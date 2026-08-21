@@ -142,10 +142,6 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
 
-# Supabase local dev
-supabase/.branches/
-supabase/.temp/
-
 # Playwright
 test-results/
 playwright-report/

@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  app:
+    name: Lint, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+        env:
+          # Supabase's published, non-secret local-dev demo credentials. Without
+          # these, VITE_SUPABASE_URL/ANON_KEY resolve to `undefined` at build
+          # time, and Vite's minifier can prove a createClient() call
+          # unreachable — silently tree-shaking @supabase/supabase-js out of
+          # the bundle without failing the build. Setting them here keeps
+          # `npm run build` in CI representative of a real production bundle.
+          VITE_SUPABASE_URL: http://127.0.0.1:54421
+          VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
+
+  # Migrations must apply cleanly to a database built from scratch (handoff §11
+  # item 10; §14 T0.3 AC), then the pgTAP suite under supabase/tests/ runs
+  # against it. supabase/tests/000_sanity.sql is a Phase 0 placeholder proving
+  # the runner works before Phase 1 adds real schema/RLS coverage.
+  supabase:
+    name: Migrations from scratch + pgTAP
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - run: supabase start
+      - run: supabase test db --local supabase/tests

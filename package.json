@@ -13,7 +13,9 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "supabase": "supabase"
+    "supabase": "supabase",
+    "db:reset": "supabase db reset",
+    "db:test": "supabase test db --local supabase/tests"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.47.10"
