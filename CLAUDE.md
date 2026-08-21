@@ -1,6 +1,6 @@
 # Seduh Score Next — Claude Code orientation
 
-_State: Phase 0 — T0.1–T0.3 done, T0.4 (this doc set) in progress — matches CHANGELOG.md as of 2026-08-21_
+_State: Phase 0 done; Phase 1 done (T1.1–T1.4) — matches CHANGELOG.md as of 2026-08-21_
 
 Read these before touching anything:
 
@@ -134,8 +134,7 @@ src/
 supabase/
   migrations/                   ← forward-only, each with a tested -- rollback: block
   tests/                        ← pgTAP, one file per concern, numbered
-                                   (000_sanity.sql is a Phase 0 placeholder — Phase 1
-                                   adds the real schema/RLS suite)
+                                   (000_with_check_gate.sql runs first, per T1.4)
   config.toml                   ← local stack, ports offset +100 (5442x) from the CLI
                                    default so this project's stack can run alongside
                                    the sibling Kira-Kira repo's stack

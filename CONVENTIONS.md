@@ -113,10 +113,36 @@ unauthenticated by design — audience surfaces have no login. Write anywhere re
 `org_members` membership in the owning org. Everything else is org-scoped read and
 write. Every `FOR INSERT`/`FOR UPDATE`/`FOR ALL` policy needs an explicit `WITH CHECK` —
 `USING` alone governs reads and the pre-image of updates, not what gets written; CI
-(§14 T1.4) fails the build if one is missing. Membership checks go through a
-`SECURITY DEFINER STABLE` helper with `SET search_path = ''`, never a policy on
-`org_members` selecting from `org_members` directly (the classic Supabase recursion bug,
-Postgres error 42P17).
+(§14 T1.4, `supabase/tests/000_with_check_gate.sql`) fails the build if one is missing.
+Every write policy in this schema is declared `FOR ALL` (one policy handling
+insert/update/delete together, not three separate ones) — the gate's own query
+accounts for this (`cmd in ('INSERT','UPDATE','ALL')`, not just the first two), since
+`pg_policies.cmd` shows `'ALL'` for a `FOR ALL` policy, never `'INSERT'`/`'UPDATE'`
+individually.
+
+**The chokepoint**: `app.is_org_member(org_id)` — `SECURITY DEFINER STABLE`,
+`SET search_path = ''`, fully-qualified `public.` references — never a policy on
+`org_members` selecting from `org_members` directly (the classic Supabase recursion
+bug, Postgres error 42P17). For tables without a direct `org_id` column, a chain of
+resolver functions walks the FK graph up to `events.org_id` (`org_id_for_event` →
+`org_id_for_stage` → `org_id_for_heat` → `org_id_for_heat_entry`, each built on the
+previous) — the single place each join lives, so no policy re-implements the chain
+inline. Mirrors Kira-Kira's `app.can_read_tx` chokepoint pattern.
+
+**Base GRANTs are a separate layer from RLS, and both are required.** A role needs the
+underlying table privilege before RLS is even consulted — new tables aren't
+auto-exposed to `anon`/`authenticated` by default. Discovered directly (not from prior
+knowledge) when the T1.3 RLS policies alone produced `permission denied for table orgs`
+against a role with zero GRANTs; fixed with a dedicated grants migration.
+
+**A table with two independent FKs that are supposed to agree needs an explicit check,
+not an assumption.** `live_sessions.org_id` and `event_id` had no enforced relationship
+until a live-proven cross-org exploit (an org member inserting a row with their own
+`org_id` but another org's `event_id`) got caught in review — fixed with a
+`before insert or update` trigger resolving the "real" org from `event_id` and
+rejecting a mismatch. When adding a table with more than one FK that encodes the same
+real-world entity from two directions, check whether the schema alone guarantees they
+agree, or whether a trigger is needed.
 
 ---
 
@@ -126,10 +152,12 @@ Postgres error 42P17).
   under `src/**` and `supabase/functions/**` (see `vite.config.js`'s `test.include`).
   Pure logic in `core/` gets thorough unit coverage, including the exact negative cases
   each build-plan task names (handoff §14) — not just a happy path.
-- **SQL**: pgTAP, `supabase/tests/NNN_description.sql`, numbered. Every file wraps in
+- **SQL**: pgTAP, `supabase/tests/NNN_description.sql`, numbered so
+  `000_with_check_gate.sql` (the T1.4 CI gate) runs first. Every file wraps in
   `begin; ... select plan(N); ... select * from finish(); rollback;` so nothing persists
-  between runs. `000_sanity.sql` is a Phase 0 placeholder proving the runner and CI
-  wiring work before any real schema exists — Phase 1 adds the actual suite.
+  between runs. Fixtures insert `auth.users` rows directly, then simulate a specific
+  user via `set local role authenticated; set local request.jwt.claim.sub = '<uuid>';`
+  — reset both after each block.
 - **E2E**: Playwright, `tests/e2e/*.spec.js`. `test:e2e` runs against a production build
   served by `vite preview`. This is a real project dependency (D25, diverging from
   Kira-Kira's ad-hoc use) because three live surfaces — organiser, projector, phone —
