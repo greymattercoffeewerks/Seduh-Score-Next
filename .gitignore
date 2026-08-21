@@ -149,6 +149,11 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
 
+# Wrangler (Cloudflare Workers) local cache and secrets
+.wrangler/
+.dev.vars
+.dev.vars.*
+
 # Playwright
 test-results/
 playwright-report/

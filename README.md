@@ -18,7 +18,7 @@ Claude Code, see [`CLAUDE.md`](CLAUDE.md).
 
 Vite + vanilla ES modules (no framework). Supabase — Postgres, Auth, Storage, Edge
 Functions. ESLint + Prettier. Vitest for unit tests, Playwright for end-to-end. Deployed
-to Cloudflare Pages via git push (not yet connected).
+to Cloudflare Workers with Static Assets via git push (configured, not connected).
 
 ## Getting started
 

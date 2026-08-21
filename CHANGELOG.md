@@ -6,6 +6,41 @@ closes.
 
 ---
 
+## Handoff correction 001 — hosting target · 2026-08-21
+
+Applied `HANDOFF-CORRECTION-001.md` (user-supplied, filed against the frozen spec) between
+Phase 2 and Phase 3, per its own "apply after Phase 2 completes" instruction. Not a
+progress edit — a correction to §0's own stated exception ("only to correct an error").
+
+**What changed**: hosting target is **Cloudflare Workers with Static Assets**, not
+Cloudflare Pages (D29). Cloudflare's own guidance moved Workers-first for new projects
+once feature parity was reached (March 2026); Pages remains supported but no longer gets
+new platform investment. Greenfield repo, so no migration cost — a config choice made
+once, not a re-platform.
+
+Folded into `SEDUH-NEXT-HANDOFF.md`: §3 (Stack), §12 (D29 appended to the decision
+record), §14 T0.1's task body, §15.4 item 3. `HANDOFF-CORRECTION-001.md` deleted per its
+own instruction once folded.
+
+**T0.1 had a pre-existing gap this surfaced**: the original handoff's §15.4 referred to
+"Cloudflare Pages deployment... configured in T0.1," but T0.1's own task body never
+actually described that clause — Phase 0's real T0.1 work only mentioned Cloudflare in
+README prose, no config file ever existed. Closed now, with the corrected target: added
+`wrangler` as a devDependency, `wrangler.jsonc` (an `assets` block pointing at `./dist`,
+`compatibility_date` set to today), and `.wrangler/`/`.dev.vars*` to `.gitignore`. Not
+deployed, repo not connected — configuration only, matching the correction's explicit
+instruction. Validated genuinely: `npx wrangler deploy --dry-run` reads the real `dist/`
+build output and exits cleanly without deploying or requiring auth. `README.md`'s stack
+line updated to match. Confirmed T0.1's AC still holds unchanged post-amendment:
+`dev`/`build`/`test`/`test:e2e`/`lint`/`format:check` all re-run and passing.
+
+Verifier: `code-reviewer`, per the correction's own verification section (a documentation
+change). `grep -c "Cloudflare Pages" SEDUH-NEXT-HANDOFF.md` returns 1, and that one hit is
+D29's own text explaining the change — matching the correction's exact acceptance
+criterion ("returns 0 except where the record deliberately explains the change").
+
+---
+
 ## Phase 2 — Core libraries · 2026-08-21
 
 Six pure modules in `src/core/`, per handoff §14 T2.1–T2.6 — no UI, no I/O. 116
