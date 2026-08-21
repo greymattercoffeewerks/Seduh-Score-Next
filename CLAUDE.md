@@ -1,6 +1,7 @@
 # Seduh Score Next — Claude Code orientation
 
-_State: Phase 0 done; Phase 1 done (T1.1–T1.4) — matches CHANGELOG.md as of 2026-08-21_
+_State: Phase 0 done; Phase 1 done (T1.1–T1.4); Phase 2 done (T2.1–T2.6) — matches
+CHANGELOG.md as of 2026-08-21_
 
 Read these before touching anything:
 
@@ -122,9 +123,10 @@ project once verified (project not yet created — see Repo section below).
 ```
 Handoffs and Specs/SEDUH-NEXT-HANDOFF.md   ← frozen spec, never edited for progress
 src/
-  core/                         ← shared, format-agnostic — partition, ranking,
-                                   advancement, countdown, timeclamp, publish,
-                                   viewer-shell, export, registry, entitlements
+  core/                         ← shared, format-agnostic. Done (Phase 2): partition,
+                                   ranking, advancement, countdown, timeclamp,
+                                   entitlements. Not yet built: publish, viewer-shell,
+                                   export, registry
   formats/
     cup-taster/                 ← scoring, timing-surface, entry-surface, viewer-body,
                                    analytics — Cup Taster-specific, built on core/
@@ -139,6 +141,7 @@ supabase/
                                    default so this project's stack can run alongside
                                    the sibling Kira-Kira repo's stack
 eslint-rules/                   ← the 4 custom rules enforcing this project's contracts
+                                   (no-raw-elapsed-write has its own Linter-based test)
 tests/e2e/                      ← Playwright — the one place three live surfaces
                                    (organiser, projector, phone) get proven to agree
 .claude/

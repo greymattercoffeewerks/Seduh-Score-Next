@@ -149,9 +149,20 @@ agree, or whether a trigger is needed.
 ## Testing
 
 - **JS**: Vitest, `*.test.js` next to the file it tests. `npm test` runs everything
-  under `src/**` and `supabase/functions/**` (see `vite.config.js`'s `test.include`).
-  Pure logic in `core/` gets thorough unit coverage, including the exact negative cases
-  each build-plan task names (handoff §14) — not just a happy path.
+  under `src/**`, `supabase/functions/**`, and `eslint-rules/**` (see `vite.config.js`'s
+  `test.include`). Pure logic in `core/` gets thorough unit coverage, including the
+  exact negative cases each build-plan task names (handoff §14) — not just a happy path.
+- **Testing a custom ESLint rule**: use `new Linter().verify(code, config)` inside plain
+  Vitest `it()` blocks, not ESLint's `RuleTester` — `RuleTester` expects global
+  `describe`/`it` (Mocha-style), which this project doesn't configure (`vitest.config`'s
+  `test.globals` is unset), and silently produces "No test found in suite" instead of
+  running anything. `eslint-rules/no-raw-elapsed-write.test.js` is the reference shape.
+- **A grep-style "this module has no X" test can match its own comment.** A test reading
+  a module's source and regex-checking for banned APIs will also match the module's own
+  header comment explaining _why_ those APIs are absent (the exact trap
+  `no-trio-vocabulary` hit in Phase 0, and `countdown.test.js`'s engine-purity test hit
+  again in Phase 2). Require call-parens/property-access (`setInterval(`, `document.`)
+  rather than bare word matches.
 - **SQL**: pgTAP, `supabase/tests/NNN_description.sql`, numbered so
   `000_with_check_gate.sql` (the T1.4 CI gate) runs first. Every file wraps in
   `begin; ... select plan(N); ... select * from finish(); rollback;` so nothing persists

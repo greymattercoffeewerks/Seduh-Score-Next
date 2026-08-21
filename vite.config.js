@@ -18,7 +18,7 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
-    include: ['src/**/*.test.js', 'supabase/functions/**/*.test.js'],
+    include: ['src/**/*.test.js', 'supabase/functions/**/*.test.js', 'eslint-rules/**/*.test.js'],
     setupFiles: ['./src/testSetup.js'],
   },
 });
