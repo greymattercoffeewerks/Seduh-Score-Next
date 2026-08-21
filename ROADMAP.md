@@ -1,7 +1,7 @@
 # Seduh Score Next — Roadmap
 
-_State: Phase 0 done; Phase 1 done (T1.1–T1.4); Phase 2 done (T2.1–T2.6) — matches
-CHANGELOG.md as of 2026-08-21_
+_State: Phase 0 done; Phase 1 done (T1.1–T1.4); Phase 2 done (T2.1–T2.6); Phase 3 in
+progress (T3.1 done) — matches CHANGELOG.md as of 2026-08-22_
 
 The living tracker for the handoff's build plan (§14). The handoff itself stays frozen
 as the original spec — this file is what's actually shipped, updated as tasks and phases
@@ -12,15 +12,15 @@ about original design intent.
 
 ## Current state
 
-| Phase                               | Status      | What it covers                                                                                |
-| ----------------------------------- | ----------- | --------------------------------------------------------------------------------------------- |
-| Phase 0 — Foundation                | ✅ Done     | Scaffold, Claude Code tooling, Supabase local stack + CI, doc seed                            |
-| Phase 1 — Schema and security       | ✅ Done     | Core tables, Cup Taster tables, RLS, `WITH CHECK` gate                                        |
-| Phase 2 — Core libraries            | ✅ Done     | `partition`, `ranking`, `advancement`, `countdown`, `timeclamp`, `entitlements`               |
-| Phase 3 — Registry and offline      | Not started | `registry`, IndexedDB mirror + outbox, sync state panel                                       |
-| Phase 4 — Cup Taster                | Not started | Setup, heat generation, timing (app + manual), scoring, standings/advancement, report, export |
-| Phase 5 — Live surfaces             | Not started | `publish`, `viewer-shell`, projector, phone summary                                           |
-| Phase 6 — Guess the Bean, hardening | Not started | Booth game, accessibility pass, offline soak, dry run                                         |
+| Phase                               | Status                     | What it covers                                                                                |
+| ----------------------------------- | -------------------------- | --------------------------------------------------------------------------------------------- |
+| Phase 0 — Foundation                | ✅ Done                    | Scaffold, Claude Code tooling, Supabase local stack + CI, doc seed                            |
+| Phase 1 — Schema and security       | ✅ Done                    | Core tables, Cup Taster tables, RLS, `WITH CHECK` gate                                        |
+| Phase 2 — Core libraries            | ✅ Done                    | `partition`, `ranking`, `advancement`, `countdown`, `timeclamp`, `entitlements`               |
+| Phase 3 — Registry and offline      | 🚧 In progress (T3.1 done) | `registry`, IndexedDB mirror + outbox, sync state panel                                       |
+| Phase 4 — Cup Taster                | Not started                | Setup, heat generation, timing (app + manual), scoring, standings/advancement, report, export |
+| Phase 5 — Live surfaces             | Not started                | `publish`, `viewer-shell`, projector, phone summary                                           |
+| Phase 6 — Guess the Bean, hardening | Not started                | Booth game, accessibility pass, offline soak, dry run                                         |
 
 **Deadline: 4 October 2026, Cup Tasters event.**
 
@@ -68,6 +68,18 @@ Per handoff §14. No UI, no I/O — pure logic in `src/core/`.
 | T2.6 `entitlements` | `module-boundary-checker`          | ✅ Done — all five D14 keys present with `minTier: null` and an intent comment; zero `canAccess()` call sites outside its own file/test, confirmed live                                                                                                                                                                  |
 
 **116 tests total** across the whole suite, all passing.
+
+---
+
+## Phase 3 — Registry and offline
+
+Per handoff §14. Verifier: `offline-sync-auditor` throughout.
+
+| Task                           | Status                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| T3.1 `registry`                | ✅ Done — `findPersonByPhone/Email`, `createPerson`, `registerPerson` (phone-then-email dedup), `createEntry` (snapshotting), `mergePeople` (atomic RPC). `security-reviewer` found and closed a **live-exploited cross-org bug**: `merge_people` didn't validate `p_kept_id`'s org, exploitable both via the RPC (when the merged-away person had zero event entries) and via a direct `insert into person_merges` bypassing the RPC entirely. Both closed, re-verified by re-attempting the live exploit. `offline-sync-auditor` independently caught a real contradiction between `registerPerson`'s dedup comment and the frozen schema's own email-uniqueness index, plus an unescaped `ilike` wildcard risk — both fixed |
+| T3.2 IndexedDB mirror + outbox | Not started                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| T3.3 Sync state panel          | Not started                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
 ---
 
