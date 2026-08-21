@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Cloudflare Workers with Static Assets, not Workers Sites (deprecated, unsupported by
+  // the Cloudflare Vite plugin) and not Cloudflare Pages (handoff D29 — Cloudflare's own
+  // guidance moved Workers-first for new projects in March 2026; Pages remains supported
+  // but no longer gets new platform investment). Configuration only — not deployed, repo
+  // not connected. Deployment is a separate decision (handoff §15.4).
+  "name": "seduh-score-next",
+  "compatibility_date": "2026-08-21",
+  "assets": {
+    "directory": "./dist",
+  },
+}
