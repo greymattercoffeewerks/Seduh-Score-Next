@@ -1,0 +1,156 @@
+# Seduh Score Next — Claude Code orientation
+
+_State: Phase 0 — T0.1–T0.3 done, T0.4 (this doc set) in progress — matches CHANGELOG.md as of 2026-08-21_
+
+Read these before touching anything:
+
+1. `Handoffs and Specs/SEDUH-NEXT-HANDOFF.md` — the frozen spec. Vocabulary, schema,
+   permission model, the full build plan (§14, T0.1–T6.x), Definition of Done (§11). This
+   never gets edited to reflect progress (§0) — it's the original brief.
+2. `CONVENTIONS.md` — how this codebase actually builds things, backfilled from what's
+   shipped.
+3. `CHANGELOG.md` — what's shipped, in what order, and why. The ground truth for "where
+   are we."
+4. `ROADMAP.md` — living phase-status tracker (the handoff's build plan, kept current —
+   unlike the handoff itself).
+
+---
+
+## Delegation strategy
+
+The 9 subagents in `.claude/agents/` per handoff §13:
+
+- **After any migration/schema change** → `schema-guardian` (constraints, indexes,
+  rollback blocks — and _verify_ the rollback by actually running it in a transaction,
+  not just reading it).
+- **After any RLS policy, RPC, or Storage change** → `security-reviewer`. Blocking, per
+  the Definition of Done — never skip it.
+- **After `core/ranking`, `core/advancement`, `core/timeclamp`, or `formats/*/scoring`
+  changes** → `scoring-auditor`. Nothing in Phase 4 may start before these three pass
+  this review (handoff §14).
+- **After any change under `src/**`** → `module-boundary-checker` — the §6 test is "can
+  a future format reuse this module without editing it?"
+- **After any test file changes** → `test-auditor` — checks that tests assert the
+  invariant, not merely pass.
+- **After any UI change** → `ui-accessibility-reviewer`, verified at 360px first, before
+  wider breakpoints.
+- **After outbox/IndexedDB/sync changes** (Phase 3 onward) → `offline-sync-auditor`.
+- **After any code change, any file** → `code-reviewer`.
+- **End of every task** → `kb-sync`.
+
+Run the relevant reviewers in parallel (single message, multiple Agent calls) when a
+change touches more than one concern — e.g. a migration that's both schema and RLS gets
+`schema-guardian` + `security-reviewer` together.
+
+**Every review this project runs should be expected to find something** (handoff §13).
+Treat a clean review as the surprising outcome, not the expected one.
+
+---
+
+## Non-negotiables
+
+### Vocabulary — "trio" is banned
+
+`CUP-TASTER-SPEC.md` v4.0 used "trio" to mean _set_, and "set" to mean the stage's whole
+collection of sets — that inversion is not carried forward (handoff §2). Enforced by the
+`no-trio-vocabulary` ESLint rule under `src/`, case-insensitive, across identifiers,
+strings, and comments.
+
+### The module boundary (handoff §6)
+
+**Can a future format reuse this module without editing it?** `src/core/` must never
+import from `src/formats/`, and format-specific logic must never leak into `src/core/`.
+Enforced by `no-core-format-import`; `module-boundary-checker` catches the subtler cases
+a static rule can't (indirect coupling, reimplementing a `core/` primitive inside a
+format). v4.x's parallel timer implementation — one in `shared/timer.js`, a second,
+incompatible one hand-rolled inside Cup Taster because the first couldn't be reused — is
+the specific defect this boundary exists to prevent from recurring.
+
+### `correct` is a count, never a column (handoff §5.2)
+
+`ct_results` stores one row per cupper per set. Standings positions and tallies are
+always derived (a view or a pure function), never persisted as a field. Enforced by
+`no-derived-storage`; `scoring-auditor` verifies by reading, since the rule only catches
+the obvious property/assignment shapes.
+
+### `elapsed_secs` has exactly one writer: `clampElapsed()`
+
+Both the tap path and the manual-entry path must call it — it's the sole duration cap
+(handoff §5.2, §6). Enforced by `no-raw-elapsed-write`.
+
+### Entitlements are a stub, not a system (D14)
+
+`entitlements.js` returns permissive for every key. No call site should branch on a
+tier or gate result anywhere in this repo yet — that's explicitly out of scope until a
+real entitlement system is built.
+
+### `is_test` renders unmistakably, from the first commit (D9)
+
+Designed in from the first live-surface rendering task, not logged as a defect
+afterward. v4.x demo mode was indistinguishable from a real event in the audience view —
+that is the failure this project exists to close.
+
+### Definition of Done (handoff §11, restated)
+
+A task is done when: acceptance criteria are demonstrated, not asserted · tests pass
+including the negative cases the task names · lint/format clean, hook not firing · no
+new TODO without a linked issue · scoring/ranking/timing changes have `scoring-auditor`
+sign-off · schema/policy/Storage changes have `security-reviewer` sign-off including a
+negative test proving a non-member reads zero rows · UI changes have
+`ui-accessibility-reviewer` sign-off at 360px first · outbox/sync changes have
+`offline-sync-auditor` sign-off · a session log entry exists (`kb-sync`) · every
+migration has a rollback block, applies cleanly from an empty database, and — once
+pushed to the linked cloud project — is never edited again (a fix is a new migration).
+
+---
+
+## Git — dev/main, main protected
+
+`dev` is the working branch; `main` is protected (D26) — direct pushes to `main` are
+rejected (`GH006`), changes land via PR. This required making the GitHub repo public
+(branch protection is a GitHub Pro feature for private repos on the free plan); the
+handoff's own `LICENSE.md` already frames this repo as publicly viewable for
+transparency/portfolio purposes, so this aligns with that, not against it.
+
+Migrations: local dev (`npm run db:reset`) first, `supabase db push` to the linked cloud
+project once verified (project not yet created — see Repo section below).
+
+---
+
+## Architecture
+
+```
+Handoffs and Specs/SEDUH-NEXT-HANDOFF.md   ← frozen spec, never edited for progress
+src/
+  core/                         ← shared, format-agnostic — partition, ranking,
+                                   advancement, countdown, timeclamp, publish,
+                                   viewer-shell, export, registry, entitlements
+  formats/
+    cup-taster/                 ← scoring, timing-surface, entry-surface, viewer-body,
+                                   analytics — Cup Taster-specific, built on core/
+  ui/
+    tokens/                     ← design tokens (plain CSS custom properties)
+  main.js                       ← scaffold entry point (Phase 0 placeholder)
+supabase/
+  migrations/                   ← forward-only, each with a tested -- rollback: block
+  tests/                        ← pgTAP, one file per concern, numbered
+                                   (000_sanity.sql is a Phase 0 placeholder — Phase 1
+                                   adds the real schema/RLS suite)
+  config.toml                   ← local stack, ports offset +100 (5442x) from the CLI
+                                   default so this project's stack can run alongside
+                                   the sibling Kira-Kira repo's stack
+eslint-rules/                   ← the 4 custom rules enforcing this project's contracts
+tests/e2e/                      ← Playwright — the one place three live surfaces
+                                   (organiser, projector, phone) get proven to agree
+.claude/
+  agents/                       ← the 9 subagents
+  hooks/lint-on-write.cjs       ← PostToolUse: ESLint on every .js write
+```
+
+## Repo
+
+Local: `C:\Users\mfosa\OneDrive\Documents\seduh-score-next`
+GitHub: `github.com/greymattercoffeewerks/Seduh-Score-Next` (public)
+Supabase project: not yet linked — local stack only (`npm run supabase -- start`,
+Studio at `http://127.0.0.1:54423`)
+Current phase: check `ROADMAP.md`.
