@@ -1,0 +1,5 @@
+# Pin text files to LF regardless of the checkout platform's core.autocrlf —
+# Prettier writes LF by default, and without this, Windows checkouts convert
+# it back to CRLF on write, producing phantom "modified" diffs with zero real
+# content change on every checkout/pull.
+* text=auto eol=lf
