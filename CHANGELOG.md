@@ -6,6 +6,110 @@ closes.
 
 ---
 
+## Phase 2 — Core libraries · 2026-08-21
+
+Six pure modules in `src/core/`, per handoff §14 T2.1–T2.6 — no UI, no I/O. 116
+tests passing across the whole suite.
+
+### T2.1 `partition`
+
+`partition(n, { target = 4, min = 2 })` → heat sizes: `heats = ceil(n / target)`,
+reduced if it would force a heat below `min`, then `n` distributed as evenly as
+possible across that many heats (sizes differ by at most 1, larger heats first).
+
+Verifier: `scoring-auditor` + `test-auditor`. AC's exact `N=2..12` table tested
+case by case (11 separate assertions, not a loop that could silently pass on a
+subset), invariants (sum=N, min≥2, max−min≤1) tested individually across
+`N=2..64`, `n < min` throws. `scoring-auditor` additionally fuzzed 2,796
+`n`/`target`/`min` combinations beyond the AC's own requirement — zero failures.
+
+### T2.2 `ranking`
+
+`rank(items, compareFn)` — competition ranking (ties share a position, the next
+distinct row's position is its 1-based sort index, which skips by tie size
+automatically). `chainComparators(...)` combines sort keys in priority order
+(e.g. §7.3's "most correct, then fastest time").
+
+Verifier: `scoring-auditor` + `test-auditor`. Both AC-named cases tested
+separately: a three-way tie at the front, and a two-way tie in the middle of the
+list (not first) — the AC's own point that a tie-at-position-1 test alone can
+pass even with the classic off-by-one bug present. Non-mutation of the input
+array proven by both value and referential-identity checks.
+
+### T2.3 `advancement`
+
+`computeAdvancement(rankedEntries, cutoff)` — walks position groups in rank
+order; a group that would push the cumulative count past `cutoff` is withheld
+in full as `tiedAtBorder` rather than being resolved (D20's fixed-field rule,
+§7.2).
+
+Verifier: `scoring-auditor` + `test-auditor`. All AC-named cases proven
+separately: exact-cutoff with no tie, a tie wholly above the cutoff (no
+tiebreak flagged), a tie straddling the cutoff (tiebreak flagged, exact
+membership), and — the specific "not the whole tie group when it starts above
+the line" case — two earlier wholly-above tie groups plus a genuine border tie,
+proving `tiedAtBorder` holds only the border group. `scoring-auditor`
+additionally fuzzed 20,000 group-size/cutoff combinations against four
+invariants; could not construct a breaking case.
+
+### T2.4 `countdown`
+
+`remainingSecs(startedAt, durationSecs, now)` / `isExpired(...)` — pure
+arithmetic, no timer or DOM reference, matching §8.2's "publish `started_at` +
+`duration_secs` once, every viewer computes locally" design.
+
+Verifier: `scoring-auditor` + `test-auditor`. Engine-purity proven by a
+grep-style test reading the module's own source — which required a fix
+mid-task: the naive regex matched the module's own header comment explaining
+_why_ no timers exist (the same self-referential trap the Phase 0
+`no-trio-vocabulary` rule hit), fixed by requiring call-parens/property-access
+rather than bare words. Clamp-at-zero, a background-gap resume, and two
+readers' clocks landing on the same result all proven with an injected fake
+clock throughout (no `Date.now()` anywhere in the test file).
+
+**One finding from `test-auditor`, fixed**: a test titled "two instances …
+different now-values … agree" passed the identical `now` value to both calls,
+so it only proved determinism, not what its name claimed. Rewritten into two
+tests — two close-but-different `now` reads within the same second agreeing,
+plus a control case proving a `now` crossing a second boundary genuinely
+changes the result (guarding the first test against a version of the function
+that ignores `now` entirely).
+
+### T2.5 `timeclamp`
+
+`clampElapsed(secs, durationSecs)` → `{ elapsed, raw, maxed }` — the sole
+`elapsed_secs` writer (§5.2, §6).
+
+Verifier: `scoring-auditor`. At/beyond-duration boundary proven exactly
+(`maxed: true`, `elapsed === durationSecs`, `raw` preserves the actual input).
+
+**A real AC gap, caught independently by both `scoring-auditor` and
+`test-auditor`**: the AC's second clause — "prove `no-raw-elapsed-write` fires
+on a direct assignment bypassing it" — had only been demonstrated as a one-off
+manual proof during Phase 0/2 work, not as a permanent, CI-enforced test. Added
+`eslint-rules/no-raw-elapsed-write.test.js` using ESLint's `Linter` directly
+(its `RuleTester` needs Mocha-style global `describe`/`it`, which this project
+doesn't configure — tried first, got "No test found in suite" until switched to
+`Linter.verify()` inside plain Vitest `it()` blocks). Also required adding
+`eslint-rules/**/*.test.js` to `vite.config.js`'s `test.include`, which had only
+covered `src/**` and `supabase/functions/**`.
+
+### T2.6 `entitlements`
+
+`canAccess(key)` — permissive stub (D14): five real keys
+(`cup_taster_analytics`, `cup_taster_report`, `cup_taster_unlimited`,
+`audience_enhanced`, `audience_branding`), each `minTier: null` with its own
+intent comment; throws on an unregistered key rather than silently allowing it.
+
+Verifier: `module-boundary-checker`. Confirmed live: all five keys present with
+comments, zero `canAccess()` call sites anywhere outside `entitlements.js`
+itself and its own test file (`grep -rn "canAccess"`), no `src/formats/`
+imports anywhere in Phase 2's files, `core/timeclamp` remains the sole
+duration-cap implementation (the only other `elapsed_secs`-adjacent hit is the
+ESLint rule that _enforces_ this, not a second implementation).
+
+---
+
 ## Phase 1 — Schema and security · 2026-08-21
 
 ### T1.1 Core tables
