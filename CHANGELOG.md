@@ -6,6 +6,83 @@ closes.
 
 ---
 
+## Phase 3 — Registry and offline · 2026-08-22
+
+### T3.1 `registry`
+
+`src/core/supabaseClient.js` (lazy client construction, mirroring Kira-Kira's
+`getSupabase()` pattern exactly — importing `registry.js` never requires
+`VITE_SUPABASE_URL`/`ANON_KEY` on its own) and `src/core/registry.js`:
+`findPersonByPhone`, `findPersonByEmail`, `createPerson`, `registerPerson`
+(phone-then-email dedup), `createEntry` (snapshots `display_name`/`cafe` from
+the person at creation time, or uses the caller-provided values for a D16
+walk-up with no `personId`), `mergePeople`. 14 unit tests against a fake
+Supabase client (Kira-Kira's established pattern), no live network call in any
+test.
+
+New migration `20260822090000_registry_org_check_and_merge_rpc.sql`: an
+`event_entries.person_id`/`event.org_id` consistency trigger, and a
+`merge_people(p_org_id, p_kept_id, p_merged_id)` RPC implementing the merge
+algorithm as one atomic transaction — a client-side sequence of separate
+reassign/log/delete calls risks exactly the partial-failure class §9's offline
+model exists to avoid. Per event where the merged-away person holds an entry:
+reassigned to the kept person if there's no collision, unlinked
+(`person_id = null`) if the kept person already has an entry there (the exact
+scenario T1.1's partial-index test proved the schema supports). 10 pgTAP
+assertions (38 across the whole suite).
+
+Verifiers: `offline-sync-auditor` (Phase 3's designated verifier throughout)
+and `security-reviewer` (this task touches RLS-adjacent org-scoping and a new
+RPC), both live-run via the Agent tool, each **twice** — a first pass and a
+re-verification after fixes.
+
+**A live-exploited cross-org bug, not a clean review.** `security-reviewer`
+found `merge_people` never validated that `p_kept_id` belonged to `p_org_id` —
+only `p_merged_id` was checked. The `event_entries` org-check trigger
+incidentally caught the cross-org case _when the merged-away person held at
+least one entry_ (reassigning to a foreign `p_kept_id` would fire it), but a
+merged-away person with **zero** entries never touches `event_entries` at all,
+so nothing caught it. Demonstrated live against the running local stack, as a
+real `authenticated` role with RLS actually in force: a member of Org A could
+call `merge_people` with a `p_kept_id` belonging to Org B and merge in one of
+their own zero-entry people, permanently writing a cross-org `kept_id` into
+Org A's `person_merges` ledger and silently deleting the Org A person — no
+error, no rejection. The **same hole was independently reachable via a plain
+client-side `insert into person_merges`**, entirely bypassing the RPC, because
+`person_merges_write`'s `WITH CHECK` only verified the ledger row's own
+`org_id`, never that `kept_id`'s person actually belonged to it.
+
+Fixed with two changes, both re-verified by actually re-attempting the live
+exploit and confirming it now fails: an explicit `p_kept_id`-belongs-to-`p_org_id`
+check inside `merge_people` (fails fast, clear error, before any mutation), and
+a new `app.check_person_merge_kept_org()` trigger on `person_merges` itself
+(same `SECURITY DEFINER`/`search_path = ''` shape as the existing
+`check_event_entry_person_org`/`check_live_session_org` precedents) — this is
+the one that actually closes the direct-insert path, since the RPC-level check
+alone wouldn't have. Also added a self-merge guard (`p_kept_id = p_merged_id`
+previously unlinked and deleted the person with no error — a destructive
+no-guard bug, not a true no-op).
+
+**A second, independent finding from `offline-sync-auditor`**: `registry.js`'s
+original `registerPerson` comment claimed "two different phones with the same
+email are a real, accepted scenario... not a duplicate to silently merge" —
+but the frozen schema's own `people (org_id, lower(email)) where email is not
+null` unique index (§5.1, copied verbatim in T1.1) contradicts that: a second
+person with a colliding email would hit an uncaught `23505` from
+`createPerson`, worse than either alternative the comment considered. Since
+the constraint is frozen spec, not a bug, the fix was to correct the code, not
+drop the index: `registerPerson` now checks `findPersonByEmail` as a fallback
+before creating, so the constraint should never be hit in the normal
+registration flow. Same review also caught `findPersonByEmail`'s unescaped
+`ilike` treating a literal `%`/`_` in an email as a wildcard (low severity,
+zero call sites at the time) — fixed with `escapeLikePattern()`, and the fix's
+correctness against Postgres's actual LIKE semantics (including a literal
+backslash adjacent to a wildcard character, a case the JS unit tests alone
+didn't cover) was independently confirmed against the live database during
+re-verification, then backfilled as its own unit test.
+
+---
+
 ## Handoff correction 001 — hosting target · 2026-08-21
 
 Applied `HANDOFF-CORRECTION-001.md` (user-supplied, filed against the frozen spec) between
