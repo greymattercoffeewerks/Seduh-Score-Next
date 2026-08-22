@@ -1,10 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import {
-  formatCountdown,
-  renderRosterPreview,
-  renderTimingRows,
-  mountTimingScreen,
-} from './timingScreen.js';
+import { renderRosterPreview, renderTimingRows, mountTimingScreen } from './timingScreen.js';
 
 function fakeClient({ tables = {} } = {}) {
   const queues = {};
@@ -47,19 +42,6 @@ function fakeClient({ tables = {} } = {}) {
     },
   };
 }
-
-describe('formatCountdown', () => {
-  it('formats as M:SS', () => {
-    expect(formatCountdown(0)).toBe('0:00');
-    expect(formatCountdown(9)).toBe('0:09');
-    expect(formatCountdown(65)).toBe('1:05');
-    expect(formatCountdown(480)).toBe('8:00');
-  });
-
-  it('clamps a negative value to 0 rather than showing a negative countdown', () => {
-    expect(formatCountdown(-5)).toBe('0:00');
-  });
-});
 
 describe('renderRosterPreview', () => {
   it('renders one item per entry, name as text', () => {

@@ -36,6 +36,10 @@ function fakeClient({ tables = {} } = {}) {
           calls.push(['is', table, ...args]);
           return builder;
         },
+        in: (...args) => {
+          calls.push(['in', table, ...args]);
+          return builder;
+        },
         single: () => Promise.resolve(resolve()),
         maybeSingle: () => Promise.resolve(resolve()),
         then: (onResolve, onReject) => Promise.resolve(resolve()).then(onResolve, onReject),
@@ -157,6 +161,25 @@ describe('maybeAdvanceToScoring', () => {
     expect(result).toEqual(scoringHeat);
     const updateCall = client.calls.find(([action]) => action === 'update');
     expect(updateCall[2]).toEqual({ status: 'scoring' });
+  });
+
+  it("also transitions a still-'pending' heat to scoring — the manual-mode path, which skips 'timing' entirely (§7.1)", async () => {
+    const scoringHeat = { ...appHeatPending, status: 'scoring' };
+    const client = fakeClient({
+      tables: {
+        ct_heat_entries: {
+          data: [
+            { id: 'he1', entry_id: 'e1', elapsed_secs: 100 },
+            { id: 'he2', entry_id: 'e2', elapsed_secs: 200 },
+          ],
+          error: null,
+        },
+        ct_heats: { data: scoringHeat, error: null },
+      },
+    });
+    const result = await maybeAdvanceToScoring('h1', client);
+    expect(result).toEqual(scoringHeat);
+    expect(client.calls).toContainEqual(['in', 'ct_heats', 'status', ['pending', 'timing']]);
   });
 });
 

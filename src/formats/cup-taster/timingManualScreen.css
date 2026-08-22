@@ -1,0 +1,48 @@
+/*
+ * Timing surface, manual mode (T4.4) — built on src/ui/tokens, reusing
+ * heatsScreen.css's .screen-container/.btn/.card/.field-input/.station-badge
+ * and timingScreen.css's .timing-row/.timing-row-name/.timing-row-result
+ * (all three stylesheets are loaded together; nothing here redefines them).
+ * Adds only what's new to this screen: the minutes/seconds input pair.
+ */
+
+/* Each row stacks name above controls rather than fighting for one
+   horizontal line — a name, two number inputs, a button, and a status
+   label is too much content to keep on one row at 360px (the exact
+   overflow class T4.3's .timing-row hit once already). `align-items:
+   stretch` is set explicitly, not left as a default — .timing-row (the
+   base class this extends, timingScreen.css) sets `align-items: center`,
+   and `center` sizes a column-direction flex item to its own content width
+   just as much as `flex-start` does. Only `stretch` bounds
+   .timing-row-name to the row's actual width, which is what
+   .timing-row-name-text's ellipsis machinery (min-width: 0 +
+   overflow: hidden + text-overflow: ellipsis) needs in order to have
+   anything to truncate against — without it, a long enough name grows past
+   the card and the viewport instead of ever truncating, the exact defect
+   this rule exists to prevent. */
+.manual-timing-row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+}
+
+.manual-time-fields {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.manual-time-input {
+  width: 4.5rem;
+  min-height: var(--tap-target-min);
+  text-align: center;
+  flex: 0 0 auto;
+}
+
+.manual-time-separator {
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  flex: 0 0 auto;
+}

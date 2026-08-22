@@ -4,7 +4,14 @@
 // recording each cupper's stop tap (via the sole cap, `clampElapsed` —
 // handoff §5.2, §6), auto-maxing anyone still running once the master clock
 // expires, and advancing the heat to `scoring` once every cupper has a final
-// time. `formats/cup-taster/timing-screen.js` is the UI built on top of this.
+// time. `formats/cup-taster/timingScreen.js` is the UI built on top of this.
+//
+// `buildClampedUpdate`, `findHeatEntry`, `maybeAdvanceToScoring`, and
+// `tryAdvanceToScoring` are exported and reused by `timingManual.js` (T4.4)
+// too — the write-payload shape, race-guard lookup, and advance-to-scoring
+// logic are identical regardless of `timing_mode`; only *how* a raw seconds
+// value is obtained (a tap vs. a hand-typed number) differs between the two
+// modes, so only that part is duplicated rather than the whole lifecycle.
 //
 // Direct writes, not the outbox (handoff §9) — a deliberate, documented gap
 // (see CHANGELOG.md/ROADMAP.md): this is the first genuinely live,
@@ -26,7 +33,7 @@ import { getSupabase } from '../../core/supabaseClient.js';
 // time in the heat, undetected. 5s is a generous allowance for real skew.
 const MAX_NEGATIVE_SKEW_SECS = 5;
 
-async function findHeatEntry(heatId, entryId, client) {
+export async function findHeatEntry(heatId, entryId, client) {
   const { data, error } = await client
     .from('ct_heat_entries')
     .select('*')
@@ -44,7 +51,7 @@ async function findHeatEntry(heatId, entryId, client) {
 // preserving the true value in `raw` — no pre-clamping happens here, so the
 // audit trail `elapsed_secs_raw` promises (handoff §5.2) is never lost
 // before it even reaches the one function responsible for it.
-function buildClampedUpdate(rawSecs, durationSecs, timeSource, nowMs) {
+export function buildClampedUpdate(rawSecs, durationSecs, timeSource, nowMs) {
   const clamped = clampElapsed(rawSecs, durationSecs);
   return {
     elapsed_secs: clamped.elapsed,
@@ -56,12 +63,12 @@ function buildClampedUpdate(rawSecs, durationSecs, timeSource, nowMs) {
 }
 
 // A failure here means only the heat's status→scoring transition needs a
-// retry — the write that triggered this call (a real tap or an auto-max)
-// already succeeded before this runs. Never let it fail the caller: the
-// next successful write for this heat (another tap, or
-// autoMaxRemainingEntries at expiry) retries the same check, and the
-// timing screen self-heals it on the next render too.
-async function tryAdvanceToScoring(heatId, client) {
+// retry — the write that triggered this call (a real tap, an auto-max, or a
+// manual entry) already succeeded before this runs. Never let it fail the
+// caller: the next successful write for this heat (another tap,
+// autoMaxRemainingEntries at expiry, or another manual entry) retries the
+// same check, and the timing screen self-heals it on the next render too.
+export async function tryAdvanceToScoring(heatId, client) {
   try {
     await maybeAdvanceToScoring(heatId, client);
   } catch (err) {
@@ -93,11 +100,20 @@ export async function startHeat(heatId, client = getSupabase(), { now = () => Da
   return data ?? findHeatById(heatId, client);
 }
 
-// Advances pending → ... no: timing → scoring, once every entry in the heat
-// has a final elapsed_secs (tapped or maxed). A no-op, not an error, if the
-// heat isn't fully stopped yet or has already moved past `timing` — callers
-// (recordTap, autoMaxRemainingEntries) call this unconditionally after every
-// write rather than trying to reason about whether this was "the last one."
+// Advances to scoring once every entry in the heat has a final elapsed_secs
+// (tapped, maxed, or hand-entered). The source status differs by
+// `timing_mode`: an app-mode heat is 'timing' at this point (§7.1's normal
+// pending → timing → scoring path); a manual-mode heat is still 'pending' —
+// it "skips timing" entirely (§7.1) since there's no master clock to start.
+// `.in('status', [...])` covers both without needing the caller to know
+// which mode it's in. Safe for app mode's still-'pending', not-yet-started
+// case too: `entries.length > 0` combined with every entry needing a
+// non-null elapsed_secs means this is unreachable before `startHeat` runs —
+// nothing can record a tap before the heat is 'timing'. A no-op, not an
+// error, if the heat isn't fully stopped yet or has already moved past this
+// point — callers (recordTap, autoMaxRemainingEntries, recordManualTime)
+// call this unconditionally after every write rather than trying to reason
+// about whether this was "the last one."
 export async function maybeAdvanceToScoring(heatId, client = getSupabase()) {
   const entries = await listHeatEntries(heatId, client);
   const allStopped = entries.length > 0 && entries.every((entry) => entry.elapsed_secs != null);
@@ -107,7 +123,7 @@ export async function maybeAdvanceToScoring(heatId, client = getSupabase()) {
     .from('ct_heats')
     .update({ status: 'scoring' })
     .eq('id', heatId)
-    .eq('status', 'timing')
+    .in('status', ['pending', 'timing'])
     .select()
     .maybeSingle();
   if (error) throw error;
