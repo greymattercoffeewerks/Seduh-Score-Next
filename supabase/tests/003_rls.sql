@@ -2,7 +2,7 @@
 -- Proves: a non-member reads zero rows from every table except live_sessions, and
 -- an unauthenticated client can read live_sessions and cannot write it.
 begin;
-select plan(15);
+select plan(17);
 
 -- ---------- fixtures (as postgres, bypasses RLS) ----------
 
@@ -57,6 +57,10 @@ insert into live_sessions (id, org_id, event_id, format, active) values
   ('00000000-0000-0000-0000-0000000000a9', '00000000-0000-0000-0000-000000000010',
    '00000000-0000-0000-0000-0000000000e1', 'cup_taster', true);
 
+insert into processed_operations (id, org_id, kind) values
+  ('00000000-0000-0000-0000-0000000000b3', '00000000-0000-0000-0000-000000000010',
+   'confirm_heat');
+
 -- A second org with its own event, for the cross-org live_sessions check below.
 insert into orgs (id, name, slug) values
   ('00000000-0000-0000-0000-000000000020', 'Other Org', 'other-org');
@@ -93,6 +97,19 @@ select is((select count(*)::int from ct_stage_entries), 0, 'non-member reads zer
 select is((select count(*)::int from ct_heats), 0, 'non-member reads zero rows: ct_heats');
 select is((select count(*)::int from ct_heat_entries), 0, 'non-member reads zero rows: ct_heat_entries');
 select is((select count(*)::int from ct_results), 0, 'non-member reads zero rows: ct_results');
+select is(
+  (select count(*)::int from processed_operations),
+  0,
+  'non-member reads zero rows: processed_operations'
+);
+
+select throws_ok(
+  $$ insert into processed_operations (id, org_id, kind) values
+       (gen_random_uuid(), '00000000-0000-0000-0000-000000000010', 'confirm_heat') $$,
+  '42501',
+  null,
+  'a non-member cannot insert a processed_operations row claiming another org''s org_id'
+);
 
 reset role;
 reset request.jwt.claim.sub;

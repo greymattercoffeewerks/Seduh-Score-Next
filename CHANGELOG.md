@@ -8,6 +8,80 @@ closes.
 
 ## Phase 3 — Registry and offline · 2026-08-22
 
+### T3.2 IndexedDB mirror + operation outbox
+
+`src/core/db.js` (IndexedDB wrapper: `cache` + `outbox` object stores, ported
+from Kira-Kira's own `db.js`) and `src/core/outbox.js` (the FIFO queue
+engine). Deliberately diverges from Kira-Kira's pattern in one way:
+`flushOutbox()` takes a `handlers` map as a parameter rather than hard-coding
+operation handlers inside the module — Kira-Kira is single-purpose and can
+hard-code them, but a hard-coded Cup-Taster-specific handler (e.g.
+`confirm_heat`) living inside `src/core/` would fail §6's own test ("can a
+future format reuse this module without editing it?"). 22 unit tests (9
+db.js, 13 outbox.js) prove generic queue mechanics: FIFO order, attempt-count
+tracking, stop-at-first-genuine-failure (never running a later operation
+ahead of a stuck earlier one), retry replaying the identical payload, and
+concurrent-flush deduplication.
+
+The AC's three specific proofs (atomic flush, idempotent retry, conflict
+surfacing) live where the actual guarantee is implemented: new migration
+`20260822100000_confirm_heat_rpc.sql`'s `confirm_heat` RPC — one atomic
+transaction writing every cupper's time and every set's score together, a
+`processed_operations` idempotency ledger keyed on a client-generated
+operation id (a retry replays the same id and becomes a safe no-op — checked
+_before_ re-validating anything, which matters specifically because
+re-validating would compare against the row's now-changed `updated_at` and
+misreport a real success as a conflict), and a `P0002` conflict exception
+carrying both the current and expected `updated_at` in its `DETAIL`. 13
+pgTAP assertions (53 across the whole suite) prove all three directly against
+the real database — including the earlier bug T1.1's own comment described
+(a partial flush leaving one cupper's results written while another's
+strict-confirm failure aborts the whole heat) actually rolling back
+completely, not just failing.
+
+Verifier: `offline-sync-auditor` (clean review — see below), `security-reviewer`
+(2 rounds — real findings, both rounds), `code-reviewer`.
+
+**`offline-sync-auditor`'s review came back clean**, including on the one
+judgment call worth double-checking: whether splitting the AC's proof across
+the SQL layer (where the atomicity/idempotency/conflict mechanism actually
+lives) and the JS layer (generic queue mechanics, which is all `outbox.js`
+could possibly prove or break) is legitimate rather than dodging the AC's
+letter. Confirmed legitimate — `outbox.js` has no code path that could
+implement or break any of the three specific guarantees.
+
+**`security-reviewer` found three real issues, two of them genuine
+production-breaking/security gaps** — not from reading the RPC and reasoning
+it looked correct, but from re-testing everything itself, including
+re-attacking each fix independently after applying it:
+
+1. `processed_operations` had **no `GRANT` to `authenticated`** — every real
+   call to `confirm_heat` would have failed with `permission denied` in
+   production. The pgTAP suite passed regardless, because it ran as the
+   Postgres superuser (GRANT/RLS-exempt) rather than a real `authenticated`
+   role — the same root cause as finding 3. Verified by revoking the grant
+   and reproducing `permission denied for table processed_operations` as a
+   real `authenticated` caller, then re-granting and reproducing success.
+2. `ct_results.set_id` had no check tying it to the same stage as its
+   `heat_entry_id`'s heat — the same "two independently-FK'd columns, nothing
+   joins them" pattern already found and closed twice (`live_sessions` in
+   T1.3, `event_entries`/`person_merges` in T3.1). Closed with
+   `app.check_ct_results_set_stage()`, the same trigger shape as its
+   precedents; verified to cover a direct `insert`/`update` against
+   `ct_results`, not just writes routed through `confirm_heat`.
+3. **The pgTAP suite itself never used `set local role authenticated`** —
+   every assertion ran as the Postgres superuser, which is exactly how
+   findings 1 and a cross-org write went unnoticed. Rewrote
+   `005_confirm_heat.sql` with real `auth.users`/`org_members` fixtures and
+   every call under a real `authenticated` role; added `003_rls.sql`'s
+   missing `processed_operations` non-member-zero-rows and write-rejection
+   assertions (a low-severity but real instance of the same "reasoned it
+   looked correct instead of proving it" gap, caught in the same
+   re-verification pass).
+
+Every fix was re-verified by actually re-attempting the failure it closes,
+not by re-reading the diff.
+
 ### T3.1 `registry`
 
 `src/core/supabaseClient.js` (lazy client construction, mirroring Kira-Kira's
