@@ -5,6 +5,7 @@ import {
   createPerson,
   registerPerson,
   createEntry,
+  registerEntry,
   mergePeople,
 } from './registry.js';
 
@@ -26,10 +27,13 @@ function fakeClient({ tables = {}, rpcResult = { data: null, error: null } } = {
       const resolve = () => (queue.length > 1 ? queue.shift() : queue[0]);
       const builder = {
         select: () => builder,
-        insert: () => builder,
         eq: () => builder,
         ilike: (...args) => {
           calls.push(['ilike', ...args]);
+          return builder;
+        },
+        insert: (payload) => {
+          calls.push(['insert', table, payload]);
           return builder;
         },
         single: () => Promise.resolve(resolve()),
@@ -184,6 +188,81 @@ describe('createEntry', () => {
     expect(result).toEqual(insertedEntry);
     // The people table must never be queried for a walk-up — there is no
     // personId to look up.
+  });
+});
+
+describe('registerEntry', () => {
+  it('registers a new person then creates their entry', async () => {
+    const created = { id: 'p1', display_name: 'New Cupper', phone: '+6738005555' };
+    const insertedEntry = {
+      id: 'e1',
+      event_id: 'ev1',
+      person_id: 'p1',
+      display_name: 'New Cupper',
+    };
+    const client = fakeClient({
+      tables: {
+        // findPersonByPhone: no match; createPerson: the insert result;
+        // createEntry's own people lookup (snapshotting display_name/cafe)
+        people: [
+          { data: null, error: null },
+          { data: created, error: null },
+          { data: created, error: null },
+        ],
+        event_entries: { data: insertedEntry, error: null },
+      },
+    });
+    const result = await registerEntry(
+      'org1',
+      'ev1',
+      { displayName: 'New Cupper', phone: '+6738005555' },
+      client,
+    );
+    expect(result).toEqual(insertedEntry);
+  });
+
+  it('reuses an existing person by phone rather than creating a duplicate', async () => {
+    const existing = { id: 'p1', display_name: 'Cupper One', phone: '+6738001111', cafe: null };
+    const insertedEntry = { id: 'e2', event_id: 'ev1', person_id: 'p1' };
+    const client = fakeClient({
+      tables: {
+        // findPersonByPhone: match; createEntry's own people lookup
+        people: [
+          { data: existing, error: null },
+          { data: existing, error: null },
+        ],
+        event_entries: { data: insertedEntry, error: null },
+      },
+    });
+    const result = await registerEntry(
+      'org1',
+      'ev1',
+      { displayName: 'Cupper One (again)', phone: '+6738001111' },
+      client,
+    );
+    expect(result).toEqual(insertedEntry);
+    // The proof this test is named for: no second person row gets created.
+    expect(client.calls.some(([action, table]) => action === 'insert' && table === 'people')).toBe(
+      false,
+    );
+  });
+
+  it('passes bib through to the entry', async () => {
+    const existing = { id: 'p1', display_name: 'Cupper One', cafe: null };
+    const client = fakeClient({
+      tables: {
+        people: [
+          { data: existing, error: null },
+          { data: existing, error: null },
+        ],
+        event_entries: { data: { id: 'e3' }, error: null },
+      },
+    });
+    await registerEntry('org1', 'ev1', { phone: '+6738001111', bib: '42' }, client);
+    const entryInsert = client.calls.find(
+      ([action, table]) => action === 'insert' && table === 'event_entries',
+    );
+    expect(entryInsert[2].bib).toBe('42');
   });
 });
 
