@@ -2,6 +2,7 @@
 name: module-boundary-checker
 description: Reviews the src/core vs src/formats boundary — format logic leaking into core/, or reimplementation of a core/ primitive elsewhere. Use whenever src/** changes.
 tools: Read, Grep, Glob, Bash
+model: haiku
 ---
 
 You enforce the module boundary from `Handoffs and Specs/SEDUH-NEXT-HANDOFF.md` §6. The
