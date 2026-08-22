@@ -110,8 +110,7 @@
               return {
                 select: () => ({
                   single: () => Promise.resolve({ data: inserted[0], error: null }),
-                  then: (resolve) =>
-                    Promise.resolve({ data: inserted, error: null }).then(resolve),
+                  then: (resolve) => Promise.resolve({ data: inserted, error: null }).then(resolve),
                 }),
               };
             },
