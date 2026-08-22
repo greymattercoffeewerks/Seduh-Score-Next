@@ -1,0 +1,44 @@
+/*
+ * Spacing & shape tokens — Seduh Score Next
+ *
+ * No elevation/shadow tokens exist in this system, on purpose. All three
+ * reference systems (Acme Cups, Assembly Coffee, Ventriloc) separate
+ * surfaces with a hairline border or a flat background-color step, never a
+ * drop shadow — see DESIGN.md. For a judging/scoring tool that flat,
+ * printed-scoresheet register signals rigor over SaaS gloss, so don't add
+ * `box-shadow` anywhere; reach for `--color-border` or a `--color-surface*`
+ * step instead.
+ */
+
+:root {
+  --space-0: 0;
+  --space-1: 0.25rem; /* 4px */
+  --space-2: 0.5rem; /* 8px */
+  --space-3: 0.75rem; /* 12px */
+  --space-4: 1rem; /* 16px */
+  --space-5: 1.5rem; /* 24px */
+  --space-6: 2rem; /* 32px */
+  --space-7: 3rem; /* 48px */
+  --space-8: 4rem; /* 64px */
+  --space-9: 6rem; /* 96px */
+
+  /* Acme's tight 3px radius for structural elements; a touch more room for
+     containers that need to read as softer (cards, modals). */
+  --radius-sm: 3px; /* inputs, tags, badges, buttons */
+  --radius-md: 6px; /* cards */
+  --radius-lg: 10px; /* modals, large containers */
+  --radius-full: 999px; /* status pill / live-indicator dot only */
+
+  --border-hairline: 1px;
+  --border-strong: 2px;
+
+  --max-width-content: 72rem; /* 1152px */
+  --max-width-reading: 42rem; /* 672px — long-form copy (help text, guidelines) */
+
+  /* WCAG 2.5.5 minimum tap target — the phone entry surface is used
+     one-handed, often standing, often by someone who just ran a heat. */
+  --tap-target-min: 2.75rem; /* 44px */
+
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+}

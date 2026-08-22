@@ -47,6 +47,11 @@ module, provable by grep. `core/timeclamp` is the one place the duration cap is
 enforced, called by every entry path — never a second cap, and never a database `CHECK`
 standing in for it.
 
+`src/ui/tokens/` is subject to the same test applied to design rather than logic: a
+token layer with format vocabulary or format-specific values baked in (e.g. Cup
+Taster-only copy in a shared preview/demo) fails it the same way a `core/` file importing
+`formats/*` would. Caught once in practice — see "Design tokens" below.
+
 ---
 
 ## Local patches are an anti-pattern — fixes go to source
@@ -187,10 +192,59 @@ agree, or whether a trigger is needed.
 
 ## Design tokens
 
-`src/ui/tokens/*.css` — plain CSS custom properties, currently a placeholder directory
-(Phase 0). As real UI work starts (Phase 4+), tokens land here first and screens consume
-them; a screen introducing its own one-off color or spacing value instead of a token is
-the same "local patch" anti-pattern described above, applied to design.
+`src/ui/tokens/*.css` — plain CSS custom properties, real as of 2026-08-22 (shipped
+ahead of Phase 4; see `CHANGELOG.md`'s "Design system foundation" entry for what shipped
+and what review found). `src/ui/tokens/DESIGN.md` is the source of rationale — this
+section only records the conventions a new screen or token needs to follow.
+
+- **Import order is fixed**: `index.css` pulls in `fonts.css` → `colors.css` →
+  `typography.css` → `spacing.css` → `base.css`, in that order. A screen imports
+  `index.css`, never an individual token file directly.
+- **One neutral ramp, two surface modes.** `--clr-clay-50`–`950` is the only color ramp;
+  `:root`/`[data-surface="paper"]` (light) and `[data-surface="stage"]` (dark) both draw
+  from it. Every semantic token (`--color-accent`, `-danger`, `-success`, `-warning`,
+  `-gold`) follows one symmetric rule across both modes — paper is a dark tone + white
+  `-contrast`, stage is a light tone + `clay-950` `-contrast` — so a new semantic token
+  must supply both mode's values in that shape, never a one-off exception.
+  `data-surface="stage"` goes on the projector root only; don't hand-build a second dark
+  theme anywhere else.
+- **`--color-test` (violet, `#6b21c9`) is reserved exclusively for `is_test` indicators**
+  (handoff D9) and is fixed across both surface modes. Never reused for a brand color,
+  a semantic state, or a future feature's accent.
+- **No `box-shadow` token exists, anywhere** (D31, `CHANGELOG.md`). Elevation is a
+  border (`--color-border*`) or a background-color step, never a shadow — this is a
+  convention enforced by review, not a lint rule, so watch for it specifically in any
+  new component.
+- **`--color-focus-ring` is the neutral `--color-border-strong`, deliberately not the
+  accent hue** — an already-accent-colored element (a primary button, an active tab)
+  still needs a focus state that reads as visually distinct from its own resting color.
+- **`.tap-target` (`base.css`), not `--tap-target-min` alone**, on any icon-only
+  control. The token alone only guarantees `min-height` on an already-wide text button;
+  an icon-only button needs width guaranteed too.
+- **Fonts are self-hosted only, never CDN-linked** (D30, `CHANGELOG.md`) — the app runs
+  on unreliable venue wifi at live events, so a webfont request cannot be a point of
+  failure. Adding a new weight/family means downloading the file into
+  `src/ui/tokens/fonts/` and adding the `@font-face` rule to `fonts.css` with a full
+  system-stack fallback, the same way the existing three (Erode/Switzer/Tabular) are
+  set up — never a `<link>` to Fontshare, Google Fonts, or any other font CDN.
+  `--font-mono` pairs with `.tabular-nums`/`.font-mono-score` for every score/timer
+  digit display, since `--font-mono` (Tabular) is a grotesque sans with tabular figures,
+  not a true monospace.
+- **`--text-5xl`/`--text-6xl` are fixed-canvas-only** (the projector stage or a
+  dedicated big-number panel) — dropping them into an arbitrary responsive container
+  without its own step-down/scroll handling caused a real 360px overflow bug in
+  `preview.html`; documented directly in `typography.css`.
+- A screen introducing its own one-off color, spacing, or shadow value instead of a
+  token is the same "local patch" anti-pattern described above, applied to design — the
+  fix belongs in `src/ui/tokens/`, not in the screen that needed it. Reserved-hue and
+  reserved-accent rules (violet, gold-as-fill-only) apply the same way: if no existing
+  semantic token fits, that's a signal the token layer needs a new one, reasoned through
+  and contrast-checked, not a hand-picked hex value in the consuming screen.
+- `src/ui/tokens/preview.html` renders every token in both surface modes — open it
+  (`npm run dev`, then `/src/ui/tokens/preview.html`) when changing any token value, and
+  keep its demo copy format-agnostic (a leaked Cup-Taster-specific term here was
+  `module-boundary-checker`'s one finding on the initial build — see "The module
+  boundary" above).
 
 ---
 

@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Seduh Score Next — Design Tokens</title>
+    <link rel="stylesheet" href="./index.css" />
+    <style>
+      .guide-section {
+        max-width: var(--max-width-content);
+        margin: 0 auto;
+        padding: var(--space-6) var(--space-5);
+      }
+      .guide-heading {
+        font-family: var(--font-display);
+        font-size: var(--text-2xl);
+        font-weight: var(--font-weight-regular);
+        margin: 0 0 var(--space-4);
+        border-bottom: var(--border-hairline) solid var(--color-border);
+        padding-bottom: var(--space-3);
+      }
+      .swatch-grid {
+        display: grid;
+        /* 9rem track minimum is a demo-page layout choice (fits a label plus
+           a reasonable swatch width), not itself a design token. */
+        grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+        gap: var(--space-3);
+        margin-bottom: var(--space-6);
+      }
+      [data-surface='stage'] .swatch-grid {
+        margin-bottom: 0;
+      }
+      .swatch {
+        border: var(--border-hairline) solid var(--color-border);
+        border-radius: var(--radius-md);
+        overflow: hidden;
+        font-family: var(--font-mono);
+        font-size: var(--text-2xs);
+      }
+      .swatch-fill {
+        height: var(--space-8);
+      }
+      .swatch-label {
+        padding: var(--space-2);
+        background: var(--color-surface);
+        color: var(--color-text-secondary);
+      }
+      .stage-swatches {
+        border-radius: var(--radius-lg);
+        border: var(--border-hairline) solid var(--color-border);
+        padding: var(--space-5);
+        margin-bottom: var(--space-6);
+      }
+      .type-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: var(--space-4);
+        padding: var(--space-2) 0;
+        border-bottom: var(--border-hairline) solid var(--color-border);
+      }
+      .type-row .meta {
+        /* 8rem label column is a demo-page layout choice, not a token —
+           it doesn't correspond to any spacing rung. */
+        flex: 0 0 8rem;
+        font-family: var(--font-mono);
+        font-size: var(--text-2xs);
+        color: var(--color-text-muted);
+      }
+      .type-row .sample {
+        font-family: var(--font-body);
+        max-width: 100%;
+        overflow-x: auto;
+      }
+      .space-row {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        padding: var(--space-2) 0;
+      }
+      .space-row .bar {
+        background: var(--color-accent);
+        height: var(--space-3);
+      }
+      .space-row .meta {
+        font-family: var(--font-mono);
+        font-size: var(--text-2xs);
+        color: var(--color-text-muted);
+        width: var(--space-9);
+      }
+      .btn {
+        font-family: var(--font-body);
+        font-size: var(--text-sm);
+        font-weight: var(--font-weight-semibold);
+        padding: var(--space-3) var(--space-5);
+        border-radius: var(--radius-sm);
+        border: none;
+        cursor: pointer;
+        min-height: var(--tap-target-min);
+      }
+      .btn-primary {
+        background: var(--color-accent);
+        color: var(--color-accent-contrast);
+      }
+      .btn-primary:hover {
+        background: var(--color-accent-hover);
+      }
+      .btn-outline {
+        background: transparent;
+        color: var(--color-text);
+        border: var(--border-hairline) solid var(--color-border-strong);
+      }
+      .btn-danger {
+        background: var(--color-danger);
+        color: var(--color-danger-contrast);
+      }
+      .btn-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        font-size: var(--text-md);
+        background: var(--color-surface);
+        border: var(--border-hairline) solid var(--color-border-strong);
+      }
+      .btn-row {
+        display: flex;
+        gap: var(--space-3);
+        flex-wrap: wrap;
+        align-items: center;
+        margin-bottom: var(--space-6);
+      }
+      .scoreboard {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: var(--space-2) var(--space-5);
+        align-items: center;
+        background: var(--color-surface);
+        border: var(--border-hairline) solid var(--color-border);
+        border-radius: var(--radius-md);
+        padding: var(--space-5);
+        margin-bottom: var(--space-6);
+      }
+      .scoreboard .name {
+        font-family: var(--font-body);
+        font-size: var(--text-lg);
+        min-width: 0;
+      }
+      .scoreboard .score {
+        font-size: var(--text-5xl);
+        text-align: right;
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-2);
+        padding: var(--space-1) var(--space-3);
+        border-radius: var(--radius-full);
+        font-size: var(--text-2xs);
+        font-weight: var(--font-weight-bold);
+        text-transform: uppercase;
+        letter-spacing: var(--tracking-wide);
+        margin-left: var(--space-2);
+        background: var(--color-gold);
+        color: var(--color-gold-contrast);
+      }
+      .stage-panel {
+        margin-bottom: var(--space-6);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        border: var(--border-hairline) solid var(--color-border);
+      }
+      .stage-panel[data-surface='stage'] {
+        padding: var(--space-6);
+        background: var(--color-canvas);
+        color: var(--color-text);
+      }
+      .stage-timer {
+        font-size: var(--text-6xl);
+        text-align: center;
+        max-width: 100%;
+        overflow-x: auto;
+      }
+      .stage-caption {
+        text-align: center;
+        text-transform: uppercase;
+        letter-spacing: var(--tracking-wide);
+        color: var(--color-text-secondary);
+        font-size: var(--text-sm);
+      }
+
+      /* --text-5xl/--text-6xl are fixed-canvas sizes (see typography.css) —
+         this documentation page is exactly the kind of narrow, responsive
+         container they warn against, so it steps them down below 480px
+         rather than letting the page overflow horizontally. */
+      @media (max-width: 480px) {
+        .scoreboard {
+          grid-template-columns: 1fr;
+        }
+        .scoreboard .score {
+          text-align: left;
+          font-size: var(--text-3xl);
+        }
+        .stage-timer {
+          font-size: var(--text-4xl);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="is-test-banner">This preview page uses is_test styling as a demonstration only</div>
+
+    <section class="guide-section">
+      <h1 class="guide-heading">Seduh Score Next — Design Tokens</h1>
+      <p>
+        Palette, type, spacing, and the core patterns (tabular score digits, the
+        <code>is_test</code> banner) defined in <code>src/ui/tokens/</code>. See
+        <code>DESIGN.md</code> for the reasoning behind every value on this page.
+      </p>
+
+      <h2 class="guide-heading">Color — paper mode</h2>
+      <div class="swatch-grid">
+        <div class="swatch">
+          <div class="swatch-fill" style="background: var(--color-canvas)"></div>
+          <div class="swatch-label">canvas</div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-fill" style="background: var(--color-surface)"></div>
+          <div class="swatch-label">surface</div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-fill" style="background: var(--color-text)"></div>
+          <div class="swatch-label">text</div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-fill" style="background: var(--color-accent)"></div>
+          <div class="swatch-label">accent</div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-fill" style="background: var(--color-gold)"></div>
+          <div class="swatch-label">gold</div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-fill" style="background: var(--color-danger)"></div>
+          <div class="swatch-label">danger</div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-fill" style="background: var(--color-success)"></div>
+          <div class="swatch-label">success</div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-fill" style="background: var(--color-warning)"></div>
+          <div class="swatch-label">warning</div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-fill" style="background: var(--color-test)"></div>
+          <div class="swatch-label">test (reserved)</div>
+        </div>
+      </div>
+
+      <h2 class="guide-heading">Color — stage mode</h2>
+      <div class="stage-swatches" data-surface="stage">
+        <div class="swatch-grid">
+          <div class="swatch">
+            <div class="swatch-fill" style="background: var(--color-canvas)"></div>
+            <div class="swatch-label">canvas</div>
+          </div>
+          <div class="swatch">
+            <div class="swatch-fill" style="background: var(--color-surface)"></div>
+            <div class="swatch-label">surface</div>
+          </div>
+          <div class="swatch">
+            <div class="swatch-fill" style="background: var(--color-text)"></div>
+            <div class="swatch-label">text</div>
+          </div>
+          <div class="swatch">
+            <div class="swatch-fill" style="background: var(--color-accent)"></div>
+            <div class="swatch-label">accent</div>
+          </div>
+          <div class="swatch">
+            <div class="swatch-fill" style="background: var(--color-gold)"></div>
+            <div class="swatch-label">gold</div>
+          </div>
+          <div class="swatch">
+            <div class="swatch-fill" style="background: var(--color-danger)"></div>
+            <div class="swatch-label">danger</div>
+          </div>
+          <div class="swatch">
+            <div class="swatch-fill" style="background: var(--color-success)"></div>
+            <div class="swatch-label">success</div>
+          </div>
+          <div class="swatch">
+            <div class="swatch-fill" style="background: var(--color-warning)"></div>
+            <div class="swatch-label">warning</div>
+          </div>
+        </div>
+      </div>
+
+      <h2 class="guide-heading">Buttons</h2>
+      <div class="btn-row">
+        <button class="btn btn-primary">Confirm heat →</button>
+        <button class="btn btn-outline">Cancel</button>
+        <button class="btn btn-danger">Delete entry</button>
+        <button class="btn btn-icon tap-target" aria-label="Sync status" title="Sync status">
+          ⟳
+        </button>
+      </div>
+
+      <h2 class="guide-heading">Type scale</h2>
+      <div class="type-row">
+        <div class="meta">display / 96px</div>
+        <div class="sample font-mono-score tabular-nums" style="font-size: var(--text-6xl)">
+          07:42
+        </div>
+      </div>
+      <div class="type-row">
+        <div class="meta">5xl / 64px</div>
+        <div class="sample font-mono-score tabular-nums" style="font-size: var(--text-5xl)">
+          92.5
+        </div>
+      </div>
+      <div class="type-row">
+        <div class="meta">2xl / 33px</div>
+        <div class="sample" style="font-size: var(--text-2xl)">Round 3 — Semifinal</div>
+      </div>
+      <div class="type-row">
+        <div class="meta">lg / 21px</div>
+        <div class="sample" style="font-size: var(--text-lg)">Amara Okafor</div>
+      </div>
+      <div class="type-row">
+        <div class="meta">base / 16px</div>
+        <div class="sample" style="font-size: var(--text-base)">
+          Body copy — helper text, form labels, table cells.
+        </div>
+      </div>
+      <div class="type-row">
+        <div class="meta">sm / 14px, tracked</div>
+        <div
+          class="sample"
+          style="
+            font-size: var(--text-sm);
+            text-transform: uppercase;
+            letter-spacing: var(--tracking-wide);
+          "
+        >
+          Round 3 — Semifinal
+        </div>
+      </div>
+
+      <h2 class="guide-heading">Spacing scale</h2>
+      <div class="space-row">
+        <div class="meta">space-2 / 8px</div>
+        <div class="bar" style="width: var(--space-2)"></div>
+      </div>
+      <div class="space-row">
+        <div class="meta">space-4 / 16px</div>
+        <div class="bar" style="width: var(--space-4)"></div>
+      </div>
+      <div class="space-row">
+        <div class="meta">space-6 / 32px</div>
+        <div class="bar" style="width: var(--space-6)"></div>
+      </div>
+      <div class="space-row">
+        <div class="meta">space-8 / 64px</div>
+        <div class="bar" style="width: var(--space-8)"></div>
+      </div>
+
+      <h2 class="guide-heading">Mock scoreboard (paper mode)</h2>
+      <p>
+        <code>--color-gold</code> appears only as a fill (badge background, paired with
+        <code>--color-gold-contrast</code>) — never as a plain text color. See the "Don't" list in
+        <code>DESIGN.md</code>.
+      </p>
+      <div class="scoreboard">
+        <div class="name">Amara Okafor</div>
+        <div class="score font-mono-score tabular-nums">96.25</div>
+        <div class="name">Kenji Watanabe <span class="badge">Champion</span></div>
+        <div class="score font-mono-score tabular-nums">98.00</div>
+        <div class="name">Priya Sharma</div>
+        <div class="score font-mono-score tabular-nums">94.75</div>
+      </div>
+
+      <h2 class="guide-heading">Stage mode (projector surface)</h2>
+      <div class="stage-panel" data-surface="stage">
+        <div class="stage-caption">Round 3 — Time Remaining</div>
+        <div class="stage-timer font-mono-score tabular-nums">04:12</div>
+        <div class="btn-row" style="justify-content: center; margin-top: var(--space-5)">
+          <span class="status-live-dot" aria-hidden="true"></span>
+          <span style="color: var(--color-text-secondary); font-size: var(--text-sm)"
+            >Live — 4 judges scoring</span
+          >
+        </div>
+      </div>
+
+      <h2 class="guide-heading"><code>is_test</code> banner</h2>
+      <div class="is-test-banner">Test Data — Not a Live Event</div>
+    </section>
+  </body>
+</html>

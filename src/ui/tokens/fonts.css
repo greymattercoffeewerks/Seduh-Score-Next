@@ -1,0 +1,87 @@
+/*
+ * Self-hosted webfonts — Seduh Score Next
+ *
+ * Three fonts from fontshare.com (Indian Type Foundry, ITF Free Font
+ * License — free for commercial use, self-hosting explicitly permitted),
+ * downloaded once into src/ui/tokens/fonts/*.woff2 and served from this
+ * origin. Deliberately NOT linked from Fontshare's CDN (no <link> to
+ * fonts.fontshare.com, no @import of their hosted CSS): the whole reason
+ * for a design-system font choice here is that the app must render at live
+ * events on unpredictable venue wifi, and a CDN font request is one more
+ * thing that can fail or stall at the worst possible moment. Self-hosting
+ * keeps the reliability property while still getting a real typographic
+ * identity instead of a bare system-font fallback.
+ *
+ * Only the weights actually used by a --font-weight-* token are included
+ * (see typography.css) — no unused styles shipped.
+ */
+
+@font-face {
+  font-family: 'Erode';
+  src: url('./fonts/erode-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Erode';
+  src: url('./fonts/erode-400-italic.woff2') format('woff2');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Switzer';
+  src: url('./fonts/switzer-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Switzer';
+  src: url('./fonts/switzer-500.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Switzer';
+  src: url('./fonts/switzer-600.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Switzer';
+  src: url('./fonts/switzer-700.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* "Tabular" is not a monospace face — it's a grotesque sans with strong
+   tabular (fixed-width) lining figures, which is what score/timer digits
+   actually need; a true monospace forces every letter to the same width,
+   which this system doesn't need outside of numerals. Still paired with
+   `font-variant-numeric: tabular-nums` on `.font-mono-score` (base.css) as
+   a belt-and-suspenders guarantee regardless of the active font. */
+@font-face {
+  font-family: 'Tabular';
+  src: url('./fonts/tabular-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Tabular';
+  src: url('./fonts/tabular-700.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
