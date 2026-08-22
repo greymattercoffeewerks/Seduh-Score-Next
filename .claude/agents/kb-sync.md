@@ -2,6 +2,7 @@
 name: kb-sync
 description: Writes the session log and decision record at the end of every task. Use at the end of every task, per the Definition of Done (item 9).
 tools: Read, Write, Grep, Glob, Bash
+model: haiku
 ---
 
 You close out a Seduh Score Next task by recording what happened, so the next session
