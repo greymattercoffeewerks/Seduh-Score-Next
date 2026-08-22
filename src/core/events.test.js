@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createEvent } from './events.js';
+import { createEvent, findEvent } from './events.js';
 
 function fakeClient(response) {
   const calls = [];
@@ -12,6 +12,10 @@ function fakeClient(response) {
           return builder;
         },
         select: () => builder,
+        eq: (...args) => {
+          calls.push(['eq', ...args]);
+          return builder;
+        },
         single: () => Promise.resolve(response),
       };
       return builder;
@@ -72,5 +76,19 @@ describe('createEvent', () => {
     await expect(
       createEvent('org1', { format: 'cup_taster', name: 'Broken' }, client),
     ).rejects.toThrow('insert failed');
+  });
+});
+
+describe('findEvent', () => {
+  it('returns the matching event', async () => {
+    const event = { id: 'ev1', name: 'October Cup', is_test: false };
+    const client = fakeClient({ data: event, error: null });
+    expect(await findEvent('ev1', client)).toEqual(event);
+    expect(client.calls).toContainEqual(['eq', 'id', 'ev1']);
+  });
+
+  it('throws on a query error', async () => {
+    const client = fakeClient({ data: null, error: new Error('not found') });
+    await expect(findEvent('missing', client)).rejects.toThrow('not found');
   });
 });

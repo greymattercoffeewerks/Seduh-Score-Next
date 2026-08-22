@@ -6,6 +6,7 @@ import {
   registerPerson,
   createEntry,
   registerEntry,
+  listEntries,
   mergePeople,
 } from './registry.js';
 
@@ -38,6 +39,7 @@ function fakeClient({ tables = {}, rpcResult = { data: null, error: null } } = {
         },
         single: () => Promise.resolve(resolve()),
         maybeSingle: () => Promise.resolve(resolve()),
+        then: (onResolve, onReject) => Promise.resolve(resolve()).then(onResolve, onReject),
       };
       return builder;
     },
@@ -188,6 +190,29 @@ describe('createEntry', () => {
     expect(result).toEqual(insertedEntry);
     // The people table must never be queried for a walk-up — there is no
     // personId to look up.
+  });
+});
+
+describe('listEntries', () => {
+  it('returns every entry for the event', async () => {
+    const entries = [
+      { id: 'e1', event_id: 'ev1', display_name: 'Cupper One', withdrawn: false },
+      { id: 'e2', event_id: 'ev1', display_name: 'Cupper Two', withdrawn: true },
+    ];
+    const client = fakeClient({ tables: { event_entries: { data: entries, error: null } } });
+    expect(await listEntries('ev1', client)).toEqual(entries);
+  });
+
+  it('returns an empty array when the event has no entries', async () => {
+    const client = fakeClient({ tables: { event_entries: { data: [], error: null } } });
+    expect(await listEntries('ev1', client)).toEqual([]);
+  });
+
+  it('throws on a query error', async () => {
+    const client = fakeClient({
+      tables: { event_entries: { data: null, error: new Error('boom') } },
+    });
+    await expect(listEntries('ev1', client)).rejects.toThrow('boom');
   });
 });
 

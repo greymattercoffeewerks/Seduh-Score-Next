@@ -22,3 +22,9 @@ export async function createEvent(orgId, event, client = getSupabase()) {
   if (error) throw error;
   return data;
 }
+
+export async function findEvent(eventId, client = getSupabase()) {
+  const { data, error } = await client.from('events').select('*').eq('id', eventId).single();
+  if (error) throw error;
+  return data;
+}

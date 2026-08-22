@@ -109,6 +109,12 @@ export async function findStageByOrdinal(eventId, ordinal, client = getSupabase(
   return data;
 }
 
+export async function findStageById(stageId, client = getSupabase()) {
+  const { data, error } = await client.from('ct_stages').select('*').eq('id', stageId).single();
+  if (error) throw error;
+  return data;
+}
+
 // True only when an existing row matches the incoming config exactly — the
 // one case a retry may silently reuse. Anything else (a genuinely different
 // cutoff/duration/set count at the same ordinal) is a config change, not a
@@ -141,7 +147,10 @@ function throwConfigConflict(ordinal, existing, requested) {
   );
 }
 
-const UNIQUE_VIOLATION = '23505';
+// Postgres unique-violation — shared with heats.js's own race-recovery, same
+// meaning either place: a concurrent caller won an insert between our check
+// and ours.
+export const UNIQUE_VIOLATION = '23505';
 
 export async function createStage(eventId, stage, client = getSupabase()) {
   const existing = await findStageByOrdinal(eventId, stage.ordinal, client);
