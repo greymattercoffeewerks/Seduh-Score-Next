@@ -113,6 +113,16 @@ export async function listEntries(eventId, client = getSupabase()) {
   return data;
 }
 
+// For a caller that already has a specific set of entry ids (e.g. a single
+// heat's roster) and doesn't want to fetch — and then discard — every other
+// entry in the event via listEntries.
+export async function listEntriesByIds(entryIds, client = getSupabase()) {
+  if (entryIds.length === 0) return [];
+  const { data, error } = await client.from('event_entries').select('*').in('id', entryIds);
+  if (error) throw error;
+  return data;
+}
+
 // Composes registerPerson + createEntry for the common case: a cupper with a
 // phone number, registered and entered into one event in a single call. A
 // walk-up with no phone yet still calls createEntry directly (D16) — this

@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Timing surface — preview</title>
+    <link rel="stylesheet" href="/src/ui/tokens/index.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/heatsScreen.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/timingScreen.css" />
+  </head>
+  <body>
+    <!--
+      Demo-only harness for the T4.3 timing screen — not part of the shipped
+      module graph, same role as src/ui/tokens/preview.html and
+      heatsScreen.preview.html. In-memory fake client, no live Supabase
+      connection. Duration is deliberately short (20s, not a real ~480s
+      heat) so the full lifecycle — countdown, a manual stop, auto-max at
+      expiry, transition to "timing complete" — can be observed directly in
+      a couple of minutes instead of eight.
+    -->
+    <div id="app"></div>
+    <script type="module">
+      import { mountTimingScreen } from './timingScreen.js';
+
+      function createDemoClient() {
+        const db = {
+          events: [{ id: 'ev1', is_test: true }],
+          ct_heats: [
+            {
+              id: 'h1',
+              stage_id: 's1',
+              heat_number: 1,
+              timing_mode: 'app',
+              status: 'pending',
+              duration_secs: 20,
+              started_at: null,
+            },
+          ],
+          ct_heat_entries: [
+            {
+              id: 'he1',
+              heat_id: 'h1',
+              entry_id: 'e1',
+              station: 'A',
+              elapsed_secs: null,
+              maxed: false,
+            },
+            {
+              id: 'he2',
+              heat_id: 'h1',
+              entry_id: 'e2',
+              station: 'B',
+              elapsed_secs: null,
+              maxed: false,
+            },
+            {
+              id: 'he3',
+              heat_id: 'h1',
+              entry_id: 'e3',
+              station: 'C',
+              elapsed_secs: null,
+              maxed: false,
+            },
+          ],
+          event_entries: [
+            { id: 'e1', display_name: 'Alex Rivera' },
+            { id: 'e2', display_name: 'Jordan Lee' },
+            { id: 'e3', display_name: 'Sam Okafor' },
+          ],
+        };
+
+        function matchesFilters(row, filters) {
+          return filters.every(([type, col, val]) => {
+            if (type === 'eq') return row[col] === val;
+            if (type === 'is') return row[col] === val; // val is null in our usage
+            if (type === 'in') return val.includes(row[col]);
+            return true;
+          });
+        }
+
+        function makeBuilder(table) {
+          const filters = [];
+          let pendingUpdate = null;
+
+          const builder = {
+            select() {
+              return builder;
+            },
+            eq(col, val) {
+              filters.push(['eq', col, val]);
+              return builder;
+            },
+            is(col, val) {
+              filters.push(['is', col, val]);
+              return builder;
+            },
+            in(col, vals) {
+              filters.push(['in', col, vals]);
+              return builder;
+            },
+            update(payload) {
+              pendingUpdate = payload;
+              return builder;
+            },
+            single() {
+              const rows = db[table].filter((r) => matchesFilters(r, filters));
+              return Promise.resolve({ data: rows[0] ?? null, error: null });
+            },
+            maybeSingle() {
+              if (pendingUpdate) {
+                const rows = db[table].filter((r) => matchesFilters(r, filters));
+                for (const row of rows) Object.assign(row, pendingUpdate);
+                return Promise.resolve({ data: rows[0] ?? null, error: null });
+              }
+              const rows = db[table].filter((r) => matchesFilters(r, filters));
+              return Promise.resolve({ data: rows[0] ?? null, error: null });
+            },
+            then(resolve, reject) {
+              const rows = db[table].filter((r) => matchesFilters(r, filters));
+              return Promise.resolve({ data: rows, error: null }).then(resolve, reject);
+            },
+          };
+          return builder;
+        }
+
+        return { from: (table) => makeBuilder(table) };
+      }
+
+      mountTimingScreen(document.getElementById('app'), {
+        eventId: 'ev1',
+        heatId: 'h1',
+        client: createDemoClient(),
+      });
+    </script>
+  </body>
+</html>

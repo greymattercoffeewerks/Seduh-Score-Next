@@ -8,5 +8,14 @@ export function clampElapsed(secs, durationSecs) {
   if (secs >= durationSecs) {
     return { elapsed: durationSecs, raw: secs, maxed: true };
   }
+  if (secs < 0) {
+    // A negative input (clock skew between client and server — the tap path
+    // computes this against a server-recorded started_at) floors to 0 for
+    // the authoritative `elapsed`, but `raw` still preserves the true
+    // unclamped value — this is the ONE place both bounds are enforced, so
+    // a caller inspecting `raw` can always recover what was actually
+    // measured, never a value this function already lost.
+    return { elapsed: 0, raw: secs, maxed: false };
+  }
   return { elapsed: secs, raw: secs, maxed: false };
 }

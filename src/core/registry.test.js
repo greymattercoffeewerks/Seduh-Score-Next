@@ -7,6 +7,7 @@ import {
   createEntry,
   registerEntry,
   listEntries,
+  listEntriesByIds,
   mergePeople,
 } from './registry.js';
 
@@ -29,6 +30,10 @@ function fakeClient({ tables = {}, rpcResult = { data: null, error: null } } = {
       const builder = {
         select: () => builder,
         eq: () => builder,
+        in: (...args) => {
+          calls.push(['in', ...args]);
+          return builder;
+        },
         ilike: (...args) => {
           calls.push(['ilike', ...args]);
           return builder;
@@ -213,6 +218,28 @@ describe('listEntries', () => {
       tables: { event_entries: { data: null, error: new Error('boom') } },
     });
     await expect(listEntries('ev1', client)).rejects.toThrow('boom');
+  });
+});
+
+describe('listEntriesByIds', () => {
+  it('returns the matching entries', async () => {
+    const entries = [{ id: 'e1', display_name: 'Cupper One' }];
+    const client = fakeClient({ tables: { event_entries: { data: entries, error: null } } });
+    expect(await listEntriesByIds(['e1'], client)).toEqual(entries);
+    expect(client.calls).toContainEqual(['in', 'id', ['e1']]);
+  });
+
+  it('returns an empty array without querying at all when given no ids', async () => {
+    const client = fakeClient({ tables: { event_entries: { data: [], error: null } } });
+    expect(await listEntriesByIds([], client)).toEqual([]);
+    expect(client.calls).toHaveLength(0);
+  });
+
+  it('throws on a query error', async () => {
+    const client = fakeClient({
+      tables: { event_entries: { data: null, error: new Error('boom') } },
+    });
+    await expect(listEntriesByIds(['e1'], client)).rejects.toThrow('boom');
   });
 });
 

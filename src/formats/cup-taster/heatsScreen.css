@@ -6,7 +6,12 @@
  * shapes — later screens should reuse these rather than inventing their own.
  */
 
-.heats-screen {
+/* Shared by every format-screen container (.heats-screen, .timing-screen,
+   ...) — extracted here on the 2nd verbatim occurrence rather than left
+   duplicated, since it's not merely similar CSS but byte-for-byte identical
+   rules. Screens keep their own class too (as a semantic/scoping hook for
+   screen-specific rules below), just add .screen-container alongside it. */
+.screen-container {
   max-width: var(--max-width-content);
   margin: 0 auto;
   padding: var(--space-5) var(--space-4);
@@ -15,14 +20,14 @@
   gap: var(--space-6);
 }
 
-.heats-screen h1 {
+.screen-container h1 {
   font-family: var(--font-display);
   font-size: var(--text-2xl);
   line-height: var(--leading-tight);
   margin: 0;
 }
 
-.heats-screen h2 {
+.screen-container h2 {
   font-family: var(--font-display);
   font-size: var(--text-lg);
   line-height: var(--leading-snug);
@@ -194,6 +199,18 @@
   background: var(--color-surface-sunken);
   border: var(--border-hairline) solid var(--color-danger);
   color: var(--color-danger);
+}
+
+.screen-feedback[data-tone='success'] {
+  background: var(--color-surface-sunken);
+  border: var(--border-hairline) solid var(--color-success);
+  color: var(--color-success);
+}
+
+.screen-feedback[data-tone='urgent'] {
+  background: var(--color-surface-sunken);
+  border: var(--border-hairline) solid var(--color-warning);
+  color: var(--color-warning);
 }
 
 .screen-feedback:empty {

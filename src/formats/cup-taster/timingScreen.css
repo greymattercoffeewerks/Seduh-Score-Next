@@ -1,0 +1,95 @@
+/*
+ * Timing surface, app mode (T4.3) — built on src/ui/tokens, reusing
+ * heatsScreen.css's .btn/.card/.station-badge/.screen-feedback (both
+ * stylesheets are loaded together; nothing here redefines them). Adds only
+ * what's new to this screen: the page container, the live countdown
+ * display, and the per-cupper timing-row states (running/stopped/maxed).
+ */
+
+/* Container/heading rules live in heatsScreen.css's .screen-container —
+   both stylesheets are always loaded together (see file comment above), so
+   nothing screen-specific is redefined here. */
+
+/* Every digit here must use --font-mono + tabular-nums (base.css) so the
+   display doesn't reflow width as seconds tick down — a projector-scale
+   requirement (typography.css), but true here too since this is read at a
+   glance while cupping, not studied. */
+.countdown-display {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  font-size: var(--text-5xl);
+  line-height: var(--leading-mono);
+  text-align: center;
+  padding: var(--space-5) 0;
+}
+
+.countdown-display[data-urgent='true'] {
+  color: var(--color-danger);
+}
+
+.timing-row-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.timing-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: var(--border-hairline) solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+/* min-width: 0 overrides the flex-item default of min-width: auto (content
+   size) — without it, a long cupper name can never shrink below its own
+   intrinsic width, and at 360px pushes the Stop button (min-width: 6rem)
+   off the edge of the card instead of truncating. */
+.timing-row-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.timing-row-name-inner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.timing-row-name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.timing-row-result {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  font-size: var(--text-md);
+}
+
+.timing-row-result[data-maxed='true'] {
+  color: var(--color-warning);
+}
+
+/* Every stop button is a large, unambiguous tap target on its own row —
+   this is the screen used mid-heat, one-handed, sometimes urgently. */
+.btn-stop {
+  min-width: 6rem;
+  flex-shrink: 0;
+}

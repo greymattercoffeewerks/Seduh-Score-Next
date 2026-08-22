@@ -38,5 +38,16 @@ export default [
       'seduh-next/no-raw-elapsed-write': 'error',
     },
   },
+  {
+    // Legitimate exemption (handoff §10): this file's fixtures describe mock
+    // ct_heat_entries *rows* the fake Supabase client hands back — data
+    // shape, not a real write path. The module under test (timing.js) still
+    // has full rule coverage; only its test's own fixture literals are
+    // exempt.
+    files: ['src/formats/cup-taster/timing.test.js', 'src/formats/cup-taster/timingScreen.test.js'],
+    rules: {
+      'seduh-next/no-raw-elapsed-write': 'off',
+    },
+  },
   prettier,
 ];
