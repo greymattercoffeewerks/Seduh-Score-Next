@@ -6,6 +6,29 @@ closes.
 
 ---
 
+## Cloudflare Workers connected · 2026-08-22
+
+Noticed mid-session, not initiated by this session: opening T3.2's PR surfaced an
+unexpected third CI check, "Workers Builds: seduh-score-next," from Cloudflare's official
+"Cloudflare Workers and Pages" GitHub App — with a real build ID and live preview URLs
+(`https://5ec46df3-seduh-score-next.workers.dev`,
+`https://feat-t3-2-outbox-seduh-score-next.workers.dev`). This meant the GitHub repo was
+now connected to a real Cloudflare Workers project, which neither this session did (no
+Cloudflare credentials or dashboard access were used) nor matches what T0.1/Handoff
+Correction 001 says ("do not deploy and do not connect the repo").
+
+Paused before merging and asked the user directly rather than assuming. Confirmed: the
+user connected it themselves and is fine with deploys happening on merge going forward.
+Merged T3.2's PR; confirmed a Workers Build check also fires on `main` (production
+script), not just PR branches. Updated the "not connected" claims in `README.md` and
+`ROADMAP.md`'s open items to match reality — left T0.1's own 2026-08-21 entry below
+un-rewritten, since it accurately described the state at the time it was written.
+
+No real app content is served yet either way (Phase 0's placeholder `main.js`/`index.html`
+only) — this is a build/deploy pipeline now being live, not a live feature.
+
+---
+
 ## Phase 3 — Registry and offline · 2026-08-22
 
 ### T3.2 IndexedDB mirror + operation outbox

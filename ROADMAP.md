@@ -94,7 +94,11 @@ Per handoff §14. Verifier: `offline-sync-auditor` throughout.
   deliberately read-only at the RLS+GRANT layer; provisioning the single org for
   October happens via `service_role` outside the app, not through a built flow. Revisit
   if a self-serve org-setup flow is ever needed.
-- **Cloudflare Workers deployment is configured but not connected** (D29, amended into
-  T0.1 — see its row above). `wrangler.jsonc` exists and validates
-  (`npx wrangler deploy --dry-run`), but connecting the repo and actually deploying is a
-  separate decision, not before Phase 5 at the earliest per §15.4.
+- **Cloudflare Workers is now connected and auto-deploying** (2026-08-22, user action —
+  ahead of §15.4's "not before Phase 5 at the earliest" default). The GitHub repo has the
+  official "Cloudflare Workers and Pages" App installed; every push gets a Workers Build
+  check and a live preview URL, and pushes to `main` build the production script. This
+  happened between T3.2's PR being opened and merged — noticed via an unexpected third CI
+  check, confirmed intentional with the user before merging. No app code is actually
+  served yet (Phase 0's placeholder `main.js`/`index.html` only); revisit this note once
+  Phase 4/5 ships something real to that URL.
