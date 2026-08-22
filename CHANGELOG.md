@@ -74,6 +74,104 @@ more minor, non-blocking edge cases, both fixed:
 
 ---
 
+## Design system foundation (`src/ui/tokens/`) · 2026-08-22
+
+**No single §14 task ID** — this isn't one of the numbered build-plan tasks. It closes
+the open item ROADMAP.md carried since Phase 2 ("`src/ui/tokens/` is an empty Phase 0
+placeholder; real tokens land starting Phase 4, when UI work begins") ahead of Phase 4
+starting, so T4.1–T4.8 (all reviewed by `ui-accessibility-reviewer` per §14) have a real
+token layer to build on from their first commit rather than inventing one mid-task.
+
+**What shipped**: `colors.css`, `typography.css`, `spacing.css`, `base.css`, `fonts.css`
+\+ `fonts/*.woff2` (8 files), `index.css` (single entry point, fixed import order:
+fonts → colors → typography → spacing → base), `DESIGN.md` (full rationale — three
+refero.design references used as a starting point, a computed WCAG contrast table, the
+Do/Don't guideline list), `preview.html` (live style guide exercising every token in both
+surface modes), and `index.html` wired to load `index.css` so the existing placeholder
+scaffold already inherits it. Full reasoning lives in `src/ui/tokens/DESIGN.md` — not
+reproduced here; this entry records what shipped and what review found, not the design
+argument.
+
+Architecture in one paragraph: one warm neutral ramp (`--clr-clay-50`–`950`) shared by
+two surface modes, `:root`/`[data-surface="paper"]` (light, organiser + phone) and
+`[data-surface="stage"]` (dark, projector) — every semantic token follows one symmetric
+rule (paper = dark tone + white `-contrast`, stage = light tone + `clay-950` `-contrast`)
+so the mode switch has zero per-color exceptions. `--color-test` (violet, `#6b21c9`) is
+reserved exclusively for `is_test` indicators (D9) and fixed across both modes. No
+`box-shadow` token anywhere — flat borders/surface steps only. Three fonts
+(Erode/Switzer/Tabular, Fontshare/ITF license) self-hosted rather than CDN-linked.
+
+**Verifiers**: `module-boundary-checker`, `ui-accessibility-reviewer`, and
+`code-reviewer`, run in parallel per `CLAUDE.md`'s delegation strategy (touches `src/**`
+and is a UI change). **Not a clean pass — all three found real issues**, fixed before
+this landed:
+
+- `module-boundary-checker`: `preview.html`'s demo copy used Cup-Taster vocabulary
+  ("Heat"/"cuppers") inside what's meant to be a format-agnostic token layer — the one
+  place format vocabulary had leaked in. Genericized to "Round"/"judges". Otherwise
+  clean — no `core/`↔`formats/` boundary issue, since this layer has no format coupling
+  to begin with.
+- `ui-accessibility-reviewer` (360px first, per DoD): `--color-focus-ring` was set to the
+  accent hue — a focus ring in the same color family as an element's own accent styling
+  weakens the focus signal, so it's now the neutral `--color-border-strong`. Added a
+  `.tap-target` utility: `--tap-target-min` (44px, WCAG 2.5.5) alone only guaranteed
+  `min-height`, not `min-width`, so an icon-only control could still land under 44px
+  wide. A real 360px horizontal-overflow bug in `preview.html` (three independent
+  causes: an unbreakable 96px mono sample, a grid auto-column that wouldn't shrink below
+  its content's intrinsic width, and fixed-canvas type sizes dropped into a narrow
+  responsive card) — fixed with flex-wrap + a media query, and `typography.css` now
+  documents `--text-5xl`/`--text-6xl` as fixed-canvas-only (projector stage), not for
+  arbitrary responsive containers. `--color-gold` was used as plain preview text at a
+  measured 4.9:1 (barely-passing, undocumented) — removed in favor of gold-as-fill-only
+  (badge background + `-contrast` text), matching the system's own stated guideline.
+- `code-reviewer`: an orphaned unused token (`--clr-ember-400`) removed; `base.css`'s
+  `.is-test-banner` stripe pattern used hardcoded `10px`/`20px` instead of the spacing
+  scale, and carried an untokenized `text-shadow` that contradicted the system's own
+  no-shadow rule — both fixed. `DESIGN.md`'s contrast table had one wrong number
+  (accent-as-text listed as 5.6:1; actually 5.2:1 — that figure was the button-fill
+  pairing, a different case) — split into two separate rows with correct values. A
+  Prettier formatting failure across 4 files fixed via `npm run format`.
+
+Every fix was re-verified in the running preview, not just re-read.
+
+**Follow-up in the same session, on explicit user request**: the three Fontshare fonts
+were added after the initial token build (colors/type/spacing/base only, system-font
+stack). Verified in-browser after adding: network tab shows 200s for all 8 `.woff2`
+files, computed styles confirm the webfonts apply over the fallback stack, and the
+360px fix above still holds with real fonts in place (fonts change metrics; re-checked
+rather than assumed).
+
+**Decisions closed this session, not yet in the handoff's §12 record** (recorded here
+per §0 — the handoff itself is never edited to reflect progress; a new decision is a new
+row logged in this file, not a rewrite of the frozen document):
+
+- **D30 — Self-hosted webfonts only, never a third-party CDN link (Fontshare's or
+  otherwise).** The app runs at live events on venue wifi of unknown quality; a font
+  request that has to succeed mid-event is a single point of failure this project can't
+  accept, matching the same offline-first posture Phase 3's outbox work already commits
+  to. `fonts.css` uses `font-display: swap` and every `--font-*` token keeps a full
+  system-stack fallback after the webfont name regardless, so a slow/failed load still
+  renders instantly rather than blocking — the self-hosting rule is belt-and-suspenders
+  on top of that, not a substitute for it.
+- **D31 — No `box-shadow` token in the design system; elevation is a border or a
+  background-color step.** All three refero.design references this system started from
+  separate surfaces with a hairline border or a flat color step, never a drop shadow —
+  for a tool whose output is a competition scoresheet, that flat register was judged to
+  read as rigor rather than SaaS gloss. Enforced only by convention/review for now (no
+  lint rule); `code-reviewer`'s finding above (an untokenized `text-shadow` slipping into
+  `base.css`) is the first real instance of what this decision is guarding against, so a
+  future session should consider whether it's worth a lint rule once there's more than
+  one occurrence to justify it.
+
+**Open follow-up**: no real screen consumes these tokens yet (Phase 4 is "not started"
+per `ROADMAP.md`) — `preview.html` and `index.html`'s `<link>` are the only current
+consumers. `ui-accessibility-reviewer`'s 360px-first review covered the token layer and
+`preview.html` itself; it has not yet reviewed a real product screen built on top of it,
+since none exists — that review happens per-task starting Phase 4 (T4.1's own DoD), not
+retroactively satisfied by this entry.
+
+---
+
 ## Cloudflare Workers connected · 2026-08-22
 
 Noticed mid-session, not initiated by this session: opening T3.2's PR surfaced an

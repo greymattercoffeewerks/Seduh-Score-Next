@@ -24,6 +24,11 @@ about original design intent.
 
 **Deadline: 4 October 2026, Cup Tasters event.**
 
+**Not tied to a phase task**: the `src/ui/tokens/` design system (colors, typography,
+spacing, base styles, self-hosted fonts, `DESIGN.md`, `preview.html`) shipped
+2026-08-22, ahead of Phase 4 — see CHANGELOG.md's "Design system foundation" entry.
+Closes the open item that used to sit below. No real screen consumes it yet.
+
 ---
 
 ## Phase 0 — Foundation
@@ -88,11 +93,13 @@ Per handoff §14. Verifier: `offline-sync-auditor` throughout.
 - **Supabase cloud project not yet linked.** Phases 0–3 only set up and verified the
   local stack. Linking a cloud project (and the `supabase db push` step CLAUDE.md's Git
   section refers to) is Phase 4+ work, once the schema is stable enough to push.
-- **Design tokens (`src/ui/tokens/`) — a separate, concurrent session is building the
-  real token layer** (colors/typography/spacing/base + self-hosted fonts) as of
-  2026-08-22, ahead of Phase 4. Not yet committed to `main` as of this entry — this
-  session deliberately left it untouched (shared working tree; confirmed with the user
-  not to interfere). Update this note once that work lands.
+- **Design tokens shipped 2026-08-22, ahead of Phase 4** (`src/ui/tokens/`: colors,
+  typography, spacing, base styles, self-hosted fonts, `DESIGN.md`, `preview.html`) —
+  see CHANGELOG.md's "Design system foundation" entry for what shipped and what the
+  three parallel reviews (`module-boundary-checker`, `ui-accessibility-reviewer`,
+  `code-reviewer`) found and fixed. No real screen consumes it yet — `preview.html` and
+  `index.html`'s stylesheet `<link>` are the only current consumers; Phase 4 tasks are
+  the first to build a real screen on top of it.
 - **No org/membership management UI or RPC exists.** `orgs`/`org_members` are
   deliberately read-only at the RLS+GRANT layer; provisioning the single org for
   October happens via `service_role` outside the app, not through a built flow. Revisit

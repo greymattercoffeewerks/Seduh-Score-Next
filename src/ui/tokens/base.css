@@ -1,0 +1,133 @@
+/*
+ * Base layer — Seduh Score Next
+ *
+ * A handful of global rules and utility classes built directly on the
+ * tokens in colors.css/typography.css/spacing.css. Nothing here is
+ * format-specific (Cup Taster, Guess the Bean, ...) — this file must stay
+ * usable by any future format untouched, same as the rest of `src/core`.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+}
+
+/* Every score, timer, and elapsed-time display must use this so digits
+   don't change width as they change value — critical at projector scale,
+   read from across a room. Pair with --font-mono for guaranteed fixed
+   digit width even where font-variant-numeric support is inconsistent. */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+.font-mono-score {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  line-height: var(--leading-mono);
+}
+
+/* Visible on every interactive element, on every surface — never suppress
+   this without supplying an equivalent custom focus style. */
+:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/*
+ * The `is_test` banner (D9). Renders identically on every surface —
+ * organiser, projector, phone — and in both `data-surface` modes on
+ * purpose: it must be unmistakable regardless of context, so it does not
+ * inherit the paper/stage palette swap the rest of the UI does. Attach
+ * `.is-test-banner` to a persistent, non-dismissible element rendered
+ * whenever `is_test` is true anywhere in the current session/event chain.
+ */
+.is-test-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  /* Stripe width uses --space-3 (12px) so the pattern stays on the spacing
+     scale rather than an arbitrary pixel value. Contrast for white text is
+     verified against both stripe colors (7.8:1 and 19.4:1) — see
+     DESIGN.md — so no text-shadow/elevation effect is needed to read it;
+     that would also break this file's "no shadows" rule for no benefit. */
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--color-test),
+    var(--color-test) var(--space-3),
+    var(--clr-clay-950) var(--space-3),
+    var(--clr-clay-950) calc(var(--space-3) * 2)
+  );
+  color: var(--color-test-contrast);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+/* Guarantees both dimensions of the WCAG 2.5.5 minimum tap target
+   (--tap-target-min, 44px) — apply to any icon-only control, where
+   min-height alone (e.g. on a text button that's already wide enough)
+   isn't sufficient. */
+.tap-target {
+  min-width: var(--tap-target-min);
+  min-height: var(--tap-target-min);
+}
+
+/* A small "LIVE" pulse dot, used sparingly (heat in progress, live
+   session connected). Motion is opt-in via prefers-reduced-motion so it
+   degrades to a static dot rather than being suppressed entirely. */
+.status-live-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .status-live-dot {
+    animation: status-live-pulse 2s ease-in-out infinite;
+  }
+}
+
+@keyframes status-live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}

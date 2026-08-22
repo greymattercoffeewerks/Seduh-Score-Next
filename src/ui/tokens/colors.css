@@ -1,0 +1,120 @@
+/*
+ * Color tokens — Seduh Score Next
+ *
+ * One warm neutral ramp ("clay") spans both surface modes instead of two
+ * disconnected light/dark palettes: `:root` (no attribute, or
+ * `data-surface="paper"`) uses the light end of the ramp for the organiser
+ * dashboard and the phone entry surface; `[data-surface="stage"]` uses the
+ * dark end for the projector/audience big-screen view. Flipping one
+ * attribute on a container swaps the whole palette correctly because every
+ * semantic color obeys the same rule: paper-mode semantic colors are always
+ * dark tones (safe against the light canvas, paired with a white
+ * `-contrast`), stage-mode semantic colors are always light tones (safe
+ * against the dark canvas, paired with a clay-950 `-contrast`). See
+ * DESIGN.md for the contrast ratios behind every pairing.
+ */
+
+:root {
+  /* Clay — warm neutral ramp, 50 (lightest) to 950 (near-black) */
+  --clr-clay-50: #fefcf9;
+  --clr-clay-100: #faf6ef;
+  --clr-clay-200: #f2ebdf;
+  --clr-clay-300: #e6dbc8;
+  --clr-clay-400: #d3c3a8;
+  --clr-clay-500: #a89876;
+  --clr-clay-600: #6b5d49;
+  --clr-clay-700: #574d3c;
+  --clr-clay-800: #362f24;
+  --clr-clay-900: #201b14;
+  --clr-clay-950: #100d0a;
+
+  /* Ember — primary brand/interactive accent (roast-orange) */
+  --clr-ember-500: #ff6b35;
+  --clr-ember-600: #e0501c;
+  --clr-ember-700: #b83e15;
+  --clr-ember-800: #8f3010;
+
+  /* Gold — secondary, ceremonial accent (podium, champion, finals) */
+  --clr-gold-500: #cfa53b;
+  --clr-gold-700: #8a6a1f;
+
+  /* Semantic hue ramps — one text-safe shade per surface mode */
+  --clr-danger-300: #e0603a;
+  --clr-danger-500: #9b1b01;
+  --clr-success-300: #8fae72;
+  --clr-success-500: #3f5c2e;
+  --clr-warning-300: #cf9a37;
+  --clr-warning-500: #8a5e10;
+
+  /*
+   * Test/violet — reserved exclusively for `is_test` indicators (D9).
+   * Violet appears nowhere else in this system, in either surface mode, on
+   * purpose: it must never be mistaken for a brand, semantic, or accent
+   * color. Never repurpose it for a new feature, badge, or state — if it
+   * shows up anywhere, it means "this is not a live event."
+   */
+  --clr-test-500: #6b21c9;
+
+  /* Semantic tokens — paper mode (default) */
+  --color-canvas: var(--clr-clay-100);
+  --color-surface: var(--clr-clay-50);
+  --color-surface-sunken: var(--clr-clay-200);
+  --color-border: var(--clr-clay-300);
+  --color-border-strong: var(--clr-clay-950);
+
+  --color-text: var(--clr-clay-950);
+  --color-text-secondary: var(--clr-clay-700);
+  --color-text-muted: var(--clr-clay-600);
+
+  --color-accent: var(--clr-ember-700);
+  --color-accent-hover: var(--clr-ember-800);
+  --color-accent-contrast: #ffffff;
+
+  --color-gold: var(--clr-gold-700);
+  --color-gold-contrast: #ffffff;
+
+  --color-danger: var(--clr-danger-500);
+  --color-danger-contrast: #ffffff;
+  --color-success: var(--clr-success-500);
+  --color-success-contrast: #ffffff;
+  --color-warning: var(--clr-warning-500);
+  --color-warning-contrast: #ffffff;
+
+  /* Neutral, not brand-colored: a focused element that's already
+     accent-styled (a primary button, an active tab) still needs a focus
+     ring that reads as distinct from its own resting-state color. */
+  --color-focus-ring: var(--color-border-strong);
+
+  /* Fixed across both surface modes — see the comment on --clr-test-500 */
+  --color-test: var(--clr-test-500);
+  --color-test-contrast: #ffffff;
+}
+
+/* Stage mode — the projector/audience big-screen surface */
+[data-surface='stage'] {
+  --color-canvas: var(--clr-clay-950);
+  --color-surface: var(--clr-clay-900);
+  --color-surface-sunken: var(--clr-clay-800);
+  --color-border: var(--clr-clay-700);
+  --color-border-strong: var(--clr-clay-50);
+
+  --color-text: var(--clr-clay-50);
+  --color-text-secondary: var(--clr-clay-300);
+  --color-text-muted: var(--clr-clay-500);
+
+  --color-accent: var(--clr-ember-500);
+  --color-accent-hover: var(--clr-ember-600);
+  --color-accent-contrast: var(--clr-clay-950);
+
+  --color-gold: var(--clr-gold-500);
+  --color-gold-contrast: var(--clr-clay-950);
+
+  --color-danger: var(--clr-danger-300);
+  --color-danger-contrast: var(--clr-clay-950);
+  --color-success: var(--clr-success-300);
+  --color-success-contrast: var(--clr-clay-950);
+  --color-warning: var(--clr-warning-300);
+  --color-warning-contrast: var(--clr-clay-950);
+
+  --color-focus-ring: var(--color-border-strong);
+}

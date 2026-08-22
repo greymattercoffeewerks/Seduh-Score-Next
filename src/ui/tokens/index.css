@@ -1,0 +1,9 @@
+/*
+ * Design tokens — single entry point. Import this file, not the individual
+ * files, from anywhere consuming the design system.
+ */
+@import './fonts.css';
+@import './colors.css';
+@import './typography.css';
+@import './spacing.css';
+@import './base.css';
