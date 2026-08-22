@@ -129,9 +129,21 @@ describe('flushOutbox', () => {
     expect(handler).toHaveBeenCalledTimes(2);
   });
 
-  it('throws when no handler is registered for a queued operation type', async () => {
+  it('a missing handler is recorded as a failed attempt, not an uncaught rejection — so it can surface as a stuck operation', async () => {
+    // A thrown-before-the-try version of this would skip attempts/lastError
+    // persistence entirely, making a missing-handler operation permanently
+    // and silently block the queue with no diagnostic (found during T3.3
+    // review, since T3.3's sync-state panel identifies a stuck operation by
+    // attempts > 0).
     await enqueueOperation('unknown_type', {});
-    await expect(flushOutbox({})).rejects.toThrow(/no handler registered/);
+
+    const result = await flushOutbox({});
+
+    expect(result.stopped).toBe(true);
+    expect(result.error.message).toMatch(/no handler registered/);
+    const [pending] = await listPendingOperations();
+    expect(pending.attempts).toBe(1);
+    expect(pending.lastError).toMatch(/no handler registered/);
   });
 
   it('returns immediately with nothing to do when the queue is empty', async () => {

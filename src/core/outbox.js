@@ -86,16 +86,26 @@ async function runFlush(handlers) {
     if (operations.length === 0) return { processed, stopped: false };
 
     for (const operation of operations) {
-      const handler = handlers[operation.type];
-      if (!handler) {
-        throw new Error(`outbox: no handler registered for operation type "${operation.type}"`);
-      }
-
       try {
+        const handler = handlers[operation.type];
+        if (!handler) {
+          throw new Error(`outbox: no handler registered for operation type "${operation.type}"`);
+        }
         await handler(operation.payload);
+        // If outboxRemove itself throws here (IndexedDB quota/contention),
+        // the catch below persists it as attempts+1 like any other failure —
+        // the handler already ran, so a retry re-invokes it. Safe only
+        // because idempotency is each handler's job (see module comment
+        // above), not this file's.
         await outboxRemove(operation.id);
         processed += 1;
       } catch (error) {
+        // A missing handler is a failure like any other — it must go through
+        // the same attempts/lastError persistence as a handler throwing, or
+        // it can never surface as a stuck/poison operation (T3.3's
+        // computeSyncState() identifies one by attempts > 0; a missing
+        // handler that never increments attempts would silently and
+        // permanently block the queue with no diagnostic reaching a human).
         await outboxPut({
           ...operation,
           attempts: operation.attempts + 1,

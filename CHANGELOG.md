@@ -6,6 +6,74 @@ closes.
 
 ---
 
+## Phase 3 — Registry and offline · 2026-08-22 (T3.3)
+
+### T3.3 Sync state panel
+
+`src/core/syncState.js`: `computeSyncState({ enabled, operations, lastFlushError })` —
+pure derivation of the three-state panel (handoff §8.4: off / live / not synced). No UI
+exists anywhere in this project yet (Phase 4/5 build actual screens), so this is
+deliberately just the state-derivation logic a future panel will render, not a rendered
+component. `stuckOperation` surfaces the first queued operation with `attempts > 0` —
+closing the "a poison operation accumulates silently with no way to reach a human" gap
+`offline-sync-auditor` flagged as deferred during T3.2's review.
+
+Verifier: `offline-sync-auditor`, live-run via the Agent tool, twice (a first pass and a
+re-verification after fixes) — matching Phase 3's other two tasks, not a clean pass
+either time.
+
+**First pass found three real issues**, the first a genuine fail-open violation:
+
+1. `enabled` was checked _before_ the outbox's own real state — `enabled: false` could
+   mask a genuinely pending or failed operation behind "off," which reads as an
+   unalarming, expected state. Exactly the kind of lie "fail-open never lies about a
+   write that failed" (§8.4) exists to prevent, and the original test suite had
+   pinned this as intentional ("stays 'off' even if operations/error are (incorrectly)
+   passed while disabled") rather than catching it. Fixed by checking pending
+   operations/`lastFlushError` first, `enabled` only once both are already clean —
+   `enabled: false` now correctly returns "not synced" whenever real work is
+   outstanding.
+2. **A real bug in already-merged T3.2 code, found via this review**: `outbox.js`'s
+   missing-handler check threw _before_ the `try` block that persists
+   `attempts`/`lastError`, so an operation whose type had no registered handler could
+   never accumulate attempts — meaning it could never surface via `stuckOperation`
+   despite permanently blocking the queue exactly like any other poison operation.
+   Fixed by moving the handler lookup inside the `try`; confirmed the reordering
+   doesn't change the successful-handler path at all, only how a missing handler is
+   recorded. `flushOutbox`'s contract changes as a result (resolves with
+   `{stopped:true, error}` instead of rejecting) — noted for whoever wires up the sync
+   engine next, since nothing calls `flushOutbox` yet.
+3. `operations: null` crashed with a `TypeError` instead of degrading to a defined
+   state. Fixed with an `Array.isArray` guard.
+
+**Re-verification found one more, smaller gap** in fix 3: an array _containing_ a
+null/undefined element (e.g. `[null, {id:'x', attempts:1}]`) still crashed on
+`.find()`, since `Array.isArray` only guards the outer shape. Fixed with `op?.attempts`.
+Not reachable from any current real caller (`listPendingOperations()` → IndexedDB
+`getAll()` can't produce array holes), but closes the same class of gap fix 3 was
+meant to close, not just its literal stated case.
+
+**Final `code-reviewer` pass** (pre-commit, scoped to this task's files only) found two
+more minor, non-blocking edge cases, both fixed:
+
+4. `syncState.js` checked `lastFlushError` as truthy rather than "is set" — an error
+   whose `message` came back as `''` (a handler throwing something other than a
+   well-formed `Error`) would have read as "no error." Not reachable today
+   (`pendingCount > 0` already forces "not synced" independently, since a failed
+   operation is never removed from the outbox), but fixed anyway per the fail-open
+   discipline this file is built around: `lastFlushError != null` instead of a bare
+   truthy check, plus a test pinning `lastFlushError: ''` as still "not synced."
+5. `outbox.js`: if `outboxRemove` itself throws right after a handler succeeds
+   (IndexedDB quota/contention), the same catch re-persists the operation as a normal
+   failure and a retry re-invokes the already-succeeded handler. Not a bug — each
+   handler owns its own idempotency (confirm_heat's ledger, for example) — but the
+   failure mode wasn't documented at the call site; added a comment.
+
+163 tests total across the whole suite (up from 152; 11 new for `syncState.js`, plus
+`outbox.test.js`'s missing-handler test rewritten to assert the corrected behavior).
+
+---
+
 ## Cloudflare Workers connected · 2026-08-22
 
 Noticed mid-session, not initiated by this session: opening T3.2's PR surfaced an
