@@ -20,15 +20,9 @@ import { remainingSecs, isExpired } from '../../core/countdown.js';
 import { getSupabase } from '../../core/supabaseClient.js';
 import { el } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
+import { formatDuration } from '../../core/duration.js';
 
 const URGENT_THRESHOLD_SECS = 10;
-
-export function formatCountdown(totalSecs) {
-  const clamped = Math.max(0, totalSecs);
-  const minutes = Math.floor(clamped / 60);
-  const seconds = clamped % 60;
-  return `${minutes}:${String(seconds).padStart(2, '0')}`;
-}
 
 export function renderRosterPreview(hydratedEntries) {
   const items = hydratedEntries.map((entry) =>
@@ -62,8 +56,8 @@ export function renderTimingRows(hydratedEntries, { onStop }) {
         className: 'timing-row-result',
         attrs: { 'data-maxed': entry.maxed ? 'true' : 'false' },
         text: entry.maxed
-          ? `Max time (${formatCountdown(entry.elapsed_secs)})`
-          : formatCountdown(entry.elapsed_secs),
+          ? `Max time (${formatDuration(entry.elapsed_secs)})`
+          : formatDuration(entry.elapsed_secs),
       });
     }
 
@@ -157,7 +151,7 @@ export async function mountTimingScreen(root, { eventId, heatId, client = getSup
   function tick(startedAtMs, durationSecs, feedback) {
     const remaining = remainingSecs(startedAtMs, durationSecs, Date.now());
     if (countdownEl) {
-      countdownEl.textContent = formatCountdown(remaining);
+      countdownEl.textContent = formatDuration(remaining);
       countdownEl.dataset.urgent = remaining <= URGENT_THRESHOLD_SECS ? 'true' : 'false';
     }
     // A one-time announcement, not a full render — the countdown's own
@@ -255,7 +249,7 @@ export async function mountTimingScreen(root, { eventId, heatId, client = getSup
       countdownEl = el('div', { className: 'countdown-display' });
       const startedAtMs = new Date(data.heat.started_at).getTime();
       const initialRemaining = remainingSecs(startedAtMs, data.heat.duration_secs, Date.now());
-      countdownEl.textContent = formatCountdown(initialRemaining);
+      countdownEl.textContent = formatDuration(initialRemaining);
       countdownEl.dataset.urgent = initialRemaining <= URGENT_THRESHOLD_SECS ? 'true' : 'false';
       container.appendChild(countdownEl);
 

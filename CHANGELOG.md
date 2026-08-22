@@ -6,6 +6,114 @@ closes.
 
 ---
 
+## Phase 4 — Cup Taster · 2026-08-23 (T4.4)
+
+### T4.4 Timing surface, manual mode
+
+Scope decided with the user before writing code, via two explicit questions: (1) stay
+scoped to the manual-mode surface itself, not also retrofit T4.3's app-mode screen with a
+manual-entry fallback for a mid-heat device failure — the spec sentence that prompted the
+question ("a heat may mix tapped and hand-entered times if a stopwatch fails mid-heat,"
+§7.1) only makes sense as an app-mode recovery path (`recordTap` requires `status ===
+'timing'`, which a manual-mode heat never enters), so building it would have meant
+touching T4.3's already-shipped, already-reviewed screen — noted as a deferred gap rather
+than silently dropped; (2) logic plus a real screen now, matching T4.2/T4.3's precedent.
+
+`src/formats/cup-taster/timing.js`: three previously-private functions —
+`buildClampedUpdate`, `findHeatEntry`, `tryAdvanceToScoring` — are now exported so the new
+manual-mode module can reuse them rather than reimplementing the same write-payload
+builder, entry lookup, and advance-retry wrapper. `maybeAdvanceToScoring`'s status filter
+generalized from `.eq('status', 'timing')` to `.in('status', ['pending', 'timing'])`,
+since a manual-mode heat "skips timing" entirely (§7.1) — it advances straight from
+`pending` to `scoring`, never passing through `timing` at all. Verified safe for app mode
+too: a still-`pending` app-mode heat can never have any entry with `elapsed_secs` set,
+since nothing can write one before `startHeat` flips status to `timing` — confirmed by
+`scoring-auditor` tracing every writer in the repo, not just asserted.
+
+`src/formats/cup-taster/timingManual.js` (new): `recordManualTime(heatId, entryId,
+rawSecs, client, {now})` — validates `rawSecs` is a non-negative integer before any DB
+call, validates `timing_mode === 'manual'` and `status === 'pending'`, writes via the same
+`buildClampedUpdate` the tap path uses (`time_source: 'manual'`), then calls
+`tryAdvanceToScoring`. The one deliberate behavioral difference from `recordTap`: this
+_allows_ overwriting an already-recorded time — no `.is('elapsed_secs', null)` race guard
+— since a judge correcting a mis-typed number is normal, expected workflow here, not a
+race to defend against, given the project's existing single-writer assumption (handoff
+§9). That correction window is bounded by the `pending` guard, not open-ended: once every
+entry has a time and the heat auto-advances to `scoring`, further writes are refused, same
+as the tap path locks once a heat leaves `timing`.
+
+`src/formats/cup-taster/timingManualScreen.js` + `.css` (new): every row shows an editable
+minutes/seconds pair the whole time the heat is `pending` — unlike T4.3's Stop button
+(permanently replaced once tapped), there's no locked/unlocked distinction here, since
+re-saving is always allowed. Pre-fills from `elapsed_secs_raw` (the true value a judge
+typed), never the clamped `elapsed_secs`, so re-saving an already-maxed entry without
+changes can't silently "fix" what's displayed as entered. Reuses `timingScreen.js`'s
+`renderTimingRows` directly for its own read-only "Timing complete" view rather than
+duplicating that rendering logic. `formatCountdown` (local to `timingScreen.js`) was
+extracted to `src/core/duration.js` as `formatDuration` on its 2nd verbatim use (now
+needed by both screens) — format-agnostic, any future format needing duration display
+could reuse it unedited.
+
+Verifiers: `scoring-auditor`, `ui-accessibility-reviewer`, `module-boundary-checker`,
+`test-auditor`, `code-reviewer` — run in parallel, then the four with findings re-run
+after fixes (`module-boundary-checker` came back clean both times reused-logic reasoning
+holds; skipped its second pass since nothing in the fix round touched an import or a
+boundary). Every other reviewer found something real:
+
+1. **`ui-accessibility-reviewer` (the most significant finding, and the only one that
+   needed two attempts to actually close): a genuine 360px horizontal-overflow bug**, of
+   the exact class T4.3 already hit once. `.manual-timing-row`'s original
+   `flex-direction: column; align-items: flex-start;` broke the inherited ellipsis
+   truncation on a long cupper name — the harness's own test name happened to just barely
+   fit, masking it; a longer name reproduced real page-level overflow (540px vs. a 360px
+   viewport). **First fix attempt (removing `align-items: flex-start` entirely) did not
+   actually work** — it just fell back to the base `.timing-row` class's own
+   `align-items: center`, which has the identical non-stretch problem. The re-review
+   agent caught this independently rather than trusting the description, by measuring
+   actual computed layout with the same long name. Real fix: explicitly set
+   `align-items: stretch` to override the base class, verified afterward at both 360px
+   and 320px with `clientWidth < scrollWidth` on the name element itself (genuine
+   truncation, not coincidental fit).
+2. **`ui-accessibility-reviewer`: every row's Save/Update button shared the same
+   accessible name** ("Save" on every row, indistinguishable in a screen-reader rotor) —
+   a regression against T4.3's own established pattern (its Stop button already solved
+   this with a per-cupper `aria-label`). Fixed the same way:
+   `` `${saveLabel} ${entry.displayName}'s time` ``.
+3. **`ui-accessibility-reviewer` (flagged as worth tracking, addressed anyway): the
+   success announcement didn't convey a heat-completion state transition.** When a save
+   is the one that flips the heat from `pending` to `scoring`, the screen swaps to the
+   read-only "Timing complete" view underneath the user — but the announcement still just
+   said "{name}'s time recorded," giving a screen-reader user no indication the whole
+   screen just changed shape. Fixed with a `checkForCompletionOnNextRender` flag, checked
+   against the freshly-loaded heat status at the top of the next render, appending
+   "Timing complete — every cupper has a final time." only on the completing save.
+   `test-auditor`'s re-review found the first version of this fix's own test only proved
+   the branch _could_ fire, not that it wouldn't fire on a _non_-completing save — closed
+   with a paired negative assertion, verified by deliberately mutating the guard to
+   always fire and confirming the new assertion catches it.
+4. **`scoring-auditor`: `recordManualTime`'s module comment said corrections were allowed
+   "before the heat closes,"** which reads as open-ended, but the actual guard is
+   `status !== 'pending'` — tightened to accurately describe the bounded window.
+5. **`code-reviewer` (two minor items): dead code** — a `focusAfterRender` variable in
+   the new screen was declared, checked, and reset, but never actually assigned anywhere
+   (removed); and **a stale comment** referencing the now-deleted `formatCountdown`
+   (updated to `formatDuration`).
+6. **`test-auditor`: `parseElapsedInput`'s seconds boundary (0–59) was untested at the
+   actual boundary** — only far-off values (75, -1) were covered. Confirmed via real
+   mutation testing (a `seconds >= 59` off-by-one passed every existing test undetected).
+   Closed with explicit 59-accepted/60-rejected cases.
+
+355 tests total (up from 325 after T4.3) — 9 new in `timingManual.test.js` (new file), 20
+new in `timingManualScreen.test.js` (new file), 2 new in `duration.test.js` (new file,
+moved from `timingScreen.test.js`'s old `formatCountdown` tests), 1 new in `timing.test.js`
+(the generalized `maybeAdvanceToScoring` covering manual mode's `pending`→`scoring` path).
+
+**Known gap, carried forward, not silently dropped:** the app-mode fallback described in
+§7.1 ("a heat may mix tapped and hand-entered times if a stopwatch fails mid-heat") is not
+built — see ROADMAP.md's known items.
+
+---
+
 ## Phase 4 — Cup Taster · 2026-08-22–23 (T4.3)
 
 ### T4.3 Timing surface, app mode

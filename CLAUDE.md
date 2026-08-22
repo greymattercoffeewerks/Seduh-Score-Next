@@ -1,7 +1,7 @@
 # Seduh Score Next — Claude Code orientation
 
 _State: Phase 0 done; Phase 1 done (T1.1–T1.4); Phase 2 done (T2.1–T2.6); Phase 3 done
-(T3.1–T3.3); Phase 4 in progress (T4.1–T4.3 done) — matches CHANGELOG.md as of 2026-08-23_
+(T3.1–T3.3); Phase 4 in progress (T4.1–T4.4 done) — matches CHANGELOG.md as of 2026-08-23_
 
 Read these before touching anything:
 
@@ -137,16 +137,20 @@ src/
                                    advancement, countdown, timeclamp, entitlements
                                    (Phase 2); registry, supabaseClient (T3.1); db, outbox
                                    (T3.2); syncState (T3.3); events, registry.registerEntry
-                                   (T4.1); dom, errors (T4.3, extracted from heatsScreen.js
-                                   on their 2nd verbatim use). Not yet built: publish,
-                                   viewer-shell, export
+                                   (T4.1); dom, errors (T4.3), duration (T4.4) — all three
+                                   extracted from a cup-taster screen file on their 2nd
+                                   verbatim use. Not yet built: publish, viewer-shell,
+                                   export
   formats/
     cup-taster/                 ← scoring, timing-surface, entry-surface, viewer-body,
                                    analytics — Cup Taster-specific, built on core/. Done:
                                    setup (T4.1, logic only); heats, heatsScreen (T4.2 —
                                    first real UI screen in the project); timing,
                                    timingScreen (T4.3 — first live/ticking screen; direct
-                                   writes, not the outbox — see ROADMAP.md's known-gaps)
+                                   writes, not the outbox — see ROADMAP.md's known-gaps);
+                                   timingManual, timingManualScreen (T4.4 — manual mode,
+                                   also direct-write; timing.js exports shared helpers
+                                   both timing modes reuse)
   ui/
     tokens/                     ← design tokens (plain CSS custom properties)
   main.js                       ← scaffold entry point (Phase 0 placeholder)
