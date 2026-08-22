@@ -6,6 +6,124 @@ closes.
 
 ---
 
+## Phase 4 — Cup Taster · 2026-08-22 (T4.2)
+
+### T4.2 Heat generation: stage-entry seeding, random + manual, station assignment
+
+Scope decided with the user before writing code, same as T4.1: no explicit AC exists for
+T4.2 in the handoff, and no task owns seeding a stage's entries from the roster. Unlike
+T4.1, this task does ship a real screen — the first one in the project, and the first
+real consumer of `src/ui/tokens/`.
+
+`src/core/registry.js`: added `listEntries(eventId, client)` — generic, reusable by a
+future format. `src/core/events.js`: added `findEvent(eventId, client)`, used so the
+screen can render `is_test` (below).
+
+`src/formats/cup-taster/heats.js` (new): `seedFirstStageEntries` (idempotent, seeds only
+the ordinal-1 stage from non-withdrawn roster entries — later stages get their entries
+from T4.6's advancement logic, not this function), `buildHeatPlansFromSizes` (pure,
+Fisher-Yates shuffle + `core/partition`'s own sizing — not reimplemented),
+`buildHeatPlansFromAssignments` (pure, manual path — every stage entry must be assigned
+exactly once, heat numbers sequential, `HEAT_MIN` enforced, stations unique per heat),
+`createHeat`/`ensureHeatEntries` (idempotent, config-drift-checked, bounded-retry-on-race
+— directly reusing T4.1's `setup.js` patterns, including its bounded-retry asymmetry fix
+applied proactively this time), `generateHeatsRandom`/`generateHeatsManual`,
+`listHeatsForStage`.
+
+`src/formats/cup-taster/heatsScreen.js` + `heatsScreen.css` (new): the screen itself —
+roster display, a "seed from roster" action, random-generate button, a manual
+heat/station assignment form, a read-only generated-heats view. DOM built via
+`createElement`/`textContent` only (roster names are user-entered, never trusted as
+markup). Rebuild-then-refocus (§15.3) throughout. `heatsScreen.preview.html` is a
+demo-only harness (in-memory fake client, no live backend needed), matching
+`src/ui/tokens/preview.html`'s own pattern — used to verify the screen live in a real
+browser at 375px, not just in jsdom.
+
+Verifiers: `scoring-auditor`, `ui-accessibility-reviewer`, `module-boundary-checker`,
+`test-auditor`, `code-reviewer` — run in parallel, then re-run after fixes across three
+total rounds (the first two heavier, the third a targeted close-out of the second
+round's own fix). `module-boundary-checker` came back clean both rounds. The others each
+found real issues:
+
+**Round 1:**
+
+1. **`scoring-auditor`: no test proved `generateHeatsRandom` rejects a stage below
+   `HEAT_MIN`** — the behavior was already correct (propagates `core/partition`'s own
+   throw, not reimplemented), just unproven. Closed with a test.
+2. **`code-reviewer` (the most significant finding across all of T4.2): a genuine
+   partial-failure of heat generation could be silently displayed as "fully
+   generated."** `createHeats` has no batch-level atomicity — if it throws after heat 1
+   commits but before heat 2 does, the old render gate (`heats.length === 0`) treated
+   any non-empty heat list as done, hiding that some cuppers were never assigned a heat,
+   with no way back into generation from the screen. Fixed: the render logic now
+   computes `generationComplete` (every stage entry's id present across the union of
+   all generated heats' entries — an identity check, not a count) and branches three
+   ways: no heats yet / heats exist but incomplete (a new, honest "Heat generation
+   incomplete" state, offering no retry — regenerating isn't provably safe) / heats
+   exist and complete.
+3. **`code-reviewer`: raw DB/Postgrest error strings flowed straight into the
+   user-facing feedback panel**, undifferentiated from this module's own descriptive
+   thrown errors. Fixed with a `describeError()` helper (exported, unit-tested) that
+   only passes through a plain `Error` with no `.code`; anything else (a raw Postgrest
+   failure) gets a generic fallback message.
+4. **`ui-accessibility-reviewer`: `is_test` wasn't rendered anywhere, and the screen
+   didn't even fetch it** — flagged as worth fixing now (not deferring to T5.3/T5.4)
+   given `src/ui/tokens/DESIGN.md`'s explicit "every surface" language and D9. Fixed:
+   `loadState()` now fetches the event and renders `.is-test-banner` (already built,
+   already contrast-verified in the design-system work) whenever `is_test` is true.
+5. **`ui-accessibility-reviewer`: error feedback landed at the bottom of the page with
+   no scroll-into-view or focus move** — a real gap for sighted users not using
+   assistive tech. Fixed with `scrollIntoView`/`.focus()` on the feedback region.
+6. **`test-auditor` (four findings):** a shuffle "proof" that sorted output before
+   comparing (would pass even with a no-op shuffle — fixed with a hand-traced,
+   independently-verified-by-running-the-code exact-order assertion); a bounded-retry
+   test that only checked the error message text, not the actual insert-call count
+   (fixed); an error-injection test coupled to an undocumented call-order assumption
+   (fixed by replacing the monkeypatch with the same plain queue-based mocking used
+   everywhere else in the suite); no test proving a manual-assignment validation error
+   surfaces through the mounted screen (fixed).
+7. Minor comment-accuracy fixes (`listHeatsForStage`'s query-cost comment overstated
+   itself as "two queries" when it's 1+N sequential; a form-reading comment claimed
+   `NaN` where `Number('')` is actually `0`) and removal of three CSS rules with zero
+   call sites (`.btn-secondary`, `.field-label`, `.screen-feedback[data-tone='success']`)
+   rather than kept as speculative forward-declarations.
+
+**Round 2** (re-verification of round 1's fixes, all four reviewers): `scoring-auditor`,
+`ui-accessibility-reviewer`, and `test-auditor` confirmed their findings genuinely
+closed — `test-auditor` specifically via mutation testing (patching the real shuffle to
+a no-op, patching the retry bound off-by-one, and confirming the new tests actually
+fail), and additionally found the two new "completeness" tests didn't distinguish the
+real identity-based check from a weaker count-based stand-in (fixed with a test using
+duplicate entries across heats). `code-reviewer` found one more real gap in finding 2's
+fix: **the render logic only refreshed from real DB state on the _next_ mount** — within
+the _same_ browser session, a failed generate click left the stale "Generate heats"
+button live, and a second click would reshuffle the entire roster fresh; since
+`ensureHeatEntries` only checks for a station conflict within the _same_ heat (not
+across heats), a cupper already committed to heat 1 could silently end up placed in
+heat 2 too, with nothing to catch it.
+
+**Round 3** (targeted close-out of round 2's fix): every action handler now
+unconditionally re-renders after its attempt, success or failure (carrying the error
+message across via a `pendingError` variable, since a failed re-render's fresh feedback
+element didn't exist yet at catch-time). Since the re-render itself calls `loadState()`
+fresh and that could also fail, a `renderOrShowError()` wrapper falls back to writing
+the error directly onto whatever DOM is still live rather than crashing with an
+unhandled rejection. `code-reviewer` re-checked this specific fix once more and found it
+correct — including that the scroll/focus-on-error logic never double-fires or
+misses across the two code paths that can now set an error.
+
+272 tests total (up from 209 after T4.1) — 33 new in `heats.test.js` (new file), 25 new
+in `heatsScreen.test.js` (new file), 2 new in `events.test.js` (`findEvent`), 3 new in
+`registry.test.js` (`listEntries`).
+
+**Also this session, unrelated to T4.2 itself:** `kb-sync` and `module-boundary-checker`
+moved to a cheaper model (`model: haiku`) per user decision, to economize token usage on
+the more mechanical reviewers. The five correctness/security gate agents, plus
+`test-auditor` and `ui-accessibility-reviewer`, stay on the full model — see `CLAUDE.md`'s
+delegation strategy section.
+
+---
+
 ## Phase 4 — Cup Taster · 2026-08-22 (T4.1)
 
 ### T4.1 Setup: stage plan, sets, roster

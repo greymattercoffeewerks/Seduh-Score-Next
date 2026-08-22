@@ -1,7 +1,7 @@
 # Seduh Score Next — Claude Code orientation
 
 _State: Phase 0 done; Phase 1 done (T1.1–T1.4); Phase 2 done (T2.1–T2.6); Phase 3 done
-(T3.1–T3.3); Phase 4 in progress (T4.1 done) — matches CHANGELOG.md as of 2026-08-22_
+(T3.1–T3.3); Phase 4 in progress (T4.1–T4.2 done) — matches CHANGELOG.md as of 2026-08-22_
 
 Read these before touching anything:
 
@@ -45,6 +45,16 @@ change touches more than one concern — e.g. a migration that's both schema and
 
 **Every review this project runs should be expected to find something** (handoff §13).
 Treat a clean review as the surprising outcome, not the expected one.
+
+**Cost note (2026-08-22, user decision):** `kb-sync` and `module-boundary-checker` run
+on a cheaper model (`model: haiku` in their `.claude/agents/*.md` frontmatter) — both are
+comparatively mechanical (session-log writing; import-path/grep-based boundary checks).
+`schema-guardian`, `security-reviewer`, `scoring-auditor`, `offline-sync-auditor`, and
+`code-reviewer` stay on the full model deliberately — these are the correctness/security
+gates the "every review should find something" discipline above depends on, and Phase 4's
+own review cycles (T4.1, T4.2) already surfaced real bugs on second and third passes that
+a weaker reviewer could plausibly have missed. `test-auditor` and `ui-accessibility-reviewer`
+were considered and kept on the full model too.
 
 ---
 
@@ -131,7 +141,8 @@ src/
   formats/
     cup-taster/                 ← scoring, timing-surface, entry-surface, viewer-body,
                                    analytics — Cup Taster-specific, built on core/. Done:
-                                   setup (T4.1, no UI yet — logic only)
+                                   setup (T4.1, logic only); heats, heatsScreen (T4.2 —
+                                   first real UI screen in the project)
   ui/
     tokens/                     ← design tokens (plain CSS custom properties)
   main.js                       ← scaffold entry point (Phase 0 placeholder)

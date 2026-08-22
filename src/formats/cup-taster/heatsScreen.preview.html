@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Heat generation — preview</title>
+    <link rel="stylesheet" href="/src/ui/tokens/index.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/heatsScreen.css" />
+  </head>
+  <body>
+    <!--
+      Demo-only harness for the T4.2 heat generation screen — not part of the
+      shipped module graph, same role as src/ui/tokens/preview.html. No live
+      Supabase connection: an in-memory fake client (below) stands in for the
+      real one so this screen can be exercised and reviewed at 360px without
+      needing an authenticated session, a real event, or seeded DB rows.
+    -->
+    <div id="app"></div>
+    <script type="module">
+      import { mountHeatGenerationScreen } from './heatsScreen.js';
+
+      function createDemoClient() {
+        const db = {
+          events: [{ id: 'ev1', org_id: 'org1', name: 'October Cup', is_test: true }],
+          ct_stages: [
+            {
+              id: 's1',
+              event_id: 'ev1',
+              ordinal: 1,
+              kind: 'prelims',
+              set_count: 5,
+              duration_secs: 480,
+              cutoff: 8,
+            },
+          ],
+          ct_stage_entries: [],
+          event_entries: [
+            {
+              id: 'e1',
+              event_id: 'ev1',
+              display_name: 'Alex Rivera',
+              cafe: 'Grey Matter Coffee',
+              bib: '1',
+              withdrawn: false,
+            },
+            {
+              id: 'e2',
+              event_id: 'ev1',
+              display_name: 'Jordan Lee',
+              cafe: 'Roast & Ritual',
+              bib: '2',
+              withdrawn: false,
+            },
+            {
+              id: 'e3',
+              event_id: 'ev1',
+              display_name: 'Sam Okafor',
+              cafe: 'Third Wave Collective',
+              bib: '3',
+              withdrawn: false,
+            },
+            {
+              id: 'e4',
+              event_id: 'ev1',
+              display_name: 'Priya Nair',
+              cafe: 'Grey Matter Coffee',
+              bib: '4',
+              withdrawn: false,
+            },
+            {
+              id: 'e5',
+              event_id: 'ev1',
+              display_name: 'Casey Morgan',
+              cafe: 'Sundown Roasters',
+              bib: '5',
+              withdrawn: true, // withdrawn — must NOT appear after seeding
+            },
+          ],
+          ct_heats: [],
+          ct_heat_entries: [],
+        };
+
+        function matchesFilters(row, filters) {
+          return filters.every(([col, val]) => row[col] === val);
+        }
+
+        function makeBuilder(table) {
+          const filters = [];
+          let orderCol = null;
+
+          const builder = {
+            select() {
+              return builder;
+            },
+            eq(col, val) {
+              filters.push([col, val]);
+              return builder;
+            },
+            order(col) {
+              orderCol = col;
+              return builder;
+            },
+            insert(payload) {
+              const rows = Array.isArray(payload) ? payload : [payload];
+              const inserted = rows.map((row) => ({
+                id: `${table}-${db[table].length}-${Math.random().toString(36).slice(2, 8)}`,
+                ...row,
+              }));
+              db[table].push(...inserted);
+              return {
+                select: () => ({
+                  single: () => Promise.resolve({ data: inserted[0], error: null }),
+                  then: (resolve) => Promise.resolve({ data: inserted, error: null }).then(resolve),
+                }),
+              };
+            },
+            single() {
+              const rows = db[table].filter((r) => matchesFilters(r, filters));
+              return Promise.resolve({ data: rows[0] ?? null, error: null });
+            },
+            maybeSingle() {
+              const rows = db[table].filter((r) => matchesFilters(r, filters));
+              return Promise.resolve({ data: rows[0] ?? null, error: null });
+            },
+            then(resolve, reject) {
+              let rows = db[table].filter((r) => matchesFilters(r, filters));
+              if (orderCol) rows = [...rows].sort((a, b) => (a[orderCol] > b[orderCol] ? 1 : -1));
+              return Promise.resolve({ data: rows, error: null }).then(resolve, reject);
+            },
+          };
+          return builder;
+        }
+
+        return { from: (table) => makeBuilder(table) };
+      }
+
+      mountHeatGenerationScreen(document.getElementById('app'), {
+        eventId: 'ev1',
+        stageId: 's1',
+        client: createDemoClient(),
+      });
+    </script>
+  </body>
+</html>

@@ -107,6 +107,12 @@ export async function createEntry(eventId, entry, client = getSupabase()) {
   return data;
 }
 
+export async function listEntries(eventId, client = getSupabase()) {
+  const { data, error } = await client.from('event_entries').select('*').eq('event_id', eventId);
+  if (error) throw error;
+  return data;
+}
+
 // Composes registerPerson + createEntry for the common case: a cupper with a
 // phone number, registered and entered into one event in a single call. A
 // walk-up with no phone yet still calls createEntry directly (D16) — this
