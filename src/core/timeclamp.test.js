@@ -17,4 +17,15 @@ describe('clampElapsed', () => {
   it('zero elapsed on a real duration: unmaxed', () => {
     expect(clampElapsed(0, 480)).toEqual({ elapsed: 0, raw: 0, maxed: false });
   });
+
+  it('negative input (clock skew): floors elapsed to 0, but raw preserves the true negative value', () => {
+    // The true raw value must survive so a caller can distinguish "a
+    // millisecond of clock skew" from "something is actually wrong" —
+    // flooring raw too would destroy that distinction permanently.
+    expect(clampElapsed(-3, 480)).toEqual({ elapsed: 0, raw: -3, maxed: false });
+  });
+
+  it('a large negative input is still floored to elapsed 0, not treated as "beyond duration"', () => {
+    expect(clampElapsed(-1000, 480)).toEqual({ elapsed: 0, raw: -1000, maxed: false });
+  });
 });

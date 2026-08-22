@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   listStageEntries,
-  hydrateStageEntries,
+  hydrateEntries,
   seedFirstStageEntries,
   buildHeatPlansFromSizes,
   buildHeatPlansFromAssignments,
@@ -67,11 +67,11 @@ describe('listStageEntries', () => {
   });
 });
 
-describe('hydrateStageEntries', () => {
+describe('hydrateEntries', () => {
   it('joins each stage entry to its roster row', () => {
     const stageEntries = [{ id: 'se1', entry_id: 'e1' }];
     const eventEntries = [{ id: 'e1', display_name: 'Cupper One', cafe: 'Grey Matter', bib: '7' }];
-    const result = hydrateStageEntries(stageEntries, eventEntries);
+    const result = hydrateEntries(stageEntries, eventEntries);
     expect(result).toEqual([
       { id: 'se1', entry_id: 'e1', displayName: 'Cupper One', cafe: 'Grey Matter', bib: '7' },
     ]);
@@ -79,7 +79,7 @@ describe('hydrateStageEntries', () => {
 
   it('falls back to a placeholder rather than crashing when no roster row matches', () => {
     const stageEntries = [{ id: 'se1', entry_id: 'missing' }];
-    const result = hydrateStageEntries(stageEntries, []);
+    const result = hydrateEntries(stageEntries, []);
     expect(result[0].displayName).toBe('(unknown cupper)');
     expect(result[0].cafe).toBeNull();
   });

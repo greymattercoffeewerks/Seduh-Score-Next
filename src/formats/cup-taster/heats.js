@@ -30,15 +30,18 @@ export async function listStageEntries(stageId, client = getSupabase()) {
 // testable and independent of PostgREST's embed syntax. Entries with no
 // matching roster row (shouldn't happen — entry_id is a real FK — but a
 // stale/deleted row shouldn't crash the UI) fall back to a placeholder name.
-export function hydrateStageEntries(stageEntries, eventEntries) {
+// Generic over the caller's row shape — anything carrying `entry_id`
+// (`ct_stage_entries` or `ct_heat_entries` rows both do), not stage-specific
+// despite living in this file; `timing.js` reuses it for heat entries.
+export function hydrateEntries(entries, eventEntries) {
   const byId = new Map(eventEntries.map((entry) => [entry.id, entry]));
-  return stageEntries.map((stageEntry) => {
-    const entry = byId.get(stageEntry.entry_id);
+  return entries.map((entry) => {
+    const person = byId.get(entry.entry_id);
     return {
-      ...stageEntry,
-      displayName: entry?.display_name ?? '(unknown cupper)',
-      cafe: entry?.cafe ?? null,
-      bib: entry?.bib ?? null,
+      ...entry,
+      displayName: person?.display_name ?? '(unknown cupper)',
+      cafe: person?.cafe ?? null,
+      bib: person?.bib ?? null,
     };
   });
 }
@@ -207,6 +210,12 @@ async function findHeatByNumber(stageId, heatNumber, client) {
   return data;
 }
 
+export async function findHeatById(heatId, client = getSupabase()) {
+  const { data, error } = await client.from('ct_heats').select('*').eq('id', heatId).single();
+  if (error) throw error;
+  return data;
+}
+
 async function createHeat(stageId, heatNumber, durationSecs, timingMode, client) {
   const existing = await findHeatByNumber(stageId, heatNumber, client);
   if (existing) {
@@ -243,7 +252,7 @@ async function createHeat(stageId, heatNumber, durationSecs, timingMode, client)
   return data;
 }
 
-async function listHeatEntries(heatId, client) {
+export async function listHeatEntries(heatId, client = getSupabase()) {
   const { data, error } = await client.from('ct_heat_entries').select('*').eq('heat_id', heatId);
   if (error) throw error;
   return data;
@@ -345,7 +354,7 @@ export async function generateHeatsManual(
 
 // For display: every heat in the stage, each with its own entries. One query
 // for the heat list plus one more per heat (sequential, not parallelized) —
-// composed in JS rather than a DB-side join, matching hydrateStageEntries's
+// composed in JS rather than a DB-side join, matching hydrateEntries's
 // own reasoning (simpler to test, no dependency on PostgREST embed syntax).
 // Acceptable for a low-frequency, organiser-only setup screen; a stage with
 // many heats would be worth switching to Promise.all or a single

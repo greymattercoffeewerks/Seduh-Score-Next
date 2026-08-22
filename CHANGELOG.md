@@ -6,6 +6,152 @@ closes.
 
 ---
 
+## Phase 4 — Cup Taster · 2026-08-22–23 (T4.3)
+
+### T4.3 Timing surface, app mode
+
+Scope decided with the user before writing code, via three explicit questions: (1) full
+lifecycle (start → tap → auto-max at clock zero → transition to scoring), not
+tap-recording alone; (2) logic plus a real ticking screen now, matching T4.2's precedent,
+rather than deferring the UI; (3) direct writes for now, not wired through Phase 3's
+outbox — a deliberate, documented scope gap (this is the first genuinely live,
+time-pressured screen in the build plan, exactly what the outbox exists for, but queue
+ordering against a live countdown and conflict surfacing deserve a focused pass with
+`offline-sync-auditor` rather than folding into this task's first cut).
+
+`src/core/timeclamp.js`: `clampElapsed()` now handles negative input too — floors
+`elapsed` to 0 (clock skew between client and server, since the tap path computes elapsed
+against a server-recorded `started_at`) while `raw` always preserves the true unclamped
+value, so the audit trail the schema comment promises (§5.2) is never lost before it
+reaches the one function responsible for enforcing the cap. This is the sole place both
+bounds — negative floor and duration ceiling — are enforced.
+
+`src/formats/cup-taster/timing.js` (new): `startHeat` (idempotent — a heat already timing
+is returned unchanged rather than restarting the clock, which would corrupt the meaning
+of every already-recorded elapsed time), `recordTap` (the tap path — `MAX_NEGATIVE_SKEW_SECS`
+= 5 rejects a computed tap more than 5s before `started_at` outright, before it ever
+reaches `clampElapsed`, so a broken client clock can't silently hand a cupper the fastest
+time in the heat; `.is('elapsed_secs', null)` on the update closes the race between the
+read-check and the write for two concurrent taps; a lost race re-fetches and distinguishes
+a genuine duplicate-tap collision from a race lost to the master clock expiring first),
+`autoMaxRemainingEntries` (called by the UI once its own local countdown detects expiry —
+there is no server-side timer, §8.2 — maxes everyone still running via the same
+`clampElapsed` cap a real tap uses), `maybeAdvanceToScoring` (timing → scoring once every
+entry has a final time), and `tryAdvanceToScoring` (wraps the advance-to-scoring call so a
+failure there — the triggering tap or auto-max write already succeeded by that point —
+never propagates as if the tap itself failed; logs and lets the next write for that heat
+retry the same check).
+
+`src/formats/cup-taster/timingScreen.js` + `timingScreen.css` (new): the live-countdown
+screen. Rebuild-then-refocus (§15.3) for real actions, but the countdown itself is
+deliberately excluded from that cycle — a full DOM rebuild every second would flicker and
+steal focus, so `tick()` only mutates the countdown element's `textContent`, while
+`render()` runs only after start/tap/auto-max. The countdown display is intentionally not
+an `aria-live` region (a value changing every second would spam announcements — confirmed
+against WAI-ARIA/MDN guidance); real state changes (a stop recorded, the heat completing,
+crossing the ≤10s urgent threshold once) go through the existing `screen-feedback` live
+region instead. `timingScreen.preview.html` is a demo-only harness (in-memory fake client,
+20s duration instead of a real ~480s heat so the full lifecycle is observable directly),
+matching `heatsScreen.preview.html`'s precedent.
+
+Two format-agnostic helpers reached their second verbatim use this task and were
+extracted to `src/core/` rather than duplicated again: `dom.js` (`el()`, the DOM builder)
+and `errors.js` (`describeError()`) — both originally local to `heatsScreen.js`. This is a
+different call than "three similar lines is better than premature abstraction": these
+were 100%-identical functions, not merely similar ones, so extraction on the 2nd
+occurrence rather than waiting for a 3rd. `heats.js`'s `hydrateStageEntries` was renamed
+to `hydrateEntries` and its doc comment updated — it already worked generically over
+anything carrying `entry_id` (`ct_stage_entries` or `ct_heat_entries` rows both do), and
+`timing.js`/`timingScreen.js` now reuse it unedited rather than reimplementing it, exactly
+the §6 test this project holds itself to. `core/registry.js` gained `listEntriesByIds`
+(the roster-by-id-list lookup the timing screen needs, that `listEntries`'s
+whole-event-roster form didn't cover).
+
+Verifiers: `scoring-auditor`, `ui-accessibility-reviewer`, `module-boundary-checker`,
+`test-auditor`, `code-reviewer` — run in parallel, then re-run after fixes across two
+total rounds. `scoring-auditor` and `module-boundary-checker` came back clean both rounds.
+The others each found real issues:
+
+**Round 1:**
+
+1. **`scoring-auditor` (the most significant finding): a pre-clamp in `timing.js` floored
+   negative elapsed values to 0 before they ever reached `clampElapsed()`**, splitting the
+   "sole writer" authority the function exists to hold and silently destroying the true
+   skewed value `elapsed_secs_raw` is supposed to preserve, with no bound distinguishing
+   "200ms of clock skew" from a broken client clock. Fixed as described above:
+   `clampElapsed()` itself now floors `elapsed` while always preserving `raw`, and
+   `MAX_NEGATIVE_SKEW_SECS` rejects anything beyond 5s outright.
+2. **`ui-accessibility-reviewer` (D9, blocking): the `is_test` banner was entirely
+   missing** — `mountTimingScreen` didn't even take an `eventId`. Fixed: added the param,
+   `findEvent()` in `loadState()`, and the banner render, matching `heatsScreen.js`.
+3. **`ui-accessibility-reviewer`: rebuild-then-refocus only covered the `startHeat`
+   success path** — a stop tap or an auto-max left focus wherever it happened to be.
+   Fixed: `render()` now falls back to focusing the feedback region whenever it carries a
+   tone and no explicit target was requested, extending `heatsScreen.js`'s existing
+   error-only fallback to also cover success.
+4. **`ui-accessibility-reviewer`: no success-path live-region announcements at all** —
+   `setFeedback` was only ever called from catch blocks. Fixed: `onStop`/`handleExpiry`
+   now set a `pendingSuccess` message applied the same way `pendingError` already was.
+5. **`ui-accessibility-reviewer`: no announcement when the countdown first crosses the
+   urgent (≤10s) threshold.** Fixed with a one-time `urgentAnnounced` flag mutating the
+   live feedback element directly (not a full render, to avoid flicker mid-tick).
+6. **`ui-accessibility-reviewer`: heading structure was conflated** — the ticking
+   countdown div also carried the only `id`/heading role for that section, and the
+   per-cupper row list had no heading at all. Fixed: a stable `<h2 id="countdown-heading">`
+   separate from the ticking display, plus a real `<h2>Cuppers</h2>` above the row list.
+7. **`code-reviewer`/`test-auditor`: `.heats-screen`/`.timing-screen` container CSS was
+   byte-for-byte duplicated** between the two screens' stylesheets. Extracted to a shared
+   `.screen-container` class in `heatsScreen.css` (both sheets are always loaded
+   together); added the `[data-tone='success']`/`[data-tone='urgent']` CSS the new
+   announcements needed.
+8. **`test-auditor`: the auto-max "stops ticking" test only proved no further DB calls
+   happened**, which would pass even with a harmlessly-leaked interval — `expiryHandled`
+   blocks re-entry regardless of whether the timer was actually cleared. Fixed with a
+   `vi.spyOn(global, 'clearInterval')` assertion proving the teardown itself, not just an
+   absence of side effects. Also tightened a `toContain('Max time')` assertion to the
+   exact `toBe('Max time (8:00)')`.
+
+**Round 2** (re-verification of round 1's fixes, all five reviewers): `scoring-auditor`
+and `module-boundary-checker` confirmed clean. `ui-accessibility-reviewer`,
+`test-auditor`, and `code-reviewer` each found one more real issue:
+
+9. **`ui-accessibility-reviewer`: a 360px overflow risk** — `.timing-row` had no
+   `min-width: 0`/truncation handling between a long cupper name and the fixed-width Stop
+   button, so a long enough name would push the button off the edge of the card rather
+   than wrapping or truncating. Fixed with `min-width: 0` + `text-overflow: ellipsis` on
+   the name, `flex-shrink: 0` on the button — live-verified at 360px with a 28-character
+   name (would have overflowed to 226px, correctly truncates to 104px, no page-level
+   horizontal scroll).
+10. **`ui-accessibility-reviewer`: `handleExpiry`'s zero-maxed path left focus/feedback
+    unmanaged** — reachable via the `tryAdvanceToScoring` retry design (a transiently
+    failed status transition can leave a heat in `'timing'` with every entry already
+    stopped until the master clock also expires and this handler fires as the retry), not
+    just hypothetical. Fixed: `handleExpiry` now always sets a `pendingSuccess` message,
+    even when nothing needed maxing.
+11. **`code-reviewer`: `unmount()` didn't abandon a `render()` already in flight** — it
+    called `stopTicking()` but never bumped the generation counter, so a slow in-flight
+    render (awaiting `loadState()`) could still finish after teardown, rebuild into a
+    discarded root, and register a fresh interval/listener nothing would ever clear again.
+    Fixed by bumping `renderGeneration` in `unmount()` too, giving it the same
+    "abandon if superseded" protection a newer render already has over an older one.
+    Verified with a deliberate revert-and-rerun: the new regression test fails cleanly
+    against the un-fixed code and passes against the fix.
+12. **`test-auditor` (two gaps):** the `MAX_NEGATIVE_SKEW_SECS` boundary was untested at
+    its exact cutoff (only -2s and -10s were covered — an off-by-one would have passed
+    undetected); fixed with cases at exactly -5s (accepted) and -6s (rejected). The
+    render-race generation counter had zero test coverage despite being realistically
+    triggerable (two Stop taps in quick succession); fixed with a deterministic test using
+    a small in-memory client whose `events` query (loadState's first await, untouched by
+    `recordTap`) is gate-controlled, letting the test pin down exactly which of two
+    concurrent renders "wins" without needing to guess real microtask interleaving order.
+
+325 tests total (up from 272 after T4.2) — 23 new in `timing.test.js` (new file), 20 new
+in `timingScreen.test.js` (new file), 5 new in `dom.test.js` (new file, extracted), 3 new
+in `errors.test.js` (new file, extracted from `heatsScreen.test.js`), 2 new in
+`timeclamp.test.js`, 3 new in `registry.test.js` (`listEntriesByIds`).
+
+---
+
 ## Phase 4 — Cup Taster · 2026-08-22 (T4.2)
 
 ### T4.2 Heat generation: stage-entry seeding, random + manual, station assignment

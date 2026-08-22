@@ -8,7 +8,7 @@
 // (core/registry), so nothing here should trust it as markup.
 import {
   listStageEntries,
-  hydrateStageEntries,
+  hydrateEntries,
   seedFirstStageEntries,
   generateHeatsRandom,
   generateHeatsManual,
@@ -18,18 +18,8 @@ import { listEntries } from '../../core/registry.js';
 import { findEvent } from '../../core/events.js';
 import { findStageById } from './setup.js';
 import { getSupabase } from '../../core/supabaseClient.js';
-
-function el(tag, { className, text, attrs, id } = {}, children = []) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (id) node.id = id;
-  if (text != null) node.textContent = text;
-  if (attrs) {
-    for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
-  }
-  for (const child of children) node.appendChild(child);
-  return node;
-}
+import { el } from '../../core/dom.js';
+import { describeError } from '../../core/errors.js';
 
 export function renderRosterList(hydratedEntries) {
   const items = hydratedEntries.map((entry) =>
@@ -130,18 +120,6 @@ export function renderHeatsList(heatsWithEntries, hydratedById) {
   ]);
 }
 
-// Distinguishes this module's own descriptive thrown errors (plain `Error`s
-// with a human-readable message, e.g. "heat 2 already exists with a
-// different configuration") from whatever a raw Supabase/Postgrest failure
-// looks like (carries a `.code`) — only the former is safe to show a user
-// verbatim. This is the first UI surface in the project consuming these
-// throws directly; later screens should follow the same split rather than
-// piping `err.message` straight into a feedback panel.
-export function describeError(err) {
-  if (err instanceof Error && !err.code) return err.message;
-  return 'Something went wrong saving that — try again.';
-}
-
 export async function mountHeatGenerationScreen(
   root,
   { eventId, stageId, client = getSupabase() } = {},
@@ -181,7 +159,7 @@ export async function mountHeatGenerationScreen(
     const stage = await findStageById(stageId, client);
     const stageEntries = await listStageEntries(stageId, client);
     const roster = await listEntries(eventId, client);
-    const hydrated = hydrateStageEntries(stageEntries, roster);
+    const hydrated = hydrateEntries(stageEntries, roster);
     const heats = await listHeatsForStage(stageId, client);
     return { event, stage, hydrated, heats };
   }
@@ -190,7 +168,7 @@ export async function mountHeatGenerationScreen(
     const data = await loadState();
     root.innerHTML = '';
 
-    const container = el('section', { className: 'heats-screen' });
+    const container = el('section', { className: 'screen-container heats-screen' });
 
     // D9: is_test must render unmistakably on every surface an organiser or
     // audience member can see, not only the audience-facing live surfaces
