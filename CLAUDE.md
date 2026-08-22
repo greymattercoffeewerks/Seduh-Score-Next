@@ -1,7 +1,7 @@
 # Seduh Score Next — Claude Code orientation
 
 _State: Phase 0 done; Phase 1 done (T1.1–T1.4); Phase 2 done (T2.1–T2.6); Phase 3 done
-(T3.1–T3.3) — matches CHANGELOG.md as of 2026-08-22_
+(T3.1–T3.3); Phase 4 in progress (T4.1 done) — matches CHANGELOG.md as of 2026-08-22_
 
 Read these before touching anything:
 
@@ -126,11 +126,12 @@ src/
   core/                         ← shared, format-agnostic. Done: partition, ranking,
                                    advancement, countdown, timeclamp, entitlements
                                    (Phase 2); registry, supabaseClient (T3.1); db, outbox
-                                   (T3.2); syncState (T3.3). Not yet built: publish,
-                                   viewer-shell, export
+                                   (T3.2); syncState (T3.3); events, registry.registerEntry
+                                   (T4.1). Not yet built: publish, viewer-shell, export
   formats/
     cup-taster/                 ← scoring, timing-surface, entry-surface, viewer-body,
-                                   analytics — Cup Taster-specific, built on core/
+                                   analytics — Cup Taster-specific, built on core/. Done:
+                                   setup (T4.1, no UI yet — logic only)
   ui/
     tokens/                     ← design tokens (plain CSS custom properties)
   main.js                       ← scaffold entry point (Phase 0 placeholder)

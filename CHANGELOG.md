@@ -6,6 +6,106 @@ closes.
 
 ---
 
+## Phase 4 — Cup Taster · 2026-08-22 (T4.1)
+
+### T4.1 Setup: stage plan, sets, roster
+
+Scope decided with the user before writing code (no explicit AC exists for T4.1 in the
+handoff, unlike T4.5/T4.6, and no task creates an `events` row anywhere in the build
+plan): this task ships the tested logic module only, no rendered screen — a UI pass
+lands once more of Phase 4 exists to build one screen against, not four thin ones. Event
+creation was added as a minimal function (not a screen), since without it the setup flow
+has nothing to attach a stage plan to.
+
+`src/core/events.js` (new): `createEvent(orgId, event, client)` — generic, takes
+`format` as plain input rather than assuming Cup Taster, so a future format (Guess the
+Bean) reuses it unedited. Tested with both `format: 'cup_taster'` and
+`format: 'guess_the_bean'` to prove that directly.
+
+`src/core/registry.js`: added `registerEntry(orgId, eventId, cupper, client)`, composing
+the existing `registerPerson` + `createEntry` for the common case (a cupper with a
+phone). Placed in `core/registry` rather than the Cup Taster format module — nothing
+about the composition is Cup-Taster-specific, so a future identity-core format can reuse
+it unedited too.
+
+`src/formats/cup-taster/setup.js` (new): `validateStagePlan` (pure) and
+`createStage`/`ensureSetsForStage`/`createStagePlan` (idempotent, Supabase-backed). This
+is the genuinely Cup-Taster-specific half of the task — stage `kind`/`cutoff`/`set_count`
+are §2/§7.5 vocabulary a future format wouldn't share.
+
+Verifiers: `scoring-auditor`, `module-boundary-checker`, `test-auditor`, `code-reviewer`
+— run in parallel, then `scoring-auditor`/`code-reviewer`/`test-auditor` re-run after
+fixes. `module-boundary-checker`'s review came back clean both on registry/events
+placement and on a live synthetic-violation probe confirming `no-core-format-import`
+actually fires. The other three each found real issues, across two full review-and-fix
+rounds:
+
+**First round:**
+
+1. **Blocking (`scoring-auditor`): `createStage` silently discarded config drift on
+   retry.** If a stage already existed at an ordinal, the existing row was returned
+   verbatim with no comparison against the newly-passed cutoff/setCount/durationSecs —
+   indistinguishable from a legitimate correction (an organiser fixing a typo'd cutoff
+   before the event), which would then be silently lost with no error. Since `cutoff` is
+   the fixed advancement field (D20) and `duration_secs` gets snapshotted per-heat later,
+   a stale value here would silently mis-size the field or mis-time heats. Fixed:
+   `createStage` now compares the existing row against the incoming config and throws a
+   descriptive conflict error on any mismatch, rather than assuming "found" means
+   "identical."
+2. **`scoring-auditor`: cutoff monotonicity across stages was unvalidated.** A plan like
+   `prelims: cutoff 8, semis: cutoff 16` passed `validateStagePlan` cleanly, and
+   `core/advancement` would then silently treat the oversized cutoff as "everyone
+   advances" instead of trimming the field. Fixed: each non-terminal stage's cutoff must
+   now be ≤ the previous stage's.
+3. **`scoring-auditor` + `code-reviewer` (independently, same defect): kind/ordinal
+   weren't tied to canonical progression.** A plan with `finals` at ordinal 1 and
+   `prelims` at ordinal 2 passed every per-stage check individually. Fixed:
+   `validateStagePlan` now checks the whole kind sequence against the two real
+   configurations (§7.5) — exactly `["prelims","finals"]` or
+   `["prelims","semis","finals"]`, in that order.
+4. **`code-reviewer`: the idempotency claim didn't hold under concurrent callers.**
+   Check-then-create has nothing serializing the check and the insert — two concurrent
+   callers (a double-click, a flaky-connection retry racing the original request) could
+   both pass the "not found" check, and the loser would get a raw Postgres
+   unique-violation propagated unchanged. Fixed: both `createStage` and
+   `ensureSetsForStage` now catch a unique-violation (`23505`), re-fetch, and either
+   adopt the winning row (if it matches what was requested) or throw the same
+   config-conflict error a sequential retry would have gotten.
+5. **`test-auditor` (six findings):** a `registerEntry` dedup test that never actually
+   asserted no duplicate person was created (would have stayed green even with the dedup
+   bypass reintroduced); a `createStagePlan` "ordinal order" test that didn't prove order
+   at all; `createStage`'s camelCase→snake_case payload mapping never checked; idempotency
+   proven only via separately-scripted branches rather than a real double-invocation
+   against one shared client; terminal-stage-by-highest-ordinal proven only incidentally;
+   no non-mutation test for `validateStagePlan`'s input. All six closed, each with a
+   proof traced by re-verification to confirm it would actually fail if the bug it
+   targets were reintroduced — not just a same-named test.
+
+**Second round** (re-verification of the first round's fixes): `scoring-auditor` and
+`test-auditor` confirmed all their findings genuinely closed. `code-reviewer` found one
+more real gap in the concurrent-race fix: `ensureSetsForStage`'s retry only survived
+_one_ level of racing — a second collision on the retry's own insert would throw the raw
+error unchanged, contradicting the function's own doc comment. Fixed with a bounded
+retry loop (`MAX_INSERT_ATTEMPTS = 3`), throwing a clear "gave up" error only once every
+attempt has collided. Also fixed: duplicated conflict-error message construction
+(extracted to `throwConfigConflict`), and a single formatter fragilely reconciling two
+different object shapes (DB row vs. camelCase request) via `??` fallbacks — split into
+`describeStoredStage`/`describeRequestedStage`, each handling only its own real shape.
+
+**Third round** (targeted close-out of the bounded-retry fix specifically):
+`code-reviewer` found one more asymmetry — the loop's "already done" check only ran at
+the top of each iteration, so the recompute after the _final_ attempt's collision was
+never re-checked. A race that actually resolved in our favor on the last collision would
+still report "gave up" instead of the success it had already reached. Fixed with an
+explicit post-loop check, plus a test proving it (3rd attempt collides, but the
+recompute immediately after shows nothing missing → resolves normally, not "gave up").
+
+209 tests total (up from 163 before this task) — 38 new in `setup.test.js` (new file),
+5 new in `events.test.js` (new file), 3 new in `registry.test.js`'s `registerEntry`
+block.
+
+---
+
 ## Phase 3 — Registry and offline · 2026-08-22 (T3.3)
 
 ### T3.3 Sync state panel

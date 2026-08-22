@@ -107,6 +107,16 @@ export async function createEntry(eventId, entry, client = getSupabase()) {
   return data;
 }
 
+// Composes registerPerson + createEntry for the common case: a cupper with a
+// phone number, registered and entered into one event in a single call. A
+// walk-up with no phone yet still calls createEntry directly (D16) — this
+// wrapper doesn't branch for that case, since registerPerson has nothing to
+// dedup against without one.
+export async function registerEntry(orgId, eventId, cupper, client = getSupabase()) {
+  const person = await registerPerson(orgId, cupper, client);
+  return createEntry(eventId, { personId: person.id, bib: cupper.bib }, client);
+}
+
 // Atomic (merge_people RPC, migration 20260822090000) — a client-side sequence
 // of separate reassign/log/delete calls risks a partial-failure class §9's
 // offline model exists to avoid. Per event where the merged-away person holds

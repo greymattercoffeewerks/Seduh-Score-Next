@@ -1,7 +1,7 @@
 # Seduh Score Next — Roadmap
 
 _State: Phase 0 done; Phase 1 done (T1.1–T1.4); Phase 2 done (T2.1–T2.6); Phase 3 done
-(T3.1–T3.3) — matches CHANGELOG.md as of 2026-08-22_
+(T3.1–T3.3); Phase 4 in progress (T4.1 done) — matches CHANGELOG.md as of 2026-08-22_
 
 The living tracker for the handoff's build plan (§14). The handoff itself stays frozen
 as the original spec — this file is what's actually shipped, updated as tasks and phases
@@ -12,15 +12,15 @@ about original design intent.
 
 ## Current state
 
-| Phase                               | Status      | What it covers                                                                                |
-| ----------------------------------- | ----------- | --------------------------------------------------------------------------------------------- |
-| Phase 0 — Foundation                | ✅ Done     | Scaffold, Claude Code tooling, Supabase local stack + CI, doc seed                            |
-| Phase 1 — Schema and security       | ✅ Done     | Core tables, Cup Taster tables, RLS, `WITH CHECK` gate                                        |
-| Phase 2 — Core libraries            | ✅ Done     | `partition`, `ranking`, `advancement`, `countdown`, `timeclamp`, `entitlements`               |
-| Phase 3 — Registry and offline      | ✅ Done     | `registry`, IndexedDB mirror + outbox, sync state panel                                       |
-| Phase 4 — Cup Taster                | Not started | Setup, heat generation, timing (app + manual), scoring, standings/advancement, report, export |
-| Phase 5 — Live surfaces             | Not started | `publish`, `viewer-shell`, projector, phone summary                                           |
-| Phase 6 — Guess the Bean, hardening | Not started | Booth game, accessibility pass, offline soak, dry run                                         |
+| Phase                               | Status                     | What it covers                                                                                |
+| ----------------------------------- | -------------------------- | --------------------------------------------------------------------------------------------- |
+| Phase 0 — Foundation                | ✅ Done                    | Scaffold, Claude Code tooling, Supabase local stack + CI, doc seed                            |
+| Phase 1 — Schema and security       | ✅ Done                    | Core tables, Cup Taster tables, RLS, `WITH CHECK` gate                                        |
+| Phase 2 — Core libraries            | ✅ Done                    | `partition`, `ranking`, `advancement`, `countdown`, `timeclamp`, `entitlements`               |
+| Phase 3 — Registry and offline      | ✅ Done                    | `registry`, IndexedDB mirror + outbox, sync state panel                                       |
+| Phase 4 — Cup Taster                | 🚧 In progress (T4.1 done) | Setup, heat generation, timing (app + manual), scoring, standings/advancement, report, export |
+| Phase 5 — Live surfaces             | Not started                | `publish`, `viewer-shell`, projector, phone summary                                           |
+| Phase 6 — Guess the Bean, hardening | Not started                | Booth game, accessibility pass, offline soak, dry run                                         |
 
 **Deadline: 4 October 2026, Cup Tasters event.**
 
@@ -88,8 +88,24 @@ Per handoff §14. Verifier: `offline-sync-auditor` throughout.
 
 ---
 
+## Phase 4 — Cup Taster
+
+Per handoff §14. Verifiers: `scoring-auditor` + `ui-accessibility-reviewer` on every
+task (T4.1 has no UI yet, so only `scoring-auditor` applied this task, plus
+`module-boundary-checker`/`test-auditor`/`code-reviewer` per `CLAUDE.md`'s delegation
+strategy).
+
+| Task                                 | Status                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T4.1 Setup: stage plan, sets, roster | ✅ Done — `core/events.createEvent` (format-agnostic), `core/registry.registerEntry` (composes existing registerPerson+createEntry), `formats/cup-taster/setup.js` (`validateStagePlan`, idempotent `createStage`/`ensureSetsForStage`/`createStagePlan`). Deliberately no UI this task (decided with the user — a real screen lands once more of Phase 4 exists to build one against). Not a clean pass across three review rounds: a blocking config-drift bug in `createStage` (a legitimate cutoff correction would be silently discarded as if it were a retry), missing cutoff-monotonicity and canonical-stage-order validation, a concurrent-caller race surfacing raw Postgres errors, six test-quality gaps, and — found in re-verification of the race fix — a bounded-retry loop that itself had an asymmetry (didn't recognize a race resolved in its favor on the final attempt). All closed; see CHANGELOG.md for the full account |
+
+---
+
 ## Known open items carried into Phase 4
 
+- **T4.1 shipped no UI.** `setup.js` is a tested logic module only — no screen exists yet
+  for an organiser to actually build a roster or a stage plan. The design-tokens layer
+  below is ready for one; the first Phase 4 UI task is the one to build it.
 - **Supabase cloud project not yet linked.** Phases 0–3 only set up and verified the
   local stack. Linking a cloud project (and the `supabase db push` step CLAUDE.md's Git
   section refers to) is Phase 4+ work, once the schema is stable enough to push.
