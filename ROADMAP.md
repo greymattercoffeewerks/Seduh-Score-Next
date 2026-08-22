@@ -1,7 +1,7 @@
 # Seduh Score Next — Roadmap
 
-_State: Phase 0 done; Phase 1 done (T1.1–T1.4); Phase 2 done (T2.1–T2.6); Phase 3 in
-progress (T3.1–T3.2 done) — matches CHANGELOG.md as of 2026-08-22_
+_State: Phase 0 done; Phase 1 done (T1.1–T1.4); Phase 2 done (T2.1–T2.6); Phase 3 done
+(T3.1–T3.3) — matches CHANGELOG.md as of 2026-08-22_
 
 The living tracker for the handoff's build plan (§14). The handoff itself stays frozen
 as the original spec — this file is what's actually shipped, updated as tasks and phases
@@ -12,15 +12,15 @@ about original design intent.
 
 ## Current state
 
-| Phase                               | Status                          | What it covers                                                                                |
-| ----------------------------------- | ------------------------------- | --------------------------------------------------------------------------------------------- |
-| Phase 0 — Foundation                | ✅ Done                         | Scaffold, Claude Code tooling, Supabase local stack + CI, doc seed                            |
-| Phase 1 — Schema and security       | ✅ Done                         | Core tables, Cup Taster tables, RLS, `WITH CHECK` gate                                        |
-| Phase 2 — Core libraries            | ✅ Done                         | `partition`, `ranking`, `advancement`, `countdown`, `timeclamp`, `entitlements`               |
-| Phase 3 — Registry and offline      | 🚧 In progress (T3.1–T3.2 done) | `registry`, IndexedDB mirror + outbox, sync state panel                                       |
-| Phase 4 — Cup Taster                | Not started                     | Setup, heat generation, timing (app + manual), scoring, standings/advancement, report, export |
-| Phase 5 — Live surfaces             | Not started                     | `publish`, `viewer-shell`, projector, phone summary                                           |
-| Phase 6 — Guess the Bean, hardening | Not started                     | Booth game, accessibility pass, offline soak, dry run                                         |
+| Phase                               | Status      | What it covers                                                                                |
+| ----------------------------------- | ----------- | --------------------------------------------------------------------------------------------- |
+| Phase 0 — Foundation                | ✅ Done     | Scaffold, Claude Code tooling, Supabase local stack + CI, doc seed                            |
+| Phase 1 — Schema and security       | ✅ Done     | Core tables, Cup Taster tables, RLS, `WITH CHECK` gate                                        |
+| Phase 2 — Core libraries            | ✅ Done     | `partition`, `ranking`, `advancement`, `countdown`, `timeclamp`, `entitlements`               |
+| Phase 3 — Registry and offline      | ✅ Done     | `registry`, IndexedDB mirror + outbox, sync state panel                                       |
+| Phase 4 — Cup Taster                | Not started | Setup, heat generation, timing (app + manual), scoring, standings/advancement, report, export |
+| Phase 5 — Live surfaces             | Not started | `publish`, `viewer-shell`, projector, phone summary                                           |
+| Phase 6 — Guess the Bean, hardening | Not started | Booth game, accessibility pass, offline soak, dry run                                         |
 
 **Deadline: 4 October 2026, Cup Tasters event.**
 
@@ -79,17 +79,20 @@ Per handoff §14. Verifier: `offline-sync-auditor` throughout.
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | T3.1 `registry`                | ✅ Done — `findPersonByPhone/Email`, `createPerson`, `registerPerson` (phone-then-email dedup), `createEntry` (snapshotting), `mergePeople` (atomic RPC). `security-reviewer` found and closed a **live-exploited cross-org bug**: `merge_people` didn't validate `p_kept_id`'s org, exploitable both via the RPC (when the merged-away person had zero event entries) and via a direct `insert into person_merges` bypassing the RPC entirely. Both closed, re-verified by re-attempting the live exploit. `offline-sync-auditor` independently caught a real contradiction between `registerPerson`'s dedup comment and the frozen schema's own email-uniqueness index, plus an unescaped `ilike` wildcard risk — both fixed |
 | T3.2 IndexedDB mirror + outbox | ✅ Done — `db.js`/`outbox.js` (generic FIFO queue engine, injectable handlers — deliberately not hard-coded, since a Cup-Taster-specific handler in `src/core/` would fail §6's boundary test), `confirm_heat` RPC (one atomic transaction, `processed_operations` idempotency ledger, `P0002` conflict exception carrying both versions). All 3 AC clauses proven directly against the real database (53 pgTAP assertions). `security-reviewer` (2 rounds) found and closed a missing `GRANT` that would have broken every real call in production, a `ct_results.set_id`/stage gap matching two earlier precedents, and a test-methodology gap (superuser bypass) that had let both slip past the first review pass          |
-| T3.3 Sync state panel          | Not started                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| T3.3 Sync state panel          | ✅ Done — `computeSyncState()`, the pure off/live/not-synced derivation (no UI exists yet to render it into — that's Phase 4/5). `stuckOperation` closes T3.2's deferred "poison operation surfaces to a human" gap. `offline-sync-auditor` (2 rounds) found `enabled` was checked before real outbox state — a fail-open violation letting "off" mask genuinely pending/failed work — plus a **real bug in already-merged T3.2 code**: a missing outbox handler bypassed attempts/lastError persistence entirely, fixed in `outbox.js` alongside this task                                                                                                                                                                    |
 
 ---
 
-## Known open items carried into Phase 3
+## Known open items carried into Phase 4
 
-- **Supabase cloud project not yet linked.** Phases 0–2 only set up and verified the
+- **Supabase cloud project not yet linked.** Phases 0–3 only set up and verified the
   local stack. Linking a cloud project (and the `supabase db push` step CLAUDE.md's Git
-  section refers to) is Phase 3+ work, once the schema is stable enough to push.
-- **Design tokens (`src/ui/tokens/`) are an empty placeholder directory.** Real tokens
-  land starting Phase 4, when UI work begins.
+  section refers to) is Phase 4+ work, once the schema is stable enough to push.
+- **Design tokens (`src/ui/tokens/`) — a separate, concurrent session is building the
+  real token layer** (colors/typography/spacing/base + self-hosted fonts) as of
+  2026-08-22, ahead of Phase 4. Not yet committed to `main` as of this entry — this
+  session deliberately left it untouched (shared working tree; confirmed with the user
+  not to interfere). Update this note once that work lands.
 - **No org/membership management UI or RPC exists.** `orgs`/`org_members` are
   deliberately read-only at the RLS+GRANT layer; provisioning the single org for
   October happens via `service_role` outside the app, not through a built flow. Revisit
