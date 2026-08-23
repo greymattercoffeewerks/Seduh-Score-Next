@@ -6,6 +6,88 @@ closes.
 
 ---
 
+## Phase 4 — Cup Taster · 2026-08-23 (T4.7)
+
+### T4.7 Report and analytics
+
+Scope decided with the user before writing code: the report shows per-stage standings +
+analytics (per-cupper stats, per-set difficulty, score distribution — the handoff's own
+module table listing for `analytics`), and — the user's own explicit constraint — it only
+ever surfaces once the whole event is finished, never mid-competition. This sidesteps every
+partial-data question a live report would raise entirely: by the time this module's data is
+read, every stage's numbers are already final and will never change again.
+
+`src/formats/cup-taster/analytics.js` (new): `isEventComplete` (finds the terminal stage —
+the one with `cutoff === null` — and checks its status, the one gate every other function
+in this module implicitly assumes); `computeSetDifficulty` (`avg(correct) group by set_id`,
+restricted to `kind = 'normal'` heats, the identical restriction `ct_standings`'s own
+migration comment gives and for the identical reason — a tiebreak heat's population is a
+biased subset); `computeScoreDistribution` (pure, buckets `fetchStandingsForStage`'s own
+ranked output by correct count, no second DB read); `computeStageReport` (composes
+`fetchStandingsForStage`, unmodified, with the two functions above for one stage).
+
+`src/formats/cup-taster/standings.js`: `fetchStandingsForStage`'s merged output gained
+three pass-through fields — `finalPosition`, `source`, `positionNote` — read directly from
+the already-fetched `ct_stage_entries` row, purely additive.
+
+`src/formats/cup-taster/setup.js`: new `listStagesForEvent`, ordered by ordinal.
+
+`src/formats/cup-taster/reportScreen.js`/`.css` (new): two states only — "not yet
+available" or the full report — no rebuild-then-refocus concerns, since this screen has no
+actions and renders once. Deliberately reuses `.standings-table` from `standingsScreen.css`
+for all three of this screen's tables rather than a third copy of that pattern — T4.6's own
+round-1 review flagged that screen's 480px table-stacking CSS as copy-pasted instead of
+shared. Live-verified via a demo harness (`reportScreen.preview.html`, a completed two-stage
+event) with hand-checked arithmetic and a 360px check.
+
+Verifiers: `scoring-auditor`, `ui-accessibility-reviewer`, `module-boundary-checker`,
+`test-auditor`, `code-reviewer` — five agents in parallel, one round (the fixes below were
+verified directly — re-run against passing tests plus live browser checks — rather than a
+second full review round, given their mechanical nature). No `offline-sync-auditor` (no
+outbox/IndexedDB involvement; this is a direct-write, organiser-only screen matching T4.2's
+own precedent).
+
+`module-boundary-checker` and `scoring-auditor` came back clean — the aggregation logic
+(the `kind = 'normal'` exclusion, the `finalPosition == null` ⟺ "advanced" invariant, the
+population consistency between difficulty and distribution) was traced end-to-end and holds.
+The other three found real issues, all fixed:
+
+1. **`ui-accessibility-reviewer` + `code-reviewer` (independently converging): the error
+   path only wrapped `loadState()`,** leaving a render-path failure uncaught entirely, and
+   the error branch wasn't a proper screen at all — no heading, focus never moved to the
+   error, unlike every sibling screen's own established pattern. Fixed by wrapping the whole
+   render body in one try/catch, always rendering a heading, and moving focus to the error
+   region on failure — this screen never re-renders, so getting the first render's own error
+   handling right matters more here than anywhere else in the project.
+2. **`ui-accessibility-reviewer`: two real ambiguities.** The distribution table's "Correct"
+   column (a raw count) sat directly below the difficulty table's own "Correct" column (a
+   percentage) with nothing but the same `data-label` text distinguishing them at the 480px
+   stacked breakpoint — a count plausibly misread as a percentage, the opposite of its actual
+   meaning. Renamed to "Correct answers." Separately: two complete stages produced
+   identically-worded "Set difficulty"/"Score distribution" headings with no stage name to
+   tell them apart in a screen reader's flat headings list — fixed by folding the stage kind
+   into each heading's own text. Also flagged, not fixed (a known, deliberately-deferred
+   gap already recorded for the sibling standings screen): no visible loading state during
+   the initial load — closed anyway, since the fix was small and this screen's own load can
+   be several sequential round trips deep.
+3. **`code-reviewer` (two items):** a `source` field was pulled through `standings.js`'s
+   merge for this report but never actually read anywhere — closed by wiring it into the
+   outcome text (distinguishing "advanced via tiebreak"/"advanced via coin toss" from a
+   clean advance, a genuinely useful piece of report context, not just satisfying the
+   reviewer). Also: two verbose async-IIFE patterns in `analytics.js` simplified to match
+   the existing ternary idiom already established in `standings.js`.
+4. **`test-auditor` (two real gaps):** `computeSetDifficulty`'s `kind = 'normal'` exclusion
+   test only proved the filter clause exists in the source, not that a tiebreak heat's
+   actual data gets excluded (the shared fake client doesn't filter by query arguments) —
+   closed with a small, locally-scoped client for just that test that does. `isEventComplete`'s
+   "only the terminal stage counts" test never separated "terminal stage" from "last array
+   position" (every fixture happened to order them the same way) — closed with a fixture
+   where the terminal, complete stage is first and a non-terminal, incomplete one is last.
+
+486 tests total (up from 449 after T4.6).
+
+---
+
 ## Phase 4 — Cup Taster · 2026-08-23 (T4.6)
 
 ### T4.6 Standings and advancement, including the tiebreak flow
