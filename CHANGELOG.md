@@ -70,7 +70,7 @@ project's own "every review should find something" discipline.
    moving `draft` to closure-level state, mutated **synchronously** as the first statement
    of every handler — before any `await` — since one click handler's synchronous portion
    always completes before another dispatched click can start. `scoring-auditor` verified
-   this closes the race even under out-of-order IndexedDB transaction *commit* ordering
+   this closes the race even under out-of-order IndexedDB transaction _commit_ ordering
    (not just promise resolution order), by tracing `core/db.js`'s actual `db.transaction()`
    semantics.
 2. **`scoring-auditor`: `confirm_heat`'s strict-confirm row-count check was dead code
@@ -81,11 +81,11 @@ project's own "every review should find something" discipline.
    `buildConfirmEntries`'s payload entirely — no migration touched, since nothing has been
    pushed to a cloud project yet and the fix didn't need one anyway.
 3. **`offline-sync-auditor`: two real outbox/confirm-flow bugs.** (a) A P0002 conflict left
-   a permanently-stuck outbox operation blocking the *entire* global queue forever — any
+   a permanently-stuck outbox operation blocking the _entire_ global queue forever — any
    heat, any future confirm. Fixed via the `.permanent` error-flag mechanism described
    above (remove-and-continue instead of stop-and-retry-forever). (b) No double-click guard
    on Confirm could enqueue two operations, causing a self-inflicted P0002 conflict where a
-   *successful* confirm gets reported to the organiser as *failed*. Fixed with a
+   _successful_ confirm gets reported to the organiser as _failed_. Fixed with a
    `confirmInFlight` guard, disabled synchronously (same reasoning as the `draft` race fix
    above), plus a fresh ground-truth re-fetch after the flush resolves rather than trusting
    the flush's own (possibly-unrelated, since the outbox is one shared global queue)
@@ -120,7 +120,7 @@ project's own "every review should find something" discipline.
    (and does — see round 3) treat the two disabled states differently.
 4. **`ui-accessibility-reviewer`: the confirmed view's disabled toggles inherited a
    project-wide `.btn:disabled { opacity: 0.6; }`,** dropping contrast on data that's meant
-   to be *read* (not an unavailable action) below AA (~2.7–3.4:1 measured vs. the 4.5:1
+   to be _read_ (not an unavailable action) below AA (~2.7–3.4:1 measured vs. the 4.5:1
    floor). Recommended scoping an opacity override to the true read-only case — closed in
    round 3.
 5. **`code-reviewer`: three more stray debug files** (`__pw_check*.mjs`) left at the repo
