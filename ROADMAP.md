@@ -165,3 +165,15 @@ strategy.
   check, confirmed intentional with the user before merging. No app code is actually
   served yet (Phase 0's placeholder `main.js`/`index.html` only); revisit this note once
   Phase 4/5 ships something real to that URL.
+- **T4.6's round-1 accessibility review flagged three non-blocking items, deliberately
+  left as-is rather than fixed inline:** (1) `standingsScreen.css`'s 480px table-stacking
+  rule is copy-pasted from `heatsScreen.css`'s `.assignment-table` pattern rather than
+  shared — sits against `CONVENTIONS.md`'s own "extract on 2nd verbatim occurrence" rule;
+  a future fix to that pattern (e.g. real screen-reader label text instead of CSS
+  `::before` content) has to land in two places until centralized. (2) `standingsScreen.js`'s
+  initial `await render()` on mount has no try/catch, so a `loadState()` failure on first
+  load surfaces as an unhandled rejection rather than an in-screen message — inherited
+  unchanged from `heatsScreen.js`'s own identical pattern, not new to this task. (3) No
+  visible "in progress" affordance between a tap and its re-render (no spinner, though
+  re-entrancy is safely guarded) — worth revisiting given this project's "unreliable venue
+  wifi" design target. None block Phase 4; revisit if either becomes a real field issue.
