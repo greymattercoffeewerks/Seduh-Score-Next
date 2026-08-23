@@ -1,7 +1,7 @@
 # Seduh Score Next — Claude Code orientation
 
 _State: Phase 0 done; Phase 1 done (T1.1–T1.4); Phase 2 done (T2.1–T2.6); Phase 3 done
-(T3.1–T3.3); Phase 4 in progress (T4.1–T4.4 done) — matches CHANGELOG.md as of 2026-08-23_
+(T3.1–T3.3); Phase 4 in progress (T4.1–T4.5 done) — matches CHANGELOG.md as of 2026-08-23_
 
 Read these before touching anything:
 
@@ -150,7 +150,12 @@ src/
                                    writes, not the outbox — see ROADMAP.md's known-gaps);
                                    timingManual, timingManualScreen (T4.4 — manual mode,
                                    also direct-write; timing.js exports shared helpers
-                                   both timing modes reuse)
+                                   both timing modes reuse); scoring, scoringScreen (T4.5
+                                   — three-state toggle + strict confirm; the whole heat
+                                   is submitted as ONE outbox operation through the
+                                   existing confirm_heat RPC, unlike T4.3/T4.4's direct
+                                   writes — first format module to use core/outbox.js's
+                                   `.permanent` error-flag contract)
   ui/
     tokens/                     ← design tokens (plain CSS custom properties)
   main.js                       ← scaffold entry point (Phase 0 placeholder)

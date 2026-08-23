@@ -70,6 +70,22 @@ let inFlightFlush = null;
 // run ahead of it (§9's "operations, not rows" guarantee extended to the
 // queue's own replay order).
 //
+// A handler that throws with `error.permanent === true` is telling this
+// function something different from an ordinary failure: not "this didn't
+// work yet, try again later" but "this exact operation can never succeed no
+// matter how many times it's retried" (a stale-data conflict is the
+// motivating case — retrying with the SAME payload against the SAME
+// expected-state check will keep failing the SAME way forever). Treating
+// that like any other failure would leave it stuck at the head of the
+// queue, permanently blocking every later operation behind it — including
+// ones for a completely different heat — with no way out short of manually
+// clearing IndexedDB. So a permanent failure is removed and the flush
+// continues, instead of stopping: nothing is "waiting" on an operation that
+// will never succeed, so letting later operations proceed doesn't violate
+// the FIFO guarantee above (that guarantee protects operations that MIGHT
+// still succeed). The failure itself is still reported back to the caller
+// via the returned `error`/`permanentFailure`, not silently discarded.
+//
 // `handlers` maps an operation `type` to `(payload) => Promise<void>`.
 export function flushOutbox(handlers) {
   if (inFlightFlush) return inFlightFlush;
@@ -81,9 +97,22 @@ export function flushOutbox(handlers) {
 
 async function runFlush(handlers) {
   let processed = 0;
+  // The most recent permanent failure across the WHOLE flush (not just one
+  // operation) — a permanently-failed operation doesn't stop the pass (see
+  // the catch block below), so without this its failure would be silently
+  // lost the moment a later operation either succeeds or fails ordinarily
+  // and the function returns with no memory anything else went wrong. Named
+  // distinctly from the returned `permanentFailure` boolean field below —
+  // this holds the actual Error, that's a flag.
+  let lastPermanentError = null;
+
   for (;;) {
     const operations = await outboxListAll();
-    if (operations.length === 0) return { processed, stopped: false };
+    if (operations.length === 0) {
+      return lastPermanentError
+        ? { processed, stopped: false, error: lastPermanentError, permanentFailure: true }
+        : { processed, stopped: false, permanentFailure: false };
+    }
 
     for (const operation of operations) {
       try {
@@ -100,6 +129,18 @@ async function runFlush(handlers) {
         await outboxRemove(operation.id);
         processed += 1;
       } catch (error) {
+        if (error?.permanent) {
+          // See the module comment above `runFlush` — this operation can
+          // never succeed as-is, so it's removed rather than left to block
+          // every later operation forever. Recorded for the eventual
+          // return value, but the loop keeps going: nothing is "waiting"
+          // on an operation that will never succeed, so a later,
+          // independent operation (this same pass or a future one) must
+          // still get its turn.
+          await outboxRemove(operation.id);
+          lastPermanentError = error;
+          continue;
+        }
         // A missing handler is a failure like any other — it must go through
         // the same attempts/lastError persistence as a handler throwing, or
         // it can never surface as a stuck/poison operation (T3.3's
@@ -111,7 +152,18 @@ async function runFlush(handlers) {
           attempts: operation.attempts + 1,
           lastError: error.message,
         });
-        return { processed, stopped: true, error };
+        // `permanentFailure` stays a plain boolean here too (unlike the
+        // queue-empty return above, `error` is always the STOPPING failure,
+        // never the earlier permanent one — this function doesn't try to
+        // report two distinct errors from one call). An earlier permanent
+        // failure in this same pass must still not vanish silently just
+        // because a later, unrelated, ordinary failure is what ultimately
+        // stopped things: the permanently-failed operation was already
+        // correctly removed from the queue (no data-integrity gap either
+        // way), but a caller inspecting only `stopped`/`error` would
+        // otherwise have no way to learn something else was also dropped
+        // during this same call.
+        return { processed, stopped: true, error, permanentFailure: Boolean(lastPermanentError) };
       }
     }
     // Loop again: operations enqueued while this pass was running should be

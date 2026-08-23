@@ -195,6 +195,19 @@ export async function listSetPositions(stageId, client = getSupabase()) {
   return data.map((row) => row.position);
 }
 
+// Full rows (id, position, label), ordered — the scoring surface (T4.5)
+// needs `id` to key results by `set_id`, which `listSetPositions` above
+// (built for T4.1's own missing-position check) never needed.
+export async function listSetsForStage(stageId, client = getSupabase()) {
+  const { data, error } = await client
+    .from('ct_sets')
+    .select('*')
+    .eq('stage_id', stageId)
+    .order('position', { ascending: true });
+  if (error) throw error;
+  return data;
+}
+
 async function computeMissingPositions(stageId, setCount, client) {
   const existingPositions = new Set(await listSetPositions(stageId, client));
   const missing = [];

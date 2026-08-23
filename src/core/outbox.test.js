@@ -38,7 +38,7 @@ describe('flushOutbox', () => {
     const result = await flushOutbox({ confirm_heat: handler });
 
     expect(handler).toHaveBeenCalledWith({ heatId: 'h1' });
-    expect(result).toEqual({ processed: 1, stopped: false });
+    expect(result).toEqual({ processed: 1, stopped: false, permanentFailure: false });
     expect(await countPendingOperations()).toBe(0);
   });
 
@@ -71,6 +71,89 @@ describe('flushOutbox', () => {
     // Only the failing operation was attempted — the queue never let the
     // second operation run ahead of the one still stuck.
     expect(handler).toHaveBeenCalledTimes(1);
+    expect(await countPendingOperations()).toBe(2);
+  });
+
+  it('a permanent failure is removed from the queue, not left stuck retrying forever', async () => {
+    // Found in T4.5 review: a handler that determines its own operation
+    // can never succeed no matter how many times it's retried (e.g.
+    // confirm_heat rejecting a stale-data conflict) must not leave that
+    // operation stuck at the head of the queue — since flushOutbox is
+    // strict FIFO, a stuck-but-not-removed operation would block every
+    // later operation behind it forever, for ANY heat, not just the one
+    // that conflicted.
+    await enqueueOperation('confirm_heat', { heatId: 'h1' });
+    const err = new Error('stale conflict');
+    err.permanent = true;
+    const handler = vi.fn().mockRejectedValue(err);
+
+    const result = await flushOutbox({ confirm_heat: handler });
+
+    expect(result.permanentFailure).toBe(true);
+    expect(result.stopped).toBe(false);
+    expect(result.error).toBe(err);
+    expect(await countPendingOperations()).toBe(0);
+  });
+
+  it('a permanent failure does not block a later, unrelated operation in the same flush pass', async () => {
+    await enqueueOperation('confirm_heat', { heatId: 'stale-conflict' });
+    await enqueueOperation('confirm_heat', { heatId: 'should-still-succeed' });
+    const handler = vi.fn(async (payload) => {
+      if (payload.heatId === 'stale-conflict') {
+        const err = new Error('stale conflict');
+        err.permanent = true;
+        throw err;
+      }
+    });
+
+    const result = await flushOutbox({ confirm_heat: handler });
+
+    // The second, unrelated operation still got its turn in the SAME
+    // flush call — nothing is "waiting" on an operation that will never
+    // succeed, unlike a transient failure, which correctly does stop the
+    // whole pass (see the sibling "stops at the first genuine failure"
+    // test above).
+    expect(handler).toHaveBeenCalledTimes(2);
+    expect(result.processed).toBe(1);
+    expect(result.permanentFailure).toBe(true);
+    expect(await countPendingOperations()).toBe(0);
+  });
+
+  it('an earlier permanent failure in the same pass is not lost when a later, ordinary failure is what ultimately stops it', async () => {
+    // Found in review (offline-sync-auditor + code-reviewer, independently):
+    // the queue-empty return path already carried a prior permanent
+    // failure's info forward, but the ordinary-failure-stops-the-pass path
+    // didn't — so a permanent failure earlier in the same pass would
+    // silently vanish from the return value the moment a later, unrelated,
+    // ordinary failure was what actually stopped things. The permanently
+    // failed operation itself was still correctly removed from the queue
+    // either way (no data-integrity gap) — this is purely about the return
+    // value not losing information a caller might act on.
+    await enqueueOperation('confirm_heat', { heatId: 'stale-conflict' });
+    await enqueueOperation('confirm_heat', { heatId: 'network-fails' });
+    await enqueueOperation('confirm_heat', { heatId: 'never-reached' });
+    const handler = vi.fn(async (payload) => {
+      if (payload.heatId === 'stale-conflict') {
+        const err = new Error('stale conflict');
+        err.permanent = true;
+        throw err;
+      }
+      if (payload.heatId === 'network-fails') {
+        throw new Error('network timeout');
+      }
+    });
+
+    const result = await flushOutbox({ confirm_heat: handler });
+
+    expect(result.stopped).toBe(true);
+    expect(result.error.message).toBe('network timeout');
+    expect(result.permanentFailure).toBe(true);
+    expect(handler).toHaveBeenCalledTimes(2);
+    // 'stale-conflict' was removed (permanent). 'network-fails' is left
+    // queued for retry (attempts bumped). 'never-reached' is ALSO still
+    // queued — it was never touched at all, not removed and not retried,
+    // since the ordinary failure on 'network-fails' stops the whole pass
+    // before its own turn comes up.
     expect(await countPendingOperations()).toBe(2);
   });
 
@@ -125,7 +208,7 @@ describe('flushOutbox', () => {
 
     const result = await flushOutbox({ confirm_heat: handler });
 
-    expect(result).toEqual({ processed: 2, stopped: false });
+    expect(result).toEqual({ processed: 2, stopped: false, permanentFailure: false });
     expect(handler).toHaveBeenCalledTimes(2);
   });
 
@@ -147,7 +230,11 @@ describe('flushOutbox', () => {
   });
 
   it('returns immediately with nothing to do when the queue is empty', async () => {
-    expect(await flushOutbox({})).toEqual({ processed: 0, stopped: false });
+    expect(await flushOutbox({})).toEqual({
+      processed: 0,
+      stopped: false,
+      permanentFailure: false,
+    });
   });
 
   it('concurrent flush calls share one in-flight run rather than processing the queue twice', async () => {
