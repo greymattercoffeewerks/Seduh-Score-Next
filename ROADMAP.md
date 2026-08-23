@@ -20,9 +20,20 @@ about original design intent.
 | Phase 3 — Registry and offline      | ✅ Done                         | `registry`, IndexedDB mirror + outbox, sync state panel                                       |
 | Phase 4 — Cup Taster                | 🚧 In progress (T4.1–T4.6 done) | Setup, heat generation, timing (app + manual), scoring, standings/advancement, report, export |
 | Phase 5 — Live surfaces             | Not started                     | `publish`, `viewer-shell`, projector, phone summary                                           |
-| Phase 6 — Guess the Bean, hardening | Not started                     | Booth game, accessibility pass, offline soak, dry run                                         |
+| Phase 6 — Guess the Bean, hardening | Descoped (see below)            | Accessibility pass, offline soak, dry run — Guess the Bean itself not rebuilt                 |
 
 **Deadline: 4 October 2026, Cup Tasters event.**
+
+**2026-08-23, user decision: Guess the Bean will NOT be rebuilt in this codebase.** The
+original v4.x implementation is booth-only, temporary, and already has zero contact with
+the identity core (D17) — the user decided reusing the working v4.x game as-is is the
+right call rather than reinventing it here, since none of this project's reasons for
+rebuilding Cup Taster (fixed advancement, `is_test` visibility, the outbox/atomic-write
+discipline, etc.) apply to a standalone booth game with no roster/scoring/advancement
+surface. Phase 6 narrows to just the hardening pass (accessibility, offline soak, dry
+run against the real roster) — §5.4/§14's "spec written at the start of the phase" for
+Guess the Bean is moot; there's no spec to write because there's no rebuild. Revisit only
+if the v4.x game turns out not to actually work at the venue.
 
 **Not tied to a phase task**: the `src/ui/tokens/` design system (colors, typography,
 spacing, base styles, self-hosted fonts, `DESIGN.md`, `preview.html`) shipped
