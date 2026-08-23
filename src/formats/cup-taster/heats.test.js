@@ -8,6 +8,7 @@ import {
   generateHeatsRandom,
   generateHeatsManual,
   listHeatsForStage,
+  generateTiebreakHeat,
 } from './heats.js';
 
 // Same shape as setup.test.js's fixture — queries consumed strictly in call
@@ -620,5 +621,154 @@ describe('listHeatsForStage', () => {
     await listHeatsForStage('s1', client);
     const orderCall = client.calls.find(([action]) => action === 'order');
     expect(orderCall).toEqual(['order', 'ct_heats', 'heat_number', { ascending: true }]);
+  });
+});
+
+describe('generateTiebreakHeat', () => {
+  it('rejects fewer than the minimum heat size — a genuine tie is never smaller than 2 (core/advancement never flags a solo group as a border tie)', async () => {
+    const client = fakeClient({ tables: {} });
+    await expect(generateTiebreakHeat('s1', [{ entry_id: 'e1' }], {}, client)).rejects.toThrow(
+      'at least 2 tied entries',
+    );
+  });
+
+  it('creates a kind: tiebreak heat containing exactly the tied entries, as heat number 1 when no tiebreak heat exists yet for this stage', async () => {
+    const tiedEntries = [{ entry_id: 'e1' }, { entry_id: 'e2' }];
+    const createdHeat = { id: 'tb1', stage_id: 's1', heat_number: 1, kind: 'tiebreak' };
+    const client = fakeClient({
+      tables: {
+        ct_stages: { data: stage, error: null },
+        ct_heats: [
+          { data: [], error: null }, // listHeatsForStage: no heats yet
+          { data: null, error: null }, // findHeatByNumber(kind: 'tiebreak'): none yet
+          { data: createdHeat, error: null }, // insert result
+        ],
+        ct_heat_entries: [
+          { data: [], error: null }, // listHeatEntries before insert
+          { data: tiedEntries, error: null }, // insert result (ignored)
+          { data: tiedEntries, error: null }, // re-list after success
+        ],
+      },
+    });
+
+    const result = await generateTiebreakHeat(
+      's1',
+      tiedEntries,
+      { random: identityRandom },
+      client,
+    );
+
+    expect(result.heat).toEqual(createdHeat);
+    expect(result.entries).toEqual(tiedEntries);
+
+    const heatInsert = client.calls.find(
+      ([action, table]) => action === 'insert' && table === 'ct_heats',
+    );
+    expect(heatInsert[2].kind).toBe('tiebreak');
+    expect(heatInsert[2].heat_number).toBe(1);
+    expect(heatInsert[2].duration_secs).toBe(stage.duration_secs);
+
+    // Found in review (test-auditor): `result.entries` above is
+    // `ensureHeatEntries`'s own re-fetch, whose queued response the test
+    // sets directly to `tiedEntries` — asserting on it alone would pass
+    // even if the actual INSERT payload sent to ct_heat_entries were wrong
+    // (a subset, an extra cupper from another stage, etc.). Assert on the
+    // real insert call instead, which is what the T4.6 AC ("a tiebreak heat
+    // containing exactly the tied cuppers") actually needs proven.
+    const entriesInsert = client.calls.find(
+      ([action, table]) => action === 'insert' && table === 'ct_heat_entries',
+    );
+    expect(entriesInsert[2].map((e) => e.entry_id).sort()).toEqual(['e1', 'e2']);
+    expect(entriesInsert[2]).toHaveLength(2);
+  });
+
+  it('numbers a second tiebreak heat 2, independent of how many normal heats exist — the two kinds have separate sequences (unique(stage_id, heat_number, kind))', async () => {
+    const existingHeats = [
+      { heat: { id: 'h1', kind: 'normal', heat_number: 1 }, entries: [] },
+      { heat: { id: 'h2', kind: 'normal', heat_number: 2 }, entries: [] },
+      { heat: { id: 'tb1', kind: 'tiebreak', heat_number: 1 }, entries: [] },
+    ];
+    const tiedEntries = [{ entry_id: 'e3' }, { entry_id: 'e4' }];
+    const createdHeat = { id: 'tb2', stage_id: 's1', heat_number: 2, kind: 'tiebreak' };
+    const client = fakeClient({
+      tables: {
+        ct_stages: { data: stage, error: null },
+        ct_heats: [
+          // listHeatsForStage's own heats list, plus one ct_heat_entries
+          // lookup per heat (all empty, unused by this test).
+          { data: existingHeats.map((h) => h.heat), error: null },
+          { data: null, error: null }, // findHeatByNumber(2, 'tiebreak'): none yet
+          { data: createdHeat, error: null }, // insert result
+        ],
+        ct_heat_entries: [
+          { data: [], error: null }, // listHeatsForStage's per-heat entries: h1
+          { data: [], error: null }, // h2
+          { data: [], error: null }, // tb1
+          { data: [], error: null }, // ensureHeatEntries: listHeatEntries before insert
+          { data: tiedEntries, error: null }, // insert result (ignored)
+          { data: tiedEntries, error: null }, // re-list after success
+        ],
+      },
+    });
+
+    const result = await generateTiebreakHeat(
+      's1',
+      tiedEntries,
+      { random: identityRandom },
+      client,
+    );
+
+    expect(result.heat).toEqual(createdHeat);
+    const heatInsert = client.calls.find(
+      ([action, table]) => action === 'insert' && table === 'ct_heats',
+    );
+    expect(heatInsert[2].heat_number).toBe(2);
+    expect(heatInsert[2].kind).toBe('tiebreak');
+  });
+
+  it('a normal heat at the same heat_number never collides — kind scopes the uniqueness, so generateHeatsRandom and generateTiebreakHeat never fight over heat_number 1', async () => {
+    // Regression check for the createHeat/findHeatByNumber generalization:
+    // before this task, both functions hard-coded kind: 'normal', so this
+    // scoping was implicit. Proven here by generating a tiebreak heat 1
+    // while a normal heat 1 already exists — createHeat's own conflict
+    // check (heatMatchesConfig) must never even run, since findHeatByNumber
+    // is scoped to kind: 'tiebreak' and correctly finds nothing.
+    const tiedEntries = [{ entry_id: 'e1' }, { entry_id: 'e2' }];
+    const createdHeat = { id: 'tb1', stage_id: 's1', heat_number: 1, kind: 'tiebreak' };
+    const client = fakeClient({
+      tables: {
+        ct_stages: { data: stage, error: null },
+        ct_heats: [
+          { data: [{ id: 'h1', kind: 'normal', heat_number: 1 }], error: null },
+          { data: null, error: null }, // findHeatByNumber(1, 'tiebreak'): none yet, despite normal heat 1 existing
+          { data: createdHeat, error: null },
+        ],
+        ct_heat_entries: [
+          { data: [], error: null }, // listHeatsForStage's per-heat entries: h1
+          { data: [], error: null }, // ensureHeatEntries: listHeatEntries before insert
+          { data: tiedEntries, error: null },
+          { data: tiedEntries, error: null },
+        ],
+      },
+    });
+
+    const result = await generateTiebreakHeat(
+      's1',
+      tiedEntries,
+      { random: identityRandom },
+      client,
+    );
+    expect(result.heat).toEqual(createdHeat);
+
+    // Found in review (test-auditor): the fake client's queues are purely
+    // call-order based and never actually filter by `kind` — so this test
+    // would still have passed even if `findHeatByNumber`'s `kind` parameter
+    // were silently dropped (the exact regression this test claims to
+    // guard). Assert on the real `.eq('kind', …)` call value to close that
+    // gap — this is what would actually fail if the regression recurred.
+    const kindEqCalls = client.calls.filter(
+      ([action, table, col]) => action === 'eq' && table === 'ct_heats' && col === 'kind',
+    );
+    expect(kindEqCalls.at(-1)).toEqual(['eq', 'ct_heats', 'kind', 'tiebreak']);
   });
 });
