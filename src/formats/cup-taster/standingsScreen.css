@@ -1,0 +1,107 @@
+/*
+ * Standings and advancement screen (T4.6) — built on src/ui/tokens, reusing
+ * heatsScreen.css's .screen-container/.btn/.card/.field-input and its
+ * .assignment-table responsive-stack pattern for this screen's own table
+ * (both stylesheets load together; nothing here redefines them).
+ */
+
+.standings-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.standings-table th {
+  text-align: left;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  padding: var(--space-2);
+  border-bottom: var(--border-strong) solid var(--color-border-strong);
+}
+
+.standings-table td {
+  padding: var(--space-2);
+  border-bottom: var(--border-hairline) solid var(--color-border);
+  vertical-align: middle;
+}
+
+.standings-correct,
+.standings-time {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* Same reasoning as heatsScreen.css's .assignment-table at this same
+   breakpoint: a 5-column table can't stay readable at 360px, so it becomes a
+   stacked card layout instead of shrinking columns further. */
+@media (max-width: 480px) {
+  .standings-table,
+  .standings-table thead,
+  .standings-table tbody,
+  .standings-table tr,
+  .standings-table td {
+    display: block;
+    width: 100%;
+  }
+  .standings-table thead {
+    display: none;
+  }
+  .standings-table tr {
+    border-bottom: var(--border-strong) solid var(--color-border-strong);
+    padding: var(--space-3) 0;
+  }
+  .standings-table td {
+    border-bottom: none;
+    padding: var(--space-1) 0;
+  }
+  .standings-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    font-size: var(--text-2xs);
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+  }
+}
+
+/* A row's provisional standing while a tie is still being resolved —
+   distinct, token-sourced treatment for each state, not left to fall
+   through unstyled (the same reasoning scoringScreen.css's `unscored` tone
+   rule gives for not leaving a meaningful state undesigned). */
+.standings-row[data-status='advancing'] {
+  background: var(--color-surface-sunken);
+}
+
+.standings-row[data-status='advancing'] .standings-status {
+  color: var(--color-success);
+  font-weight: var(--font-weight-semibold);
+}
+
+.standings-row[data-status='tied'] .standings-status {
+  color: var(--color-warning);
+  font-weight: var(--font-weight-semibold);
+}
+
+.coin-toss-list {
+  list-style: none;
+  margin: var(--space-3) 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.coin-toss-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.coin-toss-list input[type='checkbox'] {
+  width: var(--tap-target-min);
+  height: var(--tap-target-min);
+}
+
+.coin-toss-note {
+  margin: var(--space-2) 0 var(--space-4) 0;
+}

@@ -198,13 +198,13 @@ function throwHeatConfigConflict(heatNumber, existing, requested) {
   );
 }
 
-async function findHeatByNumber(stageId, heatNumber, client) {
+async function findHeatByNumber(stageId, heatNumber, client, kind = 'normal') {
   const { data, error } = await client
     .from('ct_heats')
     .select('*')
     .eq('stage_id', stageId)
     .eq('heat_number', heatNumber)
-    .eq('kind', 'normal')
+    .eq('kind', kind)
     .maybeSingle();
   if (error) throw error;
   return data;
@@ -216,8 +216,8 @@ export async function findHeatById(heatId, client = getSupabase()) {
   return data;
 }
 
-async function createHeat(stageId, heatNumber, durationSecs, timingMode, client) {
-  const existing = await findHeatByNumber(stageId, heatNumber, client);
+async function createHeat(stageId, heatNumber, durationSecs, timingMode, client, kind = 'normal') {
+  const existing = await findHeatByNumber(stageId, heatNumber, client, kind);
   if (existing) {
     if (!heatMatchesConfig(existing, durationSecs, timingMode)) {
       throwHeatConfigConflict(heatNumber, existing, { durationSecs, timingMode });
@@ -230,7 +230,7 @@ async function createHeat(stageId, heatNumber, durationSecs, timingMode, client)
     .insert({
       stage_id: stageId,
       heat_number: heatNumber,
-      kind: 'normal',
+      kind,
       timing_mode: timingMode,
       status: 'pending',
       duration_secs: durationSecs,
@@ -239,7 +239,7 @@ async function createHeat(stageId, heatNumber, durationSecs, timingMode, client)
     .single();
   if (error) {
     if (error.code === UNIQUE_VIOLATION) {
-      const raced = await findHeatByNumber(stageId, heatNumber, client);
+      const raced = await findHeatByNumber(stageId, heatNumber, client, kind);
       if (raced) {
         if (!heatMatchesConfig(raced, durationSecs, timingMode)) {
           throwHeatConfigConflict(heatNumber, raced, { durationSecs, timingMode });
@@ -314,10 +314,10 @@ async function ensureHeatEntries(heatId, entries, client) {
   );
 }
 
-async function createHeats(stageId, heatPlans, durationSecs, timingMode, client) {
+async function createHeats(stageId, heatPlans, durationSecs, timingMode, client, kind = 'normal') {
   const created = [];
   for (const plan of heatPlans) {
-    const heat = await createHeat(stageId, plan.heatNumber, durationSecs, timingMode, client);
+    const heat = await createHeat(stageId, plan.heatNumber, durationSecs, timingMode, client, kind);
     const entries = await ensureHeatEntries(heat.id, plan.entries, client);
     created.push({ heat, entries });
   }
@@ -350,6 +350,61 @@ export async function generateHeatsManual(
   const stageEntries = await listStageEntries(stageId, client);
   const heatPlans = buildHeatPlansFromAssignments(assignments, stageEntries);
   return createHeats(stageId, heatPlans, stage.duration_secs, timingMode, client);
+}
+
+// Tiebreak heat generation (handoff §7.2, §14 T4.6): one heat, `kind:
+// 'tiebreak'`, containing exactly the cuppers tied at a stage's border —
+// reuses every existing heat-creation primitive above (buildHeatPlansFromSizes
+// for station assignment, createHeats' now-generalized `kind` parameter)
+// rather than a parallel implementation, matching this project's own
+// module-boundary discipline. Once created, this heat is indistinguishable
+// from a normal one to timingScreen.js/scoringScreen.js — neither reads
+// `kind` — so it flows through the existing timing → scoring surfaces
+// unmodified; ct_standings' own `kind = 'normal'` filter is what keeps its
+// result out of the stage's primary tally (see that view's migration
+// comment).
+//
+// Heat numbers are scoped per (stage_id, heat_number, kind) at the DB level
+// (§5.2's unique constraint), so tiebreak heats get their own 1, 2, 3...
+// sequence independent of the stage's normal heats — this stage's second
+// border tie (e.g. one at the prelims cutoff, a separate one for some other
+// position) produces tiebreak heat 2, not a collision with normal heat 2.
+//
+// `tiedEntries` must carry `entry_id` (the shape core/advancement's
+// `tiedAtBorder` groups already carry, once unwrapped from their `{item,
+// position}` ranking envelope) and have at least 2 members — a genuine tie
+// always does (see standings.js's own reasoning: a group of exactly 1 can
+// never be flagged as a border tie by computeAdvancement).
+export async function generateTiebreakHeat(
+  stageId,
+  tiedEntries,
+  { timingMode = 'app', random = Math.random } = {},
+  client = getSupabase(),
+) {
+  if (!Array.isArray(tiedEntries) || tiedEntries.length < HEAT_MIN) {
+    throw new Error(
+      `generateTiebreakHeat: needs at least ${HEAT_MIN} tied entries, got ${tiedEntries?.length ?? 0}`,
+    );
+  }
+
+  const stage = await findStageById(stageId, client);
+  const existingHeats = await listHeatsForStage(stageId, client);
+  const nextHeatNumber = existingHeats.filter(({ heat }) => heat.kind === 'tiebreak').length + 1;
+
+  const [{ entries: planEntries }] = buildHeatPlansFromSizes(tiedEntries, [tiedEntries.length], {
+    random,
+  });
+  const heatPlan = { heatNumber: nextHeatNumber, entries: planEntries };
+
+  const [created] = await createHeats(
+    stageId,
+    [heatPlan],
+    stage.duration_secs,
+    timingMode,
+    client,
+    'tiebreak',
+  );
+  return created;
 }
 
 // For display: every heat in the stage, each with its own entries. One query

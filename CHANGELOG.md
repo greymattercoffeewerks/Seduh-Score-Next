@@ -6,6 +6,98 @@ closes.
 
 ---
 
+## Phase 4 — Cup Taster · 2026-08-23 (T4.6)
+
+### T4.6 Standings and advancement, including the tiebreak flow
+
+Scope decided with the user before writing code: full flow (standings display, tiebreak
+heat creation, and coin-toss recording all ship as real screens/actions in this task, not
+deferred), and advancing to the next stage — or declaring a champion — requires an explicit
+organiser confirm action, matching T4.5's strict-confirm precedent rather than advancing
+automatically.
+
+`src/formats/cup-taster/standings.js` (new): ranks a stage via `core/ranking` (most correct
+→ fastest time, per §7.3, applied uniformly at every cutoff including the terminal/champion
+stage — `stage.cutoff ?? 1`); derives advancement via `core/advancement.computeAdvancement`,
+unmodified; creates a tiebreak heat for a border tie; reads a confirmed tiebreak heat's own
+results directly (never via `ct_standings`, which filters `kind = 'normal'` out specifically
+so a tiebreak never blends into the primary tally); and commits a fully-resolved stage —
+`ct_stage_entries` rows into the next stage with `source` provenance (`advanced` /
+`tiebreak_won` / `coin_toss`), `final_position`/`position_note` for the champion and for
+anyone eliminated. A tiebreak heat reuses the stage's whole existing set of `ct_sets` rather
+than a literal single new set — the schema has no heat-scoped subset of a stage's sets, and
+`ct_standings`'s own migration comment already frames a tiebreak heat as living in the same
+`stage_id` it's resolving, which is why that view's `kind = 'normal'` filter exists at all.
+Direct writes, not the outbox — matching T4.2's own heat-generation precedent (an organiser
+setup/administrative action, not a live-heat write under time pressure).
+
+`src/formats/cup-taster/heats.js`: `findHeatByNumber`/`createHeat`/`createHeats` gained a
+trailing `kind = 'normal'` parameter (previously hard-coded), and a new exported
+`generateTiebreakHeat` reuses these same generalized primitives — no parallel
+heat-creation path, the exact discipline this project's module boundary exists to enforce
+(the v4.x parallel-timer defect CLAUDE.md documents).
+
+`src/formats/cup-taster/standingsScreen.js`/`.css` (new): a standings table plus a
+state machine (`not-ready` → `clean` | `needs-tiebreak-heat` → `tiebreak-pending` →
+`tiebreak-resolved` | `needs-coin-toss` → `complete`), ending in one atomic
+`commitStageResolution` call — a coin-toss selection is local, ephemeral UI state until the
+single commit, never a separately persisted step. Live-verified via a demo harness
+(`standingsScreen.preview.html`) walking the full tie → tiebreak-heat → coin-toss → commit
+path.
+
+Verifiers: `scoring-auditor`, `ui-accessibility-reviewer`, `module-boundary-checker`,
+`test-auditor`, `code-reviewer` — five agents in parallel, two rounds. No `offline-sync-auditor`
+(no outbox/IndexedDB involvement, matching the direct-write scoping above).
+
+**Round 1** found real issues in four of five domains:
+
+1. **`scoring-auditor` (the most severe finding): a genuine data-correctness bug.** When a
+   stage's border tie has 3+ members and the tiebreak heat only _partially_ resolves it — a
+   clear winner, a smaller sub-tie needing a coin toss, AND a cupper ranked distinctly below
+   that sub-tie — the last cupper was never a member of any `tiedAtBorder` group at any level
+   (`core/advancement`'s own break-without-visiting loop never even forms a group for them),
+   so their `ct_stage_entries` row was left with no `final_position` forever, on a stage the
+   UI reported as closed. Fixed by deriving `eliminated` directly from the tiebreak heat's
+   own full ranking minus whoever ends up advancing — correct regardless of how many
+   sub-groups the tiebreak heat's ranking produces — rather than from ad-hoc "loser" lists
+   assembled in the UI. Closed with a regression test reproducing the exact scenario.
+2. **`scoring-auditor` + `code-reviewer` (independently converging): a leftover
+   `isTerminal` inconsistency** in the coin-toss card specifically, using
+   `nextStage === null` after every other terminal check in the file had already been fixed
+   to use `stage.cutoff == null` (the two only disagree when a cutoff stage's next stage is
+   missing — a stage-plan data problem, not evidence of terminality). Also added: a new
+   explicit guard in the commit path throwing a clear error for exactly that missing-next-stage
+   case, rather than silently treating it as terminal.
+3. **`ui-accessibility-reviewer`: the coin-toss witness-note input was missing tap-target
+   and token styling entirely** (a bare `<input>`, never given the shared `.field-input`
+   class every other text input in this codebase gets) — fixed. **Also: every action handler
+   set focus to the heading unconditionally, even on failure** (the commit functions swallow
+   their own errors internally), sending keyboard focus to unchanged content instead of the
+   error region — fixed by having `commit()` return a success flag callers gate focus
+   movement on; a failed coin-toss submit also now preserves the organiser's selection/note
+   instead of clearing it.
+4. **`test-auditor` (four gaps, all closed):** a `generateTiebreakHeat` test asserted only
+   against its own queued mock response, never the actual DB insert payload; a "kind scopes
+   uniqueness" regression test couldn't actually fail under the regression it claimed to
+   guard (the fake client never filtered by the asserted value); the coin-toss note's
+   "required" validation had no test at all; and no test exercised the coin-toss slot-count
+   arithmetic with a nonzero clean-advancer count. All four closed with real assertions.
+5. `module-boundary-checker` came back clean both rounds — `generateTiebreakHeat` and
+   `standings.js` genuinely reuse existing primitives (`buildHeatPlansFromSizes`,
+   `createHeats`, `core/ranking`, `core/advancement`) rather than reimplementing them.
+
+**Round 2** (scoped to round 1's fixes only): all three re-invoked reviewers
+(`scoring-auditor`, `ui-accessibility-reviewer`, `code-reviewer`) confirmed every fix
+correct and complete, independently tracing scenarios beyond what the new tests cover
+(an all-in-one-coin-toss-group case, a hypothetical further-nested tied subgroup) to
+confirm no regression and no remaining gap. One purely cosmetic comment-wording nit, fixed
+inline.
+
+449 tests total (up from 409 after T4.5) — new files `standings.test.js` and
+`standingsScreen.test.js`, plus `heats.test.js` gained `generateTiebreakHeat` coverage.
+
+---
+
 ## Phase 4 — Cup Taster · 2026-08-23 (T4.5)
 
 ### T4.5 Scoring surface: three-state toggle, strict confirm, bulk mark-wrong

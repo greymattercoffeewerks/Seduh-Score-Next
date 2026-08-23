@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Standings surface — preview</title>
+    <link rel="stylesheet" href="/src/ui/tokens/index.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/heatsScreen.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/standingsScreen.css" />
+  </head>
+  <body>
+    <!--
+      Demo-only harness for the T4.6 standings screen — not part of the
+      shipped module graph, same role as scoringScreen.preview.html. In-memory
+      fake Supabase client, no RPC needed (this screen only ever does plain
+      select/insert/update). Three cuppers, cutoff 1 (a champion stage), two
+      of them tied at the border — exercises the full flow: standings display,
+      tiebreak-heat creation, and (after manually flipping the tiebreak heat
+      to confirmed via the console — this harness has no scoring UI wired in)
+      both the clean-resolution and coin-toss paths.
+    -->
+    <div id="app"></div>
+    <script type="module">
+      import { mountStandingsScreen } from './standingsScreen.js';
+
+      const db = {
+        events: [{ id: 'ev1', org_id: 'org1', is_test: true }],
+        ct_stages: [
+          {
+            id: 's1',
+            event_id: 'ev1',
+            ordinal: 1,
+            kind: 'finals',
+            set_count: 3,
+            cutoff: null,
+            status: 'running',
+          },
+        ],
+        ct_stage_entries: [
+          {
+            id: 'se1',
+            stage_id: 's1',
+            entry_id: 'e1',
+            source: 'seed',
+            final_position: null,
+            position_note: null,
+          },
+          {
+            id: 'se2',
+            stage_id: 's1',
+            entry_id: 'e2',
+            source: 'seed',
+            final_position: null,
+            position_note: null,
+          },
+          {
+            id: 'se3',
+            stage_id: 's1',
+            entry_id: 'e3',
+            source: 'seed',
+            final_position: null,
+            position_note: null,
+          },
+        ],
+        event_entries: [
+          { id: 'e1', display_name: 'Alex Rivera' },
+          { id: 'e2', display_name: 'Jordan Lee' },
+          { id: 'e3', display_name: 'Sam Okafor' },
+        ],
+        ct_heats: [
+          {
+            id: 'h1',
+            stage_id: 's1',
+            heat_number: 1,
+            kind: 'normal',
+            status: 'confirmed',
+            duration_secs: 480,
+          },
+        ],
+        ct_heat_entries: [
+          { id: 'he1', heat_id: 'h1', entry_id: 'e1', elapsed_secs: 100 },
+          { id: 'he2', heat_id: 'h1', entry_id: 'e2', elapsed_secs: 100 },
+          { id: 'he3', heat_id: 'h1', entry_id: 'e3', elapsed_secs: 200 },
+        ],
+        ct_results: [
+          { heat_entry_id: 'he1', set_id: 'set1', correct: true },
+          { heat_entry_id: 'he1', set_id: 'set2', correct: true },
+          { heat_entry_id: 'he1', set_id: 'set3', correct: true },
+          { heat_entry_id: 'he2', set_id: 'set1', correct: true },
+          { heat_entry_id: 'he2', set_id: 'set2', correct: true },
+          { heat_entry_id: 'he2', set_id: 'set3', correct: true },
+          { heat_entry_id: 'he3', set_id: 'set1', correct: true },
+          { heat_entry_id: 'he3', set_id: 'set2', correct: false },
+          { heat_entry_id: 'he3', set_id: 'set3', correct: false },
+        ],
+      };
+      // Alex and Jordan both go 3/3 in 100s — tied for the single champion
+      // slot. Sam goes 1/3 in 200s — clearly eliminated, no ambiguity.
+
+      // Derived, not stored (matches ct_standings' own real view, which a
+      // real Postgres session provides for free) — recomputed on every read
+      // from the raw ct_results/ct_heat_entries facts above.
+      function computeStandingsRows(stageId) {
+        const heatsForStage = db.ct_heats.filter(
+          (h) => h.stage_id === stageId && h.kind === 'normal',
+        );
+        const heatIds = new Set(heatsForStage.map((h) => h.id));
+        const byEntry = new Map();
+        for (const he of db.ct_heat_entries) {
+          if (!heatIds.has(he.heat_id)) continue;
+          const correct = db.ct_results.filter(
+            (r) => r.heat_entry_id === he.id && r.correct,
+          ).length;
+          const scored = db.ct_results.filter((r) => r.heat_entry_id === he.id).length;
+          const existing = byEntry.get(he.entry_id) ?? {
+            correct_count: 0,
+            sets_scored: 0,
+            total_elapsed_secs: 0,
+          };
+          byEntry.set(he.entry_id, {
+            correct_count: existing.correct_count + correct,
+            sets_scored: existing.sets_scored + scored,
+            total_elapsed_secs: existing.total_elapsed_secs + (he.elapsed_secs ?? 0),
+          });
+        }
+        return [...byEntry.entries()].map(([entry_id, agg]) => ({
+          entry_id,
+          stage_id: stageId,
+          ...agg,
+        }));
+      }
+
+      function matchesFilters(row, filters) {
+        return filters.every(([type, col, val]) => {
+          if (type === 'eq') return row[col] === val;
+          if (type === 'in') return val.includes(row[col]);
+          return true;
+        });
+      }
+
+      function makeBuilder(table) {
+        const filters = [];
+        let pendingUpdate = null;
+        let pendingInsert = null;
+
+        const builder = {
+          select() {
+            return builder;
+          },
+          insert(payload) {
+            pendingInsert = Array.isArray(payload) ? payload : [payload];
+            return builder;
+          },
+          update(payload) {
+            pendingUpdate = payload;
+            return builder;
+          },
+          eq(col, val) {
+            filters.push(['eq', col, val]);
+            if (pendingUpdate) {
+              const row = db[table].find((r) => matchesFilters(r, filters));
+              if (row) Object.assign(row, pendingUpdate);
+              return Promise.resolve({ data: null, error: null });
+            }
+            return builder;
+          },
+          in(col, vals) {
+            filters.push(['in', col, vals]);
+            return builder;
+          },
+          order(col, { ascending } = {}) {
+            const rows =
+              table === 'ct_standings'
+                ? computeStandingsRows(filters.find(([, c]) => c === 'stage_id')?.[2])
+                : db[table].filter((r) => matchesFilters(r, filters));
+            rows.sort((a, b) => (ascending ? a[col] - b[col] : b[col] - a[col]));
+            db[`__ordered_${table}`] = rows;
+            return builder;
+          },
+          single() {
+            if (pendingInsert) {
+              const withId = { id: `${table}-new-${db[table].length}`, ...pendingInsert[0] };
+              db[table].push(withId);
+              console.log('[demo] insert into', table, withId);
+              return Promise.resolve({ data: withId, error: null });
+            }
+            const rows = db[table].filter((r) => matchesFilters(r, filters));
+            return Promise.resolve({ data: rows[0] ?? null, error: null });
+          },
+          maybeSingle() {
+            const rows = db[table].filter((r) => matchesFilters(r, filters));
+            return Promise.resolve({ data: rows[0] ?? null, error: null });
+          },
+          then(resolve, reject) {
+            if (pendingInsert) {
+              const withIds = pendingInsert.map((row, i) => ({
+                id: `${table}-new-${db[table].length + i}`,
+                ...row,
+              }));
+              db[table].push(...withIds);
+              console.log('[demo] insert into', table, withIds);
+              return Promise.resolve({ data: withIds, error: null }).then(resolve, reject);
+            }
+            const rows =
+              db[`__ordered_${table}`] ??
+              (table === 'ct_standings'
+                ? computeStandingsRows(filters.find(([, c]) => c === 'stage_id')?.[2])
+                : db[table].filter((r) => matchesFilters(r, filters)));
+            delete db[`__ordered_${table}`];
+            return Promise.resolve({ data: rows, error: null }).then(resolve, reject);
+          },
+        };
+        return builder;
+      }
+
+      const client = { from: (table) => makeBuilder(table) };
+
+      window.__db = db; // for manual console pokes during live verification
+      // Re-mounts without a page reload, so console mutations to __db survive
+      // — a full navigate() would reset the in-memory fixture back to its
+      // seeded state.
+      window.__remount = () => {
+        document.getElementById('app').innerHTML = '';
+        mountStandingsScreen(document.getElementById('app'), {
+          eventId: 'ev1',
+          stageId: 's1',
+          client,
+        });
+      };
+
+      window.__remount();
+    </script>
+  </body>
+</html>
