@@ -75,6 +75,25 @@
   background: var(--color-accent-hover);
 }
 
+/* Ported from src/ui/tokens/preview.html's own documented `.btn-outline` —
+ * this project's first REAL usage of a secondary button variant (T4.8's
+ * report screen). Every `.btn` usage before this was paired with
+ * `.btn-primary`; `.btn` itself sets no background/color of its own, so a
+ * bare `.btn` falls through to un-tokenized browser/OS default button
+ * chrome — found in review. Belongs here, not in the format-specific
+ * screen that first needed it, matching this file's own stated role as
+ * where shared `.btn*` component shapes live.
+ */
+.btn-outline {
+  background: transparent;
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+}
+
+.btn-outline:hover:not(:disabled) {
+  background: var(--color-surface-sunken);
+}
+
 .field-input {
   min-height: var(--tap-target-min);
   width: 100%;

@@ -1,12 +1,14 @@
 /*
- * Report and analytics screen (T4.7) — built on src/ui/tokens, reusing
+ * Report and analytics screen (T4.7/T4.8) — built on src/ui/tokens, reusing
  * heatsScreen.css's .screen-container/.card/.is-test-banner/.screen-feedback
  * and standingsScreen.css's .standings-table (including its 480px
  * responsive-stack rule) for every table on this screen, rather than a
  * third copy of that pattern. Nothing here redefines those; this file adds
  * only what's genuinely new: the first h3 subheading on this project's
- * screens, and spacing between a stage's three tables/one stage card and
- * the next.
+ * screens, spacing between a stage's three tables/one stage card and the
+ * next, the export toolbar, and (T4.8) this screen's own print stylesheet —
+ * PDF export is the browser's own Print -> Save as PDF against these rules,
+ * not a generated file (see reportScreen.js's own module comment).
  */
 
 .report-screen h3 {
@@ -22,4 +24,48 @@
 
 .report-stage-card table + h3 {
   margin-top: var(--space-5);
+}
+
+.report-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+@media print {
+  /* The export toolbar itself is a screen-only control, not report
+     content — printing the "Download CSV"/"Print / Save as PDF" buttons
+     onto the page they triggered would be meaningless. */
+  .no-print {
+    display: none;
+  }
+
+  /* Force the real table layout even if the print surface happens to be
+     narrow enough to trigger .standings-table's own 480px stacked-card
+     breakpoint (a print preview pane, an actual narrow-format printer) —
+     printed/PDF output should never rely on that screen-only scroll/stack
+     affordance, which drops the header row from the accessibility tree
+     entirely and reads poorly as a static document. Explicit table-display
+     values, not `revert` — found in review: `revert` only happens to land
+     on these values today because nothing else sets `display` on these
+     selectors outside the 480px rule this block overrides; a future rule
+     added anywhere else touching the same selectors' `display` would
+     silently change what `revert` resolves to here without anyone touching
+     this block. Explicit values have no such cascade-position dependency. */
+  .standings-table {
+    display: table;
+  }
+  .standings-table thead {
+    display: table-header-group;
+  }
+  .standings-table tbody {
+    display: table-row-group;
+  }
+  .standings-table tr {
+    display: table-row;
+  }
+  .standings-table td,
+  .standings-table th {
+    display: table-cell;
+  }
 }
