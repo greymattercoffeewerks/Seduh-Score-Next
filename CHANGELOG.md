@@ -6,6 +6,150 @@ closes.
 
 ---
 
+## Phase 4 — Cup Taster · 2026-08-23 (T4.5)
+
+### T4.5 Scoring surface: three-state toggle, strict confirm, bulk mark-wrong
+
+Scope decided with the user before writing code, via three explicit questions: (1) write
+model — local-accumulate (browser state + IndexedDB draft) with the whole heat submitted
+as ONE atomic operation via the existing `confirm_heat` RPC (migration 20260822100000)
+through the outbox, not a direct-write-as-you-tap pattern like T4.3/T4.4 — the
+recommended option, chosen specifically because it's the exact "confirming a heat is
+queued as ONE operation calling ONE RPC" use case the outbox's own module comment and
+handoff §9 were built for, but never actually wired up until now; (2) persist the draft to
+IndexedDB as taps happen, not the recommended in-memory-only option — the more resilient
+choice, so a browser refresh/crash mid-scoring doesn't lose an organiser's work; (3) the
+bulk mark-wrong action scoped to per-cupper only, not also a whole-heat action.
+
+`src/formats/cup-taster/setup.js`: added `listSetsForStage(stageId, client)` — T4.1's
+existing `listSetPositions` only returns bare positions, not full rows with `id`, and
+scoring needs `set_id` to key results.
+
+`src/formats/cup-taster/scoring.js` (new): `toggleScore` (null → true → false → null,
+three-state, never a fourth state), `computeTally`/`isEntryComplete`/`isHeatComplete`
+(pure derivations — `correct` stays a count, never a stored column, per handoff §5.2),
+`markCupperRemainingWrong` (per-cupper only, per the user's scoping decision),
+`loadDraft`/`saveDraft`/`clearDraft` (IndexedDB-backed draft, keyed per heat),
+`loadConfirmedResults` (reads the real `ct_results` rows for the post-confirm read-only
+view), `buildConfirmEntries` (assembles the RPC payload, filtering out any still-null
+result rather than sending an explicit `null`), `submitConfirmHeat` (enqueues one
+`confirm_heat` operation and flushes it through the outbox), `describeConfirmError`
+(translates a P0002 conflict into an organiser-facing message using the DETAIL payload's
+`current_updated_at`).
+
+`src/formats/cup-taster/scoringScreen.js`/`.css` (new): a three-state toggle grid per
+cupper per set (stable `score-{entryId}-{setId}` ids for rebuild-then-refocus, §15.3), a
+running tally per cupper, a per-cupper "Mark remaining wrong" action, and a Confirm button
+gated on every cupper having every set scored. Live-verified via a demo harness
+(`scoringScreen.preview.html`, including a fake `.rpc()` — the first screen needing one).
+
+`src/core/outbox.js`: gained a generic `.permanent` error-flag contract on `runFlush` — a
+handler can throw with `error.permanent = true` to mean "this exact operation can never
+succeed no matter how many times it's retried" (distinct from an ordinary failure, which
+still correctly stops the whole flush and leaves the operation queued for retry). Zero
+Cup-Taster-specific knowledge in `core/outbox.js` itself — `scoring.js`'s
+`submitConfirmHeat` is the one format-specific caller that tags a P0002 conflict this way,
+never a network-level rejection.
+
+Verifiers: `scoring-auditor`, `ui-accessibility-reviewer`, `module-boundary-checker`,
+`offline-sync-auditor` (the outbox's own confirm-heat write path made this task's first
+genuine use of it), `test-auditor`, `code-reviewer` — six agents, run in parallel, across
+three rounds. Round 1 found the most severe issues; round 2 found narrower, second-order
+gaps in round 1's own fixes; round 3 (scoped to just round 2's fixes, not the whole
+feature again) found one cosmetic nit and one test-coverage gap, both closed, and
+otherwise came back clean. Every round found something real, consistent with this
+project's own "every review should find something" discipline.
+
+**Round 1:**
+
+1. **`scoring-auditor` + `code-reviewer` (independently converging): a real, reproduced
+   lost-update race.** Rapid taps on different cells could silently drop one — `draft` was
+   captured once per `render()`, and a second tap landing on the stale DOM before the
+   first tap's full network round trip resolved read the same stale snapshot, with
+   `saveDraft`'s unconditional overwrite discarding whichever save landed last. Fixed by
+   moving `draft` to closure-level state, mutated **synchronously** as the first statement
+   of every handler — before any `await` — since one click handler's synchronous portion
+   always completes before another dispatched click can start. `scoring-auditor` verified
+   this closes the race even under out-of-order IndexedDB transaction _commit_ ordering
+   (not just promise resolution order), by tracing `core/db.js`'s actual `db.transaction()`
+   semantics.
+2. **`scoring-auditor`: `confirm_heat`'s strict-confirm row-count check was dead code
+   against the real client payload.** Sending an explicit `correct: null` for an unscored
+   set tripped a raw NOT NULL constraint violation (`ct_results.correct` is `not null`)
+   before the RPC's own row-count check could ever fire, making the "friendly" error
+   message unreachable. Fixed by filtering null-valued results out of
+   `buildConfirmEntries`'s payload entirely — no migration touched, since nothing has been
+   pushed to a cloud project yet and the fix didn't need one anyway.
+3. **`offline-sync-auditor`: two real outbox/confirm-flow bugs.** (a) A P0002 conflict left
+   a permanently-stuck outbox operation blocking the _entire_ global queue forever — any
+   heat, any future confirm. Fixed via the `.permanent` error-flag mechanism described
+   above (remove-and-continue instead of stop-and-retry-forever). (b) No double-click guard
+   on Confirm could enqueue two operations, causing a self-inflicted P0002 conflict where a
+   _successful_ confirm gets reported to the organiser as _failed_. Fixed with a
+   `confirmInFlight` guard, disabled synchronously (same reasoning as the `draft` race fix
+   above), plus a fresh ground-truth re-fetch after the flush resolves rather than trusting
+   the flush's own (possibly-unrelated, since the outbox is one shared global queue)
+   result.
+4. **`ui-accessibility-reviewer`: an unstyled `unscored` toggle** (browser UA defaults, not
+   design tokens) **and non-disabled buttons in the confirmed read-only view.** Fixed with
+   explicit token-sourced CSS and a new `interactive` parameter on `renderScoringRows`.
+5. **`test-auditor`: a misleading `listSetsForStage` test** claimed to prove sort order,
+   which the fake test client structurally couldn't prove. Split into two honest tests: one
+   proving row shape, one proving the `.order()` call arguments.
+
+**Round 2** (re-review of round 1's fixes):
+
+1. **`offline-sync-auditor` + `code-reviewer` (independently converging): `runFlush`'s
+   permanent-failure tracking silently dropped an earlier permanent failure's info if a
+   later, unrelated ordinary failure was what actually stopped the same pass** — only the
+   queue-empty return path carried it forward. Fixed by making `permanentFailure: boolean`
+   present on every return path, and renaming the local variable to `lastPermanentError`
+   for clarity.
+2. **`offline-sync-auditor`: the confirm handler's ground-truth re-fetch could itself fail**
+   right after a successful confirm (e.g. a connection drop between the RPC ack and this
+   read), showing a misleadingly definite "failed" message even though the confirm may
+   have actually succeeded. Fixed via `.catch(() => null)` and a new, appropriately hedged
+   branch ("Could not confirm whether this went through...") — the next render's own
+   re-fetch self-corrects if it did.
+3. **`scoring-auditor`: toggle/mark-wrong buttons weren't disabled while a confirm was in
+   flight**, leaving a narrow window where a tap could be silently overwritten the moment a
+   successful confirm switched the screen to the server-authoritative read-only view, with
+   no notice the tap never counted. Fixed with a new `locked` parameter on
+   `renderScoringRows`, distinct from `interactive` — a `locked`-but-editable toggle gets
+   `disabled` without the `data-readonly` marker the true confirmed view uses, so CSS can
+   (and does — see round 3) treat the two disabled states differently.
+4. **`ui-accessibility-reviewer`: the confirmed view's disabled toggles inherited a
+   project-wide `.btn:disabled { opacity: 0.6; }`,** dropping contrast on data that's meant
+   to be _read_ (not an unavailable action) below AA (~2.7–3.4:1 measured vs. the 4.5:1
+   floor). Recommended scoping an opacity override to the true read-only case — closed in
+   round 3.
+5. **`code-reviewer`: three more stray debug files** (`__pw_check*.mjs`) left at the repo
+   root by earlier reviewer agents' own live-verification sessions. Deleted.
+
+**Round 3** (scoped re-verification of round 2's fixes only, given round 2's own findings
+were narrower/second-order rather than severe): all five relevant reviewers
+(`code-reviewer`, `module-boundary-checker`, `offline-sync-auditor`, `test-auditor`,
+`ui-accessibility-reviewer`) came back clean on correctness — the CSS opacity override
+(`.scoring-toggle[data-readonly='true'] { opacity: 1; }`) was live-verified in-browser
+(computed opacity 1, white-on-danger-red at ~8.25:1) and confirmed by
+`ui-accessibility-reviewer` to clear AA across all three tones in both light and dark
+surface modes, with margin. Two small findings, both closed: **`code-reviewer`** caught a
+dead `interactive &&` guard left over from the `locked` fix (unreachable in every current
+call site — simplified); **`test-auditor`** caught that the new "toggle tap during an
+in-flight confirm" integration test only proved a render happened, not that the tap's own
+draft mutation survived — closed with a direct post-unlock `data-tone` assertion.
+
+409 tests total (up from 355 after T4.4) — new files `scoring.test.js` and
+`scoringScreen.test.js`, plus additions to `outbox.test.js` (the `.permanent` mechanism)
+and a split-for-honesty pair in `setup.test.js`.
+
+Unlike T4.3/T4.4, this screen has **no direct-write gap** — it's the first Cup Taster
+surface that actually routes through Phase 3's outbox end to end, closing part of the
+known gap those two tasks carried forward (see ROADMAP.md; the app-mode/manual-mode timing
+screens themselves still write directly, that gap is unchanged).
+
+---
+
 ## Phase 4 — Cup Taster · 2026-08-23 (T4.4)
 
 ### T4.4 Timing surface, manual mode

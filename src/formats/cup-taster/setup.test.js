@@ -4,6 +4,7 @@ import {
   findStageByOrdinal,
   createStage,
   listSetPositions,
+  listSetsForStage,
   ensureSetsForStage,
   createStagePlan,
 } from './setup.js';
@@ -39,6 +40,10 @@ function fakeClient({ tables = {} } = {}) {
         },
         eq: (...args) => {
           calls.push(['eq', table, ...args]);
+          return builder;
+        },
+        order: (...args) => {
+          calls.push(['order', table, ...args]);
           return builder;
         },
         single: () => Promise.resolve(resolve()),
@@ -385,6 +390,39 @@ describe('listSetPositions', () => {
   it('returns an empty array when no sets exist yet', async () => {
     const client = fakeClient({ tables: { ct_sets: { data: [], error: null } } });
     expect(await listSetPositions('s1', client)).toEqual([]);
+  });
+});
+
+describe('listSetsForStage', () => {
+  it('returns full set rows, keyed by id for scoring results', async () => {
+    const client = fakeClient({
+      tables: {
+        ct_sets: {
+          data: [
+            { id: 'set1', stage_id: 's1', position: 1, label: null },
+            { id: 'set2', stage_id: 's1', position: 2, label: null },
+          ],
+          error: null,
+        },
+      },
+    });
+    const result = await listSetsForStage('s1', client);
+    expect(result).toEqual([
+      { id: 'set1', stage_id: 's1', position: 1, label: null },
+      { id: 'set2', stage_id: 's1', position: 2, label: null },
+    ]);
+  });
+
+  // The fake client above resolves whatever `data` was fixtured verbatim —
+  // it doesn't simulate `.order()` actually sorting anything, so no
+  // value-based assertion against it can prove real sort behavior. This
+  // is the one assertion that actually proves the function requests
+  // ascending order from the real database, which is what would cause
+  // real sorting server-side.
+  it('requests ascending order by position from the database', async () => {
+    const client = fakeClient({ tables: { ct_sets: { data: [], error: null } } });
+    await listSetsForStage('s1', client);
+    expect(client.calls).toContainEqual(['order', 'ct_sets', 'position', { ascending: true }]);
   });
 });
 

@@ -1,0 +1,95 @@
+/*
+ * Scoring surface (T4.5) — built on src/ui/tokens, reusing
+ * heatsScreen.css's .screen-container/.btn/.card/.station-badge and
+ * timingScreen.css's .timing-row/.timing-row-name (both stylesheets are
+ * loaded together with this one; nothing here redefines them). Adds only
+ * what's new to this screen: the per-set toggle grid, the running tally,
+ * and the mark-remaining-wrong action.
+ */
+
+/* Explicit `align-items: stretch` from the start, not left to inherit
+   `.timing-row`'s own `align-items: center` — T4.4's own CSS review found
+   that exact inheritance silently breaks a column-direction row's width
+   bounding (a non-stretch value lets a flex item size to its own content
+   instead of the row's actual width). A scoring row can hold up to a
+   handful of toggle buttons that need to wrap onto multiple lines, so
+   stacking (not a single rigid row) is the layout from the start here,
+   same reasoning as T4.4's own row, not rediscovered the hard way again. */
+.scoring-row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-3);
+}
+
+.scoring-tally {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  color: var(--color-text-secondary);
+}
+
+.scoring-tally[data-complete='true'] {
+  color: var(--color-success);
+  font-weight: var(--font-weight-semibold);
+}
+
+.scoring-toggle-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* Deliberately not min-width: 0/flex: 1 1 auto like .timing-row-name-text —
+   there's nothing here to truncate; a toggle button's own text ("3 ✓") is
+   always short and fixed-length, so it just wraps as a group instead. */
+.scoring-toggle {
+  min-width: 3.5rem;
+  font-family: var(--font-mono);
+}
+
+/* The resting state of every toggle before a judge taps anything — i.e.
+   the dominant visual state of the whole grid on first load — so this
+   needs an explicit token-sourced rule same as the other two tones, not
+   left to fall through to the browser's own unstyled button default
+   (which is exactly what happened before this rule existed: correct
+   contrast by accident, but undefined and theme/browser-dependent, the
+   "local patch"/untokened-color anti-pattern this project avoids
+   everywhere else). */
+.scoring-toggle[data-tone='unscored'] {
+  background: var(--color-surface-sunken);
+  color: var(--color-text-secondary);
+  border-color: var(--color-border-strong);
+}
+
+.scoring-toggle[data-tone='correct'] {
+  background: var(--color-success);
+  color: var(--color-success-contrast);
+  border-color: var(--color-success);
+}
+
+.scoring-toggle[data-tone='wrong'] {
+  background: var(--color-danger);
+  color: var(--color-danger-contrast);
+  border-color: var(--color-danger);
+}
+
+.scoring-mark-wrong {
+  align-self: flex-start;
+}
+
+/* Two different reasons a toggle can be `disabled`, and they need different
+   treatment (ui-accessibility-reviewer, T4.5 round 2): the confirmed view's
+   toggles are disabled because there is nothing left to DO with them — the
+   heat is closed and this screen's whole purpose here is to be READ, not to
+   signal an unavailable action. heatsScreen.css's project-wide
+   `.btn:disabled { opacity: 0.6; }` was built for the latter case and drops
+   the tone colors below AA when applied to the former (measured ~2.7-3.4:1
+   vs the 4.5:1 this needs). `data-readonly` is set ONLY in that true
+   confirmed/read-only case (scoringScreen.js's `interactive: false`) — the
+   `locked` mid-confirm case (a heat still open for editing, temporarily
+   disabled while a confirm is in flight) deliberately keeps the normal
+   dimmed treatment, since that IS a genuinely temporary "unavailable"
+   state. */
+.scoring-toggle[data-readonly='true'] {
+  opacity: 1;
+}

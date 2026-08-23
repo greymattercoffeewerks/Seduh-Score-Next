@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Scoring surface — preview</title>
+    <link rel="stylesheet" href="/src/ui/tokens/index.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/heatsScreen.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/timingScreen.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/scoringScreen.css" />
+  </head>
+  <body>
+    <!--
+      Demo-only harness for the T4.5 scoring screen — not part of the
+      shipped module graph, same role as timingScreen.preview.html and
+      heatsScreen.preview.html. In-memory fake client (including a fake
+      .rpc() for confirm_heat), no live Supabase connection. Three sets,
+      two cuppers — enough to exercise the grid, the running tally, the
+      per-cupper mark-remaining-wrong action, and the strict-confirm gate.
+    -->
+    <div id="app"></div>
+    <script type="module">
+      import { mountScoringScreen } from './scoringScreen.js';
+
+      function createDemoClient() {
+        const db = {
+          events: [{ id: 'ev1', org_id: 'org1', is_test: true }],
+          ct_heats: [
+            {
+              id: 'h1',
+              stage_id: 's1',
+              heat_number: 1,
+              status: 'scoring',
+              updated_at: '2026-08-23T00:00:00.000Z',
+            },
+          ],
+          ct_sets: [
+            { id: 'set1', stage_id: 's1', position: 1, label: null },
+            { id: 'set2', stage_id: 's1', position: 2, label: null },
+            { id: 'set3', stage_id: 's1', position: 3, label: null },
+          ],
+          ct_heat_entries: [
+            {
+              id: 'he1',
+              heat_id: 'h1',
+              entry_id: 'e1',
+              station: 'A',
+              elapsed_secs: 125,
+              elapsed_secs_raw: 125,
+              maxed: false,
+              time_source: 'tapped',
+            },
+            {
+              id: 'he2',
+              heat_id: 'h1',
+              entry_id: 'e2',
+              station: 'B',
+              elapsed_secs: 480,
+              elapsed_secs_raw: 483,
+              maxed: true,
+              time_source: 'tapped',
+            },
+          ],
+          event_entries: [
+            { id: 'e1', display_name: 'Alex Rivera' },
+            { id: 'e2', display_name: 'Jordan Lee' },
+          ],
+          ct_results: [],
+        };
+
+        function matchesFilters(row, filters) {
+          return filters.every(([type, col, val]) => {
+            if (type === 'eq') return row[col] === val;
+            if (type === 'in') return val.includes(row[col]);
+            return true;
+          });
+        }
+
+        function makeBuilder(table) {
+          const filters = [];
+
+          const builder = {
+            select() {
+              return builder;
+            },
+            eq(col, val) {
+              filters.push(['eq', col, val]);
+              return builder;
+            },
+            in(col, vals) {
+              filters.push(['in', col, vals]);
+              return builder;
+            },
+            order(col, { ascending } = {}) {
+              const rows = db[table].filter((r) => matchesFilters(r, filters));
+              rows.sort((a, b) => (ascending ? a[col] - b[col] : b[col] - a[col]));
+              db[`__ordered_${table}`] = rows;
+              return builder;
+            },
+            single() {
+              const rows = db[table].filter((r) => matchesFilters(r, filters));
+              return Promise.resolve({ data: rows[0] ?? null, error: null });
+            },
+            then(resolve, reject) {
+              const rows =
+                db[`__ordered_${table}`] ?? db[table].filter((r) => matchesFilters(r, filters));
+              delete db[`__ordered_${table}`];
+              return Promise.resolve({ data: rows, error: null }).then(resolve, reject);
+            },
+          };
+          return builder;
+        }
+
+        return {
+          from: (table) => makeBuilder(table),
+          rpc(name, payload) {
+            console.log('[demo] rpc call:', name, payload);
+            if (name === 'confirm_heat') {
+              const heat = db.ct_heats.find((h) => h.id === payload.p_heat_id);
+              if (heat.updated_at !== payload.p_expected_updated_at) {
+                return Promise.resolve({
+                  data: null,
+                  error: {
+                    code: 'P0002',
+                    details: JSON.stringify({ current_updated_at: heat.updated_at }),
+                  },
+                });
+              }
+              // Mirror confirm_heat's own real behavior: write every
+              // submitted result, so the confirmed read-only view
+              // (loadConfirmedResults) has something real to display,
+              // not just a status flip.
+              for (const entry of payload.p_entries) {
+                const heatEntry = db.ct_heat_entries.find((e) => e.entry_id === entry.entry_id);
+                for (const result of entry.results) {
+                  db.ct_results.push({
+                    heat_entry_id: heatEntry.id,
+                    set_id: result.set_id,
+                    correct: result.correct,
+                  });
+                }
+              }
+              heat.status = 'confirmed';
+              heat.updated_at = new Date().toISOString();
+              return Promise.resolve({ data: null, error: null });
+            }
+            return Promise.resolve({ data: null, error: null });
+          },
+        };
+      }
+
+      mountScoringScreen(document.getElementById('app'), {
+        eventId: 'ev1',
+        heatId: 'h1',
+        client: createDemoClient(),
+      });
+    </script>
+  </body>
+</html>

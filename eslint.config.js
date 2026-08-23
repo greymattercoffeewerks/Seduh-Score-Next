@@ -49,6 +49,8 @@ export default [
       'src/formats/cup-taster/timingScreen.test.js',
       'src/formats/cup-taster/timingManual.test.js',
       'src/formats/cup-taster/timingManualScreen.test.js',
+      'src/formats/cup-taster/scoring.test.js',
+      'src/formats/cup-taster/scoringScreen.test.js',
     ],
     rules: {
       'seduh-next/no-raw-elapsed-write': 'off',
