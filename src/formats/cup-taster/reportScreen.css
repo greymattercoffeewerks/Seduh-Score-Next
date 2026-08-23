@@ -1,0 +1,25 @@
+/*
+ * Report and analytics screen (T4.7) — built on src/ui/tokens, reusing
+ * heatsScreen.css's .screen-container/.card/.is-test-banner/.screen-feedback
+ * and standingsScreen.css's .standings-table (including its 480px
+ * responsive-stack rule) for every table on this screen, rather than a
+ * third copy of that pattern. Nothing here redefines those; this file adds
+ * only what's genuinely new: the first h3 subheading on this project's
+ * screens, and spacing between a stage's three tables/one stage card and
+ * the next.
+ */
+
+.report-screen h3 {
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  line-height: var(--leading-snug);
+  margin: var(--space-5) 0 var(--space-2) 0;
+}
+
+.report-stage-card + .report-stage-card {
+  margin-top: var(--space-4);
+}
+
+.report-stage-card table + h3 {
+  margin-top: var(--space-5);
+}

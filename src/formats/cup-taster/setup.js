@@ -115,6 +115,22 @@ export async function findStageById(stageId, client = getSupabase()) {
   return data;
 }
 
+// Every stage in an event, in the order they run — the shape T4.7's report
+// needs to walk prelims → semis → finals, and the shape a future org-facing
+// event overview would need too. Ordinal order is how §7.5 expresses stage
+// sequence throughout this codebase (validateStagePlan's own ordinal check,
+// heats.js's per-stage generation), so this stays consistent with every
+// other stage-ordering read.
+export async function listStagesForEvent(eventId, client = getSupabase()) {
+  const { data, error } = await client
+    .from('ct_stages')
+    .select('*')
+    .eq('event_id', eventId)
+    .order('ordinal', { ascending: true });
+  if (error) throw error;
+  return data;
+}
+
 // True only when an existing row matches the incoming config exactly — the
 // one case a retry may silently reuse. Anything else (a genuinely different
 // cutoff/duration/set count at the same ordinal) is a config change, not a

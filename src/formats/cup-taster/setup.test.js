@@ -7,6 +7,7 @@ import {
   listSetsForStage,
   ensureSetsForStage,
   createStagePlan,
+  listStagesForEvent,
 } from './setup.js';
 
 // Matches core/registry.test.js's fake shape, extended with a `.then()` on
@@ -585,5 +586,18 @@ describe('createStagePlan', () => {
     );
     expect(stageInserts[0][2].kind).toBe('prelims');
     expect(stageInserts[1][2].kind).toBe('finals');
+  });
+});
+
+describe('listStagesForEvent', () => {
+  it('returns every stage for the event, ordered by ordinal ascending', async () => {
+    const stages = [
+      { id: 's1', event_id: 'ev1', ordinal: 1, kind: 'prelims' },
+      { id: 's2', event_id: 'ev1', ordinal: 2, kind: 'finals' },
+    ];
+    const client = fakeClient({ tables: { ct_stages: { data: stages, error: null } } });
+    expect(await listStagesForEvent('ev1', client)).toEqual(stages);
+    const orderCall = client.calls.find(([action]) => action === 'order');
+    expect(orderCall).toEqual(['order', 'ct_stages', 'ordinal', { ascending: true }]);
   });
 });

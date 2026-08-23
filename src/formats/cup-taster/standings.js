@@ -78,6 +78,12 @@ export async function fetchStandingsForStage(stageId, client = getSupabase()) {
       numCorrect: standing?.correct_count ?? 0,
       sets_scored: standing?.sets_scored ?? 0,
       total_elapsed_secs: standing?.total_elapsed_secs ?? null,
+      // Pass-through, not derived — already written by commitStageResolution
+      // once this stage is resolved (§5.2's advancement provenance). `null`
+      // before that point, same as any other still-in-progress stage.
+      finalPosition: stageEntry.final_position ?? null,
+      source: stageEntry.source,
+      positionNote: stageEntry.position_note ?? null,
     };
   });
 
