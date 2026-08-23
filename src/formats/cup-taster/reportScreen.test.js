@@ -1,5 +1,12 @@
-import { describe, it, expect } from 'vitest';
-import { ordinalLabel, describeOutcome, mountReportScreen } from './reportScreen.js';
+import { describe, it, expect, vi } from 'vitest';
+import * as exportModule from '../../core/export.js';
+import {
+  ordinalLabel,
+  describeOutcome,
+  buildReportTables,
+  sanitizeFilename,
+  mountReportScreen,
+} from './reportScreen.js';
 
 function fakeClient({ tables = {} } = {}) {
   const queues = {};
@@ -106,6 +113,78 @@ describe('describeOutcome', () => {
   });
 });
 
+describe('sanitizeFilename', () => {
+  it('replaces every character in the function\'s own stated unsafe set (\\/:*?"<>|), not just a sample of them', () => {
+    expect(sanitizeFilename('a\\b/c:d*e?f"g<h>i|j')).toBe('a-b-c-d-e-f-g-h-i-j');
+  });
+
+  it('leaves an already-safe name untouched', () => {
+    expect(sanitizeFilename('Autumn Cup Tasters')).toBe('Autumn Cup Tasters');
+  });
+});
+
+describe('buildReportTables', () => {
+  it('builds standings, difficulty, and distribution table specs per stage, formatted the same as the on-screen tables', () => {
+    const stageReports = [
+      {
+        stage: { kind: 'prelims' },
+        ranked: [
+          {
+            item: {
+              displayName: 'Alex',
+              numCorrect: 3,
+              total_elapsed_secs: 90,
+              finalPosition: null,
+              source: 'seed',
+              positionNote: null,
+            },
+            position: 1,
+          },
+        ],
+        difficulty: [{ setId: 'set1', position: 1, label: null, sampleSize: 4, avgCorrect: 0.75 }],
+        distribution: [{ correctCount: 3, numCuppers: 1 }],
+      },
+    ];
+
+    const tables = buildReportTables(stageReports);
+
+    expect(tables).toHaveLength(3);
+    expect(tables[0]).toEqual({
+      title: 'prelims — Standings',
+      columns: [
+        { key: 'position', label: 'Pos' },
+        { key: 'displayName', label: 'Cupper' },
+        { key: 'numCorrect', label: 'Correct' },
+        { key: 'time', label: 'Time' },
+        { key: 'outcome', label: 'Outcome' },
+      ],
+      rows: [{ position: 1, displayName: 'Alex', numCorrect: 3, time: '90s', outcome: 'Advanced' }],
+    });
+    expect(tables[1].title).toBe('prelims — Set difficulty');
+    expect(tables[1].rows).toEqual([{ set: 'Set 1', correct: '75%', sampleSize: 4 }]);
+    expect(tables[2].title).toBe('prelims — Score distribution');
+    expect(tables[2].rows).toEqual([{ correctCount: 3, numCuppers: 1 }]);
+  });
+
+  it('flattens every stage into one list, in order', () => {
+    const emptyStage = (kind) => ({
+      stage: { kind },
+      ranked: [],
+      difficulty: [],
+      distribution: [],
+    });
+    const tables = buildReportTables([emptyStage('prelims'), emptyStage('finals')]);
+    expect(tables.map((t) => t.title)).toEqual([
+      'prelims — Standings',
+      'prelims — Set difficulty',
+      'prelims — Score distribution',
+      'finals — Standings',
+      'finals — Set difficulty',
+      'finals — Score distribution',
+    ]);
+  });
+});
+
 const event = { id: 'ev1', org_id: 'org1', name: 'Autumn Cup Tasters', is_test: false };
 
 describe('mountReportScreen', () => {
@@ -192,6 +271,150 @@ describe('mountReportScreen', () => {
     expect(root.textContent).toContain('Alex');
     expect(root.textContent).toContain('Set difficulty');
     expect(root.textContent).toContain('Score distribution');
+  });
+
+  // Shared by the three export-button tests below — a single normal stage,
+  // one entry, so the exact CSV content is small enough to assert on in
+  // full rather than loosely.
+  function exportFixtureTables(overrides = {}) {
+    const stages = [
+      {
+        id: 's1',
+        event_id: 'ev1',
+        ordinal: 1,
+        kind: 'finals',
+        set_count: 1,
+        cutoff: null,
+        status: 'complete',
+      },
+    ];
+    return {
+      events: { data: { ...event, ...overrides }, error: null },
+      ct_stages: [
+        { data: stages, error: null }, // isEventComplete
+        { data: stages, error: null }, // listStagesForEvent
+        { data: stages[0], error: null }, // computeStageReport -> findStageById
+      ],
+      ct_stage_entries: { data: [{ id: 'se1', stage_id: 's1', entry_id: 'e1' }], error: null },
+      ct_standings: {
+        data: [
+          {
+            entry_id: 'e1',
+            stage_id: 's1',
+            correct_count: 1,
+            sets_scored: 1,
+            total_elapsed_secs: 40,
+          },
+        ],
+        error: null,
+      },
+      event_entries: { data: [{ id: 'e1', display_name: 'Rivera, Alex' }], error: null },
+      ct_sets: { data: [{ id: 'set1', stage_id: 's1', position: 1, label: null }], error: null },
+      ct_heats: { data: [{ id: 'h1' }], error: null },
+      ct_heat_entries: { data: [{ id: 'he1' }], error: null },
+      ct_results: { data: [{ set_id: 'set1', correct: true }], error: null },
+    };
+  }
+
+  it('offers export actions once the report is available, and exports the real report data end to end — including a comma-containing cupper name surviving CSV escaping, and the event name sanitized into the filename', async () => {
+    const root = document.createElement('div');
+    // Deliberately an unsafe filename character AND a comma-containing
+    // roster name in the same test — found in review (test-auditor): the
+    // escaping logic and the report-building logic were each tested in
+    // isolation but never composed, and the sanitized-filename claim was
+    // never proven wired into the actual download call (a fixture using an
+    // already-safe name would pass identically whether or not
+    // sanitizeFilename was actually called).
+    const client = fakeClient({ tables: exportFixtureTables({ name: 'Fall/Winter Cup' }) });
+
+    const downloadSpy = vi.spyOn(exportModule, 'downloadCsv').mockImplementation(() => {});
+    const printSpy = vi.spyOn(window, 'print').mockImplementation(() => {});
+
+    await mountReportScreen(root, { eventId: 'ev1', client });
+
+    const buttons = [...root.querySelectorAll('.report-actions button')];
+    expect(buttons.map((b) => b.textContent)).toEqual(['Download CSV', 'Print / Save as PDF']);
+    // Distinct visual weight per T4.8 review (ui-accessibility-reviewer):
+    // no bare, un-tokenized `.btn` — a real primary/secondary pairing.
+    expect(buttons[0].className).toContain('btn-primary');
+    expect(buttons[1].className).toContain('btn-outline');
+
+    buttons[0].click();
+    expect(downloadSpy).toHaveBeenCalledTimes(1);
+    expect(downloadSpy.mock.calls[0][0]).toBe('Fall-Winter Cup report.csv');
+    expect(downloadSpy.mock.calls[0][1]).toBe(
+      'finals — Standings\r\n' +
+        'Pos,Cupper,Correct,Time,Outcome\r\n' +
+        '1,"Rivera, Alex",1,40s,Advanced\r\n' +
+        '\r\n' +
+        'finals — Set difficulty\r\n' +
+        'Set,Correct,Cuppers scored\r\n' +
+        'Set 1,100%,1\r\n' +
+        '\r\n' +
+        'finals — Score distribution\r\n' +
+        'Correct answers,Cuppers\r\n' +
+        '0,0\r\n' +
+        '1,1',
+    );
+
+    buttons[1].click();
+    expect(printSpy).toHaveBeenCalledTimes(1);
+
+    downloadSpy.mockRestore();
+    printSpy.mockRestore();
+  });
+
+  it("marks the export unmistakably as test data, both in the filename and as the CSV's own first line — a downloaded file can be forwarded or archived without its on-screen context", async () => {
+    const root = document.createElement('div');
+    const client = fakeClient({ tables: exportFixtureTables({ is_test: true }) });
+    const downloadSpy = vi.spyOn(exportModule, 'downloadCsv').mockImplementation(() => {});
+
+    await mountReportScreen(root, { eventId: 'ev1', client });
+    root.querySelector('.report-actions button').click();
+
+    expect(downloadSpy.mock.calls[0][0]).toBe('TEST — Autumn Cup Tasters report.csv');
+    expect(downloadSpy.mock.calls[0][1].startsWith('TEST DATA — NOT A LIVE EVENT\r\n\r\n')).toBe(
+      true,
+    );
+
+    downloadSpy.mockRestore();
+  });
+
+  it('shows a focused error message, not a silent failure, when the CSV download itself throws', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const client = fakeClient({ tables: exportFixtureTables() });
+    const downloadSpy = vi.spyOn(exportModule, 'downloadCsv').mockImplementation(() => {
+      throw new Error('download blocked');
+    });
+
+    await mountReportScreen(root, { eventId: 'ev1', client });
+    root.querySelector('.report-actions button').click();
+
+    const feedback = root.querySelector('.report-actions .screen-feedback');
+    expect(feedback.textContent).toContain('download blocked');
+    expect(feedback.dataset.tone).toBe('error');
+    expect(document.activeElement).toBe(feedback);
+    // The rest of the report is untouched by an export failure — this is a
+    // narrow, local error, not a reason to blank the whole screen.
+    expect(root.textContent).toContain('Rivera, Alex');
+
+    downloadSpy.mockRestore();
+    document.body.removeChild(root);
+  });
+
+  it('offers no export actions when the report is not available yet', async () => {
+    const root = document.createElement('div');
+    const stages = [{ id: 's1', event_id: 'ev1', ordinal: 1, cutoff: null, status: 'running' }];
+    const client = fakeClient({
+      tables: {
+        events: { data: event, error: null },
+        ct_stages: { data: stages, error: null },
+      },
+    });
+
+    await mountReportScreen(root, { eventId: 'ev1', client });
+    expect(root.querySelector('.report-actions')).toBeNull();
   });
 
   it('renders the is-test banner unmistakably when the event is marked test data', async () => {

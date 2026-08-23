@@ -1,10 +1,11 @@
-// Report and analytics screen (handoff §14 T4.7, §6). Scoped with the user
-// before writing code: the report only ever surfaces once the whole event
-// is finished (see analytics.js's own module comment) — this screen has
-// exactly two states, "not yet available" and "here is the final report,"
-// nothing in between. No rebuild-then-refocus concerns worth the usual
-// comment either: this screen has no actions, nothing to tap, no focus to
-// manage after a re-render — it renders once and sits still.
+// Report and analytics screen (handoff §14 T4.7/T4.8, §6). Scoped with the
+// user before writing code: the report only ever surfaces once the whole
+// event is finished (see analytics.js's own module comment) — this screen
+// has exactly two states, "not yet available" and "here is the final
+// report," nothing in between. The two export actions (T4.8) don't change
+// that: neither one mutates any displayed state or triggers a re-render —
+// one downloads a file, the other opens the browser's own print dialog —
+// so there's still no rebuild-then-refocus concern to manage here.
 //
 // Deliberately reuses `.standings-table` from standingsScreen.css for every
 // table on this screen (standings-with-outcome, difficulty, distribution)
@@ -13,10 +14,16 @@
 // heatsScreen.css's `.assignment-table` instead of a shared rule (see
 // ROADMAP.md's T4.6 follow-up note); reusing the existing class here avoids
 // repeating that exact gap a third time rather than adding to it.
+//
+// T4.8's PDF export is the browser's own Print -> Save as PDF against this
+// file's own `@media print` rules (reportScreen.css) — scoped with the user
+// before writing code, matching core/export.js's own "no new dependency"
+// framing. There is no generated-PDF code path here.
 import { findEvent } from '../../core/events.js';
 import { el } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
 import { getSupabase } from '../../core/supabaseClient.js';
+import { buildCsvForTables, downloadCsv } from '../../core/export.js';
 import { listStagesForEvent } from './setup.js';
 import { isEventComplete, computeStageReport } from './analytics.js';
 
@@ -148,6 +155,73 @@ function renderDistributionTable(distribution) {
   ]);
 }
 
+// Pure. One stage's report -> the three table specs core/export.js needs,
+// mirroring the exact formatting each on-screen table above uses (the same
+// "Xs" time suffix, the same "No data"/percentage difficulty text, the same
+// describeOutcome call) — so the CSV a cupper opens says the same thing the
+// organiser saw on screen, not a second, independently-formatted view of
+// the same numbers.
+function buildStageTables(stageReport) {
+  const { stage, ranked, difficulty, distribution } = stageReport;
+  return [
+    {
+      title: `${stage.kind} — Standings`,
+      columns: [
+        { key: 'position', label: 'Pos' },
+        { key: 'displayName', label: 'Cupper' },
+        { key: 'numCorrect', label: 'Correct' },
+        { key: 'time', label: 'Time' },
+        { key: 'outcome', label: 'Outcome' },
+      ],
+      rows: ranked.map(({ item, position }) => ({
+        position,
+        displayName: item.displayName,
+        numCorrect: item.numCorrect,
+        time: item.total_elapsed_secs == null ? '' : `${item.total_elapsed_secs}s`,
+        outcome: describeOutcome(item),
+      })),
+    },
+    {
+      title: `${stage.kind} — Set difficulty`,
+      columns: [
+        { key: 'set', label: 'Set' },
+        { key: 'correct', label: 'Correct' },
+        { key: 'sampleSize', label: 'Cuppers scored' },
+      ],
+      rows: difficulty.map((set) => ({
+        set: set.label ?? `Set ${set.position}`,
+        correct: set.avgCorrect == null ? 'No data' : `${Math.round(set.avgCorrect * 100)}%`,
+        sampleSize: set.sampleSize,
+      })),
+    },
+    {
+      title: `${stage.kind} — Score distribution`,
+      columns: [
+        { key: 'correctCount', label: 'Correct answers' },
+        { key: 'numCuppers', label: 'Cuppers' },
+      ],
+      rows: distribution,
+    },
+  ];
+}
+
+// Pure. Every stage's tables, in order — the whole report as one flat list
+// of table specs, ready for core/export.js's buildCsvForTables.
+export function buildReportTables(stageReports) {
+  return stageReports.flatMap(buildStageTables);
+}
+
+// Pure. Strips the character set Windows forbids in a filename
+// (`\/:*?"<>|`) — an event named e.g. "Fall/Winter Cup" would otherwise
+// silently break the download rather than just export under a slightly
+// different name. NOT a complete Windows-filename-safety guarantee: it
+// doesn't handle a trailing period/space or the reserved device names
+// (`CON`, `PRN`, `COM1`, …) — low-probability inputs for a coffee-event
+// name, not covered here.
+export function sanitizeFilename(name) {
+  return name.replace(/[\\/:*?"<>|]/g, '-');
+}
+
 // Every heading includes the stage's own kind — found in review: two
 // complete stages (e.g. prelims and finals) each produce an identically-
 // worded "Set difficulty"/"Score distribution" <h3> with nothing to tell
@@ -232,6 +306,79 @@ export async function mountReportScreen(root, { eventId, client = getSupabase() 
     feedback.focus();
   }
 
+  // Two export actions (T4.8), both side effects with nothing to await and
+  // no displayed state to update afterward — neither triggers a screen
+  // re-render (see the module comment above for why that's fine here). Each
+  // still gets its own try/catch and a local feedback region, though —
+  // found in review (code-reviewer): unlike the Blob/URL/anchor plumbing
+  // inside core/export.js's downloadCsv (unguarded there deliberately,
+  // per this project's "no error handling for scenarios that can't happen"
+  // principle — Blob/URL support is universal), buildReportTables/
+  // buildCsvForTables re-derive formatted rows from live data at click
+  // time, and window.print() can genuinely throw in some sandboxed/embedded
+  // contexts — an uncaught error at a live event with no visible feedback
+  // is exactly the failure mode every OTHER action in this project reports
+  // through a feedback region, and these two actions had none. `.no-print`
+  // hides this toolbar (feedback region included) from the printed/PDF
+  // output (reportScreen.css) — it's a screen-only control, not part of the
+  // report content.
+  function renderExportActions(data) {
+    const feedback = el('div', {
+      className: 'screen-feedback',
+      attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
+    });
+
+    function showActionError(message) {
+      feedback.textContent = message;
+      feedback.dataset.tone = 'error';
+      feedback.scrollIntoView?.({ block: 'nearest' });
+      feedback.focus();
+    }
+
+    const csvButton = el('button', {
+      className: 'btn btn-primary tap-target',
+      text: 'Download CSV',
+    });
+    csvButton.addEventListener('click', () => {
+      try {
+        const tables = buildReportTables(data.stageReports);
+        const csv = buildCsvForTables(tables);
+        // D9: is_test must render unmistakably wherever this data can end
+        // up, not only on-screen — a downloaded CSV forwarded or archived
+        // without its original context (filename can be renamed, the app
+        // it was exported from isn't visible from inside a spreadsheet) is
+        // exactly the "demo data indistinguishable from a real event"
+        // failure mode this project exists to close, applied to an export
+        // path rather than a live surface. Marked both in the filename (for
+        // a downloads-folder/email-attachment glance) and as the CSV's own
+        // first line (for when the file itself is actually opened).
+        const marked = data.event.is_test ? `TEST DATA — NOT A LIVE EVENT\r\n\r\n${csv}` : csv;
+        const filenamePrefix = data.event.is_test ? 'TEST — ' : '';
+        downloadCsv(`${filenamePrefix}${sanitizeFilename(data.event.name)} report.csv`, marked);
+      } catch (err) {
+        showActionError(describeError(err));
+      }
+    });
+
+    const printButton = el('button', {
+      className: 'btn btn-outline tap-target',
+      text: 'Print / Save as PDF',
+    });
+    printButton.addEventListener('click', () => {
+      try {
+        window.print();
+      } catch (err) {
+        showActionError(describeError(err));
+      }
+    });
+
+    return el('div', { className: 'card report-actions no-print' }, [
+      csvButton,
+      printButton,
+      feedback,
+    ]);
+  }
+
   function renderReport(data) {
     root.innerHTML = '';
     const container = el('section', { className: 'screen-container report-screen' });
@@ -253,6 +400,7 @@ export async function mountReportScreen(root, { eventId, client = getSupabase() 
         ]),
       );
     } else {
+      container.appendChild(renderExportActions(data));
       for (const stageReport of data.stageReports) {
         container.appendChild(renderStageSection(stageReport));
       }

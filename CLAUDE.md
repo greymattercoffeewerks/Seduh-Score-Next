@@ -1,7 +1,7 @@
 # Seduh Score Next — Claude Code orientation
 
 _State: Phase 0 done; Phase 1 done (T1.1–T1.4); Phase 2 done (T2.1–T2.6); Phase 3 done
-(T3.1–T3.3); Phase 4 in progress (T4.1–T4.7 done) — matches CHANGELOG.md as of 2026-08-23_
+(T3.1–T3.3); Phase 4 done (T4.1–T4.8) — matches CHANGELOG.md as of 2026-08-23_
 
 Read these before touching anything:
 
@@ -139,8 +139,10 @@ src/
                                    (T3.2); syncState (T3.3); events, registry.registerEntry
                                    (T4.1); dom, errors (T4.3), duration (T4.4) — all three
                                    extracted from a cup-taster screen file on their 2nd
-                                   verbatim use. Not yet built: publish, viewer-shell,
-                                   export
+                                   verbatim use; export (T4.8 — table spec → CSV; PDF is
+                                   the browser's own Print → Save as PDF, not a generated
+                                   file, deliberately no new dependency). Not yet built:
+                                   publish, viewer-shell
   formats/
     cup-taster/                 ← scoring, timing-surface, entry-surface, viewer-body,
                                    analytics — Cup Taster-specific, built on core/. Done:
@@ -161,7 +163,8 @@ src/
                                    generalized `kind` parameter for tiebreak heat creation);
                                    analytics, reportScreen (T4.7 — per-stage difficulty/
                                    distribution, gated on the whole event being complete;
-                                   no partial-data report)
+                                   no partial-data report) — reportScreen.js also gained
+                                   T4.8's export actions (CSV download + print).
   ui/
     tokens/                     ← design tokens (plain CSS custom properties)
   main.js                       ← scaffold entry point (Phase 0 placeholder)

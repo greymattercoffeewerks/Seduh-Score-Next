@@ -6,6 +6,85 @@ closes.
 
 ---
 
+## Phase 4 — Cup Taster · 2026-08-23 (T4.8)
+
+### T4.8 Export — the last Cup Taster task
+
+Scope decided with the user before writing code: CSV export is a real, generated file;
+PDF is the browser's own Print → Save as PDF against a print-optimized stylesheet, not a
+generated file — this project has essentially one runtime dependency (`@supabase/
+supabase-js`), and a client-side PDF library would have been the first non-Supabase
+dependency added since Phase 0. The export contains the same full report T4.7 already
+computes and displays (per-stage standings, set difficulty, score distribution), not a
+standings-only subset.
+
+`src/core/export.js` (new) — the ONE Cup Taster task built on a genuinely core, format-
+agnostic module (the handoff's own §6 module table lists `export`: "Table spec → CSV /
+PDF"). `buildCsv(table)` (pure: one `{columns, rows}` spec → one CSV string, RFC 4180-ish
+escaping), `buildCsvForTables(tables)` (pure: multiple specs → one file, title-prefixed
+sections), `downloadCsv(filename, csvContent)` (DOM: Blob + object URL + a synthetic
+`<a download>` click). Zero Cup-Taster vocabulary anywhere in this file — a future format
+calls the same three functions with its own table specs, unedited.
+
+`src/formats/cup-taster/reportScreen.js`/`.css`: `buildReportTables`/`buildStageTables`
+turn a stage's report into generic table specs, reusing `describeOutcome`'s exact
+formatting so the CSV says the same thing the on-screen table does. Two new buttons
+("Download CSV," "Print / Save as PDF") in a `renderExportActions` toolbar, shown once
+the report is available. A `@media print` block forces `.standings-table` back to real
+table `display` values regardless of viewport width, since printed output should never
+rely on the screen-only 480px stacked-card layout.
+
+Verifiers: `module-boundary-checker`, `ui-accessibility-reviewer`, `test-auditor`,
+`code-reviewer` — four agents in parallel, one round (no `scoring-auditor`, since this
+task touches no ranking/advancement/timeclamp/scoring logic; fixes verified directly —
+tests plus live browser checks — rather than a second review round, matching T4.7's own
+precedent once round 1's findings are the kind that verify cleanly on inspection).
+`module-boundary-checker` came back clean — `core/export.js` is genuinely reusable, all
+Cup-Taster-specific knowledge stays in `reportScreen.js`. The other three found real
+issues, all fixed:
+
+1. **`ui-accessibility-reviewer` (the most significant finding): the exported CSV carried
+   no `is_test` marker anywhere** — a downloaded file can be forwarded, archived, or
+   opened divorced from its on-screen context, and the CSV path (unlike print, which
+   naturally inherits the `.is-test-banner` DOM) never touched `event.is_test` at all.
+   This is squarely the D9 failure mode ("demo data indistinguishable from a real event")
+   applied to an export path rather than a live surface. Fixed: a `TEST — ` filename
+   prefix plus a `TEST DATA — NOT A LIVE EVENT` first line in the CSV body itself.
+2. **`ui-accessibility-reviewer`: the two new buttons used a bare, un-tokenized `.btn`**
+   — every other button in this codebase pairs `.btn` with `.btn-primary`, but `.btn`
+   itself sets no color, so these fell back to browser/OS default chrome. Fixed by
+   porting the design system's own documented (but never-before-used) `.btn-outline`
+   variant into `heatsScreen.css` — the shared home for `.btn*` components — alongside
+   `.btn-primary` for the primary action. Also flagged, not blocking: the print
+   stylesheet's `display: revert` values are cascade-position-dependent rather than a
+   fixed guarantee — fixed anyway by making them explicit (`table`/`table-header-group`/
+   etc.), since the fix was small.
+3. **`code-reviewer`: the two export actions had no failure-reporting path at all** —
+   unlike every other action in this project, a thrown error (a `window.print()` failure
+   in a sandboxed context, for instance) would become an invisible console-only exception
+   at a live event. Fixed with a local feedback region and try/catch on both actions,
+   matching this project's established pattern elsewhere. Also fixed: an RFC number typo
+   in a comment (4126 → 4180) and an overstated comment on `sanitizeFilename`'s actual
+   Windows-filename-safety coverage.
+4. **`test-auditor` (four gaps, all closed):** `downloadCsv`'s test proved only that mocked
+   functions were called, never the actual Blob content/type or link href/filename at
+   click time — closed by capturing and asserting on the real values. The export-button
+   integration test's content assertions were two loose substrings, not specific enough
+   to catch a dropped table or wrong column — closed with a full exact-string CSV
+   assertion. The comma/quote-escaping path was tested in isolation (hand-built table
+   specs) and separately in `buildReportTables`'s own tests, but never composed — closed
+   with an end-to-end test using a comma-containing cupper name through the real
+   pipeline. `sanitizeFilename` was tested against only 3 of its 8 stated unsafe
+   characters, and nothing proved it was actually wired into the live download call
+   (the fixture's event name was already filename-safe) — closed by covering the full
+   character set and using an unsafe event name in the integration test.
+
+503 tests total (up from 486 after T4.7).
+
+**Phase 4 is done.** T4.1–T4.8 all shipped. Phase 5 (live surfaces) is next.
+
+---
+
 ## Phase 4 — Cup Taster · 2026-08-23 (T4.7)
 
 ### T4.7 Report and analytics
