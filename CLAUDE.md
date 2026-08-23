@@ -1,7 +1,7 @@
 # Seduh Score Next — Claude Code orientation
 
 _State: Phase 0 done; Phase 1 done (T1.1–T1.4); Phase 2 done (T2.1–T2.6); Phase 3 done
-(T3.1–T3.3); Phase 4 in progress (T4.1–T4.6 done) — matches CHANGELOG.md as of 2026-08-23_
+(T3.1–T3.3); Phase 4 in progress (T4.1–T4.7 done) — matches CHANGELOG.md as of 2026-08-23_
 
 Read these before touching anything:
 
@@ -158,7 +158,10 @@ src/
                                    `.permanent` error-flag contract); standings,
                                    standingsScreen (T4.6 — ranking/advancement/tiebreak/
                                    coin-toss, direct writes like T4.2; heats.js gained a
-                                   generalized `kind` parameter for tiebreak heat creation)
+                                   generalized `kind` parameter for tiebreak heat creation);
+                                   analytics, reportScreen (T4.7 — per-stage difficulty/
+                                   distribution, gated on the whole event being complete;
+                                   no partial-data report)
   ui/
     tokens/                     ← design tokens (plain CSS custom properties)
   main.js                       ← scaffold entry point (Phase 0 placeholder)
