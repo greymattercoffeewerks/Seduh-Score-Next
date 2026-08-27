@@ -24,7 +24,7 @@
 // restriction visible before the organiser tries, not to be the only thing
 // enforcing it.
 import { getSupabase } from '../../core/supabaseClient.js';
-import { el } from '../../core/dom.js';
+import { el, labeledField } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
 import { findEvent } from '../../core/events.js';
 import { listStagesForEvent, stageHasHeats, saveStagePlan, STAGE_KINDS } from './setup.js';
@@ -69,18 +69,6 @@ export function buildPlanFromDraft(draftStages) {
     durationSecs: row.durationSecs,
     cutoff: index === draftStages.length - 1 ? null : row.cutoff,
   }));
-}
-
-function fieldWrapper(labelText, input, extra = []) {
-  return el('div', { className: 'stage-field' }, [
-    el('span', {
-      className: 'stage-field-label',
-      text: labelText,
-      attrs: { 'aria-hidden': 'true' },
-    }),
-    input,
-    ...extra,
-  ]);
 }
 
 export function renderStageRow(
@@ -176,7 +164,7 @@ export function renderStageRow(
     // color- or placeholder-only signal.
     cutoffHint = el('p', {
       id: cutoffHintId,
-      className: 'stage-field-hint',
+      className: 'form-field-hint',
       text: 'Not applicable — terminal stage, nobody advances past it.',
     });
   } else {
@@ -218,10 +206,10 @@ export function renderStageRow(
   return el('div', { className: 'card stage-row', attrs: { id: rowId, tabindex: '-1' } }, [
     el('h3', { text: stageLabel }),
     el('div', { className: 'stage-row-fields' }, [
-      fieldWrapper('Kind', kindSelect),
-      fieldWrapper('Set count', setCountInput),
-      fieldWrapper('Duration (seconds)', durationInput),
-      fieldWrapper('Cutoff', cutoffInput, cutoffHint ? [cutoffHint] : []),
+      labeledField('Kind', kindSelect),
+      labeledField('Set count', setCountInput),
+      labeledField('Duration (seconds)', durationInput),
+      labeledField('Cutoff', cutoffInput, cutoffHint ? [cutoffHint] : []),
     ]),
     el('div', { className: 'stage-row-actions' }, [moveUpButton, moveDownButton, removeButton]),
   ]);

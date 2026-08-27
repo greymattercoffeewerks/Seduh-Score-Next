@@ -20,6 +20,7 @@
 // module already leans on (handoff §9) — a real concurrent-write scenario
 // would need an RPC to close, not a stronger client-side check.
 import { getSupabase } from '../../core/supabaseClient.js';
+import { UNIQUE_VIOLATION } from '../../core/errors.js';
 
 export const STAGE_KINDS = ['prelims', 'semis', 'finals'];
 
@@ -185,11 +186,6 @@ function throwConfigConflict(ordinal, existing, requested) {
       `existing: ${describeStoredStage(existing)}, requested: ${describeRequestedStage(requested)}`,
   );
 }
-
-// Postgres unique-violation — shared with heats.js's own race-recovery, same
-// meaning either place: a concurrent caller won an insert between our check
-// and ours.
-export const UNIQUE_VIOLATION = '23505';
 
 export async function createStage(eventId, stage, client = getSupabase()) {
   const existing = await findStageByOrdinal(eventId, stage.ordinal, client);

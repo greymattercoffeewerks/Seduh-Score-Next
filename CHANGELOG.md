@@ -6,6 +6,115 @@ closes.
 
 ---
 
+## Phase 4 — Cup Taster · 2026-08-27 (Roster registration screen)
+
+### Roster registration
+
+Closes the other half of T4.1's own "no UI" gap — the stage-plan setup screen shipped
+earlier the same day left `core/registry.registerEntry` (roster registration) explicitly
+out of scope, by decision, as a separate task. This is that task: an organiser can now
+register cuppers (name + phone required per D16, email/cafe/bib optional) into an event
+and withdraw/reinstate an already-registered entry — the `event_entries.withdrawn` flag
+`heats.js`'s own seeding step has filtered on since T4.2, but that nothing could ever set
+before this.
+
+`src/core/registry.js`: two additions and one change, all format-agnostic — this file
+already had zero Cup-Taster vocabulary and stays that way. New `findEntryForPerson`
+(the dedup check `registerEntry` needed before inserting — `event_entries` has a real
+unique index on `(event_id, person_id)`, so a double-tap or a re-submit after a dropped
+response would otherwise surface that constraint as a raw error instead of the existing
+row). `registerEntry` itself is now idempotent: checks `findEntryForPerson` before
+`createEntry`, and — found in review — recovers from a genuinely concurrent registration
+(two staff devices, same phone, same race window) the same way `setup.js`'s `createStage`
+already does: catch the unique-violation, re-query, adopt the winner rather than surface
+the raw constraint error to whichever caller lost. The `UNIQUE_VIOLATION` constant this
+needed was previously defined only in `formats/cup-taster/setup.js` (and re-used by
+`heats.js`) — hoisted to `core/errors.js` instead, since a raw Postgres error code isn't
+Cup-Taster vocabulary and `core/` can't import from `formats/` (handoff §6); `setup.js`
+and `heats.js` both now import it from there. New `setEntryWithdrawn` (sets/clears the
+flag; never deletes the row, since `ct_stage_entries`/`ct_heats`/`ct_results` all key off
+`entry_id` with `on delete cascade` — deleting instead of flagging could silently destroy
+already-recorded results).
+
+`src/formats/cup-taster/rosterScreen.js`/`.css` (new): the screen itself, following
+`setupScreen.js`'s established `renderLoading`/`renderLoadError`/`render` shape,
+`is_test`-banner, and synchronous-before-any-await draft-state discipline (a withdraw
+toggle elsewhere on the screen re-renders the whole subtree, including the registration
+form — draft field values are mutated on every `input` event so that rerender rehydrates
+from what the organiser already typed, rather than wiping it blank mid-entry; a live
+regression test proves this). `core/dom.js` gained a new exported `labeledField()` —
+setupScreen.js's own local `fieldWrapper` helper, extracted here on its 2nd verbatim use
+(this screen's five form fields) per `CONVENTIONS.md`'s own rule; `setupScreen.js`/`.css`
+updated to use the shared version instead of their own copy (`.stage-field*` classes
+renamed `.form-field*`, moved into `heatsScreen.css` as the shared home — nothing else
+about `setupScreen.js` changed). Live-verified via `rosterScreen.preview.html` (new demo
+harness, same pattern as `setupScreen.preview.html`) in a real browser at 360px, and via
+jsdom-backed tests exercising the actual mounted DOM.
+
+Verifiers: `ui-accessibility-reviewer` (360px-first), `module-boundary-checker`,
+`test-auditor`, `code-reviewer` — four agents in parallel, one round.
+`module-boundary-checker` came back clean (no `core/`↔`formats/` violation, no
+reimplementation of a `core/` primitive — confirmed directly against the new
+`registry.js`/`dom.js` additions). The other three found real issues, consistent with
+this project's own "every review should find something" discipline:
+
+1. **`code-reviewer` (the most significant finding): `registerEntry`'s new idempotency
+   check closed the sequential-retry case but not a genuinely concurrent one.** Two staff
+   devices registering the same phone at once could both pass the pre-check, then the
+   loser's insert would surface a raw `23505` instead of the friendly "already registered"
+   message the winner got. Fixed per above (catch, re-query, adopt the winner) — the same
+   race-recovery shape `setup.js`/`heats.js` already established, now genuinely reusable
+   from `core/` since `UNIQUE_VIOLATION` moved there. New tests prove both the recovery
+   (adopts the winner's row, still just one row) and that a genuinely different error
+   (not a unique-violation) is never swallowed as if it were a race.
+2. **`code-reviewer`: the "already registered" message echoed the just-typed draft name
+   instead of the canonical stored one.** `result` (the row `registerEntry` returns)
+   already carries the correct `display_name` in both branches of the message's ternary;
+   only the duplicate-registration branch used the wrong source, which could show a typo
+   or a stale casing the organiser had typed rather than what's actually on the roster.
+   Fixed to use `result.display_name` in both branches; also removed a dead
+   `|| 'That cupper'` fallback `validateDraft` already made unreachable.
+3. **`ui-accessibility-reviewer` (the most significant accessibility finding): dimming a
+   withdrawn row via `opacity: 0.7` dropped two text colors below the AA floor** —
+   measured at 4.17:1 for the "Withdrawn" tag's danger color and 3.64:1 for the meta line
+   (both fail 4.5:1), hitting hardest the one non-color signal the withdrawn state has.
+   The exact class of bug this same day's earlier setup-screen work had just fixed for
+   disabled-hint text, reintroduced here a different way. Fixed by swapping opacity for a
+   token-backed background tint instead — matching `setupScreen.css`'s own
+   `[data-locked='true']` precedent — full-strength foreground colors throughout,
+   re-verified live (danger color reads `rgb(155, 27, 1)`, unchanged from its
+   non-withdrawn value).
+4. **`ui-accessibility-reviewer`: a successful registration's confirmation lived only in
+   a live region that's destroyed and rebuilt every render**, which many screen-reader/
+   browser pairs don't reliably announce for a brand-new node — the validation-error path
+   already moved focus to the feedback region, success didn't. This mattered more here
+   than the identical gap in `setupScreen.js` (noted, not fixed, as a separate pre-existing
+   item — see `ROADMAP.md`) because registration is a repeat-many-times-in-a-row workflow,
+   not a one-shot save. Fixed by extending `render()`'s own focus-fallback to the success
+   tone as well as error, verified live via `document.activeElement`, and via a new
+   regression test.
+5. **`ui-accessibility-reviewer` (two more, both closed):** a redundant `aria-label` on
+   the registration `<form>` duplicating its own visible `<h2>` — switched to
+   `aria-labelledby` pointing at the heading. A long name+cafe pair had no wrap safety at
+   360px (`.roster-entry-info` had no `min-width: 0`) and could push the withdraw/reinstate
+   button off-screen — fixed with `min-width: 0`/`overflow-wrap: anywhere` plus
+   `flex-wrap: wrap` on the shared `.roster-list li` rule (benefits `heatsScreen.js`'s own
+   simpler roster list too). Also closed as smaller findings: no token color on a disabled
+   `.field-input` (fell back to browser/OS default while a write is in flight) and the
+   roster `<ul>` had no `aria-label` for region navigation.
+6. **`test-auditor` (one gap, closed):** the "registers a new cupper" test asserted only
+   `.toContain('registered')`, which the "already registered" branch's message also
+   matches — a regression that made the idempotency check always report a false positive
+   would have passed silently. Tightened to an exact string match.
+
+579 tests total (up from 573 after the same day's setup-screen work) — 6 new in
+`registry.test.js` (35 total), 3 new in `dom.test.js`, 30 in the new `rosterScreen.test.js`.
+
+**Closes the "Roster registration still has no UI" item in `ROADMAP.md`'s known open
+items.**
+
+---
+
 ## Phase 4 — Cup Taster · 2026-08-27 (T4.1's setup screen — closing the known UI gap)
 
 ### Stage plan setup screen

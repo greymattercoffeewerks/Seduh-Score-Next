@@ -3,6 +3,7 @@
 // evaluates when the argument is omitted, so a test that always passes its own
 // fake client never triggers real Supabase construction.
 import { getSupabase } from './supabaseClient.js';
+import { UNIQUE_VIOLATION } from './errors.js';
 
 export async function findPersonByPhone(orgId, phone, client = getSupabase()) {
   const { data, error } = await client
@@ -113,6 +114,24 @@ export async function listEntries(eventId, client = getSupabase()) {
   return data;
 }
 
+// The dedup check registerEntry needs before it inserts: `event_entries` has
+// a real unique index on (event_id, person_id) (migration 20260821200000),
+// so calling registerEntry twice for the same person/event — a double-tap on
+// a registration button, a re-submit after a dropped response the write
+// actually reached — would otherwise surface that constraint as a raw
+// Postgres error instead of the existing row, the same failure mode
+// registerPerson's own phone/email dedup exists to avoid one level up.
+export async function findEntryForPerson(eventId, personId, client = getSupabase()) {
+  const { data, error } = await client
+    .from('event_entries')
+    .select('*')
+    .eq('event_id', eventId)
+    .eq('person_id', personId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 // For a caller that already has a specific set of entry ids (e.g. a single
 // heat's roster) and doesn't want to fetch — and then discard — every other
 // entry in the event via listEntries.
@@ -130,7 +149,43 @@ export async function listEntriesByIds(entryIds, client = getSupabase()) {
 // dedup against without one.
 export async function registerEntry(orgId, eventId, cupper, client = getSupabase()) {
   const person = await registerPerson(orgId, cupper, client);
-  return createEntry(eventId, { personId: person.id, bib: cupper.bib }, client);
+  const existingEntry = await findEntryForPerson(eventId, person.id, client);
+  if (existingEntry) return existingEntry;
+
+  try {
+    return await createEntry(eventId, { personId: person.id, bib: cupper.bib }, client);
+  } catch (error) {
+    // Lost a race to a concurrent registration of the same person into this
+    // event, between our check and our insert — a realistic scenario for a
+    // roster screen with more than one staff device open, not hypothetical.
+    // Same recovery shape as setup.js's createStage: adopt the winner
+    // rather than surface the raw constraint violation to whichever caller
+    // lost the race.
+    if (error.code === UNIQUE_VIOLATION) {
+      const raced = await findEntryForPerson(eventId, person.id, client);
+      if (raced) return raced;
+    }
+    throw error;
+  }
+}
+
+// Withdrawn, never deleted — event_entries is a snapshot real event data
+// (ct_stage_entries, ct_heat_entries, ct_results) keys off by `entry_id`
+// with `on delete cascade`, so removing the row instead of flagging it would
+// silently destroy any results already recorded. heats.js's own roster read
+// already filters on this flag (a withdrawn cupper is excluded from
+// generation); this is simply the one place that flag gets set, previously
+// missing entirely — no screen or logic module could ever mark someone
+// withdrawn before this.
+export async function setEntryWithdrawn(entryId, withdrawn, client = getSupabase()) {
+  const { data, error } = await client
+    .from('event_entries')
+    .update({ withdrawn })
+    .eq('id', entryId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
 }
 
 // Atomic (merge_people RPC, migration 20260822090000) — a client-side sequence
