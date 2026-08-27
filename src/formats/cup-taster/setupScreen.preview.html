@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stage plan setup — preview</title>
+    <link rel="stylesheet" href="/src/ui/tokens/index.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/heatsScreen.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/setupScreen.css" />
+  </head>
+  <body>
+    <!--
+      Demo-only harness for the T4.1 setup screen — not part of the shipped
+      module graph, same role as heatsScreen.preview.html/
+      reportScreen.preview.html. No live Supabase connection: an in-memory
+      fake client (below) stands in for the real one. Seeded with one stage
+      (prelims) that already has a heat — demonstrates the "locked, can't be
+      edited" rendering — and one stage (finals) that's still fully
+      editable. Try: editing finals' duration, adding a new stage (appends
+      at the end) and moving it up between prelims and finals, then saving.
+    -->
+    <div id="app"></div>
+    <script type="module">
+      import { mountSetupScreen } from './setupScreen.js';
+
+      function createDemoClient() {
+        const db = {
+          events: [{ id: 'ev1', org_id: 'org1', name: 'October Cup', is_test: true }],
+          ct_stages: [
+            {
+              id: 's1',
+              event_id: 'ev1',
+              kind: 'prelims',
+              ordinal: 1,
+              set_count: 5,
+              duration_secs: 480,
+              cutoff: 8,
+            },
+            {
+              id: 's2',
+              event_id: 'ev1',
+              kind: 'finals',
+              ordinal: 2,
+              set_count: 5,
+              duration_secs: 480,
+              cutoff: null,
+            },
+          ],
+          ct_sets: [
+            { id: 'set-s1-1', stage_id: 's1', position: 1, label: null },
+            { id: 'set-s1-2', stage_id: 's1', position: 2, label: null },
+            { id: 'set-s1-3', stage_id: 's1', position: 3, label: null },
+            { id: 'set-s1-4', stage_id: 's1', position: 4, label: null },
+            { id: 'set-s1-5', stage_id: 's1', position: 5, label: null },
+            { id: 'set-s2-1', stage_id: 's2', position: 1, label: null },
+            { id: 'set-s2-2', stage_id: 's2', position: 2, label: null },
+            { id: 'set-s2-3', stage_id: 's2', position: 3, label: null },
+            { id: 'set-s2-4', stage_id: 's2', position: 4, label: null },
+            { id: 'set-s2-5', stage_id: 's2', position: 5, label: null },
+          ],
+          // Only s1 has a heat — this is what marks it "locked" on screen.
+          ct_heats: [
+            {
+              id: 'h1',
+              stage_id: 's1',
+              heat_number: 1,
+              kind: 'normal',
+              timing_mode: 'app',
+              status: 'pending',
+            },
+          ],
+        };
+        let idCounter = 0;
+
+        function matchesFilters(row, filters) {
+          return filters.every(([col, val]) => row[col] === val);
+        }
+
+        function makeBuilder(table) {
+          const filters = [];
+          let orderCol = null;
+
+          const builder = {
+            select() {
+              return builder;
+            },
+            eq(col, val) {
+              filters.push([col, val]);
+              return builder;
+            },
+            order(col) {
+              orderCol = col;
+              return builder;
+            },
+            insert(payload) {
+              const rows = Array.isArray(payload) ? payload : [payload];
+              const inserted = rows.map((row) => {
+                idCounter += 1;
+                return { id: `${table}-${idCounter}`, ...row };
+              });
+              db[table].push(...inserted);
+              return {
+                select: () => ({
+                  single: () => Promise.resolve({ data: inserted[0], error: null }),
+                  then: (resolve) => Promise.resolve({ data: inserted, error: null }).then(resolve),
+                }),
+              };
+            },
+            update(patch) {
+              return {
+                eq(col, val) {
+                  for (const row of db[table]) {
+                    if (row[col] === val) Object.assign(row, patch);
+                  }
+                  return Promise.resolve({ error: null });
+                },
+              };
+            },
+            delete() {
+              return {
+                eq(col, val) {
+                  db[table] = db[table].filter((row) => row[col] !== val);
+                  return Promise.resolve({ error: null });
+                },
+              };
+            },
+            single() {
+              const rows = db[table].filter((r) => matchesFilters(r, filters));
+              return Promise.resolve({ data: rows[0] ?? null, error: null });
+            },
+            maybeSingle() {
+              const rows = db[table].filter((r) => matchesFilters(r, filters));
+              return Promise.resolve({ data: rows[0] ?? null, error: null });
+            },
+            then(resolve, reject) {
+              let rows = db[table].filter((r) => matchesFilters(r, filters));
+              if (orderCol) rows = [...rows].sort((a, b) => (a[orderCol] > b[orderCol] ? 1 : -1));
+              return Promise.resolve({ data: rows, error: null }).then(resolve, reject);
+            },
+          };
+          return builder;
+        }
+
+        return { from: (table) => makeBuilder(table) };
+      }
+
+      mountSetupScreen(document.getElementById('app'), {
+        eventId: 'ev1',
+        client: createDemoClient(),
+      });
+    </script>
+  </body>
+</html>

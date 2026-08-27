@@ -1,7 +1,8 @@
 # Seduh Score Next — Claude Code orientation
 
 _State: Phase 0 done; Phase 1 done (T1.1–T1.4); Phase 2 done (T2.1–T2.6); Phase 3 done
-(T3.1–T3.3); Phase 4 done (T4.1–T4.8) — matches CHANGELOG.md as of 2026-08-23_
+(T3.1–T3.3); Phase 4 done (T4.1–T4.8, plus a 2026-08-27 follow-up closing T4.1's
+stage-plan UI gap) — matches CHANGELOG.md as of 2026-08-27_
 
 Read these before touching anything:
 
@@ -146,8 +147,14 @@ src/
   formats/
     cup-taster/                 ← scoring, timing-surface, entry-surface, viewer-body,
                                    analytics — Cup Taster-specific, built on core/. Done:
-                                   setup (T4.1, logic only); heats, heatsScreen (T4.2 —
-                                   first real UI screen in the project); timing,
+                                   setup, setupScreen (T4.1 — validateStagePlan generalized
+                                   to an arbitrary stage-kind chain rather than two fixed
+                                   sequences; saveStagePlan reconciles add/remove/reorder/
+                                   edit against what's persisted, refusing the whole save
+                                   if it would touch a stage that already has heats; the
+                                   screen itself shipped 2026-08-27, closing T4.1's own
+                                   original no-UI gap — see CHANGELOG.md); heats, heatsScreen
+                                   (T4.2 — first real UI screen in the project); timing,
                                    timingScreen (T4.3 — first live/ticking screen; direct
                                    writes, not the outbox — see ROADMAP.md's known-gaps);
                                    timingManual, timingManualScreen (T4.4 — manual mode,

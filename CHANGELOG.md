@@ -6,6 +6,129 @@ closes.
 
 ---
 
+## Phase 4 — Cup Taster · 2026-08-27 (T4.1's setup screen — closing the known UI gap)
+
+### Stage plan setup screen
+
+Scope decided in advance (see the task's own framing, carried into this entry): stage
+plan only — no roster/cupper registration on this screen, that's separately scoped. The
+organiser can build an ARBITRARY chain of stages (add, remove, reorder, each with its own
+kind/set_count/duration_secs/cutoff), not the two-fixed-sequence restriction T4.1 shipped
+with. A stage is editable only while genuinely safe to change — once it has heats, its
+plan is locked.
+
+`src/formats/cup-taster/setup.js`: `validateStagePlan` generalized from a fixed
+`["prelims","finals"]`/`["prelims","semis","finals"]` allowlist to a rank-based
+kind-ordering check (`prelims`-type stages, then `semis`, then `finals` — may repeat or be
+skipped, but never regress). Duplicate kinds, a missing kind, and a single-stage plan are
+all real plans now. New `stageHasHeats` (a stage's plan is locked once any heat exists —
+results can only exist once a heat does, so this alone covers "or results") and
+`saveStagePlan` (reconciles a whole desired plan against what's persisted: diffs
+removed/changed/created stages, refuses the WHOLE save — naming the specific stage — if
+anything touched already has heats, and reorders via a two-phase negative-ordinal move so
+no update collides with the `(event_id, ordinal)` unique index mid-reconciliation).
+
+`src/formats/cup-taster/setupScreen.js`/`.css` (new): the screen itself, following
+`heatsScreen.js`'s established rebuild-then-refocus/`is_test`-banner/`screen-feedback`
+pattern. Locked stages render read-only; unlocked ones are editable with synchronous
+per-field draft mutation (same lost-update-race discipline T4.5's `scoringScreen.js`
+established). Live-verified via `setupScreen.preview.html` (new demo harness, same
+pattern as `heatsScreen.preview.html`) in a real browser at 360px via Playwright, and via
+jsdom-backed tests exercising the actual mounted DOM.
+
+Verifiers: `ui-accessibility-reviewer` (360px-first), `module-boundary-checker`,
+`test-auditor`, `code-reviewer` — four agents in parallel, one round. Every review found
+something real, consistent with this project's own "every review should find something"
+discipline (`CLAUDE.md`). `module-boundary-checker` came back clean on the actual boundary
+question (no `core/`↔`formats/` violation, no reimplementation of a `core/` primitive) —
+its one note, a `STAGE_KINDS` constant duplicated between `setup.js` and `setupScreen.js`,
+closed by exporting it from `setup.js` and importing it rather than restating it. The
+other three found real issues:
+
+1. **`code-reviewer` + `ui-accessibility-reviewer` (independently converging): a genuine
+   CSS corruption bug.** `setupScreen.css`'s opening doc-comment contained the literal
+   token `.btn*/` inside its own prose (documenting the shared `.btn` class name) — the
+   `*/` closed the comment three sentences early, and everything from there through
+   `.stage-rows` itself became one long invalid selector that browsers silently drop.
+   `ui-accessibility-reviewer` confirmed this live in Chromium: `.stage-rows` measured
+   `display: block` instead of the intended `flex`/`column`/`gap`, with a real 0px gap
+   between stage cards on screen (should be 16px). Fixed by closing the comment cleanly;
+   re-verified live afterward (`display: flex`, 16px gap, screenshot-confirmed).
+2. **`code-reviewer` (the most significant data-correctness finding): `saveStagePlan`
+   didn't reject a plan carrying the same stage id twice.** Reproduced directly: two plan
+   entries both claiming to be one existing row silently corrupt the ordinal sequence
+   (the diff can only ever resolve one of them, discarding the other's edits, ending with
+   two stages sharing one DB row and no stage left at ordinal 1) — nothing in the write
+   path ever threw. Fixed with a pure, up-front duplicate-id check in `validateStagePlan`
+   itself, guarding every caller.
+3. **`code-reviewer`: shrinking an edited stage's `setCount` left orphaned `ct_sets`
+   rows.** `ensureSetsForStage` is add-only by design (T4.1's own idempotent-healing
+   pattern); nothing removed the positions above a newly-lowered count. Fixed with a new
+   `deleteSetsAbovePosition`, called alongside `ensureSetsForStage` in `saveStagePlan`'s
+   changed-row loop, gated by the same `stageHasHeats` check that already guarantees no
+   heat/result data references those sets.
+4. **`code-reviewer`: the check-then-write reconciliation isn't atomic against a heat
+   being created mid-save** (a genuine race window, not a bug in the check itself) —
+   the module's header comment overstated this as a hard guarantee. Reworded to state the
+   race window explicitly, under the same single-organiser pre-event assumption the rest
+   of the module already leans on (handoff §9), rather than adding RPC atomicity this
+   task's scope didn't call for.
+5. **`code-reviewer` (two nits, both closed):** a dead `previous.cutoff != null` guard in
+   `validateStagePlan` (unreachable — `previous` is always non-terminal by construction,
+   so its cutoff is never null by the time it's read back) simplified away with a comment
+   explaining why; a `.tempOrdinal` scratch property bolted directly onto fetched DB row
+   objects during the two-phase reorder replaced with a local `Map` keyed by id, so
+   `saveStagePlan`'s own bookkeeping never leaks onto data a caller might hold a reference
+   to.
+6. **`ui-accessibility-reviewer` (the most significant accessibility finding): Move
+   up/down permanently dropped keyboard/screen-reader focus to `<body>`.** Confirmed live:
+   `moveStage()`'s own `focusAfterRender` correctly targeted the moved row's container,
+   but a plain `<div>` isn't part of the focus order, so `.focus()` was a documented
+   no-op, and the destroyed-and-rebuilt subtree left nothing else to land on. Fixed with
+   `tabindex="-1"` on the row container — re-verified live (`document.activeElement`
+   matches the moved row after a real click).
+7. **`ui-accessibility-reviewer`: the terminal-stage cutoff field's only explanation was
+   browser-default placeholder text**, measured live at 4.50:1 in Chromium (right at the
+   AA floor, worse in other engines) and invisible to some assistive-tech read modes on a
+   disabled field. Fixed with a real, always-rendered, token-colored `<p>` wired via
+   `aria-describedby`, matching the locked-row explanation's own established pattern
+   (real text, never color/placeholder alone).
+8. **`ui-accessibility-reviewer`: no defined loading state during the initial mount** —
+   `loadPersisted()` is `findEvent` + `listStagesForEvent` in parallel, then a
+   `stageHasHeats` round trip per stage, which could leave `root` blank for a real
+   stretch of time on this project's "unreliable venue wifi" target. `reportScreen.js`
+   solved this exact problem for T4.7; `setupScreen.js` had reverted to the older,
+   pre-fix pattern instead. Closed with the same `renderLoading()` shape.
+9. **`code-reviewer` (UX, not correctness): removing or reordering an unlocked stage
+   positioned before a locked one always failed the whole save, blaming a DIFFERENT stage
+   than the one the organiser touched.** `test-auditor` independently flagged the sibling
+   gap: Move up/down next to a locked row was a silent no-op (the runtime guard in
+   `moveStage()` was correct, but the button itself never showed as disabled). Both closed
+   together: `render()` now computes, per row, whether a move would swap into a locked
+   neighbor or a remove would shift a locked stage's ordinal, and disables exactly those
+   controls up front — re-verified live and via new integration tests.
+10. **`test-auditor` (four gaps, all closed):** the "refuses to remove a locked stage"
+    test only proved no `delete` call fired, not that the edited stage's own `update`
+    also never fired — closed. No test proved the module's own stated "refuse-then-
+    explain, not partially apply" guarantee under the real risk case (an earlier,
+    otherwise-safe touched stage followed by a later blocked one in the same save) —
+    closed with a test proving the earlier stage's `update` never fires once any later
+    stage in the same save is found locked. The "removes and renumbers" test's own
+    2-stage fixture couldn't actually prove renumbering (with only 2 stages, removing one
+    always leaves "Stage 1" whether or not renumbering happened) — closed with a 3-stage
+    fixture proving a later stage's rendered label shifts down. The generalized
+    `validateStagePlan` claim was independently confirmed genuine (not a message-text-only
+    change) by diffing against the pre-generalization implementation and finding three
+    tests that target cases the OLD code would have wrongly rejected.
+
+538 tests total (up from 503) — 15 new in `setup.test.js` (56 total, up from 41),
+20 new in `setupScreen.test.js` (new file as of this task).
+
+**Closes the "T4.1's `setup.js` still has no UI" item in `ROADMAP.md`'s known open
+items.**
+
+---
+
 ## Phase 4 — Cup Taster · 2026-08-23 (T4.8)
 
 ### T4.8 Export — the last Cup Taster task
