@@ -8,6 +8,8 @@ import {
   ensureSetsForStage,
   createStagePlan,
   listStagesForEvent,
+  stageHasHeats,
+  saveStagePlan,
 } from './setup.js';
 
 // Matches core/registry.test.js's fake shape, extended with a `.then()` on
@@ -37,6 +39,14 @@ function fakeClient({ tables = {} } = {}) {
         },
         insert: (payload) => {
           calls.push(['insert', table, payload]);
+          return builder;
+        },
+        update: (payload) => {
+          calls.push(['update', table, payload]);
+          return builder;
+        },
+        delete: () => {
+          calls.push(['delete', table]);
           return builder;
         },
         eq: (...args) => {
@@ -120,12 +130,16 @@ describe('validateStagePlan', () => {
     expect(() => validateStagePlan(plan)).toThrow('stage kind must be one of');
   });
 
-  it('throws on a duplicate stage kind', () => {
+  it('allows a duplicate stage kind, unlike the old fixed-sequence restriction', () => {
+    // Two prelims heats-worth of stages feeding one finals — an arbitrary
+    // chain, not one of the two formerly-hardcoded sequences.
     const plan = [
-      { kind: 'prelims', ordinal: 1, setCount: 5, durationSecs: 480, cutoff: 8 },
-      { kind: 'prelims', ordinal: 2, setCount: 5, durationSecs: 480, cutoff: null },
+      { kind: 'prelims', ordinal: 1, setCount: 5, durationSecs: 480, cutoff: 16 },
+      { kind: 'prelims', ordinal: 2, setCount: 5, durationSecs: 480, cutoff: 8 },
+      { kind: 'finals', ordinal: 3, setCount: 5, durationSecs: 480, cutoff: null },
     ];
-    expect(() => validateStagePlan(plan)).toThrow('duplicate stage kind');
+    const sorted = validateStagePlan(plan);
+    expect(sorted.map((s) => s.kind)).toEqual(['prelims', 'prelims', 'finals']);
   });
 
   it('throws when setCount is not a positive integer', () => {
@@ -191,22 +205,39 @@ describe('validateStagePlan', () => {
       { kind: 'finals', ordinal: 1, setCount: 5, durationSecs: 480, cutoff: 8 },
       { kind: 'prelims', ordinal: 2, setCount: 5, durationSecs: 480, cutoff: null },
     ];
-    expect(() => validateStagePlan(plan)).toThrow('must be exactly');
+    expect(() => validateStagePlan(plan)).toThrow('runs after a later-kind stage');
   });
 
-  it('throws when semis appears with no prelims feeding it', () => {
+  it('allows semis with no prelims feeding it — presence of a kind is not required, only order among the kinds present', () => {
     const plan = [
       { kind: 'semis', ordinal: 1, setCount: 5, durationSecs: 480, cutoff: 8 },
       { kind: 'finals', ordinal: 2, setCount: 5, durationSecs: 480, cutoff: null },
     ];
-    expect(() => validateStagePlan(plan)).toThrow('must be exactly');
+    const sorted = validateStagePlan(plan);
+    expect(sorted.map((s) => s.kind)).toEqual(['semis', 'finals']);
   });
 
-  it('throws on a single-stage plan (neither real configuration is one stage)', () => {
+  it('throws when a later stage regresses to an earlier kind after semis, even skipping straight from prelims', () => {
+    const plan = [
+      { kind: 'prelims', ordinal: 1, setCount: 5, durationSecs: 480, cutoff: 8 },
+      { kind: 'semis', ordinal: 2, setCount: 5, durationSecs: 480, cutoff: 4 },
+      { kind: 'prelims', ordinal: 3, setCount: 5, durationSecs: 480, cutoff: null },
+    ];
+    expect(() => validateStagePlan(plan)).toThrow('runs after a later-kind stage');
+  });
+
+  it('accepts a single-stage plan — an arbitrary chain no longer requires one of two fixed sequences', () => {
     const plan = [{ kind: 'prelims', ordinal: 1, setCount: 5, durationSecs: 480, cutoff: null }];
-    // cutoff:null on a single stage also satisfies the terminal-cutoff rule,
-    // so this exercises the sequence check specifically, not the cutoff one.
-    expect(() => validateStagePlan(plan)).toThrow('must be exactly');
+    expect(validateStagePlan(plan)).toHaveLength(1);
+  });
+
+  it('accepts prelims straight to finals with no semis (one of the old fixed sequences, still valid under the general rule)', () => {
+    const plan = [
+      { kind: 'prelims', ordinal: 1, setCount: 5, durationSecs: 480, cutoff: 8 },
+      { kind: 'finals', ordinal: 2, setCount: 5, durationSecs: 480, cutoff: null },
+    ];
+    const sorted = validateStagePlan(plan);
+    expect(sorted.map((s) => s.kind)).toEqual(['prelims', 'finals']);
   });
 });
 
@@ -599,5 +630,287 @@ describe('listStagesForEvent', () => {
     expect(await listStagesForEvent('ev1', client)).toEqual(stages);
     const orderCall = client.calls.find(([action]) => action === 'order');
     expect(orderCall).toEqual(['order', 'ct_stages', 'ordinal', { ascending: true }]);
+  });
+});
+
+describe('stageHasHeats', () => {
+  it('returns true when at least one heat exists for the stage', async () => {
+    const client = fakeClient({ tables: { ct_heats: { data: [{ id: 'h1' }], error: null } } });
+    expect(await stageHasHeats('s1', client)).toBe(true);
+  });
+
+  it('returns false when no heat exists for the stage', async () => {
+    const client = fakeClient({ tables: { ct_heats: { data: [], error: null } } });
+    expect(await stageHasHeats('s1', client)).toBe(false);
+  });
+});
+
+describe('saveStagePlan', () => {
+  it('creates a brand-new stage when the event has no existing plan', async () => {
+    const created = {
+      id: 's1',
+      event_id: 'ev1',
+      ordinal: 1,
+      kind: 'prelims',
+      set_count: 1,
+      duration_secs: 480,
+      cutoff: null,
+    };
+    const client = fakeClient({
+      tables: {
+        ct_stages: [
+          { data: [], error: null }, // initial listStagesForEvent: nothing yet
+          { data: null, error: null }, // createStage's findStageByOrdinal(1): no match
+          { data: created, error: null }, // createStage's insert
+          { data: [created], error: null }, // final listStagesForEvent
+        ],
+        ct_sets: [
+          { data: [], error: null }, // ensureSetsForStage: nothing yet
+          { data: [{ position: 1 }], error: null }, // ensureSetsForStage's insert
+        ],
+      },
+    });
+    const plan = [{ kind: 'prelims', ordinal: 1, setCount: 1, durationSecs: 480, cutoff: null }];
+    const result = await saveStagePlan('ev1', plan, client);
+    expect(result).toEqual([created]);
+    expect(client.calls.some(([action]) => action === 'update' || action === 'delete')).toBe(false);
+  });
+
+  it('edits an existing stage in place when it has no heats yet', async () => {
+    const s1 = {
+      id: 's1',
+      event_id: 'ev1',
+      ordinal: 1,
+      kind: 'prelims',
+      set_count: 5,
+      duration_secs: 480,
+      cutoff: 8,
+    };
+    const s2 = {
+      id: 's2',
+      event_id: 'ev1',
+      ordinal: 2,
+      kind: 'finals',
+      set_count: 5,
+      duration_secs: 480,
+      cutoff: null,
+    };
+    const s1Updated = { ...s1, cutoff: 4 };
+    const client = fakeClient({
+      tables: {
+        ct_stages: [
+          { data: [s1, s2], error: null }, // initial listStagesForEvent
+          { error: null }, // temp-ordinal move for s1
+          { error: null }, // final config update for s1
+          { data: [s1Updated, s2], error: null }, // final listStagesForEvent
+        ],
+        ct_heats: [{ data: [], error: null }], // s1 has no heats — safe to edit
+        ct_sets: [
+          {
+            data: [1, 2, 3, 4, 5].map((position) => ({ position })),
+            error: null,
+          }, // s1's sets already all exist — no insert needed
+        ],
+      },
+    });
+    const plan = [
+      { id: 's1', kind: 'prelims', ordinal: 1, setCount: 5, durationSecs: 480, cutoff: 4 },
+      { id: 's2', kind: 'finals', ordinal: 2, setCount: 5, durationSecs: 480, cutoff: null },
+    ];
+    const result = await saveStagePlan('ev1', plan, client);
+    expect(result).toEqual([s1Updated, s2]);
+
+    const updateCalls = client.calls.filter(
+      ([action, table]) => action === 'update' && table === 'ct_stages',
+    );
+    expect(updateCalls).toHaveLength(2);
+    expect(updateCalls[0][2]).toEqual({ ordinal: -1 }); // temp move first
+    expect(updateCalls[1][2]).toMatchObject({ cutoff: 4, ordinal: 1 }); // then the real config
+  });
+
+  it('refuses to edit a stage that already has heats, naming it in a clear message rather than a raw DB error', async () => {
+    const s1 = {
+      id: 's1',
+      event_id: 'ev1',
+      ordinal: 1,
+      kind: 'prelims',
+      set_count: 5,
+      duration_secs: 480,
+      cutoff: 8,
+    };
+    const s2 = {
+      id: 's2',
+      event_id: 'ev1',
+      ordinal: 2,
+      kind: 'finals',
+      set_count: 5,
+      duration_secs: 480,
+      cutoff: null,
+    };
+    const client = fakeClient({
+      tables: {
+        ct_stages: [{ data: [s1, s2], error: null }],
+        ct_heats: [{ data: [{ id: 'h1' }], error: null }], // s1 already has a heat
+      },
+    });
+    const plan = [
+      { id: 's1', kind: 'prelims', ordinal: 1, setCount: 5, durationSecs: 480, cutoff: 4 },
+      { id: 's2', kind: 'finals', ordinal: 2, setCount: 5, durationSecs: 480, cutoff: null },
+    ];
+    await expect(saveStagePlan('ev1', plan, client)).rejects.toThrow('already has heats generated');
+    expect(client.calls.some(([action]) => action === 'update' || action === 'delete')).toBe(false);
+  });
+
+  it('removes a stage with no heats, renumbering the plan around it', async () => {
+    const s1 = {
+      id: 's1',
+      event_id: 'ev1',
+      ordinal: 1,
+      kind: 'prelims',
+      set_count: 5,
+      duration_secs: 480,
+      cutoff: 8,
+    };
+    const s2 = {
+      id: 's2',
+      event_id: 'ev1',
+      ordinal: 2,
+      kind: 'finals',
+      set_count: 5,
+      duration_secs: 480,
+      cutoff: null,
+    };
+    const s1Updated = { ...s1, cutoff: null }; // now the sole (terminal) stage
+    const client = fakeClient({
+      tables: {
+        ct_stages: [
+          { data: [s1, s2], error: null }, // initial listStagesForEvent
+          { error: null }, // temp-ordinal move for s1
+          { error: null }, // delete s2
+          { error: null }, // final config update for s1
+          { data: [s1Updated], error: null }, // final listStagesForEvent
+        ],
+        ct_heats: [
+          { data: [], error: null }, // s2 (removed): no heats — safe
+          { data: [], error: null }, // s1 (changed): no heats — safe
+        ],
+        ct_sets: [{ data: [1, 2, 3, 4, 5].map((position) => ({ position })), error: null }],
+      },
+    });
+    const plan = [
+      { id: 's1', kind: 'prelims', ordinal: 1, setCount: 5, durationSecs: 480, cutoff: null },
+    ];
+    const result = await saveStagePlan('ev1', plan, client);
+    expect(result).toEqual([s1Updated]);
+    expect(client.calls).toContainEqual(['delete', 'ct_stages']);
+  });
+
+  it('refuses to remove a stage that already has heats', async () => {
+    const s1 = {
+      id: 's1',
+      event_id: 'ev1',
+      ordinal: 1,
+      kind: 'prelims',
+      set_count: 5,
+      duration_secs: 480,
+      cutoff: 8,
+    };
+    const s2 = {
+      id: 's2',
+      event_id: 'ev1',
+      ordinal: 2,
+      kind: 'finals',
+      set_count: 5,
+      duration_secs: 480,
+      cutoff: null,
+    };
+    const client = fakeClient({
+      tables: {
+        ct_stages: [{ data: [s1, s2], error: null }],
+        ct_heats: [{ data: [{ id: 'h1' }], error: null }], // s2 (the removed one) already has a heat
+      },
+    });
+    const plan = [
+      { id: 's1', kind: 'prelims', ordinal: 1, setCount: 5, durationSecs: 480, cutoff: null },
+    ];
+    await expect(saveStagePlan('ev1', plan, client)).rejects.toThrow('already has heats generated');
+    expect(client.calls.some(([action]) => action === 'delete')).toBe(false);
+  });
+
+  it('reorders two existing stages via a two-phase ordinal move, avoiding a collision on the shared unique index', async () => {
+    const s1 = {
+      id: 's1',
+      event_id: 'ev1',
+      ordinal: 1,
+      kind: 'prelims',
+      set_count: 5,
+      duration_secs: 480,
+      cutoff: 8,
+    };
+    const s2 = {
+      id: 's2',
+      event_id: 'ev1',
+      ordinal: 2,
+      kind: 'prelims',
+      set_count: 5,
+      duration_secs: 480,
+      cutoff: 8,
+    };
+    const s3 = {
+      id: 's3',
+      event_id: 'ev1',
+      ordinal: 3,
+      kind: 'finals',
+      set_count: 5,
+      duration_secs: 480,
+      cutoff: null,
+    };
+    const finalStages = [{ ...s2, ordinal: 1 }, { ...s1, ordinal: 2 }, s3];
+    const client = fakeClient({
+      tables: {
+        ct_stages: [
+          { data: [s1, s2, s3], error: null }, // initial listStagesForEvent
+          { error: null }, // temp move s2
+          { error: null }, // temp move s1
+          { error: null }, // final update s2 -> ordinal 1
+          { error: null }, // final update s1 -> ordinal 2
+          { data: finalStages, error: null }, // final listStagesForEvent
+        ],
+        ct_heats: [
+          { data: [], error: null }, // s2: no heats
+          { data: [], error: null }, // s1: no heats
+        ],
+        ct_sets: [
+          { data: [1, 2, 3, 4, 5].map((position) => ({ position })), error: null },
+          { data: [1, 2, 3, 4, 5].map((position) => ({ position })), error: null },
+        ],
+      },
+    });
+    // Passed already in the swapped order — proves the reordering itself,
+    // not just that a caller-supplied ordinal is echoed back.
+    const plan = [
+      { id: 's2', kind: 'prelims', ordinal: 1, setCount: 5, durationSecs: 480, cutoff: 8 },
+      { id: 's1', kind: 'prelims', ordinal: 2, setCount: 5, durationSecs: 480, cutoff: 8 },
+      { id: 's3', kind: 'finals', ordinal: 3, setCount: 5, durationSecs: 480, cutoff: null },
+    ];
+    const result = await saveStagePlan('ev1', plan, client);
+    expect(result).toEqual(finalStages);
+
+    const updateCalls = client.calls.filter(
+      ([action, table]) => action === 'update' && table === 'ct_stages',
+    );
+    // The two temp moves land on DISTINCT negative ordinals — the actual
+    // proof this avoids the (event_id, ordinal) unique index, not just that
+    // some update happened.
+    expect(updateCalls[0][2]).toEqual({ ordinal: -1 });
+    expect(updateCalls[1][2]).toEqual({ ordinal: -2 });
+    expect(updateCalls[2][2]).toMatchObject({ ordinal: 1 });
+    expect(updateCalls[3][2]).toMatchObject({ ordinal: 2 });
+  });
+
+  it('throws an invalid plan before ever reading existing stages', async () => {
+    const client = fakeClient();
+    await expect(saveStagePlan('ev1', [], client)).rejects.toThrow('at least one stage');
+    expect(client.calls).toHaveLength(0);
   });
 });

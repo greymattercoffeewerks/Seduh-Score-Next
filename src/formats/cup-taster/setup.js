@@ -7,37 +7,43 @@
 // Stage/set creation is idempotent by construction (check-then-create, same
 // shape as registerPerson): setup happens ahead of the event, not under the
 // live-heat time pressure §9's outbox model exists for, so a plain retryable
-// compose is the right amount of ceremony here, not a new RPC.
+// compose is the right amount of ceremony here, not a new RPC. `saveStagePlan`
+// extends that same setup-time-ceremony reasoning to edit/reorder/remove: an
+// organiser reworking a plan before the event starts is still plain retryable
+// composition, not a live write needing an RPC's atomicity — the one thing it
+// guards is never rewriting a stage that already has real event data (heats)
+// hanging off it.
 import { getSupabase } from '../../core/supabaseClient.js';
 
 const STAGE_KINDS = ['prelims', 'semis', 'finals'];
 
-// §7.5: only two configurations are real. Checked as whole sequences (not
-// just per-stage kind validity) so a plan can't reorder them — e.g. `finals`
-// running before `prelims`, or `semis` with no `prelims` feeding it — which
-// would otherwise pass every per-stage check individually while producing an
-// event where the stage named "finals" isn't actually the terminal one.
-const VALID_KIND_SEQUENCES = [
-  ['prelims', 'finals'],
-  ['prelims', 'semis', 'finals'],
-];
+// A future format's setup screen needing more than a linear
+// prelims→semis→finals progression is exactly why this is a rank, not a
+// fixed two-sequence allowlist: any number of stages of any of these kinds
+// is a real plan now (repeated prelims heats, prelims straight to finals, a
+// plan with no prelims at all), as long as no stage's kind ever ranks lower
+// than the one before it — a stage kind can never regress once the plan has
+// moved on to a later kind.
+const STAGE_KIND_RANK = Object.fromEntries(STAGE_KINDS.map((kind, index) => [kind, index]));
 
 // Pure — no I/O. Validates a whole stage plan before anything is persisted:
 // ordinals sequential from 1 (how §7.5 says stage order is expressed), kind
-// sequence matches one of the two real configurations, and the terminal
-// stage (highest ordinal) is the one place `cutoff` must be null — every
-// stage before it needs a real cutoff, since that's what a border tie (§7.2)
-// resolves against. Cutoff must also be non-increasing stage over stage — a
-// later stage can't advance more cuppers than the previous stage sent
-// forward, or `core/advancement` would silently treat the oversized cutoff
-// as "everyone advances" instead of trimming the field.
+// order never regresses (prelims-type stages before semis before finals —
+// duplicates of the same kind, or skipping a kind entirely, are both real
+// plans; only running an earlier kind AFTER a later one is invalid), and the
+// terminal stage (highest ordinal) is the one place `cutoff` must be null —
+// every stage before it needs a real cutoff, since that's what a border tie
+// (§7.2) resolves against. Cutoff must also be non-increasing stage over
+// stage — a later stage can't advance more cuppers than the previous stage
+// sent forward, or `core/advancement` would silently treat the oversized
+// cutoff as "everyone advances" instead of trimming the field.
 export function validateStagePlan(stages) {
   if (!Array.isArray(stages) || stages.length === 0) {
     throw new Error('stage plan must contain at least one stage');
   }
 
   const sorted = [...stages].sort((a, b) => a.ordinal - b.ordinal);
-  const seenKinds = new Set();
+  let previousRank = -Infinity;
 
   sorted.forEach((stage, index) => {
     const expectedOrdinal = index + 1;
@@ -50,10 +56,15 @@ export function validateStagePlan(stages) {
     if (!STAGE_KINDS.includes(stage.kind)) {
       throw new Error(`stage kind must be one of ${STAGE_KINDS.join(', ')}, got "${stage.kind}"`);
     }
-    if (seenKinds.has(stage.kind)) {
-      throw new Error(`duplicate stage kind "${stage.kind}" — each kind may appear at most once`);
+    const rank = STAGE_KIND_RANK[stage.kind];
+    if (rank < previousRank) {
+      throw new Error(
+        `stage "${stage.kind}" at ordinal ${stage.ordinal} runs after a later-kind stage — ` +
+          `stage kinds must run in order (prelims-type stages, then semis, then finals); ` +
+          `${STAGE_KINDS.join(' → ')} may repeat or be skipped, but never regress`,
+      );
     }
-    seenKinds.add(stage.kind);
+    previousRank = rank;
 
     if (!Number.isInteger(stage.setCount) || stage.setCount < 1) {
       throw new Error(`stage "${stage.kind}": setCount must be a positive integer`);
@@ -83,17 +94,6 @@ export function validateStagePlan(stages) {
       }
     }
   });
-
-  const kinds = sorted.map((stage) => stage.kind);
-  const matchesAValidSequence = VALID_KIND_SEQUENCES.some(
-    (sequence) =>
-      sequence.length === kinds.length && sequence.every((kind, i) => kind === kinds[i]),
-  );
-  if (!matchesAValidSequence) {
-    throw new Error(
-      `stage plan must be exactly ["prelims","finals"] or ["prelims","semis","finals"] in that order, got [${kinds.join(', ')}]`,
-    );
-  }
 
   return sorted;
 }
@@ -279,4 +279,112 @@ export async function createStagePlan(eventId, stages, client = getSupabase()) {
     created.push({ stage, sets });
   }
   return created;
+}
+
+// True once a stage has any heat at all — the point past which its plan
+// (kind/ordinal/set_count/duration_secs/cutoff) is no longer safely
+// editable. A heat snapshots duration_secs at creation and stations/results
+// key off the stage's sets, so rewriting the stage out from under it would
+// silently strand or mis-time real event data; results themselves (ct_results)
+// can only exist once a heat does, so checking for heats alone already
+// covers "or results" without a second query.
+export async function stageHasHeats(stageId, client = getSupabase()) {
+  const { data, error } = await client.from('ct_heats').select('id').eq('stage_id', stageId);
+  if (error) throw error;
+  return data.length > 0;
+}
+
+async function updateStageRow(stageId, patch, client) {
+  const { error } = await client.from('ct_stages').update(patch).eq('id', stageId);
+  if (error) throw error;
+}
+
+async function deleteStageRow(stageId, client) {
+  const { error } = await client.from('ct_stages').delete().eq('id', stageId);
+  if (error) throw error;
+}
+
+// Reconciles a whole desired stage plan against whatever's already
+// persisted for the event, letting the setup screen support an arbitrary
+// add/remove/reorder chain across repeated saves rather than only ever
+// appending. `stages` mixes untouched/edited stages (carrying the `id` of
+// the row they correspond to) with brand-new ones (no `id`). Refuse-then-
+// explain, not partially apply: if the plan would touch (edit, reorder, or
+// remove) any stage that already has heats — real event data hanging off
+// its ordinal/kind/set_count/duration_secs/cutoff — the WHOLE save is
+// rejected before anything is written, naming the specific stage that
+// blocked it, rather than a raw constraint error surfacing partway through.
+export async function saveStagePlan(eventId, stages, client = getSupabase()) {
+  const validated = validateStagePlan(stages);
+  const existing = await listStagesForEvent(eventId, client);
+  const existingById = new Map(existing.map((row) => [row.id, row]));
+  const keepIds = new Set(validated.filter((stage) => stage.id).map((stage) => stage.id));
+
+  const removed = existing.filter((row) => !keepIds.has(row.id));
+  const changed = [];
+  const created = [];
+
+  for (const stage of validated) {
+    if (!stage.id) {
+      created.push(stage);
+      continue;
+    }
+    const row = existingById.get(stage.id);
+    if (!row) {
+      throw new Error(
+        `stage ${stage.id} was not found on this event — it may already have been removed`,
+      );
+    }
+    if (!(stageMatchesConfig(row, stage) && row.ordinal === stage.ordinal)) {
+      changed.push({ stage, row });
+    }
+  }
+
+  const touched = [...removed, ...changed.map(({ row }) => row)];
+  for (const row of touched) {
+    if (await stageHasHeats(row.id, client)) {
+      throw new Error(
+        `stage "${row.kind}" (currently ordinal ${row.ordinal}) already has heats generated — ` +
+          `its plan is locked and can't be edited, reordered, or removed from this screen`,
+      );
+    }
+  }
+
+  // Every changed row first moves to a guaranteed-unused negative ordinal,
+  // THEN to its real final ordinal — otherwise an ordinary sequential update
+  // could try to write a target ordinal another row (not yet moved off it)
+  // is still occupying, tripping the (event_id, ordinal) unique index even
+  // though the finished plan itself has no collisions.
+  changed.forEach(({ row }, index) => {
+    row.tempOrdinal = -(index + 1);
+  });
+  for (const { row } of changed) {
+    await updateStageRow(row.id, { ordinal: row.tempOrdinal }, client);
+  }
+
+  for (const row of removed) {
+    await deleteStageRow(row.id, client);
+  }
+
+  for (const { stage } of changed) {
+    await updateStageRow(
+      stage.id,
+      {
+        kind: stage.kind,
+        ordinal: stage.ordinal,
+        set_count: stage.setCount,
+        duration_secs: stage.durationSecs,
+        cutoff: stage.cutoff ?? null,
+      },
+      client,
+    );
+    await ensureSetsForStage(stage.id, stage.setCount, client);
+  }
+
+  for (const stage of created) {
+    const row = await createStage(eventId, stage, client);
+    await ensureSetsForStage(row.id, stage.setCount, client);
+  }
+
+  return listStagesForEvent(eventId, client);
 }
