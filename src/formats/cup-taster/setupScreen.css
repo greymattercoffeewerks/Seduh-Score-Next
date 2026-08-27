@@ -1,0 +1,79 @@
+/*
+ * Stage plan setup screen (T4.1's UI gap, closed here). Built on
+ * heatsScreen.css's shared .screen-container / .card / .btn / .field-input /
+ * .screen-feedback component shapes — loaded alongside this file on every
+ * screen, so nothing here redefines them. Stacks single-column from the
+ * smallest supported viewport (360px) rather than needing a breakpoint —
+ * .stage-row-fields is a column flex layout by default, so there's no
+ * table to collapse the way heatsScreen.css's .assignment-table needs to.
+ */
+
+.stage-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.stage-row[data-locked='true'] {
+  background: var(--color-surface-sunken);
+}
+
+.stage-row h3 {
+  font-family: var(--font-display);
+  font-size: var(--text-base);
+  margin: 0 0 var(--space-3) 0;
+}
+
+.stage-row-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.stage-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.stage-field-label {
+  font-size: var(--text-2xs);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+}
+
+/* The terminal-stage cutoff explanation — a real, token-colored line, not
+   placeholder text alone (found in review: a disabled field's placeholder
+   falls back to browser/OS default color, right at the AA floor in one
+   engine and worse in others, and can drop out of some assistive-tech read
+   modes entirely). */
+.stage-field-hint {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.stage-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.stage-row-actions .btn {
+  flex: 1 1 auto;
+}
+
+/* Wide enough for a row of fields to sit side by side without crowding —
+   still well above the 360px floor this project designs from first. */
+@media (min-width: 640px) {
+  .stage-row-fields {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .stage-field {
+    flex: 1 1 140px;
+  }
+}
