@@ -13,8 +13,9 @@
 // for a stage it didn't seed itself.
 import { partition } from '../../core/partition.js';
 import { listEntries } from '../../core/registry.js';
-import { findStageByOrdinal, findStageById, UNIQUE_VIOLATION } from './setup.js';
+import { findStageByOrdinal, findStageById } from './setup.js';
 import { getSupabase } from '../../core/supabaseClient.js';
+import { UNIQUE_VIOLATION } from '../../core/errors.js';
 
 const HEAT_TARGET = 4;
 const HEAT_MIN = 2;

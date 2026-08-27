@@ -94,6 +94,34 @@
   background: var(--color-surface-sunken);
 }
 
+/* Shared "label above input" field wrapper — core/dom.js's labeledField()
+   renders these class names, so any screen's form fields (originally
+   setupScreen.js's stage rows; roster registration reuses it unedited)
+   look consistent without redefining the shapes per screen. */
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.form-field-label {
+  font-size: var(--text-2xs);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+}
+
+/* A real, token-colored explanation line — not placeholder text alone
+   (found in review on setupScreen.js's terminal-cutoff hint: a disabled
+   field's placeholder falls back to browser/OS default color, right at the
+   AA floor in one engine and worse in others, and can drop out of some
+   assistive-tech read modes entirely). */
+.form-field-hint {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
 .field-input {
   min-height: var(--tap-target-min);
   width: 100%;
@@ -104,6 +132,15 @@
   color: var(--color-text);
   font-family: var(--font-body);
   font-size: var(--text-base);
+}
+
+/* A real, token-controlled color — not left to browser/OS default disabled
+   styling, which can render right at or below the AA floor in some
+   engines (found in review: the same contrast-reliability class of bug
+   this file's own .form-field-hint comment already documents, just not
+   yet extended to a disabled input's own foreground text). */
+.field-input:disabled {
+  color: var(--color-text-secondary);
 }
 
 .roster-list {
@@ -117,6 +154,7 @@
 
 .roster-list li {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: var(--space-3);
   padding: var(--space-2) 0;

@@ -5,7 +5,9 @@ import {
   createPerson,
   registerPerson,
   createEntry,
+  findEntryForPerson,
   registerEntry,
+  setEntryWithdrawn,
   listEntries,
   listEntriesByIds,
   mergePeople,
@@ -40,6 +42,10 @@ function fakeClient({ tables = {}, rpcResult = { data: null, error: null } } = {
         },
         insert: (payload) => {
           calls.push(['insert', table, payload]);
+          return builder;
+        },
+        update: (payload) => {
+          calls.push(['update', table, payload]);
           return builder;
         },
         single: () => Promise.resolve(resolve()),
@@ -198,6 +204,41 @@ describe('createEntry', () => {
   });
 });
 
+describe('findEntryForPerson', () => {
+  it('returns the matching entry', async () => {
+    const entry = { id: 'e1', event_id: 'ev1', person_id: 'p1' };
+    const client = fakeClient({ tables: { event_entries: { data: entry, error: null } } });
+    expect(await findEntryForPerson('ev1', 'p1', client)).toEqual(entry);
+  });
+
+  it('returns null when no match exists', async () => {
+    const client = fakeClient({ tables: { event_entries: { data: null, error: null } } });
+    expect(await findEntryForPerson('ev1', 'p1', client)).toBeNull();
+  });
+
+  it('throws on a query error', async () => {
+    const client = fakeClient({
+      tables: { event_entries: { data: null, error: new Error('boom') } },
+    });
+    await expect(findEntryForPerson('ev1', 'p1', client)).rejects.toThrow('boom');
+  });
+});
+
+describe('setEntryWithdrawn', () => {
+  it('updates the entry withdrawn flag and returns the updated row', async () => {
+    const updated = { id: 'e1', event_id: 'ev1', withdrawn: true };
+    const client = fakeClient({ tables: { event_entries: { data: updated, error: null } } });
+    expect(await setEntryWithdrawn('e1', true, client)).toEqual(updated);
+  });
+
+  it('throws on a query error', async () => {
+    const client = fakeClient({
+      tables: { event_entries: { data: null, error: new Error('boom') } },
+    });
+    await expect(setEntryWithdrawn('e1', true, client)).rejects.toThrow('boom');
+  });
+});
+
 describe('listEntries', () => {
   it('returns every entry for the event', async () => {
     const entries = [
@@ -261,7 +302,11 @@ describe('registerEntry', () => {
           { data: created, error: null },
           { data: created, error: null },
         ],
-        event_entries: { data: insertedEntry, error: null },
+        // findEntryForPerson: no existing entry; createEntry: the insert result
+        event_entries: [
+          { data: null, error: null },
+          { data: insertedEntry, error: null },
+        ],
       },
     });
     const result = await registerEntry(
@@ -283,7 +328,11 @@ describe('registerEntry', () => {
           { data: existing, error: null },
           { data: existing, error: null },
         ],
-        event_entries: { data: insertedEntry, error: null },
+        // findEntryForPerson: no existing entry; createEntry: the insert result
+        event_entries: [
+          { data: null, error: null },
+          { data: insertedEntry, error: null },
+        ],
       },
     });
     const result = await registerEntry(
@@ -299,6 +348,85 @@ describe('registerEntry', () => {
     );
   });
 
+  it('returns the existing entry without creating a duplicate when the person is already registered for this event', async () => {
+    // A double-tap of a registration button, or a re-submit after a dropped
+    // response the write actually reached — event_entries has a real unique
+    // index on (event_id, person_id), so without this check the second call
+    // would surface that constraint as a raw error instead of the existing row.
+    const existing = { id: 'p1', display_name: 'Cupper One', phone: '+6738001111', cafe: null };
+    const existingEntry = { id: 'e2', event_id: 'ev1', person_id: 'p1' };
+    const client = fakeClient({
+      tables: {
+        people: { data: existing, error: null },
+        event_entries: { data: existingEntry, error: null },
+      },
+    });
+    const result = await registerEntry(
+      'org1',
+      'ev1',
+      { displayName: 'Cupper One (again)', phone: '+6738001111' },
+      client,
+    );
+    expect(result).toEqual(existingEntry);
+    expect(
+      client.calls.some(([action, table]) => action === 'insert' && table === 'event_entries'),
+    ).toBe(false);
+  });
+
+  it('adopts the winner rather than surfacing a raw error when a concurrent caller wins the race to register the same person for this event', async () => {
+    // Two devices registering the same phone number at once: both pass the
+    // pre-check (findEntryForPerson returns null for both), then one's
+    // insert wins and the other's hits the real unique index on
+    // (event_id, person_id) as a 23505. Same recovery shape as setup.js's
+    // createStage — the loser adopts the winner's row instead of surfacing
+    // the raw constraint violation.
+    const existing = { id: 'p1', display_name: 'Cupper One', phone: '+6738001111', cafe: null };
+    const racedEntry = { id: 'e1', event_id: 'ev1', person_id: 'p1' };
+    const client = fakeClient({
+      tables: {
+        // findPersonByPhone: match; createEntry's own people lookup
+        people: [
+          { data: existing, error: null },
+          { data: existing, error: null },
+        ],
+        event_entries: [
+          // findEntryForPerson (pre-check): no match yet
+          { data: null, error: null },
+          // createEntry's insert: lost the race
+          { data: null, error: { code: '23505', message: 'duplicate key' } },
+          // findEntryForPerson (post-race retry): the winner's row
+          { data: racedEntry, error: null },
+        ],
+      },
+    });
+    const result = await registerEntry(
+      'org1',
+      'ev1',
+      { displayName: 'Cupper One (again)', phone: '+6738001111' },
+      client,
+    );
+    expect(result).toEqual(racedEntry);
+  });
+
+  it('rethrows a non-unique-violation error from the insert rather than masking it as a race', async () => {
+    const existing = { id: 'p1', display_name: 'Cupper One', phone: '+6738001111', cafe: null };
+    const client = fakeClient({
+      tables: {
+        people: [
+          { data: existing, error: null },
+          { data: existing, error: null },
+        ],
+        event_entries: [
+          { data: null, error: null },
+          { data: null, error: new Error('network unreachable') },
+        ],
+      },
+    });
+    await expect(
+      registerEntry('org1', 'ev1', { displayName: 'Cupper One', phone: '+6738001111' }, client),
+    ).rejects.toThrow('network unreachable');
+  });
+
   it('passes bib through to the entry', async () => {
     const existing = { id: 'p1', display_name: 'Cupper One', cafe: null };
     const client = fakeClient({
@@ -307,7 +435,10 @@ describe('registerEntry', () => {
           { data: existing, error: null },
           { data: existing, error: null },
         ],
-        event_entries: { data: { id: 'e3' }, error: null },
+        event_entries: [
+          { data: null, error: null },
+          { data: { id: 'e3' }, error: null },
+        ],
       },
     });
     await registerEntry('org1', 'ev1', { phone: '+6738001111', bib: '42' }, client);

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { el } from './dom.js';
+import { el, labeledField } from './dom.js';
 
 describe('el', () => {
   it('creates an element with the given tag', () => {
@@ -32,5 +32,30 @@ describe('el', () => {
     expect(node.textContent).toBe('');
     expect(node.className).toBe('');
     expect(node.id).toBe('');
+  });
+});
+
+describe('labeledField', () => {
+  it('wraps the input with a visible, aria-hidden label', () => {
+    const input = el('input', { attrs: { 'aria-label': 'Name' } });
+    const field = labeledField('Name', input);
+    expect(field.className).toBe('form-field');
+    const label = field.querySelector('.form-field-label');
+    expect(label.textContent).toBe('Name');
+    expect(label.getAttribute('aria-hidden')).toBe('true');
+    expect(field.contains(input)).toBe(true);
+  });
+
+  it('appends any extra nodes after the input', () => {
+    const input = el('input');
+    const hint = el('p', { className: 'form-field-hint', text: 'A hint' });
+    const field = labeledField('Label', input, [hint]);
+    expect([...field.children].at(-1)).toBe(hint);
+  });
+
+  it('omits extra nodes entirely when none are given', () => {
+    const input = el('input');
+    const field = labeledField('Label', input);
+    expect(field.children).toHaveLength(2); // label span + input, no third child
   });
 });
