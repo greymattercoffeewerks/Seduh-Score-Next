@@ -2,8 +2,8 @@
 
 _State: Phase 0 done; Phase 1 done (T1.1–T1.4); Phase 2 done (T2.1–T2.6); Phase 3 done
 (T3.1–T3.3); Phase 4 done (T4.1–T4.8, plus two 2026-08-27 follow-ups closing T4.1's
-stage-plan UI gap and its roster-registration UI gap) — matches CHANGELOG.md as of
-2026-08-27_
+stage-plan UI gap and its roster-registration UI gap); Phase 5 in progress (T5.1 done) —
+matches CHANGELOG.md as of 2026-08-27_
 
 Read these before touching anything:
 
@@ -150,8 +150,12 @@ src/
                                    verbatim use), errors gained UNIQUE_VIOLATION (hoisted
                                    from formats/cup-taster/setup.js so core/registry.js
                                    could reuse the same race-recovery shape) — all
-                                   2026-08-27, the roster-registration screen's follow-up.
-                                   Not yet built: publish, viewer-shell
+                                   2026-08-27, the roster-registration screen's follow-up;
+                                   publish (T5.1, 2026-08-27 — publishSession() enqueues +
+                                   flushes a publish_session RPC through outbox.js exactly
+                                   like scoring.js's submitConfirmHeat; logic-module only,
+                                   nothing calls it yet — payload shape/call cadence are
+                                   T5.2+ decisions). Not yet built: viewer-shell
   formats/
     cup-taster/                 ← scoring, timing-surface, entry-surface, viewer-body,
                                    analytics — Cup Taster-specific, built on core/. Done:

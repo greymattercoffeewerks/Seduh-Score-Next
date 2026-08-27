@@ -6,6 +6,86 @@ closes.
 
 ---
 
+## Phase 5 — Live surfaces · 2026-08-27 (T5.1 — publish + live_sessions write path)
+
+### publish_session RPC + core/publish.js
+
+Phase 5's first task. `live_sessions` (the table §5.3/T1.3 already created and secured) had
+no write path yet — this is that path: `publish_session(p_operation_id, p_org_id,
+p_event_id, p_format, p_is_test, p_payload)` (new migration
+`20260827200000_publish_session_rpc.sql`) atomically activates a session for an event,
+deactivating whatever else is active for the org first. Needed as a real RPC, not a
+client-side check-then-write, because `live_sessions` carries a genuine two-row invariant
+(`live_sessions_one_active_per_org`, a partial unique index) that only one transaction can
+guarantee — the same problem class `confirm_heat`/`merge_people` already exist to solve for
+their own tables. Idempotent via the same `processed_operations` ledger `confirm_heat`
+established.
+
+`src/core/publish.js` (new): `publishSession(orgId, eventId, {format, isTest, payload},
+client)` — the JS write path, format-agnostic (handoff §6). Enqueues + flushes through
+`core/outbox.js` as ONE operation, the same discipline `scoring.js`'s `submitConfirmHeat`
+established for `confirm_heat` — "publish is explicit and separate, a queued publish that
+hasn't drained shows not synced, never green" (§9) only holds if publishing genuinely goes
+through the same queue/flush/fail-open machinery every other tracked write does.
+
+**Deliberately logic-module-only this task** (scoped with the user in advance, matching
+T4.1's own setup.js precedent): nothing calls `publishSession` yet from any existing screen.
+WHEN a format calls this (once at heat start with a timing-only payload, again on an
+explicit results publish, per D7's "split publish cadence") and WHAT its payload contains
+(Cup Taster's is a standings table, §8.3) are both real design decisions deferred until
+T5.2's `viewer-shell` exists to build real wiring against, rather than guessed at now.
+
+Verifiers: `schema-guardian`, `security-reviewer`, `module-boundary-checker`,
+`test-auditor`, `code-reviewer` — five agents in parallel, one round (no UI this task, so
+`ui-accessibility-reviewer` doesn't apply). `module-boundary-checker` came back clean. The
+other four found real issues, consistent with this project's own "every review should find
+something" discipline:
+
+1. **`code-reviewer` + `security-reviewer` (independently converging): a NULL-unsafe
+   ownership check silently skipped the org/event validation for a nonexistent event.**
+   `app.org_id_for_event` returns `null` for a missing event, and `p_org_id <> null` is
+   `null` (not `true`) in plpgsql's `if` — a caller passing a fabricated event id fell
+   through the check entirely and hit a raw foreign-key-violation on the insert instead of
+   a clear message. First fix attempt (a separate `not exists (select 1 from events ...)`
+   pre-check) introduced a NEW bug, caught immediately by re-running the full pgTAP suite:
+   that query runs under the caller's own RLS, so a genuinely wrong-org caller can't see the
+   other org's event row either, and the pre-check reported "not found" before the real
+   ownership check ever ran — masking the intended message and breaking two tests. Real fix:
+   a single `is distinct from` comparison (NULL-safe) reusing the existing
+   `security definer` `org_id_for_event` helper, collapsing "doesn't exist" and "exists but
+   belongs to a different org" into one "not found" message — deliberately not
+   distinguished, matching `confirm_heat`'s own established convention (a wrong-org caller
+   who can't see another org's rows under RLS anyway shouldn't be told that org's event
+   exists at all).
+2. **`schema-guardian` + `security-reviewer` (independently, both reproduced it live against
+   the real database): no test proved the RLS backstop itself, only the RPC's own
+   application-level ownership check.** Every existing rejection case passed a
+   _mismatched_ org/event pair, caught by `publish_session`'s own guard before RLS ever got
+   involved. A caller passing the event's _correct_ owning org (so the guard passes) while
+   not actually being a member of that org was untested — `security-reviewer` reproduced it
+   by hand (`ERROR: new row violates row-level security policy`), closed with a new pgTAP
+   case proving RLS's own `WITH CHECK` rejects it independently.
+3. **`test-auditor`: the "publishing a second event atomically deactivates the first" test
+   only proved the final state after one clean call, not atomicity** — a naive two-statement
+   client sequence would produce the identical final state whenever nothing fails partway
+   through, so the test didn't distinguish "atomic RPC" from "two statements that happened
+   to both succeed." Closed with a genuine forced-failure case (publishing with a null
+   `format`, which fails the column's `not null` constraint _after_ the deactivate-others
+   update has already run) proving the earlier update rolls back too, not just the failed
+   insert.
+4. **`code-reviewer`: nothing in `publish.js` enforced its own doc comment's "`isTest` is a
+   required, explicit argument" claim** — a caller that forgot the key would have silently
+   enqueued `isTest: undefined`, the one place D9's "unmistakable `is_test`" guarantee could
+   quietly break for free. Closed with a runtime type guard (`typeof isTest !== 'boolean'`
+   throws before anything is enqueued) plus a test proving the omitted-key case actually
+   throws rather than merely being named as if it did.
+
+585 tests total (up from 579) — 6 new in `publish.test.js` (new file). 71 pgTAP assertions
+total (up from 65) — 18 new in `006_publish_session.sql` (new file, up from an initial 9
+during development — two were fixed for real bugs the tests themselves had, see above).
+
+---
+
 ## Phase 4 — Cup Taster · 2026-08-27 (Roster registration screen)
 
 ### Roster registration
