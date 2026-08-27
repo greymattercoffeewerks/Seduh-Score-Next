@@ -81,8 +81,10 @@ something" discipline:
    throws rather than merely being named as if it did.
 
 585 tests total (up from 579) — 6 new in `publish.test.js` (new file). 71 pgTAP assertions
-total (up from 65) — 18 new in `006_publish_session.sql` (new file, up from an initial 9
-during development — two were fixed for real bugs the tests themselves had, see above).
+total (up from 53 before this task) — all 18 in the new `006_publish_session.sql`, which
+grew from an initial 12 (its first working version, after two earlier `plan()` miscounts)
+to 18 across the review-fix round above: 6 new assertions closing the not-found, RLS-denial,
+and forced-failure-rollback gaps.
 
 ---
 
