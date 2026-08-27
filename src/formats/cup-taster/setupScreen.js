@@ -27,9 +27,8 @@ import { getSupabase } from '../../core/supabaseClient.js';
 import { el } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
 import { findEvent } from '../../core/events.js';
-import { listStagesForEvent, stageHasHeats, saveStagePlan } from './setup.js';
+import { listStagesForEvent, stageHasHeats, saveStagePlan, STAGE_KINDS } from './setup.js';
 
-const STAGE_KINDS = ['prelims', 'semis', 'finals'];
 const DEFAULT_SET_COUNT = 5;
 const DEFAULT_DURATION_SECS = 480;
 const DEFAULT_CUTOFF = 8;
@@ -72,7 +71,7 @@ export function buildPlanFromDraft(draftStages) {
   }));
 }
 
-function fieldWrapper(labelText, input) {
+function fieldWrapper(labelText, input, extra = []) {
   return el('div', { className: 'stage-field' }, [
     el('span', {
       className: 'stage-field-label',
@@ -80,6 +79,7 @@ function fieldWrapper(labelText, input) {
       attrs: { 'aria-hidden': 'true' },
     }),
     input,
+    ...extra,
   ]);
 }
 
@@ -87,7 +87,15 @@ export function renderStageRow(
   row,
   index,
   total,
-  { onMoveUp, onMoveDown, onRemove, disableActions } = {},
+  {
+    onMoveUp,
+    onMoveDown,
+    onRemove,
+    disableActions,
+    moveUpUnsafe,
+    moveDownUnsafe,
+    removeUnsafe,
+  } = {},
 ) {
   const stageLabel = `Stage ${index + 1}`;
   const rowId = `stage-row-${row.key}`;
@@ -103,6 +111,7 @@ export function renderStageRow(
   }
 
   const isTerminal = index === total - 1;
+  const cutoffHintId = `${rowId}-cutoff-hint`;
 
   const kindSelect = el('select', {
     className: 'field-input',
@@ -153,10 +162,23 @@ export function renderStageRow(
       'data-field': 'cutoff',
     },
   });
+  let cutoffHint = null;
   if (isTerminal) {
     cutoffInput.value = '';
     cutoffInput.disabled = true;
-    cutoffInput.placeholder = 'Not applicable — terminal stage';
+    cutoffInput.setAttribute('aria-describedby', cutoffHintId);
+    // A real, always-rendered, token-colored explanation — not placeholder
+    // text alone. Found in review: placeholder-only text falls back to
+    // browser/OS default color (measured right at the AA contrast floor in
+    // one engine, commonly worse in others) and disappears entirely from a
+    // disabled field for some assistive tech read modes. Matches the
+    // locked-row explanation above, which is likewise real text, not a
+    // color- or placeholder-only signal.
+    cutoffHint = el('p', {
+      id: cutoffHintId,
+      className: 'stage-field-hint',
+      text: 'Not applicable — terminal stage, nobody advances past it.',
+    });
   } else {
     cutoffInput.value = row.cutoff == null ? '' : String(row.cutoff);
     cutoffInput.addEventListener('input', () => {
@@ -169,7 +191,7 @@ export function renderStageRow(
     text: 'Move up',
     attrs: { type: 'button', 'aria-label': `Move ${stageLabel} up` },
   });
-  moveUpButton.disabled = disableActions || index === 0;
+  moveUpButton.disabled = Boolean(disableActions) || index === 0 || Boolean(moveUpUnsafe);
   moveUpButton.addEventListener('click', () => onMoveUp(row));
 
   const moveDownButton = el('button', {
@@ -177,7 +199,8 @@ export function renderStageRow(
     text: 'Move down',
     attrs: { type: 'button', 'aria-label': `Move ${stageLabel} down` },
   });
-  moveDownButton.disabled = disableActions || index === total - 1;
+  moveDownButton.disabled =
+    Boolean(disableActions) || index === total - 1 || Boolean(moveDownUnsafe);
   moveDownButton.addEventListener('click', () => onMoveDown(row));
 
   const removeButton = el('button', {
@@ -185,16 +208,20 @@ export function renderStageRow(
     text: 'Remove',
     attrs: { type: 'button', 'aria-label': `Remove ${stageLabel}` },
   });
-  removeButton.disabled = Boolean(disableActions);
+  removeButton.disabled = Boolean(disableActions) || Boolean(removeUnsafe);
   removeButton.addEventListener('click', () => onRemove(row));
 
-  return el('div', { className: 'card stage-row', attrs: { id: rowId } }, [
+  // tabindex="-1": not in the tab order, but a valid target for
+  // moveStage()'s own focus restoration after a reorder rebuilds the whole
+  // subtree — a plain <div> is otherwise unfocusable, which left focus
+  // stranded on <body> after every Move up/down (found in review).
+  return el('div', { className: 'card stage-row', attrs: { id: rowId, tabindex: '-1' } }, [
     el('h3', { text: stageLabel }),
     el('div', { className: 'stage-row-fields' }, [
       fieldWrapper('Kind', kindSelect),
       fieldWrapper('Set count', setCountInput),
       fieldWrapper('Duration (seconds)', durationInput),
-      fieldWrapper('Cutoff', cutoffInput),
+      fieldWrapper('Cutoff', cutoffInput, cutoffHint ? [cutoffHint] : []),
     ]),
     el('div', { className: 'stage-row-actions' }, [moveUpButton, moveDownButton, removeButton]),
   ]);
@@ -243,6 +270,26 @@ export async function mountSetupScreen(root, { eventId, client = getSupabase() }
     feedback.textContent = message ?? '';
     if (tone) feedback.dataset.tone = tone;
     else delete feedback.dataset.tone;
+  }
+
+  // A defined loading state, not a blank screen, for the initial mount —
+  // loadPersisted() is findEvent + listStagesForEvent in parallel, THEN a
+  // stageHasHeats round trip per stage, which on this project's "unreliable
+  // venue wifi" design target can leave `root` empty for a real stretch of
+  // time. Matches reportScreen.js's own renderLoading() precedent, found
+  // missing here in review.
+  function renderLoading() {
+    root.innerHTML = '';
+    const container = el('section', { className: 'screen-container setup-screen' });
+    container.appendChild(el('h1', { text: 'Stage plan' }));
+    container.appendChild(
+      el('div', {
+        className: 'screen-feedback',
+        text: 'Loading stage plan…',
+        attrs: { role: 'status', 'aria-live': 'polite' },
+      }),
+    );
+    root.appendChild(container);
   }
 
   function renderLoadError() {
@@ -298,12 +345,24 @@ export async function mountSetupScreen(root, { eventId, client = getSupabase() }
       pendingSuccess = null;
     }
 
+    // The highest index carrying a locked stage — removing (or, via move,
+    // shifting the ordinal of) ANY unlocked row before that index would
+    // renumber the locked stage too, which saveStagePlan always refuses.
+    // Disabling the controls that would produce that plan up front, rather
+    // than letting the organiser attempt it and get a save-time error
+    // naming a DIFFERENT stage than the one they touched (found in
+    // review), and giving Move up/down real disabled state instead of a
+    // silent no-op next to a locked neighbor (also found in review).
+    const lastLockedIndex = draftStages.reduce((max, row, index) => (row.locked ? index : max), -1);
     const rows = draftStages.map((row, index) =>
       renderStageRow(row, index, draftStages.length, {
         onMoveUp: (r) => moveStage(r, -1),
         onMoveDown: (r) => moveStage(r, 1),
         onRemove: (r) => removeStage(r),
         disableActions: saving,
+        moveUpUnsafe: index > 0 && draftStages[index - 1].locked,
+        moveDownUnsafe: index < draftStages.length - 1 && draftStages[index + 1].locked,
+        removeUnsafe: index < lastLockedIndex,
       }),
     );
     container.appendChild(el('div', { className: 'stage-rows' }, rows));
@@ -396,6 +455,7 @@ export async function mountSetupScreen(root, { eventId, client = getSupabase() }
     render();
   }
 
+  renderLoading();
   try {
     const persisted = await loadPersisted();
     event = persisted.event;

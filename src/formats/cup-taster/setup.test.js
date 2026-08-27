@@ -115,6 +115,30 @@ describe('validateStagePlan', () => {
     expect(() => validateStagePlan([])).toThrow('at least one stage');
   });
 
+  it('throws when the same stage id appears more than once in the plan', () => {
+    // Reproduces the exact scenario review found: two entries both
+    // claiming to BE the same existing row. saveStagePlan's diff can only
+    // ever resolve one of them, silently discarding the other and
+    // corrupting the ordinal sequence — this must never reach that diff.
+    const plan = [
+      { id: 's1', kind: 'prelims', ordinal: 1, setCount: 5, durationSecs: 480, cutoff: 8 },
+      { id: 's1', kind: 'finals', ordinal: 2, setCount: 5, durationSecs: 480, cutoff: null },
+    ];
+    expect(() => validateStagePlan(plan)).toThrow('same stage id more than once');
+  });
+
+  it('allows a plan with no ids at all, and a plan mixing null/undefined ids with real ones', () => {
+    // A brand-new plan (createStagePlan's own callers) never carries ids;
+    // a mix of untouched/edited stages (real ids) and freshly-added ones
+    // (null/undefined) is exactly saveStagePlan's own normal input shape.
+    // Neither should ever collide with the duplicate check above.
+    const plan = [
+      { id: null, kind: 'prelims', ordinal: 1, setCount: 5, durationSecs: 480, cutoff: 8 },
+      { kind: 'finals', ordinal: 2, setCount: 5, durationSecs: 480, cutoff: null },
+    ];
+    expect(validateStagePlan(plan)).toHaveLength(2);
+  });
+
   it('throws when ordinals are not sequential from 1', () => {
     const plan = [
       { kind: 'prelims', ordinal: 1, setCount: 5, durationSecs: 480, cutoff: 8 },
@@ -728,6 +752,65 @@ describe('saveStagePlan', () => {
     expect(updateCalls[1][2]).toMatchObject({ cutoff: 4, ordinal: 1 }); // then the real config
   });
 
+  it('deletes the orphaned ct_sets rows above the new count when an edited stage shrinks its setCount', async () => {
+    const s1 = {
+      id: 's1',
+      event_id: 'ev1',
+      ordinal: 1,
+      kind: 'prelims',
+      set_count: 5,
+      duration_secs: 480,
+      cutoff: 8,
+    };
+    const s2 = {
+      id: 's2',
+      event_id: 'ev1',
+      ordinal: 2,
+      kind: 'finals',
+      set_count: 5,
+      duration_secs: 480,
+      cutoff: null,
+    };
+    const s1Shrunk = { ...s1, set_count: 2 };
+    const fivePositions = [1, 2, 3, 4, 5].map((position) => ({ position }));
+    const client = fakeClient({
+      tables: {
+        ct_stages: [
+          { data: [s1, s2], error: null }, // initial listStagesForEvent
+          { error: null }, // temp-ordinal move for s1
+          { error: null }, // final config update for s1
+          { data: [s1Shrunk, s2], error: null }, // final listStagesForEvent
+        ],
+        ct_heats: [{ data: [], error: null }], // s1 has no heats — safe to edit
+        ct_sets: [
+          { data: fivePositions, error: null }, // ensureSetsForStage: 1-2 already exist, nothing to add
+          { data: fivePositions, error: null }, // deleteSetsAbovePosition: still sees all 5
+          { error: null }, // delete position 3
+          { error: null }, // delete position 4
+          { error: null }, // delete position 5
+        ],
+      },
+    });
+    const plan = [
+      { id: 's1', kind: 'prelims', ordinal: 1, setCount: 2, durationSecs: 480, cutoff: 4 },
+      { id: 's2', kind: 'finals', ordinal: 2, setCount: 5, durationSecs: 480, cutoff: null },
+    ];
+    const result = await saveStagePlan('ev1', plan, client);
+    expect(result).toEqual([s1Shrunk, s2]);
+
+    const deleteCalls = client.calls.filter(
+      ([action, table]) => action === 'delete' && table === 'ct_sets',
+    );
+    expect(deleteCalls).toHaveLength(3);
+    // The actual proof of WHICH positions were removed, not just a count.
+    const positionFilters = client.calls
+      .filter(
+        ([action, table, col]) => action === 'eq' && table === 'ct_sets' && col === 'position',
+      )
+      .map(([, , , val]) => val);
+    expect(positionFilters).toEqual([3, 4, 5]);
+  });
+
   it('refuses to edit a stage that already has heats, naming it in a clear message rather than a raw DB error', async () => {
     const s1 = {
       id: 's1',
@@ -834,7 +917,55 @@ describe('saveStagePlan', () => {
       { id: 's1', kind: 'prelims', ordinal: 1, setCount: 5, durationSecs: 480, cutoff: null },
     ];
     await expect(saveStagePlan('ev1', plan, client)).rejects.toThrow('already has heats generated');
+    // Neither half of the write phase ran — not just "no delete", since s1
+    // (also touched, via its own cutoff change to become terminal) must
+    // stay untouched too, not just s2.
     expect(client.calls.some(([action]) => action === 'delete')).toBe(false);
+    expect(client.calls.some(([action]) => action === 'update')).toBe(false);
+  });
+
+  it('blocks the WHOLE save when an earlier, otherwise-safe touched stage is followed by a later blocked one — refuse-then-explain, not partially apply', async () => {
+    // The module's own stated guarantee (see its header comment): every
+    // stageHasHeats check runs before any write. A regression that
+    // interleaved check-then-write per stage instead of check-all-then-
+    // write-all would let s1's edit slip through here before ever
+    // reaching s2's blocking check — this proves that can't happen.
+    const s1 = {
+      id: 's1',
+      event_id: 'ev1',
+      ordinal: 1,
+      kind: 'prelims',
+      set_count: 5,
+      duration_secs: 480,
+      cutoff: 8,
+    };
+    const s2 = {
+      id: 's2',
+      event_id: 'ev1',
+      ordinal: 2,
+      kind: 'finals',
+      set_count: 5,
+      duration_secs: 480,
+      cutoff: null,
+    };
+    const client = fakeClient({
+      tables: {
+        ct_stages: [{ data: [s1, s2], error: null }],
+        ct_heats: [
+          { data: [], error: null }, // s1 (changed, touched first): no heats — would be safe alone
+          { data: [{ id: 'h1' }], error: null }, // s2 (changed, touched second): has heats — blocks the save
+        ],
+      },
+    });
+    const plan = [
+      { id: 's1', kind: 'prelims', ordinal: 1, setCount: 5, durationSecs: 480, cutoff: 4 }, // edited
+      { id: 's2', kind: 'finals', ordinal: 2, setCount: 5, durationSecs: 300, cutoff: null }, // edited
+    ];
+    await expect(saveStagePlan('ev1', plan, client)).rejects.toThrow('already has heats generated');
+    // The real proof: s1's own edit — checked safe first — never got
+    // written, because the write phase never starts until every touched
+    // stage's check has passed.
+    expect(client.calls.some(([action]) => action === 'update')).toBe(false);
   });
 
   it('reorders two existing stages via a two-phase ordinal move, avoiding a collision on the shared unique index', async () => {

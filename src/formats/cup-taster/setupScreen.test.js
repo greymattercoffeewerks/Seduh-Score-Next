@@ -235,6 +235,70 @@ describe('renderStageRow', () => {
     expect(el.querySelector('[aria-label="Move Stage 2 down"]').disabled).toBe(true);
   });
 
+  it('gives the terminal cutoff field a real, visible explanation wired via aria-describedby, not placeholder text alone', () => {
+    const row = {
+      key: 's2',
+      id: 's2',
+      kind: 'finals',
+      setCount: 5,
+      durationSecs: 480,
+      cutoff: null,
+      locked: false,
+    };
+    const el = renderStageRow(row, 1, 2, { onMoveUp() {}, onMoveDown() {}, onRemove() {} });
+    const cutoffInput = el.querySelector('input[aria-label="Stage 2: cutoff"]');
+    const describedBy = cutoffInput.getAttribute('aria-describedby');
+    expect(describedBy).toBeTruthy();
+    const hint = el.querySelector(`#${describedBy}`);
+    expect(hint).not.toBeNull();
+    expect(hint.textContent).toContain('terminal stage');
+  });
+
+  it('disables Move up/down when the swap target is a locked row, and Remove when an earlier stage sits before a locked one', () => {
+    const rows = [
+      {
+        key: 's1',
+        id: 's1',
+        kind: 'prelims',
+        setCount: 5,
+        durationSecs: 480,
+        cutoff: 8,
+        locked: true,
+      },
+      {
+        key: 's2',
+        id: 's2',
+        kind: 'semis',
+        setCount: 5,
+        durationSecs: 480,
+        cutoff: 4,
+        locked: false,
+      },
+      {
+        key: 's3',
+        id: 's3',
+        kind: 'finals',
+        setCount: 5,
+        durationSecs: 480,
+        cutoff: null,
+        locked: false,
+      },
+    ];
+    // Stage 2 (index 1): moving up would swap into the locked Stage 1's
+    // slot; it also sits before no locked row itself, but IS after one —
+    // removing it would leave Stage 1 exactly where it is, so Remove stays
+    // safe. Moving up must not.
+    const stage2 = renderStageRow(rows[1], 1, 3, {
+      onMoveUp() {},
+      onMoveDown() {},
+      onRemove() {},
+      moveUpUnsafe: true,
+      removeUnsafe: false,
+    });
+    expect(stage2.querySelector('[aria-label="Move Stage 2 up"]').disabled).toBe(true);
+    expect(stage2.querySelector('[aria-label="Remove Stage 2"]').disabled).toBe(false);
+  });
+
   it('routes a field edit to the row object directly, synchronously — before any rebuild', () => {
     const row = {
       key: 's1',
@@ -316,8 +380,78 @@ describe('mountSetupScreen', () => {
   });
 
   it('removes an unlocked stage and renumbers the rest, but offers no remove control on a locked stage', async () => {
+    const semis = {
+      id: 's2b',
+      event_id: 'ev1',
+      kind: 'semis',
+      ordinal: 2,
+      set_count: 5,
+      duration_secs: 480,
+      cutoff: 4,
+    };
+    const finalsAt3 = { ...finals, id: 's3', ordinal: 3 };
     const root = document.createElement('div');
     document.body.appendChild(root); // .focus() is a no-op on a detached element
+    await mountSetupScreen(root, {
+      eventId: 'ev1',
+      client: fakeClient({
+        events: [nonTestEvent],
+        ct_stages: [prelims, semis, finalsAt3],
+        ct_heats: [{ id: 'h1', stage_id: 's1' }], // prelims locked
+        ct_sets: [],
+      }),
+    });
+
+    // The locked row (prelims) has no buttons at all — nothing to remove it with.
+    const lockedRow = root.querySelector('.stage-row[data-locked="true"]');
+    expect(lockedRow.querySelector('button')).toBeNull();
+
+    // Remove the middle (non-terminal, unlocked) stage — the real proof of
+    // "renumbers the rest": with only 2 stages, removing one always leaves
+    // the other at "Stage 1" regardless of whether renumbering actually
+    // happened. With 3, the former "Stage 3" must become "Stage 2".
+    const removeButton = root.querySelector('[aria-label="Remove Stage 2"]');
+    removeButton.click();
+
+    expect(root.querySelectorAll('.stage-row')).toHaveLength(2);
+    expect(root.textContent).toContain('2 stages planned');
+    expect(root.querySelector('[aria-label="Remove Stage 3"]')).toBeNull();
+    expect(root.querySelector('[aria-label="Remove Stage 2"]')).not.toBeNull();
+    expect(root.querySelector('select[aria-label="Stage 2: kind"]').value).toBe('finals');
+    expect(document.activeElement.id).toBe('stage-plan-heading');
+  });
+
+  it('disables Remove on an unlocked stage sitting before a locked one, since removing it would renumber the locked stage', async () => {
+    const semis = {
+      id: 's2b',
+      event_id: 'ev1',
+      kind: 'semis',
+      ordinal: 2,
+      set_count: 5,
+      duration_secs: 480,
+      cutoff: 4,
+    };
+    const finalsAt3 = { ...finals, id: 's3', ordinal: 3 };
+    const root = document.createElement('div');
+    await mountSetupScreen(root, {
+      eventId: 'ev1',
+      client: fakeClient({
+        events: [nonTestEvent],
+        ct_stages: [prelims, semis, finalsAt3],
+        ct_heats: [{ id: 'h1', stage_id: 's3' }], // finals (the LAST stage) is locked
+        ct_sets: [],
+      }),
+    });
+
+    // Stage 1 and Stage 2 both sit before the locked Stage 3 — removing
+    // either would shift Stage 3's ordinal, which saveStagePlan always
+    // refuses. Both Remove controls must be disabled up front.
+    expect(root.querySelector('[aria-label="Remove Stage 1"]').disabled).toBe(true);
+    expect(root.querySelector('[aria-label="Remove Stage 2"]').disabled).toBe(true);
+  });
+
+  it('disables Move up/down on an unlocked stage when the swap target is a locked neighbor', async () => {
+    const root = document.createElement('div');
     await mountSetupScreen(root, {
       eventId: 'ev1',
       client: fakeClient({
@@ -328,16 +462,17 @@ describe('mountSetupScreen', () => {
       }),
     });
 
-    // The locked row (prelims) has no buttons at all — nothing to remove it with.
-    const lockedRow = root.querySelector('.stage-row[data-locked="true"]');
-    expect(lockedRow.querySelector('button')).toBeNull();
+    // Stage 2 (finals, unlocked) sits directly after the locked Stage 1 —
+    // Move up would swap into that locked slot.
+    const moveUp = root.querySelector('[aria-label="Move Stage 2 up"]');
+    expect(moveUp.disabled).toBe(true);
 
-    const removeButton = root.querySelector('[aria-label="Remove Stage 2"]');
-    removeButton.click();
-
-    expect(root.querySelectorAll('.stage-row')).toHaveLength(1);
-    expect(root.textContent).toContain('1 stage planned');
-    expect(document.activeElement.id).toBe('stage-plan-heading');
+    // Clicking it anyway (e.g. a stale reference) must still be a no-op —
+    // the runtime guard in moveStage() stays as defense in depth even
+    // though the button is now disabled up front.
+    moveUp.click();
+    const kinds = [...root.querySelectorAll('select[data-field="kind"]')].map((s) => s.value);
+    expect(kinds).toEqual(['finals']); // only the unlocked row has a select; order unchanged
   });
 
   it('reorders two unlocked stages via Move up, and normalizes cutoffs afterward', async () => {
@@ -364,6 +499,7 @@ describe('mountSetupScreen', () => {
       cutoff: null,
     };
     const root = document.createElement('div');
+    document.body.appendChild(root); // .focus() is a no-op on a detached element
     await mountSetupScreen(root, {
       eventId: 'ev1',
       client: fakeClient({
@@ -383,6 +519,10 @@ describe('mountSetupScreen', () => {
     // finals is no longer terminal — its cutoff must be editable again
     // (normalizeTerminalCutoff re-ran as part of the move).
     expect(root.querySelector('input[aria-label="Stage 2: cutoff"]').disabled).toBe(false);
+    // Focus lands back on the moved row's own container, not <body> — a
+    // plain, non-focusable <div> would silently drop it there (found in
+    // review; the row now carries tabindex="-1" as a valid target).
+    expect(document.activeElement).toBe(root.querySelector('#stage-row-s3'));
   });
 
   it('saves a valid plan, disabling the Save button while in flight and showing success afterward', async () => {
@@ -451,6 +591,43 @@ describe('mountSetupScreen', () => {
     expect(feedback.textContent).toContain('already has heats generated');
     // Never silently applied — the DB itself was not actually changed.
     expect(client.db.ct_stages.find((s) => s.id === 's1').duration_secs).toBe(480);
+  });
+
+  it('shows a defined loading state while the initial load is still in flight, not a blank screen', async () => {
+    // A real, awaited delay on the underlying query rather than a
+    // synchronously-resolved fake — the whole point is to observe the
+    // screen DURING loadPersisted(), not just before/after it.
+    let resolveEvents;
+    const eventsGate = new Promise((resolve) => {
+      resolveEvents = resolve;
+    });
+    const slowClient = fakeClient({
+      events: [nonTestEvent],
+      ct_stages: [],
+      ct_heats: [],
+      ct_sets: [],
+    });
+    const realFrom = slowClient.from.bind(slowClient);
+    slowClient.from = (table) => {
+      const builder = realFrom(table);
+      if (table !== 'events') return builder;
+      const originalSingle = builder.single.bind(builder);
+      return { ...builder, single: () => eventsGate.then(originalSingle) };
+    };
+
+    const root = document.createElement('div');
+    const mountPromise = mountSetupScreen(root, { eventId: 'ev1', client: slowClient });
+
+    // mountSetupScreen has started but findEvent's own query is gated —
+    // the loading state must already be showing.
+    expect(root.textContent).toContain('Loading stage plan');
+    expect(root.querySelector('button')).toBeNull();
+
+    resolveEvents();
+    await mountPromise;
+
+    expect(root.textContent).not.toContain('Loading stage plan');
+    expect(root.querySelector('h1').textContent).toBe('Stage plan');
   });
 
   it('renders a dedicated error screen, with no add/save actions, when the initial load itself fails', async () => {

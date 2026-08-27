@@ -10,12 +10,18 @@
 // compose is the right amount of ceremony here, not a new RPC. `saveStagePlan`
 // extends that same setup-time-ceremony reasoning to edit/reorder/remove: an
 // organiser reworking a plan before the event starts is still plain retryable
-// composition, not a live write needing an RPC's atomicity — the one thing it
-// guards is never rewriting a stage that already has real event data (heats)
-// hanging off it.
+// composition, not a live write needing an RPC's atomicity. The one thing it
+// guards — never rewriting a stage that already has real event data (heats)
+// hanging off it — is checked for every touched stage BEFORE any write, but
+// that check-then-write sequence is a series of separate round trips, not a
+// transaction: it is not atomic against a heat being created for one of the
+// touched stages in the gap between its check and its write. Accepted here
+// under the same single-organiser, pre-event assumption the rest of this
+// module already leans on (handoff §9) — a real concurrent-write scenario
+// would need an RPC to close, not a stronger client-side check.
 import { getSupabase } from '../../core/supabaseClient.js';
 
-const STAGE_KINDS = ['prelims', 'semis', 'finals'];
+export const STAGE_KINDS = ['prelims', 'semis', 'finals'];
 
 // A future format's setup screen needing more than a linear
 // prelims→semis→finals progression is exactly why this is a rank, not a
@@ -40,6 +46,18 @@ const STAGE_KIND_RANK = Object.fromEntries(STAGE_KINDS.map((kind, index) => [kin
 export function validateStagePlan(stages) {
   if (!Array.isArray(stages) || stages.length === 0) {
     throw new Error('stage plan must contain at least one stage');
+  }
+
+  // Two entries carrying the same existing-row id is never a legitimate
+  // plan — saveStagePlan's diff (existingById.get(stage.id)) can only ever
+  // resolve one of them to a real row, so a duplicate silently loses
+  // whichever entry updates first and corrupts the ordinal sequence
+  // (found in review: reproduced against a real diff run, ending with two
+  // stages sharing one row and no stage left at ordinal 1). Caught here,
+  // pure and up front, rather than left for the diff to discover.
+  const ids = stages.filter((stage) => stage.id != null).map((stage) => stage.id);
+  if (new Set(ids).size !== ids.length) {
+    throw new Error('stage plan contains the same stage id more than once');
   }
 
   const sorted = [...stages].sort((a, b) => a.ordinal - b.ordinal);
@@ -86,8 +104,13 @@ export function validateStagePlan(stages) {
           `stage "${stage.kind}": non-terminal stages require a positive integer cutoff`,
         );
       }
+      // `previous` is always non-terminal here (only the last element of
+      // `sorted` is ever terminal, and this branch only runs for index <
+      // sorted.length - 1), so its own cutoff was already validated as a
+      // positive integer by this same forEach on an earlier iteration —
+      // never null by the time it's read back here.
       const previous = index > 0 ? sorted[index - 1] : null;
-      if (previous && previous.cutoff != null && stage.cutoff > previous.cutoff) {
+      if (previous && stage.cutoff > previous.cutoff) {
         throw new Error(
           `stage "${stage.kind}": cutoff (${stage.cutoff}) cannot exceed the previous stage's cutoff (${previous.cutoff}) — a later stage can't advance more cuppers than the previous stage sent forward`,
         );
@@ -270,6 +293,26 @@ export async function ensureSetsForStage(stageId, setCount, client = getSupabase
   );
 }
 
+// The mirror image of ensureSetsForStage's add-only healing: when an edited
+// stage's setCount SHRINKS, the positions above the new count are no longer
+// part of the plan and must actually go, not just stop being topped up.
+// Simple per-position deletes rather than a single `.in()` filter — matches
+// this file's existing plain-Postgrest style (no exotic filter operators
+// used anywhere else here) and keeps the fake-client test doubles simple.
+async function deleteSetsAbovePosition(stageId, setCount, client) {
+  const toDelete = (await listSetPositions(stageId, client)).filter(
+    (position) => position > setCount,
+  );
+  for (const position of toDelete) {
+    const { error } = await client
+      .from('ct_sets')
+      .delete()
+      .eq('stage_id', stageId)
+      .eq('position', position);
+    if (error) throw error;
+  }
+}
+
 export async function createStagePlan(eventId, stages, client = getSupabase()) {
   const validated = validateStagePlan(stages);
   const created = [];
@@ -354,12 +397,15 @@ export async function saveStagePlan(eventId, stages, client = getSupabase()) {
   // THEN to its real final ordinal — otherwise an ordinary sequential update
   // could try to write a target ordinal another row (not yet moved off it)
   // is still occupying, tripping the (event_id, ordinal) unique index even
-  // though the finished plan itself has no collisions.
-  changed.forEach(({ row }, index) => {
-    row.tempOrdinal = -(index + 1);
-  });
+  // though the finished plan itself has no collisions. Tracked in a local
+  // Map keyed by id, not a scratch property bolted onto the fetched row
+  // object — `row` came straight out of a DB read and callers may hold
+  // their own reference to it; a `.tempOrdinal` mutation would leak this
+  // function's own bookkeeping onto data that isn't this function's to
+  // annotate.
+  const tempOrdinals = new Map(changed.map(({ row }, index) => [row.id, -(index + 1)]));
   for (const { row } of changed) {
-    await updateStageRow(row.id, { ordinal: row.tempOrdinal }, client);
+    await updateStageRow(row.id, { ordinal: tempOrdinals.get(row.id) }, client);
   }
 
   for (const row of removed) {
@@ -379,6 +425,11 @@ export async function saveStagePlan(eventId, stages, client = getSupabase()) {
       client,
     );
     await ensureSetsForStage(stage.id, stage.setCount, client);
+    // ensureSetsForStage only ever ADDS missing positions — a setCount
+    // that shrank needs the positions above the new count actually
+    // removed, or a future listSetsForStage read (scoring, T4.5) would
+    // still see the stale, now-out-of-plan sets.
+    await deleteSetsAbovePosition(stage.id, stage.setCount, client);
   }
 
   for (const stage of created) {
