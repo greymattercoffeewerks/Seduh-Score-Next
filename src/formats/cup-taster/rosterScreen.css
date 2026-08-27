@@ -1,0 +1,69 @@
+/*
+ * Roster registration screen. Built on heatsScreen.css's shared
+ * .screen-container / .card / .btn / .field-input / .form-field /
+ * .screen-feedback / .roster-list component shapes — nothing here
+ * redefines them. Stacks single-column from the smallest supported
+ * viewport (360px) rather than needing a breakpoint, same reasoning as
+ * setupScreen.css's own .stage-row-fields.
+ */
+
+.roster-form h2 {
+  margin-bottom: var(--space-3);
+}
+
+.roster-form-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.roster-entry-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  /* Lets the flex item shrink below its content's intrinsic width instead
+     of forcing the row wider than the viewport — a long name+cafe pair
+     would otherwise push the toggle button off a 360px screen (found in
+     review). */
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.roster-withdrawn-tag {
+  align-self: flex-start;
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  color: var(--color-danger);
+}
+
+/* A token-backed background tint, not opacity (found in review: dimming
+   the whole row via opacity dropped both the danger-colored "Withdrawn"
+   tag and the muted meta text below the AA contrast floor — the exact
+   class of bug this session's own setupScreen.css diff had just fixed for
+   disabled-field hint text, reintroduced here a different way). Matches
+   setupScreen.css's own locked-stage-row precedent
+   (.stage-row[data-locked='true']) — a background swap reads as "different
+   state" without touching any foreground color's contrast. */
+.roster-list li[data-withdrawn='true'] {
+  background: var(--color-surface-sunken);
+}
+
+/* Wide enough for the registration form's fields to sit side by side
+   without crowding — still well above the 360px floor this project
+   designs from first. Matches setupScreen.css's own 640px breakpoint. */
+@media (min-width: 640px) {
+  .roster-form-fields {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .roster-form-fields .form-field {
+    flex: 1 1 140px;
+  }
+
+  .roster-list li {
+    align-items: center;
+  }
+}
