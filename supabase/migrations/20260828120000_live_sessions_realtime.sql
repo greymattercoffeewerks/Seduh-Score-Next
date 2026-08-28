@@ -1,0 +1,41 @@
+-- Seduh Score Next · T5.2 enable Realtime on live_sessions
+-- Handoff: SEDUH-NEXT-HANDOFF.md §8 (live surfaces), §14 T5.2 (viewer-shell).
+--
+-- rollback:
+--   alter publication supabase_realtime drop table live_sessions;
+
+-- The first table this project streams via Supabase Realtime — every write
+-- so far (Phase 0-4) has been request/response. viewer-shell (T5.2) needs to
+-- react to a live_sessions row changing (a new heat starting, results
+-- publishing, a different event taking over as the org's active session)
+-- without polling — the direct equivalent of the legacy app's Firestore
+-- onSnapshot, and the natural fit for viewer-shell's own "reconnect"
+-- responsibility (a persistent channel has real connect/disconnect events; a
+-- poll loop doesn't).
+--
+-- Reviewed by security-reviewer, verified live (not just reasoned about):
+-- an anon-key realtime subscription received exactly the columns an anon
+-- REST `select *` already returns, nothing more; a negative control on a
+-- table NOT in this publication (processed_operations) received zero
+-- events. live_sessions_read (migration 20260821230000_rls_policies.sql) is
+-- already `using (true)` — open, unauthenticated read, by design (§4, §8:
+-- audience surfaces have no login) — so streaming the same rows via
+-- Realtime widens HOW a row can be observed, never WHO can observe it.
+--
+-- No REPLICA IDENTITY change: the default (the primary key) is enough for
+-- viewer-shell's own "something changed, re-fetch the current state"
+-- pattern (see core/viewer-shell.js's own module comment) — it never reads
+-- a change payload's old/new column values directly, so FULL replica
+-- identity (needed only for that) would be pure overhead for every write
+-- path that exists today. Narrower than it sounds, though (found in
+-- review): this only holds for INSERT/UPDATE, where the full new row is
+-- always in the WAL regardless of identity. A DELETE's old-row WAL entry
+-- under the default identity carries only `id` — not `org_id` — so a
+-- subscriber's `filter: org_id=eq.<id>` would fail to match a delete and
+-- that viewer just wouldn't be notified. No code path deletes a
+-- live_sessions row today (grep supabase/migrations/** — publish_session
+-- only ever inserts/updates, matching D19's "retain history" design), but
+-- the DELETE grant to `authenticated` (20260821240000_grants.sql) isn't
+-- revoked either, so the door isn't structurally closed. Revisit REPLICA
+-- IDENTITY if a delete path is ever added.
+alter publication supabase_realtime add table live_sessions;
