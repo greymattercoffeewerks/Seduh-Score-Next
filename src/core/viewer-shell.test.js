@@ -567,6 +567,96 @@ describe('mountViewerShell', () => {
     }
   });
 
+  it('calls a renderBody-returned cleanup before the next re-render', async () => {
+    const root = document.createElement('div');
+    const cleanup = vi.fn();
+    const renderBody = vi.fn(() => cleanup);
+    const client = fakeClient([session({ payload: { a: 1 } })]);
+    await mountViewerShell(root, { orgId: 'org1', renderBody, showChrome: false, client });
+    expect(renderBody).toHaveBeenCalledTimes(1);
+    expect(cleanup).not.toHaveBeenCalled();
+
+    client.db.live_sessions[0].payload = { a: 2 };
+    client._triggerChange();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(cleanup).toHaveBeenCalledTimes(1);
+    expect(renderBody).toHaveBeenCalledTimes(2);
+  });
+
+  it('calls the cleanup BEFORE the body is wiped for the next render, not after', async () => {
+    const root = document.createElement('div');
+    const client = fakeClient([session({ payload: { a: 1 } })]);
+    // The cleanup closes over `container` (the same node renderBody itself
+    // received) and records its own child count at the moment it runs — the
+    // only way to observe from outside whether the old content was still
+    // there when cleanup fired, or already gone.
+    const observedChildCounts = [];
+    const renderBody = vi.fn((container) => {
+      container.appendChild(document.createElement('span'));
+      return () => observedChildCounts.push(container.childNodes.length);
+    });
+    await mountViewerShell(root, { orgId: 'org1', renderBody, showChrome: false, client });
+
+    client.db.live_sessions[0].payload = { a: 2 };
+    client._triggerChange();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // 1, not 0 — the old <span> was still there when cleanup ran, proving
+    // cleanup fires before body.replaceChildren() wipes it, not after.
+    expect(observedChildCounts).toEqual([1]);
+  });
+
+  it('calls a renderBody-returned cleanup on unmount', async () => {
+    const root = document.createElement('div');
+    const cleanup = vi.fn();
+    const { unmount } = await mountViewerShell(root, {
+      orgId: 'org1',
+      renderBody: () => cleanup,
+      showChrome: false,
+      client: fakeClient([session({ payload: { a: 1 } })]),
+    });
+    expect(cleanup).not.toHaveBeenCalled();
+    unmount();
+    expect(cleanup).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls the cleanup BEFORE the root is wiped on unmount, not after', async () => {
+    const root = document.createElement('div');
+    let rootHtmlAtCleanupTime = null;
+    const { unmount } = await mountViewerShell(root, {
+      orgId: 'org1',
+      renderBody: (container) => {
+        container.appendChild(document.createElement('span'));
+        return () => {
+          rootHtmlAtCleanupTime = root.innerHTML;
+        };
+      },
+      showChrome: false,
+      client: fakeClient([session({ payload: { a: 1 } })]),
+    });
+    unmount();
+    // Non-empty — the full mounted tree was still there when cleanup ran,
+    // proving cleanup fires before root.innerHTML = '' wipes it, not after.
+    expect(rootHtmlAtCleanupTime).not.toBe('');
+    expect(rootHtmlAtCleanupTime).toContain('<span>');
+  });
+
+  it('tolerates a renderBody that returns nothing (no cleanup needed)', async () => {
+    const root = document.createElement('div');
+    const client = fakeClient([session({ payload: { a: 1 } })]);
+    const { unmount } = await mountViewerShell(root, {
+      orgId: 'org1',
+      renderBody: vi.fn(),
+      showChrome: false,
+      client,
+    });
+    client.db.live_sessions[0].payload = { a: 2 };
+    client._triggerChange();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(() => unmount()).not.toThrow();
+  });
+
   it('unmount removes the realtime channel and clears the root', async () => {
     const root = document.createElement('div');
     const client = fakeClient([session({ payload: { a: 1 } })]);

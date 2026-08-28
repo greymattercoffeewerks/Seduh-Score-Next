@@ -3,7 +3,8 @@
 _State: Phase 0 done; Phase 1 done (T1.1–T1.4); Phase 2 done (T2.1–T2.6); Phase 3 done
 (T3.1–T3.3); Phase 4 done (T4.1–T4.8, plus two 2026-08-27 follow-ups closing T4.1's
 stage-plan UI gap and its roster-registration UI gap); Phase 5 in progress (T5.1, T5.2,
-T5.4 done) — matches CHANGELOG.md as of 2026-08-28_
+T5.3, T5.4 done; the cross-surface Playwright AC itself still open — see ROADMAP.md) —
+matches CHANGELOG.md as of 2026-08-28_
 
 Read these before touching anything:
 
@@ -162,11 +163,16 @@ src/
                                    caller-supplied renderBody only once real content
                                    exists, same inversion-of-control shape as outbox.js's
                                    handler map; also the first CSS file living in core/
-                                   rather than a format directory). viewer-shell now has
-                                   one real consumer (T5.4's phoneSummary, below) but its
-                                   preview harness's own renderBody stays a stub —
-                                   T5.3/T5.4 build real content against it, not
-                                   viewer-shell.js itself
+                                   rather than a format directory; gained a renderBody
+                                   cleanup-lifecycle contract, T5.3 — an optional returned
+                                   function, called before every re-render's
+                                   body.replaceChildren() and again on unmount(), so a
+                                   ticking display (viewerBody.js's live countdown) never
+                                   outlives the DOM node it mutates). viewer-shell now has
+                                   two real consumers (T5.3's projectorSurface, T5.4's
+                                   phoneSummary, below) but its own preview harness's
+                                   renderBody stays a stub, deliberately — that harness
+                                   proves the shell alone, not the real content
   formats/
     cup-taster/                 ← scoring, timing-surface, entry-surface, viewer-body,
                                    analytics — Cup Taster-specific, built on core/. Done:
@@ -212,7 +218,19 @@ src/
                                    hand-rolling one. Logic/renderer-only like T5.1/T5.2 —
                                    no screen calls publishSession() yet, so
                                    live_sessions.payload's shape is this module's own
-                                   invented contract).
+                                   invented contract); projectorSurface (T5.3 — the thin
+                                   projector-specific composition, showChrome: false,
+                                   data-surface="stage" set on the caller's own root;
+                                   reuses viewerBody.js completely unedited, per the
+                                   handoff's own plan. viewerBody.js itself gained a live
+                                   countdown for an active app-mode heat this same task —
+                                   core/countdown.js + core/duration.js, mirroring
+                                   timingScreen.js's own tick pattern — the concrete
+                                   answer to the handoff's cross-surface "organiser/
+                                   projector/phone all agree on remaining time" AC, built
+                                   into the shared module so T5.4's phone surface gets it
+                                   too. mountViewerBody now returns an optional cleanup
+                                   function per viewer-shell.js's own new contract above).
   ui/
     tokens/                     ← design tokens (plain CSS custom properties)
   main.js                       ← scaffold entry point (Phase 0 placeholder)

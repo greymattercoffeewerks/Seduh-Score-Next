@@ -1,0 +1,15 @@
+/*
+ * Projector surface (T5.3) — full-viewport framing for the page this mounts
+ * into. Everything else (colors, typography, the stage-mode text scale) is
+ * already handled by viewer-shell.css/viewerBody.css's own
+ * [data-surface="stage"] rules; this file only makes the mount target fill
+ * the screen, since a projector/TV is the one surface in this project meant
+ * to be viewed at native fullscreen, not scrolled. Scoped to its own class,
+ * not a bare [data-surface="stage"] selector, so this rule can't leak onto
+ * some other element that happens to carry that same attribute for
+ * unrelated reasons (a test container, a future surface).
+ */
+.projector-surface {
+  min-height: 100vh;
+  min-height: 100dvh;
+}

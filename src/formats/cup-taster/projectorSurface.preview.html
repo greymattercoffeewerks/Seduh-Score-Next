@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Projector surface — preview</title>
+    <link rel="stylesheet" href="/src/ui/tokens/index.css" />
+    <link rel="stylesheet" href="/src/core/viewer-shell.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/heatsScreen.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/standingsScreen.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/viewerBody.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/projectorSurface.css" />
+    <style>
+      /* Demo-harness-only layout — not part of the shipped module graph. */
+      .demo-controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 16px;
+        border-bottom: 2px solid var(--color-border-strong);
+        background: var(--color-surface);
+      }
+      .demo-controls button {
+        min-height: 44px;
+        padding: 8px 14px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--color-border-strong);
+        background: var(--color-surface);
+        color: var(--color-text);
+        font-family: var(--font-body);
+        cursor: pointer;
+      }
+      /* A projector/TV is always ~16:9 — this box is demo-only, so the
+         harness can show that framing without needing real fullscreen.
+         The real module (projectorSurface.js/.css) imposes no aspect-ratio
+         of its own, matching the handoff's own "no scale-to-fit stage"
+         guidance — it just fills whatever container it's given. */
+      .demo-stage {
+        max-width: 960px;
+        aspect-ratio: 16 / 9;
+        margin: 16px;
+        border: 2px solid var(--color-border-strong);
+        border-radius: var(--radius-md);
+        /* auto, not hidden — real deployment has no fixed-height box at
+           all (just min-height: 100vh, see projectorSurface.css), so taller
+           content simply extends the real page; this demo box's aspect
+           ratio is only a visual "this is a 16:9 screen" cue and shouldn't
+           clip content the real surface would never clip. */
+        overflow: auto;
+      }
+      #projector-frame {
+        min-height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      Demo-only harness for the T5.3 projector surface — not part of the
+      shipped module graph, same role as every other *.preview.html file.
+      Mounts the REAL mountProjectorSurface() (viewer-shell + viewerBody,
+      showChrome: false, data-surface="stage") against a fake live_sessions
+      source — same content viewerBody.js already renders for T5.4's phone
+      surface, unedited, per the handoff's own "T5.3 reuses this module
+      unedited" plan. The one thing genuinely new here is the live countdown
+      (also viewerBody.js, added alongside this task) — its own button below
+      drives a real ticking clock, the concrete proof for the handoff's
+      cross-surface "organiser/projector/phone all agree on remaining time"
+      AC.
+    -->
+    <div class="demo-controls">
+      <button id="btn-standings-only">Standings only</button>
+      <button id="btn-active-heat">+ Active heat, live countdown (app mode)</button>
+      <button id="btn-urgent">+ Active heat, countdown &lt;10s (urgent)</button>
+      <button id="btn-manual-no-clock">Manual heat, not started (no-clock)</button>
+      <button id="btn-recent">+ Recent results</button>
+      <button id="btn-test-event">Publish as TEST event</button>
+      <button id="btn-end">End session</button>
+      <button id="btn-disconnect">Simulate disconnect</button>
+      <button id="btn-reconnect">Reconnect</button>
+    </div>
+    <div class="demo-stage">
+      <div id="projector-frame"></div>
+    </div>
+
+    <script type="module">
+      import { mountProjectorSurface } from './projectorSurface.js';
+
+      const ORG_ID = 'org1';
+      const EVENT_ID = 'ev1';
+
+      function createDemoClient() {
+        const db = { live_sessions: [] };
+        let idCounter = 0;
+        const changeHandlers = [];
+        const statusHandlers = [];
+
+        function matchesFilters(row, filters) {
+          return filters.every(([col, val]) => row[col] === val);
+        }
+
+        function notifyChange() {
+          for (const h of changeHandlers) h();
+        }
+
+        function makeBuilder() {
+          const filters = [];
+          const builder = {
+            select: () => builder,
+            eq(col, val) {
+              filters.push([col, val]);
+              return builder;
+            },
+            maybeSingle() {
+              const rows = db.live_sessions.filter((r) => matchesFilters(r, filters));
+              return Promise.resolve({ data: rows[0] ?? null, error: null });
+            },
+          };
+          return builder;
+        }
+
+        const channelObj = {
+          on(_event, _filter, handler) {
+            changeHandlers.push(handler);
+            return channelObj;
+          },
+          subscribe(cb) {
+            statusHandlers.push(cb);
+            Promise.resolve().then(() => cb('SUBSCRIBED'));
+            return channelObj;
+          },
+        };
+
+        return {
+          from: () => makeBuilder(),
+          channel: () => channelObj,
+          removeChannel: () => {},
+          _publish({ isTest = false, payload }) {
+            for (const row of db.live_sessions) {
+              if (row.org_id === ORG_ID) row.active = false;
+            }
+            let row = db.live_sessions.find((r) => r.event_id === EVENT_ID);
+            if (!row) {
+              idCounter += 1;
+              row = { id: `ls-${idCounter}`, org_id: ORG_ID, event_id: EVENT_ID };
+              db.live_sessions.push(row);
+            }
+            Object.assign(row, { format: 'cup_taster', active: true, is_test: isTest, payload });
+            notifyChange();
+          },
+          _end() {
+            for (const row of db.live_sessions) {
+              if (row.org_id === ORG_ID) row.active = false;
+            }
+            notifyChange();
+          },
+          _setStatus(status) {
+            for (const h of statusHandlers) h(status);
+          },
+        };
+      }
+
+      const client = createDemoClient();
+      mountProjectorSurface(document.getElementById('projector-frame'), { orgId: ORG_ID, client });
+
+      const standings = [
+        {
+          position: 1,
+          displayName: 'Alex Rivera',
+          numCorrect: 5,
+          totalElapsedSecs: 210,
+          tieStatus: 'advancing',
+        },
+        {
+          position: 2,
+          displayName: 'Jordan Lee',
+          numCorrect: 5,
+          totalElapsedSecs: 245,
+          tieStatus: 'tied',
+        },
+        { position: 3, displayName: 'Sam Okafor', numCorrect: 3, totalElapsedSecs: 300 },
+        { position: 4, displayName: 'Priya Nair', numCorrect: 1, totalElapsedSecs: null },
+      ];
+      const recentHeats = [
+        {
+          heatNumber: 1,
+          stageKind: 'prelims',
+          results: [
+            { displayName: 'Alex Rivera', numCorrect: 5, totalElapsedSecs: 210 },
+            { displayName: 'Sam Okafor', numCorrect: 3, totalElapsedSecs: 300 },
+          ],
+        },
+      ];
+
+      document.getElementById('btn-standings-only').addEventListener('click', () => {
+        client._publish({
+          payload: { stage: { kind: 'prelims', setCount: 5 }, standings },
+        });
+      });
+
+      document.getElementById('btn-active-heat').addEventListener('click', () => {
+        client._publish({
+          payload: {
+            stage: { kind: 'prelims', setCount: 5 },
+            standings,
+            activeHeat: {
+              heatNumber: 2,
+              stageKind: 'prelims',
+              status: 'timing',
+              timingMode: 'app',
+              startedAt: new Date().toISOString(),
+              durationSecs: 480,
+              cuppers: [
+                { displayName: 'Jordan Lee', station: 'A', totalElapsedSecs: null, maxed: false },
+                { displayName: 'Priya Nair', station: 'B', totalElapsedSecs: 190, maxed: false },
+                { displayName: 'Taylor Chen', station: 'C', totalElapsedSecs: 480, maxed: true },
+              ],
+            },
+          },
+        });
+      });
+
+      document.getElementById('btn-urgent').addEventListener('click', () => {
+        client._publish({
+          payload: {
+            stage: { kind: 'prelims', setCount: 5 },
+            standings,
+            activeHeat: {
+              heatNumber: 2,
+              stageKind: 'prelims',
+              status: 'timing',
+              timingMode: 'app',
+              startedAt: new Date(Date.now() - 473000).toISOString(),
+              durationSecs: 480,
+              cuppers: [
+                { displayName: 'Jordan Lee', station: 'A', totalElapsedSecs: null, maxed: false },
+              ],
+            },
+          },
+        });
+      });
+
+      document.getElementById('btn-manual-no-clock').addEventListener('click', () => {
+        client._publish({
+          payload: {
+            stage: { kind: 'prelims', setCount: 5 },
+            standings,
+            activeHeat: {
+              heatNumber: 3,
+              stageKind: 'prelims',
+              status: 'timing',
+              timingMode: 'manual',
+              startedAt: null,
+              durationSecs: 480,
+              cuppers: [
+                { displayName: 'Morgan Diaz', station: 'A', totalElapsedSecs: null, maxed: false },
+                { displayName: 'Casey Wu', station: 'B', totalElapsedSecs: null, maxed: false },
+              ],
+            },
+          },
+        });
+      });
+
+      document.getElementById('btn-recent').addEventListener('click', () => {
+        client._publish({
+          payload: { stage: { kind: 'prelims', setCount: 5 }, standings, recentHeats },
+        });
+      });
+
+      document.getElementById('btn-test-event').addEventListener('click', () => {
+        client._publish({
+          isTest: true,
+          payload: { stage: { kind: 'prelims', setCount: 5 }, standings },
+        });
+      });
+
+      document.getElementById('btn-end').addEventListener('click', () => {
+        client._end();
+      });
+      document.getElementById('btn-disconnect').addEventListener('click', () => {
+        client._setStatus('CHANNEL_ERROR');
+      });
+      document.getElementById('btn-reconnect').addEventListener('click', () => {
+        client._setStatus('SUBSCRIBED');
+      });
+    </script>
+  </body>
+</html>

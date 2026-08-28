@@ -50,6 +50,14 @@
 // the focus move that announces the outcome; this is a passive,
 // no-interaction "watch and wait" surface with no action to hang that on,
 // so the live region itself has to be the whole mechanism.
+//
+// `renderBody` may optionally return a cleanup function (T5.3/T5.4's own
+// viewerBody.js does, for its live countdown's setInterval) — this module
+// calls it before every subsequent `body.replaceChildren()` and again on
+// `unmount()`. `body` is rebuilt on every re-render (any postgres_changes
+// event for this org, not just ones affecting the active heat), so without
+// this a ticking body would leak one orphaned interval per unrelated
+// refresh, each still mutating its own now-detached DOM node forever.
 import { getSupabase } from './supabaseClient.js';
 import { el } from './dom.js';
 
@@ -156,6 +164,7 @@ export async function mountViewerShell(
   let mounted = false;
   let requestSeq = 0;
   let lastIsTest = null;
+  let bodyCleanup = null;
 
   root.innerHTML = '';
   const container = el('div', { className: 'viewer-shell' });
@@ -203,18 +212,22 @@ export async function mountViewerShell(
       lastIsTest = isTest;
     }
 
+    bodyCleanup?.();
+    bodyCleanup = null;
     body.replaceChildren();
     if (connectionLost) {
       body.appendChild(renderHoldingState('lost'));
     } else if (phase === 'live') {
-      // The real Cup Taster viewer-body (not yet built) must treat a
-      // manual-mode heat with no started_at as ITS OWN defined no-clock
-      // state (§8.2: cupper names/station/finished-not-finished, never a
-      // blank or zeroed timer) — that heat's own payload still counts as
-      // "content" via hasContent, so it reaches here, not the generic
-      // "not published yet" card above. Flagged per review so this
-      // requirement isn't lost between now and whenever that body lands.
-      renderBody(body, session.payload, { isTest: session.is_test === true });
+      // The real Cup Taster viewer-body (T5.4) treats a manual-mode heat
+      // with no started_at as ITS OWN defined no-clock state (§8.2: cupper
+      // names/station/finished-not-finished, never a blank or zeroed
+      // timer) — that heat's own payload still counts as "content" via
+      // hasContent, so it reaches here, not the generic "not published
+      // yet" card above.
+      // Not `?? null`: `bodyCleanup?.()` below already tolerates `undefined`
+      // exactly like `null` (found in review — the normalization was
+      // provably redundant, no test could distinguish the two).
+      bodyCleanup = renderBody(body, session.payload, { isTest: session.is_test === true });
     } else {
       body.appendChild(renderHoldingState(phase));
     }
@@ -296,6 +309,8 @@ export async function mountViewerShell(
   return {
     unmount() {
       mounted = false;
+      bodyCleanup?.();
+      bodyCleanup = null;
       root.innerHTML = '';
       client.removeChannel(channel);
     },
