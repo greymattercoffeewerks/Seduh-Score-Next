@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Viewer shell — preview</title>
+    <link rel="stylesheet" href="/src/ui/tokens/index.css" />
+    <link rel="stylesheet" href="/src/core/viewer-shell.css" />
+    <style>
+      /* Demo-harness-only layout — not part of the shipped module graph. */
+      .demo-controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 16px;
+        border-bottom: 2px solid var(--color-border-strong);
+        background: var(--color-surface);
+      }
+      .demo-controls button {
+        min-height: 44px;
+        padding: 8px 14px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--color-border-strong);
+        background: var(--color-surface);
+        color: var(--color-text);
+        font-family: var(--font-body);
+        cursor: pointer;
+      }
+      .demo-surfaces {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        padding: 16px;
+      }
+      .demo-surface {
+        flex: 1 1 320px;
+      }
+      .demo-surface h2 {
+        font-family: var(--font-display);
+        margin: 0 0 8px 0;
+      }
+      .demo-surface-frame {
+        border: 2px solid var(--color-border-strong);
+        border-radius: var(--radius-md);
+        overflow: hidden;
+        min-height: 320px;
+      }
+      /* Phone frame stays a normal responsive box; projector frame is
+         forced to a fixed 16:9-ish box to demonstrate the stage surface
+         without needing real fullscreen. */
+      #projector-frame {
+        aspect-ratio: 16 / 9;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      Demo-only harness for the T5.2 viewer shell — not part of the shipped
+      module graph, same role as every other *.preview.html file. Mounts TWO
+      shells against the SAME fake org/live_sessions source: a phone-style
+      surface (showChrome: true, default data-surface) and a projector-style
+      surface (showChrome: false, data-surface="stage"). The stub renderBody
+      below stands in for T5.3/T5.4's real Cup Taster viewer-body — it just
+      prints the payload, so this harness stays honest about what THIS
+      task built (the shell + its holding states/reconnect logic) versus
+      what's still to come (the actual content renderer).
+
+      Buttons drive the SAME state transitions a real event would produce:
+      Publish (no results yet) (active session, empty payload — "not
+      published yet"), Publish (with standings) (active session, real
+      payload — mounts the stub body), Publish TEST event (same, with
+      is_test true), End session (no active session for the org — "waiting
+      for the organiser"), Simulate disconnect / Reconnect (channel status
+      events).
+    -->
+    <div class="demo-controls">
+      <button id="btn-publish-empty">Publish (no results yet)</button>
+      <button id="btn-publish-content">Publish (with standings)</button>
+      <button id="btn-publish-test">Publish TEST event</button>
+      <button id="btn-end">End session (no active event)</button>
+      <button id="btn-disconnect">Simulate disconnect</button>
+      <button id="btn-reconnect">Reconnect</button>
+    </div>
+    <div class="demo-surfaces">
+      <div class="demo-surface">
+        <h2>Phone (showChrome: true)</h2>
+        <div id="phone-frame" class="demo-surface-frame"></div>
+      </div>
+      <div class="demo-surface">
+        <h2>Projector (showChrome: false, data-surface="stage")</h2>
+        <div id="projector-frame" class="demo-surface-frame" data-surface="stage"></div>
+      </div>
+    </div>
+    <script type="module">
+      import { mountViewerShell } from './viewer-shell.js';
+
+      const ORG_ID = 'org1';
+      const EVENT_ID = 'ev1';
+
+      function createDemoClient() {
+        const db = { live_sessions: [] };
+        let idCounter = 0;
+        let changeHandlers = [];
+        let statusHandlers = [];
+
+        function matchesFilters(row, filters) {
+          return filters.every(([col, val]) => row[col] === val);
+        }
+
+        function notifyChange() {
+          for (const h of changeHandlers) h();
+        }
+
+        function makeBuilder() {
+          const filters = [];
+          const builder = {
+            select: () => builder,
+            eq(col, val) {
+              filters.push([col, val]);
+              return builder;
+            },
+            maybeSingle() {
+              const rows = db.live_sessions.filter((r) => matchesFilters(r, filters));
+              return Promise.resolve({ data: rows[0] ?? null, error: null });
+            },
+          };
+          return builder;
+        }
+
+        const channelObj = {
+          on(_event, _filter, handler) {
+            changeHandlers.push(handler);
+            return channelObj;
+          },
+          subscribe(cb) {
+            statusHandlers.push(cb);
+            Promise.resolve().then(() => cb('SUBSCRIBED'));
+            return channelObj;
+          },
+        };
+
+        return {
+          from: () => makeBuilder(),
+          channel: () => channelObj,
+          removeChannel: () => {},
+          // Demo-only helpers, not part of the real Supabase client shape.
+          _publish({ isTest, payload }) {
+            for (const row of db.live_sessions) {
+              if (row.org_id === ORG_ID) row.active = false;
+            }
+            let row = db.live_sessions.find((r) => r.event_id === EVENT_ID);
+            if (!row) {
+              idCounter += 1;
+              row = { id: `ls-${idCounter}`, org_id: ORG_ID, event_id: EVENT_ID };
+              db.live_sessions.push(row);
+            }
+            Object.assign(row, { format: 'cup_taster', active: true, is_test: isTest, payload });
+            notifyChange();
+          },
+          _end() {
+            for (const row of db.live_sessions) {
+              if (row.org_id === ORG_ID) row.active = false;
+            }
+            notifyChange();
+          },
+          _setStatus(status) {
+            for (const h of statusHandlers) h(status);
+          },
+        };
+      }
+
+      // A stub body — this is what T5.3/T5.4's real viewer-body will
+      // replace; this harness's job is only to prove the SHELL around it
+      // works, not to demonstrate real Cup Taster content.
+      function stubRenderBody(container, payload, { isTest }) {
+        container.textContent =
+          'Content mounted. Payload: ' + JSON.stringify(payload) + (isTest ? ' (TEST)' : '');
+      }
+
+      const client = createDemoClient();
+
+      mountViewerShell(document.getElementById('phone-frame'), {
+        orgId: ORG_ID,
+        renderBody: stubRenderBody,
+        showChrome: true,
+        client,
+      });
+      mountViewerShell(document.getElementById('projector-frame'), {
+        orgId: ORG_ID,
+        renderBody: stubRenderBody,
+        showChrome: false,
+        client,
+      });
+
+      document.getElementById('btn-publish-empty').addEventListener('click', () => {
+        client._publish({ isTest: false, payload: {} });
+      });
+      document.getElementById('btn-publish-content').addEventListener('click', () => {
+        client._publish({ isTest: false, payload: { standings: [{ name: 'Alex', place: 1 }] } });
+      });
+      document.getElementById('btn-publish-test').addEventListener('click', () => {
+        client._publish({
+          isTest: true,
+          payload: { standings: [{ name: 'Test Cupper', place: 1 }] },
+        });
+      });
+      document.getElementById('btn-end').addEventListener('click', () => {
+        client._end();
+      });
+      document.getElementById('btn-disconnect').addEventListener('click', () => {
+        client._setStatus('CHANNEL_ERROR');
+      });
+      document.getElementById('btn-reconnect').addEventListener('click', () => {
+        client._setStatus('SUBSCRIBED');
+      });
+    </script>
+  </body>
+</html>
