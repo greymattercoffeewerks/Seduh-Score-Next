@@ -60,6 +60,75 @@ closes.
 
 ---
 
+## Known open items carried into Phase 4 · 2026-08-29 (T4.2's station-uniqueness gap closed at the DB level)
+
+Closes the known open item ROADMAP.md tracked since T4.2: station-uniqueness-per-heat was
+enforced at the application layer only (`buildHeatPlansFromAssignments` validates it
+pre-write), with no DB-level backstop against two genuinely concurrent requests each
+independently passing that check and then both writing the same `(heat_id, station)` pair.
+`scoring-auditor` flagged this as low-risk at the time (T4.2 is an organiser-driven setup
+screen, not the live-heat timing surface) and it was noted rather than fixed.
+
+**New migration** (`20260829100000_ct_heat_entries_station_unique.sql`) adds
+`ct_heat_entries_heat_station_unique unique (heat_id, station)` plus `alter column
+station set not null`. Named explicitly rather than left to Postgres's auto-generated
+name, since `station` is never null on a row this app actually writes
+(`buildHeatPlansFromAssignments` throws before any insert if an assignment is missing
+one).
+
+**`heats.js`'s `ensureHeatEntries` updated**: the table now carries two unique
+constraints that need different handling on conflict. An `entry_id` collision (the
+pre-existing `unique(heat_id, entry_id)`) means someone else already inserted the exact
+row this call also wants — safe to retry, since the next attempt's `diffAgainst` sees it
+and moves on. A `station` collision means two *different* cuppers are racing for the
+*same* station — retrying the identical insert would just fail identically forever, so a
+new `isStationConflict()` helper distinguishes it (matching "station" in the Postgres
+error's DETAIL/message) and fails fast with a clear message instead of quietly burning
+through the bounded-retry budget toward the generic "gave up" error a genuine `entry_id`
+race also produces.
+
+**Verified empirically, not just by reading the migration**: connected directly to the
+local Postgres instance (`docker exec` into the Supabase container) and triggered a real
+violation, confirming the error DETAIL (`Key (heat_id, station)=(...) already exists.`)
+and constraint name (`ct_heat_entries_heat_station_unique`) both contain "station",
+making the string-match discriminator reliable rather than assumed.
+
+**Tests**: three new pgTAP assertions in `002_cup_taster_tables.sql` (plan grown 6→9) —
+a same-station collision in the same heat is rejected, a genuinely different station in
+the same heat is unaffected, and the same station label in a *different* heat is
+unaffected (uniqueness is scoped per heat, not global). A new Vitest case in
+`heats.test.js` proves the fail-fast path issues exactly one insert attempt on a station
+conflict, never retries.
+
+**A real gap was found and closed during review, not before shipping**: the migration's
+first version reasoned that Postgres's "NULL is never equal to another NULL" UNIQUE
+semantics "never come into play here," since the app never writes a null `station`.
+`schema-guardian` proved that reasoning wrong at the DB level — a plain
+`unique(heat_id, station)` places *zero* constraint on rows where `station IS NULL`
+(verified empirically: two such rows insert with no error), so the new invariant this
+migration exists to add was itself only app-layer-enforced for the null case, exactly
+the kind of guarantee the migration was meant to stop relying on. Fixed by adding `alter
+column station set not null` to the same migration (still local-only and unpushed, so
+safe to edit directly rather than needing a follow-up migration) plus a matching
+rollback. This broke five pre-existing pgTAP fixtures across `002_cup_taster_tables.sql`,
+`003_rls.sql`, `005_confirm_heat.sql`, and `007_timing_outbox_rpcs.sql` that inserted
+`ct_heat_entries` rows without a `station` value — each fixed by adding an explicit
+station letter, taking care that two entries sharing a heat in the same fixture never
+collide with each other or with a later test's own station assertions (one such
+collision surfaced immediately on re-running the suite and was fixed by moving a
+tiebreak fixture off station `'A'`).
+
+Separately, `test-auditor` suggested strengthening the station-collision `throws_ok` to
+check the exact Postgres error message, not just its SQLSTATE — the original version
+only proved *some* 23505 error occurred, relying on the surrounding fixture (not the
+assertion itself) to guarantee it was really the station constraint and not the
+pre-existing `entry_id` one. Applied.
+
+Full suite re-verified after both fixes: 113/113 pgTAP assertions, 681/681 Vitest tests,
+lint clean.
+
+---
+
 ## Known open items carried into Phase 4/5 · 2026-08-29 (T4.3/T4.4 timing screens now outbox-wired)
 
 Closes the known open item ROADMAP.md tracked since T4.3/T4.4: the app-mode tap timer and
