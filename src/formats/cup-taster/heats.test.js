@@ -592,6 +592,54 @@ describe('ensureHeatEntries idempotency (via generateHeatsManual)', () => {
     );
     expect(insertCalls).toHaveLength(3);
   });
+
+  // A station collision — two DIFFERENT cuppers racing for the SAME station,
+  // caught only because it's a genuinely concurrent write (a single caller's
+  // own plan is already rejected client-side by buildHeatPlansFromAssignments)
+  // — must fail fast with a clear message, not retry MAX_INSERT_ATTEMPTS
+  // times toward the same generic "gave up" error a genuine entry_id race
+  // produces (that race IS safe to retry; this one never can succeed by
+  // retrying the identical insert). The error shape mirrors what Postgres's
+  // own ct_heat_entries_heat_station_unique violation actually sends —
+  // confirmed empirically against the real local stack, not assumed —
+  // DETAIL: "Key (heat_id, station)=(...) already exists."
+  it('fails fast on a station collision, distinct from the entry_id race above — never retries a conflict that cannot resolve itself', async () => {
+    const stageEntries = [{ entry_id: 'e1' }, { entry_id: 'e2' }];
+    const assignments = [
+      { entryId: 'e1', heatNumber: 1, station: 'A' },
+      { entryId: 'e2', heatNumber: 1, station: 'B' },
+    ];
+    const stationConflict = {
+      data: null,
+      error: {
+        code: '23505',
+        message:
+          'duplicate key value violates unique constraint "ct_heat_entries_heat_station_unique"',
+        details: 'Key (heat_id, station)=(h1, B) already exists.',
+      },
+    };
+    const stillMissing = { data: [], error: null };
+    const client = fakeClient({
+      tables: {
+        ct_stages: { data: stage, error: null },
+        ct_stage_entries: { data: stageEntries, error: null },
+        ct_heats: { data: { id: 'h1', duration_secs: 480, timing_mode: 'app' }, error: null },
+        ct_heat_entries: [
+          stillMissing, // initial listHeatEntries
+          stationConflict, // attempt 1 insert — a concurrent request just claimed station B
+        ],
+      },
+    });
+    await expect(generateHeatsManual('s1', assignments, {}, client)).rejects.toThrow(
+      'a concurrent request already claimed one of these stations',
+    );
+    // Exactly one insert attempt — proves this fails fast rather than
+    // retrying, unlike the entry_id-race test above (which retries 3 times).
+    const insertCalls = client.calls.filter(
+      ([action, table]) => action === 'insert' && table === 'ct_heat_entries',
+    );
+    expect(insertCalls).toHaveLength(1);
+  });
 });
 
 describe('listHeatsForStage', () => {

@@ -2,8 +2,9 @@
 
 _State: Phase 0 done; Phase 1 done (T1.1–T1.4); Phase 2 done (T2.1–T2.6); Phase 3 done
 (T3.1–T3.3); Phase 4 done (T4.1–T4.8, plus two 2026-08-27 follow-ups closing T4.1's
-stage-plan UI gap and its roster-registration UI gap, and a 2026-08-29 follow-up closing
-T4.3/T4.4's direct-write gap — see below); Phase 5 done (T5.1–T5.4, the 2026-08-28
+stage-plan UI gap and its roster-registration UI gap, a 2026-08-29 follow-up closing
+T4.3/T4.4's direct-write gap, and a further 2026-08-29 follow-up closing T4.2's
+DB-level station-uniqueness gap — see below); Phase 5 done (T5.1–T5.4, the 2026-08-28
 holding-state follow-up, the cross-surface Playwright AC, and the 2026-08-28 viewer-shell
 `<h1>`/heading-hierarchy follow-up) — matches CHANGELOG.md as of 2026-08-29_
 
@@ -228,7 +229,18 @@ src/
                                    CHANGELOG.md/ROADMAP.md for the full account, including
                                    a related, NOT-yet-closed gap the same review surfaced
                                    (timingHandlers() isn't shared with scoring.js's/
-                                   publish.js's own handler maps); scoring, scoringScreen
+                                   publish.js's own handler maps); heats.js gained a
+                                   DB-level unique(heat_id, station) constraint follow-up
+                                   (2026-08-29, migration 20260829100000) closing a known
+                                   ROADMAP.md gap — ensureHeatEntries's new
+                                   isStationConflict() helper distinguishes a station
+                                   collision (two different cuppers racing for the same
+                                   station — fails fast, never retries) from an entry_id
+                                   collision (the pre-existing, safe-to-retry race
+                                   recovery path, unchanged), told apart by matching
+                                   "station" in the Postgres error's DETAIL/message,
+                                   verified against a real violation via docker exec;
+                                   scoring, scoringScreen
                                    (T4.5 — three-state toggle + strict confirm; the whole
                                    heat is submitted as ONE outbox operation through the
                                    existing confirm_heat RPC — first format module to use

@@ -60,6 +60,49 @@ closes.
 
 ---
 
+## Known open items carried into Phase 4 · 2026-08-29 (T4.2's station-uniqueness gap closed at the DB level)
+
+Closes the known open item ROADMAP.md tracked since T4.2: station-uniqueness-per-heat was
+enforced at the application layer only (`buildHeatPlansFromAssignments` validates it
+pre-write), with no DB-level backstop against two genuinely concurrent requests each
+independently passing that check and then both writing the same `(heat_id, station)` pair.
+`scoring-auditor` flagged this as low-risk at the time (T4.2 is an organiser-driven setup
+screen, not the live-heat timing surface) and it was noted rather than fixed.
+
+**New migration** (`20260829100000_ct_heat_entries_station_unique.sql`) adds
+`ct_heat_entries_heat_station_unique unique (heat_id, station)`. Named explicitly rather
+than left to Postgres's auto-generated name, since `station` is never null on a row this
+app actually writes (`buildHeatPlansFromAssignments` throws before any insert if an
+assignment is missing one) — so a plain `unique` constraint is sufficient, no partial
+index or `nulls not distinct` needed.
+
+**`heats.js`'s `ensureHeatEntries` updated**: the table now carries two unique
+constraints that need different handling on conflict. An `entry_id` collision (the
+pre-existing `unique(heat_id, entry_id)`) means someone else already inserted the exact
+row this call also wants — safe to retry, since the next attempt's `diffAgainst` sees it
+and moves on. A `station` collision means two *different* cuppers are racing for the
+*same* station — retrying the identical insert would just fail identically forever, so a
+new `isStationConflict()` helper distinguishes it (matching "station" in the Postgres
+error's DETAIL/message) and fails fast with a clear message instead of quietly burning
+through the bounded-retry budget toward the generic "gave up" error a genuine `entry_id`
+race also produces.
+
+**Verified empirically, not just by reading the migration**: connected directly to the
+local Postgres instance (`docker exec` into the Supabase container) and triggered a real
+violation, confirming the error DETAIL (`Key (heat_id, station)=(...) already exists.`)
+and constraint name (`ct_heat_entries_heat_station_unique`) both contain "station",
+making the string-match discriminator reliable rather than assumed.
+
+**Tests**: three new pgTAP assertions in `002_cup_taster_tables.sql` (plan grown 6→9) —
+a same-station collision in the same heat is rejected, a genuinely different station in
+the same heat is unaffected, and the same station label in a *different* heat is
+unaffected (uniqueness is scoped per heat, not global). A new Vitest case in
+`heats.test.js` proves the fail-fast path issues exactly one insert attempt on a station
+conflict, never retries. Full suite re-verified: 113/113 pgTAP assertions, 681/681
+Vitest tests, lint clean.
+
+---
+
 ## Known open items carried into Phase 4/5 · 2026-08-29 (T4.3/T4.4 timing screens now outbox-wired)
 
 Closes the known open item ROADMAP.md tracked since T4.3/T4.4: the app-mode tap timer and

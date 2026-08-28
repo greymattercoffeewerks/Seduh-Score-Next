@@ -2,9 +2,11 @@
 
 _State: Phase 0 done; Phase 1 done (T1.1–T1.4); Phase 2 done (T2.1–T2.6); Phase 3 done
 (T3.1–T3.3); Phase 4 done (T4.1–T4.8, plus two 2026-08-27 follow-ups closing T4.1's
-stage-plan UI gap and its roster-registration UI gap); Phase 5 done (T5.1, T5.2, T5.3,
-T5.4, the 2026-08-28 holding-state follow-up, and the cross-surface Playwright AC) —
-matches CHANGELOG.md as of 2026-08-28_
+stage-plan UI gap and its roster-registration UI gap, a 2026-08-29 follow-up closing
+T4.3/T4.4's direct-write gap, and a further 2026-08-29 follow-up closing T4.2's
+DB-level station-uniqueness gap); Phase 5 done (T5.1, T5.2, T5.3, T5.4, the 2026-08-28
+holding-state follow-up, and the cross-surface Playwright AC) —
+matches CHANGELOG.md as of 2026-08-29_
 
 The living tracker for the handoff's build plan (§14). The handoff itself stays frozen
 as the original spec — this file is what's actually shipped, updated as tasks and phases
@@ -198,11 +200,22 @@ two consumers of the same shell/data. Verifiers per task, `code-reviewer` always
   call and isn't safe to retry once some heats exist. Fixing a stuck stage today means
   manual intervention outside the app (Studio). Worth a real resume/reset flow if this
   proves to matter in practice before October.
-- **No DB-level `unique(heat_id, station)` constraint.** `ensureHeatEntries` enforces
-  station-uniqueness-per-heat at the application layer only (`buildHeatPlansFromAssignments`
-  validates it pre-write). `scoring-auditor` flagged this as low-risk given T4.2 is an
-  organiser-driven setup screen, not the live-heat timing surface — noted here rather
-  than fixed, since a real gap would need a genuinely concurrent write to trigger it.
+- **No DB-level `unique(heat_id, station)` constraint — closed (2026-08-29 follow-up).**
+  Migration `20260829100000_ct_heat_entries_station_unique.sql` adds
+  `ct_heat_entries_heat_station_unique unique (heat_id, station)`, named explicitly so
+  `ensureHeatEntries` (`heats.js`) can tell it apart from the pre-existing
+  `unique(heat_id, entry_id)` constraint's own violation — the two need different
+  handling: an `entry_id` collision is a safe-to-retry race (the next attempt's
+  `diffAgainst` sees the row and moves on), but a `station` collision means two
+  different cuppers are racing for the same station and retrying the identical insert
+  would just fail identically every time, so a new `isStationConflict()` helper fails
+  fast with a clear message instead of quietly burning through the bounded-retry budget.
+  Verified empirically against the real local Postgres instance (`docker exec` +
+  concurrent `psql`) that a genuine violation's error DETAIL and constraint name both
+  contain the word "station", confirming the string-match discriminator is reliable.
+  Three new pgTAP assertions (`002_cup_taster_tables.sql`, plan grown to 9) plus a new
+  Vitest case proving the fail-fast path issues exactly one insert attempt, never
+  retries. See CHANGELOG.md's dated entry for the full account.
 - **Supabase cloud project not yet linked.** Phases 0–3 only set up and verified the
   local stack. Linking a cloud project (and the `supabase db push` step CLAUDE.md's Git
   section refers to) is Phase 4+ work, once the schema is stable enough to push.

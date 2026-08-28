@@ -1,9 +1,12 @@
 -- T1.2 Cup Taster tables — handoff §5.2, §14 T1.2 AC.
 -- Proves: `correct` is nowhere stored as a column except the one atomic per-set
 -- fact on ct_results (never a tally/count column anywhere else — that's always
--- derived, via ct_standings), and a negative elapsed_secs is rejected.
+-- derived, via ct_standings), a negative elapsed_secs is rejected, and (T4.2
+-- follow-up, migration 20260829100000) two cuppers in the same heat can't
+-- both claim the same station — a gap ROADMAP.md tracked as application-layer
+-- only until now.
 begin;
-select plan(6);
+select plan(9);
 
 -- ============ correct is nowhere a stored tally column ============
 
@@ -106,6 +109,41 @@ select throws_ok(
   '23514',
   null,
   'a negative elapsed_secs is rejected by the ct_heat_entries_elapsed_nonneg check'
+);
+
+-- ============ station uniqueness is enforced at the DB level, not just the
+-- application layer (heats.js's buildHeatPlansFromAssignments) ============
+-- a1 already occupies station 'A' in heat d1 (inserted implicitly above via
+-- the module's own default — set explicitly here to make the collision
+-- target unambiguous).
+
+update ct_heat_entries set station = 'A'
+  where id = '00000000-0000-0000-0000-0000000000f1';
+
+select throws_ok(
+  $$ insert into ct_heat_entries (heat_id, entry_id, station) values
+       ('00000000-0000-0000-0000-0000000000d1',
+        '00000000-0000-0000-0000-0000000000a2', 'A') $$,
+  '23505',
+  null,
+  'a second cupper claiming an already-taken station in the same heat is
+   rejected by ct_heat_entries_heat_station_unique, not just the application
+   layer'
+);
+
+select lives_ok(
+  $$ insert into ct_heat_entries (heat_id, entry_id, station) values
+       ('00000000-0000-0000-0000-0000000000d1',
+        '00000000-0000-0000-0000-0000000000a2', 'B') $$,
+  'a genuinely different station in the same heat is unaffected'
+);
+
+select lives_ok(
+  $$ insert into ct_heat_entries (heat_id, entry_id, station) values
+       ('00000000-0000-0000-0000-0000000000d2',
+        '00000000-0000-0000-0000-0000000000a2', 'A') $$,
+  'the SAME station label in a DIFFERENT heat is unaffected — uniqueness is
+   scoped per heat, not global'
 );
 
 select * from finish();

@@ -266,6 +266,23 @@ export async function listHeatEntries(heatId, client = getSupabase()) {
 // requested (rather than silently keeping the stale value), and gives up
 // with a clear error after MAX_INSERT_ATTEMPTS rather than looping forever
 // or leaking a raw constraint error on a second collision.
+//
+// ct_heat_entries carries TWO unique constraints, not one — (heat_id,
+// entry_id) (this file's own original race-recovery target) and, as of the
+// ct_heat_entries_heat_station_unique migration, (heat_id, station) too.
+// The two need different handling: an entry_id collision means someone else
+// already inserted the SAME row this call also wants (safe to retry — the
+// next attempt's diffAgainst sees it and moves on), but a station collision
+// means two DIFFERENT cuppers are racing for the SAME station — retrying the
+// identical insert would just fail the identical way every time, so
+// isStationConflict distinguishes it below and fails fast with a clear
+// message instead of quietly burning through MAX_INSERT_ATTEMPTS toward the
+// generic "gave up" error a genuine entry_id race also produces.
+function isStationConflict(error) {
+  const detail = error.details ?? error.detail ?? error.message ?? '';
+  return detail.includes('station');
+}
+
 async function ensureHeatEntries(heatId, entries, client) {
   function diffAgainst(existingRows) {
     const existingByEntryId = new Map(existingRows.map((row) => [row.entry_id, row]));
@@ -304,6 +321,12 @@ async function ensureHeatEntries(heatId, entries, client) {
       .select();
     if (!error) return listHeatEntries(heatId, client);
     if (error.code !== UNIQUE_VIOLATION) throw error;
+
+    if (isStationConflict(error)) {
+      throw new Error(
+        `ensureHeatEntries: a concurrent request already claimed one of these stations for heat ${heatId} — reload and re-check the assignment before retrying.`,
+      );
+    }
 
     missing = diffAgainst(await listHeatEntries(heatId, client));
   }
