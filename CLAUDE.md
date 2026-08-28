@@ -3,8 +3,8 @@
 _State: Phase 0 done; Phase 1 done (T1.1–T1.4); Phase 2 done (T2.1–T2.6); Phase 3 done
 (T3.1–T3.3); Phase 4 done (T4.1–T4.8, plus two 2026-08-27 follow-ups closing T4.1's
 stage-plan UI gap and its roster-registration UI gap); Phase 5 done (T5.1–T5.4, the
-2026-08-28 holding-state follow-up, and the cross-surface Playwright AC) — matches
-CHANGELOG.md as of 2026-08-28_
+2026-08-28 holding-state follow-up, the cross-surface Playwright AC, and the 2026-08-28
+viewer-shell `<h1>`/heading-hierarchy follow-up) — matches CHANGELOG.md as of 2026-08-28_
 
 Read these before touching anything:
 
@@ -180,7 +180,11 @@ src/
                                    content; events gained findLatestEventForOrg in that same
                                    2026-08-28 follow-up — existence-only, since
                                    events.status exists in the schema but nothing writes it
-                                   yet
+                                   yet; renderChrome()'s identity name is a real <h1>, not a
+                                   <span>, 2026-08-28 heading-hierarchy follow-up — a
+                                   visually-hidden equivalent <h1> covers showChrome:false
+                                   (the projector), which has no chrome band to host a
+                                   visible one in; both reference one APP_NAME constant.
   formats/
     cup-taster/                 ← scoring, timing-surface, entry-surface, viewer-body,
                                    analytics — Cup Taster-specific, built on core/. Done:

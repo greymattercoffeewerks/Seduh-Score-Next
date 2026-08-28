@@ -60,6 +60,57 @@ closes.
 
 ---
 
+## Phase 5 — Live surfaces · 2026-08-28 (viewer-shell heading-hierarchy follow-up)
+
+### src/core/viewer-shell.js, viewer-shell.css, viewer-shell.test.js
+
+Closes a real `ui-accessibility-reviewer` finding from T5.4's own review: the mounted
+viewer-shell tree had no `<h1>` anywhere. `renderChrome()`'s identity name (showChrome:true,
+the phone surface) is now a real `<h1 class="viewer-chrome-name">`, not a `<span>` — a
+screen reader's heading navigation previously had nothing to land on, and viewerBody.js's
+own `<h2>` was the page's de facto first heading with nothing to nest under.
+`viewer-chrome-name` gained `margin: 0` (same reset every other real `<h1>` in this
+codebase uses, e.g. `heatsScreen.css`'s `.screen-container h1`) so the badge doesn't shift.
+
+`showChrome:false` (the projector) has no identity band to host a visible heading in —
+`mountViewerShell`'s own setup adds a visually-hidden `el('h1', { className: 'sr-only', ... })`
+as the container's first child instead, mutually exclusive with the chrome path (never
+both, never neither). Both sites reference one `APP_NAME` constant rather than repeating
+the literal.
+
+Four parallel subagent reviews (`module-boundary-checker`, `code-reviewer`,
+`test-auditor`, `ui-accessibility-reviewer`) ran against the initial fix. Three real
+findings came back and were fixed in a second pass:
+
+- `test-auditor`: the re-render-duplication test only covered `showChrome:false` — a
+  hypothetical duplication bug in the chrome-rebuild path (e.g. one gated on
+  `connectionLost`) would go undetected. Added the symmetric `showChrome:true` test;
+  confirmed via mutation testing (temporarily changed the chrome render to
+  `appendChild` instead of `replaceChildren`, confirmed the new test fails with
+  "expected length of 1 but got 2", reverted, confirmed it passes again).
+- `code-reviewer`: the `'Seduh Score'` literal was duplicated across both `<h1>` call
+  sites — extracted to `const APP_NAME`. A follow-up pass from the same reviewer found
+  the first attempt at consolidating the duplicated rationale comment hadn't actually
+  shortened the second copy to a cross-reference — fixed properly on the second pass.
+- `ui-accessibility-reviewer`: approved outright, with extensive live Playwright-based
+  verification (both surfaces, 360px, real accessibility tree via `ariaSnapshot()`,
+  computed layout confirming zero vertical shift from the `margin:0` reset, `.sr-only`
+  confirmed genuinely exposed to assistive tech). Flagged one pre-existing, out-of-scope
+  gap for future awareness: `viewerBody.js` could theoretically skip the `<h2>` level if
+  a payload ever has standings but no stage — not touched by this fix.
+
+Full suite: 686 unit tests (was 685), lint/format clean (repo-wide, not `src/`-scoped).
+Live-verified in-browser post-fix: both `phoneSummary.preview.html` (visible `<h1>`) and
+`projectorSurface.preview.html` (hidden `<h1>`) render "Seduh Score" correctly with no
+regression to the "Not live"/holding-state content.
+
+Verifier: `code-reviewer` (second pass, clean). `test-auditor`'s planned second-pass
+re-check hit the account's monthly spend limit mid-run and did not complete — the fixes
+it would have re-checked were already independently confirmed via this session's own
+mutation testing above, so the gap is in a second opinion, not in unverified code.
+
+---
+
 ## Phase 5 — Live surfaces · 2026-08-28 (cross-surface Playwright AC)
 
 ### tests/e2e/cross-surface-countdown.spec.js
