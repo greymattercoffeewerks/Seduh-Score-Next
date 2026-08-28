@@ -1,8 +1,148 @@
+## 2026-08-28 — kb-sync verification (Phase 5 closure)
+
+Session log entry for verification pass on Phase 5's cross-surface Playwright acceptance
+criteria closure. Task corresponds to T5.3/T5.4 cross-surface AC (§14 handoff). Verifier:
+`kb-sync` (this session).
+
+All files logged: `tests/e2e/cross-surface-countdown.spec.js` (new), `playwright.config.js`
+(extended), `.github/workflows/ci.yml` (extended), `src/formats/cup-taster/timingScreen.
+preview.html`, `phoneSummary.preview.html`, `projectorSurface.preview.html` (each gained
+`window.__e2e` test hook), `src/formats/cup-taster/demoActiveHeatPayload.js` (new).
+
+Verification findings: CHANGELOG.md, ROADMAP.md, and CLAUDE.md entries already written,
+comprehensive and accurate. Cross-verified each against actual source files:
+
+1. `viewer-shell.js` architecture correctly documents Realtime subscription, `hasEvent`/
+   `notStarted` vs `noEvent` distinction, cleanup-lifecycle contract for ticking body.
+   `events.js` correctly describes `findLatestEventForOrg()`'s existence-only semantics.
+   Both confirmed against committed code.
+
+2. `viewerBody.js` correctly summarizes live countdown (core/countdown + core/duration
+   reused unedited), per-cupper status chips with non-color signals, standings table
+   reusing existing CSS, optional cleanup return matching viewer-shell contract. Confirmed
+   against 41-test suite and live browser verification already logged.
+
+3. `phoneSummary.js` and `projectorSurface.js` both accurately described as thin
+   compositions of `viewer-shell` + `viewerBody`, with correct `showChrome` values and
+   `data-surface` handling. Confirmed showChrome semantics against source.
+
+4. `demoActiveHeatPayload.js` correctly logged as extraction from 2nd verbatim use across
+   two preview harnesses; buildActiveHeatPayload() payload shape matches test expectations.
+
+5. Playwright test (`cross-surface-countdown.spec.js`): accurately describes three separate
+   contexts, real-heat values published to viewers, ±2s tolerance checks at three checkpoints,
+   three-way proof at expiry (organiser maxed entries, viewers at 0:00, isExpired() agreement).
+
+6. **CLAUDE.md architecture section — content found intact.** Earlier concern that T5.2/T5.3/
+   T5.4/holding-state follow-up edits had been lost turned out unfounded — all descriptions
+   of viewer-shell (Realtime, hasEvent/notStarted/noEvent, renderBody cleanup contract),
+   events.findLatestEventForOrg, viewerBody (live countdown, cleanup return, core-reuse),
+   phoneSummary (showChrome: true), projectorSurface (showChrome: false, data-surface="stage"),
+   and demoActiveHeatPayload (2nd-use extraction) are all present and accurate. No
+   reconstruction was needed; the session's initial concern was based on incomplete git
+   history observation during earlier kb-sync work.
+
+ROADMAP.md phase-status update correct: Phase 5 marked done, cross-surface AC listed as
+last item closing Definition of Done. Status statement at top (line 3–7) accurately
+reflects T5.1–T5.4 + two follow-ups + AC closure = Phase 5 complete. Matches CHANGELOG.md
+dated entries exactly.
+
+Full suite: 682 unit tests, 2 Playwright tests (one per project), lint/format clean.
+No open items introduced by this session's verification.
+
+---
+
 # Changelog — Seduh Score Next
 
 Backfilled 2026-08-21 for Phase 0 (this file didn't exist while T0.1–T0.3 shipped, all in
 the same session). From here forward, an entry lands before any session that ships code
 closes.
+
+---
+
+## Phase 5 — Live surfaces · 2026-08-28 (cross-surface Playwright AC)
+
+### tests/e2e/cross-surface-countdown.spec.js
+
+Closes the handoff's own outstanding AC across T5.3/T5.4 (§14): "Playwright test driving
+organiser + projector + phone simultaneously, proving all three agree on remaining time
+within tolerance." This is the last piece of Phase 5's own Definition of Done — T5.1
+through T5.4 (plus the holding-state follow-up) built everything the AC needs; this task
+builds the AC's own proof.
+
+`tests/e2e/cross-surface-countdown.spec.js` (new): three separate Playwright browser
+contexts — not one page with three panels — driving the existing, already-reviewed demo
+harnesses directly (`timingScreen.preview.html` for the organiser, `projectorSurface.
+preview.html`, `phoneSummary.preview.html`). Starts a real heat on the organiser side,
+reads back the REAL `started_at`/`duration_secs` that action set (not a timestamp the
+test invents), publishes those exact values to the other two contexts, then checks
+agreement (±2s tolerance) at three points: mid-heat, inside the urgent window (also
+confirming all three independently reach `data-urgent="true"`), and past expiry.
+
+Two real environment findings, worked through before writing any test code: `vite build`
+only outputs `index.html` (confirmed directly — `dist/` has no `.preview.html` files),
+so this test needs the dev server, not the existing prod-preview Playwright config; and
+running the test for real (not assumed) revealed that past expiry, the organiser's own
+`timingScreen.js` auto-maxes every cupper and swaps its whole view to a "Timing complete"
+summary, while the read-only viewers just freeze their countdown at 0:00 — a genuine
+divergence the test's final checkpoint has to prove correctly rather than force a
+same-shape comparison across.
+
+`playwright.config.js` (extended): a second project (`dev-harnesses`, targeting `npm run
+dev`) alongside the existing `built-app` project (`smoke.spec.js`, unchanged, still
+targeting the real production build). `src/formats/cup-taster/timingScreen.preview.html`,
+`phoneSummary.preview.html`, `projectorSurface.preview.html` (extended): each gained a
+small, clearly-commented `window.__e2e` test-only hook so the Playwright test can read the
+organiser's real state and publish matching values to the other two contexts — none of
+these hooks are reachable from anywhere outside each file's own script block.
+`src/formats/cup-taster/demoActiveHeatPayload.js` (new): `buildActiveHeatPayload()`,
+extracted from `phoneSummary.preview.html`/`projectorSurface.preview.html`'s previously
+near-identical inline payload builders on its 2nd verbatim use, per this project's own
+convention — `standings` stays a caller-supplied argument rather than embedded here, since
+each harness already owns its own `standings` fixture reused by several other demo
+buttons. `.github/workflows/ci.yml` (extended): a new `playwright` job (self-contained —
+its own checkout/build, since GitHub Actions jobs don't share build output) running
+`npm run test:e2e`.
+
+Verifiers: `module-boundary-checker`, `test-auditor`, `code-reviewer` — three agents in
+parallel (no UI change, so `ui-accessibility-reviewer` didn't apply; no migration/RLS/
+scoring-module change either). `module-boundary-checker` came back clean. The other two
+found real issues, all fixed:
+
+1. **`code-reviewer`: browser-context creation happened OUTSIDE the test's own try/finally**
+   — a throw partway through the three `newContext()`/`newPage()` calls (three simultaneous
+   contexts under real resource pressure is exactly the kind of thing that can fail) would
+   leak whichever context(s) had already been created, since Playwright doesn't auto-track
+   manually created contexts. Fixed by moving creation inside `try` and guarding the
+   `finally` block's closes with optional chaining.
+2. **`code-reviewer`: `buildActiveHeatPayload` was duplicated verbatim across two files**,
+   with nothing (lint, tests) to catch the two harnesses' demo states silently diverging
+   from each other over time — exactly the "2nd verbatim use" extraction trigger this
+   project's own convention names. Extracted to `demoActiveHeatPayload.js`.
+3. **`code-reviewer`: this AC-closing test never actually ran in CI** — `.github/workflows/
+ci.yml` had no Playwright job at all (a pre-existing gap, not introduced by this task,
+   but one this specific task's own DoD — "tests pass," continuously verifiable — depends
+   on closing). Added the `playwright` job.
+4. **`test-auditor` (the most significant finding, though the test's central property —
+   detecting real disagreement — was independently re-verified and confirmed sound via the
+   same mutation technique I'd already used myself): the past-expiry checkpoint proved
+   "organiser reaches 'Timing complete'" and "viewers freeze at 0:00" as two disconnected
+   facts, never tied back to the SAME zero-crossing event** — exactly the boundary where a
+   real timing bug would be easiest to hide behind two correct-looking but uncorrelated
+   proxies. Fixed by also asserting every organiser-side heat entry auto-maxed to exactly
+   `durationSecs` (the real clamp) AND that `core/countdown.js`'s own `isExpired()` —
+   the same pure function every surface's countdown already calls — independently agrees
+   the real `(startedAt, durationSecs)` pair is expired right now.
+
+Both new tests added during fixes (context-leak guard, the strengthened expiry check) were
+verified the same way as the test's own central property: temporarily reverted, confirmed
+the resulting failure, reverted back. Full suite: 682 unit tests, 2 Playwright tests (one
+per project), lint/format clean. Live-verified in browser that the refactored "+ Active
+heat" demo buttons still work correctly on both `phoneSummary.preview.html` and
+`projectorSurface.preview.html` after the `demoActiveHeatPayload.js` extraction.
+
+**Phase 5 is now fully done** — T5.1 through T5.4, the holding-state follow-up, and this
+AC together close every item the handoff's own Definition of Done named for this phase.
 
 ---
 

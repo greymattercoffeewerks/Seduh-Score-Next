@@ -2,8 +2,9 @@
 
 _State: Phase 0 done; Phase 1 done (T1.1–T1.4); Phase 2 done (T2.1–T2.6); Phase 3 done
 (T3.1–T3.3); Phase 4 done (T4.1–T4.8, plus two 2026-08-27 follow-ups closing T4.1's
-stage-plan UI gap and its roster-registration UI gap); Phase 5 in progress (T5.1, T5.2,
-T5.3, T5.4 done, plus 2026-08-28 follow-up closing T5.3's accessibility gap; the cross-surface Playwright AC itself still open) — matches CHANGELOG.md as of 2026-08-28_
+stage-plan UI gap and its roster-registration UI gap); Phase 5 done (T5.1–T5.4, the
+2026-08-28 holding-state follow-up, and the cross-surface Playwright AC) — matches
+CHANGELOG.md as of 2026-08-28_
 
 Read these before touching anything:
 
@@ -162,14 +163,24 @@ src/
                                    caller-supplied renderBody only once real content
                                    exists, same inversion-of-control shape as outbox.js's
                                    handler map; also the first CSS file living in core/
-                                   rather than a format directory); events extended with
-                                   findLatestEventForOrg (2026-08-28 follow-up —
-                                   distinguishing "no event" from "not started" holding
-                                   states); viewer-shell gained hasEvent and raceTimeout()
-                                   for that same follow-up, computePhase/renderHoldingState
-                                   gained noEvent and renamed empty→notStarted. Nothing yet
-                                   calls viewer-shell with real Cup Taster content —
-                                   T5.3/T5.4 do that
+                                   rather than a format directory; gained a renderBody
+                                   cleanup-lifecycle contract, T5.3 — an optional returned
+                                   function, called before every re-render's
+                                   body.replaceChildren() and again on unmount(), so a
+                                   ticking display (viewerBody.js's live countdown) never
+                                   outlives the DOM node it mutates; gained hasEvent and
+                                   raceTimeout(), 2026-08-28 follow-up — distinguishes the
+                                   'noEvent' holding card from the renamed 'notStarted' one,
+                                   formerly both collapsed into a single 'empty' phase since
+                                   this module never read events, only live_sessions).
+                                   viewer-shell now has two real consumers (T5.3's
+                                   projectorSurface, T5.4's phoneSummary, below) but its own
+                                   preview harness's renderBody stays a stub, deliberately —
+                                   that harness proves the shell alone, not the real
+                                   content; events gained findLatestEventForOrg in that same
+                                   2026-08-28 follow-up — existence-only, since
+                                   events.status exists in the schema but nothing writes it
+                                   yet
   formats/
     cup-taster/                 ← scoring, timing-surface, entry-surface, viewer-body,
                                    analytics — Cup Taster-specific, built on core/. Done:
@@ -200,7 +211,34 @@ src/
                                    analytics, reportScreen (T4.7 — per-stage difficulty/
                                    distribution, gated on the whole event being complete;
                                    no partial-data report) — reportScreen.js also gained
-                                   T4.8's export actions (CSV download + print).
+                                   T4.8's export actions (CSV download + print);
+                                   viewerBody, phoneSummary (T5.4 — the shared renderBody
+                                   core/viewer-shell.js mounts once real content exists:
+                                   standings table, active-heat panel with per-cupper
+                                   status chips, recent-results list; content shape ported
+                                   from the legacy v4.x app's own never-shipped-standalone
+                                   audience view. Deliberately Cup-Taster-specific per the
+                                   handoff's own module table, meant to be shared unedited
+                                   by T5.3's projector. phoneSummary.js is the thin
+                                   phone-specific composition, showChrome: true); viewerBody
+                                   extended with a live countdown for an active app-mode
+                                   heat, T5.3 — core/countdown.js + core/duration.js,
+                                   mirroring timingScreen.js's own tick pattern; reuses
+                                   core/ranking.js's chainComparators for the recent-heats
+                                   sort rather than hand-rolling one; mountViewerBody
+                                   returns an optional cleanup function per
+                                   viewer-shell.js's own contract above; projectorSurface
+                                   (T5.3 — the thin projector-specific composition,
+                                   showChrome: false, data-surface="stage" set on the
+                                   caller's own root; reuses viewerBody.js completely
+                                   unedited, per the handoff's own module table);
+                                   demoActiveHeatPayload (2026-08-28, closing the handoff's
+                                   cross-surface Playwright AC — buildActiveHeatPayload(),
+                                   extracted from phoneSummary.preview.html/
+                                   projectorSurface.preview.html's near-identical inline
+                                   demo builders on its 2nd verbatim use; demo-only, not
+                                   part of the shipped module graph, imported only by those
+                                   two *.preview.html files and by nothing else).
   ui/
     tokens/                     ← design tokens (plain CSS custom properties)
   main.js                       ← scaffold entry point (Phase 0 placeholder)
@@ -214,7 +252,13 @@ supabase/
 eslint-rules/                   ← the 4 custom rules enforcing this project's contracts
                                    (no-raw-elapsed-write has its own Linter-based test)
 tests/e2e/                      ← Playwright — the one place three live surfaces
-                                   (organiser, projector, phone) get proven to agree
+                                   (organiser, projector, phone) get proven to agree.
+                                   smoke.spec.js (Phase 0) targets the real production
+                                   build; cross-surface-countdown.spec.js (2026-08-28,
+                                   closing the handoff's own cross-surface AC) targets the
+                                   dev server instead, since it drives the format demo
+                                   harnesses directly and vite build doesn't output those
+                                   at all — see playwright.config.js's two projects
 .claude/
   agents/                       ← the 9 subagents
   hooks/lint-on-write.cjs       ← PostToolUse: ESLint on every .js write
