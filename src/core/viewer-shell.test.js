@@ -531,6 +531,83 @@ describe('mountViewerShell', () => {
     expect(rootWithout.querySelector('.viewer-chrome')).toBeNull();
   });
 
+  it('exposes exactly one real, visible <h1> when showChrome is true — the chrome name itself', async () => {
+    const root = document.createElement('div');
+    await mountViewerShell(root, {
+      orgId: 'org1',
+      renderBody: vi.fn(),
+      showChrome: true,
+      client: fakeClient([session()]),
+    });
+    const headings = root.querySelectorAll('h1');
+    expect(headings).toHaveLength(1);
+    expect(headings[0].className).toBe('viewer-chrome-name');
+    expect(headings[0].textContent).toBe('Seduh Score');
+    expect(headings[0].className).not.toContain('sr-only');
+  });
+
+  it('exposes exactly one <h1> when showChrome is false too — visually hidden, since there is no chrome band to host a visible one in', async () => {
+    const root = document.createElement('div');
+    await mountViewerShell(root, {
+      orgId: 'org1',
+      renderBody: vi.fn(),
+      showChrome: false,
+      client: fakeClient([session()]),
+    });
+    const headings = root.querySelectorAll('h1');
+    expect(headings).toHaveLength(1);
+    expect(headings[0].className).toBe('sr-only');
+    expect(headings[0].textContent).toBe('Seduh Score');
+    // Present before mount even resolves — not something later render()
+    // calls conditionally add or remove.
+    expect(root.querySelector('.viewer-chrome')).toBeNull();
+  });
+
+  it('the showChrome:false heading survives across re-renders (holding states, live content, connection loss) without ever duplicating', async () => {
+    const root = document.createElement('div');
+    const client = fakeClient([]);
+    await mountViewerShell(root, {
+      orgId: 'org1',
+      renderBody: vi.fn(),
+      showChrome: false,
+      client,
+    });
+    expect(root.querySelectorAll('h1')).toHaveLength(1);
+
+    client.db.live_sessions.push(session({ payload: { standings: [1] } }));
+    client._triggerChange();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(root.querySelectorAll('h1')).toHaveLength(1);
+
+    client._triggerStatus('CHANNEL_ERROR');
+    expect(root.querySelectorAll('h1')).toHaveLength(1);
+  });
+
+  it('the showChrome:true heading survives across re-renders too, without ever duplicating', async () => {
+    // Symmetric to the showChrome:false test above — found in review
+    // (test-auditor): only the false branch had a re-render duplication
+    // test, so a hypothetical bug in the chrome-rebuild path (e.g. one
+    // gated on connectionLost that re-appended renderChrome()'s own <h1>
+    // instead of replacing it) would go undetected by the full suite.
+    const root = document.createElement('div');
+    const client = fakeClient([session()]);
+    await mountViewerShell(root, {
+      orgId: 'org1',
+      renderBody: vi.fn(),
+      showChrome: true,
+      client,
+    });
+    expect(root.querySelectorAll('h1')).toHaveLength(1);
+
+    client.db.live_sessions[0].payload = { standings: [2] };
+    client._triggerChange();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(root.querySelectorAll('h1')).toHaveLength(1);
+
+    client._triggerStatus('CHANNEL_ERROR');
+    expect(root.querySelectorAll('h1')).toHaveLength(1);
+  });
+
   it('the status region is a persistent node mutated in place, not recreated, across renders', async () => {
     // The whole point of the persistent-node restructure (found in review:
     // a full innerHTML rebuild defeats aria-live change detection for
