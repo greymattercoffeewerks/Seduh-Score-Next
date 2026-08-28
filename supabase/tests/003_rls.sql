@@ -46,9 +46,9 @@ insert into ct_stage_entries (stage_id, entry_id) values
 insert into ct_heats (id, stage_id, heat_number, duration_secs) values
   ('00000000-0000-0000-0000-0000000000d1', '00000000-0000-0000-0000-0000000000b1', 1, 480);
 
-insert into ct_heat_entries (id, heat_id, entry_id, elapsed_secs) values
+insert into ct_heat_entries (id, heat_id, entry_id, station, elapsed_secs) values
   ('00000000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-0000000000d1',
-   '00000000-0000-0000-0000-0000000000ee', 240);
+   '00000000-0000-0000-0000-0000000000ee', 'A', 240);
 
 insert into ct_results (heat_entry_id, set_id, correct) values
   ('00000000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-0000000000c1', true);
