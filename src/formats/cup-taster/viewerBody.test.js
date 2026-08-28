@@ -1,9 +1,20 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { hasViewableContent, isNoClockHeat, mountViewerBody } from './viewerBody.js';
 
 function baseCupper(overrides = {}) {
   return { displayName: 'Alex', station: 'A', totalElapsedSecs: null, maxed: false, ...overrides };
 }
+
+// Fake timers for the whole file — an app-timed active heat starts a real
+// setInterval (the countdown), and without this every such test would leak
+// one into the real event loop.
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-08-28T00:00:00Z'));
+});
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('hasViewableContent', () => {
   it('is false for null/undefined', () => {
@@ -139,6 +150,7 @@ describe('mountViewerBody — active heat', () => {
         status: 'timing',
         timingMode: 'app',
         startedAt: '2026-08-28T00:00:00Z',
+        durationSecs: 480,
         cuppers: [baseCupper()],
       },
     });
@@ -173,6 +185,7 @@ describe('mountViewerBody — active heat', () => {
         status: 'timing',
         timingMode: 'app',
         startedAt: '2026-08-28T00:00:00Z',
+        durationSecs: 480,
         cuppers: [
           baseCupper({ displayName: 'Running Cupper', totalElapsedSecs: null, maxed: false }),
           baseCupper({ displayName: 'Done Cupper', totalElapsedSecs: 200, maxed: false }),
@@ -203,6 +216,7 @@ describe('mountViewerBody — active heat', () => {
         status: 'timing',
         timingMode: 'app',
         startedAt: '2026-08-28T00:00:00Z',
+        durationSecs: 480,
         cuppers: [baseCupper({ displayName: 'Alex', station: 'B' })],
       },
     });
@@ -269,6 +283,57 @@ describe('mountViewerBody — active heat', () => {
     expect(container.textContent).not.toContain('not yet started');
   });
 
+  it('shows no countdown for a manual heat, even one that has started', () => {
+    const container = document.createElement('div');
+    mountViewerBody(container, {
+      standings: [],
+      activeHeat: {
+        heatNumber: 1,
+        stageKind: 'prelims',
+        status: 'timing',
+        timingMode: 'manual',
+        startedAt: '2026-08-28T00:00:00Z',
+        durationSecs: 480,
+        cuppers: [baseCupper()],
+      },
+    });
+    expect(container.querySelector('.viewer-countdown')).toBeNull();
+  });
+
+  it('shows no countdown once a heat has moved to scoring', () => {
+    const container = document.createElement('div');
+    mountViewerBody(container, {
+      standings: [],
+      activeHeat: {
+        heatNumber: 1,
+        stageKind: 'prelims',
+        status: 'scoring',
+        timingMode: 'app',
+        startedAt: '2026-08-28T00:00:00Z',
+        durationSecs: 480,
+        cuppers: [baseCupper()],
+      },
+    });
+    expect(container.querySelector('.viewer-countdown')).toBeNull();
+  });
+
+  it('shows no countdown for an app-mode heat with no startedAt yet', () => {
+    const container = document.createElement('div');
+    mountViewerBody(container, {
+      standings: [],
+      activeHeat: {
+        heatNumber: 1,
+        stageKind: 'prelims',
+        status: 'timing',
+        timingMode: 'app',
+        startedAt: null,
+        durationSecs: 480,
+        cuppers: [baseCupper()],
+      },
+    });
+    expect(container.querySelector('.viewer-countdown')).toBeNull();
+  });
+
   it('omits the active-heat section entirely when there is no active heat', () => {
     const container = document.createElement('div');
     mountViewerBody(container, {
@@ -277,6 +342,151 @@ describe('mountViewerBody — active heat', () => {
       activeHeat: null,
     });
     expect(container.querySelector('.viewer-active-heat')).toBeNull();
+  });
+});
+
+function appHeatFixture(overrides = {}) {
+  return {
+    standings: [],
+    activeHeat: {
+      heatNumber: 1,
+      stageKind: 'prelims',
+      status: 'timing',
+      timingMode: 'app',
+      startedAt: '2026-08-28T00:00:00Z',
+      durationSecs: 480,
+      cuppers: [baseCupper()],
+      ...overrides,
+    },
+  };
+}
+
+describe('mountViewerBody — live countdown', () => {
+  it('paints the initial remaining time on mount, tabular/mono, not announced per-tick', () => {
+    const container = document.createElement('div');
+    mountViewerBody(container, appHeatFixture());
+    const countdown = container.querySelector('.viewer-countdown');
+    expect(countdown).not.toBeNull();
+    expect(countdown.textContent).toBe('8:00');
+    expect(countdown.className).toContain('font-mono-score');
+    expect(countdown.getAttribute('aria-live')).toBe('off');
+  });
+
+  it('ticks down by one second per second', () => {
+    const container = document.createElement('div');
+    mountViewerBody(container, appHeatFixture());
+    const countdown = container.querySelector('.viewer-countdown');
+    vi.advanceTimersByTime(3000);
+    expect(countdown.textContent).toBe('7:57');
+  });
+
+  it('marks urgent at 10s remaining or below, not above', () => {
+    const container = document.createElement('div');
+    mountViewerBody(container, appHeatFixture({ durationSecs: 11 }));
+    const countdown = container.querySelector('.viewer-countdown');
+    expect(countdown.dataset.urgent).toBe('false'); // 11s remaining
+    vi.advanceTimersByTime(1000);
+    expect(countdown.dataset.urgent).toBe('true'); // 10s remaining
+  });
+
+  it('freezes at 0:00 once expired, rather than ticking negative', () => {
+    const container = document.createElement('div');
+    mountViewerBody(container, appHeatFixture({ durationSecs: 2 }));
+    const countdown = container.querySelector('.viewer-countdown');
+    vi.advanceTimersByTime(5000);
+    expect(countdown.textContent).toBe('0:00');
+    expect(countdown.dataset.urgent).toBe('true');
+  });
+
+  it('actually stops the interval on expiry — the display floor alone is not proof of that', () => {
+    const container = document.createElement('div');
+    mountViewerBody(container, appHeatFixture({ durationSecs: 2 }));
+    // remainingSecs/formatDuration already floor at 0 regardless of whether
+    // the interval is still running — vi.getTimerCount() is the only way to
+    // prove the interval itself was cleared, not merely that the displayed
+    // value can't go visibly wrong once it is.
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+    vi.advanceTimersByTime(5000);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('does not start an interval at all when already expired at mount time', () => {
+    const container = document.createElement('div');
+    const clearSpy = vi.spyOn(globalThis, 'clearInterval');
+    const setSpy = vi.spyOn(globalThis, 'setInterval');
+    mountViewerBody(
+      container,
+      appHeatFixture({ durationSecs: 2, startedAt: '2026-08-27T00:00:00Z' }),
+    );
+    expect(setSpy).not.toHaveBeenCalled();
+    clearSpy.mockRestore();
+    setSpy.mockRestore();
+  });
+
+  it("mountViewerBody's returned cleanup stops the tick — a later render never touches this container again", () => {
+    const container = document.createElement('div');
+    const cleanup = mountViewerBody(container, appHeatFixture());
+    const countdown = container.querySelector('.viewer-countdown');
+    expect(typeof cleanup).toBe('function');
+    vi.advanceTimersByTime(2000);
+    expect(countdown.textContent).toBe('7:58');
+    cleanup();
+    vi.advanceTimersByTime(5000);
+    // Unchanged — the interval was cleared, not merely detached.
+    expect(countdown.textContent).toBe('7:58');
+  });
+
+  it('returns a falsy cleanup when there is no active heat at all', () => {
+    const container = document.createElement('div');
+    const cleanup = mountViewerBody(container, {
+      stage: { kind: 'prelims', setCount: 5 },
+      standings: [{ position: 1, displayName: 'Alex', numCorrect: 5, totalElapsedSecs: 200 }],
+    });
+    expect(cleanup).toBeFalsy();
+  });
+
+  it('returns a falsy cleanup when the active heat has no live countdown (e.g. manual mode)', () => {
+    const container = document.createElement('div');
+    const cleanup = mountViewerBody(
+      container,
+      appHeatFixture({ timingMode: 'manual', startedAt: '2026-08-28T00:00:00Z' }),
+    );
+    expect(cleanup).toBeFalsy();
+  });
+
+  it('shows no countdown, not "NaN:NaN", when durationSecs is missing on an otherwise-live app heat', () => {
+    const container = document.createElement('div');
+    const cleanup = mountViewerBody(container, appHeatFixture({ durationSecs: undefined }));
+    expect(container.querySelector('.viewer-countdown')).toBeNull();
+    expect(container.textContent).not.toContain('NaN');
+    expect(cleanup).toBeFalsy();
+  });
+
+  it('announces once, non-visually, on crossing into the urgent window', () => {
+    const container = document.createElement('div');
+    mountViewerBody(container, appHeatFixture({ durationSecs: 12 }));
+    const announcement = () => container.querySelector('.sr-only');
+    expect(announcement().textContent).toBe('');
+    vi.advanceTimersByTime(2000); // 10s remaining — crosses the threshold
+    expect(announcement().textContent).toBe('Less than 10 seconds remaining.');
+    const textAfterFirstCross = announcement().textContent;
+    vi.advanceTimersByTime(1000); // 9s remaining — still urgent, not a new crossing
+    expect(announcement().textContent).toBe(textAfterFirstCross); // unchanged, not re-announced
+  });
+
+  it('announces once, non-visually, on expiry — distinct from the urgent message', () => {
+    const container = document.createElement('div');
+    mountViewerBody(container, appHeatFixture({ durationSecs: 2 }));
+    vi.advanceTimersByTime(3000);
+    expect(container.querySelector('.sr-only').textContent).toBe('Time is up.');
+  });
+
+  it('the countdown digits themselves stay aria-live="off" throughout — the announcement node is the separate, sparse channel', () => {
+    const container = document.createElement('div');
+    mountViewerBody(container, appHeatFixture());
+    expect(container.querySelector('.viewer-countdown').getAttribute('aria-live')).toBe('off');
+    const announcement = container.querySelector('.sr-only');
+    expect(announcement.getAttribute('aria-live')).toBe('polite');
   });
 });
 
@@ -339,6 +549,7 @@ describe('mountViewerBody — section composition', () => {
         status: 'timing',
         timingMode: 'app',
         startedAt: '2026-08-28T00:00:00Z',
+        durationSecs: 480,
         cuppers: [baseCupper()],
       },
       recentHeats: [{ heatNumber: 1, stageKind: 'prelims', results: [] }],

@@ -96,6 +96,17 @@ body {
   text-transform: uppercase;
 }
 
+/* Size only — never color/palette (see the module comment above: the
+   test-violet stripe deliberately stays fixed across both surface modes).
+   Found in review (T5.3): on the projector specifically, this banner was
+   the single smallest, least-legible line of text on an otherwise
+   room-legible display — exactly what D9's "unmistakable" bar exists to
+   prevent. clamp()-bounded, matching every other stage-mode text rule in
+   this codebase. */
+[data-surface='stage'] .is-test-banner {
+  font-size: clamp(var(--text-base), 2.5vw, var(--text-xl));
+}
+
 /* Guarantees both dimensions of the WCAG 2.5.5 minimum tap target
    (--tap-target-min, 44px) — apply to any icon-only control, where
    min-height alone (e.g. on a text button that's already wide enough)

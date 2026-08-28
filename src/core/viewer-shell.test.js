@@ -13,20 +13,31 @@ import {
 // real websocket. `_triggerChange` accepts an optional (deliberately
 // unused-by-the-real-handler) payload arg so a test can prove the shell
 // truly ignores it and re-reads, rather than trusting it.
-function fakeClient(initialRows = [], { failNextRead = false, readDelayMs = 0 } = {}) {
-  const db = { live_sessions: [...initialRows] };
+//
+// `events` defaults to ONE row for org1 — so every pre-existing test here
+// (written before the events lookup existed, none of them about the
+// noEvent/notStarted distinction) keeps seeing 'notStarted' exactly as
+// before. Tests that DO care about the distinction pass `events: []`
+// explicitly.
+function fakeClient(
+  initialRows = [],
+  { failNextRead = false, readDelayMs = 0, events = [{ id: 'ev1', org_id: 'org1' }] } = {},
+) {
+  const db = { live_sessions: [...initialRows], events: [...events] };
   let changeHandler = null;
   let statusHandler = null;
   let removedChannel = null;
   const channelObj = {};
   let shouldFail = failNextRead;
   let delay = readDelayMs;
+  let shouldFailEvents = false;
+  let eventsDelay = 0;
 
   function matchesFilters(row, filters) {
     return filters.every(([col, val]) => row[col] === val);
   }
 
-  function makeBuilder() {
+  function makeBuilder(table) {
     const filters = [];
     const builder = {
       select: () => builder,
@@ -34,7 +45,25 @@ function fakeClient(initialRows = [], { failNextRead = false, readDelayMs = 0 } 
         filters.push([col, val]);
         return builder;
       },
+      order: () => builder,
+      limit: () => builder,
       maybeSingle() {
+        if (table === 'events') {
+          const rows = db.events.filter((r) => matchesFilters(r, filters));
+          const snapshot = rows[0] ? { ...rows[0] } : null;
+          const willFail = shouldFailEvents;
+          if (shouldFailEvents) shouldFailEvents = false;
+          const resolveResult = () =>
+            willFail
+              ? { data: null, error: new Error('events read failed') }
+              : { data: snapshot, error: null };
+          if (eventsDelay > 0) {
+            return new Promise((resolve) =>
+              setTimeout(() => resolve(resolveResult()), eventsDelay),
+            );
+          }
+          return Promise.resolve(resolveResult());
+        }
         // Snapshot the matching row AND the fail flag synchronously, at
         // CALL time — not after the delay, at resolution time. A real
         // query reflects the database as of when it was issued, not
@@ -88,7 +117,7 @@ function fakeClient(initialRows = [], { failNextRead = false, readDelayMs = 0 } 
 
   return {
     db,
-    from: () => makeBuilder(),
+    from: (table) => makeBuilder(table),
     channel: () => channelObj,
     removeChannel: (ch) => {
       removedChannel = ch;
@@ -102,6 +131,12 @@ function fakeClient(initialRows = [], { failNextRead = false, readDelayMs = 0 } 
     },
     _setReadDelay: (ms) => {
       delay = ms;
+    },
+    _failNextEventsRead: () => {
+      shouldFailEvents = true;
+    },
+    _setEventsReadDelay: (ms) => {
+      eventsDelay = ms;
     },
     _isSubscribed: () => statusHandler != null,
   };
@@ -138,7 +173,8 @@ describe('defaultHasContent', () => {
 describe('renderHoldingState', () => {
   it.each([
     ['connecting', 'Connecting…'],
-    ['empty', 'Waiting for the organiser'],
+    ['noEvent', 'No event scheduled'],
+    ['notStarted', 'Waiting for the organiser'],
     ['pending', 'Event not published yet'],
     ['lost', 'Connection lost'],
   ])('renders the phase-specific title for "%s"', (phase, expectedTitle) => {
@@ -223,6 +259,191 @@ describe('mountViewerShell', () => {
       client: fakeClient([]),
     });
     expect(root.textContent).toContain('Waiting for the organiser');
+  });
+
+  it('renders "no event scheduled" instead, when the org has no event at all yet', async () => {
+    const root = document.createElement('div');
+    await mountViewerShell(root, {
+      orgId: 'org1',
+      renderBody: vi.fn(),
+      showChrome: false,
+      client: fakeClient([], { events: [] }),
+    });
+    expect(root.textContent).toContain('No event scheduled');
+    expect(root.textContent).not.toContain('Waiting for the organiser');
+  });
+
+  it('checks for an existing event only ONCE it needs to know, and re-uses that answer afterward', async () => {
+    const root = document.createElement('div');
+    const client = fakeClient([], { events: [] });
+    const eventsBuilderCalls = [];
+    const realFrom = client.from;
+    client.from = (table) => {
+      if (table === 'events') eventsBuilderCalls.push(1);
+      return realFrom(table);
+    };
+    await mountViewerShell(root, { orgId: 'org1', renderBody: vi.fn(), showChrome: false, client });
+    expect(eventsBuilderCalls).toHaveLength(1);
+
+    // Still no session, still no event — a later refresh checks again,
+    // since the answer isn't known to be "yes" yet.
+    client._triggerChange();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(eventsBuilderCalls).toHaveLength(2);
+
+    // Once an event exists, hasEvent latches true and is never re-checked.
+    client.db.events.push({ id: 'ev1', org_id: 'org1' });
+    client._triggerChange();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(root.textContent).toContain('Waiting for the organiser');
+
+    client._triggerChange();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(eventsBuilderCalls).toHaveLength(3); // the one that found the event, not a 4th
+  });
+
+  it('a live_sessions row latches hasEvent via the session branch alone (no events query), and the latch survives the session disappearing again', async () => {
+    const root = document.createElement('div');
+    const client = fakeClient([], { events: [] });
+    const eventsBuilderCalls = [];
+    const realFrom = client.from;
+    client.from = (table) => {
+      if (table === 'events') eventsBuilderCalls.push(1);
+      return realFrom(table);
+    };
+    await mountViewerShell(root, { orgId: 'org1', renderBody: vi.fn(), showChrome: false, client });
+    expect(root.textContent).toContain('No event scheduled');
+    expect(eventsBuilderCalls).toHaveLength(1);
+
+    // A live_sessions row appears — hasEvent latches via the `if (session)`
+    // branch, never touching the events table.
+    client.db.live_sessions.push(session({ payload: {} }));
+    client._triggerChange();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(eventsBuilderCalls).toHaveLength(1); // unchanged
+
+    // The session disappears again (organiser un-published) — hasEvent
+    // stays latched true, so this reverts to 'notStarted', NOT back to
+    // 'noEvent', and still without an events query.
+    client.db.live_sessions.length = 0;
+    client._triggerChange();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(root.textContent).toContain('Waiting for the organiser');
+    expect(root.textContent).not.toContain('No event scheduled');
+    expect(eventsBuilderCalls).toHaveLength(1);
+  });
+
+  it('a transient failure checking for an event tries again next refresh, rather than caching a false negative forever', async () => {
+    const root = document.createElement('div');
+    const client = fakeClient([], { events: [{ id: 'ev1', org_id: 'org1' }] });
+    client._failNextEventsRead();
+    await mountViewerShell(root, { orgId: 'org1', renderBody: vi.fn(), showChrome: false, client });
+    // The failed check leaves hasEvent at its starting value (false) —
+    // shows the more generic card rather than throwing or getting stuck.
+    expect(root.textContent).toContain('No event scheduled');
+
+    client._triggerChange();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(root.textContent).toContain('Waiting for the organiser');
+  });
+
+  it('times out a hung event-existence check at its own SHORTER bound, not the primary 10s one', async () => {
+    vi.useFakeTimers();
+    try {
+      const root = document.createElement('div');
+      const client = {
+        from: (table) => ({
+          select: () => ({
+            eq: () => ({
+              eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }),
+              order: () => ({
+                limit: () => ({
+                  maybeSingle: () =>
+                    table === 'events'
+                      ? new Promise(() => {})
+                      : Promise.resolve({ data: null, error: null }),
+                }),
+              }),
+            }),
+          }),
+        }),
+        channel: () => ({
+          on: () => ({ subscribe: () => {} }),
+          subscribe() {
+            return this;
+          },
+        }),
+        removeChannel: () => {},
+      };
+      const mountPromise = mountViewerShell(root, {
+        orgId: 'org1',
+        renderBody: vi.fn(),
+        showChrome: false,
+        client,
+      });
+      // 4000ms, not 10000 — the events check's own shorter timeout. If this
+      // were still racing against the primary 10s bound, the viewer would
+      // still be on 'Connecting…' at this point.
+      await vi.advanceTimersByTimeAsync(4000);
+      await mountPromise;
+      // Fails toward the more generic card, not stuck forever on 'Connecting…'.
+      expect(root.textContent).toContain('No event scheduled');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('the combined worst-case wait (slow live_sessions read, then a hung events check) stays well under double the primary bound', async () => {
+    vi.useFakeTimers();
+    try {
+      const root = document.createElement('div');
+      const client = {
+        from: (table) => ({
+          select: () => ({
+            eq: () => ({
+              // live_sessions itself resolves, but only after 9s — close to
+              // its own 10s bound without tripping it.
+              eq: () => ({
+                maybeSingle: () =>
+                  new Promise((resolve) =>
+                    setTimeout(() => resolve({ data: null, error: null }), 9000),
+                  ),
+              }),
+              order: () => ({
+                limit: () => ({
+                  maybeSingle: () =>
+                    table === 'events'
+                      ? new Promise(() => {})
+                      : Promise.resolve({ data: null, error: null }),
+                }),
+              }),
+            }),
+          }),
+        }),
+        channel: () => ({
+          on: () => ({ subscribe: () => {} }),
+          subscribe() {
+            return this;
+          },
+        }),
+        removeChannel: () => {},
+      };
+      const mountPromise = mountViewerShell(root, {
+        orgId: 'org1',
+        renderBody: vi.fn(),
+        showChrome: false,
+        client,
+      });
+      // 9s (live_sessions resolves) + 4s (events check's own shorter
+      // timeout) = 13s total — comfortably under a NAIVE double-10s (20s)
+      // worst case, proving EVENT_CHECK_TIMEOUT_MS actually bounds the
+      // compounded wait rather than silently doubling it.
+      await vi.advanceTimersByTimeAsync(13000);
+      await mountPromise;
+      expect(root.textContent).toContain('No event scheduled');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('renders the "not published yet" holding state for an active session with no content', async () => {
@@ -565,6 +786,96 @@ describe('mountViewerShell', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('calls a renderBody-returned cleanup before the next re-render', async () => {
+    const root = document.createElement('div');
+    const cleanup = vi.fn();
+    const renderBody = vi.fn(() => cleanup);
+    const client = fakeClient([session({ payload: { a: 1 } })]);
+    await mountViewerShell(root, { orgId: 'org1', renderBody, showChrome: false, client });
+    expect(renderBody).toHaveBeenCalledTimes(1);
+    expect(cleanup).not.toHaveBeenCalled();
+
+    client.db.live_sessions[0].payload = { a: 2 };
+    client._triggerChange();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(cleanup).toHaveBeenCalledTimes(1);
+    expect(renderBody).toHaveBeenCalledTimes(2);
+  });
+
+  it('calls the cleanup BEFORE the body is wiped for the next render, not after', async () => {
+    const root = document.createElement('div');
+    const client = fakeClient([session({ payload: { a: 1 } })]);
+    // The cleanup closes over `container` (the same node renderBody itself
+    // received) and records its own child count at the moment it runs — the
+    // only way to observe from outside whether the old content was still
+    // there when cleanup fired, or already gone.
+    const observedChildCounts = [];
+    const renderBody = vi.fn((container) => {
+      container.appendChild(document.createElement('span'));
+      return () => observedChildCounts.push(container.childNodes.length);
+    });
+    await mountViewerShell(root, { orgId: 'org1', renderBody, showChrome: false, client });
+
+    client.db.live_sessions[0].payload = { a: 2 };
+    client._triggerChange();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // 1, not 0 — the old <span> was still there when cleanup ran, proving
+    // cleanup fires before body.replaceChildren() wipes it, not after.
+    expect(observedChildCounts).toEqual([1]);
+  });
+
+  it('calls a renderBody-returned cleanup on unmount', async () => {
+    const root = document.createElement('div');
+    const cleanup = vi.fn();
+    const { unmount } = await mountViewerShell(root, {
+      orgId: 'org1',
+      renderBody: () => cleanup,
+      showChrome: false,
+      client: fakeClient([session({ payload: { a: 1 } })]),
+    });
+    expect(cleanup).not.toHaveBeenCalled();
+    unmount();
+    expect(cleanup).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls the cleanup BEFORE the root is wiped on unmount, not after', async () => {
+    const root = document.createElement('div');
+    let rootHtmlAtCleanupTime = null;
+    const { unmount } = await mountViewerShell(root, {
+      orgId: 'org1',
+      renderBody: (container) => {
+        container.appendChild(document.createElement('span'));
+        return () => {
+          rootHtmlAtCleanupTime = root.innerHTML;
+        };
+      },
+      showChrome: false,
+      client: fakeClient([session({ payload: { a: 1 } })]),
+    });
+    unmount();
+    // Non-empty — the full mounted tree was still there when cleanup ran,
+    // proving cleanup fires before root.innerHTML = '' wipes it, not after.
+    expect(rootHtmlAtCleanupTime).not.toBe('');
+    expect(rootHtmlAtCleanupTime).toContain('<span>');
+  });
+
+  it('tolerates a renderBody that returns nothing (no cleanup needed)', async () => {
+    const root = document.createElement('div');
+    const client = fakeClient([session({ payload: { a: 1 } })]);
+    const { unmount } = await mountViewerShell(root, {
+      orgId: 'org1',
+      renderBody: vi.fn(),
+      showChrome: false,
+      client,
+    });
+    client.db.live_sessions[0].payload = { a: 2 };
+    client._triggerChange();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(() => unmount()).not.toThrow();
   });
 
   it('unmount removes the realtime channel and clears the root', async () => {
