@@ -202,20 +202,26 @@ two consumers of the same shell/data. Verifiers per task, `code-reviewer` always
   proves to matter in practice before October.
 - **No DB-level `unique(heat_id, station)` constraint — closed (2026-08-29 follow-up).**
   Migration `20260829100000_ct_heat_entries_station_unique.sql` adds
-  `ct_heat_entries_heat_station_unique unique (heat_id, station)`, named explicitly so
-  `ensureHeatEntries` (`heats.js`) can tell it apart from the pre-existing
-  `unique(heat_id, entry_id)` constraint's own violation — the two need different
-  handling: an `entry_id` collision is a safe-to-retry race (the next attempt's
-  `diffAgainst` sees the row and moves on), but a `station` collision means two
-  different cuppers are racing for the same station and retrying the identical insert
-  would just fail identically every time, so a new `isStationConflict()` helper fails
-  fast with a clear message instead of quietly burning through the bounded-retry budget.
-  Verified empirically against the real local Postgres instance (`docker exec` +
+  `ct_heat_entries_heat_station_unique unique (heat_id, station)` plus `alter column
+  station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can tell
+  it apart from the pre-existing `unique(heat_id, entry_id)` constraint's own violation —
+  the two need different handling: an `entry_id` collision is a safe-to-retry race (the
+  next attempt's `diffAgainst` sees the row and moves on), but a `station` collision
+  means two different cuppers are racing for the same station and retrying the identical
+  insert would just fail identically every time, so a new `isStationConflict()` helper
+  fails fast with a clear message instead of quietly burning through the bounded-retry
+  budget. Verified empirically against the real local Postgres instance (`docker exec` +
   concurrent `psql`) that a genuine violation's error DETAIL and constraint name both
   contain the word "station", confirming the string-match discriminator is reliable.
-  Three new pgTAP assertions (`002_cup_taster_tables.sql`, plan grown to 9) plus a new
-  Vitest case proving the fail-fast path issues exactly one insert attempt, never
-  retries. See CHANGELOG.md's dated entry for the full account.
+  **`schema-guardian` caught a real gap in review**: a plain `unique` constraint alone
+  gives zero protection when `station IS NULL` (Postgres treats every NULL as distinct),
+  so the `NOT NULL` addition is what actually closes the gap, not the `unique` alone —
+  fixing this broke five pre-existing pgTAP fixtures across the test suite that inserted
+  `ct_heat_entries` without a station, all repaired. Three new pgTAP assertions
+  (`002_cup_taster_tables.sql`, plan grown to 9, one strengthened per `test-auditor` to
+  check the exact error message) plus a new Vitest case proving the fail-fast path
+  issues exactly one insert attempt, never retries. See CHANGELOG.md's dated entry for
+  the full account.
 - **Supabase cloud project not yet linked.** Phases 0–3 only set up and verified the
   local stack. Linking a cloud project (and the `supabase db push` step CLAUDE.md's Git
   section refers to) is Phase 4+ work, once the schema is stable enough to push.

@@ -240,6 +240,12 @@ src/
                                    recovery path, unchanged), told apart by matching
                                    "station" in the Postgres error's DETAIL/message,
                                    verified against a real violation via docker exec;
+                                   schema-guardian caught the migration's own first
+                                   version relying on a plain unique alone, which gives
+                                   zero protection when station IS NULL — the added
+                                   `alter column station set not null` is what actually
+                                   closes the gap, fixed in the same migration since it
+                                   was still local-only and unpushed;
                                    scoring, scoringScreen
                                    (T4.5 — three-state toggle + strict confirm; the whole
                                    heat is submitted as ONE outbox operation through the
