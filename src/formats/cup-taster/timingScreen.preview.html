@@ -123,14 +123,23 @@
           return builder;
         }
 
-        return { from: (table) => makeBuilder(table) };
+        return { from: (table) => makeBuilder(table), db };
       }
 
+      const client = createDemoClient();
       mountTimingScreen(document.getElementById('app'), {
         eventId: 'ev1',
         heatId: 'h1',
-        client: createDemoClient(),
+        client,
       });
+
+      // e2e test hook only — tests/e2e/cross-surface-countdown.spec.js
+      // reads the real started_at/duration_secs this page's own "Start
+      // heat" action sets, then publishes the exact same values to the
+      // phone/projector harnesses in separate browser contexts, to prove
+      // genuine cross-context agreement on remaining time. Not part of the
+      // shipped module graph, same as everything else in this harness.
+      window.__e2e = { client };
     </script>
   </body>
 </html>

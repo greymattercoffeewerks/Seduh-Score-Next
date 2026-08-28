@@ -70,6 +70,7 @@
 
     <script type="module">
       import { mountPhoneSummary } from './phoneSummary.js';
+      import { buildActiveHeatPayload } from './demoActiveHeatPayload.js';
 
       const ORG_ID = 'org1';
       const EVENT_ID = 'ev1';
@@ -190,23 +191,7 @@
 
       document.getElementById('btn-active-heat').addEventListener('click', () => {
         client._publish({
-          payload: {
-            stage: { kind: 'prelims', setCount: 5 },
-            standings,
-            activeHeat: {
-              heatNumber: 2,
-              stageKind: 'prelims',
-              status: 'timing',
-              timingMode: 'app',
-              startedAt: new Date().toISOString(),
-              durationSecs: 480,
-              cuppers: [
-                { displayName: 'Jordan Lee', station: 'A', totalElapsedSecs: null, maxed: false },
-                { displayName: 'Priya Nair', station: 'B', totalElapsedSecs: 190, maxed: false },
-                { displayName: 'Taylor Chen', station: 'C', totalElapsedSecs: 480, maxed: true },
-              ],
-            },
-          },
+          payload: buildActiveHeatPayload(new Date().toISOString(), 480, standings),
         });
       });
 
@@ -262,6 +247,19 @@
           frame.setAttribute('data-surface', 'stage');
         }
       });
+
+      // e2e test hook only — tests/e2e/cross-surface-countdown.spec.js
+      // publishes the exact same startedAt/durationSecs here as it reads
+      // from the organiser's own timingScreen.preview.html (a separate
+      // browser context), to prove genuine cross-context agreement on
+      // remaining time rather than three independently-guessed timestamps.
+      // Not part of the shipped module graph, same as everything else in
+      // this harness.
+      window.__e2e = {
+        publishActiveHeat(startedAt, durationSecs) {
+          client._publish({ payload: buildActiveHeatPayload(startedAt, durationSecs, standings) });
+        },
+      };
     </script>
   </body>
 </html>

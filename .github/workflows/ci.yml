@@ -30,6 +30,32 @@ jobs:
           VITE_SUPABASE_URL: http://127.0.0.1:54421
           VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
 
+  # Closes the handoff's own cross-surface AC (§14, T5.3/T5.4): "Playwright
+  # test driving organiser + projector + phone simultaneously, proving all
+  # three agree on remaining time." Found in review: this test existing
+  # locally isn't the same as it being continuously verified — a separate
+  # job, self-contained (its own checkout/build), since Playwright's own
+  # webServer config starts both `npm run preview` (needs a `dist/` built in
+  # THIS job, GitHub Actions jobs don't share build output) and `npm run dev`.
+  playwright:
+    name: Playwright e2e
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+        env:
+          # Same non-secret local-dev demo credentials as the `app` job's own
+          # build step, and for the same reason — see that step's comment.
+          VITE_SUPABASE_URL: http://127.0.0.1:54421
+          VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
+      - run: npm run test:e2e
+
   # Migrations must apply cleanly to a database built from scratch (handoff §11
   # item 10; §14 T0.3 AC), then the pgTAP suite under supabase/tests/ runs
   # against it. supabase/tests/000_sanity.sql is a Phase 0 placeholder proving
