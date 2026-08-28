@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Phone summary — preview</title>
+    <link rel="stylesheet" href="/src/ui/tokens/index.css" />
+    <link rel="stylesheet" href="/src/core/viewer-shell.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/heatsScreen.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/standingsScreen.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/viewerBody.css" />
+    <style>
+      /* Demo-harness-only layout — not part of the shipped module graph. */
+      .demo-controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 16px;
+        border-bottom: 2px solid var(--color-border-strong);
+        background: var(--color-surface);
+      }
+      .demo-controls button {
+        min-height: 44px;
+        padding: 8px 14px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--color-border-strong);
+        background: var(--color-surface);
+        color: var(--color-text);
+        font-family: var(--font-body);
+        cursor: pointer;
+      }
+      .demo-surface {
+        max-width: 420px;
+        margin: 16px;
+        border: 2px solid var(--color-border-strong);
+        border-radius: var(--radius-md);
+        overflow: hidden;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      Demo-only harness for the T5.4 phone summary surface — not part of the
+      shipped module graph, same role as every other *.preview.html file.
+      Mounts the REAL mountPhoneSummary() (viewer-shell + viewerBody, wired
+      together exactly as phoneSummary.js composes them) against a fake
+      live_sessions source, so — unlike viewer-shell.preview.html's own
+      stub renderBody — this harness demonstrates real Cup Taster content:
+      a standings table, an active-heat panel with running/done/maxed
+      cupper chips, the manual-heat no-clock state (§8.2's own AC), and
+      recent results.
+
+      Buttons drive realistic publish_session payloads directly (bypassing
+      the still-unbuilt real "assemble a payload from standings.js/heats.js"
+      wiring — deliberately out of this task's scope, see viewerBody.js's
+      own module comment for why).
+    -->
+    <div class="demo-controls">
+      <button id="btn-standings-only">Standings only</button>
+      <button id="btn-active-heat">+ Active heat (app mode)</button>
+      <button id="btn-manual-no-clock">Manual heat, not started (no-clock)</button>
+      <button id="btn-recent">+ Recent results</button>
+      <button id="btn-test-event">Publish as TEST event</button>
+      <button id="btn-end">End session</button>
+      <button id="btn-disconnect">Simulate disconnect</button>
+      <button id="btn-reconnect">Reconnect</button>
+      <button id="btn-toggle-stage">Toggle stage mode</button>
+    </div>
+    <div id="phone-frame" class="demo-surface"></div>
+
+    <script type="module">
+      import { mountPhoneSummary } from './phoneSummary.js';
+
+      const ORG_ID = 'org1';
+      const EVENT_ID = 'ev1';
+
+      function createDemoClient() {
+        const db = { live_sessions: [] };
+        let idCounter = 0;
+        const changeHandlers = [];
+        const statusHandlers = [];
+
+        function matchesFilters(row, filters) {
+          return filters.every(([col, val]) => row[col] === val);
+        }
+
+        function notifyChange() {
+          for (const h of changeHandlers) h();
+        }
+
+        function makeBuilder() {
+          const filters = [];
+          const builder = {
+            select: () => builder,
+            eq(col, val) {
+              filters.push([col, val]);
+              return builder;
+            },
+            maybeSingle() {
+              const rows = db.live_sessions.filter((r) => matchesFilters(r, filters));
+              return Promise.resolve({ data: rows[0] ?? null, error: null });
+            },
+          };
+          return builder;
+        }
+
+        const channelObj = {
+          on(_event, _filter, handler) {
+            changeHandlers.push(handler);
+            return channelObj;
+          },
+          subscribe(cb) {
+            statusHandlers.push(cb);
+            Promise.resolve().then(() => cb('SUBSCRIBED'));
+            return channelObj;
+          },
+        };
+
+        return {
+          from: () => makeBuilder(),
+          channel: () => channelObj,
+          removeChannel: () => {},
+          _publish({ isTest = false, payload }) {
+            for (const row of db.live_sessions) {
+              if (row.org_id === ORG_ID) row.active = false;
+            }
+            let row = db.live_sessions.find((r) => r.event_id === EVENT_ID);
+            if (!row) {
+              idCounter += 1;
+              row = { id: `ls-${idCounter}`, org_id: ORG_ID, event_id: EVENT_ID };
+              db.live_sessions.push(row);
+            }
+            Object.assign(row, { format: 'cup_taster', active: true, is_test: isTest, payload });
+            notifyChange();
+          },
+          _end() {
+            for (const row of db.live_sessions) {
+              if (row.org_id === ORG_ID) row.active = false;
+            }
+            notifyChange();
+          },
+          _setStatus(status) {
+            for (const h of statusHandlers) h(status);
+          },
+        };
+      }
+
+      const client = createDemoClient();
+      mountPhoneSummary(document.getElementById('phone-frame'), { orgId: ORG_ID, client });
+
+      const standings = [
+        {
+          position: 1,
+          displayName: 'Alex Rivera',
+          numCorrect: 5,
+          totalElapsedSecs: 210,
+          tieStatus: 'advancing',
+        },
+        {
+          position: 2,
+          displayName: 'Jordan Lee',
+          numCorrect: 5,
+          totalElapsedSecs: 245,
+          tieStatus: 'tied',
+        },
+        { position: 3, displayName: 'Sam Okafor', numCorrect: 3, totalElapsedSecs: 300 },
+        { position: 4, displayName: 'Priya Nair', numCorrect: 1, totalElapsedSecs: null },
+      ];
+      const recentHeats = [
+        {
+          heatNumber: 1,
+          stageKind: 'prelims',
+          results: [
+            { displayName: 'Alex Rivera', numCorrect: 5, totalElapsedSecs: 210 },
+            { displayName: 'Sam Okafor', numCorrect: 3, totalElapsedSecs: 300 },
+          ],
+        },
+      ];
+
+      document.getElementById('btn-standings-only').addEventListener('click', () => {
+        client._publish({
+          payload: { stage: { kind: 'prelims', setCount: 5 }, standings },
+        });
+      });
+
+      document.getElementById('btn-active-heat').addEventListener('click', () => {
+        client._publish({
+          payload: {
+            stage: { kind: 'prelims', setCount: 5 },
+            standings,
+            activeHeat: {
+              heatNumber: 2,
+              stageKind: 'prelims',
+              status: 'timing',
+              timingMode: 'app',
+              startedAt: new Date().toISOString(),
+              durationSecs: 480,
+              cuppers: [
+                { displayName: 'Jordan Lee', station: 'A', totalElapsedSecs: null, maxed: false },
+                { displayName: 'Priya Nair', station: 'B', totalElapsedSecs: 190, maxed: false },
+                { displayName: 'Taylor Chen', station: 'C', totalElapsedSecs: 480, maxed: true },
+              ],
+            },
+          },
+        });
+      });
+
+      document.getElementById('btn-manual-no-clock').addEventListener('click', () => {
+        client._publish({
+          payload: {
+            stage: { kind: 'prelims', setCount: 5 },
+            standings,
+            activeHeat: {
+              heatNumber: 3,
+              stageKind: 'prelims',
+              status: 'timing',
+              timingMode: 'manual',
+              startedAt: null,
+              durationSecs: 480,
+              cuppers: [
+                { displayName: 'Morgan Diaz', station: 'A', totalElapsedSecs: null, maxed: false },
+                { displayName: 'Casey Wu', station: 'B', totalElapsedSecs: null, maxed: false },
+              ],
+            },
+          },
+        });
+      });
+
+      document.getElementById('btn-recent').addEventListener('click', () => {
+        client._publish({
+          payload: { stage: { kind: 'prelims', setCount: 5 }, standings, recentHeats },
+        });
+      });
+
+      document.getElementById('btn-test-event').addEventListener('click', () => {
+        client._publish({
+          isTest: true,
+          payload: { stage: { kind: 'prelims', setCount: 5 }, standings },
+        });
+      });
+
+      document.getElementById('btn-end').addEventListener('click', () => {
+        client._end();
+      });
+      document.getElementById('btn-disconnect').addEventListener('click', () => {
+        client._setStatus('CHANNEL_ERROR');
+      });
+      document.getElementById('btn-reconnect').addEventListener('click', () => {
+        client._setStatus('SUBSCRIBED');
+      });
+      document.getElementById('btn-toggle-stage').addEventListener('click', () => {
+        const frame = document.getElementById('phone-frame');
+        const isStage = frame.getAttribute('data-surface') === 'stage';
+        if (isStage) {
+          frame.removeAttribute('data-surface');
+        } else {
+          frame.setAttribute('data-surface', 'stage');
+        }
+      });
+    </script>
+  </body>
+</html>

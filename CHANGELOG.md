@@ -6,6 +6,104 @@ closes.
 
 ---
 
+## Phase 5 — Live surfaces · 2026-08-28 (T5.4 — phone summary surface)
+
+### viewerBody + phoneSummary
+
+Phase 5's fourth task. Researched the legacy v4.x app's own (never-shipped-standalone)
+Cup Taster audience view — `rAudienceLbHTML()`/`rAudienceHeatHTML()`, only ever an
+operator-device overlay, never a real live surface — for the content SHAPE this task
+ports; nothing about how it was delivered carries over. Scoped with the user as
+logic/content-renderer only, matching T5.1/T5.2's own precedent: nothing wires a real
+`publishSession()` call from any existing screen yet, so the `live_sessions.payload`
+shape this task defines is a new contract this task invents, not yet built by anything
+else.
+
+`src/formats/cup-taster/viewerBody.js`/`.css` (new): `mountViewerBody(container,
+payload)` — the `renderBody` callback `core/viewer-shell.js` (T5.2) plugs in once real
+content exists. A standings table (reusing `standingsScreen.css`'s `.standings-table`
+unedited, its third consumer), an active-heat panel with per-cupper status chips
+(running/done/maxed), and a short recent-results list. Deliberately Cup-Taster-specific
+(per the handoff's own module table), meant to be shared unedited by T5.3's projector.
+`src/formats/cup-taster/phoneSummary.js` (new): the thin phone-specific composition —
+`viewer-shell` + `viewerBody`, `showChrome: true` (the phone surface's own defining
+choice; T5.3 omits it). Both demonstrated via a live preview harness
+(`phoneSummary.preview.html`) mounting the real modules against a fake `live_sessions`
+source, not a stub.
+
+Verifiers: `module-boundary-checker`, `test-auditor`, `ui-accessibility-reviewer`,
+`code-reviewer` — four agents in parallel (no migration/RLS/scoring change this task, so
+`schema-guardian`/`security-reviewer`/`scoring-auditor` didn't apply).
+`module-boundary-checker` came back clean — confirmed `chainComparators` reuse (added
+during fixes below) and the read-only `totalElapsedSecs` fields introduce no second
+writer. The other three found real issues, all fixed:
+
+1. **`ui-accessibility-reviewer` (the most significant finding — high severity, directly
+   against this task's own AC): the no-clock heat's own heading read "Timing…" immediately
+   above the "Manual heat — not yet started." message** — a self-contradiction sitting
+   right next to the one AC this task exists to prove ("prove a manual heat with no
+   `started_at` renders its defined no-clock state rather than a blank or a zeroed
+   timer"). Fixed by deriving the heading label from `isNoClockHeat` too ("Not started"
+   instead of falling through to the generic timing/scoring label).
+2. **`ui-accessibility-reviewer` (also high severity): the "running" cupper status had no
+   non-color signal at all** — done had a ✓, maxed had "(max)", running had nothing, so a
+   screen-reader user or anyone who can't visually compare chips side-by-side had no way
+   to tell a currently-timing cupper apart. Fixed with an explicit "(timing)" suffix; also
+   added "(done)" alongside the checkmark, since a bare ✓'s pronunciation is inconsistent
+   across screen readers.
+3. **`ui-accessibility-reviewer` (medium, three related findings): stage-mode's font-size
+   bump missed `.stage-meta`/`.viewer-recent-heat-list` (an empty-stage projector's only
+   text would've been the smallest thing on screen); the stage-mode maxed-chip color sat
+   in the same ~4.67:1 contrast margin this project's own `viewer-shell.css` already
+   rejected once; and the "no `clamp()` needed" reasoning for stage-mode sizing rested on
+   an assumption about T5.3's eventual fixed-canvas wrapper that isn't built yet.** All
+   three fixed: added the missing selectors, switched the maxed chip to the stronger
+   `--color-text-secondary` token in stage mode (verified live at `rgb(230, 219, 200)`,
+   matching `--clr-clay-300`), and applied `clamp()` defensively, mirroring
+   `viewer-shell.css`'s own precedent. Also flagged and closed cheaply while the payload
+   contract is still wet: standings had no way to mark a tied/advancing cupper even though
+   `standings.js`/`standingsScreen.css` already model exactly that on the organiser side —
+   added an optional `tieStatus` field, rendered as a text-carried label (not color alone).
+   The preview harness gained a stage-mode toggle so this CSS actually gets visually
+   exercised, not just written.
+4. **`code-reviewer`: `payload.stage`'s header comment said required, but the code and
+   tests already treated it as optional** — surfaced a real latent gap underneath the doc
+   error: a payload with real `standings` but no `stage` would silently render a blank
+   body under the shell's "Live" chrome. Fixed by decoupling the heading from the table
+   (standings render with a bare correct-count when `stage` is absent) and correcting the
+   doc to `null | {...}`, matching `activeHeat`'s own notation. Also: `cupperStatus`'s
+   maxed-before-done precedence was correct but undocumented (a comment now explains why
+   the order matters, per `core/timeclamp.js`'s clamped-not-null maxed value), the
+   `elapsedSecs`→`totalElapsedSecs` rename's justification overstated
+   `no-raw-elapsed-write`'s reach (the module's own reads were never actually at risk —
+   only test-fixture object literals would have been; comment tightened to lead with the
+   real reason, matching `standings.js`'s own `total_elapsed_secs` precedent), and
+   `renderRecentHeat` hand-rolled a sort comparator instead of reusing `core/ranking.js`'s
+   `chainComparators` — the exact "reimplementing a core/ primitive inside a format"
+   pattern CLAUDE.md names as the module boundary's reason for existing. Now reuses it.
+5. **`test-auditor` (two proof gaps, both closed):** the no-clock-state test proved the
+   message string appeared but never proved the AC's actual negative — a regression that
+   also rendered a stray duration/countdown alongside the message would have passed
+   unchanged; closed with explicit `not.toMatch()` assertions against clock-shaped
+   strings. `phoneSummary.test.js`'s "no `data-surface` override" test only checked the
+   root node, not the whole mounted subtree; strengthened to
+   `querySelectorAll('[data-surface]')`.
+
+28 tests now (26 → 28: a missing-`stage` fallback case, and tied/advancing rendering),
+plus the two strengthened assertions above. Full suite (647 tests) and lint/format clean.
+Live-verified in browser: the no-clock heading no longer contradicts its own body text,
+all three chip states show a non-color signal, tied/advancing standings render with text
+labels and the correct `data-status`, and the stage-mode toggle confirmed the stronger
+maxed-chip contrast token takes effect.
+
+**Follow-up flagged, not fixed here** (out of this task's scope — touches
+`core/viewer-shell.js`, already-shipped T5.2 code): the mounted viewer tree has no `<h1>`
+anywhere, so `viewerBody.js`'s own `<h2>` becomes the page's first heading with nothing
+to nest under. Spawned as its own task rather than reopening T5.2's shipped module
+mid-T5.4.
+
+---
+
 ## Phase 5 — Live surfaces · 2026-08-28 (T5.2 — viewer-shell + holding states)
 
 ### viewer-shell
