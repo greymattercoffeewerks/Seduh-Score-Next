@@ -2,9 +2,10 @@
 
 _State: Phase 0 done; Phase 1 done (T1.1–T1.4); Phase 2 done (T2.1–T2.6); Phase 3 done
 (T3.1–T3.3); Phase 4 done (T4.1–T4.8, plus two 2026-08-27 follow-ups closing T4.1's
-stage-plan UI gap and its roster-registration UI gap); Phase 5 done (T5.1–T5.4, the
-2026-08-28 holding-state follow-up, the cross-surface Playwright AC, and the 2026-08-28
-viewer-shell `<h1>`/heading-hierarchy follow-up) — matches CHANGELOG.md as of 2026-08-28_
+stage-plan UI gap and its roster-registration UI gap, and a 2026-08-29 follow-up closing
+T4.3/T4.4's direct-write gap — see below); Phase 5 done (T5.1–T5.4, the 2026-08-28
+holding-state follow-up, the cross-surface Playwright AC, and the 2026-08-28 viewer-shell
+`<h1>`/heading-hierarchy follow-up) — matches CHANGELOG.md as of 2026-08-29_
 
 Read these before touching anything:
 
@@ -199,16 +200,40 @@ src/
                                    T4.1's OTHER no-UI gap: register/list/withdraw cuppers,
                                    built on core/registry.js unedited); heats, heatsScreen
                                    (T4.2 — first real UI screen in the project); timing,
-                                   timingScreen (T4.3 — first live/ticking screen; direct
-                                   writes, not the outbox — see ROADMAP.md's known-gaps);
+                                   timingScreen (T4.3 — first live/ticking screen);
                                    timingManual, timingManualScreen (T4.4 — manual mode,
-                                   also direct-write; timing.js exports shared helpers
-                                   both timing modes reuse); scoring, scoringScreen (T4.5
-                                   — three-state toggle + strict confirm; the whole heat
-                                   is submitted as ONE outbox operation through the
-                                   existing confirm_heat RPC, unlike T4.3/T4.4's direct
-                                   writes — first format module to use core/outbox.js's
-                                   `.permanent` error-flag contract); standings,
+                                   timing.js exports shared helpers both timing modes
+                                   reuse); both were direct-write until a 2026-08-29
+                                   follow-up routed every write (start a heat, a real tap,
+                                   a manual entry/correction, an auto-max sweep) through
+                                   the outbox via three new RPCs (start_heat/
+                                   record_heat_time/auto_max_heat, migration
+                                   20260828150000) mirroring confirm_heat's idempotent,
+                                   org-scoped shape — timing.js gained a shared
+                                   timingHandlers(client) map (used by every flush in both
+                                   modules, since core/outbox.js registers handlers per
+                                   flushOutbox() call, not globally) and a
+                                   buildRecordHeatTimePayload() helper shared by
+                                   recordTap/recordManualTime; timingScreen.js/
+                                   timingManualScreen.js gained a "ground truth over flush
+                                   bookkeeping" pattern (pendingHeatCheck/
+                                   pendingEntryCheck) comparing a fresh reload against the
+                                   exact value a write attempted, not a bare null-check —
+                                   a real concurrency bug (two concurrent taps for a
+                                   heat's last two entries could both miss the
+                                   advance-to-scoring flip; a first fix attempt then left
+                                   a narrower stale-read gap under lock contention) was
+                                   found and closed during review, verified with real
+                                   concurrent psql sessions, not just pgTAP — see
+                                   CHANGELOG.md/ROADMAP.md for the full account, including
+                                   a related, NOT-yet-closed gap the same review surfaced
+                                   (timingHandlers() isn't shared with scoring.js's/
+                                   publish.js's own handler maps); scoring, scoringScreen
+                                   (T4.5 — three-state toggle + strict confirm; the whole
+                                   heat is submitted as ONE outbox operation through the
+                                   existing confirm_heat RPC — first format module to use
+                                   core/outbox.js's `.permanent` error-flag contract, and
+                                   the pattern T4.3/T4.4 followed above); standings,
                                    standingsScreen (T4.6 — ranking/advancement/tiebreak/
                                    coin-toss, direct writes like T4.2; heats.js gained a
                                    generalized `kind` parameter for tiebreak heat creation);

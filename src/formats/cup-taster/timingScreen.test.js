@@ -1,45 +1,172 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderRosterPreview, renderTimingRows, mountTimingScreen } from './timingScreen.js';
+import { _clearAllForTests } from '../../core/db.js';
 
-function fakeClient({ tables = {} } = {}) {
-  const queues = {};
-  for (const [table, response] of Object.entries(tables)) {
-    queues[table] = Array.isArray(response) ? [...response] : [response];
-  }
-  const calls = [];
+beforeEach(async () => {
+  await _clearAllForTests();
+});
 
-  return {
-    calls,
-    from(table) {
-      const queue = queues[table] ?? [{ data: null, error: null }];
-      const resolve = () => (queue.length > 1 ? queue.shift() : queue[0]);
-      const builder = {
-        select: (...args) => {
-          calls.push(['select', table, ...args]);
-          return builder;
-        },
-        update: (payload) => {
-          calls.push(['update', table, payload]);
-          return builder;
-        },
-        eq: (...args) => {
-          calls.push(['eq', table, ...args]);
-          return builder;
-        },
-        is: (...args) => {
-          calls.push(['is', table, ...args]);
-          return builder;
-        },
-        in: (...args) => {
-          calls.push(['in', table, ...args]);
-          return builder;
-        },
-        single: () => Promise.resolve(resolve()),
-        maybeSingle: () => Promise.resolve(resolve()),
-        then: (onResolve, onReject) => Promise.resolve(resolve()).then(onResolve, onReject),
-      };
+// This suite fakes ONLY `Date` (`vi.useFakeTimers({ toFake: ['Date'] })`
+// below), never the full timer set — found while wiring outbox writes
+// through this screen's tests: fake-indexeddb schedules its own callback
+// via a REAL setImmediate obtained from an unsandboxed realm (see
+// node_modules/fake-indexeddb/build/cjs/lib/scheduling.js's jsdom-detection
+// branch, which deliberately escapes jsdom's sandboxing — the same root
+// cause scoringScreen.test.js's own equivalent comment documents). Faking
+// the full timer set (the original attempt here) doesn't just slow that
+// callback down, it leaves the underlying IndexedDB transaction OPEN
+// forever, which then hangs every LATER test's own indexedDB access too
+// (observed directly: subsequent tests' beforeEach hooks timed out).
+// Leaving setInterval/setTimeout/setImmediate genuinely real sidesteps the
+// whole problem — a plain `await settle()` below is an ordinary, unfaked
+// wait, and the countdown's own real `setInterval` fires on its own real
+// 1-second cadence; `vi.setSystemTime()` (Date is still faked) is what
+// makes that next real tick DISPLAY however many simulated seconds a test
+// wants, without needing to wait that many real seconds for it.
+function settle(ms = 50) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function matchesFilters(row, filters) {
+  return filters.every(([type, col, val]) => {
+    if (type === 'eq') return row[col] === val;
+    if (type === 'is') return row[col] === val;
+    if (type === 'in') return val.includes(row[col]);
+    return true;
+  });
+}
+
+function makeTableBuilder(rows) {
+  const filters = [];
+  const builder = {
+    select: () => builder,
+    eq: (col, val) => {
+      filters.push(['eq', col, val]);
       return builder;
     },
+    is: (col, val) => {
+      filters.push(['is', col, val]);
+      return builder;
+    },
+    in: (col, vals) => {
+      filters.push(['in', col, vals]);
+      return builder;
+    },
+    // A shallow COPY, not the live db row reference — a real Supabase read
+    // returns freshly-deserialized JSON, not a live handle into server
+    // memory. Found the hard way: without this, a test simulating "the
+    // screen's already-rendered state is stale, the server has since moved
+    // on" (mutating `client.db` directly, not through this screen) instead
+    // mutated the SAME object the screen was already holding, since
+    // `.then()`'s own list path already copies but this didn't — silently
+    // defeating the very race the test existed to prove.
+    single: () => {
+      const matched = rows.filter((row) => matchesFilters(row, filters));
+      return Promise.resolve({ data: matched[0] ? { ...matched[0] } : null, error: null });
+    },
+    maybeSingle: () => {
+      const matched = rows.filter((row) => matchesFilters(row, filters));
+      return Promise.resolve({ data: matched[0] ? { ...matched[0] } : null, error: null });
+    },
+    then: (onResolve, onReject) => {
+      const matched = rows.filter((row) => matchesFilters(row, filters));
+      return Promise.resolve({ data: matched.map((row) => ({ ...row })), error: null }).then(
+        onResolve,
+        onReject,
+      );
+    },
+  };
+  return builder;
+}
+
+// Mutates the shared `db` in place, mirroring start_heat/record_heat_time/
+// auto_max_heat's own real server-side behavior (migration 20260828150000)
+// closely enough to exercise the whole outbox-wired round trip end to end:
+// an enqueue, a flush, and this screen's own NEXT render() (a plain read)
+// actually observing the mutation.
+function makeRpc(db, calls) {
+  return (name, payload) => {
+    calls.push([name, payload]);
+    if (name === 'start_heat') {
+      const heat = db.ct_heats.find((h) => h.id === payload.p_heat_id);
+      if (heat?.status === 'pending') {
+        heat.status = 'timing';
+        heat.started_at = payload.p_started_at;
+      }
+      return Promise.resolve({ data: null, error: null });
+    }
+    if (name === 'record_heat_time') {
+      const entry = db.ct_heat_entries.find((e) => e.id === payload.p_heat_entry_id);
+      if (!entry) {
+        return Promise.resolve({
+          data: null,
+          error: { code: 'P0002', message: 'record_heat_time: heat entry not found' },
+        });
+      }
+      const heat = db.ct_heats.find((h) => h.id === entry.heat_id);
+      if (heat.status !== payload.p_expected_heat_status) {
+        return Promise.resolve({
+          data: null,
+          error: { code: 'P0002', message: `CONFLICT: heat is ${heat.status} now` },
+        });
+      }
+      if (payload.p_conflict_policy === 'reject' && entry.elapsed_secs != null) {
+        return Promise.resolve({
+          data: null,
+          error: { code: 'P0002', message: 'CONFLICT: heat entry already has a recorded time' },
+        });
+      }
+      entry.elapsed_secs = payload.p_elapsed_secs;
+      entry.elapsed_secs_raw = payload.p_elapsed_secs_raw;
+      entry.maxed = payload.p_maxed;
+      entry.time_source = payload.p_time_source;
+      entry.time_edited_at = payload.p_time_edited_at;
+      const heatEntries = db.ct_heat_entries.filter((e) => e.heat_id === heat.id);
+      if (heatEntries.every((e) => e.elapsed_secs != null)) heat.status = 'scoring';
+      return Promise.resolve({ data: null, error: null });
+    }
+    if (name === 'auto_max_heat') {
+      const heat = db.ct_heats.find((h) => h.id === payload.p_heat_id);
+      if (heat?.status === 'timing') {
+        for (const entry of db.ct_heat_entries.filter((e) => e.heat_id === heat.id)) {
+          if (entry.elapsed_secs == null) {
+            entry.elapsed_secs = heat.duration_secs;
+            entry.elapsed_secs_raw = heat.duration_secs;
+            entry.maxed = true;
+            entry.time_source = 'maxed';
+            entry.time_edited_at = payload.p_time_edited_at;
+          }
+        }
+        heat.status = 'scoring';
+      }
+      return Promise.resolve({ data: null, error: null });
+    }
+    return Promise.resolve({ data: null, error: null });
+  };
+}
+
+function buildFakeClient({ event, heat, entries, roster }) {
+  // Shallow-cloned, not the caller's own object references — found the hard
+  // way: several tests share module-level fixtures like `appHeatPending`,
+  // and makeRpc()'s handlers mutate `heat`/entries in place (mirroring the
+  // real RPCs' own server-side writes). Without cloning here, one test's
+  // start_heat call would permanently flip the SHARED fixture object to
+  // 'timing', silently corrupting every later test that reused the same
+  // fixture — a real bug this exact bite proved, not a hypothetical one.
+  const db = {
+    events: [{ ...event }],
+    ct_heats: [{ ...heat }],
+    ct_heat_entries: entries.map((entry) => ({ ...entry })),
+    event_entries: roster.map((person) => ({ ...person })),
+  };
+  const calls = [];
+  return {
+    db,
+    calls,
+    from(table) {
+      return makeTableBuilder(db[table] ?? []);
+    },
+    rpc: makeRpc(db, calls),
   };
 }
 
@@ -117,7 +244,7 @@ const appHeatPending = {
 
 describe('mountTimingScreen', () => {
   beforeEach(() => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-08-22T10:00:00.000Z'));
   });
 
@@ -127,13 +254,11 @@ describe('mountTimingScreen', () => {
 
   it('shows the roster and a start button for a pending heat', async () => {
     const root = document.createElement('div');
-    const client = fakeClient({
-      tables: {
-        events: { data: { id: 'ev1', is_test: false }, error: null },
-        ct_heats: { data: appHeatPending, error: null },
-        ct_heat_entries: { data: [{ id: 'he1', entry_id: 'e1', elapsed_secs: null }], error: null },
-        event_entries: { data: [{ id: 'e1', display_name: 'Cupper One' }], error: null },
-      },
+    const client = buildFakeClient({
+      event: { id: 'ev1', org_id: 'org1', is_test: false },
+      heat: appHeatPending,
+      entries: [{ id: 'he1', heat_id: 'h1', entry_id: 'e1', elapsed_secs: null }],
+      roster: [{ id: 'e1', display_name: 'Cupper One' }],
     });
     await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
     expect(root.textContent).toContain('Cupper One');
@@ -142,13 +267,11 @@ describe('mountTimingScreen', () => {
 
   it('rejects mounting against a manual-timing-mode heat with an explanatory message, no start button', async () => {
     const root = document.createElement('div');
-    const client = fakeClient({
-      tables: {
-        events: { data: { id: 'ev1', is_test: false }, error: null },
-        ct_heats: { data: { ...appHeatPending, timing_mode: 'manual' }, error: null },
-        ct_heat_entries: { data: [], error: null },
-        event_entries: { data: [], error: null },
-      },
+    const client = buildFakeClient({
+      event: { id: 'ev1', org_id: 'org1', is_test: false },
+      heat: { ...appHeatPending, timing_mode: 'manual' },
+      entries: [],
+      roster: [],
     });
     await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
     expect(root.textContent).toContain('manual');
@@ -157,13 +280,11 @@ describe('mountTimingScreen', () => {
 
   it('renders the is-test banner unmistakably when the event is marked test data', async () => {
     const root = document.createElement('div');
-    const client = fakeClient({
-      tables: {
-        events: { data: { id: 'ev1', is_test: true }, error: null },
-        ct_heats: { data: appHeatPending, error: null },
-        ct_heat_entries: { data: [{ id: 'he1', entry_id: 'e1', elapsed_secs: null }], error: null },
-        event_entries: { data: [{ id: 'e1', display_name: 'Cupper One' }], error: null },
-      },
+    const client = buildFakeClient({
+      event: { id: 'ev1', org_id: 'org1', is_test: true },
+      heat: appHeatPending,
+      entries: [{ id: 'he1', heat_id: 'h1', entry_id: 'e1', elapsed_secs: null }],
+      roster: [{ id: 'e1', display_name: 'Cupper One' }],
     });
     await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
     const banner = root.querySelector('.is-test-banner');
@@ -173,13 +294,11 @@ describe('mountTimingScreen', () => {
 
   it('does not render the is-test banner for a real event', async () => {
     const root = document.createElement('div');
-    const client = fakeClient({
-      tables: {
-        events: { data: { id: 'ev1', is_test: false }, error: null },
-        ct_heats: { data: appHeatPending, error: null },
-        ct_heat_entries: { data: [{ id: 'he1', entry_id: 'e1', elapsed_secs: null }], error: null },
-        event_entries: { data: [{ id: 'e1', display_name: 'Cupper One' }], error: null },
-      },
+    const client = buildFakeClient({
+      event: { id: 'ev1', org_id: 'org1', is_test: false },
+      heat: appHeatPending,
+      entries: [{ id: 'he1', heat_id: 'h1', entry_id: 'e1', elapsed_secs: null }],
+      roster: [{ id: 'e1', display_name: 'Cupper One' }],
     });
     await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
     expect(root.querySelector('.is-test-banner')).toBeNull();
@@ -188,27 +307,16 @@ describe('mountTimingScreen', () => {
   it('starting the heat shows a live countdown that ticks down', async () => {
     const root = document.createElement('div');
     document.body.appendChild(root);
-    const startedHeat = {
-      ...appHeatPending,
-      status: 'timing',
-      started_at: '2026-08-22T10:00:00.000Z',
-    };
-    const client = fakeClient({
-      tables: {
-        events: { data: { id: 'ev1', is_test: false }, error: null },
-        ct_heats: [
-          { data: appHeatPending, error: null }, // initial load
-          { data: startedHeat, error: null }, // startHeat's update
-          { data: startedHeat, error: null }, // re-render's findHeatById
-        ],
-        ct_heat_entries: { data: [{ id: 'he1', entry_id: 'e1', elapsed_secs: null }], error: null },
-        event_entries: { data: [{ id: 'e1', display_name: 'Cupper One' }], error: null },
-      },
+    const client = buildFakeClient({
+      event: { id: 'ev1', org_id: 'org1', is_test: false },
+      heat: appHeatPending,
+      entries: [{ id: 'he1', heat_id: 'h1', entry_id: 'e1', elapsed_secs: null }],
+      roster: [{ id: 'e1', display_name: 'Cupper One' }],
     });
-    await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
+    const { unmount } = await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
 
     root.querySelector('button').click();
-    await vi.advanceTimersByTimeAsync(0); // let the click handler's awaits settle
+    await settle(); // let the click handler's awaits (enqueue + flush + re-render) settle
 
     // Focus moved to the new, stable heading — a separate element from the
     // ticking display itself (the ticking div is never the focus target, so
@@ -218,41 +326,47 @@ describe('mountTimingScreen', () => {
     const countdown = root.querySelector('.countdown-display');
     expect(countdown.textContent).toBe('8:00');
 
-    await vi.advanceTimersByTimeAsync(3000);
+    // The countdown's own setInterval is a genuinely real one (only `Date`
+    // is faked in this suite — see the module comment above) — jumping the
+    // fake clock forward, then waiting for ONE real tick to actually fire,
+    // gets the same "3 simulated seconds passed" result the display reads
+    // without needing to wait 3 real seconds for it.
+    vi.setSystemTime(new Date('2026-08-22T10:00:03.000Z'));
+    await settle(1100);
     expect(countdown.textContent).toBe('7:57');
 
+    // Since this interval is genuinely real (see the module comment above),
+    // an un-unmounted heat left mid-'timing' would keep ticking in the real
+    // background across every LATER test in this file — including calling
+    // handleExpiry()'s own outbox write against a shared, real IndexedDB
+    // queue once enough real time (or a later test's own vi.setSystemTime()
+    // jump, since Date is a shared global) makes it look expired. unmount()
+    // here is load-bearing, not just tidy cleanup.
+    unmount();
     document.body.removeChild(root);
   });
 
   it('announces once, via the live region, when the countdown first crosses the urgent threshold', async () => {
     const root = document.createElement('div');
     document.body.appendChild(root);
-    const startedHeat = {
-      ...appHeatPending,
-      status: 'timing',
-      started_at: '2026-08-22T10:00:00.000Z',
-    };
-    const client = fakeClient({
-      tables: {
-        events: { data: { id: 'ev1', is_test: false }, error: null },
-        ct_heats: [
-          { data: appHeatPending, error: null },
-          { data: startedHeat, error: null },
-          { data: startedHeat, error: null },
-        ],
-        ct_heat_entries: { data: [{ id: 'he1', entry_id: 'e1', elapsed_secs: null }], error: null },
-        event_entries: { data: [{ id: 'e1', display_name: 'Cupper One' }], error: null },
-      },
+    const client = buildFakeClient({
+      event: { id: 'ev1', org_id: 'org1', is_test: false },
+      heat: appHeatPending,
+      entries: [{ id: 'he1', heat_id: 'h1', entry_id: 'e1', elapsed_secs: null }],
+      roster: [{ id: 'e1', display_name: 'Cupper One' }],
     });
-    await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
+    const { unmount } = await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
     root.querySelector('button').click();
-    await vi.advanceTimersByTimeAsync(0);
+    await settle();
 
     const feedback = root.querySelector('.screen-feedback');
     expect(feedback.textContent).toBe('');
 
-    // 471s in: 9s remaining, just inside the urgent window.
-    await vi.advanceTimersByTimeAsync(471_000);
+    // 471s in: 9s remaining, just inside the urgent window. Jump the (only
+    // faked) clock, then wait for one real tick to actually observe it —
+    // same technique as the "ticks down" test above.
+    vi.setSystemTime(new Date('2026-08-22T10:07:51.000Z'));
+    await settle(1100);
     expect(feedback.dataset.tone).toBe('urgent');
     expect(feedback.textContent).toContain('10 seconds');
 
@@ -261,9 +375,13 @@ describe('mountTimingScreen', () => {
     // directly on the live tick loop here).
     feedback.textContent = '';
     delete feedback.dataset.tone;
-    await vi.advanceTimersByTimeAsync(1000);
+    vi.setSystemTime(new Date('2026-08-22T10:07:52.000Z'));
+    await settle(1100);
     expect(feedback.textContent).toBe('');
 
+    // Load-bearing, not just tidy cleanup — see the "ticks down" test's own
+    // comment on this same real-interval-leak risk above.
+    unmount();
     document.body.removeChild(root);
   });
 
@@ -275,41 +393,26 @@ describe('mountTimingScreen', () => {
       status: 'timing',
       started_at: '2026-08-22T10:00:00.000Z',
     };
-    const stoppedEntry = {
-      id: 'he1',
-      entry_id: 'e1',
-      elapsed_secs: 120,
-      elapsed_secs_raw: 120,
-      maxed: false,
-    };
-    const client = fakeClient({
-      tables: {
-        events: { data: { id: 'ev1', is_test: false }, error: null },
-        ct_heats: [
-          { data: timingHeat, error: null }, // initial load
-          { data: timingHeat, error: null }, // recordTap's own findHeatById
-          { data: null, error: null }, // maybeAdvanceToScoring: not everyone done — no ct_heats update
-          { data: timingHeat, error: null }, // re-render's findHeatById
-        ],
-        ct_heat_entries: [
-          { data: [{ id: 'he1', entry_id: 'e1', elapsed_secs: null }], error: null }, // initial load
-          { data: { id: 'he1', entry_id: 'e1', elapsed_secs: null }, error: null }, // findHeatEntry
-          { data: stoppedEntry, error: null }, // update result
-          { data: [stoppedEntry], error: null }, // maybeAdvanceToScoring's listHeatEntries
-          { data: [stoppedEntry], error: null }, // re-render's listHeatEntries
-        ],
-        event_entries: { data: [{ id: 'e1', display_name: 'Cupper One' }], error: null },
-      },
+    const client = buildFakeClient({
+      event: { id: 'ev1', org_id: 'org1', is_test: false },
+      heat: timingHeat,
+      entries: [{ id: 'he1', heat_id: 'h1', entry_id: 'e1', elapsed_secs: null }],
+      roster: [{ id: 'e1', display_name: 'Cupper One' }],
     });
     await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
     // 2 minutes into the heat when the tap happens
     vi.setSystemTime(new Date('2026-08-22T10:02:00.000Z'));
 
     root.querySelector('.btn-stop').click();
-    await vi.advanceTimersByTimeAsync(0);
+    await settle();
 
     expect(root.querySelector('.btn-stop')).toBeNull();
     expect(root.textContent).toContain('2:00');
+
+    const [rpcName, rpcPayload] = client.calls.find(([name]) => name === 'record_heat_time');
+    expect(rpcName).toBe('record_heat_time');
+    expect(rpcPayload.p_elapsed_secs).toBe(120);
+    expect(rpcPayload.p_conflict_policy).toBe('reject');
 
     // No explicit focus target is set for a stop tap — the fallback is the
     // feedback region, which also carries the "recorded" announcement (both
@@ -323,6 +426,50 @@ describe('mountTimingScreen', () => {
     document.body.removeChild(root);
   });
 
+  it('a tap that lands after the heat has already advanced surfaces the real conflict, not a false "recorded"', async () => {
+    // Models a real race: the organiser's tap is enqueued while THIS
+    // render's own `data.heat.status` still reads 'timing' (captured
+    // before the click), but by the time the RPC actually runs, the heat
+    // has already moved on (e.g. auto_max_heat won first). The screen has
+    // no way to synchronously prevent the click here — record_heat_time's
+    // own p_expected_heat_status check is what catches it, which this test
+    // proves reaches the organiser as a real message, not a silent
+    // "recorded" success.
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const timingHeat = {
+      ...appHeatPending,
+      status: 'timing',
+      started_at: '2026-08-22T10:00:00.000Z',
+    };
+    const client = buildFakeClient({
+      event: { id: 'ev1', org_id: 'org1', is_test: false },
+      heat: timingHeat,
+      entries: [{ id: 'he1', heat_id: 'h1', entry_id: 'e1', elapsed_secs: null }],
+      roster: [{ id: 'e1', display_name: 'Cupper One' }],
+    });
+    await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
+
+    // The heat advances behind this screen's back — the RPC's own
+    // p_expected_heat_status check is server-side, so mutating the shared
+    // db directly (not through this screen) is exactly what simulates a
+    // genuinely concurrent write from elsewhere.
+    client.db.ct_heats[0].status = 'scoring';
+
+    root.querySelector('.btn-stop').click();
+    await settle();
+
+    const feedback = root.querySelector('.screen-feedback');
+    expect(feedback.dataset.tone).toBe('error');
+    expect(feedback.textContent).toContain('moved on');
+    // The entry itself was never actually written — ground truth (the
+    // reload) shows it still null, which is exactly why the conflict
+    // message won out over an optimistic "recorded" one.
+    expect(client.db.ct_heat_entries[0].elapsed_secs).toBeNull();
+
+    document.body.removeChild(root);
+  });
+
   it('auto-maxes everyone still running once the countdown expires, and stops ticking', async () => {
     const root = document.createElement('div');
     const timingHeat = {
@@ -330,38 +477,21 @@ describe('mountTimingScreen', () => {
       status: 'timing',
       started_at: '2026-08-22T10:00:00.000Z',
     };
-    const scoringHeat = { ...timingHeat, status: 'scoring' };
-    const maxedEntry = {
-      id: 'he1',
-      entry_id: 'e1',
-      elapsed_secs: 480,
-      elapsed_secs_raw: 480,
-      maxed: true,
-    };
-    const client = fakeClient({
-      tables: {
-        events: { data: { id: 'ev1', is_test: false }, error: null },
-        ct_heats: [
-          { data: timingHeat, error: null }, // initial load
-          { data: timingHeat, error: null }, // autoMaxRemainingEntries's own findHeatById
-          { data: scoringHeat, error: null }, // maybeAdvanceToScoring's update
-          { data: scoringHeat, error: null }, // re-render's findHeatById
-        ],
-        ct_heat_entries: [
-          { data: [{ id: 'he1', entry_id: 'e1', elapsed_secs: null }], error: null }, // initial load
-          { data: [{ id: 'he1', entry_id: 'e1', elapsed_secs: null }], error: null }, // autoMax's listHeatEntries
-          { data: maxedEntry, error: null }, // update result for e1
-          { data: [maxedEntry], error: null }, // maybeAdvanceToScoring's listHeatEntries
-          { data: [maxedEntry], error: null }, // re-render's listHeatEntries
-        ],
-        event_entries: { data: [{ id: 'e1', display_name: 'Cupper One' }], error: null },
-      },
+    const client = buildFakeClient({
+      event: { id: 'ev1', org_id: 'org1', is_test: false },
+      heat: timingHeat,
+      entries: [{ id: 'he1', heat_id: 'h1', entry_id: 'e1', elapsed_secs: null }],
+      roster: [{ id: 'e1', display_name: 'Cupper One' }],
     });
     const clearIntervalSpy = vi.spyOn(global, 'clearInterval');
     await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
 
-    // Advance past the full 480s duration.
-    await vi.advanceTimersByTimeAsync(480_000);
+    // Jump the (only faked) clock past the full 480s duration, then wait
+    // for one real tick to actually fire — it detects expiry and calls
+    // handleExpiry()'s own async chain (a real outbox write), which now
+    // resolves normally since nothing else in this suite is faked.
+    vi.setSystemTime(new Date('2026-08-22T10:08:00.000Z'));
+    await settle(1200);
 
     expect(root.textContent).toContain('Timing complete');
     // Exact text, not just a substring — a maxed row's label must show its
@@ -375,15 +505,20 @@ describe('mountTimingScreen', () => {
     expect(feedback.dataset.tone).toBe('success');
     expect(feedback.textContent).toContain('automatically maxed');
 
+    expect(client.calls.some(([name]) => name === 'auto_max_heat')).toBe(true);
+
     // The interval was actually torn down (not merely idempotency-guarded
     // against redundant writes) — proven directly against the timer API,
-    // not inferred from an absence of further DB calls.
+    // not inferred from an absence of further RPC calls.
     expect(clearIntervalSpy).toHaveBeenCalled();
 
-    // No leaked interval still running against a torn-down countdown.
-    const insertCallsAfter = client.calls.length;
-    await vi.advanceTimersByTimeAsync(5000);
-    expect(client.calls.length).toBe(insertCallsAfter);
+    // No leaked interval still running against a torn-down countdown — a
+    // real, unbounded wait covering several would-be tick periods, since
+    // this interval is genuinely real in this suite (see the module
+    // comment above).
+    const callsAfter = client.calls.length;
+    await settle(2500);
+    expect(client.calls.length).toBe(callsAfter);
 
     clearIntervalSpy.mockRestore();
   });
@@ -398,47 +533,23 @@ describe('mountTimingScreen', () => {
     // Two cuppers, so the first stop's re-render lands back in the
     // 'timing' branch (not everyone's done) — exactly the case that would
     // add a second listener without the fix.
-    const entryE1 = { id: 'he1', entry_id: 'e1', elapsed_secs: null };
-    const entryE2 = { id: 'he2', entry_id: 'e2', elapsed_secs: null };
-    const stoppedE1 = {
-      id: 'he1',
-      entry_id: 'e1',
-      elapsed_secs: 60,
-      elapsed_secs_raw: 60,
-      maxed: false,
-    };
+    const client = buildFakeClient({
+      event: { id: 'ev1', org_id: 'org1', is_test: false },
+      heat: timingHeat,
+      entries: [
+        { id: 'he1', heat_id: 'h1', entry_id: 'e1', elapsed_secs: null },
+        { id: 'he2', heat_id: 'h1', entry_id: 'e2', elapsed_secs: null },
+      ],
+      roster: [
+        { id: 'e1', display_name: 'Cupper One' },
+        { id: 'e2', display_name: 'Cupper Two' },
+      ],
+    });
 
     const addSpy = vi.spyOn(document, 'addEventListener');
     const removeSpy = vi.spyOn(document, 'removeEventListener');
 
-    const client = fakeClient({
-      tables: {
-        events: { data: { id: 'ev1', is_test: false }, error: null },
-        ct_heats: [
-          { data: timingHeat, error: null }, // initial load
-          { data: timingHeat, error: null }, // recordTap's findHeatById
-          // maybeAdvanceToScoring never touches ct_heats at all here — e2 is
-          // still unstopped, so it returns early after its own
-          // ct_heat_entries check, below.
-          { data: timingHeat, error: null }, // re-render's findHeatById
-        ],
-        ct_heat_entries: [
-          { data: [entryE1, entryE2], error: null }, // initial load
-          { data: entryE1, error: null }, // findHeatEntry
-          { data: stoppedE1, error: null }, // update result
-          { data: [stoppedE1, entryE2], error: null }, // maybeAdvanceToScoring's listHeatEntries
-          { data: [stoppedE1, entryE2], error: null }, // re-render's listHeatEntries
-        ],
-        event_entries: {
-          data: [
-            { id: 'e1', display_name: 'Cupper One' },
-            { id: 'e2', display_name: 'Cupper Two' },
-          ],
-          error: null,
-        },
-      },
-    });
-    await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
+    const { unmount } = await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
 
     const visibilityAddsBefore = addSpy.mock.calls.filter(
       ([type]) => type === 'visibilitychange',
@@ -446,7 +557,7 @@ describe('mountTimingScreen', () => {
     expect(visibilityAddsBefore).toBe(1);
 
     root.querySelector('.btn-stop').click();
-    await vi.advanceTimersByTimeAsync(0);
+    await settle();
 
     const visibilityAddsAfter = addSpy.mock.calls.filter(
       ([type]) => type === 'visibilitychange',
@@ -459,6 +570,11 @@ describe('mountTimingScreen', () => {
     expect(visibilityAddsAfter).toBe(2);
     expect(visibilityRemovesAfter).toBe(1);
 
+    // Load-bearing, not just tidy cleanup — this heat is still 'timing'
+    // (only e1 was stopped), so its interval is genuinely real and would
+    // otherwise keep ticking in the background across every LATER test in
+    // this file (see the "ticks down" test's own comment on this).
+    unmount();
     addSpy.mockRestore();
     removeSpy.mockRestore();
   });
@@ -470,96 +586,45 @@ describe('mountTimingScreen', () => {
       status: 'timing',
       started_at: '2026-08-22T10:00:00.000Z',
     };
-    const client = fakeClient({
-      tables: {
-        events: { data: { id: 'ev1', is_test: false }, error: null },
-        ct_heats: { data: timingHeat, error: null },
-        ct_heat_entries: { data: [{ id: 'he1', entry_id: 'e1', elapsed_secs: null }], error: null },
-        event_entries: { data: [{ id: 'e1', display_name: 'Cupper One' }], error: null },
-      },
+    const client = buildFakeClient({
+      event: { id: 'ev1', org_id: 'org1', is_test: false },
+      heat: timingHeat,
+      entries: [{ id: 'he1', heat_id: 'h1', entry_id: 'e1', elapsed_secs: null }],
+      roster: [{ id: 'e1', display_name: 'Cupper One' }],
     });
     const { unmount } = await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
 
     const callsBeforeUnmount = client.calls.length;
     unmount();
 
-    // Advance well past the heat's duration — if the interval were still
-    // live, it would detect expiry and call autoMaxRemainingEntries.
-    await vi.advanceTimersByTimeAsync(480_000);
+    // Jump well past the heat's duration and wait a real tick period — if
+    // the interval were still live, it would detect expiry and call
+    // autoMaxRemainingEntries.
+    vi.setSystemTime(new Date('2026-08-22T10:08:00.000Z'));
+    await settle(1200);
     expect(client.calls.length).toBe(callsBeforeUnmount);
   });
 
-  // The next two tests build a small, realistic in-memory client (state
-  // matched by filter, not a strict call-order queue) rather than reusing
-  // the FIFO `fakeClient` above — deliberately: both tests drive two
-  // concurrent async chains (two taps racing, or a tap racing unmount())
-  // whose internal query interleaving isn't something a test can pin down
-  // by pre-staging a fixed response order. Only the `events` table is
-  // gate-controlled (a manually-resolved promise) — it's loadState()'s
-  // first await, never touched by recordTap itself, so gating it lets the
-  // test control exactly when a given render() is allowed to proceed past
-  // that point, without needing to guess the order two independent
-  // recordTap chains interleave in.
+  // The next two tests drive two concurrent async chains (two taps racing,
+  // or a tap racing unmount()) whose internal query interleaving isn't
+  // something a test can pin down by pre-staging a fixed response order.
+  // Only the `events` table is gate-controlled (a manually-resolved
+  // promise) — it's loadState()'s first await, the one every render() must
+  // pass through, so gating it lets the test control exactly when a given
+  // render() is allowed to proceed, without needing to guess how two
+  // independent action chains interleave before that point. recordTap
+  // itself has no server read of its own to race (unlike the old
+  // direct-write version) — it enqueues and flushes purely from the
+  // caller-supplied local state — so the only real race left to prove is
+  // at the render() layer, which is exactly what these tests target.
   function buildGatedRaceClient({ heat, entries, roster }) {
-    function matchesFilters(row, filters) {
-      return filters.every(([type, col, val]) => {
-        if (type === 'eq') return row[col] === val;
-        if (type === 'is') return row[col] === val;
-        if (type === 'in') return val.includes(row[col]);
-        return true;
-      });
-    }
-
-    function makeTableBuilder(rows) {
-      const filters = [];
-      let pendingUpdate = null;
-      const builder = {
-        select: () => builder,
-        eq: (col, val) => {
-          filters.push(['eq', col, val]);
-          return builder;
-        },
-        is: (col, val) => {
-          filters.push(['is', col, val]);
-          return builder;
-        },
-        in: (col, vals) => {
-          filters.push(['in', col, vals]);
-          return builder;
-        },
-        update: (payload) => {
-          pendingUpdate = payload;
-          return builder;
-        },
-        single: () => {
-          const matched = rows.filter((row) => matchesFilters(row, filters));
-          return Promise.resolve({ data: matched[0] ?? null, error: null });
-        },
-        maybeSingle: () => {
-          const matched = rows.filter((row) => matchesFilters(row, filters));
-          if (pendingUpdate) {
-            if (matched.length === 0) return Promise.resolve({ data: null, error: null });
-            Object.assign(matched[0], pendingUpdate);
-            return Promise.resolve({ data: { ...matched[0] }, error: null });
-          }
-          return Promise.resolve({ data: matched[0] ?? null, error: null });
-        },
-        then: (onResolve, onReject) => {
-          const matched = rows.filter((row) => matchesFilters(row, filters));
-          return Promise.resolve({ data: matched.map((row) => ({ ...row })), error: null }).then(
-            onResolve,
-            onReject,
-          );
-        },
-      };
-      return builder;
-    }
-
+    const db = { ct_heats: [heat], ct_heat_entries: entries, event_entries: roster };
     const eventsGates = [];
     let eventsCallCount = 0;
 
     return {
       eventsGates,
+      rpc: makeRpc(db, []),
       from(table) {
         if (table === 'events') {
           eventsCallCount += 1;
@@ -570,7 +635,10 @@ describe('mountTimingScreen', () => {
               select: () => ({
                 eq: () => ({
                   single: () =>
-                    Promise.resolve({ data: { id: 'ev1', is_test: false }, error: null }),
+                    Promise.resolve({
+                      data: { id: 'ev1', org_id: 'org1', is_test: false },
+                      error: null,
+                    }),
                 }),
               }),
             };
@@ -584,15 +652,15 @@ describe('mountTimingScreen', () => {
             select: () => ({
               eq: () => ({
                 single: () =>
-                  promise.then(() => ({ data: { id: 'ev1', is_test: false }, error: null })),
+                  promise.then(() => ({
+                    data: { id: 'ev1', org_id: 'org1', is_test: false },
+                    error: null,
+                  })),
               }),
             }),
           };
         }
-        if (table === 'ct_heats') return makeTableBuilder([heat]);
-        if (table === 'ct_heat_entries') return makeTableBuilder(entries);
-        if (table === 'event_entries') return makeTableBuilder(roster);
-        return makeTableBuilder([]);
+        return makeTableBuilder(db[table] ?? []);
       },
     };
   }
@@ -629,19 +697,19 @@ describe('mountTimingScreen', () => {
     buttons[0].click();
     buttons[1].click();
 
-    // Let both recordTap chains (and both writes) fully resolve — neither
-    // touches the gated `events` table, so both reach their own render()'s
-    // loadState() and block there.
-    await vi.advanceTimersByTimeAsync(0);
+    // Let both recordTap chains (enqueue + flush, neither gated) fully
+    // resolve — both reach their own render()'s loadState() and block on
+    // the gated `events` table.
+    await settle();
     expect(client.eventsGates).toHaveLength(2);
 
     const containerBefore = root.querySelector('.screen-container');
 
     // Resolve the LATER-arriving render's gate first — it "wins," writing
-    // the final DOM. Both taps already landed in the DB by this point, so
-    // whichever render wins shows the completed state.
+    // the final DOM. Both taps already landed by this point, so whichever
+    // render wins shows the completed state.
     client.eventsGates[1].resolve();
-    await vi.advanceTimersByTimeAsync(0);
+    await settle(0);
     expect(root.textContent).toContain('Timing complete');
     const containerAfterWinner = root.querySelector('.screen-container');
     expect(containerAfterWinner).not.toBe(containerBefore);
@@ -651,7 +719,7 @@ describe('mountTimingScreen', () => {
     // a second time — replacing containerAfterWinner with a new node even
     // though nothing about the visible state should change.
     client.eventsGates[0].resolve();
-    await vi.advanceTimersByTimeAsync(0);
+    await settle(0);
     expect(root.querySelector('.screen-container')).toBe(containerAfterWinner);
   });
 
@@ -679,7 +747,7 @@ describe('mountTimingScreen', () => {
     const intervalCallsAfterMount = setIntervalSpy.mock.calls.length;
 
     root.querySelector('.btn-stop').click();
-    await vi.advanceTimersByTimeAsync(0);
+    await settle();
     expect(client.eventsGates).toHaveLength(1); // the tap's own render is now blocked
 
     const containerBeforeUnmount = root.querySelector('.screen-container');
@@ -689,7 +757,7 @@ describe('mountTimingScreen', () => {
     // fix, it would proceed to rebuild the DOM and register a fresh
     // interval that nothing would ever clear again.
     client.eventsGates[0].resolve();
-    await vi.advanceTimersByTimeAsync(0);
+    await settle(0);
 
     expect(root.querySelector('.screen-container')).toBe(containerBeforeUnmount);
     expect(setIntervalSpy.mock.calls.length).toBe(intervalCallsAfterMount);

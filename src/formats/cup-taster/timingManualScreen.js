@@ -15,6 +15,7 @@ import { findHeatById, listHeatEntries, hydrateEntries } from './heats.js';
 import { listEntriesByIds } from '../../core/registry.js';
 import { findEvent } from '../../core/events.js';
 import { recordManualTime } from './timingManual.js';
+import { describeTimingConflict } from './timing.js';
 import { renderTimingRows } from './timingScreen.js';
 import { getSupabase } from '../../core/supabaseClient.js';
 import { el } from '../../core/dom.js';
@@ -137,6 +138,9 @@ export async function mountManualTimingScreen(
   // generic "time recorded" leaving a screen-reader user unaware the whole
   // screen just changed shape underneath them.
   let checkForCompletionOnNextRender = false;
+  // Ground truth over the outbox flush's own bookkeeping — same principle
+  // and shape as timingScreen.js's own pendingEntryCheck (see its comment).
+  let pendingEntryCheck = null;
 
   function setFeedback(feedback, message, tone) {
     feedback.textContent = message ?? '';
@@ -175,6 +179,37 @@ export async function mountManualTimingScreen(
     // rebuild the DOM with stale data on top of a newer, already-applied
     // save.
     if (myGeneration !== renderGeneration) return;
+
+    // Ground truth over the outbox flush's own bookkeeping — resolved here,
+    // against THIS render's freshly-reloaded state, before
+    // checkForCompletionOnNextRender (below) or anything else reads
+    // pendingError/pendingSuccess. Same principle as timingScreen.js's own
+    // pendingEntryCheck (see its comment there).
+    if (pendingEntryCheck) {
+      const { heatEntryId, displayName, expectedElapsedSecs, flushResult } = pendingEntryCheck;
+      pendingEntryCheck = null;
+      const freshEntry = data.hydrated.find((entry) => entry.id === heatEntryId);
+      // Compares against the EXACT value this call attempted to write —
+      // matters even more for 'overwrite' than a real tap's 'reject': a
+      // correction can land on an entry that already had SOME non-null
+      // elapsed_secs from an earlier save, so a bare null-check couldn't
+      // distinguish "my correction landed" from "my correction was
+      // rejected and the OLD value is still sitting there" at all.
+      if (freshEntry?.elapsed_secs === expectedElapsedSecs) {
+        pendingSuccess = `${displayName ?? 'Cupper'}'s time recorded.`;
+        // onSave only exists while this render's own branch is 'pending'
+        // (see the `else if` below), so the heat was necessarily 'pending'
+        // right before this save — checked against this same freshly-
+        // loaded status just below, only once the save itself is confirmed.
+        checkForCompletionOnNextRender = true;
+      } else if (flushResult?.permanentFailure) {
+        pendingError =
+          describeTimingConflict(flushResult.error) ?? describeError(flushResult.error);
+      } else {
+        pendingError =
+          "This cupper's time has not synced yet — it may still be waiting to sync. Try again in a moment.";
+      }
+    }
 
     if (checkForCompletionOnNextRender) {
       checkForCompletionOnNextRender = false;
@@ -223,13 +258,20 @@ export async function mountManualTimingScreen(
           const savedEntry = data.hydrated.find((entry) => entry.entry_id === entryId);
           try {
             const totalSecs = parseElapsedInput(minutesValue, secondsValue);
-            await recordManualTime(heatId, entryId, totalSecs, client, {});
-            pendingSuccess = `${savedEntry?.displayName ?? 'Cupper'}'s time recorded.`;
-            // onSave only exists while this render's own branch is
-            // 'pending' (see the enclosing `else if` below), so the heat
-            // was necessarily 'pending' right before this save — checked
-            // against the next render's freshly-loaded status above.
-            checkForCompletionOnNextRender = true;
+            const { expectedElapsedSecs, flushResult } = await recordManualTime(
+              data.heat,
+              savedEntry,
+              totalSecs,
+              data.event.org_id,
+              client,
+              {},
+            );
+            pendingEntryCheck = {
+              heatEntryId: savedEntry.id,
+              displayName: savedEntry.displayName,
+              expectedElapsedSecs,
+              flushResult,
+            };
           } catch (err) {
             pendingError = describeError(err);
           }
