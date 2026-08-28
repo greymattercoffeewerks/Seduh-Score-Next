@@ -142,16 +142,27 @@ two consumers of the same shell/data. Verifiers per task, `code-reviewer` always
 
 ## Known open items carried into Phase 4
 
-- **T4.3's `timing.js` and T4.4's `timingManual.js` both write directly to the database,
-  not through Phase 3's outbox.** Decided with the user before writing code (see
-  CHANGELOG.md) — these are the first genuinely live timing screens in the build plan,
-  exactly what the outbox exists for, but wiring it correctly (queue ordering against a
-  live countdown or a hand-entered correction, conflict surfacing to an organiser
-  mid-heat) deserves a focused pass with `offline-sync-auditor` rather than folding into
-  either task's first cut. Revisit before relying on either screen somewhere with
-  unreliable connectivity. **T4.5's scoring surface does not share this gap** — it routes
-  its whole-heat confirm through the outbox end to end (see CHANGELOG.md), so this note
-  now applies only to the timing screens, not scoring.
+- **T4.3/T4.4's direct-write gap is closed (2026-08-29 follow-up)** — `timing.js`/
+  `timingManual.js` now route every write (start a heat, a real tap, a manual entry/
+  correction, an auto-max sweep) through the outbox, via three new RPCs
+  (`start_heat`/`record_heat_time`/`auto_max_heat`, migration
+  20260828150000_timing_outbox_rpcs.sql) mirroring `confirm_heat`'s idempotent,
+  org-scoped shape. A real concurrency bug (two concurrent taps for a heat's last two
+  entries could both miss flipping the heat to `scoring`; a fix's own first attempt then
+  left a narrower but real stale-read gap under lock contention) was found and closed
+  during review, verified with real concurrent `psql` sessions, not just pgTAP — see
+  CHANGELOG.md's dated entry for the full account. **A new, related gap surfaced by this
+  same review is NOT yet closed**: the shared `timingHandlers()` map this task added is
+  not shared with `scoring.js`'s `confirm_heat` or `publish.js`'s `publish_session` —
+  `core/outbox.js` registers handlers per `flushOutbox()` call, not globally, so the
+  primary offline workflow (a heat timed _and_ scored fully offline in one session) can
+  stall a `confirm_heat` flush behind earlier-queued timing operations, with no app-level
+  recovery mechanism anywhere yet. Pre-existing (present since `scoring.js` first shipped
+  its own single-type handler map), not introduced by this task, but assessed by
+  `offline-sync-auditor` as serious enough to be the next task, not a further-deferred
+  note — revisit before relying on the app for a fully-offline timing-then-scoring
+  session. **T4.5's scoring surface's own outbox wiring is otherwise unaffected** — this
+  note is about handler-map _composition_ across modules, not scoring's own correctness.
 - **T4.3's app-mode timing screen has no manual-entry fallback for a mid-heat device
   failure.** The spec (§7.1) describes a heat that "may mix tapped and hand-entered
   times if a stopwatch fails mid-heat" — read literally, this only makes sense as a

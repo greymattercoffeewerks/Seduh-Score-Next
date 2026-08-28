@@ -60,6 +60,108 @@ closes.
 
 ---
 
+## Known open items carried into Phase 4/5 · 2026-08-29 (T4.3/T4.4 timing screens now outbox-wired)
+
+Closes the known open item ROADMAP.md tracked since T4.3/T4.4: the app-mode tap timer and
+manual-entry screens wrote directly to `ct_heats`/`ct_heat_entries` instead of through
+Phase 3's offline outbox — the exact "live, time-pressured screen" the outbox exists for,
+deliberately deferred at the time as its own focused pass.
+
+**Three new RPCs** (`supabase/migrations/20260828150000_timing_outbox_rpcs.sql`) —
+`start_heat`, `record_heat_time`, `auto_max_heat` — mirror `confirm_heat`'s own
+idempotent, org-scoped shape (the `processed_operations` ledger, a two-check org-scoping
+pattern). `started_at` stays client-timestamp-supplied, not server `now()`, to preserve
+the already-shipped, already-Playwright-tested cross-surface agreement design.
+`record_heat_time`'s `p_conflict_policy` ('reject' for a real tap, 'overwrite' for a
+manual correction) and `p_expected_heat_status` check close the gap a bare per-entry
+null-check can't: once a heat has left the status a queued write assumed it was still in,
+every already-recorded entry is frozen, most importantly once `confirm_heat` has run.
+
+**`timing.js`/`timingManual.js` rewritten**: every write now captures its payload (a
+timestamp, a clamped `elapsed_secs` via the same sole `clampElapsed()` path as before) at
+the moment of the action, never re-derived at flush time — a tap made while offline no
+longer inflates by however long the device was offline. Each write takes the caller's own
+already-rendered local `heat`/`heatEntry` state as a parameter instead of re-reading the
+server first, so recording a tap has no network dependency of its own. A shared
+`timingHandlers(client)` map (not per-caller) is used by every flush in both modules,
+closing a real gap a single-type handler map would have hit: `core/outbox.js` registers
+handlers per `flushOutbox()` call, not globally, so a flush call scoped to only its own
+caller's operation type would stall on any other timing operation queued ahead of it —
+e.g. an app-mode heat that's started, then rapid-tapped, while offline.
+
+**`timingScreen.js`/`timingManualScreen.js`** gained a "ground truth over flush
+bookkeeping" pattern (`pendingHeatCheck`/`pendingEntryCheck`): an action sets a pending
+check, and the _next_ render resolves it against freshly-reloaded state — comparing
+against the _exact_ value a write attempted (not a bare null-check, which can't
+distinguish "my write took" from "someone else's write is what's actually sitting
+there"). A genuine conflict surfaces to the organiser via a new `describeTimingConflict()`
+translator (mirroring `scoring.js`'s `describeConfirmError`), reading "refresh this page"
+rather than "reload the heat" — found in review (ui-accessibility-reviewer): neither
+screen has a router/reload affordance yet, so the message can only honestly ask for what
+the organiser can actually do today.
+
+**A real concurrency bug was found and fixed during review, not before shipping**:
+`record_heat_time`'s advance-to-scoring check has no row locking in its first version —
+two concurrent calls for a heat's last two entries could each run their own "is anyone
+else still null" check against a snapshot that doesn't see the other's still-uncommitted
+write (plain reads under READ COMMITTED don't block on an in-flight write to a _different_
+row), landing both entries correctly but never flipping the heat to `scoring`. Fixed with
+`perform ... for update` locking the parent heat row. A second pass (schema-guardian,
+verified with two real concurrent `psql` sessions against the local stack, not just
+pgTAP) found the fix itself was incomplete: `v_heat_status`/`v_already_set` were read
+_before_ the lock and never refreshed after acquiring it, so a call delayed behind
+another writer's lock (e.g. stuck behind `auto_max_heat`'s own sweep) could resume and
+validate against stale data, silently overwriting an already-finalized value — exactly
+the "frozen record" guarantee `p_expected_heat_status` exists to protect. Fixed by moving
+the status/already-set read to _after_ the lock; re-verified with the same two-session
+reproduction (confirmed the delayed transaction now correctly raises the conflict instead
+of silently succeeding) and the full pgTAP suite (110/110).
+
+**Four parallel subagent reviews** (schema-guardian, security-reviewer, scoring-auditor,
+offline-sync-auditor, module-boundary-checker, test-auditor, ui-accessibility-reviewer,
+code-reviewer — the full set, given the change touches a migration, RPCs, the outbox,
+`elapsed_secs` handling, and UI) surfaced, beyond the concurrency fix above:
+
+- **test-auditor / code-reviewer** (independently, both caught it): `timingManualScreen.js`'s
+  ground-truth check had regressed to a bare `!= null` comparison instead of the exact-value
+  comparison its own comment described — a corrected/overwritten entry that already had a
+  prior non-null value would report a false "recorded" success even when the RPC actually
+  rejected the write. Fixed to match `timingScreen.js`'s own correct implementation; the
+  existing test for exactly this scenario (already written, already correct) went from red
+  to green.
+- **code-reviewer**: `recordTap`/`recordManualTime` built byte-for-byte identical
+  `record_heat_time` payloads independently; extracted a shared
+  `buildRecordHeatTimePayload()` helper. A stale demo-harness comment referencing a
+  "+ Force duplicate tap" button that didn't exist — closed by actually adding real
+  interactive "force a conflict" demo controls to both `timingScreen.preview.html` and
+  `timingManualScreen.preview.html` (mutating the fake client's own `db` directly, the
+  same shape a genuinely concurrent write from elsewhere would take), which also closes
+  the gap code-reviewer separately noted: neither harness previously had any way to
+  interactively trigger the conflict scenario, which is part of why the bug above went
+  unnoticed by manual testing.
+- **schema-guardian**: two pgTAP coverage gaps closed — `start_heat`'s own
+  `processed_operations` ledger replay path was untested (the existing "safe no-op" test
+  used a _different_ operation id, only proving the business-logic no-op, not the ledger
+  check itself), and `record_heat_time`'s `p_conflict_policy` validation guard had no
+  test. Both added (110 pgTAP assertions, was 107).
+- **offline-sync-auditor**: confirmed the shared-handler-map fix is correct and complete
+  for every write this task touches, but flagged that it is _not_ shared with `scoring.js`'s
+  `confirm_heat` or `publish.js`'s `publish_session` — a pre-existing gap (present since
+  `scoring.js` first used its own single-type handler map), not introduced by this task,
+  but assessed as more operationally serious than a documented-and-deferred note: the
+  primary offline workflow this project is built for (a heat timed _and_ scored fully
+  offline in one session) can genuinely stall a `confirm_heat` flush behind earlier-queued
+  timing operations, with no app-level recovery mechanism anywhere yet (`computeSyncState`
+  has zero consumers). Not a data-corruption risk — FIFO ordering is preserved — but
+  recommended as the immediate next follow-up rather than carried forward again. See
+  ROADMAP.md's own updated note.
+
+Full suite: 680 Vitest tests, 110 pgTAP assertions (all 8 files), lint/format clean
+(repo-wide). Live-verified in-browser: app-mode start/tap/auto-max-at-expiry and
+manual-mode save/correct/complete-the-heat, all with no console errors.
+
+---
+
 ## Phase 5 — Live surfaces · 2026-08-28 (viewer-shell heading-hierarchy follow-up)
 
 ### src/core/viewer-shell.js, viewer-shell.css, viewer-shell.test.js

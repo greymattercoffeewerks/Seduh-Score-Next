@@ -8,6 +8,26 @@
     <link rel="stylesheet" href="/src/formats/cup-taster/heatsScreen.css" />
     <link rel="stylesheet" href="/src/formats/cup-taster/timingScreen.css" />
     <link rel="stylesheet" href="/src/formats/cup-taster/timingManualScreen.css" />
+    <style>
+      /* Demo-harness-only control — not part of the shipped module graph. */
+      .demo-controls {
+        padding: 8px 16px;
+        display: flex;
+        gap: 8px;
+        border-bottom: 2px solid var(--color-border-strong);
+        background: var(--color-surface);
+      }
+      .demo-controls button {
+        min-height: 44px;
+        padding: 8px 14px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--color-border-strong);
+        background: var(--color-surface);
+        color: var(--color-text);
+        font-family: var(--font-body);
+        cursor: pointer;
+      }
+    </style>
   </head>
   <body>
     <!--
@@ -17,13 +37,16 @@
       connection. Two cuppers: one deliberately long name, to check the
       360px row-wrap behavior directly.
     -->
+    <div class="demo-controls">
+      <button id="btn-force-conflict" type="button">Force the heat past 'pending'</button>
+    </div>
     <div id="app"></div>
     <script type="module">
       import { mountManualTimingScreen } from './timingManualScreen.js';
 
       function createDemoClient() {
         const db = {
-          events: [{ id: 'ev1', is_test: true }],
+          events: [{ id: 'ev1', org_id: 'org1', is_test: true }],
           ct_heats: [
             {
               id: 'h1',
@@ -113,13 +136,64 @@
           return builder;
         }
 
-        return { from: (table) => makeBuilder(table) };
+        // Mirrors record_heat_time's own real behavior (migration
+        // 20260828150000) closely enough to exercise the whole
+        // outbox-wired write path — this screen only ever calls it with
+        // p_conflict_policy: 'overwrite' (a correction), so unlike
+        // timingScreen.preview.html's own rpc() there's no 'reject' branch
+        // to mirror here.
+        function rpc(name, payload) {
+          console.log('[demo] rpc call:', name, payload);
+          if (name === 'record_heat_time') {
+            const entry = db.ct_heat_entries.find((e) => e.id === payload.p_heat_entry_id);
+            if (!entry) {
+              return Promise.resolve({
+                data: null,
+                error: { code: 'P0002', message: 'record_heat_time: heat entry not found' },
+              });
+            }
+            const heat = db.ct_heats.find((h) => h.id === entry.heat_id);
+            if (heat.status !== payload.p_expected_heat_status) {
+              return Promise.resolve({
+                data: null,
+                error: { code: 'P0002', message: `CONFLICT: heat is ${heat.status} now` },
+              });
+            }
+            entry.elapsed_secs = payload.p_elapsed_secs;
+            entry.elapsed_secs_raw = payload.p_elapsed_secs_raw;
+            entry.maxed = payload.p_maxed;
+            entry.time_source = payload.p_time_source;
+            entry.time_edited_at = payload.p_time_edited_at;
+            const heatEntries = db.ct_heat_entries.filter((e) => e.heat_id === heat.id);
+            if (heatEntries.every((e) => e.elapsed_secs != null)) heat.status = 'scoring';
+            return Promise.resolve({ data: null, error: null });
+          }
+          return Promise.resolve({ data: null, error: null });
+        }
+
+        return { from: (table) => makeBuilder(table), rpc };
       }
 
+      const client = createDemoClient();
       mountManualTimingScreen(document.getElementById('app'), {
         eventId: 'ev1',
         heatId: 'h1',
-        client: createDemoClient(),
+        client,
+      });
+
+      // Mutates the underlying db directly, NOT through the screen — what a
+      // genuinely concurrent write from elsewhere looks like from this
+      // screen's own perspective. The screen's already-rendered, still-
+      // editable rows stay visible (they only reflect state as of the last
+      // render), so saving one after this hits the real RPC conflict path
+      // — record_heat_time's own P0002 "heat is scoring now, expected
+      // pending" rejection — proving the organiser sees a real conflict
+      // message, not a false "recorded" success.
+      document.getElementById('btn-force-conflict').addEventListener('click', () => {
+        client.db.ct_heats[0].status = 'scoring';
+        console.log(
+          "[demo] forced the heat to 'scoring' — the next Save/Update for any cupper will be rejected as a conflict.",
+        );
       });
     </script>
   </body>

@@ -7,6 +7,26 @@
     <link rel="stylesheet" href="/src/ui/tokens/index.css" />
     <link rel="stylesheet" href="/src/formats/cup-taster/heatsScreen.css" />
     <link rel="stylesheet" href="/src/formats/cup-taster/timingScreen.css" />
+    <style>
+      /* Demo-harness-only control — not part of the shipped module graph. */
+      .demo-controls {
+        padding: 8px 16px;
+        display: flex;
+        gap: 8px;
+        border-bottom: 2px solid var(--color-border-strong);
+        background: var(--color-surface);
+      }
+      .demo-controls button {
+        min-height: 44px;
+        padding: 8px 14px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--color-border-strong);
+        background: var(--color-surface);
+        color: var(--color-text);
+        font-family: var(--font-body);
+        cursor: pointer;
+      }
+    </style>
   </head>
   <body>
     <!--
@@ -18,13 +38,16 @@
       expiry, transition to "timing complete" — can be observed directly in
       a couple of minutes instead of eight.
     -->
+    <div class="demo-controls">
+      <button id="btn-force-conflict" type="button">Force conflict on Alex Rivera</button>
+    </div>
     <div id="app"></div>
     <script type="module">
       import { mountTimingScreen } from './timingScreen.js';
 
       function createDemoClient() {
         const db = {
-          events: [{ id: 'ev1', is_test: true }],
+          events: [{ id: 'ev1', org_id: 'org1', is_test: true }],
           ct_heats: [
             {
               id: 'h1',
@@ -123,7 +146,75 @@
           return builder;
         }
 
-        return { from: (table) => makeBuilder(table), db };
+        // Mirrors start_heat/record_heat_time/auto_max_heat's own real
+        // behavior (migration 20260828150000) closely enough for this demo
+        // harness to exercise the whole outbox-wired write path end to
+        // end — org-id/expected-status checks included, so a genuine
+        // conflict (via the "Force conflict" button below) is actually
+        // visible in this harness, not just assumed correct.
+        function rpc(name, payload) {
+          console.log('[demo] rpc call:', name, payload);
+          if (name === 'start_heat') {
+            const heat = db.ct_heats.find((h) => h.id === payload.p_heat_id);
+            if (heat?.status === 'pending') {
+              heat.status = 'timing';
+              heat.started_at = payload.p_started_at;
+            }
+            return Promise.resolve({ data: null, error: null });
+          }
+          if (name === 'record_heat_time') {
+            const entry = db.ct_heat_entries.find((e) => e.id === payload.p_heat_entry_id);
+            if (!entry) {
+              return Promise.resolve({
+                data: null,
+                error: { code: 'P0002', message: 'record_heat_time: heat entry not found' },
+              });
+            }
+            const heat = db.ct_heats.find((h) => h.id === entry.heat_id);
+            if (heat.status !== payload.p_expected_heat_status) {
+              return Promise.resolve({
+                data: null,
+                error: { code: 'P0002', message: `CONFLICT: heat is ${heat.status} now` },
+              });
+            }
+            if (payload.p_conflict_policy === 'reject' && entry.elapsed_secs != null) {
+              return Promise.resolve({
+                data: null,
+                error: {
+                  code: 'P0002',
+                  message: 'CONFLICT: heat entry already has a recorded time',
+                },
+              });
+            }
+            entry.elapsed_secs = payload.p_elapsed_secs;
+            entry.elapsed_secs_raw = payload.p_elapsed_secs_raw;
+            entry.maxed = payload.p_maxed;
+            entry.time_source = payload.p_time_source;
+            entry.time_edited_at = payload.p_time_edited_at;
+            const heatEntries = db.ct_heat_entries.filter((e) => e.heat_id === heat.id);
+            if (heatEntries.every((e) => e.elapsed_secs != null)) heat.status = 'scoring';
+            return Promise.resolve({ data: null, error: null });
+          }
+          if (name === 'auto_max_heat') {
+            const heat = db.ct_heats.find((h) => h.id === payload.p_heat_id);
+            if (heat?.status === 'timing') {
+              for (const entry of db.ct_heat_entries.filter((e) => e.heat_id === heat.id)) {
+                if (entry.elapsed_secs == null) {
+                  entry.elapsed_secs = heat.duration_secs;
+                  entry.elapsed_secs_raw = heat.duration_secs;
+                  entry.maxed = true;
+                  entry.time_source = 'maxed';
+                  entry.time_edited_at = payload.p_time_edited_at;
+                }
+              }
+              heat.status = 'scoring';
+            }
+            return Promise.resolve({ data: null, error: null });
+          }
+          return Promise.resolve({ data: null, error: null });
+        }
+
+        return { from: (table) => makeBuilder(table), rpc, db };
       }
 
       const client = createDemoClient();
@@ -131,6 +222,27 @@
         eventId: 'ev1',
         heatId: 'h1',
         client,
+      });
+
+      // Mutates the underlying db directly, NOT through the screen —
+      // exactly what a genuinely concurrent write from elsewhere (another
+      // device, an auto-max sweep) looks like from this screen's own
+      // perspective. The screen's already-rendered Stop button for Alex
+      // Rivera stays visible (it only reflects state as of its own last
+      // render), so clicking it after this hits the real RPC conflict
+      // path — record_heat_time's own P0002 "already has a recorded time"
+      // rejection — proving the organiser sees a real conflict message,
+      // not a false "recorded" success.
+      document.getElementById('btn-force-conflict').addEventListener('click', () => {
+        const entry = client.db.ct_heat_entries.find((e) => e.id === 'he1');
+        if (entry) {
+          entry.elapsed_secs = 999;
+          entry.elapsed_secs_raw = 999;
+          entry.time_source = 'tapped';
+          console.log(
+            '[demo] forced a conflict — Alex Rivera already has a recorded time now; the next Stop tap for them will be rejected.',
+          );
+        }
       });
 
       // e2e test hook only — tests/e2e/cross-surface-countdown.spec.js

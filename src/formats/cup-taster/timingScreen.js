@@ -15,7 +15,7 @@
 import { findHeatById, listHeatEntries, hydrateEntries } from './heats.js';
 import { listEntriesByIds } from '../../core/registry.js';
 import { findEvent } from '../../core/events.js';
-import { startHeat, recordTap, autoMaxRemainingEntries } from './timing.js';
+import { startHeat, recordTap, autoMaxRemainingEntries, describeTimingConflict } from './timing.js';
 import { remainingSecs, isExpired } from '../../core/countdown.js';
 import { getSupabase } from '../../core/supabaseClient.js';
 import { el } from '../../core/dom.js';
@@ -79,6 +79,19 @@ export async function mountTimingScreen(root, { eventId, heatId, client = getSup
   let urgentAnnounced = false;
   let visibilityHandler = null;
   let renderGeneration = 0;
+  // Set by an action handler right before triggering the next render(),
+  // resolved INSIDE that render() against its own freshly-reloaded state —
+  // ground truth over the outbox flush's own bookkeeping, same principle
+  // scoringScreen.js's submitConfirmHeat handler already established (its
+  // own comment: "the outbox is a single shared queue, so `result` can
+  // reflect an unrelated operation... rather than this specific attempt").
+  // `flushResult` is used only as a FALLBACK explanation when the ground
+  // truth shows the action did NOT visibly take — never to override what
+  // the fresh reload actually shows, which is what keeps a stale/unrelated
+  // flushResult from ever being reported as if it were about the wrong
+  // action.
+  let pendingHeatCheck = null;
+  let pendingEntryCheck = null;
 
   function stopTicking() {
     if (tickHandle) {
@@ -124,31 +137,26 @@ export async function mountTimingScreen(root, { eventId, heatId, client = getSup
     return { event, heat, hydrated };
   }
 
-  async function handleExpiry(feedback) {
+  async function handleExpiry(data, feedback) {
     if (expiryHandled) return;
     expiryHandled = true;
     stopTicking();
+    // The count comes from LOCAL knowledge (this screen's own already-
+    // rendered roster), not a value read back from the RPC — auto_max_heat
+    // returns void, matching start_heat/record_heat_time's own shape (see
+    // timing.js's module comment). pendingHeatCheck below still verifies
+    // this against fresh, reloaded state before actually reporting success.
+    const stillRunningCount = data.hydrated.filter((entry) => entry.elapsed_secs == null).length;
     try {
-      const maxed = await autoMaxRemainingEntries(heatId, client, {});
-      // Always set a message, even when nothing needed maxing — that empty
-      // case is reachable (not just hypothetical): tryAdvanceToScoring
-      // swallows a failed status transition, so a heat can sit in 'timing'
-      // with every entry already stopped until the master clock also
-      // expires and this handler fires as the retry. Leaving pendingSuccess
-      // null here would mean feedback.dataset.tone never gets set on that
-      // render, which is also the render's only focus target — an
-      // unmanaged-focus regression, not just a missing message.
-      pendingSuccess =
-        maxed.length > 0
-          ? `Time's up — ${maxed.length} cupper${maxed.length === 1 ? '' : 's'} automatically maxed.`
-          : "Time's up — every cupper already had a final time.";
+      const flushResult = await autoMaxRemainingEntries(heatId, data.event.org_id, client, {});
+      pendingHeatCheck = { expect: 'past-timing', stillRunningCount, flushResult };
     } catch (err) {
       pendingError = describeError(err);
     }
     await renderOrShowError(feedback);
   }
 
-  function tick(startedAtMs, durationSecs, feedback) {
+  function tick(data, startedAtMs, durationSecs, feedback) {
     const remaining = remainingSecs(startedAtMs, durationSecs, Date.now());
     if (countdownEl) {
       countdownEl.textContent = formatDuration(remaining);
@@ -163,7 +171,7 @@ export async function mountTimingScreen(root, { eventId, heatId, client = getSup
       setFeedback(feedback, 'Less than 10 seconds remaining.', 'urgent');
     }
     if (isExpired(startedAtMs, durationSecs, Date.now())) {
-      handleExpiry(feedback);
+      handleExpiry(data, feedback);
     }
   }
 
@@ -181,6 +189,48 @@ export async function mountTimingScreen(root, { eventId, heatId, client = getSup
     // the alternative (two renders touching the DOM concurrently) is the
     // actual corruption bug this generation counter exists to prevent.
     if (myGeneration !== renderGeneration) return;
+
+    // Ground truth over the outbox flush's own bookkeeping (see the module
+    // comment on pendingHeatCheck/pendingEntryCheck above) — resolved here,
+    // against THIS render's freshly-reloaded state, before anything below
+    // reads pendingError/pendingSuccess to build the feedback region.
+    if (pendingHeatCheck) {
+      const { expect, stillRunningCount, flushResult } = pendingHeatCheck;
+      pendingHeatCheck = null;
+      if (expect === 'timing' && data.heat.status === 'timing') {
+        focusAfterRender = '#countdown-heading';
+      } else if (expect === 'past-timing' && data.heat.status !== 'timing') {
+        pendingSuccess =
+          stillRunningCount > 0
+            ? `Time's up — ${stillRunningCount} cupper${stillRunningCount === 1 ? '' : 's'} automatically maxed.`
+            : "Time's up — every cupper already had a final time.";
+      } else if (flushResult?.permanentFailure) {
+        pendingError =
+          describeTimingConflict(flushResult.error) ?? describeError(flushResult.error);
+      } else {
+        pendingError =
+          'This has not synced yet — it may still be waiting to sync. Try again in a moment.';
+      }
+    }
+    if (pendingEntryCheck) {
+      const { heatEntryId, displayName, expectedElapsedSecs, flushResult } = pendingEntryCheck;
+      pendingEntryCheck = null;
+      const freshEntry = data.hydrated.find((entry) => entry.id === heatEntryId);
+      // Compares against the EXACT value this call attempted to write, not
+      // just non-null — a rejected duplicate tap leaves a non-null
+      // elapsed_secs too (someone else's), which a bare null-check can't
+      // tell apart from this call's own success (see recordTap's own
+      // comment in timing.js).
+      if (freshEntry?.elapsed_secs === expectedElapsedSecs) {
+        pendingSuccess = `${displayName ?? 'Cupper'}'s time recorded.`;
+      } else if (flushResult?.permanentFailure) {
+        pendingError =
+          describeTimingConflict(flushResult.error) ?? describeError(flushResult.error);
+      } else {
+        pendingError =
+          "This cupper's time has not synced yet — it may still be waiting to sync. Try again in a moment.";
+      }
+    }
 
     root.innerHTML = '';
 
@@ -224,8 +274,8 @@ export async function mountTimingScreen(root, { eventId, heatId, client = getSup
       });
       startButton.addEventListener('click', async () => {
         try {
-          await startHeat(heatId, client, {});
-          focusAfterRender = '#countdown-heading';
+          const { flushResult } = await startHeat(heatId, data.event.org_id, client, {});
+          pendingHeatCheck = { expect: 'timing', flushResult };
         } catch (err) {
           pendingError = describeError(err);
         }
@@ -257,8 +307,19 @@ export async function mountTimingScreen(root, { eventId, heatId, client = getSup
         onStop: async (entryId) => {
           const stoppedEntry = data.hydrated.find((entry) => entry.entry_id === entryId);
           try {
-            await recordTap(heatId, entryId, client, {});
-            pendingSuccess = `${stoppedEntry?.displayName ?? 'Cupper'}'s time recorded.`;
+            const { expectedElapsedSecs, flushResult } = await recordTap(
+              data.heat,
+              stoppedEntry,
+              data.event.org_id,
+              client,
+              {},
+            );
+            pendingEntryCheck = {
+              heatEntryId: stoppedEntry.id,
+              displayName: stoppedEntry.displayName,
+              expectedElapsedSecs,
+              flushResult,
+            };
           } catch (err) {
             pendingError = describeError(err);
           }
@@ -271,7 +332,10 @@ export async function mountTimingScreen(root, { eventId, heatId, client = getSup
 
       expiryHandled = false;
       urgentAnnounced = initialRemaining <= URGENT_THRESHOLD_SECS;
-      tickHandle = setInterval(() => tick(startedAtMs, data.heat.duration_secs, feedback), 1000);
+      tickHandle = setInterval(
+        () => tick(data, startedAtMs, data.heat.duration_secs, feedback),
+        1000,
+      );
       // A backgrounded/throttled tab may miss scheduled ticks entirely —
       // force an immediate check on return rather than waiting for the next
       // 1s tick, so an already-expired heat resolves as soon as the
@@ -281,7 +345,7 @@ export async function mountTimingScreen(root, { eventId, heatId, client = getSup
       // from a tap, expiry, or an error retry.
       visibilityHandler = () => {
         if (document.visibilityState === 'visible') {
-          tick(startedAtMs, data.heat.duration_secs, feedback);
+          tick(data, startedAtMs, data.heat.duration_secs, feedback);
         }
       };
       document.addEventListener('visibilitychange', visibilityHandler);
