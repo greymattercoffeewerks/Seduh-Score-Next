@@ -77,30 +77,45 @@ instead of `box-shadow`.
 
 ## Typeface — self-hosted, not system-only
 
-Three fonts from [fontshare.com](https://www.fontshare.com) (Indian Type Foundry, ITF
-Free Font License — free for commercial use, self-hosting explicitly permitted),
-downloaded once and served from `src/ui/tokens/fonts/*.woff2` (`fonts.css` has the
-`@font-face` rules and the license note):
+_Refreshed 2026-08-28 — Cabinet Grotesk and JetBrains Mono replace the original
+Erode/Tabular pairing; Switzer is unchanged. (Chillax briefly held the display slot
+first before being swapped for Cabinet Grotesk on second thought, same day — no Chillax
+files remain in the repo.) Downloaded once and served from `src/ui/tokens/fonts/*.woff2`
+(`fonts.css` has the `@font-face` rules and license notes)._
 
-- **Erode** (`--font-display`) — an editorial serif with real italics, the closest free
-  match to Assembly Coffee's italic display serif.
-- **Switzer** (`--font-body`) — a free, open alternative to Söhne, which is Assembly
-  Coffee's own documented body-font fallback. This is a direct, intentional callback to
-  that reference, not a generic sans pick.
-- **Tabular** (`--font-mono`) — not actually a monospace face; a grotesque sans with
-  strong tabular (fixed-width) lining figures, which is what score/timer digits need
-  without forcing every letter in the UI to the same width. Still paired with
-  `font-variant-numeric: tabular-nums` on `.font-mono-score` (`base.css`) as a
-  belt-and-suspenders guarantee regardless of the active font.
+- **Cabinet Grotesk** (`--font-display`) — [fontshare.com](https://www.fontshare.com)
+  (Indian Type Foundry, ITF Free Font License — free for commercial use, self-hosting
+  explicitly permitted). A geometric grotesk display face — a cleaner, more contemporary
+  register than Erode's editorial serif, while keeping the same two-role structure (a
+  distinct display face over a workhorse body face). Ships two weights (400, 700) — every
+  unstyled heading in the shipped app screens renders at the browser's default bold
+  (`base.css` never resets heading weight), so 700 is a real consumer, not a speculative
+  addition; 400 is also a genuine consumer in its own right (`preview.html`'s
+  `.guide-heading` deliberately overrides to regular weight for that documentation page's
+  own look — found in `ui-accessibility-reviewer`'s review, 2026-08-28). The other cuts
+  (Thin, Extralight, Light, Medium, Extrabold, Black) have no consumer and aren't shipped.
+  No italic cut exists, and nothing in this codebase sets `font-style: italic` on
+  `--font-display`, so none is declared.
+- **Switzer** (`--font-body`) — fontshare.com, ITF Free Font License. A free, open
+  alternative to Söhne, which is Assembly Coffee's own documented body-font fallback.
+  This is a direct, intentional callback to that reference, not a generic sans pick.
+  Unchanged by the refresh.
+- **JetBrains Mono** (`--font-mono`) — [JetBrains](https://www.jetbrains.com/lp/mono/),
+  SIL Open Font License 1.1 (also explicitly permits self-hosting/bundling). A genuine
+  fixed-width monospace — every glyph the same width, not just numerals, a strict
+  upgrade over Tabular (a grotesque sans with tabular lining figures) for anything
+  reading digit columns. Still paired with `font-variant-numeric: tabular-nums` on
+  `.font-mono-score` (`base.css`) as a belt-and-suspenders guarantee regardless of the
+  active font.
 
-**Self-hosted, never linked from Fontshare's CDN.** The app runs at live events on
+**Self-hosted, never linked from a third-party CDN.** The app runs at live events on
 whatever wifi the venue has, and every surface must not depend on a third-party font
 request succeeding mid-event — a design token shouldn't be a single point of failure a
 font CDN outage can take down, same posture as the Phase 3 offline-sync work. Each
 `@font-face` rule uses `font-display: swap`, and every `--font-*` token keeps its full
 system-stack fallback after the webfont name, so a slow or failed first load still
 renders instantly in a structurally-equivalent fallback rather than blocking. Total
-payload for all 8 weight/style files currently used is under 160KB.
+payload for all 8 weight files currently used is ~230KB.
 
 `--font-mono` is not decorative. Every score, timer, and elapsed-time display must pair
 it with `.tabular-nums` (`base.css`) so digits don't change width as they change value.

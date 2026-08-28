@@ -6,7 +6,9 @@ stage-plan UI gap and its roster-registration UI gap, a 2026-08-29 follow-up clo
 T4.3/T4.4's direct-write gap, and a further 2026-08-29 follow-up closing T4.2's
 DB-level station-uniqueness gap — see below); Phase 5 done (T5.1–T5.4, the 2026-08-28
 holding-state follow-up, the cross-surface Playwright AC, and the 2026-08-28 viewer-shell
-`<h1>`/heading-hierarchy follow-up) — matches CHANGELOG.md as of 2026-08-29_
+`<h1>`/heading-hierarchy follow-up); design-system type refresh (2026-08-28, not tied to
+a phase — Erode/Tabular → Cabinet Grotesk/JetBrains Mono) — matches CHANGELOG.md as of
+2026-08-29_
 
 Read these before touching anything:
 
