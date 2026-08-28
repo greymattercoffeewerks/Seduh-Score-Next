@@ -225,11 +225,11 @@ section only records the conventions a new screen or token needs to follow.
   on unreliable venue wifi at live events, so a webfont request cannot be a point of
   failure. Adding a new weight/family means downloading the file into
   `src/ui/tokens/fonts/` and adding the `@font-face` rule to `fonts.css` with a full
-  system-stack fallback, the same way the existing three (Erode/Switzer/Tabular) are
-  set up — never a `<link>` to Fontshare, Google Fonts, or any other font CDN.
+  system-stack fallback, the same way the existing three (Cabinet Grotesk/Switzer/JetBrains
+  Mono) are set up — never a `<link>` to Fontshare, Google Fonts, or any other font CDN.
   `--font-mono` pairs with `.tabular-nums`/`.font-mono-score` for every score/timer
-  digit display, since `--font-mono` (Tabular) is a grotesque sans with tabular figures,
-  not a true monospace.
+  digit display as a belt-and-suspenders guarantee, even though `--font-mono` (JetBrains
+  Mono) is already a genuine fixed-width monospace.
 - **`--text-5xl`/`--text-6xl` are fixed-canvas-only** (the projector stage or a
   dedicated big-number panel) — dropping them into an arbitrary responsive container
   without its own step-down/scroll handling caused a real 360px overflow bug in

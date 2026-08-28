@@ -1,3 +1,101 @@
+## Design system type refresh (`src/ui/tokens/fonts.css`, `typography.css`) · 2026-08-28
+
+**No single §14 task ID** — like the original "Design system foundation" entry below,
+this is a follow-up to that foundation, not a numbered build-plan task. Prompted by the
+user reviewing rendered mockups in a design-canvas exploration and deciding on new
+typefaces for the display and mono roles.
+
+**What changed**: `--font-display` (was Erode, an editorial serif, weight 400 only) is
+now **Cabinet Grotesk**, a geometric grotesk, weights 400 and 700; `--font-mono` (was
+"Tabular", a grotesque sans with tabular figures, not a true monospace) is now
+**JetBrains Mono**, a genuine fixed-width monospace, weights 400 and 700 (unchanged from
+Tabular's own weight count). `--font-body` (Switzer) is unchanged — same family, same
+four weights, files just refreshed from a fresh download of the same typeface. Fallback
+stack for `--font-display` changed from a serif-oriented stack to a sans-oriented one
+(`ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif`), matching Cabinet
+Grotesk's own construction. No italic `@font-face` declared for the new display face —
+Cabinet Grotesk ships no italic cut, and grep confirmed nothing in `src/` sets
+`font-style: italic` on `--font-display` (Erode's own italic rule existed only because
+Erode itself had real italics, used nowhere in the app). Both new families are
+Fontshare/ITF Free Font License (same license Erode/Switzer/Tabular were under,
+self-hosting explicitly permitted); JetBrains Mono is SIL Open Font License 1.1, which
+also explicitly permits self-hosting.
+
+**Decision record — Chillax, then Cabinet Grotesk**: the display-face swap went through
+two rounds in the same session. Chillax (also Fontshare/ITF) was the first replacement
+for Erode, fully wired into `fonts.css`/`typography.css`/`DESIGN.md`/`CONVENTIONS.md`
+and verified loading in-browser. The user then reconsidered and asked for Cabinet
+Grotesk instead — Chillax was fully removed (files deleted, no `@font-face` or
+`--font-display` reference left anywhere in `src/`) rather than left as a second option,
+matching this project's one-typeface-per-role discipline. No functional difference
+between the two swaps' mechanics; recorded here so a future reader doesn't find a
+Chillax reference in an old commit and wonder if it's still live (it isn't).
+
+Total payload for all 8 weight files now shipped (2 Cabinet Grotesk + 4 Switzer + 2
+JetBrains Mono) is ~230KB, up from the original 8-file/~133KB Erode/Switzer/Tabular set
+(2 Erode + 4 Switzer + 2 Tabular) — self-hosting posture unchanged, still zero
+third-party CDN font requests.
+
+**Weight rationale — why 400+700, not one weight or the full family**: Cabinet Grotesk's
+download includes Thin/Extralight/Light/Regular/Medium/Bold/Extrabold/Black cuts (plus a
+variable-font file, unused — this project ships static instances only); only Regular
+and Bold are shipped because those are the only two weights any consumer in `src/`
+actually requests — checked before shipping, not assumed. The other six cuts have zero
+consumers and are deliberately excluded, per `fonts.css`'s own "only weights actually
+used" rule (the same discipline already governing Switzer's four weights and JetBrains
+Mono's two).
+
+**Verifier**: `ui-accessibility-reviewer` (360px first, per DoD — required because this
+touches `src/ui/tokens/` and changes what renders on every UI surface, even though no
+layout/color/motion token changed). **Not a clean pass — found one real issue**, fixed
+before this entry was written:
+
+- The shipping comment in `fonts.css` (and the mirrored prose in `DESIGN.md`) claimed
+  "nothing in this codebase sets an explicit font-weight on `--font-display`'s regular
+  body use" as the justification for why 700 was a genuine consumer. That claim was
+  false: `src/ui/tokens/preview.html`'s own `.guide-heading` rule (predates this swap,
+  originally styled for Erode's look) explicitly sets `font-weight:
+var(--font-weight-regular)` on the token-preview page's own headings. Not a rendered
+  accessibility failure — at `--text-2xl` (33px) that page's headings clear WCAG's
+  large-text threshold and the paper/stage contrast pairs there are both near-maximal —
+  but a real documentation-accuracy defect: the comment would have misled a future
+  reader deciding whether the 400 cut is safe to drop. Both `fonts.css` and `DESIGN.md`
+  corrected to state the true picture — 700 covers every real app screen's headings
+  (bare `<h1>`-`<h6>` UA-default bold, or `viewer-shell.css`'s explicit bold), 400 is
+  independently a genuine consumer via `preview.html`'s own deliberate override, not
+  merely a fallback the 700 rule makes redundant.
+  - Reviewer separately checked and ruled out (reported explicitly, not just omitted, so
+    the review's coverage is on record): JetBrains Mono legibility/width-locking at
+    every real display size from the projector's 96px down to the organiser's smaller
+    sizes (no `--tracking-tight` applied to any `--font-mono` element, and
+    `.tabular-nums` still layered on regardless); Cabinet Grotesk 400 stroke
+    weight/contrast at the smallest headings the app actually ships (none render at 400
+    — see the finding above, they're all genuine bold); leftover assumptions tied to the
+    old fonts' specific metrics (none found — no `font-size-adjust`, no face-specific
+    `line-height` comments, and the one real old-font-specific dependency, Erode's
+    italic, was fully and correctly removed with no orphaned rule left anywhere);
+    fallback-stack honesty (sans stack now correctly matches Cabinet Grotesk's sans
+    construction, no serif-metric assumption left behind); the `is_test` banner (D9) —
+    unaffected, since it uses `--font-body` (Switzer, untouched by this swap), not
+    `--font-display`/`--font-mono`.
+
+**Files touched**: `src/ui/tokens/fonts.css`, `typography.css`, `DESIGN.md`,
+`CONVENTIONS.md` (font-name references); `src/ui/tokens/fonts/` gained
+`cabinet-grotesk-400.woff2`, `cabinet-grotesk-700.woff2`, `jetbrains-mono-400.woff2`,
+`jetbrains-mono-700.woff2`, and refreshed `switzer-{400,500,600,700}.woff2`; lost
+`erode-400.woff2`, `erode-400-italic.woff2`, `tabular-400.woff2`, `tabular-700.woff2`
+(and the intermediate `chillax-400.woff2`, added then removed same session). Verified
+in-browser against the running dev server: every new `.woff2` request resolved `200 OK`,
+and `getComputedStyle(document.documentElement).getPropertyValue('--font-display')`
+resolved to `'Cabinet Grotesk', ui-sans-serif, ...` as expected.
+
+**Open follow-up**: none outstanding — the one review finding was fixed inline before
+this entry was written, so this task's Definition of Done (§11) is fully met (no
+schema/RLS/scoring/outbox surface touched, so those verifiers don't apply; UI-touching
+change got its required `ui-accessibility-reviewer` sign-off above).
+
+---
+
 ## 2026-08-28 — kb-sync verification (Phase 5 closure)
 
 Session log entry for verification pass on Phase 5's cross-surface Playwright acceptance
