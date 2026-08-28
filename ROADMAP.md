@@ -44,7 +44,9 @@ if the v4.x game turns out not to actually work at the venue.
 spacing, base styles, self-hosted fonts, `DESIGN.md`, `preview.html`) shipped
 2026-08-22, ahead of Phase 4 — see CHANGELOG.md's "Design system foundation" entry.
 Closes the open item that used to sit below. `heatsScreen.js`/`.css` (T4.2) is the first
-real screen consuming it.
+real screen consuming it. **2026-08-28 follow-up**: the display and mono typefaces
+refreshed — Erode → Cabinet Grotesk, Tabular → JetBrains Mono; Switzer unchanged — see
+CHANGELOG.md's "Design system type refresh" entry.
 
 ---
 

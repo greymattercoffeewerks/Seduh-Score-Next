@@ -1,22 +1,27 @@
 /*
  * Typography tokens — Seduh Score Next
  *
- * Three self-hosted fonts from fontshare.com (see fonts.css for the
- * @font-face rules and licensing note), each with a system-stack fallback
- * that renders identically in structure if the webfont hasn't painted yet:
- *   - Erode (display) — an editorial serif with real italics, the closest
- *     free match to Assembly Coffee's italic display serif reference.
+ * Three self-hosted fonts (see fonts.css for the @font-face rules and
+ * licensing notes), each with a system-stack fallback that renders
+ * identically in structure if the webfont hasn't painted yet:
+ *   - Cabinet Grotesk (display) — a geometric grotesk display face. Replaces
+ *     Erode (an editorial serif) as of the 2026-08-28 type refresh — a
+ *     cleaner, more contemporary display register, still paired with a
+ *     distinct body face rather than one font doing both jobs. (Chillax
+ *     briefly held this slot before being swapped for Cabinet Grotesk on
+ *     second thought, same day.)
  *   - Switzer (body) — a free, open alternative to Söhne, which is
  *     Assembly Coffee's own documented body-font fallback; picking it here
  *     is a direct, intentional callback to that reference rather than a
- *     generic sans pick.
- *   - Tabular (mono/numeral) — see the usage note below.
+ *     generic sans pick. Unchanged by the type refresh.
+ *   - JetBrains Mono (mono/numeral) — see the usage note below. Replaces
+ *     Tabular as of the same refresh.
  *
- * Self-hosted, not linked from Fontshare's CDN, on purpose: the app runs at
- * live events on whatever wifi the venue has, and every surface (organiser,
- * projector, phone) must not depend on a third-party font request
- * succeeding mid-event. This mirrors the offline-first posture of the
- * Phase 3 sync work — a design token shouldn't be a single point of
+ * Self-hosted, not linked from any third-party CDN, on purpose: the app
+ * runs at live events on whatever wifi the venue has, and every surface
+ * (organiser, projector, phone) must not depend on a third-party font
+ * request succeeding mid-event. This mirrors the offline-first posture of
+ * the Phase 3 sync work — a design token shouldn't be a single point of
  * failure a font CDN outage can take down. `font-display: swap` (fonts.css)
  * means a slow first load still shows the system-stack fallback instantly
  * rather than blocking render.
@@ -24,19 +29,21 @@
  * `--font-mono` is not decorative: every score, timer, and elapsed-time
  * display must use it (with `.tabular-nums` from base.css) so digits don't
  * jitter in width as they change — the projector view is read from across
- * a room, and reflow there reads as a bug, not a stylistic choice. "Tabular"
- * itself is not a monospace face (it's a grotesque sans with strong tabular
- * lining figures) — `font-variant-numeric: tabular-nums` still does the
- * actual width-locking work, the same as it would with any other font.
+ * a room, and reflow there reads as a bug, not a stylistic choice.
+ * JetBrains Mono is a genuine fixed-width monospace (unlike Tabular, which
+ * it replaces — a grotesque sans with tabular lining figures, not actually
+ * monospace); `font-variant-numeric: tabular-nums` still does the width-
+ * locking work as a belt-and-suspenders guarantee regardless of the active
+ * font.
  */
 
 :root {
-  --font-display: 'Erode', ui-serif, Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+  --font-display: 'Cabinet Grotesk', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-body:
     'Switzer', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-mono:
-    'Tabular', ui-monospace, 'SF Mono', 'Cascadia Mono', 'Segoe UI Mono', Consolas, 'Roboto Mono',
-    monospace;
+    'JetBrains Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', 'Segoe UI Mono', Consolas,
+    'Roboto Mono', monospace;
 
   /* Type scale — roughly a 1.25 (major third) ratio from a 16px base */
   --text-3xs: 0.6875rem; /* 11px — legal/fine print only */
