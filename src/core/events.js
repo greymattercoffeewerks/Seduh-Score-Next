@@ -28,3 +28,23 @@ export async function findEvent(eventId, client = getSupabase()) {
   if (error) throw error;
   return data;
 }
+
+// Distinguishes "this org has no event scheduled" from "this org has an
+// event but nothing's been published yet" (viewer-shell.js's own two
+// separately-named holding states, handoff §8.4). Deliberately existence-
+// only — `events.status` (draft/running/concluded) exists in the schema but
+// nothing anywhere writes it yet, so it isn't a reliable "started" signal;
+// any event row at all is treated as "there's an event for tonight," full
+// stop. `.maybeSingle()`, not `.single()` like findEvent above — zero
+// events for an org is a normal, expected outcome here, not an error.
+export async function findLatestEventForOrg(orgId, client = getSupabase()) {
+  const { data, error } = await client
+    .from('events')
+    .select('*')
+    .eq('org_id', orgId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}

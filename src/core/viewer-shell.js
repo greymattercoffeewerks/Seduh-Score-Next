@@ -60,6 +60,7 @@
 // refresh, each still mutating its own now-detached DOM node forever.
 import { getSupabase } from './supabaseClient.js';
 import { el } from './dom.js';
+import { findLatestEventForOrg } from './events.js';
 
 export function defaultHasContent(payload) {
   return payload != null && typeof payload === 'object' && Object.keys(payload).length > 0;
@@ -75,11 +76,26 @@ function holdingCard(icon, title, body) {
 
 // Exported for direct testing — the exact card each phase/connection-lost
 // state renders, independent of the subscription machinery around it.
+// `noEvent`/`notStarted` are the handoff's own two separately-named states
+// (§8.4: "no event, not started, started-but-nothing-published, connection
+// lost") — found in review (T5.3, closed as its own follow-up task): both
+// used to collapse into one generic card under a single `'empty'` phase,
+// since this module never read `events`, only `live_sessions`. `pending`
+// below is already the correct "started-but-nothing-published" state (an
+// active live_sessions row exists, just with no real content yet) — it was
+// never actually ambiguous; only the "nothing published AND no active
+// session at all" case was.
 export function renderHoldingState(phase) {
   switch (phase) {
     case 'connecting':
       return holdingCard('🕐', 'Connecting…', 'Waiting for the live session.');
-    case 'empty':
+    case 'noEvent':
+      return holdingCard(
+        '📅',
+        'No event scheduled',
+        'There’s nothing set up here yet. Check back once an event has been created.',
+      );
+    case 'notStarted':
       return holdingCard(
         '📭',
         'Waiting for the organiser',
@@ -142,10 +158,33 @@ export function renderChrome(session, connectionLost = false) {
 // query error would, so callers don't need a separate branch for "timed
 // out" vs. "failed."
 const REFRESH_TIMEOUT_MS = 10000;
+// The events-existence check (below) is a secondary, non-critical read —
+// its own comment already frames it as "purely the cosmetic distinction
+// while genuinely nothing has happened yet." It runs strictly AFTER the
+// primary live_sessions read succeeds, not concurrently with it, so giving
+// it the full REFRESH_TIMEOUT_MS would silently double the module's own
+// documented no-spinner-forever bound on a slow-but-not-erroring network —
+// found in review (T5.3's holding-state follow-up).
+const EVENT_CHECK_TIMEOUT_MS = 4000;
 function withTimeout(promise, ms) {
   let timer;
   const timeout = new Promise((resolve) => {
     timer = setTimeout(() => resolve({ data: null, error: new Error('timed out') }), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+// Same guard, different shape — `findLatestEventForOrg` throws on error and
+// resolves with the row directly (events.js's own convention), not the
+// `{data,error}` envelope `withTimeout` above is built around. Racing it
+// against a REJECTING timeout instead of a resolving one keeps both error
+// paths (a real throw, and a timeout) landing in the same catch block at
+// the call site, without `withTimeout`'s sentinel object being mistaken for
+// a real (truthy) result if it ever won the race.
+function raceTimeout(promise, ms) {
+  let timer;
+  const timeout = new Promise((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error('timed out')), ms);
   });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
@@ -165,6 +204,12 @@ export async function mountViewerShell(
   let requestSeq = 0;
   let lastIsTest = null;
   let bodyCleanup = null;
+  // Whether this org has ANY event row yet — distinguishes 'noEvent' from
+  // 'notStarted' below. Starts false and is only ever re-checked while still
+  // false (an event, once created, doesn't get un-created) — so a transient
+  // read failure just means "try again next refresh" rather than
+  // permanently caching a false negative.
+  let hasEvent = false;
 
   root.innerHTML = '';
   const container = el('div', { className: 'viewer-shell' });
@@ -234,7 +279,7 @@ export async function mountViewerShell(
   }
 
   function computePhase() {
-    if (!session) return 'empty';
+    if (!session) return hasEvent ? 'notStarted' : 'noEvent';
     return hasContent(session.payload) ? 'live' : 'pending';
   }
 
@@ -259,6 +304,36 @@ export async function mountViewerShell(
       return;
     }
     session = data;
+    if (session) {
+      hasEvent = true; // an active live_sessions row implies its event exists
+    } else if (!hasEvent) {
+      // Only worth the extra read while we don't already know the answer —
+      // there's no realtime subscription on `events`, so this can't react
+      // to an event being created while the viewer already sits idle on
+      // 'noEvent', but the next live_sessions activity (the organiser's
+      // first real publish) reaches 'live'/'pending' regardless; this is
+      // purely the cosmetic distinction while genuinely nothing has
+      // happened yet.
+      let foundEvent = false;
+      try {
+        foundEvent = Boolean(
+          await raceTimeout(findLatestEventForOrg(orgId, client), EVENT_CHECK_TIMEOUT_MS),
+        );
+      } catch (err) {
+        console.error('viewer-shell: failed to check for an existing event', err);
+      }
+      // Written only AFTER the staleness guard, matching the primary
+      // session read's own ordering just above — found in review: writing
+      // `hasEvent` directly inside the try/catch, before this check, meant
+      // a slower-resolving earlier call could still overwrite the shared
+      // flag even after a faster-resolving later call had already moved
+      // on. Harmless today (an event, once found, never un-exists), but
+      // the file's own "a slower call must never clobber a faster one"
+      // invariant (see the comment above) should hold uniformly, not just
+      // for `session`, in case that assumption ever stops being true.
+      if (!mounted || seq !== requestSeq) return;
+      hasEvent = foundEvent;
+    }
     phase = computePhase();
     // A successful read recovers from connectionLost on its own — found in
     // review: without this, a lost state entered via a QUERY error/timeout

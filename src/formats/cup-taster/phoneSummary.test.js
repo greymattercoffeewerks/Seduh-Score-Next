@@ -1,14 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import { mountPhoneSummary } from './phoneSummary.js';
 
-function fakeClient(initialRows = []) {
-  const db = { live_sessions: [...initialRows] };
+// `events` defaults to one row for org1 so viewer-shell.js's own
+// noEvent/notStarted distinction (see viewer-shell.test.js) doesn't affect
+// these tests, none of which are about that distinction.
+function fakeClient(initialRows = [], { events = [{ id: 'ev1', org_id: 'org1' }] } = {}) {
+  const db = { live_sessions: [...initialRows], events: [...events] };
 
   function matchesFilters(row, filters) {
     return filters.every(([col, val]) => row[col] === val);
   }
 
-  function makeBuilder() {
+  function makeBuilder(table) {
     const filters = [];
     const builder = {
       select: () => builder,
@@ -16,8 +19,10 @@ function fakeClient(initialRows = []) {
         filters.push([col, val]);
         return builder;
       },
+      order: () => builder,
+      limit: () => builder,
       maybeSingle() {
-        const rows = db.live_sessions.filter((r) => matchesFilters(r, filters));
+        const rows = db[table].filter((r) => matchesFilters(r, filters));
         return Promise.resolve({ data: rows[0] ?? null, error: null });
       },
     };
@@ -26,7 +31,7 @@ function fakeClient(initialRows = []) {
 
   return {
     db,
-    from: () => makeBuilder(),
+    from: (table) => makeBuilder(table),
     channel: () => ({
       on() {
         return this;

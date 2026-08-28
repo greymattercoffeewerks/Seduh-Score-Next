@@ -75,7 +75,10 @@
       const EVENT_ID = 'ev1';
 
       function createDemoClient() {
-        const db = { live_sessions: [] };
+        // events defaults to one row for ORG_ID — this harness demonstrates
+        // real published content, not the noEvent/notStarted distinction
+        // (see viewer-shell.preview.html for that).
+        const db = { live_sessions: [], events: [{ id: EVENT_ID, org_id: ORG_ID }] };
         let idCounter = 0;
         const changeHandlers = [];
         const statusHandlers = [];
@@ -88,7 +91,7 @@
           for (const h of changeHandlers) h();
         }
 
-        function makeBuilder() {
+        function makeBuilder(table) {
           const filters = [];
           const builder = {
             select: () => builder,
@@ -96,8 +99,10 @@
               filters.push([col, val]);
               return builder;
             },
+            order: () => builder,
+            limit: () => builder,
             maybeSingle() {
-              const rows = db.live_sessions.filter((r) => matchesFilters(r, filters));
+              const rows = db[table].filter((r) => matchesFilters(r, filters));
               return Promise.resolve({ data: rows[0] ?? null, error: null });
             },
           };
@@ -117,7 +122,7 @@
         };
 
         return {
-          from: () => makeBuilder(),
+          from: (table) => makeBuilder(table),
           channel: () => channelObj,
           removeChannel: () => {},
           _publish({ isTest = false, payload }) {

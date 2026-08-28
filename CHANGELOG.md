@@ -6,6 +6,74 @@ closes.
 
 ---
 
+## Phase 5 — Live surfaces · 2026-08-28 (follow-up — distinguishing "no event" from "not started" holding states)
+
+### viewer-shell: noEvent vs notStarted
+
+Closes a follow-up flagged by T5.3's own accessibility review: `viewer-shell.js`'s
+holding states collapsed the handoff's two separately-named states (§8.4: "no event, not
+started, started-but-nothing-published, connection lost") into one generic card, since the
+module only ever read `live_sessions`, never `events`. Not introduced by T5.3, but T5.3 was
+the first task to put this in front of a real audience-facing surface (the projector) where
+the distinction would matter.
+
+`src/core/events.js` (extended): `findLatestEventForOrg(orgId, client)` — a new read-only
+query, existence-only by design. `events.status` (`draft`/`running`/`concluded`) exists in
+the schema but nothing anywhere writes it yet, so it isn't a reliable "started" signal;
+scoped with the user in advance to keep this simple — any event row at all counts as "there's
+an event for tonight," full stop, no date/status filtering.
+
+`src/core/viewer-shell.js` (extended): a `hasEvent` boolean, checked only while still false
+(an active `live_sessions` row also latches it directly, without a query — an event that
+exists doesn't stop existing), driving `computePhase()`'s new `'noEvent'` vs `'notStarted'`
+(renamed from the old ambiguous `'empty'`) branch. A `raceTimeout()` helper (rejects on
+timeout) sits alongside the existing `withTimeout()` (resolves with a sentinel) specifically
+because `findLatestEventForOrg` throws rather than returning a `{data,error}` envelope —
+reusing `withTimeout` would have let a timeout's sentinel object read as truthy at the call
+site.
+
+Verifiers: `module-boundary-checker`, `test-auditor`, `ui-accessibility-reviewer`,
+`code-reviewer` — four agents in parallel (no migration/RLS/scoring-module change).
+`module-boundary-checker` came back clean (confirmed the core-to-core `events.js` import is
+legitimate, `findLatestEventForOrg`'s placement matches the file's existing convention, and
+the `raceTimeout`/`withTimeout` split is a reasoned judgment call, not an unexplained
+duplication). The other three found real issues, all fixed:
+
+1. **`ui-accessibility-reviewer`: the new event-existence check ran sequentially after the
+   primary `live_sessions` read, sharing its full 10-second timeout — silently doubling the
+   module's own documented no-spinner-forever bound to ~20s on a slow-but-not-erroring
+   network, under the same unlabeled "Connecting…" copy the whole time.** Fixed with its own
+   materially shorter `EVENT_CHECK_TIMEOUT_MS` (4s) — proportionate to the check's own
+   "purely cosmetic" framing — plus a new test proving the combined worst case (a slow
+   live_sessions read followed by a hung events check) stays well under a naive doubled
+   bound, not just that either leg times out in isolation.
+2. **`code-reviewer`: `hasEvent` was written directly inside the try/catch, before the
+   existing staleness guard (`seq !== requestSeq`) that the primary `session` write already
+   respects** — a slower-resolving earlier check could still clobber a faster-resolving
+   later one's answer, inconsistent with the file's own stated "a slower call must never
+   clobber a faster one" invariant. Harmless today (an event never un-exists in this schema)
+   but worth closing so the invariant actually holds uniformly. Fixed by computing into a
+   local and gating the assignment behind the same guard.
+3. **`test-auditor`: the `if (session) hasEvent = true` latch path — new surface introduced
+   by this fix — had no direct test**, only inference from adjacent passing tests. Added a
+   test proving a live_sessions row latches `hasEvent` without ever querying `events`, and
+   that the latch survives the session disappearing again (reverts to `'notStarted'`, not
+   back to `'noEvent'`). Verified via mutation testing (removing the latch line, confirming
+   the new test fails, reverting) alongside the timeout fix's own new test (same technique).
+
+46 tests in `viewer-shell.test.js` (44 → 46), 10 in `events.test.js` (7 → 10). Full suite:
+682 tests, lint/format clean. Live-verified in browser via `viewer-shell.preview.html`
+(reworked to start with zero events by default — the harness's own initial state now
+demonstrates `'noEvent'` directly, with every publish/end action creating the demo event
+first, matching real ordering) and a fresh-tab console check (the pane's own long-lived tab
+had accumulated stale error entries from earlier edit iterations that a fresh navigate
+didn't clear — confirmed via a brand-new tab instead, zero errors). `phoneSummary.preview.html`
+and `projectorSurface.preview.html` also updated (defaulting to one existing event, since
+neither demonstrates this distinction) to keep their own demo Supabase clients consistent
+with the new `events` table dependency.
+
+---
+
 ## Phase 5 — Live surfaces · 2026-08-28 (T5.3 — projector surface)
 
 ### projectorSurface + live countdown

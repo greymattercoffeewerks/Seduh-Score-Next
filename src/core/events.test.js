@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createEvent, findEvent } from './events.js';
+import { createEvent, findEvent, findLatestEventForOrg } from './events.js';
 
 function fakeClient(response) {
   const calls = [];
@@ -16,7 +16,16 @@ function fakeClient(response) {
           calls.push(['eq', ...args]);
           return builder;
         },
+        order: (...args) => {
+          calls.push(['order', ...args]);
+          return builder;
+        },
+        limit: (...args) => {
+          calls.push(['limit', ...args]);
+          return builder;
+        },
         single: () => Promise.resolve(response),
+        maybeSingle: () => Promise.resolve(response),
       };
       return builder;
     },
@@ -90,5 +99,26 @@ describe('findEvent', () => {
   it('throws on a query error', async () => {
     const client = fakeClient({ data: null, error: new Error('not found') });
     await expect(findEvent('missing', client)).rejects.toThrow('not found');
+  });
+});
+
+describe('findLatestEventForOrg', () => {
+  it('returns the matching event', async () => {
+    const event = { id: 'ev1', org_id: 'org1', name: 'October Cup' };
+    const client = fakeClient({ data: event, error: null });
+    expect(await findLatestEventForOrg('org1', client)).toEqual(event);
+    expect(client.calls).toContainEqual(['eq', 'org_id', 'org1']);
+    expect(client.calls).toContainEqual(['order', 'created_at', { ascending: false }]);
+    expect(client.calls).toContainEqual(['limit', 1]);
+  });
+
+  it('returns null, not a thrown error, when the org has no events yet', async () => {
+    const client = fakeClient({ data: null, error: null });
+    expect(await findLatestEventForOrg('org1', client)).toBeNull();
+  });
+
+  it('throws on a real query error', async () => {
+    const client = fakeClient({ data: null, error: new Error('connection refused') });
+    await expect(findLatestEventForOrg('org1', client)).rejects.toThrow('connection refused');
   });
 });

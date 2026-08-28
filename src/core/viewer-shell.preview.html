@@ -77,7 +77,7 @@
       <button id="btn-publish-empty">Publish (no results yet)</button>
       <button id="btn-publish-content">Publish (with standings)</button>
       <button id="btn-publish-test">Publish TEST event</button>
-      <button id="btn-end">End session (no active event)</button>
+      <button id="btn-end">End session (event exists, not started)</button>
       <button id="btn-disconnect">Simulate disconnect</button>
       <button id="btn-reconnect">Reconnect</button>
     </div>
@@ -98,10 +98,21 @@
       const EVENT_ID = 'ev1';
 
       function createDemoClient() {
-        const db = { live_sessions: [] };
+        // No events at all on load — the very first thing this harness
+        // shows, before any button is clicked, is now the 'noEvent' card
+        // (previously indistinguishable from 'notStarted'). Every
+        // publish/end action below calls ensureEvent() first, matching
+        // reality: publishing implies an event already exists.
+        const db = { live_sessions: [], events: [] };
         let idCounter = 0;
         let changeHandlers = [];
         let statusHandlers = [];
+
+        function ensureEvent() {
+          if (!db.events.some((e) => e.org_id === ORG_ID)) {
+            db.events.push({ id: EVENT_ID, org_id: ORG_ID });
+          }
+        }
 
         function matchesFilters(row, filters) {
           return filters.every(([col, val]) => row[col] === val);
@@ -111,7 +122,7 @@
           for (const h of changeHandlers) h();
         }
 
-        function makeBuilder() {
+        function makeBuilder(table) {
           const filters = [];
           const builder = {
             select: () => builder,
@@ -119,8 +130,10 @@
               filters.push([col, val]);
               return builder;
             },
+            order: () => builder,
+            limit: () => builder,
             maybeSingle() {
-              const rows = db.live_sessions.filter((r) => matchesFilters(r, filters));
+              const rows = db[table].filter((r) => matchesFilters(r, filters));
               return Promise.resolve({ data: rows[0] ?? null, error: null });
             },
           };
@@ -140,11 +153,12 @@
         };
 
         return {
-          from: () => makeBuilder(),
+          from: (table) => makeBuilder(table),
           channel: () => channelObj,
           removeChannel: () => {},
           // Demo-only helpers, not part of the real Supabase client shape.
           _publish({ isTest, payload }) {
+            ensureEvent();
             for (const row of db.live_sessions) {
               if (row.org_id === ORG_ID) row.active = false;
             }
@@ -158,6 +172,7 @@
             notifyChange();
           },
           _end() {
+            ensureEvent();
             for (const row of db.live_sessions) {
               if (row.org_id === ORG_ID) row.active = false;
             }
