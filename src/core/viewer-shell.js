@@ -62,6 +62,12 @@ import { getSupabase } from './supabaseClient.js';
 import { el } from './dom.js';
 import { findLatestEventForOrg } from './events.js';
 
+// The one place this string is spelled out — both the chrome's visible <h1>
+// (renderChrome, showChrome:true) and mountViewerShell's own visually-hidden
+// <h1> (showChrome:false) reference this constant rather than repeating the
+// literal.
+const APP_NAME = 'Seduh Score';
+
 export function defaultHasContent(payload) {
   return payload != null && typeof payload === 'object' && Object.keys(payload).length > 0;
 }
@@ -129,7 +135,14 @@ export function renderHoldingState(phase) {
 // no denormalized human-readable event name to show instead (only
 // `events.name` does, which this module never reads), so showing the raw
 // format slug as if it were a title would be a permanent-looking
-// placeholder masquerading as finished UI (found in review).
+// placeholder masquerading as finished UI (found in review). The name is a
+// real `<h1>`, not a `<span>` — found in a later review (T5.4): with no
+// heading anywhere in the mounted tree, a screen reader's own heading
+// navigation had nothing to land on, and viewerBody.js's own `<h2>` became
+// the page's de facto first heading with nothing to nest under. This
+// covers only the showChrome:true case — mountViewerShell's own setup
+// below adds the showChrome:false equivalent (a visually-hidden <h1>, for
+// the projector's chrome-less surface); see that declaration for why.
 export function renderChrome(session, connectionLost = false) {
   let statusBadge;
   if (connectionLost) {
@@ -147,7 +160,7 @@ export function renderChrome(session, connectionLost = false) {
   }
 
   return el('div', { className: 'viewer-chrome' }, [
-    el('span', { className: 'viewer-chrome-name', text: 'Seduh Score' }),
+    el('h1', { className: 'viewer-chrome-name', text: APP_NAME }),
     statusBadge,
   ]);
 }
@@ -213,6 +226,11 @@ export async function mountViewerShell(
 
   root.innerHTML = '';
   const container = el('div', { className: 'viewer-shell' });
+  // showChrome:false's own <h1> — see renderChrome()'s comment above for
+  // why every render path needs one; this is the visually-hidden
+  // equivalent for the surface (the projector) that never calls
+  // renderChrome() at all.
+  const hiddenHeading = showChrome ? null : el('h1', { className: 'sr-only', text: APP_NAME });
   const chromeHost = el('div', {});
   const bannerHost = el('div', {});
   // role="status"/aria-live="polite" lives on THIS node permanently — every
@@ -221,7 +239,7 @@ export async function mountViewerShell(
     className: 'viewer-shell-body',
     attrs: { role: 'status', 'aria-live': 'polite' },
   });
-  container.append(chromeHost, bannerHost, body);
+  container.append(...(hiddenHeading ? [hiddenHeading] : []), chromeHost, bannerHost, body);
   root.appendChild(container);
 
   function render() {

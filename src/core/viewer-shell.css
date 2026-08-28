@@ -37,6 +37,11 @@
   font-size: var(--text-base);
   font-weight: var(--font-weight-bold);
   color: var(--color-text);
+  /* Now a real <h1>, not a <span> — the browser default heading margin
+     would otherwise shift the badge next to it. Every other real <h1> in
+     this codebase resets this the same way (see heatsScreen.css's own
+     `.screen-container h1`). */
+  margin: 0;
   /* A flex item's default min-width is auto, not 0 — without this a long
      future name/identifier would overflow the row instead of truncating
      (found in review; today's short fixed label doesn't trigger it, but

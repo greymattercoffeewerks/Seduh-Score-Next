@@ -237,12 +237,14 @@ two consumers of the same shell/data. Verifiers per task, `code-reviewer` always
   dated entry for the full review account, including a sequential-timeout compounding bug
   the review caught (fixed with the event check's own shorter timeout) and a
   staleness-guard ordering fix.
-- **T5.4's accessibility review flagged that the mounted viewer tree has no `<h1>`
-  anywhere** — `core/viewer-shell.js`'s own chrome name is a `<span>`, not a heading, so
-  `viewerBody.js`'s `<h2>` becomes the page's first heading with nothing to nest under.
-  Not fixed as part of T5.4 since it means editing T5.2's already-shipped shared
-  `core/viewer-shell.js`, not this task's own new files — spawned as its own follow-up
-  task. Revisit before T5.3 lands, since the projector will inherit the same gap.
+- **T5.4's missing `<h1>` is closed (2026-08-28 follow-up)** — `core/viewer-shell.js`'s
+  chrome name (showChrome:true, the phone surface) is now a real `<h1>`, not a `<span>`;
+  the projector (showChrome:false, no chrome band to host one) gets an equivalent
+  visually-hidden `<h1>` instead. Both reference one `APP_NAME` constant. Four parallel
+  reviews found three real issues in the first pass, all fixed in a second pass — see
+  CHANGELOG.md's dated entry for the full account, including a mutation-tested proof that
+  the new symmetric `showChrome:true` re-render test actually catches the regression it
+  targets.
 - **T4.6's round-1 accessibility review flagged three non-blocking items, deliberately
   left as-is rather than fixed inline:** (1) `standingsScreen.css`'s 480px table-stacking
   rule is copy-pasted from `heatsScreen.css`'s `.assignment-table` pattern rather than
