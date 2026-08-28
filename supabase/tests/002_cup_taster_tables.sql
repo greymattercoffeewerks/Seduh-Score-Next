@@ -57,9 +57,9 @@ insert into ct_sets (id, stage_id, position) values
   ('00000000-0000-0000-0000-0000000000c3', '00000000-0000-0000-0000-0000000000b1', 3);
 insert into ct_heats (id, stage_id, heat_number, duration_secs) values
   ('00000000-0000-0000-0000-0000000000d1', '00000000-0000-0000-0000-0000000000b1', 1, 480);
-insert into ct_heat_entries (id, heat_id, entry_id, elapsed_secs) values
+insert into ct_heat_entries (id, heat_id, entry_id, station, elapsed_secs) values
   ('00000000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-0000000000d1',
-   '00000000-0000-0000-0000-0000000000a1', 240);
+   '00000000-0000-0000-0000-0000000000a1', 'A', 240);
 insert into ct_results (heat_entry_id, set_id, correct) values
   ('00000000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-0000000000c1', true),
   ('00000000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-0000000000c2', false),
@@ -82,9 +82,9 @@ select is(
 insert into ct_heats (id, stage_id, heat_number, kind, duration_secs) values
   ('00000000-0000-0000-0000-0000000000d2', '00000000-0000-0000-0000-0000000000b1',
    1, 'tiebreak', 480);
-insert into ct_heat_entries (id, heat_id, entry_id, elapsed_secs) values
+insert into ct_heat_entries (id, heat_id, entry_id, station, elapsed_secs) values
   ('00000000-0000-0000-0000-0000000000f2', '00000000-0000-0000-0000-0000000000d2',
-   '00000000-0000-0000-0000-0000000000a1', 60);
+   '00000000-0000-0000-0000-0000000000a1', 'B', 60);
 insert into ct_results (heat_entry_id, set_id, correct) values
   ('00000000-0000-0000-0000-0000000000f2', '00000000-0000-0000-0000-0000000000c1', true);
 
@@ -103,9 +103,9 @@ insert into event_entries (id, event_id, display_name) values
    'Cupper Two');
 
 select throws_ok(
-  $$ insert into ct_heat_entries (heat_id, entry_id, elapsed_secs) values
+  $$ insert into ct_heat_entries (heat_id, entry_id, station, elapsed_secs) values
        ('00000000-0000-0000-0000-0000000000d1',
-        '00000000-0000-0000-0000-0000000000a2', -1) $$,
+        '00000000-0000-0000-0000-0000000000a2', 'B', -1) $$,
   '23514',
   null,
   'a negative elapsed_secs is rejected by the ct_heat_entries_elapsed_nonneg check'
@@ -113,22 +113,20 @@ select throws_ok(
 
 -- ============ station uniqueness is enforced at the DB level, not just the
 -- application layer (heats.js's buildHeatPlansFromAssignments) ============
--- a1 already occupies station 'A' in heat d1 (inserted implicitly above via
--- the module's own default — set explicitly here to make the collision
--- target unambiguous).
-
-update ct_heat_entries set station = 'A'
-  where id = '00000000-0000-0000-0000-0000000000f1';
+-- a1 already occupies station 'A' in heat d1 (set explicitly at insert time
+-- above, now that station is not null), making the collision target below
+-- unambiguous.
 
 select throws_ok(
   $$ insert into ct_heat_entries (heat_id, entry_id, station) values
        ('00000000-0000-0000-0000-0000000000d1',
         '00000000-0000-0000-0000-0000000000a2', 'A') $$,
   '23505',
-  null,
+  'duplicate key value violates unique constraint "ct_heat_entries_heat_station_unique"',
   'a second cupper claiming an already-taken station in the same heat is
-   rejected by ct_heat_entries_heat_station_unique, not just the application
-   layer'
+   rejected by ct_heat_entries_heat_station_unique specifically (not the
+   pre-existing heat_id/entry_id constraint, and not just the application
+   layer)'
 );
 
 select lives_ok(

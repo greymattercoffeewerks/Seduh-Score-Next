@@ -42,13 +42,13 @@ insert into ct_sets (id, stage_id, position) values
 insert into ct_heats (id, stage_id, heat_number, duration_secs) values
   ('00000000-0000-0000-0000-0000000000d1', '00000000-0000-0000-0000-0000000000b1', 1, 480),
   ('00000000-0000-0000-0000-0000000000d9', '00000000-0000-0000-0000-0000000000b9', 1, 480);
-insert into ct_heat_entries (id, heat_id, entry_id) values
+insert into ct_heat_entries (id, heat_id, entry_id, station) values
   ('00000000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-0000000000d1',
-   '00000000-0000-0000-0000-0000000000a1'),
+   '00000000-0000-0000-0000-0000000000a1', 'A'),
   ('00000000-0000-0000-0000-0000000000f2', '00000000-0000-0000-0000-0000000000d1',
-   '00000000-0000-0000-0000-0000000000a2'),
+   '00000000-0000-0000-0000-0000000000a2', 'B'),
   ('00000000-0000-0000-0000-0000000000f9', '00000000-0000-0000-0000-0000000000d9',
-   '00000000-0000-0000-0000-0000000000a9');
+   '00000000-0000-0000-0000-0000000000a9', 'A');
 
 -- Every call below runs as this real, authenticated org member — RLS and
 -- GRANTs are both actually in force, not bypassed by superuser fixtures.
@@ -202,9 +202,9 @@ select is(
 
 insert into ct_heats (id, stage_id, heat_number, duration_secs) values
   ('00000000-0000-0000-0000-0000000000d2', '00000000-0000-0000-0000-0000000000b1', 2, 480);
-insert into ct_heat_entries (id, heat_id, entry_id) values
+insert into ct_heat_entries (id, heat_id, entry_id, station) values
   ('00000000-0000-0000-0000-0000000000f3', '00000000-0000-0000-0000-0000000000d2',
-   '00000000-0000-0000-0000-0000000000a1');
+   '00000000-0000-0000-0000-0000000000a1', 'A');
 
 -- The "stale" expected_updated_at simulates a client that read this heat
 -- before some other write landed. A real second write can't be used to
