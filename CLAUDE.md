@@ -2,8 +2,8 @@
 
 _State: Phase 0 done; Phase 1 done (T1.1–T1.4); Phase 2 done (T2.1–T2.6); Phase 3 done
 (T3.1–T3.3); Phase 4 done (T4.1–T4.8, plus two 2026-08-27 follow-ups closing T4.1's
-stage-plan UI gap and its roster-registration UI gap); Phase 5 in progress (T5.1 done) —
-matches CHANGELOG.md as of 2026-08-27_
+stage-plan UI gap and its roster-registration UI gap); Phase 5 in progress (T5.1, T5.2
+done) — matches CHANGELOG.md as of 2026-08-28_
 
 Read these before touching anything:
 
@@ -155,7 +155,16 @@ src/
                                    flushes a publish_session RPC through outbox.js exactly
                                    like scoring.js's submitConfirmHeat; logic-module only,
                                    nothing calls it yet — payload shape/call cadence are
-                                   T5.2+ decisions). Not yet built: viewer-shell
+                                   T5.2+ decisions); viewer-shell (T5.2, 2026-08-28 —
+                                   mountViewerShell() watches live_sessions per-org via
+                                   Supabase Realtime, the project's first realtime usage;
+                                   renders every holding state itself, mounts a
+                                   caller-supplied renderBody only once real content
+                                   exists, same inversion-of-control shape as outbox.js's
+                                   handler map; also the first CSS file living in core/
+                                   rather than a format directory). Nothing yet calls
+                                   viewer-shell with real Cup Taster content — T5.3/T5.4
+                                   do that
   formats/
     cup-taster/                 ← scoring, timing-surface, entry-surface, viewer-body,
                                    analytics — Cup Taster-specific, built on core/. Done:

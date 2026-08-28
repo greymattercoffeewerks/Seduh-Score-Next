@@ -6,6 +6,121 @@ closes.
 
 ---
 
+## Phase 5 — Live surfaces · 2026-08-28 (T5.2 — viewer-shell + holding states)
+
+### viewer-shell
+
+Phase 5's second task, scoped in advance with the user on two real design questions:
+Supabase Realtime (`postgres_changes`) over polling, since this project has no prior
+realtime usage and the spec's own "reconnect" requirement wants a real connection
+lifecycle, not an inferred one; and matching the legacy reference app's identity-band
+split (phone shows it, the fixed-16:9 projector doesn't) over a single unified chrome,
+via a `showChrome` option.
+
+`supabase/migrations/20260828120000_live_sessions_realtime.sql` (new): enables Realtime
+on the existing `live_sessions` table — the first table this project streams. No RLS
+change (`live_sessions_read` was already `using (true)`, open by design), no new grant.
+
+`src/core/viewer-shell.js`/`.css`/`.preview.html` (new): `mountViewerShell(root, {orgId,
+renderBody, hasContent, showChrome, client})` — watches `live_sessions` for an org (not
+an event: a viewer link is handed out once per org, "tonight's competition," and should
+keep showing whichever event is currently active, D19), renders every holding state
+itself (connecting / no session / active-but-nothing-published / connection-lost), and
+mounts a caller-supplied `renderBody` only once real content exists — the same
+inversion-of-control shape `core/outbox.js` already uses for its handler map. The first
+CSS file placed inside `src/core/` rather than a format's own directory, since no format
+"owns" this module the way `heatsScreen.css` originally owned `.form-field`.
+
+Verifiers: `schema-guardian`, `security-reviewer`, `module-boundary-checker`,
+`test-auditor`, `ui-accessibility-reviewer`, `code-reviewer` — six agents in parallel,
+two rounds (this is real UI, unlike T5.1). `module-boundary-checker` and
+`security-reviewer` came back clean on round 1 — the latter having live-tested the
+realtime enablement itself (a real anon websocket subscription proving RLS enforcement,
+plus a negative control on a table not in the publication). The other four found real
+issues, all fixed:
+
+1. **`code-reviewer` (the most significant correctness finding): the realtime
+   subscription was registered AFTER the initial read, not before** — a full
+   request/response round trip during which a change could land and never be observed.
+   Fixed by subscribing first; closed with a dedicated race test.
+2. **`code-reviewer`: no guard against overlapping `refresh()` calls resolving out of
+   order.** A monotonic sequence number now discards a slower-resolving earlier call in
+   favor of a faster-resolving later one, regardless of which one's network response
+   actually arrives first.
+3. **`ui-accessibility-reviewer` (the most significant accessibility finding): a full
+   `innerHTML` rebuild on every render defeats `aria-live` change detection** — a screen
+   reader needs a _persisting_ node to detect a mutation, not a freshly re-inserted one,
+   and this is a passive "watch and wait" surface with no user action to hang an
+   alternative announcement mechanism on. Fixed with a genuine restructure: the DOM is
+   built once at mount and mutated in place via `replaceChildren()` on every render.
+4. **`ui-accessibility-reviewer`: the `is_test` banner had no `role`/`aria-live` at
+   all** — a real D9 gap for non-visual users, since this shell re-fetches (and could
+   flip `is_test`) on every change event. Fixed with `role="alert"`.
+5. **`ui-accessibility-reviewer`: no timeout on the initial "Connecting…" state** — an
+   unbounded wait is §8.4's "never leave a user watching a spinner" failure mode under a
+   different name. Fixed with a 10-second timeout, resolving to the same shape a query
+   error would.
+6. **`ui-accessibility-reviewer` (two more): stage-mode fixed text sizes had no
+   clamp/step-down guard, and `.viewer-badge-live`'s accent-as-text-on-sunken contrast
+   was thin (~4.7:1) and undocumented.** Fixed with `clamp()`-bounded sizing and a
+   switch to a solid, already-verified accent fill (5.6:1+ both surface modes) — which
+   in turn required overriding `.status-live-dot`'s own accent-colored background,
+   caught while making the fix (it would have been invisible against the new solid
+   accent fill).
+7. **`test-auditor` (three tests that passed for the wrong reason, closed):** the
+   re-fetch test never proved the shell ignores the change event's own payload and
+   genuinely re-reads; the reconnect-recovery test never proved a NEW read happens, only
+   that a flag cleared; the connection-lost test used a no-op `renderBody`, so "content
+   was showing and got replaced" was never actually true. Also added: an explicit
+   `is_test: false` + loaded-session negative test, and exact per-phase holding-card copy
+   assertions instead of a bare length check.
+8. **`code-reviewer`, two more:** `renderChrome` showed a stale "Live" badge during a
+   connection-lost state (the event may still be live even though _this viewer's_
+   connection dropped) — fixed with a neutral "Reconnecting…" badge. The identity band
+   showed the raw `session.format` slug (e.g. `"cup_taster"`) as if it were a finished
+   event-name display — `live_sessions` has no denormalized name to show instead — fixed
+   by keeping the identity band generic until a real name source exists.
+
+**Round 2** (scoped to the round-1 fixes, since the render-model restructure and the
+subscribe-ordering fix were substantial enough to warrant fresh eyes): all seven round-1
+fixes verified to actually close what was found. One new, real bug caught in the new
+code itself — `connectionLost` was only ever cleared by the realtime channel's own
+`SUBSCRIBED` handler, so a lost state entered via a query error/timeout (not a channel
+drop) could get stuck forever once the underlying channel itself never blipped again,
+even while every later read kept succeeding behind the scenes. Fixed by clearing the
+flag in `refresh()`'s own success branch, closed with a regression test proving recovery
+via a plain successful read, no channel reconnect involved. `ui-accessibility-reviewer`
+also caught a genuine WCAG failure in the brand-new "Reconnecting…" badge itself
+(3.72:1 in stage mode, below the 4.5:1 floor — it hadn't inherited `.viewer-badge-live`'s
+earlier fix just because it looked similar) and a minor over-announcement gap (the
+`is_test` banner was recreated, and so re-announced, on every unrelated render) — both
+closed. `test-auditor`'s own round-2 pass on the new race/timeout tests found one more:
+the "discards a slower-resolving earlier refresh" test didn't actually prove the
+sequence guard — confirmed by disabling the guard and watching all 34 tests still pass.
+Tracing it further while fixing it surfaced a second, independent bug one level down, in
+the test fixture itself: the fake client's `maybeSingle()` snapshotted a row by
+reference, not by value, so a later in-place mutation (`db.live_sessions[0].payload =
+...`, the exact pattern the test itself used) silently changed what an
+already-in-flight, supposedly-frozen "slow" read would see once it finally resolved —
+defeating the very race the test existed to create. Fixed with a real snapshot (a
+shallow copy at read time) and, separately, rewritten to use fake timers instead of real
+0ms/30ms `setTimeout` delays (too imprecise in a test environment to reliably reproduce
+out-of-order resolution). Re-verified the same way: passes with the guard restored,
+fails cleanly when the guard is disabled again.
+
+619 tests total (up from 585) — 34 in the new `viewer-shell.test.js`. 71 pgTAP
+assertions unchanged (this migration touches no RLS/table/function). Live-verified in a
+real browser: both a phone-style and a projector-style (`data-surface="stage"`) shell
+mounted side by side against the same fake org/session source, exercising every holding
+state, the `is_test` banner, disconnect/reconnect, and — at 360px — confirming the
+projector's `clamp()`-bounded text doesn't overflow.
+
+**Deliberately shell-only, no real Cup Taster content wired in** — the preview harness's
+`renderBody` is an explicit stub that just prints the payload. T5.3/T5.4 build the real
+`viewer-body` against this shell unedited.
+
+---
+
 ## Phase 5 — Live surfaces · 2026-08-27 (T5.1 — publish + live_sessions write path)
 
 ### publish_session RPC + core/publish.js
