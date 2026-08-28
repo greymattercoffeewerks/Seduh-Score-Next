@@ -1,0 +1,102 @@
+/*
+ * Cup Taster viewer body (T5.4) — the content core/viewer-shell.js mounts
+ * once real data exists. Built on heatsScreen.css's shared .card/.stage-meta
+ * and standingsScreen.css's .standings-table (both load alongside this
+ * file); nothing here redefines them. Shared unedited by T5.3's projector
+ * surface — every rule here is token-only so data-surface="stage" repaints
+ * it correctly with zero rules of its own.
+ */
+
+.viewer-active-heat h3 {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  margin: 0 0 var(--space-2) 0;
+}
+
+.viewer-heat-chips {
+  list-style: none;
+  margin: var(--space-3) 0 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.viewer-heat-chip {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  border: var(--border-hairline) solid var(--color-border);
+  background: var(--color-surface-sunken);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Three states, text-carried (the ✓/"(max)" suffix already in the label,
+   not color alone) — running is the unstyled default above. */
+.viewer-heat-chip[data-status='done'] {
+  border-color: var(--color-success);
+  color: var(--color-success);
+}
+
+.viewer-heat-chip[data-status='maxed'] {
+  border-color: var(--color-text-muted);
+  color: var(--color-text-muted);
+}
+
+.viewer-recent-heats h3 {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  margin: var(--space-5) 0 var(--space-2) 0;
+}
+
+.viewer-recent-heat + .viewer-recent-heat {
+  margin-top: var(--space-3);
+}
+
+.viewer-recent-heat-list {
+  list-style: none;
+  margin: var(--space-1) 0 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+}
+
+/* Stage-mode text scales up across the board, matching viewer-shell.css's
+   own [data-surface="stage"] holding-card sizing — read from across a room.
+   clamp()-bounded like that holding-card sizing (found in review there
+   first) — T5.3's eventual fixed-canvas wrapper shape isn't settled yet, so
+   bounding defensively now is cheap insurance against an unbounded value on
+   an unusual physical display, same reasoning viewer-shell.css already
+   applied to itself. */
+[data-surface='stage'] .standings-table th,
+[data-surface='stage'] .standings-table td {
+  font-size: clamp(var(--text-base), 2.5vw, var(--text-xl));
+  padding: var(--space-3);
+}
+
+[data-surface='stage'] .viewer-active-heat h3,
+[data-surface='stage'] .viewer-recent-heats h3 {
+  font-size: clamp(var(--text-lg), 4vw, var(--text-3xl));
+}
+
+[data-surface='stage'] .viewer-heat-chip {
+  font-size: clamp(var(--text-sm), 2vw, var(--text-lg));
+  padding: var(--space-2) var(--space-4);
+}
+
+[data-surface='stage'] .stage-meta,
+[data-surface='stage'] .viewer-recent-heat-list {
+  font-size: clamp(var(--text-sm), 2vw, var(--text-lg));
+}
+
+/* Maxed uses --color-text-muted in paper mode (~5.4:1, comfortably safe);
+   that same token measures ~4.67:1 in stage mode against
+   --color-surface-sunken — thin enough that this project's own precedent
+   (viewer-shell.css) already rejected an equivalent pairing elsewhere, so
+   stage mode gets the stronger --color-text-secondary token instead. */
+[data-surface='stage'] .viewer-heat-chip[data-status='maxed'] {
+  border-color: var(--color-text-secondary);
+  color: var(--color-text-secondary);
+}
