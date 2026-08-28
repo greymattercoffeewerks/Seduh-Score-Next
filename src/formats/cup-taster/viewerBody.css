@@ -1,16 +1,32 @@
 /*
- * Cup Taster viewer body (T5.4) — the content core/viewer-shell.js mounts
- * once real data exists. Built on heatsScreen.css's shared .card/.stage-meta
- * and standingsScreen.css's .standings-table (both load alongside this
- * file); nothing here redefines them. Shared unedited by T5.3's projector
- * surface — every rule here is token-only so data-surface="stage" repaints
- * it correctly with zero rules of its own.
+ * Cup Taster viewer body (T5.4, extended T5.3) — the content
+ * core/viewer-shell.js mounts once real data exists. Built on
+ * heatsScreen.css's shared .card/.stage-meta, standingsScreen.css's
+ * .standings-table, and base.css's .font-mono-score (both stylesheets load
+ * alongside this file); nothing here redefines them. Shared unedited by
+ * T5.3's projector surface — every rule here is token-only so
+ * data-surface="stage" repaints it correctly with zero rules of its own.
  */
 
 .viewer-active-heat h3 {
   font-family: var(--font-display);
   font-size: var(--text-lg);
   margin: 0 0 var(--space-2) 0;
+}
+
+/* .font-mono-score (base.css) supplies the mono/tabular-nums digit
+   treatment — same convention timingScreen.css's own .countdown-display
+   uses, since this is the exact same "digits mustn't reflow width as they
+   tick down" requirement, just on a read-only surface instead of the
+   organiser's own. */
+.viewer-countdown {
+  font-size: var(--text-3xl);
+  text-align: center;
+  padding: var(--space-3) 0;
+}
+
+.viewer-countdown[data-urgent='true'] {
+  color: var(--color-danger);
 }
 
 .viewer-heat-chips {
@@ -66,10 +82,12 @@
 /* Stage-mode text scales up across the board, matching viewer-shell.css's
    own [data-surface="stage"] holding-card sizing — read from across a room.
    clamp()-bounded like that holding-card sizing (found in review there
-   first) — T5.3's eventual fixed-canvas wrapper shape isn't settled yet, so
-   bounding defensively now is cheap insurance against an unbounded value on
-   an unusual physical display, same reasoning viewer-shell.css already
-   applied to itself. */
+   first, before the handoff's own §8.3 confirmed T5.3 needs no scale-to-fit
+   canvas wrapper at all — "Cup Taster's payload is a standings table, so the
+   projector is far simpler... no tree renderer, no scale-to-fit stage" —
+   kept anyway since it's a free, harmless step-down guard on a genuinely
+   small stage-mode viewport, the same insurance viewer-shell.css already
+   applies to itself). */
 [data-surface='stage'] .standings-table th,
 [data-surface='stage'] .standings-table td {
   font-size: clamp(var(--text-base), 2.5vw, var(--text-xl));
@@ -79,6 +97,11 @@
 [data-surface='stage'] .viewer-active-heat h3,
 [data-surface='stage'] .viewer-recent-heats h3 {
   font-size: clamp(var(--text-lg), 4vw, var(--text-3xl));
+}
+
+[data-surface='stage'] .viewer-countdown {
+  font-size: clamp(var(--text-4xl), 10vw, var(--text-6xl));
+  padding: var(--space-4) 0;
 }
 
 [data-surface='stage'] .viewer-heat-chip {

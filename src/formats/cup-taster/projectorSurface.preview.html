@@ -3,12 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Phone summary — preview</title>
+    <title>Projector surface — preview</title>
     <link rel="stylesheet" href="/src/ui/tokens/index.css" />
     <link rel="stylesheet" href="/src/core/viewer-shell.css" />
     <link rel="stylesheet" href="/src/formats/cup-taster/heatsScreen.css" />
     <link rel="stylesheet" href="/src/formats/cup-taster/standingsScreen.css" />
     <link rel="stylesheet" href="/src/formats/cup-taster/viewerBody.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/projectorSurface.css" />
     <style>
       /* Demo-harness-only layout — not part of the shipped module graph. */
       .demo-controls {
@@ -29,47 +30,60 @@
         font-family: var(--font-body);
         cursor: pointer;
       }
-      .demo-surface {
-        max-width: 420px;
+      /* A projector/TV is always ~16:9 — this box is demo-only, so the
+         harness can show that framing without needing real fullscreen.
+         The real module (projectorSurface.js/.css) imposes no aspect-ratio
+         of its own, matching the handoff's own "no scale-to-fit stage"
+         guidance — it just fills whatever container it's given. */
+      .demo-stage {
+        max-width: 960px;
+        aspect-ratio: 16 / 9;
         margin: 16px;
         border: 2px solid var(--color-border-strong);
         border-radius: var(--radius-md);
-        overflow: hidden;
+        /* auto, not hidden — real deployment has no fixed-height box at
+           all (just min-height: 100vh, see projectorSurface.css), so taller
+           content simply extends the real page; this demo box's aspect
+           ratio is only a visual "this is a 16:9 screen" cue and shouldn't
+           clip content the real surface would never clip. */
+        overflow: auto;
+      }
+      #projector-frame {
+        min-height: 100%;
       }
     </style>
   </head>
   <body>
     <!--
-      Demo-only harness for the T5.4 phone summary surface — not part of the
+      Demo-only harness for the T5.3 projector surface — not part of the
       shipped module graph, same role as every other *.preview.html file.
-      Mounts the REAL mountPhoneSummary() (viewer-shell + viewerBody, wired
-      together exactly as phoneSummary.js composes them) against a fake
-      live_sessions source, so — unlike viewer-shell.preview.html's own
-      stub renderBody — this harness demonstrates real Cup Taster content:
-      a standings table, an active-heat panel with running/done/maxed
-      cupper chips, the manual-heat no-clock state (§8.2's own AC), and
-      recent results.
-
-      Buttons drive realistic publish_session payloads directly (bypassing
-      the still-unbuilt real "assemble a payload from standings.js/heats.js"
-      wiring — deliberately out of this task's scope, see viewerBody.js's
-      own module comment for why).
+      Mounts the REAL mountProjectorSurface() (viewer-shell + viewerBody,
+      showChrome: false, data-surface="stage") against a fake live_sessions
+      source — same content viewerBody.js already renders for T5.4's phone
+      surface, unedited, per the handoff's own "T5.3 reuses this module
+      unedited" plan. The one thing genuinely new here is the live countdown
+      (also viewerBody.js, added alongside this task) — its own button below
+      drives a real ticking clock, the concrete proof for the handoff's
+      cross-surface "organiser/projector/phone all agree on remaining time"
+      AC.
     -->
     <div class="demo-controls">
       <button id="btn-standings-only">Standings only</button>
-      <button id="btn-active-heat">+ Active heat (app mode)</button>
+      <button id="btn-active-heat">+ Active heat, live countdown (app mode)</button>
+      <button id="btn-urgent">+ Active heat, countdown &lt;10s (urgent)</button>
       <button id="btn-manual-no-clock">Manual heat, not started (no-clock)</button>
       <button id="btn-recent">+ Recent results</button>
       <button id="btn-test-event">Publish as TEST event</button>
       <button id="btn-end">End session</button>
       <button id="btn-disconnect">Simulate disconnect</button>
       <button id="btn-reconnect">Reconnect</button>
-      <button id="btn-toggle-stage">Toggle stage mode</button>
     </div>
-    <div id="phone-frame" class="demo-surface"></div>
+    <div class="demo-stage">
+      <div id="projector-frame"></div>
+    </div>
 
     <script type="module">
-      import { mountPhoneSummary } from './phoneSummary.js';
+      import { mountProjectorSurface } from './projectorSurface.js';
 
       const ORG_ID = 'org1';
       const EVENT_ID = 'ev1';
@@ -151,7 +165,7 @@
       }
 
       const client = createDemoClient();
-      mountPhoneSummary(document.getElementById('phone-frame'), { orgId: ORG_ID, client });
+      mountProjectorSurface(document.getElementById('projector-frame'), { orgId: ORG_ID, client });
 
       const standings = [
         {
@@ -210,6 +224,26 @@
         });
       });
 
+      document.getElementById('btn-urgent').addEventListener('click', () => {
+        client._publish({
+          payload: {
+            stage: { kind: 'prelims', setCount: 5 },
+            standings,
+            activeHeat: {
+              heatNumber: 2,
+              stageKind: 'prelims',
+              status: 'timing',
+              timingMode: 'app',
+              startedAt: new Date(Date.now() - 473000).toISOString(),
+              durationSecs: 480,
+              cuppers: [
+                { displayName: 'Jordan Lee', station: 'A', totalElapsedSecs: null, maxed: false },
+              ],
+            },
+          },
+        });
+      });
+
       document.getElementById('btn-manual-no-clock').addEventListener('click', () => {
         client._publish({
           payload: {
@@ -252,15 +286,6 @@
       });
       document.getElementById('btn-reconnect').addEventListener('click', () => {
         client._setStatus('SUBSCRIBED');
-      });
-      document.getElementById('btn-toggle-stage').addEventListener('click', () => {
-        const frame = document.getElementById('phone-frame');
-        const isStage = frame.getAttribute('data-surface') === 'stage';
-        if (isStage) {
-          frame.removeAttribute('data-surface');
-        } else {
-          frame.setAttribute('data-surface', 'stage');
-        }
       });
     </script>
   </body>

@@ -3,7 +3,7 @@
 _State: Phase 0 done; Phase 1 done (T1.1–T1.4); Phase 2 done (T2.1–T2.6); Phase 3 done
 (T3.1–T3.3); Phase 4 done (T4.1–T4.8, plus two 2026-08-27 follow-ups closing T4.1's
 stage-plan UI gap and its roster-registration UI gap); Phase 5 in progress (T5.1, T5.2,
-T5.4 done) — matches CHANGELOG.md as of 2026-08-28_
+T5.3, T5.4 done, plus 2026-08-28 follow-up closing T5.3's accessibility gap; the cross-surface Playwright AC itself still open) — matches CHANGELOG.md as of 2026-08-28_
 
 Read these before touching anything:
 
@@ -162,11 +162,14 @@ src/
                                    caller-supplied renderBody only once real content
                                    exists, same inversion-of-control shape as outbox.js's
                                    handler map; also the first CSS file living in core/
-                                   rather than a format directory). viewer-shell now has
-                                   one real consumer (T5.4's phoneSummary, below) but its
-                                   preview harness's own renderBody stays a stub —
-                                   T5.3/T5.4 build real content against it, not
-                                   viewer-shell.js itself
+                                   rather than a format directory); events extended with
+                                   findLatestEventForOrg (2026-08-28 follow-up —
+                                   distinguishing "no event" from "not started" holding
+                                   states); viewer-shell gained hasEvent and raceTimeout()
+                                   for that same follow-up, computePhase/renderHoldingState
+                                   gained noEvent and renamed empty→notStarted. Nothing yet
+                                   calls viewer-shell with real Cup Taster content —
+                                   T5.3/T5.4 do that
   formats/
     cup-taster/                 ← scoring, timing-surface, entry-surface, viewer-body,
                                    analytics — Cup Taster-specific, built on core/. Done:
@@ -197,22 +200,7 @@ src/
                                    analytics, reportScreen (T4.7 — per-stage difficulty/
                                    distribution, gated on the whole event being complete;
                                    no partial-data report) — reportScreen.js also gained
-                                   T4.8's export actions (CSV download + print);
-                                   viewerBody, phoneSummary (T5.4 — the shared renderBody
-                                   core/viewer-shell.js mounts once real content exists:
-                                   standings table, active-heat panel with per-cupper
-                                   status chips, recent-results list; content shape
-                                   ported from the legacy v4.x app's own never-shipped-
-                                   standalone audience view. Deliberately Cup-Taster-
-                                   specific per the handoff's own module table, meant to
-                                   be shared unedited by T5.3's projector surface.
-                                   phoneSummary.js is the thin phone-specific composition,
-                                   showChrome: true. Reuses core/ranking.js's
-                                   chainComparators for the recent-heats sort rather than
-                                   hand-rolling one. Logic/renderer-only like T5.1/T5.2 —
-                                   no screen calls publishSession() yet, so
-                                   live_sessions.payload's shape is this module's own
-                                   invented contract).
+                                   T4.8's export actions (CSV download + print).
   ui/
     tokens/                     ← design tokens (plain CSS custom properties)
   main.js                       ← scaffold entry point (Phase 0 placeholder)

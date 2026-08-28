@@ -95,11 +95,28 @@
   color: var(--color-danger-contrast);
 }
 
+/* flex-direction: column — found in review (T5.3): the default row axis
+   went untested here throughout T5.2, since a holding card is always this
+   container's only child. Once real content (T5.4's viewerBody.js) appends
+   several sibling sections — a heading, a table, an active-heat card,
+   a recent-results list — row direction laid every one of them out
+   side-by-side instead of stacked, each shrunk to its own intrinsic width.
+   `gap` gives those siblings consistent spacing regardless of whichever
+   ones happen to be present on a given payload.
+   align-items: stretch, not center — found in round-2 review: center left
+   every section (the standings table excepted, since it sets its own
+   width:100%) shrunk to its own intrinsic content width and centered
+   independently, an inconsistent column width across siblings rather than
+   a deliberate look. `.viewer-holding-card` gets its own `align-self`
+   below to keep its already-correct narrow/centered appearance, since it's
+   the one section that genuinely should stay narrow. */
 .viewer-shell-body {
   flex: 1 1 auto;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   justify-content: center;
+  gap: var(--space-4);
   padding: var(--space-5) var(--space-4);
 }
 
@@ -107,6 +124,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  align-self: center;
   gap: var(--space-3);
   text-align: center;
   max-width: 44ch;

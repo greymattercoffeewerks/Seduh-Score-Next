@@ -6,6 +6,188 @@ closes.
 
 ---
 
+## Phase 5 — Live surfaces · 2026-08-28 (follow-up — distinguishing "no event" from "not started" holding states)
+
+### viewer-shell: noEvent vs notStarted
+
+Closes a follow-up flagged by T5.3's own accessibility review: `viewer-shell.js`'s
+holding states collapsed the handoff's two separately-named states (§8.4: "no event, not
+started, started-but-nothing-published, connection lost") into one generic card, since the
+module only ever read `live_sessions`, never `events`. Not introduced by T5.3, but T5.3 was
+the first task to put this in front of a real audience-facing surface (the projector) where
+the distinction would matter.
+
+`src/core/events.js` (extended): `findLatestEventForOrg(orgId, client)` — a new read-only
+query, existence-only by design. `events.status` (`draft`/`running`/`concluded`) exists in
+the schema but nothing anywhere writes it yet, so it isn't a reliable "started" signal;
+scoped with the user in advance to keep this simple — any event row at all counts as "there's
+an event for tonight," full stop, no date/status filtering.
+
+`src/core/viewer-shell.js` (extended): a `hasEvent` boolean, checked only while still false
+(an active `live_sessions` row also latches it directly, without a query — an event that
+exists doesn't stop existing), driving `computePhase()`'s new `'noEvent'` vs `'notStarted'`
+(renamed from the old ambiguous `'empty'`) branch. A `raceTimeout()` helper (rejects on
+timeout) sits alongside the existing `withTimeout()` (resolves with a sentinel) specifically
+because `findLatestEventForOrg` throws rather than returning a `{data,error}` envelope —
+reusing `withTimeout` would have let a timeout's sentinel object read as truthy at the call
+site.
+
+Verifiers: `module-boundary-checker`, `test-auditor`, `ui-accessibility-reviewer`,
+`code-reviewer` — four agents in parallel (no migration/RLS/scoring-module change).
+`module-boundary-checker` came back clean (confirmed the core-to-core `events.js` import is
+legitimate, `findLatestEventForOrg`'s placement matches the file's existing convention, and
+the `raceTimeout`/`withTimeout` split is a reasoned judgment call, not an unexplained
+duplication). The other three found real issues, all fixed:
+
+1. **`ui-accessibility-reviewer`: the new event-existence check ran sequentially after the
+   primary `live_sessions` read, sharing its full 10-second timeout — silently doubling the
+   module's own documented no-spinner-forever bound to ~20s on a slow-but-not-erroring
+   network, under the same unlabeled "Connecting…" copy the whole time.** Fixed with its own
+   materially shorter `EVENT_CHECK_TIMEOUT_MS` (4s) — proportionate to the check's own
+   "purely cosmetic" framing — plus a new test proving the combined worst case (a slow
+   live_sessions read followed by a hung events check) stays well under a naive doubled
+   bound, not just that either leg times out in isolation.
+2. **`code-reviewer`: `hasEvent` was written directly inside the try/catch, before the
+   existing staleness guard (`seq !== requestSeq`) that the primary `session` write already
+   respects** — a slower-resolving earlier check could still clobber a faster-resolving
+   later one's answer, inconsistent with the file's own stated "a slower call must never
+   clobber a faster one" invariant. Harmless today (an event never un-exists in this schema)
+   but worth closing so the invariant actually holds uniformly. Fixed by computing into a
+   local and gating the assignment behind the same guard.
+3. **`test-auditor`: the `if (session) hasEvent = true` latch path — new surface introduced
+   by this fix — had no direct test**, only inference from adjacent passing tests. Added a
+   test proving a live_sessions row latches `hasEvent` without ever querying `events`, and
+   that the latch survives the session disappearing again (reverts to `'notStarted'`, not
+   back to `'noEvent'`). Verified via mutation testing (removing the latch line, confirming
+   the new test fails, reverting) alongside the timeout fix's own new test (same technique).
+
+46 tests in `viewer-shell.test.js` (44 → 46), 10 in `events.test.js` (7 → 10). Full suite:
+682 tests, lint/format clean. Live-verified in browser via `viewer-shell.preview.html`
+(reworked to start with zero events by default — the harness's own initial state now
+demonstrates `'noEvent'` directly, with every publish/end action creating the demo event
+first, matching real ordering) and a fresh-tab console check (the pane's own long-lived tab
+had accumulated stale error entries from earlier edit iterations that a fresh navigate
+didn't clear — confirmed via a brand-new tab instead, zero errors). `phoneSummary.preview.html`
+and `projectorSurface.preview.html` also updated (defaulting to one existing event, since
+neither demonstrates this distinction) to keep their own demo Supabase clients consistent
+with the new `events` table dependency.
+
+---
+
+## Phase 5 — Live surfaces · 2026-08-28 (T5.3 — projector surface)
+
+### projectorSurface + live countdown
+
+Phase 5's third task, closing Phase 5's UI trio (viewer-shell, phone, projector). Researching
+the handoff's own §8.3 first ("Cup Taster's payload is a standings table, so the projector
+is far simpler than Throwdown's — no tree renderer, no scale-to-fit stage") settled the one
+open design question from T5.4's own scoping notes: no fixed-logical-resolution canvas with
+a JS-driven scale wrapper, just a plain full-viewport page relying on `data-surface="stage"`'s
+existing `clamp()`-bounded typography.
+
+That same research pass also surfaced a real scope gap: the handoff's own cross-surface AC —
+"prove organiser, projector, and phone all agree on remaining time" — had no display logic
+anywhere to satisfy it. Scoped with the user in advance: build the live countdown into the
+**shared** `viewerBody.js` (not a projector-only feature), so T5.4's already-shipped phone
+surface gets it from the same change instead of a second pass later.
+
+`src/formats/cup-taster/projectorSurface.js`/`.css`/`.test.js`/`.preview.html` (new): the
+thin projector-specific composition — `viewer-shell` + `viewerBody`, `showChrome: false`
+(the legacy reference app's own projector precedent), `data-surface="stage"` set on the
+caller's own root. `viewerBody.js` reused completely unedited, per the handoff's own module
+table.
+
+`src/formats/cup-taster/viewerBody.js`/`.css` (extended): a live countdown for an active
+app-mode heat — `core/countdown.js`'s `remainingSecs`/`isExpired` + `core/duration.js`'s
+`formatDuration`, mirroring `timingScreen.js`'s own established tick pattern (1s interval,
+urgent threshold at 10s remaining). `mountViewerBody` now returns an optional cleanup
+function, which required extending `core/viewer-shell.js`'s own `renderBody` contract
+(below) to call it.
+
+`src/core/viewer-shell.js`/`.css` (extended, already-shipped T5.2 code): a `renderBody`
+cleanup-lifecycle contract — an optional returned function, called before every subsequent
+re-render and again on `unmount()`, so a ticking interval never outlives the DOM node it
+mutates (`body` rebuilds on every realtime event for the org, not just ones touching the
+active heat).
+
+Verifiers: `module-boundary-checker`, `test-auditor`, `ui-accessibility-reviewer`,
+`code-reviewer` — four agents in parallel (no migration/RLS/scoring-module change this
+task). `module-boundary-checker` came back clean (confirmed no format→core leak in the new
+cleanup contract, no reimplementation of `core/countdown.js`/`core/duration.js`, and that
+the tick-pattern similarity to `timingScreen.js` is a reasonable judgment call given the two
+surfaces' real differences — organiser control panel vs. read-only viewer — not a
+"CONVENTIONS.md 2nd-verbatim-use" violation). The other three found real issues, all fixed:
+
+1. **Found live, before any review even ran: `.viewer-shell-body` was `display:flex` with
+   the default row direction, completely untested throughout T5.2** since a holding card was
+   always its only child. Once real content (multiple sibling sections: heading, table,
+   active-heat card, recent-heats list) got appended, everything laid out side-by-side
+   instead of stacked. Fixed with `flex-direction: column` + `gap`. `code-reviewer`'s own
+   pass then caught a second-order issue in that fix: `align-items: center` shrank every
+   section to its own intrinsic width and centered it independently — a full-width standings
+   table sitting next to a much narrower, independently-centered active-heat card — fixed
+   with `align-items: stretch` plus `align-self: center` on `.viewer-holding-card` alone, the
+   one section that genuinely should stay narrow.
+2. **`test-auditor`: the "freezes at 0:00 once expired" test never proved the interval
+   actually stopped** — `remainingSecs`/`formatDuration` already floor at 0 regardless of
+   whether the interval is still running, so a real leak would have passed unchanged. Closed
+   with a `vi.getTimerCount()` assertion, and separately verified (via temporary mutation,
+   reverted) that a bare `NaN`/malformed `durationSecs` produces a live "NaN:NaN" — the
+   payload's own contract had no guard for a missing duration. `showsCountdown()` now
+   requires `durationSecs != null`.
+3. **`test-auditor`: `viewer-shell.test.js`'s two new cleanup-lifecycle tests proved cleanup
+   was CALLED, never that it was called BEFORE the DOM wipe** — confirmed by temporarily
+   swapping the order in both `render()` and `unmount()` (reverted after) and watching the
+   original tests still pass either way. Rewritten so the cleanup closure itself observes
+   DOM/root state at the moment it fires, which the swapped-order mutation now genuinely
+   fails against (re-verified).
+4. **`ui-accessibility-reviewer` (the most significant finding): `aria-live="off"` on the
+   ticking countdown digits is correct and necessary (avoids a per-second announcement spam
+   inside `viewer-shell.js`'s own polite live region), but it also silently swallowed the one
+   thing a non-visual user actually needs — crossing into the urgent window, and the heat
+   timing out.** `timingScreen.js` already solved this for the organiser's own screen with a
+   one-shot feedback-region announcement; the read-only viewer had no equivalent. Fixed with
+   a separate, explicit `aria-live="polite"` sr-only node inside the countdown, announced
+   once per threshold crossing and once on expiry — never per-tick.
+5. **`ui-accessibility-reviewer`: `.is-test-banner` doesn't scale for `data-surface="stage"`**
+   — fixed at `--text-sm` (14px) while every other stage-mode text this task touches scales
+   up specifically to "read from across a room." On the projector specifically — no chrome at
+   all (`showChrome:false`) to compensate — this risked being the single smallest, least
+   legible line of text on an otherwise room-legible screen, directly against D9's
+   "unmistakable" bar. Fixed with a `[data-surface='stage']` `clamp()` override in `base.css`
+   (size only, never color/palette — the banner's own module comment already documents why
+   the test-violet stripe stays fixed across both surface modes; that reasoning doesn't
+   extend to font-size).
+6. **`code-reviewer`: an ordering hazard in `mountViewerBody` — if `renderRecentHeats`
+   (side-effect-free) threw partway through construction AFTER `renderActiveHeat` had already
+   started a live countdown's `setInterval`, the exception would propagate before the cleanup
+   handle was ever returned, leaking the interval permanently.** Fixed by building
+   `renderRecentHeats` first (still appended last, in the original visual order) — a throw
+   there can now never leave an already-started interval orphaned.
+7. **`code-reviewer`: the `bodyCleanup = renderBody(...) ?? null` normalization was provably
+   redundant** — `bodyCleanup?.()`'s optional chaining already tolerates `undefined`
+   identically to `null`, and no test could distinguish the two. Simplified.
+
+41 tests in `viewerBody.test.js` (28 → 41), 39 in `viewer-shell.test.js` (34 → 39), 4 new in
+`projectorSurface.test.js`. Full suite: 672 tests, lint/format clean. Live-verified in
+browser across both surfaces: live countdown ticking and freezing correctly, urgent/expiry
+non-visual announcements firing exactly once each (confirmed via direct DOM inspection of
+the `aria-live="polite"` node's text), the stretched full-width layout with holding-card
+centering preserved, the stage-mode `is_test` banner at its new size, and zero console
+errors — including a full regression pass of T5.2's own `viewer-shell.preview.html` harness
+(stub `renderBody`, no cleanup returned) and T5.4's `phoneSummary.preview.html`, both
+unaffected by every core/-level change here.
+
+**Follow-ups flagged, not fixed here (both spawned as separate tasks):** the mounted viewer
+tree still has no `<h1>` anywhere (T5.4's own already-tracked gap, unchanged by this task —
+confirmed it isn't worse for `showChrome:false`, since the chrome name span was never a real
+heading either); and `viewer-shell.js`'s holding states still collapse the handoff's two
+separately-named "no event" / "not started yet" states into one generic card — a pre-existing
+T5.2 design gap (`computePhase()` never reads `events`), newly relevant now that a real
+audience sees it on the projector.
+
+---
+
 ## Phase 5 — Live surfaces · 2026-08-28 (T5.4 — phone summary surface)
 
 ### viewerBody + phoneSummary
