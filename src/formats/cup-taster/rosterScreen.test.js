@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   buildCupperFromDraft,
   validateDraft,
@@ -6,6 +6,7 @@ import {
   renderRosterEntries,
   mountRosterScreen,
 } from './rosterScreen.js';
+import { DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
 
 // Table-based in-memory fake client, mirroring setupScreen.test.js's own
 // (registerEntry's control flow varies by whether a phone match exists, so
@@ -328,11 +329,97 @@ describe('mountRosterScreen', () => {
     resolveFind({ data: baseEvent, error: null });
   });
 
-  it('renders a dedicated error screen, with no form or list, when the initial load fails', async () => {
+  it('renders a dedicated error screen, with no form or list but a working Retry, when the initial load fails', async () => {
     const root = document.createElement('div');
+    document.body.appendChild(root); // .focus() is a no-op on a detached element
     await mountRosterScreen(root, { eventId: 'ev1', client: throwingClient() });
     expect(root.querySelector('form')).toBeNull();
     expect(root.querySelector('.screen-feedback').dataset.tone).toBe('error');
+    const buttons = [...root.querySelectorAll('button')];
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0].textContent).toBe('Retry');
+  });
+
+  it('Retry re-attempts the load and shows real content once it succeeds, closing the "no retry affordance" gap', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    // Deterministic, not call-count-based — flipped by the test itself the
+    // moment Retry is clicked, matching setupScreen.test.js's own approach
+    // (see its comment for why a call-count gate would be racy here).
+    let shouldFail = true;
+    // Seeded with one real entry specifically so this test can prove the
+    // reload actually happened — found in review (test-auditor): asserting
+    // only "h1 says Roster, no error tone" would still pass against a
+    // broken Retry that just cleared the error state without reloading,
+    // since both screens render that same shell on zero-entry state too.
+    const succeeding = fakeClient({ events: [baseEvent], event_entries: [entry()] });
+    const client = {
+      from(table) {
+        return shouldFail ? throwingClient().from(table) : succeeding.from(table);
+      },
+    };
+    await mountRosterScreen(root, { eventId: 'ev1', client });
+
+    expect(root.querySelector('.screen-feedback').dataset.tone).toBe('error');
+
+    shouldFail = false;
+    root.querySelector('button').click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(root.querySelector('h1').textContent).toBe('Roster');
+    expect(root.querySelector('.screen-feedback[data-tone="error"]')).toBeNull();
+    expect(root.textContent).toContain('Cupper One');
+    // Found in review (ui-accessibility-reviewer): a successful Retry used
+    // to silently drop focus to <body> — see setupScreen.test.js's own
+    // identical check for the full reasoning.
+    expect(document.activeElement.id).toBe('roster-heading');
+  });
+
+  describe('a genuinely hung load (neither resolves nor rejects)', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('times out rather than leaving the screen on "Loading…" forever, and shows a distinct message with a working Retry', async () => {
+      function hungBuilder() {
+        const builder = {
+          select: () => builder,
+          eq: () => builder,
+          single: () => new Promise(() => {}),
+          maybeSingle: () => new Promise(() => {}),
+          then: () => new Promise(() => {}), // never settles — the exact failure mode under test
+        };
+        return builder;
+      }
+      const hungClient = { from: () => hungBuilder() };
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      const mountPromise = mountRosterScreen(root, { eventId: 'ev1', client: hungClient });
+
+      await vi.advanceTimersByTimeAsync(0);
+      expect(root.textContent).toContain('Loading roster…');
+
+      // Pins the actual shared constant, not just "a timeout eventually
+      // fires" — see setupScreen.test.js's own identical check for the
+      // full reasoning (test-auditor finding).
+      await vi.advanceTimersByTimeAsync(DEFAULT_LOAD_TIMEOUT_MS - 1);
+      expect(root.textContent).toContain('Loading roster…');
+
+      await vi.advanceTimersByTimeAsync(1);
+      await mountPromise;
+
+      const feedback = root.querySelector('.screen-feedback');
+      expect(feedback.dataset.tone).toBe('error');
+      expect(feedback.textContent).toMatch(/taking longer than expected/i);
+      const retryButton = [...root.querySelectorAll('button')].find(
+        (b) => b.textContent === 'Retry',
+      );
+      expect(retryButton).toBeTruthy();
+    });
   });
 
   it('renders the current roster, sorted, with cafe/bib meta', async () => {

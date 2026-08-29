@@ -4,9 +4,10 @@ _State: Phase 0 done; Phase 1 done (T1.1–T1.4); Phase 2 done (T2.1–T2.6); Ph
 (T3.1–T3.3); Phase 4 done (T4.1–T4.8, plus two 2026-08-27 follow-ups closing T4.1's
 stage-plan UI gap and its roster-registration UI gap, a 2026-08-29 follow-up closing
 T4.3/T4.4's direct-write gap, a further 2026-08-29 follow-up closing T4.2's DB-level
-station-uniqueness gap, and a further 2026-08-29 follow-up closing the cross-module
-outbox handler-map composition gap); Phase 5 done (T5.1, T5.2, T5.3, T5.4, the 2026-08-28
-holding-state follow-up, and the cross-surface Playwright AC) —
+station-uniqueness gap, a further 2026-08-29 follow-up closing the cross-module outbox
+handler-map composition gap, and a further 2026-08-29 follow-up closing the
+setupScreen/rosterScreen hung-load timeout/retry gap); Phase 5 done (T5.1, T5.2, T5.3,
+T5.4, the 2026-08-28 holding-state follow-up, and the cross-surface Playwright AC) —
 matches CHANGELOG.md as of 2026-08-29_
 
 The living tracker for the handoff's build plan (§14). The handoff itself stays frozen
@@ -196,15 +197,27 @@ two consumers of the same shell/data. Verifiers per task, `code-reviewer` always
   duplicate registration, same shape as `setup.js`'s `createStage`). See CHANGELOG.md's
   dated entry for the full review account. Both of T4.1's original "no UI" gaps are now
   closed.
-- **Two screens share an unaddressed gap, found while reviewing the roster screen above:
-  no timeout/failure state for a hung initial load.** `setupScreen.js` and
-  `rosterScreen.js` both render a literal "Loading…" state correctly (no spinner-as-
-  resting-state), but `loadPersisted()` has no timeout in either — on this project's own
-  "unreliable venue wifi" design target, a request that neither resolves nor rejects
-  leaves the organiser stuck indefinitely, with no retry affordance. Not fixed as part of
-  the roster screen task since it's a cross-cutting gap across already-shipped screens,
-  not something specific to roster registration — worth a dedicated pass (a shared
-  timeout/retry primitive, probably in `core/`) if it proves to matter before October.
+- **Two screens shared an unaddressed gap, found while reviewing the roster screen above:
+  no timeout/failure state for a hung initial load — closed (2026-08-29 follow-up).**
+  `setupScreen.js` and `rosterScreen.js` both render a literal "Loading…" state correctly
+  (no spinner-as-resting-state), but `loadPersisted()` had no timeout in either — on this
+  project's own "unreliable venue wifi" design target, a request that neither resolves
+  nor rejects left the organiser stuck indefinitely, with no retry affordance. New
+  `core/timeout.js` (`raceTimeout`/`DEFAULT_LOAD_TIMEOUT_MS`) is the shared primitive this
+  note originally called for — extracted from `core/viewer-shell.js`'s own private
+  identical implementation on its 2nd verbatim use, not written fresh. Both screens gained
+  an `attemptLoad()` racing `loadPersisted()` against a 10s timeout, and their
+  `renderLoadError()` gained a real Retry button. Four parallel reviews
+  (`module-boundary-checker`, `ui-accessibility-reviewer`, `test-auditor`, `code-reviewer`)
+  found real issues: `ui-accessibility-reviewer` caught a successful Retry silently
+  dropping focus to `<body>` (fixed — matches the existing `focusAfterRender` pattern
+  every other action on these screens already uses) plus two minor consistency gaps
+  (Retry missing `type="button"`, the loading state itself not taking focus during a
+  retry-triggered wait); `test-auditor` caught the "Retry re-attempts" tests not actually
+  proving a reload happened (a no-op retry handler would have passed both) and the
+  timeout tests not pinning the shared constant specifically — both closed. Live-verified
+  in a real browser, including a genuine unmocked 10-second timeout actually firing. See
+  CHANGELOG.md's dated entry for the full account.
 - **No resumability for a partial heat-generation failure.** T4.2's screen correctly
   detects and honestly reports an incomplete generation (see CHANGELOG.md), but offers
   no repair path — `generateHeatsRandom` reshuffles the whole roster fresh on every

@@ -4,9 +4,11 @@ _State: Phase 0 done; Phase 1 done (T1.1–T1.4); Phase 2 done (T2.1–T2.6); Ph
 (T3.1–T3.3); Phase 4 done (T4.1–T4.8, plus two 2026-08-27 follow-ups closing T4.1's
 stage-plan UI gap and its roster-registration UI gap, a 2026-08-29 follow-up closing
 T4.3/T4.4's direct-write gap, a further 2026-08-29 follow-up closing T4.2's DB-level
-station-uniqueness gap, and a further 2026-08-29 follow-up closing the cross-module
-outbox handler-map composition gap — see below); Phase 5 done (T5.1–T5.4, the 2026-08-28
-holding-state follow-up, the cross-surface Playwright AC, and the 2026-08-28 viewer-shell
+station-uniqueness gap, a further 2026-08-29 follow-up closing the cross-module outbox
+handler-map composition gap, and a further 2026-08-29 follow-up closing the
+setupScreen/rosterScreen hung-load timeout/retry gap — see below); Phase 5 done
+(T5.1–T5.4, the 2026-08-28 holding-state follow-up, the cross-surface Playwright AC, and
+the 2026-08-28 viewer-shell
 `<h1>`/heading-hierarchy follow-up); design-system type refresh (2026-08-28, not tied to
 a phase — Erode/Tabular → Cabinet Grotesk/JetBrains Mono) — matches CHANGELOG.md as of
 2026-08-29_
@@ -201,7 +203,13 @@ src/
                                    publish.js stays here too — publish_session carries its
                                    own p_format parameter, genuinely format-agnostic — see
                                    formats/cup-taster's own outboxHandlers.js entry below
-                                   for the actual composition point.
+                                   for the actual composition point. timeout (new,
+                                   2026-08-29 follow-up) — raceTimeout(promise, ms) +
+                                   DEFAULT_LOAD_TIMEOUT_MS, extracted from
+                                   viewer-shell.js's own private identical implementation
+                                   on its 2nd verbatim use, closing the setupScreen.js/
+                                   rosterScreen.js hung-initial-load gap; viewer-shell.js
+                                   now imports it instead of keeping its own copy.
   formats/
     cup-taster/                 ← scoring, timing-surface, entry-surface, viewer-body,
                                    analytics — Cup Taster-specific, built on core/. Done:
