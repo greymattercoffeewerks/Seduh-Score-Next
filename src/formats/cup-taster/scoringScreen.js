@@ -30,6 +30,7 @@ import {
   submitConfirmHeat,
   describeConfirmError,
 } from './scoring.js';
+import { cupTasterOutboxHandlers } from './outboxHandlers.js';
 import { getSupabase } from '../../core/supabaseClient.js';
 import { el } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
@@ -291,6 +292,7 @@ export async function mountScoringScreen(root, { eventId, heatId, client = getSu
             data.heat.updated_at,
             entries,
             client,
+            cupTasterOutboxHandlers(client),
           );
           // Ground truth, not the flush's own bookkeeping: the outbox is a
           // single shared queue, so `result` can reflect an unrelated

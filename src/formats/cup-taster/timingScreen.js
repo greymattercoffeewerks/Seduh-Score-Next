@@ -16,6 +16,7 @@ import { findHeatById, listHeatEntries, hydrateEntries } from './heats.js';
 import { listEntriesByIds } from '../../core/registry.js';
 import { findEvent } from '../../core/events.js';
 import { startHeat, recordTap, autoMaxRemainingEntries, describeTimingConflict } from './timing.js';
+import { cupTasterOutboxHandlers } from './outboxHandlers.js';
 import { remainingSecs, isExpired } from '../../core/countdown.js';
 import { getSupabase } from '../../core/supabaseClient.js';
 import { el } from '../../core/dom.js';
@@ -148,7 +149,9 @@ export async function mountTimingScreen(root, { eventId, heatId, client = getSup
     // this against fresh, reloaded state before actually reporting success.
     const stillRunningCount = data.hydrated.filter((entry) => entry.elapsed_secs == null).length;
     try {
-      const flushResult = await autoMaxRemainingEntries(heatId, data.event.org_id, client, {});
+      const flushResult = await autoMaxRemainingEntries(heatId, data.event.org_id, client, {
+        handlers: cupTasterOutboxHandlers(client),
+      });
       pendingHeatCheck = { expect: 'past-timing', stillRunningCount, flushResult };
     } catch (err) {
       pendingError = describeError(err);
@@ -274,7 +277,9 @@ export async function mountTimingScreen(root, { eventId, heatId, client = getSup
       });
       startButton.addEventListener('click', async () => {
         try {
-          const { flushResult } = await startHeat(heatId, data.event.org_id, client, {});
+          const { flushResult } = await startHeat(heatId, data.event.org_id, client, {
+            handlers: cupTasterOutboxHandlers(client),
+          });
           pendingHeatCheck = { expect: 'timing', flushResult };
         } catch (err) {
           pendingError = describeError(err);
@@ -312,7 +317,7 @@ export async function mountTimingScreen(root, { eventId, heatId, client = getSup
               stoppedEntry,
               data.event.org_id,
               client,
-              {},
+              { handlers: cupTasterOutboxHandlers(client) },
             );
             pendingEntryCheck = {
               heatEntryId: stoppedEntry.id,

@@ -16,6 +16,7 @@ import { listEntriesByIds } from '../../core/registry.js';
 import { findEvent } from '../../core/events.js';
 import { recordManualTime } from './timingManual.js';
 import { describeTimingConflict } from './timing.js';
+import { cupTasterOutboxHandlers } from './outboxHandlers.js';
 import { renderTimingRows } from './timingScreen.js';
 import { getSupabase } from '../../core/supabaseClient.js';
 import { el } from '../../core/dom.js';
@@ -264,7 +265,7 @@ export async function mountManualTimingScreen(
               totalSecs,
               data.event.org_id,
               client,
-              {},
+              { handlers: cupTasterOutboxHandlers(client) },
             );
             pendingEntryCheck = {
               heatEntryId: savedEntry.id,

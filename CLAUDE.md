@@ -3,8 +3,9 @@
 _State: Phase 0 done; Phase 1 done (T1.1–T1.4); Phase 2 done (T2.1–T2.6); Phase 3 done
 (T3.1–T3.3); Phase 4 done (T4.1–T4.8, plus two 2026-08-27 follow-ups closing T4.1's
 stage-plan UI gap and its roster-registration UI gap, a 2026-08-29 follow-up closing
-T4.3/T4.4's direct-write gap, and a further 2026-08-29 follow-up closing T4.2's
-DB-level station-uniqueness gap — see below); Phase 5 done (T5.1–T5.4, the 2026-08-28
+T4.3/T4.4's direct-write gap, a further 2026-08-29 follow-up closing T4.2's DB-level
+station-uniqueness gap, and a further 2026-08-29 follow-up closing the cross-module
+outbox handler-map composition gap — see below); Phase 5 done (T5.1–T5.4, the 2026-08-28
 holding-state follow-up, the cross-surface Playwright AC, and the 2026-08-28 viewer-shell
 `<h1>`/heading-hierarchy follow-up); design-system type refresh (2026-08-28, not tied to
 a phase — Erode/Tabular → Cabinet Grotesk/JetBrains Mono) — matches CHANGELOG.md as of
@@ -189,6 +190,18 @@ src/
                                    visually-hidden equivalent <h1> covers showChrome:false
                                    (the projector), which has no chrome band to host a
                                    visible one in; both reference one APP_NAME constant.
+                                   outbox gained buildRpcHandler(client, type) and publish
+                                   gained publishHandlers(client), 2026-08-29 follow-up —
+                                   closing the cross-module handler-map composition gap
+                                   surfaced by the T4.3/T4.4 outbox-wiring review;
+                                   buildRpcHandler is pure RPC-wrapping mechanics (dedups
+                                   3 near-identical blocks formerly hand-rolled in
+                                   timing.js/scoring.js/publish.js), format-agnostic by
+                                   design, so it lives here rather than in a format;
+                                   publish.js stays here too — publish_session carries its
+                                   own p_format parameter, genuinely format-agnostic — see
+                                   formats/cup-taster's own outboxHandlers.js entry below
+                                   for the actual composition point.
   formats/
     cup-taster/                 ← scoring, timing-surface, entry-surface, viewer-body,
                                    analytics — Cup Taster-specific, built on core/. Done:
@@ -229,9 +242,10 @@ src/
                                    found and closed during review, verified with real
                                    concurrent psql sessions, not just pgTAP — see
                                    CHANGELOG.md/ROADMAP.md for the full account, including
-                                   a related, NOT-yet-closed gap the same review surfaced
-                                   (timingHandlers() isn't shared with scoring.js's/
-                                   publish.js's own handler maps); heats.js gained a
+                                   a related gap the same review surfaced, closed in a
+                                   separate 2026-08-29 follow-up — see outbox and
+                                   formats/cup-taster's own entries below for
+                                   buildRpcHandler/cupTasterOutboxHandlers; heats.js gained a
                                    DB-level unique(heat_id, station) constraint follow-up
                                    (2026-08-29, migration 20260829100000) closing a known
                                    ROADMAP.md gap — ensureHeatEntries's new
@@ -253,7 +267,21 @@ src/
                                    heat is submitted as ONE outbox operation through the
                                    existing confirm_heat RPC — first format module to use
                                    core/outbox.js's `.permanent` error-flag contract, and
-                                   the pattern T4.3/T4.4 followed above); standings,
+                                   the pattern T4.3/T4.4 followed above; gained an exported
+                                   confirmHandlers(client), 2026-08-29 follow-up, mirroring
+                                   timing.js's own timingHandlers — see outboxHandlers.js
+                                   below); outboxHandlers (new, 2026-08-29 — the composition
+                                   point closing the cross-module handler-map gap: exports
+                                   cupTasterOutboxHandlers(client), spreading
+                                   timingHandlers/confirmHandlers/core's publishHandlers
+                                   into one map every real screen call site now passes as
+                                   an optional `handlers` override, so a flush triggered
+                                   from any of timingScreen.js/timingManualScreen.js/
+                                   scoringScreen.js can process any of the 5 queued Cup
+                                   Taster operation types, not just its own; deliberately
+                                   not imported back into timing.js/scoring.js themselves,
+                                   which would be circular — see CHANGELOG.md/ROADMAP.md
+                                   for the full four-reviewer account); standings,
                                    standingsScreen (T4.6 — ranking/advancement/tiebreak/
                                    coin-toss, direct writes like T4.2; heats.js gained a
                                    generalized `kind` parameter for tiebreak heat creation);

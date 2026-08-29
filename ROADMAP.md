@@ -3,8 +3,9 @@
 _State: Phase 0 done; Phase 1 done (T1.1–T1.4); Phase 2 done (T2.1–T2.6); Phase 3 done
 (T3.1–T3.3); Phase 4 done (T4.1–T4.8, plus two 2026-08-27 follow-ups closing T4.1's
 stage-plan UI gap and its roster-registration UI gap, a 2026-08-29 follow-up closing
-T4.3/T4.4's direct-write gap, and a further 2026-08-29 follow-up closing T4.2's
-DB-level station-uniqueness gap); Phase 5 done (T5.1, T5.2, T5.3, T5.4, the 2026-08-28
+T4.3/T4.4's direct-write gap, a further 2026-08-29 follow-up closing T4.2's DB-level
+station-uniqueness gap, and a further 2026-08-29 follow-up closing the cross-module
+outbox handler-map composition gap); Phase 5 done (T5.1, T5.2, T5.3, T5.4, the 2026-08-28
 holding-state follow-up, and the cross-surface Playwright AC) —
 matches CHANGELOG.md as of 2026-08-29_
 
@@ -155,18 +156,26 @@ two consumers of the same shell/data. Verifiers per task, `code-reviewer` always
   entries could both miss flipping the heat to `scoring`; a fix's own first attempt then
   left a narrower but real stale-read gap under lock contention) was found and closed
   during review, verified with real concurrent `psql` sessions, not just pgTAP — see
-  CHANGELOG.md's dated entry for the full account. **A new, related gap surfaced by this
-  same review is NOT yet closed**: the shared `timingHandlers()` map this task added is
-  not shared with `scoring.js`'s `confirm_heat` or `publish.js`'s `publish_session` —
-  `core/outbox.js` registers handlers per `flushOutbox()` call, not globally, so the
-  primary offline workflow (a heat timed _and_ scored fully offline in one session) can
-  stall a `confirm_heat` flush behind earlier-queued timing operations, with no app-level
-  recovery mechanism anywhere yet. Pre-existing (present since `scoring.js` first shipped
-  its own single-type handler map), not introduced by this task, but assessed by
-  `offline-sync-auditor` as serious enough to be the next task, not a further-deferred
-  note — revisit before relying on the app for a fully-offline timing-then-scoring
-  session. **T4.5's scoring surface's own outbox wiring is otherwise unaffected** — this
-  note is about handler-map _composition_ across modules, not scoring's own correctness.
+  CHANGELOG.md's dated entry for the full account. **The related handler-map composition
+  gap this review surfaced is now closed too (2026-08-29, separate follow-up)** —
+  `core/outbox.js` gained an exported `buildRpcHandler(client, type)` (deduping three
+  near-identical RPC-wrapping blocks that used to live independently in `timing.js`,
+  `scoring.js`, and `publish.js`); each of those three now exports a named handler-builder
+  (`timingHandlers`, new `confirmHandlers`, new `publishHandlers`); a new
+  `formats/cup-taster/outboxHandlers.js` composes all three into
+  `cupTasterOutboxHandlers(client)`, which every real screen call site (`timingScreen.js`,
+  `timingManualScreen.js`, `scoringScreen.js`) now passes into its write function via a
+  new optional `handlers` override — so a flush triggered from any of these screens can
+  process ANY queued Cup Taster operation type, not just its own, closing the primary
+  offline workflow's stall risk. `offline-sync-auditor` found one residual, currently
+  latent gap in review: `flushOutbox`'s reentrancy guard discards a losing concurrent
+  caller's `handlers` argument entirely — harmless today since every real call site passes
+  the same composed map, but documented with a comment on `core/outbox.js`'s own
+  `inFlightFlush` so a future narrower-map call site doesn't silently reintroduce this
+  exact stall. `test-auditor` found three test-quality gaps (a composition test that
+  proved key presence but not that the values were real handlers; only 2 of 5 composed
+  operation types actually exercised through a real flush; a fragile double-invocation
+  assertion) — all closed. See CHANGELOG.md's dated entry for the full account.
 - **T4.3's app-mode timing screen has no manual-entry fallback for a mid-heat device
   failure.** The spec (§7.1) describes a heat that "may mix tapped and hand-entered
   times if a stopwatch fails mid-heat" — read literally, this only makes sense as a
@@ -205,7 +214,7 @@ two consumers of the same shell/data. Verifiers per task, `code-reviewer` always
 - **No DB-level `unique(heat_id, station)` constraint — closed (2026-08-29 follow-up).**
   Migration `20260829100000_ct_heat_entries_station_unique.sql` adds
   `ct_heat_entries_heat_station_unique unique (heat_id, station)` plus `alter column
-  station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can tell
+station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can tell
   it apart from the pre-existing `unique(heat_id, entry_id)` constraint's own violation —
   the two need different handling: an `entry_id` collision is a safe-to-retry race (the
   next attempt's `diffAgainst` sees the row and moves on), but a `station` collision

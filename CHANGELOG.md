@@ -158,6 +158,98 @@ closes.
 
 ---
 
+## Known open items carried into Phase 4/5 · 2026-08-29 (cross-module outbox handler-map composition gap closed)
+
+Closes the known open item ROADMAP.md/CHANGELOG.md tracked since the T4.3/T4.4
+outbox-wiring follow-up: `core/outbox.js`'s `flushOutbox()` registers a handler map per
+call, not globally, so `timing.js`'s shared `timingHandlers()` map (covering
+`start_heat`/`record_heat_time`/`auto_max_heat`) was never shared with `scoring.js`'s own
+`confirm_heat` handler or `publish.js`'s own `publish_session` handler. A flush triggered
+with only one module's narrow map couldn't process an operation type queued by a
+different module — hitting the FIRST queued operation of an unrecognized type throws "no
+handler registered," an ordinary (non-permanent) failure that stops the whole flush pass
+before ever reaching the operation the caller actually wanted flushed. `offline-sync-auditor`
+assessed this as serious enough to be the next task, not a further-deferred note: the
+primary offline workflow this project cares about — a heat timed AND scored fully offline
+in one session — enqueues `start_heat`/`record_heat_time` operations first, then
+`confirm_heat` behind them; scoring the heat would silently stall forever if the
+connection came back only once the organiser reached the scoring screen, with no
+app-level recovery.
+
+**`core/outbox.js` gained an exported `buildRpcHandler(client, type)`** — a generic
+RPC-wrapping-as-permanent-outbox-handler helper, extracted from three near-identical
+~10-line blocks that had each been hand-rolled independently in `timing.js`, `scoring.js`,
+and `publish.js` (same `err.message`/`err.code`/`err.details`/`err.permanent = true`
+shape, same "an RPC-level error is a rejection of this exact payload, a network-level
+rejection stays retryable" distinction). Purely generic RPC mechanics with zero knowledge
+of any operation type's name or payload shape, so it belongs in `core/`, not a format —
+verified by `module-boundary-checker`.
+
+**Each owning module now exports its own named handler-builder**: `timing.js`'s
+`timingHandlers(client)` (unchanged shape, now built via `buildRpcHandler`), a new
+`scoring.js`'s `confirmHandlers(client)`, and a new `publish.js`'s `publishHandlers(client)`.
+`publish.js` stays in `core/`, not a format module — `publish_session` is itself
+format-agnostic (its own `p_format` parameter carries the format, per the module's own
+original design comment).
+
+**New `formats/cup-taster/outboxHandlers.js`** is the composition point:
+`cupTasterOutboxHandlers(client)` spreads all three maps into one. Deliberately NOT
+imported back into `timing.js`/`scoring.js`/`publish.js` themselves (that would be a
+circular module dependency) — instead, each of those three modules' write functions
+(`submitTimingOperation` and its three public callers `startHeat`/`recordTap`/
+`autoMaxRemainingEntries`, `timingManual.js`'s `recordManualTime`, `scoring.js`'s
+`submitConfirmHeat`, `publish.js`'s `publishSession`) gained an optional trailing
+`handlers` override — when passed, it REPLACES that function's own narrow default map;
+when omitted, behavior is exactly as before (backward compatible with every existing
+test and caller). Five real screen call sites (`timingScreen.js`'s
+`autoMaxRemainingEntries`/`startHeat`/`recordTap` calls, `timingManualScreen.js`'s
+`recordManualTime` call, `scoringScreen.js`'s `submitConfirmHeat` call) now pass
+`cupTasterOutboxHandlers(client)` in, so a flush triggered from any of them can process
+any of the 5 queued Cup Taster operation types, not just its own.
+
+**Four parallel subagent reviews** (module-boundary-checker, offline-sync-auditor,
+test-auditor, code-reviewer — no migration/RLS/scoring-module change, so
+`schema-guardian`/`security-reviewer`/`scoring-auditor` didn't apply): `module-boundary-checker`
+came back clean (confirmed the composition respects §6 both directions — no format
+logic leaked into `core/`, and a future format could build its own equivalent
+`outboxHandlers.js` without editing any of `core/outbox.js`, `core/publish.js`, or Cup
+Taster's own files). The other three found real issues, all closed:
+
+- **`code-reviewer`**: a stale comment in `timing.js`'s `describeTimingConflict` still
+  referenced the removed private `rpcHandler` function by name. Fixed to point at
+  `buildRpcHandler` in `core/outbox.js`.
+- **`offline-sync-auditor`**: `flushOutbox`'s reentrancy guard (`inFlightFlush`) discards
+  a losing concurrent caller's `handlers` argument entirely — a second caller arriving
+  while a flush is already in-flight just gets back the SAME promise, built from
+  whichever caller's map won the race. Harmless today (every real call site now passes
+  the same composed map, so it doesn't matter whose object reference wins), but a real,
+  undocumented constraint that a future narrower-map call site racing one of today's five
+  could silently reintroduce this exact stall. Not fixed (no current code path triggers
+  it, and a real fix would mean redesigning the reentrancy guard itself, out of scope for
+  this task) — documented with a comment on `inFlightFlush` so a future author doesn't
+  reintroduce it unknowingly.
+- **`test-auditor`**: three test-quality gaps. (1) The `cupTasterOutboxHandlers`
+  composition test only checked key names, not that the values were real handler
+  functions — would have passed even if e.g. `publishHandlers()` silently degraded to
+  `{ publish_session: undefined }`. Fixed by asserting every value is a function. (2)
+  Only 2 of the 5 composed operation types (`start_heat`/`confirm_heat`) were ever
+  exercised through an actual flush — the other 3 (`record_heat_time`/`auto_max_heat`/
+  `publish_session`) were only proven present by the key-name check. Fixed with a new
+  test flushing all 5 through the composed map in one pass, in FIFO order. (3)
+  `buildRpcHandler`'s "network rejection isn't marked permanent" test called the handler
+  twice (once for a `rejects.toThrow` check, again in a bare `try/catch` for the
+  `.permanent` check) — traced and confirmed it did actually run and prove the claim, but
+  flagged as needlessly fragile to read. Fixed by collapsing to one invocation, one
+  `.catch()`, both assertions on the same rejection, guarded by `expect.assertions(2)` —
+  note this required using `.catch()` rather than `rejects.toMatchObject({ permanent:
+undefined })`, since `toMatchObject` does not treat an absent property as matching an
+  explicit `undefined` (discovered when the first attempt at this collapse failed for
+  exactly that reason).
+
+Full suite re-verified after every fix: 689/689 Vitest tests, lint clean, format clean.
+
+---
+
 ## Known open items carried into Phase 4 · 2026-08-29 (T4.2's station-uniqueness gap closed at the DB level)
 
 Closes the known open item ROADMAP.md tracked since T4.2: station-uniqueness-per-heat was
@@ -178,8 +270,8 @@ one).
 constraints that need different handling on conflict. An `entry_id` collision (the
 pre-existing `unique(heat_id, entry_id)`) means someone else already inserted the exact
 row this call also wants — safe to retry, since the next attempt's `diffAgainst` sees it
-and moves on. A `station` collision means two *different* cuppers are racing for the
-*same* station — retrying the identical insert would just fail identically forever, so a
+and moves on. A `station` collision means two _different_ cuppers are racing for the
+_same_ station — retrying the identical insert would just fail identically forever, so a
 new `isStationConflict()` helper distinguishes it (matching "station" in the Postgres
 error's DETAIL/message) and fails fast with a clear message instead of quietly burning
 through the bounded-retry budget toward the generic "gave up" error a genuine `entry_id`
@@ -193,7 +285,7 @@ making the string-match discriminator reliable rather than assumed.
 
 **Tests**: three new pgTAP assertions in `002_cup_taster_tables.sql` (plan grown 6→9) —
 a same-station collision in the same heat is rejected, a genuinely different station in
-the same heat is unaffected, and the same station label in a *different* heat is
+the same heat is unaffected, and the same station label in a _different_ heat is
 unaffected (uniqueness is scoped per heat, not global). A new Vitest case in
 `heats.test.js` proves the fail-fast path issues exactly one insert attempt on a station
 conflict, never retries.
@@ -202,7 +294,7 @@ conflict, never retries.
 first version reasoned that Postgres's "NULL is never equal to another NULL" UNIQUE
 semantics "never come into play here," since the app never writes a null `station`.
 `schema-guardian` proved that reasoning wrong at the DB level — a plain
-`unique(heat_id, station)` places *zero* constraint on rows where `station IS NULL`
+`unique(heat_id, station)` places _zero_ constraint on rows where `station IS NULL`
 (verified empirically: two such rows insert with no error), so the new invariant this
 migration exists to add was itself only app-layer-enforced for the null case, exactly
 the kind of guarantee the migration was meant to stop relying on. Fixed by adding `alter
@@ -218,7 +310,7 @@ tiebreak fixture off station `'A'`).
 
 Separately, `test-auditor` suggested strengthening the station-collision `throws_ok` to
 check the exact Postgres error message, not just its SQLSTATE — the original version
-only proved *some* 23505 error occurred, relying on the surrounding fixture (not the
+only proved _some_ 23505 error occurred, relying on the surrounding fixture (not the
 assertion itself) to guarantee it was really the station constraint and not the
 pre-existing `entry_id` one. Applied.
 
