@@ -19,6 +19,11 @@
       registered" rather than a duplicate), and withdrawing/reinstating an
       entry.
     -->
+    <p>
+      <button id="demo-normal">Mount (normal)</button>
+      <button id="demo-failed">Mount (load fails)</button>
+      <button id="demo-hung">Mount (load hangs — real 10s timeout)</button>
+    </p>
     <div id="app"></div>
     <script type="module">
       import { mountRosterScreen } from './rosterScreen.js';
@@ -141,10 +146,40 @@
         return { from: (table) => makeBuilder(table) };
       }
 
-      mountRosterScreen(document.getElementById('app'), {
-        eventId: 'ev1',
-        client: createDemoClient(),
-      });
+      // Demo-only for the timeout/retry follow-up — not part of the shipped
+      // module graph. Lets the actual timeout/error/retry UI be seen live,
+      // not just inferred from the unit tests.
+      function failingClient() {
+        return { from: () => ({ from: () => {} }) };
+      }
+      function hungClient() {
+        function builder() {
+          const b = {
+            select: () => b,
+            eq: () => b,
+            single: () => new Promise(() => {}),
+            maybeSingle: () => new Promise(() => {}),
+            then: () => new Promise(() => {}),
+          };
+          return b;
+        }
+        return { from: () => builder() };
+      }
+
+      function mount(client) {
+        document.getElementById('app').innerHTML = '';
+        mountRosterScreen(document.getElementById('app'), { eventId: 'ev1', client });
+      }
+
+      document
+        .getElementById('demo-normal')
+        .addEventListener('click', () => mount(createDemoClient()));
+      document
+        .getElementById('demo-failed')
+        .addEventListener('click', () => mount(failingClient()));
+      document.getElementById('demo-hung').addEventListener('click', () => mount(hungClient()));
+
+      mount(createDemoClient());
     </script>
   </body>
 </html>

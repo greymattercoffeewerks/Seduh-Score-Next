@@ -26,6 +26,7 @@ import { getSupabase } from '../../core/supabaseClient.js';
 import { el, labeledField } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
 import { findEvent } from '../../core/events.js';
+import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
 import { listEntries, registerEntry, setEntryWithdrawn } from '../../core/registry.js';
 
 function blankDraft() {
@@ -186,6 +187,7 @@ export async function mountRosterScreen(root, { eventId, client = getSupabase() 
   let pendingSuccess = null;
   let focusAfterRender = null;
   let loadFailedMessage = null;
+  let loading = false;
 
   async function loadPersisted() {
     const [ev, evEntries] = await Promise.all([
@@ -205,19 +207,30 @@ export async function mountRosterScreen(root, { eventId, client = getSupabase() 
   // parallel reads, but this project's "unreliable venue wifi" design
   // target means `root` can sit empty for a real stretch of time.
   // heatsScreen.js/setupScreen.js/reportScreen.js all establish this same
-  // precedent; reused here rather than skipped.
+  // precedent; reused here rather than skipped. attemptLoad() below bounds
+  // how long this can show for (DEFAULT_LOAD_TIMEOUT_MS, core/timeout.js's
+  // raceTimeout) — 2026-08-29 follow-up closing a real gap shared with
+  // setupScreen.js: a request that neither resolves nor rejects used to
+  // leave this screen stuck here indefinitely, with no retry affordance
+  // (see CHANGELOG.md's dated entry).
   function renderLoading() {
     root.innerHTML = '';
     const container = el('section', { className: 'screen-container roster-screen' });
     container.appendChild(el('h1', { text: 'Roster' }));
-    container.appendChild(
-      el('div', {
-        className: 'screen-feedback',
-        text: 'Loading roster…',
-        attrs: { role: 'status', 'aria-live': 'polite' },
-      }),
-    );
+    const feedback = el('div', {
+      className: 'screen-feedback',
+      text: 'Loading roster…',
+      attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
+    });
+    container.appendChild(feedback);
     root.appendChild(container);
+    // Found in review (ui-accessibility-reviewer): a Retry click destroys
+    // the focused Retry button (root.innerHTML = '' above) with nothing
+    // taking its place — without this, a keyboard/screen-reader user gets
+    // total silence for up to DEFAULT_LOAD_TIMEOUT_MS after clicking Retry,
+    // with no confirmation the click even registered. Harmless on the
+    // initial mount, where nothing was focused yet.
+    feedback.focus();
   }
 
   function renderLoadError() {
@@ -231,9 +244,45 @@ export async function mountRosterScreen(root, { eventId, client = getSupabase() 
     });
     feedback.dataset.tone = 'error';
     container.appendChild(feedback);
+    const retryButton = el('button', {
+      className: 'btn btn-outline tap-target',
+      text: 'Retry',
+      attrs: { type: 'button' },
+    });
+    retryButton.addEventListener('click', () => {
+      attemptLoad();
+    });
+    container.appendChild(retryButton);
     root.appendChild(container);
     feedback.scrollIntoView?.({ block: 'nearest' });
     feedback.focus();
+  }
+
+  // Races loadPersisted() against a timeout so a hung request (this
+  // project's "unreliable venue wifi" design target) never leaves the
+  // screen stuck on renderLoading() forever — mirrors setupScreen.js's own
+  // attemptLoad(), see its comment for the full reasoning. `loading` guards
+  // against a double-click starting two concurrent loads.
+  async function attemptLoad() {
+    if (loading) return;
+    loading = true;
+    renderLoading();
+    try {
+      const persisted = await raceTimeout(loadPersisted(), DEFAULT_LOAD_TIMEOUT_MS);
+      event = persisted.event;
+      entries = persisted.entries;
+      loadFailedMessage = null;
+      // Found in review (ui-accessibility-reviewer): without this, a
+      // successful Retry silently dropped focus to <body> — see
+      // setupScreen.js's own identical fix for the full reasoning.
+      focusAfterRender = '#roster-heading';
+    } catch (err) {
+      loadFailedMessage = err.timedOut
+        ? 'This is taking longer than expected — check your connection and try Retry.'
+        : describeError(err);
+    }
+    loading = false;
+    render();
   }
 
   function render() {
@@ -382,15 +431,7 @@ export async function mountRosterScreen(root, { eventId, client = getSupabase() 
     render();
   }
 
-  renderLoading();
-  try {
-    const persisted = await loadPersisted();
-    event = persisted.event;
-    entries = persisted.entries;
-  } catch (err) {
-    loadFailedMessage = describeError(err);
-  }
-  render();
+  await attemptLoad();
 
   return {
     unmount() {
