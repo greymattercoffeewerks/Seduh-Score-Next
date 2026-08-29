@@ -1,10 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   renderStageRow,
   normalizeTerminalCutoff,
   buildPlanFromDraft,
   mountSetupScreen,
 } from './setupScreen.js';
+import { DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
 
 // Table-based in-memory fake client (rather than setup.test.js's
 // call-order queue) — saveStagePlan makes a variable, reconciliation-
@@ -630,14 +631,118 @@ describe('mountSetupScreen', () => {
     expect(root.querySelector('h1').textContent).toBe('Stage plan');
   });
 
-  it('renders a dedicated error screen, with no add/save actions, when the initial load itself fails', async () => {
+  it('renders a dedicated error screen, with no add/save actions but a working Retry, when the initial load itself fails', async () => {
     const root = document.createElement('div');
     document.body.appendChild(root); // .focus() is a no-op on a detached element
     await mountSetupScreen(root, { eventId: 'ev1', client: throwingClient() });
 
     const feedback = root.querySelector('.screen-feedback');
     expect(feedback.dataset.tone).toBe('error');
-    expect(root.querySelector('button')).toBeNull();
+    // No stage-plan actions (add/save) leaked into the error screen — the
+    // ONLY button present is the Retry affordance itself.
+    const buttons = [...root.querySelectorAll('button')];
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0].textContent).toBe('Retry');
     expect(document.activeElement).toBe(feedback);
+  });
+
+  it('Retry re-attempts the load and shows real content once it succeeds, closing the "no retry affordance" gap', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    // Deterministic, not call-count-based (loadPersisted's own findEvent
+    // and listStagesForEvent dispatch two concurrent `.from()` calls per
+    // attempt, so counting calls to decide pass/fail would be racy) — the
+    // test itself flips this the moment Retry is clicked, matching exactly
+    // "the connection came back" rather than an arbitrary call number.
+    let shouldFail = true;
+    // Seeded with one real stage specifically so this test can prove the
+    // reload actually happened — found in review (test-auditor): asserting
+    // only "h1 says Stage plan, no error tone" would still pass against a
+    // broken Retry that just cleared the error state without reloading,
+    // since both screens render that same shell on zero-stage state too.
+    const succeeding = fakeClient({
+      events: [testEvent],
+      ct_stages: [prelims],
+      ct_heats: [],
+      ct_sets: [],
+    });
+    const client = {
+      from(table) {
+        return shouldFail ? throwingClient().from(table) : succeeding.from(table);
+      },
+    };
+    await mountSetupScreen(root, { eventId: 'ev1', client });
+
+    expect(root.querySelector('.screen-feedback').dataset.tone).toBe('error');
+
+    shouldFail = false;
+    root.querySelector('button').click();
+    await flush();
+
+    expect(root.querySelector('h1').textContent).toBe('Stage plan');
+    expect(root.querySelector('.screen-feedback[data-tone="error"]')).toBeNull();
+    expect(root.textContent).toContain('1 stage planned');
+    // Found in review (ui-accessibility-reviewer): a successful Retry used
+    // to silently drop focus to <body> — renderLoading() destroys the
+    // focused Retry button, and nothing took its place until this fix.
+    expect(document.activeElement.id).toBe('stage-plan-heading');
+  });
+
+  describe('a genuinely hung load (neither resolves nor rejects)', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('times out rather than leaving the screen on "Loading…" forever, and shows a distinct message with a working Retry', async () => {
+      // The exact failure mode this task closes: no error, no success —
+      // just a request that never settles, the real shape of a captive
+      // portal or a dropped connection mid-request on this project's own
+      // "unreliable venue wifi" design target.
+      function hungBuilder() {
+        const builder = {
+          select: () => builder,
+          eq: () => builder,
+          order: () => builder,
+          single: () => new Promise(() => {}),
+          maybeSingle: () => new Promise(() => {}),
+          then: () => new Promise(() => {}), // never settles — the exact failure mode under test
+        };
+        return builder;
+      }
+      const hungClient = { from: () => hungBuilder() };
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      const mountPromise = mountSetupScreen(root, { eventId: 'ev1', client: hungClient });
+
+      await vi.advanceTimersByTimeAsync(0);
+      expect(root.textContent).toContain('Loading stage plan');
+
+      // Pins the actual shared constant, not just "a timeout eventually
+      // fires" — found in review (test-auditor): without this check, a
+      // regression hardcoding some other, shorter ms value directly in
+      // attemptLoad() (forking away from DEFAULT_LOAD_TIMEOUT_MS) would
+      // still pass, since the shorter timeout would already have fired by
+      // the time the full constant's worth of time has elapsed.
+      await vi.advanceTimersByTimeAsync(DEFAULT_LOAD_TIMEOUT_MS - 1);
+      expect(root.textContent).toContain('Loading stage plan');
+
+      await vi.advanceTimersByTimeAsync(1);
+      await mountPromise;
+
+      const feedback = root.querySelector('.screen-feedback');
+      expect(feedback.dataset.tone).toBe('error');
+      // Distinct from a real failure's message (describeError's generic
+      // text) — an organiser staring at this should understand it's a
+      // connectivity problem, not a rejected request.
+      expect(feedback.textContent).toMatch(/taking longer than expected/i);
+      const retryButton = [...root.querySelectorAll('button')].find(
+        (b) => b.textContent === 'Retry',
+      );
+      expect(retryButton).toBeTruthy();
+    });
   });
 });

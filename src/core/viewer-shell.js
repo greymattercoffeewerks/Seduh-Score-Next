@@ -61,6 +61,7 @@
 import { getSupabase } from './supabaseClient.js';
 import { el } from './dom.js';
 import { findLatestEventForOrg } from './events.js';
+import { raceTimeout } from './timeout.js';
 
 // The one place this string is spelled out — both the chrome's visible <h1>
 // (renderChrome, showChrome:true) and mountViewerShell's own visually-hidden
@@ -187,20 +188,13 @@ function withTimeout(promise, ms) {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
-// Same guard, different shape — `findLatestEventForOrg` throws on error and
-// resolves with the row directly (events.js's own convention), not the
-// `{data,error}` envelope `withTimeout` above is built around. Racing it
-// against a REJECTING timeout instead of a resolving one keeps both error
-// paths (a real throw, and a timeout) landing in the same catch block at
-// the call site, without `withTimeout`'s sentinel object being mistaken for
-// a real (truthy) result if it ever won the race.
-function raceTimeout(promise, ms) {
-  let timer;
-  const timeout = new Promise((_resolve, reject) => {
-    timer = setTimeout(() => reject(new Error('timed out')), ms);
-  });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
-}
+// `findLatestEventForOrg` throws on error and resolves with the row
+// directly (events.js's own convention), not the `{data,error}` envelope
+// `withTimeout` above is built around — `raceTimeout` (core/timeout.js,
+// imported above) races against a REJECTING timeout instead of a resolving
+// one, so both error paths (a real throw, and a timeout) land in the same
+// catch block at the call site below, without `withTimeout`'s sentinel
+// object being mistaken for a real (truthy) result if it ever won the race.
 
 export async function mountViewerShell(
   root,

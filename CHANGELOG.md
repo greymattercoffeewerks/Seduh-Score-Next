@@ -158,6 +158,86 @@ closes.
 
 ---
 
+## Known open items carried into Phase 4 · 2026-08-29 (setupScreen/rosterScreen hung-load timeout/retry gap closed)
+
+Closes the known open item ROADMAP.md tracked since the roster-registration screen's own
+review: `setupScreen.js` and `rosterScreen.js` both render a proper "Loading…" state on
+mount (no spinner-as-resting-state), but `loadPersisted()` had no timeout in either — on
+this project's own "unreliable venue wifi" design target, a request that neither
+resolves nor rejects left the organiser stuck indefinitely, with no retry affordance.
+Cross-cutting across two already-shipped screens, deliberately not fixed inline at the
+time — noted for "a dedicated pass (a shared timeout/retry primitive, probably in
+`core/`) if it proves to matter before October."
+
+**New `core/timeout.js`** exports `raceTimeout(promise, ms)` and
+`DEFAULT_LOAD_TIMEOUT_MS` (10000, matching `viewer-shell.js`'s own `REFRESH_TIMEOUT_MS`).
+Not written fresh — `core/viewer-shell.js` already had a private, unexported function
+doing the exact same thing (racing `findLatestEventForOrg` against a timeout, T5.2/T5.3
+follow-up work); extracted on its 2nd verbatim use, and `viewer-shell.js` now imports the
+shared version instead of keeping its own copy. The rejected timeout carries
+`.timedOut = true` so a caller can show a distinct "this is taking a while" message
+instead of `describeError()`'s generic failure text — a timeout never reaches the
+server, so there's no real error shape `describeError()` could read anything from.
+
+**Both screens gained an `attemptLoad()` function**, replacing their previous inline
+mount-tail `renderLoading(); try {...} catch {...} render();` block: races
+`loadPersisted()` against `raceTimeout`/`DEFAULT_LOAD_TIMEOUT_MS`, guards re-entrancy
+with a `loading` boolean (the same in-flight discipline `handleSave()`'s own `saving`
+flag already uses), and sets a distinct timed-out message when `err.timedOut` is true.
+`renderLoadError()` (already existed, previously just a static message) gained a real
+`Retry` button (`btn btn-outline tap-target`) that calls `attemptLoad()` again.
+
+**Four parallel subagent reviews** (`module-boundary-checker`, `ui-accessibility-reviewer`
+at 360px, `test-auditor`, `code-reviewer` — no migration/RLS/scoring/outbox change, so
+`schema-guardian`/`security-reviewer`/`scoring-auditor`/`offline-sync-auditor` didn't
+apply): `module-boundary-checker` came back clean (confirmed `core/timeout.js` is
+genuinely format-agnostic and a future format could reuse it unedited for its own
+initial-load timeout). The other three found real issues, all closed:
+
+- **`ui-accessibility-reviewer`**: a successful Retry silently dropped focus to
+  `<body>` — `attemptLoad()`'s success path never set `focusAfterRender`, and
+  `renderLoading()`'s own `root.innerHTML = ''` destroys the focused Retry button with
+  nothing taking its place once the reload succeeds. Fixed by setting
+  `focusAfterRender = '#stage-plan-heading'` / `'#roster-heading'` on success, matching
+  the pattern `addStage()`/`removeStage()`/`moveStage()` and their roster-screen
+  equivalents already use. Also closed two minor consistency gaps found in the same
+  review: the Retry button was missing `type="button"` (every other non-submit button in
+  both files already sets it explicitly), and the loading state itself took no focus
+  during a retry-triggered wait, leaving a keyboard/screen-reader user with total silence
+  for up to 10 seconds after clicking Retry with no confirmation the click registered —
+  fixed by giving the loading status node `tabindex="-1"` and a `.focus()` call too,
+  mirroring `renderLoadError()`'s own existing handling.
+- **`test-auditor`**: the "Retry re-attempts the load" tests didn't actually prove a
+  reload happened — asserting only "no error tone, heading says X" would still pass
+  against a broken no-op retry handler that just cleared the error state, since the
+  succeeding fixture's zero-content state rendered identically to the screen's own
+  default empty state. Fixed by seeding the succeeding fixture with real content (one
+  stage / one cupper) and asserting on it specifically. Also found the fake-timer "times
+  out" tests only proved _a_ timeout eventually fired, not that it was bound to
+  `DEFAULT_LOAD_TIMEOUT_MS` specifically — a regression forking a shorter hardcoded value
+  into `attemptLoad()` would still have passed. Fixed by asserting the screen is still
+  loading one millisecond before the full constant elapses, then advancing the last
+  millisecond. Both screens' tests also gained a direct focus assertion after the
+  accessibility fix above, proving the fix rather than just applying it.
+- **`code-reviewer`**: one real, verifiable finding — `core/timeout.test.js`'s
+  "propagates the original rejection" test used a `queueMicrotask`-deferred rejection
+  specifically to avoid a Node unhandled-rejection warning; the reviewer empirically
+  re-tested with a plain `Promise.reject()` (both in isolation and against the full
+  697-test suite) and confirmed no warning actually occurs — the workaround's stated
+  justification didn't hold for this codebase's actual runtime. Simplified back to a
+  plain `Promise.reject()`, removing the unwarranted complexity.
+
+**Live-verified in a real browser**, not just unit tests: both `setupScreen.preview.html`
+and `rosterScreen.preview.html` gained "Mount (normal)/(load fails)/(load hangs — real
+10s timeout)" demo buttons (demo-only, not part of the shipped module graph). Confirmed
+the error state renders with a working Retry button, Retry correctly re-invokes the
+load, and — most importantly — a genuine, entirely unmocked real 10-second timeout fires
+correctly in the browser and shows the distinct "taking longer than expected" message.
+
+Full suite re-verified after every fix: 697/697 Vitest tests, lint clean, format clean.
+
+---
+
 ## Known open items carried into Phase 4/5 · 2026-08-29 (cross-module outbox handler-map composition gap closed)
 
 Closes the known open item ROADMAP.md/CHANGELOG.md tracked since the T4.3/T4.4
