@@ -44,7 +44,7 @@ export async function recordManualTime(
   rawSecs,
   orgId,
   client = getSupabase(),
-  { now = () => Date.now() } = {},
+  { now = () => Date.now(), handlers } = {},
 ) {
   if (!Number.isInteger(rawSecs) || rawSecs < 0) {
     throw new Error(
@@ -57,6 +57,10 @@ export async function recordManualTime(
 
   const payload = buildRecordHeatTimePayload(heat, heatEntry, orgId, update, 'overwrite');
   await enqueueOperation('record_heat_time', payload);
-  const flushResult = await flushOutbox(timingHandlers(client));
+  // See timing.js's own module comment: `handlers`, when passed, is the
+  // cross-module composed map (cupTasterOutboxHandlers) so this flush can
+  // also walk past a queued confirm_heat/publish_session, not just this
+  // module's own three operation types.
+  const flushResult = await flushOutbox(handlers ?? timingHandlers(client));
   return { expectedElapsedSecs: update.elapsed_secs, flushResult };
 }

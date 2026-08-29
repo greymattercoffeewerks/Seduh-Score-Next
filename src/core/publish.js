@@ -28,18 +28,39 @@
 // `isTest: undefined`, defeating D9's guarantee at the one place a caller
 // could get it wrong at no cost).
 import { getSupabase } from './supabaseClient.js';
-import { enqueueOperation, flushOutbox } from './outbox.js';
+import { buildRpcHandler, enqueueOperation, flushOutbox } from './outbox.js';
+
+// Mirrors formats/cup-taster/timing.js's timingHandlers(client) and
+// scoring.js's confirmHandlers(client) shape — kept here in core/, not a
+// format module, since publish_session is itself format-agnostic (its own
+// p_format parameter carries the format, per this file's own module
+// comment). A format's own outboxHandlers.js composition (e.g.
+// formats/cup-taster/outboxHandlers.js) imports this to include
+// publish_session in its flush map — core exporting something a format
+// imports is the normal, permitted direction; nothing here imports back
+// from any format module.
+export function publishHandlers(client) {
+  return { publish_session: buildRpcHandler(client, 'publish_session') };
+}
 
 // Enqueues + immediately attempts a flush — same shape as
 // scoring.js's submitConfirmHeat (see its own comment for the full
 // reasoning: persisted before any network call, survives a crash/reload the
 // instant this resolves, the flush attempt gives the common case an
 // immediate result without waiting for a separate sync pass).
+//
+// `handlers`, when passed, REPLACES publishHandlers(client) — same optional
+// cross-module-composition override timing.js's submitTimingOperation and
+// scoring.js's submitConfirmHeat take (see their comments); nothing calls
+// this with an explicit map yet, since nothing calls publishSession() from
+// any screen yet (see ROADMAP.md's own T5.1 note), but the shape is here
+// ready for whichever future screen wires this in.
 export async function publishSession(
   orgId,
   eventId,
   { format, isTest, payload },
   client = getSupabase(),
+  handlers,
 ) {
   if (typeof isTest !== 'boolean') {
     throw new TypeError('publishSession: isTest must be explicitly true or false');
@@ -53,24 +74,5 @@ export async function publishSession(
     p_payload: payload,
   };
   await enqueueOperation('publish_session', rpcPayload);
-  return flushOutbox({
-    publish_session: async (opPayload) => {
-      const { error } = await client.rpc('publish_session', opPayload);
-      if (error) {
-        // Every error publish_session itself can return (an event/org
-        // mismatch, a nonexistent event, an RLS rejection for a non-member)
-        // is a rejection of THIS payload specifically; retrying the exact
-        // same org/event pair will fail the exact same way forever, the
-        // same reasoning confirm_heat's own handler documents. A genuine
-        // network-level failure (client.rpc() rejecting before ever
-        // reaching the server) never reaches this branch and stays the
-        // outbox's normal, retryable failure.
-        const err = new Error(error.message);
-        err.code = error.code;
-        err.details = error.details;
-        err.permanent = true;
-        throw err;
-      }
-    },
-  });
+  return flushOutbox(handlers ?? publishHandlers(client));
 }

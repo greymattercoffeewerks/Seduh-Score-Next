@@ -17,7 +17,7 @@
 // of separate row-writes for entries then results is the "half-scored
 // heat" failure mode the whole architecture exists to prevent.
 import { cacheGet, cacheSet } from '../../core/db.js';
-import { enqueueOperation, flushOutbox } from '../../core/outbox.js';
+import { buildRpcHandler, enqueueOperation, flushOutbox } from '../../core/outbox.js';
 import { getSupabase } from '../../core/supabaseClient.js';
 
 // Cycles unscored -> correct -> wrong -> unscored, so a mis-tap is always
@@ -168,12 +168,25 @@ export function buildConfirmEntries(hydratedEntries, draftResults, setIds) {
 // own UI rather than this function guessing on its behalf — the flush may
 // process an unrelated, earlier-queued operation instead of (or before)
 // this one, per the outbox's own strict FIFO ordering guarantee.
+// Mirrors timing.js's own timingHandlers(client) shape — the export a
+// screen composes into formats/cup-taster/outboxHandlers.js's
+// cupTasterOutboxHandlers(client) so a flush triggered from anywhere can
+// also process a queued confirm_heat, not just this module's own callers.
+export function confirmHandlers(client) {
+  return { confirm_heat: buildRpcHandler(client, 'confirm_heat') };
+}
+
+// `handlers`, when passed, REPLACES confirmHandlers(client) — same optional
+// cross-module-composition override timing.js's submitTimingOperation
+// takes; see its comment. Omitting it keeps this function's original,
+// narrower behavior (used by this file's own tests).
 export async function submitConfirmHeat(
   heatId,
   orgId,
   expectedUpdatedAt,
   entries,
   client = getSupabase(),
+  handlers,
 ) {
   const payload = {
     p_operation_id: crypto.randomUUID(),
@@ -183,29 +196,7 @@ export async function submitConfirmHeat(
     p_entries: entries,
   };
   await enqueueOperation('confirm_heat', payload);
-  return flushOutbox({
-    confirm_heat: async (opPayload) => {
-      const { error } = await client.rpc('confirm_heat', opPayload);
-      if (error) {
-        // Every error confirm_heat itself can return (a stale-data P0002
-        // conflict, or the strict-confirm row-count check) is a rejection
-        // of THIS payload specifically — retrying the exact same
-        // p_expected_updated_at/p_entries will fail the exact same way
-        // forever, unlike a network-level failure (client.rpc() itself
-        // rejecting before ever reaching the server), which never reaches
-        // this branch and stays the outbox's normal, retryable failure.
-        // Marking it `.permanent` tells core/outbox.js's flush to remove
-        // this operation rather than leave it stuck blocking every later
-        // one (see runFlush's own comment for why that distinction
-        // exists).
-        const err = new Error(error.message);
-        err.code = error.code;
-        err.details = error.details;
-        err.permanent = true;
-        throw err;
-      }
-    },
-  });
+  return flushOutbox(handlers ?? confirmHandlers(client));
 }
 
 // confirm_heat's optimistic-concurrency conflict (migration 20260822100000,

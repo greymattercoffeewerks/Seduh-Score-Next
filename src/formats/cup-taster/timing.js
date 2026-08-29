@@ -35,14 +35,16 @@
 // operation queued ahead of it in strict FIFO order (an app-mode heat that
 // gets started, then rapid-tapped, while offline enqueues start_heat and
 // several record_heat_time operations together, in completely normal use).
-// NOT shared with scoring.js's confirm_heat or publish.js's publish_session
-// — core/outbox.js registers handlers per flushOutbox() call, not globally,
-// so those two operation types have this exact same latent gap against
-// each other and against this module's own operations. Pre-existing (both
-// already had it, independently, before this task), not introduced here,
-// and out of scope for this pass — see ROADMAP.md's own note on it.
+// Cross-module gap closed (2026-08-29 follow-up, see CHANGELOG.md): every
+// public function here takes an optional `handlers` override (threaded
+// through submitTimingOperation) so a screen can pass
+// formats/cup-taster/outboxHandlers.js's cupTasterOutboxHandlers(client) —
+// the composed map covering timing's own three RPCs plus scoring.js's
+// confirm_heat and core/publish.js's publish_session — closing the same
+// stall against those operation types too. Omitting `handlers` keeps this
+// module's original, narrower behavior (used by this file's own tests).
 import { clampElapsed } from '../../core/timeclamp.js';
-import { enqueueOperation, flushOutbox } from '../../core/outbox.js';
+import { buildRpcHandler, enqueueOperation, flushOutbox } from '../../core/outbox.js';
 import { getSupabase } from '../../core/supabaseClient.js';
 
 // A tap computed as arriving before the heat even started is normal clock
@@ -93,36 +95,25 @@ export function buildRecordHeatTimePayload(heat, heatEntry, orgId, update, confl
   };
 }
 
-// Every RPC error these operations can return is a rejection of that exact
-// payload (a real conflict — see migration 20260828150000's own comments)
-// and will fail the exact same way on retry, so it's always marked
-// `.permanent`. A network-level failure (client.rpc() itself rejecting
-// before ever reaching the server) never reaches this branch and stays the
-// outbox's normal, retryable failure.
-function rpcHandler(client, type) {
-  return async (payload) => {
-    const { error } = await client.rpc(type, payload);
-    if (error) {
-      const err = new Error(error.message);
-      err.code = error.code;
-      err.details = error.details;
-      err.permanent = true;
-      throw err;
-    }
-  };
-}
-
 export function timingHandlers(client) {
   return {
-    start_heat: rpcHandler(client, 'start_heat'),
-    record_heat_time: rpcHandler(client, 'record_heat_time'),
-    auto_max_heat: rpcHandler(client, 'auto_max_heat'),
+    start_heat: buildRpcHandler(client, 'start_heat'),
+    record_heat_time: buildRpcHandler(client, 'record_heat_time'),
+    auto_max_heat: buildRpcHandler(client, 'auto_max_heat'),
   };
 }
 
-async function submitTimingOperation(type, payload, client) {
+// `handlers`, when passed, REPLACES timingHandlers(client) entirely rather
+// than merging with it — the caller (a screen) is expected to pass the full
+// cross-module map (formats/cup-taster/outboxHandlers.js's
+// cupTasterOutboxHandlers) when it wants this flush to also be able to walk
+// past any OTHER queued operation type ahead of/behind this one, closing the
+// gap described in this file's own module comment above. Omitting it keeps
+// this function's original, narrower behavior — used by tests and any
+// caller that doesn't need cross-module composition.
+async function submitTimingOperation(type, payload, client, handlers) {
   await enqueueOperation(type, payload);
-  return flushOutbox(timingHandlers(client));
+  return flushOutbox(handlers ?? timingHandlers(client));
 }
 
 // Idempotent by the RPC's own contract (a heat already timing/scoring/
@@ -142,7 +133,7 @@ export async function startHeat(
   heatId,
   orgId,
   client = getSupabase(),
-  { now = () => Date.now() } = {},
+  { now = () => Date.now(), handlers } = {},
 ) {
   const startedAtMs = now();
   const startedAtIso = new Date(startedAtMs).toISOString();
@@ -155,6 +146,7 @@ export async function startHeat(
       p_started_at: startedAtIso,
     },
     client,
+    handlers,
   );
   return { startedAtMs, startedAtIso, flushResult };
 }
@@ -181,7 +173,7 @@ export async function recordTap(
   heatEntry,
   orgId,
   client = getSupabase(),
-  { now = () => Date.now() } = {},
+  { now = () => Date.now(), handlers } = {},
 ) {
   const nowMs = now();
   const rawSecs = Math.floor((nowMs - new Date(heat.started_at).getTime()) / 1000);
@@ -195,6 +187,7 @@ export async function recordTap(
     'record_heat_time',
     buildRecordHeatTimePayload(heat, heatEntry, orgId, update, 'reject'),
     client,
+    handlers,
   );
   return { expectedElapsedSecs: update.elapsed_secs, flushResult };
 }
@@ -207,7 +200,7 @@ export async function recordTap(
 // entries still null, and is a no-op once the heat has left 'timing'.
 // A P0002 conflict from record_heat_time/start_heat is the one shape
 // core/errors.js's generic describeError() can't know about — every RPC
-// error here carries `.code` (see rpcHandler above), so describeError()
+// error here carries `.code` (see buildRpcHandler in core/outbox.js), so describeError()
 // would otherwise show its generic "something went wrong" for both a
 // genuinely actionable conflict AND an unrelated bug alike. Returns null
 // for anything else, matching scoring.js's own describeConfirmError
@@ -232,7 +225,7 @@ export async function autoMaxRemainingEntries(
   heatId,
   orgId,
   client = getSupabase(),
-  { now = () => Date.now() } = {},
+  { now = () => Date.now(), handlers } = {},
 ) {
   return submitTimingOperation(
     'auto_max_heat',
@@ -243,5 +236,6 @@ export async function autoMaxRemainingEntries(
       p_time_edited_at: new Date(now()).toISOString(),
     },
     client,
+    handlers,
   );
 }
