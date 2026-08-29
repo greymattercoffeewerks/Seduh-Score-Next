@@ -5,9 +5,10 @@ _State: Phase 0 done; Phase 1 done (T1.1–T1.4); Phase 2 done (T2.1–T2.6); Ph
 stage-plan UI gap and its roster-registration UI gap, a 2026-08-29 follow-up closing
 T4.3/T4.4's direct-write gap, a further 2026-08-29 follow-up closing T4.2's DB-level
 station-uniqueness gap, a further 2026-08-29 follow-up closing the cross-module outbox
-handler-map composition gap, and a further 2026-08-29 follow-up closing the
-setupScreen/rosterScreen hung-load timeout/retry gap); Phase 5 done (T5.1, T5.2, T5.3,
-T5.4, the 2026-08-28 holding-state follow-up, and the cross-surface Playwright AC) —
+handler-map composition gap, a further 2026-08-29 follow-up closing the
+setupScreen/rosterScreen hung-load timeout/retry gap, and a further 2026-08-29 follow-up
+closing T4.2's heat-generation resumability gap); Phase 5 done (T5.1, T5.2, T5.3, T5.4,
+the 2026-08-28 holding-state follow-up, and the cross-surface Playwright AC) —
 matches CHANGELOG.md as of 2026-08-29_
 
 The living tracker for the handoff's build plan (§14). The handoff itself stays frozen
@@ -218,12 +219,37 @@ two consumers of the same shell/data. Verifiers per task, `code-reviewer` always
   timeout tests not pinning the shared constant specifically — both closed. Live-verified
   in a real browser, including a genuine unmocked 10-second timeout actually firing. See
   CHANGELOG.md's dated entry for the full account.
-- **No resumability for a partial heat-generation failure.** T4.2's screen correctly
-  detects and honestly reports an incomplete generation (see CHANGELOG.md), but offers
-  no repair path — `generateHeatsRandom` reshuffles the whole roster fresh on every
-  call and isn't safe to retry once some heats exist. Fixing a stuck stage today means
-  manual intervention outside the app (Studio). Worth a real resume/reset flow if this
-  proves to matter in practice before October.
+- **No resumability for a partial heat-generation failure — closed (2026-08-29
+  follow-up).** T4.2's screen correctly detects and honestly reports an incomplete
+  generation (see CHANGELOG.md), but used to offer no repair path — `generateHeatsRandom`
+  reshuffles the whole roster fresh on every call and isn't safe to retry once some heats
+  exist, so a stuck stage meant manual intervention outside the app (Studio). The fix
+  turned out to need zero changes to `heats.js` itself: `generateHeatsManual`/
+  `buildHeatPlansFromAssignments` were already idempotent and conflict-checked, and the
+  manual-assignment form was already safe to use on a partial stage — it was just never
+  _shown_ there. `renderManualAssignmentForm` (`heatsScreen.js`) gained an optional
+  `existingAssignments` map: an already-placed cupper renders as fixed text ("Heat N ·
+  Station X (already placed)"), not an editable input, so the organiser only fills in
+  what's actually missing, and a new `buildManualForm` closure re-attaches each
+  already-placed cupper's real assignment before calling `generateHeatsManual`,
+  satisfying its "every stage entry assigned exactly once" check without asking anyone
+  to re-type what's already correct. The unsafe "Generate heats (random)" button stays
+  absent from the incomplete state, unchanged. Four parallel reviews
+  (`module-boundary-checker`, `ui-accessibility-reviewer` at 360px, `test-auditor`,
+  `code-reviewer`); `module-boundary-checker` came back clean (confirmed `heats.js` is
+  genuinely untouched). The other three found real issues, all closed: a formatting gap
+  (`code-reviewer`), the "finish assigning" heading structurally disconnected from the
+  card explaining why fewer inputs are needed than the roster count (`ui-accessibility-reviewer`
+  — fixed by repeating the remaining count directly in the heading), and two real
+  test-quality gaps (`test-auditor` — the "doesn't disturb the already-placed cupper"
+  test didn't actually check the already-placed cupper's final assignment, and no test
+  covered a missing cupper's station colliding with an already-placed one — both closed,
+  the latter with a new test proving `buildHeatPlansFromAssignments`'s existing
+  station-uniqueness check fails safely through this new UI path). Live-verified in a
+  real browser against a realistic fake Supabase client: a stuck stage (1 of 4 cuppers
+  placed) resumed cleanly, the already-placed cupper was undisturbed, and the final state
+  matched the normal "generation complete" view exactly. See CHANGELOG.md's dated entry
+  for the full account.
 - **No DB-level `unique(heat_id, station)` constraint — closed (2026-08-29 follow-up).**
   Migration `20260829100000_ct_heat_entries_station_unique.sql` adds
   `ct_heat_entries_heat_station_unique unique (heat_id, station)` plus `alter column

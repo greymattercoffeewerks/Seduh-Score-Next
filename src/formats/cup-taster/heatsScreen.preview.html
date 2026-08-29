@@ -15,11 +15,15 @@
       real one so this screen can be exercised and reviewed at 360px without
       needing an authenticated session, a real event, or seeded DB rows.
     -->
+    <p>
+      <button id="demo-fresh">Mount (fresh, no heats)</button>
+      <button id="demo-partial">Mount (partial generation — needs resume)</button>
+    </p>
     <div id="app"></div>
     <script type="module">
       import { mountHeatGenerationScreen } from './heatsScreen.js';
 
-      function createDemoClient() {
+      function createDemoClient({ partial = false } = {}) {
         const db = {
           events: [{ id: 'ev1', org_id: 'org1', name: 'October Cup', is_test: true }],
           ct_stages: [
@@ -33,7 +37,12 @@
               cutoff: 8,
             },
           ],
-          ct_stage_entries: [],
+          ct_stage_entries: [
+            { id: 'se1', stage_id: 's1', entry_id: 'e1' },
+            { id: 'se2', stage_id: 's1', entry_id: 'e2' },
+            { id: 'se3', stage_id: 's1', entry_id: 'e3' },
+            { id: 'se4', stage_id: 's1', entry_id: 'e4' },
+          ],
           event_entries: [
             {
               id: 'e1',
@@ -76,8 +85,27 @@
               withdrawn: true, // withdrawn — must NOT appear after seeding
             },
           ],
-          ct_heats: [],
-          ct_heat_entries: [],
+          // Demo-only for the resumability follow-up — heat 1 exists with
+          // only Alex Rivera placed (the exact shape a partial
+          // generateHeatsRandom failure leaves: createHeats has no
+          // batch-level atomicity), Jordan Lee/Sam Okafor/Priya Nair still
+          // need a heat.
+          ct_heats: partial
+            ? [
+                {
+                  id: 'h1',
+                  stage_id: 's1',
+                  heat_number: 1,
+                  kind: 'normal',
+                  timing_mode: 'app',
+                  status: 'pending',
+                  duration_secs: 480,
+                },
+              ]
+            : [],
+          ct_heat_entries: partial
+            ? [{ id: 'he1', heat_id: 'h1', entry_id: 'e1', station: 'A' }]
+            : [],
         };
 
         function matchesFilters(row, filters) {
@@ -134,11 +162,23 @@
         return { from: (table) => makeBuilder(table) };
       }
 
-      mountHeatGenerationScreen(document.getElementById('app'), {
-        eventId: 'ev1',
-        stageId: 's1',
-        client: createDemoClient(),
-      });
+      function mount(client) {
+        document.getElementById('app').innerHTML = '';
+        mountHeatGenerationScreen(document.getElementById('app'), {
+          eventId: 'ev1',
+          stageId: 's1',
+          client,
+        });
+      }
+
+      document
+        .getElementById('demo-fresh')
+        .addEventListener('click', () => mount(createDemoClient()));
+      document
+        .getElementById('demo-partial')
+        .addEventListener('click', () => mount(createDemoClient({ partial: true })));
+
+      mount(createDemoClient());
     </script>
   </body>
 </html>

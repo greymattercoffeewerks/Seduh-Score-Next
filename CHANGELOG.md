@@ -158,6 +158,84 @@ closes.
 
 ---
 
+## Known open items carried into Phase 4 · 2026-08-29 (T4.2's heat-generation resumability gap closed)
+
+Closes the known open item ROADMAP.md tracked since T4.2: a `generateHeatsRandom`
+failure partway through left a stage stuck — some heats/entries committed, some cuppers
+still unplaced — with no in-app repair path. `createHeats` has no batch-level atomicity,
+so this is a real, expected failure mode on this project's "unreliable venue wifi"
+design target, not an edge case. The screen already detected and honestly reported the
+incomplete state (T4.2's own review closed that half of the gap); this closes the other
+half — actually fixing it, not just reporting it.
+
+**`heats.js` needed zero changes.** `generateHeatsManual`/`buildHeatPlansFromAssignments`
+were already idempotent and conflict-checked (pre-existing code): submitting the same
+correct assignment twice is a safe no-op, a colliding station is rejected before any
+write, and every constraint that protects the normal manual-generation path already
+protected a resumption attempt too. The actual gap was purely a UI-availability one —
+`heatsScreen.js`'s manual-assignment form was only ever rendered when zero heats existed
+yet, never in the "incomplete generation" branch, even though the underlying logic was
+already safe to use there.
+
+**`renderManualAssignmentForm` gained an optional `existingAssignments` parameter**
+(`Map<entryId, {heatNumber, station}>`): a cupper already committed to a heat now
+renders as fixed text (`Heat N · Station X (already placed)`) instead of editable
+inputs, so `readManualAssignmentForm` never returns a value for them at all — the
+organiser only fills in what's genuinely still missing. A new `buildManualForm`
+closure in `mountHeatGenerationScreen` (factored out — both the "zero heats yet" branch
+and the "generation incomplete" branch need identical submit-wiring, differing only in
+what `existingAssignments` they pass) re-attaches each already-placed cupper's real
+assignment before calling `generateHeatsManual`, so its "every stage entry assigned
+exactly once" check is still satisfied without asking anyone to re-type what's already
+correct. The unsafe "Generate heats (random)" button remains absent from the incomplete
+state, unchanged — reshuffling the whole roster fresh is still never safe once any
+heats exist.
+
+**Four parallel subagent reviews** (`module-boundary-checker`, `ui-accessibility-reviewer`
+at 360px, `test-auditor`, `code-reviewer` — no migration/RLS/scoring/outbox change, so
+`schema-guardian`/`security-reviewer`/`scoring-auditor`/`offline-sync-auditor` didn't
+apply): `module-boundary-checker` came back clean, confirming `heats.js` is genuinely
+untouched (the fix belongs entirely in the screen layer, since the underlying business
+logic was already safe). The other three found real issues, all closed:
+
+- **`code-reviewer`**: a formatting gap (`npx prettier --write` needed on the touched
+  files) — a direct Definition of Done violation, fixed. Also suggested renaming the new
+  `attachManualForm` closure to `buildManualForm`, matching this file's own `render*`
+  naming convention more closely (it builds a form and wires a handler, doesn't attach
+  anything to the DOM itself) — applied.
+- **`ui-accessibility-reviewer`**: the "Finish assigning the rest" heading was
+  structurally disconnected from the card explaining _why_ it has fewer inputs than "N
+  cupper(s) in this stage" — an entire `renderHeatsList` card sits between them, so a
+  screen-reader user navigating by heading, or a sighted user scanning straight to the
+  form, had no link back to that context. Fixed by repeating the remaining count
+  directly in the heading (`Finish assigning the rest (${missing} remaining)`).
+- **`test-auditor`**: two real gaps. (1) The test asserting the resumed submission
+  "doesn't disturb the already-placed cupper" never actually checked that cupper's final
+  station — its only assertions (`.heats-list` present, "incomplete" text gone) would
+  have passed even if the merge silently dropped or altered that cupper's assignment.
+  Fixed by asserting the final rendered station directly and the exact insert payload
+  sent (only the genuinely new entry, never the already-placed one). (2) No test covered
+  the negative case a genuinely new UI path this fix opens: a still-missing cupper
+  submitting a station that collides with an already-placed cupper's real one. Fixed
+  with a new test proving `buildHeatPlansFromAssignments`'s existing per-heat
+  station-uniqueness check fails safely through this path — rejected before any write,
+  clear error feedback, no data corruption.
+
+**Live-verified in a real browser**, not just unit tests: `heatsScreen.preview.html`
+gained "Mount (fresh, no heats)"/"Mount (partial generation — needs resume)" demo
+buttons (demo-only, not part of the shipped module graph). Confirmed a stuck stage (1 of
+4 cuppers placed, one already at Heat 1/Station A) renders the already-placed cupper as
+fixed text and the other three as editable rows; filling in the remaining three and
+submitting completed generation cleanly against a realistic fake Supabase client (real
+query filtering/insert logic, not a mock) — the already-placed cupper stayed exactly
+where it was, and the final state matched the normal "generation complete" view
+byte-for-byte, with focus correctly landing on the "Generated heats" heading via the
+screen's existing `focusAfterRender` pattern, unchanged.
+
+Full suite re-verified after every fix: 700/700 Vitest tests, lint clean, format clean.
+
+---
+
 ## Known open items carried into Phase 4 · 2026-08-29 (setupScreen/rosterScreen hung-load timeout/retry gap closed)
 
 Closes the known open item ROADMAP.md tracked since the roster-registration screen's own
