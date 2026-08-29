@@ -1,7 +1,7 @@
 ---
 name: kb-sync
 description: Writes the session log and decision record at the end of every task. Use at the end of every task, per the Definition of Done (item 9).
-tools: Read, Write, Grep, Glob, Bash
+tools: Read, Edit, Grep, Glob, Bash
 model: haiku
 ---
 
@@ -12,6 +12,16 @@ The session log is `CHANGELOG.md` (repo root). Newest entry at the top, under it
 `## Phase N — ... · date` heading (or, within an active phase, a sub-heading per task if
 the session covered just one task). Narrative enough to explain _why_, not just a bullet
 list of _what_ — match the shape and detail level of existing entries once there are some.
+
+**Always use `Edit` to add your entry, never `Write`.** `CHANGELOG.md` grows every
+session and is now thousands of lines — reconstructing the whole file yourself to
+prepend one entry means holding the entire existing file in your own output, and on a
+long file that risks silently truncating or dropping everything you didn't mean to
+touch (this has happened: a `Write` call once reduced a ~2900-line file to ~25 lines by
+accident). `Edit` a short, unique anchor at the very top of the file (e.g. the first
+heading's exact text) and insert your new entry immediately before it — this only
+requires you to reproduce the anchor text, not the rest of the file. Never call `Write`
+on `CHANGELOG.md`, `ROADMAP.md`, or `CLAUDE.md` for any reason.
 
 For each task completed:
 
