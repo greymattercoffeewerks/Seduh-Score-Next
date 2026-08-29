@@ -49,6 +49,31 @@ export async function enqueueOperation(type, payload) {
   return operation;
 }
 
+// Wraps a Supabase RPC call as a `flushOutbox` handler for one operation
+// `type`. Every RPC this project routes through the outbox (confirm_heat,
+// publish_session, start_heat/record_heat_time/auto_max_heat) rejects a
+// stale/conflicting payload the exact same way: retrying the identical
+// payload against the RPC's own idempotency/conflict check fails the exact
+// same way forever, unlike a network-level failure (client.rpc() itself
+// rejecting before ever reaching the server), which never reaches this
+// branch and stays retryable. Extracted here — not `formats/cup-taster/` —
+// because it's pure RPC-wrapping mechanics with zero knowledge of any
+// operation type's name or payload shape; three call sites
+// (timing.js/scoring.js/publish.js) had each hand-rolled this identical
+// ~10-line block before this extraction.
+export function buildRpcHandler(client, type) {
+  return async (payload) => {
+    const { error } = await client.rpc(type, payload);
+    if (error) {
+      const err = new Error(error.message);
+      err.code = error.code;
+      err.details = error.details;
+      err.permanent = true;
+      throw err;
+    }
+  };
+}
+
 export async function countPendingOperations() {
   return (await outboxListAll()).length;
 }
@@ -62,6 +87,19 @@ export async function listPendingOperations() {
 // in-flight promise and see its real outcome; the flush re-lists the queue
 // after each pass so anything enqueued mid-flush gets picked up in that same
 // call rather than requiring a separate flushOutbox() invocation.
+//
+// Caveat found in review (offline-sync-auditor, 2026-08-29, while closing
+// the cross-module handler-map gap — see formats/cup-taster/outboxHandlers.js):
+// a caller that arrives while a flush is already in-flight gets back that
+// SAME promise, built from whichever caller's `handlers` argument won the
+// race — this caller's own `handlers` is silently discarded, not merged.
+// Harmless today because every real production call site passes the exact
+// same cupTasterOutboxHandlers(client) map (functionally interchangeable
+// regardless of whose object reference wins), but a FUTURE call site that
+// races one of today's with a narrower map would have its intent silently
+// dropped, potentially reintroducing exactly the stall that gap-closing
+// task fixed. Not fixed here — no current code path triggers it — but
+// worth this note so a future addition doesn't reintroduce it unknowingly.
 let inFlightFlush = null;
 
 // Replays every queued operation, strictly in FIFO (createdAt) order,

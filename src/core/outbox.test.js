@@ -4,6 +4,7 @@ import {
   countPendingOperations,
   listPendingOperations,
   flushOutbox,
+  buildRpcHandler,
 } from './outbox.js';
 import { _clearAllForTests } from './db.js';
 
@@ -27,6 +28,60 @@ describe('enqueueOperation', () => {
     const op = await enqueueOperation('confirm_heat', { heatId: 'h1' });
     expect(op.attempts).toBe(0);
     expect(op.lastError).toBeNull();
+  });
+});
+
+describe('buildRpcHandler', () => {
+  it('resolves without throwing when the RPC succeeds', async () => {
+    const client = { rpc: () => Promise.resolve({ data: null, error: null }) };
+    await expect(buildRpcHandler(client, 'confirm_heat')({ a: 1 })).resolves.toBeUndefined();
+  });
+
+  it('calls client.rpc with the given type and the exact payload passed to the handler', async () => {
+    const calls = [];
+    const client = {
+      rpc: (type, payload) => {
+        calls.push([type, payload]);
+        return Promise.resolve({ data: null, error: null });
+      },
+    };
+    await buildRpcHandler(client, 'start_heat')({ p_heat_id: 'h1' });
+    expect(calls).toEqual([['start_heat', { p_heat_id: 'h1' }]]);
+  });
+
+  it('wraps an RPC error as a permanent outbox failure, preserving code/details/message', async () => {
+    const client = {
+      rpc: () =>
+        Promise.resolve({
+          data: null,
+          error: { message: 'stale conflict', code: 'P0002', details: 'v1 vs v2' },
+        }),
+    };
+    const handler = buildRpcHandler(client, 'confirm_heat');
+    await expect(handler({})).rejects.toMatchObject({
+      message: 'stale conflict',
+      code: 'P0002',
+      details: 'v1 vs v2',
+      permanent: true,
+    });
+  });
+
+  it('does not mark a network-level rejection (client.rpc itself throwing) as permanent', async () => {
+    expect.assertions(2);
+    const client = { rpc: () => Promise.reject(new Error('fetch failed')) };
+    const handler = buildRpcHandler(client, 'confirm_heat');
+    // A plain Error from a rejected client.rpc() call never passes through
+    // buildRpcHandler's own error-wrapping branch (that only runs when
+    // client.rpc() RESOLVES with an `error` field) — this handler function
+    // never gets a chance to set `.permanent` on it, so flushOutbox's own
+    // ordinary-failure path (retryable) is what actually handles it. One
+    // invocation, one catch, both assertions on the SAME rejection —
+    // `expect.assertions(2)` guards against the catch silently not running
+    // if a future change made this resolve instead of reject.
+    await handler({}).catch((err) => {
+      expect(err.message).toBe('fetch failed');
+      expect(err.permanent).toBeUndefined();
+    });
   });
 });
 
