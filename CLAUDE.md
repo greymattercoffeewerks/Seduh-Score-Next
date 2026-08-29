@@ -5,10 +5,11 @@ _State: Phase 0 done; Phase 1 done (T1.1–T1.4); Phase 2 done (T2.1–T2.6); Ph
 stage-plan UI gap and its roster-registration UI gap, a 2026-08-29 follow-up closing
 T4.3/T4.4's direct-write gap, a further 2026-08-29 follow-up closing T4.2's DB-level
 station-uniqueness gap, a further 2026-08-29 follow-up closing the cross-module outbox
-handler-map composition gap, and a further 2026-08-29 follow-up closing the
-setupScreen/rosterScreen hung-load timeout/retry gap — see below); Phase 5 done
-(T5.1–T5.4, the 2026-08-28 holding-state follow-up, the cross-surface Playwright AC, and
-the 2026-08-28 viewer-shell
+handler-map composition gap, a further 2026-08-29 follow-up closing the
+setupScreen/rosterScreen hung-load timeout/retry gap, and a further 2026-08-29 follow-up
+closing T4.2's heat-generation resumability gap — see below); Phase 5 done (T5.1–T5.4,
+the 2026-08-28 holding-state follow-up, the cross-surface Playwright AC, and the
+2026-08-28 viewer-shell
 `<h1>`/heading-hierarchy follow-up); design-system type refresh (2026-08-28, not tied to
 a phase — Erode/Tabular → Cabinet Grotesk/JetBrains Mono) — matches CHANGELOG.md as of
 2026-08-29_
@@ -223,7 +224,22 @@ src/
                                    (also 2026-08-27, same day, separate follow-up — closes
                                    T4.1's OTHER no-UI gap: register/list/withdraw cuppers,
                                    built on core/registry.js unedited); heats, heatsScreen
-                                   (T4.2 — first real UI screen in the project); timing,
+                                   (T4.2 — first real UI screen in the project);
+                                   heatsScreen gained a resumability follow-up (2026-08-29,
+                                   closing a known ROADMAP.md gap) — heats.js itself is
+                                   untouched (generateHeatsManual/
+                                   buildHeatPlansFromAssignments were already idempotent
+                                   and conflict-checked); renderManualAssignmentForm gained
+                                   an optional existingAssignments map (an already-placed
+                                   cupper renders as fixed text, not an editable input) and
+                                   a new buildManualForm closure re-attaches each
+                                   already-placed cupper's real assignment before calling
+                                   generateHeatsManual, so its "every stage entry assigned
+                                   exactly once" check still passes without asking the
+                                   organiser to re-type anything; the manual form is now
+                                   also shown when generation is incomplete, closing the
+                                   "no repair path" gap purely as a UI-availability fix;
+                                   timing,
                                    timingScreen (T4.3 — first live/ticking screen);
                                    timingManual, timingManualScreen (T4.4 — manual mode,
                                    timing.js exports shared helpers both timing modes

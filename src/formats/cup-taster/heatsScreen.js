@@ -31,8 +31,34 @@ export function renderRosterList(hydratedEntries) {
   return el('ul', { className: 'roster-list' }, items);
 }
 
-export function renderManualAssignmentForm(hydratedEntries) {
+// `existingAssignments` (Map<entryId, {heatNumber, station}>), when given,
+// is for resuming a partial generation (heatsScreen.js's own "incomplete"
+// branch) — a cupper already committed to a heat renders as plain text, not
+// an editable input, so readManualAssignmentForm below naturally never
+// reads a value for them at all. Deliberately NOT a pre-filled-but-editable
+// input: submitting a changed value for an already-placed cupper would hit
+// ensureHeatEntries's "already exists with a different station" conflict
+// (safe, never corrupts data) but is a needless dead end this design avoids
+// by construction — the caller re-attaches each already-placed cupper's own
+// real assignment before calling generateHeatsManual (see
+// mountHeatGenerationScreen's buildManualForm), so buildHeatPlansFromAssignments'
+// own "every stage entry must be assigned" check is still satisfied without
+// asking the organiser to re-type what's already correct.
+export function renderManualAssignmentForm(
+  hydratedEntries,
+  { existingAssignments = new Map() } = {},
+) {
   const rows = hydratedEntries.map((entry) => {
+    const existing = existingAssignments.get(entry.entry_id);
+    if (existing) {
+      return el('tr', {}, [
+        el('td', { text: entry.displayName, attrs: { 'data-label': 'Cupper' } }),
+        el('td', {
+          text: `Heat ${existing.heatNumber} · Station ${existing.station} (already placed)`,
+          attrs: { 'data-label': 'Assignment', colspan: '2' },
+        }),
+      ]);
+    }
     const heatInput = el('input', {
       className: 'field-input',
       attrs: {
@@ -235,6 +261,40 @@ export async function mountHeatGenerationScreen(
       const generationComplete =
         data.heats.length > 0 && data.hydrated.every((entry) => placedEntryIds.has(entry.entry_id));
 
+      // Shared by both the zero-heats and the incomplete-generation branches
+      // below — `existingAssignments` (Map<entryId, {heatNumber, station}>)
+      // is empty in the zero-heats case (nothing placed yet) and non-empty
+      // when resuming a partial failure. generateHeatsManual/
+      // buildHeatPlansFromAssignments are unedited — already idempotent and
+      // conflict-checked (see heats.js's own comments), so resuming is safe
+      // by construction: an already-placed cupper's real assignment is
+      // re-attached here rather than left to the organiser to re-type
+      // (renderManualAssignmentForm shows it as plain text, not an editable
+      // field, so readManualAssignmentForm never returns a value for them at
+      // all), and buildHeatPlansFromAssignments's own "every stage entry
+      // must be assigned exactly once" check still passes.
+      function buildManualForm(existingAssignments) {
+        const manualForm = renderManualAssignmentForm(data.hydrated, { existingAssignments });
+        manualForm.addEventListener('submit', async (event) => {
+          event.preventDefault();
+          const assignments = [
+            ...readManualAssignmentForm(manualForm),
+            ...[...existingAssignments].map(([entryId, assignment]) => ({
+              entryId,
+              ...assignment,
+            })),
+          ];
+          try {
+            await generateHeatsManual(stageId, assignments, {}, client);
+            focusAfterRender = '#heats-heading';
+          } catch (err) {
+            pendingError = describeError(err);
+          }
+          await renderOrShowError(feedback);
+        });
+        return manualForm;
+      }
+
       if (data.heats.length === 0) {
         const randomButton = el('button', {
           className: 'btn btn-primary tap-target',
@@ -254,25 +314,15 @@ export async function mountHeatGenerationScreen(
             // for a station conflict within the SAME heat — a cupper
             // already committed to heat 1 could silently end up placed in
             // heat 2 as well on the retry, with nothing to catch it. Moving
-            // to the "incomplete" branch (which offers no generate button)
-            // as soon as the real failure state is known closes that gap.
+            // to the "incomplete" branch (which offers no generate button,
+            // only the safe manual-resume form below) as soon as the real
+            // failure state is known closes that gap.
             pendingError = describeError(err);
           }
           await renderOrShowError(feedback);
         });
 
-        const manualForm = renderManualAssignmentForm(data.hydrated);
-        manualForm.addEventListener('submit', async (event) => {
-          event.preventDefault();
-          const assignments = readManualAssignmentForm(manualForm);
-          try {
-            await generateHeatsManual(stageId, assignments, {}, client);
-            focusAfterRender = '#heats-heading';
-          } catch (err) {
-            pendingError = describeError(err);
-          }
-          await renderOrShowError(feedback);
-        });
+        const manualForm = buildManualForm(new Map());
 
         container.appendChild(
           el('div', { className: 'card' }, [el('h2', { text: 'Generate heats' }), randomButton]),
@@ -284,27 +334,49 @@ export async function mountHeatGenerationScreen(
         // A prior generation attempt failed partway — some heats/entries
         // exist, but not every stage entry has one. Never show this as
         // "done" (the render gate below would if it only checked
-        // heats.length > 0). Deliberately offers no "try again" action:
-        // generateHeatsRandom reshuffles the *entire* roster fresh on every
-        // call, and ensureHeatEntries's conflict check only compares an
-        // entry against rows already in that SAME heat — it does not check
-        // whether that cupper already landed in a different heat from the
-        // failed attempt, so a same-session retry could silently place one
-        // cupper into two heats instead of throwing. Resuming/repairing
-        // this safely is out of this task's scope — surfacing the true
-        // state honestly, with no path back into generation from here, is
-        // the fix that belongs here.
+        // heats.length > 0). No "try again" (random) action — that path
+        // stays permanently unsafe here, see generateHeatsRandom's own
+        // comment above. The manual form below IS a safe repair path
+        // (2026-08-29 follow-up, closing a known ROADMAP.md gap): each
+        // already-placed cupper's real heat/station is shown as fixed text,
+        // not re-typed, so the organiser only fills in the ones still
+        // missing — buildManualForm re-attaches the already-placed rows
+        // before submitting, so buildHeatPlansFromAssignments' own
+        // completeness check is satisfied without asking for anything that
+        // isn't genuinely new.
         const hydratedById = new Map(data.hydrated.map((entry) => [entry.entry_id, entry]));
         const missing = data.hydrated.length - placedEntryIds.size;
+        const existingAssignments = new Map(
+          data.heats.flatMap(({ heat, entries }) =>
+            entries.map((entry) => [
+              entry.entry_id,
+              { heatNumber: heat.heat_number, station: entry.station },
+            ]),
+          ),
+        );
         container.appendChild(
           el('div', { className: 'card' }, [
             el('h2', { text: 'Heat generation incomplete' }),
             el('p', {
-              text: `${placedEntryIds.size} of ${data.hydrated.length} cupper(s) were assigned a heat before generation stopped — ${missing} still need one. This needs manual attention before scoring can begin.`,
+              text: `${placedEntryIds.size} of ${data.hydrated.length} cupper(s) were assigned a heat before generation stopped — ${missing} still need one. Assign the rest below to finish, or continue in Studio.`,
             }),
           ]),
         );
         container.appendChild(renderHeatsList(data.heats, hydratedById));
+        container.appendChild(
+          el('div', { className: 'card' }, [
+            // Repeats the count from the card above rather than relying on
+            // it — found in review (ui-accessibility-reviewer): the
+            // "Heat generation incomplete" card explaining WHY this form has
+            // fewer inputs than "N cupper(s) in this stage" sits before the
+            // Generated heats list, structurally disconnected from this
+            // form by an intervening card. A screen-reader user navigating
+            // by heading, or a sighted user scanning straight to this card,
+            // had no link back to that context.
+            el('h2', { text: `Finish assigning the rest (${missing} remaining)` }),
+            buildManualForm(existingAssignments),
+          ]),
+        );
       } else {
         const hydratedById = new Map(data.hydrated.map((entry) => [entry.entry_id, entry]));
         container.appendChild(renderHeatsList(data.heats, hydratedById));

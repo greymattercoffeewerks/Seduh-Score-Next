@@ -373,7 +373,7 @@ describe('mountHeatGenerationScreen', () => {
     expect(incompleteRoot.querySelector('.is-test-banner')).not.toBeNull();
   });
 
-  it('re-renders into the incomplete state — with no generate button — immediately after a same-session generation failure that left a partial heat committed', async () => {
+  it('re-renders into the incomplete state — with no random-generate button, but a working manual-resume form — immediately after a same-session generation failure that left a partial heat committed', async () => {
     // The specific risk this closes: createHeats has no batch-level
     // atomicity. If a heat row gets created but its entries fail
     // (ensureHeatEntries gives up after exhausting its bounded retry), the
@@ -431,9 +431,194 @@ describe('mountHeatGenerationScreen', () => {
     expect(root.textContent).toContain('Heat generation incomplete');
     expect(root.textContent).toContain('0 of 2 cupper(s)');
     expect(root.textContent).not.toContain('Generate heats (random)');
-    expect(root.querySelector('form.manual-assignment-form')).toBeNull();
     const feedback = root.querySelector('.screen-feedback');
     expect(feedback.dataset.tone).toBe('error');
+
+    // The manual-resume form IS present (2026-08-29 follow-up) — heat1's
+    // shell exists but has zero entries in this fixture, so neither cupper
+    // is "already placed" yet and both render as genuinely editable rows,
+    // not read-only text.
+    const manualForm = root.querySelector('form.manual-assignment-form');
+    expect(manualForm).not.toBeNull();
+    expect(manualForm.querySelectorAll('input[data-field="heatNumber"]')).toHaveLength(2);
+    expect(root.textContent).not.toContain('already placed');
+  });
+
+  it('the manual-resume form only asks for the cuppers still missing a heat — an already-placed one shows as fixed text, not an editable field', async () => {
+    // Same shape as the previous test, but heat1's entries DID land for one
+    // cupper before generation stopped for the other — the realistic
+    // partial-failure shape this fix exists for (see heats.js's own
+    // createHeats: "no batch-level atomicity" applies per-heat-entry too,
+    // not just per-heat).
+    const root = document.createElement('div');
+    const stageEntries = [
+      { id: 'se1', stage_id: 's1', entry_id: 'e1' },
+      { id: 'se2', stage_id: 's1', entry_id: 'e2' },
+    ];
+    const roster = [
+      { id: 'e1', event_id: 'ev1', display_name: 'Cupper One', withdrawn: false },
+      { id: 'e2', event_id: 'ev1', display_name: 'Cupper Two', withdrawn: false },
+    ];
+    const createdHeat = { id: 'h1', stage_id: 's1', heat_number: 1, duration_secs: 480 };
+    const placedEntry = { id: 'he1', heat_id: 'h1', entry_id: 'e1', station: 'A' };
+    const client = fakeClient({
+      tables: {
+        events: { data: nonTestEvent, error: null },
+        ct_stages: { data: stage, error: null },
+        ct_stage_entries: { data: stageEntries, error: null },
+        event_entries: { data: roster, error: null },
+        ct_heats: { data: [createdHeat], error: null },
+        ct_heat_entries: { data: [placedEntry], error: null },
+      },
+    });
+    await mountHeatGenerationScreen(root, { eventId: 'ev1', stageId: 's1', client });
+
+    expect(root.textContent).toContain('1 of 2 cupper(s)');
+
+    const manualForm = root.querySelector('form.manual-assignment-form');
+    expect(manualForm).not.toBeNull();
+    // Scoped to Cupper One's own row specifically, not a bare
+    // root.textContent/manualForm.textContent substring check — found in
+    // review (test-auditor): with only one already-placed cupper in this
+    // fixture, a substring check can't tell "correct row, correct content"
+    // apart from "content present but attached to the wrong cupper's row".
+    // Scoping to the row containing "Cupper One" makes a future swap bug
+    // (a second already-placed cupper added to this fixture later) still
+    // catchable.
+    const cupperOneRow = [...manualForm.querySelectorAll('tr')].find((row) =>
+      row.textContent.includes('Cupper One'),
+    );
+    expect(cupperOneRow.textContent).toContain('Heat 1 · Station A (already placed)');
+    // Only Cupper Two (the still-missing one) gets an editable row.
+    expect(manualForm.querySelectorAll('input[data-field="heatNumber"]')).toHaveLength(1);
+    expect(manualForm.querySelector('input[aria-label="Cupper Two: heat number"]')).not.toBeNull();
+    expect(manualForm.querySelector('input[aria-label="Cupper One: heat number"]')).toBeNull();
+  });
+
+  it('submitting the manual-resume form completes generation without disturbing the already-placed cupper', async () => {
+    const root = document.createElement('div');
+    const stageEntries = [
+      { id: 'se1', stage_id: 's1', entry_id: 'e1' },
+      { id: 'se2', stage_id: 's1', entry_id: 'e2' },
+    ];
+    const roster = [
+      { id: 'e1', event_id: 'ev1', display_name: 'Cupper One', withdrawn: false },
+      { id: 'e2', event_id: 'ev1', display_name: 'Cupper Two', withdrawn: false },
+    ];
+    const createdHeat = {
+      id: 'h1',
+      stage_id: 's1',
+      heat_number: 1,
+      duration_secs: 480,
+      timing_mode: 'app',
+    };
+    const placedEntry = { id: 'he1', heat_id: 'h1', entry_id: 'e1', station: 'A' };
+    const bothPlaced = [placedEntry, { id: 'he2', heat_id: 'h1', entry_id: 'e2', station: 'B' }];
+    const client = fakeClient({
+      tables: {
+        events: { data: nonTestEvent, error: null },
+        ct_stages: { data: stage, error: null },
+        ct_stage_entries: { data: stageEntries, error: null },
+        event_entries: { data: roster, error: null },
+        ct_heats: [
+          { data: [createdHeat], error: null }, // mount's listHeatsForStage
+          { data: createdHeat, error: null }, // generateHeatsManual's createHeat findHeatByNumber (heat1 already exists, config matches)
+          { data: [createdHeat], error: null }, // post-submit re-render's listHeatsForStage
+        ],
+        ct_heat_entries: [
+          { data: [placedEntry], error: null }, // mount's listHeatEntries for heat1
+          { data: [placedEntry], error: null }, // ensureHeatEntries' initial listHeatEntries (Cupper One already there, Cupper Two missing)
+          { data: [bothPlaced[1]], error: null }, // insert().select() result for the missing entry
+          { data: bothPlaced, error: null }, // ensureHeatEntries' listHeatEntries after the successful insert
+          { data: bothPlaced, error: null }, // post-submit re-render's listHeatEntries for heat1
+        ],
+      },
+    });
+    await mountHeatGenerationScreen(root, { eventId: 'ev1', stageId: 's1', client });
+
+    const heatInput = root.querySelector('input[aria-label="Cupper Two: heat number"]');
+    const stationInput = root.querySelector('input[aria-label="Cupper Two: station"]');
+    heatInput.value = '1';
+    stationInput.value = 'B';
+    heatInput.dispatchEvent(new Event('input', { bubbles: true }));
+    stationInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+    const manualForm = root.querySelector('form.manual-assignment-form');
+    manualForm.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(root.textContent).not.toContain('Heat generation incomplete');
+    // `.heats-list` alone is non-diagnostic — found in review (test-auditor):
+    // it's rendered in BOTH the incomplete and complete branches, so its
+    // mere presence proves nothing about whether the submission actually
+    // succeeded. The real proof is below: reading Cupper One's assignment
+    // back out of the final rendered state, plus the exact insert payload
+    // that was actually sent — either would fail if the merge in
+    // buildManualForm silently dropped or altered Cupper One's already-
+    // placed row instead of re-attaching it unchanged.
+    const cupperOneItem = [...root.querySelectorAll('.heat-entries-list li')].find((li) =>
+      li.textContent.includes('Cupper One'),
+    );
+    expect(cupperOneItem.querySelector('.station-badge').textContent).toBe('A');
+    const insertCall = client.calls.find(
+      ([action, table]) => action === 'insert' && table === 'ct_heat_entries',
+    );
+    expect(insertCall[2]).toEqual([{ heat_id: 'h1', entry_id: 'e2', station: 'B' }]);
+  });
+
+  it('a missing cupper submitting a station that collides with an already-placed cupper fails safely, without corrupting either assignment', async () => {
+    // A genuinely new path this fix opens: before, the incomplete branch had
+    // no form at all, so this collision could never be attempted through
+    // the UI. buildHeatPlansFromAssignments' own per-heat station-uniqueness
+    // check (heats.js) is what actually rejects it — this proves that
+    // check is reachable and fails safely through the new UI, not just that
+    // it exists in heats.js.
+    const root = document.createElement('div');
+    const stageEntries = [
+      { id: 'se1', stage_id: 's1', entry_id: 'e1' },
+      { id: 'se2', stage_id: 's1', entry_id: 'e2' },
+    ];
+    const roster = [
+      { id: 'e1', event_id: 'ev1', display_name: 'Cupper One', withdrawn: false },
+      { id: 'e2', event_id: 'ev1', display_name: 'Cupper Two', withdrawn: false },
+    ];
+    const createdHeat = {
+      id: 'h1',
+      stage_id: 's1',
+      heat_number: 1,
+      duration_secs: 480,
+      timing_mode: 'app',
+    };
+    const placedEntry = { id: 'he1', heat_id: 'h1', entry_id: 'e1', station: 'A' };
+    const client = fakeClient({
+      tables: {
+        events: { data: nonTestEvent, error: null },
+        ct_stages: { data: stage, error: null },
+        ct_stage_entries: { data: stageEntries, error: null },
+        event_entries: { data: roster, error: null },
+        ct_heats: { data: [createdHeat], error: null },
+        ct_heat_entries: { data: [placedEntry], error: null },
+      },
+    });
+    await mountHeatGenerationScreen(root, { eventId: 'ev1', stageId: 's1', client });
+
+    const heatInput = root.querySelector('input[aria-label="Cupper Two: heat number"]');
+    const stationInput = root.querySelector('input[aria-label="Cupper Two: station"]');
+    heatInput.value = '1';
+    stationInput.value = 'A'; // collides with Cupper One's real, already-placed station
+    heatInput.dispatchEvent(new Event('input', { bubbles: true }));
+    stationInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+    const manualForm = root.querySelector('form.manual-assignment-form');
+    manualForm.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // Rejected before ever reaching the client — buildHeatPlansFromAssignments
+    // throws synchronously, so no insert was attempted at all.
+    expect(client.calls.some(([action]) => action === 'insert')).toBe(false);
+    const feedback = root.querySelector('.screen-feedback');
+    expect(feedback.dataset.tone).toBe('error');
+    expect(feedback.textContent).toMatch(/station/i);
   });
 
   it("surfaces a thrown error in the feedback region using this module's own message", async () => {
