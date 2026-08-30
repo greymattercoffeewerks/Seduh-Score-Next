@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Every screen main.js wires in is replaced with a spy that renders a
 // distinguishable marker and records the params it was mounted with — this
@@ -17,6 +17,7 @@ const mountTimingRouteScreen = vi.fn();
 const mountScoringScreen = vi.fn();
 const mountProjectorSurface = vi.fn();
 const mountPhoneSummary = vi.fn();
+const mountLoginScreen = vi.fn();
 
 vi.mock('./core/eventsScreen.js', () => ({
   mountEventsScreen: (...args) => mountEventsScreen(...args),
@@ -51,6 +52,9 @@ vi.mock('./formats/cup-taster/projectorSurface.js', () => ({
 vi.mock('./formats/cup-taster/phoneSummary.js', () => ({
   mountPhoneSummary: (...args) => mountPhoneSummary(...args),
 }));
+vi.mock('./core/loginScreen.js', () => ({
+  mountLoginScreen: (...args) => mountLoginScreen(...args),
+}));
 
 const { mountApp } = await import('./main.js');
 
@@ -61,20 +65,65 @@ function stubScreen(mockFn, marker) {
   });
 }
 
+// Session is mutable via .setSession() — requireAuth() (main.js) and
+// appShell.js's own onAuthStateChange subscription both read
+// client.auth.getSession()/getUser() fresh each time, so a test can flip
+// from unauthenticated to authenticated mid-test to prove the sign-in
+// transition, without needing a second mountApp() call. Authenticated by
+// default (a real session object) so every routing test written before
+// the auth gate existed keeps testing routing, not auth, unchanged.
+function fakeClient({ session = { user: { email: 'organiser@test.com' } } } = {}) {
+  let currentSession = session;
+  return {
+    setSession(next) {
+      currentSession = next;
+    },
+    auth: {
+      getSession: () => Promise.resolve({ data: { session: currentSession } }),
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe: vi.fn() } } }),
+      signOut: vi.fn(),
+    },
+  };
+}
+
 let activeApp = null;
 async function startApp(overrides = {}) {
   const root = document.createElement('div');
   document.body.appendChild(root);
-  const app = mountApp(root, { client: {}, orgId: 'org1', ...overrides });
+  const app = mountApp(root, { client: fakeClient(), orgId: 'org1', ...overrides });
   await app.ready;
   activeApp = app;
   return { root, app };
 }
 
+// jsdom queues its hashchange dispatch rather than firing it synchronously
+// (per the HTML spec's own "queue a task to fire hashchange" wording) — a
+// test with several navigations can leave more than one dispatch still
+// pending after its own body finishes. core/router.test.js's own precedent
+// resets location.hash in both beforeEach and afterEach for this same
+// reason; this file goes one step further and settles the queue (two
+// macrotask ticks — matches the documented jsdom double-fire-per-assignment
+// quirk elsewhere in this codebase) BEFORE tearing the router down, not
+// after — found the hard way: resetting the hash only in afterEach, after
+// unmount() had already removed the listener, let a backlog of several
+// tests' worth of stale dispatches accumulate and fire against whichever
+// LATER test's router happened to be listening when jsdom finally got
+// around to them, corrupting that later test's own state.
+async function settleHashDispatch() {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+beforeEach(async () => {
+  location.hash = '';
+  await settleHashDispatch();
+});
+
 afterEach(async () => {
+  location.hash = '';
+  await settleHashDispatch();
   await activeApp?.unmount();
   activeApp = null;
-  location.hash = '';
   vi.clearAllMocks();
 });
 
@@ -228,5 +277,60 @@ describe('mountApp routing', () => {
     activeApp = null; // already unmounted directly — afterEach shouldn't unmount again
 
     expect(root.querySelector('.app-shell-header')).toBeNull();
+  });
+});
+
+describe('the temporary auth gate (requireAuth)', () => {
+  it('an unauthenticated session on a normal route mounts the login screen, not the real screen', async () => {
+    stubScreen(mountLoginScreen, 'LOGIN_SCREEN');
+    const { root } = await startApp({ client: fakeClient({ session: null }) });
+    expect(root.textContent).toContain('LOGIN_SCREEN');
+    expect(mountEventsScreen).not.toHaveBeenCalled();
+  });
+
+  it('an authenticated session mounts the real screen, and actually checked the session rather than skipping the gate', async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    const client = fakeClient();
+    const getSessionSpy = vi.spyOn(client.auth, 'getSession');
+    const { root } = await startApp({ client });
+    expect(root.textContent).toContain('EVENTS_SCREEN');
+    expect(mountLoginScreen).not.toHaveBeenCalled();
+    expect(getSessionSpy).toHaveBeenCalled();
+  });
+
+  it('#/live/projector mounts its real screen regardless of session state, even on initial load — the audience never authenticates', async () => {
+    stubScreen(mountProjectorSurface, 'PROJECTOR_SCREEN');
+    location.hash = '#/live/projector';
+    const { root } = await startApp({ client: fakeClient({ session: null }) });
+    expect(root.textContent).toContain('PROJECTOR_SCREEN');
+    expect(mountLoginScreen).not.toHaveBeenCalled();
+  });
+
+  it('#/live/phone mounts its real screen regardless of session state, even on initial load', async () => {
+    stubScreen(mountPhoneSummary, 'PHONE_SCREEN');
+    location.hash = '#/live/phone';
+    const { root } = await startApp({ client: fakeClient({ session: null }) });
+    expect(root.textContent).toContain('PHONE_SCREEN');
+    expect(mountLoginScreen).not.toHaveBeenCalled();
+  });
+
+  it('a successful sign-in transitions straight into the screen the user originally tried to reach', async () => {
+    const client = fakeClient({ session: null });
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    let capturedOnSignedIn;
+    mountLoginScreen.mockImplementation(async (root, { onSignedIn }) => {
+      capturedOnSignedIn = onSignedIn;
+      root.textContent = 'LOGIN_SCREEN';
+      return { unmount: vi.fn() };
+    });
+
+    const { root } = await startApp({ client });
+    expect(root.textContent).toContain('LOGIN_SCREEN');
+
+    client.setSession({ user: { email: 'organiser@test.com' } });
+    capturedOnSignedIn();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(root.textContent).toContain('EVENTS_SCREEN');
   });
 });

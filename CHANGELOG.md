@@ -1,3 +1,97 @@
+## Temporary login screen · 2026-08-30
+
+**No §14 task ID — explicitly scoped by the user as temporary,** ahead of D14's real
+entitlements-based access control (currently an intentional permissive stub). The
+app-wiring PR (above) connected every organiser screen into a real, navigable app, but
+every organiser table is `authenticated`-only (`20260821240000_grants.sql`), and there
+was still no way for a human to sign in — the only way to establish a session was typing
+`supabase.auth.signInWithPassword(...)` into devtools, which is not something to rely on
+live in front of an audience on 4 October. This closes that gap with the smallest thing
+that actually works: a plain sign-in form against the existing `auth.signInWithPassword`.
+No sign-up, no password reset, no tier/role gating — account provisioning stays exactly
+as already decided (`ROADMAP.md`: the single organiser is provisioned via `service_role`
+outside the app).
+
+**What shipped:**
+
+- `src/core/loginScreen.js`/`.css` (new) + `.test.js` — `mountLoginScreen(root,
+{client, onSignedIn})`: email + password via `core/dom.js`'s `labeledField()`
+  (`autocomplete="username"`/`"current-password"`), client-side "both fields filled"
+  check before ever calling the API, `signInWithPassword` on submit, `onSignedIn()` on
+  success, `error.message` shown verbatim on failure (Supabase Auth's own user-facing
+  text — deliberately not routed through `core/errors.js`'s `describeError()`, which
+  guards a different thing: raw DB error internals). Lives in `core/` — auth is
+  format-agnostic.
+- `src/main.js` — a `requireAuth(mount, routerRef)` wrapper, deliberately confined to
+  this file rather than `core/router.js` (which stays exactly as shipped, reusable
+  unedited by a future format), applied around every organiser route. `#/live/projector`
+  and `#/live/phone` are **not** wrapped — the audience never authenticates, by design
+  (`live_sessions` is anon-readable). On success, `onSignedIn` re-resolves the current
+  path, so sign-in lands the user exactly where they were trying to go — no separate
+  `#/login` route needed.
+- `src/core/appShell.js` — a reactive "signed in as {email}" + "Sign out" control in the
+  persistent header, subscribed via `client.auth.onAuthStateChange` (not a one-time
+  fetch — the shell mounts once per app lifetime, but a sign-in can happen well after
+  that, inside its own outlet). Sign out calls `client.auth.signOut()` then navigates to
+  `#/events`, which re-triggers `requireAuth` and shows the login screen — no extra
+  plumbing needed.
+
+**A real, reproducible test-isolation bug found and fixed while writing `main.test.js`,
+not a product bug** — `beforeEach`/`afterEach` previously reset `location.hash` but
+didn't account for jsdom queuing its `hashchange` dispatch rather than firing it
+synchronously (per the HTML spec's own "queue a task to fire hashchange" wording). A
+test with several navigations could leave more than one dispatch pending after its own
+body finished; the backlog would fire later against whichever _later_ test's router
+happened to be listening when jsdom got around to it, corrupting that test's state.
+Root-caused by direct `router.js` instrumentation, not guessed at. Fixed with a
+`settleHashDispatch()` helper (two macrotask ticks, matching the documented jsdom
+double-fire-per-assignment quirk `router.test.js` already established) called in both
+`beforeEach` and `afterEach`, resetting the hash _before_ tearing the router down so each
+test's own trailing dispatches settle against its own still-live router rather than
+leaking into the next one. `test-auditor` independently reproduced this (removing the
+fix made the affected test fail deterministically across 5 consecutive runs) and formed
+its own judgment that this is a genuine test-environment artifact, not a masked
+`core/router.js` defect — `mountApp()`/`createRouter()` are only ever created once per
+real page load in production; this class of interaction (many independent router
+instances sharing one `window`) is unique to running many tests back to back.
+
+**Live browser verification**: signed out, confirmed the real login form renders;
+signed in through the actual form (not devtools) with `supabase/seed.sql`'s fixed
+credentials, landed on Events; confirmed "signed in as organiser@local.test" + Sign out
+appear in the header; clicked Sign out, confirmed it returns to the login screen;
+confirmed `#/live/projector` still renders its own holding state with zero session and
+zero login gate, exactly as designed.
+
+**Five reviewers in parallel** (`module-boundary-checker`, `ui-accessibility-reviewer` at
+360px, `test-auditor`, `code-reviewer`, `security-reviewer` — the last included
+deliberately even though no RLS/RPC/Storage changed, since this is the first credential-
+entry surface this codebase has ever had). `module-boundary-checker` and `test-auditor`
+both came back clean. `ui-accessibility-reviewer` and `code-reviewer` independently
+converged on the same real gap: neither `requireAuth`'s `client.auth.getSession()` call
+nor `loginScreen.js`'s `signInWithPassword` call had a timeout, unlike every other
+initial-load boundary call in this codebase (`eventsScreen.js`/`setupScreen.js`/
+`rosterScreen.js`'s own established `raceTimeout`/`DEFAULT_LOAD_TIMEOUT_MS` pattern) — on
+a hung connection, the _entire app_ (not just one screen) was left permanently blank
+with no feedback, or the login form stayed disabled and unrecoverable forever. Both
+fixed: `requireAuth` now races `getSession()` against the timeout and renders a
+Retry-capable error state on failure; `loginScreen.js` now races `signInWithPassword`
+the same way, showing a distinct "taking longer than expected" message on timeout versus
+a generic connection message on an outright transport failure. `code-reviewer` also
+found `appShell.js`'s sign-out handler had an unguarded `await client.auth.signOut()` —
+a rejected sign-out (a real possibility over a bad connection) threw as an unhandled
+rejection and left the user believing they'd signed out when they hadn't; fixed with a
+try/catch that leaves the button clickable to retry. `security-reviewer` found
+`appShell.js`'s own breadcrumb fetch (`setNav` → `findEvent`) isn't sequenced behind
+`requireAuth`'s session check — it fires in parallel, since `router.js`'s `onNavigate` is
+called synchronously before `route.mount()`'s own await settles. Confirmed harmless (RLS
+already scopes `events` to org membership regardless of caller, and the existing catch
+clears the breadcrumb on a denied read) but worth making explicit rather than letting a
+future reader assume `requireAuth` covers every organiser-surface fetch — documented with
+a comment rather than restructured, given the "temporary" scope and that RLS is already
+the real, sole enforcement boundary here, not this UI gate.
+
+---
+
 ## App wiring: router, organiser shell, event management, live routes · 2026-08-30
 
 **No single §14 task ID — like the design system entries above, this was never a

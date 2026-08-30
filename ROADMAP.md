@@ -11,7 +11,9 @@ closing T4.2's heat-generation resumability gap); Phase 5 done (T5.1, T5.2, T5.3
 the 2026-08-28 holding-state follow-up, and the cross-surface Playwright AC); app wiring
 done (2026-08-30, not tied to a phase task — router, organiser shell, event management,
 `#/live/*` routes connecting every already-built screen into one navigable app for the
-first time) — matches CHANGELOG.md as of 2026-08-30_
+first time); temporary login screen done (2026-08-30, also not tied to a phase task — a
+plain sign-in form, explicitly scoped as temporary ahead of D14's real access control) —
+matches CHANGELOG.md as of 2026-08-30_
 
 The living tracker for the handoff's build plan (§14). The handoff itself stays frozen
 as the original spec — this file is what's actually shipped, updated as tasks and phases
@@ -65,6 +67,18 @@ real gaps found during scoping: `heatsScreen.js` had no `unmount()` return at al
 dated entry for the full account, including a real, deliberately-not-fixed-here race
 condition found live-testing (a slow-resolving screen's own DOM write isn't gated by the
 router's staleness guard) — see "Known open items" below.
+
+**Temporary login screen (2026-08-30), also not tied to a phase task**: closes the gap
+the app-wiring pass above left open — every organiser table is `authenticated`-only, and
+there was still no way for a human to sign in outside devtools. `core/loginScreen.js`
+(new) + a `requireAuth()` gate confined to `main.js` (not `core/router.js`) + a reactive
+sign-in/sign-out control in `appShell.js`. Explicitly scoped as temporary: plain
+`auth.signInWithPassword`, no sign-up, no tier/role gating — real access control is D14
+entitlements, future work. Five reviewers in parallel found and fixed real issues,
+including a hung-network gap (neither the session check nor the sign-in call had a
+timeout, unlike every other initial-load boundary call in this codebase) and a real,
+reproducible jsdom test-isolation bug found and fixed while writing the tests. See
+CHANGELOG.md's dated entry for the full account.
 
 ---
 
