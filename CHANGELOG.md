@@ -1,3 +1,53 @@
+## Supabase cloud project linked, real organiser account provisioned · 2026-08-30
+
+**No §14 task ID — infrastructure, not a code change.** User asked for their login
+details, which surfaced that no real organiser account existed anywhere — the temporary
+login screen (above) had a real form, but the only real login was `supabase/seed.sql`'s
+local-dev-only credentials. Confirmed the intent was to get this ready now, ahead of 4
+October, rather than defer it further.
+
+Discovered a Supabase cloud project named "Seduh Score Next" (`wxzwanprluqmgoagbkpv`,
+org "Grey Matter Coffee Werks", `ap-southeast-1`) already existed — created 2026-08-21,
+before this session, but with zero migrations applied. Reused it rather than creating a
+second project. All 11 local migrations applied in order via the Supabase MCP's
+`apply_migration` (`core_tables` through `ct_heat_entries_station_unique`) — schema, RLS
+policies, grants, and every RPC now match local dev exactly. A real org ("Grey Matter
+Coffee Werks") and a real organiser `auth.users` row (bcrypt password, same
+`extensions.crypt`/`gen_salt('bf')` mechanism `seed.sql` already established for local
+dev) were provisioned directly via SQL — matching this project's own already-decided
+provisioning model (`ROADMAP.md`: the one organiser account is created outside the app,
+via `service_role`, not a self-serve flow). Verified live: a real password-grant token
+request against the project's own Auth API succeeded.
+
+`get_advisors` (security) surfaced two pre-existing findings, neither introduced by this
+session's migrations — flagged rather than silently patched, since editing an
+already-pushed migration isn't allowed by this project's own Definition of Done (a fix
+is a new migration, reviewed as such):
+
+- Six RPC functions (`merge_people`, `confirm_heat`, `publish_session`, `start_heat`,
+  `record_heat_time`, `auto_max_heat`) have no explicit `search_path` pin. Lower risk
+  than it sounds — all six are `SECURITY INVOKER` (the default), not `SECURITY DEFINER`,
+  and neither `anon` nor `authenticated` has `CREATE` on `public` in this project's
+  standard Supabase role setup, so there's no live schema-shadowing path today. Still a
+  real hygiene gap worth a follow-up migration adding `set search_path = ''` to all six,
+  matching every `app.*` helper function's own existing convention.
+- `public.rls_auto_enable()` is callable by both `anon` and `authenticated` as
+  `SECURITY DEFINER` — a Supabase-platform-provided function, not something any
+  migration in this repo created. Worth investigating (or asking Supabase support about)
+  before relying on it being harmless, but out of this session's scope to fix.
+
+**Cloudflare Workers deployment config was NOT updated this session** — no Cloudflare
+API access was available. The real `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`/
+`VITE_DEFAULT_ORG_ID` values need to be set as build environment variables in the
+Cloudflare dashboard (Workers project → Settings → Environment variables) before the
+auto-deployed production build actually points at this real project instead of failing
+with unset env vars — handed to the user directly, not committed anywhere.
+
+**Real credentials** (org id, project URL/anon key, and the organiser's real password)
+were given to the user directly in chat, never written to any file in this repo.
+
+---
+
 ## Temporary login screen · 2026-08-30
 
 **No §14 task ID — explicitly scoped by the user as temporary,** ahead of D14's real
