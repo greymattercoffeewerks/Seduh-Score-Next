@@ -1,3 +1,60 @@
+## Migration: pin search_path on the six write RPCs · 2026-08-30
+
+Follow-up to the cloud-linking entry below — user asked for this specific
+`get_advisors` finding closed now, ahead of the Cloudflare deployment-config step (done
+separately). New migration `supabase/migrations/20260830130000_rpc_search_path_pin.sql`:
+`merge_people`, `confirm_heat`, `publish_session`, `start_heat`, `record_heat_time`, and
+`auto_max_heat` all lacked an explicit `search_path` pin — every `app.*` helper function
+in this schema (`is_org_member`, `org_id_for_event`, etc.) has carried `set search_path =
+''` since T1.3, these six never got it.
+
+Not a bare `alter function ... set search_path` — all six bodies referenced tables
+UNQUALIFIED (`from people`, `from ct_heats`, ...), so pinning an empty search_path alone
+would have silently broken every one of them at runtime (nothing but `pg_catalog`
+resolves implicitly under `search_path = ''`). Each function is reproduced via `create
+or replace function` with every previously-bare reference now `public.`-qualified,
+matching the `app.*` functions' own existing discipline — no other logic change.
+
+Verified locally before writing the migration up: `supabase db reset` applies clean,
+full pgTAP suite passes (113/113), and the rollback block was run for real in a `begin;
+... rollback;` transaction against the local docker container (matching this project's
+own schema-guardian discipline — a rollback block is verified by running it, not just
+reading it). `schema-guardian` independently re-verified all of this AND went further —
+exercised all six functions end-to-end with real fixture data under the new empty
+search_path (person merged, heat advanced pending→timing→scoring→confirmed, a result
+row inserted, `live_sessions.active` flipped, an auto-max sweep applied), confirming a
+missed qualification would have surfaced as a real runtime error, not a silent pass; none
+occurred. Also confirmed independently that all nine `app.*` helper functions already
+carry the pin — this migration's scope (these six, and only these six) was the real, full
+gap. `security-reviewer` came back clean on the migration itself, and independently
+verified the "SECURITY INVOKER is lower-risk than SECURITY DEFINER here" reasoning by
+directly querying `pg_roles`/`has_database_privilege` (`anon`/`authenticated` have no
+`CREATE` on `public`/`app`/`extensions` — no live schema-shadowing path exists today).
+
+**A real, adjacent finding surfaced during security review, not fixed in this
+migration**: `anon` has default-`PUBLIC` `EXECUTE` on all six RPCs — Postgres grants
+`EXECUTE` to `PUBLIC` by default unless explicitly revoked, and none of the six
+functions' own original migrations ever issued that revoke, only `grant ... to
+authenticated`. Every one of these functions' own comments states an "authenticated
+only" intent this silently doesn't enforce. Confirmed **not currently exploitable** —
+proved live via `set role anon` — every one of the six touches a table `anon` has no
+GRANT on at all before RLS is even reached (`permission denied for table people` /
+`processed_operations` / etc.), so this is a defense-in-depth gap, not a live hole.
+Deliberately left as a separate follow-up rather than folded into this migration (a
+different root cause — a missing `REVOKE`, not a missing pin) — revisit as its own small
+migration (`revoke execute on function <sig> from public;` ×6) if/when prioritized.
+
+Pushed to both the local stack and the now-linked cloud project (via the Supabase MCP's
+`apply_migration`, same mechanism as the initial migration push above) — re-ran
+`get_advisors` afterward and confirmed all six `function_search_path_mutable` warnings
+are gone. The pre-existing `rls_auto_enable` platform-function finding is unchanged
+(not something any migration in this repo created), and `get_advisors` surfaced one more
+finding, unrelated to any migration: leaked-password protection is disabled in Auth
+settings (a dashboard toggle under Authentication → Settings, not a schema change) —
+flagged to the user, not fixed here.
+
+---
+
 ## Supabase cloud project linked, real organiser account provisioned · 2026-08-30
 
 **No §14 task ID — infrastructure, not a code change.** User asked for their login
