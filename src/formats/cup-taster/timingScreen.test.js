@@ -414,14 +414,15 @@ describe('mountTimingScreen', () => {
     expect(rpcPayload.p_elapsed_secs).toBe(120);
     expect(rpcPayload.p_conflict_policy).toBe('reject');
 
-    // No explicit focus target is set for a stop tap — the fallback is the
-    // feedback region, which also carries the "recorded" announcement (both
-    // the refocus fix and the success-announcement fix land on the same
-    // element by design).
     const feedback = root.querySelector('.screen-feedback');
     expect(feedback.dataset.tone).toBe('success');
     expect(feedback.textContent).toContain("Cupper One's time recorded");
-    expect(document.activeElement).toBe(feedback);
+    // This heat has only one entry, so this one tap also completes it —
+    // focus goes to the "Timing complete" heading, not the feedback
+    // region, so a keyboard/screen-reader user lands somewhere that Tabs
+    // forward into the new "Score this heat" link rather than past it
+    // (found in ui-accessibility-reviewer's own pass on that link).
+    expect(document.activeElement.id).toBe('timing-complete-heading');
 
     document.body.removeChild(root);
   });
@@ -466,6 +467,35 @@ describe('mountTimingScreen', () => {
     // reload) shows it still null, which is exactly why the conflict
     // message won out over an optimistic "recorded" one.
     expect(client.db.ct_heat_entries[0].elapsed_secs).toBeNull();
+    // The heat's real status already advanced past 'timing' (see above),
+    // so this render also lands on the "Timing complete" card — found in
+    // review: the completing-transition focus redirect there must NOT
+    // fire on this error tone, or a keyboard-only user would have no way
+    // to reach this rejection text at all (`feedback` is tabindex="-1",
+    // out of tab order).
+    expect(document.activeElement).toBe(feedback);
+
+    document.body.removeChild(root);
+  });
+
+  it('a plain navigation straight to an already-complete heat leaves focus untouched', async () => {
+    // No tap/save/auto-max just happened here (no pendingHeatCheck/
+    // pendingEntryCheck, no success/error tone) — the completing-transition
+    // focus redirect must stay inert in this case, same as before that fix
+    // existed (found in review as the negative case its own guard needs
+    // covering).
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const client = buildFakeClient({
+      event: { id: 'ev1', org_id: 'org1', is_test: false },
+      heat: { ...appHeatPending, status: 'scoring' },
+      entries: [{ id: 'he1', heat_id: 'h1', entry_id: 'e1', elapsed_secs: 90, maxed: false }],
+      roster: [{ id: 'e1', display_name: 'Cupper One' }],
+    });
+    await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
+
+    expect(root.textContent).toContain('Timing complete');
+    expect(document.activeElement).toBe(document.body);
 
     document.body.removeChild(root);
   });
@@ -504,6 +534,14 @@ describe('mountTimingScreen', () => {
     const feedback = root.querySelector('.screen-feedback');
     expect(feedback.dataset.tone).toBe('success');
     expect(feedback.textContent).toContain('automatically maxed');
+
+    // Live-found gap: the complete view used to have no forward link at
+    // all, forcing a detour back through Overview -> Heats to reach
+    // scoring — this is the direct link added to close it.
+    const scoreLink = [...root.querySelectorAll('a')].find(
+      (a) => a.textContent === 'Score this heat',
+    );
+    expect(scoreLink.getAttribute('href')).toBe('#/events/ev1/heats/h1/scoring');
 
     expect(client.calls.some(([name]) => name === 'auto_max_heat')).toBe(true);
 

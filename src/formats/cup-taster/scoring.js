@@ -142,7 +142,22 @@ export async function loadConfirmedResults(heatEntries, client = getSupabase()) 
 // says it should, with a message a caller can actually show someone.
 export function buildConfirmEntries(hydratedEntries, draftResults, setIds) {
   return hydratedEntries.map((entry) => ({
-    entry_id: entry.entry_id,
+    // confirm_heat (migration 20260822100000) matches this against
+    // ct_heat_entries.id, NOT the cupper's own entry_id — same value
+    // record_heat_time's own payload already sends unambiguously as
+    // p_heat_entry_id (timing.js's buildRecordHeatTimePayload). `entry`
+    // here is a hydrated ct_heat_entries row (heats.js's hydrateEntries
+    // spreads the full row), so both `.id` (this) and `.entry_id` (the
+    // roster person, used below to key into the LOCAL draft state, which
+    // is keyed by person id — see scoringScreen.js's onToggle) are
+    // present and genuinely different UUIDs. Sending `.entry_id` here
+    // instead of `.id` is exactly the bug found live: confirm_heat's own
+    // "update ct_heat_entries ... where id = v_entry_id" never matches,
+    // raising "heat_entry % not found in heat %" on the first entry and
+    // rolling back the whole confirm — silently shown as
+    // describeError()'s generic fallback, since only the RPC's P0002
+    // conflict case has its own message (describeConfirmError).
+    entry_id: entry.id,
     // Pass-through of a value clampElapsed() already produced (via
     // timing.js/timingManual.js at write time), not a new derivation — the
     // rule can't statically tell a safe forward from an unsafe one, so

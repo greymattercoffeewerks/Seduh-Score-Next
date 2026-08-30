@@ -316,6 +316,13 @@ describe('mountScoringScreen', () => {
     expect(rpcCall[2].p_org_id).toBe('org1');
     expect(rpcCall[2].p_heat_id).toBe('h1');
     expect(rpcCall[2].p_entries[0].results).toEqual([{ set_id: 's1', correct: true }]);
+    // The live-found regression this line exists to catch: confirm_heat
+    // matches p_entries[].entry_id against ct_heat_entries.id ('he1' in
+    // oneEntry above), not the roster person's own entry_id ('e1') —
+    // sending the wrong one made every real confirm fail, hidden behind
+    // describeError()'s generic fallback message (see buildConfirmEntries'
+    // own comment in scoring.js).
+    expect(rpcCall[2].p_entries[0].entry_id).toBe('he1');
 
     // The confirmed view must show the actual final score, not a blank
     // grid — this is exactly the bug live-verification caught: clearing

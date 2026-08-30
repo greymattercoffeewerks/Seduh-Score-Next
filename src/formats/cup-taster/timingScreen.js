@@ -70,6 +70,27 @@ export function renderTimingRows(hydratedEntries, { onStop }) {
   return el('ul', { className: 'timing-row-list' }, rows);
 }
 
+// Shared by this screen's own "Timing complete" view and
+// timingManualScreen.js's identical one (which imports this directly, same
+// as it already imports renderTimingRows above) — extracted on 2nd
+// verbatim use. Lives here, not in timing.js, since that file is otherwise
+// pure DB/logic with no DOM (`el`) usage at all — found in review
+// (module-boundary-checker/code-reviewer): timing.js is also imported by
+// outboxHandlers.js and timingManualScreen.js's OWN logic-only sibling,
+// timingManual.js, neither of which has any reason to pull in core/dom.js
+// transitively. Deliberately NOT merged with heatsScreen.js's own
+// heatActionLink(), which handles three states (confirmed/scoring/
+// pending-or-timing) for a heat LIST; this only ever renders the single
+// "timing just finished, go score" case these two screens need once their
+// own local status check already confirms it.
+export function buildScoringLink(eventId, heatId) {
+  return el('a', {
+    className: 'btn btn-primary tap-target',
+    text: 'Score this heat',
+    attrs: { href: `#/events/${eventId}/heats/${heatId}/scoring` },
+  });
+}
+
 export async function mountTimingScreen(root, { eventId, heatId, client = getSupabase() } = {}) {
   let focusAfterRender = null;
   let pendingError = null;
@@ -362,10 +383,37 @@ export async function mountTimingScreen(root, { eventId, heatId, client = getSup
             text: 'Timing complete',
             attrs: { tabindex: '-1' },
           }),
-          el('p', { text: 'Every cupper has a final time. Proceed to scoring.' }),
+          el('p', { text: 'Every cupper has a final time.' }),
           renderTimingRows(data.hydrated, { onStop: () => {} }),
+          // Found live: without this, reaching scoring meant leaving this
+          // screen entirely (Overview -> stage -> Heats -> this same heat's
+          // own "Score this heat" link, heatsScreen.js's heatActionLink) —
+          // several avoidable steps right when timing has just finished and
+          // an organiser wants to move straight into scoring.
+          buildScoringLink(eventId, heatId),
         ]),
       );
+      // Found in review (ui-accessibility-reviewer): without this, the
+      // render that just completed the heat (last tap, or the auto-max
+      // sweep) fell through to the generic feedback-region fallback below
+      // — but `feedback` is appended to the DOM AFTER this card, so a
+      // keyboard/screen-reader user landing there and pressing Tab moved
+      // FORWARD, past the "Score this heat" link that already sits
+      // earlier in the DOM, not toward it. Gated on 'success' specifically
+      // (not any tone) — found in a second review pass: a concurrent tap
+      // that loses the race to complete this same heat reports an ERROR
+      // tone on this exact branch (pendingEntryCheck's permanentFailure/
+      // not-yet-synced cases), and `feedback` has tabindex="-1" (out of
+      // tab order), so redirecting focus to the heading on an error tone
+      // would leave a keyboard-only user with no way to reach their own
+      // rejection message at all — only the aria-live announcement, which
+      // a sighted keyboard user watching focus position wouldn't get. A
+      // plain navigation straight to an already-complete heat sets no
+      // tone at all, so it's left with no explicit focus move either way,
+      // same as before this fix.
+      if (feedback.dataset.tone === 'success') {
+        focusAfterRender = '#timing-complete-heading';
+      }
     }
 
     container.appendChild(feedback);

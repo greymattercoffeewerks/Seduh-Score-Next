@@ -17,7 +17,7 @@ import { findEvent } from '../../core/events.js';
 import { recordManualTime } from './timingManual.js';
 import { describeTimingConflict } from './timing.js';
 import { cupTasterOutboxHandlers } from './outboxHandlers.js';
-import { renderTimingRows } from './timingScreen.js';
+import { renderTimingRows, buildScoringLink } from './timingScreen.js';
 import { getSupabase } from '../../core/supabaseClient.js';
 import { el } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
@@ -139,6 +139,10 @@ export async function mountManualTimingScreen(
   // generic "time recorded" leaving a screen-reader user unaware the whole
   // screen just changed shape underneath them.
   let checkForCompletionOnNextRender = false;
+  // Set inside render()'s own "Timing complete" branch when that render is
+  // the live completing transition (not a plain navigation to an
+  // already-complete heat) — see that branch's own comment.
+  let completeHeadingFocus = false;
   // Ground truth over the outbox flush's own bookkeeping — same principle
   // and shape as timingScreen.js's own pendingEntryCheck (see its comment).
   let pendingEntryCheck = null;
@@ -290,10 +294,27 @@ export async function mountManualTimingScreen(
             text: 'Timing complete',
             attrs: { tabindex: '-1' },
           }),
-          el('p', { text: 'Every cupper has a final time. Proceed to scoring.' }),
+          el('p', { text: 'Every cupper has a final time.' }),
           renderTimingRows(data.hydrated, { onStop: () => {} }),
+          // See timingScreen.js's identical use of the same shared
+          // helper — same live-found gap (no forward link out of this
+          // screen once timing's done).
+          buildScoringLink(eventId, heatId),
         ]),
       );
+      // Found in review (ui-accessibility-reviewer), same gap as
+      // timingScreen.js's identical fix: `feedback` is appended AFTER this
+      // card, so a keyboard/screen-reader user landing on it after the
+      // completing save would Tab FORWARD, past the "Score this heat" link
+      // that already sits earlier in the DOM. Gated on 'success'
+      // specifically, not any tone — see timingScreen.js's own comment on
+      // its identical guard: a rejected concurrent save also lands on this
+      // branch with an ERROR tone, and `feedback` (tabindex="-1", out of
+      // tab order) is the only reachable place a keyboard-only user could
+      // find that rejection text.
+      if (feedback.dataset.tone === 'success') {
+        completeHeadingFocus = true;
+      }
     }
 
     container.appendChild(feedback);
@@ -304,8 +325,12 @@ export async function mountManualTimingScreen(
     // stable element to return focus to — every action here lands on the
     // feedback region instead, unlike timingScreen.js's screen (which
     // still has an explicit target for its one distinct action, starting
-    // the heat).
-    if (feedback.dataset.tone) {
+    // the heat) — except the one completing transition above, which now has
+    // its own explicit target for the same reason timingScreen.js's does.
+    if (completeHeadingFocus) {
+      completeHeadingFocus = false;
+      root.querySelector('#timing-complete-heading')?.focus();
+    } else if (feedback.dataset.tone) {
       feedback.scrollIntoView?.({ block: 'nearest' });
       feedback.focus();
     }

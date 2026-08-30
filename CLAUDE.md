@@ -14,7 +14,8 @@ the 2026-08-28 holding-state follow-up, the cross-surface Playwright AC, and the
 a phase — Erode/Tabular → Cabinet Grotesk/JetBrains Mono); app wiring done (2026-08-30,
 not tied to a phase task — router, organiser shell, event management, `#/live/*`
 routes — see below); temporary login screen done (2026-08-30, also not tied to a phase
-task — see below) — matches CHANGELOG.md as of 2026-08-30_
+task — see below); confirm_heat entry_id fix + Score-this-heat UX (2026-08-31, PR #42
+open); Cloudflare deployment fix (2026-08-31, supabaseUrl crash resolved) — matches CHANGELOG.md as of 2026-08-31_
 
 Read these before touching anything:
 
