@@ -500,6 +500,13 @@ tests/e2e/                      ← Playwright. smoke.spec.js (Phase 0, rewritte
 
 Local: `C:\Users\mfosa\OneDrive\Documents\seduh-score-next`
 GitHub: `github.com/greymattercoffeewerks/Seduh-Score-Next` (public)
-Supabase project: not yet linked — local stack only (`npm run supabase -- start`,
-Studio at `http://127.0.0.1:54423`)
+Supabase project: **linked, 2026-08-30** — cloud project "Seduh Score Next"
+(`wxzwanprluqmgoagbkpv`, org "Grey Matter Coffee Werks", region `ap-southeast-1`), all 11
+migrations pushed via the Supabase MCP's `apply_migration` (not yet linked locally via
+`supabase link` — that needs the project's DB password from the dashboard, not set up
+this session; pushing further migrations can keep using the MCP, or `supabase link` once
+that password is in hand). A real org + organiser login were provisioned directly (see
+CHANGELOG.md's dated entry) — credentials given to the user in chat, not committed
+anywhere. Local dev still defaults to the local stack (`npm run supabase -- start`,
+Studio at `http://127.0.0.1:54423`) — nothing about local dev changed.
 Current phase: check `ROADMAP.md`.
