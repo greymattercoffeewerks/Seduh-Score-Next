@@ -167,9 +167,18 @@ describe('loadConfirmedResults', () => {
 });
 
 describe('buildConfirmEntries', () => {
+  // `id` (the ct_heat_entries row's own pk) and `entry_id` (the roster
+  // person's id) are deliberately DIFFERENT values in every fixture below
+  // — a real hydrated entry always has both, and they're never equal in
+  // practice. A fixture using the same string for both (as this file used
+  // to) can't distinguish "sent the right field" from "sent the wrong
+  // one", which is exactly how the live entry_id/id mix-up bug (confirm_heat
+  // matches ct_heat_entries.id, not the person's entry_id — see
+  // buildConfirmEntries' own comment) went uncaught here.
   it('shapes each entry exactly as confirm_heat expects, passing elapsed_secs through unchanged', () => {
     const hydrated = [
       {
+        id: 'he1',
         entry_id: 'e1',
         elapsed_secs: 125,
         elapsed_secs_raw: 125,
@@ -181,7 +190,7 @@ describe('buildConfirmEntries', () => {
     const result = buildConfirmEntries(hydrated, draft, ['s1', 's2']);
     expect(result).toEqual([
       {
-        entry_id: 'e1',
+        entry_id: 'he1',
         elapsed_secs: 125,
         elapsed_secs_raw: 125,
         maxed: false,
@@ -197,6 +206,7 @@ describe('buildConfirmEntries', () => {
   it('an entry with no draft at all produces an empty results array — never an explicit null', () => {
     const hydrated = [
       {
+        id: 'he1',
         entry_id: 'e1',
         elapsed_secs: 480,
         elapsed_secs_raw: 480,
@@ -218,6 +228,7 @@ describe('buildConfirmEntries', () => {
   it('a partially-scored entry omits only the still-unscored sets, keeping the scored ones', () => {
     const hydrated = [
       {
+        id: 'he1',
         entry_id: 'e1',
         elapsed_secs: 100,
         elapsed_secs_raw: 100,
@@ -228,6 +239,18 @@ describe('buildConfirmEntries', () => {
     const draft = { e1: { s1: true } };
     const result = buildConfirmEntries(hydrated, draft, ['s1', 's2', 's3']);
     expect(result[0].results).toEqual([{ set_id: 's1', correct: true }]);
+  });
+
+  it('sends the heat entry\'s own id, not the roster person\'s entry_id, as the RPC entry_id field', () => {
+    // The regression this fixture exists to catch: confirm_heat
+    // (migration 20260822100000) matches p_entries[].entry_id against
+    // ct_heat_entries.id, not the person's own entry_id — sending the
+    // wrong one makes every real confirm fail with "heat_entry % not
+    // found in heat %", swallowed by describeError() into a generic
+    // "Something went wrong" message with no clue to the real cause.
+    const hydrated = [{ id: 'heat-entry-row-id', entry_id: 'roster-person-id' }];
+    const result = buildConfirmEntries(hydrated, {}, []);
+    expect(result[0].entry_id).toBe('heat-entry-row-id');
   });
 });
 
