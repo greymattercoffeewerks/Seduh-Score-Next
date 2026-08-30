@@ -365,14 +365,18 @@ describe('mountManualTimingScreen', () => {
     await settle();
 
     // The screen has already switched to the read-only "Timing complete"
-    // view by this point — the announcement is the only way a screen
-    // reader user learns the whole screen just changed shape, since focus
-    // landing on the feedback region alone doesn't convey that on its own.
+    // view by this point — the aria-live announcement is what tells a
+    // screen reader user the whole screen just changed shape; DOM focus
+    // itself now moves to the new heading (not the feedback region, found
+    // in ui-accessibility-reviewer's own pass — see the render() branch's
+    // own comment), so Tab from there reaches the new "Score this heat"
+    // link rather than skipping past it.
     const feedback = root.querySelector('.screen-feedback');
     expect(feedback.textContent).toContain("Cupper One's time recorded");
     expect(feedback.textContent).toContain('Timing complete');
-    expect(root.textContent).toContain('Proceed to scoring');
+    expect(root.textContent).toContain('Score this heat');
     expect(root.querySelector('input')).toBeNull();
+    expect(document.activeElement.id).toBe('timing-complete-heading');
 
     document.body.removeChild(root);
   });
@@ -455,6 +459,63 @@ describe('mountManualTimingScreen', () => {
     expect(root.textContent).toContain('Timing complete');
     expect(root.querySelector('input')).toBeNull();
     expect(root.textContent).toContain('3:20');
+    // Live-found gap: the complete view used to have no forward link at
+    // all, forcing a detour back through Overview -> Heats to reach
+    // scoring — this is the direct link added to close it.
+    const scoreLink = [...root.querySelectorAll('a')].find(
+      (a) => a.textContent === 'Score this heat',
+    );
+    expect(scoreLink.getAttribute('href')).toBe('#/events/ev1/heats/h1/scoring');
+    // A plain navigation straight to an already-complete heat — no
+    // save/tap just happened, so no success tone is set — must NOT steal
+    // focus to the heading; that redirect is only for the live completing
+    // transition (found in review: the guard's own condition must stay
+    // false here, not just true on the positive case).
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('a rejected concurrent save leaves focus on the feedback region, not the complete heading, so the rejection is reachable by keyboard', async () => {
+    // The heat completing (someone ELSE's save won the race, changing its
+    // status out from under this screen's own loaded snapshot) and THIS
+    // save being rejected happen in the same render — found in a second
+    // review pass: the completing-transition focus redirect above must
+    // not fire on an error tone, or a keyboard-only user would have no
+    // way to reach this rejection text at all (`feedback` is
+    // tabindex="-1", out of tab order).
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const client = buildFakeClient({
+      event: { id: 'ev1', org_id: 'org1', is_test: false },
+      heat: manualHeatPending,
+      entries: [{ id: 'he1', heat_id: 'h1', entry_id: 'e1', elapsed_secs: null }],
+      roster: [{ id: 'e1', display_name: 'Cupper One' }],
+    });
+    await mountManualTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
+
+    // Simulates a concurrent write that already moved the heat on while
+    // this screen was still showing the (now-stale) 'pending' form — the
+    // real production shape record_heat_time's own optimistic-concurrency
+    // check (p_expected_heat_status) guards against, mirrored by this
+    // fake client's makeRpc() above.
+    client.db.ct_heats[0].status = 'scoring';
+
+    const inputs = root.querySelectorAll('input');
+    inputs[0].value = '2';
+    inputs[1].value = '5';
+    root.querySelector('button').click();
+    await settle();
+
+    // The rejection, not a clean save — this entry's elapsed_secs was
+    // never actually written.
+    expect(client.db.ct_heat_entries[0].elapsed_secs).toBeNull();
+    // Reached the "Timing complete" branch anyway (the DB's real status
+    // already moved on), which is exactly the case the guard must handle.
+    expect(root.textContent).toContain('Timing complete');
+    const feedback = root.querySelector('.screen-feedback');
+    expect(feedback.dataset.tone).toBe('error');
+    expect(document.activeElement).toBe(feedback);
+
+    document.body.removeChild(root);
   });
 
   // Same technique as timingScreen.test.js's own gated-race tests: the
