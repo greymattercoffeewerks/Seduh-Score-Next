@@ -386,3 +386,25 @@ station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can 
   than the app-wiring PR that surfaced it (retrofitting 10 already-shipped, already-
   reviewed screens). Revisit as its own scoped task; in the meantime this is a real,
   if narrow, correctness gap under fast navigation + slow network — not a hypothetical.
+- **Supabase cloud project linked, real organiser provisioned (2026-08-30)** — the
+  project "Seduh Score Next" (`wxzwanprluqmgoagbkpv`) already existed (created before
+  this session) but had zero migrations; all 11 are now applied and verified, plus a
+  follow-up migration (`20260830130000_rpc_search_path_pin.sql`) closing a
+  `get_advisors` finding on six write RPCs. See CHANGELOG.md's two dated entries.
+  **Cloudflare Workers deployment env vars still need setting manually** — no Cloudflare
+  API access was available; the user has the real values and is doing this separately.
+- **`anon` has default-`PUBLIC` EXECUTE on all six write RPCs — not closed, found in the
+  search_path migration's own security review.** Postgres grants `EXECUTE` to `PUBLIC`
+  by default unless explicitly revoked; none of `merge_people`/`confirm_heat`/
+  `publish_session`/`start_heat`/`record_heat_time`/`auto_max_heat`'s own original
+  migrations ever revoked it, only granted to `authenticated` — every one of their own
+  comments states an "authenticated only" intent this silently doesn't enforce.
+  Confirmed NOT currently exploitable (proved live via `set role anon` — every one hits
+  a table-level permission-denied error before RLS is even reached), so this is
+  defense-in-depth, not a live hole. A different root cause than the search_path gap
+  (a missing `REVOKE`, not a missing pin), deliberately left as its own follow-up rather
+  than folded in — a small migration (`revoke execute on function <sig> from public;`
+  ×6) whenever prioritized.
+- **Leaked-password protection is disabled in Supabase Auth settings** — a `get_advisors`
+  finding, unrelated to any migration (a dashboard toggle under Authentication →
+  Settings on the cloud project, not a schema change). Flagged to the user, not fixed.
