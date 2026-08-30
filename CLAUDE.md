@@ -136,8 +136,10 @@ rejected (`GH006`), changes land via PR. This required making the GitHub repo pu
 handoff's own `LICENSE.md` already frames this repo as publicly viewable for
 transparency/portfolio purposes, so this aligns with that, not against it.
 
-Migrations: local dev (`npm run db:reset`) first, `supabase db push` to the linked cloud
-project once verified (project not yet created — see Repo section below).
+Migrations: local dev (`npm run db:reset`) first, then push to the linked cloud project
+once verified — see the Repo section below for the project details and how the first
+push (2026-08-30) was actually done (the Supabase MCP's `apply_migration`, not
+`supabase db push` — this machine isn't `supabase link`-ed to the cloud project yet).
 
 ---
 
