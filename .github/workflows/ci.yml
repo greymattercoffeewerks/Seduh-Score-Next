@@ -83,7 +83,7 @@ jobs:
           # these need to be set here too, matching seed.sql's fixed org.
           VITE_SUPABASE_URL: http://127.0.0.1:54421
           VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
-          VITE_DEFAULT_ORG_ID: 00000000-0000-0000-0000-000000000001
+          VITE_DEFAULT_ORG_ID: 10c8c375-afe6-41c7-a54e-ffaa15429612
 
   # Migrations must apply cleanly to a database built from scratch (handoff §11
   # item 10; §14 T0.3 AC), then the pgTAP suite under supabase/tests/ runs

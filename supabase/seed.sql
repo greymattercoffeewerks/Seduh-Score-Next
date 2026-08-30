@@ -24,8 +24,20 @@
 -- Credentials are intentionally public (this file is committed): local
 -- dev and CI-only, never valid against a real deployed project since
 -- seed.sql never reaches one.
+--
+-- Real, low-numbered UUIDs (genuine random UUIDs, not the readable
+-- 00000000-0000-0000-0000-0000000000NN pattern the pgTAP fixtures under
+-- supabase/tests/ use) — found the hard way in CI: `supabase test db`
+-- runs a real `db reset` first, which applies this seed BEFORE the pgTAP
+-- suite runs, and 001_core_tables.sql's own `orgs` fixture hardcodes
+-- '...0001' as its own org id. The first version of this file used that
+-- same id and broke the whole pgTAP suite with a duplicate-key error the
+-- moment it ran in CI (never surfaced locally, since a local `db reset`
+-- run for THIS file alone doesn't also run the pgTAP suite in the same
+-- breath). Deliberately not reusing the fixtures' own low-number
+-- convention going forward, for exactly this reason.
 insert into orgs (id, name, slug)
-values ('00000000-0000-0000-0000-000000000001', 'Local Dev Org', 'local-dev-org')
+values ('10c8c375-afe6-41c7-a54e-ffaa15429612', 'Local Dev Org', 'local-dev-org')
 on conflict (id) do nothing;
 
 -- confirmation_token/recovery_token/email_change_token_new/email_change
@@ -45,7 +57,7 @@ insert into auth.users (
 )
 values (
   '00000000-0000-0000-0000-000000000000',
-  '00000000-0000-0000-0000-000000000002',
+  'f507f696-7495-40b5-ade7-138dd617807c',
   'authenticated',
   'authenticated',
   'organiser@local.test',
@@ -69,10 +81,10 @@ insert into auth.identities (
 )
 values (
   gen_random_uuid(),
-  '00000000-0000-0000-0000-000000000002',
-  '00000000-0000-0000-0000-000000000002',
+  'f507f696-7495-40b5-ade7-138dd617807c',
+  'f507f696-7495-40b5-ade7-138dd617807c',
   'email',
-  jsonb_build_object('sub', '00000000-0000-0000-0000-000000000002', 'email', 'organiser@local.test'),
+  jsonb_build_object('sub', 'f507f696-7495-40b5-ade7-138dd617807c', 'email', 'organiser@local.test'),
   now(),
   now(),
   now()
@@ -81,8 +93,8 @@ on conflict (provider_id, provider) do nothing;
 
 insert into org_members (org_id, user_id, role)
 values (
-  '00000000-0000-0000-0000-000000000001',
-  '00000000-0000-0000-0000-000000000002',
+  '10c8c375-afe6-41c7-a54e-ffaa15429612',
+  'f507f696-7495-40b5-ade7-138dd617807c',
   'organiser'
 )
 on conflict (org_id, user_id) do nothing;

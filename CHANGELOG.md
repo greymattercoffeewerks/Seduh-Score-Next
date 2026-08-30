@@ -137,6 +137,18 @@ serializes them instead of masking it with a longer timeout. `.github/workflows/
 `playwright` job now also runs a real local Supabase stack (`supabase/setup-cli@v1` +
 `supabase start`) before `npm run test:e2e`, since `organiser-flow.spec.js` needs one.
 
+**A real bug this PR's own CI run caught, not local testing** — `seed.sql`'s first
+version used `00000000-0000-0000-0000-000000000001` as its org id, the same readable,
+low-numbered id `supabase/tests/001_core_tables.sql`'s own pgTAP fixture already
+hardcodes as its own "Test Org." `supabase test db` runs a real `db reset` first, which
+applies `seed.sql` before the pgTAP suite itself runs — invisible locally (nothing runs
+both `db reset` and the pgTAP suite back to back outside CI's own job), but broke the
+"Migrations from scratch + pgTAP" CI job outright (`duplicate key value violates unique
+constraint "orgs_pkey"`) the moment this PR's own CI run exercised it. Fixed by
+generating genuine random UUIDs for `seed.sql`'s org/user ids instead of reusing the
+fixtures' own readable low-number convention — see that file's own comment for the full
+account.
+
 **Five reviewers in parallel** (`module-boundary-checker`, `ui-accessibility-reviewer` at
 360px, `test-auditor`, `code-reviewer`, `security-reviewer` — the last specifically for
 `seed.sql`'s auth-table inserts and the CI credential handling).
