@@ -1,10 +1,22 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { mountAppShell } from './appShell.js';
+
+// Every fake client needs a minimal auth shape now — mountAppShell's own
+// "signed in as X / sign out" control subscribes via
+// client.auth.onAuthStateChange on every mount (see that file's own
+// comment for why: reactive, not a one-time fetch).
+function fakeAuth() {
+  return {
+    onAuthStateChange: () => ({ data: { subscription: { unsubscribe: vi.fn() } } }),
+    signOut: vi.fn(),
+  };
+}
 
 function fakeClient(eventsById) {
   const calls = [];
   return {
     calls,
+    auth: fakeAuth(),
     from(table) {
       return {
         select: () => ({
@@ -94,6 +106,7 @@ describe('mountAppShell', () => {
 
   it('a findEvent failure clears the breadcrumb rather than leaving stale/error text', async () => {
     const client = {
+      auth: fakeAuth(),
       from: () => ({
         select: () => ({ eq: () => ({ single: () => Promise.reject(new Error('boom')) }) }),
       }),
@@ -112,6 +125,73 @@ describe('mountAppShell', () => {
     expect(root.children.length).toBe(0);
   });
 
+  function fakeAuthWithTrigger() {
+    let listener = null;
+    const unsubscribe = vi.fn();
+    return {
+      auth: {
+        signOut: vi.fn(() => Promise.resolve({ error: null })),
+        onAuthStateChange: (cb) => {
+          listener = cb;
+          return { data: { subscription: { unsubscribe } } };
+        },
+      },
+      unsubscribe,
+      trigger(session) {
+        listener?.('SIGNED_IN', session);
+      },
+    };
+  }
+
+  describe('the temporary sign-in/sign-out control', () => {
+    it('renders nothing while signed out', () => {
+      const root = document.createElement('div');
+      const { auth } = fakeAuthWithTrigger();
+      mountAppShell(root, { client: { auth, from: () => ({}) } });
+      expect(root.querySelector('.app-shell-auth').children).toHaveLength(0);
+    });
+
+    it('shows the signed-in email and a Sign out button once a session appears — reactive, not a one-time fetch (the shell mounts before a sign-in can possibly have happened yet)', () => {
+      const root = document.createElement('div');
+      const { auth, trigger } = fakeAuthWithTrigger();
+      mountAppShell(root, { client: { auth, from: () => ({}) } });
+
+      trigger({ user: { email: 'organiser@local.test' } });
+
+      expect(root.querySelector('.app-shell-auth-email').textContent).toBe('organiser@local.test');
+      const signOutButton = [...root.querySelectorAll('button')].find(
+        (b) => b.textContent === 'Sign out',
+      );
+      expect(signOutButton).not.toBeUndefined();
+    });
+
+    it('clicking Sign out calls client.auth.signOut() and navigates to #/events', async () => {
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      const { auth, trigger } = fakeAuthWithTrigger();
+      mountAppShell(root, { client: { auth, from: () => ({}) } });
+      trigger({ user: { email: 'organiser@local.test' } });
+      location.hash = '#/events/ev1/setup';
+
+      const signOutButton = [...root.querySelectorAll('button')].find(
+        (b) => b.textContent === 'Sign out',
+      );
+      signOutButton.dispatchEvent(new Event('click', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(auth.signOut).toHaveBeenCalledTimes(1);
+      expect(location.hash).toBe('#/events');
+    });
+
+    it('unmount() unsubscribes from the auth-state listener', () => {
+      const root = document.createElement('div');
+      const { auth, unsubscribe } = fakeAuthWithTrigger();
+      const { unmount } = mountAppShell(root, { client: { auth, from: () => ({}) } });
+      unmount();
+      expect(unsubscribe).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('a slower-resolving setNav call for a since-superseded eventId does not clobber a faster, later one', async () => {
     // Same staleness discipline as core/viewer-shell.js's own requestSeq
     // guard: event A's findEvent call is deliberately delayed past event
@@ -119,6 +199,7 @@ describe('mountAppShell', () => {
     let resolveA;
     const client = {
       calls: [],
+      auth: fakeAuth(),
       from() {
         return {
           select: () => ({

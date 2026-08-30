@@ -134,7 +134,15 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
 
     await navigateHash(page, '#/live/phone');
     await expect(page.locator('.app-shell-root')).toBeHidden();
-    await expect(page.getByText('NOT LIVE')).toBeVisible();
+    // A generous, explicit timeout, not the 5s default — this is a real
+    // Supabase Realtime WebSocket handshake (viewer-shell.js's own
+    // connecting-holding-state), which can legitimately take longer than
+    // 5s under load; this project's own "unreliable venue wifi" design
+    // target treats that as expected, not a bug. Found flaking under CI's
+    // more resource-constrained runner (passed reliably every time
+    // locally) — this isn't testing exact timing precision, just that the
+    // badge eventually renders.
+    await expect(page.getByText('NOT LIVE')).toBeVisible({ timeout: 15000 });
   });
 
   test('an unknown route shows an inline "Page not found" with a link back to events', async ({

@@ -9,7 +9,9 @@ import { mountAppShell } from './core/appShell.js';
 import { getDefaultOrgId } from './core/config.js';
 import { getSupabase } from './core/supabaseClient.js';
 import { el } from './core/dom.js';
+import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './core/timeout.js';
 import { mountEventsScreen } from './core/eventsScreen.js';
+import { mountLoginScreen } from './core/loginScreen.js';
 import { mountEventDashboardScreen } from './formats/cup-taster/eventDashboardScreen.js';
 import { mountSetupScreen } from './formats/cup-taster/setupScreen.js';
 import { mountRosterScreen } from './formats/cup-taster/rosterScreen.js';
@@ -20,6 +22,67 @@ import { mountTimingRouteScreen } from './formats/cup-taster/timingRouteScreen.j
 import { mountScoringScreen } from './formats/cup-taster/scoringScreen.js';
 import { mountProjectorSurface } from './formats/cup-taster/projectorSurface.js';
 import { mountPhoneSummary } from './formats/cup-taster/phoneSummary.js';
+
+// Same "unreliable venue wifi" holding-state pattern this project already
+// established for setupScreen.js/rosterScreen.js/eventsScreen.js's own
+// initial loads — found missing in review: getSession() is a real network
+// call (a token refresh can round-trip), and without this, a hang left the
+// ENTIRE app blank forever with no feedback, not just one screen.
+function renderAuthCheckError(outlet, retry) {
+  outlet.innerHTML = '';
+  const container = el('section', { className: 'screen-container' });
+  const feedback = el('div', {
+    className: 'screen-feedback',
+    text: 'This is taking longer than expected — check your connection and try Retry.',
+    attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
+  });
+  feedback.dataset.tone = 'error';
+  container.appendChild(feedback);
+  const retryButton = el('button', {
+    className: 'btn btn-outline tap-target',
+    text: 'Retry',
+    attrs: { type: 'button' },
+  });
+  retryButton.addEventListener('click', retry);
+  container.appendChild(retryButton);
+  outlet.appendChild(container);
+  feedback.scrollIntoView?.({ block: 'nearest' });
+  feedback.focus();
+  return { unmount() {} };
+}
+
+// Temporary auth gate (2026-08-30) — deliberately confined to this file,
+// not core/router.js, since router.js is meant to be reused unedited by a
+// future format and this concept (an unauthenticated screen swap-in) is
+// explicitly scoped as temporary, ahead of D14's real entitlements-based
+// gating. `routerRef` is a mutable box read lazily inside onSignedIn/retry —
+// it's still null at buildRoutes() call time (createRouter() needs the
+// routes this function returns), but by the time either can actually fire,
+// mountApp has already set it.
+function requireAuth(mount, routerRef) {
+  return async (outlet, params) => {
+    // '/events' fallback matches router.start()'s own fallbackPath below —
+    // found in testing: an empty hash (the common case for reaching the
+    // app at all, per router.js's own "no history entry written for the
+    // fallback case" design) has no route match on its own, so
+    // re-resolving the bare empty string landed on the not-found screen
+    // instead of Events.
+    function resolveCurrentPath() {
+      routerRef.current.resolve(location.hash.replace(/^#/, '') || '/events');
+    }
+
+    let session;
+    try {
+      const result = await raceTimeout(params.client.auth.getSession(), DEFAULT_LOAD_TIMEOUT_MS);
+      session = result.data.session;
+    } catch {
+      return renderAuthCheckError(outlet, resolveCurrentPath);
+    }
+
+    if (session) return mount(outlet, params);
+    return mountLoginScreen(outlet, { client: params.client, onSignedIn: resolveCurrentPath });
+  };
+}
 
 function mountNotFoundScreen(root) {
   root.innerHTML = '';
@@ -36,51 +99,80 @@ function mountNotFoundScreen(root) {
   return { unmount() {} };
 }
 
-export function buildRoutes({ orgId, bareRoot }) {
+export function buildRoutes({ orgId, bareRoot, routerRef }) {
   return [
     {
       pattern: '/events',
-      mount: (outlet, { client }) =>
-        mountEventsScreen(outlet, { orgId, client, defaultFormat: 'cup_taster' }),
+      mount: requireAuth(
+        (outlet, { client }) =>
+          mountEventsScreen(outlet, { orgId, client, defaultFormat: 'cup_taster' }),
+        routerRef,
+      ),
     },
     {
       pattern: '/events/:eventId',
-      mount: (outlet, { eventId, client }) =>
-        mountEventDashboardScreen(outlet, { eventId, client }),
+      mount: requireAuth(
+        (outlet, { eventId, client }) => mountEventDashboardScreen(outlet, { eventId, client }),
+        routerRef,
+      ),
     },
     {
       pattern: '/events/:eventId/setup',
-      mount: (outlet, { eventId, client }) => mountSetupScreen(outlet, { eventId, client }),
+      mount: requireAuth(
+        (outlet, { eventId, client }) => mountSetupScreen(outlet, { eventId, client }),
+        routerRef,
+      ),
     },
     {
       pattern: '/events/:eventId/roster',
-      mount: (outlet, { eventId, client }) => mountRosterScreen(outlet, { eventId, client }),
+      mount: requireAuth(
+        (outlet, { eventId, client }) => mountRosterScreen(outlet, { eventId, client }),
+        routerRef,
+      ),
     },
     {
       pattern: '/events/:eventId/report',
-      mount: (outlet, { eventId, client }) => mountReportScreen(outlet, { eventId, client }),
+      mount: requireAuth(
+        (outlet, { eventId, client }) => mountReportScreen(outlet, { eventId, client }),
+        routerRef,
+      ),
     },
     {
       pattern: '/events/:eventId/stages/:stageId/heats',
-      mount: (outlet, { eventId, stageId, client }) =>
-        mountHeatGenerationScreen(outlet, { eventId, stageId, client }),
+      mount: requireAuth(
+        (outlet, { eventId, stageId, client }) =>
+          mountHeatGenerationScreen(outlet, { eventId, stageId, client }),
+        routerRef,
+      ),
     },
     {
       pattern: '/events/:eventId/stages/:stageId/standings',
-      mount: (outlet, { eventId, stageId, client }) =>
-        mountStandingsScreen(outlet, { eventId, stageId, client }),
+      mount: requireAuth(
+        (outlet, { eventId, stageId, client }) =>
+          mountStandingsScreen(outlet, { eventId, stageId, client }),
+        routerRef,
+      ),
     },
     {
       pattern: '/events/:eventId/heats/:heatId/timing',
-      mount: (outlet, { eventId, heatId, client }) =>
-        mountTimingRouteScreen(outlet, { eventId, heatId, client }),
+      mount: requireAuth(
+        (outlet, { eventId, heatId, client }) =>
+          mountTimingRouteScreen(outlet, { eventId, heatId, client }),
+        routerRef,
+      ),
     },
     {
       pattern: '/events/:eventId/heats/:heatId/scoring',
-      mount: (outlet, { eventId, heatId, client }) =>
-        mountScoringScreen(outlet, { eventId, heatId, client }),
+      mount: requireAuth(
+        (outlet, { eventId, heatId, client }) =>
+          mountScoringScreen(outlet, { eventId, heatId, client }),
+        routerRef,
+      ),
     },
     {
+      // Deliberately NOT wrapped in requireAuth — the audience never
+      // authenticates, by design (live_sessions is anon-readable; see
+      // 20260821240000_grants.sql).
       pattern: '/live/projector',
       chrome: false,
       outlet: bareRoot,
@@ -104,7 +196,11 @@ export function mountApp(root, { client = getSupabase(), orgId = getDefaultOrgId
   root.append(shellRoot, bareRoot);
 
   const shell = mountAppShell(shellRoot, { client });
-  const routes = buildRoutes({ orgId, bareRoot });
+  // Still null here — createRouter() below needs `routes` already built,
+  // but requireAuth()'s onSignedIn only reads routerRef.current lazily,
+  // once a real sign-in actually happens, by which point it's set.
+  const routerRef = { current: null };
+  const routes = buildRoutes({ orgId, bareRoot, routerRef });
 
   function updateChrome(route, params) {
     const showChrome = route.chrome !== false;
@@ -124,6 +220,7 @@ export function mountApp(root, { client = getSupabase(), orgId = getDefaultOrgId
     notFoundMount: mountNotFoundScreen,
     onNavigate: updateChrome,
   });
+  routerRef.current = router;
 
   const started = router.start(shell.outlet, { fallbackPath: '/events' });
 

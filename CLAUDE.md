@@ -13,7 +13,8 @@ the 2026-08-28 holding-state follow-up, the cross-surface Playwright AC, and the
 `<h1>`/heading-hierarchy follow-up); design-system type refresh (2026-08-28, not tied to
 a phase — Erode/Tabular → Cabinet Grotesk/JetBrains Mono); app wiring done (2026-08-30,
 not tied to a phase task — router, organiser shell, event management, `#/live/*`
-routes — see below) — matches CHANGELOG.md as of 2026-08-30_
+routes — see below); temporary login screen done (2026-08-30, also not tied to a phase
+task — see below) — matches CHANGELOG.md as of 2026-08-30_
 
 Read these before touching anything:
 
@@ -237,6 +238,18 @@ src/
                                    staleness guard, nav links, and a <main> content
                                    outlet; the second CSS file living in core/ rather
                                    than a format directory, after viewer-shell.css.
+                                   Gained a reactive "signed in as {email}" + Sign out
+                                   control, 2026-08-30 (temporary login screen pass) —
+                                   subscribed via client.auth.onAuthStateChange rather
+                                   than a one-time fetch, since the shell mounts once per
+                                   app lifetime but a sign-in can happen well after that
+                                   (the login screen mounts inside THIS shell's own
+                                   outlet); unsubscribes in the shell's own unmount().
+                                   Its breadcrumb fetch (setNav -> findEvent) is
+                                   deliberately NOT gated by main.js's requireAuth — RLS,
+                                   not this UI gate, is what actually protects that read
+                                   (found in security review; documented with a comment
+                                   at the call site rather than restructured).
                                    config (new, same pass) — getDefaultOrgId() reads
                                    VITE_DEFAULT_ORG_ID, throwing loudly if unset; the
                                    explicit, trivially-swappable placeholder for "which
@@ -251,6 +264,23 @@ src/
                                    unchecked (D9), the one place in the app that
                                    actually SETS is_test rather than just displaying it.
                                    events.js gained listEventsForOrg(orgId, client).
+                                   loginScreen (new, 2026-08-30, temporary login screen
+                                   pass) — mountLoginScreen(): a plain sign-in form
+                                   against auth.signInWithPassword, explicitly scoped as
+                                   temporary ahead of D14's real access control. No
+                                   sign-up, no password reset, no tier/role gating.
+                                   Gated in front of every organiser route by a
+                                   requireAuth() wrapper confined to main.js itself (NOT
+                                   added to router.js, which stays reusable unedited by a
+                                   future format) — #/live/projector and #/live/phone
+                                   stay unwrapped, since the audience never
+                                   authenticates. Both requireAuth's getSession() call
+                                   and loginScreen's own signInWithPassword call race
+                                   against core/timeout.js's raceTimeout/
+                                   DEFAULT_LOAD_TIMEOUT_MS (found missing in review —
+                                   without it, a hung connection left the whole app, or
+                                   the login form itself, stuck forever with no
+                                   feedback).
   formats/
     cup-taster/                 ← scoring, timing-surface, entry-surface, viewer-body,
                                    analytics — Cup Taster-specific, built on core/. Done:
@@ -421,7 +451,13 @@ src/
                                    the two chrome:false audience routes (#/live/projector,
                                    #/live/phone) get the entire root for their own
                                    full-bleed styling and never show organiser nav to an
-                                   audience.
+                                   audience. Gained requireAuth() (temporary login screen
+                                   pass, 2026-08-30) — see core/loginScreen.js's own
+                                   entry above for the full account; routerRef is a
+                                   mutable box (still null when buildRoutes() runs, since
+                                   createRouter() needs the routes it returns first) read
+                                   lazily by requireAuth's own onSignedIn/retry callbacks,
+                                   which only ever fire after mountApp has set it.
 supabase/
   migrations/                   ← forward-only, each with a tested -- rollback: block
   seed.sql                      ← (new, 2026-08-30) local-dev/CI-only: a fixed org + an

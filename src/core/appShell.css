@@ -53,3 +53,18 @@
 .app-shell-outlet {
   min-height: 0;
 }
+
+/* Temporary (2026-08-30) — "signed in as X" + sign out, ahead of any real
+   access-control UI. Empty (no children) while signed out, so it takes no
+   layout space until a session exists. */
+.app-shell-auth {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.app-shell-auth-email {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
