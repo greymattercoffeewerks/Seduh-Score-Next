@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createEvent, findEvent, findLatestEventForOrg } from './events.js';
+import { createEvent, findEvent, findLatestEventForOrg, listEventsForOrg } from './events.js';
 
 function fakeClient(response) {
   const calls = [];
@@ -26,6 +26,7 @@ function fakeClient(response) {
         },
         single: () => Promise.resolve(response),
         maybeSingle: () => Promise.resolve(response),
+        then: (resolve, reject) => Promise.resolve(response).then(resolve, reject),
       };
       return builder;
     },
@@ -120,5 +121,31 @@ describe('findLatestEventForOrg', () => {
   it('throws on a real query error', async () => {
     const client = fakeClient({ data: null, error: new Error('connection refused') });
     await expect(findLatestEventForOrg('org1', client)).rejects.toThrow('connection refused');
+  });
+});
+
+describe('listEventsForOrg', () => {
+  it('returns every event for the org, newest first per the query', async () => {
+    const events = [
+      { id: 'ev2', org_id: 'org1', name: 'Newer' },
+      { id: 'ev1', org_id: 'org1', name: 'Older' },
+    ];
+    const client = fakeClient({ data: events, error: null });
+    expect(await listEventsForOrg('org1', client)).toEqual(events);
+    expect(client.calls).toContainEqual(['eq', 'org_id', 'org1']);
+    expect(client.calls).toContainEqual(['order', 'created_at', { ascending: false }]);
+    // Unlike findLatestEventForOrg, no .limit(1) — this is the "give me
+    // everything" query, not the "give me just the most recent one" query.
+    expect(client.calls.some(([action]) => action === 'limit')).toBe(false);
+  });
+
+  it('returns an empty array, not null, when the org has no events yet', async () => {
+    const client = fakeClient({ data: [], error: null });
+    expect(await listEventsForOrg('org1', client)).toEqual([]);
+  });
+
+  it('throws on a real query error', async () => {
+    const client = fakeClient({ data: null, error: new Error('connection refused') });
+    await expect(listEventsForOrg('org1', client)).rejects.toThrow('connection refused');
   });
 });

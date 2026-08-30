@@ -48,3 +48,17 @@ export async function findLatestEventForOrg(orgId, client = getSupabase()) {
   if (error) throw error;
   return data;
 }
+
+// Every event for an org, newest first — the list core/eventsScreen.js
+// needs (2026-08-29 app-wiring pass); findLatestEventForOrg above only ever
+// returns one row, by design, for a different caller's different need
+// (viewer-shell.js's own holding-state check).
+export async function listEventsForOrg(orgId, client = getSupabase()) {
+  const { data, error } = await client
+    .from('events')
+    .select('*')
+    .eq('org_id', orgId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data;
+}

@@ -127,7 +127,31 @@ export function readManualAssignmentForm(form) {
   return [...byEntry.values()];
 }
 
-export function renderHeatsList(heatsWithEntries, hydratedById) {
+// `eventId`, when given, adds a next-action link per heat (Timing while
+// `pending`/`timing`, Scoring while `scoring`) — the only way to actually
+// reach a heat's own timing/scoring screen once it exists (2026-08-29
+// follow-up closing a real gap found while wiring the app's router: this
+// list previously had no forward path into the rest of the flow at all).
+// Omitted (undefined) for callers that only want a read-only summary — the
+// pre-existing standingsScreen.js preview usage, and this file's own
+// pre-router tests, don't need live links into screens the router didn't
+// exist to reach yet.
+function heatActionLink(eventId, heat) {
+  if (!eventId) return null;
+  if (heat.status === 'confirmed') {
+    return el('span', { className: 'heat-status-done', text: 'Confirmed' });
+  }
+  const toScoring = heat.status === 'scoring';
+  return el('a', {
+    className: 'btn btn-outline tap-target',
+    text: toScoring ? 'Score this heat' : 'Time this heat',
+    attrs: {
+      href: `#/events/${eventId}/heats/${heat.id}/${toScoring ? 'scoring' : 'timing'}`,
+    },
+  });
+}
+
+export function renderHeatsList(heatsWithEntries, hydratedById, eventId) {
   const cards = heatsWithEntries.map(({ heat, entries }) => {
     const items = entries.map((entry) =>
       el('li', {}, [
@@ -135,10 +159,16 @@ export function renderHeatsList(heatsWithEntries, hydratedById) {
         el('span', { text: hydratedById.get(entry.entry_id)?.displayName ?? entry.entry_id }),
       ]),
     );
-    return el('div', { className: 'card heat-card' }, [
-      el('h3', { text: `Heat ${heat.heat_number}` }),
-      el('ul', { className: 'heat-entries-list' }, items),
-    ]);
+    const actionLink = heatActionLink(eventId, heat);
+    return el(
+      'div',
+      { className: 'card heat-card' },
+      [
+        el('h3', { text: `Heat ${heat.heat_number}` }),
+        el('ul', { className: 'heat-entries-list' }, items),
+        actionLink,
+      ].filter(Boolean),
+    );
   });
   return el('div', { className: 'heats-list' }, [
     el('h2', { id: 'heats-heading', text: 'Generated heats', attrs: { tabindex: '-1' } }),
@@ -362,7 +392,7 @@ export async function mountHeatGenerationScreen(
             }),
           ]),
         );
-        container.appendChild(renderHeatsList(data.heats, hydratedById));
+        container.appendChild(renderHeatsList(data.heats, hydratedById, eventId));
         container.appendChild(
           el('div', { className: 'card' }, [
             // Repeats the count from the card above rather than relying on
@@ -379,7 +409,7 @@ export async function mountHeatGenerationScreen(
         );
       } else {
         const hydratedById = new Map(data.hydrated.map((entry) => [entry.entry_id, entry]));
-        container.appendChild(renderHeatsList(data.heats, hydratedById));
+        container.appendChild(renderHeatsList(data.heats, hydratedById, eventId));
       }
     }
 
@@ -411,4 +441,16 @@ export async function mountHeatGenerationScreen(
   }
 
   await render();
+
+  return {
+    unmount() {
+      // No live state, no listeners beyond the DOM subtree itself (removed
+      // wholesale by the caller), no timers — nothing to tear down. Found
+      // missing during the app-shell/router wiring pass — every other
+      // screen already returns this exact shape (see setupScreen.js/
+      // rosterScreen.js/reportScreen.js's own identical comment); a router
+      // that uniformly calls `.unmount()` after every navigation needs it
+      // here too, not as a special case.
+    },
+  };
 }

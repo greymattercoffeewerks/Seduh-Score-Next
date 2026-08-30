@@ -1,0 +1,62 @@
+/* Events list/create screen (2026-08-29 app-wiring pass). Reuses
+   .screen-container/.card/.btn/.tap-target/.field-input from
+   heatsScreen.css's own established token-only styling — no new
+   one-off colors/spacing/shadows beyond what this file itself needs. */
+
+.events-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.events-list li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-bottom: var(--border-hairline) solid var(--color-border);
+}
+
+.events-list li:last-child {
+  border-bottom: none;
+}
+
+/* A small per-row indicator, not the full-page .is-test-banner stripe
+   (base.css) — that banner is reserved for when the organiser is actually
+   INSIDE a test event; here they're browsing a list where only some rows
+   may be test data, so a small text badge signals it without being
+   visually overwhelming per row. Still uses --color-test, never a
+   plain/muted color, so it's not mistaken for ordinary metadata. */
+.is-test-indicator {
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-test);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+}
+
+.create-event-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Matches standingsScreen.css's own `.coin-toss-list input[type='checkbox']`
+   precedent — a native unstyled checkbox renders well under the 44px tap
+   target floor. Matters especially here: D9's "unmistakable" bar for
+   is_test means this control has to be easy to deliberately hit, not
+   fat-finger-adjacent. */
+.checkbox-field input[type='checkbox'] {
+  width: var(--tap-target-min);
+  height: var(--tap-target-min);
+}

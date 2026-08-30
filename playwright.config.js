@@ -44,5 +44,30 @@ export default defineConfig({
       testMatch: /cross-surface-countdown\.spec\.js/,
       use: { baseURL: 'http://127.0.0.1:5173' },
     },
+    {
+      // organiser-flow.spec.js (2026-08-29 app-wiring pass) — the real
+      // app (main.js/index.html), not a demo harness, so it shares
+      // 'dev-harnesses' own dev-server baseURL rather than 'built-app''s
+      // preview server. Needs a real local Supabase stack + supabase/
+      // seed.sql's fixed org/login to be running alongside it (see
+      // ci.yml's 'playwright' job); a plain local dev machine already has
+      // both if `supabase start` has been run.
+      //
+      // `dependencies: ['dev-harnesses']` — found running the full suite:
+      // fullyParallel means every project runs concurrently by default,
+      // and cross-surface-countdown.spec.js's own ~25s real-time test
+      // (three browser contexts) contending with this project's real
+      // Supabase Realtime connection on the SAME shared dev server made
+      // organiser-flow.spec.js's own live-route assertions intermittently
+      // miss their timeout — real resource contention, not an app bug
+      // (each project passes reliably alone). Since both projects share
+      // the one dev server AND the one local Supabase stack, running them
+      // sequentially is the actual fix, not a longer timeout that would
+      // just move the flake threshold.
+      name: 'dev-app',
+      testMatch: /organiser-flow\.spec\.js/,
+      dependencies: ['dev-harnesses'],
+      use: { baseURL: 'http://127.0.0.1:5173' },
+    },
   ],
 });

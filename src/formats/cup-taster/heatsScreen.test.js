@@ -140,6 +140,34 @@ describe('renderHeatsList', () => {
     const heading = list.querySelector('#heats-heading');
     expect(heading.getAttribute('tabindex')).toBe('-1');
   });
+
+  it('renders no action link at all when eventId is omitted — the pre-router, read-only-summary usage', () => {
+    const heatsWithEntries = [
+      { heat: { id: 'h1', heat_number: 1, status: 'pending' }, entries: [] },
+    ];
+    const list = renderHeatsList(heatsWithEntries, new Map());
+    expect(list.querySelector('a')).toBeNull();
+    expect(list.querySelector('.heat-status-done')).toBeNull();
+  });
+
+  it('links a pending or timing heat to its Timing screen, a scoring heat to its Scoring screen, and marks a confirmed heat done with no link', () => {
+    const heatsWithEntries = [
+      { heat: { id: 'h1', heat_number: 1, status: 'pending' }, entries: [] },
+      { heat: { id: 'h2', heat_number: 2, status: 'timing' }, entries: [] },
+      { heat: { id: 'h3', heat_number: 3, status: 'scoring' }, entries: [] },
+      { heat: { id: 'h4', heat_number: 4, status: 'confirmed' }, entries: [] },
+    ];
+    const list = renderHeatsList(heatsWithEntries, new Map(), 'ev1');
+    const cards = [...list.querySelectorAll('.heat-card')];
+
+    expect(cards[0].querySelector('a').getAttribute('href')).toBe('#/events/ev1/heats/h1/timing');
+    expect(cards[0].querySelector('a').textContent).toBe('Time this heat');
+    expect(cards[1].querySelector('a').getAttribute('href')).toBe('#/events/ev1/heats/h2/timing');
+    expect(cards[2].querySelector('a').getAttribute('href')).toBe('#/events/ev1/heats/h3/scoring');
+    expect(cards[2].querySelector('a').textContent).toBe('Score this heat');
+    expect(cards[3].querySelector('a')).toBeNull();
+    expect(cards[3].querySelector('.heat-status-done').textContent).toBe('Confirmed');
+  });
 });
 
 const nonTestEvent = { id: 'ev1', is_test: false };
@@ -718,5 +746,59 @@ describe('mountHeatGenerationScreen', () => {
     // The failed submission must not silently jump to a "no heats" or
     // "generated" state — the form should still be there to fix and retry.
     expect(root.querySelector('form.manual-assignment-form')).not.toBeNull();
+  });
+
+  it('resolves to an object with a callable unmount() — regression test for a real gap found wiring the app router', async () => {
+    // Every other mount*Screen in this project returns { unmount() {...} };
+    // this one implicitly returned undefined until this fix. A router that
+    // uniformly calls `.unmount()` after every navigation needs this to
+    // hold for every screen it can mount, not just most of them.
+    const root = document.createElement('div');
+    const client = fakeClient({
+      tables: {
+        events: { data: nonTestEvent, error: null },
+        ct_stages: { data: stage, error: null },
+        ct_stage_entries: { data: [], error: null },
+        event_entries: { data: [], error: null },
+        ct_heats: { data: [], error: null },
+      },
+    });
+    const handle = await mountHeatGenerationScreen(root, {
+      eventId: 'ev1',
+      stageId: 's1',
+      client,
+    });
+    expect(handle).not.toBeUndefined();
+    expect(typeof handle.unmount).toBe('function');
+    expect(() => handle.unmount()).not.toThrow();
+  });
+
+  it('the fully-generated heats list links each heat into its own Timing/Scoring screen', async () => {
+    const root = document.createElement('div');
+    const stageEntries = [{ id: 'se1', stage_id: 's1', entry_id: 'e1' }];
+    const roster = [{ id: 'e1', event_id: 'ev1', display_name: 'Cupper One', withdrawn: false }];
+    const heat = {
+      id: 'h1',
+      stage_id: 's1',
+      heat_number: 1,
+      status: 'pending',
+      duration_secs: 480,
+      timing_mode: 'app',
+    };
+    const placedEntry = { id: 'he1', heat_id: 'h1', entry_id: 'e1', station: 'A' };
+    const client = fakeClient({
+      tables: {
+        events: { data: nonTestEvent, error: null },
+        ct_stages: { data: stage, error: null },
+        ct_stage_entries: { data: stageEntries, error: null },
+        event_entries: { data: roster, error: null },
+        ct_heats: { data: [heat], error: null },
+        ct_heat_entries: { data: [placedEntry], error: null },
+      },
+    });
+    await mountHeatGenerationScreen(root, { eventId: 'ev1', stageId: 's1', client });
+
+    const link = root.querySelector('.heats-list a');
+    expect(link.getAttribute('href')).toBe('#/events/ev1/heats/h1/timing');
   });
 });

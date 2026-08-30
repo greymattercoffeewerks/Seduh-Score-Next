@@ -48,13 +48,42 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
+      # organiser-flow.spec.js (2026-08-29 app-wiring pass) drives the real
+      # app (not a demo harness) against a real local Supabase stack —
+      # unlike cross-surface-countdown.spec.js's fake in-memory client, this
+      # spec needs real auth (every organiser table is `authenticated`-only,
+      # see 20260821240000_grants.sql) and real rows. supabase/seed.sql
+      # provides both a fixed org and a fixed already-confirmed login — see
+      # that file's own header comment for exactly which Supabase CLI
+      # commands would (and currently don't) carry it to a linked project.
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - run: supabase start
       - run: npm run build
         env:
           # Same non-secret local-dev demo credentials as the `app` job's own
           # build step, and for the same reason — see that step's comment.
           VITE_SUPABASE_URL: http://127.0.0.1:54421
           VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
+          # Unlike the `app` job's own build step, THIS job actually boots the
+          # bundle in a real browser (smoke.spec.js) — core/config.js's
+          # getDefaultOrgId() throws at runtime if this is unset, which the
+          # `app` job's plain `npm run build` (no browser load) never
+          # exercises. smoke.spec.js's own assertions never depend on which
+          # org id this is, so it's a distinct, deliberately-unseeded id —
+          # only organiser-flow.spec.js's dev-server run below needs the
+          # REAL seeded org id.
+          VITE_DEFAULT_ORG_ID: 00000000-0000-0000-0000-000000000000
       - run: npm run test:e2e
+        env:
+          # The dev-app project (organiser-flow.spec.js) starts its own
+          # `npm run dev` server (see playwright.config.js) — Vite's dev
+          # server reads VITE_* from process.env same as `build` does, so
+          # these need to be set here too, matching seed.sql's fixed org.
+          VITE_SUPABASE_URL: http://127.0.0.1:54421
+          VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
+          VITE_DEFAULT_ORG_ID: 00000000-0000-0000-0000-000000000001
 
   # Migrations must apply cleanly to a database built from scratch (handoff §11
   # item 10; §14 T0.3 AC), then the pgTAP suite under supabase/tests/ runs

@@ -1,3 +1,204 @@
+## App wiring: router, organiser shell, event management, live routes · 2026-08-30
+
+**No single §14 task ID — like the design system entries above, this was never a
+scoped, tracked task anywhere** (not the frozen handoff's own build plan, not
+`ROADMAP.md`, not Phase 6). Every organiser screen (8) and both audience surfaces (2)
+already existed, fully built and individually reviewed through Phase 4/5 — but
+`src/main.js` was still the literal Phase 0 placeholder
+(`root.textContent = 'Seduh Score Next'`) and nothing connected them into a navigable
+app. Surfaced when the user asked "how about wiring the pages together — when does that
+happen?" Scoped with the user directly: at least two devices (an organiser control
+device and a separate audience-facing device), no real login yet (but the design
+shouldn't foreclose adding one later), and a real event list/create flow rather than a
+single hardcoded event id, since this has to keep working for events after October, not
+just the one on 4 October 2026.
+
+**Two real gaps found during scoping research, closed as part of this same PR:**
+`heatsScreen.js`'s `mountHeatGenerationScreen` had no `unmount()` return at all — every
+other screen already returns `{ unmount() {...} }`, this one implicitly returned
+`undefined`, which a router calling `.unmount()` uniformly needed fixed, not worked
+around. And the "generation complete" heats list rendered heat cards with **no links
+into Timing or Scoring at all** — wiring a router alone doesn't fix this; there was no
+path from "heats generated" into the rest of the flow. New per-heat `heatActionLink()`
+links (`heatsScreen.js`) close it: "Time this heat" / "Score this heat" depending on
+`heat.status`, or a "Confirmed" badge once done.
+
+**What shipped:**
+
+- `src/core/router.js` (new) + `.test.js` — hand-rolled, hash-based (`#/events/...`),
+  no framework (matches D2/§3). Hash routing specifically: `wrangler.jsonc`'s Cloudflare
+  Workers Static Assets config has no SPA-fallback (`not_found_handling`) set, so a real
+  path would 404 on direct navigation; a hash fragment never round-trips to the server,
+  so this needed zero deployment config changes. Split into a pure `matchRoute()`
+  (directly unit-testable) and a stateful `createRouter()` wrapper. `client` is resolved
+  once and threaded into every mount as `{...params, client}` — the single chokepoint
+  guaranteeing every screen the router ever mounts gets the same client, matching this
+  codebase's existing single-chokepoint discipline (`buildRpcHandler`,
+  `app.is_org_member`). `route.outlet`/`onNavigate` are the router's only two extension
+  points — it has zero opinion about screens, chrome, or format (confirmed clean by
+  `module-boundary-checker`).
+- `src/core/appShell.js`/`.css` (new) + `.test.js` — persistent organiser header (app
+  name, an event-name breadcrumb cached by event id, nav links) plus a content outlet.
+  Deliberately doesn't reuse `viewer-shell.js`'s `renderChrome()` (different purpose —
+  audience identity band vs. organiser navigation) but follows its structural precedent;
+  second CSS file living in `core/` rather than a format directory, after
+  `viewer-shell.css`.
+- `src/core/config.js` (new) + `.test.js` + `.env.example` — `getDefaultOrgId()` reads
+  `VITE_DEFAULT_ORG_ID`, throwing loudly (not silently) if unset. The explicit,
+  trivially-swappable placeholder for "which org" until real per-session org derivation
+  exists — no auth is being added now, matching the scoping decision above.
+- `src/core/eventsScreen.js`/`.css` (new) + `.test.js` — events list/create. Lives in
+  `core/`, not `formats/cup-taster/` — `core/events.js` already treats `format` as plain
+  caller-supplied input, so the screen listing/creating those rows is the same kind of
+  module; `main.js` is the one file allowed to pass `defaultFormat: 'cup_taster'` in.
+  The "This is test data" checkbox defaults **unchecked** (D9: opt in, never the
+  reverse) — this is the one screen in the whole app where `is_test` is actually _set_,
+  not just displayed. `core/events.js` gained `listEventsForOrg(orgId, client)`.
+- `src/formats/cup-taster/eventDashboardScreen.js`/`.css` (new) + `.test.js` — per-event
+  hub: is_test banner, event name, Setup/Roster/Report links, one card per stage
+  (labelled "Heats" or "Generate heats" depending on `stageHasHeats`, plus a Standings
+  link), a zero-stages empty state pointing at Setup. Lives in `formats/cup-taster/` —
+  reads `ct_stages` via `setup.js`, genuinely format-specific.
+- `src/formats/cup-taster/timingRouteScreen.js` (new) + `.test.js` — thin dispatcher:
+  one route entry for "timing" (`.../heats/:heatId/timing`), but two real screens
+  depending on the heat's own `timing_mode` (not knowable from the URL alone). Keeps
+  every link-building call site simple.
+- `src/main.js` (rewritten) — the composition root: the full route table, `mountApp()`,
+  a `shellRoot`/`bareRoot` split so the two `chrome:false` audience routes
+  (`#/live/projector`, `#/live/phone`) get the _entire_ root for their own full-bleed
+  styling and never show organiser navigation to an audience. `index.html` gained
+  `<link>` tags for every screen's own CSS file — previously only `ui/tokens/index.css`
+  was linked; every screen's styling was only ever pulled in by its own standalone
+  preview harness, so real navigation would have rendered every screen unstyled the
+  first time it was reached outside one.
+
+**A real bug found live-testing, not fixed in this PR — documented, not silently
+shipped:** a slow-resolving screen's own async `render()` can write to the DOM _after_ a
+newer navigation has already mounted something else, because `router.js`'s `resolveSeq`
+staleness guard only protects its own `current` bookkeeping — it does not, and cannot
+from outside, stop a discarded-but-still-in-flight screen's own internal DOM writes
+(`root.innerHTML = ''; root.appendChild(...)`) that happen _while_ its promise is still
+resolving. Found via a genuinely flaky e2e test (not theorized): navigating away from
+the events screen before its own load finished let the events screen's late-arriving
+data clobber the destination screen's already-rendered content back to the events list,
+with no further signal anything was wrong. Root-caused by temporarily instrumenting
+`resolve()` directly and tracing the actual interleaving, not guessed at. Fixing this
+properly means giving every one of the ~10 existing screens' own `attemptLoad()`/
+`render()` pattern a cancellation check (an `AbortSignal` or equivalent) — a real,
+worthwhile follow-up, but a materially larger, more invasive change than this PR's own
+scope (retrofitting 10 already-shipped, already-reviewed screens). The one place this
+PR's own test suite could hit the race (`tests/e2e/organiser-flow.spec.js`) was fixed by
+waiting for the events screen to fully settle before navigating away, matching what a
+real user's own reaction time already does in practice — not a workaround that hides the
+underlying gap, since the gap itself is now written down here.
+
+**`supabase/seed.sql` (new)** — a fixed local-dev-only org, an `auth.users` row (bcrypt
+password via `pgcrypto`), an `auth.identities` row, and an `org_members` grant. Exists
+because every organiser-facing table is `authenticated`-only
+(`20260821240000_grants.sql`), and this project deliberately has no login screen yet —
+without a seeded org and a real authenticated login already a member of it, there was no
+way to exercise the real app against the real local stack at all, for a human developer
+or for an e2e test, short of hand-crafting a user via the admin API every time. Applied
+by `supabase db reset` and a fresh `supabase start` per `config.toml`'s `[db.seed]`
+block. `security-reviewer` found the file's own original comment overstated this as an
+unconditional "never reaches a linked/production project" — `supabase db push
+--include-seed` and `supabase db reset --linked` (seeds by default unless passed
+`--no-seed`) would actually apply it there; no script or CI job in this repo runs either
+today, and no cloud project is linked yet, so there's no live exploit path, but the
+comment was reworded to state the real, procedural boundary rather than an absolute one.
+
+**Live browser verification**: real dev server, real local Supabase (not a mock) —
+signed in as the seeded organiser, created an event, built a one-stage plan, registered
+three cuppers, generated heats, opened Timing (confirming `timingRouteScreen.js`
+correctly dispatches to the app-mode screen), and separately verified `#/live/projector`
+(holding state, organiser chrome correctly hidden) and `#/live/phone` (its own
+`NOT LIVE` badge chrome, confirmed distinct from the organiser shell) and the
+not-found fallback.
+
+**Testing**: `src/core/router.test.js` (18 cases, including a genuine staleness-guard
+regression test — verified it actually fails with the guard removed, not merely
+constructed to look like it would), `appShell.test.js`, `config.test.js`,
+`eventsScreen.test.js` (including a mutation-tested proof that `defaultFormat` is never
+hardcoded — verified the test fails if `'cup_taster'` is hardcoded back in),
+`eventDashboardScreen.test.js`, `timingRouteScreen.test.js`, extended
+`heatsScreen.test.js`/`events.test.js`, and a full `main.test.js` rewrite (every screen
+mocked, asserting the router wires the right screen/params/chrome for every route,
+including an unmount-ordering test surviving jsdom's own double-`hashchange`-fire quirk
+and a not-found fallback test). New `tests/e2e/organiser-flow.spec.js` (Playwright,
+`dev-app` project, drives the real app against the real local Supabase stack via
+`seed.sql`'s fixed login) and `tests/e2e/smoke.spec.js` rewritten to assert on the real
+app shell instead of the old placeholder string. `playwright.config.js` gained the
+`dev-app` project with `dependencies: ['dev-harnesses']` — found running the full suite:
+`cross-surface-countdown.spec.js`'s own ~25s real-time test and this project's real
+Supabase Realtime connection, run concurrently by Playwright's default `fullyParallel`
+behavior on the same shared dev server, caused real, reproducible resource-contention
+flakiness in `organiser-flow.spec.js`'s own live-route assertions — the dependency
+serializes them instead of masking it with a longer timeout. `.github/workflows/ci.yml`'s
+`playwright` job now also runs a real local Supabase stack (`supabase/setup-cli@v1` +
+`supabase start`) before `npm run test:e2e`, since `organiser-flow.spec.js` needs one.
+
+**Five reviewers in parallel** (`module-boundary-checker`, `ui-accessibility-reviewer` at
+360px, `test-auditor`, `code-reviewer`, `security-reviewer` — the last specifically for
+`seed.sql`'s auth-table inserts and the CI credential handling).
+`module-boundary-checker` came back clean — `core/eventsScreen.js` confirmed genuinely
+format-agnostic (`defaultFormat` is caller-supplied, never hardcoded; the only
+`'cup_taster'` literal in production code is `main.js`'s own route table), `router.js`
+confirmed to have zero screen/chrome/format opinion. `security-reviewer`'s one real
+finding is the `seed.sql` wording fix described above; everything else it checked
+(credential non-secrecy, bcrypt hashing, `instance_id` scoping, no other secrets)
+verified clean.
+
+`test-auditor` found the router's own headline race-condition test didn't actually
+prove the `resolveSeq` staleness guard: both mocked mounts resolved synchronously, so
+the assertions held identically with the guard deleted entirely (verified: removing the
+guard left all 15 original tests green). Rewritten using the same controllable-delay
+pattern `appShell.test.js`'s own staleness test already uses correctly — re-verified the
+new version genuinely fails without the guard. Also flagged a trivially-true
+`expect(true).toBe(true)` assertion, replaced with a real check on router state via
+`resolve()` called directly rather than `navigate()` plus an arbitrary `setTimeout(0)`.
+
+`ui-accessibility-reviewer` found real issues at 360px: every organiser screen had two
+`<h1>`s (the shell's own app name plus each routed screen's own heading) — fixed by
+demoting the shell's name to a `<p>` (screens keep their real `<h1>`, matching
+`viewerBody.js`'s own precedent of never competing with `viewer-shell.js`'s identity
+`<h1>`); no focus management on route transitions at all — fixed at `router.js`'s own
+chokepoint, moving focus to the new screen's heading only when nothing else has already
+claimed it (`document.activeElement === document.body`), so a screen's own loading/error
+focus calls are never overridden; the `is_test` checkbox and header nav links fell under
+the 44px tap-target floor — fixed using the exact `--tap-target-min` pattern
+`standingsScreen.css` already established; `eventDashboardScreen.js` skipped straight
+from `<h1>` to `<h3>` with no `<h2>` — added a "Stages" heading; the outlet had no
+`<main>` landmark — the outlet element is now a real `<main>`; and `.heat-status-done`
+had no CSS rule at all — styled matching `rosterScreen.css`'s own status-tag pattern.
+All verified live in the browser (single `<h1>`, `<main>` landmark, focus genuinely
+lands on the new heading on load, both undersized controls now measure 44×44px).
+
+`code-reviewer` (run after the accessibility fixes above landed, re-verifying against
+that settled state — flagged the mid-review edits explicitly rather than reviewing a
+moving target) found four more real issues: `mountApp()`'s own `unmount()` called
+`router.stop()` but never `shell.unmount()` — the one thing in `main.js` holding real DOM
+state (header, nav, the cached breadcrumb closure) was left mounted forever, breaking the
+same "every mount has a real unmount" contract this PR itself closed a gap in for
+`heatsScreen.js` — fixed, with a new regression test proving the shell's own header is
+gone after `unmount()`. `timingRouteScreen.js`'s `attemptLoad()` had no re-entrancy guard
+on Retry, unlike `eventsScreen.js`'s/`eventDashboardScreen.js`'s own established
+`loading` guard — two rapid Retry clicks could start two concurrent mounts of
+`timingScreen.js` (this project's own "first live/ticking screen") into the same root,
+orphaning the loser's ticking interval with nothing to ever stop it — fixed, with a
+regression test using a controllable delay to force the race, not an instantly-resolving
+mock that couldn't actually prove it. Also fixed: an `appShell.js` doc comment overstating
+where the nav's own strings live (main.js's `updateChrome()` only ever builds the small
+persistent Events/Overview nav — "Setup"/"Roster"/"Report" live inside
+`eventDashboardScreen.js`'s own routed content, not the shell), and a documented-but-
+unenforced invariant in `router.js` (a route with its own `outlet` override must
+implement real DOM cleanup in its own `unmount()`, since the "next screen at the same
+outlet wholesale-clears my DOM" convention most screens rely on doesn't hold across a
+different outlet — currently safe only because `viewer-shell.js`, the one outlet-override
+consumer today, already does real cleanup; now stated explicitly as a comment so a future
+outlet-override route built on a no-op-unmount screen doesn't silently leak).
+
+---
+
 ## Design system type refresh (`src/ui/tokens/fonts.css`, `typography.css`) · 2026-08-28
 
 **No single §14 task ID** — like the original "Design system foundation" entry below,
