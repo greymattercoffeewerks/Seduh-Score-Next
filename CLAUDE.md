@@ -11,8 +11,9 @@ closing T4.2's heat-generation resumability gap — see below); Phase 5 done (T5
 the 2026-08-28 holding-state follow-up, the cross-surface Playwright AC, and the
 2026-08-28 viewer-shell
 `<h1>`/heading-hierarchy follow-up); design-system type refresh (2026-08-28, not tied to
-a phase — Erode/Tabular → Cabinet Grotesk/JetBrains Mono) — matches CHANGELOG.md as of
-2026-08-29_
+a phase — Erode/Tabular → Cabinet Grotesk/JetBrains Mono); app wiring done (2026-08-30,
+not tied to a phase task — router, organiser shell, event management, `#/live/*`
+routes — see below) — matches CHANGELOG.md as of 2026-08-30_
 
 Read these before touching anything:
 
@@ -211,6 +212,45 @@ src/
                                    on its 2nd verbatim use, closing the setupScreen.js/
                                    rosterScreen.js hung-initial-load gap; viewer-shell.js
                                    now imports it instead of keeping its own copy.
+                                   router (new, 2026-08-30 app-wiring pass) —
+                                   hand-rolled, hash-based (createRouter/matchRoute); no
+                                   opinion about screens/chrome/format (route.outlet and
+                                   onNavigate are its only two extension points), client
+                                   resolved once and threaded into every mount as the
+                                   single chokepoint every screen gets it through; own
+                                   resolveSeq staleness guard (mirrors viewer-shell.js's
+                                   requestSeq) protects its own `current` bookkeeping
+                                   only — see formats/cup-taster's own entry below for a
+                                   real, deliberately-unfixed gap this does NOT close;
+                                   also does the navigation focus-move (moves focus to
+                                   the new screen's own heading, but only if nothing
+                                   inside that screen's own mount already claimed focus
+                                   itself — found missing in ui-accessibility-reviewer's
+                                   own pass). appShell (new, same pass) —
+                                   mountAppShell(): persistent organiser header (app
+                                   name — a <p>, not an <h1>, since every routed screen
+                                   already owns the page's real <h1>; a different
+                                   tradeoff than viewer-shell.js's own renderChrome(),
+                                   which IS a real <h1> since nothing else on that
+                                   audience-facing surface competes with it), an
+                                   event-name breadcrumb cached by event id with its own
+                                   staleness guard, nav links, and a <main> content
+                                   outlet; the second CSS file living in core/ rather
+                                   than a format directory, after viewer-shell.css.
+                                   config (new, same pass) — getDefaultOrgId() reads
+                                   VITE_DEFAULT_ORG_ID, throwing loudly if unset; the
+                                   explicit, trivially-swappable placeholder for "which
+                                   org" until real per-session org derivation exists —
+                                   no auth is being added now (D-scoped with the user).
+                                   eventsScreen (new, same pass) — events list/create;
+                                   lives in core/, not formats/cup-taster/, since
+                                   core/events.js already treats `format` as
+                                   caller-supplied input (defaultFormat is a prop,
+                                   main.js is the one file allowed to pass 'cup_taster'
+                                   in) — the "This is test data" checkbox defaults
+                                   unchecked (D9), the one place in the app that
+                                   actually SETS is_test rather than just displaying it.
+                                   events.js gained listEventsForOrg(orgId, client).
   formats/
     cup-taster/                 ← scoring, timing-surface, entry-surface, viewer-body,
                                    analytics — Cup Taster-specific, built on core/. Done:
@@ -340,11 +380,58 @@ src/
                                    demo builders on its 2nd verbatim use; demo-only, not
                                    part of the shipped module graph, imported only by those
                                    two *.preview.html files and by nothing else).
+                                   eventDashboardScreen (new, 2026-08-30 app-wiring
+                                   pass) — per-event hub the organiser lands on after
+                                   picking an event: is_test banner, Setup/Roster/Report
+                                   links, one card per stage (labelled "Heats" or
+                                   "Generate heats" per stageHasHeats, plus Standings),
+                                   a zero-stages empty state pointing at Setup. Lives
+                                   here not core/ — reads ct_stages via setup.js,
+                                   genuinely format-specific. timingRouteScreen (new,
+                                   same pass) — thin dispatcher: one route entry for
+                                   "timing" but two real screens depending on the
+                                   heat's own timing_mode (not knowable from the URL
+                                   alone), so every heat-timing link stays simple.
+                                   heatsScreen.js gained the fix for two real gaps found
+                                   scoping this pass: mountHeatGenerationScreen was
+                                   missing its `unmount()` return entirely (every other
+                                   screen already had one), and its "generation
+                                   complete" heats list had no links into Timing/Scoring
+                                   at all — new heatActionLink() closes both. **A real
+                                   gap found live-testing this same pass, NOT closed
+                                   here**: core/router.js's resolveSeq staleness guard
+                                   protects its own `current` bookkeeping only — it
+                                   cannot stop a discarded-but-still-in-flight screen's
+                                   OWN internal DOM writes (every screen here's own
+                                   attemptLoad()/render() pattern) from landing after a
+                                   newer navigation already mounted something else.
+                                   Closing it means retrofitting every one of these ~10
+                                   screens' own load pattern with a cancellation check —
+                                   out of scope for the app-wiring pass that found it;
+                                   see ROADMAP.md's "Known open items" for the account.
   ui/
     tokens/                     ← design tokens (plain CSS custom properties)
-  main.js                       ← scaffold entry point (Phase 0 placeholder)
+  main.js                       ← composition root (2026-08-30 app-wiring pass — was the
+                                   Phase 0 placeholder until this). The one file allowed
+                                   to know both "this app is Cup Taster"
+                                   (defaultFormat: 'cup_taster' passed into
+                                   core/eventsScreen.js) and the full route table
+                                   connecting every screen above. mountApp(root,
+                                   {client, orgId}) builds a shellRoot/bareRoot split so
+                                   the two chrome:false audience routes (#/live/projector,
+                                   #/live/phone) get the entire root for their own
+                                   full-bleed styling and never show organiser nav to an
+                                   audience.
 supabase/
   migrations/                   ← forward-only, each with a tested -- rollback: block
+  seed.sql                      ← (new, 2026-08-30) local-dev/CI-only: a fixed org + an
+                                   authenticated login (bcrypt via pgcrypto), since every
+                                   organiser table is authenticated-only and this project
+                                   has no login screen yet. Applied by `db reset`/a fresh
+                                   `start`, never by a bare `db push` — see the file's own
+                                   header comment for exactly which CLI flags WOULD carry
+                                   it to a linked project (none run anywhere in this repo
+                                   today).
   tests/                        ← pgTAP, one file per concern, numbered
                                    (000_with_check_gate.sql runs first, per T1.4)
   config.toml                   ← local stack, ports offset +100 (5442x) from the CLI
@@ -352,14 +439,22 @@ supabase/
                                    the sibling Kira-Kira repo's stack
 eslint-rules/                   ← the 4 custom rules enforcing this project's contracts
                                    (no-raw-elapsed-write has its own Linter-based test)
-tests/e2e/                      ← Playwright — the one place three live surfaces
-                                   (organiser, projector, phone) get proven to agree.
-                                   smoke.spec.js (Phase 0) targets the real production
-                                   build; cross-surface-countdown.spec.js (2026-08-28,
-                                   closing the handoff's own cross-surface AC) targets the
-                                   dev server instead, since it drives the format demo
-                                   harnesses directly and vite build doesn't output those
-                                   at all — see playwright.config.js's two projects
+tests/e2e/                      ← Playwright. smoke.spec.js (Phase 0, rewritten
+                                   2026-08-30 for the real app shell) targets the real
+                                   production build; cross-surface-countdown.spec.js
+                                   (2026-08-28, closing the handoff's own cross-surface
+                                   AC) targets the dev server instead, driving the format
+                                   demo harnesses directly with a fake client, since vite
+                                   build doesn't output those at all; organiser-flow.spec.js
+                                   (new, 2026-08-30) also targets the dev server but drives
+                                   the REAL app (main.js) against a REAL local Supabase
+                                   stack via seed.sql's fixed login — three live surfaces
+                                   (organiser, projector, phone) proven to agree, and the
+                                   full create-event→timing click-through proven for real.
+                                   See playwright.config.js's three projects — 'dev-app'
+                                   depends on 'dev-harnesses' finishing first, since both
+                                   share one dev server and running them concurrently
+                                   caused real resource-contention flakiness.
 .claude/
   agents/                       ← the 9 subagents
   hooks/lint-on-write.cjs       ← PostToolUse: ESLint on every .js write

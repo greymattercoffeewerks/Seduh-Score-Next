@@ -8,8 +8,10 @@ station-uniqueness gap, a further 2026-08-29 follow-up closing the cross-module 
 handler-map composition gap, a further 2026-08-29 follow-up closing the
 setupScreen/rosterScreen hung-load timeout/retry gap, and a further 2026-08-29 follow-up
 closing T4.2's heat-generation resumability gap); Phase 5 done (T5.1, T5.2, T5.3, T5.4,
-the 2026-08-28 holding-state follow-up, and the cross-surface Playwright AC) —
-matches CHANGELOG.md as of 2026-08-29_
+the 2026-08-28 holding-state follow-up, and the cross-surface Playwright AC); app wiring
+done (2026-08-30, not tied to a phase task — router, organiser shell, event management,
+`#/live/*` routes connecting every already-built screen into one navigable app for the
+first time) — matches CHANGELOG.md as of 2026-08-30_
 
 The living tracker for the handoff's build plan (§14). The handoff itself stays frozen
 as the original spec — this file is what's actually shipped, updated as tasks and phases
@@ -50,6 +52,19 @@ Closes the open item that used to sit below. `heatsScreen.js`/`.css` (T4.2) is t
 real screen consuming it. **2026-08-28 follow-up**: the display and mono typefaces
 refreshed — Erode → Cabinet Grotesk, Tabular → JetBrains Mono; Switzer unchanged — see
 CHANGELOG.md's "Design system type refresh" entry.
+
+**App wiring (2026-08-30), also not tied to a phase task**: every organiser screen and
+both audience surfaces already existed, fully built and reviewed through Phase 4/5, but
+nothing connected them — `src/main.js` was still the Phase 0 placeholder. `core/router.js`
+(hash-based, hand-rolled), `core/appShell.js` (organiser chrome), `core/eventsScreen.js`
+(events list/create), `formats/cup-taster/eventDashboardScreen.js` (per-event hub),
+`formats/cup-taster/timingRouteScreen.js` (timing-mode dispatcher), and a rewritten
+`main.js` connect them into one real, navigable app for the first time. Also closed two
+real gaps found during scoping: `heatsScreen.js` had no `unmount()` return at all, and its
+"generation complete" heats list had no links into Timing or Scoring. See CHANGELOG.md's
+dated entry for the full account, including a real, deliberately-not-fixed-here race
+condition found live-testing (a slow-resolving screen's own DOM write isn't gated by the
+router's staleness guard) — see "Known open items" below.
 
 ---
 
@@ -337,3 +352,23 @@ station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can 
   visible "in progress" affordance between a tap and its re-render (no spinner, though
   re-entrancy is safely guarded) — worth revisiting given this project's "unreliable venue
   wifi" design target. None block Phase 4; revisit if either becomes a real field issue.
+- **App wiring shipped (2026-08-30, not tied to a phase task)** — `core/router.js`,
+  `core/appShell.js`, `core/config.js`, `core/eventsScreen.js`,
+  `formats/cup-taster/eventDashboardScreen.js`, `formats/cup-taster/timingRouteScreen.js`,
+  and a rewritten `main.js` connect every already-built screen into one real, navigable
+  app. See CHANGELOG.md's dated entry for the full review account (five reviewers in
+  parallel — real findings from all but `module-boundary-checker`, all closed).
+- **A real DOM-write race between the router and a slow-resolving screen is NOT closed —
+  found live-testing this app-wiring pass, documented rather than silently shipped.**
+  `router.js`'s `resolveSeq` staleness guard only protects its own `current` bookkeeping;
+  it cannot stop a discarded-but-still-in-flight screen's own internal
+  `root.innerHTML = ''`/`appendChild()` writes made while ITS OWN promise was still
+  resolving. Concretely: navigate away from a screen with a genuine in-flight network
+  load before that load finishes, and its late-arriving data can clobber whatever
+  screen is actually showing now, back to the stale one — with no error, no signal
+  anything went wrong. Closing this properly means giving every one of the ~10 existing
+  screens' own `attemptLoad()`/`render()` pattern a cancellation check (an `AbortSignal`
+  or equivalent) — real, worthwhile work, but a materially larger, more invasive change
+  than the app-wiring PR that surfaced it (retrofitting 10 already-shipped, already-
+  reviewed screens). Revisit as its own scoped task; in the meantime this is a real,
+  if narrow, correctness gap under fast navigation + slow network — not a hypothetical.

@@ -1,0 +1,10 @@
+/* Event dashboard (2026-08-29 app-wiring pass). Reuses
+   .screen-container/.card/.stage-meta/.btn/.tap-target/.is-test-banner from
+   heatsScreen.css/base.css — only genuinely new layout classes live here. */
+
+.event-dashboard-actions,
+.stage-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
