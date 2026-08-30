@@ -78,6 +78,7 @@ for each `import.meta.env.VITE_*` reference, and `core/supabaseClient.js`'s
 
 The user couldn't trigger a dashboard redeploy to re-apply those env vars (no
 permissions/API access), so built and deployed locally via `npx wrangler deploy` after:
+
 1. Fetching the three real (non-secret) Supabase values directly via the Supabase MCP's
    own tools (project URL, publishable anon key, org id) — avoiding a re-paste of
    credentials into devtools.

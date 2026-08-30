@@ -241,7 +241,7 @@ describe('buildConfirmEntries', () => {
     expect(result[0].results).toEqual([{ set_id: 's1', correct: true }]);
   });
 
-  it('sends the heat entry\'s own id, not the roster person\'s entry_id, as the RPC entry_id field', () => {
+  it("sends the heat entry's own id, not the roster person's entry_id, as the RPC entry_id field", () => {
     // The regression this fixture exists to catch: confirm_heat
     // (migration 20260822100000) matches p_entries[].entry_id against
     // ct_heat_entries.id, not the person's own entry_id — sending the
