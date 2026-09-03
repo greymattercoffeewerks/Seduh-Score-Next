@@ -3,6 +3,7 @@ import {
   renderStageRow,
   normalizeTerminalCutoff,
   buildPlanFromDraft,
+  hasDuplicateKind,
   mountSetupScreen,
 } from './setupScreen.js';
 import { DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
@@ -184,6 +185,28 @@ describe('buildPlanFromDraft', () => {
   });
 });
 
+describe('hasDuplicateKind', () => {
+  it("is false when no other row shares this row's kind", () => {
+    const draft = [
+      { key: 's1', kind: 'prelims' },
+      { key: 's2', kind: 'finals' },
+    ];
+    expect(hasDuplicateKind(draft, 0)).toBe(false);
+    expect(hasDuplicateKind(draft, 1)).toBe(false);
+  });
+
+  it('is true for every row sharing a kind, symmetrically, and never self-matches', () => {
+    const draft = [
+      { key: 's1', kind: 'prelims' },
+      { key: 's2', kind: 'finals' },
+      { key: 's3', kind: 'prelims' },
+    ];
+    expect(hasDuplicateKind(draft, 0)).toBe(true);
+    expect(hasDuplicateKind(draft, 1)).toBe(false);
+    expect(hasDuplicateKind(draft, 2)).toBe(true);
+  });
+});
+
 describe('renderStageRow', () => {
   it('renders a locked stage read-only, with no editable inputs or move/remove buttons', () => {
     const row = {
@@ -253,6 +276,47 @@ describe('renderStageRow', () => {
     const hint = el.querySelector(`#${describedBy}`);
     expect(hint).not.toBeNull();
     expect(hint.textContent).toContain('terminal stage');
+  });
+
+  it('renders no kind hint when no other row shares this kind', () => {
+    const row = {
+      key: 's1',
+      id: 's1',
+      kind: 'prelims',
+      setCount: 5,
+      durationSecs: 480,
+      cutoff: 8,
+      locked: false,
+    };
+    const el = renderStageRow(row, 0, 2, { onMoveUp() {}, onMoveDown() {}, onRemove() {} });
+    const kindSelect = el.querySelector('select[aria-label="Stage 1: kind"]');
+    expect(kindSelect.getAttribute('aria-describedby')).toBeNull();
+    expect(el.textContent).not.toContain('already exists in this plan');
+  });
+
+  it('gives the kind field a real, visible same-kind-round advisory wired via aria-describedby when duplicateKind is true', () => {
+    const row = {
+      key: 's1',
+      id: 's1',
+      kind: 'prelims',
+      setCount: 5,
+      durationSecs: 480,
+      cutoff: 8,
+      locked: false,
+    };
+    const el = renderStageRow(row, 0, 2, {
+      onMoveUp() {},
+      onMoveDown() {},
+      onRemove() {},
+      duplicateKind: true,
+    });
+    const kindSelect = el.querySelector('select[aria-label="Stage 1: kind"]');
+    const describedBy = kindSelect.getAttribute('aria-describedby');
+    expect(describedBy).toBeTruthy();
+    const hint = el.querySelector(`#${describedBy}`);
+    expect(hint).not.toBeNull();
+    expect(hint.textContent).toContain('Another prelims stage already exists in this plan');
+    expect(hint.textContent).toContain('separate, sequential rounds');
   });
 
   it('disables Move up/down when the swap target is a locked row, and Remove when an earlier stage sits before a locked one', () => {
@@ -378,6 +442,106 @@ describe('mountSetupScreen', () => {
     expect(root.querySelector('input[aria-label="Stage 2: cutoff"]').disabled).toBe(false);
     expect(root.querySelector('input[aria-label="Stage 3: cutoff"]').disabled).toBe(true);
     expect(document.activeElement).toBe(root.querySelector('select[aria-label="Stage 3: kind"]'));
+  });
+
+  it('surfaces the same-kind-round advisory on both rows once Add stage creates a second prelims row, and not on the unrelated finals row', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root); // .focus() is a no-op on a detached element
+    await mountSetupScreen(root, {
+      eventId: 'ev1',
+      client: fakeClient({
+        events: [nonTestEvent],
+        ct_stages: [prelims, finals],
+        ct_heats: [],
+        ct_sets: [],
+      }),
+    });
+
+    const addButton = [...root.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Add stage',
+    );
+    // defaultDraftRow's own default kind is 'prelims' — the new Stage 3
+    // collides with the existing Stage 1 by default, with no extra setup.
+    addButton.click();
+
+    const rows = root.querySelectorAll('.stage-row');
+    expect(rows).toHaveLength(3);
+    expect(rows[0].textContent).toContain('Another prelims stage already exists in this plan');
+    expect(rows[1].textContent).not.toContain('already exists in this plan');
+    expect(rows[2].textContent).toContain('Another prelims stage already exists in this plan');
+  });
+
+  it('updates the same-kind-round advisory immediately when a kind is changed via the select, with no Add/Remove/Move in between', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root); // .focus() is a no-op on a detached element
+    await mountSetupScreen(root, {
+      eventId: 'ev1',
+      client: fakeClient({
+        events: [nonTestEvent],
+        ct_stages: [prelims, finals],
+        ct_heats: [],
+        ct_sets: [],
+      }),
+    });
+
+    // Distinct kinds to start — no advisory on either row yet.
+    let rows = root.querySelectorAll('.stage-row');
+    expect(rows[0].textContent).not.toContain('already exists in this plan');
+    expect(rows[1].textContent).not.toContain('already exists in this plan');
+
+    // Change Stage 2 (finals) to 'prelims' via its own select — no Add
+    // stage/Remove/Move button click anywhere in this test, proving the
+    // kind select's own change handler is what triggers the re-render.
+    const stage2Kind = root.querySelector('select[aria-label="Stage 2: kind"]');
+    stage2Kind.value = 'prelims';
+    stage2Kind.dispatchEvent(new Event('change', { bubbles: true }));
+
+    rows = root.querySelectorAll('.stage-row');
+    expect(rows[0].textContent).toContain('Another prelims stage already exists in this plan');
+    expect(rows[1].textContent).toContain('Another prelims stage already exists in this plan');
+
+    // Change it back to 'finals' — the now-stale advisory on BOTH rows must
+    // clear, not merely fail to update further (the bug this closes: a
+    // stale hint keeps asserting a duplicate that no longer exists).
+    stage2Kind.value = 'finals';
+    stage2Kind.dispatchEvent(new Event('change', { bubbles: true }));
+
+    rows = root.querySelectorAll('.stage-row');
+    expect(rows[0].textContent).not.toContain('already exists in this plan');
+    expect(rows[1].textContent).not.toContain('already exists in this plan');
+  });
+
+  it('never surfaces the advisory on a locked row, even when it would otherwise qualify as a duplicate kind', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root); // .focus() is a no-op on a detached element
+    await mountSetupScreen(root, {
+      eventId: 'ev1',
+      client: fakeClient({
+        events: [nonTestEvent],
+        ct_stages: [prelims, finals],
+        ct_heats: [{ id: 'h1', stage_id: 's1' }], // locks prelims (Stage 1)
+        ct_sets: [],
+      }),
+    });
+
+    const addButton = [...root.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Add stage',
+    );
+    // defaultDraftRow's own default kind is 'prelims' — Stage 3 collides
+    // with the now-LOCKED Stage 1, not an unlocked one.
+    addButton.click();
+
+    const rows = root.querySelectorAll('.stage-row');
+    expect(rows).toHaveLength(3);
+    expect(rows[0].dataset.locked).toBe('true');
+    expect(rows[0].textContent).toContain('locked, heats already generated');
+    // The locked row's own read-only summary never gets the advisory or an
+    // aria-describedby, regardless of duplicateKind — renderStageRow's
+    // locked branch returns before the hint logic ever runs.
+    expect(rows[0].textContent).not.toContain('already exists in this plan');
+    expect(rows[0].querySelector('[aria-describedby]')).toBeNull();
+    // The unlocked duplicate (Stage 3) still gets the advisory normally.
+    expect(rows[2].textContent).toContain('Another prelims stage already exists in this plan');
   });
 
   it('removes an unlocked stage and renumbers the rest, but offers no remove control on a locked stage', async () => {

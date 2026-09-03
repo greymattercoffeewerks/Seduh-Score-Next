@@ -14,7 +14,14 @@
 // the latest typed values, never a stale snapshot. A field edit alone never
 // triggers a rebuild (typing in one row must not destroy every other row's
 // live input, mid-edit, per CONVENTIONS.md's rebuild-then-refocus rule) —
-// only a structural change (add/remove/move) or a save re-renders.
+// only a structural change (add/remove/move) or a save re-renders. The one
+// exception is the kind <select>: its `change` is a single discrete commit
+// (not a per-keystroke stream like the number fields), and it's the one
+// field whose value the same-kind advisory hint below is actually ABOUT —
+// unlike every other field-edit-no-rebuild case here, leaving it un-rendered
+// doesn't just delay the hint, it leaves stale, actively wrong advisory text
+// on screen (found in review). So a kind change re-renders, same as
+// add/remove/move.
 //
 // A stage that already has heats (setup.js's stageHasHeats) is rendered
 // read-only and can't be edited, reordered past, or removed — real event
@@ -56,6 +63,17 @@ export function normalizeTerminalCutoff(draftStages) {
   });
 }
 
+// Pure. Whether draftStages[index]'s kind is shared by any OTHER row in the
+// plan — same-kind rows are a legitimate, supported shape (a real
+// sequential elimination round), not a mistake, but the organiser's own
+// "one prelim, more capacity" mental model diverges from that, so
+// renderStageRow surfaces this as an advisory. Named and exported, matching
+// this file's own normalizeTerminalCutoff/buildPlanFromDraft convention,
+// rather than left inline in render() (found in review).
+export function hasDuplicateKind(draftStages, index) {
+  return draftStages.some((row, i) => i !== index && row.kind === draftStages[index].kind);
+}
+
 // Pure. Draft rows (screen-local shape) -> a plan setup.js's
 // validateStagePlan/saveStagePlan can consume. Forces the terminal row's
 // cutoff to null independently of normalizeTerminalCutoff having already
@@ -84,6 +102,8 @@ export function renderStageRow(
     moveUpUnsafe,
     moveDownUnsafe,
     removeUnsafe,
+    duplicateKind,
+    onKindChange,
   } = {},
 ) {
   const stageLabel = `Stage ${index + 1}`;
@@ -101,6 +121,7 @@ export function renderStageRow(
 
   const isTerminal = index === total - 1;
   const cutoffHintId = `${rowId}-cutoff-hint`;
+  const kindHintId = `${rowId}-kind-hint`;
 
   const kindSelect = el('select', {
     className: 'field-input',
@@ -112,7 +133,31 @@ export function renderStageRow(
   kindSelect.value = row.kind;
   kindSelect.addEventListener('change', () => {
     row.kind = kindSelect.value;
+    // Unlike every other field here, a kind change re-renders — see this
+    // module's own top comment for why. onKindChange is undefined in the
+    // handful of tests that call renderStageRow directly with no caller
+    // wired up; harmless, since there's then nothing to notify.
+    onKindChange?.(row);
   });
+
+  // Advisory only, not a validation error — a second same-kind stage row is
+  // a legitimate, supported shape (a real sequential elimination round), not
+  // a mistake to block. This exists purely because the organiser's own
+  // mental model of "one prelim, more capacity" and the schema's actual
+  // model ("each same-kind row is its own round, own cutoff, survivors carry
+  // forward") diverge — ROADMAP.md's "Stage-plan setup scoping" entry has
+  // the full incident this closes. Same aria-describedby-plus-always-visible-
+  // text pattern as the terminal-stage cutoff hint below, not a placeholder
+  // or color-only signal.
+  let kindHint = null;
+  if (duplicateKind) {
+    kindSelect.setAttribute('aria-describedby', kindHintId);
+    kindHint = el('p', {
+      id: kindHintId,
+      className: 'form-field-hint',
+      text: `Another ${row.kind} stage already exists in this plan — same-kind stages run as separate, sequential rounds (each with its own cutoff, survivors carrying forward), not added capacity for one round.`,
+    });
+  }
 
   const setCountInput = el('input', {
     className: 'field-input',
@@ -207,7 +252,7 @@ export function renderStageRow(
   return el('div', { className: 'card stage-row', attrs: { id: rowId, tabindex: '-1' } }, [
     el('h3', { text: stageLabel }),
     el('div', { className: 'stage-row-fields' }, [
-      labeledField('Kind', kindSelect),
+      labeledField('Kind', kindSelect, kindHint ? [kindHint] : []),
       labeledField('Set count', setCountInput),
       labeledField('Duration (seconds)', durationInput),
       labeledField('Cutoff', cutoffInput, cutoffHint ? [cutoffHint] : []),
@@ -405,6 +450,11 @@ export async function mountSetupScreen(root, { eventId, client = getSupabase() }
         moveUpUnsafe: index > 0 && draftStages[index - 1].locked,
         moveDownUnsafe: index < draftStages.length - 1 && draftStages[index + 1].locked,
         removeUnsafe: index < lastLockedIndex,
+        duplicateKind: hasDuplicateKind(draftStages, index),
+        onKindChange: (r) => {
+          focusAfterRender = `#stage-row-${r.key} select`;
+          render();
+        },
       }),
     );
     container.appendChild(el('div', { className: 'stage-rows' }, rows));

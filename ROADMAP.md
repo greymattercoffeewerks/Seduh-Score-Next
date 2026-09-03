@@ -378,22 +378,22 @@ station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can 
   and a rewritten `main.js` connect every already-built screen into one real, navigable
   app. See CHANGELOG.md's dated entry for the full review account (five reviewers in
   parallel — real findings from all but `module-boundary-checker`, all closed).
-- **Stage-plan setup scoping: "another stage" vs "more heats in this stage" — PENDING
-  (user-approved, not yet built, 2026-08-31).** User hit a real product-model confusion
-  live-testing: built a "prelims" as two separate same-kind stage ROWS, expecting one
-  pooled prelim with shared standings/cutoff, but the schema treats multiple same-kind
-  stage rows as genuine sequential elimination rounds (each needs its own cutoff,
-  survivors carry forward). Confirmed the user's actual workflow is ALREADY fully built
-  (one stage row split into station-limited heats via `partition.js`, aggregated back in
-  `standings.js`, one cutoff via `advancement.js` — all tested and shipping), so the gap
-  is narrower: `setupScreen.js`'s "Add stage" button gives no indication adding a SECOND
-  same-kind row means "a real second elimination round," not "more capacity for this
-  round." Plan written and approved via Plan Mode (local to that session, not committed to
-  this repo): add inline advisory hint matching the existing terminal-stage cutoff hint
-  pattern in `renderStageRow`, clarifying
-  "adding another stage means another round" before the user commits to the structure. No
-  core/schema/advancement change needed; purely a setupScreen UX clarification. Revisit
-  after confirming the planned hint implementation path is still the right one.
+- **Stage-plan setup scoping: "another stage" vs "more heats in this stage" — CLOSED
+  (2026-09-03).** User hit a real product-model confusion live-testing: built a "prelims"
+  as two separate same-kind stage ROWS, expecting one pooled prelim with shared
+  standings/cutoff, but the schema treats multiple same-kind stage rows as genuine
+  sequential elimination rounds (each needs its own cutoff, survivors carry forward).
+  Confirmed the user's actual workflow is ALREADY fully built (one stage row split into
+  station-limited heats via `partition.js`, aggregated back in `standings.js`, one cutoff
+  via `advancement.js` — all tested and shipping), so the gap was narrower:
+  `setupScreen.js`'s "Add stage" button gave no indication adding a SECOND same-kind row
+  means "a real second elimination round," not "more capacity for this round." Closed by
+  adding an inline advisory hint matching the existing terminal-stage cutoff hint pattern
+  in `renderStageRow`, clarifying "adding another stage means another round" before the
+  user commits to the structure. Also found and fixed a real staleness bug: the kind
+  `<select>`'s change handler wasn't re-rendering, leaving stale hint text on screen until
+  an unrelated action triggered a rebuild. See CHANGELOG.md's dated entry for the full
+  account (four parallel reviewers, all found real issues).
 - **PR #42 (fix: confirm_heat entry_id misidentification + Score-this-heat UX) is MERGED
   (2026-08-31).** Two linked fixes: root cause was `scoring.js`'s `buildConfirmEntries()`
   passing the wrong id field to the RPC, silently breaking every real confirm attempt; the
