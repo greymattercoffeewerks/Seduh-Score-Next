@@ -1,3 +1,65 @@
+## Fix: setupScreen kind-duplicate advisory hint + staleness bug · 2026-09-03
+
+**Close the stage-plan setup scoping gap (ROADMAP.md's "Stage-plan setup scoping"
+item)** — a real UX gap found during live testing. When an organiser adds a second
+stage row with the same `kind` (e.g., two `prelims` rows), the schema treats both as
+genuine sequential rounds with independent cutoffs and forward-advancing survivors —
+not pooled capacity within one round, the user's actual mental model. `setupScreen.js`
+offered no visual warning before that structural commitment landed in the database.
+
+**Feature**: `renderStageRow()` gained an advisory hint (new `<p class="form-field-hint">`)
+appearing below a stage row's `kind` `<select>` when another row in the plan shares the
+same `kind`. Text reads: "Another {kind} stage already exists in this plan — same-kind
+stages run as separate, sequential rounds (each with its own cutoff, survivors carrying
+forward), not added capacity for one round." Mirrors the file's pre-existing
+terminal-stage cutoff hint pattern exactly (same CSS class, same `aria-describedby`
+wiring, same "real visible text" discipline). Hides when the collision clears
+(changing or removing the other row).
+
+**New pure helper**: `hasDuplicateKind(draftStages, index)` exported from
+`setupScreen.js`, matching the file's existing `normalizeTerminalCutoff`/
+`buildPlanFromDraft` naming convention. Found missing during review — the detection
+logic was originally left inline in `render()`.
+
+**Real bug found and fixed during review**: The kind `<select>`'s `change` handler only
+mutated `row.kind` without triggering a re-render. Unlike the number fields (whose state
+nothing depends on), the new advisory hint's truth depends on `row.kind`'s current value
+— without a re-render, changing a row's kind left STALE, ACTIVELY WRONG hint text on
+screen (e.g. still warning about a kind the row no longer has, or missing a new collision)
+until an unrelated Add/Remove/Move/Save triggered a full rebuild. Both `ui-accessibility-reviewer`
+and `code-reviewer` independently flagged this. Fixed: `kindSelect`'s `change` handler now
+calls a new `onKindChange` callback (wired by `mountSetupScreen`'s `render()`) that
+re-renders and restores focus to the same select, mirroring `addStage()`'s own
+`focusAfterRender` pattern.
+
+**Tests**: 7 new tests in `setupScreen.test.js` — 2 unit tests for `hasDuplicateKind`
+itself, 2 `renderStageRow`-level tests (hint absent/present via the `duplicateKind` prop),
+and 3 `mountSetupScreen` integration tests: (1) Add stage creating a same-kind collision
+surfaces the hint on both affected rows; (2) changing a kind via the live `<select>`
+immediately updates the hint on both affected rows with no Add/Remove/Move — and changing
+it BACK clears the now-stale hint, proving the staleness fix; (3) a locked row never shows
+the hint even when it would otherwise qualify as a duplicate. The 3rd integration test's
+fix was mutation-tested: disabling the `onKindChange` call broke exactly the targeted
+staleness test.
+
+**Verification**: `npm run lint` clean, `npm run format:check` clean (after `npm run
+format`), `npm test` 824/824 passing (up from 817). Live-verified in browser via
+`setupScreen.preview.html` at 360px: hint renders correctly; toggling Stage 2's kind
+between `prelims`/`finals` shows/hides the advisory in real time; locked Stage 1 (also
+`prelims`) never shows it.
+
+**Review chain**: `ui-accessibility-reviewer` ✅ (found the staleness bug at 360px first
+per project convention), `module-boundary-checker` ✅ (clean on boundary; suggested
+`hasDuplicateKind` extraction, adopted; O(n²) recompute immaterial at stage-plan scale),
+`test-auditor` ✅ (verified mutations catch all new tests; flagged the missing locked-row
+hint test, closed), `code-reviewer` ✅ (independently confirmed staleness bug; confirmed
+both other reviewers' suggestions worth adopting).
+
+No schema/RLS/RPC/migration change — pure UI-text/behavior confined to `setupScreen.js`
+and its test file. State: uncommitted in the working tree (dev branch).
+
+---
+
 ## Fix: confirm_heat entry_id misidentification + Score-this-heat UX · 2026-08-31
 
 **PR #42 (open, not yet merged)** — two linked fixes shipped together:
