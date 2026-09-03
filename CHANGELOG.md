@@ -1,3 +1,88 @@
+## Fix: router/slow-screen DOM-write race · 2026-09-04
+
+**Closes ROADMAP.md's "A real DOM-write race between the router and a slow-resolving
+screen"** — a real, previously-documented correctness gap, not a hypothetical: under
+fast navigation + slow network, a screen still loading when the user navigates away
+could have its own internal `render()` fire AFTER a newer screen already mounted onto
+the same shared DOM outlet, clobbering it back to stale content with no error and no
+signal anything went wrong. `router.js`'s existing `resolveSeq` staleness guard only
+ever protected its own `current` bookkeeping — it can't stop a screen's own DOM writes
+from landing before its `mount()` promise even resolves back to the router, including
+during a screen's very first mount, before it's returned a handle the router could call
+`unmount()` on.
+
+**Fix, in layers:**
+
+1. `core/router.js` — `resolve()` now creates a fresh `AbortController` per navigation
+   and aborts the PREVIOUS one synchronously, the instant a newer navigation starts
+   (not once the stale mount's own promise happens to settle). The resulting `signal`
+   threads into every `route.mount(outlet, {...params, client, signal})` call; `stop()`
+   also aborts on teardown.
+2. `main.js` — found genuinely mid-task, not scoped up front: `buildRoutes()`'s own
+   per-route lambdas were reconstructing narrower params objects that silently DROPPED
+   `signal` before it ever reached a real screen, making router.js's own fix inert.
+   Every route now threads it through. `requireAuth()`'s own extra async hop
+   (`getSession()`) needed the identical `signal?.aborted` check before proceeding.
+3. 13 screens (`core/eventsScreen.js`/`splashScreen.js`/`loginScreen.js`, and all 10
+   `formats/cup-taster/*Screen.js` files) each gained an optional `signal` param and a
+   guard at the top of their own render-dispatch continuation (right after their own
+   async load resolves, before any DOM write). `timingRouteScreen.js`'s dispatcher
+   gained an extra guard right after `findHeatById()` resolves — not to prevent a DOM
+   clobber (its two inner screens already guard that), but to skip a wasted network
+   round trip once the lookup is already known-stale.
+4. `core/viewer-shell.js` (and its two consumers, `projectorSurface.js`/
+   `phoneSummary.js`) was initially scoped OUT of this pass, reasoning its own local
+   `mounted` flag already covered the race. **`code-reviewer` found that reasoning was
+   wrong**: `mounted` is set `true` _before_ the initial `refresh()`'s own network
+   await, so it only ever protects a callback firing after a legitimate `unmount()` —
+   never the still-in-flight FIRST load, which is exactly what this whole fix is about.
+   Worse, this left a real, live asymmetry: `/live/splash` shares the `bareRoot` outlet
+   with `/live/projector`/`/live/phone`, and only splash had been protected in the
+   first pass. Closed in the same pass once confirmed real — `viewer-shell.js` now
+   accepts `signal` too, checked alongside `mounted` at both of `refresh()`'s existing
+   guard points.
+
+**Testing**: 18 new regression tests (`router.test.js` ×2, `main.test.js` ×2, one per
+screen file ×14 including `viewer-shell.test.js`), each hand-mutation-tested — the
+guard was temporarily disabled, the exact right test confirmed to fail, then restored.
+
+**A real bug survived the first mutation-testing pass anyway**: a guard in
+`eventsScreen.js` was left disabled (a stray `// MUTATED-FOR-TEST if (false && ...)`)
+after manual verification and never restored before the parallel review round started.
+Caught independently by BOTH `test-auditor` and `ui-accessibility-reviewer` in that same
+round — the latter via its own focus-management angle: the disabled guard meant a
+superseded Events-screen render could still yank keyboard/screen-reader focus back onto
+itself after silently clobbering whatever screen the user had actually navigated to
+(Events being the app's landing route, not a low-traffic corner). Fixed; full suite
+re-verified green afterward.
+
+**Review chain**: `module-boundary-checker` ✅ clean (the `AbortController` mechanism is
+a Web-standard primitive with zero format opinion; the repeated
+`if (signal?.aborted) return;` one-liner across 13 files was assessed as reasonable
+given each screen's differing `render()` shape, not a duplication smell worth
+extracting into a shared helper). `code-reviewer` found the two real issues in items 3
+and 4 above (the `eventsScreen.js` dead guard, and the `viewer-shell.js` scope-cut
+being based on a false premise), plus one comment-accuracy fix in
+`timingRouteScreen.js` (its extra guard's own justification incorrectly claimed the
+inner screens had no protection of their own — they do; the guard's real value is
+avoiding a wasted round trip, not preventing a clobber). `test-auditor` independently
+found the same `eventsScreen.js` dead guard via the currently-failing test it left
+behind, spot-checked three other screens' mutation-testing claims by hand, and traced
+all four hand-built minimal test fixtures (`timingScreen`/`timingManualScreen`/
+`scoringScreen`/`standingsScreen`) against their modules' real query chains to confirm
+none crash instead of failing cleanly when their guard is removed. `ui-accessibility-reviewer`
+traced router.js's own post-navigation focus-move logic against both an `undefined`-
+returning bailout (`requireAuth`) and a real-handle-returning one (`timingRouteScreen`),
+confirmed neither can leave focus in a confusing place, and found the `eventsScreen.js`
+bug independently via the focus-theft angle.
+
+`npm run lint`/`format:check` clean, `npm test` 843/843 passing throughout. No live
+Supabase/browser verification for this pass — the dev server's port was held by an
+unrelated foreground process outside this session's own tracking (the sibling
+Kira-Kira repo's own dev server); given the fix is pure internal control-flow with no
+visual surface and every guard is independently mutation-tested, this was judged
+sufficient without forcing the port.
+
 ## Fix: setupScreen kind-duplicate advisory hint + staleness bug · 2026-09-03
 
 **Close the stage-plan setup scoping gap (ROADMAP.md's "Stage-plan setup scoping"

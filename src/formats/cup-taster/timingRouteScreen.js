@@ -12,9 +12,15 @@ import { mountManualTimingScreen } from './timingManualScreen.js';
 
 export async function mountTimingRouteScreen(
   root,
-  { eventId, heatId, client = getSupabase() } = {},
+  { eventId, heatId, client = getSupabase(), signal } = {},
 ) {
   function renderLoadError(err) {
+    // A discarded-but-still-in-flight lookup (still resolving after the
+    // router already navigated elsewhere) must never write to `root`
+    // again — router.js aborts `signal` the instant a newer navigation
+    // starts. See ROADMAP.md's "A real DOM-write race between the
+    // router..." entry.
+    if (signal?.aborted) return;
     root.innerHTML = '';
     const container = el('section', { className: 'screen-container' });
     const feedback = el('div', {
@@ -56,10 +62,22 @@ export async function mountTimingRouteScreen(
       renderLoadError(err);
       return;
     }
+    // A stale, still-in-flight findHeatById() shouldn't go on to mount
+    // EITHER inner screen — both already carry their own signal guard (via
+    // `signal` passed through below), so this isn't preventing a DOM
+    // clobber that would otherwise happen; it's avoiding a wasted
+    // event/heat/entries/roster round trip for a mount() call that would
+    // just immediately discard its own result once it got there anyway
+    // (found in review — corrected from an earlier, incorrect claim that
+    // the inner screens' own initial paint was unguarded).
+    if (signal?.aborted) {
+      loading = false;
+      return;
+    }
     inner =
       heat.timing_mode === 'manual'
-        ? await mountManualTimingScreen(root, { eventId, heatId, client })
-        : await mountTimingScreen(root, { eventId, heatId, client });
+        ? await mountManualTimingScreen(root, { eventId, heatId, client, signal })
+        : await mountTimingScreen(root, { eventId, heatId, client, signal });
     loading = false;
   }
 

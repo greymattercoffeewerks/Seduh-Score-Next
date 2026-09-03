@@ -261,7 +261,7 @@ export function renderStageRow(
   ]);
 }
 
-export async function mountSetupScreen(root, { eventId, client = getSupabase() } = {}) {
+export async function mountSetupScreen(root, { eventId, client = getSupabase(), signal } = {}) {
   let event = null;
   let draftStages = [];
   let keyCounter = 0;
@@ -396,6 +396,12 @@ export async function mountSetupScreen(root, { eventId, client = getSupabase() }
   }
 
   function render() {
+    // A discarded-but-still-in-flight mount (attemptLoad, or a post-await
+    // handler like handleSave, still resolving after the router already
+    // navigated elsewhere) must never write to `root` again — router.js
+    // aborts `signal` the instant a newer navigation starts. See
+    // ROADMAP.md's "A real DOM-write race between the router..." entry.
+    if (signal?.aborted) return;
     if (loadFailedMessage) {
       renderLoadError();
       return;

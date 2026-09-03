@@ -329,6 +329,58 @@ describe('mountRosterScreen', () => {
     resolveFind({ data: baseEvent, error: null });
   });
 
+  it('never writes to root again once its own signal is aborted mid-load — the router-navigation-race guard', async () => {
+    // Models the real bug (ROADMAP.md's "A real DOM-write race between the
+    // router..."): this screen's own load is still in flight when the
+    // router (in production) decides a newer navigation has superseded it
+    // and aborts this mount's signal — well before this screen's own
+    // attemptLoad() promise gets a chance to resolve.
+    let resolveFind;
+    const client = {
+      from(table) {
+        const builder = {
+          select: () => builder,
+          eq: () => builder,
+          single: () =>
+            table === 'events'
+              ? new Promise((resolve) => {
+                  resolveFind = resolve;
+                })
+              : Promise.resolve({ data: null, error: null }),
+          maybeSingle: () => Promise.resolve({ data: null, error: null }),
+          then: (resolve) => Promise.resolve({ data: [], error: null }).then(resolve),
+        };
+        return builder;
+      },
+    };
+    const controller = new AbortController();
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+
+    const mountPromise = mountRosterScreen(root, {
+      eventId: 'ev1',
+      client,
+      signal: controller.signal,
+    });
+
+    await vi.waitFor(() => expect(resolveFind).toBeDefined());
+    expect(root.textContent).toContain('Loading roster…');
+
+    // Simulate another, now-current screen having already rendered onto
+    // this SAME shared root — exactly what a router navigation away from
+    // this still-loading screen would have done in production.
+    root.innerHTML = '<div id="other-screen-marker">Screen B is showing now</div>';
+
+    controller.abort();
+    resolveFind({ data: baseEvent, error: null });
+    await mountPromise;
+
+    // render() must have bailed out entirely — root still shows the OTHER
+    // screen's content, untouched, not this screen's own roster.
+    expect(root.querySelector('#other-screen-marker')).not.toBeNull();
+    expect(root.textContent).not.toContain('Roster');
+  });
+
   it('renders a dedicated error screen, with no form or list but a working Retry, when the initial load fails', async () => {
     const root = document.createElement('div');
     document.body.appendChild(root); // .focus() is a no-op on a detached element

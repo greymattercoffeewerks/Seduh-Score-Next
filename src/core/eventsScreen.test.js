@@ -199,4 +199,58 @@ describe('mountEventsScreen', () => {
       expect(feedback.textContent).toMatch(/taking longer than expected/i);
     });
   });
+
+  it('never writes to root again once its own signal is aborted mid-load — the router-navigation-race guard', async () => {
+    // Models the real bug (ROADMAP.md's "A real DOM-write race between the
+    // router..."): this screen's own load is still in flight when the
+    // router (in production) decides a newer navigation has superseded it
+    // and aborts this mount's signal — well before this screen's own
+    // attemptLoad() promise gets a chance to resolve. A discarded screen's
+    // late render() must never clobber whatever's actually on screen now.
+    let resolveQuery;
+    const controllableClient = {
+      from: () => {
+        const builder = {
+          select: () => builder,
+          eq: () => builder,
+          order: () => builder,
+          then: (resolve) => {
+            resolveQuery = () => resolve({ data: [], error: null });
+          },
+        };
+        return builder;
+      },
+    };
+    const controller = new AbortController();
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+
+    const mountPromise = mountEventsScreen(root, {
+      orgId: 'org1',
+      client: controllableClient,
+      defaultFormat: 'cup_taster',
+      signal: controller.signal,
+    });
+
+    await vi.waitFor(() => expect(resolveQuery).toBeDefined());
+    expect(root.textContent).toContain('Loading events');
+
+    // Simulate another, now-current screen having already rendered onto
+    // this SAME shared root — exactly what a router navigation away from
+    // this still-loading screen would have done in production.
+    root.innerHTML = '<div id="other-screen-marker">Screen B is showing now</div>';
+
+    // The router aborts a superseded mount's signal the instant a newer
+    // navigation starts — simulated directly here, then the slow query
+    // FINALLY resolves, same as a late network response arriving after
+    // the user has already moved on.
+    controller.abort();
+    resolveQuery();
+    await mountPromise;
+
+    // render() must have bailed out entirely — root still shows the OTHER
+    // screen's content, untouched, not this screen's own event list.
+    expect(root.querySelector('#other-screen-marker')).not.toBeNull();
+    expect(root.textContent).not.toContain('No events yet');
+  });
 });

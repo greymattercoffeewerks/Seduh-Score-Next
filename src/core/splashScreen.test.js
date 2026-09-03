@@ -198,6 +198,67 @@ describe('mountSplashScreen', () => {
     errorSpy.mockRestore();
   });
 
+  it('never writes the event fill-in once its own signal is aborted mid-load — the router-navigation-race guard', async () => {
+    // Models the real bug (ROADMAP.md's "A real DOM-write race between the
+    // router..."): this screen's own findLatestEventForOrg read is still
+    // in flight when the router (in production) decides a newer
+    // navigation has superseded it and aborts this mount's signal, well
+    // before this screen's own fire-and-forget .then() continuation runs.
+    let resolveEvent;
+    const controllableClient = {
+      from: () => {
+        const builder = {
+          select: () => builder,
+          eq: () => builder,
+          order: () => builder,
+          limit: () => builder,
+          maybeSingle: () =>
+            new Promise((resolve) => {
+              resolveEvent = () =>
+                resolve({
+                  data: {
+                    id: 'ev1',
+                    name: 'October Cup',
+                    event_date: '2026-10-01',
+                    is_test: false,
+                  },
+                  error: null,
+                });
+            }),
+        };
+        return builder;
+      },
+    };
+    const controller = new AbortController();
+    const root = document.createElement('div');
+
+    mountSplashScreen(root, {
+      orgId: 'org1',
+      client: controllableClient,
+      signal: controller.signal,
+    });
+
+    await vi.waitFor(() => expect(resolveEvent).toBeDefined());
+    // Still the generic, brand-only state — matches production reality:
+    // the branded shell renders synchronously; only the event fill-in
+    // waits on the network.
+    expect(root.querySelector('.splash-eventline').textContent).toBe('');
+
+    // The router aborts a superseded mount's signal the instant a newer
+    // navigation starts — simulated directly here, then the slow read
+    // FINALLY resolves, same as a late network response arriving after
+    // the user has already moved on to another screen.
+    controller.abort();
+    resolveEvent();
+    await settle();
+
+    // fillEvent() must never have run — the event line stays blank rather
+    // than showing the now-stale event's name.
+    expect(root.querySelector('.splash-eventline').textContent).toBe('');
+    expect(root.querySelector('.splash-badge-generic')).not.toBeNull();
+    expect(root.querySelector('.splash-badge-live')).toBeNull();
+  });
+
   it('unmount() clears the DOM it mounted, since this route uses a SHARED outlet (bareRoot) other routes reuse', async () => {
     // Regression test for a real bug found in review (code-reviewer):
     // router.js documents an explicit contract for any route using an

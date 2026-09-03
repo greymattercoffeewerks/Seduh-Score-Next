@@ -91,7 +91,10 @@ export function buildScoringLink(eventId, heatId) {
   });
 }
 
-export async function mountTimingScreen(root, { eventId, heatId, client = getSupabase() } = {}) {
+export async function mountTimingScreen(
+  root,
+  { eventId, heatId, client = getSupabase(), signal } = {},
+) {
   let focusAfterRender = null;
   let pendingError = null;
   let pendingSuccess = null;
@@ -213,6 +216,15 @@ export async function mountTimingScreen(root, { eventId, heatId, client = getSup
     // the alternative (two renders touching the DOM concurrently) is the
     // actual corruption bug this generation counter exists to prevent.
     if (myGeneration !== renderGeneration) return;
+    // A discarded-but-still-in-flight render (this render's own loadState()
+    // still resolving after the router already navigated elsewhere) must
+    // never write to `root` again — router.js aborts `signal` the instant
+    // a newer navigation starts. Distinct from the renderGeneration check
+    // above: that one guards against a NEWER render() from THIS SAME
+    // screen instance winning; this one guards against the whole screen
+    // instance having been superseded by NAVIGATION. See ROADMAP.md's "A
+    // real DOM-write race between the router..." entry.
+    if (signal?.aborted) return;
 
     // Ground truth over the outbox flush's own bookkeeping (see the module
     // comment on pendingHeatCheck/pendingEntryCheck above) — resolved here,

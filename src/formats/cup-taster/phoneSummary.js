@@ -8,12 +8,13 @@
 import { mountViewerShell } from '../../core/viewer-shell.js';
 import { mountViewerBody, hasViewableContent } from './viewerBody.js';
 
-export function mountPhoneSummary(root, { orgId, client } = {}) {
+export function mountPhoneSummary(root, { orgId, client, signal } = {}) {
   return mountViewerShell(root, {
     orgId,
     renderBody: mountViewerBody,
     hasContent: hasViewableContent,
     showChrome: true,
     client,
+    signal,
   });
 }

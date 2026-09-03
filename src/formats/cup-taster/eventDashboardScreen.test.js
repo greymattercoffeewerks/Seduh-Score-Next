@@ -196,4 +196,57 @@ describe('mountEventDashboardScreen', () => {
       expect(feedback.textContent).toMatch(/taking longer than expected/i);
     });
   });
+
+  it('never writes to root again once its own signal is aborted mid-load — the router-navigation-race guard', async () => {
+    // Models the real bug (ROADMAP.md's "A real DOM-write race between the
+    // router..."): this screen's own load is still in flight when the
+    // router (in production) decides a newer navigation has superseded it
+    // and aborts this mount's signal — well before this screen's own
+    // attemptLoad() promise gets a chance to resolve.
+    let resolveEvent;
+    const client = {
+      from(table) {
+        const builder = {
+          select: () => builder,
+          eq: () => builder,
+          order: () => builder,
+          single: () =>
+            table === 'events'
+              ? new Promise((resolve) => {
+                  resolveEvent = () => resolve({ data: nonTestEvent, error: null });
+                })
+              : Promise.resolve({ data: null, error: null }),
+          maybeSingle: () => Promise.resolve({ data: null, error: null }),
+          then: (resolve) => Promise.resolve({ data: [], error: null }).then(resolve),
+        };
+        return builder;
+      },
+    };
+    const controller = new AbortController();
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+
+    const mountPromise = mountEventDashboardScreen(root, {
+      eventId: 'ev1',
+      client,
+      signal: controller.signal,
+    });
+
+    await vi.waitFor(() => expect(resolveEvent).toBeDefined());
+    expect(root.textContent).toContain('Loading event');
+
+    // Simulate another, now-current screen having already rendered onto
+    // this SAME shared root — exactly what a router navigation away from
+    // this still-loading screen would have done in production.
+    root.innerHTML = '<div id="other-screen-marker">Screen B is showing now</div>';
+
+    controller.abort();
+    resolveEvent();
+    await mountPromise;
+
+    // render() must have bailed out entirely — root still shows the OTHER
+    // screen's content, untouched, not this screen's own dashboard.
+    expect(root.querySelector('#other-screen-marker')).not.toBeNull();
+    expect(root.textContent).not.toContain('October Cup');
+  });
 });

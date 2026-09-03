@@ -972,6 +972,80 @@ describe('mountViewerShell', () => {
     expect(root.innerHTML).toBe('');
   });
 
+  it('never writes to root again once its own signal is aborted mid-load — the router-navigation-race guard', async () => {
+    // Models a real bug found in review (ROADMAP.md's "A real DOM-write
+    // race between the router..."): this shell's own INITIAL refresh() is
+    // still in flight — awaited INSIDE mountViewerShell, before it ever
+    // returns a handle the router could call unmount() on — when the
+    // router (in production) decides a newer navigation has superseded it
+    // and aborts this mount's signal. The pre-existing `mounted` flag
+    // alone does NOT catch this: it's set true BEFORE this very await, so
+    // it only guards a callback firing after a LATER, legitimate
+    // unmount() — not this still-in-flight first load.
+    let resolveSession;
+    const client = {
+      from(table) {
+        if (table !== 'live_sessions') {
+          return {
+            select: () => ({
+              eq: () => ({
+                order: () => ({
+                  limit: () => ({
+                    maybeSingle: () => Promise.resolve({ data: null, error: null }),
+                  }),
+                }),
+              }),
+            }),
+          };
+        }
+        return {
+          select: () => ({
+            eq: () => ({
+              eq: () => ({
+                maybeSingle: () =>
+                  new Promise((resolve) => {
+                    resolveSession = () =>
+                      resolve({ data: session({ payload: { a: 1 } }), error: null });
+                  }),
+              }),
+            }),
+          }),
+        };
+      },
+      channel: () => ({
+        on: () => ({ subscribe: () => ({}) }),
+        subscribe: () => ({}),
+      }),
+      removeChannel: () => {},
+    };
+    const controller = new AbortController();
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+
+    const mountPromise = mountViewerShell(root, {
+      orgId: 'org1',
+      renderBody: (container) => {
+        container.textContent = 'STANDINGS HERE';
+      },
+      showChrome: false,
+      client,
+      signal: controller.signal,
+    });
+
+    await vi.waitFor(() => expect(resolveSession).toBeDefined());
+    // The synchronous 'connecting' paint is unguarded and safe — nothing
+    // aborts a call before its own first await.
+    expect(root.textContent).not.toContain('STANDINGS HERE');
+
+    controller.abort();
+    resolveSession();
+    await mountPromise;
+
+    // refresh()'s post-await continuation must have bailed out entirely —
+    // still showing 'connecting', never the resolved session's real body.
+    expect(root.textContent).not.toContain('STANDINGS HERE');
+  });
+
   it('a change event that arrives after unmount does not throw or repaint a stale root', async () => {
     const root = document.createElement('div');
     const client = fakeClient([]);

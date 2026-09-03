@@ -127,7 +127,7 @@ export function renderManualEntryRows(hydratedEntries, { onSave }) {
 
 export async function mountManualTimingScreen(
   root,
-  { eventId, heatId, client = getSupabase() } = {},
+  { eventId, heatId, client = getSupabase(), signal } = {},
 ) {
   let pendingError = null;
   let pendingSuccess = null;
@@ -184,6 +184,15 @@ export async function mountManualTimingScreen(
     // rebuild the DOM with stale data on top of a newer, already-applied
     // save.
     if (myGeneration !== renderGeneration) return;
+    // A discarded-but-still-in-flight render (this render's own loadState()
+    // still resolving after the router already navigated elsewhere) must
+    // never write to `root` again — router.js aborts `signal` the instant
+    // a newer navigation starts. Distinct from the renderGeneration check
+    // above: that one guards against a NEWER render() from THIS SAME
+    // screen instance winning; this one guards against the whole screen
+    // instance having been superseded by NAVIGATION. See ROADMAP.md's "A
+    // real DOM-write race between the router..." entry.
+    if (signal?.aborted) return;
 
     // Ground truth over the outbox flush's own bookkeeping — resolved here,
     // against THIS render's freshly-reloaded state, before

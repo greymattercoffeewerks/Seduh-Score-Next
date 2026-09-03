@@ -68,11 +68,19 @@ verbatim use, closing the `setupScreen.js`/`rosterScreen.js` hung-initial-load g
 `onNavigate` are its only two extension points), client resolved once and threaded into
 every mount as the single chokepoint every screen gets it through; own `resolveSeq`
 staleness guard (mirrors `viewer-shell.js`'s `requestSeq`) protects its own `current`
-bookkeeping only — see [src/formats/cup-taster/CLAUDE.md](../formats/cup-taster/CLAUDE.md)
-for a real, deliberately-unfixed gap this does NOT close. Also does the navigation
-focus-move (moves focus to the new screen's own heading, but only if nothing inside that
-screen's own mount already claimed focus itself — found missing in
-`ui-accessibility-reviewer`'s own pass).
+bookkeeping only. Also does the navigation focus-move (moves focus to the new screen's
+own heading, but only if nothing inside that screen's own mount already claimed focus
+itself — found missing in `ui-accessibility-reviewer`'s own pass). Gained an
+`AbortController`/`signal` mechanism, 2026-09-04 — `resolve()` aborts the PREVIOUS
+navigation's controller the instant a newer one starts (not once the stale mount's own
+promise settles), threading `signal` into every `route.mount()` call — closes the real
+gap `resolveSeq` alone couldn't: a discarded-but-still-in-flight screen's own DOM writes
+landing after a newer screen already mounted. Every screen this app ships now checks
+`signal?.aborted` before writing to its outlet; see
+[src/formats/cup-taster/CLAUDE.md](../formats/cup-taster/CLAUDE.md) for the full
+four-reviewer account of closing this across `main.js` and all 13 screens (plus
+`viewer-shell.js`, brought in mid-task once review found its own local `mounted` flag
+didn't actually cover this case either).
 
 `appShell` (same pass) — `mountAppShell()`: persistent organiser header (app name — a
 `<p>`, not an `<h1>`, since every routed screen already owns the page's real `<h1>`; a
