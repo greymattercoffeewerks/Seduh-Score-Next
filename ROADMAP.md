@@ -394,15 +394,16 @@ station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can 
   "adding another stage means another round" before the user commits to the structure. No
   core/schema/advancement change needed; purely a setupScreen UX clarification. Revisit
   after confirming the planned hint implementation path is still the right one.
-- **PR #42 (fix: confirm_heat entry_id misidentification + Score-this-heat UX) is OPEN,
-  not yet merged (2026-08-31).** Two linked fixes: root cause was `scoring.js`'s
-  `buildConfirmEntries()` passing the wrong id field to the RPC, silently breaking every
-  real confirm attempt; the secondary UX addition added a "Score this heat" link from the
-  timing-complete view. Already deployed directly to production via `wrangler deploy` ahead
-  of the PR merging (the stuck-heat bug was actively blocking workflow). See CHANGELOG.md's
-  dated entry for the full review account (five parallel reviews, including a second
-  code-reviewer pass that caught a high-severity gap in the first pass's own focus-move
-  fix). Waiting for explicit merge instruction.
+- **PR #42 (fix: confirm_heat entry_id misidentification + Score-this-heat UX) is MERGED
+  (2026-08-31).** Two linked fixes: root cause was `scoring.js`'s `buildConfirmEntries()`
+  passing the wrong id field to the RPC, silently breaking every real confirm attempt; the
+  secondary UX addition added a "Score this heat" link from the timing-complete view.
+  Already verified live in production (deployed via `wrangler deploy` ahead of the PR
+  merging, then re-verified after merge that Cloudflare's own auto-build reproduced the
+  identical, correctly-configured bundle). See CHANGELOG.md's dated entry for the full
+  review account (five parallel reviews, including a second code-reviewer pass that caught
+  a high-severity gap in the first pass's own focus-move fix, and a CI-only prettier
+  format:check failure neither local eslint nor the review passes caught).
 - **A real DOM-write race between the router and a slow-resolving screen is NOT closed —
   found live-testing this app-wiring pass, documented rather than silently shipped.**
   `router.js`'s `resolveSeq` staleness guard only protects its own `current` bookkeeping;
