@@ -440,3 +440,13 @@ station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can 
 - **Leaked-password protection is disabled in Supabase Auth settings** — a `get_advisors`
   finding, unrelated to any migration (a dashboard toggle under Authentication →
   Settings on the cloud project, not a schema change). Flagged to the user, not fixed.
+- **`anon`'s TRUNCATE/REFERENCES/TRIGGER/MAINTAIN grant on every table — not closed,
+  found while diagnosing the anon-safe events-read migration
+  (`20260831100000_events_anon_safe_read.sql`).** Every table in this schema carries a
+  default `anon=...Dxtm` grant regardless of RLS — TRUNCATE in particular is not
+  governed by RLS at all in Postgres, so it's a full bypass wherever it's reachable.
+  Confirmed NOT currently exploitable (PostgREST never issues TRUNCATE, and no other
+  anon-reachable raw-SQL path exists in this app), so — same shape as the write-RPC
+  EXECUTE gap above — this is defense-in-depth, not a live hole. Schema-wide, not
+  specific to `events`; deliberately left as its own follow-up rather than folded into
+  that migration's already-large scope.

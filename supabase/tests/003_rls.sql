@@ -2,7 +2,7 @@
 -- Proves: a non-member reads zero rows from every table except live_sessions, and
 -- an unauthenticated client can read live_sessions and cannot write it.
 begin;
-select plan(26);
+select plan(30);
 
 -- ---------- fixtures (as postgres, bypasses RLS) ----------
 
@@ -143,6 +143,40 @@ reset role;
 -- column is referenced, so "denied on the withheld columns" is provable
 -- directly, the same way `throws_ok` already proves live_sessions' own
 -- write denial above.
+
+-- Proves the actual MECHANISM (this migration's own table-level revoke ran
+-- and took effect), not just its externally-observable outcome — found in
+-- review (security-reviewer): the column-read assertions below prove
+-- "anon can't read venue", but on an environment where anon never had
+-- table-level SELECT to begin with (this project's own local/CI
+-- environments have differed on exactly this — see the migration's own
+-- comment), those same assertions would pass identically whether or not
+-- this migration's `revoke select, insert, update, delete on events from
+-- anon` line ever ran at all. `has_table_privilege`, run as postgres (not
+-- anon — the function checks a NAMED role's privilege, it doesn't need to
+-- assume that role's own session), is environment-independent: it fails
+-- this test in EITHER starting-state scenario if the revoke is ever
+-- accidentally dropped from the migration.
+select is(
+  has_table_privilege('anon', 'events', 'select'),
+  false,
+  'anon has no table-level SELECT on events (column grant only)'
+);
+select is(
+  has_table_privilege('anon', 'events', 'insert'),
+  false,
+  'anon has no table-level INSERT on events'
+);
+select is(
+  has_table_privilege('anon', 'events', 'update'),
+  false,
+  'anon has no table-level UPDATE on events'
+);
+select is(
+  has_table_privilege('anon', 'events', 'delete'),
+  false,
+  'anon has no table-level DELETE on events'
+);
 
 set local role anon;
 
