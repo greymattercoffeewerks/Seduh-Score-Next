@@ -207,15 +207,59 @@ two consumers of the same shell/data. Verifiers per task, `code-reviewer` always
   proved key presence but not that the values were real handlers; only 2 of 5 composed
   operation types actually exercised through a real flush; a fragile double-invocation
   assertion) — all closed. See CHANGELOG.md's dated entry for the full account.
-- **T4.3's app-mode timing screen has no manual-entry fallback for a mid-heat device
-  failure.** The spec (§7.1) describes a heat that "may mix tapped and hand-entered
-  times if a stopwatch fails mid-heat" — read literally, this only makes sense as a
-  recovery path inside an app-mode heat still in `timing` status (a manual-mode heat, by
-  construction, never has any tapped entries to mix with). Decided with the user to keep
-  T4.4 scoped to the manual-mode surface only, rather than also retrofitting T4.3's
-  already-shipped, already-reviewed screen. Revisit if a real device-failure scenario
-  makes this matter before October — building it means adding a per-entry manual-override
-  path to `timingScreen.js`/`timing.js`, not `timingManualScreen.js`/`timingManual.js`.
+- **T4.3's app-mode timing screen's mid-heat device-failure manual-entry fallback is
+  CLOSED (2026-09-04).** The spec (§7.1) describes a heat that "may mix tapped and
+  hand-entered times if a stopwatch fails mid-heat" — read literally, this only makes
+  sense as a recovery path inside an app-mode heat still in `timing` status (a
+  manual-mode heat, by construction, never has any tapped entries to mix with). Each
+  unstopped row in `timingScreen.js` now offers an opt-in "Enter time manually" toggle
+  next to Stop — a purely local DOM show/hide (no `render()`, so it never interrupts the
+  live countdown or triggers a network reload), revealing the same minutes/seconds
+  input pair `timingManualScreen.js` already used, reusing `recordManualTime` and the
+  exact same `pendingEntryCheck` ground-truth-vs-flush machinery `recordTap`'s own
+  Stop path already established — success/conflict messaging behaves identically
+  regardless of which path recorded the time. A heat can now genuinely mix
+  `time_source: 'tapped'` and `time_source: 'manual'` entries, exactly as the spec
+  describes, verified live in the browser (one cupper tapped, another hand-entered, in
+  the same still-running heat) and in a dedicated integration test. `parseElapsedInput`/
+  `secsToParts` moved from `timingManualScreen.js` into `timingManual.js` (the shared
+  pure logic module) so both screens can import them without either screen importing
+  from the other — `timingManualScreen.js` already imported `renderTimingRows`/
+  `buildScoringLink` from `timingScreen.js`, so the reverse direction would have created
+  a cycle. A new shared `renderManualTimeFields()` (in `timingScreen.js`, alongside
+  `buildScoringLink`, for the same "no DOM in timing.js/timingManual.js" reasoning)
+  replaces the input-pair-building code that used to be duplicated once this became the
+  2nd use. Live-verifying at 360px (this project's own "verify at 360px first" convention) caught
+  a real regression before ship: the row's own `justify-content: space-between`
+  squeezed a long cupper name down to 2-3 characters once the wider two-button actions
+  area was added — fixed by letting `.timing-row` wrap, dropping the whole actions block
+  to its own line rather than fighting the name for space.
+
+  **A five-reviewer round (scoring-auditor, module-boundary-checker, code-reviewer,
+  test-auditor, ui-accessibility-reviewer) found a real, HIGH-severity data-corruption
+  bug plus several genuine UX/accessibility gaps, all closed before ship:**
+  `scoring-auditor` found that reusing `record_heat_time`'s existing `'overwrite'`
+  conflict policy (originally safe only because `timingManualScreen.js` was its one
+  caller, on manual-only heats nothing else could ever write) broke once this fallback
+  made it reachable from an app-mode heat too — a real tap and a manual guess for the
+  SAME cupper can both queue offline and flush tap-then-manual, silently clobbering the
+  accurate tapped time with a hand-typed guess, no conflict raised, false success
+  reported. Closed with a new migration
+  (`20260904120000_record_heat_time_overwrite_scoped_to_manual.sql`) scoping
+  `'overwrite'` to only succeed when the entry is unset or already `time_source:
+'manual'` — `schema-guardian` and `security-reviewer` both signed off clean.
+  `ui-accessibility-reviewer` found the toggle dropped focus to nowhere on open/Cancel
+  and gave a screen reader zero signal new content appeared (no `aria-expanded`, no
+  announcement) — fixed with explicit focus moves and `aria-expanded`.
+  `code-reviewer` found a validation error was routed through a full `render()`,
+  silently closing the toggle and discarding whatever the organiser had already typed
+  in the OTHER, valid field — fixed by validating locally (a new `.manual-time-fields`
+  onSave wrapper) so a bad typo never triggers `render()` at all, only a real write
+  does. `test-auditor` found `toContain('2:00')`-style assertions couldn't actually
+  distinguish a real time from a mislabeled "Max time" one (confirmed via mutation
+  testing) — strengthened across every affected test. See CHANGELOG.md's dated entry
+  for the full seven-reviewer account.
+
 - **T4.1's stage-plan UI gap is closed (2026-08-27 follow-up)** — `setupScreen.js`/`.css`
   now let an organiser build the stage plan itself (add/remove/reorder, generalized
   validation), see CHANGELOG.md's dated entry.
@@ -454,9 +498,12 @@ station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can 
   inert only because `app` isn't in `config.toml`'s exposed `api.schemas` — not fixed,
   noted for a future audit pass. Pushed to both local and the cloud project; see
   CHANGELOG.md's dated entry for the full account.
-- **Leaked-password protection is disabled in Supabase Auth settings** — a `get_advisors`
-  finding, unrelated to any migration (a dashboard toggle under Authentication →
-  Settings on the cloud project, not a schema change). Flagged to the user, not fixed.
+- **Leaked-password protection cannot be enabled — Supabase free-tier limitation, not a
+  fix left undone.** A `get_advisors` finding, unrelated to any migration (a dashboard
+  toggle under Authentication → Settings on the cloud project, not a schema change).
+  Confirmed with the user (2026-09-04): the toggle is gated to paid Supabase plans, and
+  the linked cloud project is on the free tier. Revisit only if/when the project
+  upgrades tiers — no action available today.
 - **`anon`'s TRUNCATE/REFERENCES/TRIGGER/MAINTAIN grant on every table — not closed,
   found while diagnosing the anon-safe events-read migration
   (`20260831100000_events_anon_safe_read.sql`).** Every table in this schema carries a

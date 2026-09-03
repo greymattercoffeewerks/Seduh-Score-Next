@@ -37,8 +37,18 @@
   gap: var(--space-3);
 }
 
+/* flex-wrap: wrap — found in review (ui-accessibility-reviewer, 360px
+   pass): the manual-entry fallback's own two-button .timing-row-actions
+   (Stop + "Enter time manually") is wide enough at narrow widths that a
+   nowrap row squeezed .timing-row-name-text's ellipsis down to a couple of
+   characters ("Al…" for "Alex Rivera") instead of ever giving the name
+   real room. Wrapping lets the WHOLE actions block drop to its own line
+   below the name when it doesn't fit, rather than both fighting for space
+   on one line — harmless for the plain result-span case (never wide
+   enough to need it). */
 .timing-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
@@ -92,4 +102,50 @@
 .btn-stop {
   min-width: 6rem;
   flex-shrink: 0;
+}
+
+/* The mid-heat device-failure fallback (renderTimingRows' own comment) —
+   Stop stays the large, primary action; "Enter time manually" and the
+   fields it reveals are secondary, wrapping onto their own line at narrow
+   widths rather than fighting Stop for horizontal space. gap: space-3, not
+   space-2 — found in review (ui-accessibility-reviewer): this screen's own
+   "tapped one-handed, sometimes urgently" context (see .btn-stop's own
+   comment) warrants a bit more separation between Stop and a second,
+   differently-consequential action than the tighter default gap most rows
+   use. */
+.timing-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+/* [hidden] alone loses to .btn's own `display: inline-flex` at equal CSS
+   specificity (author origin beats the UA stylesheet regardless of source
+   order) — the exact bug this project already hit once for
+   .status-live-dot (splashScreen.css). Scoped to this row, not every .btn
+   in the app. */
+.timing-row-actions [hidden] {
+  display: none;
+}
+
+/* Local, non-network validation feedback (renderTimingRows' own onSave
+   wrapper) — a bad minutes/seconds typo never reaches render()'s own
+   aria-live feedback region at all, so this needs to carry the message
+   itself. role="alert" (not the screen's own polite live region) since
+   this is the one place a genuinely new error needs to interrupt, the
+   same reasoning splashScreen.js's is-test-banner and viewer-shell.js's
+   own is_test flip both already use role="alert" for. :empty collapses to
+   nothing when there's no error, rather than reserving blank space on
+   every open of the fields. */
+.manual-time-local-error {
+  width: 100%;
+  margin: 0;
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+}
+
+.manual-time-local-error:empty {
+  display: none;
 }

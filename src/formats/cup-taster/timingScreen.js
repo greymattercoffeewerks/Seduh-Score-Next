@@ -16,6 +16,7 @@ import { findHeatById, listHeatEntries, hydrateEntries } from './heats.js';
 import { listEntriesByIds } from '../../core/registry.js';
 import { findEvent } from '../../core/events.js';
 import { startHeat, recordTap, autoMaxRemainingEntries, describeTimingConflict } from './timing.js';
+import { recordManualTime, parseElapsedInput, secsToParts } from './timingManual.js';
 import { cupTasterOutboxHandlers } from './outboxHandlers.js';
 import { remainingSecs, isExpired } from '../../core/countdown.js';
 import { getSupabase } from '../../core/supabaseClient.js';
@@ -32,7 +33,77 @@ export function renderRosterPreview(hydratedEntries) {
   return el('ul', { className: 'timing-row-list' }, items);
 }
 
-export function renderTimingRows(hydratedEntries, { onStop }) {
+// Shared by this screen's own "unstopped" row (the toggle below) and
+// timingManualScreen.js's ALWAYS-shown entry row (every row, every heat) —
+// extracted here rather than into timingManual.js since that file is
+// otherwise pure DB/logic with no DOM (`el`) usage at all, same reasoning
+// as buildScoringLink below. `extraChildren` lets a caller append its own
+// trailing node(s) (timingManualScreen.js's already-recorded status span)
+// INSIDE the same flex row the inputs/button live in, matching that
+// screen's own established layout — not a sibling, which would break its
+// CSS.
+export function renderManualTimeFields(entry, { onSave, extraChildren = [] }) {
+  const [prefillMin, prefillSec] = secsToParts(entry.elapsed_secs_raw ?? entry.elapsed_secs);
+  const minutesInput = el('input', {
+    className: 'field-input manual-time-input',
+    attrs: {
+      type: 'number',
+      min: '0',
+      inputmode: 'numeric',
+      'aria-label': `${entry.displayName}: minutes`,
+      value: prefillMin != null ? String(prefillMin) : '',
+    },
+  });
+  const secondsInput = el('input', {
+    className: 'field-input manual-time-input',
+    attrs: {
+      type: 'number',
+      min: '0',
+      max: '59',
+      inputmode: 'numeric',
+      'aria-label': `${entry.displayName}: seconds`,
+      value: prefillSec != null ? String(prefillSec) : '',
+    },
+  });
+  const saveLabel = entry.elapsed_secs != null ? 'Update' : 'Save';
+  const saveButton = el('button', {
+    className: 'btn btn-primary tap-target',
+    text: saveLabel,
+    attrs: { 'aria-label': `${saveLabel} ${entry.displayName}'s time` },
+  });
+  saveButton.addEventListener('click', () =>
+    onSave(entry.entry_id, minutesInput.value, secondsInput.value),
+  );
+
+  return el('div', { className: 'manual-time-fields' }, [
+    minutesInput,
+    el('span', { className: 'manual-time-separator', text: ':' }),
+    secondsInput,
+    saveButton,
+    ...extraChildren,
+  ]);
+}
+
+// `onSaveManual` is the mid-heat device-failure fallback (handoff §7.1: "a
+// heat may mix tapped and hand-entered times if a stopwatch fails
+// mid-heat") — closes a real, previously-documented gap (ROADMAP.md's own
+// "T4.3's app-mode timing screen has no manual-entry fallback" entry): the
+// organiser's own device is what runs THIS screen's tap interface, so if
+// it fails (or a specific cupper's clock genuinely can't be reached) mid-
+// heat, every OTHER cupper keeps timing normally by tap while this one
+// entry gets a hand-typed time instead — both `time_source` values coexist
+// in the same heat, exactly as the spec describes. Opt-in per row (a small
+// toggle next to Stop, not always-visible inputs) — this screen's primary
+// path is the fast tap, and permanently showing input fields on every row
+// would compete with that. Purely a LOCAL DOM toggle (hidden/shown, no
+// render()) so opening it never interrupts the live countdown or reloads
+// from the network — see this module's own top comment on why a full
+// rebuild is reserved for real state changes only. A stale toggle left
+// open across an unrelated action's real render() (e.g. a different row's
+// Stop) resets to closed — accepted, matching this screen's existing
+// no-draft-persistence precedent (pendingEntryCheck etc.), and this is a
+// rare fallback path, not the primary workflow.
+export function renderTimingRows(hydratedEntries, { onStop, onSaveManual }) {
   const rows = hydratedEntries.map((entry) => {
     const nameNode = el(
       'span',
@@ -50,8 +121,84 @@ export function renderTimingRows(hydratedEntries, { onStop }) {
         text: 'Stop',
         attrs: { 'aria-label': `Stop ${entry.displayName}'s clock` },
       });
+
+      const manualToggle = el('button', {
+        className: 'btn btn-outline tap-target btn-manual-toggle',
+        text: 'Enter time manually',
+        attrs: {
+          type: 'button',
+          'aria-label': `Enter ${entry.displayName}'s time manually`,
+          'aria-expanded': 'false',
+        },
+      });
+      const cancelButton = el('button', {
+        className: 'btn btn-outline tap-target',
+        text: 'Cancel',
+        attrs: { type: 'button', 'aria-label': `Cancel manual entry for ${entry.displayName}` },
+      });
+      // A parse failure (parseElapsedInput throwing) is a pure client-side
+      // validation error — no write was ever attempted, so it's handled
+      // entirely locally, same as the toggle itself: no render(), the
+      // fields and whatever the organiser already typed stay exactly as
+      // they were, only this message changes. Found in review
+      // (code-reviewer): routing it through the full render() cycle (the
+      // original version's shape) silently closed the toggle AND discarded
+      // a correctly-typed sibling field along with the invalid one — a
+      // real cost for the exact time-pressured moment this fallback exists
+      // for. `onSaveManual` itself (mountTimingScreen's own handler) is
+      // only ever called with an already-validated integer now, never raw
+      // strings — the network/RPC path stays the one place a real render()
+      // is warranted, since only that path can change persisted state.
+      const localError = el('p', {
+        className: 'manual-time-local-error',
+        attrs: { role: 'alert' },
+      });
+      const manualFields = renderManualTimeFields(entry, {
+        onSave: (entryId, minutesRaw, secondsRaw) => {
+          let rawSecs;
+          try {
+            rawSecs = parseElapsedInput(minutesRaw, secondsRaw);
+          } catch (err) {
+            localError.textContent = err.message;
+            return;
+          }
+          localError.textContent = '';
+          onSaveManual(entryId, rawSecs);
+        },
+        extraChildren: [cancelButton, localError],
+      });
+      manualFields.hidden = true;
+
+      manualToggle.addEventListener('click', () => {
+        stopButton.hidden = true;
+        manualToggle.hidden = true;
+        manualToggle.setAttribute('aria-expanded', 'true');
+        manualFields.hidden = false;
+        // Rebuild-then-refocus (§15.3) applies to a real disclosure open
+        // too, not just a full render() — found in review
+        // (ui-accessibility-reviewer): hiding manualToggle (the element
+        // that was just focused, per browser click-focus behavior) drops
+        // focus to <body> with no defined landing spot otherwise. The
+        // minutes input is the natural first field to land on.
+        manualFields.querySelector('input')?.focus();
+      });
+      cancelButton.addEventListener('click', () => {
+        localError.textContent = '';
+        manualFields.hidden = true;
+        stopButton.hidden = false;
+        manualToggle.hidden = false;
+        manualToggle.setAttribute('aria-expanded', 'false');
+        // Same rebuild-then-refocus reasoning as above, in reverse —
+        // cancelButton (just focused) is about to be hidden.
+        manualToggle.focus();
+      });
       stopButton.addEventListener('click', () => onStop(entry.entry_id));
-      resultNode = stopButton;
+
+      resultNode = el('div', { className: 'timing-row-actions' }, [
+        stopButton,
+        manualToggle,
+        manualFields,
+      ]);
     } else {
       resultNode = el('span', {
         className: 'timing-row-result',
@@ -162,6 +309,20 @@ export async function mountTimingScreen(
     return { event, heat, hydrated };
   }
 
+  // Accepted tradeoff, found in review (code-reviewer): if the countdown
+  // reaches zero while an organiser has a row's manual-entry fields open
+  // (mid-type, for the exact device-failure scenario this fallback
+  // exists for), this still auto-maxes that entry and its own render()
+  // silently discards whatever was half-typed, with no distinct warning
+  // that an in-progress hand-entry was specifically the thing lost — not
+  // just a generic "time's up." Not fixed: §7.1's own "an unstopped clock
+  // maxes at the full duration" is unconditional, and delaying/skipping
+  // the sweep to protect an unsent, never-enqueued local draft would
+  // violate that guarantee for every OTHER still-running entry too. The
+  // window this can actually bite in — the clock hits exactly zero while
+  // someone is mid-type on this specific fallback path — is narrow enough
+  // that documenting it here, rather than building a warn-before-sweep
+  // mechanism, is the proportionate response for now.
   async function handleExpiry(data, feedback) {
     if (expiryHandled) return;
     expiryHandled = true;
@@ -355,6 +516,38 @@ export async function mountTimingScreen(
             pendingEntryCheck = {
               heatEntryId: stoppedEntry.id,
               displayName: stoppedEntry.displayName,
+              expectedElapsedSecs,
+              flushResult,
+            };
+          } catch (err) {
+            pendingError = describeError(err);
+          }
+          await renderOrShowError(feedback);
+        },
+        // The mid-heat device-failure fallback (see this module's own
+        // renderTimingRows comment) — reuses recordManualTime and the
+        // exact same pendingEntryCheck ground-truth machinery recordTap's
+        // own onStop already established above, so success/conflict
+        // messaging behaves identically regardless of which path recorded
+        // the time. `rawSecs` arrives already validated — renderTimingRows'
+        // own onSave wrapper calls parseElapsedInput itself and only
+        // invokes this handler on success, so a bad typo never reaches
+        // this far (see that comment for why: a validation failure alone
+        // must never trigger a render()).
+        onSaveManual: async (entryId, rawSecs) => {
+          const targetEntry = data.hydrated.find((entry) => entry.entry_id === entryId);
+          try {
+            const { expectedElapsedSecs, flushResult } = await recordManualTime(
+              data.heat,
+              targetEntry,
+              rawSecs,
+              data.event.org_id,
+              client,
+              { handlers: cupTasterOutboxHandlers(client) },
+            );
+            pendingEntryCheck = {
+              heatEntryId: targetEntry.id,
+              displayName: targetEntry.displayName,
               expectedElapsedSecs,
               flushResult,
             };

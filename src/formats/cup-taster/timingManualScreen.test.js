@@ -1,9 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import {
-  parseElapsedInput,
-  renderManualEntryRows,
-  mountManualTimingScreen,
-} from './timingManualScreen.js';
+import { renderManualEntryRows, mountManualTimingScreen } from './timingManualScreen.js';
 import { _clearAllForTests } from '../../core/db.js';
 
 beforeEach(async () => {
@@ -119,43 +115,6 @@ function buildFakeClient({ event, heat, entries, roster }) {
     rpc: makeRpc(db, calls),
   };
 }
-
-describe('parseElapsedInput', () => {
-  it('converts minutes and seconds to a total-seconds value', () => {
-    expect(parseElapsedInput('2', '5')).toBe(125);
-    expect(parseElapsedInput('0', '0')).toBe(0);
-    expect(parseElapsedInput('8', '0')).toBe(480);
-  });
-
-  it('rejects an empty minutes field rather than treating it as 0', () => {
-    expect(() => parseElapsedInput('', '5')).toThrow('Minutes must be a whole number');
-  });
-
-  it('rejects an empty seconds field rather than treating it as 0', () => {
-    expect(() => parseElapsedInput('2', '')).toThrow('Seconds must be a whole number');
-  });
-
-  it('rejects a negative or non-integer minutes value', () => {
-    expect(() => parseElapsedInput('-1', '5')).toThrow('Minutes must be a whole number');
-    expect(() => parseElapsedInput('2.5', '5')).toThrow('Minutes must be a whole number');
-  });
-
-  it('rejects seconds outside 0–59', () => {
-    expect(() => parseElapsedInput('2', '75')).toThrow(
-      'Seconds must be a whole number from 0 to 59',
-    );
-    expect(() => parseElapsedInput('2', '-1')).toThrow(
-      'Seconds must be a whole number from 0 to 59',
-    );
-  });
-
-  it('accepts exactly 59 seconds and rejects exactly 60 — the boundary itself, not just values far past it', () => {
-    expect(parseElapsedInput('2', '59')).toBe(179);
-    expect(() => parseElapsedInput('2', '60')).toThrow(
-      'Seconds must be a whole number from 0 to 59',
-    );
-  });
-});
 
 describe('renderManualEntryRows', () => {
   it('renders empty, unlabeled inputs and a Save button for an unrecorded entry', () => {

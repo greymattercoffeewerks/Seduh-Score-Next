@@ -52,6 +52,43 @@ same review surfaced, closed in a separate 2026-08-29 follow-up — see
 [src/core/CLAUDE.md](../../core/CLAUDE.md) (`outbox`) and `outboxHandlers` below for
 `buildRpcHandler`/`cupTasterOutboxHandlers`.
 
+`timingScreen.js` gained a mid-heat manual-entry fallback, 2026-09-04 — closes
+ROADMAP.md's own "no manual-entry fallback for a mid-heat device failure" entry (handoff
+§7.1's own "a heat may mix tapped and hand-entered times if a stopwatch fails
+mid-heat"). Each unstopped row now offers an opt-in "Enter time manually" toggle next to
+Stop, a purely local DOM show/hide (no `render()`, so it never interrupts the live
+countdown), revealing the same minutes/seconds pair `timingManualScreen.js` already
+used and reusing `recordManualTime` plus the exact `pendingEntryCheck` machinery
+`recordTap` already established. `parseElapsedInput`/`secsToParts` moved from
+`timingManualScreen.js` into `timingManual.js` (pure logic, no DOM) so both screens can
+import them without either importing from the other — `timingManualScreen.js` already
+imports `renderTimingRows`/`buildScoringLink` from `timingScreen.js`, so the reverse
+direction would have cycled. New shared `renderManualTimeFields()` lives in
+`timingScreen.js` for the same reason `buildScoringLink` does (no DOM in
+timing.js/timingManual.js). Verified live in a real browser: one cupper tapped, another
+hand-entered, in the same still-running heat, matching the spec's own scenario exactly.
+A 360px live-verification pass caught a real regression before ship — the row's
+`justify-content: space-between` squeezed a long cupper name down to 2-3 characters once
+the wider two-button actions area was added; fixed by letting `.timing-row` wrap so the
+actions block drops to its own line instead of fighting the name for space.
+
+**Five parallel reviews then found one HIGH-severity data-corruption bug and several
+real UX/accessibility gaps, all closed:** `scoring-auditor` found that
+`record_heat_time`'s `'overwrite'` policy — safe only in its original context
+(`timingManualScreen.js`, where nothing else could ever write that row) — let a
+queued-offline tap and manual entry for the SAME cupper flush tap-then-manual and
+silently clobber the real tapped time with no conflict; closed with migration
+`20260904120000_record_heat_time_overwrite_scoped_to_manual.sql` (`schema-guardian`/
+`security-reviewer` both clean). `ui-accessibility-reviewer` found the toggle moved
+focus nowhere on open/Cancel and gave screen readers no signal at all (bypassing
+`render()`'s own `aria-live` region entirely) — fixed with explicit
+`focus()`/`aria-expanded`. `code-reviewer` found a validation error triggered a full
+`render()`, discarding the toggle state and any correctly-typed sibling field — fixed
+by validating locally, so only a real write ever calls `render()`. `test-auditor` found
+several `toContain()` assertions couldn't distinguish a real time from a mislabeled
+"Max time" (proven via mutation testing) — strengthened throughout. See CHANGELOG.md's
+dated entry for the full seven-reviewer account.
+
 `heats.js` gained a DB-level `unique(heat_id, station)` constraint follow-up (2026-08-29,
 migration `20260829100000`) closing a known ROADMAP.md gap — `ensureHeatEntries`'s new
 `isStationConflict()` helper distinguishes a station collision (two different cuppers

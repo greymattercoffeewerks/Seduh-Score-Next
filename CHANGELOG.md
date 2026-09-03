@@ -1,3 +1,137 @@
+## Feature: mid-heat manual-entry fallback for app-mode timing · 2026-09-04
+
+**Closes ROADMAP.md's "T4.3's app-mode timing screen has no manual-entry fallback for a
+mid-heat device failure"** — the frozen spec (§7.1) describes a heat that "may mix
+tapped and hand-entered times if a stopwatch fails mid-heat." Read literally this only
+makes sense as a recovery path inside an app-mode heat still in `timing` status (a
+manual-mode heat, by construction, never has any tapped entries to mix with): the
+organiser's own device is what runs the tap interface, so if it fails — or a specific
+cupper's clock genuinely can't be reached — mid-heat, that one entry now gets a
+hand-typed time while every other cupper keeps timing normally by tap.
+
+**The feature**: each unstopped row in `timingScreen.js` gained an opt-in "Enter time
+manually" toggle next to Stop — a purely local DOM show/hide (`element.hidden`, no
+`render()`) so opening it never interrupts the live countdown or triggers a network
+reload. Toggling reveals the same minutes/seconds input pair `timingManualScreen.js`
+already used, reusing `recordManualTime()` and the exact `pendingEntryCheck`
+ground-truth-vs-flush machinery `recordTap`'s own Stop path already established —
+success/conflict messaging behaves identically regardless of which path recorded the
+time. `parseElapsedInput`/`secsToParts` moved from `timingManualScreen.js` into
+`timingManual.js` (pure logic, no DOM) so both screens can import them without either
+importing from the other (`timingManualScreen.js` already imports `renderTimingRows`/
+`buildScoringLink` from `timingScreen.js` — the reverse direction would have cycled). A
+new shared `renderManualTimeFields()` lives in `timingScreen.js`, same reasoning as the
+existing `buildScoringLink` (no DOM in `timing.js`/`timingManual.js`); it replaces the
+input-pair-building code `timingManualScreen.js`'s own `renderManualEntryRows` used to
+duplicate inline, once this became the 2nd use.
+
+Live-verified in the browser: one cupper tapped, another hand-entered, in the same
+still-running heat — the exact scenario the spec names — plus a dedicated integration
+test proving it. A 360px pass caught a real regression before the review round even
+started: `.timing-row`'s `justify-content: space-between` squeezed a long cupper name
+down to 2-3 characters once the wider two-button actions area was added; fixed with
+`flex-wrap: wrap` so the whole actions block drops to its own line instead of fighting
+the name for space. Also needed a `.timing-row-actions [hidden] { display: none; }`
+override — `.btn`'s own `display: inline-flex` beats the bare `[hidden]` UA rule at
+equal specificity, the same class of bug this project already hit once for
+`.status-live-dot` (`splashScreen.css`).
+
+**A five-reviewer round found one HIGH-severity data-corruption bug and several real
+UX/accessibility gaps — all closed before ship:**
+
+- **`scoring-auditor` (HIGH)** — traced the actual RPC SQL and outbox-flush ordering,
+  not just the JS, and found that reusing `record_heat_time`'s existing `'overwrite'`
+  conflict policy broke a safety invariant that held only in its ORIGINAL context.
+  `'overwrite'` was designed for exactly one caller (`timingManualScreen.js`'s
+  judge-fixing-a-typo workflow, on manual-only heats where nothing else could ever write
+  that row) — reused from this new app-mode fallback, a real tap and a manual guess for
+  the SAME cupper can both get queued offline (this app's own outbox model) and flush in
+  either order. Tap-then-manual is the dangerous order: the manual write's `'overwrite'`
+  policy silently clobbered the accurate, already-committed tapped time with a
+  hand-typed guess, raised no conflict, and the client's own ground-truth check reported
+  false success — a genuinely live, offline-plausible corruption path for a set that
+  will be ranked, not a hypothetical. Manual-then-tap was already safe (the tap's own
+  `'reject'` policy already refused to clobber an already-set entry regardless of
+  source), so only the one direction needed closing.
+
+  **Fix**: new migration `20260904120000_record_heat_time_overwrite_scoped_to_manual.sql`
+  — `record_heat_time` now reads the entry's CURRENT `time_source` before honoring
+  `'overwrite'`, only allowing it when the entry is unset or already `'manual'` (a
+  genuine self-correction — the only case `'overwrite'` was ever meant to cover).
+  Overwriting a `'tapped'` or `'maxed'` entry via `'overwrite'` now raises the SAME
+  conflict shape `'reject'` already used (`'CONFLICT: heat entry % already has a
+recorded time'`, errcode P0002) — deliberately reusing that exact message so
+  `describeTimingConflict()` already classifies it correctly client-side with zero JS
+  changes. Function signature unchanged, so no grant/revoke statements needed. Verified:
+  applied locally via `supabase db reset` (clean from empty, 15 migrations), 3 new
+  pgTAP assertions (`007_timing_outbox_rpcs.sql`, plan 39→42) proving the refusal and
+  that both `elapsed_secs` and `time_source` stay untouched, rollback block run for real
+  in a `begin;...rollback;` transaction (confirmed it genuinely restores the OLD,
+  vulnerable behavior, then rolled back, then re-confirmed the fixed version via a full
+  pgTAP re-run). `schema-guardian` independently confirmed the fix correctly refuses
+  BOTH `'tapped'` and `'maxed'` (not just tapped) and diff-checked the rollback against
+  the actual prior live function body (byte-for-byte identical). `security-reviewer`
+  came back fully clean — authorization/org-scoping untouched and still runs before the
+  new logic, no new TOCTOU gap (the new read shares the same post-lock `select` the
+  existing reads already used), no information disclosure from reusing the error
+  message.
+
+- **`ui-accessibility-reviewer`** — the toggle is the first "local DOM change, no
+  `render()`" interaction pattern in this codebase, and it had inherited none of the
+  focus-management or live-announcement discipline the rest of the screen relies on.
+  Opening it hid the just-focused toggle button with no landing spot (focus silently
+  drops to `<body>`); Cancel had the identical problem in reverse. No `aria-expanded` on
+  the toggle and no announcement mechanism at all, since this deliberately bypasses the
+  screen's only live-announcing surface (the `aria-live="polite"` feedback region).
+  `Cancel` also had no `aria-label`, ambiguous once more than one row is open (confirmed
+  the code doesn't actually prevent that). **Fixed**: explicit `.focus()` into the
+  minutes input on open and back onto the toggle on Cancel; `aria-expanded` toggled
+  alongside `.hidden`; `Cancel` now labeled per-cupper. Also flagged (low severity, took
+  the suggestion): `.timing-row-actions`'s gap widened from `--space-2` to `--space-3`,
+  matching this screen's own "tapped one-handed, sometimes urgently" design context.
+
+- **`code-reviewer`** — a validation error (`parseElapsedInput` throwing on a bad typo)
+  was routed through the full `renderOrShowError`/`render()` cycle even though no write
+  had ever been attempted — silently closing the toggle AND discarding whatever the
+  organiser had already correctly typed in the _other_ field, a real cost at the exact
+  time-pressured moment this fallback exists for. **Fixed**: validation now happens
+  locally, inside `renderTimingRows`' own `onSave` wrapper around `renderManualTimeFields`
+  — a parse failure shows a local `role="alert"` message (`.manual-time-local-error`)
+  and returns without ever calling the network-touching handler; `mountTimingScreen`'s
+  own `onSaveManual` now only ever receives an already-validated integer, never raw
+  strings, so a bad typo can no longer trigger a `render()` at all. Also flagged (design
+  risk, documented rather than engineered around): the countdown's own `handleExpiry`
+  can still fire while a row's manual fields are open, discarding an in-progress
+  hand-entry with only a generic "time's up" — accepted, since §7.1's "an unstopped
+  clock maxes at the full duration" is unconditional and the window this can actually
+  bite in (the clock hitting exactly zero mid-type on this one fallback path) is narrow.
+
+- **`test-auditor`** — mutation-tested the two success-path assertions
+  (`root.textContent.toContain('2:00')`/`'2:30'`) by forcing every write to be
+  mislabeled `maxed: true`; all 29 tests still passed, since `"Max time (2:00)"` also
+  contains the substring `"2:00"`. **Fixed**: every affected assertion now pins the
+  exact `.timing-row-result` text and its `data-maxed` flag. Also added: DOM assertions
+  to the mixed-entry integration test (previously only checked the backing store), a
+  negative test for a manual save landing after the heat has already advanced (mirroring
+  the existing tap-conflict test — genuinely new to this feature, since two write paths
+  can now race against one heat's completion), and (per `scoring-auditor`'s own
+  observation) a test proving a manually-entered value at/over `duration_secs` clamps
+  and displays as "Max time", not the entered figure.
+
+- **`module-boundary-checker`** — clean. Confirmed `timingManual.js` stays pure logic
+  (no DOM), no import cycle between the two screens, `src/core/` untouched, and the
+  `parseElapsedInput`/`secsToParts`/`renderManualTimeFields` relocations correctly
+  followed this project's own "extract on 2nd verbatim use" convention rather than
+  duplicating or over-abstracting.
+
+**Testing**: 32 tests in `timingScreen.test.js` (10 new/rewritten this round: toggle
+open/Cancel/Save/validation-error at the `renderTimingRows` level, plus 5 `mountTimingScreen`
+integration tests — success, max-clamping, the mixed-heat scenario, the local
+validation error end-to-end, and the manual-path conflict), `timingManual.test.js`
+gained `secsToParts` coverage (moved/added alongside the already-existing
+`parseElapsedInput` tests, relocated verbatim from `timingManualScreen.test.js`). Full
+suite 856/856 passing, `npm run lint`/`format:check` clean, pgTAP 129/129.
+
 ## Fix: router/slow-screen DOM-write race · 2026-09-04
 
 **Closes ROADMAP.md's "A real DOM-write race between the router and a slow-resolving
