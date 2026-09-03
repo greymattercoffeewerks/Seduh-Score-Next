@@ -23,7 +23,7 @@
 import { mountViewerShell } from '../../core/viewer-shell.js';
 import { mountViewerBody, hasViewableContent } from './viewerBody.js';
 
-export function mountProjectorSurface(root, { orgId, client } = {}) {
+export function mountProjectorSurface(root, { orgId, client, signal } = {}) {
   root.classList.add('projector-surface');
   root.setAttribute('data-surface', 'stage');
   return mountViewerShell(root, {
@@ -32,5 +32,6 @@ export function mountProjectorSurface(root, { orgId, client } = {}) {
     hasContent: hasViewableContent,
     showChrome: false,
     client,
+    signal,
   });
 }

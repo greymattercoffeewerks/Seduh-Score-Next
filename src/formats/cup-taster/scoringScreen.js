@@ -125,7 +125,10 @@ export function renderScoringRows(
   return el('ul', { className: 'timing-row-list' }, rows);
 }
 
-export async function mountScoringScreen(root, { eventId, heatId, client = getSupabase() } = {}) {
+export async function mountScoringScreen(
+  root,
+  { eventId, heatId, client = getSupabase(), signal } = {},
+) {
   let focusAfterRender = null;
   let pendingError = null;
   let pendingSuccess = null;
@@ -190,6 +193,15 @@ export async function mountScoringScreen(root, { eventId, heatId, client = getSu
     const myGeneration = ++renderGeneration;
     const data = await loadState();
     if (myGeneration !== renderGeneration) return;
+    // A discarded-but-still-in-flight render (this render's own loadState()
+    // still resolving after the router already navigated elsewhere) must
+    // never write to `root` again — router.js aborts `signal` the instant
+    // a newer navigation starts. Distinct from the renderGeneration check
+    // above: that one guards against a NEWER render() from THIS SAME
+    // screen instance winning; this one guards against the whole screen
+    // instance having been superseded by NAVIGATION. See ROADMAP.md's "A
+    // real DOM-write race between the router..." entry.
+    if (signal?.aborted) return;
 
     root.innerHTML = '';
 

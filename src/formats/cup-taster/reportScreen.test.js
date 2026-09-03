@@ -445,4 +445,65 @@ describe('mountReportScreen', () => {
     expect(feedback.dataset.tone).toBe('error');
     expect(feedback.textContent).toContain('connection lost');
   });
+
+  it('never writes to root again once its own signal is aborted mid-load — the router-navigation-race guard', async () => {
+    // Models the real bug (ROADMAP.md's "A real DOM-write race between the
+    // router..."): this screen's own load is still in flight when the
+    // router (in production) decides a newer navigation has superseded it
+    // and aborts this mount's signal — well before render()'s own
+    // loadState() promise gets a chance to resolve.
+    let resolveEvent;
+    const stages = [{ id: 's1', event_id: 'ev1', ordinal: 1, cutoff: null, status: 'running' }];
+    const client = {
+      from(table) {
+        if (table !== 'events') {
+          const rowsFor = table === 'ct_stages' ? stages : [];
+          const builder = {
+            select: () => builder,
+            eq: () => builder,
+            order: () => builder,
+            single: () => Promise.resolve({ data: rowsFor[0] ?? null, error: null }),
+            then: (resolve) => Promise.resolve({ data: rowsFor, error: null }).then(resolve),
+          };
+          return builder;
+        }
+        return {
+          select: () => ({
+            eq: () => ({
+              single: () =>
+                new Promise((resolve) => {
+                  resolveEvent = () => resolve({ data: event, error: null });
+                }),
+            }),
+          }),
+        };
+      },
+    };
+    const controller = new AbortController();
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+
+    const mountPromise = mountReportScreen(root, {
+      eventId: 'ev1',
+      client,
+      signal: controller.signal,
+    });
+
+    await vi.waitFor(() => expect(resolveEvent).toBeDefined());
+    expect(root.textContent).toContain('Loading');
+
+    // Simulate another, now-current screen having already rendered onto
+    // this SAME shared root — exactly what a router navigation away from
+    // this still-loading screen would have done in production.
+    root.innerHTML = '<div id="other-screen-marker">Screen B is showing now</div>';
+
+    controller.abort();
+    resolveEvent();
+    await mountPromise;
+
+    // render() must have bailed out entirely — root still shows the OTHER
+    // screen's content, untouched, not this screen's own report.
+    expect(root.querySelector('#other-screen-marker')).not.toBeNull();
+    expect(root.textContent).not.toContain('not available yet');
+  });
 });

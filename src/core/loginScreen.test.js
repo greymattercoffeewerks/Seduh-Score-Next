@@ -200,6 +200,54 @@ describe('mountLoginScreen', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
 
+  it('never writes to root again once its own signal is aborted mid-signIn — the router-navigation-race guard', async () => {
+    // Models the real bug (ROADMAP.md's "A real DOM-write race between the
+    // router..."): a signIn attempt is still in flight when the router (in
+    // production) decides a newer navigation has superseded this screen and
+    // aborts its signal, well before this screen's own handleSubmit
+    // continuation gets a chance to run.
+    let resolveSignIn;
+    const client = {
+      auth: {
+        signInWithPassword: () =>
+          new Promise((resolve) => {
+            resolveSignIn = () =>
+              resolve({ data: null, error: { message: 'Invalid login credentials' } });
+          }),
+      },
+    };
+    const controller = new AbortController();
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    await mountLoginScreen(root, { client, onSignedIn: vi.fn(), signal: controller.signal });
+
+    root.querySelector('[data-field="email"]').value = 'a@b.com';
+    root.querySelector('[data-field="email"]').dispatchEvent(new Event('input', { bubbles: true }));
+    root.querySelector('[data-field="password"]').value = 'x';
+    root
+      .querySelector('[data-field="password"]')
+      .dispatchEvent(new Event('input', { bubbles: true }));
+    root
+      .querySelector('form')
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(resolveSignIn).toBeDefined();
+
+    // Simulate another, now-current screen having already rendered onto
+    // this SAME shared root — exactly what a router navigation away from
+    // this still-signing-in screen would have done in production.
+    root.innerHTML = '<div id="other-screen-marker">Screen B is showing now</div>';
+
+    controller.abort();
+    resolveSignIn();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // render() must have bailed out entirely — root still shows the OTHER
+    // screen's content, untouched, not this screen's own error re-render.
+    expect(root.querySelector('#other-screen-marker')).not.toBeNull();
+    expect(root.textContent).not.toContain('Invalid login credentials');
+  });
+
   it('resolves to an object with a callable unmount()', async () => {
     const root = document.createElement('div');
     const handle = await mountLoginScreen(root, { client: fakeClient() });

@@ -198,7 +198,14 @@ function withTimeout(promise, ms) {
 
 export async function mountViewerShell(
   root,
-  { orgId, renderBody, hasContent = defaultHasContent, showChrome, client = getSupabase() } = {},
+  {
+    orgId,
+    renderBody,
+    hasContent = defaultHasContent,
+    showChrome,
+    client = getSupabase(),
+    signal,
+  } = {},
 ) {
   if (typeof showChrome !== 'boolean') {
     throw new TypeError('mountViewerShell: showChrome must be explicitly true or false');
@@ -301,7 +308,17 @@ export async function mountViewerShell(
       client.from('live_sessions').select('*').eq('org_id', orgId).eq('active', true).maybeSingle(),
       REFRESH_TIMEOUT_MS,
     );
-    if (!mounted) return;
+    // `mounted` alone only catches a callback firing after a legitimate
+    // unmount() already ran (it's set true BEFORE this refresh's own await,
+    // so it can't protect the FIRST refresh() call — the one still in
+    // flight when this whole mount() hasn't even returned a handle the
+    // router could call unmount() on yet). `signal` closes that gap:
+    // router.js aborts it the instant a newer navigation starts, even
+    // while this very call is still awaiting withTimeout() above — found
+    // in review (code-reviewer), correcting an earlier, incorrect claim
+    // that `mounted` alone already covered this. See ROADMAP.md's "A real
+    // DOM-write race between the router..." entry.
+    if (!mounted || signal?.aborted) return;
     // A slower-resolving earlier call must never clobber a faster-resolving
     // later one — real requests can complete out of order.
     if (seq !== requestSeq) return;
@@ -343,7 +360,7 @@ export async function mountViewerShell(
       // the file's own "a slower call must never clobber a faster one"
       // invariant (see the comment above) should hold uniformly, not just
       // for `session`, in case that assumption ever stops being true.
-      if (!mounted || seq !== requestSeq) return;
+      if (!mounted || signal?.aborted || seq !== requestSeq) return;
       hasEvent = foundEvent;
     }
     phase = computePhase();

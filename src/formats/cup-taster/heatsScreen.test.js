@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   renderRosterList,
   renderManualAssignmentForm,
@@ -800,5 +800,72 @@ describe('mountHeatGenerationScreen', () => {
 
     const link = root.querySelector('.heats-list a');
     expect(link.getAttribute('href')).toBe('#/events/ev1/heats/h1/timing');
+  });
+
+  it('never writes to root again once its own signal is aborted mid-load — the router-navigation-race guard', async () => {
+    // Models the real bug (ROADMAP.md's "A real DOM-write race between the
+    // router..."): this screen's own load is still in flight when the
+    // router (in production) decides a newer navigation has superseded it
+    // and aborts this mount's signal — well before render()'s own
+    // loadState() promise gets a chance to resolve.
+    let resolveEvent;
+    const otherTables = {
+      ct_stages: [stage],
+      ct_stage_entries: [],
+      event_entries: [],
+      ct_heats: [],
+    };
+    const client = {
+      from(table) {
+        if (table !== 'events') {
+          const rowsFor = otherTables[table] ?? [];
+          const builder = {
+            select: () => builder,
+            eq: () => builder,
+            order: () => builder,
+            single: () => Promise.resolve({ data: rowsFor[0] ?? null, error: null }),
+            maybeSingle: () => Promise.resolve({ data: rowsFor[0] ?? null, error: null }),
+            then: (resolve) => Promise.resolve({ data: rowsFor, error: null }).then(resolve),
+          };
+          return builder;
+        }
+        return {
+          select: () => ({
+            eq: () => ({
+              single: () =>
+                new Promise((resolve) => {
+                  resolveEvent = () => resolve({ data: nonTestEvent, error: null });
+                }),
+            }),
+          }),
+        };
+      },
+    };
+    const controller = new AbortController();
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+
+    const mountPromise = mountHeatGenerationScreen(root, {
+      eventId: 'ev1',
+      stageId: 's1',
+      client,
+      signal: controller.signal,
+    });
+
+    await vi.waitFor(() => expect(resolveEvent).toBeDefined());
+
+    // Simulate another, now-current screen having already rendered onto
+    // this SAME shared root — exactly what a router navigation away from
+    // this still-loading screen would have done in production.
+    root.innerHTML = '<div id="other-screen-marker">Screen B is showing now</div>';
+
+    controller.abort();
+    resolveEvent();
+    await mountPromise;
+
+    // render() must have bailed out entirely — root still shows the OTHER
+    // screen's content, untouched, not this screen's own heats UI.
+    expect(root.querySelector('#other-screen-marker')).not.toBeNull();
+    expect(root.textContent).not.toContain('Heat generation');
   });
 });

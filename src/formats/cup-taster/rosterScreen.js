@@ -178,7 +178,7 @@ export function renderRosterEntries(entries, { onToggleWithdrawn, disabled }) {
   );
 }
 
-export async function mountRosterScreen(root, { eventId, client = getSupabase() } = {}) {
+export async function mountRosterScreen(root, { eventId, client = getSupabase(), signal } = {}) {
   let event = null;
   let entries = [];
   let draft = blankDraft();
@@ -286,6 +286,12 @@ export async function mountRosterScreen(root, { eventId, client = getSupabase() 
   }
 
   function render() {
+    // A discarded-but-still-in-flight mount (attemptLoad, or a post-await
+    // handler still resolving after the router already navigated
+    // elsewhere) must never write to `root` again — router.js aborts
+    // `signal` the instant a newer navigation starts. See ROADMAP.md's "A
+    // real DOM-write race between the router..." entry.
+    if (signal?.aborted) return;
     if (loadFailedMessage) {
       renderLoadError();
       return;

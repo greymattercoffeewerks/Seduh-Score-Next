@@ -119,7 +119,7 @@ export function renderCreateForm(draft, { disabled }) {
 
 export async function mountEventsScreen(
   root,
-  { orgId, client = getSupabase(), defaultFormat } = {},
+  { orgId, client = getSupabase(), defaultFormat, signal } = {},
 ) {
   let events = [];
   let draft = blankDraft();
@@ -235,6 +235,15 @@ export async function mountEventsScreen(
   }
 
   function render() {
+    // A discarded-but-still-in-flight mount (this screen's OWN attemptLoad
+    // or a post-await handler like handleCreate, still resolving after the
+    // router already navigated elsewhere) must never write to `root` again
+    // — router.js aborts `signal` the instant a newer navigation starts,
+    // well before this screen's own promise chain gets a chance to
+    // finish. Single guard at render()'s own entry point covers every
+    // call site (initial load, Retry, create) in one place. See
+    // ROADMAP.md's "A real DOM-write race between the router..." entry.
+    if (signal?.aborted) return;
     if (loadFailedMessage) {
       renderLoadError();
       return;

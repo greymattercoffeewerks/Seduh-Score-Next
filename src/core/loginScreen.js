@@ -66,7 +66,7 @@ export function renderLoginForm(draft, { disabled }) {
   ]);
 }
 
-export async function mountLoginScreen(root, { client = getSupabase(), onSignedIn } = {}) {
+export async function mountLoginScreen(root, { client = getSupabase(), onSignedIn, signal } = {}) {
   let draft = { email: '', password: '' };
   let signingIn = false;
   let pendingError = null;
@@ -133,6 +133,12 @@ export async function mountLoginScreen(root, { client = getSupabase(), onSignedI
   }
 
   function render() {
+    // A discarded-but-still-in-flight signIn attempt (the router aborts
+    // `signal` the instant a newer navigation starts) must never write to
+    // `root` again — same guard shape as every other screen's own render()
+    // entry point. See ROADMAP.md's "A real DOM-write race between the
+    // router..." entry.
+    if (signal?.aborted) return;
     root.innerHTML = '';
     const container = el('section', { className: 'screen-container login-screen' });
     container.appendChild(el('h1', { text: 'Sign in' }));

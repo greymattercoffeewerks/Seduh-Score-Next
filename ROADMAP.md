@@ -404,20 +404,33 @@ station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can 
   review account (five parallel reviews, including a second code-reviewer pass that caught
   a high-severity gap in the first pass's own focus-move fix, and a CI-only prettier
   format:check failure neither local eslint nor the review passes caught).
-- **A real DOM-write race between the router and a slow-resolving screen is NOT closed —
-  found live-testing this app-wiring pass, documented rather than silently shipped.**
-  `router.js`'s `resolveSeq` staleness guard only protects its own `current` bookkeeping;
-  it cannot stop a discarded-but-still-in-flight screen's own internal
-  `root.innerHTML = ''`/`appendChild()` writes made while ITS OWN promise was still
-  resolving. Concretely: navigate away from a screen with a genuine in-flight network
-  load before that load finishes, and its late-arriving data can clobber whatever
-  screen is actually showing now, back to the stale one — with no error, no signal
-  anything went wrong. Closing this properly means giving every one of the ~10 existing
-  screens' own `attemptLoad()`/`render()` pattern a cancellation check (an `AbortSignal`
-  or equivalent) — real, worthwhile work, but a materially larger, more invasive change
-  than the app-wiring PR that surfaced it (retrofitting 10 already-shipped, already-
-  reviewed screens). Revisit as its own scoped task; in the meantime this is a real,
-  if narrow, correctness gap under fast navigation + slow network — not a hypothetical.
+- **The DOM-write race between the router and a slow-resolving screen is CLOSED
+  (2026-09-04).** `router.js`'s `resolveSeq` staleness guard alone only ever protected
+  its own `current` bookkeeping; it couldn't stop a discarded-but-still-in-flight
+  screen's own internal `root.innerHTML = ''`/`appendChild()` writes made while ITS OWN
+  promise was still resolving — even during a screen's very first mount, before it had
+  returned a handle the router could call `unmount()` on. Closed via an `AbortController`
+  `resolve()` creates per navigation, aborting the PREVIOUS one synchronously the
+  instant a newer navigation starts (not once the stale mount's own promise happens to
+  settle) — the resulting `signal` is threaded into every screen's mount call, and each
+  screen checks `signal?.aborted` before writing to `root` in its own post-await
+  continuation. Retrofitted across all 13 screens with the gap
+  (`core/eventsScreen.js`/`splashScreen.js`/`loginScreen.js`, all 10
+  `formats/cup-taster/*Screen.js` files), plus `main.js`'s `buildRoutes()` (found, mid-task,
+  to be silently dropping `signal` before it ever reached a screen — every route's own
+  params-reconstruction lambda needed its own fix) and `requireAuth()`'s own extra async
+  hop (`getSession()`). `core/viewer-shell.js` (and its two consumers,
+  `projectorSurface.js`/`phoneSummary.js`) was initially scoped OUT as "already guarded by
+  its own local `mounted` flag" — `code-reviewer` caught that this claim was false
+  (`mounted` is set `true` _before_ the initial `refresh()`'s own network await, so it only
+  ever protects a callback firing after a legitimate `unmount()`, never the still-in-flight
+  first load) — closed too, in the same pass, once the gap was confirmed real. 18 new
+  regression tests across `router.test.js`/`main.test.js`/13 screen test files, every one
+  hand-mutation-tested (guard disabled, confirmed the exact right test failed, restored).
+  One real mutation-testing-leftover bug (a guard left disabled in `eventsScreen.js`
+  after a manual test pass) was independently caught by two parallel reviewers
+  (`test-auditor`, `ui-accessibility-reviewer`) before merge — fixed. See CHANGELOG.md's
+  dated entry for the full four-reviewer account.
 - **Supabase cloud project linked, real organiser provisioned (2026-08-30)** — the
   project "Seduh Score Next" (`wxzwanprluqmgoagbkpv`) already existed (created before
   this session) but had zero migrations; all 11 are now applied and verified, plus a

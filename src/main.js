@@ -77,11 +77,22 @@ function requireAuth(mount, routerRef) {
       const result = await raceTimeout(params.client.auth.getSession(), DEFAULT_LOAD_TIMEOUT_MS);
       session = result.data.session;
     } catch {
+      // A newer navigation may already have superseded this one while
+      // getSession() was still in flight — router.js aborts `params.signal`
+      // the instant that happens, well before this catch runs. Writing an
+      // error screen here would clobber whatever's actually showing now.
+      // See ROADMAP.md's "A real DOM-write race between the router..." entry.
+      if (params.signal?.aborted) return undefined;
       return renderAuthCheckError(outlet, resolveCurrentPath);
     }
 
+    if (params.signal?.aborted) return undefined;
     if (session) return mount(outlet, params);
-    return mountLoginScreen(outlet, { client: params.client, onSignedIn: resolveCurrentPath });
+    return mountLoginScreen(outlet, {
+      client: params.client,
+      onSignedIn: resolveCurrentPath,
+      signal: params.signal,
+    });
   };
 }
 
@@ -105,85 +116,98 @@ export function buildRoutes({ orgId, bareRoot, routerRef }) {
     {
       pattern: '/events',
       mount: requireAuth(
-        (outlet, { client }) =>
-          mountEventsScreen(outlet, { orgId, client, defaultFormat: 'cup_taster' }),
+        (outlet, { client, signal }) =>
+          mountEventsScreen(outlet, { orgId, client, defaultFormat: 'cup_taster', signal }),
         routerRef,
       ),
     },
     {
       pattern: '/events/:eventId',
       mount: requireAuth(
-        (outlet, { eventId, client }) => mountEventDashboardScreen(outlet, { eventId, client }),
+        (outlet, { eventId, client, signal }) =>
+          mountEventDashboardScreen(outlet, { eventId, client, signal }),
         routerRef,
       ),
     },
     {
       pattern: '/events/:eventId/setup',
       mount: requireAuth(
-        (outlet, { eventId, client }) => mountSetupScreen(outlet, { eventId, client }),
+        (outlet, { eventId, client, signal }) =>
+          mountSetupScreen(outlet, { eventId, client, signal }),
         routerRef,
       ),
     },
     {
       pattern: '/events/:eventId/roster',
       mount: requireAuth(
-        (outlet, { eventId, client }) => mountRosterScreen(outlet, { eventId, client }),
+        (outlet, { eventId, client, signal }) =>
+          mountRosterScreen(outlet, { eventId, client, signal }),
         routerRef,
       ),
     },
     {
       pattern: '/events/:eventId/report',
       mount: requireAuth(
-        (outlet, { eventId, client }) => mountReportScreen(outlet, { eventId, client }),
+        (outlet, { eventId, client, signal }) =>
+          mountReportScreen(outlet, { eventId, client, signal }),
         routerRef,
       ),
     },
     {
       pattern: '/events/:eventId/stages/:stageId/heats',
       mount: requireAuth(
-        (outlet, { eventId, stageId, client }) =>
-          mountHeatGenerationScreen(outlet, { eventId, stageId, client }),
+        (outlet, { eventId, stageId, client, signal }) =>
+          mountHeatGenerationScreen(outlet, { eventId, stageId, client, signal }),
         routerRef,
       ),
     },
     {
       pattern: '/events/:eventId/stages/:stageId/standings',
       mount: requireAuth(
-        (outlet, { eventId, stageId, client }) =>
-          mountStandingsScreen(outlet, { eventId, stageId, client }),
+        (outlet, { eventId, stageId, client, signal }) =>
+          mountStandingsScreen(outlet, { eventId, stageId, client, signal }),
         routerRef,
       ),
     },
     {
       pattern: '/events/:eventId/heats/:heatId/timing',
       mount: requireAuth(
-        (outlet, { eventId, heatId, client }) =>
-          mountTimingRouteScreen(outlet, { eventId, heatId, client }),
+        (outlet, { eventId, heatId, client, signal }) =>
+          mountTimingRouteScreen(outlet, { eventId, heatId, client, signal }),
         routerRef,
       ),
     },
     {
       pattern: '/events/:eventId/heats/:heatId/scoring',
       mount: requireAuth(
-        (outlet, { eventId, heatId, client }) =>
-          mountScoringScreen(outlet, { eventId, heatId, client }),
+        (outlet, { eventId, heatId, client, signal }) =>
+          mountScoringScreen(outlet, { eventId, heatId, client, signal }),
         routerRef,
       ),
     },
     {
       // Deliberately NOT wrapped in requireAuth — the audience never
       // authenticates, by design (live_sessions is anon-readable; see
-      // 20260821240000_grants.sql).
+      // 20260821240000_grants.sql). `signal` IS threaded through here —
+      // this shares `bareRoot` with `/live/splash` (below), which already
+      // gets it; leaving this route unprotected would have left an
+      // asymmetric gap on the same shared outlet (found in review,
+      // correcting an earlier claim that viewer-shell.js's own `mounted`
+      // flag already covered this — it doesn't: `mounted` is set true
+      // BEFORE the initial refresh()'s own network await, so it only
+      // catches a callback firing after a legitimate unmount(), not the
+      // still-in-flight FIRST load this whole fix is about).
       pattern: '/live/projector',
       chrome: false,
       outlet: bareRoot,
-      mount: (outlet, { client }) => mountProjectorSurface(outlet, { orgId, client }),
+      mount: (outlet, { client, signal }) =>
+        mountProjectorSurface(outlet, { orgId, client, signal }),
     },
     {
       pattern: '/live/phone',
       chrome: false,
       outlet: bareRoot,
-      mount: (outlet, { client }) => mountPhoneSummary(outlet, { orgId, client }),
+      mount: (outlet, { client, signal }) => mountPhoneSummary(outlet, { orgId, client, signal }),
     },
     {
       // Deliberately NOT wrapped in requireAuth — same reasoning as the two
@@ -192,7 +216,7 @@ export function buildRoutes({ orgId, bareRoot, routerRef }) {
       pattern: '/live/splash',
       chrome: false,
       outlet: bareRoot,
-      mount: (outlet, { client }) => mountSplashScreen(outlet, { orgId, client }),
+      mount: (outlet, { client, signal }) => mountSplashScreen(outlet, { orgId, client, signal }),
     },
   ];
 }

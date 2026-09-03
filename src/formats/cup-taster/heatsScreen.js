@@ -178,7 +178,7 @@ export function renderHeatsList(heatsWithEntries, hydratedById, eventId) {
 
 export async function mountHeatGenerationScreen(
   root,
-  { eventId, stageId, client = getSupabase() } = {},
+  { eventId, stageId, client = getSupabase(), signal } = {},
 ) {
   let focusAfterRender = null;
   let pendingError = null;
@@ -222,6 +222,12 @@ export async function mountHeatGenerationScreen(
 
   async function render() {
     const data = await loadState();
+    // A discarded-but-still-in-flight render (loadState() still resolving
+    // after the router already navigated elsewhere) must never write to
+    // `root` again — router.js aborts `signal` the instant a newer
+    // navigation starts. See ROADMAP.md's "A real DOM-write race between
+    // the router..." entry.
+    if (signal?.aborted) return;
     root.innerHTML = '';
 
     const container = el('section', { className: 'screen-container heats-screen' });

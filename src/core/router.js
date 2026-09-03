@@ -68,7 +68,24 @@ export function createRouter({ routes, client = getSupabase(), notFoundMount, on
   // `current?.unmount?.()` step could run AFTER a newer resolve has already
   // mounted the real current screen, incorrectly unmounting IT instead of
   // whatever the stale resolve was actually superseding.
+  //
+  // resolveSeq alone only protects THIS module's own `current` bookkeeping
+  // — it cannot stop a stale screen's own internal DOM writes (its
+  // attemptLoad()/render() pattern) from landing on the shared outlet
+  // BEFORE its `route.mount()` promise even resolves back here, since the
+  // staleness check below only runs AFTER that await. A screen can't be
+  // told "you lost" via `unmount()` until it returns a handle to be
+  // unmounted — which, for the very screen that's still stuck resolving,
+  // hasn't happened yet. `abortController`/`signal` below closes that gap:
+  // every screen's `mount()` receives a `signal` it's expected to check
+  // before any DOM write that follows an `await`, and THIS module aborts
+  // the previous resolve's controller the INSTANT a newer resolve() starts
+  // — not once its mount() finishes — so a screen still in flight can see
+  // it's already been superseded before its own late render() runs.
+  // Genuinely found live-testing the app-wiring pass, not a hypothetical
+  // (see ROADMAP.md's "Known open items").
   let resolveSeq = 0;
+  let currentAbortController = null;
 
   function currentPath() {
     return location.hash.replace(/^#/, '');
@@ -76,6 +93,13 @@ export function createRouter({ routes, client = getSupabase(), notFoundMount, on
 
   async function resolve(path) {
     const mySeq = (resolveSeq += 1);
+    // Abort synchronously, BEFORE this resolve does anything async — a
+    // still-in-flight previous mount() may check `signal.aborted` at any
+    // point after its own next `await`, including one that's already
+    // pending right now.
+    currentAbortController?.abort();
+    const abortController = new AbortController();
+    currentAbortController = abortController;
     const matched = matchRoute(routes, path);
     const route = matched?.route ?? { mount: notFoundMount, outlet: undefined };
     const params = matched?.params ?? {};
@@ -95,7 +119,8 @@ export function createRouter({ routes, client = getSupabase(), notFoundMount, on
     // nothing here enforces the pairing for a future outlet-override route
     // built on a no-op-unmount screen.
     const outlet = route.outlet ?? defaultOutlet;
-    const mounted = (await route.mount(outlet, { ...params, client })) ?? null;
+    const mounted =
+      (await route.mount(outlet, { ...params, client, signal: abortController.signal })) ?? null;
 
     if (mySeq !== resolveSeq) {
       // A newer resolve() started while this one's mount() was in flight —
@@ -165,6 +190,8 @@ export function createRouter({ routes, client = getSupabase(), notFoundMount, on
       window.removeEventListener('hashchange', hashChangeListener);
       hashChangeListener = null;
     }
+    currentAbortController?.abort();
+    currentAbortController = null;
     await current?.unmount?.();
     current = null;
   }

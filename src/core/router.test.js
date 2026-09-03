@@ -98,7 +98,11 @@ describe('createRouter', () => {
     expect(calls).toHaveLength(1);
     expect(calls[0].name).toBe('dashboard');
     expect(calls[0].outlet).toBe(outlet);
-    expect(calls[0].props).toEqual({ eventId: 'ev1', client });
+    expect(calls[0].props).toEqual({
+      eventId: 'ev1',
+      client,
+      signal: expect.any(AbortSignal),
+    });
   });
 
   it('an empty hash on start resolves to fallbackPath without writing to location.hash', async () => {
@@ -228,6 +232,71 @@ describe('createRouter', () => {
     // The stale mount's OWN result is still correctly torn down — the
     // guard discards it, it doesn't leak it.
     expect(slowUnmount).toHaveBeenCalledTimes(1);
+  });
+
+  it("aborts a still-in-flight mount's own signal the INSTANT a newer navigation starts — not once the stale mount finally settles", async () => {
+    // resolveSeq alone (proven by the test above) only protects this
+    // module's OWN `current` bookkeeping; it can't stop a stale screen's
+    // own internal render() from writing to the shared outlet before its
+    // mount() promise even resolves back to resolve(). This test proves
+    // the mechanism that closes THAT gap: `signal` must already read
+    // `aborted === true` while the slow mount is still suspended, well
+    // before it ever gets a chance to return — a screen checking
+    // `signal.aborted` in its own post-await continuation sees it in time.
+    let resolveSlow;
+    let slowSignal;
+    const routes = [
+      {
+        pattern: '/slow',
+        mount: async (outlet, { signal }) => {
+          slowSignal = signal;
+          await new Promise((resolve) => {
+            resolveSlow = resolve;
+          });
+          return { unmount: vi.fn() };
+        },
+      },
+      { pattern: '/fast', mount: async (outlet, { signal }) => ({ unmount: vi.fn(), signal }) },
+    ];
+    const router = trackedRouter({ routes, client: {} });
+
+    const slowResolved = router.resolve('/slow');
+    // Let /slow's mount() actually start running (assigns slowSignal) and
+    // suspend at its own await, before /fast supersedes it.
+    await Promise.resolve();
+    expect(slowSignal.aborted).toBe(false);
+
+    await router.resolve('/fast');
+    // The fast navigation is now current, but the SLOW mount is still
+    // suspended, unresolved — yet its signal must already be aborted.
+    expect(slowSignal.aborted).toBe(true);
+
+    resolveSlow();
+    await slowResolved;
+    // Aborting the loser must never touch the winner's own signal.
+    expect(slowSignal.aborted).toBe(true);
+  });
+
+  it('passes a fresh, not-yet-aborted signal to each new navigation', async () => {
+    const signals = [];
+    function trackingMount(outlet, { signal }) {
+      signals.push(signal);
+      return { unmount: vi.fn() };
+    }
+    const routes = [
+      { pattern: '/a', mount: trackingMount },
+      { pattern: '/b', mount: trackingMount },
+    ];
+    const router = trackedRouter({ routes, client: {} });
+    const outlet = document.createElement('div');
+
+    await router.start(outlet, { fallbackPath: '/a' });
+    await router.resolve('/b');
+
+    expect(signals).toHaveLength(2);
+    expect(signals[0]).not.toBe(signals[1]);
+    expect(signals[0].aborted).toBe(true); // /a was superseded by /b
+    expect(signals[1].aborted).toBe(false); // /b is current
   });
 
   it("moves focus to the new screen's own heading after navigation, since the outgoing screen's removal resets focus to <body> with no other signal", async () => {

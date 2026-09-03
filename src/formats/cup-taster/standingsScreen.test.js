@@ -953,4 +953,84 @@ describe('mountStandingsScreen', () => {
     await mountStandingsScreen(root, { eventId: 'ev1', stageId: 's1', client });
     expect(root.querySelector('.is-test-banner')).not.toBeNull();
   });
+
+  it('never writes to root again once its own signal is aborted mid-load — the router-navigation-race guard', async () => {
+    // Models the real bug (ROADMAP.md's "A real DOM-write race between the
+    // router..."): this screen's own INITIAL load is still in flight when
+    // the router (in production) decides a newer navigation has superseded
+    // it and aborts this mount's signal — well before render()'s own
+    // loadState() promise gets a chance to resolve. Distinct from the
+    // renderGeneration/actionInFlight guards this screen already has, which
+    // protect against races WITHIN one already-mounted screen instance.
+    let resolveEvent;
+    const stage = {
+      id: 's1',
+      event_id: 'ev1',
+      ordinal: 1,
+      kind: 'prelims',
+      cutoff: 2,
+      status: 'running',
+    };
+    const otherTables = {
+      ct_stages: [stage],
+      ct_stage_entries: stageEntries,
+      ct_standings: [],
+      event_entries: roster,
+      ct_heats: [{ id: 'h1', stage_id: 's1', kind: 'normal', heat_number: 1, status: 'timing' }],
+      ct_heat_entries: [],
+    };
+    const client = {
+      from(table) {
+        if (table !== 'events') {
+          const queue = [...(otherTables[table] ?? [])];
+          const builder = {
+            select: () => builder,
+            eq: () => builder,
+            in: () => builder,
+            order: () => builder,
+            single: () => Promise.resolve({ data: queue[0] ?? null, error: null }),
+            maybeSingle: () => Promise.resolve({ data: queue[0] ?? null, error: null }),
+            then: (resolve) => Promise.resolve({ data: queue, error: null }).then(resolve),
+          };
+          return builder;
+        }
+        return {
+          select: () => ({
+            eq: () => ({
+              single: () =>
+                new Promise((resolve) => {
+                  resolveEvent = () => resolve({ data: event, error: null });
+                }),
+            }),
+          }),
+        };
+      },
+    };
+    const controller = new AbortController();
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+
+    const mountPromise = mountStandingsScreen(root, {
+      eventId: 'ev1',
+      stageId: 's1',
+      client,
+      signal: controller.signal,
+    });
+
+    await vi.waitFor(() => expect(resolveEvent).toBeDefined());
+
+    // Simulate another, now-current screen having already rendered onto
+    // this SAME shared root — exactly what a router navigation away from
+    // this still-loading screen would have done in production.
+    root.innerHTML = '<div id="other-screen-marker">Screen B is showing now</div>';
+
+    controller.abort();
+    resolveEvent();
+    await mountPromise;
+
+    // render() must have bailed out entirely — root still shows the OTHER
+    // screen's content, untouched, not this screen's own standings table.
+    expect(root.querySelector('#other-screen-marker')).not.toBeNull();
+    expect(root.textContent).not.toContain('Waiting on');
+  });
 });

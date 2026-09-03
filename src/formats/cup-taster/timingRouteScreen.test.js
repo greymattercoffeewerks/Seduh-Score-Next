@@ -116,6 +116,58 @@ describe('mountTimingRouteScreen', () => {
     expect(mountTimingScreen).toHaveBeenCalledTimes(1);
   });
 
+  it('threads its own signal into whichever inner screen it mounts', async () => {
+    findHeatById.mockResolvedValue({ id: 'h1', timing_mode: 'app' });
+    mountTimingScreen.mockResolvedValue({ unmount: vi.fn() });
+    const controller = new AbortController();
+    const root = document.createElement('div');
+
+    await mountTimingRouteScreen(root, {
+      eventId: 'ev1',
+      heatId: 'h1',
+      client: {},
+      signal: controller.signal,
+    });
+
+    expect(mountTimingScreen).toHaveBeenCalledWith(
+      root,
+      expect.objectContaining({ signal: controller.signal }),
+    );
+  });
+
+  it('never mounts either inner screen once its own signal is aborted mid-lookup — the router-navigation-race guard', async () => {
+    // Models the real bug (ROADMAP.md's "A real DOM-write race between the
+    // router..."): findHeatById() is still in flight when the router (in
+    // production) decides a newer navigation has superseded this dispatcher
+    // and aborts its signal. Mounting an inner screen at that point would
+    // still clobber `root` via that screen's own synchronous, unguarded
+    // initial paint, even though nothing downstream would ever undo it.
+    let resolveHeat;
+    findHeatById.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveHeat = () => resolve({ id: 'h1', timing_mode: 'app' });
+      }),
+    );
+    const controller = new AbortController();
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+
+    const mountPromise = mountTimingRouteScreen(root, {
+      eventId: 'ev1',
+      heatId: 'h1',
+      client: {},
+      signal: controller.signal,
+    });
+
+    await vi.waitFor(() => expect(resolveHeat).toBeDefined());
+    controller.abort();
+    resolveHeat();
+    await mountPromise;
+
+    expect(mountTimingScreen).not.toHaveBeenCalled();
+    expect(mountManualTimingScreen).not.toHaveBeenCalled();
+  });
+
   it('resolves to an object with a callable unmount() even when the inner screen never mounted', async () => {
     findHeatById.mockRejectedValueOnce(new Error('network down'));
     const root = document.createElement('div');

@@ -143,6 +143,22 @@ describe('mountApp routing', () => {
     );
   });
 
+  it('threads a real AbortSignal into the mounted screen — the router-navigation-race guard depends on every screen actually receiving one', async () => {
+    // main.js's own buildRoutes() reconstructs a NARROWER params object for
+    // every screen call site, rather than forwarding router.js's params
+    // wholesale — router.js passing a signal into route.mount() is useless
+    // to a screen if this file drops it along the way. Regression coverage
+    // for exactly that gap (found while wiring core/router.js's own signal
+    // mechanism). See ROADMAP.md's "A real DOM-write race between the
+    // router..." entry.
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    await startApp();
+    expect(mountEventsScreen).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
   it('#/events/:eventId routes to the event dashboard with the right param', async () => {
     stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
     stubScreen(mountEventDashboardScreen, 'DASHBOARD_SCREEN');
@@ -208,7 +224,7 @@ describe('mountApp routing', () => {
     expect(root.textContent).toContain('PROJECTOR_SCREEN');
     expect(mountProjectorSurface).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ orgId: 'org1' }),
+      expect.objectContaining({ orgId: 'org1', signal: expect.any(AbortSignal) }),
     );
 
     location.hash = '#/live/phone';
@@ -216,7 +232,7 @@ describe('mountApp routing', () => {
     expect(root.textContent).toContain('PHONE_SCREEN');
     expect(mountPhoneSummary).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ orgId: 'org1' }),
+      expect.objectContaining({ orgId: 'org1', signal: expect.any(AbortSignal) }),
     );
   });
 
@@ -353,6 +369,60 @@ describe('the temporary auth gate (requireAuth)', () => {
     const { root } = await startApp({ client: fakeClient({ session: null }) });
     expect(root.textContent).toContain('SPLASH_SCREEN');
     expect(mountLoginScreen).not.toHaveBeenCalled();
+  });
+
+  it('a still-in-flight session check that gets superseded by a newer navigation mounts neither the login screen nor the real one for the stale attempt', async () => {
+    // requireAuth()'s own getSession() call is a real network round trip —
+    // if a newer navigation starts (and router.js aborts this resolve's
+    // signal) before it settles, neither branch it could take (render the
+    // login screen, or mount the real one) should still happen once it
+    // finally does. Models the same class of race core/router.test.js's
+    // own "aborts a still-in-flight mount's own signal" test proves at the
+    // router level, but through requireAuth()'s own extra async hop.
+    // Only the FIRST getSession() call (for the stale '/events' navigation)
+    // stays pending — the SECOND (for '/events/ev1', the one that's
+    // supposed to win) resolves immediately with a real session, exactly
+    // as it would in production where only the SUPERSEDED navigation's own
+    // network call happens to be the slow one.
+    let resolveGetSession;
+    let getSessionCalls = 0;
+    const client = fakeClient();
+    client.auth.getSession = () => {
+      getSessionCalls += 1;
+      if (getSessionCalls === 1) {
+        return new Promise((resolve) => {
+          resolveGetSession = () => resolve({ data: { session: null } });
+        });
+      }
+      return Promise.resolve({ data: { session: { user: { email: 'organiser@test.com' } } } });
+    };
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    stubScreen(mountEventDashboardScreen, 'DASHBOARD_SCREEN');
+
+    // Not startApp()/app.ready — the FIRST resolve()'s own getSession()
+    // deliberately never settles in this test, so awaiting `.ready` here
+    // would hang forever. Tracked as activeApp anyway so afterEach's own
+    // cleanup still tears it down.
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const app = mountApp(root, { client, orgId: 'org1' });
+    activeApp = app;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(resolveGetSession).toBeDefined();
+
+    // A second, faster navigation supersedes the still-pending first one.
+    location.hash = '#/events/ev1';
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(root.textContent).toContain('DASHBOARD_SCREEN');
+
+    // NOW let the stale getSession() finally resolve (session: null, which
+    // would normally mount the login screen).
+    resolveGetSession();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mountLoginScreen).not.toHaveBeenCalled();
+    expect(mountEventsScreen).not.toHaveBeenCalled();
+    expect(root.textContent).toContain('DASHBOARD_SCREEN');
   });
 
   it('a successful sign-in transitions straight into the screen the user originally tried to reach', async () => {

@@ -118,10 +118,47 @@ one route entry for "timing" but two real screens depending on the heat's own
 screen already had one), and its "generation complete" heats list had no links into
 Timing/Scoring at all — new `heatActionLink()` closes both.
 
-**A real gap found live-testing this same pass, NOT closed here**:
-`core/router.js`'s `resolveSeq` staleness guard protects its own `current` bookkeeping
-only — it cannot stop a discarded-but-still-in-flight screen's OWN internal DOM writes
-(every screen here's own `attemptLoad()`/`render()` pattern) from landing after a newer
-navigation already mounted something else. Closing it means retrofitting every one of
-these ~10 screens' own load pattern with a cancellation check — out of scope for the
-app-wiring pass that found it; see ROADMAP.md's "Known open items" for the account.
+**The router/slow-screen DOM-write race found live-testing this same pass is CLOSED
+(2026-09-04 follow-up)** — `core/router.js`'s `resolveSeq` staleness guard alone only
+ever protected its own `current` bookkeeping; it couldn't stop a discarded-but-
+still-in-flight screen's OWN internal DOM writes (every screen here's own
+`attemptLoad()`/`render()` pattern) from landing after a newer navigation already
+mounted something else — including during a screen's very FIRST mount, before it had
+returned a handle the router could ever call `unmount()` on. Closed with an
+`AbortController`/`signal` mechanism: `core/router.js`'s `resolve()` now aborts the
+PREVIOUS navigation's controller synchronously the instant a newer one starts, and
+every one of this format's 10 screens (`setupScreen`/`rosterScreen`/
+`eventDashboardScreen`/`timingRouteScreen`/`timingScreen`/`timingManualScreen`/
+`scoringScreen`/`heatsScreen`/`standingsScreen`/`reportScreen`) plus `core/eventsScreen`/
+`splashScreen`/`loginScreen` now check `signal?.aborted` before writing to `root` in
+their own post-await continuation. `timingRouteScreen.js`'s dispatcher gained an extra
+guard right after its own `findHeatById()` resolves — not to prevent a DOM clobber (its
+two inner screens already guard that themselves), but to skip a wasted network round
+trip once the lookup is already known-stale.
+
+Found genuinely mid-task, not scoped up front: `main.js`'s own `buildRoutes()` was
+silently DROPPING `signal` before it ever reached a real screen (every route's lambda
+reconstructs a narrower params object rather than forwarding the router's own params
+wholesale) — router.js's fix alone was inert without this. `requireAuth()`'s own extra
+async hop (`getSession()`) needed the identical check. `core/viewer-shell.js` (and its
+two consumers, `projectorSurface.js`/`phoneSummary.js`) was initially scoped OUT,
+reasoning its own local `mounted` flag already covered this — `code-reviewer` found
+that reasoning was wrong (`mounted` is set `true` _before_ the initial `refresh()`'s own
+network await, so it only protects a callback firing after a legitimate `unmount()`,
+never the still-in-flight first load) and flagged a real, live asymmetry: `/live/splash`
+shares `bareRoot` with `/live/projector`/`/live/phone`, and only splash had gotten the
+fix. Closed in the same pass once confirmed real.
+
+18 new regression tests across `router.test.js`, `main.test.js`, and one per screen —
+each hand-mutation-tested (guard disabled, confirmed the exact right test failed,
+restored). One real bug slipped through a first mutation-testing pass anyway: a guard in
+`eventsScreen.js` was left disabled (a stray `// MUTATED-FOR-TEST if (false && ...)`)
+after manual verification and never restored — caught independently by BOTH
+`test-auditor` and `ui-accessibility-reviewer` in the same parallel review round (the
+latter via its own focus-management angle: the disabled guard meant a superseded
+Events-screen render could still yank keyboard focus back onto itself after clobbering
+the current screen). `module-boundary-checker` came back clean (the `AbortController`
+mechanism is a Web-standard primitive with zero format opinion; the repeated
+`if (signal?.aborted) return;` one-liner across 13 files was assessed as reasonable
+given each screen's differing render() shape, not a duplication smell worth extracting).
+See ROADMAP.md's dated entry and CHANGELOG.md for the full four-reviewer account.

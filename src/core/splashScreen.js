@@ -23,7 +23,7 @@ import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
 
 const APP_NAME = 'Seduh Score';
 
-export function mountSplashScreen(root, { orgId, client = getSupabase() } = {}) {
+export function mountSplashScreen(root, { orgId, client = getSupabase(), signal } = {}) {
   root.innerHTML = '';
   root.classList.add('splash-screen');
   root.setAttribute('data-surface', 'stage');
@@ -96,6 +96,13 @@ export function mountSplashScreen(root, { orgId, client = getSupabase() } = {}) 
 
   loadEvent(orgId, client)
     .then((event) => {
+      // A navigation away from this screen (router.js aborts `signal` the
+      // instant a newer one starts) must stop this late-resolving read
+      // from writing into a root some other, now-current screen may
+      // already be using — same guard shape as every other screen's own
+      // render() entry point. See ROADMAP.md's "A real DOM-write race
+      // between the router..." entry.
+      if (signal?.aborted) return;
       if (!event) return;
       fillEvent(
         eventLine,

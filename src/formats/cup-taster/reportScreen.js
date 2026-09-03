@@ -241,7 +241,7 @@ function renderStageSection(stageReport) {
   ]);
 }
 
-export async function mountReportScreen(root, { eventId, client = getSupabase() } = {}) {
+export async function mountReportScreen(root, { eventId, client = getSupabase(), signal } = {}) {
   async function loadState() {
     const event = await findEvent(eventId, client);
     const complete = await isEventComplete(eventId, client);
@@ -413,8 +413,15 @@ export async function mountReportScreen(root, { eventId, client = getSupabase() 
     renderLoading();
     try {
       const data = await loadState();
+      // A discarded-but-still-in-flight load (this render's own loadState()
+      // still resolving after the router already navigated elsewhere) must
+      // never write to `root` again — router.js aborts `signal` the
+      // instant a newer navigation starts. See ROADMAP.md's "A real
+      // DOM-write race between the router..." entry.
+      if (signal?.aborted) return;
       renderReport(data);
     } catch (err) {
+      if (signal?.aborted) return;
       renderError(describeError(err));
     }
   }

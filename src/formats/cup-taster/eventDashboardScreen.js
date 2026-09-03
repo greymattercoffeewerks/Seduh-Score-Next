@@ -42,7 +42,10 @@ export function renderStageCard(eventId, stage, hasHeats) {
   ]);
 }
 
-export async function mountEventDashboardScreen(root, { eventId, client = getSupabase() } = {}) {
+export async function mountEventDashboardScreen(
+  root,
+  { eventId, client = getSupabase(), signal } = {},
+) {
   let loadFailedMessage = null;
   let loading = false;
 
@@ -110,6 +113,12 @@ export async function mountEventDashboardScreen(root, { eventId, client = getSup
   }
 
   function render(data) {
+    // A discarded-but-still-in-flight mount (attemptLoad, still resolving
+    // after the router already navigated elsewhere) must never write to
+    // `root` again — router.js aborts `signal` the instant a newer
+    // navigation starts. See ROADMAP.md's "A real DOM-write race between
+    // the router..." entry.
+    if (signal?.aborted) return;
     if (loadFailedMessage) {
       renderLoadError();
       return;
