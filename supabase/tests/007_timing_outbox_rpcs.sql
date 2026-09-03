@@ -14,7 +14,7 @@
 -- established, for the same reason (a missing GRANT or org-scoping check
 -- must surface here, not be masked by superuser bypass).
 begin;
-select plan(39);
+select plan(42);
 
 -- ============ fixtures ============
 
@@ -303,6 +303,38 @@ select is(
   (select elapsed_secs from ct_heat_entries where id = '00000000-0000-0000-0000-0000000000f3'),
   210,
   'the rejected late correction left the frozen value untouched'
+);
+
+-- 'overwrite' scoped to a prior MANUAL entry only (2026-09-04 follow-up) —
+-- closes a real data-corruption path scoring-auditor found in review: the
+-- app-mode timing screen's own mid-heat manual-entry fallback
+-- (formats/cup-taster/timingScreen.js) reuses this same 'overwrite' policy,
+-- but a real tap and a manual guess for the SAME cupper can both get
+-- queued offline (this app's own outbox model) and flush in either order.
+-- Before this fix, tap-then-manual silently clobbered an accurate,
+-- already-committed tapped time with a hand-typed guess — no conflict, a
+-- false "recorded" success. f1 (heat d1, above) is exactly that: a real
+-- tap, elapsed_secs=200, time_source='tapped', and the heat has since
+-- advanced to 'scoring' (line ~239 above) — the same fixture state a
+-- late-flushing manual save for that same cupper would actually see.
+select throws_ok(
+  $$ select record_heat_time(
+       gen_random_uuid(), '00000000-0000-0000-0000-000000000010',
+       '00000000-0000-0000-0000-0000000000f1', 'scoring', 999, 999, false, 'manual', now(), 'overwrite'
+     ) $$,
+  'P0002',
+  null,
+  'a manual "overwrite" attempt on an already-TAPPED entry is now refused, not silently applied'
+);
+select is(
+  (select elapsed_secs from ct_heat_entries where id = '00000000-0000-0000-0000-0000000000f1'),
+  200,
+  'the refused overwrite left the real tapped time untouched'
+);
+select is(
+  (select time_source from ct_heat_entries where id = '00000000-0000-0000-0000-0000000000f1'),
+  'tapped',
+  'time_source itself is also untouched — still genuinely tapped, not silently relabeled manual'
 );
 
 -- ============ auto_max_heat ============

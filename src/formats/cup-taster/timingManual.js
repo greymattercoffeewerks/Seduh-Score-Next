@@ -25,6 +25,39 @@ import { enqueueOperation, flushOutbox } from '../../core/outbox.js';
 import { buildClampedUpdate, buildRecordHeatTimePayload, timingHandlers } from './timing.js';
 import { getSupabase } from '../../core/supabaseClient.js';
 
+// Splits a total-seconds value into [minutes, seconds] for pre-filling a
+// manual-entry form's two input fields — the inverse of parseElapsedInput
+// below. `null` in, `[null, null]` out, so an unrecorded entry's inputs
+// start genuinely empty rather than pre-filled with "0" (which would look
+// identical to a real, deliberately-entered zero). Pure, no DOM — lives
+// here rather than in a screen file so BOTH timingManualScreen.js (every
+// row, always) and timingScreen.js (an unstopped row's opt-in manual-entry
+// fallback) can import it without either screen importing from the other.
+export function secsToParts(totalSecs) {
+  if (totalSecs == null) return [null, null];
+  return [Math.floor(totalSecs / 60), totalSecs % 60];
+}
+
+// Exported for direct unit testing, same as formatDuration's own precedent.
+// Rejects an empty field rather than treating it as 0 (the
+// `Number('') === 0` trap this project has hit before, see
+// heatsScreen.js's readManualAssignmentForm) — an accidental Save on an
+// untouched row must never silently record the fastest possible time.
+// Seconds is bounded to 0–59 (unlike minutes) specifically to catch an
+// obvious mis-entry (e.g. "3:75") as a clear validation error rather than
+// silently accepting it as valid arithmetic.
+export function parseElapsedInput(minutesRaw, secondsRaw) {
+  const minutes = Number(minutesRaw);
+  if (minutesRaw === '' || !Number.isInteger(minutes) || minutes < 0) {
+    throw new Error(`Minutes must be a whole number, 0 or greater — got "${minutesRaw}"`);
+  }
+  const seconds = Number(secondsRaw);
+  if (secondsRaw === '' || !Number.isInteger(seconds) || seconds < 0 || seconds > 59) {
+    throw new Error(`Seconds must be a whole number from 0 to 59 — got "${secondsRaw}"`);
+  }
+  return minutes * 60 + seconds;
+}
+
 // `heat` and `heatEntry` are the caller's own already-loaded, already-
 // rendered state — same discipline as timing.js's recordTap, and for the
 // same reason: this must succeed (i.e. enqueue) purely from local

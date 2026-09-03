@@ -14,44 +14,14 @@
 import { findHeatById, listHeatEntries, hydrateEntries } from './heats.js';
 import { listEntriesByIds } from '../../core/registry.js';
 import { findEvent } from '../../core/events.js';
-import { recordManualTime } from './timingManual.js';
+import { recordManualTime, parseElapsedInput } from './timingManual.js';
 import { describeTimingConflict } from './timing.js';
 import { cupTasterOutboxHandlers } from './outboxHandlers.js';
-import { renderTimingRows, buildScoringLink } from './timingScreen.js';
+import { renderTimingRows, buildScoringLink, renderManualTimeFields } from './timingScreen.js';
 import { getSupabase } from '../../core/supabaseClient.js';
 import { el } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
 import { formatDuration } from '../../core/duration.js';
-
-// Splits a total-seconds value into [minutes, seconds] for pre-filling the
-// two input fields — the inverse of parseElapsedInput below. `null` in,
-// `[null, null]` out, so an unrecorded entry's inputs start genuinely empty
-// rather than pre-filled with "0" (which would look identical to a real,
-// deliberately-entered zero).
-function secsToParts(totalSecs) {
-  if (totalSecs == null) return [null, null];
-  return [Math.floor(totalSecs / 60), totalSecs % 60];
-}
-
-// Exported for direct unit testing, same as formatDuration's own precedent.
-// Rejects an empty field rather than treating it as 0 (the
-// `Number('') === 0` trap this project has hit before, see
-// heatsScreen.js's readManualAssignmentForm) — an accidental Save on an
-// untouched row must never silently record the fastest possible time.
-// Seconds is bounded to 0–59 (unlike minutes) specifically to catch an
-// obvious mis-entry (e.g. "3:75") as a clear validation error rather than
-// silently accepting it as valid arithmetic.
-export function parseElapsedInput(minutesRaw, secondsRaw) {
-  const minutes = Number(minutesRaw);
-  if (minutesRaw === '' || !Number.isInteger(minutes) || minutes < 0) {
-    throw new Error(`Minutes must be a whole number, 0 or greater — got "${minutesRaw}"`);
-  }
-  const seconds = Number(secondsRaw);
-  if (secondsRaw === '' || !Number.isInteger(seconds) || seconds < 0 || seconds > 59) {
-    throw new Error(`Seconds must be a whole number from 0 to 59 — got "${secondsRaw}"`);
-  }
-  return minutes * 60 + seconds;
-}
 
 export function renderManualEntryRows(hydratedEntries, { onSave }) {
   const rows = hydratedEntries.map((entry) => {
@@ -62,38 +32,6 @@ export function renderManualEntryRows(hydratedEntries, { onSave }) {
         entry.station ? el('span', { className: 'station-badge', text: entry.station }) : null,
         el('span', { className: 'timing-row-name-text', text: entry.displayName }),
       ].filter(Boolean),
-    );
-
-    const [prefillMin, prefillSec] = secsToParts(entry.elapsed_secs_raw ?? entry.elapsed_secs);
-    const minutesInput = el('input', {
-      className: 'field-input manual-time-input',
-      attrs: {
-        type: 'number',
-        min: '0',
-        inputmode: 'numeric',
-        'aria-label': `${entry.displayName}: minutes`,
-        value: prefillMin != null ? String(prefillMin) : '',
-      },
-    });
-    const secondsInput = el('input', {
-      className: 'field-input manual-time-input',
-      attrs: {
-        type: 'number',
-        min: '0',
-        max: '59',
-        inputmode: 'numeric',
-        'aria-label': `${entry.displayName}: seconds`,
-        value: prefillSec != null ? String(prefillSec) : '',
-      },
-    });
-    const saveLabel = entry.elapsed_secs != null ? 'Update' : 'Save';
-    const saveButton = el('button', {
-      className: 'btn btn-primary tap-target',
-      text: saveLabel,
-      attrs: { 'aria-label': `${saveLabel} ${entry.displayName}'s time` },
-    });
-    saveButton.addEventListener('click', () =>
-      onSave(entry.entry_id, minutesInput.value, secondsInput.value),
     );
 
     const statusNode =
@@ -109,17 +47,7 @@ export function renderManualEntryRows(hydratedEntries, { onSave }) {
 
     return el('li', { className: 'timing-row manual-timing-row' }, [
       el('div', { className: 'timing-row-name' }, [nameNode]),
-      el(
-        'div',
-        { className: 'manual-time-fields' },
-        [
-          minutesInput,
-          el('span', { className: 'manual-time-separator', text: ':' }),
-          secondsInput,
-          saveButton,
-          statusNode,
-        ].filter(Boolean),
-      ),
+      renderManualTimeFields(entry, { onSave, extraChildren: [statusNode].filter(Boolean) }),
     ]);
   });
   return el('ul', { className: 'timing-row-list' }, rows);

@@ -201,6 +201,7 @@ describe('renderTimingRows', () => {
     );
     expect(rows.querySelector('button')).toBeNull();
     expect(rows.textContent).toContain('2:05');
+    expect(rows.querySelector('.timing-row-result').dataset.maxed).toBe('false');
   });
 
   it('labels a maxed entry distinctly from a real tapped time', () => {
@@ -230,6 +231,118 @@ describe('renderTimingRows', () => {
     );
     rows.querySelector('button').click();
     expect(onStop).toHaveBeenCalledWith('e1');
+  });
+
+  it('offers a manual-entry fallback alongside Stop for an unstopped entry, hidden by default', () => {
+    const rows = renderTimingRows(
+      [{ entry_id: 'e1', displayName: 'Cupper One', elapsed_secs: null }],
+      { onStop: () => {}, onSaveManual: () => {} },
+    );
+    const toggle = rows.querySelector('.btn-manual-toggle');
+    expect(toggle.textContent).toBe('Enter time manually');
+    expect(toggle.getAttribute('aria-label')).toBe("Enter Cupper One's time manually");
+    expect(rows.querySelector('.manual-time-fields').hidden).toBe(true);
+  });
+
+  it('clicking "Enter time manually" swaps Stop/toggle for the manual input fields, purely locally — no onStop/onSaveManual call', () => {
+    const onStop = vi.fn();
+    const onSaveManual = vi.fn();
+    const rows = renderTimingRows(
+      [{ entry_id: 'e1', displayName: 'Cupper One', elapsed_secs: null }],
+      { onStop, onSaveManual },
+    );
+    const stopButton = rows.querySelector('.btn-stop');
+    const toggle = rows.querySelector('.btn-manual-toggle');
+    const fields = rows.querySelector('.manual-time-fields');
+
+    toggle.click();
+
+    expect(stopButton.hidden).toBe(true);
+    expect(toggle.hidden).toBe(true);
+    expect(fields.hidden).toBe(false);
+    expect(onStop).not.toHaveBeenCalled();
+    expect(onSaveManual).not.toHaveBeenCalled();
+  });
+
+  it('Cancel reverts back to Stop/toggle without calling onSaveManual', () => {
+    const onSaveManual = vi.fn();
+    const rows = renderTimingRows(
+      [{ entry_id: 'e1', displayName: 'Cupper One', elapsed_secs: null }],
+      { onStop: () => {}, onSaveManual },
+    );
+    const stopButton = rows.querySelector('.btn-stop');
+    const toggle = rows.querySelector('.btn-manual-toggle');
+    const fields = rows.querySelector('.manual-time-fields');
+    toggle.click();
+
+    const cancelButton = [...fields.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Cancel',
+    );
+    cancelButton.click();
+
+    expect(fields.hidden).toBe(true);
+    expect(stopButton.hidden).toBe(false);
+    expect(toggle.hidden).toBe(false);
+    expect(onSaveManual).not.toHaveBeenCalled();
+  });
+
+  it('Save inside the manual fields validates locally and calls onSaveManual with the entry id and the already-parsed total seconds', () => {
+    const onSaveManual = vi.fn();
+    const rows = renderTimingRows(
+      [{ entry_id: 'e1', displayName: 'Cupper One', elapsed_secs: null }],
+      { onStop: () => {}, onSaveManual },
+    );
+    const toggle = rows.querySelector('.btn-manual-toggle');
+    toggle.click();
+
+    const fields = rows.querySelector('.manual-time-fields');
+    const [minutesInput, secondsInput] = fields.querySelectorAll('input');
+    minutesInput.value = '2';
+    secondsInput.value = '30';
+    const saveButton = [...fields.querySelectorAll('button')].find((b) => b.textContent === 'Save');
+    saveButton.click();
+
+    // Parsed here, in renderTimingRows' own onSave wrapper, not passed
+    // through to the caller as raw strings — onSaveManual (the caller's
+    // own handler) only ever sees an already-valid integer, so it never
+    // needs its own parseElapsedInput try/catch.
+    expect(onSaveManual).toHaveBeenCalledWith('e1', 150);
+  });
+
+  it('an invalid manual time never calls onSaveManual at all, and shows a local error instead — no render(), no network call reachable', () => {
+    const onSaveManual = vi.fn();
+    const rows = renderTimingRows(
+      [{ entry_id: 'e1', displayName: 'Cupper One', elapsed_secs: null }],
+      { onStop: () => {}, onSaveManual },
+    );
+    const toggle = rows.querySelector('.btn-manual-toggle');
+    toggle.click();
+
+    const fields = rows.querySelector('.manual-time-fields');
+    const [minutesInput, secondsInput] = fields.querySelectorAll('input');
+    minutesInput.value = '2';
+    secondsInput.value = ''; // untouched — the Number('') === 0 trap
+    const saveButton = [...fields.querySelectorAll('button')].find((b) => b.textContent === 'Save');
+    saveButton.click();
+
+    expect(onSaveManual).not.toHaveBeenCalled();
+    expect(rows.querySelector('.manual-time-local-error').textContent).toContain(
+      'Seconds must be a whole number',
+    );
+    // The toggle stays open — nothing was rebuilt, so the correctly-typed
+    // minutes value the organiser already entered is still sitting there,
+    // not silently discarded.
+    expect(fields.hidden).toBe(false);
+    expect(minutesInput.value).toBe('2');
+  });
+
+  it('does NOT offer the manual-entry fallback for an entry that already has a recorded time', () => {
+    const rows = renderTimingRows(
+      [{ entry_id: 'e1', displayName: 'Cupper One', elapsed_secs: 125, maxed: false }],
+      { onStop: () => {}, onSaveManual: () => {} },
+    );
+    expect(rows.querySelector('.btn-manual-toggle')).toBeNull();
+    expect(rows.querySelector('.manual-time-fields')).toBeNull();
   });
 });
 
@@ -407,7 +520,15 @@ describe('mountTimingScreen', () => {
     await settle();
 
     expect(root.querySelector('.btn-stop')).toBeNull();
-    expect(root.textContent).toContain('2:00');
+    // .toContain on root.textContent alone is a substring match against
+    // "Max time (2:00)" too — found in review (test-auditor, via
+    // mutation-testing a forced-maxed bug that this weaker assertion let
+    // through undetected). Pinning the exact result span's own text and
+    // its data-maxed flag proves this landed as a genuine tapped time, not
+    // a mislabeled max.
+    const resultNode = root.querySelector('.timing-row-result');
+    expect(resultNode.textContent).toBe('2:00');
+    expect(resultNode.dataset.maxed).toBe('false');
 
     const [rpcName, rpcPayload] = client.calls.find(([name]) => name === 'record_heat_time');
     expect(rpcName).toBe('record_heat_time');
@@ -423,6 +544,256 @@ describe('mountTimingScreen', () => {
     // forward into the new "Score this heat" link rather than past it
     // (found in ui-accessibility-reviewer's own pass on that link).
     expect(document.activeElement.id).toBe('timing-complete-heading');
+
+    document.body.removeChild(root);
+  });
+
+  it('entering a time manually records it via record_heat_time with an "overwrite" conflict policy and time_source "manual", same success messaging as a tap', async () => {
+    // The mid-heat device-failure fallback (handoff §7.1) — closes
+    // ROADMAP.md's own "T4.3's app-mode timing screen has no manual-entry
+    // fallback" entry.
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const timingHeat = {
+      ...appHeatPending,
+      status: 'timing',
+      started_at: '2026-08-22T10:00:00.000Z',
+    };
+    const client = buildFakeClient({
+      event: { id: 'ev1', org_id: 'org1', is_test: false },
+      heat: timingHeat,
+      entries: [{ id: 'he1', heat_id: 'h1', entry_id: 'e1', elapsed_secs: null }],
+      roster: [{ id: 'e1', display_name: 'Cupper One' }],
+    });
+    await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
+
+    root.querySelector('.btn-manual-toggle').click();
+    const [minutesInput, secondsInput] = root
+      .querySelector('.manual-time-fields')
+      .querySelectorAll('input');
+    minutesInput.value = '2';
+    secondsInput.value = '30';
+    [...root.querySelectorAll('.manual-time-fields button')]
+      .find((b) => b.textContent === 'Save')
+      .click();
+    await settle();
+
+    expect(root.querySelector('.btn-stop')).toBeNull();
+    expect(root.querySelector('.manual-time-fields')).toBeNull();
+    // Same tighter assertion as the tap test above, same reason (a bare
+    // substring match on root.textContent can't distinguish a real
+    // 2:30 from a mislabeled "Max time (2:30)").
+    const resultNode = root.querySelector('.timing-row-result');
+    expect(resultNode.textContent).toBe('2:30');
+    expect(resultNode.dataset.maxed).toBe('false');
+
+    const [rpcName, rpcPayload] = client.calls.find(([name]) => name === 'record_heat_time');
+    expect(rpcName).toBe('record_heat_time');
+    expect(rpcPayload.p_elapsed_secs).toBe(150);
+    expect(rpcPayload.p_time_source).toBe('manual');
+    expect(rpcPayload.p_conflict_policy).toBe('overwrite');
+
+    const feedback = root.querySelector('.screen-feedback');
+    expect(feedback.dataset.tone).toBe('success');
+    expect(feedback.textContent).toContain("Cupper One's time recorded");
+
+    document.body.removeChild(root);
+  });
+
+  it('a manually-entered time at or beyond duration_secs is clamped and displayed as Max time, not the entered figure — handoff §7.1', async () => {
+    // Found missing in review (scoring-auditor): the maxed/"Max time"
+    // display was already correct BY CONSTRUCTION (renderTimingRows'
+    // maxed branch reads entry.maxed regardless of time_source, and
+    // buildClampedUpdate/clampElapsed are the same unmodified single
+    // writer for both paths) — but nothing exercised a manually-entered
+    // value specifically through this exact assertion before.
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const timingHeat = {
+      ...appHeatPending, // duration_secs: 480
+      status: 'timing',
+      started_at: '2026-08-22T10:00:00.000Z',
+    };
+    const client = buildFakeClient({
+      event: { id: 'ev1', org_id: 'org1', is_test: false },
+      heat: timingHeat,
+      entries: [{ id: 'he1', heat_id: 'h1', entry_id: 'e1', elapsed_secs: null }],
+      roster: [{ id: 'e1', display_name: 'Cupper One' }],
+    });
+    await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
+
+    root.querySelector('.btn-manual-toggle').click();
+    const [minutesInput, secondsInput] = root
+      .querySelector('.manual-time-fields')
+      .querySelectorAll('input');
+    minutesInput.value = '8';
+    secondsInput.value = '30'; // 510s — past the 480s duration
+    [...root.querySelectorAll('.manual-time-fields button')]
+      .find((b) => b.textContent === 'Save')
+      .click();
+    await settle();
+
+    const resultNode = root.querySelector('.timing-row-result');
+    expect(resultNode.dataset.maxed).toBe('true');
+    expect(resultNode.textContent).toBe('Max time (8:00)');
+
+    const [, rpcPayload] = client.calls.find(([name]) => name === 'record_heat_time');
+    expect(rpcPayload.p_elapsed_secs).toBe(480); // clamped to duration_secs
+    expect(rpcPayload.p_elapsed_secs_raw).toBe(510); // the real entered figure preserved
+    expect(rpcPayload.p_maxed).toBe(true);
+
+    document.body.removeChild(root);
+  });
+
+  it('a heat can mix a tapped entry and a manually-entered entry — the exact scenario the spec names', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const timingHeat = {
+      ...appHeatPending,
+      status: 'timing',
+      started_at: '2026-08-22T10:00:00.000Z',
+    };
+    const client = buildFakeClient({
+      event: { id: 'ev1', org_id: 'org1', is_test: false },
+      heat: timingHeat,
+      entries: [
+        { id: 'he1', heat_id: 'h1', entry_id: 'e1', elapsed_secs: null },
+        { id: 'he2', heat_id: 'h1', entry_id: 'e2', elapsed_secs: null },
+      ],
+      roster: [
+        { id: 'e1', display_name: 'Cupper One' },
+        { id: 'e2', display_name: 'Cupper Two' },
+      ],
+    });
+    await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
+    vi.setSystemTime(new Date('2026-08-22T10:01:00.000Z'));
+
+    // Cupper One's clock is tapped normally.
+    const rows = () => [...root.querySelectorAll('.timing-row')];
+    const rowFor = (name) => rows().find((row) => row.textContent.includes(name));
+    rowFor('Cupper One').querySelector('.btn-stop').click();
+    await settle();
+
+    // Cupper Two's device failed — hand-entered instead, while Cupper
+    // One's own row is already showing its real tapped result.
+    rowFor('Cupper Two').querySelector('.btn-manual-toggle').click();
+    const [minutesInput, secondsInput] =
+      rowFor('Cupper Two').querySelectorAll('.manual-time-input');
+    minutesInput.value = '3';
+    secondsInput.value = '15';
+    [...rowFor('Cupper Two').querySelectorAll('button')]
+      .find((b) => b.textContent === 'Save')
+      .click();
+    await settle();
+
+    const oneEntry = client.db.ct_heat_entries.find((e) => e.entry_id === 'e1');
+    const twoEntry = client.db.ct_heat_entries.find((e) => e.entry_id === 'e2');
+    expect(oneEntry.time_source).toBe('tapped');
+    expect(oneEntry.elapsed_secs).toBe(60);
+    expect(twoEntry.time_source).toBe('manual');
+    expect(twoEntry.elapsed_secs).toBe(195);
+    // Both entries now recorded — the heat (single-heat-worth of entries)
+    // advances past 'timing', same as an all-tapped completion would.
+    expect(client.db.ct_heats[0].status).toBe('scoring');
+
+    // Found in review (test-auditor): the backing-store assertions above
+    // alone can't catch a purely-rendering regression (wrong row, wrong
+    // label, a stale manual-fields panel left open) — since the heat
+    // completed, this is now the read-only "Timing complete" view, so both
+    // rows render via renderTimingRows' OTHER branch entirely.
+    expect(rowFor('Cupper One').querySelector('.timing-row-result').textContent).toBe('1:00');
+    expect(rowFor('Cupper Two').querySelector('.timing-row-result').textContent).toBe('3:15');
+    expect(root.querySelector('.manual-time-fields')).toBeNull();
+    expect(root.querySelector('.btn-stop')).toBeNull();
+
+    document.body.removeChild(root);
+  });
+
+  it('an invalid manual time (e.g. an empty field) shows a local error and never reaches record_heat_time, end to end through the real mounted screen', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const timingHeat = {
+      ...appHeatPending,
+      status: 'timing',
+      started_at: '2026-08-22T10:00:00.000Z',
+    };
+    const client = buildFakeClient({
+      event: { id: 'ev1', org_id: 'org1', is_test: false },
+      heat: timingHeat,
+      entries: [{ id: 'he1', heat_id: 'h1', entry_id: 'e1', elapsed_secs: null }],
+      roster: [{ id: 'e1', display_name: 'Cupper One' }],
+    });
+    await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
+
+    root.querySelector('.btn-manual-toggle').click();
+    const [minutesInput, secondsInput] = root
+      .querySelector('.manual-time-fields')
+      .querySelectorAll('input');
+    minutesInput.value = '2';
+    secondsInput.value = ''; // untouched — the Number('') === 0 trap
+    [...root.querySelectorAll('.manual-time-fields button')]
+      .find((b) => b.textContent === 'Save')
+      .click();
+    await settle();
+
+    expect(client.calls.some(([name]) => name === 'record_heat_time')).toBe(false);
+    // No render() happened at all — the GLOBAL feedback region stays
+    // untouched; the error lives locally, inside this row's own fields.
+    expect(root.querySelector('.screen-feedback').dataset.tone).toBeUndefined();
+    expect(root.querySelector('.manual-time-local-error').textContent).toContain(
+      'Seconds must be a whole number',
+    );
+    // The toggle stays open (no full rebuild to revert it), and the
+    // correctly-typed minutes value the organiser already entered is
+    // still there, not silently discarded.
+    expect(root.querySelector('.manual-time-fields').hidden).toBe(false);
+    expect(minutesInput.value).toBe('2');
+    expect(root.querySelector('.btn-stop').hidden).toBe(true);
+
+    document.body.removeChild(root);
+  });
+
+  it('a manual entry that lands after the heat has already advanced surfaces the real conflict, not a false "recorded" — mirrors the tap-path test below', async () => {
+    // Same race as the tap-path test immediately below, through the OTHER
+    // write path — new to this feature (two write paths can now race
+    // against the same single-heat completion, which neither T4.3's nor
+    // T4.4's own original suites, each single-input-method, ever
+    // exercised). Found missing in review (test-auditor).
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const timingHeat = {
+      ...appHeatPending,
+      status: 'timing',
+      started_at: '2026-08-22T10:00:00.000Z',
+    };
+    const client = buildFakeClient({
+      event: { id: 'ev1', org_id: 'org1', is_test: false },
+      heat: timingHeat,
+      entries: [{ id: 'he1', heat_id: 'h1', entry_id: 'e1', elapsed_secs: null }],
+      roster: [{ id: 'e1', display_name: 'Cupper One' }],
+    });
+    await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
+
+    root.querySelector('.btn-manual-toggle').click();
+    const [minutesInput, secondsInput] = root
+      .querySelector('.manual-time-fields')
+      .querySelectorAll('input');
+    minutesInput.value = '3';
+    secondsInput.value = '15';
+
+    // The heat advances behind this screen's back, same as the tap-path
+    // test — a genuinely concurrent write from elsewhere.
+    client.db.ct_heats[0].status = 'scoring';
+
+    [...root.querySelectorAll('.manual-time-fields button')]
+      .find((b) => b.textContent === 'Save')
+      .click();
+    await settle();
+
+    const feedback = root.querySelector('.screen-feedback');
+    expect(feedback.dataset.tone).toBe('error');
+    expect(feedback.textContent).toContain('moved on');
+    expect(client.db.ct_heat_entries[0].elapsed_secs).toBeNull();
 
     document.body.removeChild(root);
   });
