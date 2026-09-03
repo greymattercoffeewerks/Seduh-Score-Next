@@ -6,47 +6,88 @@
 -- rollback:
 --   drop policy if exists events_read_public on events;
 --   revoke select (id, org_id, name, event_date, is_test, created_at) on events from anon;
+--   grant select on events to anon;
+--   grant insert, update, delete on events to anon;
 
--- `events` has only ever been granted to `authenticated`
--- (20260821240000_grants.sql), with RLS scoped to real org membership
--- (`events_read`, 20260821230000_rls_policies.sql: `using
--- (app.is_org_member(org_id))`). That's correct for every organiser
--- surface, but two PUBLIC, unauthenticated surfaces already read this table
--- too — `core/viewer-shell.js`'s own "does this org have an event yet"
--- check (its `noEvent` vs `notStarted` holding-state distinction, §8.4) and
--- the new splash screen — both via `core/events.js`'s
+-- `events` has RLS scoped to real org membership (`events_read`/`events_write`,
+-- 20260821230000_rls_policies.sql: `using (app.is_org_member(org_id))`). That's
+-- correct for every organiser surface, but two PUBLIC, unauthenticated surfaces
+-- already read this table too — `core/viewer-shell.js`'s own "does this org have
+-- an event yet" check (its `noEvent` vs `notStarted` holding-state distinction,
+-- §8.4) and the new splash screen — both via `core/events.js`'s
 -- `findLatestEventForOrg`. Confirmed live against the local stack:
 -- `permission denied for table events` for a genuine anon caller. This has
--- silently degraded viewer-shell.js's own check since it shipped (a real
--- anon viewer always fell back to the generic 'noEvent' card even when an
--- event actually existed) — never caught before because every manual/e2e
--- check of that surface happened to run in an already-authenticated
--- browser tab, not a genuinely anonymous one.
+-- silently degraded viewer-shell.js's own check since it shipped (a real anon
+-- viewer always fell back to the generic 'noEvent' card even when an event
+-- actually existed) — never caught before because every manual/e2e check of
+-- that surface happened to run in an already-authenticated browser tab, not a
+-- genuinely anonymous one.
 --
--- Fixed narrowly, not by granting full-row access: a Postgres COLUMN-level
--- grant limits anon to exactly the six fields `findLatestEventForOrg`
--- itself now explicitly selects (narrowed from `select('*')` to this same
--- list, in the same change) — never `venue`, `status`, `config` ("config
--- ONLY, never results" per its own table comment, but still
--- organiser-authored and not meant for public eyes), `format`, or
--- `updated_at`. `created_at` is included only because ORDER BY requires
--- SELECT on the sorted column, not because any caller reads it. A bare
--- `select('*')` from anon still hits permission-denied by design; only an
--- explicit column list matching the grant succeeds.
+-- A FIRST VERSION of this migration tried to fix this with only an ADDITIVE
+-- column-level grant (`grant select (six safe columns) on events to anon`),
+-- reasoning (wrongly) that `20260821240000_grants.sql` only ever grants
+-- `events` to `authenticated`, so `anon` starts from zero. That was true on
+-- this machine's own LOCAL, long-cached Postgres image — but CI (always a
+-- fresh container) failed 5 pgTAP assertions with "no exception, wanted
+-- 42501": `anon` could still read `venue`/`status`/`config`/`format`/
+-- `updated_at` even with only the six-column grant in place. Traced directly
+-- (docker exec, \dp events, pg_default_acl): every Supabase project — this
+-- one included, on any current image — carries a schema-wide `ALTER DEFAULT
+-- PRIVILEGES ... GRANT ALL ON TABLES TO anon, authenticated, service_role`
+-- (owned by `postgres`), applied automatically to every table as it's
+-- created. `anon` has ALWAYS had full `arwdDxtm` (select/insert/update/
+-- delete/truncate/references/trigger/maintain) table-level privileges on
+-- `events` (and every other table in this schema) — RLS, not GRANTs, is what
+-- has ALWAYS been the real access-control layer everywhere else in this
+-- project (`people_read`, `event_entries_read`, etc. all follow this same
+-- shape). GRANT is purely additive in Postgres: a column-level grant can
+-- never narrow a role that already holds the broader table-level privilege
+-- covering that column — confirmed empirically (`revoke select (venue,...)
+-- from anon` alone did NOT make `select venue from events` throw, because
+-- `anon`'s table-level `r` was still present and takes precedence).
 --
--- The new RLS policy is intentionally `using (true)` — unlike the existing
--- `events_read`, it does not scope by org. This app is single-org today
--- (ROADMAP.md: "no org/membership management UI... provisioning the single
--- org happens via service_role"), so an anon caller enumerating every
--- org's event id/name/date/is_test is not a live information-disclosure
--- concern yet, but IS a real one to revisit before any self-serve
--- multi-org onboarding ships — flagged here, not silently assumed away.
--- RLS policies of the same command type are OR'd together (Postgres
--- permissive-by-default): this new policy and the existing org-scoped
--- `events_read` coexist without conflict — an authenticated org member
--- still only ever satisfies (and needs) the existing one.
+-- This never mattered before for `events` specifically because no RLS policy
+-- ever gave `anon` row-level access — the pre-existing `events_read` policy's
+-- `is_org_member(org_id)` check always evaluates false for `anon`, so the
+-- broad-but-inert table grant was harmless. It only became a live problem
+-- the moment THIS migration adds `events_read_public` (below), an anon-
+-- accessible policy — at that point every column `anon` already had a
+-- (unused) grant for became genuinely reachable, safe columns and withheld
+-- ones alike.
+--
+-- The actual fix: REVOKE `anon`'s pre-existing broad table-level grant
+-- first, then re-grant SELECT on only the six safe columns
+-- (id/org_id/name/event_date/is_test/created_at — never `venue`, `status`,
+-- `config` ["config ONLY, never results" per its own table comment, but
+-- still organiser-authored and not meant for public eyes], `format`, or
+-- `updated_at`; `created_at` is included only because ORDER BY requires
+-- SELECT on the sorted column, not because any caller reads it). Verified
+-- live, both ways, against the actual current image: `select name from
+-- events` as anon succeeds, `select venue from events` as anon throws
+-- `permission denied for table events`.
+--
+-- Also revokes anon's default insert/update/delete on this table while
+-- here — discovered alongside the read issue, same table, same root cause.
+-- `events_write`'s RLS policy already blocks every anon write today (the
+-- same `is_org_member` check), so this changes no live behavior; it closes
+-- the same class of "grant is broader than intended, RLS is the only thing
+-- actually stopping it today" gap PR #41 exists to close for the six write
+-- RPCs, applied here to the table grant directly rather than left as a
+-- second, separately-tracked follow-up.
+revoke select, insert, update, delete on events from anon;
 grant select (id, org_id, name, event_date, is_test, created_at) on events to anon;
 
+-- Intentionally `using (true)` — unlike the existing `events_read`, it does
+-- not scope by org. This app is single-org today (ROADMAP.md: "no org/
+-- membership management UI... provisioning the single org happens via
+-- service_role"), so an anon caller enumerating every org's event id/name/
+-- date/is_test is not a live information-disclosure concern yet, but IS a
+-- real one to revisit before any self-serve multi-org onboarding ships —
+-- flagged here, not silently assumed away. RLS policies of the same command
+-- type are OR'd together (Postgres permissive-by-default): this new policy
+-- and the existing org-scoped `events_read` coexist without conflict — an
+-- authenticated org member still only ever satisfies (and needs) the
+-- existing one.
 create policy events_read_public on events
   for select
   to anon

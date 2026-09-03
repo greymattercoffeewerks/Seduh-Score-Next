@@ -53,14 +53,14 @@ export function mountSplashScreen(root, { orgId, client = getSupabase() } = {}) 
   // part of the normal page load. Found in review: without this, a screen
   // reader user who starts reading before the event name arrives would
   // never learn it showed up at all.
-  const content = el('div', {
-    className: 'splash-content',
-    attrs: { role: 'status', 'aria-live': 'polite' },
-  }, [
-    el('h1', { className: 'splash-wordmark', text: APP_NAME }),
-    eventLine,
-    subLine,
-  ]);
+  const content = el(
+    'div',
+    {
+      className: 'splash-content',
+      attrs: { role: 'status', 'aria-live': 'polite' },
+    },
+    [el('h1', { className: 'splash-wordmark', text: APP_NAME }), eventLine, subLine],
+  );
 
   // The badge's own persistent inner nodes — built once at mount and
   // MUTATED in place on the generic-to-live transition (className/hidden/
@@ -97,7 +97,16 @@ export function mountSplashScreen(root, { orgId, client = getSupabase() } = {}) 
   loadEvent(orgId, client)
     .then((event) => {
       if (!event) return;
-      fillEvent(eventLine, subLine, badgeHost, badgeInner, badgeDot, badgeText, testBannerHost, event);
+      fillEvent(
+        eventLine,
+        subLine,
+        badgeHost,
+        badgeInner,
+        badgeDot,
+        badgeText,
+        testBannerHost,
+        event,
+      );
     })
     .catch((err) => {
       // Non-critical: this is exactly the same "log it, stay on the
@@ -129,7 +138,16 @@ async function loadEvent(orgId, client) {
   return raceTimeout(findLatestEventForOrg(orgId, client), DEFAULT_LOAD_TIMEOUT_MS);
 }
 
-function fillEvent(eventLine, subLine, badgeHost, badgeInner, badgeDot, badgeText, testBannerHost, event) {
+function fillEvent(
+  eventLine,
+  subLine,
+  badgeHost,
+  badgeInner,
+  badgeDot,
+  badgeText,
+  testBannerHost,
+  event,
+) {
   eventLine.textContent = event.name;
   // Raw, not reformatted — event_date is optional (eventsScreen.js's own
   // "Event date (optional)" field) and, when set, is a plain ISO date

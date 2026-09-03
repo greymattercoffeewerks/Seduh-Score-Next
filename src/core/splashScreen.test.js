@@ -70,7 +70,12 @@ describe('mountSplashScreen', () => {
     const client = fakeClient({
       tables: {
         events: {
-          data: { id: 'ev1', name: 'Jakarta Cupping Championship', event_date: '2026-03-14', is_test: false },
+          data: {
+            id: 'ev1',
+            name: 'Jakarta Cupping Championship',
+            event_date: '2026-03-14',
+            is_test: false,
+          },
           error: null,
         },
       },
@@ -79,7 +84,9 @@ describe('mountSplashScreen', () => {
     mountSplashScreen(root, { orgId: 'org1', client });
     await settle();
 
-    expect(root.querySelector('.splash-eventline').textContent).toBe('Jakarta Cupping Championship');
+    expect(root.querySelector('.splash-eventline').textContent).toBe(
+      'Jakarta Cupping Championship',
+    );
     expect(root.querySelector('.splash-subline').textContent).toBe('2026-03-14');
     expect(root.querySelector('.splash-badge-live')).not.toBeNull();
     expect(root.querySelector('.splash-badge-generic')).toBeNull();
