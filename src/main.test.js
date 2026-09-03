@@ -17,6 +17,7 @@ const mountTimingRouteScreen = vi.fn();
 const mountScoringScreen = vi.fn();
 const mountProjectorSurface = vi.fn();
 const mountPhoneSummary = vi.fn();
+const mountSplashScreen = vi.fn();
 const mountLoginScreen = vi.fn();
 
 vi.mock('./core/eventsScreen.js', () => ({
@@ -51,6 +52,9 @@ vi.mock('./formats/cup-taster/projectorSurface.js', () => ({
 }));
 vi.mock('./formats/cup-taster/phoneSummary.js', () => ({
   mountPhoneSummary: (...args) => mountPhoneSummary(...args),
+}));
+vi.mock('./core/splashScreen.js', () => ({
+  mountSplashScreen: (...args) => mountSplashScreen(...args),
 }));
 vi.mock('./core/loginScreen.js', () => ({
   mountLoginScreen: (...args) => mountLoginScreen(...args),
@@ -216,6 +220,35 @@ describe('mountApp routing', () => {
     );
   });
 
+  it('#/live/splash routes with orgId, not eventId, same as the other two live routes', async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    stubScreen(mountSplashScreen, 'SPLASH_SCREEN');
+    const { root } = await startApp();
+
+    location.hash = '#/live/splash';
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(root.textContent).toContain('SPLASH_SCREEN');
+    expect(mountSplashScreen).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ orgId: 'org1' }),
+    );
+  });
+
+  it("navigating from #/live/splash to a default-outlet route calls splash's own unmount() — regression coverage for the bareRoot DOM-leak bug (splashScreen.test.js proves what unmount() itself does; this proves the router actually calls it on this exact transition)", async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    const splashUnmount = vi.fn();
+    mountSplashScreen.mockImplementation(async (root) => {
+      root.textContent = 'SPLASH_SCREEN';
+      return { unmount: splashUnmount };
+    });
+    location.hash = '#/live/splash';
+    await startApp();
+
+    location.hash = '#/events';
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(splashUnmount).toHaveBeenCalledTimes(1);
+  });
+
   it('an unknown hash shows an inline "Page not found" with a link back to #/events', async () => {
     stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
     const { root } = await startApp();
@@ -311,6 +344,14 @@ describe('the temporary auth gate (requireAuth)', () => {
     location.hash = '#/live/phone';
     const { root } = await startApp({ client: fakeClient({ session: null }) });
     expect(root.textContent).toContain('PHONE_SCREEN');
+    expect(mountLoginScreen).not.toHaveBeenCalled();
+  });
+
+  it('#/live/splash mounts its real screen regardless of session state, even on initial load', async () => {
+    stubScreen(mountSplashScreen, 'SPLASH_SCREEN');
+    location.hash = '#/live/splash';
+    const { root } = await startApp({ client: fakeClient({ session: null }) });
+    expect(root.textContent).toContain('SPLASH_SCREEN');
     expect(mountLoginScreen).not.toHaveBeenCalled();
   });
 

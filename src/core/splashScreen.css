@@ -1,0 +1,296 @@
+/*
+ * Splash / promo screen (not tied to a phase task, 2026-08-31). Built on
+ * src/ui/tokens (colors/typography/spacing/base) — assumes index.css is
+ * already loaded, same as viewer-shell.css/projectorSurface.css. Full-bleed,
+ * stage-mode only (data-surface="stage" is set by splashScreen.js itself, on
+ * its own root — same split of responsibility viewer-shell.css's own module
+ * comment already establishes: which token mode applies is the caller's
+ * concern, not a shared component's).
+ *
+ * Sized in viewport-relative units (vmin/vmax/vw), not the fixed 1920x1080
+ * pixel values the approved design canvas used — a canvas artboard is a
+ * fixed frame; this is a real, arbitrarily-sized viewport (a small laptop
+ * screen or a 4K projector), so every size here scales with it rather than
+ * assuming one physical resolution. clamp() off the real type scale matches
+ * viewer-shell.css's own [data-surface='stage'] precedent, and
+ * typography.css's own comment on --text-5xl/6xl (sized for a fixed-canvas
+ * surface, needing their own step-down in a responsive container) is exactly
+ * why this doesn't just drop those tokens in bare.
+ */
+
+.splash-screen {
+  min-height: 100vh;
+  min-height: 100dvh;
+  position: relative;
+  overflow: hidden;
+  background: var(--color-canvas);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* A single soft, restrained glow — not a decorative gradient wash across the
+   whole background. This system otherwise has no shadow/gradient tokens on
+   purpose (spacing.css's own header: flat register over SaaS gloss) — this
+   is a deliberate, bounded exception for this one ceremonial surface, kept
+   to one shape, low opacity, and the real accent token, not an invented
+   color. Position (left/top) is set inline per mount, randomized once by
+   splashScreen.js — this file only owns its size/appearance/motion. */
+.splash-glow-drift {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+.splash-glow {
+  position: absolute;
+  width: 60vmax;
+  height: 60vmax;
+  margin-left: -30vmax;
+  margin-top: -30vmax;
+  border-radius: var(--radius-full);
+  background: radial-gradient(circle, var(--color-accent) 0%, transparent 70%);
+  /* Found in review (ui-accessibility-reviewer): the glow's randomized
+     anchor range overlaps the centered content column by design ("a
+     background presence behind the wordmark"), and at the breathing
+     animation's original peak opacity (0.34), --color-text-muted (the
+     subline — not bold, so it needs the full 4.5:1 floor, not the 3:1
+     large-text one) dropped to an estimated ~3.9:1 against the
+     accent-blended background in the worst case (glow centered directly
+     behind it). Widened blur (8vmin -> 13vmin) diffuses the glow's own
+     peak density before it ever reaches the text; the lower opacity range
+     below (0.16-0.22, was 0.2-0.34) caps how much of that diffused color
+     the worst-case position can still contribute, keeping the wordmark
+     (bold, large) and eventline (bold, large-text-exempt) comfortably
+     clear and pulling the subline's worst case back into the 4.5:1 floor
+     with real margin, not just barely across it — both figures are
+     estimates (no automated contrast tool was available to verify the
+     rendered result pixel-for-pixel), so the margin is intentional, not
+     cut to the exact minimum. */
+  filter: blur(13vmin);
+  pointer-events: none;
+  /* Static resting state is the base rule (matches base.css's own
+     .status-live-dot pattern) — motion is added only under
+     prefers-reduced-motion: no-preference below, never removed by a reduce
+     override layered on top of an always-on animation. */
+  opacity: 0.16;
+}
+
+.splash-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-6);
+  text-align: center;
+  padding: 0 var(--space-8);
+  max-width: min(90vw, 1400px);
+}
+
+.splash-wordmark {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: var(--font-weight-bold);
+  font-size: clamp(var(--text-4xl), 12vw, var(--text-6xl));
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  color: var(--color-text);
+}
+
+.splash-eventline {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: var(--font-weight-bold);
+  font-size: clamp(var(--text-lg), 4vw, var(--text-3xl));
+  letter-spacing: var(--tracking-tight);
+  color: var(--color-accent);
+}
+
+.splash-subline {
+  margin: 0;
+  font-family: var(--font-body);
+  font-weight: var(--font-weight-medium);
+  font-size: clamp(var(--text-sm), 1.6vw, var(--text-md));
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  color: var(--color-text-muted);
+}
+
+/* Empty until the event fetch resolves (or forever, on "no event yet") —
+   collapses cleanly rather than leaving a blank gap in the stack. */
+.splash-eventline:empty,
+.splash-subline:empty {
+  display: none;
+}
+
+.splash-badge-host {
+  position: absolute;
+  left: 50%;
+  bottom: var(--space-7);
+  transform: translateX(-50%);
+  z-index: 1;
+  max-width: 92vw;
+}
+
+.splash-badge {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-6);
+  border-radius: var(--radius-full);
+  font-family: var(--font-body);
+  font-weight: var(--font-weight-bold);
+  font-size: clamp(var(--text-xs), 1.4vw, var(--text-sm));
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  white-space: nowrap;
+}
+
+/* base.css's own .status-live-dot sets `display: inline-block` explicitly
+   — at equal specificity to the browser's own `[hidden] { display: none }`
+   UA rule, the later-in-cascade author rule wins, meaning splashScreen.js's
+   `badgeDot.hidden = true` would NOT actually hide it without this explicit
+   override. Scoped to this file's own usage, not base.css itself, since
+   nothing confirms this exact hide-a-live-dot pattern is safe to change
+   for every other consumer. */
+.splash-badge .status-live-dot[hidden] {
+  display: none;
+}
+
+/* Same neutral, non-accent treatment as viewer-shell.css's own
+   .viewer-badge-done — this is the brand-only/idle state, not an error. */
+.splash-badge-generic {
+  background: var(--color-surface-sunken);
+  color: var(--color-text-secondary);
+  border: var(--border-hairline) solid var(--color-border);
+}
+
+.splash-badge-live {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+}
+
+/* base.css's .status-live-dot is accent-colored by default, invisible on
+   this badge's own solid accent background — same override
+   viewer-shell.css's own .viewer-badge-live already needs, for the same
+   reason. */
+.splash-badge-live .status-live-dot {
+  background: var(--color-accent-contrast);
+}
+
+/* .is-test-banner (base.css) is a full-width band everywhere else it's
+   used — this host stays a near-full-width band, not centered/max-content
+   like splash-badge-host above, so the one state that most needs to be
+   unmistakable (D9) stays exactly as prominent here as it is on every
+   other screen. A real, deliberate inset from the true viewport edges,
+   though — found in review (ui-accessibility-reviewer): a projector/TV is
+   exactly the environment most prone to overscan cropping or bezel
+   occlusion right at the edges, and D9's own "unmistakable" bar is
+   defeated if the one thing meant to be unmissable is also the one thing
+   most likely to get physically cropped off. Empty (and so zero-height)
+   whenever the current state isn't is_test. */
+.splash-test-banner-host {
+  position: absolute;
+  left: var(--space-5);
+  right: var(--space-5);
+  bottom: var(--space-5);
+  z-index: 1;
+}
+
+/* .is-test-banner (base.css) has no radius of its own — correct for its
+   usual flush-edge placement, but this host now insets it, so a sharp
+   rectangle would read as a mistake rather than a deliberate band. Scoped
+   here, not added to the shared class, since every other consumer stays
+   flush and should keep its own sharp edges. */
+.splash-test-banner-host .is-test-banner {
+  border-radius: var(--radius-md);
+}
+
+@keyframes splash-glow-breathe {
+  0% {
+    opacity: 0.16;
+    transform: scale(1);
+    animation-timing-function: ease-in;
+  }
+  36% {
+    opacity: 0.22;
+    transform: scale(1.09);
+    animation-timing-function: linear;
+  }
+  45% {
+    opacity: 0.22;
+    transform: scale(1.09);
+    animation-timing-function: ease-out;
+  }
+  91% {
+    opacity: 0.16;
+    transform: scale(1);
+    animation-timing-function: ease-in-out;
+  }
+  100% {
+    opacity: 0.16;
+    transform: scale(1);
+  }
+}
+
+@keyframes splash-glow-drift {
+  0% {
+    transform: translate(0, 0);
+  }
+  22% {
+    transform: translate(4vmin, -3vmin);
+  }
+  48% {
+    transform: translate(-2vmin, 4vmin);
+  }
+  71% {
+    transform: translate(3vmin, 2vmin);
+  }
+  100% {
+    transform: translate(0, 0);
+  }
+}
+
+@keyframes splash-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* ~11s per cycle (4-6 breaths/min) — an asymmetric breath, not a flat
+     symmetric pulse: a ~4s build, a brief hold at the top, a longer ~5s
+     release, a short rest, shaped per-keyframe via animation-timing-function
+     rather than one eased curve applied uniformly across the whole cycle. */
+  .splash-glow {
+    animation: splash-glow-breathe 11s infinite;
+  }
+  /* A slow, irregular wander (not a mechanical back-and-forth) — four
+     off-axis stops at uneven offsets over a long 48s loop, layered on top
+     of the random per-mount anchor position splashScreen.js sets inline. */
+  .splash-glow-drift {
+    animation: splash-glow-drift 48s ease-in-out infinite;
+  }
+  .splash-wordmark,
+  .splash-eventline,
+  .splash-subline,
+  .splash-badge-host {
+    animation: splash-in 0.8s ease-out both;
+  }
+  .splash-eventline {
+    animation-delay: 0.15s;
+  }
+  .splash-subline {
+    animation-delay: 0.3s;
+  }
+  .splash-badge-host {
+    animation-delay: 0.45s;
+  }
+}
