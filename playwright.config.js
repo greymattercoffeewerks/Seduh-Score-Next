@@ -29,7 +29,7 @@ export default defineConfig({
     },
     {
       command: 'npm run dev',
-      port: 5173,
+      port: 5273,
       reuseExistingServer: !process.env.CI,
     },
   ],
@@ -42,7 +42,7 @@ export default defineConfig({
     {
       name: 'dev-harnesses',
       testMatch: /cross-surface-countdown\.spec\.js/,
-      use: { baseURL: 'http://127.0.0.1:5173' },
+      use: { baseURL: 'http://127.0.0.1:5273' },
     },
     {
       // organiser-flow.spec.js (2026-08-29 app-wiring pass) — the real
@@ -67,7 +67,7 @@ export default defineConfig({
       name: 'dev-app',
       testMatch: /organiser-flow\.spec\.js/,
       dependencies: ['dev-harnesses'],
-      use: { baseURL: 'http://127.0.0.1:5173' },
+      use: { baseURL: 'http://127.0.0.1:5273' },
     },
   ],
 });
