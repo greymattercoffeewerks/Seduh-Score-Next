@@ -38,9 +38,16 @@ export async function findEvent(eventId, client = getSupabase()) {
 // stop. `.maybeSingle()`, not `.single()` like findEvent above — zero
 // events for an org is a normal, expected outcome here, not an error.
 export async function findLatestEventForOrg(orgId, client = getSupabase()) {
+  // Explicit columns, never '*' — this is called from two PUBLIC,
+  // unauthenticated surfaces (viewer-shell.js, splashScreen.js), and `anon`
+  // only has a COLUMN-level grant on this exact list (migration
+  // 20260831100000) precisely because `select('*')` from a column-scoped
+  // role always fails, by Postgres design, regardless of RLS. `created_at`
+  // is included even though no caller reads it — ORDER BY requires SELECT
+  // on the column being sorted by, not just the columns returned.
   const { data, error } = await client
     .from('events')
-    .select('*')
+    .select('id, org_id, name, event_date, is_test, created_at')
     .eq('org_id', orgId)
     .order('created_at', { ascending: false })
     .limit(1)
