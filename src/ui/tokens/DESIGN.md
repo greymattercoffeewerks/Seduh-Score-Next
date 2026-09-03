@@ -30,7 +30,8 @@ Rather than two disconnected light/dark palettes, there is one warm neutral ramp
   someone is reading dense data or entering scores under time pressure.
 - **Stage** (`[data-surface="stage"]`): the dark end of the ramp. Used by the
   projector/audience big-screen view — the surface that needs to read from across a
-  room and carry the drama of a live result.
+  room and carry the drama of a live result. The splash/promo screen (`#/live/splash`)
+  is the same class of surface and uses it too.
 
 Every semantic color (`--color-accent`, `--color-danger`, `--color-success`,
 `--color-warning`, `--color-gold`) follows one rule across both modes: **paper-mode
@@ -130,8 +131,10 @@ bug, not a stylistic quirk.
   component. A screen introducing its own one-off color or spacing value is the
   "local patches are an anti-pattern" rule (`CONVENTIONS.md`) applied to design — the
   fix belongs in these files, not in the screen that needed it.
-- Put `data-surface="stage"` on the projector root and nowhere else. Don't build a
-  second dark theme by hand for any other surface.
+- Put `data-surface="stage"` on a full-bleed, big-screen surface's own root — the
+  projector (`projectorSurface.js`) and the splash/promo screen (`splashScreen.js`) are
+  the two today — and nowhere else. Don't build a second dark theme by hand for any
+  other surface.
 - Use `--font-mono` + `.tabular-nums` for every numeric score/timer display.
 - Use `--color-gold` only for ceremonial moments — podium, champion badge, finals
   callouts. If it starts showing up on routine UI, that's a sign it's being used as a
