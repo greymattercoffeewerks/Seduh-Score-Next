@@ -425,18 +425,22 @@ station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can 
   `get_advisors` finding on six write RPCs. See CHANGELOG.md's two dated entries.
   **Cloudflare Workers deployment env vars still need setting manually** — no Cloudflare
   API access was available; the user has the real values and is doing this separately.
-- **`anon` has default-`PUBLIC` EXECUTE on all six write RPCs — not closed, found in the
-  search_path migration's own security review.** Postgres grants `EXECUTE` to `PUBLIC`
-  by default unless explicitly revoked; none of `merge_people`/`confirm_heat`/
-  `publish_session`/`start_heat`/`record_heat_time`/`auto_max_heat`'s own original
-  migrations ever revoked it, only granted to `authenticated` — every one of their own
-  comments states an "authenticated only" intent this silently doesn't enforce.
-  Confirmed NOT currently exploitable (proved live via `set role anon` — every one hits
-  a table-level permission-denied error before RLS is even reached), so this is
-  defense-in-depth, not a live hole. A different root cause than the search_path gap
-  (a missing `REVOKE`, not a missing pin), deliberately left as its own follow-up rather
-  than folded in — a small migration (`revoke execute on function <sig> from public;`
-  ×6) whenever prioritized.
+- **`anon`'s default-`PUBLIC` EXECUTE on all six write RPCs is closed (2026-08-30
+  follow-up)** — migration `20260830140000_revoke_public_execute_on_write_rpcs.sql`
+  revokes `EXECUTE` from `PUBLIC` on `merge_people`/`confirm_heat`/`publish_session`/
+  `start_heat`/`record_heat_time`/`auto_max_heat`, leaving each function's existing
+  `authenticated` grant untouched. `security-reviewer` found a real gap in the first
+  draft before approving it: `service_role` isn't a Postgres superuser in this project
+  (only `BYPASSRLS`, which never bypasses GRANT checks) and isn't a member of
+  `authenticated` either, so it was _also_ silently losing EXECUTE by the same
+  PUBLIC-default mechanism — confirmed dormant (nothing in this codebase calls these
+  RPCs as `service_role` today) but a real footgun for future server-side tooling. Fixed
+  in the same migration with an explicit `grant execute ... to service_role` alongside
+  each revoke. `schema-guardian` flagged one adjacent, still-open observation: the ten
+  `app.*` helper functions have the identical never-revoked PUBLIC default, currently
+  inert only because `app` isn't in `config.toml`'s exposed `api.schemas` — not fixed,
+  noted for a future audit pass. Pushed to both local and the cloud project; see
+  CHANGELOG.md's dated entry for the full account.
 - **Leaked-password protection is disabled in Supabase Auth settings** — a `get_advisors`
   finding, unrelated to any migration (a dashboard toggle under Authentication →
   Settings on the cloud project, not a schema change). Flagged to the user, not fixed.

@@ -99,6 +99,51 @@ deploy with the real values automatically.
 
 ---
 
+## Migration: revoke PUBLIC execute on the six write RPCs · 2026-08-30
+
+Follow-up to the search_path migration below — user asked to close the adjacent finding
+that migration's own security review surfaced: `anon` had default-`PUBLIC` `EXECUTE` on
+`merge_people`, `confirm_heat`, `publish_session`, `start_heat`, `record_heat_time`, and
+`auto_max_heat`. Postgres grants a new function's `EXECUTE` to `PUBLIC` by default unless
+explicitly revoked (unlike table DML, which defaults to nothing) — none of these six
+functions' own original migrations ever revoked it, only added `grant execute ... to
+authenticated`. New migration
+`supabase/migrations/20260830140000_revoke_public_execute_on_write_rpcs.sql` revokes
+`EXECUTE` from `PUBLIC` on all six, leaving the existing `authenticated` grant untouched.
+
+Verified locally: `supabase db reset` applies clean (13 migrations), full pgTAP suite
+passes (113/113), `has_function_privilege` confirms `anon` → false, `authenticated` →
+true across all six, and the rollback block was run for real in a `begin; ...
+rollback;` transaction. `schema-guardian` came back clean, independently re-verified all
+of this, and flagged one adjacent (inert, out-of-scope) observation: the ten `app.*`
+helper functions have the same never-revoked PUBLIC default, currently harmless only
+because `app` isn't in `config.toml`'s exposed `api.schemas` — noted for a future pass,
+not fixed here.
+
+**`security-reviewer` found a real gap in the migration's own first draft**, live-tested
+before approving it: `service_role` — not a Postgres superuser in this project, only
+`BYPASSRLS` — was _also_ silently losing `EXECUTE` on all six by the exact same PUBLIC-
+default mechanism `anon` was, since `service_role` is a standalone role, not a member of
+`authenticated`. `BYPASSRLS` bypasses RLS _policy_ evaluation only, never GRANT-based
+privilege checks — correct Postgres behavior, but it contradicts the common assumption
+that `service_role` is "superuser, bypasses everything." Confirmed dormant, not an active
+break (nothing in this codebase currently calls any of these six RPCs as `service_role` —
+org/organiser provisioning goes directly against `orgs`/`org_members`, not through these
+functions), but a real footgun for any future server-side admin/support script reaching
+for the service-role key against one of these RPCs — it would fail with an opaque
+"permission denied for function" and no clue why. Fixed in the same migration (not shipped
+separately, since it hadn't been pushed anywhere yet): an explicit `grant execute ... to
+service_role` alongside each revoke, symmetric with the `authenticated` grant. Re-verified
+live after the fix: `anon` → false, `authenticated` → true, `service_role` → true across
+all six; rollback block re-verified in a transaction (now also reverting the
+`service_role` grant before restoring `PUBLIC`).
+
+Pushed to both the local stack and the linked cloud project via the Supabase MCP's
+`apply_migration`, same as the search_path migration — re-verified `has_function_privilege`
+directly against the cloud project afterward (`anon` → false, `authenticated` → true,
+`service_role` → true, all six).
+---
+
 ## Migration: pin search_path on the six write RPCs · 2026-08-30
 
 Follow-up to the cloud-linking entry below — user asked for this specific
