@@ -12,6 +12,7 @@ import { el } from './core/dom.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './core/timeout.js';
 import { mountEventsScreen } from './core/eventsScreen.js';
 import { mountLoginScreen } from './core/loginScreen.js';
+import { mountSplashScreen } from './core/splashScreen.js';
 import { mountEventDashboardScreen } from './formats/cup-taster/eventDashboardScreen.js';
 import { mountSetupScreen } from './formats/cup-taster/setupScreen.js';
 import { mountRosterScreen } from './formats/cup-taster/rosterScreen.js';
@@ -183,6 +184,15 @@ export function buildRoutes({ orgId, bareRoot, routerRef }) {
       chrome: false,
       outlet: bareRoot,
       mount: (outlet, { client }) => mountPhoneSummary(outlet, { orgId, client }),
+    },
+    {
+      // Deliberately NOT wrapped in requireAuth — same reasoning as the two
+      // routes above: meant to be pulled up on the projector (or any
+      // screen) on demand, and the audience never authenticates.
+      pattern: '/live/splash',
+      chrome: false,
+      outlet: bareRoot,
+      mount: (outlet, { client }) => mountSplashScreen(outlet, { orgId, client }),
     },
   ];
 }

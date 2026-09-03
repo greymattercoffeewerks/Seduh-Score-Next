@@ -320,9 +320,15 @@ station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can 
   official "Cloudflare Workers and Pages" App installed; every push gets a Workers Build
   check and a live preview URL, and pushes to `main` build the production script. This
   happened between T3.2's PR being opened and merged — noticed via an unexpected third CI
-  check, confirmed intentional with the user before merging. No app code is actually
-  served yet (Phase 0's placeholder `main.js`/`index.html` only); revisit this note once
-  Phase 4/5 ships something real to that URL.
+  check, confirmed intentional with the user before merging. Real app code now deployed
+  (2026-08-30+). **2026-08-31 follow-up: Cloudflare Workers build-time env vars were
+  missing from the dashboard's Settings → Builds → Variables and secrets box, causing a
+  "supabaseUrl is required" crash at startup** — fixed via a manual `wrangler deploy` with
+  the real values (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, VITE_DEFAULT_ORG_ID) fetched
+  from Supabase. CRITICAL: those three vars must be added to the dashboard's own Builds
+  Variables box by the user so future auto-triggered builds (e.g. from merging PR #42) don't
+  regress to the same crash — the wrangler deploy was one-time, but the dashboard setup is
+  permanent.
 - **The handoff's own cross-surface AC for T5.3/T5.4 is closed (2026-08-28)** —
   `tests/e2e/cross-surface-countdown.spec.js` drives three separate Playwright browser
   contexts (organiser's `timingScreen.preview.html`, `projectorSurface.preview.html`,
@@ -372,6 +378,32 @@ station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can 
   and a rewritten `main.js` connect every already-built screen into one real, navigable
   app. See CHANGELOG.md's dated entry for the full review account (five reviewers in
   parallel — real findings from all but `module-boundary-checker`, all closed).
+- **Stage-plan setup scoping: "another stage" vs "more heats in this stage" — PENDING
+  (user-approved, not yet built, 2026-08-31).** User hit a real product-model confusion
+  live-testing: built a "prelims" as two separate same-kind stage ROWS, expecting one
+  pooled prelim with shared standings/cutoff, but the schema treats multiple same-kind
+  stage rows as genuine sequential elimination rounds (each needs its own cutoff,
+  survivors carry forward). Confirmed the user's actual workflow is ALREADY fully built
+  (one stage row split into station-limited heats via `partition.js`, aggregated back in
+  `standings.js`, one cutoff via `advancement.js` — all tested and shipping), so the gap
+  is narrower: `setupScreen.js`'s "Add stage" button gives no indication adding a SECOND
+  same-kind row means "a real second elimination round," not "more capacity for this
+  round." Plan written and approved via Plan Mode (local to that session, not committed to
+  this repo): add inline advisory hint matching the existing terminal-stage cutoff hint
+  pattern in `renderStageRow`, clarifying
+  "adding another stage means another round" before the user commits to the structure. No
+  core/schema/advancement change needed; purely a setupScreen UX clarification. Revisit
+  after confirming the planned hint implementation path is still the right one.
+- **PR #42 (fix: confirm_heat entry_id misidentification + Score-this-heat UX) is MERGED
+  (2026-08-31).** Two linked fixes: root cause was `scoring.js`'s `buildConfirmEntries()`
+  passing the wrong id field to the RPC, silently breaking every real confirm attempt; the
+  secondary UX addition added a "Score this heat" link from the timing-complete view.
+  Already verified live in production (deployed via `wrangler deploy` ahead of the PR
+  merging, then re-verified after merge that Cloudflare's own auto-build reproduced the
+  identical, correctly-configured bundle). See CHANGELOG.md's dated entry for the full
+  review account (five parallel reviews, including a second code-reviewer pass that caught
+  a high-severity gap in the first pass's own focus-move fix, and a CI-only prettier
+  format:check failure neither local eslint nor the review passes caught).
 - **A real DOM-write race between the router and a slow-resolving screen is NOT closed —
   found live-testing this app-wiring pass, documented rather than silently shipped.**
   `router.js`'s `resolveSeq` staleness guard only protects its own `current` bookkeeping;
@@ -412,3 +444,13 @@ station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can 
 - **Leaked-password protection is disabled in Supabase Auth settings** — a `get_advisors`
   finding, unrelated to any migration (a dashboard toggle under Authentication →
   Settings on the cloud project, not a schema change). Flagged to the user, not fixed.
+- **`anon`'s TRUNCATE/REFERENCES/TRIGGER/MAINTAIN grant on every table — not closed,
+  found while diagnosing the anon-safe events-read migration
+  (`20260831100000_events_anon_safe_read.sql`).** Every table in this schema carries a
+  default `anon=...Dxtm` grant regardless of RLS — TRUNCATE in particular is not
+  governed by RLS at all in Postgres, so it's a full bypass wherever it's reachable.
+  Confirmed NOT currently exploitable (PostgREST never issues TRUNCATE, and no other
+  anon-reachable raw-SQL path exists in this app), so — same shape as the write-RPC
+  EXECUTE gap above — this is defense-in-depth, not a live hole. Schema-wide, not
+  specific to `events`; deliberately left as its own follow-up rather than folded into
+  that migration's already-large scope.

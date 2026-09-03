@@ -1,0 +1,117 @@
+-- Seduh Score Next · anon-safe read on events (id/org_id/name/event_date/is_test/created_at only)
+-- Handoff: SEDUH-NEXT-HANDOFF.md §8.4, §14 T5.2/T5.3 (viewer-shell.js's own
+-- event-existence check) — closes a gap the new splash screen (core/splashScreen.js)
+-- surfaced live-testing.
+--
+-- rollback:
+--   drop policy if exists events_read_public on events;
+--   revoke select (id, org_id, name, event_date, is_test, created_at) on events from anon;
+
+-- `events` has RLS scoped to real org membership (`events_read`/`events_write`,
+-- 20260821230000_rls_policies.sql: `using (app.is_org_member(org_id))`). That's
+-- correct for every organiser surface, but two PUBLIC, unauthenticated surfaces
+-- already read this table too — `core/viewer-shell.js`'s own "does this org have
+-- an event yet" check (its `noEvent` vs `notStarted` holding-state distinction,
+-- §8.4) and the new splash screen — both via `core/events.js`'s
+-- `findLatestEventForOrg`. Confirmed live against the local stack:
+-- `permission denied for table events` for a genuine anon caller. This has
+-- silently degraded viewer-shell.js's own check since it shipped (a real anon
+-- viewer always fell back to the generic 'noEvent' card even when an event
+-- actually existed) — never caught before because every manual/e2e check of
+-- that surface happened to run in an already-authenticated browser tab, not a
+-- genuinely anonymous one.
+--
+-- A FIRST VERSION of this migration tried to fix this with only an ADDITIVE
+-- column-level grant (`grant select (six safe columns) on events to anon`),
+-- reasoning (wrongly, for THIS environment) that `anon` starts from zero
+-- privilege on `events`. That was true here at the time, but not universally:
+-- CI (GitHub Actions run 33735769503, PR #43, 2026-09-03) failed 5 pgTAP
+-- assertions with the additive-only version — "no exception, wanted 42501" —
+-- proving `anon` could still read `venue`/`status`/`config`/`format`/
+-- `updated_at` there despite the six-column grant.
+--
+-- Root cause, pinned down precisely (not just "an older image behaves
+-- differently"): `supabase/config.toml`'s `auto_expose_new_tables` is a
+-- transitional setting — when unset/legacy, the CLI issues `alter default
+-- privileges for role postgres in schema public revoke select, insert,
+-- update, delete on tables from anon, authenticated, service_role` at
+-- startup, so every table this project's migrations create starts with NO
+-- default anon privilege; the new, non-legacy default (the direction the
+-- CLI is transitioning to) does not issue that revoke, so `anon` instead
+-- starts with FULL `arwdDxtm` table-level privileges on every table it
+-- creates, same as `authenticated`. Which behavior a given environment gets
+-- depends on the CLI version / config-transition state at the time it ran
+-- `supabase start`/`db reset` — this is genuinely environment-dependent,
+-- not a constant, and CI's own run is what actually matters for this
+-- project's real deployment target. GRANT is purely additive in Postgres
+-- either way: a column-level grant can never narrow a role that already
+-- holds the broader covering table-level privilege — confirmed empirically
+-- both directions.
+--
+-- This never mattered before for `events` specifically because no RLS
+-- policy ever gave `anon` row-level access — the pre-existing `events_read`
+-- policy's `is_org_member(org_id)` check always evaluates false for `anon`,
+-- so even a broad table grant (on an environment that has one) stays inert.
+-- It only becomes a live problem the moment THIS migration adds
+-- `events_read_public` (below), an anon-accessible policy — at that point
+-- any pre-existing table-level grant `anon` happens to hold becomes
+-- genuinely reachable, safe columns and withheld ones alike, unless it's
+-- explicitly revoked first.
+--
+-- The actual, environment-independent fix: REVOKE whatever table-level
+-- grant `anon` may hold on `events` (a no-op if it holds none, which is
+-- exactly why this is safe regardless of which of the two startup
+-- behaviors above actually applied), THEN grant SELECT on only the six
+-- safe columns (id/org_id/name/event_date/is_test/created_at — never
+-- `venue`, `status`, `config` ["config ONLY, never results" per its own
+-- table comment, but still organiser-authored and not meant for public
+-- eyes], `format`, or `updated_at`; `created_at` is included only because
+-- ORDER BY requires SELECT on the sorted column, not because any caller
+-- reads it). Verified both directions, in both startup environments this
+-- machine could reproduce, and via CI itself (run 33737256820, same PR,
+-- passing): `select name from events` as anon succeeds, `select venue from
+-- events` as anon throws `permission denied for table events`.
+--
+-- Also revokes anon's insert/update/delete on this table while here —
+-- discovered alongside the read issue, same table, same root cause, and
+-- for the same reason harmless to revoke unconditionally: `events_write`'s
+-- RLS policy already blocks every anon write today (the same
+-- `is_org_member` check) regardless of the underlying grant, so this
+-- changes no live behavior in either startup environment; it closes the
+-- same class of "grant may be broader than intended, RLS is the only thing
+-- actually stopping it today" gap PR #41 exists to close for the six write
+-- RPCs, applied here to the table grant directly.
+--
+-- The rollback above is deliberately NOT symmetric with a bare "undo the
+-- revoke" — it does not re-grant table-level select/insert/update/delete
+-- back to anon. A first draft of this rollback did exactly that ("restore
+-- what anon apparently had before"), and both schema-guardian and
+-- security-reviewer independently flagged it as reintroducing the exact
+-- hazard this migration exists to close: since what `anon` "had before" is
+-- itself environment-dependent (see above), a rollback that unconditionally
+-- re-grants full table access is wrong in the environment where `anon`
+-- never had it, and is one future anon-permissive policy away from
+-- silently exposing every column again in the environment where it did.
+-- The safe, correct rollback is simply to undo what this migration
+-- explicitly added — dropping the policy and revoking the column grant —
+-- and let whatever default an environment actually provides (zero, in the
+-- legacy/revoked-at-startup case, or the full grant, in the other) speak
+-- for itself, exactly as it did before this migration touched anything.
+revoke select, insert, update, delete on events from anon;
+grant select (id, org_id, name, event_date, is_test, created_at) on events to anon;
+
+-- Intentionally `using (true)` — unlike the existing `events_read`, it does
+-- not scope by org. This app is single-org today (ROADMAP.md: "no org/
+-- membership management UI... provisioning the single org happens via
+-- service_role"), so an anon caller enumerating every org's event id/name/
+-- date/is_test is not a live information-disclosure concern yet, but IS a
+-- real one to revisit before any self-serve multi-org onboarding ships —
+-- flagged here, not silently assumed away. RLS policies of the same command
+-- type are OR'd together (Postgres permissive-by-default): this new policy
+-- and the existing org-scoped `events_read` coexist without conflict — an
+-- authenticated org member still only ever satisfies (and needs) the
+-- existing one.
+create policy events_read_public on events
+  for select
+  to anon
+  using (true);

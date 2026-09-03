@@ -1,3 +1,104 @@
+## Fix: confirm_heat entry_id misidentification + Score-this-heat UX · 2026-08-31
+
+**PR #42 (open, not yet merged)** — two linked fixes shipped together:
+
+**1. Root cause & correctness fix:** `scoring.js`'s `buildConfirmEntries()` was passing
+`entry.entry_id` (the roster entry's person id) as the RPC's `entry_id` parameter, but
+`confirm_heat` matches that against `ct_heat_entries.id` (the heat-join row's primary key,
+a different UUID). Both fields exist and are populated on the hydrated row via
+`hydrateEntries`'s row spread — the mismatch was silent and complete. Every real confirm
+attempt failed on its first entry with `heat_entry % not found in heat %`, rolling back
+the whole transaction. Verified directly against the live production database: a heat was
+stuck in `scoring` with all cuppers' times recorded but zero `ct_results` rows — this bug
+was actively breaking the workflow. The error itself was invisible to users, swallowed by
+`describeError()`'s generic fallback since only the RPC's `P0002` optimistic-concurrency
+conflict has its own handler (`describeConfirmError`). One-field fix: `entry.entry_id` →
+`entry.id`. Verification: re-derived the correct field from four independent schema
+sources (the RPC SQL, the sibling `record_heat_time` RPC which already sent the same value
+unambiguously, the `ct_standings` view's own join, and a trigger function's join), then
+confirmed with `scoring-auditor` that this precise derivation independently holds.
+
+**2. Test-fixture root cause:** The original fixture used only ONE id-shaped field (`entry_id`
+with no separate `id`), so no test could ever distinguish "sent the right field" from "sent
+the wrong one." Strengthened by introducing a distinct `id`/`entry_id` pair in every
+`scoring.test.js` fixture, plus a new dedicated regression test that would have caught the
+original bug. `scoringScreen.test.js`'s confirm-flow integration test gained an explicit
+assertion on the RPC payload's actual `entry_id` value. `test-auditor` verified these
+would have caught the regression and found no similar field-confusion risks elsewhere
+(checked heats.test.js, timing.test.js, standings.test.js, analytics.test.js).
+
+**3. Separate UX addition on the same PR:** After timing completes, there was no direct link
+to scoring — organiser had to navigate Overview → event stage card → Heats list → find this
+heat → click. Added a "Score this heat" link to both `timingScreen.js`'s and
+`timingManualScreen.js`'s "Timing complete" view. `module-boundary-checker` found the
+snippet verbatim-duplicated across both files and recommended extraction; implemented as
+`buildScoringLink(eventId, heatId)` living in `timingScreen.js` (imports-from already
+shared with `timingManualScreen.js`) rather than `timing.js` (no other DOM references,
+stays pure logic). A first attempt to extract into `timing.js` itself was caught by
+`code-reviewer` and corrected.
+
+**4. Accessibility gap in the UX fix:** The completing render moved focus to the feedback
+region (set as fallback), but the new link sits earlier in the DOM, so forward-Tab skipped
+past it — fixed by moving focus to the "Timing complete" heading specifically. A SECOND
+`code-reviewer` pass then found a HIGH-severity gap in that fix: the focus guard fired on
+ANY tone (including 'error'), so a genuinely rejected concurrent tap/save (a real race this
+codebase treats as first-class) would redirect focus to the heading and hide the rejection
+message from keyboard users. Fixed by gating the focus move on `feedback.dataset.tone ===
+'success'` specifically in both files, with new regression tests for both "navigation to an
+already-complete heat" (negative case) and "rejected save during the completing transition"
+in both modules. A final verification pass mechanically reverted the fix, confirmed exactly
+the right 3 tests failed, then restored it — all 807/807 tests passing again. This is worth
+recording as a strong verification story since the second pass found a real, reproducible
+high-severity gap in the first pass's own fix.
+
+Also trimmed redundant "Proceed to scoring." text now that an actual button says exactly that.
+
+**Review chain:** `scoring-auditor` ✅, `test-auditor` ✅, `code-reviewer` ✅ (×2,
+second pass found the high-severity gap in the focus-move fix), `ui-accessibility-reviewer`
+✅ (found and fixed the medium-gap in the focus move; the high-severity refinement was
+then found in the code review that followed). `npm test` passing 807/807 throughout; `npm
+run lint` clean. **Already deployed directly to production via `wrangler deploy` ahead of
+the PR merging, since it was blocking real user workflow** — the stuck heat's confirm can
+now be retried. PR #42 itself remains open, not merged.
+
+---
+
+## Production deployment: Cloudflare Workers supabaseUrl crash fix · 2026-08-31
+
+**No §14 task ID — infrastructure fix, not a code change.** User reported the live
+Cloudflare Workers site (https://seduh-score-next.greymatter-cw.workers.dev) was crashing
+blank with "supabaseUrl is required." Traced to a Cloudflare Workers Builds gotcha: the
+"Variables and secrets" box under Settings → Builds is the CORRECT location for build-time
+env vars, but the user had been steered (incorrectly, in a prior conversation) to remove
+values from there. Without those three vars at build time (`VITE_SUPABASE_URL`,
+`VITE_SUPABASE_ANON_KEY`, `VITE_DEFAULT_ORG_ID`), Vite bakes `undefined` into the bundle
+for each `import.meta.env.VITE_*` reference, and `core/supabaseClient.js`'s
+`createClient(undefined, undefined)` call throws `@supabase/supabase-js`'s own
+"supabaseUrl is required." error the instant the app tries to construct a client.
+
+The user couldn't trigger a dashboard redeploy to re-apply those env vars (no
+permissions/API access), so built and deployed locally via `npx wrangler deploy` after:
+
+1. Fetching the three real (non-secret) Supabase values directly via the Supabase MCP's
+   own tools (project URL, publishable anon key, org id) — avoiding a re-paste of
+   credentials into devtools.
+2. Authenticating against Cloudflare via `wrangler login`.
+
+Verified live: the page now renders the real app shell and sign-in form (not blank with a
+crash). A probe login attempt round-tripped to Supabase Auth correctly ("Invalid login
+credentials" — a real API response, not a crash).
+
+**Critical note for future auto-deploys:** The dashboard's own Builds → Variables and
+secrets box MUST also hold these three same vars (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY,
+VITE_DEFAULT_ORG_ID) so that a future auto-triggered Cloudflare build (e.g., from merging
+PR #42 or any later PR to `main`) doesn't regress back to this same "supabaseUrl is
+required" crash. The user was asked to re-add them there after the earlier wrong steer
+removed them — this is a manual, one-time setup step separate from the wrangler deploy
+itself. Once those dashboard vars are in place, any future `main` push will auto-build and
+deploy with the real values automatically.
+
+---
+
 ## Migration: revoke PUBLIC execute on the six write RPCs · 2026-08-30
 
 Follow-up to the search_path migration below — user asked to close the adjacent finding
@@ -41,7 +142,6 @@ Pushed to both the local stack and the linked cloud project via the Supabase MCP
 `apply_migration`, same as the search_path migration — re-verified `has_function_privilege`
 directly against the cloud project afterward (`anon` → false, `authenticated` → true,
 `service_role` → true, all six).
-
 ---
 
 ## Migration: pin search_path on the six write RPCs · 2026-08-30
