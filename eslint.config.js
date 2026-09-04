@@ -53,6 +53,7 @@ export default [
       'src/formats/cup-taster/scoringScreen.test.js',
       'src/formats/cup-taster/standings.test.js',
       'src/formats/cup-taster/standingsScreen.test.js',
+      'src/formats/cup-taster/liveSession.test.js',
     ],
     rules: {
       'seduh-next/no-raw-elapsed-write': 'off',

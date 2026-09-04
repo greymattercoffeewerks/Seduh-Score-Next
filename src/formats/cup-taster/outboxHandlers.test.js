@@ -8,13 +8,48 @@ beforeEach(async () => {
   await _clearAllForTests();
 });
 
+// Also carries a minimal working `.from()` — since 2026-09-04, the composed
+// map's publish_live_session handler does its own DB reads (via
+// buildLiveSessionPayload) before ever calling `.rpc()`, unlike every other
+// handler here which is a pure buildRpcHandler pass-through; an empty stage
+// (no stage entries, no heats) is enough for that read chain to resolve
+// cleanly without needing liveSession.test.js's own richer fixtures.
 function fakeRpcClient() {
   const calls = [];
+  const stage = {
+    id: 's1',
+    event_id: 'ev1',
+    ordinal: 1,
+    kind: 'prelims',
+    set_count: 4,
+    duration_secs: 60,
+    cutoff: null,
+  };
+  const emptyTables = {
+    ct_stages: { data: stage, error: null },
+    ct_stage_entries: { data: [], error: null },
+    ct_standings: { data: [], error: null },
+    event_entries: { data: [], error: null },
+    ct_heats: { data: [], error: null },
+  };
   return {
     calls,
     rpc: (name) => {
       calls.push(name);
       return Promise.resolve({ data: null, error: null });
+    },
+    from(table) {
+      const response = emptyTables[table] ?? { data: null, error: null };
+      const builder = {
+        select: () => builder,
+        eq: () => builder,
+        in: () => builder,
+        order: () => builder,
+        single: () => Promise.resolve(response),
+        maybeSingle: () => Promise.resolve(response),
+        then: (onResolve) => Promise.resolve(response).then(onResolve),
+      };
+      return builder;
     },
   };
 }
@@ -26,13 +61,14 @@ describe('cupTasterOutboxHandlers', () => {
     expect(Object.keys(handlers).sort()).toEqual([
       'auto_max_heat',
       'confirm_heat',
-      'publish_session',
+      'publish_live_session',
       'record_heat_time',
       'start_heat',
     ]);
-    // A bare key-presence check would still pass if e.g. publishHandlers()
-    // silently degraded to { publish_session: undefined } — this proves
-    // every entry is an actual callable handler, not just a present key.
+    // A bare key-presence check would still pass if e.g.
+    // publishLiveSessionHandlers() silently degraded to
+    // { publish_live_session: undefined } — this proves every entry is an
+    // actual callable handler, not just a present key.
     for (const handler of Object.values(handlers)) {
       expect(typeof handler).toBe('function');
     }
@@ -44,10 +80,20 @@ describe('cupTasterOutboxHandlers', () => {
     await enqueueOperation('record_heat_time', { p_heat_entry_id: 'he1' });
     await enqueueOperation('auto_max_heat', { p_heat_id: 'h1' });
     await enqueueOperation('confirm_heat', { p_heat_id: 'h1' });
-    await enqueueOperation('publish_session', { p_event_id: 'ev1' });
+    await enqueueOperation('publish_live_session', {
+      orgId: 'org1',
+      eventId: 'ev1',
+      stageId: 's1',
+      format: 'cup_taster',
+      isTest: false,
+    });
 
     const result = await flushOutbox(cupTasterOutboxHandlers(client));
 
+    // The queued operation TYPE is publish_live_session, but the actual RPC
+    // it calls (built fresh inside the handler, per liveSession.js's own
+    // module comment) is still named publish_session — client.calls tracks
+    // .rpc() invocations, not outbox operation types.
     expect(client.calls).toEqual([
       'start_heat',
       'record_heat_time',

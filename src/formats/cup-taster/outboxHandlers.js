@@ -24,12 +24,12 @@
 // Taster's, not touched by adding a new format.
 import { timingHandlers } from './timing.js';
 import { confirmHandlers } from './scoring.js';
-import { publishHandlers } from '../../core/publish.js';
+import { publishLiveSessionHandlers } from './liveSession.js';
 
 export function cupTasterOutboxHandlers(client) {
   return {
     ...timingHandlers(client),
     ...confirmHandlers(client),
-    ...publishHandlers(client),
+    ...publishLiveSessionHandlers(client),
   };
 }

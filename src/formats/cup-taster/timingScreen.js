@@ -18,6 +18,7 @@ import { findEvent } from '../../core/events.js';
 import { startHeat, recordTap, autoMaxRemainingEntries, describeTimingConflict } from './timing.js';
 import { recordManualTime, parseElapsedInput, secsToParts } from './timingManual.js';
 import { cupTasterOutboxHandlers } from './outboxHandlers.js';
+import { publishLiveSession } from './liveSession.js';
 import { remainingSecs, isExpired } from '../../core/countdown.js';
 import { getSupabase } from '../../core/supabaseClient.js';
 import { el } from '../../core/dom.js';
@@ -486,6 +487,26 @@ export async function mountTimingScreen(
             handlers: cupTasterOutboxHandlers(client),
           });
           pendingHeatCheck = { expect: 'timing', flushResult };
+          try {
+            await publishLiveSession(
+              {
+                orgId: data.event.org_id,
+                eventId,
+                stageId: data.heat.stage_id,
+                isTest: data.event.is_test,
+              },
+              client,
+              cupTasterOutboxHandlers(client),
+            );
+          } catch {
+            // Best-effort (§8.2's automatic publish): publishLiveSession
+            // enqueues its own intent before doing any network read, so an
+            // offline/failed attempt here still leaves a real, retryable
+            // entry in the outbox (drained by a later screen action or
+            // main.js's reconnect flush) rather than vanishing — this catch
+            // only guards the enqueue call itself (e.g. IndexedDB unusable),
+            // which doesn't change whether the heat itself started.
+          }
         } catch (err) {
           pendingError = describeError(err);
         }
