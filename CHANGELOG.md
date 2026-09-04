@@ -1,3 +1,39 @@
+## T6.hardening.offline-soak — Offline mechanics audit, data-loss bug fix, sync-on-reconnect implementation · 2026-09-04
+
+**Phase 6's second of three named hardening activities** — testing and fixing the outbox/reconnect mechanics for real, at both unit and E2E level, and implementing the three-state sync panel required by handoff §8.4. User-confirmed scope (2026-09-04): two gaps were suspected up front (no reconnect-triggered flush despite D4's own "sync-on-reconnect" language; the three-state sync panel built in T3.3 had zero UI consumers anywhere), scoped as "test + fix if real" at both unit and E2E levels.
+
+**Headline finding: a real, HIGH-severity data-loss bug in core/outbox.js's buildRpcHandler()**, present since that function was first written, never caught before because every existing test mocked a network failure as a REJECTED promise — but supabase-js/postgrest-js's client.rpc() does NOT reject on a genuine network failure. Instead, it RESOLVES with an error object with status: 0 (confirmed via direct instrumentation against a real dropped connection: a genuine server rejection carries a non-zero status like 404, 500, etc.; only a raw network failure carries status 0). The old code marked EVERY resolved error as permanent:true unconditionally — meaning an ordinary wifi drop mid-write got silently and PERMANENTLY discarded from the offline outbox queue, never retried, a live data-loss path in production. **Fixed**: `err.permanent = Boolean(status)` — only genuinely permanent server rejections (status !== 0) are marked permanent; network failures (status === 0) stay in the queue to retry. This single-line fix ripple-broke approximately 9 existing unit tests across 6 test files (publish.test.js, scoring.test.js, timing.test.js, timingManual.test.js, timingManualScreen.test.js, timingScreen.test.js) that had been accidentally passing with unrealistic network-failure mocks — all fixed by adding status:400 (a realistic non-zero server error) to their mocked server-rejection responses, verified honest by test-auditor via mutation testing.
+
+**Secondary finding from offline-sync-auditor's review**: the new sync-on-reconnect trigger (main.js) had no screen watching its flush result, unlike every pre-existing flush call site. A permanently-failed (and therefore removed-from-the-queue) operation left the very next sync-panel poll seeing an empty queue and reporting FALSE "Synced," exactly the "conflict silently resolved" failure mode this project's own §9 principle exists to prevent. **Fixed**: appShell.js gained a reportFlushError()/lastFlushError mechanism (surfaces "Not synced — a write failed to save and was not retried" instead), wired from main.js's attemptReconnectFlush. Both fixes are mutation-tested at the unit level (test failures confirmed when reverted, restored).
+
+**Built**:
+
+- New sync panel in src/core/appShell.js/.css (the organiser app's persistent header), wired to computeSyncState() for the first time ever — polls the local outbox every 3s, shows "Synced" / "Not synced (N pending)" / "Not synced — retrying failed (N pending)".
+- Sync-on-reconnect in src/main.js — an 'online' event listener plus a mount-time attempt, both gated on a reactively-tracked session (client.auth.onAuthStateChange, not a fresh getSession() call — that would have raced requireAuth()'s own per-navigation check, a collision found and avoided while writing this).
+- A genuine Playwright E2E test (tests/e2e/organiser-flow.spec.js) using real browser network emulation (page.context().setOffline) against a real local Supabase stack, not a mock — this test is what actually FOUND the buildRpcHandler bug.
+
+**Files touched:** 12 across src/core/, src/formats/cup-taster/, src/main.js, and tests/e2e/ (appShell.js/.css/.test.js, outbox.js/.test.js, publish.test.js, timing*.test.js, main.js/.test.js, organiser-flow.spec.js). Test count: 871 → 895 (net +24, including new sync-panel and reconnect-flush unit coverage, plus the new E2E test).
+
+**Verifiers' findings:**
+
+- **`offline-sync-auditor`** — confirmed the buildRpcHandler fix and its ~9-test ripple are real and correctly targeted. Found ONE real HIGH-severity gap the fix revealed: attemptReconnectFlush (main.js) discarded a genuine permanent-failure result with nobody watching, so the sync panel could report false "Synced" for a write that was actually dropped. Verified the fix (appShell.js reportFlushError/lastFlushError mechanism) via mutation testing (guard reverted, correct test failed; restored).
+
+- **`ui-accessibility-reviewer`** — clean pass. Contrast computed against real token hex values (all >4.5:1 AA in both paper/stage modes), aria-live correctly reliable (node mutated in place, never torn down), 360px layout verified empirically via a real rendered harness, reduced-motion respected (reuses base.css's existing gated .status-live-dot). No fixes needed.
+
+- **`module-boundary-checker`** — clean. Sync panel is fully format-agnostic (generic status strings/classes, driven by core/syncState.js's own computeSyncState()); main.js's reconnect wiring correctly stays composition-only (WHEN, not HOW); outbox.js's fix is pure mechanics. No violations.
+
+- **`test-auditor`** — mutation-tested the two highest-stakes changes (buildRpcHandler's Boolean(status), appShell.js's unmount() clearInterval) plus the hasSession guard and all 8 status-field additions across 6 files — every one confirmed load-bearing (the exact right test failed when reverted, nothing else). Verified the fake-timers/fake-indexeddb incompatibility claim directly (wrote a throwaway test, confirmed it hangs). No test-quality gaps found.
+
+- **`code-reviewer`** — clean batch. One discretionary, non-blocking note: main.js's hasSession tracking is a second onAuthStateChange subscription alongside appShell.js's own pre-existing one (a consequence of appShell.js's returned handle not exposing session state, not carelessness) — left as-is, not required. status:400/0 usage confirmed consistent and honest across all six ripple-fixed test files.
+
+**Known gaps carried to ROADMAP.md (1 non-blocking, 1 deferred):** Main.js's dual-subscription pattern and the session-expiry-mid-flush edge case, consolidated below per the task's kb-sync reset contract.
+
+**E2E verification note:** The offline E2E test was run successfully end-to-end once (5/5 passing, including proving the full offline→reconnect→auto-flush→panel-updates→heat-genuinely-transitioned-server-side chain) before the local Docker/Supabase stack went down mid-task (environment issue, not caused by this work). Could not re-run E2E after the final reportFlushError fix landed, but that fix has thorough, mutation-tested unit coverage as a substitute. Recommend one fresh E2E run once Docker is back up, before this branch ships.
+
+**Full suite green, lint/format clean. Definition of Done met.**
+
+---
+
 ## T6.hardening.a11y — Full accessibility audit-and-fix pass, 17 screens · 2026-09-04
 
 **Phase 6's first of three named hardening activities** — the accessibility pass, following user's explicit choice to prioritize this self-contained work a month out from the event (doesn't need real roster data or live venue conditions). Audit-and-fix scope, matching how every review in this project has worked.

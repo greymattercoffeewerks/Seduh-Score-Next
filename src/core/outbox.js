@@ -54,21 +54,36 @@ export async function enqueueOperation(type, payload) {
 // publish_session, start_heat/record_heat_time/auto_max_heat) rejects a
 // stale/conflicting payload the exact same way: retrying the identical
 // payload against the RPC's own idempotency/conflict check fails the exact
-// same way forever, unlike a network-level failure (client.rpc() itself
-// rejecting before ever reaching the server), which never reaches this
-// branch and stays retryable. Extracted here — not `formats/cup-taster/` —
+// same way forever — permanent. Extracted here — not `formats/cup-taster/` —
 // because it's pure RPC-wrapping mechanics with zero knowledge of any
 // operation type's name or payload shape; three call sites
 // (timing.js/scoring.js/publish.js) had each hand-rolled this identical
 // ~10-line block before this extraction.
+//
+// `status` (not just `error`) is what actually distinguishes a genuine
+// server-side rejection from a network-level failure — found running a
+// real offline E2E test against a real local Supabase stack (Phase 6
+// offline soak): this function's own ORIGINAL assumption was that a
+// network-level failure means `client.rpc()` itself REJECTS, never
+// reaching this branch at all. That's false — supabase-js/postgrest-js
+// catch a raw fetch failure (a real "TypeError: Failed to fetch" under an
+// actual dropped connection) and RESOLVE with an `error` object anyway,
+// with `status: 0` (no real HTTP response was ever received) as the one
+// signal telling it apart from a genuine server rejection (always a real,
+// non-zero HTTP status — confirmed 404 for a real Postgrest rejection in
+// the same test). Marking every `error` permanent regardless of `status`
+// was a real, live bug: an ordinary wifi drop mid-write got silently and
+// PERMANENTLY discarded from the queue instead of staying there to retry
+// once the connection came back — the exact data-loss scenario the whole
+// offline-first design exists to prevent.
 export function buildRpcHandler(client, type) {
   return async (payload) => {
-    const { error } = await client.rpc(type, payload);
+    const { error, status } = await client.rpc(type, payload);
     if (error) {
       const err = new Error(error.message);
       err.code = error.code;
       err.details = error.details;
-      err.permanent = true;
+      err.permanent = Boolean(status);
       throw err;
     }
   };

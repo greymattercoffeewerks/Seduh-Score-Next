@@ -123,6 +123,113 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     await expect(page.getByText('E2E Cupper Two').first()).toBeVisible();
   });
 
+  test('a write made while offline queues locally, shows as "not synced" in the sync panel, and auto-flushes once the network genuinely returns — no further user action needed', async ({
+    page,
+  }) => {
+    // Phase 6 offline soak, real end-to-end proof of the two gaps found
+    // scoping it: (1) syncState.js's three-state sync panel logic existed
+    // and was tested, but had zero UI consumers anywhere — an organiser had
+    // no visual indication a write was queued and unsynced; (2) nothing
+    // ever retried a queue left behind by a dropped connection except the
+    // organiser's own next write action (D4: "local-first with
+    // sync-on-reconnect" was documented but not actually wired). Both are
+    // now closed in appShell.js/main.js; this drives the REAL browser's
+    // network condition (page.context().setOffline), not a mocked
+    // navigator.onLine, so a false-positive from an incomplete mock can't
+    // hide behind it.
+    test.setTimeout(60000);
+    await signIn(page);
+
+    const eventName = `E2E Offline Soak ${Date.now()}`;
+    await page.getByLabel('Event name').fill(eventName);
+    await page.getByRole('button', { name: 'Create event' }).click();
+    await page.getByRole('link', { name: eventName }).click();
+    await page.getByRole('link', { name: 'Setup' }).click();
+    await page.getByRole('button', { name: 'Add stage' }).click();
+    await page.getByRole('button', { name: 'Save stage plan' }).click();
+    await expect(page.getByText('Stage plan saved.')).toBeVisible();
+    await page.getByRole('link', { name: 'Overview' }).click();
+    await page.getByRole('link', { name: 'Roster' }).click();
+    // Two cuppers, not one — random heat generation refuses a heat below
+    // its own minimum size (2); a single-cupper roster was found the hard
+    // way to leave this test stuck on a "partition: n (1) is below the
+    // minimum heat size (2)" error banner instead of ever reaching Timing.
+    // Unique per run (Date.now()-suffixed, same idea as eventName above) —
+    // core/registry.js's own dedup-by-identity logic was found, running
+    // this test repeatedly, to silently MERGE a fixed name+phone into a
+    // pre-existing person from an earlier run of this exact test rather
+    // than registering a fresh one, so a fixed "Offline Soak Cupper
+    // One"/"555-2001" pair across reruns doesn't reliably produce two new
+    // roster entries.
+    const uniq = Date.now();
+    for (const [name, phone] of [
+      [`Offline Soak Cupper One ${uniq}`, `555-${uniq % 10000}`],
+      [`Offline Soak Cupper Two ${uniq}`, `555-${(uniq + 1) % 10000}`],
+    ]) {
+      await page.getByLabel('Name').fill(name);
+      await page.getByLabel('Phone').fill(phone);
+      await page.getByRole('button', { name: 'Register' }).click();
+      await expect(page.getByText(`${name} registered.`)).toBeVisible();
+    }
+    await page.getByRole('link', { name: 'Overview' }).click();
+    await page.getByRole('link', { name: 'Generate heats' }).click();
+    await page.getByRole('button', { name: 'Seed roster into this stage' }).click();
+    await expect(page.getByText(`Offline Soak Cupper One ${uniq}`).first()).toBeVisible();
+    await page.getByRole('button', { name: 'Generate heats (random)' }).click();
+    await expect(page.getByRole('heading', { name: 'Heat 1' })).toBeVisible();
+    await page.getByRole('link', { name: 'Time this heat' }).click();
+    await expect(page.getByRole('heading', { name: /^Timing — Heat 1$/ })).toBeVisible();
+    const startButton = page.getByRole('button', { name: 'Start heat' });
+    await expect(startButton).toBeVisible();
+
+    const syncPanel = page.locator('.app-shell-sync');
+    // A generous timeout — the panel starts empty ("off") until its
+    // mount-time refreshSync() resolves against real IndexedDB.
+    await expect(syncPanel).toHaveText('Synced', { timeout: 10000 });
+
+    await page.context().setOffline(true);
+    await startButton.click();
+    // Genuinely offline, not just a failed write: the render cycle that
+    // follows a Start-heat attempt reloads heat state fresh from the
+    // server (to check whether it actually landed) — offline, that reload
+    // fails too, so the feedback region shows the generic save-failed
+    // message (errors.js's own describeError() fallback), not the more
+    // specific "hasn't synced yet" wording that only applies when a reload
+    // succeeds but shows a stale write (found writing this test). What
+    // actually matters here — the write queued and is retryable, not
+    // silently dropped or falsely reported as successful — is what the
+    // next two assertions prove directly against the outbox's own state.
+    await expect(page.getByText('Something went wrong saving that — try again.')).toBeVisible({
+      timeout: 20000,
+    });
+    // "retrying failed," not the plain pending wording — attempts > 0
+    // after even ONE failed flush pass already counts as a stuck operation
+    // per computeSyncState()'s own definition; there's no intermediate
+    // "still trying, not stuck yet" state.
+    await expect(syncPanel).toHaveText('Not synced — retrying failed (1 pending)', {
+      timeout: 10000,
+    });
+
+    // The actual reconnect — a real browser-level network condition change,
+    // not a synthetic 'online' Event dispatch, so this also proves Chromium
+    // itself fires a genuine 'online' event on this transition that
+    // main.js's own listener catches.
+    await page.context().setOffline(false);
+    // No further page interaction below — the whole point being proven is
+    // that NOTHING else needs to happen for this to resolve on its own.
+    // Timeout comfortably covers appShell.js's own 3s poll interval plus
+    // the retried RPC's real round trip against the local Supabase stack.
+    await expect(syncPanel).toHaveText('Synced', { timeout: 15000 });
+
+    // Reload and confirm the heat genuinely transitioned server-side, not
+    // just that the panel LOOKS synced — the queued start_heat operation
+    // must have actually landed once flushed.
+    await page.reload();
+    await expect(page.getByRole('heading', { name: /^Timing — Heat 1$/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Start heat' })).not.toBeVisible();
+    await expect(page.getByRole('button', { name: /Stop/ }).first()).toBeVisible();
+  });
+
   test('the projector and phone live routes render their own chrome, not the organiser shell', async ({
     page,
   }) => {

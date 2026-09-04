@@ -49,12 +49,18 @@ describe('buildRpcHandler', () => {
     expect(calls).toEqual([['start_heat', { p_heat_id: 'h1' }]]);
   });
 
-  it('wraps an RPC error as a permanent outbox failure, preserving code/details/message', async () => {
+  it('wraps a GENUINE server-side rejection (a real HTTP response came back) as a permanent outbox failure, preserving code/details/message', async () => {
+    // status: 409 — a real, non-zero HTTP status is what actually means
+    // "the server received this and rejected it," per the module comment
+    // above. Confirmed against a real local Postgrest instance: a genuine
+    // rejection carries status 404/409/etc.; a network failure carries
+    // status 0 — see the next test.
     const client = {
       rpc: () =>
         Promise.resolve({
           data: null,
           error: { message: 'stale conflict', code: 'P0002', details: 'v1 vs v2' },
+          status: 409,
         }),
     };
     const handler = buildRpcHandler(client, 'confirm_heat');
@@ -63,6 +69,30 @@ describe('buildRpcHandler', () => {
       code: 'P0002',
       details: 'v1 vs v2',
       permanent: true,
+    });
+  });
+
+  it('does NOT mark a network-level failure as permanent, even though client.rpc() resolves (not rejects) with an error — the exact real bug found running a genuine offline E2E test (Phase 6 soak)', async () => {
+    // This is the real shape supabase-js/postgrest-js returned under an
+    // actual dropped connection in a live Playwright test against a real
+    // local Supabase stack — client.rpc() RESOLVED, it never rejected, with
+    // status: 0 (no real HTTP response was ever received) and an empty
+    // `code`. Before this fix, buildRpcHandler treated ANY resolved `error`
+    // as permanent regardless of status — silently and PERMANENTLY
+    // discarding a real, still-retryable queued write on an ordinary wifi
+    // drop.
+    const client = {
+      rpc: () =>
+        Promise.resolve({
+          data: null,
+          error: { message: 'TypeError: Failed to fetch', code: '', details: 'TypeError...' },
+          status: 0,
+        }),
+    };
+    const handler = buildRpcHandler(client, 'confirm_heat');
+    await expect(handler({})).rejects.toMatchObject({
+      message: 'TypeError: Failed to fetch',
+      permanent: false,
     });
   });
 
@@ -306,5 +336,128 @@ describe('flushOutbox', () => {
 
     expect(handler).toHaveBeenCalledTimes(1);
     expect(first).toBe(second);
+  });
+});
+
+// Phase 6 offline soak — every scenario above proves the mechanism with 2-3
+// operations; these prove the SAME guarantees hold at the volume and
+// duration a real extended-offline stretch at a venue would actually
+// produce (a whole heat's worth of taps, or an entire multi-heat session,
+// queued before the wifi comes back).
+describe('offline soak', () => {
+  it('a large backlog (50 operations) survives intact — none lost, none duplicated, none reordered — once the network genuinely returns', async () => {
+    for (let i = 0; i < 50; i += 1) {
+      await enqueueOperation('confirm_heat', { heatId: `h${i}` });
+    }
+
+    // Several consecutive failed flush passes — simulates a sustained
+    // offline stretch, not just one dropped attempt. A genuinely offline
+    // network fails on the very FIRST operation every time (nothing ever
+    // reaches the server to distinguish op #1 from op #50), so the FIFO
+    // guarantee means only the head ever accumulates attempts — every
+    // later operation must be left completely untouched, never even
+    // attempted, while an earlier one is still failing.
+    const failingHandler = vi.fn().mockRejectedValue(new Error('network unreachable'));
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const result = await flushOutbox({ confirm_heat: failingHandler });
+      expect(result.stopped).toBe(true);
+      expect(result.permanentFailure).toBe(false);
+    }
+    expect(await countPendingOperations()).toBe(50);
+    const stillQueued = await listPendingOperations();
+    expect(stillQueued[0].attempts).toBe(3);
+    expect(stillQueued.slice(1).every((op) => op.attempts === 0 && op.lastError === null)).toBe(
+      true,
+    );
+    // FIFO order preserved throughout — the retry loop must never have
+    // reshuffled the queue while repeatedly failing on its own head.
+    expect(stillQueued.map((op) => op.payload.heatId)).toEqual(
+      Array.from({ length: 50 }, (_, i) => `h${i}`),
+    );
+
+    // Network genuinely back — one flush call drains the entire backlog.
+    const succeedingHandler = vi.fn().mockResolvedValue(undefined);
+    const result = await flushOutbox({ confirm_heat: succeedingHandler });
+    expect(result).toEqual({ processed: 50, stopped: false, permanentFailure: false });
+    expect(succeedingHandler).toHaveBeenCalledTimes(50);
+    // Called in the same order the operations were originally enqueued —
+    // not insertion order of whatever IndexedDB happened to return them in,
+    // which is exactly the tied-createdAt failure mode this file's own
+    // nextSequence() comment describes.
+    expect(succeedingHandler.mock.calls.map(([payload]) => payload.heatId)).toEqual(
+      Array.from({ length: 50 }, (_, i) => `h${i}`),
+    );
+    expect(await countPendingOperations()).toBe(0);
+  });
+
+  it('a single stuck operation keeps its exact original payload across many consecutive retries — never mutated, never replaced with a fresh one', async () => {
+    const original = await enqueueOperation('record_heat_time', {
+      p_heat_id: 'h1',
+      p_entry_id: 'e1',
+      p_elapsed_secs: 42,
+    });
+    const handler = vi.fn().mockRejectedValue(new Error('stale conflict'));
+
+    for (let i = 0; i < 20; i += 1) {
+      await flushOutbox({ record_heat_time: handler });
+    }
+
+    const [pending] = await listPendingOperations();
+    expect(pending.id).toBe(original.id);
+    expect(pending.payload).toEqual(original.payload);
+    expect(pending.attempts).toBe(20);
+    expect(pending.lastError).toBe('stale conflict');
+    expect(handler).toHaveBeenCalledTimes(20);
+  });
+
+  it("a long offline session mixing several real operation types (the exact scenario outboxHandlers.js's own module comment describes — a heat timed AND scored fully offline) flushes every type correctly once reconnected, in original enqueue order regardless of type", async () => {
+    await enqueueOperation('start_heat', { p_heat_id: 'h1' });
+    await enqueueOperation('record_heat_time', { p_heat_id: 'h1', p_entry_id: 'e1' });
+    await enqueueOperation('record_heat_time', { p_heat_id: 'h1', p_entry_id: 'e2' });
+    await enqueueOperation('confirm_heat', { p_heat_id: 'h1' });
+    await enqueueOperation('publish_session', { p_event_id: 'ev1' });
+
+    const calls = [];
+    const trackingHandler = (type) => async (payload) => {
+      calls.push([type, payload]);
+    };
+    const handlers = {
+      start_heat: trackingHandler('start_heat'),
+      record_heat_time: trackingHandler('record_heat_time'),
+      confirm_heat: trackingHandler('confirm_heat'),
+      publish_session: trackingHandler('publish_session'),
+    };
+
+    const result = await flushOutbox(handlers);
+
+    expect(result).toEqual({ processed: 5, stopped: false, permanentFailure: false });
+    expect(calls.map(([type]) => type)).toEqual([
+      'start_heat',
+      'record_heat_time',
+      'record_heat_time',
+      'confirm_heat',
+      'publish_session',
+    ]);
+    expect(await countPendingOperations()).toBe(0);
+  });
+
+  it('a permanent failure partway through a large backlog does not block the rest of the queue — every later, unrelated operation still gets its turn', async () => {
+    for (let i = 0; i < 10; i += 1) {
+      await enqueueOperation('confirm_heat', { heatId: `h${i}` });
+    }
+    const handler = vi.fn(async (payload) => {
+      if (payload.heatId === 'h4') {
+        const err = new Error('stale updated_at');
+        err.permanent = true;
+        throw err;
+      }
+    });
+
+    const result = await flushOutbox({ confirm_heat: handler });
+
+    expect(result.permanentFailure).toBe(true);
+    expect(result.processed).toBe(9); // every operation except the one permanent failure
+    expect(await countPendingOperations()).toBe(0); // the permanent failure is removed too, not left stuck
+    expect(handler).toHaveBeenCalledTimes(10);
   });
 });

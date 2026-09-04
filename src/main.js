@@ -23,6 +23,8 @@ import { mountTimingRouteScreen } from './formats/cup-taster/timingRouteScreen.j
 import { mountScoringScreen } from './formats/cup-taster/scoringScreen.js';
 import { mountProjectorSurface } from './formats/cup-taster/projectorSurface.js';
 import { mountPhoneSummary } from './formats/cup-taster/phoneSummary.js';
+import { flushOutbox } from './core/outbox.js';
+import { cupTasterOutboxHandlers } from './formats/cup-taster/outboxHandlers.js';
 
 // Same "unreliable venue wifi" holding-state pattern this project already
 // established for setupScreen.js/rosterScreen.js/eventsScreen.js's own
@@ -242,6 +244,38 @@ export function buildRoutes({ orgId, bareRoot, routerRef }) {
   ];
 }
 
+// Sync-on-reconnect (D4: "local-first with sync-on-reconnect") — found
+// missing in review (Phase 6 offline soak): every real write already
+// enqueues-then-flushes in the SAME call (timing.js/scoring.js/publish.js),
+// but nothing retried a queue left behind by a dropped connection until the
+// organiser's NEXT write happened to trigger another flush attempt. A heat
+// finished right as the wifi dropped could sit unsynced indefinitely if
+// nothing else was recorded afterward. `core/outbox.js`'s own flushOutbox()
+// already owns everything about HOW a flush behaves (ordering, permanent-
+// failure handling); this only decides WHEN one starts.
+//
+// `shell.reportFlushError(...)` — found in review (offline-sync-auditor):
+// every PRE-EXISTING flush call site reads its own flushResult off the same
+// await that triggered the write and surfaces a real conflict to whichever
+// screen the organiser is looking at (timingScreen.js's own
+// pendingHeatCheck, etc.). This trigger has no screen watching it at all —
+// without this, a genuine conflict (flushResult.permanentFailure) got
+// silently discarded from the outbox with nobody told, and the very next
+// sync-panel poll saw an empty queue and reported "Synced" — a false
+// all-clear for a write that never actually landed, exactly the "conflict
+// silently resolved" failure mode §9 exists to prevent. A resolved,
+// non-permanent result (or no error at all) clears any previously-reported
+// one, the same way a screen's own retry clears its local error state.
+function attemptReconnectFlush(client, shell) {
+  flushOutbox(cupTasterOutboxHandlers(client))
+    .then((result) => {
+      shell.reportFlushError(result.permanentFailure ? result.error : null);
+    })
+    .catch((err) => {
+      console.error('main: reconnect flush failed', err);
+    });
+}
+
 export function mountApp(root, { client = getSupabase(), orgId = getDefaultOrgId() } = {}) {
   root.innerHTML = '';
 
@@ -251,6 +285,43 @@ export function mountApp(root, { client = getSupabase(), orgId = getDefaultOrgId
   root.append(shellRoot, bareRoot);
 
   const shell = mountAppShell(shellRoot, { client });
+
+  // Tracked reactively via onAuthStateChange, NOT a fresh client.auth.
+  // getSession() call here — found while wiring this: a separate
+  // getSession() call at mount would race/collide with requireAuth()'s own
+  // per-navigation getSession() check below (broke a staleness-protection
+  // test whose fake client counts calls to control which one resolves
+  // first — that test relies on being able to predict exactly which call is
+  // requireAuth's). onAuthStateChange fires its own INITIAL_SESSION event
+  // with the current session shortly after subscribing, then again on every
+  // sign-in/out/token-refresh — reused here for both "attempt once we learn
+  // we're signed in" (covers a tab reopened after being offline, and a
+  // fresh sign-in transition, for free) and "attempt on reconnect" below.
+  //
+  // Guarded on a real session, not attempted unconditionally: buildRpcHandler()
+  // (core/outbox.js) marks EVERY client.rpc() error `permanent: true`, on
+  // the reasoning that a response which reached the server and came back
+  // rejected (as opposed to the request never reaching it at all) means
+  // retrying the identical payload fails the identical way forever. That
+  // reasoning holds for a stale-conflict rejection, but an unauthenticated
+  // call also resolves with an error object rather than throwing — firing
+  // before sign-in would misclassify a purely transient "not signed in yet"
+  // state as permanent and silently discard real pending writes. Every
+  // EXISTING flush call site avoided this by construction (each only ever
+  // runs from inside an already-`requireAuth()`-gated screen's own write
+  // handler); this is the first call site that can fire before that gate.
+  let hasSession = false;
+  const {
+    data: { subscription: reconnectAuthSubscription },
+  } = client.auth.onAuthStateChange((_event, session) => {
+    hasSession = Boolean(session);
+    if (hasSession) attemptReconnectFlush(client, shell);
+  });
+
+  function onOnline() {
+    if (hasSession) attemptReconnectFlush(client, shell);
+  }
+  window.addEventListener('online', onOnline);
   // Still null here — createRouter() below needs `routes` already built,
   // but requireAuth()'s onSignedIn only reads routerRef.current lazily,
   // once a real sign-in actually happens, by which point it's set.
@@ -293,6 +364,8 @@ export function mountApp(root, { client = getSupabase(), orgId = getDefaultOrgId
       // gap in for heatsScreen.js.
       await router.stop();
       shell.unmount();
+      window.removeEventListener('online', onOnline);
+      reconnectAuthSubscription.unsubscribe();
     },
   };
 }

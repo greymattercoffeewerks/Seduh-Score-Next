@@ -82,7 +82,15 @@ describe('startHeat', () => {
 
   it('any error the RPC itself returns is treated as permanent — it will fail the same way on every retry', async () => {
     const client = fakeRpcClient(() =>
-      Promise.resolve({ data: null, error: { message: 'start_heat: heat h1 not found' } }),
+      // status: 400 — a genuine server-side rejection carries a real,
+      // non-zero HTTP status (buildRpcHandler, core/outbox.js, is what
+      // actually distinguishes this from a network-level failure, which
+      // resolves with status: 0 instead).
+      Promise.resolve({
+        data: null,
+        error: { message: 'start_heat: heat h1 not found' },
+        status: 400,
+      }),
     );
     const { flushResult } = await startHeat('h1', 'org1', client, { now: fixedNow });
     expect(flushResult.permanentFailure).toBe(true);
@@ -177,6 +185,7 @@ describe('recordTap', () => {
       Promise.resolve({
         data: null,
         error: { code: 'P0002', message: 'CONFLICT: heat entry he1 already has a recorded time' },
+        status: 400,
       }),
     );
     const { flushResult } = await recordTap(appHeatTiming, heatEntry, 'org1', client, {
@@ -204,7 +213,11 @@ describe('autoMaxRemainingEntries', () => {
 
   it('a genuine permanent failure surfaces, not silently retried forever', async () => {
     const client = fakeRpcClient(() =>
-      Promise.resolve({ data: null, error: { message: 'auto_max_heat: heat h1 not found' } }),
+      Promise.resolve({
+        data: null,
+        error: { message: 'auto_max_heat: heat h1 not found' },
+        status: 400,
+      }),
     );
     const flushResult = await autoMaxRemainingEntries('h1', 'org1', client, { now: fixedNow });
     expect(flushResult.permanentFailure).toBe(true);

@@ -101,6 +101,11 @@ function makeRpc(db, calls) {
         return Promise.resolve({
           data: null,
           error: { code: 'P0002', message: 'record_heat_time: heat entry not found' },
+          // A genuine server-side rejection carries a real, non-zero HTTP
+          // status — that's what actually distinguishes it from a
+          // network-level failure (buildRpcHandler, core/outbox.js), which
+          // resolves with status: 0 instead.
+          status: 400,
         });
       }
       const heat = db.ct_heats.find((h) => h.id === entry.heat_id);
@@ -108,12 +113,14 @@ function makeRpc(db, calls) {
         return Promise.resolve({
           data: null,
           error: { code: 'P0002', message: `CONFLICT: heat is ${heat.status} now` },
+          status: 400,
         });
       }
       if (payload.p_conflict_policy === 'reject' && entry.elapsed_secs != null) {
         return Promise.resolve({
           data: null,
           error: { code: 'P0002', message: 'CONFLICT: heat entry already has a recorded time' },
+          status: 400,
         });
       }
       entry.elapsed_secs = payload.p_elapsed_secs;

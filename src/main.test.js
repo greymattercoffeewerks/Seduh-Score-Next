@@ -60,6 +60,24 @@ vi.mock('./core/loginScreen.js', () => ({
   mountLoginScreen: (...args) => mountLoginScreen(...args),
 }));
 
+// Mocked at the module level, same as every screen above — appShell.js
+// (mounted for real in every test here, unlike the routed screens) ALSO
+// imports listPendingOperations from this exact module, so the mock must
+// cover both call sites; returning [] keeps its own sync panel a harmless
+// no-op ("off") across every test that isn't specifically about it.
+const flushOutbox = vi.fn(() =>
+  Promise.resolve({ processed: 0, stopped: false, permanentFailure: false }),
+);
+const listPendingOperations = vi.fn(() => Promise.resolve([]));
+vi.mock('./core/outbox.js', () => ({
+  flushOutbox: (...args) => flushOutbox(...args),
+  listPendingOperations: (...args) => listPendingOperations(...args),
+}));
+const cupTasterOutboxHandlers = vi.fn(() => ({ fake: 'handlers' }));
+vi.mock('./formats/cup-taster/outboxHandlers.js', () => ({
+  cupTasterOutboxHandlers: (...args) => cupTasterOutboxHandlers(...args),
+}));
+
 const { mountApp } = await import('./main.js');
 
 function stubScreen(mockFn, marker) {
@@ -477,5 +495,147 @@ describe('the temporary auth gate (requireAuth)', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(root.textContent).toContain('EVENTS_SCREEN');
+  });
+});
+
+// D4: "local-first with sync-on-reconnect." Regression coverage for the
+// Phase 6 offline-soak finding that no call site ever actually triggered a
+// flush except the same write call that had just enqueued the operation —
+// nothing retried a queue left behind by a dropped connection.
+describe('sync-on-reconnect', () => {
+  // Unlike the shared fakeClient() above, onAuthStateChange here actually
+  // invokes every subscriber — both appShell.js's own subscription and
+  // main.js's new one need to observe the same session. Fires an initial
+  // callback asynchronously per subscriber, mirroring real Supabase-js's
+  // own INITIAL_SESSION event (never synchronously — a subscriber must
+  // never assume the current session is already known the instant it
+  // subscribes).
+  function fakeReactiveClient({ session = null } = {}) {
+    let listeners = [];
+    let currentSession = session;
+    return {
+      setSession(next) {
+        currentSession = next;
+        for (const cb of listeners) cb('SIGNED_IN', next);
+      },
+      auth: {
+        getSession: () => Promise.resolve({ data: { session: currentSession } }),
+        onAuthStateChange: (cb) => {
+          listeners.push(cb);
+          Promise.resolve().then(() => cb('INITIAL_SESSION', currentSession));
+          return {
+            data: {
+              subscription: {
+                unsubscribe: () => {
+                  listeners = listeners.filter((l) => l !== cb);
+                },
+              },
+            },
+          };
+        },
+        signOut: vi.fn(),
+      },
+    };
+  }
+
+  it('attempts a flush once it learns a session already exists at mount — a tab reopened after being offline, not just a live reconnect', async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    const client = fakeReactiveClient({ session: { user: { email: 'organiser@test.com' } } });
+    await startApp({ client });
+    await new Promise((resolve) => setTimeout(resolve, 0)); // let the async INITIAL_SESSION callback fire
+
+    expect(flushOutbox).toHaveBeenCalledWith({ fake: 'handlers' });
+    expect(cupTasterOutboxHandlers).toHaveBeenCalledWith(client);
+  });
+
+  it('does NOT attempt a flush before a session is known — an unauthenticated RPC error would be misclassified as permanent by buildRpcHandler and silently discard real pending writes', async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    const client = fakeReactiveClient({ session: null });
+    await startApp({ client });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(flushOutbox).not.toHaveBeenCalled();
+  });
+
+  it("attempts a flush when the browser fires 'online', given a known session", async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    const client = fakeReactiveClient({ session: { user: { email: 'organiser@test.com' } } });
+    await startApp({ client });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    flushOutbox.mockClear();
+
+    window.dispatchEvent(new Event('online'));
+
+    expect(flushOutbox).toHaveBeenCalledTimes(1);
+  });
+
+  it("does NOT attempt a flush on 'online' while no session is known yet", async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    const client = fakeReactiveClient({ session: null });
+    await startApp({ client });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    window.dispatchEvent(new Event('online'));
+
+    expect(flushOutbox).not.toHaveBeenCalled();
+  });
+
+  it('a sign-in transition after mount (no session yet, then one arrives) triggers its own flush attempt', async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    const client = fakeReactiveClient({ session: null });
+    await startApp({ client });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(flushOutbox).not.toHaveBeenCalled();
+
+    client.setSession({ user: { email: 'organiser@test.com' } });
+
+    expect(flushOutbox).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops listening for 'online' after unmount", async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    const client = fakeReactiveClient({ session: { user: { email: 'organiser@test.com' } } });
+    const { app } = await startApp({ client });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await app.unmount();
+    activeApp = null; // already torn down — afterEach must not double-unmount it
+    flushOutbox.mockClear();
+
+    window.dispatchEvent(new Event('online'));
+
+    expect(flushOutbox).not.toHaveBeenCalled();
+  });
+
+  // Found in review (offline-sync-auditor): every OTHER flush call site has
+  // a screen reading its own flushResult off the same await that triggered
+  // the write; this trigger has none. Without surfacing permanentFailure
+  // here, a genuine conflict got silently discarded from the outbox with
+  // the real appShell.js sync panel then reporting a false "Synced" right
+  // after — regression coverage against the REAL (unmocked) appShell.js,
+  // not a mock, since the bug was specifically about what the panel shows.
+  it('surfaces a permanently-failed reconnect flush on the real sync panel, not a false "Synced"', async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    flushOutbox.mockResolvedValueOnce({
+      processed: 0,
+      stopped: false,
+      permanentFailure: true,
+      error: new Error('stale conflict'),
+    });
+    const client = fakeReactiveClient({ session: { user: { email: 'organiser@test.com' } } });
+    const { root } = await startApp({ client });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(root.querySelector('.app-shell-sync').textContent).toBe(
+      'Not synced — a write failed to save and was not retried',
+    );
+  });
+
+  it('a clean (non-permanent-failure) reconnect flush leaves the sync panel reporting normally, not stuck on a stale error', async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    const client = fakeReactiveClient({ session: { user: { email: 'organiser@test.com' } } });
+    const { root } = await startApp({ client });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(root.querySelector('.app-shell-sync').textContent).not.toContain('failed to save');
   });
 });
