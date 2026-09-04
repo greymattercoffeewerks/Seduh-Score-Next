@@ -127,7 +127,7 @@ function baseTables() {
 }
 
 describe('buildLiveSessionPayload', () => {
-  it('assembles stage, ranked standings, the running heat, and confirmed heats — matching viewerBody.js\'s documented payload contract', async () => {
+  it("assembles stage, ranked standings, the running heat, and confirmed heats — matching viewerBody.js's documented payload contract", async () => {
     const client = fakeClient({ tables: baseTables() });
     const payload = await buildLiveSessionPayload('s1', client);
 
@@ -135,7 +135,13 @@ describe('buildLiveSessionPayload', () => {
 
     expect(payload.standings).toEqual([
       { position: 1, displayName: 'Alex', numCorrect: 6, totalElapsedSecs: 200, tieStatus: null },
-      { position: 2, displayName: 'Bailey', numCorrect: 0, totalElapsedSecs: null, tieStatus: null },
+      {
+        position: 2,
+        displayName: 'Bailey',
+        numCorrect: 0,
+        totalElapsedSecs: null,
+        tieStatus: null,
+      },
     ]);
 
     expect(payload.activeHeat).toEqual({
@@ -223,7 +229,14 @@ describe('buildLiveSessionPayload', () => {
     }
     function entriesFor(n) {
       return [
-        { id: `he-${n}`, heat_id: `h${n}`, entry_id: 'a', station: 'A', elapsed_secs: 100, maxed: false },
+        {
+          id: `he-${n}`,
+          heat_id: `h${n}`,
+          entry_id: 'a',
+          station: 'A',
+          elapsed_secs: 100,
+          maxed: false,
+        },
       ];
     }
     function resultsFor(n, correctCount) {
@@ -259,7 +272,16 @@ describe('buildLiveSessionPayload', () => {
 
   it('has no activeHeat and an empty recentHeats when nothing has started or confirmed yet', async () => {
     const pendingHeats = [
-      { id: 'h1', stage_id: 's1', heat_number: 1, kind: 'normal', status: 'pending', timing_mode: 'app', started_at: null, duration_secs: 480 },
+      {
+        id: 'h1',
+        stage_id: 's1',
+        heat_number: 1,
+        kind: 'normal',
+        status: 'pending',
+        timing_mode: 'app',
+        started_at: null,
+        duration_secs: 480,
+      },
     ];
     const client = fakeClient({
       tables: {

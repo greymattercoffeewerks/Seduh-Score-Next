@@ -66,6 +66,29 @@
             { id: 'e2', display_name: 'Jordan Lee' },
           ],
           ct_results: [],
+          // Added 2026-09-04 alongside the automatic-publish wiring: the
+          // "Confirm heat" handler now also calls publishLiveSession(),
+          // which reads a stage's standings/heats through the same fake
+          // client — see timingScreen.preview.html's own comment on this
+          // same addition for the full reasoning (a missing table here
+          // throws on every retry, never permanently, which would stall
+          // this queue's FIFO order for any operation queued behind it).
+          ct_stages: [
+            {
+              id: 's1',
+              event_id: 'ev1',
+              ordinal: 1,
+              kind: 'prelims',
+              set_count: 3,
+              duration_secs: 480,
+              cutoff: null,
+            },
+          ],
+          ct_stage_entries: [
+            { id: 'se1', stage_id: 's1', entry_id: 'e1' },
+            { id: 'se2', stage_id: 's1', entry_id: 'e2' },
+          ],
+          ct_standings: [],
         };
 
         function matchesFilters(row, filters) {

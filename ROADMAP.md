@@ -24,15 +24,15 @@ about original design intent.
 
 ## Current state
 
-| Phase                               | Status               | What it covers                                                                                |
-| ----------------------------------- | -------------------- | --------------------------------------------------------------------------------------------- |
-| Phase 0 — Foundation                | ✅ Done              | Scaffold, Claude Code tooling, Supabase local stack + CI, doc seed                            |
-| Phase 1 — Schema and security       | ✅ Done              | Core tables, Cup Taster tables, RLS, `WITH CHECK` gate                                        |
-| Phase 2 — Core libraries            | ✅ Done              | `partition`, `ranking`, `advancement`, `countdown`, `timeclamp`, `entitlements`               |
-| Phase 3 — Registry and offline      | ✅ Done              | `registry`, IndexedDB mirror + outbox, sync state panel                                       |
-| Phase 4 — Cup Taster                | ✅ Done              | Setup, heat generation, timing (app + manual), scoring, standings/advancement, report, export |
-| Phase 5 — Live surfaces             | ✅ Done              | `publish`, `viewer-shell`, projector, phone summary, automatic publishing on heat actions     |
-| Phase 6 — Hardening                 | 🟡 In progress       | Accessibility pass, offline soak, dry run — **Guess the Bean (descoped, see below)**          |
+| Phase                          | Status         | What it covers                                                                                |
+| ------------------------------ | -------------- | --------------------------------------------------------------------------------------------- |
+| Phase 0 — Foundation           | ✅ Done        | Scaffold, Claude Code tooling, Supabase local stack + CI, doc seed                            |
+| Phase 1 — Schema and security  | ✅ Done        | Core tables, Cup Taster tables, RLS, `WITH CHECK` gate                                        |
+| Phase 2 — Core libraries       | ✅ Done        | `partition`, `ranking`, `advancement`, `countdown`, `timeclamp`, `entitlements`               |
+| Phase 3 — Registry and offline | ✅ Done        | `registry`, IndexedDB mirror + outbox, sync state panel                                       |
+| Phase 4 — Cup Taster           | ✅ Done        | Setup, heat generation, timing (app + manual), scoring, standings/advancement, report, export |
+| Phase 5 — Live surfaces        | ✅ Done        | `publish`, `viewer-shell`, projector, phone summary, automatic publishing on heat actions     |
+| Phase 6 — Hardening            | 🟡 In progress | Accessibility pass, offline soak, dry run — **Guess the Bean (descoped, see below)**          |
 
 **Deadline: 4 October 2026, Cup Tasters event.**
 

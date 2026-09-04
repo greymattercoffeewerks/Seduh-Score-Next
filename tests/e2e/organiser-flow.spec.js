@@ -205,8 +205,14 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     // "retrying failed," not the plain pending wording — attempts > 0
     // after even ONE failed flush pass already counts as a stuck operation
     // per computeSyncState()'s own definition; there's no intermediate
-    // "still trying, not stuck yet" state.
-    await expect(syncPanel).toHaveText('Not synced — retrying failed (1 pending)', {
+    // "still trying, not stuck yet" state. (2 pending), not 1 — since
+    // 2026-09-04's automatic-publish wiring, a successful start_heat call
+    // also enqueues a publish_live_session operation right behind it
+    // (liveSession.js's own publishLiveSession()); offline, that second
+    // operation queues too, exactly like start_heat itself, rather than
+    // being silently dropped — proving the publish genuinely survives
+    // being offline, not just the primary write.
+    await expect(syncPanel).toHaveText('Not synced — retrying failed (2 pending)', {
       timeout: 10000,
     });
 
