@@ -117,13 +117,31 @@ export function mountAppShell(root, { appName = APP_NAME, client = getSupabase()
   async function setNav({ eventId = null, links = [] } = {}) {
     navEl.innerHTML = '';
     for (const link of links) {
-      navEl.appendChild(
-        el('a', {
-          className: link.active ? 'app-shell-link app-shell-link-active' : 'app-shell-link',
-          text: link.label,
-          attrs: { href: link.href },
-        }),
-      );
+      const linkAttrs = { href: link.href };
+      // aria-current: 'page' — found in the app-wiring holistic pass: the
+      // active link was only ever distinguished visually (bold + underline
+      // via .app-shell-link-active), giving a screen-reader user no
+      // programmatic signal of which section they're currently in.
+      if (link.active) linkAttrs['aria-current'] = 'page';
+      const linkEl = el('a', {
+        className: link.active ? 'app-shell-link app-shell-link-active' : 'app-shell-link',
+        text: link.label,
+        attrs: linkAttrs,
+      });
+      // Blur immediately on click — found in the same pass: unlike a link
+      // INSIDE a routed screen (removed wholesale by the next screen's own
+      // root.innerHTML = ''), this shell's own nav links are never removed
+      // across a navigation, so router.js's own post-navigation focus
+      // fallback (which only moves focus to the new screen's heading when
+      // `document.activeElement === document.body`) never fires after a
+      // shell-nav click — the click just leaves focus stranded on the same
+      // link while the outlet underneath it silently changes screens, with
+      // no signal to a screen-reader/keyboard user that anything happened.
+      // Blurring here restores that fallback's own assumption without
+      // touching router.js itself; default navigation still proceeds (this
+      // never calls preventDefault()).
+      linkEl.addEventListener('click', () => linkEl.blur());
+      navEl.appendChild(linkEl);
     }
 
     if (!eventId) {

@@ -10,6 +10,15 @@ export default defineConfig({
     // resolves to the IPv6 loopback first, which some local tooling can't
     // reach at 127.0.0.1.
     host: '127.0.0.1',
+    // Pinned off Vite's own default (5173), +100 — same offset convention
+    // supabase/config.toml already uses for this project's whole local
+    // stack, for the same reason: this machine also runs the sibling
+    // Kira-Kira repo's own dev server, which defaults to 5173 unedited.
+    // Negotiated directly with that project (2026-09-04) rather than
+    // guessed — see .claude/launch.json's own `autoPort: true` as the
+    // belt-and-suspenders fallback if a third project ever lands on this
+    // exact port too.
+    port: 5273,
   },
   preview: {
     // Same reasoning as `server.host` above — Playwright's webServer

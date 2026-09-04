@@ -271,6 +271,15 @@ describe('mountReportScreen', () => {
     expect(root.textContent).toContain('Alex');
     expect(root.textContent).toContain('Set difficulty');
     expect(root.textContent).toContain('Score distribution');
+
+    // Every column header on every table on this screen (standings,
+    // difficulty, distribution — three per stage) uses scope='col',
+    // matching heatsScreen.js's own established convention (its own test
+    // asserts it) — found missing on this screen and on
+    // standingsScreen.js's near-identical table reviewing the two together.
+    const headers = root.querySelectorAll('.standings-table thead th');
+    expect(headers.length).toBeGreaterThan(0);
+    for (const header of headers) expect(header.getAttribute('scope')).toBe('col');
   });
 
   // Shared by the three export-button tests below — a single normal stage,

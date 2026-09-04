@@ -168,6 +168,24 @@ describe('renderHeatsList', () => {
     expect(cards[3].querySelector('a')).toBeNull();
     expect(cards[3].querySelector('.heat-status-done').textContent).toBe('Confirmed');
   });
+
+  it('disambiguates each heat card action link with a per-heat aria-label, since the visible text repeats identically across cards', () => {
+    // Found in this pass (holistic accessibility review): a screen-reader
+    // user browsing this page by a links list (not linearly, heading by
+    // heading) would otherwise hit several "Time this heat" links in a row
+    // with nothing distinguishing which heat any one of them belongs to.
+    const heatsWithEntries = [
+      { heat: { id: 'h1', heat_number: 1, status: 'pending' }, entries: [] },
+      { heat: { id: 'h2', heat_number: 3, status: 'scoring' }, entries: [] },
+    ];
+    const list = renderHeatsList(heatsWithEntries, new Map(), 'ev1');
+    const cards = [...list.querySelectorAll('.heat-card')];
+
+    // The accessible name CONTAINS the visible text verbatim (WCAG 2.5.3
+    // Label in Name), not a differently-worded description replacing it.
+    expect(cards[0].querySelector('a').getAttribute('aria-label')).toBe('Time this heat — Heat 1');
+    expect(cards[1].querySelector('a').getAttribute('aria-label')).toBe('Score this heat — Heat 3');
+  });
 });
 
 const nonTestEvent = { id: 'ev1', is_test: false };

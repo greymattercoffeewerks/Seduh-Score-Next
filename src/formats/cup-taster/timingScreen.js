@@ -42,7 +42,7 @@ export function renderRosterPreview(hydratedEntries) {
 // INSIDE the same flex row the inputs/button live in, matching that
 // screen's own established layout — not a sibling, which would break its
 // CSS.
-export function renderManualTimeFields(entry, { onSave, extraChildren = [] }) {
+export function renderManualTimeFields(entry, { onSave, extraChildren = [], id } = {}) {
   const [prefillMin, prefillSec] = secsToParts(entry.elapsed_secs_raw ?? entry.elapsed_secs);
   const minutesInput = el('input', {
     className: 'field-input manual-time-input',
@@ -75,7 +75,7 @@ export function renderManualTimeFields(entry, { onSave, extraChildren = [] }) {
     onSave(entry.entry_id, minutesInput.value, secondsInput.value),
   );
 
-  return el('div', { className: 'manual-time-fields' }, [
+  return el('div', { className: 'manual-time-fields', id }, [
     minutesInput,
     el('span', { className: 'manual-time-separator', text: ':' }),
     secondsInput,
@@ -122,6 +122,15 @@ export function renderTimingRows(hydratedEntries, { onStop, onSaveManual }) {
         attrs: { 'aria-label': `Stop ${entry.displayName}'s clock` },
       });
 
+      // `aria-controls` completes the standard disclosure-widget pattern
+      // alongside aria-expanded (WAI-ARIA Authoring Practices) — found in
+      // this pass (holistic accessibility review): aria-expanded alone was
+      // already wired, but nothing formally associated the toggle with the
+      // region it discloses. Support is inconsistent across screen
+      // readers, so this is additive, not a substitute for the toggle's own
+      // aria-expanded/focus-management, which already carries the real
+      // weight here.
+      const manualFieldsId = `manual-time-fields-${entry.entry_id}`;
       const manualToggle = el('button', {
         className: 'btn btn-outline tap-target btn-manual-toggle',
         text: 'Enter time manually',
@@ -129,6 +138,7 @@ export function renderTimingRows(hydratedEntries, { onStop, onSaveManual }) {
           type: 'button',
           'aria-label': `Enter ${entry.displayName}'s time manually`,
           'aria-expanded': 'false',
+          'aria-controls': manualFieldsId,
         },
       });
       const cancelButton = el('button', {
@@ -154,6 +164,7 @@ export function renderTimingRows(hydratedEntries, { onStop, onSaveManual }) {
         attrs: { role: 'alert' },
       });
       const manualFields = renderManualTimeFields(entry, {
+        id: manualFieldsId,
         onSave: (entryId, minutesRaw, secondsRaw) => {
           let rawSecs;
           try {

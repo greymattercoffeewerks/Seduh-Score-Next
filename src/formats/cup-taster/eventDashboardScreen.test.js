@@ -63,6 +63,30 @@ function fakeClient({ tables = {} } = {}) {
 const nonTestEvent = { id: 'ev1', name: 'October Cup', is_test: false };
 const testEvent = { ...nonTestEvent, is_test: true };
 
+// Matches setupScreen.test.js/rosterScreen.test.js's own identical
+// throwingClient() helper — every `.from()` call fails, regardless of
+// table or chain shape (select/eq/order/single/maybeSingle/then all
+// resolve to the same error).
+function throwingClient() {
+  return {
+    from() {
+      const builder = {
+        select: () => builder,
+        eq: () => builder,
+        order: () => builder,
+        single: () => Promise.resolve({ data: null, error: new Error('network unreachable') }),
+        maybeSingle: () => Promise.resolve({ data: null, error: new Error('network unreachable') }),
+        then: (resolve, reject) =>
+          Promise.resolve({ data: null, error: new Error('network unreachable') }).then(
+            resolve,
+            reject,
+          ),
+      };
+      return builder;
+    },
+  };
+}
+
 describe('mountEventDashboardScreen', () => {
   it('renders the event name and top-level Setup/Roster/Report links', async () => {
     const root = document.createElement('div');
@@ -148,6 +172,41 @@ describe('mountEventDashboardScreen', () => {
     await mountEventDashboardScreen(root, { eventId: 'ev1', client });
     expect(root.querySelector('.screen-feedback').dataset.tone).toBe('error');
     expect(root.querySelector('button').textContent).toBe('Retry');
+  });
+
+  it("a successful Retry moves focus to the event heading, not silently dropping it to <body> — matches rosterScreen.js/setupScreen.js's own identical fix", async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root); // .focus() is a no-op on a detached element
+    // Deterministic, not call-count-based — flipped by the test itself the
+    // moment Retry is clicked, matching setupScreen.test.js/rosterScreen.test.js's
+    // own approach.
+    let shouldFail = true;
+    const succeeding = fakeClient({
+      tables: { events: { data: nonTestEvent, error: null }, ct_stages: { data: [], error: null } },
+    });
+    const client = {
+      from(table) {
+        return shouldFail ? throwingClient().from(table) : succeeding.from(table);
+      },
+    };
+    await mountEventDashboardScreen(root, { eventId: 'ev1', client });
+
+    expect(root.querySelector('.screen-feedback').dataset.tone).toBe('error');
+
+    shouldFail = false;
+    root.querySelector('button').click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(root.querySelector('h1').textContent).toBe('October Cup');
+    expect(root.querySelector('.screen-feedback[data-tone="error"]')).toBeNull();
+    // Found in review (ui-accessibility-reviewer, Phase 6 cross-screen a11y
+    // pass): this screen never explicitly moved focus after a successful
+    // load — the very first mount happened to be covered by router.js's
+    // own generic "focus the new screen's own heading" fallback (nothing
+    // here focused anything itself), but a Retry click doesn't go through
+    // the router again, so a successful Retry silently dropped focus to
+    // <body> until this fix.
+    expect(document.activeElement.id).toBe('event-dashboard-heading');
   });
 
   it('resolves to an object with a callable unmount()', async () => {

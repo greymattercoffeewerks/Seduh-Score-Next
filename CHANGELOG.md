@@ -1,3 +1,29 @@
+## T6.hardening.a11y — Full accessibility audit-and-fix pass, 17 screens · 2026-09-04
+
+**Phase 6's first of three named hardening activities** — the accessibility pass, following user's explicit choice to prioritize this self-contained work a month out from the event (doesn't need real roster data or live venue conditions). Audit-and-fix scope, matching how every review in this project has worked.
+
+Five parallel `ui-accessibility-reviewer` agents audited-and-fixed grouped screens in non-overlapping batches: core wiring (`appShell`, `eventsScreen`, `loginScreen`, `splashScreen`); audience/live surfaces (`viewer-shell`, `projectorSurface`, `phoneSummary`); setup/roster (`eventDashboardScreen`, `rosterScreen`, `setupScreen`); heats/timing (`heatsScreen`, `timingScreen`, `timingManualScreen`, `timingRouteScreen`); scoring/results (`scoringScreen`, `standingsScreen`, `reportScreen`). Followed by full-suite `module-boundary-checker`, `test-auditor`, and `code-reviewer` passes.
+
+**Files touched:** 37 across `src/core/` and `src/formats/cup-taster/` (all 17 screen files plus appShell, viewer-shell, main.js, and test suites). Test count: 856 → 871 (net: many new regression tests added; 3 tests consolidated into 1 during module-boundary fix).
+
+**Verifiers' findings:**
+
+- **`ui-accessibility-reviewer` (5 parallel groups)** — holistic cross-screen review found and fixed: focus handoff consistency through the router (using `AbortController` signal per screen), consistent `aria-live`/landmark patterns app-wide, consistent 360px/tap-target/reduced-motion treatment everywhere. Notable finding: success-message focus/announcement is inconsistent app-wide — `focusAfterRender` moves focus to a screen's heading, not to the `.screen-feedback` region holding success text, so screen-reader users get no reliable announcement. Flagged as deferred (found in core wiring but identical across setupScreen/rosterScreen/standingsScreen/scoringScreen/timingScreen — fixing only one would CREATE a new inconsistency rather than resolve one; needs a dedicated app-wide pass with persistent non-recreated live-announcer region).
+
+- **`module-boundary-checker`** — found 1 real HIGH-severity §6 violation: `core/splashScreen.js` hardcoded the Cup-Taster-specific 'projector-surface' CSS class name (part of the stale-cross-route-residue fix the audience/live-surfaces group landed). Fixed by centralizing the three `/live/*` routes' shared-outlet (bareRoot) residue-reset into a new `resetBareSurface()` helper in `main.js` (the composition root — already the one file allowed to know both core and format specifics), removing all sibling-class knowledge from `splashScreen.js`/`projectorSurface.js`/`phoneSummary.js`. Verified via mutation testing (disabled the reset, regression test failed; restored).
+
+- **`test-auditor`** — mutation-tested 8 highest-risk fixes; all correctly caught their regression, no vacuous assertions found. Independently corroborated the module-boundary fix. Flagged one non-blocking item: `viewer-shell.js`'s `render()` still calls `renderChrome()` in full on every re-render just to discard everything except the status badge (`.lastElementChild`) — not a bug, just avoidable churn left after the persistent-h1 fix.
+
+- **`code-reviewer`** — confirmed the module-boundary fix and flagged the viewer-shell render churn (non-blocking). Also found during full review that phoneSummary.js was flagged inconsistent with siblings at code-review time — mid-task race (see process note below).
+
+**Process finding (worth recording):** When several review subagents run in parallel against the SAME uncommitted working tree, a later agent that reads a file, reasons about it, then writes it back (even to "restore" or "fix" something) can silently clobber an earlier agent's or the orchestrator's already-landed fix if its write is based on a stale read taken before that fix landed. Happened here: `module-boundary-checker`'s fix to `phoneSummary.js` was reverted mid-review by `test-auditor`'s own stale-read reconstruct-then-revert cycle; caught only because `code-reviewer`'s and `test-auditor`'s own final reports both independently flagged the file as inconsistent with its siblings. Mitigation used: re-Read the file immediately before trusting a review agent's claim about its current contents, and re-run the full suite/lint as the actual source of truth after every review round lands (not just after the round expected to be the last one).
+
+**Known gaps carried to ROADMAP.md (2 deferred, 2 non-blocking):** Consolidated below, per the task's kb-sync reset contract.
+
+**Full suite green, lint/format clean. Definition of Done met.**
+
+---
+
 ## Feature: mid-heat manual-entry fallback for app-mode timing · 2026-09-04
 
 **Closes ROADMAP.md's "T4.3's app-mode timing screen has no manual-entry fallback for a

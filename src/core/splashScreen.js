@@ -25,6 +25,16 @@ const APP_NAME = 'Seduh Score';
 
 export function mountSplashScreen(root, { orgId, client = getSupabase(), signal } = {}) {
   root.innerHTML = '';
+  // This route shares its outlet (bareRoot, main.js) with #/live/projector
+  // and #/live/phone — neither this screen's own unmount() nor
+  // viewer-shell.js's own unmount() ever clears a root's OWN classList/
+  // attributes, only its children (`root.innerHTML = ''`), so a stale
+  // sibling route's surface class/attribute could otherwise persist across
+  // a direct cross-navigation. main.js's buildRoutes() resets the shared
+  // root before calling this mount function, not this screen itself — a
+  // core module has no business knowing a format's class names (found in
+  // review: this used to hardcode `classList.remove('projector-surface')`,
+  // a module-boundary violation).
   root.classList.add('splash-screen');
   root.setAttribute('data-surface', 'stage');
 

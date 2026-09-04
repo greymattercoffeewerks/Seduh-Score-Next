@@ -83,14 +83,18 @@ export function renderStandingsTable(
     ]);
   });
 
+  // scope='col' on every header — heatsScreen.js's own assignment-table
+  // established this project's convention (its own test asserts it); this
+  // table's headers had been left out of that convention entirely, found
+  // reviewing this screen alongside reportScreen.js's near-identical table.
   return el('table', { className: 'standings-table' }, [
     el('thead', {}, [
       el('tr', {}, [
-        el('th', { text: 'Pos' }),
-        el('th', { text: 'Cupper' }),
-        el('th', { text: 'Correct' }),
-        el('th', { text: 'Time' }),
-        el('th', { text: 'Status' }),
+        el('th', { text: 'Pos', attrs: { scope: 'col' } }),
+        el('th', { text: 'Cupper', attrs: { scope: 'col' } }),
+        el('th', { text: 'Correct', attrs: { scope: 'col' } }),
+        el('th', { text: 'Time', attrs: { scope: 'col' } }),
+        el('th', { text: 'Status', attrs: { scope: 'col' } }),
       ]),
     ]),
     el('tbody', {}, rows),
@@ -567,11 +571,22 @@ export async function mountStandingsScreen(
       await renderOrShowError(feedback);
     });
 
-    return el('div', { className: 'card' }, [
-      el('p', {
-        text: `The tiebreak heat also drew. Select exactly ${state.slotsRemaining} winner${state.slotsRemaining === 1 ? '' : 's'} by coin toss and record who witnessed it.`,
-      }),
+    // fieldset/legend, not a bare <p> above an unrelated <ul> of checkboxes
+    // — found reviewing this screen alongside scoringScreen.js's own form
+    // controls: a screen reader landing directly on the first checkbox (Tab
+    // navigation, or a rotor/forms list) previously had no indication it was
+    // part of an exactly-N-required group at all, only the preceding
+    // paragraph a sighted user reads top-to-bottom first. The legend IS that
+    // same instruction text, not a duplicate — every browser/AT combination
+    // announces a fieldset's legend when focus enters any control inside it.
+    const instructions = `The tiebreak heat also drew. Select exactly ${state.slotsRemaining} winner${state.slotsRemaining === 1 ? '' : 's'} by coin toss and record who witnessed it.`;
+    const fieldset = el('fieldset', { className: 'coin-toss-fieldset' }, [
+      el('legend', { text: instructions }),
       list,
+    ]);
+
+    return el('div', { className: 'card' }, [
+      fieldset,
       el('label', { attrs: { for: 'coin-toss-note' }, text: 'Note' }),
       noteInput,
       submitButton,

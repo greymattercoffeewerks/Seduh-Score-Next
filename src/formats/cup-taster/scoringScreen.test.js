@@ -187,6 +187,52 @@ describe('mountScoringScreen', () => {
     expect(root.querySelector('.btn-primary').disabled).toBe(true);
   });
 
+  it('explains WHY Confirm is disabled via a real, visible hint wired with aria-describedby, not the disabled attribute alone (D24)', async () => {
+    const root = document.createElement('div');
+    const client = fakeClient({
+      tables: {
+        events: { data: { id: 'ev1', org_id: 'org1', is_test: false }, error: null },
+        ct_heats: { data: scoringHeat, error: null },
+        ct_sets: { data: oneSet, error: null },
+        ct_heat_entries: { data: oneEntry, error: null },
+        event_entries: { data: oneRosterEntry, error: null },
+      },
+    });
+    await mountScoringScreen(root, { eventId: 'ev1', heatId: 'h1', client });
+
+    const confirmButton = root.querySelector('.btn-primary');
+    const describedById = confirmButton.getAttribute('aria-describedby');
+    expect(describedById).toBeTruthy();
+    const hint = root.querySelector(`#${describedById}`);
+    expect(hint).not.toBeNull();
+    expect(hint.textContent).toContain('every cupper has every set scored');
+  });
+
+  it('removes the disabled-reason hint once every set is scored — nothing left to explain', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const client = fakeClient({
+      tables: {
+        events: { data: { id: 'ev1', org_id: 'org1', is_test: false }, error: null },
+        ct_heats: { data: scoringHeat, error: null },
+        ct_sets: { data: oneSet, error: null },
+        ct_heat_entries: { data: oneEntry, error: null },
+        event_entries: { data: oneRosterEntry, error: null },
+      },
+    });
+    await mountScoringScreen(root, { eventId: 'ev1', heatId: 'h1', client });
+
+    root.querySelector('.scoring-toggle').click();
+    await vi.waitFor(() => {
+      expect(root.querySelector('.btn-primary').disabled).toBe(false);
+    });
+
+    expect(root.querySelector('.btn-primary').getAttribute('aria-describedby')).toBeNull();
+    expect(root.querySelector('#confirm-heat-hint')).toBeNull();
+
+    document.body.removeChild(root);
+  });
+
   it('rejects a heat not yet in scoring status with an explanatory message, no grid', async () => {
     const root = document.createElement('div');
     const client = fakeClient({
@@ -270,6 +316,12 @@ describe('mountScoringScreen', () => {
     expect(buttons[0].dataset.tone).toBe('wrong');
     expect(buttons[1].dataset.tone).toBe('wrong');
     expect(root.querySelector('.btn-primary').disabled).toBe(false);
+    // Regression for a real bug found reviewing this screen alongside
+    // standingsScreen.js/reportScreen.js: the tally span this action
+    // focuses had no `tabindex`, so `target?.focus()` silently did nothing
+    // — a keyboard/screen-reader user tapping this action got no
+    // perceivable confirmation it landed at all.
+    expect(document.activeElement.id).toBe('tally-e1');
 
     document.body.removeChild(root);
   });

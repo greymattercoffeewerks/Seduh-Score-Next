@@ -111,7 +111,7 @@ export function renderStageRow(
 
   if (row.locked) {
     return el('div', { className: 'card stage-row', attrs: { id: rowId, 'data-locked': 'true' } }, [
-      el('h3', { text: `${stageLabel} — ${row.kind}` }),
+      el('h2', { className: 'stage-row-heading', text: `${stageLabel} — ${row.kind}` }),
       el('p', {
         className: 'stage-meta',
         text: `${row.setCount} sets, ${row.durationSecs}s, cutoff ${row.cutoff ?? '—'} — locked, heats already generated`,
@@ -250,7 +250,15 @@ export function renderStageRow(
   // subtree — a plain <div> is otherwise unfocusable, which left focus
   // stranded on <body> after every Move up/down (found in review).
   return el('div', { className: 'card stage-row', attrs: { id: rowId, tabindex: '-1' } }, [
-    el('h3', { text: stageLabel }),
+    // h2, not h3 (found in review, ui-accessibility-reviewer, Phase 6
+    // cross-screen a11y pass): this screen's own <h1> had no intervening
+    // <h2> before these per-row headings, a level-skip WCAG flags as a
+    // heading-navigation failure — and inconsistent with
+    // eventDashboardScreen.js's own h1 -> h2 "Stages" -> h3-per-card
+    // structure for the same "list of stage cards" shape. .stage-row-heading
+    // (setupScreen.css) keeps the existing text-base sizing rather than
+    // inheriting the shared .screen-container h2 rule's larger text-lg.
+    el('h2', { className: 'stage-row-heading', text: stageLabel }),
     el('div', { className: 'stage-row-fields' }, [
       labeledField('Kind', kindSelect, kindHint ? [kindHint] : []),
       labeledField('Set count', setCountInput),

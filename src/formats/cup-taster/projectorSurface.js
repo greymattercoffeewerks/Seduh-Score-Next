@@ -24,6 +24,10 @@ import { mountViewerShell } from '../../core/viewer-shell.js';
 import { mountViewerBody, hasViewableContent } from './viewerBody.js';
 
 export function mountProjectorSurface(root, { orgId, client, signal } = {}) {
+  // This route shares its outlet (bareRoot, main.js) with #/live/splash and
+  // #/live/phone; main.js's buildRoutes() resets the shared root's class/
+  // data-surface residue before calling this mount function, so this screen
+  // only ever needs to apply its own.
   root.classList.add('projector-surface');
   root.setAttribute('data-surface', 'stage');
   return mountViewerShell(root, {

@@ -486,6 +486,23 @@ describe('mountViewerShell', () => {
     expect(banner?.getAttribute('role')).toBe('alert');
   });
 
+  it('hosts the is_test banner inside .viewer-banner-host, carrying the stage-mode overscan-inset CSS hook (viewer-shell.css)', async () => {
+    // Regression coverage for the cross-screen consistency fix: without
+    // this class, [data-surface="stage"] .viewer-banner-host's own CSS
+    // rule (the projector's overscan-safe inset, matching splashScreen.css's
+    // .splash-test-banner-host precedent) has nothing to attach to.
+    const root = document.createElement('div');
+    await mountViewerShell(root, {
+      orgId: 'org1',
+      renderBody: vi.fn(),
+      showChrome: false,
+      client: fakeClient([session({ is_test: true, payload: { a: 1 } })]),
+    });
+    const bannerHost = root.querySelector('.viewer-banner-host');
+    expect(bannerHost).not.toBeNull();
+    expect(bannerHost.querySelector('.is-test-banner')).not.toBeNull();
+  });
+
   it('omits the is_test banner when there is no active session yet', async () => {
     const root = document.createElement('div');
     await mountViewerShell(root, {
@@ -606,6 +623,42 @@ describe('mountViewerShell', () => {
 
     client._triggerStatus('CHANNEL_ERROR');
     expect(root.querySelectorAll('h1')).toHaveLength(1);
+  });
+
+  it("the showChrome:true chrome h1 node itself is never recreated across re-renders (not just non-duplicating) — proves focus placed on it (e.g. by router.js's own one-time navigation focus-move) survives a later, wholly chrome-unrelated live_sessions change", async () => {
+    // Regression test for a real bug found in review (cross-screen
+    // consistency pass): render() used to rebuild the ENTIRE chrome (h1
+    // included) via `chromeHost.replaceChildren(renderChrome(...))` on
+    // every single render, even one triggered by a chrome-irrelevant
+    // change (a standings update). router.js's own navigation focus-move
+    // can leave real DOM focus sitting on this exact h1 right after
+    // mount; recreating that node on the very next re-render silently
+    // dropped focus back to <body> with no signal to a screen-reader
+    // user. A plain node-count assertion (the pre-existing "survives...
+    // without ever duplicating" test above) cannot distinguish "the same
+    // node, mutated" from "a fresh node with the same class" — this test
+    // asserts actual node IDENTITY (`toBe`) and real DOM focus state.
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const client = fakeClient([session({ payload: { a: 1 } })]);
+    await mountViewerShell(root, { orgId: 'org1', renderBody: vi.fn(), showChrome: true, client });
+
+    const h1Before = root.querySelector('.viewer-chrome-name');
+    // A plain <h1> isn't natively focusable — router.js's own real
+    // navigation focus-move adds this exact tabindex="-1" itself before
+    // calling .focus(); mirrored here rather than re-importing router.js,
+    // to keep this a pure viewer-shell.js unit test.
+    h1Before.setAttribute('tabindex', '-1');
+    h1Before.focus();
+    expect(document.activeElement).toBe(h1Before);
+
+    client.db.live_sessions[0].payload = { a: 2 };
+    client._triggerChange();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const h1After = root.querySelector('.viewer-chrome-name');
+    expect(h1After).toBe(h1Before);
+    expect(document.activeElement).toBe(h1Before);
   });
 
   it('the status region is a persistent node mutated in place, not recreated, across renders', async () => {

@@ -52,6 +52,35 @@
   white-space: nowrap;
 }
 
+/* Stage-mode overscan guard for the is_test banner it hosts (base.css's
+   shared .is-test-banner) — mirrors splashScreen.css's own
+   .splash-test-banner-host precedent for the identical audience-facing
+   risk: a projector/TV is the environment most prone to edge cropping/
+   bezel occlusion, and this banner otherwise sits flush against the true
+   top edge of the viewport in stage mode (the projector, showChrome:false)
+   — the exact placement splash's own review comment already flagged as
+   unsafe for this SAME shared component doing the SAME D9 job. Found in
+   review (cross-screen consistency pass): the identical banner rendered
+   with two different edge treatments depending on which of the two
+   audience routes happened to be showing it. `:not(:empty)` — a bare
+   `replaceChildren()` with no banner leaves this host with zero children,
+   and padding on an empty host would otherwise waste permanent vertical
+   space on the projector for every non-test event. Phone mode (the
+   default/paper) keeps the existing flush-edge look, matching every
+   organiser-surface consumer of .is-test-banner. */
+[data-surface='stage'] .viewer-banner-host:not(:empty) {
+  padding: var(--space-5) var(--space-5) 0;
+}
+
+[data-surface='stage'] .viewer-banner-host .is-test-banner {
+  /* .is-test-banner (base.css) has no radius of its own — correct for its
+     usual flush-edge placement, but this host now insets it, so a sharp
+     rectangle would read as a mistake rather than a deliberate band.
+     Matches splashScreen.css's own identical override for the identical
+     reason. */
+  border-radius: var(--radius-md);
+}
+
 .viewer-badge {
   display: inline-flex;
   align-items: center;

@@ -142,11 +142,25 @@ function heatActionLink(eventId, heat) {
     return el('span', { className: 'heat-status-done', text: 'Confirmed' });
   }
   const toScoring = heat.status === 'scoring';
+  const label = toScoring ? 'Score this heat' : 'Time this heat';
   return el('a', {
     className: 'btn btn-outline tap-target',
-    text: toScoring ? 'Score this heat' : 'Time this heat',
+    text: label,
     attrs: {
       href: `#/events/${eventId}/heats/${heat.id}/${toScoring ? 'scoring' : 'timing'}`,
+      // Found in this pass (holistic accessibility review): this list
+      // repeats the SAME visible link text ("Time this heat"/"Score this
+      // heat") once per heat card, with nothing distinguishing them from
+      // each other — a screen-reader user browsing by a links list (e.g.
+      // VoiceOver/NVDA's rotor), rather than reading the page linearly
+      // heading-by-heading, hits several links that read identically with
+      // no way to tell which heat any given one belongs to. Every other
+      // per-row control in this same screen group already disambiguates
+      // this way (renderTimingRows' Stop/manual-toggle/Cancel/Save all
+      // carry a per-row aria-label) — this was the one holdout. The label
+      // CONTAINS the visible text verbatim (WCAG 2.5.3 Label in Name), not
+      // just a differently-worded description.
+      'aria-label': `${label} — Heat ${heat.heat_number}`,
     },
   });
 }

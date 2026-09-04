@@ -18,7 +18,14 @@
   background: var(--color-surface-sunken);
 }
 
-.stage-row h3 {
+/* A real <h2> now (Phase 6 cross-screen a11y pass — this screen's per-row
+   heading used to be an <h3> with no intervening <h2>, a heading-level
+   skip past this screen's own <h1>). Named by class, not by the bare
+   element selector the old .stage-row h3 rule used, so this keeps its
+   own text-base sizing regardless of load order against the shared
+   .screen-container h2 rule (heatsScreen.css), which would otherwise win
+   the same-specificity tie and render these at the larger text-lg. */
+.stage-row-heading {
   font-family: var(--font-display);
   font-size: var(--text-base);
   margin: 0 0 var(--space-3) 0;

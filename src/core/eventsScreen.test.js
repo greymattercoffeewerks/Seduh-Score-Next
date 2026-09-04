@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { blankDraft, validateDraft, renderEventsList, mountEventsScreen } from './eventsScreen.js';
+import {
+  blankDraft,
+  validateDraft,
+  renderEventsList,
+  renderCreateForm,
+  mountEventsScreen,
+} from './eventsScreen.js';
 import { DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
 
 describe('validateDraft', () => {
@@ -46,6 +52,21 @@ describe('renderEventsList', () => {
     const list = renderEventsList(events);
     expect(list.querySelector('li').textContent).toContain('2026-10-04');
     expect(list.querySelector('li').textContent).toContain('HQ');
+  });
+});
+
+describe('renderCreateForm', () => {
+  it('the visible label text for date/venue matches their own aria-label — both say "(optional)", so a sighted user and a screen-reader user get the same information (found in the app-wiring holistic pass)', () => {
+    const form = renderCreateForm(blankDraft(), { disabled: false });
+    const labels = [...form.querySelectorAll('.form-field-label')].map((el) => el.textContent);
+    expect(labels).toContain('Event date (optional)');
+    expect(labels).toContain('Venue (optional)');
+    expect(form.querySelector('[data-field="eventDate"]').getAttribute('aria-label')).toBe(
+      'Event date (optional)',
+    );
+    expect(form.querySelector('[data-field="venue"]').getAttribute('aria-label')).toBe(
+      'Venue (optional)',
+    );
   });
 });
 

@@ -110,8 +110,13 @@ export function renderCreateForm(draft, { disabled }) {
 
   return el('form', { className: 'create-event-form' }, [
     labeledField('Event name', nameInput),
-    labeledField('Event date', dateInput),
-    labeledField('Venue', venueInput),
+    // Visible label text now matches each input's own aria-label
+    // ("(optional)") — found in the app-wiring holistic pass: a sighted
+    // user had no visual cue these two fields were optional while a
+    // screen-reader user (hearing the aria-label) did; the two modalities
+    // must agree on the same information.
+    labeledField('Event date (optional)', dateInput),
+    labeledField('Venue (optional)', venueInput),
     isTestField,
     submitButton,
   ]);
