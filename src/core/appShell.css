@@ -54,6 +54,42 @@
   min-height: 0;
 }
 
+/* Three-state sync panel (§8.4/T3.3) — off / live / not synced. "live" stays
+   quiet/minimal (plain muted text + base.css's own .status-live-dot, not a
+   solid badge) so it never competes with real screen content, matching D9's
+   own "don't compete" precedent for a passive indicator. "not synced" is
+   deliberately a visible, unmissable pill — this is the state that matters —
+   but warning-toned, not danger, for an ordinary in-flight pending count; a
+   genuinely stuck (repeatedly failing) operation escalates to danger-toned,
+   since that's the one case actually needing a human's attention. */
+.app-shell-sync {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.app-shell-sync-live {
+  color: var(--color-text-muted);
+}
+
+.app-shell-sync-pending,
+.app-shell-sync-stuck {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  font-weight: var(--font-weight-bold);
+}
+
+.app-shell-sync-pending {
+  background: var(--color-warning);
+  color: var(--color-warning-contrast);
+}
+
+.app-shell-sync-stuck {
+  background: var(--color-danger);
+  color: var(--color-danger-contrast);
+}
+
 /* Temporary (2026-08-30) — "signed in as X" + sign out, ahead of any real
    access-control UI. Empty (no children) while signed out, so it takes no
    layout space until a session exists. */

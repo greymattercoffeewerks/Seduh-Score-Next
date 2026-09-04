@@ -107,6 +107,11 @@ describe('publishSession', () => {
         Promise.resolve({
           data: null,
           error: { message: 'publish_session: event ev1 does not belong to org org1' },
+          // A genuine server-side rejection carries a real, non-zero HTTP
+          // status — that's what actually distinguishes it from a network-
+          // level failure (buildRpcHandler, core/outbox.js), which resolves
+          // with status: 0 instead. This mock models a REAL rejection.
+          status: 400,
         }),
     };
     const result = await publishSession(

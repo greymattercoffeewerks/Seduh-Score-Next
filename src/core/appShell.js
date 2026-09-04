@@ -23,10 +23,27 @@
 import { el } from './dom.js';
 import { findEvent } from './events.js';
 import { getSupabase } from './supabaseClient.js';
+import { listPendingOperations } from './outbox.js';
+import { computeSyncState } from './syncState.js';
 
 const APP_NAME = 'Seduh Score';
 
-export function mountAppShell(root, { appName = APP_NAME, client = getSupabase() } = {}) {
+// How often the sync panel re-checks the outbox — a plain poll, not a
+// realtime subscription, since outbox state is local IndexedDB with no
+// network round-trip to watch. Frequent enough to feel responsive right
+// after a reconnect, cheap enough (a local IndexedDB read) that polling is
+// the right tool rather than inventing a pub/sub layer for one consumer.
+// Overridable via mountAppShell's own syncPollMs param — test-only seam:
+// vi.useFakeTimers() and fake-indexeddb's own internal callback scheduling
+// don't mix safely (found writing appShell.test.js — any IndexedDB op
+// performed while timers are faked just hangs), so a real-time test proving
+// the poll actually fires needs a genuinely short interval, not a faked one.
+const SYNC_POLL_MS = 3000;
+
+export function mountAppShell(
+  root,
+  { appName = APP_NAME, client = getSupabase(), syncPollMs = SYNC_POLL_MS } = {},
+) {
   root.innerHTML = '';
 
   // Not an <h1> — every routed screen already owns the page's real <h1>
@@ -39,11 +56,27 @@ export function mountAppShell(root, { appName = APP_NAME, client = getSupabase()
   const nameEl = el('p', { className: 'app-shell-name', text: appName });
   const breadcrumbEl = el('span', { className: 'app-shell-breadcrumb' });
   const navEl = el('nav', { className: 'app-shell-nav', attrs: { 'aria-label': 'Sections' } });
+  // §8.4/T3.3's own AC: "three-state sync panel on the organiser device: off
+  // / live / not synced. Fail-open never lies about a write that failed."
+  // syncState.js's computeSyncState() already implemented that logic (T3.3)
+  // but had ZERO consumers anywhere in the app — found in Phase 6 offline-
+  // soak scoping: an organiser on real venue wifi had no visual indication
+  // whatsoever that a tap/write was queued and unsynced. role="status"/
+  // aria-live on a node that's mutated in place (never torn down and
+  // recreated) rather than rebuilt — this codebase's own root.innerHTML =
+  // ''-then-repopulate pattern is what makes aria-live unreliable elsewhere
+  // (see loginScreen.js's comment); this node persists across every
+  // refreshSync() call specifically to avoid that trap.
+  const syncEl = el('span', {
+    className: 'app-shell-sync',
+    attrs: { role: 'status', 'aria-live': 'polite' },
+  });
   const authEl = el('div', { className: 'app-shell-auth' });
   const header = el('header', { className: 'app-shell-header' }, [
     nameEl,
     breadcrumbEl,
     navEl,
+    syncEl,
     authEl,
   ]);
   const outlet = el('main', { className: 'app-shell-outlet' });
@@ -93,6 +126,83 @@ export function mountAppShell(root, { appName = APP_NAME, client = getSupabase()
   } = client.auth.onAuthStateChange((_event, session) => {
     renderAuth(session);
   });
+
+  // `enabled` mirrors syncState.js's own doc: "sync only means something
+  // once there's an active context to sync (e.g. a running event)" — this
+  // shell already tracks exactly that signal via cachedEventId (declared
+  // below), so no new state is needed. computeSyncState() itself still
+  // checks pendingCount/lastFlushError FIRST, before enabled, so a pending
+  // or stuck operation left over from a PREVIOUS event never hides behind
+  // "off" just because the organiser navigated back to the plain events
+  // list — fail-open is computeSyncState's own job, not this caller's.
+  //
+  // `lastFlushError` — found in review (offline-sync-auditor, Phase 6
+  // offline soak): main.js's own sync-on-reconnect flush attempt
+  // (attemptReconnectFlush) runs with no screen watching its result, unlike
+  // every pre-existing flush call site (each reads its own flushResult off
+  // the same await that triggered the write, and surfaces a real conflict
+  // via its own pendingHeatCheck-style handling). A permanently-failed
+  // operation is REMOVED from the outbox by design (core/outbox.js's own
+  // runFlush — a conflict that will never succeed must not block every
+  // later, unrelated operation behind it forever) — but with nobody reading
+  // that removal's reason, the very next poll saw an empty queue and
+  // reported "Synced," a false all-clear for a write that was actually
+  // discarded. That's exactly the "conflict silently resolved" failure mode
+  // §9 exists to prevent, and worse than staying "not synced" would have
+  // been. `reportFlushError()` below is how a caller outside any screen
+  // (main.js's reconnect trigger) surfaces that same conflict here instead.
+  let lastFlushError = null;
+  let lastSyncKey = null;
+  function renderSync(state) {
+    syncEl.innerHTML = '';
+    syncEl.className = 'app-shell-sync';
+    if (state.status === 'off') return; // nothing to report — no context yet, not a warning
+    if (state.status === 'live') {
+      syncEl.classList.add('app-shell-sync-live');
+      syncEl.append(
+        el('span', { className: 'status-live-dot', attrs: { 'aria-hidden': 'true' } }),
+        el('span', { text: 'Synced' }),
+      );
+      return;
+    }
+    // 'not synced' — a stuckOperation (attempts > 0) is the one case that
+    // actually needs a human's attention (repeatedly failing, not just
+    // in-flight), so it gets its own distinct, more alarming styling rather
+    // than being indistinguishable from an ordinary few-seconds-behind
+    // pending state. A surfaced lastFlushError with ZERO pending operations
+    // is a different, also-urgent case: the write is gone, not retrying —
+    // same danger-toned styling as stuckOperation, but its own wording,
+    // since "N pending" would be actively misleading here (N is 0).
+    if (state.pendingCount === 0 && state.lastFlushError) {
+      syncEl.classList.add('app-shell-sync-stuck');
+      syncEl.textContent = 'Not synced — a write failed to save and was not retried';
+    } else if (state.stuckOperation) {
+      syncEl.classList.add('app-shell-sync-stuck');
+      syncEl.textContent = `Not synced — retrying failed (${state.pendingCount} pending)`;
+    } else {
+      syncEl.classList.add('app-shell-sync-pending');
+      syncEl.textContent = `Not synced (${state.pendingCount} pending)`;
+    }
+  }
+
+  async function refreshSync() {
+    const operations = await listPendingOperations();
+    const state = computeSyncState({
+      enabled: cachedEventId != null,
+      operations,
+      lastFlushError,
+    });
+    // Skip re-rendering (and re-announcing via aria-live) when nothing
+    // actually changed since the last poll — found in review: without this,
+    // every 3s tick would re-mutate syncEl even while idle at "live",
+    // spamming an aria-live announcement for no real change.
+    const key = `${state.status}:${state.pendingCount}:${state.stuckOperation?.id ?? ''}:${Boolean(state.lastFlushError)}`;
+    if (key === lastSyncKey) return;
+    lastSyncKey = key;
+    renderSync(state);
+  }
+
+  const syncIntervalId = setInterval(refreshSync, syncPollMs);
 
   // Cached by event id — repeat navigation within the same event's screens
   // (Setup <-> Roster <-> Heats <-> ...) shouldn't refetch the event just to
@@ -147,10 +257,15 @@ export function mountAppShell(root, { appName = APP_NAME, client = getSupabase()
     if (!eventId) {
       cachedEventId = null;
       breadcrumbEl.textContent = '';
+      refreshSync(); // don't wait up to SYNC_POLL_MS for "enabled" to catch up
       return;
     }
-    if (eventId === cachedEventId) return;
+    if (eventId === cachedEventId) {
+      refreshSync();
+      return;
+    }
     cachedEventId = eventId;
+    refreshSync();
     try {
       const event = await findEvent(eventId, client);
       // A slower-resolving call must never clobber a faster one — same
@@ -166,10 +281,25 @@ export function mountAppShell(root, { appName = APP_NAME, client = getSupabase()
     }
   }
 
+  refreshSync(); // first paint — don't wait for the first SYNC_POLL_MS tick
+
   return {
     outlet,
     setNav,
+    // Lets a caller outside any screen (main.js's own sync-on-reconnect
+    // trigger) surface a permanently-failed flush the sync panel would
+    // otherwise have no way to learn about — see the lastFlushError comment
+    // above. Pass an Error to report one, or `null`/no argument to clear a
+    // previously-reported one once a later attempt genuinely succeeds
+    // (deliberately NOT auto-cleared by the poll itself — a real conflict
+    // must stay visible until something concrete supersedes it, not time
+    // out silently).
+    reportFlushError(error = null) {
+      lastFlushError = error;
+      refreshSync();
+    },
     unmount() {
+      clearInterval(syncIntervalId);
       authSubscription.unsubscribe();
       root.innerHTML = '';
     },
