@@ -24,15 +24,15 @@ about original design intent.
 
 ## Current state
 
-| Phase                               | Status               | What it covers                                                                                |
-| ----------------------------------- | -------------------- | --------------------------------------------------------------------------------------------- |
-| Phase 0 — Foundation                | ✅ Done              | Scaffold, Claude Code tooling, Supabase local stack + CI, doc seed                            |
-| Phase 1 — Schema and security       | ✅ Done              | Core tables, Cup Taster tables, RLS, `WITH CHECK` gate                                        |
-| Phase 2 — Core libraries            | ✅ Done              | `partition`, `ranking`, `advancement`, `countdown`, `timeclamp`, `entitlements`               |
-| Phase 3 — Registry and offline      | ✅ Done              | `registry`, IndexedDB mirror + outbox, sync state panel                                       |
-| Phase 4 — Cup Taster                | ✅ Done              | Setup, heat generation, timing (app + manual), scoring, standings/advancement, report, export |
-| Phase 5 — Live surfaces             | ✅ Done              | `publish`, `viewer-shell`, projector, phone summary                                           |
-| Phase 6 — Guess the Bean, hardening | Descoped (see below) | Accessibility pass, offline soak, dry run — Guess the Bean itself not rebuilt                 |
+| Phase                          | Status         | What it covers                                                                                |
+| ------------------------------ | -------------- | --------------------------------------------------------------------------------------------- |
+| Phase 0 — Foundation           | ✅ Done        | Scaffold, Claude Code tooling, Supabase local stack + CI, doc seed                            |
+| Phase 1 — Schema and security  | ✅ Done        | Core tables, Cup Taster tables, RLS, `WITH CHECK` gate                                        |
+| Phase 2 — Core libraries       | ✅ Done        | `partition`, `ranking`, `advancement`, `countdown`, `timeclamp`, `entitlements`               |
+| Phase 3 — Registry and offline | ✅ Done        | `registry`, IndexedDB mirror + outbox, sync state panel                                       |
+| Phase 4 — Cup Taster           | ✅ Done        | Setup, heat generation, timing (app + manual), scoring, standings/advancement, report, export |
+| Phase 5 — Live surfaces        | ✅ Done        | `publish`, `viewer-shell`, projector, phone summary, automatic publishing on heat actions     |
+| Phase 6 — Hardening            | 🟡 In progress | Accessibility pass, offline soak, dry run — **Guess the Bean (descoped, see below)**          |
 
 **Deadline: 4 October 2026, Cup Tasters event.**
 
@@ -560,3 +560,39 @@ station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can 
   readability extraction (keeps `renderDifficultyTable`'s own `.map()` body scannable), not
   premature abstraction — the project's convention targets copy-pasted logic across files,
   not single-use helpers. Flagged only so the user can confirm the reading matches intent.
+
+---
+
+## Known open items from Phase 5 (T5.gap.automatic-publish)
+
+- **Manual timing screen not wired to automatic publishing, DELIBERATE SCOPE BOUNDARY.**
+  A manual heat has no `started_at`/clock to publish early; it only surfaces once
+  confirmed, same as any other heat. A manual heat mid-entry won't show as "in progress"
+  on the audience view. Not a bug, not a to-do — this is the intended behavior. Flagged by:
+  `code-reviewer`.
+
+- **`standings` rows always publish `tieStatus: null`, PRODUCT/SCORING DECISION DEFERRED.**
+  Tied/advancing labels are a stage-COMPLETE concept (`standingsScreen.js`'s
+  `resolveAdvancement`, run once at stage close against a real cutoff), not computable
+  mid-stage. Open question: should a THIRD automatic publish trigger exist at
+  stage-resolution (`standingsScreen.js`'s `commitStageResolution`) so tied/advancing
+  labels ever actually render on the audience surface? D23 scopes automatic cadence to
+  "per heat," but doesn't explicitly forbid a stage-close trigger too. Needs a human/product
+  decision, not a code fix. Flagged by: `code-reviewer`.
+
+- **Generic three-state sync panel never names WHICH operation type is stuck, MINOR
+  DIAGNOSTIC GAP.** An organiser can't tell a stuck `publish_live_session` apart from a
+  stuck `start_heat`/`confirm_heat` from the panel alone. Non-blocking (the panel never
+  lies, just isn't specific). Flagged by: `offline-sync-auditor`.
+
+- **`buildLiveSessionPayload` does N+1 sequential DB reads, OPTIMIZATION DEFERRED.** One
+  query per heat via `listHeatsForStage`, more per surfaced heat's roster/results. This
+  fires automatically on every heat start/confirm (more frequent than the `heats.js`
+  precedent it cites, which fires only on occasional manual setup). Worth batching via
+  `.in('heat_id', heatIds)` in a follow-up, especially for stages with many heats.
+  Non-blocking, deferred. Flagged by: `code-reviewer`.
+
+- **No ordering guard on `live_sessions`'s upsert, SELF-HEALING RACE DEFERRED.** Two
+  publishes fired close together for different heats could theoretically commit out of
+  trigger order, causing transient staleness on the audience display until the next heat
+  action. Self-healing, non-blocking, deferred. Flagged by: `offline-sync-auditor`.

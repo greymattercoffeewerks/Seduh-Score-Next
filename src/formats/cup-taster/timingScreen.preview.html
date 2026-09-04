@@ -90,6 +90,35 @@
             { id: 'e2', display_name: 'Jordan Lee' },
             { id: 'e3', display_name: 'Sam Okafor' },
           ],
+          // Added 2026-09-04 alongside the automatic-publish wiring: the
+          // "Start heat" handler now also calls publishLiveSession(),
+          // which reads a stage's standings/heats through the same fake
+          // client — without these three tables, buildLiveSessionPayload
+          // throws on every retry (never a *permanent* failure, since it's
+          // never even reaching the RPC-error/status branch that sets
+          // one), which stalls this queue's own FIFO order and blocks the
+          // auto-max sweep queued behind it forever (found via a real CI
+          // failure: this harness's own "Timing complete" heading never
+          // appeared). ct_standings stays empty — nothing's been scored
+          // yet in this demo's own fixed pending-heat starting state.
+          ct_stages: [
+            {
+              id: 's1',
+              event_id: 'ev1',
+              ordinal: 1,
+              kind: 'prelims',
+              set_count: 3,
+              duration_secs: 20,
+              cutoff: null,
+            },
+          ],
+          ct_stage_entries: [
+            { id: 'se1', stage_id: 's1', entry_id: 'e1' },
+            { id: 'se2', stage_id: 's1', entry_id: 'e2' },
+            { id: 'se3', stage_id: 's1', entry_id: 'e3' },
+          ],
+          ct_standings: [],
+          ct_results: [],
         };
 
         function matchesFilters(row, filters) {
@@ -125,6 +154,17 @@
               pendingUpdate = payload;
               return builder;
             },
+            // Added 2026-09-04 alongside the automatic-publish wiring:
+            // liveSession.js's listHeatsForStage() call chains .order()
+            // (real DB heat-number ordering) — this builder had no such
+            // method at all before, so calling it threw synchronously.
+            // Mirrors scoringScreen.preview.html's own ordered-rows cache.
+            order(col, { ascending } = {}) {
+              const rows = db[table].filter((r) => matchesFilters(r, filters));
+              rows.sort((a, b) => (ascending ? a[col] - b[col] : b[col] - a[col]));
+              db[`__ordered_${table}`] = rows;
+              return builder;
+            },
             single() {
               const rows = db[table].filter((r) => matchesFilters(r, filters));
               return Promise.resolve({ data: rows[0] ?? null, error: null });
@@ -139,7 +179,9 @@
               return Promise.resolve({ data: rows[0] ?? null, error: null });
             },
             then(resolve, reject) {
-              const rows = db[table].filter((r) => matchesFilters(r, filters));
+              const rows =
+                db[`__ordered_${table}`] ?? db[table].filter((r) => matchesFilters(r, filters));
+              delete db[`__ordered_${table}`];
               return Promise.resolve({ data: rows, error: null }).then(resolve, reject);
             },
           };

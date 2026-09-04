@@ -1,3 +1,45 @@
+## T5.gap.automatic-publish — Automatic live_sessions publishing on heat start/confirm · 2026-09-04
+
+**Closes the Phase 5 gap where `publishSession()` (T5.1, read side T5.2-T5.4) had zero call sites anywhere in the app,** leaving the audience view showing "Waiting for the organiser" forever in live production use. User's explicit instruction: "organizers seem to forget the need to publish. We need to automate that." Confirmed against the frozen handoff spec (D7 "split publish cadence," D23 "per heat, on close," §8.1/§8.2) that this is completion of already-specified behavior, not new design.
+
+**What shipped:**
+
+- New `src/formats/cup-taster/liveSession.js`: `buildLiveSessionPayload(stageId, client)` assembles the `live_sessions.payload` contract (documented in `viewerBody.js`'s own module comment: `stage`/`standings`/`activeHeat`/`recentHeats`) fresh from current DB state — reuses `standings.js`'s `fetchStandingsForStage` for ranking, mirrors `standings.js`'s `fetchTiebreakHeatOutcome` pattern for per-heat correct-count tallies. `publishLiveSessionHandlers(client)` and `publishLiveSession(...)` are the outbox-routed automatic trigger; follows the same `handlers` override pattern as `timing.js`/`scoring.js` to avoid circular imports.
+- Two new automatic call sites: `timingScreen.js` (after `startHeat()` succeeds — publishes timing info per §8.2) and `scoringScreen.js` (after ground-truth confirms a heat is genuinely `'confirmed'` — publishes results per §8.1/D23). Both wrapped in best-effort try/catch (only guards the enqueue call itself, per §9's offline model).
+- `outboxHandlers.js` updated to compose in `publishLiveSessionHandlers` instead of the now-format-specific `core/publish.js`'s `publishHandlers`.
+- New test file `src/formats/cup-taster/liveSession.test.js` (8 tests); `outboxHandlers.test.js` updated (operation type rename).
+- `eslint.config.js`: added `liveSession.test.js` to the `no-raw-elapsed-write` test-fixture exemption list.
+
+**Files touched:** `liveSession.js`, `liveSession.test.js`, `timingScreen.js`, `scoringScreen.js`, `outboxHandlers.js`, `outboxHandlers.test.js`, `eslint.config.js`. Test count: 906 → 914.
+
+**Verifiers' findings (4 parallel reviewers, all blocking issues fixed):**
+
+- **`offline-sync-auditor`** — found ONE BLOCKING issue (fixed): the original code built the payload (multiple sequential network reads) BEFORE enqueueing the outbox operation. An offline device's very first read would throw before `enqueueOperation` was ever reached — the publish was silently DROPPED, never queued, defeating §9's offline model entirely. Restructured: `publishLiveSession()` now enqueues a small, already-known intent FIRST (`orgId`/`eventId`/`stageId`/`format`/`isTest`), and a new `publishLiveSessionHandlers(client)` handler performs the real reads + RPC call lazily at actual flush time. Enqueue-first ensures a publish queued behind a still-unflushed `start_heat`/`confirm_heat` naturally waits its turn (FIFO) and drains via `main.js`'s pre-existing reconnect-triggered flush. Proven by a new dedicated test simulating a fully offline client, confirming the operation survives in the outbox and a later flush successfully publishes it.
+
+- **`test-auditor`** — found 3 BLOCKING test gaps (all fixed): `isTest:false` never proven distinct from `isTest:true`/undefined; "lowest running heat number wins" tie-break logic completely unproven since no fixture had two simultaneously-running heats; `recentHeats`'s descending-sort-then-cap-at-3 logic unproven since no fixture had more than 1 confirmed heat. All 3 fixed with new targeted tests.
+
+- **`code-reviewer`** — found 2 BLOCKING issues (both fixed): (1) a redundant `findStageById` call duplicating work `fetchStandingsForStage` already does internally — fixed by destructuring `{stage, ranked}` from that one call; (2) the swallowed-error catch at both call sites had a stated justification ("the sync panel already surfaces a stuck outbox entry") that was FALSE for the specific failure mode where the read chain fails before ever reaching the outbox. The offline-sync-auditor's enqueue-first architectural fix resolves both: now a read-chain failure happens INSIDE the outbox-tracked handler (caught by `flushOutbox`'s attempts/lastError persistence), making the comment's claim true. Also flagged 2 non-blocking issues (N+1 query cost, duplicated tally logic) and 1 deferred item (tieStatus/stage-resolution trigger question), listed below.
+
+- **`module-boundary-checker`** — CLEAN (no fixes needed).
+
+**Known/deferred items (recorded in ROADMAP below, not blocking):**
+
+1. **Manual timing screen not wired.** A manual heat has no `started_at`/clock to publish early; it only surfaces once confirmed, same as any other heat. A manual heat mid-entry won't show as "in progress" on the audience view. Deliberate scope boundary.
+
+2. **`standings` rows always publish `tieStatus: null`.** Tied/advancing labels are a stage-COMPLETE concept (`standingsScreen.js`'s `resolveAdvancement`, run once at stage close against a real cutoff), not computable mid-stage. **Question flagged by code-reviewer**: should a THIRD publish trigger exist at stage-resolution (`standingsScreen.js`'s `commitStageResolution`) so tied/advancing labels ever actually render on the audience surface? Not decided — D23 scopes automatic cadence to "per heat," but doesn't explicitly forbid a stage-close trigger too. Needs a human/product decision.
+
+3. **Generic three-state sync panel never names WHICH operation type is stuck.** An organiser can't tell a stuck `publish_live_session` apart from a stuck `start_heat`/`confirm_heat` from the panel alone. Non-blocking (the panel never lies, just isn't specific), flagged by offline-sync-auditor as a real but minor diagnostic gap.
+
+4. **`buildLiveSessionPayload` does N+1 sequential DB reads.** One query per heat via `listHeatsForStage`, more per surfaced heat's roster/results. This fires automatically on every heat start/confirm (more frequent than the `heats.js` precedent it cites, which fires only on occasional manual setup). Flagged as worth batching via `.in('heat_id', heatIds)` in a follow-up, especially for stages with many heats. Non-blocking, deferred.
+
+5. **No ordering guard on `live_sessions`'s upsert.** Two publishes fired close together for different heats could theoretically commit out of trigger order, causing transient staleness on the audience display until the next heat action. Self-healing, non-blocking, deferred.
+
+**Verification:** Full test suite: 914 passing, lint clean. Live-verified TWICE in a real browser against the local Supabase stack: first proving the original wiring (heat start → live countdown appears on `#/live/projector` with zero manual action; heat confirm → moves into "Recent results" with correct tallies), then AGAIN after the offline-sync restructure with a completely fresh event/roster/heat, confirming the restructured code path fires correctly end-to-end. No migrations, no RLS/RPC changes (pre-existing `publish_session` RPC unmodified).
+
+**Definition of Done met.**
+
+---
+
 ## Production feedback: 8-item batch from live run · 2026-09-04
 
 **Real user encountered 8 UX/discoverability gaps during a live test run on the production app** (seduh-score-next.greymatter-cw.workers.dev), triaged into three batches of independent fixes before implementation and confirmed with the user:

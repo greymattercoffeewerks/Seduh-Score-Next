@@ -31,6 +31,7 @@ import {
   describeConfirmError,
 } from './scoring.js';
 import { cupTasterOutboxHandlers } from './outboxHandlers.js';
+import { publishLiveSession } from './liveSession.js';
 import { getSupabase } from '../../core/supabaseClient.js';
 import { el } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
@@ -347,6 +348,27 @@ export async function mountScoringScreen(
           } else if (freshHeat.status === 'confirmed') {
             await clearDraft(heatId);
             pendingSuccess = 'Heat confirmed.';
+            try {
+              await publishLiveSession(
+                {
+                  orgId: data.event.org_id,
+                  eventId,
+                  stageId: data.heat.stage_id,
+                  isTest: data.event.is_test,
+                },
+                client,
+                cupTasterOutboxHandlers(client),
+              );
+            } catch {
+              // Best-effort (§8.1/D23's automatic publish): publishLiveSession
+              // enqueues its own intent before doing any network read, so an
+              // offline/failed attempt here still leaves a real, retryable
+              // entry in the outbox (drained by a later screen action or
+              // main.js's reconnect flush) rather than vanishing — this
+              // catch only guards the enqueue call itself (e.g. IndexedDB
+              // unusable), which doesn't change whether the heat itself
+              // confirmed.
+            }
           } else if (result.error) {
             pendingError = describeConfirmError(result.error) ?? describeError(result.error);
           } else {
