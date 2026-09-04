@@ -20,7 +20,7 @@
 // `renderBody` callbacks already use — appShell owns the chrome MECHANICS
 // (a persistent header, a nav slot, an outlet); the composition root owns
 // what the nav actually SAYS.
-import { el } from './dom.js';
+import { el, brandMark } from './dom.js';
 import { findEvent } from './events.js';
 import { getSupabase } from './supabaseClient.js';
 import { listPendingOperations } from './outbox.js';
@@ -53,6 +53,12 @@ export function mountAppShell(
   // viewer-shell.js's own renderChrome() identity name, which IS a real
   // <h1> deliberately, because there's no separate routed screen heading
   // competing with it on that audience-facing surface.
+  // Found missing entirely in a live production check — this whole shell
+  // rendered a text-only wordmark, no mark/logo anywhere. Ported from the
+  // legacy Seduh-Score repo (see brandMark()'s own comment in dom.js).
+  const markEl = el('span', { className: 'app-shell-mark', attrs: { 'aria-hidden': 'true' } }, [
+    brandMark(),
+  ]);
   const nameEl = el('p', { className: 'app-shell-name', text: appName });
   const breadcrumbEl = el('span', { className: 'app-shell-breadcrumb' });
   const navEl = el('nav', { className: 'app-shell-nav', attrs: { 'aria-label': 'Sections' } });
@@ -73,6 +79,7 @@ export function mountAppShell(
   });
   const authEl = el('div', { className: 'app-shell-auth' });
   const header = el('header', { className: 'app-shell-header' }, [
+    markEl,
     nameEl,
     breadcrumbEl,
     navEl,
@@ -224,6 +231,30 @@ export function mountAppShell(
   // in this app.
   let cachedEventId = null;
 
+  // Keeps a CSS custom property on `root` in sync with the header's own
+  // real rendered height — set on `root` (the common ancestor of both
+  // `header` and `outlet`), not `header` itself, since a CSS custom
+  // property only inherits DOWN the tree and `outlet` is header's SIBLING,
+  // not its descendant. Needed because the header is now `position:
+  // sticky` (found in the same production-feedback pass): router.js's own
+  // post-navigation focus-move (`heading.focus()` on `outlet`'s new h1/h2)
+  // can trigger the browser's native scroll-into-view, which has no
+  // concept of the sticky header's own paint-order occlusion — on a long
+  // scrolled page (exactly the case the sticky header itself exists to
+  // help with), that scroll can land the newly-focused heading directly
+  // UNDER the header instead of below it, hiding both the heading and its
+  // own focus ring. `appShell.css`'s own `.app-shell-outlet h1, h2` rule
+  // reads this via `scroll-margin-top` to compensate. Re-measured here
+  // (called on every setNav(), i.e. every navigation) since the header's
+  // real height changes with the nav link count/wrap state, not just the
+  // viewport width. Guarded on height > 0 so a headless/layout-less test
+  // environment (jsdom never performs real layout) leaves the CSS
+  // fallback value in place instead of clobbering it with a meaningless 0.
+  function syncHeaderHeightVar() {
+    const height = header.getBoundingClientRect().height;
+    if (height > 0) root.style.setProperty('--app-shell-header-height', `${height}px`);
+  }
+
   async function setNav({ eventId = null, links = [] } = {}) {
     navEl.innerHTML = '';
     for (const link of links) {
@@ -231,13 +262,50 @@ export function mountAppShell(
       // aria-current: 'page' — found in the app-wiring holistic pass: the
       // active link was only ever distinguished visually (bold + underline
       // via .app-shell-link-active), giving a screen-reader user no
-      // programmatic signal of which section they're currently in.
-      if (link.active) linkAttrs['aria-current'] = 'page';
-      const linkEl = el('a', {
-        className: link.active ? 'app-shell-link app-shell-link-active' : 'app-shell-link',
-        text: link.label,
-        attrs: linkAttrs,
-      });
+      // programmatic signal of which section they're currently in. Doesn't
+      // apply to an external (openInNewTab) link — those never become the
+      // "current section" of this app's own navigation. Explicitly guarded
+      // on !link.openInNewTab, not just asserted in this comment — found in
+      // review (test-auditor): no real caller passes both flags on the same
+      // link today, but the comment's own claim was previously unenforced
+      // in code, so a future link that did would have silently gotten
+      // aria-current on a tab-opening link anyway.
+      if (link.active && !link.openInNewTab) linkAttrs['aria-current'] = 'page';
+      // openInNewTab — the three /live/* surfaces (splash, projector,
+      // phone) are meant to be pulled up on a SEPARATE device/tab (a
+      // projector, a phone) while the organiser keeps working in this one;
+      // navigating the organiser's own tab away to reach them (found
+      // missing in a live production check — there was no link to them at
+      // all) would lose their place. `noopener` — this new tab must not be
+      // able to reach back into this one via window.opener.
+      if (link.openInNewTab) {
+        linkAttrs.target = '_blank';
+        linkAttrs.rel = 'noopener noreferrer';
+      }
+      // A screen-reader user gets no other warning that clicking this link
+      // opens a brand-new tab rather than navigating the current one — an
+      // unannounced context change (found in the accessibility review of
+      // this same feedback pass). Sighted mouse users at least see
+      // target=_blank behave differently; a screen-reader user has no such
+      // signal without this. Kept out of the VISIBLE label (which is
+      // already fairly long — "Audience — projector") via .sr-only, same
+      // token/utility class this codebase already uses elsewhere (see
+      // base.css) rather than inventing a second convention.
+      const linkChildren = link.openInNewTab
+        ? [
+            document.createTextNode(link.label),
+            el('span', { className: 'sr-only', text: ' (opens in a new tab)' }),
+          ]
+        : [];
+      const linkEl = el(
+        'a',
+        {
+          className: link.active ? 'app-shell-link app-shell-link-active' : 'app-shell-link',
+          text: link.openInNewTab ? undefined : link.label,
+          attrs: linkAttrs,
+        },
+        linkChildren,
+      );
       // Blur immediately on click — found in the same pass: unlike a link
       // INSIDE a routed screen (removed wholesale by the next screen's own
       // root.innerHTML = ''), this shell's own nav links are never removed
@@ -249,10 +317,15 @@ export function mountAppShell(
       // no signal to a screen-reader/keyboard user that anything happened.
       // Blurring here restores that fallback's own assumption without
       // touching router.js itself; default navigation still proceeds (this
-      // never calls preventDefault()).
-      linkEl.addEventListener('click', () => linkEl.blur());
+      // never calls preventDefault()). Doesn't apply to an external link —
+      // THIS tab never navigates away, so there's no "new screen" for focus
+      // to land on; blurring would just strand a keyboard user's place for
+      // no reason.
+      if (!link.openInNewTab) linkEl.addEventListener('click', () => linkEl.blur());
       navEl.appendChild(linkEl);
     }
+
+    syncHeaderHeightVar();
 
     if (!eventId) {
       cachedEventId = null;

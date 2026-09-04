@@ -59,7 +59,7 @@
 // this a ticking body would leak one orphaned interval per unrelated
 // refresh, each still mutating its own now-detached DOM node forever.
 import { getSupabase } from './supabaseClient.js';
-import { el } from './dom.js';
+import { el, brandMark } from './dom.js';
 import { findLatestEventForOrg } from './events.js';
 import { raceTimeout } from './timeout.js';
 
@@ -160,8 +160,23 @@ export function renderChrome(session, connectionLost = false) {
     statusBadge = el('span', { className: 'viewer-badge viewer-badge-done', text: 'Not live' });
   }
 
+  // The mark lives INSIDE the <h1>, as one more static child, not as a
+  // sibling at this function's own top level — this div's top-level
+  // children count must stay exactly 2 (name, badge): render()'s own
+  // re-render path below does `chromeEl.replaceChild(freshChrome.
+  // lastElementChild, chromeEl.lastElementChild)`, swapping ONLY the badge
+  // and leaving the name node's identity/focus untouched across every
+  // later render — a third top-level child here would silently become the
+  // new "lastElementChild" and get treated as the badge instead. Found
+  // missing entirely in a live production check — this whole surface (the
+  // audience-facing identity band) was text-only, no mark.
   return el('div', { className: 'viewer-chrome' }, [
-    el('h1', { className: 'viewer-chrome-name', text: APP_NAME }),
+    el('h1', { className: 'viewer-chrome-name' }, [
+      el('span', { className: 'viewer-chrome-mark', attrs: { 'aria-hidden': 'true' } }, [
+        brandMark(),
+      ]),
+      el('span', { className: 'viewer-chrome-name-text', text: APP_NAME }),
+    ]),
     statusBadge,
   ]);
 }

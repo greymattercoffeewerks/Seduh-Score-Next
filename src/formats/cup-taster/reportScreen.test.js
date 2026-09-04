@@ -280,6 +280,19 @@ describe('mountReportScreen', () => {
     const headers = root.querySelectorAll('.standings-table thead th');
     expect(headers.length).toBeGreaterThan(0);
     for (const header of headers) expect(header.getAttribute('scope')).toBe('col');
+
+    // Found missing in production feedback ("no graphical info in the
+    // report") — the set-difficulty "Correct" cell now carries a bar-fill
+    // alongside its existing percentage text, not just the bare number.
+    const bar = root.querySelector('.difficulty-bar');
+    expect(bar).not.toBeNull();
+    const fill = bar.querySelector('.difficulty-bar-fill');
+    expect(fill.getAttribute('style')).toMatch(/^width: \d+%$/);
+    // The label text still matches the fill's own percentage exactly —
+    // not two independently-computed numbers that could drift apart.
+    const [, fillPct] = fill.getAttribute('style').match(/width: (\d+)%/);
+    const label = bar.parentElement.querySelector('.difficulty-bar-label');
+    expect(label.textContent).toBe(`${fillPct}%`);
   });
 
   // Shared by the three export-button tests below — a single normal stage,

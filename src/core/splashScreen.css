@@ -89,6 +89,18 @@
   max-width: min(90vw, 1400px);
 }
 
+.splash-mark {
+  display: inline-flex;
+  color: var(--color-accent);
+  width: clamp(2.5rem, 8vw, 5rem);
+  height: clamp(2.5rem, 8vw, 5rem);
+}
+
+.splash-mark svg {
+  width: 100%;
+  height: 100%;
+}
+
 .splash-wordmark {
   margin: 0;
   font-family: var(--font-display);

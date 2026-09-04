@@ -110,6 +110,27 @@ function renderStageStandingsTable(ranked) {
   ]);
 }
 
+// Bar-fill next to the existing percentage text — found missing in
+// production feedback ("no graphical info in the report"). `pct` is a
+// number this function computes itself (never user input), so a plain
+// numeric width in a style attribute carries no injection risk — same
+// reasoning as any other computed inline style in this codebase. Hidden
+// entirely (not rendered at 0% width) when there's no data at all, so a
+// dataless row reads as "nothing to show" rather than a bar that's
+// visually indistinguishable from a genuine 0%.
+function renderDifficultyCell(avgCorrect) {
+  if (avgCorrect == null) {
+    return el('td', { text: 'No data', attrs: { 'data-label': 'Correct' } });
+  }
+  const pct = Math.round(avgCorrect * 100);
+  return el('td', { attrs: { 'data-label': 'Correct' } }, [
+    el('div', { className: 'difficulty-bar' }, [
+      el('div', { className: 'difficulty-bar-fill', attrs: { style: `width: ${pct}%` } }),
+    ]),
+    el('span', { className: 'difficulty-bar-label', text: `${pct}%` }),
+  ]);
+}
+
 function renderDifficultyTable(difficulty) {
   const rows = difficulty.map((set) =>
     el('tr', { className: 'standings-row' }, [
@@ -117,10 +138,7 @@ function renderDifficultyTable(difficulty) {
         text: set.label ?? `Set ${set.position}`,
         attrs: { 'data-label': 'Set' },
       }),
-      el('td', {
-        text: set.avgCorrect == null ? 'No data' : `${Math.round(set.avgCorrect * 100)}%`,
-        attrs: { 'data-label': 'Correct' },
-      }),
+      renderDifficultyCell(set.avgCorrect),
       el('td', { text: String(set.sampleSize), attrs: { 'data-label': 'Cuppers scored' } }),
     ]),
   );

@@ -17,7 +17,7 @@
 // a screensaver-style surface, not errors needing a Retry affordance nobody
 // watching this screen is meant to click anyway.
 import { getSupabase } from './supabaseClient.js';
-import { el } from './dom.js';
+import { el, brandMark } from './dom.js';
 import { findLatestEventForOrg } from './events.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
 
@@ -69,7 +69,16 @@ export function mountSplashScreen(root, { orgId, client = getSupabase(), signal 
       className: 'splash-content',
       attrs: { role: 'status', 'aria-live': 'polite' },
     },
-    [el('h1', { className: 'splash-wordmark', text: APP_NAME }), eventLine, subLine],
+    [
+      // Found missing entirely in a live production check — this whole
+      // screen (the app's own biggest, most brand-forward surface) was
+      // text-only, no mark. Ported from the legacy Seduh-Score repo (see
+      // brandMark()'s own comment in dom.js).
+      el('span', { className: 'splash-mark', attrs: { 'aria-hidden': 'true' } }, [brandMark()]),
+      el('h1', { className: 'splash-wordmark', text: APP_NAME }),
+      eventLine,
+      subLine,
+    ],
   );
 
   // The badge's own persistent inner nodes — built once at mount and

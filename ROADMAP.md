@@ -555,3 +555,8 @@ station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can 
   EXECUTE gap above — this is defense-in-depth, not a live hole. Schema-wide, not
   specific to `events`; deliberately left as its own follow-up rather than folded into
   that migration's already-large scope.
+- **Production feedback (2026-09-04): `reportScreen.js`'s new `renderDifficultyCell()` has
+  only one call site today, NON_BLOCKING.** Code-reviewer assessed this as a reasonable
+  readability extraction (keeps `renderDifficultyTable`'s own `.map()` body scannable), not
+  premature abstraction — the project's convention targets copy-pasted logic across files,
+  not single-use helpers. Flagged only so the user can confirm the reading matches intent.

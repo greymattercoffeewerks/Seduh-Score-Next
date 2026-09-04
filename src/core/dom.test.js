@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { el, labeledField } from './dom.js';
+import { el, labeledField, brandMark } from './dom.js';
 
 describe('el', () => {
   it('creates an element with the given tag', () => {
@@ -57,5 +57,30 @@ describe('labeledField', () => {
     const input = el('input');
     const field = labeledField('Label', input);
     expect(field.children).toHaveLength(2); // label span + input, no third child
+  });
+});
+
+describe('brandMark', () => {
+  it('builds a real SVG element (createElementNS, not el()) with the right namespace and shape', () => {
+    const svg = brandMark();
+    expect(svg.tagName).toBe('svg');
+    // A plain el()/createElement build would land in the HTML namespace,
+    // not SVG — the specific failure mode this test guards against
+    // (createElement('svg') vs. createElementNS(SVG_NS, 'svg') look
+    // identical by tagName alone, so this checks the namespace directly).
+    expect(svg.namespaceURI).toBe('http://www.w3.org/2000/svg');
+    expect(svg.getAttribute('aria-label')).toBe('Seduh');
+    expect(svg.querySelectorAll('path')).toHaveLength(3);
+    expect(svg.querySelector('circle')).not.toBeNull();
+  });
+
+  it('uses currentColor throughout, never a hardcoded color — every consumer recolors it via CSS on the parent', () => {
+    const svg = brandMark();
+    expect(svg.getAttribute('stroke')).toBe('currentColor');
+    expect(svg.querySelector('circle').getAttribute('fill')).toBe('currentColor');
+  });
+
+  it('returns a fresh node on each call, not a shared/cached one — three simultaneous consumers must not fight over one DOM node', () => {
+    expect(brandMark()).not.toBe(brandMark());
   });
 });

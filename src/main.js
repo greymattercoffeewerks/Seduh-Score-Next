@@ -335,8 +335,27 @@ export function mountApp(root, { client = getSupabase(), orgId = getDefaultOrgId
     if (!showChrome) return;
     const links = [{ label: 'Events', href: '#/events', active: !params.eventId }];
     if (params.eventId) {
-      links.push({ label: 'Overview', href: `#/events/${params.eventId}` });
+      // "Overview" — found ambiguous in production feedback (organisers
+      // couldn't tell at a glance what it led back to). "Event home" names
+      // the actual destination: this event's own per-event hub
+      // (eventDashboardScreen.js), the same relationship "Events" already
+      // has to the org-wide list.
+      links.push({ label: 'Event home', href: `#/events/${params.eventId}` });
     }
+    // The three /live/* surfaces — found completely undiscoverable in
+    // production feedback: nothing in the organiser UI ever linked to any
+    // of them, so an organiser had no way to find the splash screen or
+    // hand out an audience link short of knowing the URL by heart. Always
+    // shown, not just inside a specific event's own nav — all three are
+    // ORG-scoped (whatever's currently live for this org), not event-
+    // scoped, matching "Events" itself. openInNewTab (appShell.js) since
+    // these are meant to be pulled up on a SEPARATE device/tab (a
+    // projector, a phone) while the organiser keeps working in this one.
+    links.push(
+      { label: 'Splash screen', href: '#/live/splash', openInNewTab: true },
+      { label: 'Audience — projector', href: '#/live/projector', openInNewTab: true },
+      { label: 'Audience — phone', href: '#/live/phone', openInNewTab: true },
+    );
     shell.setNav({ eventId: params.eventId ?? null, links });
   }
 
