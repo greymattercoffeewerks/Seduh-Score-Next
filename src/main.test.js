@@ -190,6 +190,39 @@ describe('mountApp routing', () => {
     );
   });
 
+  it("always shows the three /live/* audience links (org-scoped, not event-scoped) alongside the event's own nav, each opening in a new tab", async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    stubScreen(mountEventDashboardScreen, 'DASHBOARD_SCREEN');
+    const { root } = await startApp();
+    location.hash = '#/events/ev1';
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const links = [...root.querySelectorAll('.app-shell-link')];
+    const byLabel = (label) => links.find((link) => link.textContent.startsWith(label));
+
+    // "Event home" — renamed from "Overview" (found ambiguous in
+    // production feedback); only appears once an eventId is in scope.
+    expect(byLabel('Event home')).not.toBeUndefined();
+
+    // The three /live/* links are present on an EVENT-scoped screen too,
+    // not just the org-wide Events list — they're org-scoped ("whatever's
+    // currently live for this org"), matching "Events" itself, not tied to
+    // whichever event happens to be open.
+    for (const [label, href] of [
+      ['Splash screen', '#/live/splash'],
+      ['Audience — projector', '#/live/projector'],
+      ['Audience — phone', '#/live/phone'],
+    ]) {
+      const link = byLabel(label);
+      expect(link, `expected a nav link labeled "${label}"`).not.toBeUndefined();
+      expect(link.getAttribute('href')).toBe(href);
+      expect(link.getAttribute('target')).toBe('_blank');
+      expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+      // Never the "current section" — these are separate-tab/device links,
+      // not part of this app's own in-tab navigation.
+      expect(link.getAttribute('aria-current')).toBeNull();
+    }
+  });
+
   it.each([
     ['#/events/ev1/setup', mountSetupScreen, 'SETUP_SCREEN', { eventId: 'ev1' }],
     ['#/events/ev1/roster', mountRosterScreen, 'ROSTER_SCREEN', { eventId: 'ev1' }],

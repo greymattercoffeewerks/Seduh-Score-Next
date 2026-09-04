@@ -1,3 +1,33 @@
+## Production feedback: 8-item batch from live run · 2026-09-04
+
+**Real user encountered 8 UX/discoverability gaps during a live test run on the production app** (seduh-score-next.greymatter-cw.workers.dev), triaged into three batches of independent fixes before implementation and confirmed with the user:
+
+**(a) Quick independent fixes:** (1) **Missing Seduh Score brand mark** — every wordmark in the app was text-only; ported the real logo (three arcs + drop, currentColor SVG) from the legacy sibling Seduh-Score repo's shared assets, wired into brand chrome three places (`appShell.js` organiser header, `splashScreen.js`, `viewer-shell.js` audience chrome). Implemented as a new `brandMark()` export in `core/dom.js` using `document.createElementNS` (the existing `el()` helper only does `document.createElement`, doesn't reliably render SVG). (2) **Sticky organiser nav header** — scrolling back up just to navigate on a long heats/rounds list was a real friction point; fixed with `position: sticky` on `appShell.css`. (3) **Ambiguous "Overview" link** — renamed to "Event home" in the main navigation, clarified intent at first glance.
+
+**(b) Discoverability + timer sizing:** The app already HAD a splash screen and two audience views (`#/live/projector`, `#/live/phone`) fully built and working, but ZERO in-app navigation links connected to them — an organiser had no way to find or share them with a separate device. Added three persistent nav links (each with a new `openInNewTab: true` flag in the nav-link shape), opening in a new tab so the organiser's own interface stays active on its device. Also: the organiser's live countdown timer was locked at 64px on every viewport; now responsive via `clamp(var(--text-5xl), 10vw, var(--text-6xl))` (64px floor, scales to 96px on wider screens).
+
+**(c) Report bar charts:** The report screen was table-only with no graphical representation. Added horizontal bar-fill visualization (plain div track/fill, not `<progress>` for token-level styling control) next to each "Correct" percentage in the set-difficulty table, matching the legacy app's reference exactly. Hidden entirely when there's no data (not a 0%-width bar).
+
+**All three batches live-verified in the browser before review** (360px and wider): sticky header staying pinned after real scroll, brand mark rendering with correct SVG namespace at multiple screens, timer clamping correctly, bar chart rendering with matching fill-width/label.
+
+**Files touched:** 13 across `src/core/` (`dom.js`/`appShell.js`/`splashScreen.js`/`viewer-shell.js`), `src/formats/cup-taster/` (`reportScreen.js`/`timingScreen.css`), `src/main.js`, and tests (`e2e/organiser-flow.spec.js`). Test count: 902 → 906.
+
+**Verifiers' findings:**
+
+- **`ui-accessibility-reviewer`** — found and fixed 2 real gaps: (1) the three new `openInNewTab` links had no screen-reader signal they open a new tab (target=_blank alone only cues sighted mouse users) — fixed with an sr-only '(opens in a new tab)' suffix on the accessible name; (2) the new sticky header could occlude router.js's own post-navigation focus-move target on a long scrolled page (the exact scenario the sticky header itself was built for) — fixed with a new `--app-shell-header-height` custom property kept in sync by `syncHeaderHeightVar()`, driving `scroll-margin-top` on focus targets. Also added missing `main.test.js` coverage for nav-wiring. Contrast/tap-targets/reduced-motion/360px all verified clean.
+
+- **`module-boundary-checker`** — clean. `brandMark()` is genuinely format-agnostic (zero imports, currentColor, static SVG); `openInNewTab` flag is generic mechanics with no format knowledge; `main.js`'s choice of WHICH links to add stays correctly in the composition root; `reportScreen.js`'s bar chart stays correctly confined to `formats/cup-taster/`.
+
+- **`test-auditor`** — found 1 real gap: `appShell.test.js`'s test claimed 'never marked aria-current, even if also flagged active' but never actually passed `active:true` in its fixture, AND the code didn't guard that combination either (aria-current was set unconditionally on `link.active`, with no check for `openInNewTab`) — the comment's claim was aspirational, not enforced. Fixed both: `appShell.js` now guards `link.active && !link.openInNewTab`, and the test now passes `active:true` and asserts `hasAttribute('aria-current')` is false. Mutation-tested and confirmed load-bearing. Everything else (viewer-shell child-count invariant, reportScreen fill/label match, dom.js brandMark tests) verified genuinely load-bearing via mutation testing, not vacuous.
+
+- **`code-reviewer`** — clean. `brandMark()`'s 3rd-use extraction genuinely warranted, all three integration sites consistently patterned (aria-hidden wrapper span), no debug leftovers, `no-trio-vocabulary`/`no-core-format-import` clean. One non-blocking observation: `renderDifficultyCell()` has only 1 call site today (not the 2nd/3rd-use dedup pattern) — assessed as a reasonable readability extraction, not a fail.
+
+**Known gaps carried to ROADMAP.md (1 non-blocking):** `renderDifficultyCell()`'s single-use extraction pattern, consolidated below per the task's kb-sync reset contract.
+
+**Full suite green, lint/format clean. E2E suite (5 tests) passes; one pre-existing, long-documented Realtime-handshake flake reoccurred and passed cleanly both times on immediate solo retry. Definition of Done met.**
+
+---
+
 ## T6.hardening.offline-soak — Offline mechanics audit, data-loss bug fix, sync-on-reconnect implementation · 2026-09-04
 
 **Phase 6's second of three named hardening activities** — testing and fixing the outbox/reconnect mechanics for real, at both unit and E2E level, and implementing the three-state sync panel required by handoff §8.4. User-confirmed scope (2026-09-04): two gaps were suspected up front (no reconnect-triggered flush despite D4's own "sync-on-reconnect" language; the three-state sync panel built in T3.3 had zero UI consumers anywhere), scoped as "test + fix if real" at both unit and E2E levels.

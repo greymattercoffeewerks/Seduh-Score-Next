@@ -9,6 +9,33 @@
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
   border-bottom: var(--border-hairline) solid var(--color-border);
+  /* Found in production feedback: with several heats/rounds on screen, the
+     nav (the only way back to the event's own hub) scrolled away with
+     everything else, forcing a scroll back up just to navigate. An opaque
+     background is required for a sticky header — without one, scrolled
+     content shows through behind it, not merely a cosmetic miss but a real
+     legibility problem once anything scrolls under it. z-index is
+     defensive, not load-bearing today (nothing else on these screens
+     currently opens its own stacking context), kept low and explicit
+     rather than relying on default stacking order by accident. */
+  position: sticky;
+  top: 0;
+  background: var(--color-surface);
+  z-index: 10;
+}
+
+.app-shell-mark {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-accent);
+  width: 1.5rem;
+  height: 1.5rem;
+  flex-shrink: 0;
+}
+
+.app-shell-mark svg {
+  width: 100%;
+  height: 100%;
 }
 
 .app-shell-name {
@@ -52,6 +79,22 @@
 
 .app-shell-outlet {
   min-height: 0;
+}
+
+/* Compensates for the header's own sticky occlusion (see appShell.js's
+   `syncHeaderHeightVar()`, which keeps --app-shell-header-height current).
+   Scoped to headings inside THIS outlet specifically, not a bare `h1, h2`
+   — a global rule would also reach viewer-shell.js's audience-facing
+   headings, which never sit behind this (organiser-only) sticky header
+   and would get a meaningless gap added above them for no reason. The
+   5rem fallback covers the common single-line-nav case (mount time and
+   any environment where the JS measurement can't run, e.g. jsdom in
+   tests, which never performs real layout) — a real narrow-viewport
+   multi-line-wrapped-nav render is covered by the JS measurement instead,
+   since a static fallback can't track that. */
+.app-shell-outlet h1,
+.app-shell-outlet h2 {
+  scroll-margin-top: var(--app-shell-header-height, 5rem);
 }
 
 /* Three-state sync panel (§8.4/T3.3) — off / live / not synced. "live" stays

@@ -92,6 +92,84 @@ describe('mountAppShell', () => {
     expect(document.activeElement).not.toBe(link);
   });
 
+  it('renders the brand mark alongside the app name, hidden from assistive tech (the visible text already carries the same information)', () => {
+    const root = document.createElement('div');
+    mountAppShell(root, { client: fakeClient({}) });
+    const mark = root.querySelector('.app-shell-mark');
+    expect(mark).not.toBeNull();
+    expect(mark.getAttribute('aria-hidden')).toBe('true');
+    expect(mark.querySelector('svg')).not.toBeNull();
+  });
+
+  it('a link with openInNewTab opens in a new tab (target=_blank, rel=noopener) and is never marked aria-current, even if also flagged active', async () => {
+    const root = document.createElement('div');
+    const { setNav } = mountAppShell(root, { client: fakeClient({}) });
+    await setNav({
+      // active: true too — found in review (test-auditor): no real caller
+      // combines these two flags today, but this test's own name claims
+      // the interaction is covered, and until this assertion existed it
+      // wasn't (the code didn't guard it either — see appShell.js's own
+      // aria-current line).
+      links: [
+        { label: 'Audience view', href: '#/live/projector', openInNewTab: true, active: true },
+      ],
+    });
+    const link = root.querySelector('.app-shell-link');
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(link.hasAttribute('aria-current')).toBe(false);
+  });
+
+  it("an openInNewTab link's accessible name warns of the context change, not just its visible label — a screen reader user gets no other signal that this link behaves differently (opens a new tab) than every other nav link", async () => {
+    const root = document.createElement('div');
+    const { setNav } = mountAppShell(root, { client: fakeClient({}) });
+    await setNav({
+      links: [{ label: 'Audience — projector', href: '#/live/projector', openInNewTab: true }],
+    });
+    const link = root.querySelector('.app-shell-link');
+    // Visible text stays exactly the label — the warning is sr-only, not
+    // stuffed into what a sighted user reads.
+    expect(link.querySelector('.sr-only').textContent.trim()).toBe('(opens in a new tab)');
+    // The accessible name (what a screen reader announces) includes both —
+    // this is the actual assertion that matters here.
+    expect(link.textContent).toBe('Audience — projector (opens in a new tab)');
+  });
+
+  it("clicking an openInNewTab link does NOT blur it — this tab never navigates away, so there's no reason to strand a keyboard user's place", async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const { setNav } = mountAppShell(root, { client: fakeClient({}) });
+    await setNav({
+      links: [{ label: 'Audience view', href: '#/live/projector', openInNewTab: true }],
+    });
+    const link = root.querySelector('.app-shell-link');
+    link.focus();
+    expect(document.activeElement).toBe(link);
+    link.dispatchEvent(new Event('click', { bubbles: true, cancelable: true }));
+    expect(document.activeElement).toBe(link);
+    document.body.removeChild(root);
+  });
+
+  it("keeps --app-shell-header-height on root in sync with the header's own real rendered height, on every setNav() call — the sticky header (found in the same production-feedback pass) needs this for scroll-margin-top to actually compensate for its own occlusion", async () => {
+    const root = document.createElement('div');
+    const { setNav } = mountAppShell(root, { client: fakeClient({}) });
+    const header = root.querySelector('.app-shell-header');
+    // jsdom never performs real layout, so getBoundingClientRect() always
+    // reports 0 — stubbed here to prove the write-through logic itself,
+    // independent of that jsdom limitation (see the guard's own comment).
+    header.getBoundingClientRect = () => ({ height: 72 });
+    await setNav({ links: [{ label: 'Events', href: '#/events', active: true }] });
+    expect(root.style.getPropertyValue('--app-shell-header-height')).toBe('72px');
+  });
+
+  it('never sets --app-shell-header-height to a meaningless 0 (e.g. jsdom, or any layout-less environment) — leaves the CSS fallback in place instead', async () => {
+    const root = document.createElement('div');
+    const { setNav } = mountAppShell(root, { client: fakeClient({}) });
+    // No stub — real jsdom always reports height 0 here.
+    await setNav({ links: [{ label: 'Events', href: '#/events', active: true }] });
+    expect(root.style.getPropertyValue('--app-shell-header-height')).toBe('');
+  });
+
   it('a second setNav call replaces the previous links rather than appending', async () => {
     const root = document.createElement('div');
     const { setNav } = mountAppShell(root, { client: fakeClient({}) });

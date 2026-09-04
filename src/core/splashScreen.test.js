@@ -56,6 +56,12 @@ describe('mountSplashScreen', () => {
     expect(root.querySelector('.splash-badge-generic')).not.toBeNull();
     expect(root.querySelector('.splash-badge-live')).toBeNull();
     expect(root.querySelector('.is-test-banner')).toBeNull();
+    // Found missing in a live production check — this surface used to be
+    // text-only, no brand mark at all.
+    const mark = root.querySelector('.splash-mark');
+    expect(mark).not.toBeNull();
+    expect(mark.getAttribute('aria-hidden')).toBe('true');
+    expect(mark.querySelector('svg')).not.toBeNull();
 
     await settle();
 

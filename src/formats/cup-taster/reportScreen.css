@@ -32,6 +32,36 @@
   gap: var(--space-3);
 }
 
+/* Set-difficulty bar-fill — found missing in production feedback ("no
+   graphical info in the report"). Track/fill, not a <progress> element:
+   this needs to sit inline with its own percentage label in a way
+   <progress>'s fixed UA styling doesn't give token-level control over
+   (matches every other "colored bar" precedent in this codebase, e.g.
+   the sync panel's own pill fills, which are also plain divs). */
+.difficulty-bar {
+  display: inline-block;
+  width: 6rem;
+  height: 0.5rem;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-sunken);
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+.difficulty-bar-fill {
+  height: 100%;
+  background: var(--color-accent);
+  border-radius: var(--radius-full);
+}
+
+.difficulty-bar-label {
+  margin-left: var(--space-2);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  vertical-align: middle;
+}
+
 @media print {
   /* The export toolbar itself is a screen-only control, not report
      content — printing the "Download CSV"/"Print / Save as PDF" buttons

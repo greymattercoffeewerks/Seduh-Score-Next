@@ -18,7 +18,17 @@
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   font-feature-settings: 'tnum' 1;
-  font-size: var(--text-5xl);
+  /* Found too small in production feedback, given how much space is
+     actually available around it. Was a flat --text-5xl (64px) at every
+     viewport — typography.css's own comment on --text-5xl/--text-6xl
+     warns these two sizes are "sized for fixed-canvas surfaces... not for
+     drop-in use inside an arbitrary responsive container" and need their
+     own clamp/step-down, which this rule never had. Floor matches the OLD
+     fixed size exactly (--text-5xl) — no regression at 360px, where 10vw
+     (36px) already sits well under that floor — and grows past it on
+     wider viewports/tablets up to --text-6xl (96px), the same ceiling
+     viewerBody.css's own stage-mode countdown uses. */
+  font-size: clamp(var(--text-5xl), 10vw, var(--text-6xl));
   line-height: var(--leading-mono);
   text-align: center;
   padding: var(--space-5) 0;

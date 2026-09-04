@@ -33,6 +33,9 @@
 }
 
 .viewer-chrome-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   font-family: var(--font-display);
   font-size: var(--text-base);
   font-weight: var(--font-weight-bold);
@@ -46,6 +49,23 @@
      future name/identifier would overflow the row instead of truncating
      (found in review; today's short fixed label doesn't trigger it, but
      nothing should rely on that staying true). */
+  min-width: 0;
+}
+
+.viewer-chrome-mark {
+  display: inline-flex;
+  color: var(--color-accent);
+  width: 1.125rem;
+  height: 1.125rem;
+  flex-shrink: 0;
+}
+
+.viewer-chrome-mark svg {
+  width: 100%;
+  height: 100%;
+}
+
+.viewer-chrome-name-text {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

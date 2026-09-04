@@ -228,6 +228,22 @@ describe('renderChrome', () => {
     const node = renderChrome(null);
     expect(node.querySelector('.viewer-chrome-name').textContent).toBe('Seduh Score');
   });
+
+  it("renders the brand mark alongside the name, hidden from assistive tech, without changing the name text or the div's own top-level child count", () => {
+    // The child-count part matters beyond cosmetics — render()'s own
+    // re-render path does chromeEl.replaceChild(freshChrome.
+    // lastElementChild, chromeEl.lastElementChild) to swap ONLY the status
+    // badge; a third TOP-LEVEL child here would silently become
+    // lastElementChild instead of the real badge. The mark lives INSIDE
+    // the <h1> for exactly this reason.
+    const node = renderChrome(session({ active: true }));
+    expect(node.children).toHaveLength(2);
+    const mark = node.querySelector('.viewer-chrome-mark');
+    expect(mark).not.toBeNull();
+    expect(mark.getAttribute('aria-hidden')).toBe('true');
+    expect(mark.querySelector('svg')).not.toBeNull();
+    expect(node.querySelector('.viewer-chrome-name').textContent).toBe('Seduh Score');
+  });
 });
 
 describe('mountViewerShell', () => {
