@@ -92,14 +92,18 @@ function renderStageStandingsTable(ranked) {
       el('td', { text: describeOutcome(item), attrs: { 'data-label': 'Outcome' } }),
     ]),
   );
+  // scope='col' on every header, matching heatsScreen.js's own
+  // assignment-table convention (its own test asserts it) — found missing
+  // here and on standingsScreen.js's near-identical table reviewing the
+  // two together.
   return el('table', { className: 'standings-table' }, [
     el('thead', {}, [
       el('tr', {}, [
-        el('th', { text: 'Pos' }),
-        el('th', { text: 'Cupper' }),
-        el('th', { text: 'Correct' }),
-        el('th', { text: 'Time' }),
-        el('th', { text: 'Outcome' }),
+        el('th', { text: 'Pos', attrs: { scope: 'col' } }),
+        el('th', { text: 'Cupper', attrs: { scope: 'col' } }),
+        el('th', { text: 'Correct', attrs: { scope: 'col' } }),
+        el('th', { text: 'Time', attrs: { scope: 'col' } }),
+        el('th', { text: 'Outcome', attrs: { scope: 'col' } }),
       ]),
     ]),
     el('tbody', {}, rows),
@@ -123,9 +127,9 @@ function renderDifficultyTable(difficulty) {
   return el('table', { className: 'standings-table' }, [
     el('thead', {}, [
       el('tr', {}, [
-        el('th', { text: 'Set' }),
-        el('th', { text: 'Correct' }),
-        el('th', { text: 'Cuppers scored' }),
+        el('th', { text: 'Set', attrs: { scope: 'col' } }),
+        el('th', { text: 'Correct', attrs: { scope: 'col' } }),
+        el('th', { text: 'Cuppers scored', attrs: { scope: 'col' } }),
       ]),
     ]),
     el('tbody', {}, rows),
@@ -149,7 +153,10 @@ function renderDistributionTable(distribution) {
   );
   return el('table', { className: 'standings-table' }, [
     el('thead', {}, [
-      el('tr', {}, [el('th', { text: 'Correct answers' }), el('th', { text: 'Cuppers' })]),
+      el('tr', {}, [
+        el('th', { text: 'Correct answers', attrs: { scope: 'col' } }),
+        el('th', { text: 'Cuppers', attrs: { scope: 'col' } }),
+      ]),
     ]),
     el('tbody', {}, rows),
   ]);

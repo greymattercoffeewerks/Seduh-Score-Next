@@ -236,6 +236,40 @@ describe('mountApp routing', () => {
     );
   });
 
+  it("resets a stale class/data-surface attribute on bareRoot BEFORE mounting the next of the three /live/* routes — regression coverage for the cross-screen residue bug (module-boundary-checker flagged the original per-screen cleanup as a real §6 violation: core/splashScreen.js hardcoding the format-specific 'projector-surface' class name; centralized here in main.js instead)", async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    // Mirror what the REAL projectorSurface.js applies to its own root, so
+    // this test proves the reset happens on the shared outlet itself, not
+    // on some other node.
+    mountProjectorSurface.mockImplementation(async (root) => {
+      root.classList.add('projector-surface');
+      root.setAttribute('data-surface', 'stage');
+      root.textContent = 'PROJECTOR_SCREEN';
+      return { unmount: vi.fn() };
+    });
+    let phoneSawAtMountTime = null;
+    mountPhoneSummary.mockImplementation(async (root) => {
+      phoneSawAtMountTime = {
+        className: root.className,
+        dataSurface: root.getAttribute('data-surface'),
+      };
+      root.textContent = 'PHONE_SCREEN';
+      return { unmount: vi.fn() };
+    });
+    await startApp();
+
+    location.hash = '#/live/projector';
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    location.hash = '#/live/phone';
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // The phone mount must have seen a clean outlet — no leftover
+    // .projector-surface class, no leftover data-surface="stage" — even
+    // though phoneSummary.js itself no longer does any cleanup of its own.
+    expect(phoneSawAtMountTime.className).toBe('app-bare-root');
+    expect(phoneSawAtMountTime.dataSurface).toBeNull();
+  });
+
   it('#/live/splash routes with orgId, not eventId, same as the other two live routes', async () => {
     stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
     stubScreen(mountSplashScreen, 'SPLASH_SCREEN');

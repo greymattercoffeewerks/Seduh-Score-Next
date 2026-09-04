@@ -61,10 +61,20 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
+  /* Lets this flex item shrink below its content's own intrinsic width —
+     flex items default to min-width: auto, which a nowrap email inside
+     defeats. Found in the app-wiring holistic pass: at 360px, a
+     realistic-length organiser email forced the WHOLE persistent header to
+     overflow horizontally rather than wrap. */
+  min-width: 0;
 }
 
 .app-shell-auth-email {
   color: var(--color-text-muted);
   font-size: var(--text-sm);
-  white-space: nowrap;
+  /* NOT nowrap (see .app-shell-auth's own comment above) — a long email
+     must wrap onto a second line at 360px, not force horizontal overflow
+     of the whole header. overflow-wrap so even a single long unbroken
+     token (email addresses have no spaces) still wraps. */
+  overflow-wrap: anywhere;
 }

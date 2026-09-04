@@ -111,6 +111,19 @@ function mountNotFoundScreen(root) {
   return { unmount() {} };
 }
 
+// The three /live/* routes below all share one root (bareRoot) for the app's
+// whole lifetime, and each applies its own surface-identifying class/
+// data-surface attribute. None of them clears a PRIOR route's residue itself
+// any more (module-boundary-checker flagged the original per-screen cleanup —
+// core/splashScreen.js hardcoding the Cup-Taster-specific 'projector-surface'
+// class name — as a real §6 violation: a core module has no business knowing
+// a format's class names). Centralized here instead, since main.js is
+// already the one file allowed to know both sides of that line.
+function resetBareSurface(outlet) {
+  outlet.className = 'app-bare-root';
+  outlet.removeAttribute('data-surface');
+}
+
 export function buildRoutes({ orgId, bareRoot, routerRef }) {
   return [
     {
@@ -200,14 +213,19 @@ export function buildRoutes({ orgId, bareRoot, routerRef }) {
       pattern: '/live/projector',
       chrome: false,
       outlet: bareRoot,
-      mount: (outlet, { client, signal }) =>
-        mountProjectorSurface(outlet, { orgId, client, signal }),
+      mount: (outlet, { client, signal }) => {
+        resetBareSurface(outlet);
+        return mountProjectorSurface(outlet, { orgId, client, signal });
+      },
     },
     {
       pattern: '/live/phone',
       chrome: false,
       outlet: bareRoot,
-      mount: (outlet, { client, signal }) => mountPhoneSummary(outlet, { orgId, client, signal }),
+      mount: (outlet, { client, signal }) => {
+        resetBareSurface(outlet);
+        return mountPhoneSummary(outlet, { orgId, client, signal });
+      },
     },
     {
       // Deliberately NOT wrapped in requireAuth — same reasoning as the two
@@ -216,7 +234,10 @@ export function buildRoutes({ orgId, bareRoot, routerRef }) {
       pattern: '/live/splash',
       chrome: false,
       outlet: bareRoot,
-      mount: (outlet, { client, signal }) => mountSplashScreen(outlet, { orgId, client, signal }),
+      mount: (outlet, { client, signal }) => {
+        resetBareSurface(outlet);
+        return mountSplashScreen(outlet, { orgId, client, signal });
+      },
     },
   ];
 }

@@ -218,6 +218,10 @@ export async function mountViewerShell(
   let requestSeq = 0;
   let lastIsTest = null;
   let bodyCleanup = null;
+  // The persistent showChrome:true chrome element itself (built once, on
+  // this shell's first render, then only ever MUTATED — never torn down
+  // and recreated) — see render()'s own comment below for why.
+  let chromeEl = null;
   // Whether this org has ANY event row yet — distinguishes 'noEvent' from
   // 'notStarted' below. Starts false and is only ever re-checked while still
   // false (an event, once created, doesn't get un-created) — so a transient
@@ -233,7 +237,18 @@ export async function mountViewerShell(
   // renderChrome() at all.
   const hiddenHeading = showChrome ? null : el('h1', { className: 'sr-only', text: APP_NAME });
   const chromeHost = el('div', {});
-  const bannerHost = el('div', {});
+  // .viewer-banner-host (viewer-shell.css) — carries the stage-mode
+  // overscan inset for the is_test banner it hosts. Found in review
+  // (cross-screen consistency pass): splashScreen.css's own
+  // .splash-test-banner-host was deliberately inset from the true viewport
+  // edges for exactly this reason ("a projector/TV is exactly the
+  // environment most prone to overscan cropping or bezel occlusion right
+  // at the edges"), but this shell's own banner — the SAME shared
+  // base.css .is-test-banner component, doing the SAME D9 job, on the SAME
+  // kind of audience-facing stage surface (the projector, showChrome:false)
+  // — sat flush against the true top edge with no equivalent guard. See
+  // viewer-shell.css for the actual inset rule.
+  const bannerHost = el('div', { className: 'viewer-banner-host' });
   // role="status"/aria-live="polite" lives on THIS node permanently — every
   // render mutates its children in place, never replaces the node itself.
   const body = el('div', {
@@ -244,7 +259,33 @@ export async function mountViewerShell(
   root.appendChild(container);
 
   function render() {
-    chromeHost.replaceChildren(...(showChrome ? [renderChrome(session, connectionLost)] : []));
+    // Only the status badge — renderChrome()'s own SECOND child — is ever
+    // rebuilt here; the h1 itself is appended once and never replaced
+    // afterward. Found in review (cross-screen consistency pass): this
+    // used to call `chromeHost.replaceChildren(renderChrome(...))`
+    // unconditionally on EVERY render, tearing down and recreating the
+    // whole chrome — h1 included — even for a render triggered by a
+    // wholly chrome-unrelated change (a standings update, a heat status
+    // flip). router.js's own one-time navigation focus-move (its own
+    // 2026-08-30 review) can leave real DOM focus sitting on exactly this
+    // h1 right after this shell first mounts; recreating that node on the
+    // very next live_sessions change silently dropped that focus back to
+    // <body>, with no signal at all to a screen-reader user that anything
+    // happened — the showChrome:false surface (the projector) never had
+    // this problem, since its own equivalent heading (`hiddenHeading`,
+    // above) was already built once and left untouched by render(); only
+    // showChrome:true (the phone surface) was exposed. `renderChrome()`
+    // itself is untouched and still directly unit-tested as a pure
+    // function — this only changes how THIS render loop uses its output.
+    if (showChrome) {
+      const freshChrome = renderChrome(session, connectionLost);
+      if (!chromeEl) {
+        chromeEl = freshChrome;
+        chromeHost.appendChild(chromeEl);
+      } else {
+        chromeEl.replaceChild(freshChrome.lastElementChild, chromeEl.lastElementChild);
+      }
+    }
 
     // role="alert" (implies aria-live="assertive") rather than the body's
     // own polite region — found in review: is_test flipping on/off mid-view

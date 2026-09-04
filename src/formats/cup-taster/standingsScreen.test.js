@@ -113,6 +113,13 @@ describe('renderStandingsTable', () => {
     const rows = table.querySelectorAll('tbody tr');
     expect(rows[1].dataset.status).toBe('tied');
   });
+
+  it('every column header uses scope="col" for table accessibility, matching the convention heatsScreen.js already established', () => {
+    const table = renderStandingsTable(ranked);
+    const headers = table.querySelectorAll('thead th');
+    expect(headers.length).toBeGreaterThan(0);
+    for (const header of headers) expect(header.getAttribute('scope')).toBe('col');
+  });
 });
 
 describe('mountStandingsScreen', () => {
@@ -552,6 +559,16 @@ describe('mountStandingsScreen', () => {
     await mountStandingsScreen(root, { eventId: 'ev1', stageId: 's1', client });
     expect(root.textContent).toContain('The tiebreak heat also drew');
     expect(root.textContent).toContain('exactly 1 winner');
+
+    // The checkbox group is a real <fieldset>/<legend>, not a bare <ul>
+    // below an unrelated paragraph — a screen reader landing directly on a
+    // checkbox (Tab order, or a rotor/forms list) must hear the exactly-N
+    // group instruction, not just the checkbox's own cupper-name label.
+    const fieldset = root.querySelector('fieldset.coin-toss-fieldset');
+    expect(fieldset).not.toBeNull();
+    const legend = fieldset.querySelector('legend');
+    expect(legend.textContent).toContain('exactly 1 winner');
+    expect(fieldset.querySelector('.coin-toss-list')).not.toBeNull();
 
     root.querySelector('.coin-toss-list input[type="checkbox"]').click();
     const noteInput = root.querySelector('#coin-toss-note');

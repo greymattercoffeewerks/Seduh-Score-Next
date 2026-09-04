@@ -25,6 +25,19 @@
   border-bottom: none;
 }
 
+/* Found in the app-wiring holistic pass: this link was plain inline text
+   with no sizing of its own (only the surrounding <li> had padding, which
+   isn't part of the <a>'s own clickable box) — well under the 44px tap
+   target floor every other interactive control in this app already gets
+   via .tap-target/.btn/.field-input/.app-shell-link. This is the
+   organiser's own landing page, most likely to be tapped on a phone at
+   360px per this project's own tap-target discipline. */
+.events-list a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-target-min);
+}
+
 /* A small per-row indicator, not the full-page .is-test-banner stripe
    (base.css) — that banner is reserved for when the organiser is actually
    INSIDE a test event; here they're browsing a list where only some rows

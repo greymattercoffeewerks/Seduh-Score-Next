@@ -48,6 +48,7 @@ export async function mountEventDashboardScreen(
 ) {
   let loadFailedMessage = null;
   let loading = false;
+  let focusAfterRender = null;
 
   function renderLoading() {
     root.innerHTML = '';
@@ -103,6 +104,19 @@ export async function mountEventDashboardScreen(
     try {
       data = await raceTimeout(loadState(), DEFAULT_LOAD_TIMEOUT_MS);
       loadFailedMessage = null;
+      // Found in review (ui-accessibility-reviewer, Phase 6 cross-screen a11y
+      // pass): the very first successful mount is already covered by
+      // router.js's own generic "focus the new screen's own heading"
+      // fallback (this screen focuses nothing itself during that load,
+      // and document.activeElement reverts to <body> once the focused
+      // loading feedback node is removed by root.innerHTML = ''). But a
+      // Retry click after a load error does NOT go through the router
+      // again — renderLoading() destroys the focused Retry button the
+      // same way, with nothing taking its place, so without this a
+      // successful Retry silently dropped focus to <body>. Same fix
+      // rosterScreen.js/setupScreen.js already carry for the identical
+      // gap (see their own attemptLoad() comments).
+      focusAfterRender = '#event-dashboard-heading';
     } catch (err) {
       loadFailedMessage = err.timedOut
         ? 'This is taking longer than expected — check your connection and try Retry.'
@@ -133,7 +147,13 @@ export async function mountEventDashboardScreen(
       );
     }
 
-    container.appendChild(el('h1', { text: data.event.name }));
+    container.appendChild(
+      el('h1', {
+        id: 'event-dashboard-heading',
+        text: data.event.name,
+        attrs: { tabindex: '-1' },
+      }),
+    );
 
     container.appendChild(
       el('div', { className: 'card event-dashboard-actions' }, [
@@ -174,6 +194,12 @@ export async function mountEventDashboardScreen(
     }
 
     root.appendChild(container);
+
+    if (focusAfterRender) {
+      const target = root.querySelector(focusAfterRender);
+      target?.focus();
+      focusAfterRender = null;
+    }
   }
 
   await attemptLoad();

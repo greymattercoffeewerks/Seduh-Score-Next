@@ -82,6 +82,27 @@
   font-weight: var(--font-weight-semibold);
 }
 
+/* Groups the coin-toss checkboxes under one accessible name (the exact
+   instruction text, as the fieldset's own <legend>) instead of a bare <ul>
+   a screen reader lands on with no group context — see
+   renderCoinTossCard's own comment in standingsScreen.js. Un-does the
+   browser's own default fieldset border/padding/min-width so it reads as
+   plain content inside `.card`, not a second, visually distinct nested box;
+   the legend keeps the exact `.card` paragraph styling the plain <p> it
+   replaced had. */
+.coin-toss-fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.coin-toss-fieldset legend {
+  padding: 0;
+  font-size: var(--text-md);
+  color: var(--color-text);
+}
+
 .coin-toss-list {
   list-style: none;
   margin: var(--space-3) 0;

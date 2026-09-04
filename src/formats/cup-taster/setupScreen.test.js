@@ -243,6 +243,43 @@ describe('renderStageRow', () => {
     expect(el.querySelector('input[aria-label="Stage 1: cutoff"]').value).toBe('8');
   });
 
+  // Found in review (ui-accessibility-reviewer, Phase 6 cross-screen a11y
+  // pass): this screen's own <h1> ("Stage plan") had no intervening <h2>
+  // before these per-row headings, a heading-level skip WCAG flags as a
+  // navigation failure — inconsistent with eventDashboardScreen.js's own
+  // h1 -> h2 "Stages" -> h3-per-card structure for the same "list of stage
+  // cards" shape. Guards against a regression back to <h3>, not just that
+  // *some* heading exists.
+  it("renders the per-row heading as an <h2>, not an <h3>, for both a locked and an unlocked row — no heading-level skip past this screen's own <h1>", () => {
+    const unlockedRow = {
+      key: 's1',
+      id: 's1',
+      kind: 'prelims',
+      setCount: 5,
+      durationSecs: 480,
+      cutoff: 8,
+      locked: false,
+    };
+    const unlockedEl = renderStageRow(unlockedRow, 0, 2, {
+      onMoveUp() {},
+      onMoveDown() {},
+      onRemove() {},
+    });
+    expect(unlockedEl.querySelector('h3')).toBeNull();
+    const unlockedHeading = unlockedEl.querySelector('h2');
+    expect(unlockedHeading).not.toBeNull();
+    expect(unlockedHeading.className).toBe('stage-row-heading');
+    expect(unlockedHeading.textContent).toBe('Stage 1');
+
+    const lockedRow = { ...unlockedRow, key: 's2', id: 's2', locked: true };
+    const lockedEl = renderStageRow(lockedRow, 0, 2, {});
+    expect(lockedEl.querySelector('h3')).toBeNull();
+    const lockedHeading = lockedEl.querySelector('h2');
+    expect(lockedHeading).not.toBeNull();
+    expect(lockedHeading.className).toBe('stage-row-heading');
+    expect(lockedHeading.textContent).toBe('Stage 1 — prelims');
+  });
+
   it('disables the cutoff field on the terminal row, and Move up on the first row / Move down on the last', () => {
     const row = {
       key: 's2',

@@ -23,6 +23,20 @@ import { el } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
 import { formatDuration } from '../../core/duration.js';
 
+// Local, non-network validation feedback — mirrors timingScreen.js's own
+// renderTimingRows/renderManualTimeFields wrapper (its own comment explains
+// why: a parse failure here is purely client-side, so it must never trigger
+// the caller's own render(), which rebuilds EVERY row from fresh server
+// state and would discard whatever ANY OTHER row currently has half-typed).
+// Found in this pass (holistic accessibility review): this screen's own
+// rows are the ALWAYS-shown, PRIMARY entry method (unlike timingScreen.js's
+// opt-in fallback toggle), so the same data-loss risk applies here at least
+// as much, but this screen never got the 2026-09-04 fix — a mistyped row
+// still routed through mountManualTimingScreen's own full render() cycle,
+// silently wiping any correctly-typed-but-unsaved value in every OTHER row
+// on screen. `onSave` (the caller's own handler) now only ever receives an
+// already-validated integer, exactly matching renderTimingRows' own
+// onSaveManual contract.
 export function renderManualEntryRows(hydratedEntries, { onSave }) {
   const rows = hydratedEntries.map((entry) => {
     const nameNode = el(
@@ -45,9 +59,29 @@ export function renderManualEntryRows(hydratedEntries, { onSave }) {
           })
         : null;
 
+    const localError = el('p', {
+      className: 'manual-time-local-error',
+      attrs: { role: 'alert' },
+    });
+
+    const manualFields = renderManualTimeFields(entry, {
+      onSave: (entryId, minutesRaw, secondsRaw) => {
+        let totalSecs;
+        try {
+          totalSecs = parseElapsedInput(minutesRaw, secondsRaw);
+        } catch (err) {
+          localError.textContent = err.message;
+          return;
+        }
+        localError.textContent = '';
+        onSave(entryId, totalSecs);
+      },
+      extraChildren: [statusNode, localError].filter(Boolean),
+    });
+
     return el('li', { className: 'timing-row manual-timing-row' }, [
       el('div', { className: 'timing-row-name' }, [nameNode]),
-      renderManualTimeFields(entry, { onSave, extraChildren: [statusNode].filter(Boolean) }),
+      manualFields,
     ]);
   });
   return el('ul', { className: 'timing-row-list' }, rows);
@@ -196,10 +230,14 @@ export async function mountManualTimingScreen(
       );
     } else if (data.heat.status === 'pending') {
       const rows = renderManualEntryRows(data.hydrated, {
-        onSave: async (entryId, minutesValue, secondsValue) => {
+        // `totalSecs` arrives already validated — renderManualEntryRows' own
+        // onSave wrapper calls parseElapsedInput itself and only invokes
+        // this handler on success (see its own comment: a validation
+        // failure alone must never trigger a render(), matching
+        // timingScreen.js's identical onSaveManual contract).
+        onSave: async (entryId, totalSecs) => {
           const savedEntry = data.hydrated.find((entry) => entry.entry_id === entryId);
           try {
-            const totalSecs = parseElapsedInput(minutesValue, secondsValue);
             const { expectedElapsedSecs, flushResult } = await recordManualTime(
               data.heat,
               savedEntry,

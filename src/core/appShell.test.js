@@ -64,6 +64,32 @@ describe('mountAppShell', () => {
     expect(links[1].className).toContain('app-shell-link-active');
   });
 
+  it('marks the active link with aria-current="page", the inactive link with no aria-current at all — found in the holistic-pass review: the active state was only ever a visual (bold/underline) signal', async () => {
+    const root = document.createElement('div');
+    const { setNav } = mountAppShell(root, { client: fakeClient({}) });
+    await setNav({
+      links: [
+        { label: 'Setup', href: '#/events/ev1/setup' },
+        { label: 'Roster', href: '#/events/ev1/roster', active: true },
+      ],
+    });
+    const links = [...root.querySelectorAll('.app-shell-link')];
+    expect(links[0].hasAttribute('aria-current')).toBe(false);
+    expect(links[1].getAttribute('aria-current')).toBe('page');
+  });
+
+  it("clicking a shell nav link blurs it — found in the holistic-pass review: unlike a link inside a routed screen (removed by the next screen's own root.innerHTML wipe), this link is never removed across a navigation, so router.js's own activeElement===document.body post-navigation focus fallback would otherwise never fire", async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const { setNav } = mountAppShell(root, { client: fakeClient({}) });
+    await setNav({ links: [{ label: 'Events', href: '#/events' }] });
+    const link = root.querySelector('.app-shell-link');
+    link.focus();
+    expect(document.activeElement).toBe(link);
+    link.dispatchEvent(new Event('click', { bubbles: true, cancelable: true }));
+    expect(document.activeElement).not.toBe(link);
+  });
+
   it('a second setNav call replaces the previous links rather than appending', async () => {
     const root = document.createElement('div');
     const { setNav } = mountAppShell(root, { client: fakeClient({}) });

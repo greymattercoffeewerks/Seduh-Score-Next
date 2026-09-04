@@ -71,11 +71,22 @@ export function renderScoringRows(
       ].filter(Boolean),
     );
 
+    // `tabindex: '-1'` — this is a real focus target, not just a display
+    // span: onMarkWrong below sets `focusAfterRender` to this id, matching
+    // this project's rebuild-then-refocus pattern (see the file's own top
+    // comment). Without tabindex, `target?.focus()` on a plain <span>
+    // silently does nothing in every browser — a keyboard/screen-reader
+    // user tapping "Mark remaining wrong" would have no perceivable
+    // confirmation the action landed at all (found reviewing this screen
+    // alongside standingsScreen.js/reportScreen.js: every OTHER
+    // focusAfterRender target in this project's screens is a real button or
+    // an explicitly tabindex='-1' heading — this was the one silent
+    // exception).
     const tallyNode = el('span', {
       className: 'scoring-tally',
       id: `tally-${entry.entry_id}`,
       text: `${tally.correct}/${tally.total}`,
-      attrs: { 'data-complete': complete ? 'true' : 'false' },
+      attrs: { 'data-complete': complete ? 'true' : 'false', tabindex: '-1' },
     });
 
     const toggleButtons = setIds.map((setId, index) => {
@@ -279,10 +290,21 @@ export async function mountScoringScreen(
       );
 
       const complete = isHeatComplete(entryIds, draft, setIds);
+      // D24/§7.4: Confirm unlocks only once every cupper has every set
+      // scored. A bare `disabled` attribute alone leaves a screen-reader
+      // user with no explanation of WHY ("Confirm heat, button, disabled"
+      // and nothing else) — same aria-describedby-plus-always-visible-text
+      // pattern setupScreen.js already established for its own disabled
+      // fields, not a new one invented here. Omitted once `complete` is
+      // true — nothing left to explain at that point.
+      const confirmHintId = 'confirm-heat-hint';
       const confirmButton = el('button', {
         className: 'btn btn-primary tap-target',
-        text: 'Confirm heat',
-        attrs: complete && !confirmInFlight ? {} : { disabled: 'disabled' },
+        text: confirmInFlight ? 'Confirming…' : 'Confirm heat',
+        attrs: {
+          ...(complete && !confirmInFlight ? {} : { disabled: 'disabled' }),
+          ...(!complete ? { 'aria-describedby': confirmHintId } : {}),
+        },
       });
       confirmButton.addEventListener('click', async () => {
         // Guards against a rapid double-click enqueueing two confirm
@@ -337,7 +359,16 @@ export async function mountScoringScreen(
         confirmInFlight = false;
         await renderOrShowError(feedback);
       });
-      container.appendChild(el('div', { className: 'card' }, [confirmButton]));
+      const confirmHint = !complete
+        ? el('p', {
+            id: confirmHintId,
+            className: 'form-field-hint',
+            text: 'Confirm unlocks once every cupper has every set scored — a set left blank (—) still needs a tap before this heat can close.',
+          })
+        : null;
+      container.appendChild(
+        el('div', { className: 'card' }, [confirmButton, confirmHint].filter(Boolean)),
+      );
     }
 
     container.appendChild(feedback);

@@ -173,7 +173,11 @@ describe('renderManualEntryRows', () => {
     expect(rows.querySelector('.timing-row-result').dataset.maxed).toBe('true');
   });
 
-  it('calls onSave with the entry id and the raw input values when Save is clicked', () => {
+  it('calls onSave with the entry id and the already-parsed total seconds when Save is clicked', () => {
+    // Parsed locally, inside renderManualEntryRows' own onSave wrapper — see
+    // the module comment above renderManualEntryRows. `onSave` (the
+    // caller's own handler) never sees raw strings, matching
+    // renderTimingRows' identical onSaveManual contract in timingScreen.js.
     const onSave = vi.fn();
     const rows = renderManualEntryRows(
       [{ entry_id: 'e1', displayName: 'Cupper One', elapsed_secs: null }],
@@ -183,7 +187,30 @@ describe('renderManualEntryRows', () => {
     inputs[0].value = '3';
     inputs[1].value = '15';
     rows.querySelector('button').click();
-    expect(onSave).toHaveBeenCalledWith('e1', '3', '15');
+    expect(onSave).toHaveBeenCalledWith('e1', 195);
+  });
+
+  it('an invalid entry never calls onSave — shows a local, inline error instead, leaving the row itself untouched', () => {
+    // Regression test for the fix closing the gap timingScreen.js's own
+    // manual-entry fallback already closed on 2026-09-04 (see its own
+    // "an invalid manual time never calls onSaveManual at all" test) — this
+    // screen's ALWAYS-shown rows never got the same fix until this pass.
+    const onSave = vi.fn();
+    const rows = renderManualEntryRows(
+      [{ entry_id: 'e1', displayName: 'Cupper One', elapsed_secs: null }],
+      { onSave },
+    );
+    const inputs = rows.querySelectorAll('input');
+    inputs[0].value = '2';
+    inputs[1].value = ''; // untouched — the Number('') === 0 trap
+    rows.querySelector('button').click();
+
+    expect(onSave).not.toHaveBeenCalled();
+    expect(rows.querySelector('.manual-time-local-error').textContent).toContain(
+      'Seconds must be a whole number',
+    );
+    // Nothing was rebuilt — the correctly-typed minutes value is still there.
+    expect(inputs[0].value).toBe('2');
   });
 
   it('shows a station badge when the entry has one', () => {
@@ -340,7 +367,14 @@ describe('mountManualTimingScreen', () => {
     document.body.removeChild(root);
   });
 
-  it('an invalid entry shows a validation error and never calls recordManualTime', async () => {
+  it('an invalid entry shows a LOCAL, inline error and never calls recordManualTime — no render(), the global feedback region stays untouched', async () => {
+    // Rewritten for the fix closing a real gap found in this pass (holistic
+    // accessibility review): this used to route a pure client-side parse
+    // failure through the screen's own full render() cycle (asserted by the
+    // OLD version of this test, which expected the GLOBAL feedback region to
+    // carry the error) — same class of bug timingScreen.js's own manual-entry
+    // fallback already had fixed for it, 2026-09-04, but this screen (the
+    // PRIMARY entry method, not a fallback) never got the backport until now.
     const root = document.createElement('div');
     document.body.appendChild(root);
     const client = buildFakeClient({
@@ -357,12 +391,75 @@ describe('mountManualTimingScreen', () => {
     root.querySelector('button').click();
     await settle();
 
-    const feedback = root.querySelector('.screen-feedback');
-    expect(feedback.dataset.tone).toBe('error');
-    expect(feedback.textContent).toContain('Seconds must be a whole number');
+    // No render() happened at all — the GLOBAL feedback region stays
+    // untouched, matching timingScreen.js's own identical assertion.
+    expect(root.querySelector('.screen-feedback').dataset.tone).toBeUndefined();
+    expect(root.querySelector('.manual-time-local-error').textContent).toContain(
+      'Seconds must be a whole number',
+    );
     // No RPC call was ever issued — the parse error is caught before
     // recordManualTime is even called.
     expect(client.calls).toHaveLength(0);
+    // The organiser's own correctly-typed minutes value is still there —
+    // no rebuild discarded it.
+    expect(inputs[0].value).toBe('2');
+
+    document.body.removeChild(root);
+  });
+
+  it('an invalid entry in one row does not discard a correctly-typed, not-yet-saved value in a SIBLING row — the real data-loss risk this fix closes', async () => {
+    // The concrete scenario the module comment on renderManualEntryRows
+    // names: two cuppers' rows are both mid-correction: this heat's first
+    // entry gets an invalid Seconds value and Save is clicked, while its
+    // second entry already has a correctly-typed (but not yet saved) value
+    // sitting in its own inputs. Before this fix, the invalid row's Save
+    // routed through mountManualTimingScreen's own full render(), which
+    // reloads every row from FRESH SERVER STATE and rebuilds every input —
+    // silently wiping the second entry's own untouched, correctly-typed
+    // draft along with it.
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const client = buildFakeClient({
+      event: { id: 'ev1', org_id: 'org1', is_test: false },
+      heat: manualHeatPending,
+      entries: [
+        { id: 'he1', heat_id: 'h1', entry_id: 'e1', elapsed_secs: null },
+        { id: 'he2', heat_id: 'h1', entry_id: 'e2', elapsed_secs: null },
+      ],
+      roster: [
+        { id: 'e1', display_name: 'Cupper One' },
+        { id: 'e2', display_name: 'Cupper Two' },
+      ],
+    });
+    await mountManualTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
+
+    const rowFor = (name) =>
+      [...root.querySelectorAll('.manual-timing-row')].find((row) =>
+        row.textContent.includes(name),
+      );
+
+    // Cupper Two's row: a correct, not-yet-saved draft.
+    const [twoMinutes, twoSeconds] = rowFor('Cupper Two').querySelectorAll('input');
+    twoMinutes.value = '4';
+    twoSeconds.value = '20';
+
+    // Cupper One's row: an invalid Save.
+    const [oneMinutes, oneSeconds] = rowFor('Cupper One').querySelectorAll('input');
+    oneMinutes.value = '2';
+    oneSeconds.value = '75'; // invalid — out of 0-59 range
+    rowFor('Cupper One').querySelector('button').click();
+    await settle();
+
+    // No network write happened for either row, and no render() ran — the
+    // whole point being proven here is that Cupper Two's own draft, typed
+    // BEFORE Cupper One's invalid Save, is still exactly as typed.
+    expect(client.calls).toHaveLength(0);
+    const [twoMinutesAfter, twoSecondsAfter] = rowFor('Cupper Two').querySelectorAll('input');
+    expect(twoMinutesAfter.value).toBe('4');
+    expect(twoSecondsAfter.value).toBe('20');
+    expect(rowFor('Cupper One').querySelector('.manual-time-local-error').textContent).toContain(
+      'Seconds must be a whole number',
+    );
 
     document.body.removeChild(root);
   });

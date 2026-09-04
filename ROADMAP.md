@@ -355,6 +355,40 @@ station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can 
   `code-reviewer`) found and fixed. `heatsScreen.js`/`.css` (T4.2) is the first real
   screen consuming it now, alongside `preview.html` and `index.html`'s stylesheet
   `<link>`.
+- **T6.hardening.a11y — Success-message focus/announcement inconsistency, DEFERRED.**
+  `focusAfterRender` moves focus to a screen's own heading on a successful write, not to
+  the `.screen-feedback` region holding the success text, so screen-reader users get no
+  reliable announcement. Found reviewing core wiring (eventsScreen.js) but confirmed
+  identical across setupScreen.js/rosterScreen.js/standingsScreen.js/scoringScreen.js/
+  timingScreen.js too — deliberately NOT fixed in only one file, since that would create
+  a NEW inconsistency rather than resolve one. Needs a dedicated, app-wide pass (likely a
+  persistent, non-recreated live-announcer region shared across screens), not a per-screen
+  patch — out of scope for the grouped accessibility pass. Flagged by:
+  `ui-accessibility-reviewer` (core wiring group).
+
+- **T6.hardening.a11y — `viewerBody.js` countdown `[data-urgent='true']` color-alone signal,
+  DEFERRED.** The urgent state changes only text color (--color-danger), no accompanying
+  icon/pattern/weight — a color-alone signal on the state most likely to matter under time
+  pressure. Same pattern exists in timingScreen.js on the organiser side. `viewerBody.js`
+  was outside all five reviewed file groups' assigned scope (shared content mounted BY
+  viewer-shell.js, not one of the 17 screen files themselves) — flagged for a future pass
+  rather than fixed out-of-scope. Flagged by: `ui-accessibility-reviewer` (audience/live
+  surfaces group).
+
+- **T6.hardening.a11y — No button-disable during in-flight async writes, NON_BLOCKING.**
+  Stop/Save/Start heat/etc. all stay clickable while their own RPC round-trip is in
+  flight — a systemic pattern across every action button in every screen in this codebase,
+  not introduced or scoped to this pass. Server-side conflict rejection already protects
+  data integrity; fixing only the heats/timing group's own four files would be inconsistent
+  with every other screen. Flagged for a separate, whole-app pass. Flagged by:
+  `ui-accessibility-reviewer` (heats/timing group).
+
+- **T6.hardening.a11y — `viewer-shell.js` render() churn during persistent-h1 fix,
+  NON_BLOCKING.** The persistent-h1 fix (real, tested, correct) left `render()` calling
+  `renderChrome()` in full on every re-render just to discard everything except the status
+  badge (`.lastElementChild`) — not a bug, just avoidable churn. Not a blocking issue,
+  just optional cleanup. Flagged by: `code-reviewer`.
+
 - **No org/membership management UI or RPC exists.** `orgs`/`org_members` are
   deliberately read-only at the RLS+GRANT layer; provisioning the single org for
   October happens via `service_role` outside the app, not through a built flow. Revisit
@@ -372,7 +406,12 @@ station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can 
   from Supabase. CRITICAL: those three vars must be added to the dashboard's own Builds
   Variables box by the user so future auto-triggered builds (e.g. from merging PR #42) don't
   regress to the same crash — the wrangler deploy was one-time, but the dashboard setup is
-  permanent.
+  permanent. **Confirmed done and holding (2026-09-04).** The dashboard vars were in place
+  by PR #42's merge — its own auto-triggered Cloudflare build reproduced the identical,
+  correctly-configured bundle, not a crash. PR #45 and PR #46 have both auto-built since
+  with no reported regression, and a direct live check today (page load + console) shows
+  the real sign-in form rendering with zero errors. No action needed unless the dashboard
+  vars are ever cleared again.
 - **The handoff's own cross-surface AC for T5.3/T5.4 is closed (2026-08-28)** —
   `tests/e2e/cross-surface-countdown.spec.js` drives three separate Playwright browser
   contexts (organiser's `timingScreen.preview.html`, `projectorSurface.preview.html`,
@@ -480,8 +519,6 @@ station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can 
   this session) but had zero migrations; all 11 are now applied and verified, plus a
   follow-up migration (`20260830130000_rpc_search_path_pin.sql`) closing a
   `get_advisors` finding on six write RPCs. See CHANGELOG.md's two dated entries.
-  **Cloudflare Workers deployment env vars still need setting manually** — no Cloudflare
-  API access was available; the user has the real values and is doing this separately.
 - **`anon`'s default-`PUBLIC` EXECUTE on all six write RPCs is closed (2026-08-30
   follow-up)** — migration `20260830140000_revoke_public_execute_on_write_rpcs.sql`
   revokes `EXECUTE` from `PUBLIC` on `merge_people`/`confirm_heat`/`publish_session`/

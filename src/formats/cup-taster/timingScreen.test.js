@@ -244,6 +244,20 @@ describe('renderTimingRows', () => {
     expect(rows.querySelector('.manual-time-fields').hidden).toBe(true);
   });
 
+  it('formally associates the toggle with the region it discloses via aria-controls, completing the disclosure-widget pattern', () => {
+    // Found in this pass (holistic accessibility review): aria-expanded was
+    // already wired (see the toggle open/Cancel tests below), but nothing
+    // formally linked the toggle to the fields it reveals.
+    const rows = renderTimingRows(
+      [{ entry_id: 'e1', displayName: 'Cupper One', elapsed_secs: null }],
+      { onStop: () => {}, onSaveManual: () => {} },
+    );
+    const toggle = rows.querySelector('.btn-manual-toggle');
+    const fields = rows.querySelector('.manual-time-fields');
+    expect(toggle.getAttribute('aria-controls')).toBe(fields.id);
+    expect(fields.id).toBeTruthy();
+  });
+
   it('clicking "Enter time manually" swaps Stop/toggle for the manual input fields, purely locally — no onStop/onSaveManual call', () => {
     const onStop = vi.fn();
     const onSaveManual = vi.fn();
