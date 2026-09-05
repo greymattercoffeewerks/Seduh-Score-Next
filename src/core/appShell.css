@@ -130,7 +130,8 @@
   /* Compensate the border so the pill's total box size matches a
      non-active link's — otherwise every other nav item visibly shifts by
      2px (the border width) whenever the active one changes. */
-  padding: calc(var(--space-2) - var(--border-hairline)) calc(var(--space-3) - var(--border-hairline));
+  padding: calc(var(--space-2) - var(--border-hairline))
+    calc(var(--space-3) - var(--border-hairline));
   font-weight: var(--font-weight-bold);
   border-radius: var(--radius-full);
   text-decoration: none;

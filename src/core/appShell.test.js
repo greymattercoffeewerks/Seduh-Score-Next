@@ -230,8 +230,8 @@ describe('mountAppShell', () => {
       toggle.dispatchEvent(new Event('click', { bubbles: true }));
       expect(nav.classList.contains('app-shell-nav-open')).toBe(true);
 
-      const newTabLink = [...root.querySelectorAll('.app-shell-link')].find(
-        (l) => l.textContent.startsWith('Projector view'),
+      const newTabLink = [...root.querySelectorAll('.app-shell-link')].find((l) =>
+        l.textContent.startsWith('Projector view'),
       );
       newTabLink.dispatchEvent(new Event('click', { bubbles: true, cancelable: true }));
 

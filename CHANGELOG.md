@@ -54,6 +54,7 @@ finding as a real browser quirk rather than an app bug (see below).
 
 **What shipped**, `src/core/appShell.js`/`.css`, `src/core/eventsScreen.js`/`.css`,
 `src/main.js`:
+
 - Mobile hamburger menu for the persistent organiser nav (🔴 High in the feedback) —
   `.app-shell-nav` collapses by default below this codebase's existing 640px breakpoint
   (`rosterScreen.css`/`setupScreen.css`'s own convention), toggled by a new
@@ -78,10 +79,11 @@ finding as a real browser quirk rather than an app bug (see below).
 **Two items from the external feedback were deliberately NOT done**, because they
 conflict with this project's own non-negotiables (CLAUDE.md), not because they were
 missed:
+
 - **"Remove the TEST DATA badge / hide the is-test checkbox from production UI"** —
   directly contradicts D9 (`is_test` renders unmistakably, from the first commit) and
-  `core/CLAUDE.md`'s own note that `eventsScreen.js`'s checkbox is *the one place in the
-  app that actually sets `is_test`*, not a debug leftover. The Figma Make proposal
+  `core/CLAUDE.md`'s own note that `eventsScreen.js`'s checkbox is _the one place in the
+  app that actually sets `is_test`_, not a debug leftover. The Figma Make proposal
   independently reached for the same "just remove it" instinct — expected, since an
   external reviewer has no visibility into why this project exists to close exactly that
   failure mode (v4.x's demo mode being indistinguishable from a real event).
@@ -102,6 +104,7 @@ type-scale step, confirmed via computed style in a real browser. No code gap fou
 **Verifier**: `ui-accessibility-reviewer` (360px first, per DoD). **Not a clean pass —
 found real issues in the first version of this fix**, all closed before this entry was
 written:
+
 - The first `.app-shell-link-active` pill used `--color-surface-sunken` as its only
   signal — computed contrast against the header background is ~1.17:1, nowhere near the
   3:1 WCAG 1.4.11 floor for a UI-state indicator, and it happened to exactly match
@@ -129,6 +132,7 @@ closes and returns focus, Escape no-ops while already closed); `main.test.js` up
 for the renamed labels. 941 tests total, all passing.
 
 **Follow-ups (not done this pass, recorded so they aren't lost)**:
+
 - The `.screen-feedback`-appended-last pattern exists identically across the other ~12
   screens (`heatsScreen.js`, `setupScreen.js`, `scoringScreen.js`, `timingScreen.js`,
   `timingManualScreen.js`, `standingsScreen.js`, `reportScreen.js`, `rosterScreen.js`,
