@@ -17,7 +17,7 @@ import { getSupabase } from './supabaseClient.js';
 import { el, labeledField } from './dom.js';
 import { describeError } from './errors.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
-import { createEvent, listEventsForOrg } from './events.js';
+import { createEvent, listEventsForOrg, deleteTestEvent } from './events.js';
 
 export function blankDraft() {
   return { name: '', eventDate: '', venue: '', isTest: false };
@@ -30,7 +30,60 @@ export function validateDraft(draft) {
   return null;
 }
 
-export function renderEventsList(events) {
+// Delete is only ever offered for is_test events — matches
+// delete_test_event's own server-side guard (supabase/migrations/
+// 20260905130000_delete_test_event_rpc.sql) exactly, so the button is never
+// shown somewhere it could only ever fail. `deleteState` is one of
+// undefined | 'confirming' | 'deleting', keyed by event id in the caller's
+// own closure state — only ever one row's own delete action is mid-flow at
+// a time in practice, but this is per-row, not a single shared value, so a
+// stale confirm on one row never bleeds into another's.
+function renderDeleteAction(
+  event,
+  deleteState,
+  { onDeleteClick, onConfirmDelete, onCancelDelete },
+) {
+  if (!event.is_test) return null;
+
+  if (deleteState === 'deleting') {
+    return el('span', { className: 'stage-meta', text: 'Deleting…' });
+  }
+  if (deleteState === 'confirming') {
+    const confirmButton = el('button', {
+      className: 'btn btn-outline tap-target',
+      id: `confirm-delete-${event.id}`,
+      text: 'Confirm delete',
+      attrs: {
+        type: 'button',
+        'aria-label': `Confirm deleting "${event.name}" — this cannot be undone`,
+      },
+    });
+    confirmButton.addEventListener('click', () => onConfirmDelete(event.id));
+    const cancelButton = el('button', {
+      className: 'btn btn-outline tap-target',
+      id: `cancel-delete-${event.id}`,
+      text: 'Cancel',
+      attrs: { type: 'button', 'aria-label': `Cancel deleting "${event.name}"` },
+    });
+    cancelButton.addEventListener('click', () => onCancelDelete(event.id));
+    return el('span', { className: 'event-delete-confirm' }, [
+      el('span', { text: 'Delete this test event? This cannot be undone.' }),
+      confirmButton,
+      cancelButton,
+    ]);
+  }
+
+  const deleteButton = el('button', {
+    className: 'btn btn-outline tap-target',
+    id: `delete-event-${event.id}`,
+    text: 'Delete',
+    attrs: { type: 'button', 'aria-label': `Delete "${event.name}"` },
+  });
+  deleteButton.addEventListener('click', () => onDeleteClick(event.id));
+  return deleteButton;
+}
+
+export function renderEventsList(events, { deleteStates = {}, deleteHandlers = {} } = {}) {
   if (events.length === 0) {
     return el('p', { className: 'stage-meta', text: 'No events yet — create one below.' });
   }
@@ -45,6 +98,8 @@ export function renderEventsList(events) {
     if (event.is_test) {
       children.push(el('span', { className: 'is-test-indicator', text: 'Test data' }));
     }
+    const deleteAction = renderDeleteAction(event, deleteStates[event.id], deleteHandlers);
+    if (deleteAction) children.push(deleteAction);
     return el('li', {}, children);
   });
   return el('ul', { className: 'events-list' }, items);
@@ -134,6 +189,10 @@ export async function mountEventsScreen(
   let pendingSuccess = null;
   let loadFailedMessage = null;
   let focusAfterRender = null;
+  // Per-event-id delete confirmation state ('confirming' | 'deleting') —
+  // see renderEventsList's own comment for why this is keyed by id rather
+  // than a single shared value.
+  let deleteStates = {};
 
   function setFeedback(feedback, message, tone) {
     feedback.textContent = message ?? '';
@@ -239,6 +298,61 @@ export async function mountEventsScreen(
     render();
   }
 
+  // Two-step confirm (matches scoringScreen.js's own "strict confirm"
+  // discipline for an irreversible action) — a bare click can never delete
+  // anything by itself. `deleteStates` is mutated per id, never wholesale
+  // reset, so a confirm/cancel/delete on one row never disturbs another
+  // row's own independent state.
+  function handleDeleteClick(eventId) {
+    deleteStates = { ...deleteStates, [eventId]: 'confirming' };
+    focusAfterRender = `#confirm-delete-${eventId}`;
+    render();
+  }
+
+  function handleCancelDelete(eventId) {
+    deleteStates = { ...deleteStates, [eventId]: undefined };
+    focusAfterRender = `#delete-event-${eventId}`;
+    render();
+  }
+
+  async function handleConfirmDelete(eventId) {
+    // Explicit re-entrancy guard — found in review (code-reviewer): without
+    // this, only an accident of full-DOM-rebuild-per-render (the confirm
+    // button node being gone by the time a second click could physically
+    // land) protected against a double-click enqueueing two delete attempts;
+    // matches scoringScreen.js's own confirmInFlight/rosterScreen.js's own
+    // busy guard for this exact class of problem, rather than relying on an
+    // implicit side effect that would silently stop protecting anything if
+    // render() ever moved toward incremental DOM patching.
+    if (deleteStates[eventId] === 'deleting') return;
+    deleteStates = { ...deleteStates, [eventId]: 'deleting' };
+    // Found in review (ui-accessibility-reviewer, BLOCKING): the render()
+    // right below swaps the just-focused "Confirm delete" button out for a
+    // plain, non-focusable "Deleting…" span — with no explicit
+    // focusAfterRender set here, focus silently reverts to <body> for the
+    // whole (untimed) duration of the RPC call, with no announcement a
+    // delete is even in progress. Moving focus to the heading (already a
+    // real, always-present, tabindex="-1" target) keeps it somewhere real
+    // and announced instead.
+    focusAfterRender = '#events-heading';
+    render();
+    try {
+      await deleteTestEvent(orgId, eventId, client);
+      events = events.filter((event) => event.id !== eventId);
+      pendingSuccess = 'Event deleted.';
+      focusAfterRender = '#events-heading';
+    } catch (err) {
+      pendingError = describeError(err);
+      focusAfterRender = null;
+    }
+    // Matches handleCancelDelete's own one-line idiom — found in review
+    // (code-reviewer): this used to be a three-line rest/delete/reassign
+    // block, the only place in this file clearing a deleteStates key
+    // differently from every other call site.
+    deleteStates = { ...deleteStates, [eventId]: undefined };
+    render();
+  }
+
   function render() {
     // A discarded-but-still-in-flight mount (this screen's OWN attemptLoad
     // or a post-await handler like handleCreate, still resolving after the
@@ -275,7 +389,14 @@ export async function mountEventsScreen(
     container.appendChild(
       el('div', { className: 'card' }, [
         el('h2', { text: 'Your events' }),
-        renderEventsList(events),
+        renderEventsList(events, {
+          deleteStates,
+          deleteHandlers: {
+            onDeleteClick: handleDeleteClick,
+            onConfirmDelete: handleConfirmDelete,
+            onCancelDelete: handleCancelDelete,
+          },
+        }),
       ]),
     );
 

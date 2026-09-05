@@ -25,6 +25,7 @@ import { mountProjectorSurface } from './formats/cup-taster/projectorSurface.js'
 import { mountPhoneSummary } from './formats/cup-taster/phoneSummary.js';
 import { flushOutbox } from './core/outbox.js';
 import { cupTasterOutboxHandlers } from './formats/cup-taster/outboxHandlers.js';
+import { trackInputModality } from './core/inputModality.js';
 
 // Same "unreliable venue wifi" holding-state pattern this project already
 // established for setupScreen.js/rosterScreen.js/eventsScreen.js's own
@@ -279,6 +280,8 @@ function attemptReconnectFlush(client, shell) {
 export function mountApp(root, { client = getSupabase(), orgId = getDefaultOrgId() } = {}) {
   root.innerHTML = '';
 
+  const stopTrackingInputModality = trackInputModality();
+
   const shellRoot = el('div', { className: 'app-shell-root' });
   const bareRoot = el('div', { className: 'app-bare-root' });
   bareRoot.hidden = true;
@@ -385,6 +388,7 @@ export function mountApp(root, { client = getSupabase(), orgId = getDefaultOrgId
       shell.unmount();
       window.removeEventListener('online', onOnline);
       reconnectAuthSubscription.unsubscribe();
+      stopTrackingInputModality();
     },
   };
 }

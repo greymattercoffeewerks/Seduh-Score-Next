@@ -77,6 +77,11 @@ const cupTasterOutboxHandlers = vi.fn(() => ({ fake: 'handlers' }));
 vi.mock('./formats/cup-taster/outboxHandlers.js', () => ({
   cupTasterOutboxHandlers: (...args) => cupTasterOutboxHandlers(...args),
 }));
+const stopTrackingInputModality = vi.fn();
+const trackInputModality = vi.fn(() => stopTrackingInputModality);
+vi.mock('./core/inputModality.js', () => ({
+  trackInputModality: (...args) => trackInputModality(...args),
+}));
 
 const { mountApp } = await import('./main.js');
 
@@ -637,6 +642,30 @@ describe('sync-on-reconnect', () => {
     window.dispatchEvent(new Event('online'));
 
     expect(flushOutbox).not.toHaveBeenCalled();
+  });
+
+  // Focus-ring fix (2026-09-05, user-reported): a visible focus outline
+  // appearing after a mouse-driven navigation, closed by tracking real-time
+  // input modality (core/inputModality.js) so base.css can suppress the ring
+  // specifically while the tracked modality is 'pointer'. mountApp() is the
+  // one call site responsible for starting/stopping that tracker — these two
+  // mirror the existing 'online'-listener lifecycle tests immediately above,
+  // proving the wiring itself (not the module's own behavior, already fully
+  // covered by inputModality.test.js).
+  it('starts tracking input modality on mount', async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    await startApp();
+
+    expect(trackInputModality).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops tracking input modality on unmount, via the tracker's own returned cleanup", async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    const { app } = await startApp();
+    await app.unmount();
+    activeApp = null; // already torn down — afterEach must not double-unmount it
+
+    expect(stopTrackingInputModality).toHaveBeenCalledTimes(1);
   });
 
   // Found in review (offline-sync-auditor): every OTHER flush call site has

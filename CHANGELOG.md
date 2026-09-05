@@ -1,3 +1,38 @@
+## Delete event feature — Permanent deletion of test events from Events list · 2026-09-05
+
+**Closes a growing production gap: test events from verification runs accumulate indefinitely with no cleanup path.** User's explicit instruction: "We need a real way to delete test events." A one-off user-requested feature outside the build plan, implemented ahead of Phase 6 hardening.
+
+**What shipped:**
+
+- New migration `supabase/migrations/20260905130000_delete_test_event_rpc.sql`: `delete_test_event(p_org_id uuid, p_event_id uuid)` RPC with full structural safety — refuses to delete any row where `is_test != true` (guard in both RPC logic and the final DELETE's own WHERE clause for TOCTOU closure), validates org ownership via `app.org_id_for_event` + `is distinct from` (matching `publish_session`'s pattern for indistinguishable "not found" behavior for wrong org or nonexistent event). `SECURITY INVOKER`, `search_path=''`, PUBLIC execute revoked / granted to `authenticated` + `service_role` only. Leverages pre-existing `on delete cascade` on every child table (event_entries, ct_stages→ct_sets/ct_stage_entries, ct_heats→ct_heat_entries→ct_results, live_sessions) — migration's only job is the guard logic itself, not cascading setup.
+- New pgTAP suite `supabase/tests/008_delete_test_event.sql` (12 assertions) — `is_test` guard proven (both reject-nontest and allow-test cases), org-ownership check proven, cascading deletes verified (a deleted test event leaves zero orphan rows), nonexistent-event handling confirmed. Rollback block independently verified by running it inside a real transaction against the local stack.
+- `src/core/events.js` gained `deleteTestEvent(orgId, eventId, client)` — thin RPC wrapper, format-agnostic.
+- `src/core/eventsScreen.js` gained per-row "Delete" action (shown only for `is_test: true` events, matching the RPC's own guard), a two-step inline "Delete → Confirm delete/Cancel" confirmation UI, and an explicit re-entrancy guard matching `scoringScreen.js`'s established `confirmInFlight` pattern.
+- `src/core/eventsScreen.css` gained a small `.event-delete-confirm` layout rule for the confirmation card.
+- Test files added: `src/core/events.test.js` (RPC wrapper test), `src/core/eventsScreen.test.js` (UI + integration tests including double-click guard and two-event fixture proving deletion is genuinely by-id, not "remove any test event").
+
+**Files touched:** `supabase/migrations/20260905130000_delete_test_event_rpc.sql`, `supabase/tests/008_delete_test_event.sql`, `src/core/events.js`, `src/core/events.test.js`, `src/core/eventsScreen.js`, `src/core/eventsScreen.test.js`, `src/core/eventsScreen.css`. Test count: 914 → 935.
+
+**Verifiers' findings (6 parallel reviewers; all blocking issues fixed):**
+
+- **`security-reviewer`** — Signed off clean on RPC guard logic and org-ownership check. One non-blocking structural hardening applied: added `and is_test` to the final DELETE's WHERE clause for defense-in-depth TOCTOU closure (the RPC logic already validates; this catches any future procedural drift). One deferred item: an empirical pgTAP assertion that `service_role`'s pre-existing table-level DELETE grant on `events` is a Supabase platform default and not new exposure — flagged as nice-to-have verification, not required.
+
+- **`schema-guardian`** — No blocking findings. One non-blocking note: this RPC doesn't check the DELETE's affected row count (unlike `confirm_heat`/`record_heat_time` do to detect "RLS silently matched zero rows") — low practical risk given the RLS backstop, not fixed. One deferred, cross-cutting item: `p_org_id = NULL` + nonexistent-event silently no-ops instead of raising an error — a structural property already latent in `publish_session`/`start_heat`/`record_heat_time`'s own identical null-safety pattern, explicitly framed as "a systemic fix across all four RPCs, not a single-migration patch" — not fixed here, recorded for a future dedicated pass.
+
+- **`ui-accessibility-reviewer`** — Found ONE BLOCKING issue (fixed): the intermediate "Deleting…" render swapped out the just-focused "Confirm delete" button for a non-focusable `<span>` with no explicit focus target set, silently dropping keyboard focus to `<body>` for the (untimed) RPC call with no announcement. Fixed by setting `focusAfterRender = '#events-heading'` immediately before that intermediate render. Live-verified via direct `document.activeElement` inspection during the actual in-flight window (confirmed it stays on the heading, not body).
+
+- **`test-auditor`** — Found ONE BLOCKING gap (fixed): the successful-delete integration test used a single-event fixture, which couldn't distinguish "removed by id" from "removed the only element regardless of id." Fixed by using a two-event fixture and asserting the second event survives untouched — mutation-tested by temporarily changing the real filter to `.slice(0, -1)` and confirming the test now fails, then restored.
+
+- **`code-reviewer`** — Found 2 non-blocking issues (both fixed): (1) No explicit re-entrancy guard on the confirm handler despite a migration comment claiming one existed — added a real guard (`if (deleteStates[eventId] === 'deleting') return;`) matching `scoringScreen.js`'s own `confirmInFlight` pattern, with a new test proving it (double-click enqueues only one RPC call — mutation-tested). (2) Inconsistent idiom for clearing a `deleteStates` key in one function vs. another — unified to match. Also fixed a trivial nit (moved a variable's computation down to its one use site).
+
+- **`module-boundary-checker`** — CLEAN (no findings).
+
+**Verification:** Full test suite: 935 passing, lint clean, prettier clean. Live-verified end-to-end in a real browser (create test event → Delete → Confirm delete → row gone, "Event deleted." shown) and at 360px viewport (layout wraps cleanly, buttons keep their 44px tap-target floor).
+
+**Definition of Done met.**
+
+---
+
 ## T5.gap.automatic-publish — Automatic live_sessions publishing on heat start/confirm · 2026-09-04
 
 **Closes the Phase 5 gap where `publishSession()` (T5.1, read side T5.2-T5.4) had zero call sites anywhere in the app,** leaving the audience view showing "Waiting for the organiser" forever in live production use. User's explicit instruction: "organizers seem to forget the need to publish. We need to automate that." Confirmed against the frozen handoff spec (D7 "split publish cadence," D23 "per heat, on close," §8.1/§8.2) that this is completion of already-specified behavior, not new design.

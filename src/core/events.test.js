@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { createEvent, findEvent, findLatestEventForOrg, listEventsForOrg } from './events.js';
+import {
+  createEvent,
+  findEvent,
+  findLatestEventForOrg,
+  listEventsForOrg,
+  deleteTestEvent,
+} from './events.js';
 
 function fakeClient(response) {
   const calls = [];
@@ -147,5 +153,34 @@ describe('listEventsForOrg', () => {
   it('throws on a real query error', async () => {
     const client = fakeClient({ data: null, error: new Error('connection refused') });
     await expect(listEventsForOrg('org1', client)).rejects.toThrow('connection refused');
+  });
+});
+
+describe('deleteTestEvent', () => {
+  function fakeRpcClient(response) {
+    const calls = [];
+    return {
+      calls,
+      rpc: (name, payload) => {
+        calls.push([name, payload]);
+        return Promise.resolve(response);
+      },
+    };
+  }
+
+  it('calls the delete_test_event RPC with org and event id as p_org_id/p_event_id', async () => {
+    const client = fakeRpcClient({ data: null, error: null });
+    await deleteTestEvent('org1', 'ev1', client);
+    expect(client.calls).toEqual([['delete_test_event', { p_org_id: 'org1', p_event_id: 'ev1' }]]);
+  });
+
+  it('throws on an RPC error rather than silently succeeding — e.g. the server-side refusal to delete a non-test event', async () => {
+    const client = fakeRpcClient({
+      data: null,
+      error: new Error('delete_test_event: refusing to delete a non-test event (ev2)'),
+    });
+    await expect(deleteTestEvent('org1', 'ev2', client)).rejects.toThrow(
+      'refusing to delete a non-test event',
+    );
   });
 });
