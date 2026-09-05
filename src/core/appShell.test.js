@@ -188,6 +188,102 @@ describe('mountAppShell', () => {
     expect(root.style.getPropertyValue('--app-shell-header-height')).toBe('');
   });
 
+  describe('mobile nav toggle', () => {
+    it('renders a closed hamburger toggle wired to the nav via aria-controls, and the nav starts collapsed', () => {
+      const root = document.createElement('div');
+      mountAppShell(root, { client: fakeClient({}) });
+      const toggle = root.querySelector('.app-shell-nav-toggle');
+      const nav = root.querySelector('.app-shell-nav');
+      expect(toggle).not.toBeNull();
+      expect(toggle.getAttribute('aria-expanded')).toBe('false');
+      expect(toggle.getAttribute('aria-controls')).toBe(nav.id);
+      expect(nav.classList.contains('app-shell-nav-open')).toBe(false);
+    });
+
+    it('clicking the toggle opens the nav and flips aria-expanded; clicking again closes it', () => {
+      const root = document.createElement('div');
+      mountAppShell(root, { client: fakeClient({}) });
+      const toggle = root.querySelector('.app-shell-nav-toggle');
+      const nav = root.querySelector('.app-shell-nav');
+
+      toggle.dispatchEvent(new Event('click', { bubbles: true }));
+      expect(nav.classList.contains('app-shell-nav-open')).toBe(true);
+      expect(toggle.getAttribute('aria-expanded')).toBe('true');
+
+      toggle.dispatchEvent(new Event('click', { bubbles: true }));
+      expect(nav.classList.contains('app-shell-nav-open')).toBe(false);
+      expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    });
+
+    it('clicking a nav link closes an open mobile menu, including an openInNewTab link', async () => {
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      const { setNav } = mountAppShell(root, { client: fakeClient({}) });
+      await setNav({
+        links: [
+          { label: 'Events', href: '#/events' },
+          { label: 'Projector view', href: '#/live/projector', openInNewTab: true },
+        ],
+      });
+      const toggle = root.querySelector('.app-shell-nav-toggle');
+      const nav = root.querySelector('.app-shell-nav');
+      toggle.dispatchEvent(new Event('click', { bubbles: true }));
+      expect(nav.classList.contains('app-shell-nav-open')).toBe(true);
+
+      const newTabLink = [...root.querySelectorAll('.app-shell-link')].find((l) =>
+        l.textContent.startsWith('Projector view'),
+      );
+      newTabLink.dispatchEvent(new Event('click', { bubbles: true, cancelable: true }));
+
+      expect(nav.classList.contains('app-shell-nav-open')).toBe(false);
+      expect(toggle.getAttribute('aria-expanded')).toBe('false');
+      document.body.removeChild(root);
+    });
+
+    it('pressing Escape on the toggle closes an open menu and returns focus to the toggle', () => {
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      mountAppShell(root, { client: fakeClient({}) });
+      const toggle = root.querySelector('.app-shell-nav-toggle');
+      const nav = root.querySelector('.app-shell-nav');
+
+      toggle.dispatchEvent(new Event('click', { bubbles: true }));
+      expect(nav.classList.contains('app-shell-nav-open')).toBe(true);
+
+      toggle.focus();
+      toggle.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+      expect(nav.classList.contains('app-shell-nav-open')).toBe(false);
+      expect(toggle.getAttribute('aria-expanded')).toBe('false');
+      expect(document.activeElement).toBe(toggle);
+      document.body.removeChild(root);
+    });
+
+    it('Escape is a no-op while the menu is already closed', () => {
+      const root = document.createElement('div');
+      mountAppShell(root, { client: fakeClient({}) });
+      const toggle = root.querySelector('.app-shell-nav-toggle');
+      const nav = root.querySelector('.app-shell-nav');
+
+      expect(() =>
+        toggle.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })),
+      ).not.toThrow();
+      expect(nav.classList.contains('app-shell-nav-open')).toBe(false);
+    });
+
+    it('the open/closed state survives a setNav() re-render (navEl itself is never recreated)', async () => {
+      const root = document.createElement('div');
+      const { setNav } = mountAppShell(root, { client: fakeClient({}) });
+      const toggle = root.querySelector('.app-shell-nav-toggle');
+      const nav = root.querySelector('.app-shell-nav');
+      toggle.dispatchEvent(new Event('click', { bubbles: true }));
+      expect(nav.classList.contains('app-shell-nav-open')).toBe(true);
+
+      await setNav({ links: [{ label: 'Events', href: '#/events' }] });
+      expect(nav.classList.contains('app-shell-nav-open')).toBe(true);
+    });
+  });
+
   it('a second setNav call replaces the previous links rather than appending', async () => {
     const root = document.createElement('div');
     const { setNav } = mountAppShell(root, { client: fakeClient({}) });

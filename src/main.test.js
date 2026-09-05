@@ -214,8 +214,8 @@ describe('mountApp routing', () => {
     // whichever event happens to be open.
     for (const [label, href] of [
       ['Splash screen', '#/live/splash'],
-      ['Audience — projector', '#/live/projector'],
-      ['Audience — phone', '#/live/phone'],
+      ['Projector view', '#/live/projector'],
+      ['Phone view', '#/live/phone'],
     ]) {
       const link = byLabel(label);
       expect(link, `expected a nav link labeled "${label}"`).not.toBeUndefined();

@@ -354,10 +354,15 @@ export function mountApp(root, { client = getSupabase(), orgId = getDefaultOrgId
     // scoped, matching "Events" itself. openInNewTab (appShell.js) since
     // these are meant to be pulled up on a SEPARATE device/tab (a
     // projector, a phone) while the organiser keeps working in this one.
+    // Renamed from "Audience — projector"/"Audience — phone" (production
+    // UI/UX feedback, 2026-09-05): those read as developer-facing
+    // labels describing the ROUTE, not user-facing ones describing what an
+    // organiser gets when they click. "Projector view"/"Phone view" name
+    // the destination the same way "Splash screen" already does.
     links.push(
       { label: 'Splash screen', href: '#/live/splash', openInNewTab: true },
-      { label: 'Audience — projector', href: '#/live/projector', openInNewTab: true },
-      { label: 'Audience — phone', href: '#/live/phone', openInNewTab: true },
+      { label: 'Projector view', href: '#/live/projector', openInNewTab: true },
+      { label: 'Phone view', href: '#/live/phone', openInNewTab: true },
     );
     shell.setNav({ eventId: params.eventId ?? null, links });
   }

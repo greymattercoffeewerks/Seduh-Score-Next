@@ -35,7 +35,28 @@
 .events-list a {
   display: inline-flex;
   align-items: center;
+  gap: var(--space-1);
   min-height: var(--tap-target-min);
+  font-weight: var(--font-weight-bold);
+}
+
+/* A visual affordance for "this row is clickable" (found in production
+   UI/UX feedback: nothing hinted that the event name itself was the only
+   interactive part of the row). A plain CSS arrow, not an icon font/emoji —
+   matches this project's own no-emoji, draw-it-yourself icon convention
+   (see core/dom.js's brandMark()). Text, not a background/border treatment,
+   so it never competes with .events-list li's own hairline row divider. */
+.events-list a::after {
+  /* The `/ ''` alt-text form (found in review, ui-accessibility-reviewer):
+     both Chromium and Firefox now expose generated content in the
+     accessibility tree by default, so a bare `content: '→'` gets announced
+     on every single row — "October Cup, right arrow" — pure noise, since
+     the link's destination is already clear from its own text. The slash
+     form keeps the visible glyph but gives it an empty accessible
+     alternative. */
+  content: '→' / '';
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-regular);
 }
 
 /* A small per-row indicator, not the full-page .is-test-banner stripe

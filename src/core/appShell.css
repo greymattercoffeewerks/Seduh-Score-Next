@@ -50,11 +50,48 @@
   font-size: var(--text-sm);
 }
 
-.app-shell-nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
+/* Hamburger toggle — mobile-first: visible by default, hidden once the nav
+   fits inline (see the min-width:640px block below), matching this
+   codebase's own established breakpoint (rosterScreen.css/setupScreen.css).
+   Found in production UI/UX feedback: several nav links plus the auth
+   control used to force the header onto 2-3 wrapped rows on a phone
+   viewport before any real screen content appeared, and the last link
+   ("Phone view") got clipped by the viewport edge rather than wrapping. */
+.app-shell-nav-toggle {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   margin-left: auto;
+  background: transparent;
+  border: var(--border-hairline) solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.app-shell-nav-toggle-bar {
+  width: 18px;
+  height: 2px;
+  background: var(--color-text);
+  border-radius: var(--radius-full);
+}
+
+.app-shell-nav {
+  display: none;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-1);
+  /* Full-width dropdown panel below the header row it belongs to — order:1
+     with the header itself as a flex-wrap container puts it on its own new
+     line under every other header item, regardless of DOM position. */
+  order: 1;
+  width: 100%;
+  padding-top: var(--space-2);
+  border-top: var(--border-hairline) solid var(--color-border);
+}
+
+.app-shell-nav.app-shell-nav-open {
+  display: flex;
 }
 
 .app-shell-link {
@@ -63,7 +100,7 @@
   min-height: var(--tap-target-min);
   color: var(--color-text);
   text-decoration: none;
-  padding: var(--space-2) var(--space-1);
+  padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
 }
 
@@ -72,9 +109,51 @@
   text-decoration: underline;
 }
 
+/* A filled pill, not just bold+underline (found in production UI/UX
+   feedback: the previous active-state signal was "subtle" next to plain-text
+   siblings). Neutral, not accent-colored — same reasoning DESIGN.md already
+   applies to --color-focus-ring: an active nav item and a primary button
+   are different kinds of "important," and reusing the brand hue here would
+   make every screen's own accent buttons compete with the nav for
+   attention.
+   A background alone is NOT enough here — found in review
+   (ui-accessibility-reviewer): --color-surface-sunken against this header's
+   --color-surface computes to ~1.17:1, nowhere near the 3:1 WCAG 1.4.11
+   floor for a UI-state indicator, so the "filled pill" was nearly invisible
+   in practice and also happened to match `:hover`'s background exactly,
+   making active and hover indistinguishable. The hairline border (full
+   contrast, --color-border-strong) is what actually carries the signal;
+   the tinted fill is a secondary reinforcement, not the whole mechanism. */
 .app-shell-link-active {
+  background: var(--color-surface-sunken);
+  border: var(--border-hairline) solid var(--color-border-strong);
+  /* Compensate the border so the pill's total box size matches a
+     non-active link's — otherwise every other nav item visibly shifts by
+     2px (the border width) whenever the active one changes. */
+  padding: calc(var(--space-2) - var(--border-hairline))
+    calc(var(--space-3) - var(--border-hairline));
   font-weight: var(--font-weight-bold);
-  text-decoration: underline;
+  border-radius: var(--radius-full);
+  text-decoration: none;
+}
+
+@media (min-width: 640px) {
+  .app-shell-nav-toggle {
+    display: none;
+  }
+
+  .app-shell-nav {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-3);
+    order: 0;
+    width: auto;
+    padding-top: 0;
+    border-top: none;
+    margin-left: auto;
+  }
 }
 
 .app-shell-outlet {
@@ -104,8 +183,20 @@
    tests, which never performs real layout) — a real narrow-viewport
    multi-line-wrapped-nav render is covered by the JS measurement instead,
    since a static fallback can't track that. */
+/* .screen-feedback added here (found in review, ui-accessibility-reviewer):
+   eventsScreen.js moved its feedback region to right after the <h1> (a
+   separate fix, for production UI/UX feedback about errors rendering
+   unnoticed at the page bottom) — but that puts it in the same
+   sticky-header occlusion zone this rule exists to protect, and
+   eventsScreen.js still calls scrollIntoView()/.focus() on an error-toned
+   message. Without this, an organiser scrolled down to the create-event
+   form who triggers a validation error gets scrolled back up to a message
+   that lands partially hidden behind the sticky header — the exact failure
+   this rule was written to prevent for headings, just not extended to the
+   element that now shares their position. */
 .app-shell-outlet h1,
-.app-shell-outlet h2 {
+.app-shell-outlet h2,
+.app-shell-outlet .screen-feedback {
   scroll-margin-top: var(--app-shell-header-height, 5rem);
 }
 
@@ -148,6 +239,19 @@
 /* Temporary (2026-08-30) — "signed in as X" + sign out, ahead of any real
    access-control UI. Empty (no children) while signed out, so it takes no
    layout space until a session exists. */
+/* Isolated from the nav/sync cluster with its own divider (found in
+   production UI/UX feedback: the signed-in email sat directly in the nav
+   bar with no visual separation from navigation links). A left border
+   rather than a background chip — matches this system's own "hairline
+   border over a filled treatment" register (DESIGN.md's no-shadow rule
+   extends the same instinct to dividers). Only renders when non-empty
+   (renderAuth() below leaves this node childless while signed out), so no
+   floating divider shows with nothing to its right. */
+.app-shell-auth:not(:empty) {
+  border-left: var(--border-hairline) solid var(--color-border);
+  padding-left: var(--space-3);
+}
+
 .app-shell-auth {
   display: flex;
   align-items: center;

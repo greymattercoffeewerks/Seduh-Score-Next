@@ -62,7 +62,51 @@ export function mountAppShell(
   ]);
   const nameEl = el('p', { className: 'app-shell-name', text: appName });
   const breadcrumbEl = el('span', { className: 'app-shell-breadcrumb' });
-  const navEl = el('nav', { className: 'app-shell-nav', attrs: { 'aria-label': 'Sections' } });
+  const navEl = el('nav', {
+    className: 'app-shell-nav',
+    id: 'app-shell-nav',
+    attrs: { 'aria-label': 'Sections' },
+  });
+  // Mobile hamburger toggle (production UI/UX feedback, 2026-09-05):
+  // below the CSS breakpoint, `.app-shell-nav` collapses to nothing by
+  // default — without a toggle, several nav links plus the auth control
+  // used to force the header onto 2-3 wrapped rows before any real screen
+  // content appeared. `navEl` itself is never recreated (only its children,
+  // on every setNav()), so the open/closed class toggled here survives
+  // across navigation the same way the rest of this shell's persistent
+  // nodes do — no extra state threading needed.
+  const navToggle = el('button', {
+    className: 'app-shell-nav-toggle tap-target',
+    attrs: {
+      type: 'button',
+      'aria-expanded': 'false',
+      'aria-controls': 'app-shell-nav',
+      'aria-label': 'Menu',
+    },
+  });
+  navToggle.append(
+    el('span', { className: 'app-shell-nav-toggle-bar', attrs: { 'aria-hidden': 'true' } }),
+    el('span', { className: 'app-shell-nav-toggle-bar', attrs: { 'aria-hidden': 'true' } }),
+    el('span', { className: 'app-shell-nav-toggle-bar', attrs: { 'aria-hidden': 'true' } }),
+  );
+  navToggle.addEventListener('click', () => {
+    const open = navEl.classList.toggle('app-shell-nav-open');
+    navToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  // Escape closes the menu and returns focus to the toggle — found in
+  // review (ui-accessibility-reviewer): the standard disclosure-button
+  // pattern (WAI-ARIA APG) expects this when the button retains focus (it
+  // does here — nothing moves focus into the panel on open), and without
+  // it the only way to close the menu was tapping a link or the toggle
+  // itself again. Scoped to the toggle, not `document`, so this never
+  // fires while focus is somewhere else entirely unrelated to this menu.
+  navToggle.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    if (!navEl.classList.contains('app-shell-nav-open')) return;
+    navEl.classList.remove('app-shell-nav-open');
+    navToggle.setAttribute('aria-expanded', 'false');
+    navToggle.focus();
+  });
   // §8.4/T3.3's own AC: "three-state sync panel on the organiser device: off
   // / live / not synced. Fail-open never lies about a write that failed."
   // syncState.js's computeSyncState() already implemented that logic (T3.3)
@@ -83,6 +127,7 @@ export function mountAppShell(
     markEl,
     nameEl,
     breadcrumbEl,
+    navToggle,
     navEl,
     syncEl,
     authEl,
@@ -330,6 +375,16 @@ export function mountAppShell(
       // to land on; blurring would just strand a keyboard user's place for
       // no reason.
       if (!link.openInNewTab) linkEl.addEventListener('click', () => linkEl.blur());
+      // Closes the mobile menu on any link tap, including openInNewTab
+      // links — this tab doesn't navigate away for those, but the organiser
+      // has still made a choice, and leaving the menu open over whatever
+      // renders next (or the same screen, for a new-tab link) has no
+      // upside. Harmless no-op above the CSS breakpoint, where the class
+      // has no visual effect.
+      linkEl.addEventListener('click', () => {
+        navEl.classList.remove('app-shell-nav-open');
+        navToggle.setAttribute('aria-expanded', 'false');
+      });
       navEl.appendChild(linkEl);
     }
 
