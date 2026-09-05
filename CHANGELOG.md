@@ -33,6 +33,85 @@
 
 ---
 
+## Versioning system: nameplate + semver footer · 2026-09-05
+
+**Activates D27** ("no semver until a shipped artifact exists") — production has been
+live on Cloudflare since the app-wiring pass, so its own stated trigger is met. User's
+explicit ask: a version number visible on the deployed app for quick, glance-based bug
+report verification, recreating the legacy Seduh Score site's own footer nameplate
+system (`seduhscore.com/bts/`: "seduhscore.com · v5.16.0", cycles named Kiulap → Gadong →
+Kiarong → Menglait → Berakas → Jerudong → Seria, spiralling outward from the BSB urban
+core).
+
+**Decision (confirmed with the user, not assumed): a separate, fresh spiral, not a
+continuation of the legacy site's already-completed run.** This codebase is a
+from-scratch rewrite (Supabase, offline-first outbox, fixed advancement) rather than a
+patch on the same one, so it starts its own lineage back at Kiulap rather than picking
+up after Seria. Current cycle: **Kiulap, v1.0.0**. Version bumps on every closed task,
+matching CHANGELOG.md's own granularity, so the footer always names the exact deployed
+commit rather than just the last big milestone.
+
+**What shipped:**
+
+- `package.json` version bumped `0.0.0` → `1.0.0`, the single source of truth.
+- New `src/core/version.js` (format-agnostic, lives in `core/`): re-exports
+  `APP_VERSION` from `package.json` and a hardcoded `NAMEPLATE` constant, updated by
+  hand at the start of each new cycle.
+- `appShell.js` gained a `<footer>` rendering `{appName} · {NAMEPLATE} · v{APP_VERSION}`
+  on every organiser screen — a plain static node (not `role="status"`; this text never
+  changes after mount, so there's nothing to announce). Deliberately NOT added to
+  `viewer-shell.js`'s audience-facing chrome — that module's `renderChrome()` has a
+  strict "exactly 2 top-level children" invariant its own re-render path depends on
+  (see that file's own comment); a third child there was out of scope for this task and
+  risked a real regression in already-reviewed code for no discussed benefit.
+- `CONVENTIONS.md`'s "Versioning" section rewritten from "no semver yet" to document the
+  active scheme (source of truth, bump granularity, nameplate lineage decision).
+
+**Files touched:** `package.json`, `src/core/version.js` (new), `src/core/version.test.js`
+(new), `src/core/appShell.js`, `src/core/appShell.css`, `src/core/appShell.test.js`,
+`CONVENTIONS.md`. Test count: 914 → 918.
+
+**Verification:** Full test suite green, lint clean, `vite build` succeeds (confirms the
+`import pkg from '../../package.json'` JSON-module import resolves correctly through
+Vite/Rollup). Live-verified in the browser: the footer renders `Seduh Score · Kiulap ·
+v1.0.0` in a `<footer>`/`contentinfo` landmark on the login screen (mounted inside
+`appShell`'s outlet) and persists across every organiser route.
+
+**Not run this task:** no schema/RLS/scoring/offline-sync change, so `schema-guardian`,
+`security-reviewer`, `scoring-auditor`, and `offline-sync-auditor` don't apply.
+
+**Reviewers' findings:**
+
+- **`code-reviewer`** — found 2 issues, both fixed: (1) this CHANGELOG entry originally
+  claimed the pending-review gap was "flagged in ROADMAP's Known open items" when no
+  such entry actually existed yet — a documentation-accuracy bug in a project that
+  treats ROADMAP as ground truth for "where are we"; fixed by adding the real entry
+  (see ROADMAP.md's "Known open items — versioning system"). (2)
+  `appShell.test.js` had re-typed `APP_NAME` as a second, independent literal (the real
+  constant in `appShell.js` isn't exported) — a future rename would go stale silently;
+  fixed by deriving the expected value from the actually-rendered `.app-shell-name`
+  text instead of a duplicated hardcoded string.
+- **`ui-accessibility-reviewer`** — CLEAN. Confirmed `--color-text-muted` on
+  `--color-canvas` clears the stricter small-text 4.5:1 contrast floor even at
+  `--text-2xs`; confirmed the implicit `contentinfo` landmark role is correctly
+  preserved (no sectioning ancestor suppresses it, traced via `main.js`'s actual DOM
+  nesting); confirmed no interaction with the sticky header's `scroll-margin-top`
+  compensation (footer sits in normal flow, isn't itself sticky). One non-blocking note:
+  the footer's border-top hairline contrast against `--color-canvas` wasn't separately
+  measured (WCAG 1.4.11 non-text contrast, 3:1) — low risk given `--color-border` is a
+  mid-tone step, flagged since it's new UI rather than reused chrome.
+- **`module-boundary-checker`** — CLEAN. Confirmed zero imports from `src/formats/`,
+  zero format-specific vocabulary in either file, and that a future format calling
+  `mountAppShell(root, { appName: 'Throwdown', client })` gets the same footer with
+  zero edits required.
+
+**Verification (re-run after fixes):** Full test suite green (37/37 in the two touched
+files), lint clean.
+
+**Definition of Done met.**
+
+---
+
 ## T5.gap.automatic-publish — Automatic live_sessions publishing on heat start/confirm · 2026-09-04
 
 **Closes the Phase 5 gap where `publishSession()` (T5.1, read side T5.2-T5.4) had zero call sites anywhere in the app,** leaving the audience view showing "Waiting for the organiser" forever in live production use. User's explicit instruction: "organizers seem to forget the need to publish. We need to automate that." Confirmed against the frozen handoff spec (D7 "split publish cadence," D23 "per heat, on close," §8.1/§8.2) that this is completion of already-specified behavior, not new design.

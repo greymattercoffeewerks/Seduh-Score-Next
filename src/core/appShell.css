@@ -81,6 +81,18 @@
   min-height: 0;
 }
 
+/* Footer nameplate/version — quiet, out of the way, never competing with
+   real screen content (same "don't compete" precedent as the sync panel
+   below), but present on every organiser screen for at-a-glance bug-report
+   verification (CONVENTIONS.md "Versioning"). */
+.app-shell-footer {
+  padding: var(--space-2) var(--space-4);
+  border-top: var(--border-hairline) solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: var(--text-2xs);
+  text-align: center;
+}
+
 /* Compensates for the header's own sticky occlusion (see appShell.js's
    `syncHeaderHeightVar()`, which keeps --app-shell-header-height current).
    Scoped to headings inside THIS outlet specifically, not a bare `h1, h2`

@@ -610,3 +610,17 @@ station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can 
   publishes fired close together for different heats could theoretically commit out of
   trigger order, causing transient staleness on the audience display until the next heat
   action. Self-healing, non-blocking, deferred. Flagged by: `offline-sync-auditor`.
+
+---
+
+## Versioning system (2026-09-05) — closed
+
+All four applicable reviewers ran clean: `code-reviewer` (2 findings, both fixed —
+a stale cross-reference this very section existed to correct, and a duplicated-literal
+test risk), `ui-accessibility-reviewer` (clean; one non-blocking note on the footer's
+untested border-hairline contrast), `module-boundary-checker` (clean — confirmed a
+future format can call `mountAppShell` unedited and get the same footer). No
+schema/RLS/scoring/offline-sync change, so `schema-guardian`/`security-reviewer`/
+`scoring-auditor`/`offline-sync-auditor` don't apply. See CHANGELOG.md's "Versioning
+system: nameplate + semver footer" entry for the full account. **Definition of Done
+met.**

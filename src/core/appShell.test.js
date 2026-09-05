@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mountAppShell } from './appShell.js';
 import { _clearAllForTests, outboxPut } from './db.js';
 import { enqueueOperation } from './outbox.js';
+import { APP_VERSION, NAMEPLATE } from './version.js';
 
 // Every fake client needs a minimal auth shape now — mountAppShell's own
 // "signed in as X / sign out" control subscribes via
@@ -47,6 +48,23 @@ describe('mountAppShell', () => {
     const root = document.createElement('div');
     mountAppShell(root, { appName: 'Custom', client: fakeClient({}) });
     expect(root.querySelector('.app-shell-name').textContent).toBe('Custom');
+  });
+
+  it('renders a footer with the app name, nameplate, and version — for quick, glance-based bug-report verification (CONVENTIONS.md "Versioning")', () => {
+    const root = document.createElement('div');
+    mountAppShell(root, { client: fakeClient({}) });
+    const appName = root.querySelector('.app-shell-name').textContent;
+    const footer = root.querySelector('.app-shell-footer');
+    expect(footer).not.toBeNull();
+    expect(footer.textContent).toBe(`${appName} · ${NAMEPLATE} · v${APP_VERSION}`);
+  });
+
+  it('an explicit appName also flows into the footer, not just the header name', () => {
+    const root = document.createElement('div');
+    mountAppShell(root, { appName: 'Custom', client: fakeClient({}) });
+    expect(root.querySelector('.app-shell-footer').textContent).toBe(
+      `Custom · ${NAMEPLATE} · v${APP_VERSION}`,
+    );
   });
 
   it('setNav({links}) renders exactly those links, with hrefs and active state', async () => {

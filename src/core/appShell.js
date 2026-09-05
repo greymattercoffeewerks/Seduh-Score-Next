@@ -25,6 +25,7 @@ import { findEvent } from './events.js';
 import { getSupabase } from './supabaseClient.js';
 import { listPendingOperations } from './outbox.js';
 import { computeSyncState } from './syncState.js';
+import { APP_VERSION, NAMEPLATE } from './version.js';
 
 const APP_NAME = 'Seduh Score';
 
@@ -87,8 +88,15 @@ export function mountAppShell(
     authEl,
   ]);
   const outlet = el('main', { className: 'app-shell-outlet' });
+  // Quick, glance-based verification for bug reports (2026-09-05) — mirrors
+  // the legacy Seduh Score site's own footer nameplate (seduhscore.com/bts/:
+  // "seduhscore.com · v5.16.0"). A plain static `<footer>`, not `role="status"`
+  // — this text never changes after mount, so there's nothing to announce.
+  const footerEl = el('footer', { className: 'app-shell-footer' }, [
+    el('span', { text: `${appName} · ${NAMEPLATE} · v${APP_VERSION}` }),
+  ]);
 
-  root.append(header, outlet);
+  root.append(header, outlet, footerEl);
 
   // Temporary (2026-08-30) — a plain "who's signed in, sign out" control,
   // ahead of any real access-control UI (D14). Reactive via
