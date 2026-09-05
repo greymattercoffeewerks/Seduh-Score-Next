@@ -1,3 +1,42 @@
+## CI resilience: automated doc formatting backstop · 2026-09-05
+
+**No §14 task ID** — a mechanical tooling improvement addressing a recurring CI failure.
+The "Lint, test, build" job's `format:check` step failed on PRs #56–#57 this session,
+both times because kb-sync's own CHANGELOG.md entry (written on Haiku) didn't exactly
+match Prettier's markdown formatting — CI was the first signal of the mismatch, nothing
+caught it locally before push.
+
+**Root cause & layered fix:**
+
+The prior task (v1.0.2 version-bump automation) added a manual step to kb-sync's own
+instructions (.claude/agents/kb-sync.md step 7) directing it to run `npx prettier --write CHANGELOG.md`
+(and ROADMAP.md/CONVENTIONS.md if touched) right after editing. However, expecting a
+smaller model to reliably execute a manual post-edit step every time is a bet on
+discipline, not a system guarantee. This task backstops that bet with a mechanical,
+always-on PostToolUse hook:
+
+**What changed:**
+
+- `.claude/hooks/format-docs-on-write.cjs` (new): a second PostToolUse hook (Write|Edit
+  trigger), parallel to the existing `lint-on-write.cjs` (auto-lints any .js file on
+  write). This hook checks if an edited file's basename is CHANGELOG.md, ROADMAP.md, or
+  CONVENTIONS.md, and if so runs `npx prettier --write` on it directly. Hook exits 0
+  always (never blocks, since formatting mismatches are trivially auto-fixable unlike
+  real lint errors) and runs silently.
+- `.claude/settings.json`: registered the new hook as a second entry in the same
+  `PostToolUse` `Write|Edit` matcher's hooks array, alongside lint-on-write.cjs.
+
+**Verification:** tested the hook directly by simulating the exact JSON payload shape
+Claude Code sends (`{tool_input: {file_path: ...}}`), piping it into the script against
+a deliberately mis-formatted test copy of CHANGELOG.md (in the scratchpad) — confirmed
+it got auto-fixed to clean Prettier style and the hook exited 0. Confirmed it's a
+correct no-op for unrelated files (e.g., .js paths). Full repo `eslint .` and `npx
+vitest run` afterward: 956/956 tests passing, lint clean, prettier clean on the new
+hook script and settings.json edits. No reviewers run for process-only, no-application-code
+change — direct verification only.
+
+---
+
 ## Footer version link to Behind-the-Seduh credits page wired in · 2026-09-05
 
 **User-requested, not tied to §14 task ID.** Migrated standalone "Behind the Seduh"

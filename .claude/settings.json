@@ -9,6 +9,12 @@
             "command": "node .claude/hooks/lint-on-write.cjs",
             "timeout": 30,
             "statusMessage": "Linting written file..."
+          },
+          {
+            "type": "command",
+            "command": "node .claude/hooks/format-docs-on-write.cjs",
+            "timeout": 30,
+            "statusMessage": "Formatting doc..."
           }
         ]
       }
