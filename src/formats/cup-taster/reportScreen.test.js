@@ -4,6 +4,8 @@ import {
   ordinalLabel,
   describeOutcome,
   buildReportTables,
+  toCsvSafeDuration,
+  renderStageStandingsTable,
   sanitizeFilename,
   mountReportScreen,
 } from './reportScreen.js';
@@ -123,6 +125,57 @@ describe('sanitizeFilename', () => {
   });
 });
 
+describe('renderStageStandingsTable', () => {
+  const ranked = [
+    {
+      item: { displayName: 'Alex', numCorrect: 3, total_elapsed_secs: 90, finalPosition: null },
+      position: 1,
+    },
+    {
+      item: { displayName: 'Sam', numCorrect: 0, total_elapsed_secs: null, finalPosition: null },
+      position: 2,
+    },
+  ];
+
+  it('shows the visible time as M:SS, not raw seconds', () => {
+    const table = renderStageStandingsTable(ranked);
+    const timeCell = table.querySelectorAll('tbody tr')[0].querySelector('[data-label="Time"]');
+    // The visible text is the cell's own first child node — its nested
+    // .sr-only expansion (checked separately below) also contributes to a
+    // bare .textContent read, so this is what actually proves the VISIBLE
+    // format, not just that "1:30" appears somewhere in the cell.
+    expect(timeCell.childNodes[0].textContent).toBe('1:30');
+  });
+
+  it('pairs the visible M:SS time with an unambiguous screen-reader expansion', () => {
+    const table = renderStageStandingsTable(ranked);
+    const timeCell = table.querySelectorAll('tbody tr')[0].querySelector('[data-label="Time"]');
+    expect(timeCell.querySelector('.sr-only').textContent).toBe('1 minute 30 seconds');
+  });
+
+  it('shows a plain em dash with no screen-reader expansion for a cupper with no recorded time', () => {
+    const table = renderStageStandingsTable(ranked);
+    const timeCell = table.querySelectorAll('tbody tr')[1].querySelector('[data-label="Time"]');
+    expect(timeCell.textContent).toBe('—');
+    expect(timeCell.querySelector('.sr-only')).toBeNull();
+  });
+});
+
+describe('toCsvSafeDuration', () => {
+  it('prefixes a real duration with a leading apostrophe, the standard Excel/Sheets "literal text, not a value" escape', () => {
+    // Proves the actual bug this guards against: a bare "2:00" written
+    // unquoted into a CSV cell is exactly what spreadsheet software
+    // auto-detects as a time-of-day and silently reformats on open.
+    expect(toCsvSafeDuration(120)).toBe("'2:00");
+  });
+
+  it('returns a bare empty string, not an apostrophe-prefixed one, for a null duration', () => {
+    // No value to protect from mis-parsing — an apostrophe here would just
+    // be a stray character in an otherwise-blank cell.
+    expect(toCsvSafeDuration(null)).toBe('');
+  });
+});
+
 describe('buildReportTables', () => {
   it('builds standings, difficulty, and distribution table specs per stage, formatted the same as the on-screen tables', () => {
     const stageReports = [
@@ -158,7 +211,9 @@ describe('buildReportTables', () => {
         { key: 'time', label: 'Time' },
         { key: 'outcome', label: 'Outcome' },
       ],
-      rows: [{ position: 1, displayName: 'Alex', numCorrect: 3, time: '90s', outcome: 'Advanced' }],
+      rows: [
+        { position: 1, displayName: 'Alex', numCorrect: 3, time: "'1:30", outcome: 'Advanced' },
+      ],
     });
     expect(tables[1].title).toBe('prelims — Set difficulty');
     expect(tables[1].rows).toEqual([{ set: 'Set 1', correct: '75%', sampleSize: 4 }]);
@@ -367,7 +422,11 @@ describe('mountReportScreen', () => {
     expect(downloadSpy.mock.calls[0][1]).toBe(
       'finals — Standings\r\n' +
         'Pos,Cupper,Correct,Time,Outcome\r\n' +
-        '1,"Rivera, Alex",1,40s,Advanced\r\n' +
+        // Leading apostrophe: Excel/Sheets' own escape for "literal text,
+        // don't auto-format as a time" — see toCsvSafeDuration's own
+        // comment (reportScreen.js) for why a bare "0:40" would otherwise
+        // get silently reinterpreted as a clock time on open.
+        '1,"Rivera, Alex",1,\'0:40,Advanced\r\n' +
         '\r\n' +
         'finals — Set difficulty\r\n' +
         'Set,Correct,Cuppers scored\r\n' +

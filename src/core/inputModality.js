@@ -32,10 +32,51 @@
 // on-screen keyboard, a screen reader's own virtual cursor) reads as
 // 'pointer' here, same as it already does for native `:focus-visible`
 // everywhere else in this app — not a regression this module introduces.
+// Also known and accepted (found in review, ui-accessibility-reviewer): a
+// SIGHTED keyboard-only user who activates a target="_blank" link via
+// Enter/Space lands in a fresh tab whose own first scripted focus-move
+// (below) has the ring suppressed until their next real keydown — a false
+// negative trading places with the false positive this module exists to
+// fix. There is no signal available to tell the two cases apart (see
+// below), so this is a deliberate "most likely case wins" call, not an
+// oversight; the exposure is self-limiting (one screen, until their very
+// next keydown).
+//
+// Defaults to 'pointer' immediately, before any real event has fired —
+// found still reproducing live, 2026-09-05, after the first version of this
+// fix shipped: every audience-facing link in this app (Splash screen,
+// Audience — projector/phone) opens its target in a brand-new tab/window
+// (`target="_blank"`), and a brand-new tab starts with NO interaction
+// history of its own — its `data-input-modality` was simply absent on
+// first paint, so the CSS override couldn't match and native
+// `:focus-visible` showed the ring anyway, on router.js's very first
+// post-navigation focus-move in that tab. Nothing in the OPENER tab's own
+// click can cross into the new tab's separate document/JS realm to signal
+// "this came from a mouse" — so rather than trying to track that
+// (impossible across a real `window.open()` boundary), this defaults every
+// fresh page load to the pointer assumption instead: a brand-new tab is
+// overwhelmingly more likely to have been opened by a click than reached by
+// a keyboard user who's about to immediately Tab around in it, and the
+// very first real keydown (if one comes) flips this back to 'keyboard'
+// immediately, same as any other case.
+//
+// This default applies to EVERY app mount, not just the two target="_blank"
+// cases above — `trackInputModality()` is called exactly once, in
+// main.js's `mountApp()`, before any routing happens. Found in review
+// (code-reviewer): a cold load of the organiser dashboard itself (a typed
+// URL, a bookmark, an ordinary same-tab external link, an F5 refresh) hits
+// the identical "no interaction history yet" starting point a new tab
+// does, so this same trade-off — the ring suppressed on that very first
+// post-navigation heading focus, until the first real keydown — applies
+// there too, not only to the audience-facing surfaces that originally
+// surfaced the bug. Accepted for the same reason: there's no way to
+// distinguish "freshly opened by a click" from "freshly opened by a
+// keyboard user about to Tab" at mount time, for either case.
 export function trackInputModality(root = document.documentElement) {
   function setModality(value) {
     if (root.dataset.inputModality !== value) root.dataset.inputModality = value;
   }
+  setModality('pointer');
   // `pointerdown`, not `mousedown` alone — covers touch and pen too, all of
   // which are equally "not keyboard" for this purpose.
   function onPointerDown() {

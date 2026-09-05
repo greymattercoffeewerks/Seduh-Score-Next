@@ -24,9 +24,10 @@
 // together with the final advancement in one atomic write, the same "one
 // atomic action" preference T4.5's Confirm established for this project.
 import { findEvent } from '../../core/events.js';
-import { el } from '../../core/dom.js';
+import { el, withSrExpansion } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
 import { getSupabase } from '../../core/supabaseClient.js';
+import { formatDuration, formatDurationLong } from '../../core/duration.js';
 import { listHeatsForStage } from './heats.js';
 import {
   fetchStandingsForStage,
@@ -42,6 +43,20 @@ function statusLabel(item, { advancingIds, tiedBorderIds }) {
   if (advancingIds.has(item.stageEntryId)) return 'advancing';
   if (tiedBorderIds.has(item.stageEntryId)) return 'tied';
   return null;
+}
+
+// An em dash needs no screen-reader expansion (already unambiguous); a real
+// duration gets one, via withSrExpansion — see that helper's own comment
+// (core/dom.js) for why.
+function renderTimeCell(secs) {
+  if (secs == null) {
+    return el('td', { className: 'standings-time', text: '—', attrs: { 'data-label': 'Time' } });
+  }
+  return el(
+    'td',
+    { className: 'standings-time', attrs: { 'data-label': 'Time' } },
+    withSrExpansion(formatDuration(secs), formatDurationLong(secs)),
+  );
 }
 
 // Pure. `advancingIds`/`tiedBorderIds` are Sets of `stageEntryId`, letting
@@ -70,11 +85,7 @@ export function renderStandingsTable(
         text: String(item.numCorrect),
         attrs: { 'data-label': 'Correct' },
       }),
-      el('td', {
-        className: 'standings-time',
-        text: item.total_elapsed_secs == null ? '—' : `${item.total_elapsed_secs}s`,
-        attrs: { 'data-label': 'Time' },
-      }),
+      renderTimeCell(item.total_elapsed_secs),
       el('td', {
         className: 'standings-status',
         text: label ?? '',

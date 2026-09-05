@@ -74,7 +74,22 @@ describe('mountViewerBody — standings', () => {
     expect(rows[0].textContent).toContain('1');
     expect(rows[0].textContent).toContain('Alex');
     expect(rows[0].textContent).toContain('5/5');
-    expect(rows[0].textContent).toContain('240s');
+    expect(rows[0].textContent).toContain('4:00');
+  });
+
+  it('pairs the visible M:SS time with an unambiguous screen-reader expansion', () => {
+    const container = document.createElement('div');
+    mountViewerBody(container, {
+      stage: { kind: 'prelims', setCount: 5 },
+      standings: [{ position: 1, displayName: 'Alex', numCorrect: 5, totalElapsedSecs: 240 }],
+    });
+    const timeCell = container.querySelector('[data-label="Time"]');
+    // The visible text is the cell's own first child node, distinct from
+    // the nested .sr-only expansion checked on the next line — both
+    // contribute to a bare .textContent read, so checking the specific
+    // node is what actually proves the VISIBLE format is M:SS.
+    expect(timeCell.childNodes[0].textContent).toBe('4:00');
+    expect(timeCell.querySelector('.sr-only').textContent).toBe('4 minutes 0 seconds');
   });
 
   it('shows a dash, not a raw null, for a standing with no recorded time yet', () => {
