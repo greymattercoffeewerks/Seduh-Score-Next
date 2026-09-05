@@ -141,7 +141,7 @@ export function buildRoutes({ orgId, bareRoot, routerRef }) {
       pattern: '/events/:eventId',
       mount: requireAuth(
         (outlet, { eventId, client, signal }) =>
-          mountEventDashboardScreen(outlet, { eventId, client, signal }),
+          mountEventDashboardScreen(outlet, { eventId, orgId, client, signal }),
         routerRef,
       ),
     },

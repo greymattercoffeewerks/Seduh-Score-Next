@@ -1,3 +1,76 @@
+## Organiser dashboard: live-event-status visibility · 2026-09-05
+
+**User-requested, not tied to §14 task ID.** During production testing, the user
+discovered that the app's `live_sessions` partial-unique index (one active row per org,
+flipped by `publishSession` on every heat start/confirm) meant that Splash / Projector /
+Phone always showed whichever event most recently had heat activity, with zero indication
+in the organiser UI of which event was actually live. When two concurrent events were
+active, organisers had no way to tell which one was being broadcast to the audience.
+
+**What changed:**
+
+- `src/formats/cup-taster/eventDashboardScreen.js`: `loadState()` now computes `isLive`
+  (does this event's id match the org's currently-active `live_sessions` row) and, when
+  it's NOT live and a DIFFERENT event is, fetches that other event's name
+  (`liveElsewhereEventName`) — only one extra read in the common cases (this event IS live,
+  or no event is live anywhere), a second read only when there's genuinely another event to
+  name. New `renderLiveStatusBadge(isLive, liveElsewhereEventName)` function renders three
+  distinct states: "Live now — showing on Splash / Projector / Phone" (with the pulsing
+  `.status-live-dot` utility class, reusing `appShell.js`'s own sync-panel styling) when
+  live; "Not currently live — `<other event name>` is live instead" when a different event
+  has the org's one live slot; a bare "Not currently live" when no event is live anywhere.
+- `src/formats/cup-taster/eventDashboardScreen.css`: new `.event-live-status` and
+  `.event-live-status-live` rules for the badge styling.
+- `src/main.js`: `/events/:eventId` route now threads `orgId` (already in `buildRoutes`'s
+  closure) into `mountEventDashboardScreen`, enabling the dashboard to query which org
+  owns the event (needed for the `live_sessions` lookup).
+- `src/core/publish.js`: the underlying query `findActiveLiveEventId(orgId)` moved here
+  alongside the existing `publishSession`/`publishHandlers` (the write side of the same
+  table), making it format-agnostic and reusable by future formats. Initial code-reviewer
+  pass correctly flagged the first draft's version as Cup-Taster-specific logic that would
+  force a future format to duplicate it; moved and verified clean by both `code-reviewer`
+  and `module-boundary-checker`.
+- `src/formats/cup-taster/eventDashboardScreen.test.js`: 3 new/rewritten tests — this-event-live
+  (badge renders "Live now", shows pulsing dot), a-different-named-event-live (badge renders
+  the other event's name, no dot), no-event-live-anywhere (badge renders bare "Not currently live",
+  no dot). Full suite 959/959 passing.
+
+**Self-caught wiring bug, fixed before review:** After moving `findActiveLiveEventId` to
+`core/publish.js`, I computed `liveElsewhereEventName` in `loadState()` but forgot to pass it
+as the second parameter to `renderLiveStatusBadge()` at the call site. The parameter defaulted
+to undefined (falsy), silently no-opping the new feature. Caught by re-reading the code rather
+than trusting green tests; confirmed by mutation testing (reverted the fix, confirmed the new
+test failed with exact-text assertion mismatch, restored).
+
+**Live-verified:** Both the bare "Not currently live" state against a real Supabase-backed
+event, AND the full-text "named other event" variant injected via DOM to confirm proper text
+wrapping at 360px with no overflow (screenshot-verified at both desktop and 360px viewport).
+
+**Verifiers:** Three parallel reviewers (UI changed, core module boundary affected,
+src/** files changed):
+
+- `ui-accessibility-reviewer` (MEDIUM finding, fixed): identified that "Not currently live"
+  originally collapsed two different situations (event never started vs. an event that WAS
+  live and got bumped) into identical text, discarding information the code already had.
+  Fixed by always naming the other event when known, making the two cases distinguishable.
+  Confirmed clean afterward: contrast passes on both badge states (paper-mode tokens), color
+  is not the sole carrier of live/not-live distinction (dot + bold + wording all differ),
+  reduced-motion handled for free via reused `.status-live-dot` utility, and screen-reader
+  focus/announcement at page-load time is correct (router.js generic heading-focus fallback).
+- `code-reviewer` (module-boundary finding + clean): flagged initial version's Cup-Taster-specific
+  query living in formats/ instead of core/; confirmed move is correct per CLAUDE.md §6 contract.
+  Also confirmed no latency concern (organiser-dashboard reads are low-frequency), `orgId`
+  threading through main.js matches existing patterns, and string-equality comparison on
+  `activeLiveEventId === eventId` is type-safe.
+- `module-boundary-checker` (CLEAN): confirmed `findActiveLiveEventId`'s new home in
+  `core/publish.js` has zero Cup-Taster vocabulary, is correctly format-agnostic, has no
+  import-direction violation (only imports from `core/`), and the remaining format-specific
+  rendering/composition in `eventDashboardScreen.js` is appropriate.
+
+**Test count:** 959 tests passing (up from 956). Full suite lint and prettier clean.
+
+---
+
 ## CI resilience: automated doc formatting backstop · 2026-09-05
 
 **No §14 task ID** — a mechanical tooling improvement addressing a recurring CI failure.

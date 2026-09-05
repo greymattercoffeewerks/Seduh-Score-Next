@@ -76,3 +76,23 @@ export async function publishSession(
   await enqueueOperation('publish_session', rpcPayload);
   return flushOutbox(handlers ?? publishHandlers(client));
 }
+
+// The read-side counterpart to this file's own write path — live_sessions
+// enforces at most one active row per org (a partial unique index; see
+// supabase/migrations/20260821220000_live_sessions_table.sql), so "which
+// event is the org's active one right now" is a format-agnostic question
+// with a format-agnostic answer, same reasoning as publishHandlers above.
+// Moved here from formats/cup-taster/eventDashboardScreen.js (found in
+// review, code-reviewer/module-boundary-checker, 2026-09-05) — a future
+// format's own event dashboard needs this identical query, and nothing
+// about it is Cup-Taster-specific.
+export async function findActiveLiveEventId(orgId, client = getSupabase()) {
+  const { data, error } = await client
+    .from('live_sessions')
+    .select('event_id')
+    .eq('org_id', orgId)
+    .eq('active', true)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.event_id ?? null;
+}

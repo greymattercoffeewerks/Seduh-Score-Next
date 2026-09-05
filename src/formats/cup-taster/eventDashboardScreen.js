@@ -10,9 +10,50 @@ import { getSupabase } from '../../core/supabaseClient.js';
 import { el } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
 import { findEvent } from '../../core/events.js';
+import { findActiveLiveEventId } from '../../core/publish.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
 import { listStagesForEvent, stageHasHeats } from './setup.js';
 import { ordinalLabel } from './reportScreen.js';
+
+// live_sessions enforces at most one active row per org (a partial unique
+// index — see supabase/migrations/20260821220000_live_sessions_table.sql),
+// flipped automatically by publish_session whenever ANY heat starts or is
+// confirmed, in EITHER event (see liveSession.js's own top comment) — never
+// by an organiser navigating between events. Found in a real production
+// test (2026-09-05, user report): with two events in progress, the
+// Splash/Projector/Phone surfaces kept showing whichever event most
+// recently had heat activity, with nothing in the organiser UI indicating
+// that, or which event was actually live right now. This read (via
+// core/publish.js's findActiveLiveEventId — format-agnostic, moved there
+// from here in review) and the badge below close that visibility gap — they
+// don't change which event goes live, only surface the fact.
+
+// "Not currently live" alone doesn't distinguish a brand-new event that
+// hasn't started from one that WAS live and just got bumped by another
+// event's heat activity — the exact confusion this whole feature exists to
+// close (found in review, ui-accessibility-reviewer: the code already knows
+// which other event is live, via findActiveLiveEventId's own result — this
+// param just stops discarding it). Naming the other event tells the
+// organiser exactly where to look, without them hunting through every event
+// on the Events list to find which one shows "Live now."
+function renderLiveStatusBadge(isLive, liveElsewhereEventName) {
+  if (isLive) {
+    return el('p', { className: 'event-live-status event-live-status-live' }, [
+      el('span', { className: 'status-live-dot', attrs: { 'aria-hidden': 'true' } }),
+      el('span', { text: 'Live now — showing on Splash / Projector / Phone' }),
+    ]);
+  }
+  if (liveElsewhereEventName) {
+    return el('p', {
+      className: 'event-live-status',
+      text: `Not currently live — "${liveElsewhereEventName}" is live instead`,
+    });
+  }
+  return el('p', {
+    className: 'event-live-status',
+    text: 'Not currently live',
+  });
+}
 
 function stageStatusLine(stage) {
   const parts = [
@@ -44,7 +85,7 @@ export function renderStageCard(eventId, stage, hasHeats) {
 
 export async function mountEventDashboardScreen(
   root,
-  { eventId, client = getSupabase(), signal } = {},
+  { eventId, orgId, client = getSupabase(), signal } = {},
 ) {
   let loadFailedMessage = null;
   let loading = false;
@@ -93,7 +134,14 @@ export async function mountEventDashboardScreen(
     const event = await findEvent(eventId, client);
     const stages = await listStagesForEvent(eventId, client);
     const hasHeatsFlags = await Promise.all(stages.map((stage) => stageHasHeats(stage.id, client)));
-    return { event, stages, hasHeatsFlags };
+    const activeLiveEventId = await findActiveLiveEventId(orgId, client);
+    const isLive = activeLiveEventId === eventId;
+    // Only fetched when there's actually another event to name — the
+    // common cases (this event IS live, or no event is live anywhere for
+    // the org) need no extra read at all.
+    const liveElsewhereEventName =
+      !isLive && activeLiveEventId ? (await findEvent(activeLiveEventId, client)).name : null;
+    return { event, stages, hasHeatsFlags, isLive, liveElsewhereEventName };
   }
 
   async function attemptLoad() {
@@ -154,6 +202,8 @@ export async function mountEventDashboardScreen(
         attrs: { tabindex: '-1' },
       }),
     );
+
+    container.appendChild(renderLiveStatusBadge(data.isLive, data.liveElsewhereEventName));
 
     container.appendChild(
       el('div', { className: 'card event-dashboard-actions' }, [
