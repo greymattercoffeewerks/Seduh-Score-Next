@@ -56,14 +56,47 @@ describe('mountAppShell', () => {
     const appName = root.querySelector('.app-shell-name').textContent;
     const footer = root.querySelector('.app-shell-footer');
     expect(footer).not.toBeNull();
-    expect(footer.textContent).toBe(`${appName} · ${NAMEPLATE} · v${APP_VERSION}`);
+    // The version link's accessible name carries a sr-only suffix (see the
+    // dedicated link tests below), so a plain exact-match on the whole
+    // footer's textContent would also have to reproduce that suffix here —
+    // asserting the visible text nodes specifically keeps this test about
+    // what a sighted user actually reads.
+    expect(footer.childNodes[0].textContent).toBe(`${appName} · ${NAMEPLATE} · `);
+    expect(footer.querySelector('.app-shell-footer-link').childNodes[0].textContent).toBe(
+      `v${APP_VERSION}`,
+    );
   });
 
   it('an explicit appName also flows into the footer, not just the header name', () => {
     const root = document.createElement('div');
     mountAppShell(root, { appName: 'Custom', client: fakeClient({}) });
-    expect(root.querySelector('.app-shell-footer').textContent).toBe(
-      `Custom · ${NAMEPLATE} · v${APP_VERSION}`,
+    expect(root.querySelector('.app-shell-footer').childNodes[0].textContent).toBe(
+      `Custom · ${NAMEPLATE} · `,
+    );
+  });
+
+  it('the footer version links to /bts/index.html, opening in a new tab so the organiser never loses their current screen just to read a credits page', () => {
+    const root = document.createElement('div');
+    mountAppShell(root, { client: fakeClient({}) });
+    const link = root.querySelector('.app-shell-footer-link');
+    expect(link.tagName).toBe('A');
+    // The full filename, not just "/bts/" — verified live in a real browser:
+    // this app's SPA fallback claims any path without an exact file match,
+    // so the trailing-slash form silently served the login screen instead.
+    expect(link.getAttribute('href')).toBe('/bts/index.html');
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+  });
+
+  it("the footer version link's accessible name warns of the context change — a screen reader user gets no other signal that this link opens a new tab, matching this shell's own openInNewTab nav-link precedent", () => {
+    const root = document.createElement('div');
+    mountAppShell(root, { client: fakeClient({}) });
+    const link = root.querySelector('.app-shell-footer-link');
+    // Visible text stays exactly the version — the warning is sr-only, not
+    // stuffed into what a sighted user reads.
+    expect(link.childNodes[0].textContent).toBe(`v${APP_VERSION}`);
+    expect(link.querySelector('.sr-only').textContent).toBe(
+      ' — Behind the Seduh (opens in a new tab)',
     );
   });
 

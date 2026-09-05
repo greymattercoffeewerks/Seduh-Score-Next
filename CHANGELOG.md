@@ -1,3 +1,61 @@
+## Footer version link to Behind-the-Seduh credits page wired in · 2026-09-05
+
+**User-requested, not tied to §14 task ID.** Migrated standalone "Behind the Seduh"
+(BTS) credits page from `design/bts/index.html` into this app's static assets and
+wired its path into the organiser app's footer so the version number link resolves
+to it.
+
+**What changed:**
+
+- `public/bts/index.html` (new): moved from `design/bts/index.html` (never tracked in
+  git); `public/` is this Vite app's convention for static assets copied verbatim to
+  build output and served by Cloudflare Workers Static Assets in production. Top
+  comment updated from "Draft, unwired..." to mark it as wired in. Three bugs found
+  and fixed during code-reviewer pass (see Verifiers below).
+- `src/core/appShell.js`: footer refactored from plain-text span to structured content
+  — text "Seduh Score · Kiulap · " stays plain, version number now wrapped in `<a
+  class="app-shell-footer-link" href="/bts/index.html" target="_blank"
+  rel="noopener noreferrer">` with `.sr-only` suffix "— Behind the Seduh (opens in a
+  new tab)", mirroring pre-existing `setNav()` openInNewTab link pattern. Href uses
+  full path (`/bts/index.html`, not `/bts/`) — caught during live browser testing:
+  bare path falls through to SPA fallback and serves login screen instead. Comment
+  explains this SPA/static-assets routing interaction.
+- `src/core/appShell.css`: new `.app-shell-footer-link` rule (underlined at rest per
+  WCAG 1.4.1, color shifts on hover/focus-visible). Comment added post-ui-review:
+  deliberate tap-target-size exemption for this inline-prose link, citing WCAG
+  2.5.5's own "target in a sentence or block of text" carve-out.
+- `src/core/appShell.test.js`: updated 2 pre-existing footer textContent assertions
+  (now check plain-text node separately, since link's sr-only suffix also appears in
+  `.textContent`). Added 2 new tests: link href, target, rel attributes; accessible
+  name via sr-only text.
+
+**Bugs found and fixed in migrated page** (code-reviewer pass):
+- (a) **HIGH** — both "back to app" links used `href="#"` (dead link once page is
+  live/wired). Fixed to `href="/"`.
+- (b) **MEDIUM** — page footer still read "...Behind the Seduh (draft)", contradicting
+  updated top comment. Stale "(draft)" label dropped; hardcoded "Kiulap · v1.0.1"
+  removed (visitor already arrived via app footer's versioned link, no point
+  duplicating).
+- (c) **LOW** — removed unresolvable font names from stack (no @font-face or asset).
+  Kept system-stack fallbacks, grepped for any matching declaration (zero found).
+
+**Live-verified:** All three back-fixes resolved post-application; footer no longer
+shows "(draft)" or hardcoded version; both back-links navigate to `/`.
+
+**Verifiers:** Two parallel reviewers (UI touched, new static asset served):
+- `ui-accessibility-reviewer` (CLEAN + one low-severity gap, fixed): confirmed footer
+  on paper surface, contrast passes all three states (rest ~5.9:1, hover/focus ~18:1),
+  underline-at-rest satisfies WCAG 1.4.1, sr-only suffix necessary (WCAG 2.4.4, Link
+  Purpose in Context). Gap: no comment explaining tap-target exemption — fixed by
+  adding one, citing WCAG 2.5.5.
+- `code-reviewer` (3 real issues found in migrated page, all fixed per above, then
+  verified in live browser): appShell.js/css/test.js diff itself clean.
+
+**Test count:** 956 tests passing (up from 954); 2 new appShell tests. Full suite lint
+and prettier clean.
+
+---
+
 ## Tooling: automated version bump via kb-sync end-of-task step · 2026-09-05
 
 **No §14 task ID** — a process/automation decision (D27, user pick of option 1 from three proposed approaches). The "bump on every closed task" convention documented in CONVENTIONS.md's "Versioning" section turned out to be entirely honored in the breach: `package.json` sat at `1.0.0` through months of shipped, logged tasks before anyone noticed.
