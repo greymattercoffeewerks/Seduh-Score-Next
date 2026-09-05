@@ -124,6 +124,66 @@ describe('mountEventDashboardScreen', () => {
     expect(rootReal.querySelector('.is-test-banner')).toBeNull();
   });
 
+  // live_sessions enforces at most one active row per org (see
+  // eventDashboardScreen.js's own findActiveLiveEventId comment) — these
+  // three cases are the only ones that query can produce: this event is the
+  // active one, a DIFFERENT event is, or none is (no row at all).
+  it('shows "Live now" (with the pulsing status dot) when this event is the org\'s currently active live_sessions row', async () => {
+    const root = document.createElement('div');
+    const client = fakeClient({
+      tables: {
+        events: { data: nonTestEvent, error: null },
+        ct_stages: { data: [], error: null },
+        live_sessions: { data: { event_id: 'ev1' }, error: null },
+      },
+    });
+    await mountEventDashboardScreen(root, { eventId: 'ev1', orgId: 'org1', client });
+    const badge = root.querySelector('.event-live-status');
+    expect(badge.textContent).toContain('Live now');
+    expect(badge.querySelector('.status-live-dot')).not.toBeNull();
+    expect(badge.classList.contains('event-live-status-live')).toBe(true);
+  });
+
+  it('names the other event when a DIFFERENT event is the org\'s active live_sessions row — the exact confusion this feature exists to close (a bare "Not currently live" doesn\'t tell the organiser where to look)', async () => {
+    const root = document.createElement('div');
+    const client = fakeClient({
+      tables: {
+        // Sequential findEvent() calls: this event first (loadState's own
+        // first read), the other, actually-live event second (only reached
+        // because it's a different id than eventId) — fakeClient's queue
+        // shifts through an array in call order, same technique the
+        // existing "renders one card per stage" test already uses for
+        // stageHasHeats.
+        events: [
+          { data: nonTestEvent, error: null },
+          { data: { id: 'ev2', name: 'Second Harvest Cup', is_test: false }, error: null },
+        ],
+        ct_stages: { data: [], error: null },
+        live_sessions: { data: { event_id: 'ev2' }, error: null },
+      },
+    });
+    await mountEventDashboardScreen(root, { eventId: 'ev1', orgId: 'org1', client });
+    const badge = root.querySelector('.event-live-status');
+    expect(badge.textContent).toBe('Not currently live — "Second Harvest Cup" is live instead');
+    expect(badge.querySelector('.status-live-dot')).toBeNull();
+    expect(badge.classList.contains('event-live-status-live')).toBe(false);
+  });
+
+  it('shows a bare "Not currently live" (no other event named) when the org has no active live_sessions row at all', async () => {
+    const root = document.createElement('div');
+    const client = fakeClient({
+      tables: {
+        events: { data: nonTestEvent, error: null },
+        ct_stages: { data: [], error: null },
+        live_sessions: { data: null, error: null },
+      },
+    });
+    await mountEventDashboardScreen(root, { eventId: 'ev1', orgId: 'org1', client });
+    const badge = root.querySelector('.event-live-status');
+    expect(badge.textContent).toBe('Not currently live');
+    expect(badge.querySelector('.status-live-dot')).toBeNull();
+  });
+
   it('shows a "no stage plan yet" empty state pointing at Setup when there are no stages', async () => {
     const root = document.createElement('div');
     const client = fakeClient({
