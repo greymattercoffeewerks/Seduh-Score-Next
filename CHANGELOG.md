@@ -1,3 +1,69 @@
+## User-requested batch: footer versioning, focus-box splash, elapsed-time display, favicon · 2026-09-05
+
+**No single §14 task ID** — a batch of four user-requested items closed the same session.
+Footer versioning was answered via documentation (no code change). The other three were real
+bugs/UX gaps fixed: splash screen focus rings persisting on fresh tabs (inputModality.js mount
+default), audience/organiser elapsed-time display changed from raw seconds to M:SS format with
+screen-reader expansion, and favicon assets restored from the legacy repo.
+
+**What shipped:**
+
+- `src/core/inputModality.js`/`.test.js`: `trackInputModality()` now calls `setModality('pointer')`
+  on mount, before any real event, defaulting every fresh page load to the pointer assumption
+  (brand-new tabs are far more likely mouse-opened than keyboard-opened); first real keydown
+  still flips to 'keyboard'. Fixes splash screen's focus ring persisting on fresh target="_blank"
+  tabs, where the opener's interaction history is invisible.
+- `src/core/duration.js`/`.test.js`: added `formatDurationLong()` (spells out "2 minutes 0
+  seconds" for screen readers); `formatDuration()` now powers M:SS display in standings/report
+  tables across organiser and audience surfaces (was raw seconds).
+- `src/core/dom.js`: new `withSrExpansion()` helper pairs visible M:SS with screen-reader-only
+  hidden expansion (a bare colon-separated numeral is a known TTS ambiguity; the live countdown
+  elsewhere is already shielded by `aria-live="off"`, these static tables needed it too).
+- `src/formats/cup-taster/standingsScreen.js`/`.test.js`: elapsed-time columns now render M:SS
+  with SR expansion (2 new tests).
+- `src/formats/cup-taster/reportScreen.js`/`.test.js`: (a) elapsed-time columns render M:SS with
+  SR expansion (2 new tests); (b) new `toCsvSafeDuration()` fixes a real CSV-export data-corruption
+  bug — writing "2:00" unquoted to a CSV cell is exactly what Excel/Sheets auto-detect as
+  time-of-day and silently reformat on open; fixed by prefixing the CSV-only copy with a leading
+  apostrophe (the standard Excel/Sheets "literal text" escape); (c) `renderStageStandingsTable`
+  extracted and exported for direct test coverage (1 new test).
+- `src/formats/cup-taster/viewerBody.js`/`.test.js`: elapsed-time in the active-heat panel and
+  standings table now render M:SS with SR expansion (1 new test).
+- `public/favicon.svg` (new): recolored to this project's own `--clr-ember-700` (#b83e15),
+  matching `core/dom.js`'s `brandMark()` render in paper mode (stage/projector uses a lighter
+  shade for its own contrast needs; noted in code comment). `public/favicon-32.png` and
+  `public/favicon-16.png` (new, from legacy repo, unchanged) — PNG color drift from SVG's
+  recolor noted as accepted, no image tool available to regenerate them.
+- `index.html`: three `<link rel="icon">` tags added (favicon.svg, -32.png, -16.png fallback).
+
+**Footer versioning answer (no code change):** User asked whether the version footer (Kiulap ·
+v1.0.0) updates automatically or needs manual instruction. Confirmed: entirely manual
+(package.json's version is hand-bumped per `CONVENTIONS.md`'s documented convention "bump on
+every closed task"). Also checked the legacy Seduh-Score repo per user's follow-up request —
+it isn't automated either (shared/version.js is identical hand-maintained constant with "bump
+alongside CHANGELOG.md" comment). Not yet decided whether to build real automation for this
+project — open question for the user.
+
+**Verifiers:** Four reviewers ran in parallel (UI touched multiple surfaces, tests added, src/**
+files changed): `module-boundary-checker` (CLEAN), `ui-accessibility-reviewer` (no blocking
+findings; non-blocking: comment scope clarified for `trackInputModality`'s mount-default trade-off,
+SR expansion added to static tables, CSV Excel-autodetection bug fixed), `code-reviewer`
+(non-blocking: same comment-scope issue independently flagged, PNG/SVG color drift documented and
+explained, index.html comment corrected), `test-auditor` (ONE BLOCKING: cleanup test for
+`trackInputModality`'s stop() couldn't prove the keydown listener was removed — mutation testing
+confirmed the original test stayed green even without the removeEventListener call; fixed by
+splitting into two mirror-image tests, one per listener, each starting from the OPPOSITE value its
+own event would produce; both fixes mutation-tested and confirmed to catch regressions, then
+restored; ALSO ONE NON-BLOCKING: "sets pointer on pointerdown" test became vacuous once mount
+started defaulting to 'pointer' — fixed with same disambiguation technique).
+
+**Test count:** 954 tests passing (up from 942); 12 new tests added across 5 files
+(`inputModality.test.js`: 2 new/restructured, `duration.test.js`: 3 new, `standingsScreen.test.js`:
+2 new, `reportScreen.test.js`: 5 new, `viewerBody.test.js`: 1 new). Full suite lint and prettier
+clean.
+
+---
+
 ## `.card` border strengthened — container contrast follow-up · 2026-09-05
 
 **No single §14 task ID** — a direct follow-up to the "Production UI/UX feedback pass"

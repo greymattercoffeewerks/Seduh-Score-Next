@@ -92,7 +92,38 @@ describe('renderStandingsTable', () => {
     expect(rows[0].querySelector('.standings-position').textContent).toBe('1');
     expect(rows[0].querySelector('.standings-name').textContent).toBe('Alex');
     expect(rows[0].querySelector('.standings-correct').textContent).toBe('5');
-    expect(rows[0].querySelector('.standings-time').textContent).toBe('120s');
+    // The visible text is the cell's own first child node (a bare text
+    // node) — its own screen-reader expansion (a nested .sr-only span,
+    // asserted separately below) also contributes to a bare .textContent
+    // read, so checking that node specifically, not the whole cell, is
+    // what actually proves the VISIBLE format is M:SS.
+    const timeCell = rows[0].querySelector('.standings-time');
+    expect(timeCell.childNodes[0].textContent).toBe('2:00');
+  });
+
+  it('pairs the visible M:SS time with an unambiguous screen-reader expansion, not a bare colon-separated numeral', () => {
+    const table = renderStandingsTable(ranked);
+    const timeCell = table.querySelector('.standings-time');
+    expect(timeCell.querySelector('.sr-only').textContent).toBe('2 minutes 0 seconds');
+  });
+
+  it('shows a plain em dash for a cupper with no recorded time, with no screen-reader expansion needed', () => {
+    const noTimeRanked = [
+      {
+        item: {
+          stageEntryId: 'se3',
+          displayName: 'Sam',
+          numCorrect: 0,
+          total_elapsed_secs: null,
+          finalPosition: null,
+        },
+        position: 3,
+      },
+    ];
+    const table = renderStandingsTable(noTimeRanked);
+    const timeCell = table.querySelector('.standings-time');
+    expect(timeCell.textContent).toBe('—');
+    expect(timeCell.querySelector('.sr-only')).toBeNull();
   });
 
   it('shows an em dash, not "nulls", for an entry with no recorded time yet', () => {

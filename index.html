@@ -4,6 +4,27 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Seduh Score Next</title>
+    <!-- Brought back from the legacy Seduh Score site (shared/assets/favicon.*,
+         2026-09-05 user request) — same page-tab identity, recolored to this
+         project's own --clr-ember-700 accent (#b83e15) rather than the legacy
+         site's slightly different #b45309, matching the color core/dom.js's
+         brandMark() renders in paper mode (every organiser screen, splash,
+         phone) — colors.css's own --color-accent binding is mode-dependent,
+         though: stage mode (the projector, [data-surface='stage']) uses the
+         lighter --clr-ember-500 for its own dark-background contrast needs,
+         so this favicon doesn't match brandMark() literally everywhere it
+         renders, just the organiser-facing majority of surfaces (found in
+         review, code-reviewer). SVG first (crisp at any size, what most
+         current browsers use); the two PNG fallbacks are the legacy assets
+         UNCHANGED (still the old #b45309) — no image-editing tool was
+         available in this environment to recolor them, so browsers old
+         enough to fall back to a PNG see a very slightly different shade
+         than the SVG-favicon majority does. Accepted, not overlooked: a
+         one-shade favicon-color mismatch on legacy browsers is a much
+         smaller cost than the missing tab icon this change closes. -->
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="icon" href="/favicon-16.png" sizes="16x16" type="image/png" />
     <link rel="stylesheet" href="/src/ui/tokens/index.css" />
     <link rel="stylesheet" href="/src/core/appShell.css" />
     <link rel="stylesheet" href="/src/core/eventsScreen.css" />

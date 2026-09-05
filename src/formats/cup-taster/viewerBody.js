@@ -47,10 +47,10 @@
 // matching the DB-shape precedent, not dodging lint. These values are
 // always read-only display copies of an already-clamped
 // `ct_heat_entries.elapsed_secs`, never a second write path for one.
-import { el } from '../../core/dom.js';
+import { el, withSrExpansion } from '../../core/dom.js';
 import { chainComparators } from '../../core/ranking.js';
 import { remainingSecs, isExpired } from '../../core/countdown.js';
-import { formatDuration } from '../../core/duration.js';
+import { formatDuration, formatDurationLong } from '../../core/duration.js';
 
 // The `hasContent` predicate viewer-shell.js's inversion-of-control
 // contract calls for — whether THIS payload counts as real content is a
@@ -65,8 +65,33 @@ function capitalize(word) {
   return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
+// M:SS, not raw seconds — matches standingsScreen.js/reportScreen.js's own
+// organiser-facing tables (user-reported, 2026-09-05: seconds alone read as
+// less human-friendly than the same clock format the countdown above
+// already uses). Delegates to formatDuration() rather than hand-rolling a
+// second formatter — this module already imports it for the countdown.
+// Only used by renderRecentHeat below now (a plain string interpolated into
+// one <li>'s own text) — renderStandingsTable's own time cell moved to
+// renderTimeCell (below), which pairs the same M:SS text with a screen-
+// reader expansion; that treatment wasn't retrofitted here too (found in
+// review, ui-accessibility-reviewer, scoped explicitly to "the standings/
+// report tables" — a recent-heat's own summary line isn't one), left as a
+// known, deliberately deferred gap rather than restructuring this <li>'s
+// single-string shape to fit an expansion span in this same pass.
 function formatElapsed(secs) {
-  return secs == null ? '—' : `${secs}s`;
+  return secs == null ? '—' : formatDuration(secs);
+}
+
+// An em dash needs no screen-reader expansion (already unambiguous); a real
+// duration gets one, via withSrExpansion — see that helper's own comment
+// (core/dom.js) for why.
+function renderTimeCell(secs) {
+  if (secs == null) return el('td', { text: '—', attrs: { 'data-label': 'Time' } });
+  return el(
+    'td',
+    { attrs: { 'data-label': 'Time' } },
+    withSrExpansion(formatDuration(secs), formatDurationLong(secs)),
+  );
 }
 
 function renderStandingsTable(stage, standings) {
@@ -96,7 +121,7 @@ function renderStandingsTable(stage, standings) {
               : String(row.numCorrect),
           attrs: { 'data-label': 'Correct' },
         }),
-        el('td', { text: formatElapsed(row.totalElapsedSecs), attrs: { 'data-label': 'Time' } }),
+        renderTimeCell(row.totalElapsedSecs),
       ],
     );
   });

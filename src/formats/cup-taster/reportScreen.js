@@ -20,9 +20,10 @@
 // before writing code, matching core/export.js's own "no new dependency"
 // framing. There is no generated-PDF code path here.
 import { findEvent } from '../../core/events.js';
-import { el } from '../../core/dom.js';
+import { el, withSrExpansion } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
 import { getSupabase } from '../../core/supabaseClient.js';
+import { formatDuration, formatDurationLong } from '../../core/duration.js';
 import { buildCsvForTables, downloadCsv } from '../../core/export.js';
 import { listStagesForEvent } from './setup.js';
 import { isEventComplete, computeStageReport } from './analytics.js';
@@ -79,16 +80,25 @@ export function describeOutcome(item) {
   return notes ? `${label} (${notes})` : label;
 }
 
-function renderStageStandingsTable(ranked) {
+// An em dash needs no screen-reader expansion (already unambiguous); a real
+// duration gets one, via withSrExpansion — see that helper's own comment
+// (core/dom.js) for why.
+function renderTimeCell(secs) {
+  if (secs == null) return el('td', { text: '—', attrs: { 'data-label': 'Time' } });
+  return el(
+    'td',
+    { attrs: { 'data-label': 'Time' } },
+    withSrExpansion(formatDuration(secs), formatDurationLong(secs)),
+  );
+}
+
+export function renderStageStandingsTable(ranked) {
   const rows = ranked.map(({ item, position }) =>
     el('tr', { className: 'standings-row' }, [
       el('td', { text: String(position), attrs: { 'data-label': 'Pos' } }),
       el('td', { text: item.displayName, attrs: { 'data-label': 'Cupper' } }),
       el('td', { text: String(item.numCorrect), attrs: { 'data-label': 'Correct' } }),
-      el('td', {
-        text: item.total_elapsed_secs == null ? '—' : `${item.total_elapsed_secs}s`,
-        attrs: { 'data-label': 'Time' },
-      }),
+      renderTimeCell(item.total_elapsed_secs),
       el('td', { text: describeOutcome(item), attrs: { 'data-label': 'Outcome' } }),
     ]),
   );
@@ -180,12 +190,30 @@ function renderDistributionTable(distribution) {
   ]);
 }
 
+// A bare "2:00" written unquoted into a CSV cell is exactly what Excel/
+// Sheets auto-detect as a time-of-day and silently reformat/reinterpret on
+// open (found in review, ui-accessibility-reviewer, scoping the M:SS
+// change: core/export.js's own escapeCsvValue only quotes a value
+// containing a comma/quote/newline — a colon alone never triggers
+// quoting, and quoting alone wouldn't stop Excel's own auto-detection of
+// the CELL VALUE after CSV parsing anyway). A leading apostrophe is the
+// standard, purpose-built Excel/Sheets escape for "treat this as literal
+// text, not a value to auto-format" — the same convention spreadsheet
+// tooling has used for this exact class of problem for decades. Scoped to
+// the CSV export only, not the on-screen table above, since HTML never
+// auto-reformats text content the way a spreadsheet cell does.
+export function toCsvSafeDuration(secs) {
+  return secs == null ? '' : `'${formatDuration(secs)}`;
+}
+
 // Pure. One stage's report -> the three table specs core/export.js needs,
 // mirroring the exact formatting each on-screen table above uses (the same
-// "Xs" time suffix, the same "No data"/percentage difficulty text, the same
-// describeOutcome call) — so the CSV a cupper opens says the same thing the
-// organiser saw on screen, not a second, independently-formatted view of
-// the same numbers.
+// M:SS time via formatDuration — see toCsvSafeDuration's own comment for
+// why the CSV's own copy carries one extra leading character the on-screen
+// table doesn't need, the same "No data"/percentage difficulty text, the
+// same describeOutcome call) — so the CSV a cupper opens says the same
+// thing the organiser saw on screen, not a second, independently-formatted
+// view of the same numbers.
 function buildStageTables(stageReport) {
   const { stage, ranked, difficulty, distribution } = stageReport;
   return [
@@ -202,7 +230,7 @@ function buildStageTables(stageReport) {
         position,
         displayName: item.displayName,
         numCorrect: item.numCorrect,
-        time: item.total_elapsed_secs == null ? '' : `${item.total_elapsed_secs}s`,
+        time: toCsvSafeDuration(item.total_elapsed_secs),
         outcome: describeOutcome(item),
       })),
     },

@@ -14,6 +14,24 @@ export function el(tag, { className, text, attrs, id } = {}, children = []) {
   return node;
 }
 
+// A visible text node paired with a visually-hidden (.sr-only) expansion of
+// the SAME value in unambiguous words — e.g. core/duration.js's
+// formatDuration()'s "2:00" alongside its formatDurationLong()'s "2 minutes
+// 0 seconds" (found in review, ui-accessibility-reviewer: a colon-separated
+// numeral read verbatim by assistive tech is a known ambiguous case for TTS
+// engines — inconsistently vocalized as a clock time, a ratio, or a
+// duration). `title` isn't used for this — patchy screen-reader support on
+// non-interactive elements like `<td>` — matching this codebase's own
+// established "text-carried, not [visual-format]-alone" convention
+// (viewerBody.js's cupper-status suffixes are the precedent). Returns an
+// array of nodes, suitable as an `el()` children argument.
+export function withSrExpansion(visibleText, hiddenText) {
+  return [
+    document.createTextNode(visibleText),
+    el('span', { className: 'sr-only', text: hiddenText }),
+  ];
+}
+
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 function svgEl(tag, attrs = {}) {
