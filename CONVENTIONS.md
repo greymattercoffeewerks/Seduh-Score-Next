@@ -250,10 +250,29 @@ section only records the conventions a new screen or token needs to follow.
 
 ## Versioning
 
-No semver yet (D27) — progress is tracked by **handoff phase** (Phase 0–6), not a
-version number. `ROADMAP.md`'s Current State table is the source of truth for "what
-phase are we in." A semver scheme can start once there's a first real shipped artifact
-to number — don't invent version numbers before then.
+**Semver started 2026-09-05** (D27's own condition — "once there's a first real shipped
+artifact to number" — was met once production went live on Cloudflare; see CLAUDE.md's
+Repo section). Before that, progress was tracked by **handoff phase** (Phase 0–6) alone;
+`ROADMAP.md`'s Current State table stays the source of truth for "what phase are we in"
+regardless.
+
+`package.json`'s `version` field is the single source; `src/core/version.js` re-exports
+it as `APP_VERSION` alongside `NAMEPLATE`, and `appShell.js` renders both in a footer on
+every organiser screen (`Seduh Score · <nameplate> · v<version>`) — quick, glance-based
+verification for bug reports, matching the legacy Seduh Score site's own footer
+(`seduhscore.com/bts/`: "seduhscore.com · v5.16.0"). Bump on every closed task, matching
+CHANGELOG.md's own granularity — the footer should always name the exact deployed
+commit, not just the last big milestone.
+
+**Nameplate**: each build cycle takes a place name spiralling outward from Kiulap — the
+same convention the legacy site used (Kiulap → Gadong → Kiarong → Menglait → Berakas →
+Jerudong → Seria, v1.0 → v5.x, see seduhscore.com/bts/). This is a **separate, fresh
+spiral** starting back at Kiulap, not a continuation of that site's already-completed
+run — user decision, 2026-09-05: this codebase is a from-scratch rewrite (Supabase,
+offline-first outbox, fixed advancement), not a patch on the same one, so it earns its
+own lineage rather than picking up mid-spiral. Current cycle: **Kiulap, v1.0.0**. The
+next cycle's name gets picked (and this section updated) when that cycle actually starts
+— don't pre-name future cycles.
 
 ---
 
