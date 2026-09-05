@@ -137,8 +137,32 @@ export function mountAppShell(
   // the legacy Seduh Score site's own footer nameplate (seduhscore.com/bts/:
   // "seduhscore.com · v5.16.0"). A plain static `<footer>`, not `role="status"`
   // — this text never changes after mount, so there's nothing to announce.
+  //
+  // The version number itself links to /bts/index.html (2026-09-05, same day
+  // the BTS page was migrated and wired in — public/bts/index.html) — same
+  // idea as the legacy site's own footer, which reads as a nameplate/credit
+  // line pointing at exactly that page. The full `index.html` filename is
+  // required, not just `/bts/` — verified live: this app's SPA fallback
+  // (needed so a direct/refreshed load of any hash route still serves
+  // index.html) claims any path without an exact file match first, so the
+  // trailing-slash form silently serves the login screen instead of this
+  // static page. openInNewTab-shaped (target=_blank, rel=noopener noreferrer,
+  // sr-only context-change warning) for the same reason setNav's own
+  // openInNewTab links are: this organiser tab shouldn't navigate away from
+  // whatever screen is currently open just to read a credits page.
   const footerEl = el('footer', { className: 'app-shell-footer' }, [
-    el('span', { text: `${appName} · ${NAMEPLATE} · v${APP_VERSION}` }),
+    el('span', { text: `${appName} · ${NAMEPLATE} · ` }),
+    el(
+      'a',
+      {
+        className: 'app-shell-footer-link',
+        attrs: { href: '/bts/index.html', target: '_blank', rel: 'noopener noreferrer' },
+      },
+      [
+        document.createTextNode(`v${APP_VERSION}`),
+        el('span', { className: 'sr-only', text: ' — Behind the Seduh (opens in a new tab)' }),
+      ],
+    ),
   ]);
 
   root.append(header, outlet, footerEl);

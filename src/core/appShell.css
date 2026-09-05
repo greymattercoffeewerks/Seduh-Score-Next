@@ -172,6 +172,29 @@
   text-align: center;
 }
 
+/* Underlined at rest, not just on hover/focus — a link distinguished from
+   its surrounding footer text by color alone would fail WCAG 1.4.1 (this
+   footer's whole point is inline plain text with one linked word inside
+   it). Color only shifts on hover/focus, layered on top of the always-on
+   underline as the interactive cue.
+
+   Deliberately not `.tap-target`-sized (unlike every other interactive
+   element in this shell) — WCAG 2.5.5 itself carves out "a target that is
+   in a sentence or block of text" from its own minimum-size rule, which is
+   exactly this: an inline word inside a line of footer prose, not a control
+   on a timing/scoring surface where §7.1/§7.4's tap-target discipline
+   actually matters (a judge tapping under time pressure). */
+.app-shell-footer-link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.app-shell-footer-link:hover,
+.app-shell-footer-link:focus-visible {
+  color: var(--color-text);
+}
+
 /* Compensates for the header's own sticky occlusion (see appShell.js's
    `syncHeaderHeightVar()`, which keeps --app-shell-header-height current).
    Scoped to headings inside THIS outlet specifically, not a bare `h1, h2`

@@ -1,0 +1,1048 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Behind the Seduh — Seduh Score Next</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!--
+      Migrated from seduhscore.com/bts/ (the legacy Seduh Score site's "Behind
+      the Seduh" page) per user request, 2026-09-05, then restyled the same day
+      to use this repo's own dark "stage" register instead of the light "paper"
+      one — the same split viewer-shell.css/splashScreen.css already establish
+      between the organiser dashboard and the ceremonial, audience-facing
+      surfaces. The legacy page runs its OWN separate dark roast/crema palette
+      (not this repo's tokens) precisely because BTS reads as a different
+      register from the main app; this version reaches for that same idea
+      using this repo's real [data-surface="stage"] tokens (colors.css) rather
+      than inventing a third palette.
+
+      Wired in 2026-09-05 (same day): lives here under `public/` (not
+      `design/`, where it was drafted) so Vite copies it verbatim to the build
+      output and Cloudflare Workers Static Assets serves it at `/bts/` —
+      appShell.js's footer links its rendered version number here.
+
+      Facts are this repo's own (CHANGELOG.md, ROADMAP.md, CONVENTIONS.md's
+      "Versioning" section, src/core/version.js) — only one cycle exists so far
+      (Kiulap, v1.0.1, in progress), so the spiral below shows one lit node and
+      a dashed, unnamed tail, not the legacy site's seven.
+
+      Motion is a deliberate, restrained homage to the legacy page's own spiral
+      draw-in / scroll-reveal / pour-fill timeline — reimplemented here rather
+      than copied, using this repo's own splash-glow-breathe rhythm
+      (splashScreen.css) for the ambient glow, and respecting
+      prefers-reduced-motion the same way every real screen in this app does
+      (snap to the settled state, no motion suppressed by a later override).
+
+      No third-party font CDN, per DESIGN.md's self-hosting rule — same
+      system-stack fallbacks the real tokens declare.
+    -->
+    <style>
+      :root {
+        --clr-clay-50: #fefcf9;
+        --clr-clay-100: #faf6ef;
+        --clr-clay-300: #e6dbc8;
+        --clr-clay-500: #a89876;
+        --clr-clay-700: #574d3c;
+        --clr-clay-800: #362f24;
+        --clr-clay-900: #201b14;
+        --clr-clay-950: #100d0a;
+        --clr-ember-500: #ff6b35;
+        --clr-ember-600: #e0501c;
+        --clr-gold-500: #cfa53b;
+
+        --color-canvas: var(--clr-clay-950);
+        --color-surface: var(--clr-clay-900);
+        --color-surface-sunken: var(--clr-clay-800);
+        --color-border: var(--clr-clay-700);
+        --color-border-strong: var(--clr-clay-50);
+        --color-text: var(--clr-clay-50);
+        --color-text-secondary: var(--clr-clay-300);
+        --color-text-muted: var(--clr-clay-500);
+        --color-accent: var(--clr-ember-500);
+        --color-accent-hover: var(--clr-ember-600);
+        --color-accent-contrast: var(--clr-clay-950);
+        --color-gold: var(--clr-gold-500);
+        --color-gold-contrast: var(--clr-clay-950);
+
+        --font-display: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+        --font-body:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        --font-mono:
+          ui-monospace, 'SF Mono', 'Cascadia Mono', 'Segoe UI Mono', Consolas, 'Roboto Mono',
+          monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        margin: 0;
+        background: var(--color-canvas);
+        color: var(--color-text);
+        font-family: var(--font-body);
+        line-height: 1.6;
+        font-weight: 300;
+        overflow-x: hidden;
+      }
+      ::selection {
+        background: var(--color-accent);
+        color: var(--color-accent-contrast);
+      }
+      a {
+        color: var(--color-accent);
+        text-decoration: none;
+      }
+      a:hover {
+        color: var(--color-accent-hover);
+      }
+      .wrap {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 0 1.5rem;
+        position: relative;
+        z-index: 1;
+      }
+
+      /* ---------------------------------------------------------------
+         Ambient glow — splashScreen.css's own splash-glow-breathe rhythm,
+         one restrained radial accent, never a decorative wash. Fixed so
+         it stays put as a background presence while the page scrolls,
+         same "background behind the wordmark" role splashScreen.js gives
+         it, just spanning the whole page here instead of one screen.
+         --------------------------------------------------------------- */
+      .glow {
+        position: fixed;
+        top: 8%;
+        left: 62%;
+        width: 60vmax;
+        height: 60vmax;
+        margin-left: -30vmax;
+        margin-top: -30vmax;
+        border-radius: 50%;
+        background: radial-gradient(circle, var(--color-accent) 0%, transparent 70%);
+        filter: blur(13vmin);
+        opacity: 0.14;
+        pointer-events: none;
+        z-index: 0;
+      }
+
+      /* ---------------------------------------------------------------
+         Reveal-on-scroll — same intent as the legacy page's .rv/.rv.in,
+         reimplemented with this repo's own splash-in curve.
+         --------------------------------------------------------------- */
+      .rv {
+        opacity: 0;
+        transform: translateY(18px);
+        transition:
+          opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+          transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .rv.in {
+        opacity: 1;
+        transform: translateY(0);
+      }
+      .rv-d1 {
+        transition-delay: 0.1s;
+      }
+      .rv-d2 {
+        transition-delay: 0.2s;
+      }
+
+      header.hero {
+        padding: 6rem 0 4rem;
+        border-bottom: 1px solid var(--color-border);
+      }
+      .breadcrumb {
+        font-family: var(--font-mono);
+        font-size: 0.8125rem;
+        color: var(--color-text-muted);
+      }
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.625rem;
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--color-text-secondary);
+        margin-top: 2.5rem;
+      }
+      .eyebrow::before {
+        content: '';
+        width: 2rem;
+        height: 1px;
+        background: var(--color-text-secondary);
+      }
+      h1 {
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: clamp(2.25rem, 5.5vw, 3.5rem);
+        line-height: 1.08;
+        letter-spacing: -0.02em;
+        margin: 1.25rem 0;
+      }
+      h1 em {
+        color: var(--color-accent);
+        font-style: normal;
+      }
+      .lede {
+        font-size: 1.0625rem;
+        color: var(--color-text-secondary);
+        max-width: 62ch;
+        font-weight: 300;
+      }
+      .lede + .lede {
+        margin-top: 1.125rem;
+      }
+      .lede b {
+        color: var(--color-text);
+        font-weight: 600;
+      }
+
+      section {
+        padding: 5rem 0;
+        border-bottom: 1px solid var(--color-border);
+        position: relative;
+      }
+      .sec-eyebrow {
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--color-accent);
+        margin-bottom: 0.875rem;
+      }
+      h2 {
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: clamp(1.75rem, 3.4vw, 2.5rem);
+        line-height: 1.1;
+        margin: 0 0 1rem;
+      }
+      .sec-sub {
+        color: var(--color-text-secondary);
+        font-size: 0.9375rem;
+        max-width: 60ch;
+      }
+
+      /* ---------------------------------------------------------------
+         The spiral — one lit node (Kiulap, the only cycle so far), an
+         Archimedean curve drawn in on scroll (stroke-dashoffset, same
+         technique the legacy page uses), and a dashed tail trailing off
+         into the dark for whatever comes next, unnamed on purpose.
+         --------------------------------------------------------------- */
+      .spiral-layout {
+        display: grid;
+        grid-template-columns: 1.1fr 0.9fr;
+        gap: 3rem;
+        align-items: center;
+        margin-top: 2.75rem;
+      }
+      @media (max-width: 760px) {
+        .spiral-layout {
+          grid-template-columns: 1fr;
+          gap: 2rem;
+        }
+      }
+      svg#spiral {
+        width: 100%;
+        height: auto;
+        display: block;
+        overflow: visible;
+      }
+      #spiral .orbit-path {
+        fill: none;
+        stroke: var(--color-border);
+        stroke-width: 1.4;
+        stroke-dasharray: 400;
+        stroke-dashoffset: 400;
+        transition: stroke-dashoffset 1.6s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      .spiral-stage.in #spiral .orbit-path {
+        stroke-dashoffset: 0;
+      }
+      #spiral .tail-path {
+        fill: none;
+        stroke: var(--color-text-muted);
+        stroke-width: 1.2;
+        stroke-dasharray: 3 6;
+        opacity: 0;
+        transition: opacity 0.8s 1.4s;
+      }
+      .spiral-stage.in #spiral .tail-path {
+        opacity: 0.5;
+      }
+      #spiral text {
+        font-family: var(--font-mono);
+      }
+      #spiral .name-lbl {
+        font-size: 13px;
+        font-weight: 700;
+        fill: var(--color-text);
+        opacity: 0;
+        transition: opacity 0.6s 0.5s;
+      }
+      #spiral .ver-lbl {
+        font-size: 9.5px;
+        fill: var(--color-text-secondary);
+        opacity: 0;
+        transition: opacity 0.6s 0.6s;
+      }
+      .spiral-stage.in #spiral .name-lbl,
+      .spiral-stage.in #spiral .ver-lbl {
+        opacity: 1;
+      }
+      #spiral .kiulap-ring {
+        animation: spiralPulse 2.8s ease-in-out infinite;
+      }
+      @keyframes spiralPulse {
+        0%,
+        100% {
+          opacity: 0.85;
+        }
+        50% {
+          opacity: 0.3;
+        }
+      }
+
+      .spiral-key .sk-title {
+        font-family: var(--font-mono);
+        font-size: 0.6875rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--color-text-secondary);
+        margin-bottom: 1.25rem;
+      }
+      .spiral-key ul {
+        list-style: none;
+        margin: 0 0 1.5rem;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+      .spiral-key li {
+        display: flex;
+        gap: 0.75rem;
+        align-items: flex-start;
+        font-size: 0.875rem;
+        color: var(--color-text-secondary);
+      }
+      .spiral-key li b {
+        color: var(--color-text);
+        font-weight: 600;
+      }
+      .sk-dot {
+        width: 0.75rem;
+        height: 0.75rem;
+        border-radius: 50%;
+        flex: none;
+        margin-top: 0.25rem;
+      }
+      .sk-dot.now {
+        background: var(--color-accent);
+        box-shadow: 0 0 10px rgba(255, 107, 53, 0.6);
+      }
+      .sk-dot.next {
+        background: transparent;
+        border: 1.5px dashed var(--color-text-muted);
+      }
+      .sk-dir {
+        font-size: 0.8125rem;
+        color: var(--color-text-muted);
+        padding-top: 1.25rem;
+        border-top: 1px solid var(--color-border);
+      }
+      .sk-nums {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 1.5rem;
+        margin-top: 1.25rem;
+        font-family: var(--font-mono);
+        font-size: 0.6875rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+        align-items: baseline;
+      }
+      .sk-nums span {
+        display: inline-flex;
+        align-items: baseline;
+        gap: 0.4rem;
+      }
+      .sk-nums b {
+        font-family: var(--font-display);
+        font-size: 1.25rem;
+        color: var(--color-accent);
+        font-weight: 700;
+      }
+
+      /* ---------------------------------------------------------------
+         Phase-by-phase pour — the legacy page's extraction-line timeline,
+         reimplemented: an ember line fills down a track as you scroll,
+         lighting each phase node as the fill passes it.
+         --------------------------------------------------------------- */
+      .pour {
+        position: relative;
+        margin-top: 3rem;
+      }
+      .pour-track {
+        position: absolute;
+        left: 11px;
+        top: 6px;
+        bottom: 6px;
+        width: 2px;
+        background: var(--color-border);
+      }
+      .pour-fill {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 0%;
+        background: linear-gradient(var(--color-accent), var(--color-accent-hover));
+        box-shadow: 0 0 10px rgba(255, 107, 53, 0.5);
+        transition: height 0.1s linear;
+      }
+      .phase {
+        position: relative;
+        padding: 0 0 2.75rem 3rem;
+        opacity: 0.35;
+        transition: opacity 0.5s;
+      }
+      .phase:last-child {
+        padding-bottom: 0.25rem;
+      }
+      .phase.lit {
+        opacity: 1;
+      }
+      .phase-node {
+        position: absolute;
+        left: 4px;
+        top: 3px;
+        width: 15px;
+        height: 15px;
+        border-radius: 50%;
+        background: var(--color-canvas);
+        border: 2px solid var(--color-text-muted);
+        transition:
+          border-color 0.5s,
+          background 0.5s,
+          box-shadow 0.5s;
+        z-index: 2;
+      }
+      .phase.lit .phase-node {
+        border-color: var(--color-accent);
+        background: var(--color-accent);
+        box-shadow: 0 0 12px rgba(255, 107, 53, 0.55);
+      }
+      .phase.current .phase-node {
+        border-color: var(--color-gold);
+      }
+      .phase.current.lit .phase-node {
+        background: var(--color-gold);
+        border-color: var(--color-gold);
+        box-shadow: 0 0 12px rgba(207, 165, 59, 0.55);
+      }
+      .phase-head {
+        display: flex;
+        align-items: baseline;
+        gap: 0.875rem;
+        flex-wrap: wrap;
+        margin-bottom: 0.4rem;
+      }
+      .phase-name {
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: 1.25rem;
+      }
+      .phase-ver {
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+        color: var(--color-accent);
+      }
+      .phase-now {
+        font-family: var(--font-mono);
+        font-size: 0.625rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--color-canvas);
+        background: var(--color-gold);
+        border-radius: 999px;
+        padding: 0.2rem 0.625rem;
+        font-weight: 700;
+      }
+      .phase-line {
+        display: flex;
+        gap: 0.625rem;
+        font-size: 0.9375rem;
+        line-height: 1.6;
+        max-width: 62ch;
+        margin-top: 0.5rem;
+      }
+      .phase-line .k {
+        font-family: var(--font-mono);
+        font-size: 0.625rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+        flex: none;
+        width: 4.5rem;
+        padding-top: 0.2rem;
+      }
+      .phase-line.shipped .v {
+        color: var(--color-text-secondary);
+      }
+      .phase-line.felt .v {
+        color: var(--color-text-muted);
+        font-style: italic;
+      }
+
+      .bio-card {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 1.5rem;
+        align-items: start;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: 0.875rem;
+        padding: 2rem;
+        margin-top: 2rem;
+      }
+      @media (max-width: 560px) {
+        .bio-card {
+          grid-template-columns: 1fr;
+        }
+      }
+      .bio-mark {
+        width: 3.5rem;
+        height: 3.5rem;
+        border-radius: 0.75rem;
+        background: rgba(255, 107, 53, 0.14);
+        border: 1px solid rgba(255, 107, 53, 0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--color-accent);
+        flex: none;
+      }
+      .bio-mark svg {
+        width: 1.75rem;
+        height: 1.75rem;
+      }
+      .bio-role {
+        font-family: var(--font-mono);
+        font-size: 0.6875rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--color-accent);
+        margin-bottom: 0.625rem;
+      }
+      .bio-name {
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: 1.25rem;
+        margin: 0 0 0.25rem;
+      }
+      .bio-card p {
+        color: var(--color-text-secondary);
+        max-width: 62ch;
+        font-size: 0.9375rem;
+      }
+      .bio-card b {
+        color: var(--color-text);
+        font-weight: 600;
+      }
+
+      .closer {
+        text-align: center;
+        padding: 6rem 0;
+        border-bottom: none;
+      }
+      .closer h2 {
+        max-width: 22ch;
+        margin: 0 auto 1.5rem;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-family: var(--font-mono);
+        font-size: 0.8125rem;
+        letter-spacing: 0.04em;
+        padding: 0.875rem 1.75rem;
+        border-radius: 999px;
+        font-weight: 700;
+        background: var(--color-accent);
+        color: var(--color-accent-contrast);
+        transition:
+          transform 0.3s,
+          background 0.3s;
+      }
+      .btn:hover {
+        background: var(--color-accent-hover);
+        color: var(--color-accent-contrast);
+        transform: translateY(-2px);
+      }
+
+      footer {
+        text-align: center;
+        padding: 2.5rem 1.5rem 3rem;
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+        color: var(--color-text-muted);
+        line-height: 2;
+        position: relative;
+        z-index: 1;
+      }
+      footer a {
+        color: var(--color-text-muted);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+        .rv {
+          opacity: 1;
+          transform: none;
+          transition: none;
+        }
+        .pour-fill {
+          height: 100% !important;
+        }
+        .phase {
+          opacity: 1;
+        }
+        .phase .phase-node {
+          border-color: var(--color-accent);
+          background: var(--color-accent);
+        }
+        #spiral .orbit-path {
+          stroke-dashoffset: 0;
+        }
+        #spiral .tail-path,
+        #spiral .name-lbl,
+        #spiral .ver-lbl {
+          opacity: 1;
+        }
+        #spiral .kiulap-ring {
+          animation: none;
+          opacity: 0.6;
+        }
+        .glow {
+          opacity: 0.12;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow" aria-hidden="true"></div>
+
+    <div class="wrap">
+      <header class="hero">
+        <a class="breadcrumb" href="/">&larr; Seduh Score Next</a>
+        <div class="eyebrow rv">Behind the Seduh</div>
+        <h1 class="rv rv-d1">
+          Same brand, a fresh spiral —<br />told <em>one phase at a time.</em>
+        </h1>
+        <p class="lede rv rv-d2">
+          This is the rebuild, not the pitch.
+          <b
+            >Seduh Score Next is what happens when the guy who built the original Seduh Score
+            decides the receipt-and-group-chat problem deserved a second draft</b
+          >
+          — offline-first this time, a real database instead of Firebase shortcuts, and a fixed
+          advancement bug the old app never quite trusted itself with.
+        </p>
+        <p class="lede rv rv-d2">
+          One phase at a time, aimed at a real deadline: the Cup Tasters event on 4 October 2026.
+        </p>
+      </header>
+
+      <section>
+        <div class="sec-eyebrow rv">How we're naming this one</div>
+        <h2 class="rv rv-d1">A separate spiral</h2>
+        <p class="sec-sub rv rv-d1">
+          The legacy site's own spiral ran seven cycles, Kiulap through Seria — the urban core
+          spiralling out toward the frontier, v1.0 through v5.x (<a
+            href="https://seduhscore.com/bts/"
+            >seduhscore.com/bts/</a
+          >). This codebase doesn't continue that run.
+        </p>
+        <div class="spiral-layout">
+          <div class="spiral-stage" id="spiralStage">
+            <svg
+              id="spiral"
+              viewBox="0 0 260 220"
+              aria-label="Codename spiral: one cycle shipped so far, Kiulap, with the next unnamed"
+            ></svg>
+          </div>
+          <div class="spiral-key rv rv-d1">
+            <div class="sk-title">Reading the map</div>
+            <ul>
+              <li>
+                <span class="sk-dot now"></span>
+                <span
+                  ><b>Kiulap · v1.0.1</b> — the urban core, again. A from-scratch rewrite earns its
+                  own lineage rather than picking up mid-spiral.</span
+                >
+              </li>
+              <li>
+                <span class="sk-dot next"></span>
+                <span>The next cycle — named when it actually starts, not before.</span>
+              </li>
+            </ul>
+            <div class="sk-dir">
+              Same direction as the original: capital core → frontier, whenever the second cycle
+              begins.
+            </div>
+            <div class="sk-nums">
+              <span><b>1</b> cycle</span>
+              <span><b>v1.0.1</b> now</span>
+              <span><b>1 / 4</b> formats</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="cycles">
+        <div class="sec-eyebrow rv">The pour, phase by phase</div>
+        <h2 class="rv rv-d1">What shipped — and what it felt like.</h2>
+        <p class="sec-sub rv rv-d1">
+          One cycle in progress — <strong>Kiulap</strong> — built as seven phases per the project's
+          frozen handoff spec. Six shipped; the seventh is the hardening pass running now.
+        </p>
+
+        <div class="pour" id="phasePour">
+          <div class="pour-track"><div class="pour-fill" id="phasePourFill"></div></div>
+
+          <div class="phase" data-phase>
+            <div class="phase-node"></div>
+            <div class="phase-head">
+              <span class="phase-name">Phase 0</span>
+              <span class="phase-ver">Foundation</span>
+            </div>
+            <div class="phase-line shipped">
+              <span class="k">Shipped</span
+              ><span class="v"
+                >The scaffold, nine review subagents, four custom ESLint rules, a local Supabase
+                stack wired into CI, and a protected <code>main</code> branch.</span
+              >
+            </div>
+            <div class="phase-line felt">
+              <span class="k">Felt like</span
+              ><span class="v"
+                >writing down the rules before writing any of the code they'd police.</span
+              >
+            </div>
+          </div>
+
+          <div class="phase" data-phase>
+            <div class="phase-node"></div>
+            <div class="phase-head">
+              <span class="phase-name">Phase 1</span>
+              <span class="phase-ver">Schema &amp; security</span>
+            </div>
+            <div class="phase-line shipped">
+              <span class="k">Shipped</span
+              ><span class="v"
+                >Every core and Cup Taster table, row-level security across all thirteen of them,
+                and a dedicated pgTAP gate proving every write policy carries a real
+                <code>WITH CHECK</code>.</span
+              >
+            </div>
+            <div class="phase-line felt">
+              <span class="k">Felt like</span
+              ><span class="v"
+                >finding a live cross-org bug in review before it ever reached a real event.</span
+              >
+            </div>
+          </div>
+
+          <div class="phase" data-phase>
+            <div class="phase-node"></div>
+            <div class="phase-head">
+              <span class="phase-name">Phase 2</span>
+              <span class="phase-ver">Core libraries</span>
+            </div>
+            <div class="phase-line shipped">
+              <span class="k">Shipped</span
+              ><span class="v"
+                >Partitioning, ranking, advancement, countdown, time-clamping, and entitlements —
+                pure logic, fuzz-tested against thousands of combinations before a single screen
+                existed.</span
+              >
+            </div>
+            <div class="phase-line felt">
+              <span class="k">Felt like</span
+              ><span class="v"
+                >paying down the old app's advancement bug before it could be reborn here.</span
+              >
+            </div>
+          </div>
+
+          <div class="phase" data-phase>
+            <div class="phase-node"></div>
+            <div class="phase-head">
+              <span class="phase-name">Phase 3</span>
+              <span class="phase-ver">Registry &amp; offline</span>
+            </div>
+            <div class="phase-line shipped">
+              <span class="k">Shipped</span
+              ><span class="v"
+                >Person/entry registration with real dedup, an IndexedDB mirror, and a FIFO outbox
+                queue with idempotency keys — the spine every later screen writes through.</span
+              >
+            </div>
+            <div class="phase-line felt">
+              <span class="k">Felt like</span
+              ><span class="v"
+                >designing for the wifi at the venue, not the wifi in the office.</span
+              >
+            </div>
+          </div>
+
+          <div class="phase" data-phase>
+            <div class="phase-node"></div>
+            <div class="phase-head">
+              <span class="phase-name">Phase 4</span>
+              <span class="phase-ver">Cup Taster</span>
+            </div>
+            <div class="phase-line shipped">
+              <span class="k">Shipped</span
+              ><span class="v"
+                >Stage setup, roster, heat generation, live timing, the three-state scoring toggle,
+                standings with a real tiebreak flow, a completion report, and export — the format's
+                full loop.</span
+              >
+            </div>
+            <div class="phase-line felt">
+              <span class="k">Felt like</span
+              ><span class="v"
+                >"correct is a count, never a column" stopping being a rule on paper and becoming a
+                real constraint.</span
+              >
+            </div>
+          </div>
+
+          <div class="phase" data-phase>
+            <div class="phase-node"></div>
+            <div class="phase-head">
+              <span class="phase-name">Phase 5</span>
+              <span class="phase-ver">Live surfaces</span>
+            </div>
+            <div class="phase-line shipped">
+              <span class="k">Shipped</span
+              ><span class="v"
+                >A publish path, a shared viewer shell over Supabase Realtime, and two real
+                consumers — projector and phone — proven to agree on the same countdown, to the
+                second.</span
+              >
+            </div>
+            <div class="phase-line felt">
+              <span class="k">Felt like</span
+              ><span class="v"
+                >the point this stopped being an organiser tool and became something a whole room
+                could watch at once.</span
+              >
+            </div>
+          </div>
+
+          <div class="phase current" data-phase>
+            <div class="phase-node"></div>
+            <div class="phase-head">
+              <span class="phase-name">Phase 6</span>
+              <span class="phase-ver">Hardening</span>
+              <span class="phase-now">Current phase</span>
+            </div>
+            <div class="phase-line shipped">
+              <span class="k">In progress</span
+              ><span class="v"
+                >Accessibility pass, offline soak testing, and a dry run against the real roster.
+                Guess the Bean stays the working v4.x version — deliberately not rebuilt here.</span
+              >
+            </div>
+            <div class="phase-line felt">
+              <span class="k">Feels like</span
+              ><span class="v"
+                >the unglamorous work that decides whether October 4th actually goes well.</span
+              >
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="sec-eyebrow rv">The one guy</div>
+        <h2 class="rv rv-d1">Firdaus Omar</h2>
+        <p class="sec-sub rv rv-d1">
+          Grey Matter Coffee Werks &middot; Brunei — coffee first, code second, both stubborn.
+        </p>
+        <div class="bio-card rv">
+          <div class="bio-mark" aria-hidden="true">
+            <svg
+              viewBox="22 16 56 48"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="50" cy="26" r="5.5" fill="currentColor" stroke="none"></circle>
+              <path d="M26 60 a24 24 0 0 1 48 0"></path>
+              <path d="M35 60 a15 15 0 0 1 30 0"></path>
+              <path d="M44 60 a6 6 0 0 1 12 0"></path>
+            </svg>
+          </div>
+          <div>
+            <div class="bio-role">Founder &middot; Maker</div>
+            <div class="bio-name">Same person, same company, second rewrite.</div>
+            <p>
+              In the Brunei coffee scene since <b>2012</b>. Grey Matter Coffee Werks has carried the
+              torch from its predecessor, TwentyFive, for the last five years. A competitor at ABTC
+              since <b>2023</b> and a judge for Malaysia's national coffee competition in
+              <b>2019</b> — someone who has stood on both sides of the scoresheet this app produces.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="closer" style="border-bottom: none">
+        <div class="sec-eyebrow rv" style="justify-content: center; display: inline-flex">
+          Enough of the back room
+        </div>
+        <h2 class="rv rv-d1">
+          That's the pour so far.<br />Come back for <em>the next cycle.</em>
+        </h2>
+        <a class="btn rv rv-d2" href="/">&larr; Back to Seduh Score Next</a>
+      </section>
+
+      <footer>
+        Seduh Score &middot; Grey Matter Coffee Werks &middot; Brunei Darussalam<br />
+        Behind the Seduh
+      </footer>
+    </div>
+
+    <script>
+      // Reveal-on-scroll — same IntersectionObserver approach as the legacy
+      // page, just gated by prefers-reduced-motion up front rather than only
+      // in a CSS override, so a reduced-motion viewer never even receives the
+      // opacity-0 starting state as a flash of unrevealed content.
+      (function () {
+        const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (reduce) return;
+        const io = new IntersectionObserver(
+          (entries) => {
+            entries.forEach((e) => {
+              if (e.isIntersecting) {
+                e.target.classList.add('in');
+                io.unobserve(e.target);
+              }
+            });
+          },
+          { threshold: 0.14 },
+        );
+        document.querySelectorAll('.rv').forEach((el) => io.observe(el));
+      })();
+
+      // The spiral — one shipped cycle (Kiulap), same Archimedean-curve
+      // technique as the legacy page's seven-cycle version, generalized down
+      // to N=1: a short orbit arc in from the center to the lit node, then a
+      // dashed tail continuing outward for whatever comes next, unnamed.
+      (function () {
+        const svg = document.getElementById('spiral');
+        const stage = document.getElementById('spiralStage');
+        const cx = 90,
+          cy = 110,
+          startR = 14,
+          rStep = 30,
+          aStep = (150 * Math.PI) / 180;
+        const pos = (t) => {
+          const a = t * aStep - Math.PI / 2;
+          const r = startR + t * rStep;
+          return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
+        };
+        const polyline = (from, to) => {
+          const steps = Math.max(2, Math.round((to - from) * 24));
+          let d = '';
+          for (let s = 0; s <= steps; s++) {
+            const p = pos(from + ((to - from) * s) / steps);
+            d += (s ? ' L ' : 'M ') + p.x.toFixed(1) + ' ' + p.y.toFixed(1);
+          }
+          return d;
+        };
+        const kiulap = pos(0);
+        let html = '<path class="orbit-path" d="' + polyline(-1.4, 0) + '"/>';
+        html += '<path class="tail-path" d="' + polyline(0, 1.7) + '"/>';
+        html +=
+          '<circle class="kiulap-ring" cx="' +
+          kiulap.x +
+          '" cy="' +
+          kiulap.y +
+          '" r="14" fill="none" stroke="var(--color-accent)" stroke-width="1.5"/>';
+        html +=
+          '<circle cx="' + kiulap.x + '" cy="' + kiulap.y + '" r="7" fill="var(--color-accent)"/>';
+        html +=
+          '<text class="name-lbl" x="' +
+          kiulap.x +
+          '" y="' +
+          (kiulap.y - 42) +
+          '" text-anchor="middle">KIULAP</text>';
+        html +=
+          '<text class="ver-lbl" x="' +
+          kiulap.x +
+          '" y="' +
+          (kiulap.y - 27) +
+          '" text-anchor="middle">now &middot; v1.0.1</text>';
+        svg.innerHTML = html;
+
+        const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (reduce) {
+          stage.classList.add('in');
+          return;
+        }
+        new IntersectionObserver(
+          (es, obs) => {
+            es.forEach((e) => {
+              if (e.isIntersecting) {
+                stage.classList.add('in');
+                obs.disconnect();
+              }
+            });
+          },
+          { threshold: 0.3 },
+        ).observe(stage);
+      })();
+
+      // Phase pour — the ember fill-line tracks scroll progress through the
+      // phase list and lights each node as the fill passes it, same
+      // mechanism as the legacy page's .pour-fill/.cyc-node pairing.
+      (function () {
+        const pour = document.getElementById('phasePour');
+        const fill = document.getElementById('phasePourFill');
+        const items = [...document.querySelectorAll('[data-phase]')];
+        const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (reduce) return;
+        function update() {
+          const r = pour.getBoundingClientRect();
+          const vh = window.innerHeight;
+          const progress = Math.min(Math.max((vh * 0.72 - r.top) / r.height, 0), 1);
+          fill.style.height = progress * 100 + '%';
+          const fillY = r.top + r.height * progress;
+          items.forEach((ph) => {
+            const node = ph.querySelector('.phase-node').getBoundingClientRect();
+            ph.classList.toggle('lit', node.top + 7 <= fillY);
+          });
+        }
+        window.addEventListener('scroll', update, { passive: true });
+        window.addEventListener('resize', update);
+        update();
+      })();
+    </script>
+  </body>
+</html>
