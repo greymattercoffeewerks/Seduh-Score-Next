@@ -40,11 +40,36 @@
   margin: var(--space-1) 0 0 0;
 }
 
+/* Border bumped from --border-hairline/--color-border to --border-strong/
+   --color-border-strong (production UI/UX feedback, 2026-09-05) — the card
+   background (--color-surface, clay-50) sits only one step away from the
+   page canvas (--color-canvas, clay-100) on the clay ramp, which read as
+   "nearly invisible" against the page in review. A stronger edge does the
+   container-separation work without reaching for a shadow — DESIGN.md's
+   own no-shadow rule (flat borders/surface steps only, for a print-
+   scoresheet register over SaaS gloss) stays intact; this is still a
+   border, just a bolder one. Shared by every screen using `.card` —
+   intentional, a system-wide fix, not an eventsScreen-only patch. */
 .card {
   background: var(--color-surface);
-  border: var(--border-hairline) solid var(--color-border);
+  border: var(--border-strong) solid var(--color-border-strong);
   border-radius: var(--radius-md);
   padding: var(--space-5);
+}
+
+/* Found in review (ui-accessibility-reviewer): --color-focus-ring is
+   --color-border-strong in both surface modes (colors.css), and
+   --focus-ring-width now equals this card's own border-width (both
+   --border-strong, 2px) — so a focused .card (setupScreen.js's
+   `.card.stage-row`, tabindex="-1", focused after every Move up/down) would
+   otherwise show its own frame and its focus ring as one fused ~6px band
+   with no visible "focus moved here" signal, exactly the ambiguity the
+   pre-existing 1px-pale-border/2px-dark-ring pairing never had. Pushing the
+   ring out by the card's own border-width restores a real visible gap
+   between "this is the card" and "this is focus," without touching the
+   global --focus-ring-offset every other focusable element still uses. */
+.card:focus-visible {
+  outline-offset: calc(var(--focus-ring-offset) + var(--border-strong));
 }
 
 .btn {

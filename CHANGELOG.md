@@ -1,3 +1,146 @@
+## `.card` border strengthened — container contrast follow-up · 2026-09-05
+
+**No single §14 task ID** — a direct follow-up to the "Production UI/UX feedback pass"
+entry below, closing that entry's own open "card is nearly invisible" item. Prompted by
+the user comparing a Figma Make redesign proposal's white bordered/shadowed containers
+against this app's own `.card` and asking whether the same visual separation was
+achievable without breaking `DESIGN.md`'s no-shadow rule.
+
+**What shipped**, `src/formats/cup-taster/heatsScreen.css` (the shared origin of
+`.card`, reused by every screen): border changed from `--border-hairline`/`--color-border`
+(1px, clay-300) to `--border-strong`/`--color-border-strong` (2px, clay-950 paper /
+clay-50 stage) — both tokens already existed in the system (previously used for focus
+rings and strong dividers only), so this is a bolder application of an existing token,
+not a new one. Explicitly chosen over a box-shadow, which the user rejected as
+conflicting with the system's own flat, no-shadow, print-scoresheet register.
+
+**Verifier**: `ui-accessibility-reviewer`, since this touches the one class shared by
+every screen's containers. **Not a clean pass — found one real, exercised bug**, fixed
+before this entry was written: `--color-focus-ring` is defined as `--color-border-strong`
+in both surface modes, and `--focus-ring-width` (2px) now exactly equals `.card`'s own
+new border-width — so `setupScreen.js`'s `.card.stage-row` (a real focus target,
+`tabindex="-1"`, focused after every Move up/down) would have shown its own frame and
+its focus ring as one fused band, erasing the "focus moved here" signal the ring exists
+to give. Fixed with a scoped `.card:focus-visible { outline-offset: calc(...) }` that
+pushes the ring out by the card's own border-width, rather than changing the global
+`--focus-ring-offset` every other focusable element still relies on.
+
+**Checked and found clean**: no nested `.card` exists anywhere yet (so no doubled-border
+case today); both `data-surface="paper"` and `data-surface="stage"` theme correctly
+through the existing token cascade, confirmed against all 14 files that reference
+`.card`; the `is-test-banner` never nests inside a `.card` and shares no token with the
+new border color, so no adjacency clash with D9's own visual signal.
+
+**Noted, not changed**: form fields/list rows inside a `.card` (still 1px
+`--color-border`) now read as visually subordinate to their own container's 2px frame —
+a real hierarchy observation (chrome louder than content) but not a defect, and the
+reviewer's own framing was that the heavier repeated-frame look on dense screens
+(`reportScreen.js`'s stacked stage cards, `heatsScreen.js`'s stacked heat cards) is
+consistent with the deliberately austere aesthetic this project already cites (Acme
+Cups), not an accidental regression. Left as-is; revisit only if it reads as too heavy
+in practice at a real event.
+
+Full suite (941 tests) verified passing after both this change and its focus-ring fix.
+
+---
+
+## Production UI/UX feedback pass — nav, mobile menu, feedback placement · 2026-09-05
+
+**No single §14 task ID** — a response to external UI/UX review of production screenshots
+(desktop + mobile), not a numbered build-plan task. Also independently confirmed via a
+Figma Make "redesign proposal" the user asked Claude to review — its own preview mockup
+reproduced the same `dd----yyyy` native-date-input rendering ours has, corroborating that
+finding as a real browser quirk rather than an app bug (see below).
+
+**What shipped**, `src/core/appShell.js`/`.css`, `src/core/eventsScreen.js`/`.css`,
+`src/main.js`:
+- Mobile hamburger menu for the persistent organiser nav (🔴 High in the feedback) —
+  `.app-shell-nav` collapses by default below this codebase's existing 640px breakpoint
+  (`rosterScreen.css`/`setupScreen.css`'s own convention), toggled by a new
+  `.app-shell-nav-toggle` button (`aria-expanded`, `aria-controls`, Escape-to-close).
+  Closed a real 3-wrapped-row-before-content problem and a clipped "Audience —
+  projector" label on mobile.
+- Renamed "Audience — projector"/"Audience — phone" → "Projector view"/"Phone view"
+  (`main.js`) — the old labels read as developer-facing route names, not user-facing
+  destinations.
+- `.app-shell-link-active` restyled from bold+underline to a bordered pill (see the
+  Verifier section below — the first version of this fix was itself broken).
+- `.app-shell-auth` gained a `border-left` divider, isolating the signed-in
+  email/sign-out control from the nav/sync cluster.
+- `eventsScreen.js`'s `.screen-feedback` region moved from being the last DOM child
+  (after both cards) to right after the `<h1>` — found to be a systemic pattern across
+  ~13 screens in this app (every screen appends its feedback region last; confirmed via
+  a full-repo grep), but this fix is deliberately scoped to just this one screen for now.
+  See Follow-ups below.
+- `.events-list a` gained a `→` CTA affordance and bold weight (event rows had no visual
+  hint that the name was the only clickable part of the row).
+
+**Two items from the external feedback were deliberately NOT done**, because they
+conflict with this project's own non-negotiables (CLAUDE.md), not because they were
+missed:
+- **"Remove the TEST DATA badge / hide the is-test checkbox from production UI"** —
+  directly contradicts D9 (`is_test` renders unmistakably, from the first commit) and
+  `core/CLAUDE.md`'s own note that `eventsScreen.js`'s checkbox is *the one place in the
+  app that actually sets `is_test`*, not a debug leftover. The Figma Make proposal
+  independently reached for the same "just remove it" instinct — expected, since an
+  external reviewer has no visibility into why this project exists to close exactly that
+  failure mode (v4.x's demo mode being indistinguishable from a real event).
+- **The `dd----yyyy` date placeholder** — not fixable as a "placeholder string" because
+  there isn't one: `dateInput` is a native `type="date"` field with no `placeholder`
+  attribute in this codebase's source. It's the browser's own locale-based rendering of
+  an empty native date picker. Confirmed independently: the Figma Make proposal's own
+  live preview — a completely different codebase, built without ever seeing this
+  project's source — renders the identical `dd-----yyyy` string in its "fixed" date
+  field, despite its own build notes claiming the opposite. Switching to
+  `type="text"` with a controlled placeholder would trade away the native calendar
+  picker for free-form entry — a real design tradeoff, not applied without being asked.
+
+**Typography hierarchy** ("h1 vs section headers too similar") was checked, not changed
+— `--text-2xl` (33px, Cabinet Grotesk 700) vs `--text-lg` (21px) is already a full
+type-scale step, confirmed via computed style in a real browser. No code gap found.
+
+**Verifier**: `ui-accessibility-reviewer` (360px first, per DoD). **Not a clean pass —
+found real issues in the first version of this fix**, all closed before this entry was
+written:
+- The first `.app-shell-link-active` pill used `--color-surface-sunken` as its only
+  signal — computed contrast against the header background is ~1.17:1, nowhere near the
+  3:1 WCAG 1.4.11 floor for a UI-state indicator, and it happened to exactly match
+  `:hover`'s background too, making active and hover indistinguishable. Fixed with a
+  `--color-border-strong` hairline border carrying the actual contrast, background kept
+  only as secondary reinforcement; `:hover` reverted to a plain underline so the two
+  states read as genuinely different.
+- `.events-list a::after`'s `content: '→'` had no accessible-text suppression — both
+  Chromium and Firefox expose generated content to the accessibility tree by default
+  now, so every event row would have announced "<name>, right arrow" to a screen reader,
+  pure noise. Fixed with the `content: '→' / ''` alt-text form.
+- Moving `.screen-feedback` up in `eventsScreen.js` put it inside the sticky header's
+  own occlusion zone (`--app-shell-header-height`/`scroll-margin-top`, from the earlier
+  app-wiring pass) without adding it to that rule's selector list — an organiser
+  scrolled down to the create-event form who triggers a validation error would get
+  scrolled back up to a message landing partially behind the sticky header. Fixed by
+  adding `.screen-feedback` to the existing `scroll-margin-top` rule in `appShell.css`.
+- (Non-blocking, fixed anyway) No Escape-key handler on the new hamburger toggle —
+  the standard WAI-ARIA disclosure-button pattern expects it since focus stays on the
+  button when the panel opens. Added.
+
+6 new regression tests in `appShell.test.js` (toggle open/close + aria-expanded, closing
+on link click including `openInNewTab`, state survives a `setNav()` re-render, Escape
+closes and returns focus, Escape no-ops while already closed); `main.test.js` updated
+for the renamed labels. 941 tests total, all passing.
+
+**Follow-ups (not done this pass, recorded so they aren't lost)**:
+- The `.screen-feedback`-appended-last pattern exists identically across the other ~12
+  screens (`heatsScreen.js`, `setupScreen.js`, `scoringScreen.js`, `timingScreen.js`,
+  `timingManualScreen.js`, `standingsScreen.js`, `reportScreen.js`, `rosterScreen.js`,
+  `loginScreen.js`, `eventDashboardScreen.js`, `timingRouteScreen.js`, `main.js`'s own
+  `renderAuthCheckError`) — worth the same top-of-content reordering, generalized rather
+  than repeated per screen.
+- The shared `.card` background (`--color-surface` vs `--color-canvas`) is a genuinely
+  subtle one-step contrast by design (DESIGN.md's flat-borders-not-shadows rule) — the
+  "card is nearly invisible" feedback is real but changing it is a system-wide token
+  decision affecting every screen, not an Events-page-only fix, so it wasn't changed
+  without asking.
+
 ## Delete event feature — Permanent deletion of test events from Events list · 2026-09-05
 
 **Closes a growing production gap: test events from verification runs accumulate indefinitely with no cleanup path.** User's explicit instruction: "We need a real way to delete test events." A one-off user-requested feature outside the build plan, implemented ahead of Phase 6 hardening.

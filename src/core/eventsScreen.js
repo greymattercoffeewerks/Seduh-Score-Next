@@ -385,6 +385,15 @@ export async function mountEventsScreen(
       setFeedback(feedback, pendingSuccess, 'success');
       pendingSuccess = null;
     }
+    // Appended right after the heading, not after both cards (found in
+    // production UI/UX feedback: a message rendered at the very bottom of
+    // the page, below the create-event form, was easy to miss entirely for
+    // an organiser working near the top — the scrollIntoView call below
+    // compensated for error tone, but jumping the viewport is itself a
+    // jarring way to surface a message someone should just see). `.card`'s
+    // own display: none-when-empty (heatsScreen.css's `.screen-feedback`
+    // rule) means this costs nothing when there's nothing to show.
+    container.appendChild(feedback);
 
     container.appendChild(
       el('div', { className: 'card' }, [
@@ -406,7 +415,6 @@ export async function mountEventsScreen(
       el('div', { className: 'card' }, [el('h2', { text: 'Create event' }), form]),
     );
 
-    container.appendChild(feedback);
     root.appendChild(container);
 
     if (focusAfterRender) {

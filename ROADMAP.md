@@ -53,7 +53,12 @@ spacing, base styles, self-hosted fonts, `DESIGN.md`, `preview.html`) shipped
 Closes the open item that used to sit below. `heatsScreen.js`/`.css` (T4.2) is the first
 real screen consuming it. **2026-08-28 follow-up**: the display and mono typefaces
 refreshed — Erode → Cabinet Grotesk, Tabular → JetBrains Mono; Switzer unchanged — see
-CHANGELOG.md's "Design system type refresh" entry.
+CHANGELOG.md's "Design system type refresh" entry. **2026-09-05 follow-up**: production
+UI/UX feedback pass — mobile hamburger nav, renamed audience-surface links, active-pill
+contrast fix, feedback-region placement (eventsScreen.js only; other screens still
+pending), event-card CTA — see CHANGELOG.md's "Production UI/UX feedback pass" entry,
+including the two items deliberately not done (D9's is_test visibility, the native
+date-input placeholder).
 
 **App wiring (2026-08-30), also not tied to a phase task**: every organiser screen and
 both audience surfaces already existed, fully built and reviewed through Phase 4/5, but
