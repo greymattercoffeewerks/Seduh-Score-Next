@@ -80,6 +80,20 @@ timeout, unlike every other initial-load boundary call in this codebase) and a r
 reproducible jsdom test-isolation bug found and fixed while writing the tests. See
 CHANGELOG.md's dated entry for the full account.
 
+**Delete event feature (2026-09-05), also not tied to a phase task**: closes a production
+gap where test events from verification runs accumulated indefinitely with no cleanup
+path. User's explicit request: "We need a real way to delete test events." `core/events.js`
+gained `deleteTestEvent(orgId, eventId, client)`, a thin wrapper around a new
+`delete_test_event(p_org_id, p_event_id)` RPC (migration `20260905130000_delete_test_event_rpc.sql`)
+that validates `is_test: true` and org ownership before cascading the deletion through all
+child tables (which have pre-existing `on delete cascade`). `eventsScreen.js` gained a
+per-row Delete action (shown only for test events), a two-step confirmation UI, and an
+explicit re-entrancy guard. Six reviewers in parallel found and fixed real issues,
+including a critical accessibility gap where the in-flight "Deleting…" render silently
+dropped keyboard focus to `<body>`, and a test fixture gap where a single-event deletion
+test couldn't distinguish "removed by id" from "removed the only element." See
+CHANGELOG.md's dated entry for the full account.
+
 ---
 
 ## Phase 0 — Foundation

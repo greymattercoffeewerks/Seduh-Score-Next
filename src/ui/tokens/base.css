@@ -50,6 +50,21 @@ body {
   outline-offset: var(--focus-ring-offset);
 }
 
+/* Real-time input-modality override (core/inputModality.js) — narrower and
+   more specific than the rule above, so it wins only while the tracked
+   modality is 'pointer'. Applies app-wide (every scripted element.focus()
+   call that follows a mouse click, not just router.js's own post-navigation
+   heading move that first surfaced this — most screens' own feedback.focus()
+   after a form-submit click has the identical shape); this doesn't narrow
+   the rule above or violate its own "never suppress without an equivalent
+   style" warning, since a keydown flips the tracked modality back to
+   'keyboard' immediately (see that module's own comment) before a real
+   keyboard-driven focus can ever be affected — only the moment right after a
+   pointer-driven one ever has the ring suppressed. */
+[data-input-modality='pointer'] :focus-visible {
+  outline: none;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

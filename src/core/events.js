@@ -69,3 +69,21 @@ export async function listEventsForOrg(orgId, client = getSupabase()) {
   if (error) throw error;
   return data;
 }
+
+// Thin RPC wrapper (user-requested "Delete event" feature, 2026-09-05) —
+// the actual is_test-only safety guard, org check, and cascading delete all
+// live server-side (supabase/migrations/20260905130000_delete_test_event_rpc.sql's
+// own module comment has the full reasoning for why this is an RPC and not a
+// plain client-side `.delete()`: `events_write`'s RLS policy alone would
+// otherwise let an org member delete a REAL event with the same one call as
+// a test one, with no undo). Not routed through the outbox — a low-
+// frequency, organiser-only setup-time action, same reasoning setup.js's own
+// module comment already gives for stage/set creation, not a live-heat-
+// time-pressure write.
+export async function deleteTestEvent(orgId, eventId, client = getSupabase()) {
+  const { error } = await client.rpc('delete_test_event', {
+    p_org_id: orgId,
+    p_event_id: eventId,
+  });
+  if (error) throw error;
+}

@@ -53,6 +53,51 @@ describe('renderEventsList', () => {
     expect(list.querySelector('li').textContent).toContain('2026-10-04');
     expect(list.querySelector('li').textContent).toContain('HQ');
   });
+
+  it("offers a Delete action on a test event, but not on a real one — matches delete_test_event's own server-side guard", () => {
+    const events = [
+      { id: 'ev1', name: 'Test Run', is_test: true },
+      { id: 'ev2', name: 'Real Event', is_test: false },
+    ];
+    const list = renderEventsList(events);
+    const rows = [...list.querySelectorAll('li')];
+    expect(rows[0].querySelector('#delete-event-ev1')).not.toBeNull();
+    expect(rows[1].querySelector('button')).toBeNull();
+  });
+
+  it('shows the two-step confirm, not the bare Delete button, once deleteStates marks that event as confirming', () => {
+    const events = [{ id: 'ev1', name: 'Test Run', is_test: true }];
+    const list = renderEventsList(events, { deleteStates: { ev1: 'confirming' } });
+    expect(list.querySelector('#delete-event-ev1')).toBeNull();
+    expect(list.querySelector('#confirm-delete-ev1')).not.toBeNull();
+    expect(list.querySelector('#cancel-delete-ev1')).not.toBeNull();
+  });
+
+  it('shows a disabled "Deleting…" state, with no clickable controls, while deleteStates marks that event as deleting', () => {
+    const events = [{ id: 'ev1', name: 'Test Run', is_test: true }];
+    const list = renderEventsList(events, { deleteStates: { ev1: 'deleting' } });
+    expect(list.querySelector('li').textContent).toContain('Deleting…');
+    expect(list.querySelector('button')).toBeNull();
+  });
+
+  it("wires Delete/Confirm delete/Cancel to their own distinct handlers, each passed the clicked event's id", () => {
+    const events = [{ id: 'ev1', name: 'Test Run', is_test: true }];
+    const onDeleteClick = vi.fn();
+    const list = renderEventsList(events, { deleteHandlers: { onDeleteClick } });
+    list.querySelector('#delete-event-ev1').click();
+    expect(onDeleteClick).toHaveBeenCalledWith('ev1');
+
+    const onConfirmDelete = vi.fn();
+    const onCancelDelete = vi.fn();
+    const confirming = renderEventsList(events, {
+      deleteStates: { ev1: 'confirming' },
+      deleteHandlers: { onConfirmDelete, onCancelDelete },
+    });
+    confirming.querySelector('#confirm-delete-ev1').click();
+    confirming.querySelector('#cancel-delete-ev1').click();
+    expect(onConfirmDelete).toHaveBeenCalledWith('ev1');
+    expect(onCancelDelete).toHaveBeenCalledWith('ev1');
+  });
 });
 
 describe('renderCreateForm', () => {
@@ -70,12 +115,19 @@ describe('renderCreateForm', () => {
   });
 });
 
-function fakeClient({ events = [], insertResult } = {}) {
+function fakeClient({ events = [], insertResult, rpcResult } = {}) {
   const calls = [];
   const db = { events: [...events] };
   return {
     calls,
     db,
+    rpc: (name, payload) => {
+      calls.push(['rpc', name, payload]);
+      if (name === 'delete_test_event' && !rpcResult?.error) {
+        db.events = db.events.filter((event) => event.id !== payload.p_event_id);
+      }
+      return Promise.resolve(rpcResult ?? { data: null, error: null });
+    },
     from(table) {
       const builder = {
         select: () => builder,
@@ -273,5 +325,100 @@ describe('mountEventsScreen', () => {
     // screen's content, untouched, not this screen's own event list.
     expect(root.querySelector('#other-screen-marker')).not.toBeNull();
     expect(root.textContent).not.toContain('No events yet');
+  });
+
+  it('clicking Delete then Cancel returns to the plain Delete button, without ever calling the RPC', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const client = fakeClient({
+      events: [{ id: 'ev1', org_id: 'org1', name: 'Test Run', is_test: true }],
+    });
+    await mountEventsScreen(root, { orgId: 'org1', client, defaultFormat: 'cup_taster' });
+
+    root.querySelector('#delete-event-ev1').click();
+    expect(root.querySelector('#confirm-delete-ev1')).not.toBeNull();
+
+    root.querySelector('#cancel-delete-ev1').click();
+    expect(root.querySelector('#delete-event-ev1')).not.toBeNull();
+    expect(client.calls.some(([action]) => action === 'rpc')).toBe(false);
+  });
+
+  it('confirming delete calls delete_test_event with orgId/eventId, removes only that row, and shows success', async () => {
+    // Two test events, not one — found in review (test-auditor): a
+    // single-event fixture can't tell "removed by id" apart from "removed
+    // the only element regardless of id" (e.g. events = events.slice(1)
+    // would pass just as well as the real events.filter(id !== eventId)).
+    // ev2 surviving, untouched and still showing its own plain Delete
+    // button throughout, is also the only coverage anywhere in this file
+    // for deleteStates' own claimed per-id independence.
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const client = fakeClient({
+      events: [
+        { id: 'ev1', org_id: 'org1', name: 'Test Run', is_test: true },
+        { id: 'ev2', org_id: 'org1', name: 'Other Test Run', is_test: true },
+      ],
+    });
+    await mountEventsScreen(root, { orgId: 'org1', client, defaultFormat: 'cup_taster' });
+
+    root.querySelector('#delete-event-ev1').click();
+    expect(root.querySelector('#delete-event-ev2')).not.toBeNull(); // untouched while ev1 confirms
+    root.querySelector('#confirm-delete-ev1').click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(client.calls).toContainEqual([
+      'rpc',
+      'delete_test_event',
+      { p_org_id: 'org1', p_event_id: 'ev1' },
+    ]);
+    // Precise selectors, not a text-substring check — "Other Test Run"
+    // itself contains "Test Run", so a bare toContain('Test Run') would
+    // stay true even after ev1's own row is correctly gone.
+    expect(root.querySelector('#delete-event-ev1')).toBeNull();
+    expect(root.querySelector('#delete-event-ev2')).not.toBeNull();
+    expect(root.textContent).toContain('Other Test Run');
+    expect(root.querySelector('.screen-feedback').textContent).toBe('Event deleted.');
+  });
+
+  it('a rapid double-click on Confirm delete enqueues only one delete_test_event call', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const client = fakeClient({
+      events: [{ id: 'ev1', org_id: 'org1', name: 'Test Run', is_test: true }],
+    });
+    await mountEventsScreen(root, { orgId: 'org1', client, defaultFormat: 'cup_taster' });
+
+    root.querySelector('#delete-event-ev1').click();
+    const confirmButton = root.querySelector('#confirm-delete-ev1');
+    // Both clicks dispatched before either handler's own await yields —
+    // proves the guard itself (deleteStates[eventId] === 'deleting'), not
+    // just that the button happened to already be gone by the second click.
+    confirmButton.click();
+    confirmButton.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(client.calls.filter(([action]) => action === 'rpc')).toHaveLength(1);
+  });
+
+  it('a delete_test_event failure (e.g. the server refusing a non-test event) shows the error and leaves the row in place', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const client = fakeClient({
+      events: [{ id: 'ev2', org_id: 'org1', name: 'Real Event', is_test: true }],
+      rpcResult: {
+        data: null,
+        error: new Error('delete_test_event: refusing to delete a non-test event (ev2)'),
+      },
+    });
+    await mountEventsScreen(root, { orgId: 'org1', client, defaultFormat: 'cup_taster' });
+
+    root.querySelector('#delete-event-ev2').click();
+    root.querySelector('#confirm-delete-ev2').click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(root.textContent).toContain('Real Event');
+    expect(root.querySelector('.screen-feedback').dataset.tone).toBe('error');
+    // Back to the plain Delete button, not stuck showing "Deleting…" forever.
+    expect(root.querySelector('#delete-event-ev2')).not.toBeNull();
   });
 });
