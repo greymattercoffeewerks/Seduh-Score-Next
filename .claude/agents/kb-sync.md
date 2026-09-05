@@ -44,6 +44,16 @@ For each task completed:
    pattern that should generalize), make sure `CONVENTIONS.md` was updated to carry it —
    that document is edited continuously and backfilled from what shipped (§0), and it is
    the one companion doc this agent should prompt for if it's stale.
+7. Bump the footer version: run `npm version patch --no-git-tag-version` (repo root).
+   This is `package.json`'s `version` field — the single source `src/core/version.js`
+   re-exports as `APP_VERSION` (see CONVENTIONS.md's "Versioning" section) — bumped here
+   so the footer always names the exact deployed commit without relying on anyone
+   remembering to do it by hand (that manual discipline was tried and silently skipped
+   for months; this step replaces it, 2026-09-05). Uses `--no-git-tag-version` since this
+   agent never commits (CLAUDE.md's non-negotiables) — it only edits the working tree for
+   the orchestrating session to commit alongside the CHANGELOG.md entry. Skip this step
+   only if the task made no shippable change at all (e.g. a pure investigation with no
+   code/doc edits) — a closed task with nothing to show shouldn't still move the counter.
 
 Keep entries terse and factual. This is a record for future reference, not a narrative —
 optimise for someone skimming months of entries to find why a decision was made.
