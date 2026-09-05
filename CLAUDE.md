@@ -200,7 +200,7 @@ tests/e2e/                      ← Playwright — see CONVENTIONS.md for the th
 Local: `C:\Users\mfosa\OneDrive\Documents\seduh-score-next`
 GitHub: `github.com/greymattercoffeewerks/Seduh-Score-Next` (public)
 Supabase project: **linked, 2026-08-30** — cloud project "Seduh Score Next"
-(`wxzwanprluqmgoagbkpv`, org "Grey Matter Coffee Werks", region `ap-southeast-1`), all 11
+(`wxzwanprluqmgoagbkpv`, org "Grey Matter Coffee Werks", region `ap-southeast-1`), all
 migrations pushed via the Supabase MCP's `apply_migration` (not yet linked locally via
 `supabase link` — that needs the project's DB password from the dashboard, not set up
 this session; pushing further migrations can keep using the MCP, or `supabase link` once
@@ -208,4 +208,17 @@ that password is in hand). A real org + organiser login were provisioned directl
 CHANGELOG.md's dated entry) — credentials given to the user in chat, not committed
 anywhere. Local dev still defaults to the local stack (`npm run supabase -- start`,
 Studio at `http://127.0.0.1:54423`) — nothing about local dev changed.
+
+**Pushing a migration to the cloud project is a separate, manual step from merging its
+PR — merging to `main` only deploys the frontend (Cloudflare Workers Builds); it never
+touches the cloud database.** Found the hard way, 2026-09-05: three migrations
+(`events_anon_safe_read`, `record_heat_time_overwrite_scoped_to_manual`,
+`delete_test_event_rpc`) landed on `main` across PRs #49–#51 and sat live-deployed on the
+frontend for hours to a day+ before anyone noticed the cloud database was never updated
+to match — surfaced only when a user hit "Something went wrong saving that" clicking the
+brand-new Delete button in production, root-caused to the RPC function not existing on
+the cloud project. **After merging any PR that adds/changes a migration, immediately
+check whether it's been pushed to the cloud project too** — compare
+`supabase/migrations/` against `mcp__<supabase-project>__list_migrations`'s own output,
+and push whatever's missing via `apply_migration` before considering the task done.
 Current phase: check `ROADMAP.md`.
