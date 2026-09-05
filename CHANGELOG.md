@@ -1,3 +1,17 @@
+## Tooling: automated version bump via kb-sync end-of-task step · 2026-09-05
+
+**No §14 task ID** — a process/automation decision (D27, user pick of option 1 from three proposed approaches). The "bump on every closed task" convention documented in CONVENTIONS.md's "Versioning" section turned out to be entirely honored in the breach: `package.json` sat at `1.0.0` through months of shipped, logged tasks before anyone noticed.
+
+**What changed:**
+- `.claude/agents/kb-sync.md` (step 7): added `npm version patch --no-git-tag-version` to kb-sync's own end-of-task instructions, running immediately after the CHANGELOG.md entry — since kb-sync already runs on every task close, that's the exact signal the "bump" rule keys off. Uses `--no-git-tag-version` so this agent doesn't commit (CLAUDE.md's non-negotiables) — leaves the version bump in the working tree for the orchestrating session to commit alongside the CHANGELOG.md entry. Skipped only for pure investigations with no shippable change.
+- `CONVENTIONS.md`'s "Versioning" section: replaced the unenforced hand-discipline language with documentation that the bump is now automatic (2026-09-05), explains why the earlier manual approach was ineffective, and cross-references the legacy Seduh Score repo's identical-but-still-manual version mechanism for contrast.
+
+**Shipped artifact:** `package.json` version `1.0.1` (bumped from `1.0.0` by this task's own step 7, already in the working tree).
+
+**Verification:** tested `npm version patch --no-git-tag-version` works as designed — bumped package.json and package-lock.json only, created no git tag, created no commit. Grepped `src/` for any hardcoded `1.0.0` string that might break under this bump — none found. No reviewers run for process-only change with no application code.
+
+---
+
 ## User-requested batch: footer versioning, focus-box splash, elapsed-time display, favicon · 2026-09-05
 
 **No single §14 task ID** — a batch of four user-requested items closed the same session.

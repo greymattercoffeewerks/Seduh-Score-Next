@@ -260,9 +260,18 @@ regardless.
 it as `APP_VERSION` alongside `NAMEPLATE`, and `appShell.js` renders both in a footer on
 every organiser screen (`Seduh Score · <nameplate> · v<version>`) — quick, glance-based
 verification for bug reports, matching the legacy Seduh Score site's own footer
-(`seduhscore.com/bts/`: "seduhscore.com · v5.16.0"). Bump on every closed task, matching
-CHANGELOG.md's own granularity — the footer should always name the exact deployed
-commit, not just the last big milestone.
+(`seduhscore.com/bts/`: "seduhscore.com · v5.16.0").
+
+**Bumped automatically, not by hand** (2026-09-05) — `kb-sync`'s own end-of-task step
+runs `npm version patch --no-git-tag-version`, matching `CHANGELOG.md`'s own per-task
+granularity, so the footer always names the exact deployed commit without depending on
+anyone remembering to do it. This replaces an earlier "bump it yourself" convention that
+turned out not to be followed in practice — `package.json` sat at `1.0.0` through months
+of shipped, logged tasks before this was caught (found investigating the legacy Seduh
+Score repo's own footer-version mechanism, which has the identical manual-and-unenforced
+problem — see CHANGELOG.md's dated entry). The legacy repo's version is otherwise the
+same shape (a single hardcoded constant `index.html` reads on load), just without
+`package.json` as the source of truth, since that codebase predates any real build step.
 
 **Nameplate**: each build cycle takes a place name spiralling outward from Kiulap — the
 same convention the legacy site used (Kiulap → Gadong → Kiarong → Menglait → Berakas →
