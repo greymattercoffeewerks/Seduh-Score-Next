@@ -44,7 +44,12 @@ For each task completed:
    pattern that should generalize), make sure `CONVENTIONS.md` was updated to carry it —
    that document is edited continuously and backfilled from what shipped (§0), and it is
    the one companion doc this agent should prompt for if it's stale.
-7. Bump the footer version: run `npm version patch --no-git-tag-version` (repo root).
+7. Run `npx prettier --write CHANGELOG.md` (and `ROADMAP.md`/`CONVENTIONS.md` if this
+   task touched them) right after editing — CI's `format:check` has failed on this
+   agent's own `CHANGELOG.md` entry twice now (2026-09-05), each caught only after the
+   orchestrating session pushed and watched CI fail, costing a whole extra round trip.
+   Cheaper to run once here than to rediscover it per task.
+8. Bump the footer version: run `npm version patch --no-git-tag-version` (repo root).
    This is `package.json`'s `version` field — the single source `src/core/version.js`
    re-exports as `APP_VERSION` (see CONVENTIONS.md's "Versioning" section) — bumped here
    so the footer always names the exact deployed commit without relying on anyone

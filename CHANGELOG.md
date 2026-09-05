@@ -14,8 +14,8 @@ to it.
   and fixed during code-reviewer pass (see Verifiers below).
 - `src/core/appShell.js`: footer refactored from plain-text span to structured content
   — text "Seduh Score · Kiulap · " stays plain, version number now wrapped in `<a
-  class="app-shell-footer-link" href="/bts/index.html" target="_blank"
-  rel="noopener noreferrer">` with `.sr-only` suffix "— Behind the Seduh (opens in a
+class="app-shell-footer-link" href="/bts/index.html" target="_blank"
+rel="noopener noreferrer">` with `.sr-only` suffix "— Behind the Seduh (opens in a
   new tab)", mirroring pre-existing `setNav()` openInNewTab link pattern. Href uses
   full path (`/bts/index.html`, not `/bts/`) — caught during live browser testing:
   bare path falls through to SPA fallback and serves login screen instead. Comment
@@ -30,6 +30,7 @@ to it.
   name via sr-only text.
 
 **Bugs found and fixed in migrated page** (code-reviewer pass):
+
 - (a) **HIGH** — both "back to app" links used `href="#"` (dead link once page is
   live/wired). Fixed to `href="/"`.
 - (b) **MEDIUM** — page footer still read "...Behind the Seduh (draft)", contradicting
@@ -43,6 +44,7 @@ to it.
 shows "(draft)" or hardcoded version; both back-links navigate to `/`.
 
 **Verifiers:** Two parallel reviewers (UI touched, new static asset served):
+
 - `ui-accessibility-reviewer` (CLEAN + one low-severity gap, fixed): confirmed footer
   on paper surface, contrast passes all three states (rest ~5.9:1, hover/focus ~18:1),
   underline-at-rest satisfies WCAG 1.4.1, sr-only suffix necessary (WCAG 2.4.4, Link
