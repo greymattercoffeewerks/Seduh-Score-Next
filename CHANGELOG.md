@@ -23,7 +23,7 @@ caught sooner).
 precedented once in this same file), and replaced every `await settle(); <assert on a
 triggered async outcome>` pattern with `await flush(() => { <same assertions> })` —
 polling for the real outcome instead of sleeping a guessed duration and hoping. Left
-untouched the handful of `settle()` calls deliberately proving *absence* over a fixed
+untouched the handful of `settle()` calls deliberately proving _absence_ over a fixed
 real duration (e.g. "no more RPC calls after unmount/teardown") — those aren't part of
 this failure mode and don't belong on a positive poll.
 
