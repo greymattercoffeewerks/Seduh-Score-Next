@@ -64,23 +64,36 @@ export function mountAppShell(
   const breadcrumbEl = el('span', { className: 'app-shell-breadcrumb' });
   const navEl = el('nav', {
     className: 'app-shell-nav',
-    id: 'app-shell-nav',
     attrs: { 'aria-label': 'Sections' },
   });
+  const authEl = el('div', { className: 'app-shell-auth' });
+  // Wraps navEl AND authEl together (2026-09-06, user-reported production
+  // feedback + Figma's own suggestion) — the auth control ("signed in as
+  // X" + Sign out) used to sit directly in the header row as its own
+  // always-visible cluster, which on a phone viewport pushed it onto a
+  // second full-width row below the header even with the nav itself
+  // already collapsed into the hamburger — exactly the "vertical space"
+  // problem the screenshot showed. Rolling it into the SAME collapsible
+  // panel as the nav closes that gap: collapsed by default on mobile
+  // (one row: mark, name, hamburger), and revealed together with the nav
+  // links once the menu opens. `navPanel` itself is never recreated (only
+  // navEl's own children, on every setNav()) — same persistent-node
+  // reasoning the toggle below already relied on for `navEl`.
+  const navPanel = el('div', { className: 'app-shell-nav-panel', id: 'app-shell-nav-panel' }, [
+    navEl,
+    authEl,
+  ]);
   // Mobile hamburger toggle (production UI/UX feedback, 2026-09-05):
-  // below the CSS breakpoint, `.app-shell-nav` collapses to nothing by
-  // default — without a toggle, several nav links plus the auth control
+  // below the CSS breakpoint, `.app-shell-nav-panel` collapses to nothing
+  // by default — without a toggle, several nav links plus the auth control
   // used to force the header onto 2-3 wrapped rows before any real screen
-  // content appeared. `navEl` itself is never recreated (only its children,
-  // on every setNav()), so the open/closed class toggled here survives
-  // across navigation the same way the rest of this shell's persistent
-  // nodes do — no extra state threading needed.
+  // content appeared.
   const navToggle = el('button', {
     className: 'app-shell-nav-toggle tap-target',
     attrs: {
       type: 'button',
       'aria-expanded': 'false',
-      'aria-controls': 'app-shell-nav',
+      'aria-controls': 'app-shell-nav-panel',
       'aria-label': 'Menu',
     },
   });
@@ -89,8 +102,19 @@ export function mountAppShell(
     el('span', { className: 'app-shell-nav-toggle-bar', attrs: { 'aria-hidden': 'true' } }),
     el('span', { className: 'app-shell-nav-toggle-bar', attrs: { 'aria-hidden': 'true' } }),
   );
+  // Shared by every "the menu should close now" trigger below — a nav link
+  // tap, Sign out, Escape. Kept as one function (found worth factoring in
+  // review, code-reviewer/ui-accessibility-reviewer, 2026-09-06) once
+  // `authEl` moved into this same panel alongside the nav links: two
+  // different KINDS of control now live in one collapsible unit, and each
+  // needs the identical close side effect, not just the one link-click
+  // case this used to be inlined for.
+  function closeMenu() {
+    navPanel.classList.remove('app-shell-nav-panel-open');
+    navToggle.setAttribute('aria-expanded', 'false');
+  }
   navToggle.addEventListener('click', () => {
-    const open = navEl.classList.toggle('app-shell-nav-open');
+    const open = navPanel.classList.toggle('app-shell-nav-panel-open');
     navToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
   });
   // Escape closes the menu and returns focus to the toggle — found in
@@ -102,9 +126,23 @@ export function mountAppShell(
   // fires while focus is somewhere else entirely unrelated to this menu.
   navToggle.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape') return;
-    if (!navEl.classList.contains('app-shell-nav-open')) return;
-    navEl.classList.remove('app-shell-nav-open');
-    navToggle.setAttribute('aria-expanded', 'false');
+    if (!navPanel.classList.contains('app-shell-nav-panel-open')) return;
+    closeMenu();
+    navToggle.focus();
+  });
+  // A second Escape listener, on the panel itself — found missing in review
+  // (ui-accessibility-reviewer, 2026-09-06): the one above only fires while
+  // focus is still ON the toggle button, but a keyboard user who Tabs
+  // FORWARD into the panel's own contents (a nav link, or Sign out — both
+  // real destinations now that the panel holds more than just the toggle's
+  // own immediate next stop) gets no Escape handling at all once they've
+  // left the toggle. This one is intentionally scoped to `navPanel`, not
+  // `document` — Escape from somewhere totally unrelated to this menu
+  // should never suddenly steal focus back to a hamburger button.
+  navPanel.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    if (!navPanel.classList.contains('app-shell-nav-panel-open')) return;
+    closeMenu();
     navToggle.focus();
   });
   // §8.4/T3.3's own AC: "three-state sync panel on the organiser device: off
@@ -122,15 +160,13 @@ export function mountAppShell(
     className: 'app-shell-sync',
     attrs: { role: 'status', 'aria-live': 'polite' },
   });
-  const authEl = el('div', { className: 'app-shell-auth' });
   const header = el('header', { className: 'app-shell-header' }, [
     markEl,
     nameEl,
     breadcrumbEl,
     navToggle,
-    navEl,
+    navPanel,
     syncEl,
-    authEl,
   ]);
   const outlet = el('main', { className: 'app-shell-outlet' });
   // Quick, glance-based verification for bug reports (2026-09-05) — mirrors
@@ -194,6 +230,16 @@ export function mountAppShell(
         // enabled and clickable so they can just try again.
         return;
       }
+      // Found missing in review (code-reviewer/ui-accessibility-reviewer,
+      // 2026-09-06): unlike a nav link, this button never closed the mobile
+      // menu on its own — signing out from an open hamburger menu on a
+      // phone left the panel open (now showing only nav links, since
+      // renderAuth(null) below clears authEl) sitting over the login screen
+      // that mounts underneath it, with no interaction having told the
+      // organiser the menu was still expanded. Only on the success path —
+      // a failed attempt (the catch above) keeps the menu open on purpose,
+      // so Sign out is still right there to retry without reopening it.
+      closeMenu();
       // Re-triggers the router (requireAuth finds no session and shows
       // the login screen) — no extra plumbing needed between this shell
       // and main.js's own routing.
@@ -405,10 +451,7 @@ export function mountAppShell(
       // renders next (or the same screen, for a new-tab link) has no
       // upside. Harmless no-op above the CSS breakpoint, where the class
       // has no visual effect.
-      linkEl.addEventListener('click', () => {
-        navEl.classList.remove('app-shell-nav-open');
-        navToggle.setAttribute('aria-expanded', 'false');
-      });
+      linkEl.addEventListener('click', () => closeMenu());
       navEl.appendChild(linkEl);
     }
 

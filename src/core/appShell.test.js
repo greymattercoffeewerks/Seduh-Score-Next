@@ -222,29 +222,29 @@ describe('mountAppShell', () => {
   });
 
   describe('mobile nav toggle', () => {
-    it('renders a closed hamburger toggle wired to the nav via aria-controls, and the nav starts collapsed', () => {
+    it('renders a closed hamburger toggle wired to the nav panel via aria-controls, and the panel starts collapsed', () => {
       const root = document.createElement('div');
       mountAppShell(root, { client: fakeClient({}) });
       const toggle = root.querySelector('.app-shell-nav-toggle');
-      const nav = root.querySelector('.app-shell-nav');
+      const panel = root.querySelector('.app-shell-nav-panel');
       expect(toggle).not.toBeNull();
       expect(toggle.getAttribute('aria-expanded')).toBe('false');
-      expect(toggle.getAttribute('aria-controls')).toBe(nav.id);
-      expect(nav.classList.contains('app-shell-nav-open')).toBe(false);
+      expect(toggle.getAttribute('aria-controls')).toBe(panel.id);
+      expect(panel.classList.contains('app-shell-nav-panel-open')).toBe(false);
     });
 
-    it('clicking the toggle opens the nav and flips aria-expanded; clicking again closes it', () => {
+    it('clicking the toggle opens the panel and flips aria-expanded; clicking again closes it', () => {
       const root = document.createElement('div');
       mountAppShell(root, { client: fakeClient({}) });
       const toggle = root.querySelector('.app-shell-nav-toggle');
-      const nav = root.querySelector('.app-shell-nav');
+      const panel = root.querySelector('.app-shell-nav-panel');
 
       toggle.dispatchEvent(new Event('click', { bubbles: true }));
-      expect(nav.classList.contains('app-shell-nav-open')).toBe(true);
+      expect(panel.classList.contains('app-shell-nav-panel-open')).toBe(true);
       expect(toggle.getAttribute('aria-expanded')).toBe('true');
 
       toggle.dispatchEvent(new Event('click', { bubbles: true }));
-      expect(nav.classList.contains('app-shell-nav-open')).toBe(false);
+      expect(panel.classList.contains('app-shell-nav-panel-open')).toBe(false);
       expect(toggle.getAttribute('aria-expanded')).toBe('false');
     });
 
@@ -259,16 +259,16 @@ describe('mountAppShell', () => {
         ],
       });
       const toggle = root.querySelector('.app-shell-nav-toggle');
-      const nav = root.querySelector('.app-shell-nav');
+      const panel = root.querySelector('.app-shell-nav-panel');
       toggle.dispatchEvent(new Event('click', { bubbles: true }));
-      expect(nav.classList.contains('app-shell-nav-open')).toBe(true);
+      expect(panel.classList.contains('app-shell-nav-panel-open')).toBe(true);
 
       const newTabLink = [...root.querySelectorAll('.app-shell-link')].find((l) =>
         l.textContent.startsWith('Projector view'),
       );
       newTabLink.dispatchEvent(new Event('click', { bubbles: true, cancelable: true }));
 
-      expect(nav.classList.contains('app-shell-nav-open')).toBe(false);
+      expect(panel.classList.contains('app-shell-nav-panel-open')).toBe(false);
       expect(toggle.getAttribute('aria-expanded')).toBe('false');
       document.body.removeChild(root);
     });
@@ -278,15 +278,15 @@ describe('mountAppShell', () => {
       document.body.appendChild(root);
       mountAppShell(root, { client: fakeClient({}) });
       const toggle = root.querySelector('.app-shell-nav-toggle');
-      const nav = root.querySelector('.app-shell-nav');
+      const panel = root.querySelector('.app-shell-nav-panel');
 
       toggle.dispatchEvent(new Event('click', { bubbles: true }));
-      expect(nav.classList.contains('app-shell-nav-open')).toBe(true);
+      expect(panel.classList.contains('app-shell-nav-panel-open')).toBe(true);
 
       toggle.focus();
       toggle.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 
-      expect(nav.classList.contains('app-shell-nav-open')).toBe(false);
+      expect(panel.classList.contains('app-shell-nav-panel-open')).toBe(false);
       expect(toggle.getAttribute('aria-expanded')).toBe('false');
       expect(document.activeElement).toBe(toggle);
       document.body.removeChild(root);
@@ -296,24 +296,54 @@ describe('mountAppShell', () => {
       const root = document.createElement('div');
       mountAppShell(root, { client: fakeClient({}) });
       const toggle = root.querySelector('.app-shell-nav-toggle');
-      const nav = root.querySelector('.app-shell-nav');
+      const panel = root.querySelector('.app-shell-nav-panel');
 
       expect(() =>
         toggle.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })),
       ).not.toThrow();
-      expect(nav.classList.contains('app-shell-nav-open')).toBe(false);
+      expect(panel.classList.contains('app-shell-nav-panel-open')).toBe(false);
     });
 
-    it('the open/closed state survives a setNav() re-render (navEl itself is never recreated)', async () => {
+    it("pressing Escape from a nav link INSIDE the open panel also closes it and returns focus to the toggle — found in review, 2026-09-06: the toggle's own Escape listener only ever covered focus still sitting ON the toggle, not focus a keyboard user has already Tabbed forward into the panel's own contents", async () => {
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      const { setNav } = mountAppShell(root, { client: fakeClient({}) });
+      await setNav({ links: [{ label: 'Events', href: '#/events' }] });
+      const toggle = root.querySelector('.app-shell-nav-toggle');
+      const panel = root.querySelector('.app-shell-nav-panel');
+
+      toggle.dispatchEvent(new Event('click', { bubbles: true }));
+      expect(panel.classList.contains('app-shell-nav-panel-open')).toBe(true);
+
+      const link = root.querySelector('.app-shell-link');
+      link.focus();
+      link.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+      expect(panel.classList.contains('app-shell-nav-panel-open')).toBe(false);
+      expect(toggle.getAttribute('aria-expanded')).toBe('false');
+      expect(document.activeElement).toBe(toggle);
+      document.body.removeChild(root);
+    });
+
+    it('the open/closed state survives a setNav() re-render (navPanel itself is never recreated)', async () => {
       const root = document.createElement('div');
       const { setNav } = mountAppShell(root, { client: fakeClient({}) });
       const toggle = root.querySelector('.app-shell-nav-toggle');
-      const nav = root.querySelector('.app-shell-nav');
+      const panel = root.querySelector('.app-shell-nav-panel');
       toggle.dispatchEvent(new Event('click', { bubbles: true }));
-      expect(nav.classList.contains('app-shell-nav-open')).toBe(true);
+      expect(panel.classList.contains('app-shell-nav-panel-open')).toBe(true);
 
       await setNav({ links: [{ label: 'Events', href: '#/events' }] });
-      expect(nav.classList.contains('app-shell-nav-open')).toBe(true);
+      expect(panel.classList.contains('app-shell-nav-panel-open')).toBe(true);
+    });
+
+    it('the nav panel contains both the nav links and the auth control, so opening the menu reveals them together (2026-09-06, closing the "auth as its own always-visible row" vertical-space complaint)', async () => {
+      const root = document.createElement('div');
+      const { setNav } = mountAppShell(root, { client: fakeClient({}) });
+      await setNav({ links: [{ label: 'Events', href: '#/events' }] });
+      const panel = root.querySelector('.app-shell-nav-panel');
+      expect(panel.querySelector('.app-shell-nav')).not.toBeNull();
+      expect(panel.querySelector('.app-shell-auth')).not.toBeNull();
     });
   });
 
@@ -434,6 +464,55 @@ describe('mountAppShell', () => {
 
       expect(auth.signOut).toHaveBeenCalledTimes(1);
       expect(location.hash).toBe('#/events');
+    });
+
+    it('clicking Sign out from an open mobile menu closes the menu — found in review, 2026-09-06: unlike a nav link, Sign out never closed the panel on its own, leaving an expanded (now-empty) menu sitting over the login screen that mounts underneath it', async () => {
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      const { auth, trigger } = fakeAuthWithTrigger();
+      mountAppShell(root, { client: { auth, from: () => ({}) } });
+      trigger({ user: { email: 'organiser@local.test' } });
+
+      const toggle = root.querySelector('.app-shell-nav-toggle');
+      const panel = root.querySelector('.app-shell-nav-panel');
+      toggle.dispatchEvent(new Event('click', { bubbles: true }));
+      expect(panel.classList.contains('app-shell-nav-panel-open')).toBe(true);
+
+      const signOutButton = [...root.querySelectorAll('button')].find(
+        (b) => b.textContent === 'Sign out',
+      );
+      signOutButton.dispatchEvent(new Event('click', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(panel.classList.contains('app-shell-nav-panel-open')).toBe(false);
+      expect(toggle.getAttribute('aria-expanded')).toBe('false');
+      document.body.removeChild(root);
+    });
+
+    it('a FAILED Sign out leaves the menu open — the button is right there to retry without reopening it', async () => {
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      const failingAuth = {
+        signOut: vi.fn(() => Promise.resolve({ error: new Error('network unreachable') })),
+        onAuthStateChange: (cb) => {
+          cb('SIGNED_IN', { user: { email: 'organiser@local.test' } });
+          return { data: { subscription: { unsubscribe: vi.fn() } } };
+        },
+      };
+      mountAppShell(root, { client: { auth: failingAuth, from: () => ({}) } });
+
+      const toggle = root.querySelector('.app-shell-nav-toggle');
+      const panel = root.querySelector('.app-shell-nav-panel');
+      toggle.dispatchEvent(new Event('click', { bubbles: true }));
+
+      const signOutButton = [...root.querySelectorAll('button')].find(
+        (b) => b.textContent === 'Sign out',
+      );
+      signOutButton.dispatchEvent(new Event('click', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(panel.classList.contains('app-shell-nav-panel-open')).toBe(true);
+      document.body.removeChild(root);
     });
 
     it('unmount() unsubscribes from the auth-state listener', () => {

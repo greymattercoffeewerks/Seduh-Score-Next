@@ -76,22 +76,36 @@
   border-radius: var(--radius-full);
 }
 
-.app-shell-nav {
+/* Wraps the nav links AND the auth control (2026-09-06, user-reported —
+   the auth cluster used to sit outside this panel, forcing its own
+   full-width row below the header on mobile even with the nav already
+   collapsed, exactly the "vertical space" complaint the screenshot showed;
+   Figma's own suggestion was to fold it into this same menu instead). One
+   collapsible unit — display toggled here, everything inside (`.app-shell-nav`,
+   `.app-shell-auth`) just stacks in document order once shown. Full-width
+   dropdown panel below the header row it belongs to — order:1 with the
+   header itself as a flex-wrap container puts it on its own new line under
+   every other header item, regardless of DOM position. */
+.app-shell-nav-panel {
   display: none;
   flex-direction: column;
   align-items: stretch;
-  gap: var(--space-1);
-  /* Full-width dropdown panel below the header row it belongs to — order:1
-     with the header itself as a flex-wrap container puts it on its own new
-     line under every other header item, regardless of DOM position. */
+  gap: var(--space-3);
   order: 1;
   width: 100%;
   padding-top: var(--space-2);
   border-top: var(--border-hairline) solid var(--color-border);
 }
 
-.app-shell-nav.app-shell-nav-open {
+.app-shell-nav-panel.app-shell-nav-panel-open {
   display: flex;
+}
+
+.app-shell-nav {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-1);
 }
 
 .app-shell-link {
@@ -142,7 +156,10 @@
     display: none;
   }
 
-  .app-shell-nav {
+  /* Always visible at this width — the open/closed class becomes moot once
+     the toggle itself is hidden above. Lays the nav links and the auth
+     control out as one inline row instead of the mobile stack. */
+  .app-shell-nav-panel {
     display: flex;
     flex-direction: row;
     flex-wrap: wrap;
@@ -153,6 +170,19 @@
     padding-top: 0;
     border-top: none;
     margin-left: auto;
+  }
+
+  .app-shell-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+  }
+
+  .app-shell-auth:not(:empty) {
+    border-top: none;
+    padding-top: 0;
+    border-left: var(--border-hairline) solid var(--color-border);
+    padding-left: var(--space-3);
   }
 }
 
@@ -261,18 +291,24 @@
 
 /* Temporary (2026-08-30) — "signed in as X" + sign out, ahead of any real
    access-control UI. Empty (no children) while signed out, so it takes no
-   layout space until a session exists. */
-/* Isolated from the nav/sync cluster with its own divider (found in
-   production UI/UX feedback: the signed-in email sat directly in the nav
-   bar with no visual separation from navigation links). A left border
-   rather than a background chip — matches this system's own "hairline
-   border over a filled treatment" register (DESIGN.md's no-shadow rule
-   extends the same instinct to dividers). Only renders when non-empty
-   (renderAuth() below leaves this node childless while signed out), so no
-   floating divider shows with nothing to its right. */
+   layout space until a session exists. Now lives inside .app-shell-nav-panel
+   (2026-09-06 — see that class's own comment), stacked below the nav links
+   on mobile and inline alongside them at the desktop breakpoint — the
+   divider direction below follows that same layout change, mobile-first. */
+/* Isolated from the nav links with its own divider (found in production
+   UI/UX feedback: the signed-in email sat directly in the nav bar with no
+   visual separation from navigation links). A hairline border rather than
+   a background chip — matches this system's own "hairline border over a
+   filled treatment" register (DESIGN.md's no-shadow rule extends the same
+   instinct to dividers). Only renders when non-empty (renderAuth() below
+   leaves this node childless while signed out), so no floating divider
+   shows with nothing to its right/below. Top border at rest (the mobile
+   stack — this sits BELOW the nav links in that layout); the min-width:640px
+   block below switches it to a left border once auth sits inline in a row
+   instead. */
 .app-shell-auth:not(:empty) {
-  border-left: var(--border-hairline) solid var(--color-border);
-  padding-left: var(--space-3);
+  border-top: var(--border-hairline) solid var(--color-border);
+  padding-top: var(--space-2);
 }
 
 .app-shell-auth {
