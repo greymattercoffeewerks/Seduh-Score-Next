@@ -25,11 +25,13 @@
 import { timingHandlers } from './timing.js';
 import { confirmHandlers } from './scoring.js';
 import { publishLiveSessionHandlers } from './liveSession.js';
+import { resolveStageHandlers } from './standings.js';
 
 export function cupTasterOutboxHandlers(client) {
   return {
     ...timingHandlers(client),
     ...confirmHandlers(client),
     ...publishLiveSessionHandlers(client),
+    ...resolveStageHandlers(client),
   };
 }

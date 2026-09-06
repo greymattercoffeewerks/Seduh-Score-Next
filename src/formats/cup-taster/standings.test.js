@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
   rankStandingRows,
   fetchStandingsForStage,
@@ -6,9 +6,16 @@ import {
   createTiebreakHeatForTie,
   fetchTiebreakHeatOutcome,
   belowTheLine,
+  buildResolveStagePayload,
+  resolveStageHandlers,
   commitStageResolution,
   findNextStage,
 } from './standings.js';
+import { _clearAllForTests } from '../../core/db.js';
+
+beforeEach(async () => {
+  await _clearAllForTests();
+});
 
 // Same shape as heats.test.js's own fixture, extended with update() —
 // commitStageResolution needs both insert and update.
@@ -346,121 +353,291 @@ describe('belowTheLine', () => {
   });
 });
 
+// Real commitStageResolution ("insert advancing entries, loop-update
+// eliminated/below-cutoff rows, flip stage status") is now the RESPONSIBILITY
+// of the resolve_stage RPC (migration 20260906060000) — proven atomically,
+// under real RLS, in supabase/tests/009_resolve_stage.sql. This module's own
+// job, since the 2026-09-06 outbox-wiring follow-up, is narrower: reshape a
+// resolved plan into that RPC's exact payload (buildResolveStagePayload),
+// enqueue it, and flush it through the outbox exactly like every other
+// write in this app (confirm_heat, start_heat/record_heat_time/
+// auto_max_heat, publish_session) — so these tests mirror scoring.test.js's
+// own submitConfirmHeat suite, not the old direct-write assertions.
+describe('buildResolveStagePayload', () => {
+  const stage = { id: 's1', event_id: 'ev1', ordinal: 1, cutoff: 1 };
+  const nextStage = { id: 's2', event_id: 'ev1', ordinal: 2 };
+
+  it("reshapes a cutoff-stage plan into the RPC's own snake_case param names", () => {
+    const plan = {
+      stage,
+      nextStage,
+      advancingEntries: [
+        { entryId: 'e1', source: 'advanced' },
+        { entryId: 'e2', source: 'tiebreak_won' },
+      ],
+      championStageEntryId: null,
+      eliminated: [{ stageEntryId: 'se3', viaCoinToss: false }],
+      finalPosition: 3,
+      belowCutoff: [{ stageEntryId: 'se4', position: 4 }],
+      coinTossNote: null,
+    };
+    const payload = buildResolveStagePayload(plan, 'org1');
+
+    expect(payload.p_org_id).toBe('org1');
+    expect(payload.p_stage_id).toBe('s1');
+    expect(payload.p_next_stage_id).toBe('s2');
+    expect(payload.p_advancing_entries).toEqual([
+      { entry_id: 'e1', source: 'advanced' },
+      { entry_id: 'e2', source: 'tiebreak_won' },
+    ]);
+    expect(payload.p_champion_stage_entry_id).toBeNull();
+    expect(payload.p_eliminated).toEqual([{ stage_entry_id: 'se3', via_coin_toss: false }]);
+    expect(payload.p_final_position).toBe(3);
+    expect(payload.p_below_cutoff).toEqual([{ stage_entry_id: 'se4', position: 4 }]);
+    expect(payload.p_coin_toss_note).toBeNull();
+    // A fresh idempotency key per call — submitConfirmHeat's own established
+    // shape (scoring.test.js).
+    expect(payload.p_operation_id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    );
+  });
+
+  it('at the terminal stage, p_next_stage_id is null and p_champion_stage_entry_id is threaded through', () => {
+    const terminalStage = { id: 's3', event_id: 'ev1', ordinal: 3, cutoff: null };
+    const plan = {
+      stage: terminalStage,
+      nextStage: null,
+      advancingEntries: [{ entryId: 'champ', source: 'advanced' }],
+      championStageEntryId: 'se-champ',
+      eliminated: [],
+      finalPosition: 2,
+      belowCutoff: [],
+      coinTossNote: null,
+    };
+    const payload = buildResolveStagePayload(plan, 'org1');
+    expect(payload.p_next_stage_id).toBeNull();
+    expect(payload.p_champion_stage_entry_id).toBe('se-champ');
+  });
+
+  it('carries the coin-toss note through unchanged', () => {
+    const plan = {
+      stage,
+      nextStage,
+      advancingEntries: [],
+      championStageEntryId: null,
+      eliminated: [],
+      finalPosition: 9,
+      belowCutoff: [],
+      coinTossNote: 'coin toss, witnessed by organiser',
+    };
+    const payload = buildResolveStagePayload(plan, 'org1');
+    expect(payload.p_coin_toss_note).toBe('coin toss, witnessed by organiser');
+  });
+});
+
+describe('resolveStageHandlers', () => {
+  it('maps resolve_stage to a real, callable RPC-wrapping handler', () => {
+    const client = { rpc: () => Promise.resolve({ data: null, error: null }) };
+    const handlers = resolveStageHandlers(client);
+    expect(Object.keys(handlers)).toEqual(['resolve_stage']);
+    expect(typeof handlers.resolve_stage).toBe('function');
+  });
+});
+
 describe('commitStageResolution', () => {
-  it('at a cutoff stage, inserts advancing entries into the next stage and marks the current stage complete', async () => {
+  it('enqueues then flushes, calling resolve_stage with the exact expected payload shape', async () => {
+    const rpcCalls = [];
+    const client = {
+      rpc: (name, payload) => {
+        rpcCalls.push([name, payload]);
+        return Promise.resolve({ data: null, error: null });
+      },
+    };
     const stage = { id: 's1', event_id: 'ev1', ordinal: 1, cutoff: 1 };
     const nextStage = { id: 's2', event_id: 'ev1', ordinal: 2 };
-    const client = fakeClient({ tables: {} });
+    const plan = {
+      stage,
+      nextStage,
+      advancingEntries: [
+        { entryId: 'e1', source: 'advanced' },
+        { entryId: 'e2', source: 'tiebreak_won' },
+      ],
+      championStageEntryId: null,
+      eliminated: [{ stageEntryId: 'se3', viaCoinToss: false }],
+      finalPosition: 3,
+      belowCutoff: [{ stageEntryId: 'se4', position: 4 }],
+      coinTossNote: null,
+    };
 
-    await commitStageResolution(
-      {
-        stage,
-        nextStage,
-        advancingEntries: [
-          { entryId: 'e1', source: 'advanced' },
-          { entryId: 'e2', source: 'tiebreak_won' },
-        ],
-        championStageEntryId: null,
-        eliminated: [{ stageEntryId: 'se3', viaCoinToss: false }],
-        finalPosition: 3,
-        belowCutoff: [{ stageEntryId: 'se4', position: 4 }],
-        coinTossNote: null,
-      },
-      client,
-    );
+    const result = await commitStageResolution(plan, 'org1', client);
 
-    const insertCall = client.calls.find(
-      ([action, table]) => action === 'insert' && table === 'ct_stage_entries',
-    );
-    expect(insertCall[2]).toEqual([
-      { stage_id: 's2', entry_id: 'e1', source: 'advanced', position_note: null },
-      { stage_id: 's2', entry_id: 'e2', source: 'tiebreak_won', position_note: null },
+    expect(result.processed).toBe(1);
+    expect(result.stopped).toBe(false);
+    expect(rpcCalls).toHaveLength(1);
+    const [name, payload] = rpcCalls[0];
+    expect(name).toBe('resolve_stage');
+    expect(payload.p_org_id).toBe('org1');
+    expect(payload.p_stage_id).toBe('s1');
+    expect(payload.p_next_stage_id).toBe('s2');
+    expect(payload.p_advancing_entries).toEqual([
+      { entry_id: 'e1', source: 'advanced' },
+      { entry_id: 'e2', source: 'tiebreak_won' },
     ]);
-
-    const updateCalls = client.calls.filter(
-      ([action, table]) => action === 'update' && table === 'ct_stage_entries',
-    );
-    expect(updateCalls).toEqual([
-      ['update', 'ct_stage_entries', { final_position: 3, position_note: null }],
-      ['update', 'ct_stage_entries', { final_position: 4 }],
-    ]);
-
-    const stageUpdate = client.calls.find(
-      ([action, table]) => action === 'update' && table === 'ct_stages',
-    );
-    expect(stageUpdate[2]).toEqual({ status: 'complete' });
+    expect(payload.p_eliminated).toEqual([{ stage_entry_id: 'se3', via_coin_toss: false }]);
+    expect(payload.p_below_cutoff).toEqual([{ stage_entry_id: 'se4', position: 4 }]);
   });
 
-  it('at the terminal stage (nextStage: null), never inserts — sets final_position 1 on the champion instead', async () => {
+  it('at the terminal stage, sends p_next_stage_id: null and the champion stage entry id — never an insert', async () => {
+    const rpcCalls = [];
+    const client = {
+      rpc: (name, payload) => {
+        rpcCalls.push([name, payload]);
+        return Promise.resolve({ data: null, error: null });
+      },
+    };
     const stage = { id: 's1', event_id: 'ev1', ordinal: 3, cutoff: null };
-    const client = fakeClient({ tables: {} });
+    const plan = {
+      stage,
+      nextStage: null,
+      advancingEntries: [{ entryId: 'champ', source: 'advanced' }],
+      championStageEntryId: 'se-champ',
+      eliminated: [],
+      finalPosition: 2,
+      belowCutoff: [],
+      coinTossNote: null,
+    };
 
-    await commitStageResolution(
-      {
-        stage,
-        nextStage: null,
-        advancingEntries: [{ entryId: 'champ', source: 'advanced' }],
-        championStageEntryId: 'se-champ',
-        eliminated: [],
-        finalPosition: 2,
-        belowCutoff: [],
-        coinTossNote: null,
-      },
-      client,
-    );
+    await commitStageResolution(plan, 'org1', client);
 
-    expect(
-      client.calls.some(([action, table]) => action === 'insert' && table === 'ct_stage_entries'),
-    ).toBe(false);
-    const championUpdate = client.calls.find(
-      ([action, table, payload]) =>
-        action === 'update' && table === 'ct_stage_entries' && payload.final_position === 1,
-    );
-    expect(championUpdate).toBeTruthy();
-    expect(championUpdate[2]).toEqual({ final_position: 1, position_note: null });
-    const eqCall = client.calls.find(
-      ([action, , ...args]) => action === 'eq' && args[1] === 'se-champ',
-    );
-    expect(eqCall).toBeTruthy();
+    const [, payload] = rpcCalls[0];
+    expect(payload.p_next_stage_id).toBeNull();
+    expect(payload.p_champion_stage_entry_id).toBe('se-champ');
   });
 
-  it('records the coin-toss note only on rows actually decided by the coin toss, never on the rest', async () => {
-    const stage = { id: 's1', event_id: 'ev1', ordinal: 1, cutoff: 8 };
-    const nextStage = { id: 's2', event_id: 'ev1', ordinal: 2 };
-    const client = fakeClient({ tables: {} });
+  it('persists the operation before the network call resolves', async () => {
+    // A controlled, later-resolved promise rather than one that never
+    // resolves at all — flushOutbox() tracks its in-flight state in a
+    // module-level variable shared across every test in this file, so a
+    // permanently-hanging flush here would silently block every later
+    // test's own flushOutbox() call, not just this one (scoring.test.js's
+    // own identical submitConfirmHeat test carries the same caveat).
+    let resolveRpc;
+    const rpcPromise = new Promise((resolve) => {
+      resolveRpc = resolve;
+    });
+    const client = { rpc: () => rpcPromise };
+    const stage = { id: 's1', event_id: 'ev1', ordinal: 1, cutoff: 1 };
+    const plan = {
+      stage,
+      nextStage: null,
+      advancingEntries: [],
+      championStageEntryId: null,
+      eliminated: [],
+      finalPosition: 1,
+      belowCutoff: [],
+      coinTossNote: null,
+    };
+    const commitPromise = commitStageResolution(plan, 'org1', client);
+    await Promise.resolve();
+    await Promise.resolve();
+    const { countPendingOperations } = await import('../../core/outbox.js');
+    expect(await countPendingOperations()).toBeGreaterThanOrEqual(1);
+    resolveRpc({ data: null, error: null });
+    await commitPromise;
+  });
 
-    await commitStageResolution(
-      {
-        stage,
-        nextStage,
-        advancingEntries: [
-          { entryId: 'clean', source: 'advanced' },
-          { entryId: 'coin-winner', source: 'coin_toss' },
-        ],
-        championStageEntryId: null,
-        eliminated: [
-          { stageEntryId: 'se-coin-loser', viaCoinToss: true },
-          { stageEntryId: 'se-tiebreak-loser', viaCoinToss: false },
-        ],
-        finalPosition: 9,
-        belowCutoff: [],
-        coinTossNote: 'coin toss, witnessed by organiser',
-        random: undefined,
+  it('any error resolve_stage itself returns is treated as permanent — never left stuck retrying the exact same rejected payload', async () => {
+    const client = {
+      rpc: () =>
+        Promise.resolve({
+          data: null,
+          error: { message: 'resolve_stage: entry e9 is not a member of stage s1' },
+          // A genuine server-side rejection carries a real, non-zero HTTP
+          // status — buildRpcHandler (core/outbox.js) is what actually
+          // distinguishes this from a network-level failure.
+          status: 400,
+        }),
+    };
+    const stage = { id: 's1', event_id: 'ev1', ordinal: 1, cutoff: 1 };
+    const plan = {
+      stage,
+      nextStage: null,
+      advancingEntries: [],
+      championStageEntryId: null,
+      eliminated: [],
+      finalPosition: 1,
+      belowCutoff: [],
+      coinTossNote: null,
+    };
+    const result = await commitStageResolution(plan, 'org1', client);
+    expect(result.permanentFailure).toBe(true);
+    expect(result.stopped).toBe(false);
+    expect(result.error.message).toContain('not a member of stage');
+
+    const { countPendingOperations } = await import('../../core/outbox.js');
+    expect(await countPendingOperations()).toBe(0);
+  });
+
+  it('a network-level failure (the RPC call itself rejecting, not resolve_stage returning an error) stays retryable, not permanent', async () => {
+    const client = { rpc: () => Promise.reject(new Error('fetch failed')) };
+    const stage = { id: 's1', event_id: 'ev1', ordinal: 1, cutoff: 1 };
+    const plan = {
+      stage,
+      nextStage: null,
+      advancingEntries: [],
+      championStageEntryId: null,
+      eliminated: [],
+      finalPosition: 1,
+      belowCutoff: [],
+      coinTossNote: null,
+    };
+    const result = await commitStageResolution(plan, 'org1', client);
+    expect(result.permanentFailure).toBe(false);
+    expect(result.stopped).toBe(true);
+
+    const { countPendingOperations } = await import('../../core/outbox.js');
+    expect(await countPendingOperations()).toBe(1);
+  });
+
+  // The authoritative idempotency proof — replaying the exact same
+  // operation_id is a safe no-op via processed_operations' own early
+  // return — is a server-side guarantee, proven against a real Postgres
+  // instance under real RLS in supabase/tests/009_resolve_stage.sql (mirrors
+  // 005_confirm_heat.sql's/007_timing_outbox_rpcs.sql's own established
+  // idempotency-proof pattern: a fake JS client can only ever assert what it
+  // was told to return, never a real ledger's dedup behavior). This test
+  // only proves the JS layer itself adds no client-side de-dup of its own
+  // that would mask or interfere with that server behavior — replaying an
+  // identical payload (same p_operation_id included) is passed straight
+  // through to the RPC twice, exactly as a real client-side retry would.
+  it('replaying an identical payload (same operation id) is passed straight through — no client-side de-dup masks the server-side idempotency guarantee', async () => {
+    const rpcCalls = [];
+    const client = {
+      rpc: (name, payload) => {
+        rpcCalls.push([name, payload]);
+        return Promise.resolve({ data: null, error: null });
       },
-      client,
-    );
+    };
+    const fixedOperationId = '11111111-1111-1111-1111-111111111111';
+    const payload = {
+      p_operation_id: fixedOperationId,
+      p_org_id: 'org1',
+      p_stage_id: 's1',
+      p_next_stage_id: 's2',
+      p_advancing_entries: [{ entry_id: 'e1', source: 'advanced' }],
+      p_champion_stage_entry_id: null,
+      p_eliminated: [],
+      p_final_position: 2,
+      p_below_cutoff: [],
+      p_coin_toss_note: null,
+    };
+    const handlers = resolveStageHandlers(client);
+    await handlers.resolve_stage(payload);
+    await handlers.resolve_stage(payload);
 
-    const insertCall = client.calls.find(
-      ([action, table]) => action === 'insert' && table === 'ct_stage_entries',
-    );
-    expect(insertCall[2][0].position_note).toBeNull();
-    expect(insertCall[2][1].position_note).toBe('coin toss, witnessed by organiser');
-
-    const updateCalls = client.calls.filter(
-      ([action, table]) => action === 'update' && table === 'ct_stage_entries',
-    );
-    expect(updateCalls[0][2].position_note).toBe('coin toss, witnessed by organiser');
-    expect(updateCalls[1][2].position_note).toBeNull();
+    expect(rpcCalls).toHaveLength(2);
+    expect(rpcCalls[0][1].p_operation_id).toBe(fixedOperationId);
+    expect(rpcCalls[1][1].p_operation_id).toBe(fixedOperationId);
   });
 });
 

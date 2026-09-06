@@ -1,3 +1,63 @@
+## commitStageResolution atomicity fix: resolve_stage RPC · 2026-09-06
+
+**User-requested, not tied to a §14 task ID — a real correctness/durability gap flagged
+by `offline-sync-auditor` while reviewing an unrelated "champion declared" live-view
+addition.** `standings.js`'s `commitStageResolution()` used to perform, sequentially, as
+independent network round trips: an insert into `ct_stage_entries` for advancing entries
+(no idempotency key, no `ON CONFLICT` handling at all), a loop of per-row updates for
+eliminated entries, another loop for below-cutoff entries, then a final update flipping
+`ct_stages.status = 'complete'`. None of it ran in one transaction, and none of it went
+through the outbox the way every other write in this app does (`confirm_heat`/
+`start_heat`/`record_heat_time`/`auto_max_heat`/`publish_session` all are) — a connection
+drop mid-sequence could leave a stage half-resolved, and retrying wasn't safe since the
+insert had no idempotency guard at all.
+
+**Fix**: new `resolve_stage` Postgres RPC (`supabase/migrations/20260906060000_resolve_stage_rpc.sql`),
+mirroring `confirm_heat`'s own established shape exactly — one transaction, gated by an
+`operation_id` + `processed_operations` idempotency check, org-scoped. Idempotency for
+the `ct_stage_entries` insert itself is layered on top via `ON CONFLICT (stage_id,
+entry_id) DO NOTHING`, matching `record_heat_time`'s own belt-and-suspenders style. Every
+`entry_id`/`stage_entry_id` the function touches is checked against the CALLER's own
+`p_stage_id` before being trusted — both the correctness check (every advancing entry
+standings.js ever sends is sourced from THIS stage's own ranked entries) and the security
+one (closes the same class of gap already fixed for `event_entries.person_id`/
+`person_merges.kept_id`/`live_sessions.org_id` — a caller cannot forge another org's
+roster entry into their own next stage). `standings.js`'s `commitStageResolution` now
+enqueues+flushes this RPC through `core/outbox.js` exactly like `timing.js`/`scoring.js`'s
+own RPC-backed writes (`buildRpcHandler`, a new operation type, composed into
+`cupTasterOutboxHandlers`); `standingsScreen.js`'s `commit()` re-checks the stage's status
+via a fresh read before declaring success, matching `scoringScreen.js`'s own
+ground-truth-over-flush-bookkeeping pattern.
+
+**Three review passes (schema-guardian, security-reviewer, scoring-auditor), all initially
+found real issues, all closed:**
+
+- `scoring-auditor`: ranking/advancement behavior confirmed unchanged and correct
+  (`core/ranking.js`/`core/advancement.js` untouched; terminal-vs-non-terminal branching
+  and coin-toss note handling both faithfully ported) — but found the new pgTAP suite
+  never exercised an eliminated entry's `via_coin_toss: true` branch at the RPC layer
+  (only manually spot-checked). Closed with three new assertions in
+  `supabase/tests/009_resolve_stage.sql` (`plan(24)` → `plan(27)`).
+- `schema-guardian` + `security-reviewer` (independently, same finding): the new function
+  omitted `set search_path = ''` and left its table references schema-unqualified — a
+  direct regression of `20260830130000_rpc_search_path_pin.sql`'s own fix, which every
+  write RPC added since had correctly carried forward and this one, the first added
+  since, did not. Closed by pinning `search_path` and qualifying every reference
+  `public.`, matching the two sibling migrations' exact pattern.
+- `security-reviewer` also found the function still had Postgres's default PUBLIC
+  EXECUTE grant and no explicit `service_role` grant — the same gap
+  `20260830140000_revoke_public_execute_on_write_rpcs.sql` closed for this project's
+  other six write RPCs. Closed by adding the matching `revoke ... from public` /
+  `grant ... to service_role` pair in this same migration (never shipped with the gap,
+  unlike the original six, since this function had never yet been pushed anywhere).
+  `security-reviewer` independently verified all of this project's own anti-forgery
+  claims by running hand-crafted adversarial SQL directly against a real local Postgres
+  instance under RLS (non-member org rejection, cross-org entry forgery, cross-stage
+  `stage_entry_id` forgery across all three advancement categories) — all held.
+
+Migration applies cleanly from empty (verified three times independently, once per
+reviewer); rollback block verified by actually running it in a transaction. Full pgTAP
+suite: 170/170 (24 new, one extended to 27 mid-review). Full JS suite: 996/996.
 ## Fix timingScreen.test.js full-suite flakiness · 2026-09-06
 
 **User-reported, not tied to a §14 task ID.** `timingScreen.test.js` flaked in the full
