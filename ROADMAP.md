@@ -590,14 +590,20 @@ station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can 
   on the audience view. Not a bug, not a to-do — this is the intended behavior. Flagged by:
   `code-reviewer`.
 
-- **`standings` rows always publish `tieStatus: null`, PRODUCT/SCORING DECISION DEFERRED.**
-  Tied/advancing labels are a stage-COMPLETE concept (`standingsScreen.js`'s
-  `resolveAdvancement`, run once at stage close against a real cutoff), not computable
-  mid-stage. Open question: should a THIRD automatic publish trigger exist at
-  stage-resolution (`standingsScreen.js`'s `commitStageResolution`) so tied/advancing
-  labels ever actually render on the audience surface? D23 scopes automatic cadence to
-  "per heat," but doesn't explicitly forbid a stage-close trigger too. Needs a human/product
-  decision, not a code fix. Flagged by: `code-reviewer`.
+- **A third automatic-publish trigger at stage-resolution is CLOSED (2026-09-06).**
+  `standingsScreen.js`'s `commit()` now calls `publishLiveSession` right after a
+  successful `commitStageResolution`, on every resolution (not just the terminal one) —
+  built as part of the "champion declared" audience-view feature, which needed this
+  trigger to exist at all (a champion declared at the terminal stage would otherwise
+  never reach the live payload, since there's no heat left afterward to publish from).
+  See CHANGELOG.md's "Audience live view: stage-kind labels + champion hero" entry.
+  **`standings` rows still always publish `tieStatus: null`, PRODUCT/SCORING DECISION
+  STILL OPEN.** The trigger existing doesn't by itself compute tied/advancing labels —
+  `liveSession.js`'s `toStandingsRow` still hardcodes `tieStatus: null` unconditionally,
+  so a border tie still never renders as "(tied)"/"(advancing)" on the audience surface,
+  even now that a publish fires at stage close. Still needs a human/product decision on
+  whether `resolveAdvancement`'s own tie/advancement result should flow into the
+  published payload, not just a code fix. Flagged by: `code-reviewer`.
 
 - **Generic three-state sync panel never names WHICH operation type is stuck, MINOR
   DIAGNOSTIC GAP.** An organiser can't tell a stuck `publish_live_session` apart from a
@@ -615,6 +621,90 @@ station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can 
   publishes fired close together for different heats could theoretically commit out of
   trigger order, causing transient staleness on the audience display until the next heat
   action. Self-healing, non-blocking, deferred. Flagged by: `offline-sync-auditor`.
+
+---
+
+## Phase 6 — Hardening: dry run (2026-09-06, in progress)
+
+Full end-to-end local dry run against a synthetic 8-cupper roster and a real 3-stage
+plan (Preliminary top-4, Semi-Finals top-2, Finals/champion) — every real screen
+exercised in sequence: event creation, roster registration, stage plan, heat generation
+(both random and manual assignment), timing in both app mode (Start/Stop) and the
+2026-09-04 manual-entry mid-heat fallback, the auto-max sweep on timeout, three-state
+scoring, heat confirmation, standings/tiebreak/coin-toss resolution (deliberately
+engineered both a decisive tiebreak AND a genuine coin-toss draw), champion declaration,
+the live audience surfaces (Splash/Projector/Phone, checked live at each stage), the
+Report screen + CSV export, and `is_test` event deletion.
+
+- **HIGH-severity, previously-undetected bug FOUND AND FIXED.** `ct_standings`'s
+  `total_elapsed_secs` was fanned out by the number of scored sets in a heat — a LEFT
+  JOIN from `ct_heat_entries` (one `elapsed_secs` per cupper per heat) to `ct_results`
+  (N rows per scored set) multiplies `sum(he.elapsed_secs)` by the fan-out factor. A real
+  12s heat in a 3-set stage displayed/ranked as 36s. This is a ranking-correctness bug,
+  not merely cosmetic — `core/ranking.js`'s tiebreaker reads `total_elapsed_secs` directly
+  for §7.3's "most correct, then fastest time" comparison, so two cuppers with different
+  scored-set counts at read time (partial scoring, or a stage-plan `set_count` that
+  changed mid-event) could have been ranked against each other's WRONG times. No mocked-
+  client unit test could ever have caught this — it's a real SQL join-semantics defect,
+  exactly the class of bug a dry run against a real Postgres instance exists to catch.
+  Fixed via migration `20260906050000_fix_ct_standings_elapsed_fanout.sql`
+  (pre-aggregates `ct_results` per `heat_entry_id` in a subquery before joining to
+  `ct_heat_entries`, so that join is 1:1 instead of 1:many). Two new pgTAP assertions
+  added to `supabase/tests/002_cup_taster_tables.sql` (`plan(9)` → `plan(11)`), reusing
+  that file's own pre-existing fixture (`elapsed_secs=240`, 3 scored sets) — this exact
+  fixture would have caught the bug immediately (720, not 240) had the assertion existed
+  from the start.
+
+- **A second, self-inflicted regression was caught by the pgTAP suite itself, before
+  shipping** — the fix migration's first draft changed `correct_count`/`sets_scored`
+  from `bigint` to `numeric` (Postgres promotes `sum(bigint)` to `numeric`, unlike
+  `sum(int)`/`sum(smallint)`), silently, with no functional symptom in the app. Closed
+  with explicit `::bigint` casts in the same migration before it was ever applied to the
+  cloud project. This is exactly why the fix was pgTAP-verified rather than only
+  manually spot-checked against the dry run's own live data.
+
+- **Also confirmed correct, NOT a bug**: `standingsScreen.js`'s primary standings table
+  keeps showing both members of a border tie as "tied" even after their tiebreak heat is
+  confirmed — by design (see that screen's own module comment) — the actual resolution
+  only commits once the organiser clicks the state-appropriate "Advance"/"Declare
+  champion" button, which reads the tiebreak's own separately-fetched outcome. Verified
+  the resulting `ct_stage_entries` rows were correct after commit (right cupper advanced,
+  right cupper eliminated, correct provenance note) for both a decisive tiebreak
+  (Preliminary) and a tiebreak-that-also-drew, requiring a coin toss (Semi-Finals).
+
+- **Known gap, NOT fixed here**: `supabase/tests/008_delete_test_event.sql`'s "exactly
+  the two surviving events remain" assertion (`select count(*) from events`, unscoped)
+  fails whenever the local dev database carries ambient leftover events from other
+  sessions/dev-harness runs — confirmed two such rows ("Layout Check", "E2E Wiring
+  Test...") sitting in this machine's local Postgres, unrelated to this migration or to
+  the dry run's own event (already cleaned up via the Delete-event feature). Pre-existing
+  — the test assumes a freshly-`db:reset` database. Worth scoping the count to the
+  fixture's own org/event ids in a follow-up, not blocking.
+
+- **`schema-guardian` PASS** (actually ran the migration from empty, ran the full pgTAP
+  suite — 143/143 — and executed the rollback block inside a real transaction to confirm
+  it's byte-for-byte correct; grants/`security_invoker` preserved; no dependent DB
+  object references `ct_standings`, so the drop/recreate is safe).
+
+- **`scoring-auditor` found a second, real, PRE-EXISTING bug while reviewing the fix**
+  (not introduced by this migration): `standings.js`'s `byFastestTime` computed
+  `Infinity - Infinity` (`NaN`) whenever two-or-more standing rows both had a `null`
+  `total_elapsed_secs` (untimed) and equal `numCorrect` — the everyday state of every
+  stage entry before its heat has run, not an exotic edge case. `chainComparators`
+  treats a non-zero (`NaN` included) result as "not a tie," so `rank()` assigned
+  sequential positions (1, 2, 3) instead of one shared position. `core/ranking.js`
+  itself was confirmed clean — it faithfully passes through whatever a comparator
+  returns; the defect was entirely `standings.js`'s own null-handling. Fixed by
+  comparing nullness explicitly instead of subtracting `?? Infinity` sentinels. New
+  test added to `standings.test.js` (3 untimed, equally-scored rows must share position
+  1. — full JS suite (989 tests) and pgTAP suite (143 assertions) both green after the
+     fix. Both bugs are now closed; this migration + the `standings.js` fix are ready to
+     ship together.
+
+- Production leg of the dry run (per the user's own chosen scope, "local first, then
+  production" — including pushing this migration to the cloud project via
+  `apply_migration`, per this project's own established discipline that merging a PR
+  never does this automatically): not yet started.
 
 ---
 

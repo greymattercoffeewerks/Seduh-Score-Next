@@ -29,9 +29,22 @@ import { getSupabase } from '../../core/supabaseClient.js';
 function byMostCorrect(a, b) {
   return b.numCorrect - a.numCorrect;
 }
+// Compared by nullness first, not by subtracting `?? Infinity` sentinels —
+// found by scoring-auditor (2026-09-06, reviewing the ct_standings fan-out
+// fix): `Infinity - Infinity` is `NaN`, so two-or-more untimed rows tied on
+// `numCorrect` (every stage entry before its heat has run, the everyday
+// "organiser opens Standings before scoring starts" case, not an edge case)
+// previously got sequential positions instead of sharing one — chainComparators
+// treats a non-zero (NaN included) result as "not a tie", and rank()'s
+// adjacent-pair check inherits that. core/ranking.js itself is unaffected —
+// it faithfully passes through whatever a comparator returns; the defect was
+// entirely this comparator's own null-handling.
 function byFastestTime(a, b) {
-  const aTime = a.total_elapsed_secs ?? Infinity;
-  const bTime = b.total_elapsed_secs ?? Infinity;
+  const aTime = a.total_elapsed_secs;
+  const bTime = b.total_elapsed_secs;
+  if (aTime == null && bTime == null) return 0;
+  if (aTime == null) return 1;
+  if (bTime == null) return -1;
   return aTime - bTime;
 }
 const compareStandingRows = chainComparators(byMostCorrect, byFastestTime);

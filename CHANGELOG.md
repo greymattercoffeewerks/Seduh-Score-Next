@@ -1,3 +1,66 @@
+## Phase 6 dry run: ct_standings fan-out fix + byFastestTime NaN-tie fix · 2026-09-06
+
+**Phase 6 hardening — the dry run itself (handoff's own named hardening deliverable),
+not tied to a §14 task ID.** A full end-to-end local walkthrough against a synthetic
+8-cupper roster and a real 3-stage plan (Preliminary top-4, Semi-Finals top-2, Finals/
+champion) — every real screen exercised in sequence, including a deliberately-engineered
+decisive tiebreak (Preliminary) and a tiebreak-that-also-drew requiring a coin toss
+(Semi-Finals), champion declaration, all three live audience surfaces checked live, the
+Report screen + CSV export, and `is_test` event deletion. Found and fixed two real bugs
+along the way — exactly the outcome a dry run against a real Postgres instance exists to
+produce, neither of which any mocked-client unit test could have caught.
+
+**Bug 1 — HIGH severity, `ct_standings` fanned out `total_elapsed_secs`:**
+`supabase/migrations/20260906050000_fix_ct_standings_elapsed_fanout.sql` (new). The
+original view (`20260821210000_cup_taster_tables.sql`) computed
+`sum(he.elapsed_secs)` over a query that `LEFT JOIN`s `ct_results` (N rows per scored
+set) directly onto `ct_heat_entries` (one `elapsed_secs` per cupper per heat) — the join
+fans one heat_entry row out to N rows, and `sum()` then adds that same value once per
+fanned-out row. A real 12s heat in a 3-set stage displayed/ranked as 36s. Not merely
+cosmetic: `core/ranking.js`'s tiebreaker reads `total_elapsed_secs` directly for §7.3's
+"most correct, then fastest time" rule, so two cuppers with different scored-set counts
+at read time could have been ranked against each other's wrong times. Fixed by
+pre-aggregating `ct_results` per `heat_entry_id` in a subquery before joining, making
+that join 1:1. Two new pgTAP assertions in `supabase/tests/002_cup_taster_tables.sql`
+(`plan(9)` → `plan(11)`) reuse that file's own pre-existing fixture
+(`elapsed_secs=240`, 3 scored sets) to prove `total_elapsed_secs` stays `240`, both on
+its own and after an excluded tiebreak heat runs alongside it.
+
+A first draft of the fix migration introduced its own regression, caught by the pgTAP
+suite before shipping: `coalesce(sum(rc.correct_count), 0)` silently promoted
+`correct_count`/`sets_scored` from `bigint` to `numeric` (`sum(bigint)` promotes to
+`numeric` in Postgres, unlike `sum(int)`) — closed with explicit `::bigint` casts.
+
+`schema-guardian` reviewed the final migration and passed it — verified by actually
+running it from an empty database, running the full pgTAP suite (143/143), and
+executing the rollback block inside a real transaction to confirm it restores the exact
+original view definition byte-for-byte, with grants/`security_invoker` unchanged.
+
+**Bug 2 — pre-existing, found by `scoring-auditor` while reviewing the migration:**
+`src/formats/cup-taster/standings.js`'s `byFastestTime` computed `Infinity - Infinity`
+(`NaN`) whenever two-or-more standing rows were both untimed (`total_elapsed_secs:
+null`) and tied on `numCorrect` — the everyday state of every stage entry before its
+heat has run, not an edge case. `NaN !== 0` reads as "not a tie" to
+`core/ranking.js`'s `chainComparators`/`rank()`, which faithfully passed it through
+(confirmed clean, not implicated) — so three untimed, equally-scored cuppers got
+sequential positions 1/2/3 instead of sharing position 1. Fixed by comparing nullness
+explicitly rather than subtracting `?? Infinity` sentinels. New test in
+`standings.test.js` (3 untimed, equally-scored rows must share one position). Full JS
+suite (989 tests) and pgTAP suite (143 assertions) both green after the fix.
+
+**Also confirmed correct, not a bug:** `standingsScreen.js`'s primary standings table
+keeps showing both members of a border tie as "tied" even after their tiebreak heat is
+confirmed — by design; the real resolution only commits once the organiser clicks the
+state-appropriate "Advance"/"Declare champion" button. Verified the resulting
+`ct_stage_entries` rows were correct after commit in both the decisive-tiebreak and
+coin-toss cases.
+
+**Known gap, not fixed here:** `supabase/tests/008_delete_test_event.sql`'s "exactly the
+two surviving events remain" assertion counts `events` unscoped, so it fails whenever
+the local dev database carries ambient leftover events from other sessions/dev-harness
+runs — pre-existing, unrelated to this migration. See ROADMAP.md's dated entry for the
+full account, including the still-open production leg of this dry run.
+
 ## Mobile organiser nav: auth control folded into hamburger menu · 2026-09-06
 
 **User-requested, not tied to §14 task ID.** The user reviewed production screenshots and
