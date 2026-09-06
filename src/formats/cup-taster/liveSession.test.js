@@ -298,6 +298,109 @@ describe('buildLiveSessionPayload', () => {
     // timed yet should still show the roster, ranked (everyone tied last).
     expect(payload.standings).toHaveLength(2);
   });
+
+  // `champion` (2026-09-06, user request) — the whole tournament's own
+  // winner, not a per-stage one. Only ever non-null once the TERMINAL stage
+  // (cutoff: null) has been resolved (status: 'complete') — see
+  // standingsScreen.js's own commitStageResolution, which sets that status
+  // only once a single advancing entry exists at the terminal stage.
+  describe('champion', () => {
+    // Entry 'a' is the one commitStageResolution actually crowned —
+    // final_position: 1 on its ct_stage_entries row, the real DB-persisted
+    // signal (standings.js's own merge exposes this as ranked[].item.
+    // finalPosition). Deliberately NOT derived from rank()'s own `position`
+    // (ct_standings' correct_count/total_elapsed_secs alone) — see the next
+    // test for exactly why that distinction is load-bearing, not pedantic.
+    const stageEntriesWithChampion = [
+      { id: 'se-a', stage_id: 's1', entry_id: 'a', final_position: 1 },
+      { id: 'se-b', stage_id: 's1', entry_id: 'b', final_position: null },
+    ];
+
+    it('is the entry commitStageResolution actually crowned (final_position: 1) once the terminal stage is complete', async () => {
+      const client = fakeClient({
+        tables: {
+          ...baseTables(),
+          ct_stage_entries: { data: stageEntriesWithChampion, error: null },
+          ct_stages: { data: { ...stage, cutoff: null, status: 'complete' }, error: null },
+        },
+      });
+      const payload = await buildLiveSessionPayload('s1', client);
+      expect(payload.champion).toBe('Alex');
+    });
+
+    // The regression this guards (found in review, scoring-auditor,
+    // 2026-09-06): a border tie broken by a tiebreak heat or coin toss
+    // leaves BOTH tied cuppers' ct_standings rows identical (a tiebreak
+    // heat's own results are deliberately excluded from ct_standings — see
+    // standings.js's own comment) — so rank()'s `position` alone gives both
+    // entries `position: 1`, and picking "whichever tied row sorts first"
+    // has no relationship to who actually won. Bailey (entry 'b') is the
+    // real winner here (final_position: 1), Alex (entry 'a') is the one who
+    // lost the tiebreak — an implementation keyed on `position` would wrongly
+    // crown Alex, since untouched `standings.js` fixture ordering/rank()
+    // ties always resolve to whichever row the DB happens to return first.
+    it('picks the actual tiebreak/coin-toss winner, not whichever tied entry happens to sort first — the exact case a contested finals produces', async () => {
+      const tiedStandingsRows = [
+        {
+          entry_id: 'a',
+          stage_id: 's1',
+          correct_count: 6,
+          sets_scored: 8,
+          total_elapsed_secs: 200,
+        },
+        {
+          entry_id: 'b',
+          stage_id: 's1',
+          correct_count: 6,
+          sets_scored: 8,
+          total_elapsed_secs: 200,
+        },
+      ];
+      const stageEntriesTiebreakWinnerIsB = [
+        { id: 'se-a', stage_id: 's1', entry_id: 'a', final_position: null },
+        { id: 'se-b', stage_id: 's1', entry_id: 'b', final_position: 1 },
+      ];
+      const client = fakeClient({
+        tables: {
+          ...baseTables(),
+          ct_standings: { data: tiedStandingsRows, error: null },
+          ct_stage_entries: { data: stageEntriesTiebreakWinnerIsB, error: null },
+          ct_stages: { data: { ...stage, cutoff: null, status: 'complete' }, error: null },
+        },
+      });
+      const payload = await buildLiveSessionPayload('s1', client);
+      // Both rows would report position 1 from rank() alone (a genuine
+      // tie on the primary tally) — proving the payload's OWN standings
+      // still reflect that shared position, so this isn't testing an
+      // impossible fixture.
+      expect(payload.standings.filter((row) => row.position === 1)).toHaveLength(2);
+      expect(payload.champion).toBe('Bailey');
+    });
+
+    it('stays null for a non-terminal stage even once it is complete — advancing to the next stage never crowns a whole-tournament champion', async () => {
+      const client = fakeClient({
+        tables: {
+          ...baseTables(),
+          ct_stage_entries: { data: stageEntriesWithChampion, error: null },
+          ct_stages: { data: { ...stage, cutoff: 4, status: 'complete' }, error: null },
+        },
+      });
+      const payload = await buildLiveSessionPayload('s1', client);
+      expect(payload.champion).toBeNull();
+    });
+
+    it('stays null for the terminal stage before it has been resolved', async () => {
+      const client = fakeClient({
+        tables: {
+          ...baseTables(),
+          ct_stage_entries: { data: stageEntriesWithChampion, error: null },
+          ct_stages: { data: { ...stage, cutoff: null, status: 'running' }, error: null },
+        },
+      });
+      const payload = await buildLiveSessionPayload('s1', client);
+      expect(payload.champion).toBeNull();
+    });
+  });
 });
 
 describe('publishLiveSession', () => {

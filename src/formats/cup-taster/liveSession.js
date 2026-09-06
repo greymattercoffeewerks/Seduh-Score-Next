@@ -169,11 +169,36 @@ export async function buildLiveSessionPayload(stageId, client = getSupabase()) {
     recentHeats.push({ heatNumber: heat.heat_number, stageKind: stage.kind, results });
   }
 
+  // The tournament's own champion — not a per-stage winner — is exactly
+  // "the terminal stage (no cutoff) has been resolved" (standingsScreen.js's
+  // own commitStageResolution sets ct_stages.status = 'complete' on commit,
+  // gated on there being a single advancing entry when the stage is
+  // terminal — see that function's own comment). Deliberately NOT
+  // `standings.find(row => row.position === 1)` — found in review
+  // (scoring-auditor): `rank()`'s own `position` comes from ct_standings'
+  // correct_count/total_elapsed_secs alone, which is exactly the tally a
+  // border tie shares identically between the tied cuppers (a tiebreak
+  // heat's results are deliberately excluded from ct_standings — see
+  // standings.js's own listStageEntries/ct_standings comment). Once a tie
+  // is broken by a tiebreak heat or coin toss, BOTH tied entries still
+  // report `position: 1` from rank() alone, so picking whichever one
+  // happens to sort first would silently name the loser as champion on
+  // exactly the dramatic contested-finals case an audience is most likely
+  // watching closely. `item.finalPosition` (from `ranked`, before the
+  // lossy `toStandingsRow` mapping) is the actual, DB-persisted winner
+  // commitStageResolution wrote — the one field this determination must
+  // use instead.
+  const champion =
+    stage.cutoff == null && stage.status === 'complete'
+      ? (ranked.find(({ item }) => item.finalPosition === 1)?.item.displayName ?? null)
+      : null;
+
   return {
     stage: { kind: stage.kind, ordinal: stage.ordinal, setCount: stage.set_count },
     standings,
     activeHeat,
     recentHeats,
+    champion,
   };
 }
 

@@ -152,6 +152,66 @@ describe('mountViewerBody — standings', () => {
     expect(rows[2].textContent).not.toContain('(tied)');
     expect(rows[2].textContent).not.toContain('(advancing)');
   });
+
+  it('shows a decorative medal for 1st/2nd/3rd place, on top of the numeral (never instead of it) — nothing for 4th and below', () => {
+    const container = document.createElement('div');
+    mountViewerBody(container, {
+      standings: [
+        { position: 1, displayName: 'Alex', numCorrect: 5, totalElapsedSecs: 200 },
+        { position: 2, displayName: 'Jordan', numCorrect: 4, totalElapsedSecs: 210 },
+        { position: 3, displayName: 'Sam', numCorrect: 3, totalElapsedSecs: 220 },
+        { position: 4, displayName: 'Casey', numCorrect: 2, totalElapsedSecs: 230 },
+      ],
+    });
+    const posCells = [...container.querySelectorAll('[data-label="Pos"]')];
+    expect(posCells[0].querySelector('span[aria-hidden="true"]').textContent).toBe('🥇');
+    expect(posCells[0].textContent).toBe('🥇 1');
+    expect(posCells[1].querySelector('span[aria-hidden="true"]').textContent).toBe('🥈');
+    expect(posCells[2].querySelector('span[aria-hidden="true"]').textContent).toBe('🥉');
+    // 4th place: the numeral alone, no medal span at all — not just an
+    // empty/hidden one, since a screen reader with no visual medal to
+    // reinforce shouldn't have an aria-hidden span left dangling for no
+    // reason either.
+    expect(posCells[3].querySelector('span[aria-hidden="true"]')).toBeNull();
+    expect(posCells[3].textContent).toBe('4');
+  });
+});
+
+describe('mountViewerBody — champion hero', () => {
+  it('renders nothing when payload.champion is absent — the ordinary mid-tournament case', () => {
+    const container = document.createElement('div');
+    mountViewerBody(container, {
+      stage: { kind: 'prelims', setCount: 5 },
+      standings: [{ position: 1, displayName: 'Alex', numCorrect: 5, totalElapsedSecs: 200 }],
+    });
+    expect(container.querySelector('.viewer-champion-hero')).toBeNull();
+  });
+
+  it("renders the champion's name in a hero card, with a trophy emoji, ABOVE the standings table — not instead of it", () => {
+    const container = document.createElement('div');
+    mountViewerBody(container, {
+      champion: 'Alex',
+      stage: { kind: 'finals', setCount: 5 },
+      standings: [
+        { position: 1, displayName: 'Alex', numCorrect: 5, totalElapsedSecs: 200 },
+        { position: 2, displayName: 'Jordan', numCorrect: 4, totalElapsedSecs: 210 },
+      ],
+    });
+    const hero = container.querySelector('.viewer-champion-hero');
+    expect(hero).not.toBeNull();
+    expect(hero.querySelector('.viewer-champion-label').textContent).toBe('Champion');
+    const nameEl = hero.querySelector('.viewer-champion-name');
+    expect(nameEl.textContent).toBe('🏆 Alex');
+    expect(nameEl.querySelector('span[aria-hidden="true"]').textContent).toBe('🏆');
+    // The full final standings (with medals) are still there underneath —
+    // this is an addition, not a replacement.
+    expect(container.querySelector('.standings-table')).not.toBeNull();
+    expect(container.querySelectorAll('tbody tr')).toHaveLength(2);
+    // Order: hero first, standings section after — matches "in focus on
+    // screen" (the user's own framing for this feature).
+    const children = [...container.children];
+    expect(children[0]).toBe(hero);
+  });
 });
 
 describe('mountViewerBody — active heat', () => {
@@ -170,7 +230,7 @@ describe('mountViewerBody — active heat', () => {
       },
     });
     expect(container.querySelector('.viewer-active-heat h3').textContent).toBe(
-      'Semis · Heat 2 — Timing…',
+      'Semi-Finals · Heat 2 — Timing…',
     );
   });
 

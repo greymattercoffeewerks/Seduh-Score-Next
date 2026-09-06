@@ -12,7 +12,7 @@ import { describeError } from '../../core/errors.js';
 import { findEvent } from '../../core/events.js';
 import { findActiveLiveEventId } from '../../core/publish.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
-import { listStagesForEvent, stageHasHeats } from './setup.js';
+import { listStagesForEvent, stageHasHeats, stageKindLabel } from './setup.js';
 import { ordinalLabel } from './reportScreen.js';
 
 // live_sessions enforces at most one active row per org (a partial unique
@@ -66,7 +66,7 @@ function stageStatusLine(stage) {
 export function renderStageCard(eventId, stage, hasHeats) {
   const heatsLabel = hasHeats ? 'Heats' : 'Generate heats';
   return el('div', { className: 'card stage-card' }, [
-    el('h3', { text: `${ordinalLabel(stage.ordinal)} — ${stage.kind}` }),
+    el('h3', { text: `${ordinalLabel(stage.ordinal)} — ${stageKindLabel(stage.kind)}` }),
     el('p', { className: 'stage-meta', text: stageStatusLine(stage) }),
     el('div', { className: 'stage-card-actions' }, [
       el('a', {

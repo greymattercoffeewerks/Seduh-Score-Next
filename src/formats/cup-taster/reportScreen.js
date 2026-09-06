@@ -25,7 +25,7 @@ import { describeError } from '../../core/errors.js';
 import { getSupabase } from '../../core/supabaseClient.js';
 import { formatDuration, formatDurationLong } from '../../core/duration.js';
 import { buildCsvForTables, downloadCsv } from '../../core/export.js';
-import { listStagesForEvent } from './setup.js';
+import { listStagesForEvent, stageKindLabel } from './setup.js';
 import { isEventComplete, computeStageReport } from './analytics.js';
 
 // Pure. 1 -> '1st', 2 -> '2nd', 3 -> '3rd', 4 -> '4th', 11-13 -> '11th'/
@@ -218,7 +218,7 @@ function buildStageTables(stageReport) {
   const { stage, ranked, difficulty, distribution } = stageReport;
   return [
     {
-      title: `${stage.kind} — Standings`,
+      title: `${stageKindLabel(stage.kind)} — Standings`,
       columns: [
         { key: 'position', label: 'Pos' },
         { key: 'displayName', label: 'Cupper' },
@@ -235,7 +235,7 @@ function buildStageTables(stageReport) {
       })),
     },
     {
-      title: `${stage.kind} — Set difficulty`,
+      title: `${stageKindLabel(stage.kind)} — Set difficulty`,
       columns: [
         { key: 'set', label: 'Set' },
         { key: 'correct', label: 'Correct' },
@@ -248,7 +248,7 @@ function buildStageTables(stageReport) {
       })),
     },
     {
-      title: `${stage.kind} — Score distribution`,
+      title: `${stageKindLabel(stage.kind)} — Score distribution`,
       columns: [
         { key: 'correctCount', label: 'Correct answers' },
         { key: 'numCuppers', label: 'Cuppers' },
@@ -285,11 +285,11 @@ export function sanitizeFilename(name) {
 function renderStageSection(stageReport) {
   const { stage, ranked, difficulty, distribution } = stageReport;
   return el('div', { className: 'card report-stage-card' }, [
-    el('h2', { text: stage.kind }),
+    el('h2', { text: stageKindLabel(stage.kind) }),
     renderStageStandingsTable(ranked),
-    el('h3', { text: `Set difficulty — ${stage.kind}` }),
+    el('h3', { text: `Set difficulty — ${stageKindLabel(stage.kind)}` }),
     renderDifficultyTable(difficulty),
-    el('h3', { text: `Score distribution — ${stage.kind}` }),
+    el('h3', { text: `Score distribution — ${stageKindLabel(stage.kind)}` }),
     renderDistributionTable(distribution),
   ]);
 }

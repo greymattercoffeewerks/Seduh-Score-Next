@@ -86,7 +86,7 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
 
     // --- Event home reflects the new stage ---
     await page.getByRole('link', { name: 'Event home' }).click();
-    await expect(page.getByText(/1st .* prelims/)).toBeVisible();
+    await expect(page.getByText(/1st .* Preliminary/)).toBeVisible();
     const generateHeatsLink = page.getByRole('link', { name: 'Generate heats' });
     await expect(generateHeatsLink).toBeVisible();
 

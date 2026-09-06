@@ -29,6 +29,9 @@ import { describeError } from '../../core/errors.js';
 import { getSupabase } from '../../core/supabaseClient.js';
 import { formatDuration, formatDurationLong } from '../../core/duration.js';
 import { listHeatsForStage } from './heats.js';
+import { stageKindLabel } from './setup.js';
+import { cupTasterOutboxHandlers } from './outboxHandlers.js';
+import { publishLiveSession } from './liveSession.js';
 import {
   fetchStandingsForStage,
   resolveAdvancement,
@@ -332,6 +335,35 @@ export async function mountStandingsScreen(
       pendingSuccess =
         data.stage.cutoff == null ? 'Champion declared.' : 'Advanced to the next stage.';
       succeeded = true;
+      // Third automatic-publish trigger (heat start/confirm are the other
+      // two — see liveSession.js's own module comment), closing the open
+      // question ROADMAP.md's "Known open items from Phase 5" section left
+      // deferred: without this, a champion declared here would never reach
+      // the live audience payload at all, since the terminal stage has no
+      // heat left to start or confirm afterward. Best-effort, matching
+      // scoringScreen.js's own identical try/catch around this same call —
+      // publishLiveSession enqueues its own intent before any network read,
+      // so a failure here only means the enqueue itself didn't happen (e.g.
+      // IndexedDB unusable), not that the resolution above was lost.
+      //
+      // Fires on every resolution, not just the terminal/champion one —
+      // deliberate, not an oversight (found worth stating explicitly in
+      // review, offline-sync-auditor): a non-terminal "Advance" mostly
+      // re-sends standings a moment-ago heat-confirm publish already sent
+      // (buildLiveSessionPayload's own champion stays null there regardless),
+      // but matching heat start/confirm's own "every occurrence, not just
+      // special ones" cadence keeps this trigger simple and consistent
+      // rather than adding a second, narrower "is this the champion stage"
+      // condition just to skip one harmless extra RPC round trip.
+      try {
+        await publishLiveSession(
+          { orgId: data.event.org_id, eventId, stageId, isTest: data.event.is_test },
+          client,
+          cupTasterOutboxHandlers(client),
+        );
+      } catch {
+        // best-effort — see comment above.
+      }
     } catch (err) {
       pendingError = describeError(err);
     }
@@ -363,7 +395,9 @@ export async function mountStandingsScreen(
     }
 
     container.appendChild(
-      el('h1', { text: `Standings — ${data.stage.kind} (Stage ${data.stage.ordinal})` }),
+      el('h1', {
+        text: `Standings — ${stageKindLabel(data.stage.kind)} (Stage ${data.stage.ordinal})`,
+      }),
     );
 
     const feedback = el('div', {

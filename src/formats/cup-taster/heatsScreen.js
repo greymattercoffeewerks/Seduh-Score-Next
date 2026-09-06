@@ -16,7 +16,7 @@ import {
 } from './heats.js';
 import { listEntries } from '../../core/registry.js';
 import { findEvent } from '../../core/events.js';
-import { findStageById } from './setup.js';
+import { findStageById, stageKindLabel } from './setup.js';
 import { getSupabase } from '../../core/supabaseClient.js';
 import { el } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
@@ -256,7 +256,9 @@ export async function mountHeatGenerationScreen(
       );
     }
 
-    container.appendChild(el('h1', { text: `Heat generation — ${data.stage.kind}` }));
+    container.appendChild(
+      el('h1', { text: `Heat generation — ${stageKindLabel(data.stage.kind)}` }),
+    );
     container.appendChild(
       el('p', {
         className: 'stage-meta',
