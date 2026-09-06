@@ -1,3 +1,43 @@
+## Fix timingScreen.test.js full-suite flakiness · 2026-09-06
+
+**User-reported, not tied to a §14 task ID.** `timingScreen.test.js` flaked in the full
+`npx vitest run` three separate times in one day, each with a different specific
+assertion failing (`eventsGates` length, `.btn-stop` nullness, a visibilitychange-listener
+count), while always passing 33/33 in isolation immediately after. Investigated and
+fixed via a background agent, verified independently before merging.
+
+**Root cause**: not Vitest pool/worker isolation (no shared globals between files; `pool`/
+`isolate` in `vite.config.js` are unset/default and irrelevant), and not missing timer/
+listener cleanup in this file's `beforeEach`/`afterEach` (already correct). The real
+cause: this file's own `settle(ms)` helper is a blind, fixed-duration real sleep standing
+in for "wait until the click handler's async chain (outbox enqueue → real IndexedDB via
+fake-indexeddb's real `setImmediate` → flush → RPC → `render()`) has finished." Under
+full-suite CPU contention, that chain's several real macrotask hops can take longer
+wall-clock time than the fixed 50ms/1100ms/1200ms windows assumed — nothing was actually
+broken, the assertion just ran before the DOM update landed. Reproduced directly by
+saturating all CPU cores during a full run (2 of 8 runs failed, different assertion each
+time); confirmed clean at idle (5-16 consecutive clean runs, matching why this wasn't
+caught sooner).
+
+**Fix**: added a `flush(assertFn, { timeout = 3000 })` helper using `vi.waitFor` (already
+precedented once in this same file), and replaced every `await settle(); <assert on a
+triggered async outcome>` pattern with `await flush(() => { <same assertions> })` —
+polling for the real outcome instead of sleeping a guessed duration and hoping. Left
+untouched the handful of `settle()` calls deliberately proving *absence* over a fixed
+real duration (e.g. "no more RPC calls after unmount/teardown") — those aren't part of
+this failure mode and don't belong on a positive poll.
+
+**Verified independently before merging**: isolated file 33/33; full suite 989/989 with
+no other regressions. The background agent's own verification (10/10 clean runs under
+full CPU saturation post-fix, vs. 2/8 failures pre-fix under the same load) was checked
+by re-reading the diff, not just trusted.
+
+**Also found in passing, flagged separately, not fixed here**: `src/core/appShell.test.js`'s
+sync-panel "N pending" test flaked twice under the same CPU-saturation conditions, same
+shape of bug (a fixed-duration sleep before an outcome assertion) — a follow-up task was
+spawned for it rather than fixing it in this pass, since it's a different file/module
+than what was asked.
+
 ## Phase 6 dry run: ct_standings fan-out fix + byFastestTime NaN-tie fix · 2026-09-06
 
 **Phase 6 hardening — the dry run itself (handoff's own named hardening deliverable),
