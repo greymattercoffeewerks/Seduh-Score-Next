@@ -1,3 +1,94 @@
+## Mobile organiser nav: auth control folded into hamburger menu · 2026-09-06
+
+**User-requested, not tied to §14 task ID.** The user reviewed production screenshots and
+identified a vertical-space complaint: on mobile phones, the organiser app shell's header
+rendered the brand + app name (sticky, always on screen), then below it the auth control
+("signed in as mfosa@hotmail.com" / "Sign out") as its own full-width row, THEN the
+Events heading — wasting several rows of viewport before any real event/screen content
+appeared. The Figma design had already suggested rolling the auth control into the same
+collapsible hamburger menu that hides the nav links on narrow viewports, reclaiming that
+space.
+
+**What shipped:**
+
+- **New `navPanel` wrapper:** `<div class="app-shell-nav-panel">` now contains BOTH the
+  existing nav (`<nav class="app-shell-nav">`) and the existing auth control
+  (`<div class="app-shell-auth">`, completely untouched internally, just relocated in
+  the DOM). Previously `authEl` was a direct header-row sibling with no toggle of its own,
+  rendering as its own always-visible wrapped row on mobile even with the nav already
+  collapsed into the hamburger.
+- **Toggle retargeting:** The hamburger toggle's `aria-controls` now points to
+  `navPanel`'s id instead of the inner nav's id. The open/closed class renamed from
+  `app-shell-nav-open` to `app-shell-nav-panel-open` (toggles on `navPanel` instead of
+  the nav).
+- **Responsive layout:** Below 640px, `navPanel` collapses to nothing by default (one
+  header row: mark, name, hamburger only); opening it reveals nav links, then a divider,
+  then the auth control, stacked in one column. At/above 640px, `navPanel` is
+  unconditionally an inline row (nav links + auth), matching the original desktop layout
+  exactly. Verified unchanged at 1280px.
+- **Responsive divider direction:** `.app-shell-auth`'s divider is now responsive: a top
+  border when stacked in the mobile panel (new), a left border when inline in the desktop
+  row (the original treatment, preserved via a `min-width:640px` override).
+
+**Two real interaction gaps found and fixed in review:**
+
+- **Sign out never closed the mobile menu** — unlike a nav link (which already had a "close
+  the panel on click" handler via `linkEl.addEventListener('click', () => closeMenu())`),
+  the Sign out button's own click handler had no such side effect. Signing out from an
+  open hamburger menu on mobile left the panel open (now showing only nav links, since
+  `renderAuth(null)` clears authEl) sitting over the login screen that mounts underneath
+  it. Fixed by factoring a shared `closeMenu()` helper function (lines 112–115) used by
+  the nav-link click handler, the toggle's own Escape handler, and now the Sign out
+  success path (line 242). Applied deliberately only on the SUCCESS path of the
+  `signOut()` call — a failed sign-out attempt (the catch block) keeps the menu open on
+  purpose, so the button is right there to retry without reopening it (found in review:
+  an unguarded await here meant a failed signOut() over a bad connection left the click
+  handler throwing as an unhandled rejection; the user now sees the button still enabled,
+  so they know to just try again).
+- **Escape only worked while focus was still on the toggle button itself** — a keyboard
+  user who Tabs forward into the panel's own contents (a nav link, or now also Sign out —
+  both real destinations now that the panel holds more than just the toggle's own
+  immediate next stop) got no Escape handling at all once they'd left the toggle. The
+  pre-existing Escape listener (lines 127–132) only fires while `navPanel` still has the
+  `app-shell-nav-panel-open` class AND focus is still ON the toggle. Fixed by adding a
+  second Escape listener scoped to `navPanel` itself (lines 142–147), not `document` or
+  the toggle — Escape from somewhere unrelated to this menu should never suddenly steal
+  focus back to a hamburger button. Shares the same `closeMenu()` helper and returns focus
+  to the toggle.
+
+Both fixes were mutation-tested (each `closeMenu()` call site / the new panel-scoped
+listener temporarily disabled, confirmed the corresponding new test fails with the exact
+right message, restored) and live-verified in a real browser via direct JS event dispatch
+(the `computer` click tool was timing out for unrelated environment reasons). Confirmed:
+Sign out from an open menu closes it and navigates to `#/events`/login; Escape from a
+focused nav link inside the panel closes the panel and returns focus to the toggle.
+
+**Tests:** `src/core/appShell.test.js`'s "mobile nav toggle" describe block — 5
+pre-existing tests updated to target `navPanel`/`app-shell-nav-panel-open` instead of the
+old `navEl`/`app-shell-nav-open`; 3 new tests added covering: (1) panel contains both nav
+
+- auth; (2) Sign out from an open menu closes it; (3) a FAILED Sign out leaves the menu
+  open on purpose; (4) Escape from a nav link inside the panel closes it and returns focus.
+  Full suite: 991/991 passing (up from 988). **Lint and prettier clean.**
+
+**Verifiers (two reviewers):**
+
+- `ui-accessibility-reviewer`: confirmed `aria-controls` retargeting is correct
+  WAI-ARIA APG disclosure-button compliance. Confirmed focus/tab order is sensible (nav
+  links then auth, matching DOM and visual order in both layouts). Confirmed no
+  regression to pre-existing Escape/aria-expanded sync. **Found the two interaction gaps
+  above during this pass.**
+- `code-reviewer`: CLEAN on the original task. Confirmed no stale references to old
+  id/class names anywhere in the codebase. Confirmed `syncHeaderHeightVar()` is unaffected
+  by the extra wrapper depth. Confirmed the new id has no conflicts. (The two gaps found
+  by the first reviewer were applied and verified afterward per that reviewer's own
+  findings, which were small, directly-requested fixes already covered by dedicated
+  mutation-tested tests — not re-reviewed by a second code-reviewer pass.)
+
+**Files touched:** `src/core/appShell.js`, `src/core/appShell.css`.
+
+---
+
 ## Spacing: heat card & stage card gap fix · 2026-09-06
 
 **User-requested, not tied to §14 task ID.** The user reviewed production screenshots
