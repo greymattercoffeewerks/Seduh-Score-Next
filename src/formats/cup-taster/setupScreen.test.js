@@ -277,7 +277,7 @@ describe('renderStageRow', () => {
     const lockedHeading = lockedEl.querySelector('h2');
     expect(lockedHeading).not.toBeNull();
     expect(lockedHeading.className).toBe('stage-row-heading');
-    expect(lockedHeading.textContent).toBe('Stage 1 — prelims');
+    expect(lockedHeading.textContent).toBe('Stage 1 — Preliminary');
   });
 
   it('disables the cutoff field on the terminal row, and Move up on the first row / Move down on the last', () => {
@@ -352,7 +352,7 @@ describe('renderStageRow', () => {
     expect(describedBy).toBeTruthy();
     const hint = el.querySelector(`#${describedBy}`);
     expect(hint).not.toBeNull();
-    expect(hint.textContent).toContain('Another prelims stage already exists in this plan');
+    expect(hint.textContent).toContain('Another Preliminary stage already exists in this plan');
     expect(hint.textContent).toContain('separate, sequential rounds');
   });
 
@@ -503,9 +503,9 @@ describe('mountSetupScreen', () => {
 
     const rows = root.querySelectorAll('.stage-row');
     expect(rows).toHaveLength(3);
-    expect(rows[0].textContent).toContain('Another prelims stage already exists in this plan');
+    expect(rows[0].textContent).toContain('Another Preliminary stage already exists in this plan');
     expect(rows[1].textContent).not.toContain('already exists in this plan');
-    expect(rows[2].textContent).toContain('Another prelims stage already exists in this plan');
+    expect(rows[2].textContent).toContain('Another Preliminary stage already exists in this plan');
   });
 
   it('updates the same-kind-round advisory immediately when a kind is changed via the select, with no Add/Remove/Move in between', async () => {
@@ -534,8 +534,8 @@ describe('mountSetupScreen', () => {
     stage2Kind.dispatchEvent(new Event('change', { bubbles: true }));
 
     rows = root.querySelectorAll('.stage-row');
-    expect(rows[0].textContent).toContain('Another prelims stage already exists in this plan');
-    expect(rows[1].textContent).toContain('Another prelims stage already exists in this plan');
+    expect(rows[0].textContent).toContain('Another Preliminary stage already exists in this plan');
+    expect(rows[1].textContent).toContain('Another Preliminary stage already exists in this plan');
 
     // Change it back to 'finals' — the now-stale advisory on BOTH rows must
     // clear, not merely fail to update further (the bug this closes: a
@@ -578,7 +578,7 @@ describe('mountSetupScreen', () => {
     expect(rows[0].textContent).not.toContain('already exists in this plan');
     expect(rows[0].querySelector('[aria-describedby]')).toBeNull();
     // The unlocked duplicate (Stage 3) still gets the advisory normally.
-    expect(rows[2].textContent).toContain('Another prelims stage already exists in this plan');
+    expect(rows[2].textContent).toContain('Another Preliminary stage already exists in this plan');
   });
 
   it('removes an unlocked stage and renumbers the rest, but offers no remove control on a locked stage', async () => {

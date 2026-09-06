@@ -203,7 +203,7 @@ describe('buildReportTables', () => {
 
     expect(tables).toHaveLength(3);
     expect(tables[0]).toEqual({
-      title: 'prelims — Standings',
+      title: 'Preliminary — Standings',
       columns: [
         { key: 'position', label: 'Pos' },
         { key: 'displayName', label: 'Cupper' },
@@ -215,9 +215,9 @@ describe('buildReportTables', () => {
         { position: 1, displayName: 'Alex', numCorrect: 3, time: "'1:30", outcome: 'Advanced' },
       ],
     });
-    expect(tables[1].title).toBe('prelims — Set difficulty');
+    expect(tables[1].title).toBe('Preliminary — Set difficulty');
     expect(tables[1].rows).toEqual([{ set: 'Set 1', correct: '75%', sampleSize: 4 }]);
-    expect(tables[2].title).toBe('prelims — Score distribution');
+    expect(tables[2].title).toBe('Preliminary — Score distribution');
     expect(tables[2].rows).toEqual([{ correctCount: 3, numCuppers: 1 }]);
   });
 
@@ -230,12 +230,12 @@ describe('buildReportTables', () => {
     });
     const tables = buildReportTables([emptyStage('prelims'), emptyStage('finals')]);
     expect(tables.map((t) => t.title)).toEqual([
-      'prelims — Standings',
-      'prelims — Set difficulty',
-      'prelims — Score distribution',
-      'finals — Standings',
-      'finals — Set difficulty',
-      'finals — Score distribution',
+      'Preliminary — Standings',
+      'Preliminary — Set difficulty',
+      'Preliminary — Score distribution',
+      'Finals — Standings',
+      'Finals — Set difficulty',
+      'Finals — Score distribution',
     ]);
   });
 });
@@ -322,7 +322,7 @@ describe('mountReportScreen', () => {
     await mountReportScreen(root, { eventId: 'ev1', client });
 
     const headings = [...root.querySelectorAll('h2')].map((h) => h.textContent);
-    expect(headings).toEqual(['prelims', 'finals']);
+    expect(headings).toEqual(['Preliminary', 'Finals']);
     expect(root.textContent).toContain('Alex');
     expect(root.textContent).toContain('Set difficulty');
     expect(root.textContent).toContain('Score distribution');
@@ -420,7 +420,7 @@ describe('mountReportScreen', () => {
     expect(downloadSpy).toHaveBeenCalledTimes(1);
     expect(downloadSpy.mock.calls[0][0]).toBe('Fall-Winter Cup report.csv');
     expect(downloadSpy.mock.calls[0][1]).toBe(
-      'finals — Standings\r\n' +
+      'Finals — Standings\r\n' +
         'Pos,Cupper,Correct,Time,Outcome\r\n' +
         // Leading apostrophe: Excel/Sheets' own escape for "literal text,
         // don't auto-format as a time" — see toCsvSafeDuration's own
@@ -428,11 +428,11 @@ describe('mountReportScreen', () => {
         // get silently reinterpreted as a clock time on open.
         '1,"Rivera, Alex",1,\'0:40,Advanced\r\n' +
         '\r\n' +
-        'finals — Set difficulty\r\n' +
+        'Finals — Set difficulty\r\n' +
         'Set,Correct,Cuppers scored\r\n' +
         'Set 1,100%,1\r\n' +
         '\r\n' +
-        'finals — Score distribution\r\n' +
+        'Finals — Score distribution\r\n' +
         'Correct answers,Cuppers\r\n' +
         '0,0\r\n' +
         '1,1',

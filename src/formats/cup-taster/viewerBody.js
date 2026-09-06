@@ -30,7 +30,16 @@
 //     cuppers: [{ displayName, station, totalElapsedSecs, maxed }],
 //   },
 //   recentHeats: [{ heatNumber, stageKind, results: [{ displayName, numCorrect, totalElapsedSecs }] }],
+//   champion: null | string,
 // }
+//
+// `champion` (2026-09-06, user request) — the whole tournament's own winner,
+// not a per-stage one: only ever non-null once the TERMINAL stage (the one
+// with no cutoff) has been resolved, populated in liveSession.js's
+// buildLiveSessionPayload from that same resolution's own standings, position
+// 1. Before then (including every non-terminal stage's own "Advanced to the
+// next stage" resolution) this stays null — there is no whole-tournament
+// champion yet, just a stage winner who continues on.
 //
 // camelCase throughout, deliberately — a JSON wire payload built for this
 // viewer, not a raw DB row shape, so it isn't tied to any particular
@@ -51,6 +60,7 @@ import { el, withSrExpansion } from '../../core/dom.js';
 import { chainComparators } from '../../core/ranking.js';
 import { remainingSecs, isExpired } from '../../core/countdown.js';
 import { formatDuration, formatDurationLong } from '../../core/duration.js';
+import { stageKindLabel } from './setup.js';
 
 // The `hasContent` predicate viewer-shell.js's inversion-of-control
 // contract calls for — whether THIS payload counts as real content is a
@@ -59,10 +69,6 @@ import { formatDuration, formatDurationLong } from '../../core/duration.js';
 // alone both count; an empty stage descriptor with neither does not.
 export function hasViewableContent(payload) {
   return Boolean(payload?.standings?.length > 0 || payload?.activeHeat);
-}
-
-function capitalize(word) {
-  return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
 // M:SS, not raw seconds — matches standingsScreen.js/reportScreen.js's own
@@ -94,6 +100,23 @@ function renderTimeCell(secs) {
   );
 }
 
+// Decorative only — the numeral itself (already required reading for
+// anyone, medal or not) still always renders, so this is a bonus visual
+// cue on top of existing information, never a replacement for it (matches
+// this file's own "text-carried, not color/icon-alone" convention above,
+// just inverted: here the TEXT already carries the meaning, the emoji is
+// the purely-additive part, so aria-hidden is correct rather than a gap).
+const MEDAL_BY_POSITION = { 1: '🥇', 2: '🥈', 3: '🥉' };
+
+function renderPositionCell(position) {
+  const medal = MEDAL_BY_POSITION[position];
+  if (!medal) return el('td', { text: String(position), attrs: { 'data-label': 'Pos' } });
+  return el('td', { attrs: { 'data-label': 'Pos' } }, [
+    el('span', { text: medal, attrs: { 'aria-hidden': 'true' } }),
+    document.createTextNode(` ${position}`),
+  ]);
+}
+
 function renderStandingsTable(stage, standings) {
   if (standings.length === 0) {
     return el('p', { className: 'stage-meta', text: 'No scores yet.' });
@@ -110,7 +133,7 @@ function renderStandingsTable(stage, standings) {
       'tr',
       { className: 'standings-row', attrs: row.tieStatus ? { 'data-status': row.tieStatus } : {} },
       [
-        el('td', { text: String(row.position), attrs: { 'data-label': 'Pos' } }),
+        renderPositionCell(row.position),
         el('td', { text: row.displayName + statusSuffix, attrs: { 'data-label': 'Cupper' } }),
         el('td', {
           // `stage` can be absent (see mountViewerBody) — fall back to a
@@ -264,7 +287,7 @@ function renderActiveHeat(activeHeat) {
     : activeHeat.status === 'timing'
       ? 'Timing…'
       : 'Scoring…';
-  const heading = `${capitalize(activeHeat.stageKind)} · Heat ${activeHeat.heatNumber} — ${statusLabel}`;
+  const heading = `${stageKindLabel(activeHeat.stageKind)} · Heat ${activeHeat.heatNumber} — ${statusLabel}`;
 
   const children = [el('h3', { text: heading })];
   let cleanup = null;
@@ -296,7 +319,7 @@ function renderRecentHeat(heat) {
   return el('div', { className: 'viewer-recent-heat' }, [
     el('p', {
       className: 'stage-meta',
-      text: `${capitalize(heat.stageKind)} · Heat ${heat.heatNumber}`,
+      text: `${stageKindLabel(heat.stageKind)} · Heat ${heat.heatNumber}`,
     }),
     el('ul', { className: 'viewer-recent-heat-list' }, rows),
   ]);
@@ -307,6 +330,31 @@ function renderRecentHeats(recentHeats) {
   return el('div', { className: 'viewer-recent-heats' }, [
     el('h3', { text: 'Recent results' }),
     ...recentHeats.map(renderRecentHeat),
+  ]);
+}
+
+// Legacy Seduh Score put the champion "in focus on screen" once declared
+// (user request, 2026-09-06) — this is that moment's whole reason to exist:
+// the single biggest thing this live surface ever shows anyone. Rendered
+// FIRST (mountViewerBody below), above the standings table, not instead of
+// it — a viewer who wasn't watching a moment ago still gets the full final
+// order underneath, medals and all (renderPositionCell above).
+//
+// Announced via viewer-shell.js's existing aria-live="polite" body region
+// (this hero is just another child of that same mutating node), NOT
+// escalated to role="alert" the way is_test is (found worth a deliberate
+// call, not a silent default, in review: ui-accessibility-reviewer) — D9's
+// is_test escalation exists because confusing test data for a real event is
+// a safety-relevant mistake; a champion reveal is a celebratory moment, not
+// an urgent one, so it stays in the same polite bucket as every other
+// content update this passive "watch and wait" surface already makes.
+function renderChampionHero(name) {
+  return el('div', { className: 'viewer-champion-hero' }, [
+    el('p', { className: 'viewer-champion-label', text: 'Champion' }),
+    el('h2', { className: 'viewer-champion-name' }, [
+      el('span', { text: '🏆', attrs: { 'aria-hidden': 'true' } }),
+      document.createTextNode(` ${name}`),
+    ]),
   ]);
 }
 
@@ -322,13 +370,16 @@ function renderRecentHeats(recentHeats) {
 // treatment of it.
 export function mountViewerBody(container, payload) {
   const sections = [];
+  if (payload.champion) {
+    sections.push(renderChampionHero(payload.champion));
+  }
   // Standings can arrive without a `stage` descriptor (see the payload-shape
   // comment above) — render the table on its own rather than silently
   // dropping real standings data, which would leave the shell's "Live"
   // chrome over a blank body.
   if (payload.stage || (payload.standings?.length ?? 0) > 0) {
     const heading = payload.stage
-      ? el('h2', { text: `${capitalize(payload.stage.kind)} standings` })
+      ? el('h2', { text: `${stageKindLabel(payload.stage.kind)} standings` })
       : null;
     sections.push(
       ...(heading ? [heading] : []),

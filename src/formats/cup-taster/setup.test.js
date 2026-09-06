@@ -10,7 +10,27 @@ import {
   listStagesForEvent,
   stageHasHeats,
   saveStagePlan,
+  STAGE_KINDS,
+  stageKindLabel,
 } from './setup.js';
+
+describe('stageKindLabel', () => {
+  it('maps every real stage kind to its full-word display label', () => {
+    expect(stageKindLabel('prelims')).toBe('Preliminary');
+    expect(stageKindLabel('semis')).toBe('Semi-Finals');
+    expect(stageKindLabel('finals')).toBe('Finals');
+  });
+
+  it('covers every value in STAGE_KINDS — a new kind added there without a matching label would otherwise silently fall through to the raw value', () => {
+    for (const kind of STAGE_KINDS) {
+      expect(stageKindLabel(kind)).not.toBe(kind);
+    }
+  });
+
+  it('falls back to the raw value for an unrecognized kind, rather than throwing or rendering "undefined"', () => {
+    expect(stageKindLabel('not-a-real-kind')).toBe('not-a-real-kind');
+  });
+});
 
 // Matches core/registry.test.js's fake shape, extended with a `.then()` on
 // the builder itself — setup.js's list/insert-many calls await the builder

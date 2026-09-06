@@ -8,6 +8,52 @@
  * data-surface="stage" repaints it correctly with zero rules of its own.
  */
 
+/* The one ceremonial moment DESIGN.md reserves --color-gold for ("podium,
+   champion badge, finals callouts") — as a FILL on the label pill, paired
+   with --color-gold-contrast, never as the name's own text color (DESIGN.md's
+   own rule: gold clears WCAG AA by under a point of headroom as plain text,
+   the reserved-accent argument depends on it staying a fill). The name
+   itself stays the ordinary high-contrast text color; 🏆's own glyph already
+   carries the gold-and-celebratory feel with zero CSS color needed. */
+.viewer-champion-hero {
+  text-align: center;
+  margin-bottom: var(--space-5);
+}
+
+.viewer-champion-label {
+  display: inline-block;
+  background: var(--color-gold);
+  color: var(--color-gold-contrast);
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: var(--text-sm);
+  padding: var(--space-1) var(--space-4);
+  border-radius: var(--radius-full);
+  margin: 0 0 var(--space-2) 0;
+}
+
+.viewer-champion-name {
+  font-family: var(--font-display);
+  font-size: var(--text-3xl);
+  margin: 0;
+  /* A single long unbroken name (no spaces to wrap on) would otherwise
+     overflow the row at this display size — same defensive posture
+     core/viewer-shell.css's own .viewer-chrome-name-text already applies
+     to a long identifier, found worth matching here too in review
+     (ui-accessibility-reviewer). */
+  overflow-wrap: anywhere;
+}
+
+[data-surface='stage'] .viewer-champion-label {
+  font-size: clamp(var(--text-base), 2vw, var(--text-lg));
+  padding: var(--space-2) var(--space-5);
+}
+
+[data-surface='stage'] .viewer-champion-name {
+  font-size: clamp(var(--text-4xl), 8vw, var(--text-6xl));
+}
+
 .viewer-active-heat h3 {
   font-family: var(--font-display);
   font-size: var(--text-lg);

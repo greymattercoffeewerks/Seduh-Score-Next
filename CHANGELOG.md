@@ -1,3 +1,105 @@
+## Audience live view: stage-kind labels + champion hero · 2026-09-06
+
+**User-requested, not tied to §14 task ID.** The user reviewed production screenshots
+and requested two enhancements to the audience-facing surfaces. (1) Small: stage-kind
+labels in all UI surfaces should display as full words ("Preliminary", "Semi-Finals",
+"Finals") instead of the database short forms ("prelims", "semis", "finals"). (2) Bigger:
+once the tournament's terminal stage resolves and a champion is crowned, the Projector
+and Phone live views should display the champion's name in large fonts with a trophy
+emoji — an in-focus celebratory moment, matching the legacy Seduh Score app's behaviour.
+
+**What shipped:**
+
+- **Stage-kind humanized labels:** New `stageKindLabel(kind)` in
+  `src/formats/cup-taster/setup.js` (alongside existing `STAGE_KINDS` array), a simple
+  lookup table mapping raw short forms to display text with fallback to raw value for
+  unrecognized kinds. Applied across six display sites: `eventDashboardScreen.js`,
+  `heatsScreen.js`, `standingsScreen.js`, `reportScreen.js` (all table/CSV titles and
+  headings), and `setupScreen.js` (`<option>` labels, while the stored `value` stays raw).
+  Removed the prior `capitalize()` ad-hoc helper from `viewerBody.js` — it only
+  uppercased the first letter ("Semis" not "Semi-Finals") and had no other callers.
+- **Champion declared feature:**
+  - `src/formats/cup-taster/liveSession.js`'s `buildLiveSessionPayload()` gained
+    `champion: string | null`, non-null only once the terminal stage (no cutoff) is
+    complete and the winner has been recorded.
+  - `src/formats/cup-taster/standingsScreen.js`'s `commit()` now calls
+    `publishLiveSession(...)` immediately after resolving a stage, a THIRD automatic
+    trigger (heat start/confirm are the pre-existing two). This ensures the champion
+    field reaches the live audience once the terminal stage resolves, closing an open
+    ROADMAP.md question deferred during Phase 5.
+  - `src/formats/cup-taster/viewerBody.js` gained `renderChampionHero(name)` (gold badge
+    - trophy emoji + champion's name, rendered first, above the standings table) and
+      `renderPositionCell(position)` (medal emoji 🥇🥈🥉 for standings positions 1–3,
+      `aria-hidden`, prefixed onto the existing numeral, never replacing it).
+  - `src/formats/cup-taster/viewerBody.css` added hero styling, applying the project's
+    DESIGN.md rule that `--color-gold` is always a fill color paired with
+    `--color-gold-contrast`, never plain text color.
+  - Live-verified in real browser, both paper mode (phone) and stage/dark mode
+    (projector): gold contrast, clamp()-based scaling, and medal rendering all
+    confirmed correct via screenshot + computed-style checks.
+
+**BLOCKING BUG FOUND AND FIXED (HIGH severity):** My first draft derived `champion` from
+`standings.find(row => row.position === 1)?.displayName`, where `position` comes purely
+from tallying `ct_results` correct_count and elapsed_secs. However, `rank()`'s own
+`position` field excludes tiebreak-heat results by design — they're tallied separately
+per the advancement logic (§7.2). Once a border tie at the terminal stage is broken by a
+tiebreak heat (or coin toss), BOTH tied cuppers still carry `position: 1` from the main
+standings, even though only one of them has `final_position: 1` persisted in the DB by
+`commitStageResolution`. **The feature would have named the tiebreak LOSER as champion in
+exactly the dramatic contested-finals moment an audience watches most closely.**
+
+Fixed by deriving `champion` from `ranked.find(({item}) => item.finalPosition === 1)`
+instead — `item.finalPosition` is the actual DB-recorded winner set by
+`commitStageResolution`, not just the sorted standings. Added a dedicated regression
+test: a fixture with two `ct_standings` rows both reporting `position: 1` (identical
+scores) but only one with `final_position: 1` set — confirms the feature picks the
+DB-recorded winner, not array order. Mutation-tested by reverting to the buggy logic,
+confirmed the new test failed with exact-text assertion mismatch, restored.
+
+**Verifiers (four reviewers, all passed or minor polish applied):**
+
+- `scoring-auditor` (BLOCKING DEFECT FOUND AND FIXED): Identified the tiebreak-position
+  confusion above. Confirmed the fix correctly uses `finalPosition`. Also suggested one
+  one-line clarifying comment on the new publish trigger (applied): why stage resolutions
+  fire publish on every occurrence, not just the terminal one.
+- `offline-sync-auditor` (CLEAN): Confirmed the new publish call site's try/catch
+  nesting, enqueue-durability, handler-map choice, and firing-on-every-commit correct.
+  Flagged one pre-existing, unrelated gap (task_efd0dc18, spawned separately): the
+  `commitStageResolution` RPC itself is 4+ independent non-transactional writes with no
+  idempotency guard, unlike every other write in this app — noted as deferred follow-up,
+  not fixed here.
+- `module-boundary-checker` (CLEAN): Confirmed `stageKindLabel` and `champion`
+  computation are Cup-Taster-specific, no core/ leakage, no import cycles.
+- `ui-accessibility-reviewer` (CLEAN with minor polish): Confirmed gold-token contrast
+  independently (paper ~5.04:1, stage ~8.39:1, both clear AA with headroom). Confirmed
+  label rename introduces no truncation. Applied two small defensives: (a)
+  `overflow-wrap: anywhere` on `.viewer-champion-name` (matching `core/viewer-shell.css`
+  precedent, guarding against long unbroken names); (b) documented in a comment the
+  deliberate choice to keep champion announcement in the same `aria-live="polite"` bucket
+  as other content updates (passive surface), not escalating to `role="alert"` — the
+  `is_test` flag uses alert for safety reasons, but champion display doesn't need that
+  urgency.
+- `code-reviewer` (CLEAN with one simplification): Applied `stageId: data.stage.id` →
+  `stageId` (closure already has it in scope; confirmed they can never differ). Noted
+  CSV export now reads humanized labels (a deliberate consequence of the stated intent,
+  just flagged in case future tooling parses the raw short form). Also noted
+  (non-actionable on this task) that `isTerminal` is independently re-derived in two
+  places in `standingsScreen.js` — worth a future `isTerminalStage(stage)` helper.
+
+**Tests:** 10 new tests: setup.test.js (3 for `stageKindLabel`); liveSession.test.js (4,
+including the critical tie-regression test); viewerBody.test.js (1 for medals, 2 for
+champion hero); standingsScreen.test.js (extended 2 existing commit-success tests with
+rpc-call assertions proving the new publish trigger fires with correct args on both
+terminal and non-terminal stage resolutions). Full suite: 969/969 passing (up from 959).
+Lint and prettier clean throughout.
+
+**Also flagged, not fixed (spawned as follow-up tasks):** Pre-existing full-suite-only
+flake in `timingScreen.test.js` (task_7a572d25, confirmed via 3 separate full-suite runs
+each failing a different assertion while passing 33/33 in isolation every time) and the
+`commitStageResolution` atomicity gap above (task_efd0dc18).
+
+---
+
 ## Organiser dashboard: live-event-status visibility · 2026-09-05
 
 **User-requested, not tied to §14 task ID.** During production testing, the user

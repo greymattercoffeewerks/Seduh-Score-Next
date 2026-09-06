@@ -35,7 +35,13 @@ import { el, labeledField } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
 import { findEvent } from '../../core/events.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
-import { listStagesForEvent, stageHasHeats, saveStagePlan, STAGE_KINDS } from './setup.js';
+import {
+  listStagesForEvent,
+  stageHasHeats,
+  saveStagePlan,
+  STAGE_KINDS,
+  stageKindLabel,
+} from './setup.js';
 
 const DEFAULT_SET_COUNT = 5;
 const DEFAULT_DURATION_SECS = 480;
@@ -111,7 +117,10 @@ export function renderStageRow(
 
   if (row.locked) {
     return el('div', { className: 'card stage-row', attrs: { id: rowId, 'data-locked': 'true' } }, [
-      el('h2', { className: 'stage-row-heading', text: `${stageLabel} — ${row.kind}` }),
+      el('h2', {
+        className: 'stage-row-heading',
+        text: `${stageLabel} — ${stageKindLabel(row.kind)}`,
+      }),
       el('p', {
         className: 'stage-meta',
         text: `${row.setCount} sets, ${row.durationSecs}s, cutoff ${row.cutoff ?? '—'} — locked, heats already generated`,
@@ -128,7 +137,7 @@ export function renderStageRow(
     attrs: { 'aria-label': `${stageLabel}: kind`, 'data-field': 'kind' },
   });
   for (const kind of STAGE_KINDS) {
-    kindSelect.appendChild(el('option', { text: kind, attrs: { value: kind } }));
+    kindSelect.appendChild(el('option', { text: stageKindLabel(kind), attrs: { value: kind } }));
   }
   kindSelect.value = row.kind;
   kindSelect.addEventListener('change', () => {
@@ -155,7 +164,7 @@ export function renderStageRow(
     kindHint = el('p', {
       id: kindHintId,
       className: 'form-field-hint',
-      text: `Another ${row.kind} stage already exists in this plan — same-kind stages run as separate, sequential rounds (each with its own cutoff, survivors carrying forward), not added capacity for one round.`,
+      text: `Another ${stageKindLabel(row.kind)} stage already exists in this plan — same-kind stages run as separate, sequential rounds (each with its own cutoff, survivors carrying forward), not added capacity for one round.`,
     });
   }
 

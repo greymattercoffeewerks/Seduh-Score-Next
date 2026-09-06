@@ -24,6 +24,22 @@ import { UNIQUE_VIOLATION } from '../../core/errors.js';
 
 export const STAGE_KINDS = ['prelims', 'semis', 'finals'];
 
+// User-facing label for a stage kind — the stored value stays the short form
+// above (schema/validation/URL-free vocabulary, unaffected) but every screen
+// that shows a kind to a human should read through this rather than
+// interpolating the raw value (found in review, 2026-09-06: "prelims"/
+// "semis" read as internal shorthand on a live audience screen, not the
+// polished wording a competition deserves).
+const STAGE_KIND_LABELS = {
+  prelims: 'Preliminary',
+  semis: 'Semi-Finals',
+  finals: 'Finals',
+};
+
+export function stageKindLabel(kind) {
+  return STAGE_KIND_LABELS[kind] ?? kind;
+}
+
 // A future format's setup screen needing more than a linear
 // prelims→semis→finals progression is exactly why this is a rank, not a
 // fixed two-sequence allowlist: any number of stages of any of these kinds

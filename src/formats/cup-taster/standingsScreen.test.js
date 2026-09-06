@@ -1,9 +1,13 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderStandingsTable, mountStandingsScreen } from './standingsScreen.js';
+import { _clearAllForTests } from '../../core/db.js';
 
 // Same fakeClient shape as standings.test.js/scoringScreen.test.js — queues
-// consumed strictly in call order per table.
-function fakeClient({ tables = {} } = {}) {
+// consumed strictly in call order per table. `rpc`, when passed, matches
+// liveSession.test.js's own fakeClient shape — needed here now that commit()
+// also calls publishLiveSession (the "declare champion"/"advance" resolution
+// is now a third automatic-publish trigger, alongside heat start/confirm).
+function fakeClient({ tables = {}, rpc } = {}) {
   const queues = {};
   for (const [table, response] of Object.entries(tables)) {
     queues[table] = Array.isArray(response) ? [...response] : [response];
@@ -12,6 +16,7 @@ function fakeClient({ tables = {} } = {}) {
 
   return {
     calls,
+    rpc: rpc ?? (() => Promise.resolve({ data: null, error: null })),
     from(table) {
       const queue = queues[table] ?? [{ data: null, error: null }];
       const resolve = () => (queue.length > 1 ? queue.shift() : queue[0]);
@@ -154,6 +159,10 @@ describe('renderStandingsTable', () => {
 });
 
 describe('mountStandingsScreen', () => {
+  beforeEach(async () => {
+    await _clearAllForTests();
+  });
+
   it('shows a "waiting" message, no action, when not every heat is confirmed yet', async () => {
     const root = document.createElement('div');
     const stage = {
@@ -188,7 +197,7 @@ describe('mountStandingsScreen', () => {
     expect(root.querySelector('.btn-primary')).toBeNull();
   });
 
-  it('offers "Advance to next stage" when every heat is confirmed and there is no border tie', async () => {
+  it('offers "Advance to next stage" when every heat is confirmed and there is no border tie, and publishes to live_sessions too — the third publish trigger fires on EVERY resolution, not just the terminal/champion one', async () => {
     const root = document.createElement('div');
     document.body.appendChild(root);
     const stage = {
@@ -205,6 +214,7 @@ describe('mountStandingsScreen', () => {
       { entry_id: 'e2', stage_id: 's1', correct_count: 4, sets_scored: 6, total_elapsed_secs: 100 },
       { entry_id: 'e3', stage_id: 's1', correct_count: 1, sets_scored: 6, total_elapsed_secs: 100 },
     ];
+    const rpcCalls = [];
     const client = fakeClient({
       tables: {
         events: { data: event, error: null },
@@ -220,6 +230,10 @@ describe('mountStandingsScreen', () => {
           error: null,
         },
         ct_heat_entries: { data: [], error: null },
+      },
+      rpc: (name, payload) => {
+        rpcCalls.push([name, payload]);
+        return Promise.resolve({ data: null, error: null });
       },
     });
 
@@ -240,10 +254,15 @@ describe('mountStandingsScreen', () => {
       { stage_id: 's2', entry_id: 'e1', source: 'advanced', position_note: null },
       { stage_id: 's2', entry_id: 'e2', source: 'advanced', position_note: null },
     ]);
+    await vi.waitFor(() => {
+      expect(rpcCalls).toHaveLength(1);
+    });
+    expect(rpcCalls[0][0]).toBe('publish_session');
+    expect(rpcCalls[0][1].p_event_id).toBe('ev1');
     document.body.removeChild(root);
   });
 
-  it('says "Declare champion" at the terminal stage (cutoff: null)', async () => {
+  it('says "Declare champion" at the terminal stage (cutoff: null), and publishes to live_sessions once resolved — the third automatic-publish trigger, alongside heat start/confirm', async () => {
     const root = document.createElement('div');
     document.body.appendChild(root);
     const stage = {
@@ -259,6 +278,7 @@ describe('mountStandingsScreen', () => {
       { entry_id: 'e1', stage_id: 's1', correct_count: 5, sets_scored: 6, total_elapsed_secs: 100 },
       { entry_id: 'e2', stage_id: 's1', correct_count: 3, sets_scored: 6, total_elapsed_secs: 90 },
     ];
+    const rpcCalls = [];
     const client = fakeClient({
       tables: {
         events: { data: event, error: null },
@@ -271,6 +291,10 @@ describe('mountStandingsScreen', () => {
           error: null,
         },
         ct_heat_entries: { data: [], error: null },
+      },
+      rpc: (name, payload) => {
+        rpcCalls.push([name, payload]);
+        return Promise.resolve({ data: null, error: null });
       },
     });
 
@@ -292,6 +316,20 @@ describe('mountStandingsScreen', () => {
     expect(
       client.calls.some(([action, table]) => action === 'insert' && table === 'ct_stage_entries'),
     ).toBe(false);
+
+    // The publish is best-effort and asynchronous (enqueue-then-flush,
+    // matching timingScreen.js/scoringScreen.js's own identical calls) — it
+    // isn't awaited by commit() itself, so it may land just after the
+    // success message does.
+    await vi.waitFor(() => {
+      expect(rpcCalls).toHaveLength(1);
+    });
+    const [rpcName, rpcPayload] = rpcCalls[0];
+    expect(rpcName).toBe('publish_session');
+    expect(rpcPayload.p_org_id).toBe('org1');
+    expect(rpcPayload.p_event_id).toBe('ev1');
+    expect(rpcPayload.p_format).toBe('cup_taster');
+    expect(rpcPayload.p_is_test).toBe(false);
     document.body.removeChild(root);
   });
 
