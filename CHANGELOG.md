@@ -58,6 +58,7 @@ found real issues, all closed:**
 Migration applies cleanly from empty (verified three times independently, once per
 reviewer); rollback block verified by actually running it in a transaction. Full pgTAP
 suite: 170/170 (24 new, one extended to 27 mid-review). Full JS suite: 996/996.
+
 ## Fix timingScreen.test.js full-suite flakiness · 2026-09-06
 
 **User-reported, not tied to a §14 task ID.** `timingScreen.test.js` flaked in the full
