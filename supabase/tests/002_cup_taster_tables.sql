@@ -4,9 +4,15 @@
 -- derived, via ct_standings), a negative elapsed_secs is rejected, and (T4.2
 -- follow-up, migration 20260829100000) two cuppers in the same heat can't
 -- both claim the same station — a gap ROADMAP.md tracked as application-layer
--- only until now.
+-- only until now. Also proves (20260906050000 follow-up, found live via a
+-- Phase 6 dry run) that ct_standings.total_elapsed_secs is never fanned out
+-- by the number of scored sets — this exact fixture (elapsed_secs=240, 3
+-- scored sets) would have caught the original view's bug immediately
+-- (720, not 240) had this assertion existed from the start; it didn't,
+-- which is why a real end-to-end dry run — not just this pgTAP file — is
+-- what actually found it.
 begin;
-select plan(9);
+select plan(11);
 
 -- ============ correct is nowhere a stored tally column ============
 
@@ -72,6 +78,23 @@ select is(
   'ct_standings derives correct_count (2 of 3) from raw ct_results rows, live'
 );
 
+-- ============ total_elapsed_secs is never fanned out by scored-set count
+-- (20260906050000 — found live via a Phase 6 dry run: the original view's
+-- `sum(he.elapsed_secs)` over a query LEFT JOINing ct_results multiplied
+-- elapsed_secs by the number of scored sets, since that join fans one
+-- heat_entry row out to N result rows and elapsed_secs is a single
+-- per-heat_entry value, not per-set. This fixture (elapsed_secs=240, 3
+-- results rows) would have caught 720 immediately — this is the assertion
+-- that should have existed from the start) ============
+
+select is(
+  (select total_elapsed_secs from ct_standings
+     where entry_id = '00000000-0000-0000-0000-0000000000a1'),
+  240::bigint,
+  'ct_standings.total_elapsed_secs is the entry''s own elapsed_secs (240),
+   not multiplied by its 3 scored sets (would be 720 with the fan-out bug)'
+);
+
 -- ============ ct_standings excludes tiebreak heats (§7.2, §7.3) ============
 
 -- Cupper One also runs a tiebreak heat in the same stage — 1 more correct set,
@@ -94,6 +117,17 @@ select is(
   2::bigint,
   'ct_standings.correct_count stays 2 after a tiebreak heat runs — the tiebreak
    set never blends into the primary-stage tally'
+);
+
+select is(
+  (select total_elapsed_secs from ct_standings
+     where entry_id = '00000000-0000-0000-0000-0000000000a1'),
+  240::bigint,
+  'ct_standings.total_elapsed_secs stays 240 after a tiebreak heat runs —
+   neither blended with the tiebreak''s own 60s (would be 300) nor
+   re-fanned-out by its own separately-scored set (would be 300 blended,
+   or 240+60 fanned differently depending on which bug) — the tiebreak
+   heat''s kind=''tiebreak'' filter excludes it from this view entirely'
 );
 
 -- ============ negative elapsed_secs rejected ============

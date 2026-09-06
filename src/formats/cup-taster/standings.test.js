@@ -102,6 +102,24 @@ describe('rankStandingRows', () => {
     expect(ranked[0].position).toBe(1);
     expect(ranked[1].position).toBe(1);
   });
+
+  // scoring-auditor, 2026-09-06 (reviewing the ct_standings fan-out fix):
+  // `byFastestTime` used to compute `Infinity - Infinity` (NaN) whenever
+  // two-or-more untimed rows tied on numCorrect — the everyday state of
+  // every stage entry before its heat has run, not an exotic edge case.
+  // NaN reads as "not a tie" to chainComparators/rank(), so these three
+  // untimed cuppers got sequential positions 1/2/3 instead of sharing one.
+  it('two or more untimed rows tied on correct count share one position, not NaN-sequential ones', () => {
+    const rows = [
+      { entry_id: 'a', numCorrect: 0, total_elapsed_secs: null },
+      { entry_id: 'b', numCorrect: 0, total_elapsed_secs: null },
+      { entry_id: 'c', numCorrect: 0, total_elapsed_secs: null },
+    ];
+    const ranked = rankStandingRows(rows);
+    expect(ranked[0].position).toBe(1);
+    expect(ranked[1].position).toBe(1);
+    expect(ranked[2].position).toBe(1);
+  });
 });
 
 describe('fetchStandingsForStage', () => {
