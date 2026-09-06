@@ -9,6 +9,28 @@
   gap: var(--space-3);
 }
 
+/* .stage-card-actions sits below .stage-meta inside the SAME .stage-card
+   (renderStageCard) — .stage-meta supplies its own top margin closing the
+   h3-to-meta gap, but nothing closed the meta-to-actions gap below it,
+   crowding these buttons flush against the status line above them (same
+   bug class as .heat-card's own fix, found by ui-accessibility-reviewer
+   while verifying that one, 2026-09-06 — this is the 2nd occurrence, fixed
+   immediately rather than left for a future user screenshot to rediscover).
+   .event-dashboard-actions doesn't need this: it's its own standalone card
+   with nothing above it to crowd against, so the shared selector above
+   stays combined for the properties both need, this one is scoped alone.
+   Matches setupScreen.css's own .stage-row-actions margin-top value —
+   same "heading -> meta -> actions" card shape, already solved there.
+   Kept as per-child margins rather than converting .stage-card to
+   .heat-card's own single flex-gap approach (found worth stating in
+   review, code-reviewer) — .stage-card's two gaps are different sizes
+   (h3-to-meta is --space-1, meta-to-actions is --space-4), which one
+   shared `gap` can't express; .heat-card's children all shared one
+   uniform --space-3, which is what let it collapse to a single value. */
+.stage-card-actions {
+  margin-top: var(--space-4);
+}
+
 /* Whether THIS event is the one org-wide live_sessions row currently points
    at — see eventDashboardScreen.js's own findActiveLiveEventId comment for
    why this can't be inferred from merely viewing this screen. Reuses

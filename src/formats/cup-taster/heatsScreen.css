@@ -252,13 +252,27 @@
   font-size: var(--text-sm);
 }
 
+/* Found in review (user-reported, 2026-09-06, screenshots of a live heat
+   card): the action link (Time/Score this heat) sat flush against the
+   entries list above it — `.card` itself has no child-spacing rule at all
+   (just padding), and neither the list nor the plain-text `<a>` had a
+   margin of its own to fill that gap. A flex column with one shared `gap`
+   is the systemic fix — every direct child (the `<h3>`, the entries list,
+   the action link/status span) gets consistent spacing for free, rather
+   than each one needing to know it must supply its own margin to the next. */
+.heat-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
 .heat-card + .heat-card {
   margin-top: var(--space-4);
 }
 
 .heat-entries-list {
   list-style: none;
-  margin: var(--space-3) 0 0 0;
+  margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;

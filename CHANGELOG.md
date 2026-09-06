@@ -1,3 +1,58 @@
+## Spacing: heat card & stage card gap fix · 2026-09-06
+
+**User-requested, not tied to §14 task ID.** The user reviewed production screenshots
+and identified spacing issues: the "Time this heat"/"Score this heat" action buttons sat
+crowded flush against the cupper row above them, breaking visual hierarchy and tap target
+affordance.
+
+**What was found and fixed:**
+
+- **Primary bug — `.heat-card` gap (heatsScreen.css):** The per-heat card (station badge +
+  cupper name + action buttons) had no spacing rule between its children at all. `.card`
+  base class only ever sets padding; `.heat-entries-list` had top-only margin (closing the
+  h3-to-list gap) but nothing closed the gap between the list and the action button below,
+  leaving the button crowded flush against the cupper row. Reproduced live in browser
+  before touching anything, rendered real `renderHeatsList()` against fixture data, exact
+  match to user screenshots.
+  - Fix: converted `.heat-card` to `display: flex; flex-direction: column; gap: var(--space-3)`
+    (systemic fix — every child gets consistent spacing for free), removed redundant
+    `.heat-entries-list` top-only margin. Side effect: action button now full-width (bigger
+    tap target, confirmed as improvement by ui-accessibility-reviewer).
+  - Verified live-fixed at desktop and 360px viewports via screenshot before/after.
+
+- **Secondary bug — `.stage-card-actions` gap (eventDashboardScreen.css):** Found by
+  ui-accessibility-reviewer while verifying fix #1 — identical bug class on event dashboard's
+  per-stage card (heading + status line + action buttons). Same missing gap between status
+  line and actions row.
+  - Fix: added `.stage-card-actions { margin-top: var(--space-4); }` (scoped rule, not
+    applied to sibling `.event-dashboard-actions` which has no preceding card content).
+    Value matches `setupScreen.css`'s precedent for identical "heading → meta → actions"
+    card shape. Traced by code-reviewer to confirm `.event-dashboard-actions` genuinely
+    has no sibling above it.
+  - Live-verified fixed the same way.
+
+**Verifiers (two reviewers):**
+
+- `ui-accessibility-reviewer` (on fix #1): confirmed no regression from button's full-width
+  stretch, confirmed "Confirmed" status span (rendered once heat is done) isn't visually
+  affected by flex-column stretch, confirmed fix doesn't leak into other `.card`-using
+  screens. **Flagged but out-of-scope: identified fix #2 (identical bug on stage-card).**
+  Brought in-scope and fixed same task.
+- `code-reviewer` (on fix #1): CLEAN. Traced exact DOM shape `.heat-card` wraps, confirmed
+  flex-gap composes correctly with pre-existing `.heat-card` + `.heat-card` sibling-margin
+  rule and `.heat-entries-list`'s internal `<li>` gap, no double-spacing or lost-spacing.
+- `code-reviewer` (on fix #2): CLEAN. Verified `.event-dashboard-actions` has no sibling
+  above it, confirmed no other `.stage-card-actions` consumers exist. Applied documentation
+  improvement: added comment clause explaining why `.stage-card` kept per-child margins
+  (two gaps are different sizes — `--space-1` then `--space-4` — one shared `gap` value
+  can't express). Verified claim against actual token values in `.stage-meta` rule.
+
+**Files touched:** `src/formats/cup-taster/heatsScreen.css`, `src/formats/cup-taster/eventDashboardScreen.css`.
+**Tests:** No test count change — 984/984 passing (neither fix touches DOM structure or
+test-observable behavior, only visual layout). **Lint and prettier clean.**
+
+---
+
 ## Audience live view: stage-kind labels + champion hero · 2026-09-06
 
 **User-requested, not tied to §14 task ID.** The user reviewed production screenshots
