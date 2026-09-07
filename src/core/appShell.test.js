@@ -585,6 +585,25 @@ describe('mountAppShell — sync panel', () => {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
+  // `tick(ms)` above waits a FIXED real duration, chosen against an idle
+  // CPU, then hopes refreshSync()'s own await (an IndexedDB read via
+  // listPendingOperations(), a real macrotask hop through fake-indexeddb)
+  // has actually finished by the time the assertion runs. Found flaky under
+  // full-suite CPU contention (2026-09-07, reproduced directly by
+  // saturating every core during full `vitest run`s — six different
+  // assertions in this describe block failed across several runs, each
+  // with the stale pre-poll text still showing). Nothing was actually
+  // broken in any of those failures — refreshSync()'s promise just hadn't
+  // resolved yet by the arbitrary fixed deadline. `flush()` polls for the
+  // real outcome instead of sleeping a guessed duration and hoping, same
+  // fix applied to timingScreen.test.js's own identical failure mode the
+  // day before. A generous 3s timeout keeps this from ever masking a
+  // genuine regression as a hang; a real pass still resolves in tens of
+  // milliseconds on an idle machine.
+  async function flush(assertFn, { timeout = 3000 } = {}) {
+    await vi.waitFor(assertFn, { timeout, interval: 20 });
+  }
+
   it('renders nothing ("off") with no event context and no pending operations', async () => {
     const root = document.createElement('div');
     mountAppShell(root, { client: fakeClient({}) });
@@ -598,9 +617,10 @@ describe('mountAppShell — sync panel', () => {
     const root = document.createElement('div');
     const { setNav } = mountAppShell(root, { client: fakeClient({}) });
     await setNav({ eventId: 'ev1', links: [] });
-    await tick();
     const syncEl = root.querySelector('.app-shell-sync');
-    expect(syncEl.textContent).toBe('Synced');
+    await flush(() => {
+      expect(syncEl.textContent).toBe('Synced');
+    });
     expect(syncEl.classList.contains('app-shell-sync-live')).toBe(true);
     expect(syncEl.querySelector('.status-live-dot')).not.toBeNull();
   });
@@ -610,9 +630,10 @@ describe('mountAppShell — sync panel', () => {
     const root = document.createElement('div');
     const { setNav } = mountAppShell(root, { client: fakeClient({}) });
     await setNav({ eventId: 'ev1', links: [] });
-    await tick();
     const syncEl = root.querySelector('.app-shell-sync');
-    expect(syncEl.textContent).toBe('Not synced (1 pending)');
+    await flush(() => {
+      expect(syncEl.textContent).toBe('Not synced (1 pending)');
+    });
     expect(syncEl.classList.contains('app-shell-sync-pending')).toBe(true);
   });
 
@@ -622,9 +643,10 @@ describe('mountAppShell — sync panel', () => {
     const root = document.createElement('div');
     const { setNav } = mountAppShell(root, { client: fakeClient({}) });
     await setNav({ eventId: 'ev1', links: [] });
-    await tick();
     const syncEl = root.querySelector('.app-shell-sync');
-    expect(syncEl.textContent).toBe('Not synced — retrying failed (1 pending)');
+    await flush(() => {
+      expect(syncEl.textContent).toBe('Not synced — retrying failed (1 pending)');
+    });
     expect(syncEl.classList.contains('app-shell-sync-stuck')).toBe(true);
     expect(syncEl.classList.contains('app-shell-sync-pending')).toBe(false);
   });
@@ -633,39 +655,46 @@ describe('mountAppShell — sync panel', () => {
     await enqueueOperation('confirm_heat', { heatId: 'h1' });
     const root = document.createElement('div');
     mountAppShell(root, { client: fakeClient({}) }); // no setNav call at all — cachedEventId stays null
-    await tick();
     const syncEl = root.querySelector('.app-shell-sync');
-    expect(syncEl.textContent).toBe('Not synced (1 pending)');
+    await flush(() => {
+      expect(syncEl.textContent).toBe('Not synced (1 pending)');
+    });
   });
 
   it('picks up a change on its own poll cycle, without requiring another setNav call', async () => {
     const root = document.createElement('div');
     const { setNav } = mountAppShell(root, { client: fakeClient({}), syncPollMs: 20 });
     await setNav({ eventId: 'ev1', links: [] });
-    await tick();
     const syncEl = root.querySelector('.app-shell-sync');
-    expect(syncEl.textContent).toBe('Synced');
+    await flush(() => {
+      expect(syncEl.textContent).toBe('Synced');
+    });
 
     // Enqueued directly against the outbox — nothing tells the shell about
     // this new operation except its own poll.
     await enqueueOperation('confirm_heat', { heatId: 'h1' });
-    await tick(60); // > syncPollMs, so at least one poll tick has fired
-    expect(syncEl.textContent).toBe('Not synced (1 pending)');
+    await flush(() => {
+      expect(syncEl.textContent).toBe('Not synced (1 pending)');
+    });
   });
 
   it('unmount() stops the poll — a leaked interval would keep reading IndexedDB (and touching a detached DOM node) forever', async () => {
     const root = document.createElement('div');
     const { setNav, unmount } = mountAppShell(root, { client: fakeClient({}), syncPollMs: 20 });
     await setNav({ eventId: 'ev1', links: [] });
-    await tick();
     const syncEl = root.querySelector('.app-shell-sync');
-    expect(syncEl.textContent).toBe('Synced');
+    await flush(() => {
+      expect(syncEl.textContent).toBe('Synced');
+    });
     unmount();
 
     // Enqueued AFTER unmount — if the interval weren't really cleared, a
     // later poll tick would eventually reflect this. Waiting past several
     // poll intervals and asserting NOTHING changed proves the timer is
-    // actually gone, not just that clearInterval() was called.
+    // actually gone, not just that clearInterval() was called. A fixed
+    // real wait is correct here (not a flush()) — under CPU contention a
+    // still-leaking timer would fire LATER, never earlier, so a slower
+    // machine can only make this assertion more conservative, never flaky.
     await enqueueOperation('confirm_heat', { heatId: 'h1' });
     await tick(80);
     expect(syncEl.textContent).toBe('Synced');
@@ -683,13 +712,15 @@ describe('mountAppShell — sync panel', () => {
     const root = document.createElement('div');
     const { setNav, reportFlushError } = mountAppShell(root, { client: fakeClient({}) });
     await setNav({ eventId: 'ev1', links: [] });
-    await tick();
     const syncEl = root.querySelector('.app-shell-sync');
-    expect(syncEl.textContent).toBe('Synced');
+    await flush(() => {
+      expect(syncEl.textContent).toBe('Synced');
+    });
 
     reportFlushError(new Error('stale conflict'));
-    await tick();
-    expect(syncEl.textContent).toBe('Not synced — a write failed to save and was not retried');
+    await flush(() => {
+      expect(syncEl.textContent).toBe('Not synced — a write failed to save and was not retried');
+    });
     expect(syncEl.classList.contains('app-shell-sync-stuck')).toBe(true);
   });
 
@@ -697,26 +728,30 @@ describe('mountAppShell — sync panel', () => {
     const root = document.createElement('div');
     const { setNav, reportFlushError } = mountAppShell(root, { client: fakeClient({}) });
     await setNav({ eventId: 'ev1', links: [] });
-    await tick();
+    const syncEl = root.querySelector('.app-shell-sync');
+    await flush(() => {
+      expect(syncEl.textContent).toBe('Synced');
+    });
     reportFlushError(new Error('stale conflict'));
-    await tick();
-    expect(root.querySelector('.app-shell-sync').textContent).toBe(
-      'Not synced — a write failed to save and was not retried',
-    );
+    await flush(() => {
+      expect(syncEl.textContent).toBe('Not synced — a write failed to save and was not retried');
+    });
 
     reportFlushError(null);
-    await tick();
-    expect(root.querySelector('.app-shell-sync').textContent).toBe('Synced');
+    await flush(() => {
+      expect(syncEl.textContent).toBe('Synced');
+    });
   });
 
   it('fail-open also covers a reported flush error: it still reports "not synced", never "off", with no current event context', async () => {
     const root = document.createElement('div');
     const { reportFlushError } = mountAppShell(root, { client: fakeClient({}) }); // no setNav — cachedEventId stays null
     reportFlushError(new Error('stale conflict'));
-    await tick();
-    expect(root.querySelector('.app-shell-sync').textContent).toBe(
-      'Not synced — a write failed to save and was not retried',
-    );
+    await flush(() => {
+      expect(root.querySelector('.app-shell-sync').textContent).toBe(
+        'Not synced — a write failed to save and was not retried',
+      );
+    });
   });
 
   it('a genuinely pending operation takes priority over a stale reported flush error in the displayed text — the "N pending" case is the more actionable one', async () => {
@@ -726,18 +761,24 @@ describe('mountAppShell — sync panel', () => {
       syncPollMs: 20,
     });
     await setNav({ eventId: 'ev1', links: [] });
-    await tick();
+    const syncEl = root.querySelector('.app-shell-sync');
+    await flush(() => {
+      expect(syncEl.textContent).toBe('Synced');
+    });
     reportFlushError(new Error('stale conflict'));
-    await tick();
+    await flush(() => {
+      expect(syncEl.textContent).toBe('Not synced — a write failed to save and was not retried');
+    });
     // Enqueued directly, same as the "picks up a change on its own poll
     // cycle" test above — nothing calls refreshSync() directly here, only
     // the poll itself observes it.
     await enqueueOperation('confirm_heat', { heatId: 'h1' });
-    await tick(60); // > syncPollMs, so at least one poll tick has fired
     // Not the zero-pending "a write failed to save" wording — a real
     // operation is sitting in the queue now, so the ordinary pending count
     // is what's actionable (it hasn't even had a failed attempt of its
     // own yet — attempts starts at 0 on enqueue).
-    expect(root.querySelector('.app-shell-sync').textContent).toBe('Not synced (1 pending)');
+    await flush(() => {
+      expect(syncEl.textContent).toBe('Not synced (1 pending)');
+    });
   });
 });

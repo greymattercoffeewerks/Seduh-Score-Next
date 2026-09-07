@@ -16,6 +16,25 @@ function settle(ms = 50) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// `settle(ms)` above waits a FIXED real duration, chosen against an idle
+// CPU, then hopes the click handler's own awaits (local validation, or
+// enqueue -> flush -> RPC -> render, several of them real macrotask hops
+// through fake-indexeddb — see settle()'s own comment above) have actually
+// finished by the time the assertion runs. Found flaky under full-suite CPU
+// contention (2026-09-07, reproduced directly by saturating every core
+// during full `vitest run`s — several different assertions in this file
+// failed across separate runs) — same failure mode already fixed in
+// timingScreen.test.js (commit 31be64a) and src/core/appShell.test.js the
+// same week. `flush()` polls for the real outcome instead of sleeping a
+// guessed duration and hoping, so it stays correct regardless of how busy
+// the machine happens to be when the full suite runs alongside everything
+// else. A generous 3s timeout keeps this from ever masking a genuine
+// regression as a hang; a real pass still resolves in tens of milliseconds
+// on an idle machine.
+async function flush(assertFn, { timeout = 3000 } = {}) {
+  await vi.waitFor(assertFn, { timeout, interval: 20 });
+}
+
 function matchesFilters(row, filters) {
   return filters.every(([type, col, val]) => {
     if (type === 'eq') return row[col] === val;
@@ -323,10 +342,15 @@ describe('mountManualTimingScreen', () => {
     inputs[0].value = '2';
     inputs[1].value = '5';
     root.querySelector('button').click();
-    await settle();
+    // render() rebuilds `.screen-feedback` from scratch (root.innerHTML =
+    // '' — see timingManualScreen.js) on every render, so this must
+    // re-query fresh each poll rather than hold a reference captured before
+    // the async chain (enqueue -> flush -> RPC -> render) has landed.
+    await flush(() => {
+      expect(root.querySelector('.screen-feedback').dataset.tone).toBe('success');
+    });
 
     const feedback = root.querySelector('.screen-feedback');
-    expect(feedback.dataset.tone).toBe('success');
     expect(feedback.textContent).toContain("Cupper One's time recorded");
     expect(document.activeElement).toBe(feedback);
     expect(root.querySelector('.timing-row-result').textContent).toBe('Recorded: 2:05');
@@ -354,7 +378,11 @@ describe('mountManualTimingScreen', () => {
     inputs[0].value = '2';
     inputs[1].value = '5';
     root.querySelector('button').click();
-    await settle();
+    // Same re-query-inside-the-poll idiom as the test above — `.screen-
+    // feedback` is a fresh node every render().
+    await flush(() => {
+      expect(root.querySelector('.screen-feedback').textContent).toContain('Timing complete');
+    });
 
     // The screen has already switched to the read-only "Timing complete"
     // view by this point — the aria-live announcement is what tells a
@@ -365,7 +393,6 @@ describe('mountManualTimingScreen', () => {
     // link rather than skipping past it.
     const feedback = root.querySelector('.screen-feedback');
     expect(feedback.textContent).toContain("Cupper One's time recorded");
-    expect(feedback.textContent).toContain('Timing complete');
     expect(root.textContent).toContain('Score this heat');
     expect(root.querySelector('input')).toBeNull();
     expect(document.activeElement.id).toBe('timing-complete-heading');
@@ -395,14 +422,20 @@ describe('mountManualTimingScreen', () => {
     inputs[0].value = '2';
     inputs[1].value = '75'; // invalid — out of 0-59 range
     root.querySelector('button').click();
-    await settle();
+    // No render() happens on this path (asserted below), so unlike the
+    // save-success tests above, these are the SAME nodes throughout — still
+    // polling rather than a fixed sleep, since the click handler's own
+    // local-validation path is still an async function with at least one
+    // microtask hop before the inline error actually lands in the DOM.
+    await flush(() => {
+      expect(root.querySelector('.manual-time-local-error').textContent).toContain(
+        'Seconds must be a whole number',
+      );
+    });
 
-    // No render() happened at all — the GLOBAL feedback region stays
-    // untouched, matching timingScreen.js's own identical assertion.
+    // The GLOBAL feedback region stays untouched, matching timingScreen.js's
+    // own identical assertion.
     expect(root.querySelector('.screen-feedback').dataset.tone).toBeUndefined();
-    expect(root.querySelector('.manual-time-local-error').textContent).toContain(
-      'Seconds must be a whole number',
-    );
     // No RPC call was ever issued — the parse error is caught before
     // recordManualTime is even called.
     expect(client.calls).toHaveLength(0);
@@ -454,7 +487,11 @@ describe('mountManualTimingScreen', () => {
     oneMinutes.value = '2';
     oneSeconds.value = '75'; // invalid — out of 0-59 range
     rowFor('Cupper One').querySelector('button').click();
-    await settle();
+    await flush(() => {
+      expect(rowFor('Cupper One').querySelector('.manual-time-local-error').textContent).toContain(
+        'Seconds must be a whole number',
+      );
+    });
 
     // No network write happened for either row, and no render() ran — the
     // whole point being proven here is that Cupper Two's own draft, typed
@@ -463,9 +500,6 @@ describe('mountManualTimingScreen', () => {
     const [twoMinutesAfter, twoSecondsAfter] = rowFor('Cupper Two').querySelectorAll('input');
     expect(twoMinutesAfter.value).toBe('4');
     expect(twoSecondsAfter.value).toBe('20');
-    expect(rowFor('Cupper One').querySelector('.manual-time-local-error').textContent).toContain(
-      'Seconds must be a whole number',
-    );
 
     document.body.removeChild(root);
   });
@@ -497,10 +531,11 @@ describe('mountManualTimingScreen', () => {
     inputs[0].value = '3';
     inputs[1].value = '0';
     root.querySelector('button').click();
-    await settle();
+    await flush(() => {
+      expect(root.querySelector('.screen-feedback').dataset.tone).toBe('error');
+    });
 
     const feedback = root.querySelector('.screen-feedback');
-    expect(feedback.dataset.tone).toBe('error');
     expect(feedback.textContent).toContain('moved on');
     // The entry itself was never actually overwritten — ground truth (the
     // reload) still shows the original value.
@@ -565,7 +600,9 @@ describe('mountManualTimingScreen', () => {
     inputs[0].value = '2';
     inputs[1].value = '5';
     root.querySelector('button').click();
-    await settle();
+    await flush(() => {
+      expect(root.querySelector('.screen-feedback').dataset.tone).toBe('error');
+    });
 
     // The rejection, not a clean save — this entry's elapsed_secs was
     // never actually written.
@@ -574,7 +611,6 @@ describe('mountManualTimingScreen', () => {
     // already moved on), which is exactly the case the guard must handle.
     expect(root.textContent).toContain('Timing complete');
     const feedback = root.querySelector('.screen-feedback');
-    expect(feedback.dataset.tone).toBe('error');
     expect(document.activeElement).toBe(feedback);
 
     document.body.removeChild(root);
@@ -644,14 +680,25 @@ describe('mountManualTimingScreen', () => {
     inputs[0].value = '2';
     inputs[1].value = '5';
     root.querySelector('button').click();
-    // Let recordManualTime's write (enqueue + flush, real IndexedDB) fully
-    // complete, and its follow-up render() reach (and block on) the gated
-    // events query.
-    await settle();
-    expect(eventsCallCount).toBe(2);
+    // Poll for recordManualTime's write (enqueue + flush, real IndexedDB) to
+    // fully complete, and its follow-up render() to reach (and block on) the
+    // gated events query — a fixed settle() here was the actual source of
+    // this test's own full-suite flakiness (found 2026-09-07): under CPU
+    // contention that multi-hop async chain can still be in flight when the
+    // fixed sleep fires, leaving eventsCallCount at 1, not yet 2.
+    await flush(() => {
+      expect(eventsCallCount).toBe(2);
+    });
 
     unmount();
     resolveGatedEvents();
+    // A fixed settle(0) here (not a flush()) is correct: this proves the
+    // blocked render's generation check STOPS it from ever writing, and
+    // unmount() already bumped the generation counter synchronously above —
+    // however long the resolved gated-events promise actually takes to
+    // finish unwinding, it will always see the bumped counter and bail, so
+    // a slower machine only gives it more time to (incorrectly) write, never
+    // less; this can't be flaky in the direction that matters.
     await settle(0);
 
     // The blocked render's generation check now fails (unmount() bumped
