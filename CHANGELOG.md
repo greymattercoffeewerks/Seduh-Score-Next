@@ -1,3 +1,17 @@
+## Version cycle: Kiulap → Berakas, v1.0.9 → v2.0.0 · 2026-09-07
+
+**Major bump, triggered by the marketing landing page shipping** (`src/marketing/` — see this file's own "Marketing landing page" entry for the full account, committed separately). Per CONVENTIONS.md's "Versioning" rule, a major version/nameplate move is reserved for a genuine capability-era boundary (a new format shipping, or a major cross-cutting relaunch) — the landing page is the latter: the site's first real public front door, moving the console to `/app/`. Near-exact match to legacy's own Berakas cycle ("the front door — seduhscore.com, an organiser zone... quietly turning a personal tool into something a stranger could actually sign into").
+
+**What changed:** `package.json` version `1.0.9` → `2.0.0`; `src/core/version.js`'s `NAMEPLATE` `'Kiulap'` → `'Berakas'` (the organiser-app footer, `appShell.js`, now reads "Seduh Score · Berakas · v2.0.0"). `CONVENTIONS.md`'s "Versioning" section and `ROADMAP.md`'s "Version cycle plan" table both updated to record the trigger and reasoning.
+
+**A real reordering, not just filling in a blank**: ROADMAP.md's nameplate plan (2026-09-05) had reserved v2.0 for Gadong/Throwdown, since the landing page didn't exist yet as a concept. It shipped first, so Berakas — originally slotted for "whatever the next major relaunch turns out to be," unassigned — jumped the queue. Gadong (Throwdown), Kiarong (Liga Seduh), and Menglait (BBTC) each shift one cycle later (now v3.0/v4.0/v5.0). This is exactly the "plan, not a commitment" caveat that table was written with.
+
+**Cloudflare deployment of the landing page was still pending at the moment of this bump** — the version/nameplate move tracks the code landing in the repo, not the separate deploy step, matching the existing migration-vs-merge distinction in CLAUDE.md's Repo section.
+
+**Not run this task:** no schema/RLS/scoring/offline-sync/UI-logic change (a version string and two doc updates) — `schema-guardian`/`security-reviewer`/`scoring-auditor`/`offline-sync-auditor`/`code-reviewer`/`module-boundary-checker`/`ui-accessibility-reviewer` don't apply to a version-number-only change with no code behavior change. `npm run build`/`test`/`lint` re-run clean after the bump.
+
+---
+
 ## Phone number normalization & validation · 2026-09-06
 
 **User-requested, not tied to §14 task ID.** Scoped out of the multi-tenancy/Seduh ID

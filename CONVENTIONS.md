@@ -279,9 +279,23 @@ Jerudong → Seria, v1.0 → v5.x, see seduhscore.com/bts/). This is a **separat
 spiral** starting back at Kiulap, not a continuation of that site's already-completed
 run — user decision, 2026-09-05: this codebase is a from-scratch rewrite (Supabase,
 offline-first outbox, fixed advancement), not a patch on the same one, so it earns its
-own lineage rather than picking up mid-spiral. Current cycle: **Kiulap, v1.0.0**. The
-next cycle's name gets picked (and this section updated) when that cycle actually starts
-— don't pre-name future cycles.
+own lineage rather than picking up mid-spiral. The nameplate only moves on a **major**
+bump (1.x → 2.0.0, etc.), reserved for a genuine capability-era boundary — a new format
+shipping, or a major cross-cutting relaunch — never on a fixed schedule. See ROADMAP.md's
+"Version cycle plan" for the planned future sequence; a cycle's name is picked (and this
+section updated) when that cycle actually starts, not before.
+
+**Current cycle: Berakas, v2.0.0** (moved 2026-09-07, from Kiulap/v1.x). Trigger: the
+public marketing landing page (`src/marketing/`) shipped, the site's first real front
+door — the console moved to `/app/`, matching legacy's own Berakas cycle almost exactly
+("the front door — seduhscore.com, an organiser zone... Cup Taster as the fourth
+format"). This jumped the queue ahead of the originally-planned v2.0/Gadong (Throwdown,
+per ROADMAP.md's earlier plan) since the landing page shipped first — Gadong/Kiarong/
+Menglait each shifted one cycle later; see ROADMAP.md's "Version cycle plan" table for
+the corrected sequence. Cloudflare deployment of the landing page itself was still
+pending at the moment of this bump — the version/nameplate move tracks the code shipping
+to the repo, not the separate deploy step (same distinction CLAUDE.md's Repo section
+already draws for migrations).
 
 ---
 
