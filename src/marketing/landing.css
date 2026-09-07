@@ -400,6 +400,12 @@ h3 {
 /* ---- Hero ---- */
 .landing-hero {
   position: relative;
+  /* Clips the bloom rings (360px circles, easily wider than a phone
+     viewport) to the hero's own bounds — the source page this effect was
+     ported from (seduhscore.com/pitch) had this on its own .hero for the
+     same reason; missed carrying it over here, which let the rings push
+     the whole page into horizontal scroll on narrow viewports. */
+  overflow: hidden;
   padding-top: var(--space-8);
   padding-bottom: var(--space-8);
   display: grid;
@@ -625,8 +631,16 @@ h3 {
 }
 
 /* ---- Section shells ---- */
+/* Longhand on purpose, not `padding: var(--space-8) 0` — this class is
+   combined with .landing-wrap on the same element in a couple of places
+   (buildFormats(), buildPricing()), and a shorthand here would overwrite
+   .landing-wrap's left/right padding with 0 outright, since both set the
+   same `padding` property on the same element (found live: format/pricing
+   cards were flush to the viewport edge with no horizontal gutter at all,
+   not just "tighter" spacing). Longhand only ever touches its own sides. */
 .landing-section {
-  padding: var(--space-8) 0;
+  padding-top: var(--space-8);
+  padding-bottom: var(--space-8);
 }
 .landing-section-sunken {
   background: var(--color-surface-sunken);
@@ -847,8 +861,12 @@ h3 {
 }
 
 /* ---- Footer ---- */
+/* Longhand — same reason as .landing-section above: combined with
+   .landing-wrap on the same element, a `padding` shorthand here would
+   zero out .landing-wrap's left/right. */
 .landing-footer {
-  padding: var(--space-6) 0;
+  padding-top: var(--space-6);
+  padding-bottom: var(--space-6);
   display: flex;
   justify-content: space-between;
   align-items: center;

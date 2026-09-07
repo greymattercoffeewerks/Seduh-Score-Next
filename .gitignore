@@ -159,3 +159,9 @@ test-results/
 playwright-report/
 blob-report/
 playwright/.cache/
+
+# kb-sync's live scratch state (in-progress task detail ROADMAP.md/CHANGELOG.md
+# don't carry) — resets once a task closes into a CHANGELOG entry, per its own
+# header comment. Working state, not a deliverable; multiple sessions had been
+# independently leaving it untracked-but-unignored rather than deciding this.
+state.json
