@@ -24,15 +24,15 @@ about original design intent.
 
 ## Current state
 
-| Phase                          | Status         | What it covers                                                                                |
-| ------------------------------ | -------------- | --------------------------------------------------------------------------------------------- |
-| Phase 0 — Foundation           | ✅ Done        | Scaffold, Claude Code tooling, Supabase local stack + CI, doc seed                            |
-| Phase 1 — Schema and security  | ✅ Done        | Core tables, Cup Taster tables, RLS, `WITH CHECK` gate                                        |
-| Phase 2 — Core libraries       | ✅ Done        | `partition`, `ranking`, `advancement`, `countdown`, `timeclamp`, `entitlements`               |
-| Phase 3 — Registry and offline | ✅ Done        | `registry`, IndexedDB mirror + outbox, sync state panel                                       |
-| Phase 4 — Cup Taster           | ✅ Done        | Setup, heat generation, timing (app + manual), scoring, standings/advancement, report, export |
-| Phase 5 — Live surfaces        | ✅ Done        | `publish`, `viewer-shell`, projector, phone summary, automatic publishing on heat actions     |
-| Phase 6 — Hardening            | 🟡 In progress | Accessibility pass, offline soak, dry run — **Guess the Bean (descoped, see below)**          |
+| Phase                          | Status  | What it covers                                                                                            |
+| ------------------------------ | ------- | --------------------------------------------------------------------------------------------------------- |
+| Phase 0 — Foundation           | ✅ Done | Scaffold, Claude Code tooling, Supabase local stack + CI, doc seed                                        |
+| Phase 1 — Schema and security  | ✅ Done | Core tables, Cup Taster tables, RLS, `WITH CHECK` gate                                                    |
+| Phase 2 — Core libraries       | ✅ Done | `partition`, `ranking`, `advancement`, `countdown`, `timeclamp`, `entitlements`                           |
+| Phase 3 — Registry and offline | ✅ Done | `registry`, IndexedDB mirror + outbox, sync state panel                                                   |
+| Phase 4 — Cup Taster           | ✅ Done | Setup, heat generation, timing (app + manual), scoring, standings/advancement, report, export             |
+| Phase 5 — Live surfaces        | ✅ Done | `publish`, `viewer-shell`, projector, phone summary, automatic publishing on heat actions                 |
+| Phase 6 — Hardening            | ✅ Done | Accessibility pass, offline soak, dry run (local + production) — **Guess the Bean (descoped, see below)** |
 
 **Deadline: 4 October 2026, Cup Tasters event.**
 
@@ -101,7 +101,36 @@ CHANGELOG.md's dated entry for the full account.
 
 ---
 
-## Phase 0 — Foundation
+## Version cycle plan (nameplate roadmap)
+
+Per CONVENTIONS.md's "Versioning" section: patch/minor bumps happen on every closed
+task (current: v1.0.x); a **major bump moves the nameplate to the next point in the
+spiral**, and — same discipline as the handoff itself — that only happens at a genuine
+capability-era boundary (a new format shipping, or a major cross-cutting relaunch), not
+on a fixed schedule. This section plans those boundaries and their names in advance, so
+each name's meaning is decided deliberately rather than picked in the moment.
+
+**Deliberately retraces the legacy Seduh Score site's own spiral, same order, same
+places** (`seduhscore.com/bts/`: Kiulap → Gadong → Kiarong → Menglait → Berakas →
+Jerudong → Seria) — not because Next continues that site's numbering (it doesn't; see
+CONVENTIONS.md, this is a separate v1.0 lineage), but because the legacy site's own
+"reading the map" already assigned each place a meaning almost exactly matching what
+Next's own build order needs. Retracing the same physical journey, on the new
+foundation, is the point.
+
+| Version | Place        | Ships when…                                                                                    | Meaning (echoing legacy's own, where it genuinely fits)                                                                                                                                                                                                                                                                  |
+| ------- | ------------ | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| v1.x    | **Kiulap**   | Cup Taster + Phase 6 hardening, through the Oct 4, 2026 event (current cycle)                  | Legacy's own urban core, "where the very first bracket ran." Same meaning here: the first format Next actually shipped, on the new foundation.                                                                                                                                                                           |
+| v2.0    | **Gadong**   | Throwdown ships (2nd format)                                                                   | Legacy: "realising one format was never going to be enough." Literally true again — Next's own second format arriving.                                                                                                                                                                                                   |
+| v3.0    | **Kiarong**  | Liga Seduh ships (3rd format)                                                                  | Legacy: "Liga Seduh — a league, not a knockout... the platform starting to have opinions of its own." An exact match both times — same format, same place.                                                                                                                                                               |
+| v4.0    | **Menglait** | BBTC ships (4th format)                                                                        | Legacy's own Menglait was a stress-test milestone (Girls Got Drip Vol. 0), not a format ship — the thematic fit is weaker here, flagged rather than forced. Revisit this pairing once BBTC's actual shape is scoped; a stress-test cycle (first live BBTC event) may fit the name better than the format's initial ship. |
+| v5.0+   | not named    | Whatever comes after all four formats exist — a major cross-cutting relaunch, not a fixed date | Per CONVENTIONS.md's own rule: a cycle's name is picked when it actually starts, not before. `Berakas`/`Jerudong`/`Seria` remain unused and unassigned.                                                                                                                                                                  |
+
+**This table is a plan, not a commitment** — per CONVENTIONS.md, the nameplate only
+actually moves once the triggering milestone lands, and the specific pairing (especially
+v4.0/Menglait, flagged above) should be revisited against the real shape of each format
+as it's scoped, not locked in now. Update this table (and CONVENTIONS.md's "Versioning"
+section) at the moment each cycle actually starts, not preemptively.
 
 Per handoff §14.
 
@@ -701,10 +730,26 @@ Report screen + CSV export, and `is_test` event deletion.
      fix. Both bugs are now closed; this migration + the `standings.js` fix are ready to
      ship together.
 
-- Production leg of the dry run (per the user's own chosen scope, "local first, then
-  production" — including pushing this migration to the cloud project via
-  `apply_migration`, per this project's own established discipline that merging a PR
-  never does this automatically): not yet started.
+- **Production leg of the dry run is CLOSED (2026-09-07, scoped down by user decision to
+  a representative smoke test rather than a full repeat).** Signed into the real deployed
+  app (`seduh-score-next.greymatter-cw.workers.dev`) via the Claude in Chrome extension
+  (password entry stays off-limits regardless of authorization — the user logged in
+  themselves), created a separate `is_test: true` event ("Prod Smoke Test", never
+  touching the user's own real "Grey Matter Cup Taster" rehearsal event), and ran a
+  2-stage plan (Preliminary cutoff-1 → Finals) through a tie + tiebreak + resolution
+  against the real cloud Postgres instance. Confirmed against production specifically:
+  auth/RLS work end-to-end for a real organiser session, and the `ct_standings` fan-out
+  fix (above) displays correct, un-fanned-out elapsed times live in production, not just
+  locally. One real side effect caught and fixed: advancing a test event's stage
+  auto-publishes it as the org's `live_sessions` row (by design — see T5.gap.automatic-
+  publish above), which briefly replaced "Grey Matter Cup Taster" as the org's active
+  session; restored via a direct, user-confirmed `UPDATE` once the smoke test's own
+  signal was captured. Test event deleted afterward via the app's own Delete-event
+  feature. `resolve_stage` itself was NOT re-exercised against production data this pass
+  (the smoke test's own stage plan only ever advances one cupper past Preliminary, so
+  Finals never ran) — its correctness rests on the pgTAP suite + three reviewer sign-offs
+  above, not on a production-specific run; revisit if a genuine production-data
+  verification of that RPC specifically is wanted before the Oct 4 event.
 
 ---
 
