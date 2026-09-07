@@ -351,6 +351,9 @@
         background: transparent;
         border: 1.5px dashed var(--color-text-muted);
       }
+      .sk-dot.start {
+        background: var(--color-text-muted);
+      }
       .sk-dir {
         font-size: 0.8125rem;
         color: var(--color-text-muted);
@@ -672,38 +675,47 @@
           spiralling out toward the frontier, v1.0 through v5.x (<a
             href="https://seduhscore.com/bts/"
             >seduhscore.com/bts/</a
-          >). This codebase doesn't continue that run.
+          >). This codebase doesn't continue that run, but it retraces the same physical
+          journey, same order, same places — deliberately.
         </p>
         <div class="spiral-layout">
           <div class="spiral-stage" id="spiralStage">
             <svg
               id="spiral"
               viewBox="0 0 260 220"
-              aria-label="Codename spiral: one cycle shipped so far, Kiulap, with the next unnamed"
+              aria-label="Codename spiral: two cycles shipped so far, Kiulap then Berakas, with the next unnamed"
             ></svg>
           </div>
           <div class="spiral-key rv rv-d1">
             <div class="sk-title">Reading the map</div>
             <ul>
               <li>
+                <span class="sk-dot start"></span>
+                <span
+                  ><b>Kiulap · v1.x</b> — the urban core, again. Cup Taster plus the Phase 6
+                  hardening pass, done.</span
+                >
+              </li>
+              <li>
                 <span class="sk-dot now"></span>
                 <span
-                  ><b>Kiulap · v1.0.1</b> — the urban core, again. A from-scratch rewrite earns its
-                  own lineage rather than picking up mid-spiral.</span
+                  ><b>Berakas · v2.0.0</b> — jumped the queue: the public front door, ahead of
+                  schedule. The current cycle.</span
                 >
               </li>
               <li>
                 <span class="sk-dot next"></span>
-                <span>The next cycle — named when it actually starts, not before.</span>
+                <span>The next cycle — Gadong, most likely, when Throwdown ships. Named for
+                real only once it actually starts.</span>
               </li>
             </ul>
             <div class="sk-dir">
-              Same direction as the original: capital core → frontier, whenever the second cycle
-              begins.
+              Same direction as the original: capital core → frontier, one shipped cycle at a
+              time.
             </div>
             <div class="sk-nums">
-              <span><b>1</b> cycle</span>
-              <span><b>v1.0.1</b> now</span>
+              <span><b>2</b> cycles</span>
+              <span><b>v2.0.0</b> now</span>
               <span><b>1 / 4</b> formats</span>
             </div>
           </div>
@@ -714,8 +726,9 @@
         <div class="sec-eyebrow rv">The pour, phase by phase</div>
         <h2 class="rv rv-d1">What shipped — and what it felt like.</h2>
         <p class="sec-sub rv rv-d1">
-          One cycle in progress — <strong>Kiulap</strong> — built as seven phases per the project's
-          frozen handoff spec. Six shipped; the seventh is the hardening pass running now.
+          <strong>Kiulap</strong> — seven phases per the project's frozen handoff spec, all
+          shipped. Then <strong>Berakas</strong> — a front door nobody had planned for, jumping
+          the queue.
         </p>
 
         <div class="pour" id="phasePour">
@@ -853,24 +866,49 @@
             </div>
           </div>
 
-          <div class="phase current" data-phase>
+          <div class="phase" data-phase>
             <div class="phase-node"></div>
             <div class="phase-head">
               <span class="phase-name">Phase 6</span>
               <span class="phase-ver">Hardening</span>
-              <span class="phase-now">Current phase</span>
             </div>
             <div class="phase-line shipped">
-              <span class="k">In progress</span
+              <span class="k">Shipped</span
               ><span class="v"
-                >Accessibility pass, offline soak testing, and a dry run against the real roster.
-                Guess the Bean stays the working v4.x version — deliberately not rebuilt here.</span
+                >Accessibility pass, offline soak testing, and a dry run against the real roster —
+                local and production both green. Guess the Bean stayed the working v4.x
+                version, deliberately not rebuilt.</span
               >
             </div>
             <div class="phase-line felt">
-              <span class="k">Feels like</span
+              <span class="k">Felt like</span
               ><span class="v"
-                >the unglamorous work that decides whether October 4th actually goes well.</span
+                >the unglamorous work that decides whether October 4th actually goes well —
+                closed out before the event ever started.</span
+              >
+            </div>
+          </div>
+
+          <div class="phase current cycle-cap" data-phase>
+            <div class="phase-node"></div>
+            <div class="phase-head">
+              <span class="phase-name">Berakas</span>
+              <span class="phase-ver">v2.0.0</span>
+              <span class="phase-now">Current cycle</span>
+            </div>
+            <div class="phase-line shipped">
+              <span class="k">Shipped</span
+              ><span class="v"
+                >The public marketing landing page — out of the original handoff's scope
+                entirely, shipped because it was needed. The console moved to <code>/app/</code>
+                to make room for it; this page you're reading now lives right alongside it.</span
+              >
+            </div>
+            <div class="phase-line felt">
+              <span class="k">Felt like</span
+              ><span class="v"
+                >the moment this stopped being a private rebuild and got an actual public front
+                door — the same thing legacy's own Berakas cycle was, for the same reason.</span
               >
             </div>
           </div>
@@ -950,17 +988,18 @@
         document.querySelectorAll('.rv').forEach((el) => io.observe(el));
       })();
 
-      // The spiral — one shipped cycle (Kiulap), same Archimedean-curve
-      // technique as the legacy page's seven-cycle version, generalized down
-      // to N=1: a short orbit arc in from the center to the lit node, then a
-      // dashed tail continuing outward for whatever comes next, unnamed.
+      // The spiral — two shipped cycles (Kiulap, then Berakas), same
+      // Archimedean-curve technique as the legacy page's seven-cycle
+      // version: a short orbit arc in from the center through both lit
+      // nodes, then a dashed tail continuing outward for whatever comes
+      // next, unnamed.
       (function () {
         const svg = document.getElementById('spiral');
         const stage = document.getElementById('spiralStage');
-        const cx = 90,
-          cy = 110,
+        const cx = 100,
+          cy = 100,
           startR = 14,
-          rStep = 30,
+          rStep = 46,
           aStep = (150 * Math.PI) / 180;
         const pos = (t) => {
           const a = t * aStep - Math.PI / 2;
@@ -976,29 +1015,61 @@
           }
           return d;
         };
+        // Label placement flips above/below the node depending which side of
+        // center it lands on, same rule the legacy page's script uses — two
+        // nodes now close enough together that a fixed "always above" offset
+        // (the N=1 version's original approach) would collide.
+        const label = (p, name, ver, delayName, delayVer) => {
+          const above = p.y < cy;
+          const ly = above ? p.y - 22 : p.y + 26;
+          const vy = above ? p.y - 9 : p.y + 40;
+          return (
+            '<text class="name-lbl" x="' +
+            p.x +
+            '" y="' +
+            ly +
+            '" text-anchor="middle" style="transition-delay:' +
+            delayName +
+            's">' +
+            name +
+            '</text>' +
+            '<text class="ver-lbl" x="' +
+            p.x +
+            '" y="' +
+            vy +
+            '" text-anchor="middle" style="transition-delay:' +
+            delayVer +
+            's">' +
+            ver +
+            '</text>'
+          );
+        };
         const kiulap = pos(0);
-        let html = '<path class="orbit-path" d="' + polyline(-1.4, 0) + '"/>';
-        html += '<path class="tail-path" d="' + polyline(0, 1.7) + '"/>';
+        const berakas = pos(1);
+        let html = '<path class="orbit-path" d="' + polyline(-1.4, 1) + '"/>';
+        html += '<path class="tail-path" d="' + polyline(1, 2.1) + '"/>';
+
+        // Kiulap — shipped, past. A plain filled dot, no pulse: the pulse is
+        // reserved for whichever node is the CURRENT cycle, same "now" vs
+        // "start" distinction the spiral key list below draws.
+        html +=
+          '<circle cx="' + kiulap.x + '" cy="' + kiulap.y + '" r="6" fill="var(--color-text-muted)"/>';
+        html += label(kiulap, 'KIULAP', 'shipped &middot; v1.x', 0.5, 0.6);
+
+        // Berakas — current cycle, the live pulse.
         html +=
           '<circle class="kiulap-ring" cx="' +
-          kiulap.x +
+          berakas.x +
           '" cy="' +
-          kiulap.y +
+          berakas.y +
           '" r="14" fill="none" stroke="var(--color-accent)" stroke-width="1.5"/>';
         html +=
-          '<circle cx="' + kiulap.x + '" cy="' + kiulap.y + '" r="7" fill="var(--color-accent)"/>';
-        html +=
-          '<text class="name-lbl" x="' +
-          kiulap.x +
-          '" y="' +
-          (kiulap.y - 42) +
-          '" text-anchor="middle">KIULAP</text>';
-        html +=
-          '<text class="ver-lbl" x="' +
-          kiulap.x +
-          '" y="' +
-          (kiulap.y - 27) +
-          '" text-anchor="middle">now &middot; v1.0.1</text>';
+          '<circle cx="' +
+          berakas.x +
+          '" cy="' +
+          berakas.y +
+          '" r="7" fill="var(--color-accent)"/>';
+        html += label(berakas, 'BERAKAS', 'now &middot; v2.0.0', 0.7, 0.8);
         svg.innerHTML = html;
 
         const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
