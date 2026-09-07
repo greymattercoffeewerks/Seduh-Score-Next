@@ -28,6 +28,7 @@ import { describeError } from '../../core/errors.js';
 import { findEvent } from '../../core/events.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
 import { listEntries, registerEntry, setEntryWithdrawn } from '../../core/registry.js';
+import { normalizePhone, validatePhoneShape } from '../../core/phone.js';
 
 function blankDraft() {
   return { displayName: '', phone: '', email: '', cafe: '', bib: '' };
@@ -35,11 +36,14 @@ function blankDraft() {
 
 // Pure. Trims every field; blank optional fields collapse to null rather
 // than an empty string, matching registerPerson/createEntry's own `?? null`
-// convention for optional columns.
+// convention for optional columns. Phone is normalized to E.164
+// (core/phone.js) — the sole point this happens, so every entry reaching
+// core/registry.js's phone-based dedup, and later any Seduh ID backfill, is
+// already in one consistent shape.
 export function buildCupperFromDraft(draft) {
   return {
     displayName: draft.displayName.trim(),
-    phone: draft.phone.trim(),
+    phone: normalizePhone(draft.phone),
     email: draft.email.trim() || null,
     cafe: draft.cafe.trim() || null,
     bib: draft.bib.trim() || null,
@@ -52,7 +56,7 @@ export function buildCupperFromDraft(draft) {
 export function validateDraft(draft) {
   if (!draft.displayName.trim()) return 'Name is required.';
   if (!draft.phone.trim()) return 'Phone is required.';
-  return null;
+  return validatePhoneShape(normalizePhone(draft.phone));
 }
 
 export function renderRegistrationForm(draft, { disabled }) {

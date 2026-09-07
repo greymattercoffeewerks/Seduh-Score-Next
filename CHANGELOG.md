@@ -1,3 +1,84 @@
+## Phone number normalization & validation · 2026-09-06
+
+**User-requested, not tied to §14 task ID.** Scoped out of the multi-tenancy/Seduh ID
+design conversation (2026-09-05/06): phone-number normalization and shape validation
+ahead of cross-org identity matching via Seduh ID. `people.phone` is the eventual
+matching key for linking baristas across organizations; format drift now would be
+expensive to fix retroactively later. All design decisions (E.164 shape only, no
+per-country validation, Brunei default country code) are explicitly interim, with
+upgrade paths documented (see `src/core/phone.js` comment).
+
+**What shipped:**
+
+- **New `src/core/phone.js`:** `normalizePhone(raw, defaultCountryCode = '+673')`
+  accepts raw user input and returns E.164-shaped string (`+` followed by 8–15 digits);
+  `validatePhoneShape(phone)` hand-rolled E.164 check, deliberately no new dependency
+  (`libphonenumber-js` noted in comments as future upgrade path if stricter per-country
+  validation is needed).
+  - Normalization handles three input formats: already-prefixed (`+673...`), leading `00`
+    (international dialing, e.g. `0065...`), or unprefixed digits (applies default).
+    Added after code review found a pre-existing bug: "00" prefix wasn't recognized as
+    carrying a country code, so `normalizePhone` would prepend the default anyway,
+    producing wrong-but-still-shape-valid numbers. Now treats both `+` and `00` as
+    already-carrying country codes.
+  - Pure functions with zero imports — genuinely format-agnostic and reusable by future
+    formats without editing.
+
+- **`src/formats/cup-taster/rosterScreen.js` changes:**
+  - `buildCupperFromDraft()` now normalizes phone via `normalizePhone()` before dedup
+    lookup in `core/registry.js` — fixes a pre-existing latent bug where formatting drift
+    could break dedup within a single org (not just future cross-org matching).
+  - `validateDraft()` extended with `validatePhoneShape()` call after the existing
+    required-field check. New error message: "Phone must be a valid international number,
+    starting with your country code — e.g. +673 7123456 for Brunei." Chosen wording
+    (example format, explicit country-code instruction) to avoid screen-reader
+    misinterpretation as "type this literal prefix."
+
+- **`src/core/phone.test.js` (new)** and **`src/formats/cup-taster/rosterScreen.test.js`
+  updates:**
+  - Phone test file covers: valid E.164 (various lengths), valid prefixed inputs ("+",
+    "00"), valid unprefixed (applies default), invalid shapes (missing prefix, too few/many
+    digits), and the specific "00" prefix regression case mentioned above. All cases
+    verified against hand-computed E.164 standards.
+  - Roster tests updated: old placeholder phone values like `'+1'` replaced with realistic
+    ones (they now legitimately fail shape validation), new test coverage for the
+    normalization path through `buildCupperFromDraft()` and validation error messaging.
+  - Full suite: 988/988 tests passing.
+
+**REAL BUG FOUND AND FIXED IN CODE REVIEW:** `code-reviewer` discovered that "00"
+international-dialing prefix wasn't recognized as already carrying a country code. A
+phone typed as "0065 8123 4567" would be normalized to "+6730065 8123 4567" (Brunei
+default + the "00" as if it were part of the local number), producing a wrong-but-still-
+shape-valid number that would never match a real person in a different org with the
+same phone number using standard formatting. Fixed by extending the "is this already a
+country code?" check to include leading "00" (after stripping non-digits) alongside
+leading "+". Regression tests added and confirmed.
+
+**Verifiers (three reviewers, parallel):**
+
+- `code-reviewer`: Found the "00" prefix bug above and the validation-error messaging
+  wording issue (original message read as "type this literal +673" for screen readers).
+  Confirmed zero edge cases or injection risks in the normalization logic. Full review
+  CLEAN once "00" handling fixed.
+- `module-boundary-checker`: CLEAN. `core/phone.js` has zero imports (format-agnostic);
+  `defaultCountryCode` parameter means a future format isn't stuck with Brunei (not a
+  blocker, but a design note: the constant is hardcoded to Brunei rather than
+  environment-configurable like `core/config.js`'s pattern; flagged as "when a second
+  format/region needs it" item, not acted on now, explicitly not blocking).
+- `ui-accessibility-reviewer`: Confirmed accessible-error path already established by
+  pre-existing validation (focus, `aria-live="polite"`, tone styling) is reused
+  correctly with no divergence. Flagged the original validation error message as
+  potentially misread by screen readers due to bare digit string in the example; fixed
+  by rewording with explicit instruction. Identified DOM-level test gap: unit tests
+  existed for the pure functions, but nothing exercised the validation path through the
+  actual `mountRosterScreen()` submit/render/focus flow — added new test case.
+
+**Files touched:** `src/core/phone.js` (new), `src/core/phone.test.js` (new),
+`src/formats/cup-taster/rosterScreen.js`, `src/formats/cup-taster/rosterScreen.test.js`.
+**Lint and prettier clean.**
+
+---
+
 ## commitStageResolution atomicity fix: resolve_stage RPC · 2026-09-06
 
 **User-requested, not tied to a §14 task ID — a real correctness/durability gap flagged

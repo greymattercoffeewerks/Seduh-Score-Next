@@ -138,19 +138,30 @@ function entry(overrides = {}) {
 }
 
 describe('buildCupperFromDraft', () => {
-  it('trims every field', () => {
-    const draft = { displayName: '  Cupper One  ', phone: ' +123 ', email: '', cafe: '', bib: '' };
+  it('trims every field and normalizes phone to E.164', () => {
+    const draft = {
+      displayName: '  Cupper One  ',
+      phone: ' 7123456 ',
+      email: '',
+      cafe: '',
+      bib: '',
+    };
     expect(buildCupperFromDraft(draft)).toEqual({
       displayName: 'Cupper One',
-      phone: '+123',
+      phone: '+6737123456',
       email: null,
       cafe: null,
       bib: null,
     });
   });
 
+  it('keeps an already-international phone number as typed', () => {
+    const draft = { displayName: 'A', phone: '+65 8123 4567', email: '', cafe: '', bib: '' };
+    expect(buildCupperFromDraft(draft).phone).toBe('+6581234567');
+  });
+
   it('collapses a blank optional field to null rather than an empty string', () => {
-    const draft = { displayName: 'A', phone: '+1', email: '  ', cafe: '  ', bib: '  ' };
+    const draft = { displayName: 'A', phone: '7123456', email: '  ', cafe: '  ', bib: '  ' };
     const result = buildCupperFromDraft(draft);
     expect(result.email).toBeNull();
     expect(result.cafe).toBeNull();
@@ -158,7 +169,13 @@ describe('buildCupperFromDraft', () => {
   });
 
   it('keeps a real optional value', () => {
-    const draft = { displayName: 'A', phone: '+1', email: 'a@example.com', cafe: 'Cafe', bib: '9' };
+    const draft = {
+      displayName: 'A',
+      phone: '7123456',
+      email: 'a@example.com',
+      cafe: 'Cafe',
+      bib: '9',
+    };
     const result = buildCupperFromDraft(draft);
     expect(result.email).toBe('a@example.com');
     expect(result.cafe).toBe('Cafe');
@@ -168,8 +185,8 @@ describe('buildCupperFromDraft', () => {
 
 describe('validateDraft', () => {
   it('requires a name', () => {
-    expect(validateDraft({ displayName: '', phone: '+1' })).toBe('Name is required.');
-    expect(validateDraft({ displayName: '   ', phone: '+1' })).toBe('Name is required.');
+    expect(validateDraft({ displayName: '', phone: '7123456' })).toBe('Name is required.');
+    expect(validateDraft({ displayName: '   ', phone: '7123456' })).toBe('Name is required.');
   });
 
   it('requires a phone', () => {
@@ -177,8 +194,15 @@ describe('validateDraft', () => {
     expect(validateDraft({ displayName: 'A', phone: '   ' })).toBe('Phone is required.');
   });
 
-  it('passes a draft with both required fields present', () => {
-    expect(validateDraft({ displayName: 'A', phone: '+1' })).toBeNull();
+  it('rejects a phone that is too short to be a real number', () => {
+    expect(validateDraft({ displayName: 'A', phone: '+1' })).toBe(
+      'Phone must be a valid international number, starting with your country code — e.g. +673 7123456 for Brunei.',
+    );
+  });
+
+  it('passes a draft with both required fields present and a valid phone shape', () => {
+    expect(validateDraft({ displayName: 'A', phone: '7123456' })).toBeNull();
+    expect(validateDraft({ displayName: 'A', phone: '+6737123456' })).toBeNull();
   });
 });
 
@@ -547,6 +571,29 @@ describe('mountRosterScreen', () => {
 
     expect(root.querySelector('.screen-feedback').textContent).toContain('Name is required');
     expect(client.db.event_entries ?? []).toHaveLength(0);
+  });
+
+  it('rejects a submit with a malformed phone number, through the same accessible error path as other validation failures', async () => {
+    const client = fakeClient({ events: [baseEvent], people: [], event_entries: [] });
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    await mountRosterScreen(root, { eventId: 'ev1', client });
+
+    root.querySelector('[aria-label="Name"]').value = 'Cupper One';
+    root.querySelector('[aria-label="Name"]').dispatchEvent(new Event('input'));
+    root.querySelector('[aria-label="Phone"]').value = '1';
+    root.querySelector('[aria-label="Phone"]').dispatchEvent(new Event('input'));
+
+    root.querySelector('form').dispatchEvent(new Event('submit', { cancelable: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const feedback = root.querySelector('.screen-feedback');
+    expect(feedback.textContent).toContain('valid international number');
+    expect(feedback.dataset.tone).toBe('error');
+    expect(feedback.getAttribute('aria-live')).toBe('polite');
+    expect(document.activeElement).toBe(feedback);
+    expect(client.db.event_entries ?? []).toHaveLength(0);
+    document.body.removeChild(root);
   });
 
   it('shows "already registered" rather than a false success when the person already has an entry for this event', async () => {
