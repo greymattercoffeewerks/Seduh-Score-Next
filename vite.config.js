@@ -1,3 +1,4 @@
+import { fileURLToPath, URL } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
 // Single config file for both Vite (dev/build) and Vitest (test) — vitest/config
@@ -5,6 +6,21 @@ import { defineConfig } from 'vitest/config';
 // `defineConfig` from `vite` instead silently drops the whole `test` block
 // (handoff §10).
 export default defineConfig({
+  build: {
+    rollupOptions: {
+      // Two HTML entries, not one: the marketing landing page at root
+      // (index.html) and the console SPA at /app/ (app/index.html — moved
+      // out of root 2026-09-07 so the bare domain serves the landing page
+      // instead of booting straight into the console). Vite's dev server
+      // serves both by filesystem path with no config needed; only the
+      // production build needs to be told about the second entry, or
+      // `vite build` silently drops it from dist/.
+      input: {
+        main: fileURLToPath(new URL('./index.html', import.meta.url)),
+        app: fileURLToPath(new URL('./app/index.html', import.meta.url)),
+      },
+    },
+  },
   server: {
     // Bind explicitly to IPv4 loopback — on Windows, Vite's default host
     // resolves to the IPv6 loopback first, which some local tooling can't

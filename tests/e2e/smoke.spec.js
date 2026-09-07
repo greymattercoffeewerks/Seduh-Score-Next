@@ -7,8 +7,8 @@ import { test, expect } from '@playwright/test';
 // events list itself is deliberate: the chrome mounts synchronously before
 // any network call, so this stays fast and backend-independent, matching
 // what a boot smoke test is actually meant to prove.
-test('home page mounts the real app shell and routes to the events screen', async ({ page }) => {
-  await page.goto('/');
+test('app entry mounts the real app shell and routes to the events screen', async ({ page }) => {
+  await page.goto('/app/');
   await expect(page.locator('.app-shell-name')).toHaveText('Seduh Score');
   await expect(page.getByRole('link', { name: 'Events' })).toBeVisible();
 });

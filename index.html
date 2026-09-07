@@ -3,48 +3,53 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Seduh Score Next</title>
-    <!-- Brought back from the legacy Seduh Score site (shared/assets/favicon.*,
-         2026-09-05 user request) — same page-tab identity, recolored to this
-         project's own --clr-ember-700 accent (#b83e15) rather than the legacy
-         site's slightly different #b45309, matching the color core/dom.js's
-         brandMark() renders in paper mode (every organiser screen, splash,
-         phone) — colors.css's own --color-accent binding is mode-dependent,
-         though: stage mode (the projector, [data-surface='stage']) uses the
-         lighter --clr-ember-500 for its own dark-background contrast needs,
-         so this favicon doesn't match brandMark() literally everywhere it
-         renders, just the organiser-facing majority of surfaces (found in
-         review, code-reviewer). SVG first (crisp at any size, what most
-         current browsers use); the two PNG fallbacks are the legacy assets
-         UNCHANGED (still the old #b45309) — no image-editing tool was
-         available in this environment to recolor them, so browsers old
-         enough to fall back to a PNG see a very slightly different shade
-         than the SVG-favicon majority does. Accepted, not overlooked: a
-         one-shade favicon-color mismatch on legacy browsers is a much
-         smaller cost than the missing tab icon this change closes. -->
+    <title>Seduh Score — Coffee Competition Platform</title>
+    <meta
+      name="description"
+      content="Seduh Score runs the whole coffee competition — brackets, judging, live results — with no install and no dependency on venue wifi."
+    />
+    <!-- Synchronous, before any stylesheet paints: sets the day/night theme
+         immediately so there's no flash of the wrong one while
+         src/marketing/main.js (a deferred module script) loads. This is a
+         literal copy of src/marketing/theme.js's own storage-read +
+         computeAutoTheme() logic — theme.js documents this duplication and
+         is the one source of truth for the logic itself; it re-applies its
+         own computed value once it runs, so the two can only ever disagree
+         for this first paint, never persistently. -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('seduh-landing-theme');
+          var theme = stored === 'day' || stored === 'night' ? stored : null;
+          if (!theme) {
+            var hour = new Date().getHours();
+            theme = hour >= 19 || hour < 7 ? 'night' : 'day';
+          }
+          document.documentElement.setAttribute('data-theme', theme);
+        } catch (e) {
+          // localStorage threw (private browsing, disabled storage) — fall
+          // back to the same clock-only computation theme.js's own
+          // readStoredTheme()/initTheme() fall through to in this case, not
+          // a hardcoded 'day'. Hardcoding here would repaint to the correct
+          // theme moments later once main.js's module loads, which is
+          // exactly the flash this inline script exists to prevent (found
+          // in review, code-reviewer).
+          var hour = new Date().getHours();
+          document.documentElement.setAttribute('data-theme', hour >= 19 || hour < 7 ? 'night' : 'day');
+        }
+      })();
+    </script>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
     <link rel="icon" href="/favicon-16.png" sizes="16x16" type="image/png" />
-    <link rel="stylesheet" href="/src/ui/tokens/index.css" />
-    <link rel="stylesheet" href="/src/core/appShell.css" />
-    <link rel="stylesheet" href="/src/core/eventsScreen.css" />
-    <link rel="stylesheet" href="/src/core/loginScreen.css" />
-    <link rel="stylesheet" href="/src/core/splashScreen.css" />
-    <link rel="stylesheet" href="/src/core/viewer-shell.css" />
-    <link rel="stylesheet" href="/src/formats/cup-taster/eventDashboardScreen.css" />
-    <link rel="stylesheet" href="/src/formats/cup-taster/setupScreen.css" />
-    <link rel="stylesheet" href="/src/formats/cup-taster/rosterScreen.css" />
-    <link rel="stylesheet" href="/src/formats/cup-taster/heatsScreen.css" />
-    <link rel="stylesheet" href="/src/formats/cup-taster/timingScreen.css" />
-    <link rel="stylesheet" href="/src/formats/cup-taster/timingManualScreen.css" />
-    <link rel="stylesheet" href="/src/formats/cup-taster/scoringScreen.css" />
-    <link rel="stylesheet" href="/src/formats/cup-taster/standingsScreen.css" />
-    <link rel="stylesheet" href="/src/formats/cup-taster/reportScreen.css" />
-    <link rel="stylesheet" href="/src/formats/cup-taster/projectorSurface.css" />
-    <link rel="stylesheet" href="/src/formats/cup-taster/viewerBody.css" />
+    <link rel="stylesheet" href="/src/ui/tokens/fonts.css" />
+    <link rel="stylesheet" href="/src/ui/tokens/typography.css" />
+    <link rel="stylesheet" href="/src/ui/tokens/spacing.css" />
+    <link rel="stylesheet" href="/src/ui/tokens/base.css" />
+    <link rel="stylesheet" href="/src/marketing/landing.css" />
   </head>
   <body>
     <div id="app"></div>
-    <script type="module" src="/src/main.js"></script>
+    <script type="module" src="/src/marketing/main.js"></script>
   </body>
 </html>

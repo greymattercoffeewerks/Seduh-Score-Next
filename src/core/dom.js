@@ -34,7 +34,11 @@ export function withSrExpansion(visibleText, hiddenText) {
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-function svgEl(tag, attrs = {}) {
+// Exported on its 2nd real consumer (src/marketing/landingScreen.js's format
+// icons) — createElementNS is required for any SVG element, not just
+// brandMark()'s own, so this stays the one shared primitive for it rather
+// than a second copy.
+export function svgEl(tag, attrs = {}) {
   const node = document.createElementNS(SVG_NS, tag);
   for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
   return node;
