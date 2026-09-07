@@ -101,7 +101,36 @@ CHANGELOG.md's dated entry for the full account.
 
 ---
 
-## Phase 0 — Foundation
+## Version cycle plan (nameplate roadmap)
+
+Per CONVENTIONS.md's "Versioning" section: patch/minor bumps happen on every closed
+task (current: v1.0.x); a **major bump moves the nameplate to the next point in the
+spiral**, and — same discipline as the handoff itself — that only happens at a genuine
+capability-era boundary (a new format shipping, or a major cross-cutting relaunch), not
+on a fixed schedule. This section plans those boundaries and their names in advance, so
+each name's meaning is decided deliberately rather than picked in the moment.
+
+**Deliberately retraces the legacy Seduh Score site's own spiral, same order, same
+places** (`seduhscore.com/bts/`: Kiulap → Gadong → Kiarong → Menglait → Berakas →
+Jerudong → Seria) — not because Next continues that site's numbering (it doesn't; see
+CONVENTIONS.md, this is a separate v1.0 lineage), but because the legacy site's own
+"reading the map" already assigned each place a meaning almost exactly matching what
+Next's own build order needs. Retracing the same physical journey, on the new
+foundation, is the point.
+
+| Version | Place        | Ships when…                                                                                    | Meaning (echoing legacy's own, where it genuinely fits)                                                                                                                                                                                                                                                                  |
+| ------- | ------------ | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| v1.x    | **Kiulap**   | Cup Taster + Phase 6 hardening, through the Oct 4, 2026 event (current cycle)                  | Legacy's own urban core, "where the very first bracket ran." Same meaning here: the first format Next actually shipped, on the new foundation.                                                                                                                                                                           |
+| v2.0    | **Gadong**   | Throwdown ships (2nd format)                                                                   | Legacy: "realising one format was never going to be enough." Literally true again — Next's own second format arriving.                                                                                                                                                                                                   |
+| v3.0    | **Kiarong**  | Liga Seduh ships (3rd format)                                                                  | Legacy: "Liga Seduh — a league, not a knockout... the platform starting to have opinions of its own." An exact match both times — same format, same place.                                                                                                                                                               |
+| v4.0    | **Menglait** | BBTC ships (4th format)                                                                        | Legacy's own Menglait was a stress-test milestone (Girls Got Drip Vol. 0), not a format ship — the thematic fit is weaker here, flagged rather than forced. Revisit this pairing once BBTC's actual shape is scoped; a stress-test cycle (first live BBTC event) may fit the name better than the format's initial ship. |
+| v5.0+   | not named    | Whatever comes after all four formats exist — a major cross-cutting relaunch, not a fixed date | Per CONVENTIONS.md's own rule: a cycle's name is picked when it actually starts, not before. `Berakas`/`Jerudong`/`Seria` remain unused and unassigned.                                                                                                                                                                  |
+
+**This table is a plan, not a commitment** — per CONVENTIONS.md, the nameplate only
+actually moves once the triggering milestone lands, and the specific pairing (especially
+v4.0/Menglait, flagged above) should be revisited against the real shape of each format
+as it's scoped, not locked in now. Update this table (and CONVENTIONS.md's "Versioning"
+section) at the moment each cycle actually starts, not preemptively.
 
 Per handoff §14.
 
