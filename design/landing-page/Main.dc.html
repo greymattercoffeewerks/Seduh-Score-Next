@@ -1,0 +1,1278 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="./support.js"></script>
+  </head>
+  <body>
+    <x-dc>
+      <helmet>
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
+        />
+        <style>
+          :root {
+            --clr-clay-50: #fefcf9;
+            --clr-clay-100: #faf6ef;
+            --clr-clay-200: #f2ebdf;
+            --clr-clay-300: #e6dbc8;
+            --clr-clay-400: #d3c3a8;
+            --clr-clay-500: #a89876;
+            --clr-clay-600: #6b5d49;
+            --clr-clay-700: #574d3c;
+            --clr-clay-800: #362f24;
+            --clr-clay-900: #201b14;
+            --clr-clay-950: #100d0a;
+            --clr-ember-500: #ff6b35;
+            --clr-ember-600: #e0501c;
+            --clr-ember-700: #b83e15;
+            --clr-ember-800: #8f3010;
+            --clr-gold-500: #cfa53b;
+            --clr-gold-700: #8a6a1f;
+            --color-canvas: var(--clr-clay-100);
+            --color-surface: var(--clr-clay-50);
+            --color-surface-sunken: var(--clr-clay-200);
+            --color-border: var(--clr-clay-300);
+            --color-border-strong: var(--clr-clay-950);
+            --color-text: var(--clr-clay-950);
+            --color-text-secondary: var(--clr-clay-700);
+            --color-text-muted: var(--clr-clay-600);
+            --color-accent: var(--clr-ember-700);
+            --color-accent-hover: var(--clr-ember-800);
+            --color-accent-contrast: #ffffff;
+            --color-gold: var(--clr-gold-700);
+            --color-gold-contrast: #ffffff;
+            --font-display: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+            --font-body: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Consolas, monospace;
+            --space-2: 0.5rem;
+            --space-3: 0.75rem;
+            --space-4: 1rem;
+            --space-5: 1.5rem;
+            --space-6: 2rem;
+            --space-7: 3rem;
+            --space-8: 4rem;
+            --space-9: 6rem;
+            --radius-sm: 3px;
+            --radius-md: 6px;
+            --radius-lg: 10px;
+            --radius-full: 999px;
+          }
+          * {
+            box-sizing: border-box;
+          }
+          body {
+            margin: 0;
+            background: var(--color-canvas);
+            color: var(--color-text);
+            font-family: var(--font-body);
+            line-height: 1.5;
+          }
+          a {
+            color: var(--color-accent);
+            text-decoration: none;
+          }
+          a:hover {
+            color: var(--color-accent-hover);
+            text-decoration: underline;
+          }
+          .wrap {
+            max-width: 1152px;
+            margin: 0 auto;
+            padding: 0 var(--space-6);
+          }
+          .eyebrow {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--color-text-muted);
+          }
+          h1,
+          h2,
+          h3 {
+            font-family: var(--font-display);
+            font-weight: 700;
+            line-height: 1.1;
+            margin: 0;
+            letter-spacing: -0.02em;
+          }
+          .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.875rem 1.5rem;
+            border-radius: var(--radius-sm);
+            font-family: var(--font-body);
+            font-weight: 600;
+            font-size: 0.9375rem;
+            border: 1px solid transparent;
+            cursor: pointer;
+            min-height: 44px;
+          }
+          .btn-primary {
+            background: var(--color-accent);
+            color: var(--color-accent-contrast);
+          }
+          .btn-primary:hover {
+            background: var(--color-accent-hover);
+            text-decoration: none;
+          }
+          .btn-ghost {
+            background: transparent;
+            border-color: var(--color-border-strong);
+            color: var(--color-text);
+          }
+          .btn-ghost:hover {
+            background: var(--clr-clay-200);
+            text-decoration: none;
+          }
+          .mono {
+            font-family: var(--font-mono);
+            font-variant-numeric: tabular-nums;
+          }
+          .badge {
+            display: inline-block;
+            font-family: var(--font-mono);
+            font-size: 0.6875rem;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            padding: 0.25rem 0.6rem;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--color-border-strong);
+          }
+          .badge-free {
+            background: var(--clr-clay-950);
+            color: var(--clr-clay-50);
+          }
+          .badge-annual {
+            background: var(--color-gold);
+            color: var(--color-gold-contrast);
+            border-color: var(--color-gold);
+          }
+          .card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: var(--space-5);
+          }
+          .icon {
+            width: 22px;
+            height: 22px;
+            stroke: var(--color-accent);
+            fill: none;
+            stroke-width: 1.6;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+          }
+          nav.stage {
+            background: var(--clr-clay-950);
+            color: var(--clr-clay-50);
+          }
+
+          /* Responsive layout — same "flip tokens at a breakpoint" pattern
+             as the app's own paper/stage surface swap: grid shapes and
+             spacing are custom properties, redefined under :root at each
+             breakpoint, so every inline style referencing them updates
+             without needing !important overrides. */
+          :root {
+            --cols-hero: 1.1fr 1fr;
+            --cols-4: repeat(4, 1fr);
+            --cols-3: repeat(3, 1fr);
+            --cols-2: repeat(2, 1fr);
+          }
+          .banner-photo {
+            width: 100%;
+            height: 320px;
+            overflow: hidden;
+          }
+          @media (max-width: 860px) {
+            :root {
+              --cols-hero: 1fr;
+              --cols-3: 1fr;
+            }
+          }
+          @media (max-width: 620px) {
+            :root {
+              --cols-4: repeat(2, 1fr);
+              --cols-2: 1fr;
+            }
+          }
+          @media (max-width: 480px) {
+            :root {
+              --cols-4: 1fr;
+              --space-5: 1.25rem;
+              --space-6: 1rem;
+              --space-7: 2rem;
+              --space-8: 2.5rem;
+              --space-9: 3.5rem;
+            }
+            .banner-photo {
+              height: 180px;
+            }
+          }
+
+          /* Hamburger nav — same shape as the app's own app-shell.js/css:
+             a static 3-bar toggle, hard show/hide (no slide/fade), tucked
+             behind a checkbox so it works with no script. Mobile-first,
+             like the real component: collapsed by default, un-collapsed
+             at the same 640px breakpoint app-shell.css uses. */
+          .nav-toggle-input {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+          }
+          /* Neutral focus ring on the visible bars when the hidden
+             checkbox itself has keyboard focus — same rule as the app's
+             own :focus-visible convention (base.css): the border-strong
+             neutral, never the accent color. */
+          .nav-toggle-input:focus-visible ~ .nav-right .nav-toggle-btn {
+            outline: 2px solid var(--color-border-strong);
+            outline-offset: 2px;
+          }
+          .nav-toggle-btn {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 4px;
+            width: 44px;
+            height: 44px;
+            cursor: pointer;
+          }
+          .nav-toggle-bar {
+            width: 18px;
+            height: 2px;
+            border-radius: var(--radius-full);
+            background: var(--color-text);
+            display: block;
+          }
+          .nav-panel {
+            display: none;
+            position: absolute;
+            top: 72px;
+            left: 0;
+            right: 0;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: var(--space-4);
+            background: var(--color-canvas);
+            border-bottom: 1px solid var(--color-border);
+            padding: var(--space-5) var(--space-6);
+          }
+          .nav-toggle-input:checked ~ .nav-right .nav-panel {
+            display: flex;
+          }
+          .nav-panel .btn {
+            width: 100%;
+            justify-content: center;
+          }
+          @media (min-width: 640px) {
+            .nav-toggle-btn {
+              display: none;
+            }
+            .nav-panel {
+              display: flex;
+              position: static;
+              flex-direction: row;
+              align-items: center;
+              background: transparent;
+              border-bottom: none;
+              padding: 0;
+              gap: var(--space-6);
+            }
+          }
+
+          /* Brand mark — same three-arc "S" glyph as core/dom.js's
+             brandMark(), recolored via currentColor. */
+          .brand-mark-wrap {
+            position: relative;
+            display: inline-flex;
+            width: 26px;
+            height: 22px;
+          }
+          .brand-mark {
+            position: relative;
+            z-index: 1;
+            width: 26px;
+            height: 22px;
+            color: var(--color-accent);
+          }
+
+          /* Hero bloom — copied mechanic exactly from seduhscore.com/pitch's
+             own ".bloom"/".bloom span" rule: an absolute 1px anchor holding
+             three 360px ring outlines, each animating scale(0.4 -> 3.4)
+             with a fade in/out, staggered a third of the cycle apart so a
+             new ring blooms continuously. Only two things changed from the
+             source: the ring color (their amber rgba(234,165,77,.2) ->
+             this system's --clr-ember-500) and the pace — their 9s/3s-stagger
+             was a decorative background flourish; here it's slowed only in
+             the sense of being tried at a true breathing rate: ~4.8s per
+             ring (~12-13 breaths/min) with delays at a third of that. */
+          .bloom {
+            position: absolute;
+            top: 46%;
+            left: 32%;
+            width: 1px;
+            height: 1px;
+            pointer-events: none;
+            z-index: 0;
+          }
+          .bloom span {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 360px;
+            height: 360px;
+            transform: translate(-50%, -50%);
+            border: 1px solid rgba(255, 107, 53, 0.2);
+            border-radius: 50%;
+          }
+          @media (prefers-reduced-motion: no-preference) {
+            .bloom span {
+              animation: bloom 4.8s ease-out infinite;
+            }
+            .bloom span:nth-child(1) {
+              animation-delay: 0s;
+            }
+            .bloom span:nth-child(2) {
+              animation-delay: 1.6s;
+            }
+            .bloom span:nth-child(3) {
+              animation-delay: 3.2s;
+            }
+          }
+          @keyframes bloom {
+            0% {
+              transform: translate(-50%, -50%) scale(0.4);
+              opacity: 0;
+            }
+            18% {
+              opacity: 0.95;
+            }
+            100% {
+              transform: translate(-50%, -50%) scale(3.4);
+              opacity: 0;
+            }
+          }
+
+          /* Rising particles — copied exactly from seduhscore.com/pitch's
+             ".steam-field"/".steam-p"/"rise" (there, cream steam over a
+             dark hero). Only the color changed, to an ember tint that
+             reads against this system's light paper canvas instead of a
+             dark one; position/size/duration/delay stay randomized the
+             same way, computed once in the component below. */
+          .steam-field {
+            position: absolute;
+            inset: 0;
+            overflow: hidden;
+            pointer-events: none;
+            z-index: 0;
+          }
+          .steam-p {
+            position: absolute;
+            bottom: -14px;
+            border-radius: 50%;
+            background: rgba(184, 62, 21, 0.32);
+          }
+          @media (prefers-reduced-motion: no-preference) {
+            .steam-p {
+              animation: rise linear infinite;
+            }
+          }
+          @keyframes rise {
+            0% {
+              transform: translateY(0) translateX(0);
+              opacity: 0;
+            }
+            12% {
+              opacity: 0.8;
+            }
+            100% {
+              transform: translateY(-108vh) translateX(var(--drift, 22px));
+              opacity: 0;
+            }
+          }
+
+          /* Coming-soon formats — only Cup Taster is shipped today
+             (ROADMAP.md); the other three format cards are present but
+             visibly inert until their own build phases land. */
+          .format-card-disabled {
+            opacity: 0.5;
+            filter: grayscale(0.6);
+          }
+          .badge-soon {
+            background: transparent;
+            color: var(--color-text-muted);
+            border-color: var(--color-border);
+          }
+          .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+          }
+          .format-card-live {
+            display: block;
+            text-decoration: none;
+            color: inherit;
+            transition: border-color 0.15s ease;
+          }
+          .format-card-live:hover {
+            border-color: var(--color-accent);
+            text-decoration: none;
+          }
+        </style>
+      </helmet>
+
+      <!-- NAV -->
+      <div
+        style="
+          position: sticky;
+          top: 0;
+          background: var(--color-canvas);
+          border-bottom: 1px solid var(--color-border);
+          z-index: 10;
+        "
+      >
+        <div
+          class="wrap"
+          style="
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 72px;
+          "
+        >
+          <input type="checkbox" id="nav-toggle" class="nav-toggle-input" aria-label="Menu" />
+          <div style="display: flex; align-items: center; gap: 0.625rem">
+            <span class="brand-mark-wrap">
+              <svg
+                class="brand-mark"
+                viewBox="22 16 56 48"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                role="img"
+                aria-label="Seduh"
+              >
+                <circle cx="50" cy="26" r="5.5" fill="currentColor" stroke="none" />
+                <path d="M26 60 a24 24 0 0 1 48 0" />
+                <path d="M35 60 a15 15 0 0 1 30 0" />
+                <path d="M44 60 a6 6 0 0 1 12 0" />
+              </svg>
+            </span>
+            <span
+              style="
+                font-family: var(--font-display);
+                font-weight: 700;
+                font-size: 1.125rem;
+                letter-spacing: -0.01em;
+              "
+              >Seduh Score</span
+            >
+          </div>
+          <div class="nav-right" style="display: flex; align-items: center; gap: var(--space-4)">
+            <div class="nav-panel">
+              <a
+                href="#"
+                style="color: var(--color-text-secondary); font-weight: 600; font-size: 0.9375rem"
+                >Tour</a
+              >
+              <a
+                href="#"
+                style="color: var(--color-text-secondary); font-weight: 600; font-size: 0.9375rem"
+                >Pricing</a
+              >
+              <a
+                href="#"
+                style="color: var(--color-text-secondary); font-weight: 600; font-size: 0.9375rem"
+                >Org login</a
+              >
+              <a
+                href="#"
+                class="btn btn-primary"
+                style="font-size: 0.875rem; padding: 0.65rem 1.25rem"
+                >Start free</a
+              >
+            </div>
+            <label for="nav-toggle" class="nav-toggle-btn">
+              <span class="nav-toggle-bar" aria-hidden="true"></span>
+              <span class="nav-toggle-bar" aria-hidden="true"></span>
+              <span class="nav-toggle-bar" aria-hidden="true"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- HERO -->
+      <div
+        class="wrap"
+        style="
+          position: relative;
+          padding-top: var(--space-8);
+          padding-bottom: var(--space-8);
+          display: grid;
+          grid-template-columns: var(--cols-hero);
+          gap: var(--space-8);
+          align-items: center;
+        "
+      >
+        <div class="bloom" aria-hidden="true"><span></span><span></span><span></span></div>
+        <div class="steam-field" aria-hidden="true">
+          <sc-for list="{{steamParticles}}" as="p" hint-placeholder-count="14">
+            <span class="steam-p" style="{{p.style}}"></span>
+          </sc-for>
+        </div>
+        <div style="position: relative; z-index: 1">
+          <p class="eyebrow" style="margin: 0 0 var(--space-4)">
+            Grey Matter Coffee Werks &middot; Brunei
+          </p>
+          <h1 style="font-size: clamp(1.9rem, 4vw + 1.2rem, 3.4rem)">
+            One tablet. One projector.<br />A competition that
+            <span style="color: var(--color-accent)">doesn't fall apart.</span>
+          </h1>
+          <p
+            style="
+              font-size: 1.125rem;
+              color: var(--color-text-secondary);
+              max-width: 38rem;
+              margin: var(--space-5) 0 0;
+            "
+          >
+            Seduh Score runs the whole event &mdash; brackets, judging, live results &mdash; with no
+            install and no dependency on venue wifi. Built for how Southeast Asian organisers
+            actually run events.
+          </p>
+          <div
+            style="display: flex; flex-wrap: wrap; gap: var(--space-4); margin-top: var(--space-6)"
+          >
+            <a href="#" class="btn btn-primary">Start free &mdash; no account</a>
+            <a href="#" class="btn btn-ghost">Take the tour</a>
+          </div>
+          <div
+            style="
+              display: grid;
+              grid-template-columns: var(--cols-4);
+              gap: 1px;
+              background: var(--color-border);
+              margin-top: var(--space-8);
+              border: 1px solid var(--color-border);
+              border-radius: var(--radius-md);
+              overflow: hidden;
+            "
+          >
+            <div style="background: var(--color-surface); padding: var(--space-4)">
+              <div class="mono" style="font-size: 1.75rem; font-weight: 700">1</div>
+              <div style="font-size: 0.75rem; color: var(--color-text-muted)">
+                format live today
+              </div>
+            </div>
+            <div style="background: var(--color-surface); padding: var(--space-4)">
+              <div class="mono" style="font-size: 1.75rem; font-weight: 700">0</div>
+              <div style="font-size: 0.75rem; color: var(--color-text-muted)">
+                installs &mdash; pure web
+              </div>
+            </div>
+            <div style="background: var(--color-surface); padding: var(--space-4)">
+              <div class="mono" style="font-size: 1.75rem; font-weight: 700">1</div>
+              <div style="font-size: 0.75rem; color: var(--color-text-muted)">
+                tablet + projector runs it
+              </div>
+            </div>
+            <div style="background: var(--color-surface); padding: var(--space-4)">
+              <div class="mono" style="font-size: 1.75rem; font-weight: 700">3</div>
+              <div style="font-size: 0.75rem; color: var(--color-text-muted)">
+                pricing tiers, all public
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="padding: 0; overflow: hidden">
+          <div
+            style="
+              background: var(--clr-clay-950);
+              color: var(--clr-clay-50);
+              padding: var(--space-3) var(--space-4);
+              display: flex;
+              justify-content: space-between;
+              font-family: var(--font-mono);
+              font-size: 0.6875rem;
+              letter-spacing: 0.05em;
+              text-transform: uppercase;
+            "
+          >
+            <span>seduhscore.com / throwdown</span>
+            <span>bracket &middot; semifinal</span>
+          </div>
+          <div style="padding: var(--space-6)">
+            <div
+              style="
+                font-family: var(--font-mono);
+                font-size: 0.75rem;
+                color: var(--color-text-muted);
+                margin-bottom: var(--space-2);
+              "
+            >
+              match 2
+            </div>
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: var(--space-3) 0;
+                border-bottom: 1px solid var(--color-border);
+              "
+            >
+              <span style="font-weight: 600">Aliya Roslan</span>
+              <span
+                class="mono"
+                style="font-size: 1.5rem; font-weight: 700; color: var(--color-accent)"
+                >2</span
+              >
+            </div>
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: var(--space-3) 0;
+              "
+            >
+              <span style="font-weight: 600; color: var(--color-text-secondary)">Darwisyah</span>
+              <span
+                class="mono"
+                style="font-size: 1.5rem; font-weight: 700; color: var(--color-text-muted)"
+                >1</span
+              >
+            </div>
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: var(--space-3) 0;
+                border-top: 1px solid var(--color-border);
+                border-bottom: 1px solid var(--color-border);
+                margin-top: var(--space-3);
+              "
+            >
+              <span style="font-weight: 600">Hafiz Zaini</span>
+              <span
+                class="mono"
+                style="font-size: 1.5rem; font-weight: 700; color: var(--color-accent)"
+                >3</span
+              >
+            </div>
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: var(--space-3) 0;
+              "
+            >
+              <span style="font-weight: 600; color: var(--color-text-secondary)">Nabil Osman</span>
+              <span
+                class="mono"
+                style="font-size: 1.5rem; font-weight: 700; color: var(--color-text-muted)"
+                >0</span
+              >
+            </div>
+          </div>
+          <div
+            style="
+              padding: var(--space-3) var(--space-4);
+              border-top: 1px solid var(--color-border);
+              font-family: var(--font-mono);
+              font-size: 0.6875rem;
+              color: var(--color-text-muted);
+              text-transform: uppercase;
+              letter-spacing: 0.05em;
+            "
+          >
+            representative view &middot; 4:3
+          </div>
+        </div>
+      </div>
+
+      <!-- EDITORIAL BANNER -->
+      <div class="banner-photo">
+        <img
+          src="hero-cupping-bowls.jpg"
+          alt=""
+          style="
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center 60%;
+            display: block;
+          "
+        />
+      </div>
+
+      <!-- PROBLEM -->
+      <div
+        style="
+          background: var(--color-surface-sunken);
+          border-top: 1px solid var(--color-border);
+          border-bottom: 1px solid var(--color-border);
+          padding: var(--space-8) 0;
+        "
+      >
+        <div class="wrap">
+          <p class="eyebrow">The problem</p>
+          <h2
+            style="
+              font-size: clamp(1.5rem, 3vw + 1rem, 2.2rem);
+              max-width: 40rem;
+              margin-top: var(--space-3);
+            "
+          >
+            Right now, the whole competition rides on one laptop and a group chat.
+          </h2>
+          <p
+            style="
+              font-size: 1.0625rem;
+              color: var(--color-text-secondary);
+              max-width: 44rem;
+              margin-top: var(--space-4);
+            "
+          >
+            A bracket taped to the wall. Scores called out and typed into a spreadsheet one person
+            guards. The wifi drops and the room waits. A result gets questioned and there's nothing
+            to point to. Then it ends &mdash; and the whole thing is wiped to make room for the next
+            one.
+          </p>
+
+          <div
+            style="
+              display: grid;
+              grid-template-columns: var(--cols-4);
+              gap: var(--space-4);
+              margin-top: var(--space-7);
+            "
+          >
+            <div class="card">
+              <svg class="icon" aria-hidden="true" viewBox="0 0 24 24">
+                <path
+                  d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+                />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+              <h3 style="font-size: 1.0625rem; margin-top: var(--space-4)">Scattered scoring</h3>
+              <p
+                style="
+                  font-size: 0.875rem;
+                  color: var(--color-text-secondary);
+                  margin-top: var(--space-2);
+                "
+              >
+                Slips, group chats and three half-open apps &mdash; no single source of truth for
+                who's winning.
+              </p>
+            </div>
+            <div class="card">
+              <svg class="icon" aria-hidden="true" viewBox="0 0 24 24">
+                <rect x="3" y="4" width="18" height="12" rx="1" />
+                <line x1="2" y1="20" x2="22" y2="20" />
+              </svg>
+              <h3 style="font-size: 1.0625rem; margin-top: var(--space-4)">One fragile laptop</h3>
+              <p
+                style="
+                  font-size: 0.875rem;
+                  color: var(--color-text-secondary);
+                  margin-top: var(--space-2);
+                "
+              >
+                The whole event on one spreadsheet, one person, one point of failure.
+              </p>
+            </div>
+            <div class="card">
+              <svg class="icon" aria-hidden="true" viewBox="0 0 24 24">
+                <line x1="1" y1="1" x2="23" y2="23" />
+                <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" />
+                <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" />
+                <path d="M10.71 5.05A16 16 0 0 1 22.58 9" />
+                <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" />
+                <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+                <line x1="12" y1="20" x2="12.01" y2="20" />
+              </svg>
+              <h3 style="font-size: 1.0625rem; margin-top: var(--space-4)">Venue wifi</h3>
+              <p
+                style="
+                  font-size: 0.875rem;
+                  color: var(--color-text-secondary);
+                  margin-top: var(--space-2);
+                "
+              >
+                A live run that hangs on a connection which never quite holds through the finals.
+              </p>
+            </div>
+            <div class="card">
+              <svg class="icon" aria-hidden="true" viewBox="0 0 24 24">
+                <polyline points="3 6 5 6 21 6" />
+                <path
+                  d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                />
+              </svg>
+              <h3 style="font-size: 1.0625rem; margin-top: var(--space-4)">Gone afterward</h3>
+              <p
+                style="
+                  font-size: 0.875rem;
+                  color: var(--color-text-secondary);
+                  margin-top: var(--space-2);
+                "
+              >
+                Every result deleted once the trophy's handed out. No record, no history, no proof.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FORMATS -->
+      <div class="wrap" style="padding: var(--space-8) 0">
+        <p class="eyebrow">The product &middot; what's in the cup</p>
+        <h2 style="font-size: clamp(1.5rem, 3vw + 1rem, 2.2rem); margin-top: var(--space-3)">
+          Four formats. One platform. Zero installs.
+        </h2>
+        <p
+          style="
+            font-size: 1.0625rem;
+            color: var(--color-text-secondary);
+            max-width: 44rem;
+            margin-top: var(--space-4);
+          "
+        >
+          Pure web, offline-resilient, projector-ready. An organiser opens a link, runs an entire
+          competition from a tablet, and the audience watches results land in real time.
+        </p>
+
+        <div
+          style="
+            display: grid;
+            grid-template-columns: var(--cols-2);
+            gap: var(--space-5);
+            margin-top: var(--space-7);
+          "
+        >
+          <div class="card format-card-disabled">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start">
+              <svg class="icon" aria-hidden="true" viewBox="0 0 24 24">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+              </svg>
+              <span class="badge badge-soon">Coming soon</span>
+            </div>
+            <h3 style="font-size: 1.25rem; margin-top: var(--space-4)">Throwdown</h3>
+            <p
+              style="
+                font-size: 0.9375rem;
+                color: var(--color-text-secondary);
+                margin-top: var(--space-2);
+              "
+            >
+              1v1 knockout &mdash; redemption &amp; revival draw, live audience view. The format
+              that launched the platform.
+            </p>
+          </div>
+          <div class="card format-card-disabled">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start">
+              <svg class="icon" aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z" />
+                <path d="M17 5h3a2 2 0 0 1-2 4M7 5H4a2 2 0 0 0 2 4" />
+              </svg>
+              <span class="badge badge-soon">Coming soon</span>
+            </div>
+            <h3 style="font-size: 1.25rem; margin-top: var(--space-4)">Liga Seduh</h3>
+            <p
+              style="
+                font-size: 0.9375rem;
+                color: var(--color-text-secondary);
+                margin-top: var(--space-2);
+              "
+            >
+              Round-robin league &mdash; auto-generated schedules, live standings, judged finals,
+              season reports.
+            </p>
+          </div>
+          <a href="#/events" class="card format-card-live">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start">
+              <svg class="icon" aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M17 8h1a4 4 0 1 1 0 8h-1" />
+                <path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V8z" />
+                <line x1="6" y1="1" x2="6" y2="4" />
+                <line x1="10" y1="1" x2="10" y2="4" />
+                <line x1="14" y1="1" x2="14" y2="4" />
+              </svg>
+              <span style="display: flex; align-items: center; gap: var(--space-2)">
+                <span
+                  aria-hidden="true"
+                  style="
+                    width: 0.5rem;
+                    height: 0.5rem;
+                    border-radius: var(--radius-full);
+                    background: var(--color-accent);
+                    display: inline-block;
+                  "
+                ></span>
+                <span class="badge badge-free">Basic free</span>
+              </span>
+            </div>
+            <h3 style="font-size: 1.25rem; margin-top: var(--space-4)">Cup Taster</h3>
+            <p
+              style="
+                font-size: 0.9375rem;
+                color: var(--color-text-secondary);
+                margin-top: var(--space-2);
+              "
+            >
+              Blind triangulation heats &mdash; find the odd cup. Stage advancement, tie detection,
+              live right/wrong reveals.
+            </p>
+            <span
+              style="
+                display: inline-block;
+                margin-top: var(--space-4);
+                font-size: 0.875rem;
+                font-weight: 600;
+                color: var(--color-accent);
+              "
+              >Open Cup Taster &rarr;</span
+            >
+          </a>
+          <div class="card format-card-disabled">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start">
+              <svg class="icon" aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+              <span class="badge badge-soon">Coming soon</span>
+            </div>
+            <h3 style="font-size: 1.25rem; margin-top: var(--space-4)">BTC</h3>
+            <p
+              style="
+                font-size: 0.9375rem;
+                color: var(--color-text-secondary);
+                margin-top: var(--space-2);
+              "
+            >
+              Barista Team Championship &mdash; the flagship team format, with branded PDF reporting
+              piloted here first.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- PROOF -->
+      <div
+        style="
+          background: var(--color-surface-sunken);
+          border-top: 1px solid var(--color-border);
+          border-bottom: 1px solid var(--color-border);
+          padding: var(--space-8) 0;
+        "
+      >
+        <div
+          class="wrap"
+          style="
+            display: grid;
+            grid-template-columns: var(--cols-2);
+            gap: var(--space-8);
+            align-items: center;
+          "
+        >
+          <div>
+            <p class="eyebrow">Proof</p>
+            <h2 style="font-size: clamp(1.5rem, 3vw + 1rem, 2.2rem); margin-top: var(--space-3)">
+              Not a demo. Real events, real brackets.
+            </h2>
+            <p
+              style="
+                font-size: 1.0625rem;
+                color: var(--color-text-secondary);
+                margin-top: var(--space-4);
+              "
+            >
+              Every competition run on Seduh Score keeps its results &mdash; each one gets its own
+              archived page. Proof that outlives the trophy.
+            </p>
+          </div>
+          <div class="card" style="padding: 0; overflow: hidden">
+            <div
+              style="
+                padding: var(--space-4) var(--space-5);
+                border-bottom: 1px solid var(--color-border);
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+              "
+            >
+              <span style="font-weight: 700">Girls Got Drip Vol. 0</span>
+              <span class="badge badge-free">Completed</span>
+            </div>
+            <div
+              style="
+                padding: var(--space-4) var(--space-5);
+                border-bottom: 1px solid var(--color-border);
+              "
+            >
+              <p style="font-size: 0.875rem; color: var(--color-text-secondary); margin: 0">
+                &amp;Coffee Bandar &middot; June 2026 &mdash; the first parallel test on a single
+                Android tablet. What broke got fixed; what survived became the product.
+              </p>
+            </div>
+            <div
+              style="
+                padding: var(--space-4) var(--space-5);
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+              "
+            >
+              <span
+                style="
+                  color: var(--color-text-muted);
+                  font-family: var(--font-mono);
+                  font-size: 0.8125rem;
+                "
+                >[ next event &mdash; date to be announced ]</span
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PRICING -->
+      <div class="wrap" style="padding: var(--space-8) 0">
+        <p class="eyebrow">Pricing, stated plainly</p>
+        <h2 style="font-size: clamp(1.5rem, 3vw + 1rem, 2.2rem); margin-top: var(--space-3)">
+          Three tiers. No access gate.
+        </h2>
+        <p
+          style="
+            font-size: 1.0625rem;
+            color: var(--color-text-secondary);
+            max-width: 44rem;
+            margin-top: var(--space-4);
+          "
+        >
+          Start free, pay for one event, or run the whole year. Every price is on this page &mdash;
+          nothing to request, nothing to unlock.
+        </p>
+
+        <div
+          style="
+            display: grid;
+            grid-template-columns: var(--cols-3);
+            gap: var(--space-5);
+            margin-top: var(--space-7);
+          "
+        >
+          <div class="card">
+            <span class="badge" style="border-color: var(--color-border)">Community</span>
+            <div class="mono" style="font-size: 2rem; font-weight: 700; margin-top: var(--space-4)">
+              Free
+            </div>
+            <p
+              style="
+                font-size: 0.9375rem;
+                color: var(--color-text-secondary);
+                margin-top: var(--space-3);
+              "
+            >
+              Full platform, unbranded, for organisers just getting started. No account needed to
+              run a small event.
+            </p>
+          </div>
+          <div class="card" style="border-color: var(--color-border-strong)">
+            <span class="badge badge-free">Per-event</span>
+            <div class="mono" style="font-size: 2rem; font-weight: 700; margin-top: var(--space-4)">
+              BND $18
+            </div>
+            <div style="font-size: 0.75rem; color: var(--color-text-muted)">one-time</div>
+            <p
+              style="
+                font-size: 0.9375rem;
+                color: var(--color-text-secondary);
+                margin-top: var(--space-3);
+              "
+            >
+              One competition, fully branded, PDF reports included. Pay once, run your event, done.
+            </p>
+          </div>
+          <div class="card">
+            <span class="badge badge-annual">Full platform &middot; annual</span>
+            <div class="mono" style="font-size: 2rem; font-weight: 700; margin-top: var(--space-4)">
+              BND $100
+            </div>
+            <div style="font-size: 0.75rem; color: var(--color-text-muted)">per year</div>
+            <p
+              style="
+                font-size: 0.9375rem;
+                color: var(--color-text-secondary);
+                margin-top: var(--space-3);
+              "
+            >
+              Every format including BTC, priced for organisers running events all year. Persistent
+              history across seasons.
+            </p>
+          </div>
+        </div>
+        <p style="font-size: 0.8125rem; color: var(--color-text-muted); margin-top: var(--space-5)">
+          All prices in Brunei dollars &middot; billed through Grey Matter Coffee Werks.
+        </p>
+      </div>
+
+      <!-- FINAL CTA (stage surface, editorial photo backdrop) -->
+      <div
+        style="
+          position: relative;
+          background: var(--clr-clay-950);
+          color: var(--clr-clay-50);
+          padding: var(--space-9) 0;
+          overflow: hidden;
+        "
+      >
+        <img
+          src="cta-pour.jpg"
+          alt=""
+          style="
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0.55;
+          "
+        />
+        <div
+          style="
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(
+              180deg,
+              rgba(16, 13, 10, 0.55) 0%,
+              rgba(16, 13, 10, 0.92) 100%
+            );
+          "
+        ></div>
+        <div class="wrap" style="text-align: center; position: relative">
+          <h2
+            style="
+              font-size: clamp(1.6rem, 4vw + 1rem, 2.4rem);
+              color: var(--clr-clay-50);
+              max-width: 36rem;
+              margin: 0 auto;
+            "
+          >
+            The next champion is about to be written down &mdash; permanently.
+          </h2>
+          <div
+            style="
+              display: flex;
+              flex-wrap: wrap;
+              gap: var(--space-4);
+              justify-content: center;
+              margin-top: var(--space-6);
+            "
+          >
+            <a
+              href="#"
+              class="btn"
+              style="background: var(--clr-ember-500); color: var(--clr-clay-950)"
+              >Start free &mdash; no account</a
+            >
+            <a
+              href="#"
+              class="btn"
+              style="border: 1px solid var(--clr-clay-50); color: var(--clr-clay-50)"
+              >Take the tour</a
+            >
+          </div>
+        </div>
+      </div>
+
+      <!-- FOOTER -->
+      <div
+        class="wrap"
+        style="
+          padding: var(--space-6) 0;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: var(--space-3);
+        "
+      >
+        <span style="font-size: 0.8125rem; color: var(--color-text-muted)"
+          >Built by Firdaus Omar &middot; Grey Matter Coffee Werks, Brunei</span
+        >
+        <div style="display: flex; align-items: center; gap: var(--space-4)">
+          <span style="font-size: 0.8125rem; color: var(--color-text-muted)"
+            >Free tools save to this device.</span
+          >
+          <a
+            href="/bts/"
+            class="mono badge"
+            style="border-color: var(--color-border); color: var(--color-text-muted)"
+            >v1.0.9<span class="sr-only"> &mdash; Behind the Seduh</span></a
+          >
+        </div>
+      </div>
+    </x-dc>
+    <script data-dc-script data-props="{}">
+      class Component extends DCLogic {
+        renderVals() {
+          if (!this._steamParticles) {
+            this._steamParticles = Array.from({ length: 14 }, () => {
+              const size = (2 + Math.random() * 3).toFixed(2);
+              const left = (Math.random() * 100).toFixed(2);
+              const drift = (Math.random() * 70 - 35).toFixed(2);
+              const duration = (12 + Math.random() * 6).toFixed(2);
+              const delay = (Math.random() * 10).toFixed(2);
+              return {
+                style:
+                  'left:' +
+                  left +
+                  '%; --drift:' +
+                  drift +
+                  'px; width:' +
+                  size +
+                  'px; height:' +
+                  size +
+                  'px; animation-duration:' +
+                  duration +
+                  's; animation-delay:' +
+                  delay +
+                  's;',
+              };
+            });
+          }
+          return { steamParticles: this._steamParticles };
+        }
+      }
+    </script>
+  </body>
+</html>

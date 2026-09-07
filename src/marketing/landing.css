@@ -1,0 +1,873 @@
+/*
+ * Marketing landing page — Seduh Score Next
+ *
+ * Deliberately separate from src/ui/tokens/colors.css: that file's
+ * paper/stage tokens are scoped to the console's organiser/projector/phone
+ * surfaces (contrast-checked against THOSE surfaces' constraints — see
+ * DESIGN.md), and mixing this page's own day/night concept into the same
+ * variable space would be exactly the "token layer gains format-specific
+ * vocabulary" failure CONVENTIONS.md warns against, just one level up (a
+ * different PRODUCT surface, not just a different format). This file reuses
+ * the same semantic NAMES (--color-canvas, --color-text, etc.) because
+ * they're generic slots, not because it shares colors.css's values — this
+ * page is never loaded alongside colors.css, so there's no runtime
+ * collision, only a naming echo that keeps the pattern recognizable.
+ *
+ * Fonts, spacing/radius and the generic utility classes (.sr-only,
+ * .tabular-nums, .tap-target, :focus-visible, .status-live-dot) DO come
+ * from src/ui/tokens/ (fonts.css, typography.css, spacing.css, base.css) —
+ * those are genuinely format-and-surface-agnostic, no reason to duplicate
+ * them here. index.html links them before this file.
+ */
+
+:root {
+  /* Day ("Editorial") — warm paper, matches the console's own light-mode
+     register (Cabinet Grotesk/Switzer, ember accent) closely on purpose. */
+  --clr-clay-50: #fefcf9;
+  --clr-clay-100: #faf6ef;
+  --clr-clay-200: #f2ebdf;
+  --clr-clay-300: #e6dbc8;
+  --clr-clay-600: #6b5d49;
+  --clr-clay-700: #574d3c;
+  --clr-clay-950: #100d0a;
+  --clr-ember-500: #ff6b35;
+  --clr-ember-700: #b83e15;
+  --clr-ember-800: #8f3010;
+  --clr-gold-700: #8a6a1f;
+
+  --color-canvas: var(--clr-clay-100);
+  --color-surface: var(--clr-clay-50);
+  --color-surface-sunken: var(--clr-clay-200);
+  --color-border: var(--clr-clay-300);
+  --color-border-strong: var(--clr-clay-950);
+  --color-text: var(--clr-clay-950);
+  --color-text-secondary: var(--clr-clay-700);
+  --color-text-muted: var(--clr-clay-600);
+  --color-accent: var(--clr-ember-700);
+  --color-accent-hover: var(--clr-ember-800);
+  --color-accent-contrast: #ffffff;
+  --color-gold: var(--clr-gold-700);
+  --color-gold-contrast: #ffffff;
+  --color-focus-ring: var(--color-border-strong);
+
+  --bloom-ring-color: rgba(255, 107, 53, 0.2);
+  --steam-particle-color: rgba(184, 62, 21, 0.32);
+  --night-photo-filter: none;
+
+  --cols-hero: 1.1fr 1fr;
+  --cols-4: repeat(4, 1fr);
+  --cols-3: repeat(3, 1fr);
+  --cols-2: repeat(2, 1fr);
+}
+
+/* Night ("Editorial Nights") — a re-hierarchy, not a brightness flip. Ember
+   is demoted from "everywhere" accent to a rare "this is real, right now"
+   signal (live dot, Cup Taster's badge, the completed-event tag). A new
+   warm gold — "lantern" — takes the everyday interactive role instead,
+   evoking lamplight rather than the trophy-brass kept for Annual/BTC
+   (now an outline, not a fill, so it doesn't collide with lantern). Canvas
+   is a warm espresso brown-black, not neutral. */
+:root[data-theme='night'] {
+  --clr-night-950: #0d0906;
+  --clr-night-900: #1a120c;
+  --clr-night-800: #241a12;
+  --clr-night-700: #3a2a1c;
+  --clr-night-500: #a89070;
+  --clr-night-300: #c7ac89;
+  --clr-night-100: #f3e6d0;
+  --clr-lantern-500: #e6b148;
+  --clr-lantern-600: #c99730;
+  --clr-brass-500: #cfa53b;
+
+  --color-canvas: var(--clr-night-900);
+  --color-surface: var(--clr-night-800);
+  --color-surface-sunken: var(--clr-night-950);
+  --color-border: var(--clr-night-700);
+  --color-border-strong: var(--clr-night-100);
+  --color-text: var(--clr-night-100);
+  --color-text-secondary: var(--clr-night-300);
+  --color-text-muted: var(--clr-night-500);
+  --color-accent: var(--clr-lantern-500);
+  --color-accent-hover: var(--clr-lantern-600);
+  --color-accent-contrast: var(--clr-night-950);
+  --color-gold: var(--clr-brass-500);
+  --color-gold-contrast: var(--clr-night-950);
+
+  --bloom-ring-color: rgba(230, 177, 72, 0.3);
+  --steam-particle-color: rgba(255, 107, 53, 0.55);
+  --night-photo-filter: brightness(0.5) contrast(1.1) saturate(0.85) sepia(0.18);
+}
+
+/* body's own background/color/font/line-height/margin all come from
+   src/ui/tokens/base.css, loaded before this file — this page just needs
+   to supply the --color- and --font- values base.css's rule reads. */
+* {
+  box-sizing: border-box;
+}
+
+a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--color-accent-hover);
+  text-decoration: underline;
+}
+
+.landing-wrap {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 0 var(--space-6);
+}
+
+.landing-eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--leading-tight);
+  margin: 0;
+  letter-spacing: var(--tracking-tight);
+}
+
+.landing-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0.875rem 1.5rem;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--text-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+  min-height: var(--tap-target-min);
+}
+.landing-btn-primary {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+}
+.landing-btn-primary:hover {
+  background: var(--color-accent-hover);
+  text-decoration: none;
+}
+.landing-btn-ghost {
+  background: transparent;
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+.landing-btn-ghost:hover {
+  background: var(--color-surface-sunken);
+  text-decoration: none;
+}
+
+.landing-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.landing-badge {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: var(--text-3xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.25rem 0.6rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-strong);
+}
+.landing-badge-live {
+  background: var(--color-accent)
+    /* ember on night, ember on day — the
+    one accent that means "this is real, right now" on both themes */;
+  color: var(--color-canvas);
+  border-color: transparent;
+}
+:root:not([data-theme='night']) .landing-badge-live {
+  background: var(--clr-ember-700);
+}
+:root[data-theme='night'] .landing-badge-live {
+  background: var(--clr-ember-500);
+}
+.landing-badge-annual {
+  background: transparent;
+  color: var(--color-gold);
+  border-color: var(--color-gold);
+}
+.landing-badge-soon {
+  background: transparent;
+  color: var(--color-text-muted);
+  border-color: var(--color-border);
+}
+.landing-badge-neutral {
+  background: transparent;
+  border-color: var(--color-border);
+}
+.landing-accent-text {
+  color: var(--color-accent);
+}
+
+.landing-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+}
+
+.landing-icon {
+  width: 22px;
+  height: 22px;
+  stroke: var(--color-accent);
+  fill: none;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Responsive layout — grid shapes are custom properties, redefined at each
+   breakpoint, so inline-set `grid-template-columns: var(--cols-N)` updates
+   without !important overrides (same trick colors.css uses for its own
+   [data-surface] swap). */
+@media (max-width: 860px) {
+  :root {
+    --cols-hero: 1fr;
+    --cols-3: 1fr;
+  }
+}
+@media (max-width: 620px) {
+  :root {
+    --cols-4: repeat(2, 1fr);
+    --cols-2: 1fr;
+  }
+}
+@media (max-width: 480px) {
+  :root {
+    --cols-4: 1fr;
+    --space-5: 1.25rem;
+    --space-6: 1rem;
+    --space-7: 2rem;
+    --space-8: 2.5rem;
+    --space-9: 3.5rem;
+  }
+}
+
+/* ---- Nav ---- */
+.landing-nav {
+  position: sticky;
+  top: 0;
+  background: var(--color-canvas);
+  border-bottom: 1px solid var(--color-border);
+  z-index: 10;
+}
+.landing-nav-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 72px;
+}
+.landing-nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+.landing-brand-mark-wrap {
+  position: relative;
+  display: inline-flex;
+  width: 26px;
+  height: 22px;
+}
+.landing-brand-mark {
+  position: relative;
+  z-index: 1;
+  width: 26px;
+  height: 22px;
+  color: var(--color-accent);
+}
+.landing-brand-name {
+  font-family: var(--font-display);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--text-md);
+  letter-spacing: var(--tracking-tight);
+}
+.landing-nav-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+.landing-nav-panel {
+  display: none;
+  position: absolute;
+  top: 72px;
+  left: 0;
+  right: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-4);
+  background: var(--color-canvas);
+  border-bottom: 1px solid var(--color-border);
+  padding: var(--space-5) var(--space-6);
+}
+.landing-nav-panel-open {
+  display: flex;
+}
+.landing-nav-panel .landing-btn {
+  width: 100%;
+  justify-content: center;
+}
+/* min-height alone (not .tap-target, which also forces min-width — meant
+   for icon-only controls per its own doc comment in base.css) covers a
+   text link that's already wide enough; display:flex centers the text
+   inside the taller box rather than just padding it top/bottom, which
+   found in review, ui-accessibility-reviewer: was under 44px in both the
+   stacked mobile panel and the inline desktop row. */
+.landing-nav-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-target-min);
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--text-sm);
+}
+.landing-nav-toggle {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+.landing-nav-toggle-bar {
+  width: 18px;
+  height: 2px;
+  border-radius: var(--radius-full);
+  background: var(--color-text);
+  display: block;
+}
+.landing-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  color: var(--color-text-secondary);
+}
+.landing-theme-toggle:hover {
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+.landing-theme-toggle svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+@media (min-width: 640px) {
+  .landing-nav-toggle {
+    display: none;
+  }
+  .landing-nav-panel {
+    display: flex !important;
+    position: static;
+    flex-direction: row;
+    align-items: center;
+    background: transparent;
+    border-bottom: none;
+    padding: 0;
+    gap: var(--space-6);
+  }
+  .landing-nav-panel .landing-btn {
+    width: auto;
+  }
+}
+
+/* ---- Hero ---- */
+.landing-hero {
+  position: relative;
+  padding-top: var(--space-8);
+  padding-bottom: var(--space-8);
+  display: grid;
+  grid-template-columns: var(--cols-hero);
+  gap: var(--space-8);
+  align-items: center;
+}
+.landing-hero-copy {
+  position: relative;
+  z-index: 1;
+}
+.landing-hero-eyebrow {
+  margin: 0 0 var(--space-4);
+}
+.landing-hero-headline {
+  font-size: clamp(1.9rem, 4vw + 1.2rem, 3.4rem);
+}
+.landing-hero-sub {
+  font-size: var(--text-md);
+  color: var(--color-text-secondary);
+  max-width: 38rem;
+  margin: var(--space-5) 0 0;
+}
+.landing-hero-ctas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+}
+.landing-stat-strip {
+  display: grid;
+  grid-template-columns: var(--cols-4);
+  gap: 1px;
+  background: var(--color-border);
+  margin-top: var(--space-8);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.landing-stat-cell {
+  background: var(--color-surface);
+  padding: var(--space-4);
+}
+.landing-stat-num {
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-bold);
+}
+.landing-stat-label {
+  font-size: var(--text-2xs);
+  color: var(--color-text-muted);
+}
+
+/* Hero mock card — a "screenshot" of the product, deliberately dark chrome
+   regardless of theme (it represents the app's own UI, not this page's
+   mood). */
+.landing-mock-card {
+  padding: 0;
+  overflow: hidden;
+}
+.landing-mock-chrome {
+  background: var(--clr-clay-950, #100d0a);
+  color: #fff;
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: var(--text-3xs);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+:root[data-theme='night'] .landing-mock-chrome {
+  background: var(--clr-night-950);
+  color: var(--color-text);
+}
+.landing-mock-body {
+  padding: var(--space-6);
+}
+.landing-mock-caption {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-2);
+}
+.landing-mock-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.landing-mock-row:last-child {
+  border-bottom: none;
+}
+.landing-mock-row-divider {
+  border-top: 1px solid var(--color-border);
+  margin-top: var(--space-3);
+}
+.landing-mock-name {
+  font-weight: var(--font-weight-semibold);
+}
+.landing-mock-name-muted {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+}
+.landing-mock-score {
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-accent);
+}
+.landing-mock-score-muted {
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-muted);
+}
+.landing-mock-footer {
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--color-border);
+  font-family: var(--font-mono);
+  font-size: var(--text-3xs);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ---- Ambient motion — bloom + rising particles ---- */
+.landing-bloom {
+  position: absolute;
+  top: 46%;
+  left: 32%;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+  z-index: 0;
+}
+.landing-bloom span {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 360px;
+  height: 360px;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--bloom-ring-color);
+  border-radius: 50%;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .landing-bloom span {
+    animation: landing-bloom 4.8s ease-out infinite;
+  }
+  .landing-bloom span:nth-child(1) {
+    animation-delay: 0s;
+  }
+  .landing-bloom span:nth-child(2) {
+    animation-delay: 1.6s;
+  }
+  .landing-bloom span:nth-child(3) {
+    animation-delay: 3.2s;
+  }
+}
+@keyframes landing-bloom {
+  0% {
+    transform: translate(-50%, -50%) scale(0.4);
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.95;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(3.4);
+    opacity: 0;
+  }
+}
+
+.landing-steam-field {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+.landing-steam-p {
+  position: absolute;
+  bottom: -14px;
+  border-radius: 50%;
+  background: var(--steam-particle-color);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .landing-steam-p {
+    animation: landing-rise linear infinite;
+  }
+}
+@keyframes landing-rise {
+  0% {
+    transform: translateY(0) translateX(0);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(-108vh) translateX(var(--drift, 22px));
+    opacity: 0;
+  }
+}
+
+/* ---- Editorial banner photo ---- */
+.landing-banner-photo {
+  width: 100%;
+  height: 320px;
+  overflow: hidden;
+}
+.landing-banner-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 60%;
+  display: block;
+  filter: var(--night-photo-filter);
+}
+@media (max-width: 480px) {
+  .landing-banner-photo {
+    height: 180px;
+  }
+}
+
+/* ---- Section shells ---- */
+.landing-section {
+  padding: var(--space-8) 0;
+}
+.landing-section-sunken {
+  background: var(--color-surface-sunken);
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+}
+.landing-section-heading {
+  font-size: clamp(1.5rem, 3vw + 1rem, 2.2rem);
+  margin-top: var(--space-3);
+}
+.landing-problem-heading {
+  max-width: 40rem;
+}
+.landing-section-lede {
+  font-size: var(--text-lg);
+  color: var(--color-text-secondary);
+  max-width: 44rem;
+  margin-top: var(--space-4);
+}
+
+/* ---- Problem cards ---- */
+.landing-problem-grid {
+  display: grid;
+  grid-template-columns: var(--cols-4);
+  gap: var(--space-4);
+  margin-top: var(--space-7);
+}
+.landing-card h3 {
+  font-size: var(--text-md);
+  margin-top: var(--space-4);
+}
+.landing-card p {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin-top: var(--space-2);
+}
+
+/* ---- Format cards ---- */
+.landing-format-grid {
+  display: grid;
+  grid-template-columns: var(--cols-2);
+  gap: var(--space-5);
+  margin-top: var(--space-7);
+}
+.landing-format-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.landing-format-card h3 {
+  font-size: var(--text-lg);
+}
+.landing-format-card p {
+  font-size: var(--text-base);
+}
+/* Desaturated, not faded — opacity would composite the text colors down
+   against the card background and fail contrast (found in review,
+   ui-accessibility-reviewer: text-secondary dropped to ~2.4:1 at 0.5
+   opacity). grayscale() preserves luminance, so it doesn't touch contrast;
+   "Coming soon" is what actually signals disabled, this is just tone. */
+.landing-format-disabled {
+  filter: grayscale(0.6);
+}
+.landing-format-live {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s ease;
+}
+.landing-format-live:hover {
+  border-color: var(--color-accent);
+  text-decoration: none;
+}
+.landing-format-live-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.landing-format-open {
+  display: inline-block;
+  margin-top: var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-accent);
+}
+
+/* ---- Proof ---- */
+.landing-proof-grid {
+  display: grid;
+  grid-template-columns: var(--cols-2);
+  gap: var(--space-8);
+  align-items: center;
+}
+.landing-proof-card {
+  padding: 0;
+  overflow: hidden;
+}
+.landing-proof-row {
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.landing-proof-row:last-child {
+  border-bottom: none;
+}
+.landing-proof-name {
+  font-weight: var(--font-weight-bold);
+}
+.landing-proof-desc {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+.landing-proof-next {
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+/* ---- Pricing ---- */
+.landing-pricing-grid {
+  display: grid;
+  grid-template-columns: var(--cols-3);
+  gap: var(--space-5);
+  margin-top: var(--space-7);
+}
+.landing-price {
+  font-size: var(--text-2xl);
+  font-weight: var(--font-weight-bold);
+  margin-top: var(--space-4);
+}
+.landing-price-period {
+  font-size: var(--text-2xs);
+  color: var(--color-text-muted);
+}
+.landing-pricing-card-featured {
+  border-color: var(--color-border-strong);
+}
+.landing-pricing-card p {
+  font-size: var(--text-base);
+  color: var(--color-text-secondary);
+  margin-top: var(--space-3);
+}
+.landing-pricing-note {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin-top: var(--space-5);
+}
+
+/* ---- Final CTA ---- */
+.landing-cta {
+  position: relative;
+  padding: var(--space-9) 0;
+  overflow: hidden;
+}
+:root:not([data-theme='night']) .landing-cta {
+  background: var(--clr-clay-950);
+  color: #fff;
+}
+:root[data-theme='night'] .landing-cta {
+  background: radial-gradient(circle at 50% 30%, var(--clr-night-700) 0%, var(--color-canvas) 70%);
+  color: var(--color-text);
+}
+.landing-cta-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: var(--night-photo-filter);
+}
+:root:not([data-theme='night']) .landing-cta-photo {
+  opacity: 0.55;
+}
+:root[data-theme='night'] .landing-cta-photo {
+  opacity: 0.6;
+}
+.landing-cta-overlay {
+  position: absolute;
+  inset: 0;
+}
+:root:not([data-theme='night']) .landing-cta-overlay {
+  background: linear-gradient(180deg, rgba(16, 13, 10, 0.55) 0%, rgba(16, 13, 10, 0.92) 100%);
+}
+:root[data-theme='night'] .landing-cta-overlay {
+  background: linear-gradient(180deg, rgba(13, 9, 6, 0.45) 0%, rgba(13, 9, 6, 0.94) 100%);
+}
+.landing-cta-inner {
+  text-align: center;
+  position: relative;
+}
+.landing-cta-heading {
+  font-size: clamp(1.6rem, 4vw + 1rem, 2.4rem);
+  max-width: 36rem;
+  margin: 0 auto;
+  color: inherit;
+}
+.landing-cta-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  justify-content: center;
+  margin-top: var(--space-6);
+}
+.landing-cta-btn-primary {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+}
+:root:not([data-theme='night']) .landing-cta-btn-primary {
+  background: var(--clr-ember-500);
+  color: var(--clr-clay-950);
+}
+.landing-cta-btn-ghost {
+  border: 1px solid currentColor;
+  color: inherit;
+}
+
+/* ---- Footer ---- */
+.landing-footer {
+  padding: var(--space-6) 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+.landing-footer-text {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+.landing-footer-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+.landing-version-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-target-min);
+  border-color: var(--color-border);
+  color: var(--color-text-muted);
+}

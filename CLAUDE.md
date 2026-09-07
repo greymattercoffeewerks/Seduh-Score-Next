@@ -23,6 +23,7 @@ the context it actually touches:
 
 - [src/core/CLAUDE.md](src/core/CLAUDE.md) — shared, format-agnostic modules and `main.js`
   wiring.
+- [src/marketing/CLAUDE.md](src/marketing/CLAUDE.md) — the public marketing landing page.
 - [src/formats/cup-taster/CLAUDE.md](src/formats/cup-taster/CLAUDE.md) — Cup Taster.
 - [src/formats/throwdown/CLAUDE.md](src/formats/throwdown/CLAUDE.md) — Throwdown (not started).
 - [src/formats/liga-seduh/CLAUDE.md](src/formats/liga-seduh/CLAUDE.md) — Liga Seduh (not started).
@@ -163,9 +164,16 @@ push (2026-08-30) was actually done (the Supabase MCP's `apply_migration`, not
 
 ```
 Handoffs and Specs/SEDUH-NEXT-HANDOFF.md   ← frozen spec, never edited for progress
+index.html                      ← marketing landing page entry (root domain).
+app/index.html                  ← console SPA entry (moved out of root 2026-09-07 —
+                                   see src/marketing/CLAUDE.md for why). Same main.js/
+                                   router/screens as always, just served from /app/.
 src/
   core/                         ← shared, format-agnostic modules + main.js wiring.
                                    See src/core/CLAUDE.md.
+  marketing/                    ← the public landing page (day/night themed, no auth,
+                                   no router). Outside the handoff's original scope —
+                                   see src/marketing/CLAUDE.md.
   formats/
     cup-taster/                 ← scoring, timing-surface, entry-surface, viewer-body,
                                    analytics. See src/formats/cup-taster/CLAUDE.md.
@@ -173,9 +181,14 @@ src/
     liga-seduh/                 ← not started. See src/formats/liga-seduh/CLAUDE.md.
     bbtc/                       ← not started. See src/formats/bbtc/CLAUDE.md.
   ui/
-    tokens/                     ← design tokens (plain CSS custom properties)
+    tokens/                     ← design tokens (plain CSS custom properties) — the
+                                   console's own paper/stage system; src/marketing/ does
+                                   NOT use this file's color tokens (see its own CLAUDE.md).
   main.js                       ← composition root; conventions live in
                                    src/core/CLAUDE.md alongside the rest of the wiring.
+public/
+  marketing/                    ← the landing page's own static photos (not favicons —
+                                   those stay at public/'s root, shared by both entries).
 supabase/
   migrations/                   ← forward-only, each with a tested -- rollback: block
   seed.sql                      ← local-dev/CI-only: a fixed org + an authenticated

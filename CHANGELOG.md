@@ -1,3 +1,47 @@
+## Marketing landing page · 2026-09-07
+
+**Out of scope per handoff §1 ("No landing page. No console"), shipped as user-requested.** A marketing landing page now deploys at the root `index.html`, with the console SPA moved to `/app/index.html` (content byte-identical — only its path changed, and the router is hash-only so nothing in `src/main.js` or `src/core/router.js` needed to change). Preceded by a design-canvas exploration (three initial directions narrowed to "Editorial", plus a dark "Editorial Nights" variant — ember demoted from the everyday accent to a rare "this is live" signal, a new "lantern" gold taking over buttons/links instead, not a straight brightness invert of the same palette).
+
+**What shipped:**
+
+- **`vite.config.js`** — `build.rollupOptions.input` added for the two HTML entries (root `index.html` + `app/index.html`); Vite's dev server already served both by filesystem path with no config, only the production build needed this.
+- **New `src/marketing/` module** — format-agnostic top-level sibling to `src/core/`/`src/formats/`, no imports in either direction from `src/formats/`:
+  - `landingScreen.js` — builds the whole page with `core/dom.js`'s `el()`/`svgEl()`/`brandMark()`, same as every console screen (`textContent` only, no `innerHTML`).
+  - `theme.js` — day/night theme: auto by local clock (19:00–06:59 = night), manual toggle always wins once used, persisted via `localStorage` (key `seduh-landing-theme`).
+  - `main.js` — two-line composition root, mounts `landingScreen.js` into `#app`.
+  - `landing.css` — day tokens under `:root`, night tokens under `:root[data-theme='night']` (same trick `colors.css` uses for `[data-surface]`); reuses `src/ui/tokens/`'s fonts/typography/spacing/base utilities but deliberately does NOT import `colors.css` — see `src/marketing/CLAUDE.md` for why.
+  - `core/dom.js`'s private `svgEl` helper exported (2nd real consumer, this module's format-card icons) rather than duplicated.
+- **`index.html`** carries a small synchronous inline script duplicating `theme.js`'s auto-theme computation, so the page doesn't flash the wrong theme while the deferred module script loads.
+- **New `src/marketing/CLAUDE.md`** (scoped conventions, matching `src/core/CLAUDE.md`'s pattern) and root `CLAUDE.md` architecture-map/directory-list updates.
+- **`public/marketing/`** — two AI-generated photos (hero banner, final-CTA backdrop), each given a night color-grade via CSS filter rather than a second photoshoot.
+- **Two Playwright specs updated**: `smoke.spec.js` and `organiser-flow.spec.js` — `page.goto('/')` → `page.goto('/app/')`, since root no longer serves the console.
+
+**Review findings — three subagents, real issues found and fixed:**
+
+- **`module-boundary-checker`:** clean. No `core`↔`formats` coupling introduced; `src/marketing/` consuming `core/dom.js` is the allowed direction.
+- **`ui-accessibility-reviewer`:** two real bugs — disabled format cards used `opacity: 0.5` to fade, which dropped body text to ~2.4:1 contrast (fails WCAG AA's 4.5:1); fixed by switching to `filter: grayscale()` alone, which preserves luminance. Real nav links and the footer version-pill link were under this project's own 44px tap-target floor; fixed with `min-height`. Plus two minor fixes: a redundant screen-reader announcement on the brand mark next to visible "Seduh Score" text, and the hero's fabricated mock-card data (sample names/scores) now `aria-hidden` rather than read as real.
+- **`code-reviewer`:** one real bug — the inline FOUC-prevention script's error fallback hardcoded `'day'` instead of matching `theme.js`'s real fallback (compute from the clock), which could flash the wrong theme specifically when `localStorage` throws. Plus cleanup: a dead `background` declaration in `.landing-badge-live` (unconditionally overridden by both theme branches), a dead `writeStoredTheme(null)` branch nothing ever called, and an unnecessary IIFE in `landingScreen.js`'s `buildMockCard()`. Also flagged (left as-is, explained in a code comment): every nav link and CTA is `href="#"` — no tour page, pricing anchor, or sign-up flow exists yet to link to.
+
+**Verification:** `npm run lint`, `npm run build`, `npm run test` (996 tests) all pass — re-run after every review fix. Manually verified in the real dev server: theme toggle, hamburger menu, both photos with the night color-grade, and the console app all working at `/app/`.
+
+**Cloudflare deployment:** not connected or triggered this session — `wrangler.jsonc` and the handoff both call that a separate, deliberate decision. Build/config are deploy-ready.
+
+---
+
+## Version cycle: Kiulap → Berakas, v1.0.9 → v2.0.0 · 2026-09-07
+
+**Major bump, triggered by the marketing landing page shipping** (`src/marketing/` — see this file's own "Marketing landing page" entry for the full account, committed separately). Per CONVENTIONS.md's "Versioning" rule, a major version/nameplate move is reserved for a genuine capability-era boundary (a new format shipping, or a major cross-cutting relaunch) — the landing page is the latter: the site's first real public front door, moving the console to `/app/`. Near-exact match to legacy's own Berakas cycle ("the front door — seduhscore.com, an organiser zone... quietly turning a personal tool into something a stranger could actually sign into").
+
+**What changed:** `package.json` version `1.0.9` → `2.0.0`; `src/core/version.js`'s `NAMEPLATE` `'Kiulap'` → `'Berakas'` (the organiser-app footer, `appShell.js`, now reads "Seduh Score · Berakas · v2.0.0"). `CONVENTIONS.md`'s "Versioning" section and `ROADMAP.md`'s "Version cycle plan" table both updated to record the trigger and reasoning.
+
+**A real reordering, not just filling in a blank**: ROADMAP.md's nameplate plan (2026-09-05) had reserved v2.0 for Gadong/Throwdown, since the landing page didn't exist yet as a concept. It shipped first, so Berakas — originally slotted for "whatever the next major relaunch turns out to be," unassigned — jumped the queue. Gadong (Throwdown), Kiarong (Liga Seduh), and Menglait (BBTC) each shift one cycle later (now v3.0/v4.0/v5.0). This is exactly the "plan, not a commitment" caveat that table was written with.
+
+**Cloudflare deployment of the landing page was still pending at the moment of this bump** — the version/nameplate move tracks the code landing in the repo, not the separate deploy step, matching the existing migration-vs-merge distinction in CLAUDE.md's Repo section.
+
+**Not run this task:** no schema/RLS/scoring/offline-sync/UI-logic change (a version string and two doc updates) — `schema-guardian`/`security-reviewer`/`scoring-auditor`/`offline-sync-auditor`/`code-reviewer`/`module-boundary-checker`/`ui-accessibility-reviewer` don't apply to a version-number-only change with no code behavior change. `npm run build`/`test`/`lint` re-run clean after the bump.
+
+---
+
 ## Phone number normalization & validation · 2026-09-06
 
 **User-requested, not tied to §14 task ID.** Scoped out of the multi-tenancy/Seduh ID

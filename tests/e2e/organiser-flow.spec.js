@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 // Proves the routing skeleton wired up in the 2026-08-29 app-wiring pass
-// actually connects, end to end, against the REAL app (main.js/index.html)
+// actually connects, end to end, against the REAL app (main.js/app/index.html)
 // and a REAL local Supabase stack — not a mocked screen (src/main.test.js's
 // own job) and not a demo harness with a fake client
 // (cross-surface-countdown.spec.js's own job). Every organiser table is
@@ -15,7 +15,7 @@ import { test, expect } from '@playwright/test';
 // `db reset`-per-test-run harness yet.
 
 async function signIn(page) {
-  await page.goto('/');
+  await page.goto('/app/');
   await page.evaluate(async () => {
     const mod = await import('/src/core/supabaseClient.js');
     const client = mod.getSupabase();
