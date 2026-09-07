@@ -63,6 +63,7 @@ describe('cupTasterOutboxHandlers', () => {
       'confirm_heat',
       'publish_live_session',
       'record_heat_time',
+      'resolve_stage',
       'start_heat',
     ]);
     // A bare key-presence check would still pass if e.g.
@@ -74,12 +75,13 @@ describe('cupTasterOutboxHandlers', () => {
     }
   });
 
-  it('every one of the 5 composed operation types actually flushes through the composed map, not just the two the FIFO-order test below happens to cover', async () => {
+  it('every one of the 6 composed operation types actually flushes through the composed map, not just the two the FIFO-order test below happens to cover', async () => {
     const client = fakeRpcClient();
     await enqueueOperation('start_heat', { p_heat_id: 'h1' });
     await enqueueOperation('record_heat_time', { p_heat_entry_id: 'he1' });
     await enqueueOperation('auto_max_heat', { p_heat_id: 'h1' });
     await enqueueOperation('confirm_heat', { p_heat_id: 'h1' });
+    await enqueueOperation('resolve_stage', { p_stage_id: 's1' });
     await enqueueOperation('publish_live_session', {
       orgId: 'org1',
       eventId: 'ev1',
@@ -93,15 +95,18 @@ describe('cupTasterOutboxHandlers', () => {
     // The queued operation TYPE is publish_live_session, but the actual RPC
     // it calls (built fresh inside the handler, per liveSession.js's own
     // module comment) is still named publish_session — client.calls tracks
-    // .rpc() invocations, not outbox operation types.
+    // .rpc() invocations, not outbox operation types. resolve_stage, unlike
+    // that one, calls through buildRpcHandler directly (standings.js's
+    // resolveStageHandlers), so its RPC name matches its operation type.
     expect(client.calls).toEqual([
       'start_heat',
       'record_heat_time',
       'auto_max_heat',
       'confirm_heat',
+      'resolve_stage',
       'publish_session',
     ]);
-    expect(result).toEqual({ processed: 5, stopped: false, permanentFailure: false });
+    expect(result).toEqual({ processed: 6, stopped: false, permanentFailure: false });
     expect(await countPendingOperations()).toBe(0);
   });
 

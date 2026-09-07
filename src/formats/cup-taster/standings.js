@@ -16,6 +16,7 @@ import { listEntriesByIds } from '../../core/registry.js';
 import { findStageById, findStageByOrdinal } from './setup.js';
 import { listStageEntries, listHeatEntries, generateTiebreakHeat } from './heats.js';
 import { getSupabase } from '../../core/supabaseClient.js';
+import { buildRpcHandler, enqueueOperation, flushOutbox } from '../../core/outbox.js';
 
 // Most correct first, then fastest (lowest elapsed) — §7.3's stated order,
 // applied uniformly at every cutoff per that section's own "identical to the
@@ -186,36 +187,16 @@ export function belowTheLine(ranked, advancing, tiedAtBorder) {
   return ranked.filter(({ item }) => !excluded.has(item.stageEntryId));
 }
 
-// DB. Commits a fully-resolved stage outcome in one pass:
-//   - `advancingEntries`: [{ entryId, source }] — source is 'advanced'
-//     (clean, no tie involved), 'tiebreak_won' (won the tiebreak heat
-//     outright), or 'coin_toss' (won the coin toss after the tiebreak heat
-//     ALSO drew). Written as new ct_stage_entries rows in the next stage.
-//     Empty/ignored at the terminal stage — there is no next stage to enter.
-//   - `championStageEntryId`: terminal stage only — the single winner's
-//     CURRENT ct_stage_entries row gets final_position = 1 (this is a
-//     position within THIS stage, not entry into a next one, since none
-//     exists).
-//   - `eliminated`: [{ stageEntryId, viaCoinToss }] — every member of the
-//     resolved border-tie group who did NOT advance, all sharing
-//     `finalPosition` (see below). `viaCoinToss` controls whether
-//     `coinTossNote` is recorded on that row too (a coin toss is the one
-//     case §5.2's schema comment gives an explicit note example for; a
-//     cupper eliminated directly by the tiebreak heat's own scoring needs no
-//     such note — the result speaks for itself).
-//   - `finalPosition`: `effectiveCutoff + 1` — the correct competition-
-//     ranking value for "everyone left over once the scarce slot(s) are
-//     filled," per standard tie semantics (a resolved N-way tie for the last
-//     spot, having yielded exactly one advancing entry, leaves the rest tied
-//     for the position immediately after it — this generalizes to any group
-//     size and needs no per-entry distinction, which matches this module's
-//     deliberate scope: a tiebreak/coin-toss exists ONLY to allocate the
-//     scarce slot(s), not to produce a full sub-ranking of who's eliminated).
-//   - `belowCutoff`: [{ stageEntryId, position }] — entries never touched by
-//     any tie, keeping their original rank() position as their final one.
-//   - `coinTossNote`: string | null — recorded on every row touched by a
-//     coin toss (both the winning and the losing side), never elsewhere.
-export async function commitStageResolution(
+// The one place a resolve_stage payload is built, so the RPC's own shape
+// (migration 20260906060000) stays in exactly one place rather than being
+// re-derived at every caller — same discipline as scoring.js's
+// buildConfirmEntries/timing.js's buildRecordHeatTimePayload. `plan` is
+// exactly the object buildCommitPlan (standingsScreen.js) already produced —
+// this function's only job is reshaping it into the RPC's own snake_case
+// param names, never re-deriving any of the advancement decisions
+// themselves (those stay a pure, independently-testable concern of
+// buildCommitPlan/resolveAdvancement/belowTheLine, not this DB-facing layer).
+export function buildResolveStagePayload(
   {
     stage,
     nextStage,
@@ -226,57 +207,71 @@ export async function commitStageResolution(
     belowCutoff,
     coinTossNote,
   },
-  client = getSupabase(),
+  orgId,
 ) {
-  if (nextStage) {
-    if (advancingEntries.length > 0) {
-      const { error } = await client.from('ct_stage_entries').insert(
-        advancingEntries.map(({ entryId, source }) => ({
-          stage_id: nextStage.id,
-          entry_id: entryId,
-          source,
-          position_note: source === 'coin_toss' ? coinTossNote : null,
-        })),
-      );
-      if (error) throw error;
-    }
-  } else if (championStageEntryId) {
-    const { error } = await client
-      .from('ct_stage_entries')
-      .update({
-        final_position: 1,
-        position_note: advancingEntries.some((entry) => entry.source === 'coin_toss')
-          ? coinTossNote
-          : null,
-      })
-      .eq('id', championStageEntryId);
-    if (error) throw error;
-  }
+  return {
+    p_operation_id: crypto.randomUUID(),
+    p_org_id: orgId,
+    p_stage_id: stage.id,
+    p_next_stage_id: nextStage?.id ?? null,
+    p_advancing_entries: advancingEntries.map(({ entryId, source }) => ({
+      entry_id: entryId,
+      source,
+    })),
+    p_champion_stage_entry_id: championStageEntryId ?? null,
+    p_eliminated: eliminated.map(({ stageEntryId, viaCoinToss }) => ({
+      stage_entry_id: stageEntryId,
+      via_coin_toss: viaCoinToss,
+    })),
+    p_final_position: finalPosition,
+    p_below_cutoff: belowCutoff.map(({ stageEntryId, position }) => ({
+      stage_entry_id: stageEntryId,
+      position,
+    })),
+    p_coin_toss_note: coinTossNote ?? null,
+  };
+}
 
-  for (const { stageEntryId, viaCoinToss } of eliminated) {
-    const { error } = await client
-      .from('ct_stage_entries')
-      .update({
-        final_position: finalPosition,
-        position_note: viaCoinToss ? coinTossNote : null,
-      })
-      .eq('id', stageEntryId);
-    if (error) throw error;
-  }
+// Mirrors scoring.js's confirmHandlers/timing.js's timingHandlers exactly —
+// the export a screen composes into outboxHandlers.js's
+// cupTasterOutboxHandlers(client) so a flush triggered from anywhere can
+// also process a queued resolve_stage, not just this module's own callers.
+export function resolveStageHandlers(client) {
+  return { resolve_stage: buildRpcHandler(client, 'resolve_stage') };
+}
 
-  for (const { stageEntryId, position } of belowCutoff) {
-    const { error } = await client
-      .from('ct_stage_entries')
-      .update({ final_position: position })
-      .eq('id', stageEntryId);
-    if (error) throw error;
-  }
-
-  const { error: stageError } = await client
-    .from('ct_stages')
-    .update({ status: 'complete' })
-    .eq('id', stage.id);
-  if (stageError) throw stageError;
+// DB. Commits a fully-resolved stage outcome atomically, via the
+// resolve_stage RPC (migration 20260906060000), enqueued and flushed through
+// the outbox exactly like every other write in this app (confirm_heat,
+// start_heat/record_heat_time/auto_max_heat, publish_session) — see that
+// migration's own header comment for why: this used to be a sequence of
+// independent network round trips (an unguarded insert, two loops of
+// per-row updates, a final stage-status update) with no transaction and no
+// idempotency key, so a connection drop mid-sequence could leave a stage
+// half-resolved and a retry wasn't safe. Net effect is unchanged — same
+// advancing-entries insert, same eliminated/below-cutoff final_position
+// writes, same terminal-stage champion branch, same coin-toss note
+// placement — only *how* it's written changed (one atomic, idempotent RPC
+// call instead of a client-side sequence).
+//
+// Returns the flushOutbox() result as-is, same as submitConfirmHeat/
+// submitTimingOperation — the caller (standingsScreen.js's commit()) decides
+// what "still pending"/"stopped" means for its own UI by re-reading the
+// stage's own status afterward (the "ground truth over flush bookkeeping"
+// principle scoringScreen.js/timingScreen.js already established), rather
+// than trusting the flush's own bookkeeping directly: the outbox is a single
+// shared queue, so a flush result can reflect an unrelated, earlier-queued
+// operation rather than this specific resolve_stage attempt.
+//
+// `handlers`, when passed, REPLACES resolveStageHandlers(client) entirely —
+// same optional cross-module-composition override every other outbox-backed
+// write function in this app takes (see scoring.js's submitConfirmHeat,
+// timing.js's submitTimingOperation). Omitting it keeps this function's
+// original, narrower behavior — used by this file's own tests.
+export async function commitStageResolution(plan, orgId, client = getSupabase(), handlers) {
+  const payload = buildResolveStagePayload(plan, orgId);
+  await enqueueOperation('resolve_stage', payload);
+  return flushOutbox(handlers ?? resolveStageHandlers(client));
 }
 
 // DB. The next stage to advance into, or `null` at the terminal stage

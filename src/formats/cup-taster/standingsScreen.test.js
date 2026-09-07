@@ -221,6 +221,11 @@ describe('mountStandingsScreen', () => {
         ct_stages: [
           { data: stage, error: null },
           { data: nextStage, error: null },
+          // commit()'s own ground-truth re-check, publishLiveSession's own
+          // internal fetchStandingsForStage, and the post-commit render's
+          // own loadState() all land here once the queue is down to its
+          // last entry — all correctly see the stage as resolved.
+          { data: { ...stage, status: 'complete' }, error: null },
         ],
         ct_stage_entries: { data: stageEntries, error: null },
         ct_standings: { data: standingsRows, error: null },
@@ -246,19 +251,27 @@ describe('mountStandingsScreen', () => {
       expect(root.textContent).toContain('Advanced to the next stage.');
     });
 
-    const insertCall = client.calls.find(
-      ([action, table]) => action === 'insert' && table === 'ct_stage_entries',
-    );
-    // Only cutoff (2) entries advance — e1 and e2, both clean, neither tied.
-    expect(insertCall[2]).toEqual([
-      { stage_id: 's2', entry_id: 'e1', source: 'advanced', position_note: null },
-      { stage_id: 's2', entry_id: 'e2', source: 'advanced', position_note: null },
-    ]);
+    // Advancement is now committed atomically via the resolve_stage RPC
+    // (migration 20260906060000), enqueued/flushed through the outbox —
+    // never a direct client-side insert into ct_stage_entries.
     await vi.waitFor(() => {
-      expect(rpcCalls).toHaveLength(1);
+      expect(rpcCalls.some(([name]) => name === 'resolve_stage')).toBe(true);
     });
-    expect(rpcCalls[0][0]).toBe('publish_session');
-    expect(rpcCalls[0][1].p_event_id).toBe('ev1');
+    const [, resolveStagePayload] = rpcCalls.find(([name]) => name === 'resolve_stage');
+    expect(resolveStagePayload.p_org_id).toBe('org1');
+    expect(resolveStagePayload.p_stage_id).toBe('s1');
+    expect(resolveStagePayload.p_next_stage_id).toBe('s2');
+    // Only cutoff (2) entries advance — e1 and e2, both clean, neither tied.
+    expect(resolveStagePayload.p_advancing_entries).toEqual([
+      { entry_id: 'e1', source: 'advanced' },
+      { entry_id: 'e2', source: 'advanced' },
+    ]);
+
+    await vi.waitFor(() => {
+      expect(rpcCalls.some(([name]) => name === 'publish_session')).toBe(true);
+    });
+    const [, publishPayload] = rpcCalls.find(([name]) => name === 'publish_session');
+    expect(publishPayload.p_event_id).toBe('ev1');
     document.body.removeChild(root);
   });
 
@@ -282,7 +295,15 @@ describe('mountStandingsScreen', () => {
     const client = fakeClient({
       tables: {
         events: { data: event, error: null },
-        ct_stages: { data: stage, error: null },
+        // Initial mount sees the stage still 'running' (findNextStage is
+        // short-circuited regardless, since cutoff is null); the ledger
+        // ground-truth check, publishLiveSession's own read, and the
+        // post-commit render's own loadState() all then see it 'complete'
+        // once the queue is down to its last entry.
+        ct_stages: [
+          { data: stage, error: null },
+          { data: { ...stage, status: 'complete' }, error: null },
+        ],
         ct_stage_entries: { data: twoEntries, error: null },
         ct_standings: { data: standingsRows, error: null },
         event_entries: { data: roster, error: null },
@@ -307,29 +328,27 @@ describe('mountStandingsScreen', () => {
       expect(root.textContent).toContain('Champion declared.');
     });
 
-    const championUpdate = client.calls.find(
-      ([action, table, payload]) =>
-        action === 'update' && table === 'ct_stage_entries' && payload.final_position === 1,
-    );
-    expect(championUpdate).toBeTruthy();
-    // No next-stage insert ever attempted — there is no next stage.
-    expect(
-      client.calls.some(([action, table]) => action === 'insert' && table === 'ct_stage_entries'),
-    ).toBe(false);
+    // Champion declaration is now committed atomically via the
+    // resolve_stage RPC, not a direct client-side update.
+    await vi.waitFor(() => {
+      expect(rpcCalls.some(([name]) => name === 'resolve_stage')).toBe(true);
+    });
+    const [, resolveStagePayload] = rpcCalls.find(([name]) => name === 'resolve_stage');
+    expect(resolveStagePayload.p_next_stage_id).toBeNull();
+    expect(resolveStagePayload.p_champion_stage_entry_id).toBe('se1');
 
     // The publish is best-effort and asynchronous (enqueue-then-flush,
     // matching timingScreen.js/scoringScreen.js's own identical calls) — it
     // isn't awaited by commit() itself, so it may land just after the
     // success message does.
     await vi.waitFor(() => {
-      expect(rpcCalls).toHaveLength(1);
+      expect(rpcCalls.some(([name]) => name === 'publish_session')).toBe(true);
     });
-    const [rpcName, rpcPayload] = rpcCalls[0];
-    expect(rpcName).toBe('publish_session');
-    expect(rpcPayload.p_org_id).toBe('org1');
-    expect(rpcPayload.p_event_id).toBe('ev1');
-    expect(rpcPayload.p_format).toBe('cup_taster');
-    expect(rpcPayload.p_is_test).toBe(false);
+    const [, publishPayload] = rpcCalls.find(([name]) => name === 'publish_session');
+    expect(publishPayload.p_org_id).toBe('org1');
+    expect(publishPayload.p_event_id).toBe('ev1');
+    expect(publishPayload.p_format).toBe('cup_taster');
+    expect(publishPayload.p_is_test).toBe(false);
     document.body.removeChild(root);
   });
 
@@ -506,12 +525,17 @@ describe('mountStandingsScreen', () => {
       { heat_entry_id: 'the1', set_id: 'set1', correct: true },
       { heat_entry_id: 'the2', set_id: 'set1', correct: false },
     ];
+    const rpcCalls = [];
     const client = fakeClient({
       tables: {
         events: { data: event, error: null },
         ct_stages: [
           { data: stage, error: null },
           { data: { id: 's2', event_id: 'ev1', ordinal: 2, cutoff: null }, error: null },
+          // ground truth check + publishLiveSession's own read + the
+          // post-commit render's own loadState() all land here once the
+          // queue is down to its last entry.
+          { data: { ...stage, status: 'complete' }, error: null },
         ],
         ct_stage_entries: { data: twoEntries, error: null },
         ct_standings: { data: tiedStandings, error: null },
@@ -530,6 +554,10 @@ describe('mountStandingsScreen', () => {
         ],
         ct_results: { data: tiebreakResults, error: null },
       },
+      rpc: (name, payload) => {
+        rpcCalls.push([name, payload]);
+        return Promise.resolve({ data: null, error: null });
+      },
     });
 
     await mountStandingsScreen(root, { eventId: 'ev1', stageId: 's1', client });
@@ -542,18 +570,14 @@ describe('mountStandingsScreen', () => {
       expect(root.textContent).toContain('Advanced to the next stage.');
     });
 
-    const insertCall = client.calls.find(
-      ([action, table]) => action === 'insert' && table === 'ct_stage_entries',
-    );
-    expect(insertCall[2]).toEqual([
-      { stage_id: 's2', entry_id: 'e1', source: 'tiebreak_won', position_note: null },
+    const [, resolveStagePayload] = rpcCalls.find(([name]) => name === 'resolve_stage');
+    expect(resolveStagePayload.p_advancing_entries).toEqual([
+      { entry_id: 'e1', source: 'tiebreak_won' },
     ]);
-
-    const eliminatedUpdate = client.calls.find(
-      ([action, table, payload]) =>
-        action === 'update' && table === 'ct_stage_entries' && payload.final_position === 2,
-    );
-    expect(eliminatedUpdate).toBeTruthy();
+    expect(resolveStagePayload.p_eliminated).toEqual([
+      { stage_entry_id: 'se2', via_coin_toss: false },
+    ]);
+    expect(resolveStagePayload.p_final_position).toBe(2);
     document.body.removeChild(root);
   });
 
@@ -594,14 +618,18 @@ describe('mountStandingsScreen', () => {
     // the one render after a successful commit. `ct_stages`/`ct_heat_entries`
     // both need two distinct values per pass (see their own comments below),
     // so each queue here is sized for exactly those two passes.
+    const rpcCalls = [];
     const client = fakeClient({
       tables: {
         events: { data: event, error: null },
         ct_stages: [
           { data: stage, error: null }, // pass 1: findStageById
           { data: { id: 's2', event_id: 'ev1', ordinal: 2, cutoff: null }, error: null }, // pass 1: findNextStage
-          { data: stage, error: null }, // pass 2 (post-commit render): findStageById
-          { data: { id: 's2', event_id: 'ev1', ordinal: 2, cutoff: null }, error: null }, // pass 2: findNextStage
+          // ground truth check + publishLiveSession's own read + the
+          // post-commit render's own loadState() all land here once the
+          // queue is down to its last entry (correctly 'complete' now,
+          // so pass 2 never re-queries findNextStage at all).
+          { data: { ...stage, status: 'complete' }, error: null },
         ],
         ct_stage_entries: { data: twoEntries, error: null },
         ct_standings: { data: tiedStandings, error: null },
@@ -622,6 +650,10 @@ describe('mountStandingsScreen', () => {
           { data: tiebreakHeatEntries, error: null }, // pass 2: fetchTiebreakHeatOutcome
         ],
         ct_results: { data: tiebreakResults, error: null },
+      },
+      rpc: (name, payload) => {
+        rpcCalls.push([name, payload]);
+        return Promise.resolve({ data: null, error: null });
       },
     });
 
@@ -650,18 +682,13 @@ describe('mountStandingsScreen', () => {
       expect(root.textContent).toContain('Advanced to the next stage.');
     });
 
-    const insertCall = client.calls.find(
-      ([action, table]) => action === 'insert' && table === 'ct_stage_entries',
-    );
-    expect(insertCall[2]).toHaveLength(1);
-    expect(insertCall[2][0].source).toBe('coin_toss');
-    expect(insertCall[2][0].position_note).toBe('coin toss, witnessed by organiser');
+    const [, resolveStagePayload] = rpcCalls.find(([name]) => name === 'resolve_stage');
+    expect(resolveStagePayload.p_advancing_entries).toHaveLength(1);
+    expect(resolveStagePayload.p_advancing_entries[0].source).toBe('coin_toss');
+    expect(resolveStagePayload.p_coin_toss_note).toBe('coin toss, witnessed by organiser');
 
-    const loserUpdate = client.calls.find(
-      ([action, table, payload]) =>
-        action === 'update' && table === 'ct_stage_entries' && payload.final_position === 2,
-    );
-    expect(loserUpdate[2].position_note).toBe('coin toss, witnessed by organiser');
+    expect(resolveStagePayload.p_eliminated).toHaveLength(1);
+    expect(resolveStagePayload.p_eliminated[0].via_coin_toss).toBe(true);
     document.body.removeChild(root);
   });
 
@@ -903,14 +930,17 @@ describe('mountStandingsScreen', () => {
       { heat_entry_id: 'the4', set_id: 'setX', correct: true },
       { heat_entry_id: 'the5', set_id: 'setX', correct: false },
     ];
+    const rpcCalls = [];
     const client = fakeClient({
       tables: {
         events: { data: event, error: null },
         ct_stages: [
           { data: stage, error: null },
           { data: nextStage, error: null },
-          { data: stage, error: null },
-          { data: nextStage, error: null },
+          // ground truth check + publishLiveSession's own read + the
+          // post-commit render's own loadState() all land here once the
+          // queue is down to its last entry.
+          { data: { ...stage, status: 'complete' }, error: null },
         ],
         ct_stage_entries: { data: bigStageEntries, error: null },
         ct_standings: { data: standingsRows, error: null },
@@ -931,6 +961,10 @@ describe('mountStandingsScreen', () => {
           { data: tiebreakHeatEntries, error: null }, // pass 2
         ],
         ct_results: { data: tiebreakResults, error: null },
+      },
+      rpc: (name, payload) => {
+        rpcCalls.push([name, payload]);
+        return Promise.resolve({ data: null, error: null });
       },
     });
 
@@ -955,28 +989,18 @@ describe('mountStandingsScreen', () => {
       expect(root.textContent).toContain('Advanced to the next stage.');
     });
 
-    // e5's row (se5) must have been updated with final_position — the exact
-    // thing the pre-fix code silently never did. Located via the
-    // surrounding eq('id', 'se5') call rather than assuming update/eq
-    // pairing order.
-    const se5EqIndex = client.calls.findIndex(
-      ([action, table, col, val]) =>
-        action === 'eq' && table === 'ct_stage_entries' && col === 'id' && val === 'se5',
-    );
-    expect(se5EqIndex).toBeGreaterThan(-1);
-    const se5UpdateCall = client.calls[se5EqIndex - 1];
-    expect(se5UpdateCall[0]).toBe('update');
-    expect(se5UpdateCall[2]).toEqual({ final_position: 4, position_note: null });
+    // e5's row (se5) must be in p_eliminated with a final_position — the
+    // exact thing the pre-fix code silently never did. e4's row (se4) is
+    // also eliminated, but via the coin toss, so it carries the note.
+    const [, resolveStagePayload] = rpcCalls.find(([name]) => name === 'resolve_stage');
+    expect(resolveStagePayload.p_final_position).toBe(4);
 
-    const se4EqIndex = client.calls.findIndex(
-      ([action, table, col, val]) =>
-        action === 'eq' && table === 'ct_stage_entries' && col === 'id' && val === 'se4',
-    );
-    const se4UpdateCall = client.calls[se4EqIndex - 1];
-    expect(se4UpdateCall[2]).toEqual({
-      final_position: 4,
-      position_note: 'coin toss, witnessed by organiser',
-    });
+    const se5Row = resolveStagePayload.p_eliminated.find((row) => row.stage_entry_id === 'se5');
+    expect(se5Row).toEqual({ stage_entry_id: 'se5', via_coin_toss: false });
+
+    const se4Row = resolveStagePayload.p_eliminated.find((row) => row.stage_entry_id === 'se4');
+    expect(se4Row).toEqual({ stage_entry_id: 'se4', via_coin_toss: true });
+    expect(resolveStagePayload.p_coin_toss_note).toBe('coin toss, witnessed by organiser');
 
     document.body.removeChild(root);
   });

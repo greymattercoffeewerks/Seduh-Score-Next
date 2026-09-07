@@ -27,6 +27,29 @@ function settle(ms = 50) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// `settle(ms)` above waits a FIXED real duration, chosen against an idle CPU,
+// then hopes the click/tap handler's own awaits (enqueue -> flush -> re-
+// render, several of them real setImmediate hops through fake-indexeddb —
+// see settle()'s own module comment) have actually finished by the time the
+// assertion runs. Found flaky in the FULL suite (2026-09-06, three separate
+// runs, three different specific assertions each time — reproduced directly
+// by saturating every CPU core during a full run: the exact same fixed-delay
+// assertions failed, with different actual/expected pairs each run,
+// depending on which real macrotask hop happened to still be pending when
+// the fixed timer fired). Nothing was actually broken in any of those
+// failures — the awaited chain just hadn't had a CPU turn yet by the
+// arbitrary fixed deadline. `flush()` polls for the real outcome instead of
+// sleeping a guessed duration and hoping, so it stays correct regardless of
+// how busy the machine happens to be when the full suite runs alongside
+// everything else — same principle as this file's own existing
+// `vi.waitFor(() => expect(resolveEvent).toBeDefined())` use further down,
+// generalized here for reuse. A generous 3s timeout keeps this from ever
+// masking a genuine regression as a hang; a real pass still resolves in
+// tens of milliseconds on an idle machine.
+async function flush(assertFn, { timeout = 3000 } = {}) {
+  await vi.waitFor(assertFn, { timeout, interval: 20 });
+}
+
 function matchesFilters(row, filters) {
   return filters.every(([type, col, val]) => {
     if (type === 'eq') return row[col] === val;
@@ -450,24 +473,30 @@ describe('mountTimingScreen', () => {
     const { unmount } = await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
 
     root.querySelector('button').click();
-    await settle(); // let the click handler's awaits (enqueue + flush + re-render) settle
-
-    // Focus moved to the new, stable heading — a separate element from the
-    // ticking display itself (the ticking div is never the focus target, so
-    // per-second textContent mutation can never steal focus mid-tick).
-    expect(document.activeElement.id).toBe('countdown-heading');
+    // Poll for the click handler's own awaits (enqueue + flush + re-render)
+    // to actually finish, rather than sleeping a fixed duration and hoping —
+    // see flush()'s own comment above for why a fixed settle() here flaked
+    // under full-suite load.
+    await flush(() => {
+      // Focus moved to the new, stable heading — a separate element from the
+      // ticking display itself (the ticking div is never the focus target,
+      // so per-second textContent mutation can never steal focus mid-tick).
+      expect(document.activeElement.id).toBe('countdown-heading');
+    });
 
     const countdown = root.querySelector('.countdown-display');
     expect(countdown.textContent).toBe('8:00');
 
     // The countdown's own setInterval is a genuinely real one (only `Date`
     // is faked in this suite — see the module comment above) — jumping the
-    // fake clock forward, then waiting for ONE real tick to actually fire,
+    // fake clock forward, then polling for ONE real tick to actually fire,
     // gets the same "3 simulated seconds passed" result the display reads
-    // without needing to wait 3 real seconds for it.
+    // without needing to wait 3 real seconds for it, and without assuming a
+    // fixed real-ms window is always enough for that real tick to land.
     vi.setSystemTime(new Date('2026-08-22T10:00:03.000Z'));
-    await settle(1100);
-    expect(countdown.textContent).toBe('7:57');
+    await flush(() => {
+      expect(countdown.textContent).toBe('7:57');
+    });
 
     // Since this interval is genuinely real (see the module comment above),
     // an un-unmounted heat left mid-'timing' would keep ticking in the real
@@ -491,18 +520,25 @@ describe('mountTimingScreen', () => {
     });
     const { unmount } = await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
     root.querySelector('button').click();
-    await settle();
+    // Poll until the click's own render has actually landed (the countdown
+    // card only exists once status has flipped to 'timing') before querying
+    // `.screen-feedback` below — otherwise a slow-to-settle click leaves this
+    // querySelector reading the STALE, pre-click feedback node instead.
+    await flush(() => {
+      expect(root.querySelector('.countdown-display')).not.toBeNull();
+    });
 
     const feedback = root.querySelector('.screen-feedback');
     expect(feedback.textContent).toBe('');
 
     // 471s in: 9s remaining, just inside the urgent window. Jump the (only
-    // faked) clock, then wait for one real tick to actually observe it —
+    // faked) clock, then poll for one real tick to actually observe it —
     // same technique as the "ticks down" test above.
     vi.setSystemTime(new Date('2026-08-22T10:07:51.000Z'));
-    await settle(1100);
-    expect(feedback.dataset.tone).toBe('urgent');
-    expect(feedback.textContent).toContain('10 seconds');
+    await flush(() => {
+      expect(feedback.dataset.tone).toBe('urgent');
+      expect(feedback.textContent).toContain('10 seconds');
+    });
 
     // Clear it manually to prove the NEXT tick doesn't re-announce (a real
     // render would replace this node; simulating the one-time behavior
@@ -538,9 +574,12 @@ describe('mountTimingScreen', () => {
     vi.setSystemTime(new Date('2026-08-22T10:02:00.000Z'));
 
     root.querySelector('.btn-stop').click();
-    await settle();
-
-    expect(root.querySelector('.btn-stop')).toBeNull();
+    // Poll for the tap's own async chain (enqueue + flush + re-render) to
+    // actually land, rather than sleeping a fixed duration and hoping — see
+    // flush()'s own comment above.
+    await flush(() => {
+      expect(root.querySelector('.btn-stop')).toBeNull();
+    });
     // .toContain on root.textContent alone is a substring match against
     // "Max time (2:00)" too — found in review (test-auditor, via
     // mutation-testing a forced-maxed bug that this weaker assertion let
@@ -597,10 +636,10 @@ describe('mountTimingScreen', () => {
     [...root.querySelectorAll('.manual-time-fields button')]
       .find((b) => b.textContent === 'Save')
       .click();
-    await settle();
-
-    expect(root.querySelector('.btn-stop')).toBeNull();
-    expect(root.querySelector('.manual-time-fields')).toBeNull();
+    await flush(() => {
+      expect(root.querySelector('.btn-stop')).toBeNull();
+      expect(root.querySelector('.manual-time-fields')).toBeNull();
+    });
     // Same tighter assertion as the tap test above, same reason (a bare
     // substring match on root.textContent can't distinguish a real
     // 2:30 from a mislabeled "Max time (2:30)").
@@ -652,7 +691,9 @@ describe('mountTimingScreen', () => {
     [...root.querySelectorAll('.manual-time-fields button')]
       .find((b) => b.textContent === 'Save')
       .click();
-    await settle();
+    await flush(() => {
+      expect(root.querySelector('.manual-time-fields')).toBeNull();
+    });
 
     const resultNode = root.querySelector('.timing-row-result');
     expect(resultNode.dataset.maxed).toBe('true');
@@ -693,7 +734,13 @@ describe('mountTimingScreen', () => {
     const rows = () => [...root.querySelectorAll('.timing-row')];
     const rowFor = (name) => rows().find((row) => row.textContent.includes(name));
     rowFor('Cupper One').querySelector('.btn-stop').click();
-    await settle();
+    // Poll until this tap's own re-render has actually landed before
+    // interacting with Cupper Two's row below — otherwise a slow-to-settle
+    // tap leaves rowFor('Cupper Two') resolving against the STALE,
+    // pre-render row list.
+    await flush(() => {
+      expect(rowFor('Cupper One').querySelector('.btn-stop')).toBeNull();
+    });
 
     // Cupper Two's device failed — hand-entered instead, while Cupper
     // One's own row is already showing its real tapped result.
@@ -705,7 +752,9 @@ describe('mountTimingScreen', () => {
     [...rowFor('Cupper Two').querySelectorAll('button')]
       .find((b) => b.textContent === 'Save')
       .click();
-    await settle();
+    await flush(() => {
+      expect(rowFor('Cupper Two').querySelector('.btn-manual-toggle')).toBeNull();
+    });
 
     const oneEntry = client.db.ct_heat_entries.find((e) => e.entry_id === 'e1');
     const twoEntry = client.db.ct_heat_entries.find((e) => e.entry_id === 'e2');
@@ -809,10 +858,11 @@ describe('mountTimingScreen', () => {
     [...root.querySelectorAll('.manual-time-fields button')]
       .find((b) => b.textContent === 'Save')
       .click();
-    await settle();
+    await flush(() => {
+      expect(root.querySelector('.screen-feedback').dataset.tone).toBe('error');
+    });
 
     const feedback = root.querySelector('.screen-feedback');
-    expect(feedback.dataset.tone).toBe('error');
     expect(feedback.textContent).toContain('moved on');
     expect(client.db.ct_heat_entries[0].elapsed_secs).toBeNull();
 
@@ -850,10 +900,11 @@ describe('mountTimingScreen', () => {
     client.db.ct_heats[0].status = 'scoring';
 
     root.querySelector('.btn-stop').click();
-    await settle();
+    await flush(() => {
+      expect(root.querySelector('.screen-feedback').dataset.tone).toBe('error');
+    });
 
     const feedback = root.querySelector('.screen-feedback');
-    expect(feedback.dataset.tone).toBe('error');
     expect(feedback.textContent).toContain('moved on');
     // The entry itself was never actually written — ground truth (the
     // reload) shows it still null, which is exactly why the conflict
@@ -908,14 +959,16 @@ describe('mountTimingScreen', () => {
     const clearIntervalSpy = vi.spyOn(global, 'clearInterval');
     await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
 
-    // Jump the (only faked) clock past the full 480s duration, then wait
+    // Jump the (only faked) clock past the full 480s duration, then poll
     // for one real tick to actually fire — it detects expiry and calls
     // handleExpiry()'s own async chain (a real outbox write), which now
-    // resolves normally since nothing else in this suite is faked.
+    // resolves normally since nothing else in this suite is faked. Polling
+    // rather than a fixed sleep — see flush()'s own comment above for why a
+    // fixed settle() here flaked under full-suite load.
     vi.setSystemTime(new Date('2026-08-22T10:08:00.000Z'));
-    await settle(1200);
-
-    expect(root.textContent).toContain('Timing complete');
+    await flush(() => {
+      expect(root.textContent).toContain('Timing complete');
+    });
     // Exact text, not just a substring — a maxed row's label must show its
     // own time, not merely mention "Max time" somewhere on the page.
     expect(root.querySelector('.timing-row-result').textContent).toBe('Max time (8:00)');
@@ -987,7 +1040,16 @@ describe('mountTimingScreen', () => {
     expect(visibilityAddsBefore).toBe(1);
 
     root.querySelector('.btn-stop').click();
-    await settle();
+    // Poll for the tap's own re-render (which registers the fresh listener)
+    // to actually land — see flush()'s own comment above; this exact
+    // assertion (visibilityAddsAfter) is one of the ones that flaked under
+    // full-suite load with a fixed settle().
+    await flush(() => {
+      const visibilityAddsAfter = addSpy.mock.calls.filter(
+        ([type]) => type === 'visibilitychange',
+      ).length;
+      expect(visibilityAddsAfter).toBe(2);
+    });
 
     const visibilityAddsAfter = addSpy.mock.calls.filter(
       ([type]) => type === 'visibilitychange',
@@ -1129,9 +1191,13 @@ describe('mountTimingScreen', () => {
 
     // Let both recordTap chains (enqueue + flush, neither gated) fully
     // resolve — both reach their own render()'s loadState() and block on
-    // the gated `events` table.
-    await settle();
-    expect(client.eventsGates).toHaveLength(2);
+    // the gated `events` table. Polling rather than a fixed sleep — this
+    // exact assertion (eventsGates).toHaveLength(2)) is the one reported
+    // flaky under full-suite load (2026-09-06); see flush()'s own comment
+    // above for why.
+    await flush(() => {
+      expect(client.eventsGates).toHaveLength(2);
+    });
 
     const containerBefore = root.querySelector('.screen-container');
 
@@ -1139,15 +1205,18 @@ describe('mountTimingScreen', () => {
     // the final DOM. Both taps already landed by this point, so whichever
     // render wins shows the completed state.
     client.eventsGates[1].resolve();
-    await settle(0);
-    expect(root.textContent).toContain('Timing complete');
+    await flush(() => {
+      expect(root.textContent).toContain('Timing complete');
+    });
     const containerAfterWinner = root.querySelector('.screen-container');
     expect(containerAfterWinner).not.toBe(containerBefore);
 
     // Now resolve the OLDER, superseded render's gate. If the generation
     // guard didn't exist, this would call root.innerHTML = '' and rebuild
     // a second time — replacing containerAfterWinner with a new node even
-    // though nothing about the visible state should change.
+    // though nothing about the visible state should change. There is no
+    // positive DOM change to poll for here (that's the whole point — nothing
+    // should happen), so this stays a plain settle() rather than flush().
     client.eventsGates[0].resolve();
     await settle(0);
     expect(root.querySelector('.screen-container')).toBe(containerAfterWinner);
@@ -1177,8 +1246,11 @@ describe('mountTimingScreen', () => {
     const intervalCallsAfterMount = setIntervalSpy.mock.calls.length;
 
     root.querySelector('.btn-stop').click();
-    await settle();
-    expect(client.eventsGates).toHaveLength(1); // the tap's own render is now blocked
+    // Poll rather than sleep a fixed duration — same reasoning as the race
+    // test above (flush()'s own comment).
+    await flush(() => {
+      expect(client.eventsGates).toHaveLength(1); // the tap's own render is now blocked
+    });
 
     const containerBeforeUnmount = root.querySelector('.screen-container');
     unmount();
