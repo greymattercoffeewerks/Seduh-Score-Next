@@ -157,6 +157,7 @@ h3 {
 }
 .landing-btn-primary:hover {
   background: var(--color-accent-hover);
+  color: var(--color-accent-contrast);
   text-decoration: none;
 }
 .landing-btn-ghost {
@@ -166,6 +167,7 @@ h3 {
 }
 .landing-btn-ghost:hover {
   background: var(--color-surface-sunken);
+  color: var(--color-text);
   text-decoration: none;
 }
 
