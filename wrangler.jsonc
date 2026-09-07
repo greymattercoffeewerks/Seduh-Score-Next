@@ -3,8 +3,22 @@
   // Cloudflare Workers with Static Assets, not Workers Sites (deprecated, unsupported by
   // the Cloudflare Vite plugin) and not Cloudflare Pages (handoff D29 — Cloudflare's own
   // guidance moved Workers-first for new projects in March 2026; Pages remains supported
-  // but no longer gets new platform investment). Configuration only — not deployed, repo
-  // not connected. Deployment is a separate decision (handoff §15.4).
+  // but no longer gets new platform investment).
+  //
+  // CONNECTED AND LIVE since on or before 2026-09-05 (found via `wrangler deployments
+  // list` history while working PR #68, 2026-09-07 — this comment previously said "not
+  // deployed, repo not connected" per the handoff's original D29/§15.4, which is now
+  // stale: someone connected it after the handoff was written and never updated this
+  // file). Live at https://seduh-score-next.greymatter-cw.workers.dev/ (marketing landing
+  // page at root, console app at /app/). Cloudflare's own Workers Builds GitHub
+  // integration deploys automatically on every merge to `main` — see CLAUDE.md's Repo
+  // section for the migration-vs-merge distinction this doesn't cover (a merge deploys
+  // the frontend only, never the cloud database).
+  //
+  // The frozen handoff (Handoffs and Specs/SEDUH-NEXT-HANDOFF.md) still says "do not
+  // deploy, do not connect the repo" — that document is never edited to reflect progress
+  // (§0), so it stays as written; CLAUDE.md and this comment are the current source of
+  // truth for deployment state instead.
   "name": "seduh-score-next",
   "compatibility_date": "2026-08-21",
   "assets": {

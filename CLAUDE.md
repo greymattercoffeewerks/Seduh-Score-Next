@@ -212,6 +212,11 @@ tests/e2e/                      ← Playwright — see CONVENTIONS.md for the th
 
 Local: `C:\Users\mfosa\OneDrive\Documents\seduh-score-next`
 GitHub: `github.com/greymattercoffeewerks/Seduh-Score-Next` (public)
+Live: `https://seduh-score-next.greymatter-cw.workers.dev/` — marketing landing page at
+root, console app at `/app/`. Cloudflare Workers Builds deploys automatically on every
+merge to `main` (confirmed via `wrangler deployments list`, PR #68, 2026-09-07 — see
+`wrangler.jsonc`'s own comment for the fuller account of this being connected earlier
+than documented).
 Supabase project: **linked, 2026-08-30** — cloud project "Seduh Score Next"
 (`wxzwanprluqmgoagbkpv`, org "Grey Matter Coffee Werks", region `ap-southeast-1`), all
 migrations pushed via the Supabase MCP's `apply_migration` (not yet linked locally via
