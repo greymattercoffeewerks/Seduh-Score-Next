@@ -458,12 +458,7 @@
             height: 72px;
           "
         >
-          <input
-            type="checkbox"
-            id="nav-toggle"
-            class="nav-toggle-input"
-            aria-label="Menu"
-          />
+          <input type="checkbox" id="nav-toggle" class="nav-toggle-input" aria-label="Menu" />
           <div style="display: flex; align-items: center; gap: 0.625rem">
             <span class="brand-mark-wrap">
               <svg
@@ -585,7 +580,9 @@
           >
             <div style="background: var(--color-surface); padding: var(--space-4)">
               <div class="mono" style="font-size: 1.75rem; font-weight: 700">1</div>
-              <div style="font-size: 0.75rem; color: var(--color-text-muted)">format live today</div>
+              <div style="font-size: 0.75rem; color: var(--color-text-muted)">
+                format live today
+              </div>
             </div>
             <div style="background: var(--color-surface); padding: var(--space-4)">
               <div class="mono" style="font-size: 1.75rem; font-weight: 700">0</div>
@@ -722,7 +719,13 @@
         <img
           src="hero-cupping-bowls.jpg"
           alt=""
-          style="width: 100%; height: 100%; object-fit: cover; object-position: center 60%; display: block;"
+          style="
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center 60%;
+            display: block;
+          "
         />
       </div>
 
@@ -1064,7 +1067,9 @@
       <!-- PRICING -->
       <div class="wrap" style="padding: var(--space-8) 0">
         <p class="eyebrow">Pricing, stated plainly</p>
-        <h2 style="font-size: clamp(1.5rem, 3vw + 1rem, 2.2rem); margin-top: var(--space-3)">Three tiers. No access gate.</h2>
+        <h2 style="font-size: clamp(1.5rem, 3vw + 1rem, 2.2rem); margin-top: var(--space-3)">
+          Three tiers. No access gate.
+        </h2>
         <p
           style="
             font-size: 1.0625rem;
@@ -1166,10 +1171,14 @@
           style="
             position: absolute;
             inset: 0;
-            background: linear-gradient(180deg, rgba(16, 13, 10, 0.55) 0%, rgba(16, 13, 10, 0.92) 100%);
+            background: linear-gradient(
+              180deg,
+              rgba(16, 13, 10, 0.55) 0%,
+              rgba(16, 13, 10, 0.92) 100%
+            );
           "
         ></div>
-        <div class="wrap" style="text-align: center; position: relative;">
+        <div class="wrap" style="text-align: center; position: relative">
           <h2
             style="
               font-size: clamp(1.6rem, 4vw + 1rem, 2.4rem);
@@ -1233,7 +1242,7 @@
         </div>
       </div>
     </x-dc>
-    <script data-dc-script data-props='{}'>
+    <script data-dc-script data-props="{}">
       class Component extends DCLogic {
         renderVals() {
           if (!this._steamParticles) {
@@ -1245,9 +1254,19 @@
               const delay = (Math.random() * 10).toFixed(2);
               return {
                 style:
-                  'left:' + left + '%; --drift:' + drift + 'px; width:' + size +
-                  'px; height:' + size + 'px; animation-duration:' + duration +
-                  's; animation-delay:' + delay + 's;',
+                  'left:' +
+                  left +
+                  '%; --drift:' +
+                  drift +
+                  'px; width:' +
+                  size +
+                  'px; height:' +
+                  size +
+                  'px; animation-duration:' +
+                  duration +
+                  's; animation-delay:' +
+                  delay +
+                  's;',
               };
             });
           }

@@ -50,9 +50,12 @@ function applyTheme(theme) {
 // no manual override is stored; a visitor's explicit choice is never
 // silently reverted by the clock.
 function scheduleAutoRecheck() {
-  setInterval(() => {
-    if (readStoredTheme() === null) applyTheme(computeAutoTheme());
-  }, 5 * 60 * 1000);
+  setInterval(
+    () => {
+      if (readStoredTheme() === null) applyTheme(computeAutoTheme());
+    },
+    5 * 60 * 1000,
+  );
 }
 
 // Mounts the toggle's behavior onto an existing control (built by
@@ -64,7 +67,10 @@ export function initTheme(toggleButton) {
   applyTheme(initial);
   scheduleAutoRecheck();
 
-  toggleButton.setAttribute('aria-pressed', String(document.documentElement.dataset.theme === 'night'));
+  toggleButton.setAttribute(
+    'aria-pressed',
+    String(document.documentElement.dataset.theme === 'night'),
+  );
   toggleButton.addEventListener('click', () => {
     const next = document.documentElement.dataset.theme === 'night' ? 'day' : 'night';
     applyTheme(next);

@@ -35,7 +35,10 @@
           // exactly the flash this inline script exists to prevent (found
           // in review, code-reviewer).
           var hour = new Date().getHours();
-          document.documentElement.setAttribute('data-theme', hour >= 19 || hour < 7 ? 'night' : 'day');
+          document.documentElement.setAttribute(
+            'data-theme',
+            hour >= 19 || hour < 7 ? 'night' : 'day',
+          );
         }
       })();
     </script>

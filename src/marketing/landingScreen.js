@@ -150,20 +150,16 @@ function buildNav() {
     el('span', { className: 'landing-brand-name', text: 'Seduh Score' }),
   ]);
 
-  const navPanel = el(
-    'div',
-    { className: 'landing-nav-panel', id: 'landing-nav-panel' },
-    [
-      el('a', { className: 'landing-nav-link', text: 'Tour', attrs: { href: '#' } }),
-      el('a', { className: 'landing-nav-link', text: 'Pricing', attrs: { href: '#' } }),
-      el('a', { className: 'landing-nav-link', text: 'Org login', attrs: { href: '#' } }),
-      el('a', {
-        className: 'landing-btn landing-btn-primary',
-        text: 'Start free',
-        attrs: { href: '#' },
-      }),
-    ],
-  );
+  const navPanel = el('div', { className: 'landing-nav-panel', id: 'landing-nav-panel' }, [
+    el('a', { className: 'landing-nav-link', text: 'Tour', attrs: { href: '#' } }),
+    el('a', { className: 'landing-nav-link', text: 'Pricing', attrs: { href: '#' } }),
+    el('a', { className: 'landing-nav-link', text: 'Org login', attrs: { href: '#' } }),
+    el('a', {
+      className: 'landing-btn landing-btn-primary',
+      text: 'Start free',
+      attrs: { href: '#' },
+    }),
+  ]);
 
   const navToggle = el('button', {
     className: 'landing-nav-toggle tap-target',
@@ -246,23 +242,27 @@ function buildMockCard() {
   // tech rather than read as real results (D9's spirit applied here: never
   // let something that isn't real event data read as if it were). The
   // hero copy around it already states what the product does.
-  return el('div', {
-    className: 'landing-card landing-mock-card',
-    attrs: { 'aria-hidden': 'true' },
-  }, [
-    el('div', { className: 'landing-mock-chrome' }, [
-      el('span', { text: 'seduhscore.com / throwdown' }),
-      el('span', { text: 'bracket · semifinal' }),
-    ]),
-    el('div', { className: 'landing-mock-body' }, [
-      el('div', { className: 'landing-mock-caption', text: 'match 2' }),
-      row('Aliya Roslan', 2, true),
-      row('Darwisyah', 1, false),
-      secondMatchRow,
-      row('Nabil Osman', 0, false),
-    ]),
-    el('div', { className: 'landing-mock-footer', text: 'representative view · 4:3' }),
-  ]);
+  return el(
+    'div',
+    {
+      className: 'landing-card landing-mock-card',
+      attrs: { 'aria-hidden': 'true' },
+    },
+    [
+      el('div', { className: 'landing-mock-chrome' }, [
+        el('span', { text: 'seduhscore.com / throwdown' }),
+        el('span', { text: 'bracket · semifinal' }),
+      ]),
+      el('div', { className: 'landing-mock-body' }, [
+        el('div', { className: 'landing-mock-caption', text: 'match 2' }),
+        row('Aliya Roslan', 2, true),
+        row('Darwisyah', 1, false),
+        secondMatchRow,
+        row('Nabil Osman', 0, false),
+      ]),
+      el('div', { className: 'landing-mock-footer', text: 'representative view · 4:3' }),
+    ],
+  );
 }
 
 function buildHero() {
@@ -389,13 +389,23 @@ function buildFormatCard({ iconFn, title, body, status }) {
     );
     const card = el(
       'a',
-      { className: 'landing-card landing-format-card landing-format-live', attrs: { href: status.href } },
-      [head, el('h3', { text: title }), el('p', { text: body }), el('span', { className: 'landing-format-open', text: status.cta })],
+      {
+        className: 'landing-card landing-format-card landing-format-live',
+        attrs: { href: status.href },
+      },
+      [
+        head,
+        el('h3', { text: title }),
+        el('p', { text: body }),
+        el('span', { className: 'landing-format-open', text: status.cta }),
+      ],
     );
     return card;
   }
 
-  head.appendChild(el('span', { className: 'landing-badge landing-badge-soon', text: 'Coming soon' }));
+  head.appendChild(
+    el('span', { className: 'landing-badge landing-badge-soon', text: 'Coming soon' }),
+  );
   return el('div', { className: 'landing-card landing-format-card landing-format-disabled' }, [
     head,
     el('h3', { text: title }),
@@ -427,7 +437,12 @@ function buildFormats() {
       body:
         'Blind triangulation heats — find the odd cup. Stage advancement, tie detection, ' +
         'live right/wrong reveals.',
-      status: { kind: 'live', label: 'Basic free', href: '/app/#/events', cta: 'Open Cup Taster →' },
+      status: {
+        kind: 'live',
+        label: 'Basic free',
+        href: '/app/#/events',
+        cta: 'Open Cup Taster →',
+      },
     }),
     buildFormatCard({
       iconFn: ICONS.users,
@@ -470,7 +485,10 @@ function buildProof() {
       }),
     ]),
     el('div', { className: 'landing-proof-row' }, [
-      el('span', { className: 'landing-proof-next', text: '[ next event — date to be announced ]' }),
+      el('span', {
+        className: 'landing-proof-next',
+        text: '[ next event — date to be announced ]',
+      }),
     ]),
   ]);
 
@@ -499,7 +517,9 @@ function buildPricingCard({ tier, tierClass, price, period, body, borderStrong }
     ? 'landing-card landing-pricing-card landing-pricing-card-featured'
     : 'landing-card landing-pricing-card';
   const card = el('div', { className: cardClass });
-  const badgeClass = tierClass ? `landing-badge ${tierClass}` : 'landing-badge landing-badge-neutral';
+  const badgeClass = tierClass
+    ? `landing-badge ${tierClass}`
+    : 'landing-badge landing-badge-neutral';
   card.appendChild(el('span', { className: badgeClass, text: tier }));
   card.appendChild(el('div', { className: 'landing-mono landing-price', text: price }));
   if (period) card.appendChild(el('div', { className: 'landing-price-period', text: period }));

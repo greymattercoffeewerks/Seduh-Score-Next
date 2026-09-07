@@ -3,7 +3,7 @@
 Root non-negotiables apply here too, but this directory sits outside the module
 boundary the rest of them are written around: the handoff's own scope (§1 Out) says
 "No landing page. No console." — this is genuinely new territory, added 2026-09-07,
-not something the frozen spec anticipated. Treat the boundary rule's *spirit* (don't
+not something the frozen spec anticipated. Treat the boundary rule's _spirit_ (don't
 leak assumptions between things that shouldn't share them) as binding; the letter of
 "core vs. formats" doesn't map cleanly onto a third, non-format surface.
 
@@ -45,15 +45,15 @@ the console, and nothing in the console imports from here.
 
 That file's `--color-*` semantic tokens are contrast-checked against the console's own
 three surfaces (organiser/projector/phone) and documented that way in `DESIGN.md`. This
-page reuses the same semantic *names* (`--color-canvas`, `--color-text`, etc.) because
+page reuses the same semantic _names_ (`--color-canvas`, `--color-text`, etc.) because
 they're generic slots any surface can fill, not because it shares `colors.css`'s
 values — the two files are never loaded on the same page, so there's no runtime
 collision, only a naming echo that keeps the pattern recognizable. Mixing a marketing
 day/night concept into `colors.css` itself would be exactly the "token layer gains
 format-specific vocabulary" failure `CONVENTIONS.md` warns against, one layer up: a
-different *product surface* instead of a different format.
+different _product surface_ instead of a different format.
 
-What this page *does* reuse from `src/ui/tokens/`, because it's genuinely
+What this page _does_ reuse from `src/ui/tokens/`, because it's genuinely
 surface-agnostic: `fonts.css` (the real self-hosted Cabinet Grotesk/Switzer/JetBrains
 Mono — no Google Fonts, no CDN, same reasoning as the console), `typography.css` (type
 scale, weights, tracking), `spacing.css` (spacing/radius/tap-target-min scale), and the
