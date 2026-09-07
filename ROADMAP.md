@@ -24,15 +24,15 @@ about original design intent.
 
 ## Current state
 
-| Phase                          | Status         | What it covers                                                                                |
-| ------------------------------ | -------------- | --------------------------------------------------------------------------------------------- |
-| Phase 0 — Foundation           | ✅ Done        | Scaffold, Claude Code tooling, Supabase local stack + CI, doc seed                            |
-| Phase 1 — Schema and security  | ✅ Done        | Core tables, Cup Taster tables, RLS, `WITH CHECK` gate                                        |
-| Phase 2 — Core libraries       | ✅ Done        | `partition`, `ranking`, `advancement`, `countdown`, `timeclamp`, `entitlements`               |
-| Phase 3 — Registry and offline | ✅ Done        | `registry`, IndexedDB mirror + outbox, sync state panel                                       |
-| Phase 4 — Cup Taster           | ✅ Done        | Setup, heat generation, timing (app + manual), scoring, standings/advancement, report, export |
-| Phase 5 — Live surfaces        | ✅ Done        | `publish`, `viewer-shell`, projector, phone summary, automatic publishing on heat actions     |
-| Phase 6 — Hardening            | 🟡 In progress | Accessibility pass, offline soak, dry run — **Guess the Bean (descoped, see below)**          |
+| Phase                          | Status  | What it covers                                                                                            |
+| ------------------------------ | ------- | --------------------------------------------------------------------------------------------------------- |
+| Phase 0 — Foundation           | ✅ Done | Scaffold, Claude Code tooling, Supabase local stack + CI, doc seed                                        |
+| Phase 1 — Schema and security  | ✅ Done | Core tables, Cup Taster tables, RLS, `WITH CHECK` gate                                                    |
+| Phase 2 — Core libraries       | ✅ Done | `partition`, `ranking`, `advancement`, `countdown`, `timeclamp`, `entitlements`                           |
+| Phase 3 — Registry and offline | ✅ Done | `registry`, IndexedDB mirror + outbox, sync state panel                                                   |
+| Phase 4 — Cup Taster           | ✅ Done | Setup, heat generation, timing (app + manual), scoring, standings/advancement, report, export             |
+| Phase 5 — Live surfaces        | ✅ Done | `publish`, `viewer-shell`, projector, phone summary, automatic publishing on heat actions                 |
+| Phase 6 — Hardening            | ✅ Done | Accessibility pass, offline soak, dry run (local + production) — **Guess the Bean (descoped, see below)** |
 
 **Deadline: 4 October 2026, Cup Tasters event.**
 
@@ -730,10 +730,26 @@ Report screen + CSV export, and `is_test` event deletion.
      fix. Both bugs are now closed; this migration + the `standings.js` fix are ready to
      ship together.
 
-- Production leg of the dry run (per the user's own chosen scope, "local first, then
-  production" — including pushing this migration to the cloud project via
-  `apply_migration`, per this project's own established discipline that merging a PR
-  never does this automatically): not yet started.
+- **Production leg of the dry run is CLOSED (2026-09-07, scoped down by user decision to
+  a representative smoke test rather than a full repeat).** Signed into the real deployed
+  app (`seduh-score-next.greymatter-cw.workers.dev`) via the Claude in Chrome extension
+  (password entry stays off-limits regardless of authorization — the user logged in
+  themselves), created a separate `is_test: true` event ("Prod Smoke Test", never
+  touching the user's own real "Grey Matter Cup Taster" rehearsal event), and ran a
+  2-stage plan (Preliminary cutoff-1 → Finals) through a tie + tiebreak + resolution
+  against the real cloud Postgres instance. Confirmed against production specifically:
+  auth/RLS work end-to-end for a real organiser session, and the `ct_standings` fan-out
+  fix (above) displays correct, un-fanned-out elapsed times live in production, not just
+  locally. One real side effect caught and fixed: advancing a test event's stage
+  auto-publishes it as the org's `live_sessions` row (by design — see T5.gap.automatic-
+  publish above), which briefly replaced "Grey Matter Cup Taster" as the org's active
+  session; restored via a direct, user-confirmed `UPDATE` once the smoke test's own
+  signal was captured. Test event deleted afterward via the app's own Delete-event
+  feature. `resolve_stage` itself was NOT re-exercised against production data this pass
+  (the smoke test's own stage plan only ever advances one cupper past Preliminary, so
+  Finals never ran) — its correctness rests on the pgTAP suite + three reviewer sign-offs
+  above, not on a production-specific run; revisit if a genuine production-data
+  verification of that RPC specifically is wanted before the Oct 4 event.
 
 ---
 
