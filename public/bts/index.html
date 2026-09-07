@@ -22,9 +22,10 @@
       appShell.js's footer links its rendered version number here.
 
       Facts are this repo's own (CHANGELOG.md, ROADMAP.md, CONVENTIONS.md's
-      "Versioning" section, src/core/version.js) — only one cycle exists so far
-      (Kiulap, v1.0.1, in progress), so the spiral below shows one lit node and
-      a dashed, unnamed tail, not the legacy site's seven.
+      "Versioning" section, src/core/version.js) — updated 2026-09-07 for the
+      Kiulap -> Berakas v2.0.0 cycle bump. Two cycles shipped so far (Kiulap,
+      done; Berakas, current), so the spiral below draws two nodes and a
+      dashed, unnamed tail, not the legacy site's seven.
 
       Motion is a deliberate, restrained homage to the legacy page's own spiral
       draw-in / scroll-reveal / pour-fill timeline — reimplemented here rather
@@ -675,8 +676,8 @@
           spiralling out toward the frontier, v1.0 through v5.x (<a
             href="https://seduhscore.com/bts/"
             >seduhscore.com/bts/</a
-          >). This codebase doesn't continue that run, but it retraces the same physical
-          journey, same order, same places — deliberately.
+          >). This codebase doesn't continue that run, but it retraces the same physical journey,
+          same order, same places — deliberately.
         </p>
         <div class="spiral-layout">
           <div class="spiral-stage" id="spiralStage">
@@ -705,13 +706,14 @@
               </li>
               <li>
                 <span class="sk-dot next"></span>
-                <span>The next cycle — Gadong, most likely, when Throwdown ships. Named for
-                real only once it actually starts.</span>
+                <span
+                  >The next cycle — Gadong, most likely, when Throwdown ships. Named for real only
+                  once it actually starts.</span
+                >
               </li>
             </ul>
             <div class="sk-dir">
-              Same direction as the original: capital core → frontier, one shipped cycle at a
-              time.
+              Same direction as the original: capital core → frontier, one shipped cycle at a time.
             </div>
             <div class="sk-nums">
               <span><b>2</b> cycles</span>
@@ -726,9 +728,8 @@
         <div class="sec-eyebrow rv">The pour, phase by phase</div>
         <h2 class="rv rv-d1">What shipped — and what it felt like.</h2>
         <p class="sec-sub rv rv-d1">
-          <strong>Kiulap</strong> — seven phases per the project's frozen handoff spec, all
-          shipped. Then <strong>Berakas</strong> — a front door nobody had planned for, jumping
-          the queue.
+          <strong>Kiulap</strong> — seven phases per the project's frozen handoff spec, all shipped.
+          Then <strong>Berakas</strong> — a front door nobody had planned for, jumping the queue.
         </p>
 
         <div class="pour" id="phasePour">
@@ -876,15 +877,15 @@
               <span class="k">Shipped</span
               ><span class="v"
                 >Accessibility pass, offline soak testing, and a dry run against the real roster —
-                local and production both green. Guess the Bean stayed the working v4.x
-                version, deliberately not rebuilt.</span
+                local and production both green. Guess the Bean stayed the working v4.x version,
+                deliberately not rebuilt.</span
               >
             </div>
             <div class="phase-line felt">
               <span class="k">Felt like</span
               ><span class="v"
-                >the unglamorous work that decides whether October 4th actually goes well —
-                closed out before the event ever started.</span
+                >the unglamorous work that decides whether October 4th actually goes well — closed
+                out before the event ever started.</span
               >
             </div>
           </div>
@@ -899,16 +900,16 @@
             <div class="phase-line shipped">
               <span class="k">Shipped</span
               ><span class="v"
-                >The public marketing landing page — out of the original handoff's scope
-                entirely, shipped because it was needed. The console moved to <code>/app/</code>
-                to make room for it; this page you're reading now lives right alongside it.</span
+                >The public marketing landing page — out of the original handoff's scope entirely,
+                shipped because it was needed. The console moved to <code>/app/</code> to make room
+                for it; this page you're reading now lives right alongside it.</span
               >
             </div>
             <div class="phase-line felt">
               <span class="k">Felt like</span
               ><span class="v"
-                >the moment this stopped being a private rebuild and got an actual public front
-                door — the same thing legacy's own Berakas cycle was, for the same reason.</span
+                >the moment this stopped being a private rebuild and got an actual public front door
+                — the same thing legacy's own Berakas cycle was, for the same reason.</span
               >
             </div>
           </div>
@@ -1053,7 +1054,11 @@
         // reserved for whichever node is the CURRENT cycle, same "now" vs
         // "start" distinction the spiral key list below draws.
         html +=
-          '<circle cx="' + kiulap.x + '" cy="' + kiulap.y + '" r="6" fill="var(--color-text-muted)"/>';
+          '<circle cx="' +
+          kiulap.x +
+          '" cy="' +
+          kiulap.y +
+          '" r="6" fill="var(--color-text-muted)"/>';
         html += label(kiulap, 'KIULAP', 'shipped &middot; v1.x', 0.5, 0.6);
 
         // Berakas — current cycle, the live pulse.
