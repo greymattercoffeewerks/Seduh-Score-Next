@@ -337,6 +337,45 @@ describe('flushOutbox', () => {
     expect(handler).toHaveBeenCalledTimes(1);
     expect(first).toBe(second);
   });
+
+  it("a late-arriving caller's handlers are merged into the in-flight run, not discarded", async () => {
+    // The scenario the module comment above `inFlightFlush` describes: two
+    // operation types are already queued (confirm_heat, record_heat_time)
+    // before either caller starts. The first caller only knows
+    // confirm_heat, the second only knows record_heat_time. Without the
+    // merge fix, the second caller's own handlers argument would be
+    // discarded entirely in favor of the first's, so record_heat_time
+    // would never resolve a handler for the rest of THIS in-flight pass
+    // and would come back recorded as a failed attempt instead of
+    // processed.
+    await enqueueOperation('confirm_heat', { heatId: 'h1' });
+    await enqueueOperation('record_heat_time', { heatId: 'h1', station: 'A' });
+
+    let releaseConfirmHeat;
+    const confirmHeatHandler = vi.fn(
+      () => new Promise((resolve) => (releaseConfirmHeat = resolve)),
+    );
+    const recordHeatTimeHandler = vi.fn().mockResolvedValue(undefined);
+
+    // Starts the flush; it blocks on confirmHeatHandler's own unresolved
+    // promise once outboxListAll() resolves and the loop reaches it, so
+    // inFlightFlush is set but the pass hasn't reached record_heat_time
+    // yet. Waiting for the handler to actually have been invoked (rather
+    // than assuming synchronous timing) avoids a race against
+    // outboxListAll()'s own async resolution.
+    const flushPromise = flushOutbox({ confirm_heat: confirmHeatHandler });
+    await vi.waitFor(() => expect(confirmHeatHandler).toHaveBeenCalledTimes(1));
+
+    const secondCallerPromise = flushOutbox({ record_heat_time: recordHeatTimeHandler });
+
+    releaseConfirmHeat();
+    const [result] = await Promise.all([flushPromise, secondCallerPromise]);
+
+    expect(confirmHeatHandler).toHaveBeenCalledTimes(1);
+    expect(recordHeatTimeHandler).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ processed: 2, stopped: false, permanentFailure: false });
+    expect(await listPendingOperations()).toEqual([]);
+  });
 });
 
 // Phase 6 offline soak — every scenario above proves the mechanism with 2-3
