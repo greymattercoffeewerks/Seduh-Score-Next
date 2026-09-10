@@ -15,6 +15,12 @@
             "command": "node .claude/hooks/format-docs-on-write.cjs",
             "timeout": 30,
             "statusMessage": "Formatting doc..."
+          },
+          {
+            "type": "command",
+            "command": "node .claude/hooks/state-guard-on-write.cjs",
+            "timeout": 30,
+            "statusMessage": "Checking state.json reset contract..."
           }
         ]
       }

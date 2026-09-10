@@ -59,6 +59,34 @@ For each task completed:
    the orchestrating session to commit alongside the CHANGELOG.md entry. Skip this step
    only if the task made no shippable change at all (e.g. a pure investigation with no
    code/doc edits) — a closed task with nothing to show shouldn't still move the counter.
+9. **Reset `state.json`'s reset contract (2026-09-08).** Only `kb-sync` sets
+   `task.status` to `"done"` and resets the file for the next task — no other agent or
+   manual edit does this (same single-writer discipline as `elapsed_secs`/
+   `clampElapsed()`: one recognized path, everything else is a violation regardless of
+   intent). Before wiping the file, verify — don't assume:
+   - **Zero blocking findings remain.** Read `state.json`'s `review.open_findings` and
+     confirm no entry has `severity == "blocking"`. `state-guard-on-write.cjs`
+     (`.claude/hooks/`) mechanically rejects the write if you get this wrong, but don't
+     rely on the hook alone — check it yourself first, the way you'd check any other
+     Definition-of-Done item.
+   - **Every `deferred` finding actually landed in `ROADMAP.md`'s "Known open items"**,
+     not just noted as "will copy it." Grep `ROADMAP.md` for each deferred finding's
+     summary text (or its clear paraphrase) before considering this satisfied — the
+     copy is the completion condition, the same way step 2's CHANGELOG entry is, not a
+     note-to-self to do it later. If step 5 above already updated ROADMAP.md this run,
+     this is usually already true; confirm it, don't presume it.
+   - If either check fails, **do not reset the file.** Leave `task.status` as `"fixing"`
+     and report which condition failed, the same way a review round reports an open
+     finding rather than assuming it's handled — this mirrors `on_failure` in every
+     other verifier's contract in this project.
+
+   Once both hold, reset `state.json` to the next task's skeleton: clear
+   `scope_decisions`/`files_touched`/`review`/`known_gaps_this_task`/`blockers`/
+   `do_not_repeat`, set `task` to `{id: null, title: null, status: "awaiting_next_task"}`,
+   update `phase` if it changed, and record `_task_closed` with a one-line label and
+   today's date (matches the file's existing convention — see its current contents for
+   the exact shape). `state.json` is gitignored (deliberately ephemeral scratch state,
+   see `.gitignore`'s own comment above the entry) — resetting it needs no commit.
 
 Keep entries terse and factual. This is a record for future reference, not a narrative —
 optimise for someone skimming months of entries to find why a decision was made.
