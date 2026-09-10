@@ -103,19 +103,40 @@ export async function listPendingOperations() {
 // after each pass so anything enqueued mid-flush gets picked up in that same
 // call rather than requiring a separate flushOutbox() invocation.
 //
-// Caveat found in review (offline-sync-auditor, 2026-08-29, while closing
-// the cross-module handler-map gap — see formats/cup-taster/outboxHandlers.js):
-// a caller that arrives while a flush is already in-flight gets back that
-// SAME promise, built from whichever caller's `handlers` argument won the
-// race — this caller's own `handlers` is silently discarded, not merged.
-// Harmless today because every real production call site passes the exact
-// same cupTasterOutboxHandlers(client) map (functionally interchangeable
-// regardless of whose object reference wins), but a FUTURE call site that
-// races one of today's with a narrower map would have its intent silently
-// dropped, potentially reintroducing exactly the stall that gap-closing
-// task fixed. Not fixed here — no current code path triggers it — but
-// worth this note so a future addition doesn't reintroduce it unknowingly.
+// A late-arriving caller's own `handlers` map is MERGED into the run
+// already in flight (`activeHandlers`, mutated in place — the closure
+// `runFlush` holds resolves each operation's handler fresh on every loop
+// iteration, so a merge made mid-pass is visible to the very next
+// iteration, not just the next `flushOutbox()` call). Narrows the gap
+// found in review (offline-sync-auditor, 2026-08-29, while closing the
+// cross-module handler-map gap — see
+// formats/cup-taster/outboxHandlers.js): previously the second caller's
+// entire map was silently discarded in favor of whichever caller's
+// argument won the race, unconditionally aborting the whole pass the
+// instant that caller's own operation type came up. Harmless in practice
+// today, since every real call site passes the exact same
+// cupTasterOutboxHandlers(client) map, but a future call site racing one
+// of today's with a narrower map would have had its own operation types
+// go unresolved for the whole in-flight pass.
+//
+// Residual window (offline-sync-auditor, 2026-09-11): a merge landing
+// AFTER `runFlush`'s loop has already reached and failed on that specific
+// operation within the CURRENT pass's already-fetched batch still aborts
+// that pass the same way as before this fix — the merge only helps once
+// it lands before the loop gets there. Not data loss (`main.js`'s
+// reconnect-flush retries later and this fix still applies then, since
+// `activeHandlers` isn't reset until the whole pass settles), just a
+// possible one-cycle delay for whatever was queued behind the aborted
+// operation. Closing this fully would mean re-fetching the queue the
+// instant a merge lands rather than only between passes — not done here;
+// the eventual-recovery path above already bounds the damage to "delayed
+// a cycle," not "lost."
+//
+// Last write wins per-type-key on a genuine key collision (two different
+// handlers registered for the same operation `type`) — an unlikely case
+// today, since every type name is owned by exactly one format module.
 let inFlightFlush = null;
+let activeHandlers = null;
 
 // Replays every queued operation, strictly in FIFO (createdAt) order,
 // stopping at the first operation that fails for a genuine reason — a
@@ -141,9 +162,14 @@ let inFlightFlush = null;
 //
 // `handlers` maps an operation `type` to `(payload) => Promise<void>`.
 export function flushOutbox(handlers) {
-  if (inFlightFlush) return inFlightFlush;
-  inFlightFlush = runFlush(handlers).finally(() => {
+  if (inFlightFlush) {
+    Object.assign(activeHandlers, handlers);
+    return inFlightFlush;
+  }
+  activeHandlers = { ...handlers };
+  inFlightFlush = runFlush(activeHandlers).finally(() => {
     inFlightFlush = null;
+    activeHandlers = null;
   });
   return inFlightFlush;
 }
