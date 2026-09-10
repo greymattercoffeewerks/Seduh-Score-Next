@@ -466,6 +466,30 @@ describe('mountAppShell', () => {
       expect(location.hash).toBe('#/events');
     });
 
+    it("clicking Sign out while ALREADY on #/events still forces the router to re-resolve — user-reported, 2026-09-09: setting location.hash to its own current value is a browser no-op (no hashchange event fires per the WHATWG URL spec unless the fragment actually differs), which previously left the stale, still-rendered organiser screen on screen indefinitely until a manual refresh, since router.js only re-resolves via a real hashchange listener. Spies on window.dispatchEvent directly rather than relying on a real hashchange round-trip — jsdom (confirmed empirically, 2026-09-09) does not reliably reproduce real browsers' same-value suppression once an async gap (the awaited signOut() call) sits between the two assignments, so asserting on the native event's own side effect would be testing jsdom's quirk, not this fix's own code path.", async () => {
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      const { auth, trigger } = fakeAuthWithTrigger();
+      mountAppShell(root, { client: { auth, from: () => ({}) } });
+      trigger({ user: { email: 'organiser@local.test' } });
+      location.hash = '#/events';
+
+      const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+
+      const signOutButton = [...root.querySelectorAll('button')].find(
+        (b) => b.textContent === 'Sign out',
+      );
+      signOutButton.dispatchEvent(new Event('click', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(location.hash).toBe('#/events');
+      const dispatchedHashChange = dispatchSpy.mock.calls.some(
+        ([event]) => event.type === 'hashchange',
+      );
+      expect(dispatchedHashChange).toBe(true);
+      dispatchSpy.mockRestore();
+    });
+
     it('clicking Sign out from an open mobile menu closes the menu — found in review, 2026-09-06: unlike a nav link, Sign out never closed the panel on its own, leaving an expanded (now-empty) menu sitting over the login screen that mounts underneath it', async () => {
       const root = document.createElement('div');
       document.body.appendChild(root);
