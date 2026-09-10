@@ -40,6 +40,18 @@ Read `state.json` first, before Handoff/CONVENTIONS/CHANGELOG. Rewrite it after
 every step — current task state only, never a narrative of what happened.
 When kb-sync closes a task, state.json resets to the next task's skeleton.
 
+**Read-time backstop (2026-09-08).** `state.json`'s reset contract — only `kb-sync`
+sets `task.status` to `"done"`, and only once zero `review.open_findings` entries have
+`severity == "blocking"` — is mechanically enforced on write by
+`.claude/hooks/state-guard-on-write.cjs`, but that hook only covers writes made through
+the Write/Edit tools; a Bash heredoc write bypasses it. So whoever reads `state.json`
+first each session is the backstop: if `task.status` is `"done"` but
+`review.open_findings` still lists a `severity == "blocking"` entry, treat the file as
+corrupted, not as a legitimately closed task — don't act on its `next_action` or
+`safe_to_branch` fields as if it parsed cleanly. Hand it to `kb-sync` to resolve
+(re-open the task, or confirm the finding was actually fixed and the field is just
+stale) before trusting anything else in the file.
+
 ## Delegation strategy
 
 The 9 subagents in `.claude/agents/` per handoff §13:
