@@ -214,7 +214,7 @@ describe('buildLiveSessionPayload', () => {
     ]);
   });
 
-  it('suppresses tieStatus entirely once the stage is complete — matching standingsScreen.js\'s own commit-clears-the-tie-label convention, since ct_standings never reflects a tiebreak/coin-toss result', async () => {
+  it("suppresses tieStatus entirely once the stage is complete — matching standingsScreen.js's own commit-clears-the-tie-label convention, since ct_standings never reflects a tiebreak/coin-toss result", async () => {
     const tieStage = { ...stage, cutoff: 1, status: 'complete' };
     const tieStageEntries = [
       { id: 'se-a', stage_id: 's1', entry_id: 'a' },
