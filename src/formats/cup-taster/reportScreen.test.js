@@ -8,6 +8,9 @@ import {
   renderStageStandingsTable,
   sanitizeFilename,
   mountReportScreen,
+  computeAccuracyPct,
+  computeAvgSecsPerSet,
+  accuracyTier,
 } from './reportScreen.js';
 
 function fakeClient({ tables = {} } = {}) {
@@ -126,19 +129,43 @@ describe('sanitizeFilename', () => {
 });
 
 describe('renderStageStandingsTable', () => {
+  const stage = { set_count: 2 };
   const ranked = [
     {
-      item: { displayName: 'Alex', numCorrect: 3, total_elapsed_secs: 90, finalPosition: null },
+      item: {
+        entry_id: 'e1',
+        displayName: 'Alex',
+        numCorrect: 2,
+        sets_scored: 2,
+        total_elapsed_secs: 90,
+        finalPosition: null,
+      },
       position: 1,
     },
     {
-      item: { displayName: 'Sam', numCorrect: 0, total_elapsed_secs: null, finalPosition: null },
+      item: {
+        entry_id: 'e2',
+        displayName: 'Sam',
+        numCorrect: 0,
+        sets_scored: 0,
+        total_elapsed_secs: null,
+        finalPosition: null,
+      },
       position: 2,
     },
   ];
+  const setGrid = new Map([
+    [
+      'e1',
+      [
+        { setId: 'set1', position: 1, correct: true },
+        { setId: 'set2', position: 2, correct: false },
+      ],
+    ],
+  ]);
 
   it('shows the visible time as M:SS, not raw seconds', () => {
-    const table = renderStageStandingsTable(ranked);
+    const table = renderStageStandingsTable(ranked, stage, setGrid);
     const timeCell = table.querySelectorAll('tbody tr')[0].querySelector('[data-label="Time"]');
     // The visible text is the cell's own first child node — its nested
     // .sr-only expansion (checked separately below) also contributes to a
@@ -148,16 +175,128 @@ describe('renderStageStandingsTable', () => {
   });
 
   it('pairs the visible M:SS time with an unambiguous screen-reader expansion', () => {
-    const table = renderStageStandingsTable(ranked);
+    const table = renderStageStandingsTable(ranked, stage, setGrid);
     const timeCell = table.querySelectorAll('tbody tr')[0].querySelector('[data-label="Time"]');
     expect(timeCell.querySelector('.sr-only').textContent).toBe('1 minute 30 seconds');
   });
 
   it('shows a plain em dash with no screen-reader expansion for a cupper with no recorded time', () => {
-    const table = renderStageStandingsTable(ranked);
+    const table = renderStageStandingsTable(ranked, stage, setGrid);
     const timeCell = table.querySelectorAll('tbody tr')[1].querySelector('[data-label="Time"]');
     expect(timeCell.textContent).toBe('—');
     expect(timeCell.querySelector('.sr-only')).toBeNull();
+  });
+
+  it('shows accuracy as a whole percentage, and a plain em dash for a cupper with zero scored sets', () => {
+    const table = renderStageStandingsTable(ranked, stage, setGrid);
+    const rows = table.querySelectorAll('tbody tr');
+    expect(rows[0].querySelector('[data-label="Accuracy"]').textContent).toBe('100%');
+    expect(rows[1].querySelector('[data-label="Accuracy"]').textContent).toBe('—');
+  });
+
+  it('shows avg time per set as M:SS, rounded to the nearest whole second', () => {
+    const table = renderStageStandingsTable(ranked, stage, setGrid);
+    const avgCell = table
+      .querySelectorAll('tbody tr')[0]
+      .querySelector('[data-label="Avg time/set"]');
+    // 90s / 2 sets = 45s exactly here; the rounding itself is proven in
+    // computeAvgSecsPerSet's own unit tests below.
+    expect(avgCell.childNodes[0].textContent).toBe('0:45');
+  });
+
+  it("renders one Set N column per the stage's own set_count, Y/N/— from the set grid, keyed by the row's own entry_id", () => {
+    const table = renderStageStandingsTable(ranked, stage, setGrid);
+    const rows = table.querySelectorAll('tbody tr');
+    expect(rows[0].querySelector('[data-label="Set 1"]').textContent).toBe('Y');
+    expect(rows[0].querySelector('[data-label="Set 2"]').textContent).toBe('N');
+    // Sam (e2) has no entry in setGrid at all — every set cell falls back
+    // to the "not scored" em dash, not a crash or an empty cell.
+    expect(rows[1].querySelector('[data-label="Set 1"]').textContent).toBe('—');
+    expect(rows[1].querySelector('[data-label="Set 2"]').textContent).toBe('—');
+  });
+
+  it('looks up a set cell by its own .position, not by array index — found in review (test-auditor): every other fixture here happens to keep the grid array dense and position-ordered, which an accidental grid[position - 1] implementation would pass identically', () => {
+    // e1's own grid entry is deliberately SPARSE (only set 2 present, not
+    // set 1) and would misalign under an index-based lookup (grid[0] would
+    // be read for "Set 1", landing on this one set2 entry instead of the
+    // correct "no result for set 1" em dash).
+    const sparseGrid = new Map([['e1', [{ setId: 'set2', position: 2, correct: true }]]]);
+    const table = renderStageStandingsTable(ranked, stage, sparseGrid);
+    const row = table.querySelectorAll('tbody tr')[0];
+    expect(row.querySelector('[data-label="Set 1"]').textContent).toBe('—');
+    expect(row.querySelector('[data-label="Set 2"]').textContent).toBe('Y');
+  });
+
+  it('marks a 100%-accuracy row with accuracy tier 1, and a 0%-accuracy row with tier 3, as a data attribute the CSS reads — not inline color, matching this project\'s text-carried-first convention', () => {
+    const contrastRanked = [
+      {
+        item: {
+          entry_id: 'e1',
+          displayName: 'Alex',
+          numCorrect: 2,
+          sets_scored: 2,
+          total_elapsed_secs: 90,
+        },
+        position: 1,
+      },
+      {
+        item: {
+          entry_id: 'e2',
+          displayName: 'Sam',
+          numCorrect: 0,
+          sets_scored: 2,
+          total_elapsed_secs: 90,
+        },
+        position: 2,
+      },
+    ];
+    const table = renderStageStandingsTable(contrastRanked, stage, new Map());
+    const rows = table.querySelectorAll('tbody tr');
+    expect(rows[0].dataset.accuracyTier).toBe('1');
+    expect(rows[1].dataset.accuracyTier).toBe('3');
+  });
+
+  it('gives no accuracy tier at all to a cupper with zero scored sets — not a misleading "worst tier"', () => {
+    const table = renderStageStandingsTable(ranked, stage, setGrid);
+    const rows = table.querySelectorAll('tbody tr');
+    expect(rows[1].dataset.accuracyTier).toBeUndefined();
+  });
+});
+
+describe('computeAccuracyPct', () => {
+  it('rounds numCorrect/setsScored to a whole percentage', () => {
+    expect(computeAccuracyPct(2, 3)).toBe(67);
+  });
+
+  it('returns null, not NaN, for zero scored sets', () => {
+    expect(computeAccuracyPct(0, 0)).toBeNull();
+  });
+});
+
+describe('computeAvgSecsPerSet', () => {
+  it('rounds to the nearest whole second', () => {
+    expect(computeAvgSecsPerSet(100, 3)).toBe(33);
+  });
+
+  it('returns null for zero scored sets or a null total', () => {
+    expect(computeAvgSecsPerSet(100, 0)).toBeNull();
+    expect(computeAvgSecsPerSet(null, 3)).toBeNull();
+  });
+});
+
+describe('accuracyTier', () => {
+  it.each([
+    [100, 1],
+    [99, 2],
+    [50, 2],
+    [49, 3],
+    [0, 3],
+  ])('tiers %i%% as tier %i', (pct, expected) => {
+    expect(accuracyTier(pct)).toBe(expected);
+  });
+
+  it('returns null (no tier) for null accuracy', () => {
+    expect(accuracyTier(null)).toBeNull();
   });
 });
 
@@ -180,12 +319,14 @@ describe('buildReportTables', () => {
   it('builds standings, difficulty, and distribution table specs per stage, formatted the same as the on-screen tables', () => {
     const stageReports = [
       {
-        stage: { kind: 'prelims' },
+        stage: { kind: 'prelims', set_count: 1 },
         ranked: [
           {
             item: {
+              entry_id: 'e1',
               displayName: 'Alex',
               numCorrect: 3,
+              sets_scored: 4,
               total_elapsed_secs: 90,
               finalPosition: null,
               source: 'seed',
@@ -196,6 +337,7 @@ describe('buildReportTables', () => {
         ],
         difficulty: [{ setId: 'set1', position: 1, label: null, sampleSize: 4, avgCorrect: 0.75 }],
         distribution: [{ correctCount: 3, numCuppers: 1 }],
+        setGrid: new Map([['e1', [{ setId: 'set1', position: 1, correct: true }]]]),
       },
     ];
 
@@ -209,10 +351,22 @@ describe('buildReportTables', () => {
         { key: 'displayName', label: 'Cupper' },
         { key: 'numCorrect', label: 'Correct' },
         { key: 'time', label: 'Time' },
+        { key: 'accuracy', label: 'Accuracy' },
+        { key: 'avgTimePerSet', label: 'Avg time/set' },
+        { key: 'set1', label: 'Set 1' },
         { key: 'outcome', label: 'Outcome' },
       ],
       rows: [
-        { position: 1, displayName: 'Alex', numCorrect: 3, time: "'1:30", outcome: 'Advanced' },
+        {
+          position: 1,
+          displayName: 'Alex',
+          numCorrect: 3,
+          time: "'1:30",
+          accuracy: '75%',
+          avgTimePerSet: "'0:23",
+          set1: 'Y',
+          outcome: 'Advanced',
+        },
       ],
     });
     expect(tables[1].title).toBe('Preliminary — Set difficulty');
@@ -388,8 +542,8 @@ describe('mountReportScreen', () => {
       event_entries: { data: [{ id: 'e1', display_name: 'Rivera, Alex' }], error: null },
       ct_sets: { data: [{ id: 'set1', stage_id: 's1', position: 1, label: null }], error: null },
       ct_heats: { data: [{ id: 'h1' }], error: null },
-      ct_heat_entries: { data: [{ id: 'he1' }], error: null },
-      ct_results: { data: [{ set_id: 'set1', correct: true }], error: null },
+      ct_heat_entries: { data: [{ id: 'he1', entry_id: 'e1' }], error: null },
+      ct_results: { data: [{ heat_entry_id: 'he1', set_id: 'set1', correct: true }], error: null },
     };
   }
 
@@ -421,12 +575,12 @@ describe('mountReportScreen', () => {
     expect(downloadSpy.mock.calls[0][0]).toBe('Fall-Winter Cup report.csv');
     expect(downloadSpy.mock.calls[0][1]).toBe(
       'Finals — Standings\r\n' +
-        'Pos,Cupper,Correct,Time,Outcome\r\n' +
+        'Pos,Cupper,Correct,Time,Accuracy,Avg time/set,Set 1,Outcome\r\n' +
         // Leading apostrophe: Excel/Sheets' own escape for "literal text,
         // don't auto-format as a time" — see toCsvSafeDuration's own
         // comment (reportScreen.js) for why a bare "0:40" would otherwise
         // get silently reinterpreted as a clock time on open.
-        '1,"Rivera, Alex",1,\'0:40,Advanced\r\n' +
+        '1,"Rivera, Alex",1,\'0:40,100%,\'0:40,Y,Advanced\r\n' +
         '\r\n' +
         'Finals — Set difficulty\r\n' +
         'Set,Correct,Cuppers scored\r\n' +

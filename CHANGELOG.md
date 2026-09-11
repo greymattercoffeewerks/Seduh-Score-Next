@@ -1,3 +1,75 @@
+## Cup Taster report: per-set accuracy grid + accuracy tiers (Phase A) · 2026-09-11
+
+**User-requested, not tied to a §14 task ID — the first phase of a WCTC-style report
+analytics upgrade, scoped in three tiers with the user in advance (Phase A: additive
+columns over existing data; Phase B: a cross-round rollup, not yet built; Phase C:
+bar charts, not yet built).** The per-stage standings table on the Report screen gains
+Accuracy %, Avg time/set, and one Set-N column per set (Y/N/— per cupper, per set),
+plus a text-color accuracy-tier cue on the Accuracy cell.
+
+**What shipped:**
+
+- `analytics.js` gained `computeCupperSetGrid(stageId, client)` — a per-cupper,
+  per-set correct/wrong matrix for a stage, restricted to `kind = 'normal'` heats
+  (same tiebreak-exclusion rule `computeSetDifficulty` already enforces, for the
+  identical reason). A `fetchNormalHeatResults` helper, extracted from
+  `computeSetDifficulty` on its 2nd verbatim use, now backs both functions.
+- `reportScreen.js`'s `renderStageStandingsTable` extended with the new columns;
+  `computeAccuracyPct`/`computeAvgSecsPerSet`/`accuracyTier` are new pure helpers.
+  `buildStageTables` (CSV export) mirrors every new column exactly, including the
+  Set-N Y/N/— values — reuses the same `formatSetCellText` helper the on-screen table
+  uses, so the two can't silently drift.
+- `reportScreen.css` gained the accuracy-tier styling — text color + weight on the
+  Accuracy cell only, not a full-row background wash, matching
+  `standingsScreen.css`'s own `[data-status='advancing']` precedent (text-carried
+  first, color purely additive).
+
+**A real, live-caught bug, closed before shipping:** the tier scheme was originally
+4 tiers (success/gold/warning/danger). Live-verifying in a real browser (not caught by
+any unit test, which only ever asserted the NUMBER each tier maps to, never a rendered
+color) found `--color-gold` (`#8a6a1f`) and `--color-warning` (`#8a5e10`) are nearly
+identical hex values in this project's own token set — never designed to sit adjacent
+to each other as a sequence — making two of the four tiers visually indistinguishable.
+Collapsed to 3 tiers using the one triad this project's palette keeps genuinely
+distinct (confirmed via real computed RGB values in a browser, not assumed): success,
+warning, danger.
+
+**Four parallel reviews (code-reviewer, module-boundary-checker, ui-accessibility-reviewer,
+test-auditor), three clean, one with real findings, all closed:**
+
+- `module-boundary-checker`: clean — everything stays within `src/formats/cup-taster/`,
+  `core/duration.js`'s `formatDuration` genuinely reused (not reimplemented) for the
+  new avg-time-per-set column.
+- `test-auditor`: clean on the four targeted invariants (tiebreak exclusion, null-vs-
+  false honesty, CSV column placement/escaping, conditional tier attribute), each
+  independently mutation-tested. Found one minor gap — the Set-N column test used a
+  dense/position-ordered `setGrid` fixture, which couldn't distinguish a correct
+  position-based lookup from an accidental index-based one. Closed with a new sparse-
+  grid test case, itself mutation-verified.
+- `ui-accessibility-reviewer`: no blocking findings — `scope='col'` present on every
+  new header, WCAG contrast computed directly for all three tier colors (all well
+  clear of 4.5:1), 480px stacked layout and the print stylesheet both confirmed
+  unaffected, CSV values pose no formula-injection risk.
+- `code-reviewer` found three real issues, all closed: a dead default parameter
+  (`renderTimeCell`'s `label = 'Time'` could never execute — both call sites already
+  passed one explicitly), `computeStageReport` issuing the same four DB queries twice
+  over per stage (once via `computeSetDifficulty`, once via `computeCupperSetGrid`) —
+  refactored so both share one fetch, and the on-screen Y/N/— formatting logic
+  duplicated verbatim against the CSV export's own copy — extracted into one shared
+  `formatSetCellText` helper.
+
+**A flake two reviewers independently hit once each (ui-accessibility-reviewer,
+code-reviewer — different specific symptoms, neither reproducible in 15-26 follow-up
+runs) is very likely resolved as a side effect of the double-fetch fix above**: 23/23
+clean runs of the affected test files after that refactor landed, versus roughly 1-in-15
+to 1-in-26 before. Not fully proven (the original cause was never conclusively
+identified), so flagged here rather than claimed with certainty — worth a note if
+anything similar recurs.
+
+Full JS suite: 1018/1018. Verified live in a real browser via the existing
+`reportScreen.preview.html` harness, at both desktop width and 360px (the stacked
+layout, `data-label`-driven, needed no changes to accommodate the new columns).
+
 ## Marketing landing page · 2026-09-07
 
 **Out of scope per handoff §1 ("No landing page. No console"), shipped as user-requested.** A marketing landing page now deploys at the root `index.html`, with the console SPA moved to `/app/index.html` (content byte-identical — only its path changed, and the router is hash-only so nothing in `src/main.js` or `src/core/router.js` needed to change). Preceded by a design-canvas exploration (three initial directions narrowed to "Editorial", plus a dark "Editorial Nights" variant — ember demoted from the everyday accent to a rare "this is live" signal, a new "lantern" gold taking over buttons/links instead, not a straight brightness invert of the same palette).

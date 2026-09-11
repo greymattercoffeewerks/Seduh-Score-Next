@@ -22,18 +22,21 @@ export async function isEventComplete(eventId, client = getSupabase()) {
   return terminal?.status === 'complete';
 }
 
-// DB. Per-set difficulty: `avg(correct) group by set_id`, restricted to
-// `kind = 'normal'` heats — the same restriction `ct_standings` applies and
-// for the identical reason (that view's own migration comment): a tiebreak
-// heat's population is a biased subset (only the cuppers who tied), so
-// folding its results into a stage-wide difficulty figure would skew it
-// relative to the sets everyone actually faced under the same conditions.
-// Joined locally in JS across three queries rather than a DB-side embed —
-// same reasoning as heats.js's own hydrateEntries: independent of
-// PostgREST's embed syntax, trivially testable with a fake client.
-export async function computeSetDifficulty(stageId, client = getSupabase()) {
-  const sets = await listSetsForStage(stageId, client);
-
+// DB. The population `computeSetDifficulty` and `computeCupperSetGrid` both
+// need: every `ct_results` row (with the `heat_entry_id`/`entry_id` link
+// needed to attribute a result back to a cupper, not just a set) from a
+// stage's `kind = 'normal'` heats only — the same restriction `ct_standings`
+// applies and for the identical reason (that view's own migration comment):
+// a tiebreak heat's population is a biased subset (only the cuppers who
+// tied), so folding its results into a stage-wide figure would skew it
+// relative to what everyone actually faced under the same conditions.
+// Extracted here on its 2nd verbatim use (this file's own established
+// pattern — see e.g. `core/dom.js`'s `labeledField`, `core/timeout.js`'s
+// `raceTimeout`). Joined locally in JS across three queries rather than a
+// DB-side embed — same reasoning as `heats.js`'s own `hydrateEntries`:
+// independent of PostgREST's embed syntax, trivially testable with a fake
+// client.
+async function fetchNormalHeatResults(stageId, client) {
   const { data: normalHeats, error: heatsError } = await client
     .from('ct_heats')
     .select('id')
@@ -45,16 +48,32 @@ export async function computeSetDifficulty(stageId, client = getSupabase()) {
   const { data: heatEntries, error: entriesError } =
     heatIds.length === 0
       ? { data: [], error: null }
-      : await client.from('ct_heat_entries').select('id').in('heat_id', heatIds);
+      : await client.from('ct_heat_entries').select('id, entry_id').in('heat_id', heatIds);
   if (entriesError) throw entriesError;
   const heatEntryIds = heatEntries.map((entry) => entry.id);
 
   const { data: results, error: resultsError } =
     heatEntryIds.length === 0
       ? { data: [], error: null }
-      : await client.from('ct_results').select('set_id, correct').in('heat_entry_id', heatEntryIds);
+      : await client
+          .from('ct_results')
+          .select('heat_entry_id, set_id, correct')
+          .in('heat_entry_id', heatEntryIds);
   if (resultsError) throw resultsError;
 
+  return { heatEntries, results };
+}
+
+// Pure. The actual per-set aggregation, split out from computeSetDifficulty
+// so computeStageReport can share ONE fetch across this and
+// computeCupperSetGridFromResults below, instead of each independently
+// re-querying the identical stage/population — found in review
+// (code-reviewer): computeStageReport was issuing ct_sets/ct_heats/
+// ct_heat_entries/ct_results FOUR queries each, TWICE over, for the same
+// stage. This project is explicit elsewhere about round-trip cost
+// (reportScreen.js's own sequential-not-parallelized per-stage-loop
+// comment) — doubling it silently here cut against that same reasoning.
+function computeSetDifficultyFromResults(sets, results) {
   const bySet = new Map();
   for (const result of results) {
     const bucket = bySet.get(result.set_id) ?? { correct: 0, total: 0 };
@@ -76,6 +95,69 @@ export async function computeSetDifficulty(stageId, client = getSupabase()) {
       avgCorrect: bucket.total === 0 ? null : bucket.correct / bucket.total,
     };
   });
+}
+
+// DB. Per-set difficulty: `avg(correct) group by set_id`, restricted to
+// `kind = 'normal'` heats (see `fetchNormalHeatResults`'s own comment for
+// why). Does its own fetch — this export stays usable standalone (its own
+// test suite calls it directly); computeStageReport bypasses this and calls
+// computeSetDifficultyFromResults directly against its own shared fetch
+// instead, to avoid the double-query cost.
+export async function computeSetDifficulty(stageId, client = getSupabase()) {
+  const sets = await listSetsForStage(stageId, client);
+  const { results } = await fetchNormalHeatResults(stageId, client);
+  return computeSetDifficultyFromResults(sets, results);
+}
+
+// Pure. The actual per-cupper grid-building, split out for the same reason
+// computeSetDifficultyFromResults was (see its own comment above).
+function computeCupperSetGridFromResults(sets, heatEntries, results) {
+  const entryIdByHeatEntryId = new Map(heatEntries.map((entry) => [entry.id, entry.entry_id]));
+  // entry_id -> (set_id -> correct)
+  const correctBySetByEntry = new Map();
+  for (const result of results) {
+    const entryId = entryIdByHeatEntryId.get(result.heat_entry_id);
+    // A result row whose heat_entry_id isn't in THIS stage's normal-heat
+    // population shouldn't be reachable (the same `.in('heat_entry_id', ...)`
+    // filter that fetched `results` already scoped it) — skipped rather
+    // than trusted, matching this module's existing defensive style
+    // (computeScoreDistribution's own numCorrect clamp) for a schema
+    // anomaly this function has no business assuming can't happen.
+    if (entryId == null) continue;
+    if (!correctBySetByEntry.has(entryId)) correctBySetByEntry.set(entryId, new Map());
+    correctBySetByEntry.get(entryId).set(result.set_id, result.correct);
+  }
+
+  const grid = new Map();
+  for (const [entryId, correctBySet] of correctBySetByEntry) {
+    grid.set(
+      entryId,
+      sets.map((set) => ({
+        setId: set.id,
+        position: set.position,
+        // null means "no result row for this set" (a heat that ended
+        // early, or a genuine data gap) — distinct from `false` (scored
+        // and wrong). Mirrors computeSetDifficulty's own null-vs-0 honesty.
+        correct: correctBySet.has(set.id) ? correctBySet.get(set.id) : null,
+      })),
+    );
+  }
+  return grid;
+}
+
+// DB. The per-cupper, per-set Y/N breakdown the report's standings table
+// renders as its Set 1..N columns (2026-09-11, user-requested — a WCTC-style
+// per-cupper accuracy grid the organiser wanted the report to match).
+// Restricted to `kind = 'normal'` heats, same reasoning as
+// `computeSetDifficulty`. Keyed by `entry_id` (a cupper's own roster
+// identity), not `stageEntryId` or `heat_entry_id` — `fetchStandingsForStage`'s
+// own `ranked` rows already carry `entry_id` and need to look this up per
+// row without a second join of their own. Does its own fetch, same
+// standalone-usability reasoning as computeSetDifficulty above.
+export async function computeCupperSetGrid(stageId, client = getSupabase()) {
+  const sets = await listSetsForStage(stageId, client);
+  const { heatEntries, results } = await fetchNormalHeatResults(stageId, client);
+  return computeCupperSetGridFromResults(sets, heatEntries, results);
 }
 
 // Pure. Buckets `ranked` (fetchStandingsForStage's own output — no second DB
@@ -106,11 +188,18 @@ export function computeScoreDistribution(ranked, setCount) {
 
 // DB. One stage's full report: standings (with each entry's final
 // advancement provenance, since fetchStandingsForStage now carries
-// `finalPosition`/`source`/`positionNote` through), difficulty, and
-// distribution together — the one call the report screen makes per stage.
+// `finalPosition`/`source`/`positionNote` through), difficulty, distribution,
+// and the per-cupper set grid together — the one call the report screen
+// makes per stage.
 export async function computeStageReport(stageId, client = getSupabase()) {
   const { stage, ranked } = await fetchStandingsForStage(stageId, client);
-  const difficulty = await computeSetDifficulty(stageId, client);
+  // ONE shared fetch of the normal-heat population, reused for both
+  // difficulty and the set grid below — see computeSetDifficultyFromResults'
+  // own comment for why this replaced two independent fetches.
+  const sets = await listSetsForStage(stageId, client);
+  const { heatEntries, results } = await fetchNormalHeatResults(stageId, client);
+  const difficulty = computeSetDifficultyFromResults(sets, results);
   const distribution = computeScoreDistribution(ranked, stage.set_count);
-  return { stage, ranked, difficulty, distribution };
+  const setGrid = computeCupperSetGridFromResults(sets, heatEntries, results);
+  return { stage, ranked, difficulty, distribution, setGrid };
 }
