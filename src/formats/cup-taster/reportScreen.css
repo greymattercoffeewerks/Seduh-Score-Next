@@ -91,12 +91,101 @@
   font-weight: var(--font-weight-semibold);
 }
 
+/* Bar-chart categorical palette (Phase C, 2026-09-11, user-requested —
+   hand-rolled SVG bar charts, no charting library — see reportScreen.js's
+   own renderRoundBarChart comment for the full account). Defined locally
+   here, not in src/ui/tokens/ — this is a categorical (cupper-identity)
+   palette, not a semantic one, and nothing else on this screen or any
+   other screen needs it. Eight hues, deliberately excluding both ends of
+   this project's own semantic vocabulary: nothing in the ember/gold band
+   (--color-accent/--color-gold, reserved for the brand accent and
+   ceremonial podium/champion highlighting) and nothing in the violet band
+   (--clr-test-500, reserved exclusively for is_test — see colors.css's own
+   comment on that token for why it must never be reused elsewhere). */
+.report-screen {
+  --report-chart-color-1: #2f7d6e;
+  --report-chart-color-2: #3a6ea5;
+  --report-chart-color-3: #6b7a2f;
+  --report-chart-color-4: #4a548a;
+  --report-chart-color-5: #8a5a3a;
+  --report-chart-color-6: #5a7d8a;
+  --report-chart-color-7: #7a4a6e;
+  --report-chart-color-8: #4a7a5a;
+}
+
+/* A chart's own reserved per-cupper width (barWidth * cupperCount, times
+   round count) can exceed a narrow viewport well before this screen's
+   other content does — unlike a table (which stacks at 480px via
+   .standings-table's own rule), a bar chart has no equivalent "narrow"
+   layout, so this scrolls horizontally within its own container instead of
+   overflowing the page. */
+.report-chart-wrap {
+  overflow-x: auto;
+}
+
+.report-chart-svg {
+  display: block;
+}
+
+.report-chart-value {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  fill: var(--color-text-secondary);
+}
+
+.report-chart-axis-label {
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  fill: var(--color-text-secondary);
+}
+
+.report-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  list-style: none;
+  margin: var(--space-3) 0 0 0;
+  padding: 0;
+}
+
+.report-chart-legend-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.report-chart-legend-swatch {
+  display: inline-block;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
 @media print {
   /* The export toolbar itself is a screen-only control, not report
      content — printing the "Download CSV"/"Print / Save as PDF" buttons
      onto the page they triggered would be meaningless. */
   .no-print {
     display: none;
+  }
+
+  /* Screen-only scroll affordance (.report-chart-wrap's own overflow-x)
+     has no printed-page equivalent — a scrollbar doesn't print, and
+     without this the chart would just clip at the page edge instead.
+     Shrinking the SVG to fit (it's a vector, so this loses nothing) is the
+     same "override the screen-only convenience for a static document"
+     reasoning this block already applies to .standings-table below. */
+  .report-chart-wrap {
+    overflow: visible;
+  }
+  .report-chart-svg {
+    max-width: 100%;
+    height: auto;
   }
 
   /* Force the real table layout even if the print surface happens to be

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import * as exportModule from '../../core/export.js';
+import { formatDuration } from '../../core/duration.js';
 import {
   ordinalLabel,
   describeOutcome,
@@ -12,6 +13,7 @@ import {
   accuracyTier,
   renderEventSummaryTable,
   buildEventSummaryTable,
+  renderRoundBarChart,
 } from './reportScreen.js';
 
 function fakeClient({ tables = {} } = {}) {
@@ -437,6 +439,243 @@ describe('renderEventSummaryTable / buildEventSummaryTable', () => {
   });
 });
 
+describe('renderRoundBarChart', () => {
+  // Same fixture shape as the renderEventSummaryTable describe block above
+  // (matches computeEventSummary's own real output — Alex reached both
+  // rounds, Jo was eliminated after prelims and never reached finals).
+  const summaries = [
+    {
+      entryId: 'alex',
+      displayName: 'Alex',
+      rounds: [
+        { stageOrdinal: 1, numCorrect: 3, totalElapsedSecs: 90 },
+        { stageOrdinal: 2, numCorrect: 2, totalElapsedSecs: 70 },
+      ],
+    },
+    {
+      entryId: 'jo',
+      displayName: 'Jo',
+      rounds: [{ stageOrdinal: 1, numCorrect: 1, totalElapsedSecs: 150 }],
+    },
+  ];
+  const stageReports = [
+    { stage: { kind: 'prelims', ordinal: 1 } },
+    { stage: { kind: 'finals', ordinal: 2 } },
+  ];
+
+  function scoreChart() {
+    return renderRoundBarChart({
+      titleText: 'Score by Round',
+      ariaSummary: 'Bar chart: score by round.',
+      summaries,
+      stageReports,
+      getValue: (round) => round.numCorrect,
+      // A non-identity formatter, deliberately — found in review
+      // (test-auditor): `String(value)` here would produce the exact same
+      // text a buggy implementation that ignored `formatValue` entirely and
+      // fell back to `String(round.numCorrect)` directly would also
+      // produce, so a test built on that fixture couldn't prove
+      // `formatValue` is actually being called rather than silently
+      // bypassed. A `#`-prefixed formatter can only appear if the callback
+      // genuinely ran.
+      formatValue: (value) => `#${value}`,
+    });
+  }
+
+  it('renders one card with an <h2> title, an aria-labelled <svg role="img">, and a legend entry per cupper', () => {
+    const card = scoreChart();
+    expect(card.querySelector('h2').textContent).toBe('Score by Round');
+
+    const svg = card.querySelector('svg');
+    expect(svg.getAttribute('role')).toBe('img');
+    expect(svg.getAttribute('aria-label')).toBe('Bar chart: score by round.');
+
+    const legendNames = [...card.querySelectorAll('.report-chart-legend-item')].map(
+      (li) => li.textContent,
+    );
+    expect(legendNames).toEqual(['Alex', 'Jo']);
+  });
+
+  it("renders exactly one bar per cupper who actually reached a round, and OMITS a bar entirely (not a zero-height one) for a round a cupper never reached — found in review-style thinking: a bar that's just very short would be indistinguishable from a real score of 0", () => {
+    const card = scoreChart();
+    const round1Bars = card.querySelectorAll('rect[data-round="1"]');
+    const round2Bars = card.querySelectorAll('rect[data-round="2"]');
+    expect(round1Bars.length).toBe(2); // Alex + Jo both competed in prelims
+    expect(round2Bars.length).toBe(1); // only Alex reached finals
+    expect(round2Bars[0].getAttribute('data-entry')).toBe('alex');
+    expect(card.querySelectorAll('rect[data-entry="jo"][data-round="2"]').length).toBe(0);
+  });
+
+  it("labels each bar with its own real value, and a taller bar for a strictly larger value in the SAME round — proves the bar's height actually tracks the data, not just its presence", () => {
+    const card = scoreChart();
+    const valueTexts = [...card.querySelectorAll('.report-chart-value')].map((t) => t.textContent);
+    expect(valueTexts).toEqual(['#3', '#1', '#2']); // round1: Alex(3), Jo(1); round2: Alex(2)
+
+    const alexRound1 = card.querySelector('rect[data-entry="alex"][data-round="1"]');
+    const joRound1 = card.querySelector('rect[data-entry="jo"][data-round="1"]');
+    expect(Number(alexRound1.getAttribute('height'))).toBeGreaterThan(
+      Number(joRound1.getAttribute('height')),
+    );
+  });
+
+  it("formats the Time chart's own values through the caller's formatValue (M:SS), independently of the Score chart's plain-number formatting", () => {
+    const timeCard = renderRoundBarChart({
+      titleText: 'Time by Round',
+      ariaSummary: 'Bar chart: time by round.',
+      summaries,
+      stageReports,
+      getValue: (round) => round.totalElapsedSecs,
+      formatValue: (value) => formatDuration(value),
+    });
+    const valueTexts = [...timeCard.querySelectorAll('.report-chart-value')].map(
+      (t) => t.textContent,
+    );
+    expect(valueTexts).toEqual(['1:30', '2:30', '1:10']); // Alex 90s, Jo 150s, Alex 70s
+  });
+
+  it('gives the SAME cupper the SAME bar color in both the Score and Time charts, and different cuppers different colors', () => {
+    const scoreCard = scoreChart();
+    const timeCard = renderRoundBarChart({
+      titleText: 'Time by Round',
+      ariaSummary: 'Bar chart: time by round.',
+      summaries,
+      stageReports,
+      getValue: (round) => round.totalElapsedSecs,
+      formatValue: (value) => formatDuration(value),
+    });
+    const alexScoreFill = scoreCard
+      .querySelector('rect[data-entry="alex"][data-round="1"]')
+      .getAttribute('fill');
+    const alexTimeFill = timeCard
+      .querySelector('rect[data-entry="alex"][data-round="1"]')
+      .getAttribute('fill');
+    const joScoreFill = scoreCard
+      .querySelector('rect[data-entry="jo"][data-round="1"]')
+      .getAttribute('fill');
+    expect(alexScoreFill).toBe(alexTimeFill);
+    expect(alexScoreFill).not.toBe(joScoreFill);
+  });
+
+  it('axis labels reuse the SAME round labels as the per-stage <h2>/<h3> headings and the summary table\'s own column headers — disambiguated with "(Round N)" when a kind repeats, plain otherwise', () => {
+    const repeatedKindReports = [
+      { stage: { kind: 'prelims', ordinal: 1 } },
+      { stage: { kind: 'prelims', ordinal: 2 } },
+      { stage: { kind: 'finals', ordinal: 3 } },
+    ];
+    const card = renderRoundBarChart({
+      titleText: 'Score by Round',
+      ariaSummary: 'Bar chart: score by round.',
+      summaries: [],
+      stageReports: repeatedKindReports,
+      getValue: (round) => round.numCorrect,
+      formatValue: (value) => String(value),
+    });
+    const axisLabels = [...card.querySelectorAll('.report-chart-axis-label')].map(
+      (t) => t.textContent,
+    );
+    expect(axisLabels).toEqual(['Preliminary (Round 1)', 'Preliminary (Round 2)', 'Finals']);
+  });
+
+  it("builds the legend from `summaries` itself, not a hardcoded or otherwise-static list — found in review (test-auditor): the describe block's one shared fixture meant a hardcoded ['Alex', 'Jo'] legend would have passed the earlier legend test identically", () => {
+    const otherSummaries = [
+      { entryId: 'zara', displayName: 'Zara', rounds: [] },
+      { entryId: 'ben', displayName: 'Ben', rounds: [] },
+    ];
+    const card = renderRoundBarChart({
+      titleText: 'Score by Round',
+      ariaSummary: 'Bar chart: score by round.',
+      summaries: otherSummaries,
+      stageReports,
+      getValue: (round) => round.numCorrect,
+      formatValue: (value) => String(value),
+    });
+    const legendNames = [...card.querySelectorAll('.report-chart-legend-item')].map(
+      (li) => li.textContent,
+    );
+    expect(legendNames).toEqual(['Zara', 'Ben']);
+  });
+
+  it("keeps a cupper at their OWN fixed x-slot across rounds rather than compacting each round to only the cuppers present that round — found in review (test-auditor): the shared fixture (Alex present both rounds, Jo eliminated after round 1) can't distinguish a fixed slot from a compacted layout, since Jo simply drops off the trailing end either way. The case that DOES distinguish them is the reverse — a cupper absent from round 1 but present only in round 2, at a summaries index AFTER an empty slot", () => {
+    const summariesWithLateJoin = [
+      {
+        entryId: 'alex',
+        displayName: 'Alex',
+        rounds: [
+          { stageOrdinal: 1, numCorrect: 3, totalElapsedSecs: 90 },
+          { stageOrdinal: 2, numCorrect: 2, totalElapsedSecs: 70 },
+        ],
+      },
+      {
+        // Present in round 1 only — occupies slot 1. Its only purpose here
+        // is to give us a KNOWN, real slot-to-slot spacing to derive from,
+        // rather than hardcoding this chart's own internal pixel constants
+        // into the test.
+        entryId: 'jo',
+        displayName: 'Jo',
+        rounds: [{ stageOrdinal: 1, numCorrect: 1, totalElapsedSecs: 150 }],
+      },
+      {
+        // The reverse of Jo: ABSENT from round 1, present only in round 2.
+        // Under a fixed per-cupper slot, Casey (summaries index 2) sits at
+        // slot 2 in round 2's group — TWO slot-widths right of Alex — with
+        // slot 1 (Jo's own reserved slot) left empty that round. Under a
+        // wrong "compacted, only cuppers present" implementation, Casey
+        // would instead be drawn as round 2's 2nd present cupper — the SAME
+        // x position Jo's own slot 1 would use — only ONE slot-width right
+        // of Alex.
+        entryId: 'casey',
+        displayName: 'Casey',
+        rounds: [{ stageOrdinal: 2, numCorrect: 2, totalElapsedSecs: 60 }],
+      },
+    ];
+    const card = renderRoundBarChart({
+      titleText: 'Score by Round',
+      ariaSummary: 'Bar chart: score by round.',
+      summaries: summariesWithLateJoin,
+      stageReports,
+      getValue: (round) => round.numCorrect,
+      formatValue: (value) => String(value),
+    });
+
+    const alexRound1X = Number(
+      card.querySelector('rect[data-entry="alex"][data-round="1"]').getAttribute('x'),
+    );
+    const joRound1X = Number(
+      card.querySelector('rect[data-entry="jo"][data-round="1"]').getAttribute('x'),
+    );
+    const slotWidth = joRound1X - alexRound1X;
+
+    const alexRound2X = Number(
+      card.querySelector('rect[data-entry="alex"][data-round="2"]').getAttribute('x'),
+    );
+    const caseyRound2X = Number(
+      card.querySelector('rect[data-entry="casey"][data-round="2"]').getAttribute('x'),
+    );
+    expect(caseyRound2X - alexRound2X).toBe(2 * slotWidth);
+  });
+
+  it('renders a real 0 as a visible 1px-minimum bar, never an omitted one — found in review (ui-accessibility-reviewer): nothing previously tested this invariant, so a one-character regression (e.g. swapping the `value == null` guard for a falsy check) could silently start treating a real 0 the same as "didn\'t compete" with nothing to catch it', () => {
+    const summariesWithZero = [
+      {
+        entryId: 'alex',
+        displayName: 'Alex',
+        rounds: [{ stageOrdinal: 1, numCorrect: 0, totalElapsedSecs: 0 }],
+      },
+    ];
+    const card = renderRoundBarChart({
+      titleText: 'Score by Round',
+      ariaSummary: 'Bar chart: score by round.',
+      summaries: summariesWithZero,
+      stageReports,
+      getValue: (round) => round.numCorrect,
+      formatValue: (value) => String(value),
+    });
+    const bar = card.querySelector('rect[data-entry="alex"][data-round="1"]');
+    expect(bar).not.toBeNull();
+    expect(bar.getAttribute('height')).toBe('1');
+  });
+});
+
 describe('buildReportTables', () => {
   it('builds standings, difficulty, and distribution table specs per stage, formatted the same as the on-screen tables', () => {
     const stageReports = [
@@ -679,7 +918,13 @@ describe('mountReportScreen', () => {
     await mountReportScreen(root, { eventId: 'ev1', client });
 
     const headings = [...root.querySelectorAll('h2')].map((h) => h.textContent);
-    expect(headings).toEqual(['Overall — All Rounds', 'Preliminary', 'Finals']);
+    expect(headings).toEqual([
+      'Score by Round',
+      'Time by Round',
+      'Overall — All Rounds',
+      'Preliminary',
+      'Finals',
+    ]);
     expect(root.textContent).toContain('Alex');
     // Plain, undecorated labels — each kind occurs only once here, so
     // neither the <h2> nor the <h3>s should carry a "(Round N)" suffix
@@ -782,6 +1027,8 @@ describe('mountReportScreen', () => {
 
     const headings = [...root.querySelectorAll('h2')].map((h) => h.textContent);
     expect(headings).toEqual([
+      'Score by Round',
+      'Time by Round',
       'Overall — All Rounds',
       'Preliminary (Round 1)',
       'Preliminary (Round 2)',

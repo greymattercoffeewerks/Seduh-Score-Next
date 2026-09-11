@@ -1,3 +1,98 @@
+## Cup Taster report: round bar charts (Phase C) · 2026-09-11
+
+**User-requested, not tied to a §14 task ID — the third and final phase of the
+WCTC-style report analytics upgrade scoped with the user in advance (Phase A and Phase B
+shipped separately, same day).** The report screen gains two hand-rolled SVG bar
+charts — "Score by Round" and "Time by Round" — placed between the export toolbar and
+the "Overall — All Rounds" cross-round summary table, shown under the same
+more-than-one-stage gate that section already uses. No charting library, matching this
+project's existing "no new dependency" stance for PDF export (the browser's own Print
+dialog, not a generated file).
+
+Scoped with the user before writing code via two explicit questions: each bar represents
+one cupper, grouped by round (not a single aggregate bar per round), and the charts sit
+before the summary table, not after it.
+
+**What shipped:**
+
+- `renderRoundBarChart({ titleText, ariaSummary, summaries, stageReports, getValue,
+formatValue })` — one call per chart, parameterized by which field to read from each
+  `summary.rounds[]` entry (`numCorrect` vs `totalElapsedSecs`) and how to format it.
+  Built on `core/dom.js`'s existing `svgEl` primitive (its second real consumer, after
+  `brandMark()`) — no changes to `core/dom.js` itself.
+- Each cupper gets a FIXED horizontal slot matching their own index in `summaries` (the
+  same order `renderEventSummaryTable` already uses) in EVERY round's group, not a
+  layout compacted to only the cuppers present that round — so the same cupper sits at
+  the same x-position across every round, letting a reader track one cupper's bar across
+  rounds by position alone. A cupper absent from a round renders no bar at all (never a
+  zero-height one); a real score of 0 still renders a visible 1px-minimum bar, so "didn't
+  compete" and "scored zero" stay visually distinguishable.
+- A single, shared, whole-chart y-scale (not renormalized per round) — the point of a
+  "by round" chart is comparing magnitude across rounds, which a per-round-relative scale
+  would misrepresent.
+- Reuses the existing (Phase B follow-up) private `stageRoundLabels` helper for the
+  chart's own axis labels, so the "(Round N)" disambiguation for a repeated stage kind
+  stays in agreement with the per-stage `<h2>`/`<h3>` headings and the summary table's
+  own column headers — all three now share one label decision.
+- Eight categorical colors, new CSS custom properties (`--report-chart-color-1..8`)
+  scoped to `.report-screen` in `reportScreen.css` — deliberately not added to
+  `src/ui/tokens/`, since a design-system rework is in progress there on a separate
+  branch and this is a categorical, not semantic, palette. Chosen to avoid the ember/gold
+  band (brand accent + ceremonial highlight) and the violet band (reserved exclusively
+  for `is_test`). Color is never the only way to tell two cuppers' bars apart: each bar
+  carries its own adjacent value text, each cupper keeps a fixed x-slot, and a text
+  legend below each chart maps every color to a cupper's name.
+- The whole SVG is `role="img"` with a descriptive `aria-label`, not `aria-hidden` —
+  matching `core/dom.js`'s own `brandMark()` precedent for a decorative-but-real graphic,
+  reasoned as safe to summarize-not-fully-expose because the already-fully-accessible
+  "Overall — All Rounds" table sits immediately below with every exact value in real
+  markup.
+- `.report-chart-wrap { overflow-x: auto; }` lets a chart with many cuppers scroll
+  horizontally rather than overflowing the page or squeezing unreadably narrow at 360px;
+  a `@media print` override shrinks the SVG to fit the page instead (a lossless vector,
+  and a scrollbar has no printed-page equivalent).
+
+**Four parallel reviews, one clean, three with real findings, all closed:**
+
+- `module-boundary-checker`: clean — the whole feature stays private to
+  `src/formats/cup-taster/reportScreen.js`, no new `core/` imports beyond the existing
+  `svgEl`, no reimplementation of any `core/` ranking/duration primitive.
+- `code-reviewer`: clean on code quality (geometry math verified algebraically, no
+  off-by-one; the `getValue`/`formatValue` parameterization judged appropriately scoped
+  for its two real call sites) — flagged the missing CHANGELOG entry (this one) and
+  routed one accessibility question to `ui-accessibility-reviewer` (see below).
+- `ui-accessibility-reviewer` found two real, closed gaps: `.report-chart-wrap`'s
+  `overflow-x: auto` region had no way for a keyboard-only user to reach it (no
+  established table-stacking equivalent exists for a bar chart) — closed with
+  `tabindex="0"` and its own `aria-label` distinct from the chart's own; and the
+  real-zero-bar invariant (a real 0 renders a visible bar, not an omitted one) had no
+  regression test at all — closed with one. Also confirmed the `role="img"`-not-
+  `aria-hidden` reasoning is correct under WAI's own "complex image" pattern (a short
+  `aria-label` plus a full description available elsewhere on the page), which also
+  resolved code-reviewer's routed question about the Time chart's colon-formatted value
+  labels needing `withSrExpansion`: under `role="img"`, an SVG's internal text nodes
+  aren't individually exposed to assistive tech at all, so the ambiguous-vocalization
+  concern that convention exists for doesn't apply here. Suggested (non-blocking) a thin
+  `stroke` on each bar for readability under simulated colorblindness — added, since
+  several of the 8 hues cluster closer together than casual inspection suggested.
+- `test-auditor` found four real test-quality gaps, all fixed and independently
+  mutation-verified: the legend test's only fixture meant a hardcoded legend would have
+  passed identically — fixed with a second, differently-named fixture; the Score chart's
+  value-label test used an identity `formatValue`, which couldn't distinguish "the
+  callback ran" from "a buggy fallback to `String(round.numCorrect)`" — fixed with a
+  non-identity formatter; and — the most significant gap — the chart's own central design
+  claim, the fixed per-cupper x-slot across rounds, was completely untested, since the
+  original fixture (a cupper eliminated after round 1) can't distinguish a fixed slot
+  from a compacted "only cuppers present" layout. Closed with a "late-joining cupper"
+  fixture (absent round 1, present only round 2, at a summaries index after an empty
+  slot) — the one case that actually tells the two implementations apart.
+
+Full JS suite: 1040/1040. Verified live in a real browser at desktop width and 375px
+mobile against `reportScreen.preview.html`'s existing 4-cupper, 2-stage demo event —
+confirmed colors render distinguishably, a real 0 renders as a visible sliver, an
+eliminated cupper's bar correctly disappears from later rounds while keeping their own
+reserved slot, the scroll wrapper is keyboard-focusable, and no console errors.
+
 ## Cup Taster report: fix CSV/on-screen word-order mismatch in stage table titles · 2026-09-11
 
 Closes the low-priority follow-up `ui-accessibility-reviewer` flagged reviewing the
