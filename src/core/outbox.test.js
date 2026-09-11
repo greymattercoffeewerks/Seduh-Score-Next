@@ -96,6 +96,51 @@ describe('buildRpcHandler', () => {
     });
   });
 
+  it('does NOT mark a 401 (auth/JWT problem) as permanent, even though it is a real, non-zero HTTP status — a session expiring mid-flush is retryable, not a genuine rejection of the payload', async () => {
+    // ROADMAP.md's own gap: "hasSession only checks session existence at
+    // flush-start time" — a session valid when a flush BEGINS can expire
+    // partway through a large queued flush, and every RPC error before this
+    // fix was classified permanent purely by "was there a real HTTP
+    // response" (status !== 0), which 401 satisfies just as much as a
+    // genuine business-logic rejection does. Confirmed empirically against
+    // a real local Postgres/PostgREST instance (not assumed): an expired
+    // JWT returns exactly this shape — 401, code PGRST303 — while a real
+    // application-level rejection (e.g. publish_session's own "event not
+    // found") returns 400, never 401. This is the actual fix, in
+    // buildRpcHandler itself, so every call site sharing it benefits, not
+    // just main.js's own reconnect-flush trigger.
+    const client = {
+      rpc: () =>
+        Promise.resolve({
+          data: null,
+          error: { message: 'JWT expired', code: 'PGRST303', details: null },
+          status: 401,
+        }),
+    };
+    const handler = buildRpcHandler(client, 'confirm_heat');
+    await expect(handler({})).rejects.toMatchObject({
+      message: 'JWT expired',
+      code: 'PGRST303',
+      permanent: false,
+    });
+  });
+
+  it('still marks a genuine 400 business-logic rejection as permanent — the 401 carve-out does not weaken the original fix for real server-side rejections', async () => {
+    const client = {
+      rpc: () =>
+        Promise.resolve({
+          data: null,
+          error: { message: 'event not found', code: 'P0001', details: null },
+          status: 400,
+        }),
+    };
+    const handler = buildRpcHandler(client, 'confirm_heat');
+    await expect(handler({})).rejects.toMatchObject({
+      message: 'event not found',
+      permanent: true,
+    });
+  });
+
   it('does not mark a network-level rejection (client.rpc itself throwing) as permanent', async () => {
     expect.assertions(2);
     const client = { rpc: () => Promise.reject(new Error('fetch failed')) };

@@ -1,3 +1,168 @@
+## Three engineering-deficit fixes: pgTAP scoping, live_sessions ordering guard, session-expiry mid-flush · 2026-09-12
+
+**Closed three distinct, independently-reviewable deficits from Phase 6's known open items,
+addressed together in a single session (user's ranked engineering-deficit items #6, #7, #10).**
+
+### Task 1: pgTAP test scoping fix
+
+`supabase/tests/008_delete_test_event.sql`'s final assertion now scopes the count to the
+fixture's own two known-surviving event ids (`where id in ('...e2', '...e9')`) instead of a
+bare `count(*) from events`. Eliminates false failures when local dev Postgres carries
+ambient leftover events from prior sessions/dev-harness runs. pgTAP suite: 170/170 assertions
+before this session, 177/177 after all three fixes. Applies cleanly from empty database via
+`supabase db reset`.
+
+**Files touched:**
+
+- `supabase/tests/008_delete_test_event.sql` — final assertion now scopes count to fixture's
+  own org/event ids.
+
+**Reviews:** `schema-guardian` clean (migration-independent scope improvement; pgTAP suite
+verified).
+
+### Task 2: No ordering guard on live_sessions's upsert — race-condition fix
+
+**Implementation:** New migration `supabase/migrations/20260912090000_live_sessions_snapshot_ordering_guard.sql`
+adds `snapshot_at timestamptz not null default now()` column and rebuilds `publish_session`
+(6 → 7 args) adding `p_snapshot_at timestamptz default now()`. Staleness is checked UP FRONT
+before any mutation: if an incoming publish's snapshot is older than the target event's
+already-stored snapshot, the function records it as processed and returns immediately
+(untouched). Only once staleness is ruled out does the original deactivate-then-upsert
+sequence run. `src/formats/cup-taster/liveSession.js`'s `publishLiveSessionHandlers` now
+captures `const snapshotAt = new Date().toISOString()` BEFORE calling `buildLiveSessionPayload`
+(not after), threading it through as `p_snapshot_at` — the real fix, making the DB-side guard
+meaningful.
+
+**Two real, serious issues found in review and fixed before shipping:**
+
+(1) **PostgreSQL `CREATE OR REPLACE FUNCTION` limitation:** Cannot change a function's
+argument list — the old 6-arg signature would have remained callable (coexisting with the
+new 7-arg), and the new 7-arg would have started from Postgres's own insecure defaults (no
+EXECUTE revoke-from-PUBLIC, no search_path pin), silently regressing two prior hardening
+migrations (`20260830130000_rpc_search_path_pin.sql`, `20260830140000_revoke_public_execute_on_write_rpcs.sql`).
+Fixed by explicitly dropping the old 6-arg function and reproducing all three hardening
+properties on the new 7-arg signature: `search_path = ''` pin with fully-qualified table
+references, and explicit `grant execute ... to service_role` with PUBLIC revoke. Verified
+live via `has_function_privilege()` against a real local Postgres instance: anon=false,
+authenticated=true, service_role=true, search_path pinned.
+
+(2) **Zero-active-sessions regression found by security-reviewer's first pass (BLOCKING):**
+First draft kept the pre-existing unconditional "deactivate whatever else is active for this
+org" UPDATE running BEFORE the staleness-guarded ON CONFLICT DO UPDATE ... WHERE clause. When
+the WHERE guard evaluated false (a stale publish for an event that already has a row), the
+UPDATE arm was skipped — but the unconditional deactivate step above it had ALREADY run,
+leaving the org with ZERO active live sessions until some later, unrelated publish happened
+to land. This would have silently blanked the live audience view on exactly the race this fix
+was meant to close (worse than the merely-stale-payload failure mode being fixed). Closed by
+moving the staleness check up front (a `select snapshot_at into v_existing_snapshot_at ...
+where event_id = p_event_id`, checked before any mutation, short-circuiting with an early
+return if stale) rather than gating the upsert's own WHERE clause. Two new pgTAP assertions
+in `supabase/tests/006_publish_session.sql` (plan bumped 18→23→25) directly target this:
+after a stale-snapshot publish for an event that's already the org's active session, assert
+`active = true` for it specifically, and assert exactly one session is active for the org
+overall — both checked IMMEDIATELY after the stale call, not after a later call that could
+mask the intermediate all-inactive window (which is how the first draft's own test suite
+missed the regression).
+
+**Files touched:**
+
+- `supabase/migrations/20260912090000_live_sessions_snapshot_ordering_guard.sql` — new
+  migration adding snapshot_at column and 7-arg publish_session with staleness guard.
+- `src/formats/cup-taster/liveSession.js` — `publishLiveSessionHandlers` captures snapshotAt
+  before the read chain, threads it as p_snapshot_at.
+- `supabase/tests/006_publish_session.sql` — two new pgTAP assertions proving no zero-active
+  regression after stale calls.
+
+**Reviews:**
+
+- `schema-guardian` (2 passes): first pass independently reproduced the exact zero-active-sessions
+  bug via three separate methods (raw SQL, instrumented function copy, trace analysis), then
+  confirmed the fix closes it with high confidence. Also physically executed the rollback
+  block in a transaction and confirmed byte-for-byte restoration. Verified `not null default
+now()` backfill doesn't violate constraints on pre-existing rows.
+- `security-reviewer` (2 passes): first pass found the blocking zero-active-sessions issue
+  (documented in detail above). Second pass re-verified search_path/grants/org-ownership-gate
+  were all preserved in the new function, and specifically re-examined the no-existing-row
+  edge case to confirm no remaining zero-active path exists. Signed off clean.
+- Both confirmed the pgTAP non-member negative-case coverage (a non-member's call writes zero
+  rows) remains intact throughout.
+
+### Task 3: Session validity checked only at flush-start, not mid-flush — retry-classification fix
+
+**Implementation:** Fixed at the correct shared layer, `src/core/outbox.js`'s `buildRpcHandler`,
+not just at main.js's call site — closing the gap for every call site that shares this
+handler-builder (timing.js/scoring.js/standings.js/liveSession.js/publish.js), not only the
+one specifically flagged. Added `export function isAuthStatus(status) { return status === 401; }`
+and changed `err.permanent = Boolean(status)` to `err.permanent = Boolean(status) && !isAuthStatus(status)`.
+This treats 401 as blanket-retryable (PostgREST's own JWT-layer response, never a
+business-logic rejection) while preserving permanent classification for genuine application
+errors (400+ non-401 statuses).
+
+Confirmed empirically (not assumed) against a real local Postgres/PostgREST instance via raw
+curl calls with hand-crafted JWTs: an expired JWT returns exactly `401 {"code":"PGRST303","message":"JWT expired"}`,
+a malformed one `401 {"code":"PGRST301"}`, while a genuine application-level rejection
+(e.g. publish_session's own "event not found") returns `400 {"code":"P0001"}` — 401 is only
+ever an auth/JWT-layer response from PostgREST, never a business-logic rejection, across
+every RPC this app calls (confirmed by offline-sync-auditor grepping every `raise exception`
+site across all migrations — all surface as P0001/400, never 401).
+
+**Real gap found in code-reviewer's first pass (FIXED):** `src/formats/cup-taster/liveSession.js`'s
+own `publishLiveSessionHandlers` hand-rolls a SEPARATE, duplicate error-to-permanent mapping
+(it can't reuse `buildRpcHandler` directly — its stored outbox payload is only a small intent,
+not the RPC payload, built fresh at actual flush time instead) — the first draft updated
+`buildRpcHandler` but missed this second call site entirely, leaving `publish_session`'s own
+flushes still misclassifying an expired-session 401 as permanent. Fixed by exporting
+`isAuthStatus` from outbox.js (rather than keeping it module-private, since there are now two
+real call sites) and reusing it in liveSession.js's own mapping too, with its stale doc
+comment corrected.
+
+**Test regression found in code-reviewer's second pass (FIXED):** A new "captures snapshot_at
+before, not after, the read chain" test in liveSession.test.js wasn't actually discriminating
+(fakeClient's synchronous reads meant the before/after window would pass regardless of where
+the capture happened). Fixed with an artificial delay injected into fakeClient's `ct_stages`
+read, verified by literal mutation testing (moved the real capture point to after the read,
+confirmed the corrected test now fails; reverted, confirmed it passes).
+
+**Files touched:**
+
+- `src/core/outbox.js` — new `export function isAuthStatus(status) { return status === 401; }`,
+  `err.permanent = Boolean(status) && !isAuthStatus(status)` classification.
+- `src/formats/cup-taster/liveSession.js` — uses exported `isAuthStatus` in
+  `publishLiveSessionHandlers`'s own error mapping; doc comment corrected.
+- `src/core/outbox.test.js` — 2 new tests (401 response → permanent: false; 400 rejection
+  → permanent: true).
+- `src/formats/cup-taster/liveSession.test.js` — 2 new tests for publishLiveSessionHandlers'
+  own mapping (401 → permanent: false; 400 → permanent: true), plus corrected mutation-verified
+  snapshot-timing test with artificial fakeClient read delay.
+
+**Reviews:**
+
+- `offline-sync-auditor`: confirmed 401 is safe to treat as blanket-retryable across all 8
+  RPCs this app calls (timing.js, scoring.js, standings.js, liveSession.js, publish.js,
+  plus 3 others in core modules). Walked through the FIFO-blocking retry mechanics for a
+  permanently-invalid session and confirmed it surfaces visibly via the sync panel's
+  stuck-operation display rather than looping silently forever. Confirmed no new gap
+  introduced.
+- `code-reviewer` (2 passes): first pass found the missed second call site in liveSession.js
+  (documented above). Follow-up pass confirmed all four points from the first review
+  (the missed call site, the isAuthStatus export, the duplicate mapping in liveSession.js,
+  and the corrected test), were fully and correctly addressed, with no new issues.
+
+**Overall verification (all three tasks):** `npm run lint` clean throughout. Full JS suite:
+1065/1065 passing. Full pgTAP suite: 177/177 passing, applied cleanly from an empty database
+via `supabase db reset` (verified multiple times across the session as fixes landed). Live-verified
+the migration's grants/search_path hardening directly against the local Postgres instance via
+`has_function_privilege()` and `pg_proc.proconfig` queries.
+
+**Note:** The new migration `20260912090000_live_sessions_snapshot_ordering_guard.sql` has
+NOT yet been pushed to the linked cloud project (wxzwanprluqmgoagbkpv, Seduh Score Next).
+Per CLAUDE.md's established convention, pushing to the cloud project is a separate, manual
+step from merging the PR — compare `supabase/migrations/` against the cloud project's own
+migration list before considering this complete. See CLAUDE.md's Repo section for the full
+account of why this separation exists and how prior migrations have been handled.
+
+---
+
 ## T6.hardening.a11y: Countdown urgency signal, color-alone signal fixed · 2026-09-12
 
 **Closing the "countdown color-alone signal when urgent state is most critical" a11y gap

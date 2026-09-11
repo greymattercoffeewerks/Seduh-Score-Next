@@ -515,6 +515,63 @@ describe('publishLiveSession', () => {
     expect(rpcPayload.p_payload.stage).toEqual({ kind: 'prelims', ordinal: 1, setCount: 8 });
     expect(rpcPayload.p_payload.activeHeat.heatNumber).toBe(2);
     expect(rpcPayload.p_payload.recentHeats).toHaveLength(1);
+    // The ordering-guard key publish_session's own snapshot_at column
+    // compares against (ROADMAP.md's "No ordering guard on live_sessions's
+    // upsert" gap, closed 2026-09-12) — a real ISO timestamp captured
+    // before the read chain above, not the RPC's own server-side default.
+    expect(rpcPayload.p_snapshot_at).toEqual(expect.any(String));
+    expect(new Date(rpcPayload.p_snapshot_at).toISOString()).toBe(rpcPayload.p_snapshot_at);
+  });
+
+  it('captures p_snapshot_at BEFORE buildLiveSessionPayload\'s own read chain, not after — so a slower read still reports the earlier, causally-correct moment', async () => {
+    // A bare before/after Date.now() bracket around the whole call wouldn't
+    // actually distinguish "captured before the read" from "captured
+    // after" — fakeClient's reads all resolve synchronously, so both
+    // capture points would fall inside the same microtask-wide window and
+    // the assertion would pass either way (found in review, code-reviewer,
+    // 2026-09-12). An artificial delay on the FIRST real read
+    // (ct_stages, via findStageById) makes the two capture points
+    // genuinely distinguishable: captured before, the snapshot lands near
+    // `before`; captured after, it would land near `before + delayMs`.
+    const delayMs = 50;
+    const rpcCalls = [];
+    let ctStagesCallCount = 0;
+    const client = fakeClient({ tables: baseTables(), rpc: (name, payload) => {
+      rpcCalls.push([name, payload]);
+      return Promise.resolve({ data: null, error: null });
+    } });
+    // Patched IN PLACE, not wrapped-and-returned-as-a-copy — this fake's own
+    // `select()`/`eq()` chain methods all close over and return the SAME
+    // `builder` object `.from()` constructs, so a copy with an overridden
+    // `single` would be silently bypassed the moment `.select()` is called
+    // on it (it returns the ORIGINAL object, not the copy) — found by
+    // actually mutation-testing this assertion (moving the real capture
+    // point after the read and confirming THIS version of the test fails,
+    // which the first version did not).
+    const realFrom = client.from.bind(client);
+    client.from = (table) => {
+      const builder = realFrom(table);
+      if (table === 'ct_stages') {
+        ctStagesCallCount += 1;
+        const realSingle = builder.single.bind(builder);
+        builder.single = () => {
+          const result = realSingle();
+          return new Promise((resolve) => setTimeout(() => resolve(result), delayMs));
+        };
+      }
+      return builder;
+    };
+
+    const before = Date.now();
+    await publishLiveSession({ orgId: 'org1', eventId: 'ev1', stageId: 's1', isTest: true }, client);
+
+    expect(ctStagesCallCount).toBeGreaterThan(0); // the delay actually applied to a real read
+    const [, rpcPayload] = rpcCalls[0];
+    const snapshotMs = new Date(rpcPayload.p_snapshot_at).getTime();
+    // Captured before the delay: well under `before + delayMs`. A capture
+    // taken AFTER the read chain would land at or past that threshold.
+    expect(snapshotMs).toBeGreaterThanOrEqual(before);
+    expect(snapshotMs).toBeLessThan(before + delayMs);
   });
 
   it('threads an explicit isTest: false through unchanged — not coerced to true by a falsy-defaulting bug', async () => {
@@ -541,6 +598,50 @@ describe('publishLiveSession', () => {
     await expect(
       publishLiveSession({ orgId: 'org1', eventId: 'ev1', stageId: 's1' }, client),
     ).rejects.toThrow(/isTest must be explicitly true or false/);
+  });
+
+  it('does not mark a 401 (auth/JWT problem) as permanent — this handler hand-rolls its own error-to-permanent mapping since it cannot reuse core/outbox.js\'s buildRpcHandler, so it needs the identical carve-out separately (found in review, code-reviewer, 2026-09-12: the first version of this fix updated buildRpcHandler but missed this second mapping entirely)', async () => {
+    const client = fakeClient({
+      tables: baseTables(),
+      rpc: () =>
+        Promise.resolve({
+          data: null,
+          error: { message: 'JWT expired', code: 'PGRST303' },
+          status: 401,
+        }),
+    });
+    const handlers = publishLiveSessionHandlers(client);
+    await expect(
+      handlers.publish_live_session({
+        orgId: 'org1',
+        eventId: 'ev1',
+        stageId: 's1',
+        format: 'cup_taster',
+        isTest: false,
+      }),
+    ).rejects.toMatchObject({ message: 'JWT expired', permanent: false });
+  });
+
+  it('still marks a genuine server-side rejection as permanent — the 401 carve-out does not weaken this for real rejections', async () => {
+    const client = fakeClient({
+      tables: baseTables(),
+      rpc: () =>
+        Promise.resolve({
+          data: null,
+          error: { message: 'event not found', code: 'P0001' },
+          status: 400,
+        }),
+    });
+    const handlers = publishLiveSessionHandlers(client);
+    await expect(
+      handlers.publish_live_session({
+        orgId: 'org1',
+        eventId: 'ev1',
+        stageId: 's1',
+        format: 'cup_taster',
+        isTest: false,
+      }),
+    ).rejects.toMatchObject({ message: 'event not found', permanent: true });
   });
 
   it('enqueues the publish intent even when the device is offline — a read-chain failure must not drop it (found in review: offline-sync-auditor)', async () => {

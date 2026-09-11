@@ -160,11 +160,26 @@ select throws_ok(
 -- ============ untouched events remain untouched throughout ============
 -- Checked as postgres — the authenticated caller's own RLS-scoped view
 -- would never show org 020's surviving row regardless of the real count.
+--
+-- Scoped to this fixture's own two known-surviving ids, not a bare
+-- `count(*) from events` — a bare count is only correct against a freshly
+-- `db:reset` database; it previously failed whenever the local dev database
+-- carried ambient leftover events from other dev sessions/dev-harness runs
+-- (confirmed live, 2026-09-06 dry run — two such rows sitting in this
+-- machine's own local Postgres, unrelated to this test). ROADMAP.md's own
+-- "Known gap, NOT fixed here" note flagged this as a pre-existing,
+-- non-blocking follow-up rather than block that task on it; closed here.
 
 reset role;
 
 select is(
-  (select count(*)::int from events),
+  (
+    select count(*)::int from events
+    where id in (
+      '00000000-0000-0000-0000-0000000000e2', -- 'Real Event', refused (non-test)
+      '00000000-0000-0000-0000-0000000000e9'  -- 'Other Org Event', refused (wrong org / non-member)
+    )
+  ),
   2,
   'exactly the two surviving events remain — the wrong-org one and the real one, nothing else was ever removed'
 );

@@ -76,6 +76,32 @@ export async function enqueueOperation(type, payload) {
 // PERMANENTLY discarded from the queue instead of staying there to retry
 // once the connection came back — the exact data-loss scenario the whole
 // offline-first design exists to prevent.
+// 401, specifically, is never a genuine business-logic rejection — PostgREST
+// returns it only for an auth/JWT problem (an invalid, malformed, or expired
+// token), always BEFORE the RPC body or any RLS policy ever runs. A real
+// rejection from inside the function (a `raise exception`, a constraint
+// violation, an RLS denial) always carries some OTHER non-zero status (400
+// for a plpgsql exception, 403/other for RLS) — confirmed empirically
+// against a real local Postgres/PostgREST instance, not assumed: an expired
+// JWT returns `401 {"code":"PGRST303","message":"JWT expired"}`, a malformed
+// one `401 {"code":"PGRST301", ...}`, while a genuine application-level
+// rejection (e.g. publish_session's own "event not found") returns `400
+// {"code":"P0001", ...}`. ROADMAP.md's own gap ("hasSession only checks
+// session existence at flush-start time") named the real symptom this
+// closes: a session valid when a flush BEGINS can expire partway through a
+// large queued flush, and every call site sharing this one handler-builder
+// (not just main.js's reconnect trigger) would otherwise misclassify that
+// stale-token 401 as permanent, discarding a perfectly retryable write.
+// Exported, not module-private — found in review (code-reviewer, 2026-09-12):
+// liveSession.js's own publishLiveSessionHandlers hand-rolls an identical
+// error-to-permanent mapping (it can't reuse buildRpcHandler directly — see
+// that module's own comment on why), so this needs to be shared rather than
+// re-derived a second time, the exact "single call site" premise a private
+// helper here would have wrongly assumed.
+export function isAuthStatus(status) {
+  return status === 401;
+}
+
 export function buildRpcHandler(client, type) {
   return async (payload) => {
     const { error, status } = await client.rpc(type, payload);
@@ -83,7 +109,7 @@ export function buildRpcHandler(client, type) {
       const err = new Error(error.message);
       err.code = error.code;
       err.details = error.details;
-      err.permanent = Boolean(status);
+      err.permanent = Boolean(status) && !isAuthStatus(status);
       throw err;
     }
   };

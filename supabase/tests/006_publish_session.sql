@@ -8,7 +8,7 @@
 -- with RLS actually in force throughout, matching 005_confirm_heat.sql's
 -- own precedent.
 begin;
-select plan(18);
+select plan(25);
 
 -- ============ fixtures ============
 
@@ -207,6 +207,86 @@ select is(
   (select payload from live_sessions where event_id = '00000000-0000-0000-0000-0000000000e2'),
   '{"stage":"finals"}'::jsonb,
   'the retried call''s payload was NOT applied — the operation was already processed'
+);
+
+-- ============ a snapshot_at ordering guard survives out-of-order commits ============
+-- Closes ROADMAP.md's own "No ordering guard on live_sessions's upsert,
+-- SELF-HEALING RACE DEFERRED" — simulates the exact scenario named there: a
+-- slow request for an EARLIER action (an older snapshot_at) landing AFTER a
+-- fast request for a LATER one (a newer snapshot_at) must not regress the
+-- stored payload, even though its own commit genuinely happens second.
+-- Distinct operation ids throughout — the processed_operations ledger would
+-- otherwise no-op these for an unrelated reason (an already-seen id), which
+-- would prove nothing about snapshot_at itself.
+
+-- First, a normal publish establishes a known-fresh baseline.
+select lives_ok(
+  $$ select publish_session(
+       '00000000-0000-0000-0000-0000000000f3', '00000000-0000-0000-0000-000000000010',
+       '00000000-0000-0000-0000-0000000000e2', 'cup_taster', false,
+       '{"stage":"baseline"}'::jsonb, now()
+     ) $$,
+  'a publish with an explicit current snapshot_at succeeds'
+);
+
+-- A "late-arriving" publish carrying an OLDER snapshot_at than what's
+-- already stored — simulates a slow request for an action that actually
+-- happened BEFORE the baseline above, only now completing its own commit.
+select lives_ok(
+  $$ select publish_session(
+       '00000000-0000-0000-0000-0000000000f4', '00000000-0000-0000-0000-000000000010',
+       '00000000-0000-0000-0000-0000000000e2', 'cup_taster', false,
+       '{"stage":"stale-should-not-apply"}'::jsonb, now() - interval '10 seconds'
+     ) $$,
+  'a stale-snapshot publish does not error — it is silently ignored, not rejected'
+);
+
+select is(
+  (select payload from live_sessions where event_id = '00000000-0000-0000-0000-0000000000e2'),
+  '{"stage":"baseline"}'::jsonb,
+  'the stale-snapshot publish did NOT overwrite the newer baseline payload'
+);
+
+-- The actual regression security-reviewer found in the first draft of this
+-- fix: the pre-existing "deactivate whatever's currently active" step ran
+-- UNCONDITIONALLY, before the (at the time) only-guarded-on-the-upsert
+-- check — so a stale publish for e2 (already the org's active session)
+-- deactivated it and then skipped reactivating it, leaving the ORG with
+-- ZERO active sessions until some later, unrelated publish happened to
+-- land — silently blanking the live audience view, worse than the
+-- merely-stale-payload failure this whole fix exists to close.
+-- live_sessions_one_active_per_org's own partial unique index only ever
+-- prevents TWO active rows; it does nothing to prevent zero, so this can't
+-- be caught by a constraint — only by checking directly, immediately after
+-- the stale call (not after some later, masking call).
+select is(
+  (select active from live_sessions where event_id = '00000000-0000-0000-0000-0000000000e2'),
+  true,
+  'the stale-snapshot publish left e2 as the org''s active session untouched — never deactivated with nothing reactivated in its place'
+);
+
+select is(
+  (select count(*)::int from live_sessions
+     where org_id = '00000000-0000-0000-0000-000000000010' and active),
+  1,
+  'exactly one session is still active for the org after the stale publish — never zero, never two'
+);
+
+-- A genuinely newer snapshot_at must still apply normally — the guard only
+-- blocks regressions, never legitimate forward progress.
+select lives_ok(
+  $$ select publish_session(
+       '00000000-0000-0000-0000-0000000000f5', '00000000-0000-0000-0000-000000000010',
+       '00000000-0000-0000-0000-0000000000e2', 'cup_taster', false,
+       '{"stage":"genuinely-newer"}'::jsonb, now() + interval '10 seconds'
+     ) $$,
+  'a publish with a genuinely newer snapshot_at succeeds'
+);
+
+select is(
+  (select payload from live_sessions where event_id = '00000000-0000-0000-0000-0000000000e2'),
+  '{"stage":"genuinely-newer"}'::jsonb,
+  'the newer-snapshot publish DID apply — the guard never blocks real forward progress'
 );
 
 reset role;
