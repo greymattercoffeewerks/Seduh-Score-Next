@@ -1,3 +1,220 @@
+## T6.hardening.a11y: No button-disable during in-flight async writes · 2026-09-11
+
+**Closing the "Stop/Save/Start heat buttons stay clickable during their own RPC round-trip"
+gap from Phase 6's known open items, user's ranked engineering-deficit item #4.** A
+systemic pattern across every action button in every screen: buttons stay clickable while
+their own async write is in flight, offering neither visual nor behavioral feedback. Fixed
+comprehensively across all affected screens, not just the heats/timing group flagged by
+review.
+
+**Scope-check finding:** Several screens already had the fix (`setupScreen.js`,
+`rosterScreen.js`, `core/eventsScreen.js`, `scoringScreen.js` all call `render()` or
+mutate the button synchronously before their first `await`). The genuinely missing files
+were `src/formats/cup-taster/heatsScreen.js` (3 buttons), `src/formats/cup-taster/timingScreen.js`
+(Start heat, per-row Stop, manual-entry fallback Save), and `src/formats/cup-taster/timingManualScreen.js`
+(save-row buttons). A latent bug in `standingsScreen.js` was also found: the pre-existing
+`actionInFlight` guard prevented double-processing, but only evaluated during render —
+the disabled state never actually appeared on-screen during the real in-flight window.
+
+**Implementation:** Direct, synchronous DOM mutation (`button.disabled = true;
+button.textContent = '...ing…'`) at the start of every click handler, before its first `await`,
+across all 4 files. A second regression was introduced by this approach: if the post-write
+`render()` itself throws (reachable: dropped connection right after the write settles), the
+directly-mutated button stayed stuck disabled forever with no retry path. Fixed via a
+restore-callback mechanism: each file's `renderOrShowError(feedback, restoreButton)` gained
+an optional second parameter (a callback invoked only in the catch path, restoring the button
+to its original label and enabled state). Threaded through every write button across all 4
+files, either directly (heatsScreen/standingsScreen) or through existing handler-function
+contracts (timingScreen/timingManualScreen via `onStop`/`onSave`/`onSaveManual`).
+
+**Selector robustness fix:** Two `querySelector` re-derivations that reached buttons from
+async handlers were replaced with real element references, set directly by the render
+helpers themselves (`renderManualAssignmentForm` now sets `form.submitButton`;
+`renderManualTimeFields` now sets `fields.saveButton`).
+
+**Test coverage:** Synchronous (no-await) assertions prove the disable+relabel happens
+BEFORE the write's first await — this exact structure is what distinguishes a real fix
+from the old broken pattern. Initially added for 2 of 7 buttons; `ui-accessibility-reviewer`
+caught that the other 5 only had awaited/`vi.waitFor` assertions (which pass either way);
+all 5 gained synchronous tests. Final count: 8 synchronous "disables immediately" + 2
+"restores on render() failure" regression tests across `heatsScreen.test.js`,
+`standingsScreen.test.js`, `timingScreen.test.js`, `timingManualScreen.test.js`. Updated 3
+pre-existing tests whose exact-argument assertions needed a trailing `expect.any(Function)`
+once handler contracts gained the restore-callback parameter. `timingScreen.js`/
+`timingManualScreen.js`'s restore paths verified by code-reviewer re-read (fixture complexity
+made live regression tests too fragile).
+
+**One accepted, documented tradeoff:** Disabling `timingScreen.js`'s Stop button blurs it to
+`<body>` per standard browser focus-loss behavior, with no explicit refocus target, since the
+row is either about to be replaced (success) or fully rebuilt (failure). Documented in a
+comment at the Stop button's click handler rather than engineering a synthetic mid-flight
+focus target that would itself need discarding a moment later.
+
+**Verification:** `npm run lint` clean, full JS suite 1060/1060 passing. Live-verified
+end-to-end in dev server: clicked "Seed roster" and "Generate heats (random)" against real
+Supabase with only 1 cupper, confirmed real validation error surfaced correctly and button
+re-rendered clickable (error path round-trip too fast to visually catch intermediate
+"Generating…" but tests prove synchronous mutation).
+
+**Files touched:**
+
+- `src/formats/cup-taster/heatsScreen.js` — added synchronous disable+relabel before first
+  `await` on 3 buttons (seed roster, generate heats random, manual-assignment form submit);
+  added restore-callback parameter.
+- `src/formats/cup-taster/heatsScreen.test.js` — 2 new synchronous "disables immediately"
+  tests + 1 regression test for render() failure.
+- `src/formats/cup-taster/timingScreen.js` — added disable+relabel to Start heat and per-row
+  Stop buttons, added restore-callback to `onStop` contract; made `fields.saveButton` a
+  persistent reference.
+- `src/formats/cup-taster/timingScreen.test.js` — 4 new synchronous tests for the 4
+  in-flight cases.
+- `src/formats/cup-taster/timingManualScreen.js` — added disable+relabel to per-row Save
+  button, added restore-callback to `onSaveManual` contract; made `fields.saveButton` a
+  persistent reference.
+- `src/formats/cup-taster/timingManualScreen.test.js` — 2 new synchronous tests for Save
+  in-flight case (2 rows per heat = 2 distinct button identities).
+- `src/formats/cup-taster/standingsScreen.js` — fixed pre-existing `actionInFlight` guard to
+  actually apply disabled state to DOM (added synchronous disable+relabel), added
+  restore-callback to all 4 write-button handlers.
+- `src/formats/cup-taster/standingsScreen.test.js` — 1 regression test for render() failure
+  (the 7-state machine's own resolve-path complexity makes synchronous before-await testing
+  too fragile for all 4 buttons; `code-reviewer` confirmed all restore paths correct).
+
+**Reviews — all clean, zero blocking findings:**
+
+- `module-boundary-checker`: pure UI mutation, one new optional parameter on existing
+  functions, nothing crossing core/format boundary.
+- `ui-accessibility-reviewer`: found three items: (1) Missing synchronous tests for 5 of 7
+  buttons — fixed; (2) Stop-button mid-flight focus-loss — documented as accepted tradeoff;
+  (3) Disabled-button contrast gap (existing `opacity: 0.6` = ~3.4:1 on colored buttons,
+  below 4.5:1 AA floor, substantially increased by this task's new "…ing" labels) — flagged
+  as new separate ROADMAP gap, not fixed here.
+- `code-reviewer` (2 passes): (1) Render()-failure regression — fixed via restore-callback
+  mechanism; (2) Fragile selector lookups — fixed with direct element references; (3)
+  Follow-up confirmed all restore callbacks are correct (exact original label, called on
+  every path that could leave button stuck), and `form.submitButton`/`fields.saveButton`
+  property attachment has no downside (nothing clones or serializes these DOM nodes).
+
+**Known, accepted gap:** timingScreen.js/timingManualScreen.js live-throw regression tests
+were skipped (fixture complexity), but the fixes themselves are structurally identical to
+heatsScreen/standingsScreen, both of which have live tests. `code-reviewer` verified in
+pass 2; `test-auditor` noted as a known gap.
+
+---
+
+## T5.gap.sync-panel: Operation-type-specific diagnostic messages · 2026-09-11
+
+**Closing the "Generic three-state sync panel never names WHICH operation type is
+stuck" diagnostic gap from Phase 5's known open items.** User prioritized this as item
+#5 on a ranked list of engineering deficits. The sync panel in `appShell.js` was
+rendering "Not synced — retrying failed (N pending)" for any stuck operation, with no
+indication whether the stuck operation was a heat start, a heat-time record, a heat
+confirmation, or a live-session publish — making troubleshooting harder than it needed
+to be.
+
+**Implementation:** Format-agnostic architecture. `src/core/appShell.js`'s `renderSync`
+gained an optional `operationLabels = {}` parameter (no Cup-Taster-specific strings live
+in this file, per its established "no format vocabulary here" convention). The stuck
+operation branch now looks up `operationLabels[state.stuckOperation.type]` and renders
+`Not synced — ${label} failed (${pendingCount} pending)` if a label exists, falling back
+to the generic message when the type has no entry or no map is supplied. The one file
+allowed to know both "core" and "this format is Cup Taster" — `src/main.js` — imports
+the label map from `src/formats/cup-taster/outboxHandlers.js` and threads it through
+to `mountAppShell`. New export `cupTasterOperationLabels` in `outboxHandlers.js` maps
+the 6 real operation types to short labels: "starting a heat", "recording a time",
+"recording a max time", "confirming a heat", "resolving a stage", "publishing to the
+live view".
+
+**Files touched:**
+
+- `src/core/appShell.js` — added `operationLabels` parameter to `mountAppShell`, updated
+  `renderSync` to render operation-specific messages.
+- `src/formats/cup-taster/outboxHandlers.js` — new export `cupTasterOperationLabels`
+  (same file/reasoning as existing `cupTasterOutboxHandlers` composition).
+- `src/main.js` — imports and threads `cupTasterOperationLabels` through to `mountAppShell`.
+- `src/core/appShell.test.js` — two new tests: one proving a supplied label renders
+  correctly (using deliberately non-Cup-Taster type name to verify appShell.js is
+  format-agnostic), one proving the fallback works for an unlabeled type.
+- `src/formats/cup-taster/outboxHandlers.test.js` — two-way consistency check (every
+  handler type has a label, every label maps to a real handler type).
+- `src/main.test.js` — updated existing outboxHandlers.js mock to also export fake
+  `cupTasterOperationLabels` (was failing once main.js started importing it).
+
+**Live verification:** `npm run lint` clean, full JS suite 1047/1047 passing. Verified
+LIVE in dev server: injected a real stuck operation directly into IndexedDB (type:
+'confirm_heat', attempts: 1), confirmed the sync panel rendered "Not synced — confirming
+a heat failed (1 pending)" with correct danger-toned styling, then cleaned up.
+
+**Reviews — all clean, zero blocking findings:**
+
+- `ui-accessibility-reviewer`: confirmed the longer message still wraps sensibly at 360px
+  (no CSS change needed, `.app-shell-sync` was never nowrap), danger-toned
+  `.app-shell-sync-stuck` styling applies unconditionally, aria-live dedupe key (built
+  from stuckOperation.id) already changes when text does.
+- `module-boundary-checker`: confirmed zero Cup-Taster-specific strings in appShell.js,
+  `outboxHandlers.js` is the correct home (same file/reasoning as handler composition),
+  only main.js imports cupTasterOperationLabels, a hypothetical second format could supply
+  its own label map unedited.
+- `code-reviewer`: confirmed all 6 operation-type strings/labels are accurate against real
+  `enqueueOperation` call sites in timing.js/scoring.js/standings.js/liveSession.js. One
+  non-blocking observation: the consistency test only catches drift within the label map
+  itself, not a typo at an actual call site (e.g., 'start-heat' vs 'start_heat'); this is
+  pre-existing (shared with the "composes every Cup Taster operation type" test directly
+  above), structurally hard to close without app-wide refactoring, flagged as known but
+  not blocking.
+
+**Status:** Done. `npm run lint` clean, 1047/1047 tests passing. No blocking findings.
+
+---
+
+## T5.gap.automatic-publish: `tieStatus` publication decision closure · 2026-09-11
+
+**Product/scoring decision closure from Phase 5's known open items**, closing the
+ROADMAP-tracked gap. The user prioritized and decided via AskUserQuestion: match
+`standingsScreen.js`'s own existing convention exactly — `tieStatus` should stay
+'tied'/'advancing' right up through a confirmed tiebreak heat, only clearing once the
+organiser actually commits the stage resolution (not clearing as soon as the tiebreak
+heat itself is confirmed, which was the rejected alternative).
+
+**Implementation:** `src/formats/cup-taster/liveSession.js`'s `buildLiveSessionPayload`
+now calls `resolveAdvancement(ranked, stage.cutoff ?? 1)` (from `./standings.js`) using
+the SAME `ranked` list already fetched for standings rows — zero new DB reads, pure
+reuse of the exact computation `standingsScreen.js` already performs. Gated: skipped
+entirely once `stage.status === 'complete'`, because `ct_standings` (source of `ranked`)
+is never updated by tiebreak/coin-toss outcomes, so post-completion computation would
+keep showing "(tied)" on cuppers whose tie was already broken but not yet committed. New
+shared export `tieStatusFor(item, { advancingIds, tiedBorderIds })` extracted to
+`src/formats/cup-taster/standings.js` — exact byte-for-byte logic originally in
+`standingsScreen.js`'s private `statusLabel` function. Both screens now import and use
+this single shared implementation instead of duplicating (real finding from
+`code-reviewer`'s first pass, fixed before close).
+
+**Files touched:** `src/formats/cup-taster/liveSession.js` (buildLiveSessionPayload,
+tieStatus computation + gate), `src/formats/cup-taster/standings.js` (new tieStatusFor
+export), `src/formats/cup-taster/liveSession.test.js` (3 tests: existing base-case
+expectations updated, new 3-cupper border-tie at position-2 case, new complete-stage
+gate test proving tieStatus suppression).
+
+**Reviews:** All clean (one real finding, fixed in same task):
+
+- `scoring-auditor`: clean — verified `resolveAdvancement` called identically to
+  `standingsScreen.js`, confirmed stage.status gate doesn't introduce exposure worse than
+  pre-existing tied-until-commit, confirmed stageEntryId matching trivially consistent,
+  champion computation separately gated with no overlap/conflict, confirmed tests prove
+  invariants (not just happy paths).
+- `module-boundary-checker`: clean — no new `src/core/` imports, no core/` primitive
+  reimplementation (resolveAdvancement is thin pass-through to core/advancement.js).
+- `code-reviewer`: found byte-for-byte duplication of statusLabel between standingsScreen
+  and initial liveSession draft — fixed by extracting `tieStatusFor` to standings.js and
+  importing it from both. Also suggested comment clarity (ambiguous "deliberately NOT
+  computed once complete" wording) — fixed. Confirmed tests well-constructed, not
+  overfit to implementation.
+
+**Status:** Done. `npm run lint` clean, full JS suite 1044/1044 passing. No blocking
+findings. Ready to merge.
+
+---
+
 ## Design System rework: Editorial → Cherry · 2026-09-11
 
 **Whole-product visual identity refresh, not a formal phase task.** User feedback on the

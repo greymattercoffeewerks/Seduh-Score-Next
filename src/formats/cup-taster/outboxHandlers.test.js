@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { cupTasterOutboxHandlers } from './outboxHandlers.js';
+import { cupTasterOutboxHandlers, cupTasterOperationLabels } from './outboxHandlers.js';
 import { confirmHandlers, submitConfirmHeat } from './scoring.js';
 import { enqueueOperation, countPendingOperations, flushOutbox } from '../../core/outbox.js';
 import { _clearAllForTests } from '../../core/db.js';
@@ -72,6 +72,21 @@ describe('cupTasterOutboxHandlers', () => {
     // actual callable handler, not just a present key.
     for (const handler of Object.values(handlers)) {
       expect(typeof handler).toBe('function');
+    }
+  });
+
+  it('cupTasterOperationLabels names every operation type the composed handler map registers — no missing or stale label', () => {
+    const client = fakeRpcClient();
+    const handlerTypes = Object.keys(cupTasterOutboxHandlers(client)).sort();
+    const labelTypes = Object.keys(cupTasterOperationLabels).sort();
+    // Two-way check: a type with a handler but no label would leave the sync
+    // panel silently falling back to its generic message (not wrong, but a
+    // regression of the gap this map exists to close); a label with no real
+    // handler would be dead/misleading vocabulary nothing can ever queue.
+    expect(labelTypes).toEqual(handlerTypes);
+    for (const label of Object.values(cupTasterOperationLabels)) {
+      expect(typeof label).toBe('string');
+      expect(label.length).toBeGreaterThan(0);
     }
   });
 

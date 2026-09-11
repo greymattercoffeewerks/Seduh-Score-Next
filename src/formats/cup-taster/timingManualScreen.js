@@ -70,11 +70,27 @@ export function renderManualEntryRows(hydratedEntries, { onSave }) {
         try {
           totalSecs = parseElapsedInput(minutesRaw, secondsRaw);
         } catch (err) {
+          // A pure local validation failure — no write attempted, button
+          // untouched, nothing to re-enable.
           localError.textContent = err.message;
           return;
         }
         localError.textContent = '';
-        onSave(entryId, totalSecs);
+        // Mutated directly, not left to the caller's own eventual render()
+        // — matches timingScreen.js's identical fix (ROADMAP.md gap, closed
+        // 2026-09-11); onSave's own re-render (success or failure) is what
+        // actually resets this row. `.saveButton` is a real reference
+        // timingScreen.js's renderManualTimeFields attaches directly (found
+        // in review, code-reviewer) rather than a class selector re-derived
+        // here.
+        const { saveButton } = manualFields;
+        const originalLabel = saveButton.textContent;
+        saveButton.disabled = true;
+        saveButton.textContent = 'Saving…';
+        onSave(entryId, totalSecs, () => {
+          saveButton.disabled = false;
+          saveButton.textContent = originalLabel;
+        });
       },
       extraChildren: [statusNode, localError].filter(Boolean),
     });
@@ -115,10 +131,14 @@ export async function mountManualTimingScreen(
     else delete feedback.dataset.tone;
   }
 
-  async function renderOrShowError(feedback) {
+  // `restoreButton`, when given, fires only if render() ITSELF then throws
+  // — see heatsScreen.js's identical fix for the full account (found in
+  // review, code-reviewer, 2026-09-11).
+  async function renderOrShowError(feedback, restoreButton) {
     try {
       await render();
     } catch (err) {
+      restoreButton?.();
       setFeedback(feedback, describeError(err), 'error');
       feedback.scrollIntoView?.({ block: 'nearest' });
       feedback.focus();
@@ -235,7 +255,7 @@ export async function mountManualTimingScreen(
         // this handler on success (see its own comment: a validation
         // failure alone must never trigger a render(), matching
         // timingScreen.js's identical onSaveManual contract).
-        onSave: async (entryId, totalSecs) => {
+        onSave: async (entryId, totalSecs, restoreButton) => {
           const savedEntry = data.hydrated.find((entry) => entry.entry_id === entryId);
           try {
             const { expectedElapsedSecs, flushResult } = await recordManualTime(
@@ -255,7 +275,7 @@ export async function mountManualTimingScreen(
           } catch (err) {
             pendingError = describeError(err);
           }
-          await renderOrShowError(feedback);
+          await renderOrShowError(feedback, restoreButton);
         },
       });
       container.appendChild(

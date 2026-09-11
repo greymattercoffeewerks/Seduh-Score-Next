@@ -212,7 +212,32 @@ describe('renderManualEntryRows', () => {
     inputs[0].value = '3';
     inputs[1].value = '15';
     rows.querySelector('button').click();
-    expect(onSave).toHaveBeenCalledWith('e1', 195);
+    // A 3rd arg — a restore callback for renderOrShowError to call if
+    // render() itself throws after the write settles (2026-09-11 follow-up,
+    // code-reviewer) — is now always passed alongside the parsed value.
+    expect(onSave).toHaveBeenCalledWith('e1', 195, expect.any(Function));
+  });
+
+  it('disables Save and relabels it "Saving…" once validation passes — ROADMAP.md gap, closed 2026-09-11 — but leaves it untouched on a local validation failure', () => {
+    const rows = renderManualEntryRows(
+      [{ entry_id: 'e1', displayName: 'Cupper One', elapsed_secs: null }],
+      { onSave: () => {} },
+    );
+    const inputs = rows.querySelectorAll('input');
+    const saveButton = rows.querySelector('button');
+
+    // Invalid first — must not disable, since onSave is never called and
+    // nothing re-renders to reset it afterward.
+    inputs[0].value = '2';
+    inputs[1].value = '';
+    saveButton.click();
+    expect(saveButton.disabled).toBe(false);
+
+    // Now valid — must disable immediately, synchronously.
+    inputs[1].value = '15';
+    saveButton.click();
+    expect(saveButton.disabled).toBe(true);
+    expect(saveButton.textContent).toBe('Saving…');
   });
 
   it('an invalid entry never calls onSave — shows a local, inline error instead, leaving the row itself untouched', () => {

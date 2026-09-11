@@ -115,6 +115,23 @@ export function resolveAdvancement(ranked, cutoff) {
   return computeAdvancement(ranked, cutoff);
 }
 
+// Pure. The single membership-to-label mapping every consumer of
+// resolveAdvancement's `{advancing, tiedAtBorder}` groups needs — extracted
+// here (2026-09-11, found in review, code-reviewer) once liveSession.js
+// became a second, independent copy of standingsScreen.js's own
+// `statusLabel`: two hand-synced copies of a 4-line function can silently
+// drift, exactly the risk this codebase's own reuse discipline exists to
+// prevent (CONVENTIONS.md). `advancingIds`/`tiedBorderIds` are Sets of
+// `stageEntryId`, built by the caller from resolveAdvancement's own output —
+// this function doesn't call resolveAdvancement itself, since callers differ
+// on WHEN they're allowed to (standingsScreen.js always; liveSession.js only
+// while `stage.status !== 'complete'` — see that module's own comment).
+export function tieStatusFor(item, { advancingIds, tiedBorderIds }) {
+  if (advancingIds.has(item.stageEntryId)) return 'advancing';
+  if (tiedBorderIds.has(item.stageEntryId)) return 'tied';
+  return null;
+}
+
 // DB. Creates the tiebreak heat for a stage's border tie — a thin wrapper
 // over heats.js's generateTiebreakHeat, unwrapping core/advancement's
 // `{ item, position }` envelope into the plain entry rows that function

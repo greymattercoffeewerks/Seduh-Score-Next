@@ -23,16 +23,26 @@
 // mid-entry won't show as "in progress" on the audience view, only once
 // confirmed — see ROADMAP.md.
 //
-// `standings` rows always publish `tieStatus: null` — border-tie/advancing
-// labels are a STAGE-COMPLETE concept (standingsScreen.js's own
-// resolveAdvancement, run once at stage close against a real cutoff), not
-// something mid-stage live standings can compute; a heat-start/heat-confirm
-// publish only ever fires while the stage is still in progress. Not a gap
-// this module cuts silently — flagged in ROADMAP.md as a deliberately
-// deferred question (does a THIRD trigger belong at stage-resolution, so
-// tied/advancing ever renders on the audience surface?), found in review
-// (code-reviewer): D23 scoping the automatic cadence to "per heat" doesn't
-// itself settle whether stage-close deserves its own trigger too.
+// `standings` rows' `tieStatus` (2026-09-11, closing the ROADMAP-tracked
+// product decision) — computed via standings.js's OWN `resolveAdvancement`
+// plus its shared `tieStatusFor` (also used by standingsScreen.js, so the
+// two never hand-drift), applied to the identical `ranked` list this
+// function already fetched for the standings rows themselves, so this is
+// zero new DB reads, not a new rule: the audience payload now shows exactly
+// the same "who's advancing, who's tied at the border" grouping the
+// organiser's own Standings screen already computes and displays. The
+// computation is SKIPPED once `stage.status === 'complete'` (every row gets
+// `tieStatus: null` instead) — matches this codebase's own established
+// convention (`standingsScreen.js`'s own primary table keeps showing "tied"
+// right up through a confirmed tiebreak heat, only clearing once the
+// organiser actually commits; see that screen's module comment) rather than
+// inventing a different cutover point for this second consumer. A tiebreak
+// heat's own result never changes `ct_standings` (tiebreak heats are
+// deliberately excluded from it — see standings.js), so without this gate
+// `tieStatus` would keep reporting "tied" on two cuppers whose tie was
+// already broken but not yet committed — same known, accepted
+// characteristic the organiser's own screen already has, not a new one
+// introduced here.
 //
 // Deliberately does NOT reuse core/publish.js's publishSession() —
 // found in review (offline-sync-auditor): that function's contract assumes
@@ -56,20 +66,20 @@
 // — no new reconnect wiring needed, since that flush already passes
 // cupTasterOutboxHandlers(client), which now includes this operation type.
 import { listHeatsForStage, hydrateEntries } from './heats.js';
-import { fetchStandingsForStage } from './standings.js';
+import { fetchStandingsForStage, resolveAdvancement, tieStatusFor } from './standings.js';
 import { listEntriesByIds } from '../../core/registry.js';
 import { enqueueOperation, flushOutbox } from '../../core/outbox.js';
 import { getSupabase } from '../../core/supabaseClient.js';
 
 const RECENT_HEATS_LIMIT = 3;
 
-function toStandingsRow({ item, position }) {
+function toStandingsRow({ item, position }, tieGroups) {
   return {
     position,
     displayName: item.displayName,
     numCorrect: item.numCorrect,
     totalElapsedSecs: item.total_elapsed_secs,
-    tieStatus: null,
+    tieStatus: tieGroups ? tieStatusFor(item, tieGroups) : null,
   };
 }
 
@@ -140,7 +150,19 @@ function toActiveHeat(stage, heat, hydratedEntries) {
 // original version fetched the identical row twice.
 export async function buildLiveSessionPayload(stageId, client = getSupabase()) {
   const { stage, ranked } = await fetchStandingsForStage(stageId, client);
-  const standings = ranked.map(toStandingsRow);
+  // See this module's own top comment for why this is gated on stage status
+  // and why it's safe to compute from `ranked` alone (already fetched above,
+  // no new DB read) — mirrors standingsScreen.js's own advancingIds/
+  // tiedBorderIds construction exactly.
+  let tieGroups = null;
+  if (stage.status !== 'complete') {
+    const { advancing, tiedAtBorder } = resolveAdvancement(ranked, stage.cutoff ?? 1);
+    tieGroups = {
+      advancingIds: new Set(advancing.map(({ item }) => item.stageEntryId)),
+      tiedBorderIds: new Set(tiedAtBorder.map(({ item }) => item.stageEntryId)),
+    };
+  }
+  const standings = ranked.map((row) => toStandingsRow(row, tieGroups));
 
   const heatsWithEntries = await listHeatsForStage(stageId, client);
 

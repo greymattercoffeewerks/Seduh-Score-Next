@@ -46,7 +46,7 @@ export function renderRosterList(hydratedEntries) {
 // asking the organiser to re-type what's already correct.
 export function renderManualAssignmentForm(
   hydratedEntries,
-  { existingAssignments = new Map() } = {},
+  { existingAssignments = new Map(), disabled = false } = {},
 ) {
   const rows = hydratedEntries.map((entry) => {
     const existing = existingAssignments.get(entry.entry_id);
@@ -100,11 +100,18 @@ export function renderManualAssignmentForm(
 
   const submitButton = el('button', {
     className: 'btn btn-primary tap-target',
-    text: 'Save manual heats',
-    attrs: { type: 'submit' },
+    text: disabled ? 'Saving…' : 'Save manual heats',
+    attrs: disabled ? { type: 'submit', disabled: 'disabled' } : { type: 'submit' },
   });
 
-  return el('form', { className: 'manual-assignment-form' }, [table, submitButton]);
+  const form = el('form', { className: 'manual-assignment-form' }, [table, submitButton]);
+  // Attached directly rather than left for a caller to re-derive via a
+  // class/type selector (found in review, code-reviewer) — a selector stays
+  // correct only by coincidence of there being exactly one matching button
+  // today; a real reference can't silently pick up a second one this form
+  // might grow later.
+  form.submitButton = submitButton;
+  return form;
 }
 
 // Reads the form's own inputs back into `[{entryId, heatNumber, station}]`.
@@ -196,6 +203,17 @@ export async function mountHeatGenerationScreen(
 ) {
   let focusAfterRender = null;
   let pendingError = null;
+  // Guards this screen's 3 write actions (seed roster / generate random /
+  // submit manual assignment) against a rapid double-click before a
+  // re-render lands — matches standingsScreen.js's own established
+  // actionInFlight name/shape (ROADMAP.md gap, closed 2026-09-11). Matters
+  // more here than on most screens: generateHeatsRandom's own comment above
+  // already documents that a second click on a stale "no heats yet" view
+  // can silently double-place a cupper (createHeats has no batch-level
+  // atomicity, and ensureHeatEntries only checks for a conflict WITHIN one
+  // heat) — this closes the narrow but real window between a click and the
+  // re-render that would otherwise remove the button.
+  let actionInFlight = false;
 
   function setFeedback(feedback, message, tone) {
     feedback.textContent = message ?? '';
@@ -211,10 +229,23 @@ export async function mountHeatGenerationScreen(
   // loadState() throws before render() reaches `root.innerHTML = ''`, the
   // previous successful render's DOM (including its `feedback` element,
   // captured by the caller's closure) is still attached and still usable.
-  async function renderOrShowError(feedback) {
+  // `restoreButton`, when given, is called on the catch path only — found
+  // in review (code-reviewer, 2026-09-11): the three write buttons below
+  // now mutate themselves directly (disabled + "…ing" text) the instant
+  // they're clicked, since nothing re-renders between a click and the write
+  // settling (see each button's own comment). But if render() ITSELF then
+  // throws here — a real, reachable case (a dropped connection right after
+  // the write already succeeded/failed) — `root.innerHTML` is never
+  // cleared (the throw happens before that line), so the directly-mutated
+  // button stays attached and stuck disabled forever, with no on-screen way
+  // to retry short of a reload — worse than before this task, when the
+  // (never-actually-applied) disabled state left the button clickable on
+  // this exact failure path. Restoring it here closes that regression.
+  async function renderOrShowError(feedback, restoreButton) {
     try {
       await render();
     } catch (err) {
+      restoreButton?.();
       setFeedback(feedback, describeError(err), 'error');
       // render()'s own post-attach scroll/focus step never ran (it failed
       // before getting there) — `feedback` is already live in the DOM here
@@ -278,20 +309,39 @@ export async function mountHeatGenerationScreen(
     if (data.hydrated.length === 0) {
       const seedButton = el('button', {
         className: 'btn btn-primary tap-target',
-        text: 'Seed roster into this stage',
+        text: actionInFlight ? 'Seeding…' : 'Seed roster into this stage',
+        attrs: actionInFlight ? { disabled: 'disabled' } : {},
       });
       seedButton.addEventListener('click', async () => {
+        if (actionInFlight) return;
+        actionInFlight = true;
+        // Mutated directly, not left to the eventual re-render below — this
+        // button's own `attrs: actionInFlight ? ... : {}` is only evaluated
+        // while `render()` is BUILDING it, which already happened before
+        // this handler ever runs; nothing re-renders again until after the
+        // await settles, so without this direct mutation the flag would
+        // silently gate a second click's WORK (still correct) but never
+        // actually show as disabled on screen — the exact "stays clickable
+        // while the write is in flight" gap this task closes.
+        seedButton.disabled = true;
+        seedButton.textContent = 'Seeding…';
         try {
           await seedFirstStageEntries(eventId, client);
           focusAfterRender = '#roster-heading';
         } catch (err) {
           pendingError = describeError(err);
         }
+        actionInFlight = false;
         // Re-render unconditionally, success or failure: a failed attempt
         // must never leave a stale view on screen that doesn't reflect what
         // actually landed in the database (see the random/manual handlers
-        // below for why this matters more than it looks here).
-        await renderOrShowError(feedback);
+        // below for why this matters more than it looks here). The restore
+        // callback only fires if render() ITSELF then throws — see
+        // renderOrShowError's own comment.
+        await renderOrShowError(feedback, () => {
+          seedButton.disabled = false;
+          seedButton.textContent = 'Seed roster into this stage';
+        });
       });
       container.appendChild(
         el('div', { className: 'card' }, [
@@ -326,9 +376,21 @@ export async function mountHeatGenerationScreen(
       // all), and buildHeatPlansFromAssignments's own "every stage entry
       // must be assigned exactly once" check still passes.
       function buildManualForm(existingAssignments) {
-        const manualForm = renderManualAssignmentForm(data.hydrated, { existingAssignments });
+        const manualForm = renderManualAssignmentForm(data.hydrated, {
+          existingAssignments,
+          disabled: actionInFlight,
+        });
         manualForm.addEventListener('submit', async (event) => {
           event.preventDefault();
+          if (actionInFlight) return;
+          actionInFlight = true;
+          // See seedButton's own comment above — mutated directly for
+          // immediate visual feedback, since nothing re-renders (and thus
+          // nothing re-evaluates the `disabled` prop above) until after the
+          // await settles.
+          const { submitButton } = manualForm;
+          submitButton.disabled = true;
+          submitButton.textContent = 'Saving…';
           const assignments = [
             ...readManualAssignmentForm(manualForm),
             ...[...existingAssignments].map(([entryId, assignment]) => ({
@@ -342,7 +404,11 @@ export async function mountHeatGenerationScreen(
           } catch (err) {
             pendingError = describeError(err);
           }
-          await renderOrShowError(feedback);
+          actionInFlight = false;
+          await renderOrShowError(feedback, () => {
+            submitButton.disabled = false;
+            submitButton.textContent = 'Save manual heats';
+          });
         });
         return manualForm;
       }
@@ -350,9 +416,20 @@ export async function mountHeatGenerationScreen(
       if (data.heats.length === 0) {
         const randomButton = el('button', {
           className: 'btn btn-primary tap-target',
-          text: 'Generate heats (random)',
+          text: actionInFlight ? 'Generating…' : 'Generate heats (random)',
+          attrs: actionInFlight ? { disabled: 'disabled' } : {},
         });
         randomButton.addEventListener('click', async () => {
+          // The primary guard against the exact double-click corruption risk
+          // this button's own module comment above describes — actionInFlight
+          // closes the window between this click and the re-render that
+          // would otherwise remove/disable the button. Mutated directly too
+          // (see seedButton's own comment above) so the disabling is actually
+          // visible during the await, not just enforced silently.
+          if (actionInFlight) return;
+          actionInFlight = true;
+          randomButton.disabled = true;
+          randomButton.textContent = 'Generating…';
           try {
             await generateHeatsRandom(stageId, {}, client);
             focusAfterRender = '#heats-heading';
@@ -371,7 +448,11 @@ export async function mountHeatGenerationScreen(
             // failure state is known closes that gap.
             pendingError = describeError(err);
           }
-          await renderOrShowError(feedback);
+          actionInFlight = false;
+          await renderOrShowError(feedback, () => {
+            randomButton.disabled = false;
+            randomButton.textContent = 'Generate heats (random)';
+          });
         });
 
         const manualForm = buildManualForm(new Map());

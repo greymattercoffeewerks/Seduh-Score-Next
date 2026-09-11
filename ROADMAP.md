@@ -447,6 +447,17 @@ station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can 
   patch — out of scope for the grouped accessibility pass. Flagged by:
   `ui-accessibility-reviewer` (core wiring group).
 
+- **T6.hardening.a11y — Disabled-button contrast ratio, NEW GAP (2026-09-11).**
+  `.btn:disabled`'s existing `opacity: 0.6` treatment (in `heatsScreen.css`, loaded globally)
+  computes to roughly 3.4:1 contrast on a colored `.btn-primary` with white text — below the
+  4.5:1 AA floor. Pre-existing on read-only toggles elsewhere in the codebase (which is why
+  `scoringScreen.css` already documented a separate `data-readonly` override with `opacity: 1`);
+  this task substantially increases exposure to the gap by adding many new "…ing" labels that
+  render in the disabled state on timing/scoring surfaces judges read under time pressure. Not
+  fixed here (would require either extending the `data-readonly` override to the new in-flight
+  case, or a documented accepted-exception decision). Flagged as a separate, whole-app pass.
+  Flagged by: `ui-accessibility-reviewer` (heats/timing group).
+
 - **T6.hardening.a11y — `viewerBody.js` countdown `[data-urgent='true']` color-alone signal,
   DEFERRED.** The urgent state changes only text color (--color-danger), no accompanying
   icon/pattern/weight — a color-alone signal on the state most likely to matter under time
@@ -456,13 +467,29 @@ station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can 
   rather than fixed out-of-scope. Flagged by: `ui-accessibility-reviewer` (audience/live
   surfaces group).
 
-- **T6.hardening.a11y — No button-disable during in-flight async writes, NON_BLOCKING.**
-  Stop/Save/Start heat/etc. all stay clickable while their own RPC round-trip is in
-  flight — a systemic pattern across every action button in every screen in this codebase,
-  not introduced or scoped to this pass. Server-side conflict rejection already protects
-  data integrity; fixing only the heats/timing group's own four files would be inconsistent
-  with every other screen. Flagged for a separate, whole-app pass. Flagged by:
-  `ui-accessibility-reviewer` (heats/timing group).
+- **T6.hardening.a11y — No button-disable during in-flight async writes, CLOSED (2026-09-11).**
+  Every action button across all four affected screens (`heatsScreen.js`, `timingScreen.js`,
+  `timingManualScreen.js`, `standingsScreen.js`) now disables synchronously before its first
+  `await`, preventing double-clicks and maintaining correct user feedback throughout the
+  round-trip. Implementation uses direct DOM mutation (`button.disabled = true; button.textContent
+= '...ing…'`) at the start of each click handler, before any await, with a restore callback
+  mechanism gating the post-write `render()` so buttons re-enable with their original label if
+  the render itself throws (fixing a regression the initial fix would have introduced). A second
+  real defect in `standingsScreen.js` was uncovered and fixed: the pre-existing `actionInFlight`
+  guard was only ever evaluated during render, never actually applying the disabled state to the
+  DOM. All 7 affected buttons (seed roster, generate heats random, generate heats manual submit,
+  start heat, per-row stop, manual-entry save, and standingsScreen's 4 write buttons) now have
+  synchronous "disables immediately" tests proving the disable happens before the first await.
+  Two additional regression tests prove button restoration on render() failure. Three files
+  gained synchronous test coverage for this exact synchronous-before-await guarantee
+  (`heatsScreen.test.js`, `standingsScreen.test.js`), and two files use dedicated code-reviewer
+  re-read verification in place of live tests due to fixture complexity (`timingScreen.js`,
+  `timingManualScreen.js`). npm run lint clean, full JS suite 1060/1060 passing. Module-boundary
+  clean; ui-accessibility found three items (missing synchronous tests for 5 buttons — fixed;
+  Stop-button mid-flight focus-loss — documented as accepted tradeoff; disabled-button contrast
+  gap — flagged as new separate follow-up). Code-reviewer (2 rounds) found and fixed: render()
+  failure regression, fragile selector lookups (now direct element references), confirmed all
+  restore callbacks are correct. Flagged by: `ui-accessibility-reviewer` (heats/timing group).
 
 - **T6.hardening.a11y — `viewer-shell.js` render() churn during persistent-h1 fix,
   NON_BLOCKING.** The persistent-h1 fix (real, tested, correct) left `render()` calling
@@ -659,18 +686,38 @@ station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can 
   trigger to exist at all (a champion declared at the terminal stage would otherwise
   never reach the live payload, since there's no heat left afterward to publish from).
   See CHANGELOG.md's "Audience live view: stage-kind labels + champion hero" entry.
-  **`standings` rows still always publish `tieStatus: null`, PRODUCT/SCORING DECISION
-  STILL OPEN.** The trigger existing doesn't by itself compute tied/advancing labels —
-  `liveSession.js`'s `toStandingsRow` still hardcodes `tieStatus: null` unconditionally,
-  so a border tie still never renders as "(tied)"/"(advancing)" on the audience surface,
-  even now that a publish fires at stage close. Still needs a human/product decision on
-  whether `resolveAdvancement`'s own tie/advancement result should flow into the
-  published payload, not just a code fix. Flagged by: `code-reviewer`.
+  **`standings` rows compute and publish `tieStatus`, PRODUCT/SCORING DECISION CLOSED
+  (2026-09-11).** Matched `standingsScreen.js`'s existing convention exactly:
+  `tieStatus` stays 'tied'/'advancing' right up through a confirmed tiebreak heat, only
+  clearing once the organiser actually commits the stage resolution (not clearing as soon
+  as the tiebreak heat itself is confirmed, which was rejected). Implementation in
+  `buildLiveSessionPayload` calls `resolveAdvancement(ranked, stage.cutoff ?? 1)` using
+  the same `ranked` list already fetched for standings rows (zero new DB reads), gated to
+  skip computation once `stage.status === 'complete'` (since `ct_standings` is never
+  updated by tiebreak/coin-toss outcomes, post-completion computation would incorrectly
+  show ties already broken). New `tieStatusFor` exported from `standings.js` and shared
+  by both `standingsScreen.js` and `liveSession.js` instead of duplicated (found in
+  review). Three tests: base case (existing fixture, cutoff now correct), genuine 3-cupper
+  border-tie at position 2, and complete-stage gate suppresses tieStatus even when
+  underlying data would compute tie. All reviewers clean: `scoring-auditor` verified
+  identical call to `standingsScreen.js`, gate safety, stageEntryId consistency; zero
+  `core/` boundary violations; tests prove invariants. See CHANGELOG.md for full account.
+  Flagged by: `code-reviewer`.
 
 - **Generic three-state sync panel never names WHICH operation type is stuck, MINOR
   DIAGNOSTIC GAP.** An organiser can't tell a stuck `publish_live_session` apart from a
   stuck `start_heat`/`confirm_heat` from the panel alone. Non-blocking (the panel never
   lies, just isn't specific). Flagged by: `offline-sync-auditor`.
+  **CLOSED 2026-09-11:** `src/core/appShell.js` gained an optional `operationLabels` parameter
+  passed from `src/main.js` (the one file allowed to know both "core" and "this format"),
+  `src/formats/cup-taster/outboxHandlers.js` exports `cupTasterOperationLabels` mapping
+  the 6 operation types to short labels ("starting a heat", "recording a time", etc.),
+  and `renderSync` now renders operation-specific messages like "Not synced — confirming
+  a heat failed" instead of generic "retrying failed." Zero core/format boundary violation
+  — a future format supplies its own label map unedited. All three reviewers (ui-accessibility,
+  module-boundary, code-reviewer) confirmed clean; consistency tests (every handler has a
+  label, every label maps to a handler) newly added. npm run lint clean, 1047/1047 tests
+  passing.
 
 - **`buildLiveSessionPayload` does N+1 sequential DB reads, OPTIMIZATION DEFERRED.** One
   query per heat via `listHeatsForStage`, more per surfaced heat's roster/results. This

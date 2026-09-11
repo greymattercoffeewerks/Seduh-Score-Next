@@ -40,13 +40,8 @@ import {
   belowTheLine,
   commitStageResolution,
   findNextStage,
+  tieStatusFor,
 } from './standings.js';
-
-function statusLabel(item, { advancingIds, tiedBorderIds }) {
-  if (advancingIds.has(item.stageEntryId)) return 'advancing';
-  if (tiedBorderIds.has(item.stageEntryId)) return 'tied';
-  return null;
-}
 
 // An em dash needs no screen-reader expansion (already unambiguous); a real
 // duration gets one, via withSrExpansion — see that helper's own comment
@@ -71,7 +66,7 @@ export function renderStandingsTable(
   { advancingIds = new Set(), tiedBorderIds = new Set() } = {},
 ) {
   const rows = ranked.map(({ item, position }) => {
-    const label = statusLabel(item, { advancingIds, tiedBorderIds });
+    const label = tieStatusFor(item, { advancingIds, tiedBorderIds });
     return el('tr', { className: 'standings-row', attrs: label ? { 'data-status': label } : {} }, [
       el('td', {
         className: 'standings-position',
@@ -138,10 +133,18 @@ export async function mountStandingsScreen(
     else delete feedback.dataset.tone;
   }
 
-  async function renderOrShowError(feedback) {
+  // `restoreButton`, when given, fires only if render() ITSELF then throws
+  // — see heatsScreen.js's identical fix for the full account (found in
+  // review, code-reviewer, 2026-09-11): every write button below now
+  // mutates itself directly (disabled + "…ing" text) the instant it's
+  // clicked, and without this restore a render() failure right after the
+  // write settles would leave that button stuck disabled forever, with no
+  // on-screen retry path.
+  async function renderOrShowError(feedback, restoreButton) {
     try {
       await render();
     } catch (err) {
+      restoreButton?.();
       setFeedback(feedback, describeError(err), 'error');
       feedback.scrollIntoView?.({ block: 'nearest' });
       feedback.focus();
@@ -483,9 +486,23 @@ export async function mountStandingsScreen(
         attrs: actionInFlight ? { disabled: 'disabled' } : {},
       });
       button.addEventListener('click', async () => {
+        if (actionInFlight) return;
+        // Mutated directly, not left to the next render() — this button's
+        // own `attrs: actionInFlight ? ... : {}` above is only evaluated
+        // while render() BUILDS it, which already happened before this
+        // handler runs; nothing re-renders again until commit() finishes,
+        // so without this the disabling would be enforced (commit()'s own
+        // guard) but never actually visible during the write (ROADMAP.md
+        // gap, closed 2026-09-11).
+        const originalLabel = isTerminal ? 'Declare champion' : 'Advance to next stage';
+        button.disabled = true;
+        button.textContent = isTerminal ? 'Declaring champion…' : 'Advancing…';
         const succeeded = await commit(data, {});
         if (succeeded) focusAfterRender = '#standings-heading';
-        await renderOrShowError(feedback);
+        await renderOrShowError(feedback, () => {
+          button.disabled = false;
+          button.textContent = originalLabel;
+        });
       });
       container.appendChild(el('div', { className: 'card' }, [button]));
     } else if (state.kind === 'needs-tiebreak-heat') {
@@ -497,6 +514,9 @@ export async function mountStandingsScreen(
       button.addEventListener('click', async () => {
         if (actionInFlight) return;
         actionInFlight = true;
+        // See the 'clean'-state button's own comment above.
+        button.disabled = true;
+        button.textContent = 'Creating…';
         try {
           await createTiebreakHeatForTie(stageId, state.tiedAtBorder, {}, client);
           focusAfterRender = '#standings-heading';
@@ -504,7 +524,10 @@ export async function mountStandingsScreen(
           pendingError = describeError(err);
         }
         actionInFlight = false;
-        await renderOrShowError(feedback);
+        await renderOrShowError(feedback, () => {
+          button.disabled = false;
+          button.textContent = 'Create tiebreak heat';
+        });
       });
       container.appendChild(
         el('div', { className: 'card' }, [
@@ -529,12 +552,20 @@ export async function mountStandingsScreen(
         attrs: actionInFlight ? { disabled: 'disabled' } : {},
       });
       button.addEventListener('click', async () => {
+        if (actionInFlight) return;
+        // See the 'clean'-state button's own comment above.
+        const originalLabel = isTerminal ? 'Declare champion' : 'Advance to next stage';
+        button.disabled = true;
+        button.textContent = isTerminal ? 'Declaring champion…' : 'Advancing…';
         const succeeded = await commit(data, {
           tiebreakRanked: state.tiebreakRanked,
           tiebreakWinners: state.tiebreakWinners,
         });
         if (succeeded) focusAfterRender = '#standings-heading';
-        await renderOrShowError(feedback);
+        await renderOrShowError(feedback, () => {
+          button.disabled = false;
+          button.textContent = originalLabel;
+        });
       });
       container.appendChild(
         el('div', { className: 'card' }, [
@@ -625,6 +656,10 @@ export async function mountStandingsScreen(
         await renderOrShowError(feedback);
         return;
       }
+      if (actionInFlight) return;
+      // See the 'clean'-state button's own comment above.
+      submitButton.disabled = true;
+      submitButton.textContent = 'Recording coin toss…';
       const winners = state.stillTied.filter(({ item }) => coinTossWinnerIds.has(item.entry_id));
       const succeeded = await commit(data, {
         tiebreakRanked: state.tiebreakRanked,
@@ -641,7 +676,12 @@ export async function mountStandingsScreen(
         coinTossNoteDraft = '';
         focusAfterRender = '#standings-heading';
       }
-      await renderOrShowError(feedback);
+      await renderOrShowError(feedback, () => {
+        submitButton.disabled = false;
+        submitButton.textContent = isTerminal
+          ? 'Record coin toss and declare champion'
+          : 'Record coin toss and advance';
+      });
     });
 
     // fieldset/legend, not a bare <p> above an unrelated <ul> of checkboxes

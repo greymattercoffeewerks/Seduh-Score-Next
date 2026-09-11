@@ -43,7 +43,23 @@ const SYNC_POLL_MS = 3000;
 
 export function mountAppShell(
   root,
-  { appName = APP_NAME, client = getSupabase(), syncPollMs = SYNC_POLL_MS } = {},
+  {
+    appName = APP_NAME,
+    client = getSupabase(),
+    syncPollMs = SYNC_POLL_MS,
+    // Optional map of outbox operation `type` -> a short, lowercase gerund
+    // phrase (e.g. "confirming a heat"), for the sync panel to name WHICH
+    // operation is stuck (ROADMAP.md gap, closed 2026-09-11) instead of the
+    // generic "retrying failed" every stuck operation used to share
+    // regardless of type. No format-specific vocabulary lives in THIS file
+    // (see its own top comment) — the active format's own labels are
+    // supplied by main.js, the one file already allowed to know both (see
+    // formats/cup-taster/outboxHandlers.js's own cupTasterOperationLabels).
+    // A type with no entry (or no map supplied at all) falls back to a
+    // still-honest, if less specific, message below rather than crashing or
+    // showing "undefined".
+    operationLabels = {},
+  } = {},
 ) {
   root.innerHTML = '';
 
@@ -320,7 +336,10 @@ export function mountAppShell(
       syncEl.textContent = 'Not synced — a write failed to save and was not retried';
     } else if (state.stuckOperation) {
       syncEl.classList.add('app-shell-sync-stuck');
-      syncEl.textContent = `Not synced — retrying failed (${state.pendingCount} pending)`;
+      const label = operationLabels[state.stuckOperation.type];
+      syncEl.textContent = label
+        ? `Not synced — ${label} failed (${state.pendingCount} pending)`
+        : `Not synced — retrying failed (${state.pendingCount} pending)`;
     } else {
       syncEl.classList.add('app-shell-sync-pending');
       syncEl.textContent = `Not synced (${state.pendingCount} pending)`;

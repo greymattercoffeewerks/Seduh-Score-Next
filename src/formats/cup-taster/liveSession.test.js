@@ -133,14 +133,24 @@ describe('buildLiveSessionPayload', () => {
 
     expect(payload.stage).toEqual({ kind: 'prelims', ordinal: 1, setCount: 8 });
 
+    // stage.cutoff is 4 and there are only 2 stage entries, so both fit
+    // within the cutoff with no group straddling the border — both are
+    // 'advancing', not 'tied'. See the two tests below for a genuine
+    // tiedAtBorder case and the stage.status === 'complete' suppression.
     expect(payload.standings).toEqual([
-      { position: 1, displayName: 'Alex', numCorrect: 6, totalElapsedSecs: 200, tieStatus: null },
+      {
+        position: 1,
+        displayName: 'Alex',
+        numCorrect: 6,
+        totalElapsedSecs: 200,
+        tieStatus: 'advancing',
+      },
       {
         position: 2,
         displayName: 'Bailey',
         numCorrect: 0,
         totalElapsedSecs: null,
-        tieStatus: null,
+        tieStatus: 'advancing',
       },
     ]);
 
@@ -161,6 +171,77 @@ describe('buildLiveSessionPayload', () => {
         results: [{ displayName: 'Alex', numCorrect: 2, totalElapsedSecs: 200 }],
       },
     ]);
+  });
+
+  it('marks a genuine border tie as "tied", not "advancing" — mirroring standingsScreen.js\'s own resolveAdvancement grouping', async () => {
+    const tieStage = { ...stage, cutoff: 2 };
+    const tieStageEntries = [
+      { id: 'se-a', stage_id: 's1', entry_id: 'a' },
+      { id: 'se-b', stage_id: 's1', entry_id: 'b' },
+      { id: 'se-c', stage_id: 's1', entry_id: 'c' },
+    ];
+    // Alex clears the cutoff-of-2 alone (rank 1, 1 slot remaining); Bailey
+    // and Casey then tie for rank 2 with identical correct/time — that
+    // whole 2-person group straddles the single remaining slot, so both are
+    // 'tied', neither 'advancing' (computeAdvancement returns the group
+    // whole rather than picking one, since neither can be resolved without
+    // a tiebreak).
+    const tieStandingsRows = [
+      { entry_id: 'a', stage_id: 's1', correct_count: 6, sets_scored: 8, total_elapsed_secs: 200 },
+      { entry_id: 'b', stage_id: 's1', correct_count: 3, sets_scored: 8, total_elapsed_secs: 300 },
+      { entry_id: 'c', stage_id: 's1', correct_count: 3, sets_scored: 8, total_elapsed_secs: 300 },
+    ];
+    const tieRoster = [
+      { id: 'a', display_name: 'Alex' },
+      { id: 'b', display_name: 'Bailey' },
+      { id: 'c', display_name: 'Casey' },
+    ];
+    const client = fakeClient({
+      tables: {
+        ct_stages: { data: tieStage, error: null },
+        ct_stage_entries: { data: tieStageEntries, error: null },
+        ct_standings: { data: tieStandingsRows, error: null },
+        event_entries: { data: tieRoster, error: null },
+        ct_heats: { data: [], error: null },
+      },
+    });
+    const payload = await buildLiveSessionPayload('s1', client);
+
+    expect(payload.standings.map((row) => [row.displayName, row.tieStatus])).toEqual([
+      ['Alex', 'advancing'],
+      ['Bailey', 'tied'],
+      ['Casey', 'tied'],
+    ]);
+  });
+
+  it("suppresses tieStatus entirely once the stage is complete — matching standingsScreen.js's own commit-clears-the-tie-label convention, since ct_standings never reflects a tiebreak/coin-toss result", async () => {
+    const tieStage = { ...stage, cutoff: 1, status: 'complete' };
+    const tieStageEntries = [
+      { id: 'se-a', stage_id: 's1', entry_id: 'a' },
+      { id: 'se-b', stage_id: 's1', entry_id: 'b' },
+    ];
+    // Still tied per ct_standings alone (a tiebreak/coin-toss never updates
+    // it) — but the stage is complete, so this must NOT report 'tied'.
+    const tieStandingsRows = [
+      { entry_id: 'a', stage_id: 's1', correct_count: 3, sets_scored: 8, total_elapsed_secs: 300 },
+      { entry_id: 'b', stage_id: 's1', correct_count: 3, sets_scored: 8, total_elapsed_secs: 300 },
+    ];
+    const tieRoster = [
+      { id: 'a', display_name: 'Alex' },
+      { id: 'b', display_name: 'Bailey' },
+    ];
+    const client = fakeClient({
+      tables: {
+        ct_stages: { data: tieStage, error: null },
+        ct_stage_entries: { data: tieStageEntries, error: null },
+        ct_standings: { data: tieStandingsRows, error: null },
+        event_entries: { data: tieRoster, error: null },
+        ct_heats: { data: [], error: null },
+      },
+    });
+    const payload = await buildLiveSessionPayload('s1', client);
+
+    expect(payload.standings.every((row) => row.tieStatus === null)).toBe(true);
   });
 
   it('features the lowest-numbered running heat when more than one is timing/scoring at once — not whichever the DB happens to return first', async () => {

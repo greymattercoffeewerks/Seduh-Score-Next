@@ -202,17 +202,21 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     await expect(page.getByText('Something went wrong saving that — try again.')).toBeVisible({
       timeout: 20000,
     });
-    // "retrying failed," not the plain pending wording — attempts > 0
-    // after even ONE failed flush pass already counts as a stuck operation
-    // per computeSyncState()'s own definition; there's no intermediate
-    // "still trying, not stuck yet" state. (2 pending), not 1 — since
-    // 2026-09-04's automatic-publish wiring, a successful start_heat call
-    // also enqueues a publish_live_session operation right behind it
-    // (liveSession.js's own publishLiveSession()); offline, that second
-    // operation queues too, exactly like start_heat itself, rather than
-    // being silently dropped — proving the publish genuinely survives
-    // being offline, not just the primary write.
-    await expect(syncPanel).toHaveText('Not synced — retrying failed (2 pending)', {
+    // Names the stuck operation type ("starting a heat"), not the generic
+    // "retrying failed" wording (ROADMAP.md gap, closed 2026-09-11 —
+    // core/appShell.js's operationLabels map) — attempts > 0 after even ONE
+    // failed flush pass already counts as a stuck operation per
+    // computeSyncState()'s own definition; there's no intermediate "still
+    // trying, not stuck yet" state. (2 pending), not 1 — since 2026-09-04's
+    // automatic-publish wiring, a successful start_heat call also enqueues a
+    // publish_live_session operation right behind it (liveSession.js's own
+    // publishLiveSession()); offline, that second operation queues too,
+    // exactly like start_heat itself, rather than being silently dropped —
+    // proving the publish genuinely survives being offline, not just the
+    // primary write. start_heat is the one actually named here, not
+    // publish_live_session — it's first in FIFO order, and the outbox halts
+    // on the first failure, so it's the one the flush actually attempted.
+    await expect(syncPanel).toHaveText('Not synced — starting a heat failed (2 pending)', {
       timeout: 10000,
     });
 
