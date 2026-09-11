@@ -1,3 +1,35 @@
+## Cup Taster report: fix CSV/on-screen word-order mismatch in stage table titles · 2026-09-11
+
+Closes the low-priority follow-up `ui-accessibility-reviewer` flagged reviewing the
+previous entry below: `buildStageTables`'s "Set difficulty"/"Score distribution" CSV
+table titles put the round label first (`` `${roundLabel} — Set difficulty}` ``), while
+`renderStageSection`'s on-screen `<h3>`s for the same two tables put it last
+(`` `Set difficulty — ${roundLabel}` ``) — a word order flip between what an organiser
+sees on screen and what they get in the downloaded CSV. This file's own module comment
+on `buildStageTables` states the CSV should say "the same thing the organiser saw on
+screen"; an organiser comparing a download against a printout or screenshot would notice
+the phrase order flipped, even though both orderings are individually unambiguous and
+the previous fix's own disambiguation ("(Round N)") is correct in each.
+
+**What shipped:** reordered only the two mismatched title templates in `buildStageTables`
+to match `renderStageSection`'s word order (label last). The "Standings" title
+(`` `${roundLabel} — Standings` ``) was left untouched — its on-screen `<h2>` counterpart
+is the bare `roundLabel` with no "Standings" suffix at all, so there was never a mismatch
+there to fix. The cross-round summary's own `correctLabel`/`timeLabel` column headers
+have no mismatch risk by construction (`eventSummaryRoundColumns` computes them once and
+both the on-screen table and the CSV table consume the identical strings, not two
+independently-templated copies) — confirmed, not assumed, during review. Existing test
+assertions for these two title strings, across both the single-occurrence and
+disambiguated `"(Round N)"` cases, updated to match.
+
+**Two reviews, both clean:** `code-reviewer` confirmed the fix is scoped to exactly the
+two mismatched titles with no other stale word-order string left anywhere in the repo;
+`ui-accessibility-reviewer` confirmed this fully closes the follow-up it filed, for both
+the plain and `"(Round N)"`-disambiguated cases, with no remaining mismatch on this
+screen.
+
+Full JS suite: 1033/1033.
+
 ## Cup Taster report: fix same-kind stage CSV-title collision · 2026-09-11
 
 Closes the tracked follow-up spun off from the previous entry below: `buildStageTables`
