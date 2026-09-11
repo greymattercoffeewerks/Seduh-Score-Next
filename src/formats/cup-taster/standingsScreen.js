@@ -40,13 +40,8 @@ import {
   belowTheLine,
   commitStageResolution,
   findNextStage,
+  tieStatusFor,
 } from './standings.js';
-
-function statusLabel(item, { advancingIds, tiedBorderIds }) {
-  if (advancingIds.has(item.stageEntryId)) return 'advancing';
-  if (tiedBorderIds.has(item.stageEntryId)) return 'tied';
-  return null;
-}
 
 // An em dash needs no screen-reader expansion (already unambiguous); a real
 // duration gets one, via withSrExpansion — see that helper's own comment
@@ -71,7 +66,7 @@ export function renderStandingsTable(
   { advancingIds = new Set(), tiedBorderIds = new Set() } = {},
 ) {
   const rows = ranked.map(({ item, position }) => {
-    const label = statusLabel(item, { advancingIds, tiedBorderIds });
+    const label = tieStatusFor(item, { advancingIds, tiedBorderIds });
     return el('tr', { className: 'standings-row', attrs: label ? { 'data-status': label } : {} }, [
       el('td', {
         className: 'standings-position',

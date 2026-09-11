@@ -1,3 +1,51 @@
+## T5.gap.automatic-publish: `tieStatus` publication decision closure · 2026-09-11
+
+**Product/scoring decision closure from Phase 5's known open items**, closing the
+ROADMAP-tracked gap. The user prioritized and decided via AskUserQuestion: match
+`standingsScreen.js`'s own existing convention exactly — `tieStatus` should stay
+'tied'/'advancing' right up through a confirmed tiebreak heat, only clearing once the
+organiser actually commits the stage resolution (not clearing as soon as the tiebreak
+heat itself is confirmed, which was the rejected alternative).
+
+**Implementation:** `src/formats/cup-taster/liveSession.js`'s `buildLiveSessionPayload`
+now calls `resolveAdvancement(ranked, stage.cutoff ?? 1)` (from `./standings.js`) using
+the SAME `ranked` list already fetched for standings rows — zero new DB reads, pure
+reuse of the exact computation `standingsScreen.js` already performs. Gated: skipped
+entirely once `stage.status === 'complete'`, because `ct_standings` (source of `ranked`)
+is never updated by tiebreak/coin-toss outcomes, so post-completion computation would
+keep showing "(tied)" on cuppers whose tie was already broken but not yet committed. New
+shared export `tieStatusFor(item, { advancingIds, tiedBorderIds })` extracted to
+`src/formats/cup-taster/standings.js` — exact byte-for-byte logic originally in
+`standingsScreen.js`'s private `statusLabel` function. Both screens now import and use
+this single shared implementation instead of duplicating (real finding from
+`code-reviewer`'s first pass, fixed before close).
+
+**Files touched:** `src/formats/cup-taster/liveSession.js` (buildLiveSessionPayload,
+tieStatus computation + gate), `src/formats/cup-taster/standings.js` (new tieStatusFor
+export), `src/formats/cup-taster/liveSession.test.js` (3 tests: existing base-case
+expectations updated, new 3-cupper border-tie at position-2 case, new complete-stage
+gate test proving tieStatus suppression).
+
+**Reviews:** All clean (one real finding, fixed in same task):
+
+- `scoring-auditor`: clean — verified `resolveAdvancement` called identically to
+  `standingsScreen.js`, confirmed stage.status gate doesn't introduce exposure worse than
+  pre-existing tied-until-commit, confirmed stageEntryId matching trivially consistent,
+  champion computation separately gated with no overlap/conflict, confirmed tests prove
+  invariants (not just happy paths).
+- `module-boundary-checker`: clean — no new `src/core/` imports, no core/` primitive
+  reimplementation (resolveAdvancement is thin pass-through to core/advancement.js).
+- `code-reviewer`: found byte-for-byte duplication of statusLabel between standingsScreen
+  and initial liveSession draft — fixed by extracting `tieStatusFor` to standings.js and
+  importing it from both. Also suggested comment clarity (ambiguous "deliberately NOT
+  computed once complete" wording) — fixed. Confirmed tests well-constructed, not
+  overfit to implementation.
+
+**Status:** Done. `npm run lint` clean, full JS suite 1044/1044 passing. No blocking
+findings. Ready to merge.
+
+---
+
 ## Design System rework: Editorial → Cherry · 2026-09-11
 
 **Whole-product visual identity refresh, not a formal phase task.** User feedback on the

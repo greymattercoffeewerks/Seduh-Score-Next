@@ -659,13 +659,23 @@ station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can 
   trigger to exist at all (a champion declared at the terminal stage would otherwise
   never reach the live payload, since there's no heat left afterward to publish from).
   See CHANGELOG.md's "Audience live view: stage-kind labels + champion hero" entry.
-  **`standings` rows still always publish `tieStatus: null`, PRODUCT/SCORING DECISION
-  STILL OPEN.** The trigger existing doesn't by itself compute tied/advancing labels —
-  `liveSession.js`'s `toStandingsRow` still hardcodes `tieStatus: null` unconditionally,
-  so a border tie still never renders as "(tied)"/"(advancing)" on the audience surface,
-  even now that a publish fires at stage close. Still needs a human/product decision on
-  whether `resolveAdvancement`'s own tie/advancement result should flow into the
-  published payload, not just a code fix. Flagged by: `code-reviewer`.
+  **`standings` rows compute and publish `tieStatus`, PRODUCT/SCORING DECISION CLOSED
+  (2026-09-11).** Matched `standingsScreen.js`'s existing convention exactly:
+  `tieStatus` stays 'tied'/'advancing' right up through a confirmed tiebreak heat, only
+  clearing once the organiser actually commits the stage resolution (not clearing as soon
+  as the tiebreak heat itself is confirmed, which was rejected). Implementation in
+  `buildLiveSessionPayload` calls `resolveAdvancement(ranked, stage.cutoff ?? 1)` using
+  the same `ranked` list already fetched for standings rows (zero new DB reads), gated to
+  skip computation once `stage.status === 'complete'` (since `ct_standings` is never
+  updated by tiebreak/coin-toss outcomes, post-completion computation would incorrectly
+  show ties already broken). New `tieStatusFor` exported from `standings.js` and shared
+  by both `standingsScreen.js` and `liveSession.js` instead of duplicated (found in
+  review). Three tests: base case (existing fixture, cutoff now correct), genuine 3-cupper
+  border-tie at position 2, and complete-stage gate suppresses tieStatus even when
+  underlying data would compute tie. All reviewers clean: `scoring-auditor` verified
+  identical call to `standingsScreen.js`, gate safety, stageEntryId consistency; zero
+  `core/` boundary violations; tests prove invariants. See CHANGELOG.md for full account.
+  Flagged by: `code-reviewer`.
 
 - **Generic three-state sync panel never names WHICH operation type is stuck, MINOR
   DIAGNOSTIC GAP.** An organiser can't tell a stuck `publish_live_session` apart from a
