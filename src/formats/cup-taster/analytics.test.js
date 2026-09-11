@@ -5,6 +5,8 @@ import {
   computeScoreDistribution,
   computeStageReport,
   computeCupperSetGrid,
+  computeEventSummary,
+  computeAvgSecsPerSet,
 } from './analytics.js';
 
 // Same fakeClient shape used throughout this project's format tests — queues
@@ -408,5 +410,174 @@ describe('computeCupperSetGrid', () => {
     await computeCupperSetGrid('s1', client);
     expect(client.calls.some(([, table]) => table === 'ct_heat_entries')).toBe(false);
     expect(client.calls.some(([, table]) => table === 'ct_results')).toBe(false);
+  });
+});
+
+// Moved here from reportScreen.test.js (2026-09-11, review: code-reviewer) —
+// this function lives in analytics.js now, not reportScreen.js, so
+// computeEventSummary below can reuse it directly instead of keeping a
+// byte-identical duplicate; its own tests moved with it.
+describe('computeAvgSecsPerSet', () => {
+  it('rounds to the nearest whole second', () => {
+    expect(computeAvgSecsPerSet(100, 3)).toBe(33);
+  });
+
+  it('returns null for zero scored sets or a null total', () => {
+    expect(computeAvgSecsPerSet(100, 0)).toBeNull();
+    expect(computeAvgSecsPerSet(null, 3)).toBeNull();
+  });
+});
+
+describe('computeEventSummary', () => {
+  // Two stages: prelims (ordinal 1) -> finals (ordinal 2, terminal).
+  // Alex reaches finals and wins (champion, final_position 1). Sam also
+  // reaches finals, finishes 2nd. Jo is eliminated in prelims (never
+  // appears in finals' own ranked list at all).
+  function twoStageReports() {
+    const prelims = {
+      stage: { id: 's1', kind: 'prelims', ordinal: 1, cutoff: 2 },
+      ranked: [
+        {
+          item: {
+            entry_id: 'alex',
+            displayName: 'Alex',
+            numCorrect: 3,
+            sets_scored: 3,
+            total_elapsed_secs: 90,
+            finalPosition: null, // advanced — null per this project's own convention
+          },
+          position: 1,
+        },
+        {
+          item: {
+            entry_id: 'sam',
+            displayName: 'Sam',
+            numCorrect: 2,
+            sets_scored: 3,
+            total_elapsed_secs: 100,
+            finalPosition: null,
+          },
+          position: 2,
+        },
+        {
+          item: {
+            entry_id: 'jo',
+            displayName: 'Jo',
+            numCorrect: 1,
+            sets_scored: 3,
+            total_elapsed_secs: 150,
+            finalPosition: 3, // eliminated here — this IS Jo's last round
+          },
+          position: 3,
+        },
+      ],
+    };
+    const finals = {
+      stage: { id: 's2', kind: 'finals', ordinal: 2, cutoff: null },
+      ranked: [
+        {
+          item: {
+            entry_id: 'alex',
+            displayName: 'Alex',
+            numCorrect: 3,
+            sets_scored: 3,
+            total_elapsed_secs: 70,
+            finalPosition: 1, // champion
+          },
+          position: 1,
+        },
+        {
+          item: {
+            entry_id: 'sam',
+            displayName: 'Sam',
+            numCorrect: 2,
+            sets_scored: 3,
+            total_elapsed_secs: 85,
+            finalPosition: 2,
+          },
+          position: 2,
+        },
+      ],
+    };
+    return [prelims, finals];
+  }
+
+  it("sums a cupper's score, sets scored, and elapsed time across every stage they appeared in", () => {
+    const summaries = computeEventSummary(twoStageReports());
+    const alex = summaries.find((s) => s.entryId === 'alex');
+    expect(alex.totalScore).toBe(6); // 3 + 3
+    expect(alex.totalSetsScored).toBe(6); // 3 + 3
+    expect(alex.totalElapsedSecs).toBe(160); // 90 + 70
+    expect(alex.avgSecsPerSet).toBe(27); // round(160 / 6) = 26.67 -> 27
+    expect(alex.rounds).toHaveLength(2);
+  });
+
+  it("orders by each cupper's REAL final placement (most-advanced stage, then finalPosition within it) — not by a fresh ranking of these totals, which would misrepresent the real bracket outcome", () => {
+    // Found in review (test-auditor, via mutation testing): an earlier
+    // version of this fixture only made Jo FASTER than Sam, but Jo's own
+    // totalScore (1) still stayed far below Sam's (2+2=4) either way —
+    // meaning a naive `sort by totalScore desc` mis-implementation would
+    // have produced the SAME (accidentally correct) order this test
+    // asserts, without actually being caught. Jo's own numCorrect/
+    // sets_scored are bumped here so Jo's OWN totalScore (5) genuinely
+    // EXCEEDS Sam's summed total across two real rounds (4) — a naive
+    // re-rank-by-total-score implementation would now place Jo ahead of
+    // Sam, and only the real "most-advanced-stage-first" rule keeps Sam
+    // (who reached finals) correctly ordered ahead of Jo (eliminated in
+    // prelims) despite Jo's higher raw total.
+    const reports = twoStageReports();
+    reports[0].ranked[2].item.numCorrect = 5;
+    reports[0].ranked[2].item.sets_scored = 5;
+    reports[0].ranked[2].item.total_elapsed_secs = 10; // also faster, for good measure
+    const summaries = computeEventSummary(reports);
+    const jo = summaries.find((s) => s.entryId === 'jo');
+    expect(jo.totalScore).toBe(5); // genuinely exceeds Sam's own 4
+    const order = summaries.map((s) => s.entryId);
+    expect(order).toEqual(['alex', 'sam', 'jo']);
+  });
+
+  it('gives a cupper eliminated early exactly one round, not a padded/undefined entry for stages they never reached', () => {
+    const summaries = computeEventSummary(twoStageReports());
+    const jo = summaries.find((s) => s.entryId === 'jo');
+    expect(jo.rounds).toHaveLength(1);
+    expect(jo.rounds[0].stageKind).toBe('prelims');
+    expect(jo.totalScore).toBe(1);
+  });
+
+  it('returns null, not 0 or NaN, for avgSecsPerSet when a cupper has no timed rounds at all (both zero-sets-scored AND zero-time cases)', () => {
+    const reports = twoStageReports();
+    reports[0].ranked[2].item.total_elapsed_secs = null;
+    reports[0].ranked[2].item.sets_scored = 0;
+    reports[0].ranked[2].item.numCorrect = 0;
+    const summaries = computeEventSummary(reports);
+    const jo = summaries.find((s) => s.entryId === 'jo');
+    expect(jo.totalElapsedSecs).toBeNull();
+    expect(jo.avgSecsPerSet).toBeNull();
+  });
+
+  it('also returns null, not NaN, for the realistic "scored sets but never got timed" case specifically — found in review (test-auditor, via mutation testing): the guard is an OR of two independent conditions (zero sets scored, OR a null total time), and the previous test above only ever exercised BOTH at once, leaving this half of the OR unproven', () => {
+    const reports = twoStageReports();
+    // sets_scored stays REAL (3, matching Jo's own base fixture) — only
+    // the TIME is null, e.g. a stopwatch failure with no manual-entry
+    // fallback ever completed. A `Math.round(null / 3)` (if the null-check
+    // were ever dropped) would produce NaN, not a crash — exactly the
+    // silent-wrong-value failure mode this test exists to catch.
+    reports[0].ranked[2].item.total_elapsed_secs = null;
+    const summaries = computeEventSummary(reports);
+    const jo = summaries.find((s) => s.entryId === 'jo');
+    expect(jo.totalScore).toBe(1); // sets_scored/numCorrect still real
+    expect(jo.totalElapsedSecs).toBeNull();
+    expect(jo.avgSecsPerSet).toBeNull();
+  });
+
+  it('each round entry carries its own stage-level position and finalPosition, not just the aggregate totals — needed for a per-round placement column', () => {
+    const summaries = computeEventSummary(twoStageReports());
+    const alex = summaries.find((s) => s.entryId === 'alex');
+    expect(alex.rounds[0]).toMatchObject({
+      stageKind: 'prelims',
+      position: 1,
+      finalPosition: null,
+    });
+    expect(alex.rounds[1]).toMatchObject({ stageKind: 'finals', position: 1, finalPosition: 1 });
   });
 });

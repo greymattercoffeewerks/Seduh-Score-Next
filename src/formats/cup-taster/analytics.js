@@ -203,3 +203,111 @@ export async function computeStageReport(stageId, client = getSupabase()) {
   const setGrid = computeCupperSetGridFromResults(sets, heatEntries, results);
   return { stage, ranked, difficulty, distribution, setGrid };
 }
+
+// Pure. Rounded to the nearest whole second before ever reaching
+// core/duration.js's `formatDuration` — that function's own `%` arithmetic
+// assumes an integer input (see its own module comment/tests); an
+// un-rounded average (e.g. 33.33s) would render as a raw fractional-seconds
+// string instead of M:SS. Lives here, not reportScreen.js, so
+// computeEventSummary below can reuse it directly — found duplicated
+// verbatim in review (code-reviewer): reportScreen.js used to keep its own
+// byte-identical copy for its per-stage Avg-time/set column, which this
+// function's own computation would otherwise have silently re-diverged
+// from. reportScreen.js can't be imported FROM here (it already imports
+// analytics.js; the reverse would cycle), so this moved the other way.
+export function computeAvgSecsPerSet(totalElapsedSecs, setsScored) {
+  if (totalElapsedSecs == null || setsScored === 0) return null;
+  return Math.round(totalElapsedSecs / setsScored);
+}
+
+// Pure. Rolls every stage's own `ranked` list into one per-cupper summary
+// across the WHOLE event (2026-09-11, user-requested — Phase B of the
+// WCTC-style analytics upgrade scoped with the user in advance; Phase A's
+// own CHANGELOG entry covers Phase A). `stageReports` is
+// `mountReportScreen`'s own already-loaded array (one `computeStageReport`
+// result per stage, in `listStagesForEvent`'s ordinal-ascending order —
+// depended on below, not re-sorted here).
+//
+// Row order is deliberately NOT a fresh ranking computed from these totals
+// — a cupper eliminated early could rack up a higher raw score sum across
+// fewer rounds than a finalist without ever having been more successful,
+// and re-ranking by total score would misrepresent the real bracket
+// outcome this project's own advancement rules already decided. Instead,
+// each cupper's true placement is already fully determined by (the most
+// advanced stage they reached, their `finalPosition` within it) —
+// `resolve_stage`/`standings.js` already computed this — so this function
+// only RECONSTRUCTS that ordering from data already present in `ranked`,
+// never inventing a second, competing rule. `finalPosition` is reliably
+// non-null on a cupper's own LAST round specifically (see
+// `describeOutcome`'s own comment: null only ever means "advanced,"
+// impossible for the stage nothing came after) — the `?? position`
+// fallback below is defensive, matching this module's own established
+// style for a schema anomaly this function has no business assuming can't
+// happen, not an expected path.
+// Known limitation, noted in review (code-reviewer) for consistency with
+// this file's own established defensive style elsewhere
+// (computeScoreDistribution's own comment/clamp a few functions above):
+// nothing here guards against the same `ct_heat_entries` schema anomaly
+// that function already documents (its own unique constraint is only
+// `(heat_id, entry_id)`, not stage-wide, so nothing stops the same cupper
+// appearing twice in one stage's `ranked` list). If that ever happened,
+// this function would push two round entries sharing one `stageOrdinal` —
+// `eventSummaryRoundColumns`'s per-round cell lookup would silently show
+// only the first, while `totalScore`/`totalElapsedSecs` would still sum
+// both, a visible mismatch between a row's own cell and its own total. Not
+// guarded against here (unlike the sibling function) since doing so
+// correctly needs a real merge decision, not just a clamp — left as a
+// known gap rather than a silent one, per this project's "no speculative
+// validation" stance.
+export function computeEventSummary(stageReports) {
+  const byEntry = new Map();
+
+  stageReports.forEach((stageReport) => {
+    const { stage, ranked } = stageReport;
+    for (const { item, position } of ranked) {
+      const existing = byEntry.get(item.entry_id) ?? {
+        entryId: item.entry_id,
+        displayName: item.displayName,
+        rounds: [],
+        totalScore: 0,
+        totalSetsScored: 0,
+        totalElapsedSecs: null,
+      };
+      existing.rounds.push({
+        stageKind: stage.kind,
+        stageOrdinal: stage.ordinal,
+        position,
+        numCorrect: item.numCorrect,
+        setsScored: item.sets_scored,
+        totalElapsedSecs: item.total_elapsed_secs,
+        finalPosition: item.finalPosition,
+      });
+      existing.totalScore += item.numCorrect;
+      existing.totalSetsScored += item.sets_scored;
+      // Summed only across rounds that actually HAVE a time — a cupper
+      // with at least one timed round should never show a total that's
+      // silently short by an untimed round's own contribution, but the
+      // total itself should stay null (not 0) if NO round has ever been
+      // timed at all, same "honest no data" choice this module's other
+      // aggregates already make.
+      if (item.total_elapsed_secs != null) {
+        existing.totalElapsedSecs = (existing.totalElapsedSecs ?? 0) + item.total_elapsed_secs;
+      }
+      byEntry.set(item.entry_id, existing);
+    }
+  });
+
+  const summaries = [...byEntry.values()].map((entry) => ({
+    ...entry,
+    avgSecsPerSet: computeAvgSecsPerSet(entry.totalElapsedSecs, entry.totalSetsScored),
+  }));
+
+  summaries.sort((a, b) => {
+    const aLast = a.rounds[a.rounds.length - 1];
+    const bLast = b.rounds[b.rounds.length - 1];
+    if (aLast.stageOrdinal !== bLast.stageOrdinal) return bLast.stageOrdinal - aLast.stageOrdinal;
+    return (aLast.finalPosition ?? aLast.position) - (bLast.finalPosition ?? bLast.position);
+  });
+
+  return summaries;
+}
