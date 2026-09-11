@@ -222,51 +222,15 @@ function buildStat(num, label) {
   ]);
 }
 
-function buildMockCard() {
-  const row = (name, score, isWinner) =>
-    el('div', { className: 'landing-mock-row' }, [
-      el('span', {
-        className: isWinner ? 'landing-mock-name' : 'landing-mock-name-muted',
-        text: name,
-      }),
-      el('span', {
-        className: `landing-mono ${isWinner ? 'landing-mock-score' : 'landing-mock-score-muted'}`,
-        text: String(score),
-      }),
-    ]);
-
-  const secondMatchRow = row('Hafiz Zaini', 3, true);
-  secondMatchRow.classList.add('landing-mock-row-divider');
-
-  // Fabricated names/scores, purely illustrative — hidden from assistive
-  // tech rather than read as real results (D9's spirit applied here: never
-  // let something that isn't real event data read as if it were). The
-  // hero copy around it already states what the product does.
-  return el(
-    'div',
-    {
-      className: 'landing-card landing-mock-card',
-      attrs: { 'aria-hidden': 'true' },
-    },
-    [
-      el('div', { className: 'landing-mock-chrome' }, [
-        el('span', { text: 'seduhscore.com / throwdown' }),
-        el('span', { text: 'bracket · semifinal' }),
-      ]),
-      el('div', { className: 'landing-mock-body' }, [
-        el('div', { className: 'landing-mock-caption', text: 'match 2' }),
-        row('Aliya Roslan', 2, true),
-        row('Darwisyah', 1, false),
-        secondMatchRow,
-        row('Nabil Osman', 0, false),
-      ]),
-      el('div', { className: 'landing-mock-footer', text: 'representative view · 4:3' }),
-    ],
-  );
-}
-
+// Full-bleed photo hero — the big, dominant first-screen moment: headline,
+// sub, CTAs, and the stat strip all overlay a single large photo, and
+// everything else on the page (problem, formats, proof, pricing) only
+// appears once a visitor scrolls past it. Same "photo + dark scrim +
+// centered content" pattern as buildFinalCta()'s section at the bottom of
+// the page, reused here rather than invented twice, so the two big photo
+// moments bookend the page with one visual language.
 function buildHero() {
-  const copy = el('div', { className: 'landing-hero-copy' }, [
+  const copy = el('div', { className: 'landing-hero-content' }, [
     el('p', {
       className: 'landing-eyebrow landing-hero-eyebrow',
       text: 'Grey Matter Coffee Werks · Brunei',
@@ -304,22 +268,56 @@ function buildHero() {
     ]),
   ]);
 
-  const hero = el('div', { className: 'landing-wrap landing-hero' }, [
+  return el('div', { className: 'landing-hero' }, [
+    buildHeroSlideshow(),
+    el('div', { className: 'landing-hero-overlay', attrs: { 'aria-hidden': 'true' } }),
     buildBloom(),
     buildSteamField(),
-    copy,
-    buildMockCard(),
+    el('div', { className: 'landing-wrap' }, [copy]),
   ]);
-
-  return hero;
 }
 
-function buildBanner() {
-  return el('div', { className: 'landing-banner-photo' }, [
+// Hero slideshow — a slow, soft crossfade between a small set of photos,
+// not a carousel (no arrows/dots/user control; this is ambient background,
+// not content someone navigates). Ordered to loosely follow the hero's own
+// pitch ("one tablet, one projector"): cupping → the tablet doing the
+// scoring → a bracket being drawn → the projector moment → the pour shot
+// also used in buildFinalCta(). Designed to take more without any code
+// change — just add paths here. Respects prefers-reduced-motion by never
+// starting the interval, same discipline as buildBloom()/
+// buildSteamField()'s own CSS-level reduced-motion handling — the first
+// photo stays put instead of cycling.
+const HERO_PHOTOS = [
+  '/marketing/hero-cupping-bowls.jpg',
+  '/marketing/hero-cupping.jpg',
+  '/marketing/hero-tablet.jpg',
+  '/marketing/hero-bracket.jpg',
+  '/marketing/hero-projector.jpg',
+  '/marketing/cta-pour.jpg',
+];
+
+function buildHeroSlideshow() {
+  const layer = el('div', { className: 'landing-hero-slideshow' });
+  const images = HERO_PHOTOS.map((src, i) =>
     el('img', {
-      attrs: { src: '/marketing/hero-cupping-bowls.jpg', alt: '', loading: 'lazy' },
+      className: `landing-hero-photo${i === 0 ? ' is-active' : ''}`,
+      attrs: { src, alt: '', loading: i === 0 ? 'eager' : 'lazy' },
     }),
-  ]);
+  );
+  layer.append(...images);
+
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!reduceMotion && images.length > 1) {
+    let active = 0;
+    setInterval(() => {
+      const next = (active + 1) % images.length;
+      images[active].classList.remove('is-active');
+      images[next].classList.add('is-active');
+      active = next;
+    }, 7000);
+  }
+
+  return layer;
 }
 
 function buildProblemCard(iconFn, title, body) {
@@ -624,7 +622,6 @@ export function mountLandingScreen(root) {
   root.append(
     nav,
     buildHero(),
-    buildBanner(),
     buildProblem(),
     buildFormats(),
     buildProof(),

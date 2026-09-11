@@ -38,6 +38,31 @@
   gap: var(--space-1);
   min-height: var(--tap-target-min);
   font-weight: var(--font-weight-bold);
+  /* Found in the Cherry-rework exploration pass (2026-09-11): this was the
+     one link anywhere in the app with no color rule of its own, so it fell
+     through to the browser's UA-default link blue/visited-purple instead
+     of this project's own palette — plain text color, not --color-accent,
+     since this is a navigational row (like every other card link's own
+     convention), not a call-to-action; --color-accent is reserved for
+     primary CTAs and ceremonial highlighting elsewhere in this app
+     (code-reviewer, 2026-09-11 — the first version of this fix used
+     --color-accent on hover/focus, contradicting this same rationale). */
+  color: var(--color-text);
+  /* Reset the UA-default permanent underline so the hover/focus state below
+     means something — matches .app-shell-link's own rest/interaction shape
+     (appShell.css) exactly, rather than inventing a third link-affordance
+     pattern; the row's bold weight + trailing arrow (::after, below) still
+     signal "this is clickable" at rest without needing an underline too. */
+  text-decoration: none;
+}
+
+.events-list a:visited {
+  color: var(--color-text);
+}
+
+.events-list a:hover,
+.events-list a:focus-visible {
+  text-decoration: underline;
 }
 
 /* A visual affordance for "this row is clickable" (found in production

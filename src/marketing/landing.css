@@ -9,93 +9,112 @@
  * vocabulary" failure CONVENTIONS.md warns against, just one level up (a
  * different PRODUCT surface, not just a different format). This file reuses
  * the same semantic NAMES (--color-canvas, --color-text, etc.) because
- * they're generic slots, not because it shares colors.css's values — this
- * page is never loaded alongside colors.css, so there's no runtime
- * collision, only a naming echo that keeps the pattern recognizable.
+ * they're generic slots, not because it shares colors.css's values.
+ *
+ * As of the 2026-09-11 Cherry rework, this file's VALUES are now the literal
+ * same Cherry Day/Cherry Night pairs colors.css uses for its own
+ * paper/stage modes — deliberate, not a coincidence to fix later: Cherry is
+ * one identity across the whole product, so there's no more reason for the
+ * two files to diverge in value the way clay/ember (day) vs. the invented
+ * "lantern/brass" scheme (night) used to. The separate file/namespace stays
+ * (still never loaded alongside colors.css, still a different product
+ * surface per the boundary rule's spirit) — only the "must be independently
+ * derived" part of the old reasoning no longer applies.
  *
  * Fonts, spacing/radius and the generic utility classes (.sr-only,
- * .tabular-nums, .tap-target, :focus-visible, .status-live-dot) DO come
- * from src/ui/tokens/ (fonts.css, typography.css, spacing.css, base.css) —
- * those are genuinely format-and-surface-agnostic, no reason to duplicate
- * them here. index.html links them before this file.
+ * .tabular-nums, .tap-target, :focus-visible, .status-live-dot) come from
+ * src/ui/tokens/ (fonts.css, typography.css, spacing.css, base.css) — those
+ * are genuinely format-and-surface-agnostic, no reason to duplicate them
+ * here. index.html links them before this file.
  */
 
 :root {
-  /* Day ("Editorial") — warm paper, matches the console's own light-mode
-     register (Cabinet Grotesk/Switzer, ember accent) closely on purpose. */
-  --clr-clay-50: #fefcf9;
-  --clr-clay-100: #faf6ef;
-  --clr-clay-200: #f2ebdf;
-  --clr-clay-300: #e6dbc8;
-  --clr-clay-600: #6b5d49;
-  --clr-clay-700: #574d3c;
-  --clr-clay-950: #100d0a;
-  --clr-ember-500: #ff6b35;
-  --clr-ember-700: #b83e15;
-  --clr-ember-800: #8f3010;
+  /* Cherry Day — same neutral ramp + accent colors.css uses for paper mode. */
+  --clr-cherry-50: #f5f3e6;
+  --clr-cherry-100: #ece7d2;
+  --clr-cherry-200: #dcd4ae;
+  --clr-cherry-300: #c2b781;
+  --clr-cherry-600: #3d4c28;
+  --clr-cherry-700: #2c391c;
+  --clr-cherry-950: #0c130a;
+  --clr-green-500: #bfe23f;
+  --clr-green-600: #a8c936;
+  --clr-green-700: #33490f;
+  --clr-green-800: #24330a;
   --clr-gold-700: #8a6a1f;
+  /* The hero always sits on a dark photo scrim regardless of day/night
+     theme (see .landing-hero-content below), so its muted text needs its
+     own fixed light-on-dark shade — not --color-text-muted, which flips to
+     a dark tone in day mode. */
+  --color-hero-muted: #d7d6c4;
 
-  --color-canvas: var(--clr-clay-100);
-  --color-surface: var(--clr-clay-50);
-  --color-surface-sunken: var(--clr-clay-200);
-  --color-border: var(--clr-clay-300);
-  --color-border-strong: var(--clr-clay-950);
-  --color-text: var(--clr-clay-950);
-  --color-text-secondary: var(--clr-clay-700);
-  --color-text-muted: var(--clr-clay-600);
-  --color-accent: var(--clr-ember-700);
-  --color-accent-hover: var(--clr-ember-800);
+  --color-canvas: var(--clr-cherry-100);
+  --color-surface: var(--clr-cherry-50);
+  --color-surface-sunken: var(--clr-cherry-200);
+  --color-border: var(--clr-cherry-300);
+  --color-border-strong: var(--clr-cherry-950);
+  --color-text: var(--clr-cherry-950);
+  --color-text-secondary: var(--clr-cherry-700);
+  --color-text-muted: var(--clr-cherry-600);
+  --color-accent: var(--clr-green-700);
+  --color-accent-hover: var(--clr-green-800);
   --color-accent-contrast: #ffffff;
   --color-gold: var(--clr-gold-700);
   --color-gold-contrast: #ffffff;
   --color-focus-ring: var(--color-border-strong);
 
-  --bloom-ring-color: rgba(255, 107, 53, 0.2);
-  --steam-particle-color: rgba(184, 62, 21, 0.32);
+  --bloom-ring-color: rgba(51, 73, 15, 0.22);
+  --steam-particle-color: rgba(51, 73, 15, 0.34);
   --night-photo-filter: none;
 
   --cols-hero: 1.1fr 1fr;
   --cols-4: repeat(4, 1fr);
   --cols-3: repeat(3, 1fr);
   --cols-2: repeat(2, 1fr);
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Night ("Editorial Nights") — a re-hierarchy, not a brightness flip. Ember
-   is demoted from "everywhere" accent to a rare "this is real, right now"
-   signal (live dot, Cup Taster's badge, the completed-event tag). A new
-   warm gold — "lantern" — takes the everyday interactive role instead,
-   evoking lamplight rather than the trophy-brass kept for Annual/BTC
-   (now an outline, not a fill, so it doesn't collide with lantern). Canvas
-   is a warm espresso brown-black, not neutral. */
+/* Cherry Night — same neutral ramp + accent colors.css uses for stage mode.
+   Unlike the old Editorial Nights (which demoted ember to a rare signal and
+   promoted an unrelated "lantern" gold), Cherry's accent is the same green
+   family in both modes — paper mode is the dark leaf-green shade, stage
+   mode is the bright chartreuse shade of one hue, not two different hues
+   swapping roles. That's why .landing-badge-live below no longer needs a
+   per-theme literal override: var(--color-accent) already reads as "the
+   same accent" across both themes here. */
 :root[data-theme='night'] {
-  --clr-night-950: #0d0906;
-  --clr-night-900: #1a120c;
-  --clr-night-800: #241a12;
-  --clr-night-700: #3a2a1c;
-  --clr-night-500: #a89070;
-  --clr-night-300: #c7ac89;
-  --clr-night-100: #f3e6d0;
-  --clr-lantern-500: #e6b148;
-  --clr-lantern-600: #c99730;
-  --clr-brass-500: #cfa53b;
+  --clr-cherry-900: #12190b;
+  --clr-cherry-800: #1c2612;
+  --clr-cherry-400: #8f9463;
+  --clr-gold-500: #cfa53b;
 
-  --color-canvas: var(--clr-night-900);
-  --color-surface: var(--clr-night-800);
-  --color-surface-sunken: var(--clr-night-950);
-  --color-border: var(--clr-night-700);
-  --color-border-strong: var(--clr-night-100);
-  --color-text: var(--clr-night-100);
-  --color-text-secondary: var(--clr-night-300);
-  --color-text-muted: var(--clr-night-500);
-  --color-accent: var(--clr-lantern-500);
-  --color-accent-hover: var(--clr-lantern-600);
-  --color-accent-contrast: var(--clr-night-950);
-  --color-gold: var(--clr-brass-500);
-  --color-gold-contrast: var(--clr-night-950);
+  --color-canvas: var(--clr-cherry-950);
+  --color-surface: var(--clr-cherry-900);
+  --color-surface-sunken: var(--clr-cherry-800);
+  --color-border: var(--clr-cherry-700);
+  --color-border-strong: var(--clr-cherry-50);
+  --color-text: var(--clr-cherry-50);
+  --color-text-secondary: var(--clr-cherry-300);
+  --color-text-muted: var(--clr-cherry-400);
+  --color-accent: var(--clr-green-500);
+  --color-accent-hover: var(--clr-green-600);
+  --color-accent-contrast: var(--clr-cherry-950);
+  --color-gold: var(--clr-gold-500);
+  --color-gold-contrast: var(--clr-cherry-950);
 
-  --bloom-ring-color: rgba(230, 177, 72, 0.3);
-  --steam-particle-color: rgba(255, 107, 53, 0.55);
-  --night-photo-filter: brightness(0.5) contrast(1.1) saturate(0.85) sepia(0.18);
+  /* Kept dimmer than the day values' opacity would suggest at a glance —
+     found in review (ui-accessibility-reviewer, 2026-09-11): at brighter
+     opacity, a randomly-placed rising particle (buildSteamField() spawns
+     across the hero's full width) drifting behind the hero's light text
+     visibly washed out letterforms and measured well under AA contrast at
+     the moment of overlap — a bright chartreuse particle reads as much
+     "louder" than its opacity number suggests against the dark scrim.
+     Dimmed here so the ambient glow stays visible against the photo
+     without ever competing with the text on top of it. */
+  --bloom-ring-color: rgba(191, 226, 63, 0.15);
+  --steam-particle-color: rgba(191, 226, 63, 0.22);
+  --night-photo-filter: brightness(0.5) contrast(1.12) saturate(0.75);
 }
 
 /* body's own background/color/font/line-height/margin all come from
@@ -187,22 +206,21 @@ h3 {
   border: 1px solid var(--color-border-strong);
 }
 .landing-badge-live {
-  background: var(--color-accent)
-    /* ember on night, ember on day — the
-    one accent that means "this is real, right now" on both themes */;
-  color: var(--color-canvas);
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
   border-color: transparent;
 }
-:root:not([data-theme='night']) .landing-badge-live {
-  background: var(--clr-ember-700);
-}
-:root[data-theme='night'] .landing-badge-live {
-  background: var(--clr-ember-500);
-}
+/* Filled, not outlined-with-gold-text: gold as plain text only clears AA by
+   0.03 of a ratio point on the surface this badge happens to sit on (found
+   in review, ui-accessibility-reviewer, 2026-09-11) and would fail outright
+   on --color-canvas — the same "gold is fill-only, paired with
+   --color-gold-contrast" rule src/ui/tokens/DESIGN.md documents for the
+   console applies here too, now that this file's values are deliberately
+   the same Cherry palette. */
 .landing-badge-annual {
-  background: transparent;
-  color: var(--color-gold);
-  border-color: var(--color-gold);
+  background: var(--color-gold);
+  color: var(--color-gold-contrast);
+  border-color: transparent;
 }
 .landing-badge-soon {
   background: transparent;
@@ -399,35 +417,84 @@ h3 {
   }
 }
 
-/* ---- Hero ---- */
+/* ---- Hero ----
+   Full-bleed photo, dominant on first paint — headline/CTAs/stat-strip
+   overlaid on a dark scrim, same "photo + overlay + centered content"
+   pattern .landing-cta uses at the bottom of the page, so the two big
+   photo moments bookend the page with one visual language. Everything
+   else (problem, formats, proof, pricing) only appears once the visitor
+   scrolls past this. Text inside is always light — the scrim guarantees
+   a dark-enough ground in both day and night, so it doesn't follow
+   --color-text's own theme flip. */
 .landing-hero {
   position: relative;
-  /* Clips the bloom rings (360px circles, easily wider than a phone
-     viewport) to the hero's own bounds — the source page this effect was
-     ported from (seduhscore.com/pitch) had this on its own .hero for the
-     same reason; missed carrying it over here, which let the rings push
-     the whole page into horizontal scroll on narrow viewports. */
   overflow: hidden;
-  padding-top: var(--space-8);
-  padding-bottom: var(--space-8);
-  display: grid;
-  grid-template-columns: var(--cols-hero);
-  gap: var(--space-8);
-  align-items: center;
+  min-height: min(84vh, 720px);
+  display: flex;
+  align-items: flex-end;
+  padding-bottom: var(--space-9);
 }
-.landing-hero-copy {
+/* Slideshow — a small stack of photos crossfading in place, not a
+   carousel: no controls, no indicator dots, ambient rather than
+   navigable. Every layer sits at the same position; only .is-active is
+   visible, and the fade between them is a plain opacity transition rather
+   than anything JS-driven, so it stays smooth even if a swap tick and a
+   paint land close together. */
+.landing-hero-slideshow {
+  position: absolute;
+  inset: 0;
+}
+.landing-hero-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 55%;
+  filter: brightness(0.55) contrast(1.1) saturate(0.85);
+  opacity: 0;
+}
+.landing-hero-photo.is-active {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .landing-hero-photo {
+    transition: opacity 1.8s var(--ease-out-expo);
+  }
+}
+:root[data-theme='night'] .landing-hero-photo {
+  filter: var(--night-photo-filter);
+}
+.landing-hero-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(12, 19, 10, 0.35) 0%,
+    rgba(12, 19, 10, 0.88) 78%,
+    rgba(12, 19, 10, 0.96) 100%
+  );
+}
+.landing-hero-content {
   position: relative;
   z-index: 1;
+  color: var(--clr-cherry-50, #f5f3e6);
 }
 .landing-hero-eyebrow {
   margin: 0 0 var(--space-4);
+  color: var(--clr-green-500, #bfe23f);
 }
 .landing-hero-headline {
-  font-size: clamp(1.9rem, 4vw + 1.2rem, 3.4rem);
+  font-size: clamp(2rem, 4.4vw + 1.2rem, 3.8rem);
+  color: inherit;
+  max-width: 26ch;
+}
+.landing-hero-headline .landing-accent-text {
+  color: var(--clr-green-500, #bfe23f);
 }
 .landing-hero-sub {
   font-size: var(--text-md);
-  color: var(--color-text-secondary);
+  color: var(--color-hero-muted);
   max-width: 38rem;
   margin: var(--space-5) 0 0;
 }
@@ -437,106 +504,51 @@ h3 {
   gap: var(--space-4);
   margin-top: var(--space-6);
 }
+.landing-hero-ctas .landing-btn-primary {
+  background: var(--clr-green-500, #bfe23f);
+  color: var(--clr-cherry-950, #0c130a);
+}
+.landing-hero-ctas .landing-btn-primary:hover {
+  background: var(--clr-green-600, #a8c936);
+  color: var(--clr-cherry-950, #0c130a);
+}
+.landing-hero-ctas .landing-btn-ghost {
+  border-color: var(--color-hero-muted);
+  color: inherit;
+}
+.landing-hero-ctas .landing-btn-ghost:hover {
+  background: rgba(245, 243, 230, 0.1);
+  color: inherit;
+}
 .landing-stat-strip {
   display: grid;
   grid-template-columns: var(--cols-4);
   gap: 1px;
-  background: var(--color-border);
+  background: rgba(245, 243, 230, 0.18);
   margin-top: var(--space-8);
-  border: 1px solid var(--color-border);
+  border: 1px solid rgba(245, 243, 230, 0.18);
   border-radius: var(--radius-md);
   overflow: hidden;
 }
 .landing-stat-cell {
-  background: var(--color-surface);
+  background: rgba(12, 19, 10, 0.55);
   padding: var(--space-4);
 }
 .landing-stat-num {
   font-size: var(--text-xl);
   font-weight: var(--font-weight-bold);
+  color: var(--clr-green-500, #bfe23f);
 }
 .landing-stat-label {
   font-size: var(--text-2xs);
-  color: var(--color-text-muted);
-}
-
-/* Hero mock card — a "screenshot" of the product, deliberately dark chrome
-   regardless of theme (it represents the app's own UI, not this page's
-   mood). */
-.landing-mock-card {
-  padding: 0;
-  overflow: hidden;
-}
-.landing-mock-chrome {
-  background: var(--clr-clay-950, #100d0a);
-  color: #fff;
-  padding: var(--space-3) var(--space-4);
-  display: flex;
-  justify-content: space-between;
-  font-family: var(--font-mono);
-  font-size: var(--text-3xs);
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-:root[data-theme='night'] .landing-mock-chrome {
-  background: var(--clr-night-950);
-  color: var(--color-text);
-}
-.landing-mock-body {
-  padding: var(--space-6);
-}
-.landing-mock-caption {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-  margin-bottom: var(--space-2);
-}
-.landing-mock-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-3) 0;
-  border-bottom: 1px solid var(--color-border);
-}
-.landing-mock-row:last-child {
-  border-bottom: none;
-}
-.landing-mock-row-divider {
-  border-top: 1px solid var(--color-border);
-  margin-top: var(--space-3);
-}
-.landing-mock-name {
-  font-weight: var(--font-weight-semibold);
-}
-.landing-mock-name-muted {
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-secondary);
-}
-.landing-mock-score {
-  font-size: var(--text-lg);
-  font-weight: var(--font-weight-bold);
-  color: var(--color-accent);
-}
-.landing-mock-score-muted {
-  font-size: var(--text-lg);
-  font-weight: var(--font-weight-bold);
-  color: var(--color-text-muted);
-}
-.landing-mock-footer {
-  padding: var(--space-3) var(--space-4);
-  border-top: 1px solid var(--color-border);
-  font-family: var(--font-mono);
-  font-size: var(--text-3xs);
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  color: var(--color-hero-muted);
 }
 
 /* ---- Ambient motion — bloom + rising particles ---- */
 .landing-bloom {
   position: absolute;
-  top: 46%;
-  left: 32%;
+  top: 38%;
+  left: 68%;
   width: 1px;
   height: 1px;
   pointer-events: none;
@@ -551,6 +563,12 @@ h3 {
   transform: translate(-50%, -50%);
   border: 1px solid var(--bloom-ring-color);
   border-radius: 50%;
+  /* Resting state for prefers-reduced-motion: without this, the ring's only
+     opacity value lives inside @keyframes, so disabling the animation left
+     three static, fully-opaque circles permanently on screen — never the
+     intended always-mid-fade look (found in review,
+     ui-accessibility-reviewer, 2026-09-11). */
+  opacity: 0;
 }
 @media (prefers-reduced-motion: no-preference) {
   .landing-bloom span {
@@ -612,23 +630,10 @@ h3 {
   }
 }
 
-/* ---- Editorial banner photo ---- */
-.landing-banner-photo {
-  width: 100%;
-  height: 320px;
-  overflow: hidden;
-}
-.landing-banner-photo img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center 60%;
-  display: block;
-  filter: var(--night-photo-filter);
-}
 @media (max-width: 480px) {
-  .landing-banner-photo {
-    height: 180px;
+  .landing-hero {
+    min-height: min(92vh, 620px);
+    align-items: center;
   }
 }
 
@@ -801,11 +806,11 @@ h3 {
   overflow: hidden;
 }
 :root:not([data-theme='night']) .landing-cta {
-  background: var(--clr-clay-950);
-  color: #fff;
+  background: var(--clr-cherry-950);
+  color: var(--clr-cherry-50);
 }
 :root[data-theme='night'] .landing-cta {
-  background: radial-gradient(circle at 50% 30%, var(--clr-night-700) 0%, var(--color-canvas) 70%);
+  background: radial-gradient(circle at 50% 30%, var(--clr-cherry-800) 0%, var(--color-canvas) 70%);
   color: var(--color-text);
 }
 .landing-cta-photo {
@@ -818,6 +823,7 @@ h3 {
 }
 :root:not([data-theme='night']) .landing-cta-photo {
   opacity: 0.55;
+  filter: brightness(0.55) contrast(1.1) saturate(0.85);
 }
 :root[data-theme='night'] .landing-cta-photo {
   opacity: 0.6;
@@ -827,10 +833,10 @@ h3 {
   inset: 0;
 }
 :root:not([data-theme='night']) .landing-cta-overlay {
-  background: linear-gradient(180deg, rgba(16, 13, 10, 0.55) 0%, rgba(16, 13, 10, 0.92) 100%);
+  background: linear-gradient(180deg, rgba(12, 19, 10, 0.55) 0%, rgba(12, 19, 10, 0.92) 100%);
 }
 :root[data-theme='night'] .landing-cta-overlay {
-  background: linear-gradient(180deg, rgba(13, 9, 6, 0.45) 0%, rgba(13, 9, 6, 0.94) 100%);
+  background: linear-gradient(180deg, rgba(12, 19, 10, 0.45) 0%, rgba(12, 19, 10, 0.94) 100%);
 }
 .landing-cta-inner {
   text-align: center;
@@ -850,12 +856,8 @@ h3 {
   margin-top: var(--space-6);
 }
 .landing-cta-btn-primary {
-  background: var(--color-accent);
-  color: var(--color-accent-contrast);
-}
-:root:not([data-theme='night']) .landing-cta-btn-primary {
-  background: var(--clr-ember-500);
-  color: var(--clr-clay-950);
+  background: var(--clr-green-500);
+  color: var(--clr-cherry-950);
 }
 .landing-cta-btn-ghost {
   border: 1px solid currentColor;

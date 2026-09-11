@@ -7,77 +7,120 @@
     <!--
       Migrated from seduhscore.com/bts/ (the legacy Seduh Score site's "Behind
       the Seduh" page) per user request, 2026-09-05, then restyled the same day
-      to use this repo's own dark "stage" register instead of the light "paper"
-      one — the same split viewer-shell.css/splashScreen.css already establish
-      between the organiser dashboard and the ceremonial, audience-facing
-      surfaces. The legacy page runs its OWN separate dark roast/crema palette
-      (not this repo's tokens) precisely because BTS reads as a different
-      register from the main app; this version reaches for that same idea
-      using this repo's real [data-surface="stage"] tokens (colors.css) rather
-      than inventing a third palette.
+      to use this repo's own dark "stage" register. Re-themed again 2026-09-11
+      to Cherry (see src/ui/tokens/DESIGN.md): the version history is told as a
+      standings ledger and a flat build log — this product's own vocabulary
+      (heats, standings, a scoreboard read at a glance) — rather than the
+      legacy site's spiral diagram/pour-fill timeline. The facts haven't
+      changed (still CHANGELOG.md/ROADMAP.md/CONVENTIONS.md's "Versioning"
+      section/src/core/version.js), only how they're told.
 
-      Wired in 2026-09-05 (same day): lives here under `public/` (not
-      `design/`, where it was drafted) so Vite copies it verbatim to the build
-      output and Cloudflare Workers Static Assets serves it at `/bts/` —
-      appShell.js's footer links its rendered version number here.
+      Motion pass, same day: the first Cherry-themed cut of this page dropped
+      all animation entirely along with the spiral/pour devices, which read
+      as flat rather than merely restrained (user feedback: "lost animation
+      and flair"). This version keeps the break from the legacy page's
+      specific visual devices but reintroduces real motion — a generic,
+      product-agnostic vocabulary (spring/easing-curve presets, list-stagger
+      reveals, a breathing "current" indicator) rather than reviving the
+      spiral or the pour-line. Every animated rule has a
+      prefers-reduced-motion fallback that snaps straight to the settled
+      state — nothing here is load-bearing for reading the content.
 
-      Facts are this repo's own (CHANGELOG.md, ROADMAP.md, CONVENTIONS.md's
-      "Versioning" section, src/core/version.js) — updated 2026-09-07 for the
-      Kiulap -> Berakas v2.0.0 cycle bump. Two cycles shipped so far (Kiulap,
-      done; Berakas, current), so the spiral below draws two nodes and a
-      dashed, unnamed tail, not the legacy site's seven.
+      Palette: this repo's real [data-surface="stage"] Cherry tokens
+      (colors.css), copied inline rather than linked — this file lives under
+      public/ and is served as a standalone static asset outside Vite's
+      module graph, so it can't reference the built, hashed colors.css
+      output directly. Fonts: the same self-hosted Bricolage
+      Grotesque/IBM Plex Sans/IBM Plex Mono files the rest of the product
+      uses, copied to public/bts/fonts/ for the same reason (no third-party
+      font CDN, per DESIGN.md's self-hosting rule).
 
-      Motion is a deliberate, restrained homage to the legacy page's own spiral
-      draw-in / scroll-reveal / pour-fill timeline — reimplemented here rather
-      than copied, using this repo's own splash-glow-breathe rhythm
-      (splashScreen.css) for the ambient glow, and respecting
-      prefers-reduced-motion the same way every real screen in this app does
-      (snap to the settled state, no motion suppressed by a later override).
-
-      No third-party font CDN, per DESIGN.md's self-hosting rule — same
-      system-stack fallbacks the real tokens declare.
+      Wired in 2026-09-05: lives here under `public/` (not `design/`, where
+      it was drafted) so Vite copies it verbatim to the build output and
+      Cloudflare Workers Static Assets serves it at `/bts/` — appShell.js's
+      footer links its rendered version number here.
     -->
     <style>
+      @font-face {
+        font-family: 'Bricolage Grotesque';
+        src: url('./fonts/bricolage-grotesque-700.woff2') format('woff2');
+        font-weight: 700;
+        font-style: normal;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'IBM Plex Sans';
+        src: url('./fonts/ibm-plex-sans-400.woff2') format('woff2');
+        font-weight: 400;
+        font-style: normal;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'IBM Plex Sans';
+        src: url('./fonts/ibm-plex-sans-600.woff2') format('woff2');
+        font-weight: 600;
+        font-style: normal;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'IBM Plex Mono';
+        src: url('./fonts/ibm-plex-mono-400.woff2') format('woff2');
+        font-weight: 400;
+        font-style: normal;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'IBM Plex Mono';
+        src: url('./fonts/ibm-plex-mono-700.woff2') format('woff2');
+        font-weight: 700;
+        font-style: normal;
+        font-display: swap;
+      }
+
       :root {
-        --clr-clay-50: #fefcf9;
-        --clr-clay-100: #faf6ef;
-        --clr-clay-300: #e6dbc8;
-        --clr-clay-500: #a89876;
-        --clr-clay-700: #574d3c;
-        --clr-clay-800: #362f24;
-        --clr-clay-900: #201b14;
-        --clr-clay-950: #100d0a;
-        --clr-ember-500: #ff6b35;
-        --clr-ember-600: #e0501c;
+        /* Cherry — same neutral ramp + accent src/ui/tokens/colors.css uses
+           for [data-surface="stage"]. */
+        --clr-cherry-50: #f5f3e6;
+        --clr-cherry-300: #c2b781;
+        --clr-cherry-400: #8f9463;
+        --clr-cherry-700: #2c391c;
+        --clr-cherry-800: #1c2612;
+        --clr-cherry-900: #12190b;
+        --clr-cherry-950: #0c130a;
+        --clr-green-500: #bfe23f;
+        --clr-green-600: #a8c936;
         --clr-gold-500: #cfa53b;
 
-        --color-canvas: var(--clr-clay-950);
-        --color-surface: var(--clr-clay-900);
-        --color-surface-sunken: var(--clr-clay-800);
-        --color-border: var(--clr-clay-700);
-        --color-border-strong: var(--clr-clay-50);
-        --color-text: var(--clr-clay-50);
-        --color-text-secondary: var(--clr-clay-300);
-        --color-text-muted: var(--clr-clay-500);
-        --color-accent: var(--clr-ember-500);
-        --color-accent-hover: var(--clr-ember-600);
-        --color-accent-contrast: var(--clr-clay-950);
+        --color-canvas: var(--clr-cherry-950);
+        --color-surface: var(--clr-cherry-900);
+        --color-surface-sunken: var(--clr-cherry-800);
+        --color-border: var(--clr-cherry-700);
+        --color-border-strong: var(--clr-cherry-50);
+        --color-text: var(--clr-cherry-50);
+        --color-text-secondary: var(--clr-cherry-300);
+        --color-text-muted: var(--clr-cherry-400);
+        --color-accent: var(--clr-green-500);
+        --color-accent-hover: var(--clr-green-600);
+        --color-accent-contrast: var(--clr-cherry-950);
         --color-gold: var(--clr-gold-500);
-        --color-gold-contrast: var(--clr-clay-950);
+        --color-gold-contrast: var(--clr-cherry-950);
 
-        --font-display: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+        --font-display: 'Bricolage Grotesque', ui-sans-serif, system-ui, -apple-system, sans-serif;
         --font-body:
-          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-        --font-mono:
-          ui-monospace, 'SF Mono', 'Cascadia Mono', 'Segoe UI Mono', Consolas, 'Roboto Mono',
-          monospace;
+          'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+
+        /* Motion vocabulary — three named easing curves, used by role
+           (ease-out-expo for content entering/settling, ease-out-back for
+           anything that should feel pressed/tactile, ease-in-out-sine for
+           slow ambient loops) rather than one bezier reused everywhere. */
+        --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+        --ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+        --ease-in-out-sine: cubic-bezier(0.37, 0, 0.63, 1);
       }
 
       * {
         box-sizing: border-box;
-      }
-      html {
-        scroll-behavior: smooth;
       }
       body {
         margin: 0;
@@ -85,7 +128,6 @@
         color: var(--color-text);
         font-family: var(--font-body);
         line-height: 1.6;
-        font-weight: 300;
         overflow-x: hidden;
       }
       ::selection {
@@ -107,13 +149,10 @@
         z-index: 1;
       }
 
-      /* ---------------------------------------------------------------
-         Ambient glow — splashScreen.css's own splash-glow-breathe rhythm,
-         one restrained radial accent, never a decorative wash. Fixed so
-         it stays put as a background presence while the page scrolls,
-         same "background behind the wordmark" role splashScreen.js gives
-         it, just spanning the whole page here instead of one screen.
-         --------------------------------------------------------------- */
+      /* Ambient signal, same role this repo's splash screen gives its own
+         glow — here it actually breathes (slow, low-amplitude opacity
+         pulse) instead of sitting static, the one bit of always-on motion
+         on the page. */
       .glow {
         position: fixed;
         top: 8%;
@@ -125,31 +164,106 @@
         border-radius: 50%;
         background: radial-gradient(circle, var(--color-accent) 0%, transparent 70%);
         filter: blur(13vmin);
-        opacity: 0.14;
+        opacity: 0.1;
         pointer-events: none;
         z-index: 0;
+        animation: glowBreathe 7s var(--ease-in-out-sine) infinite;
+      }
+      @keyframes glowBreathe {
+        0%,
+        100% {
+          opacity: 0.07;
+        }
+        50% {
+          opacity: 0.16;
+        }
       }
 
-      /* ---------------------------------------------------------------
-         Reveal-on-scroll — same intent as the legacy page's .rv/.rv.in,
-         reimplemented with this repo's own splash-in curve.
-         --------------------------------------------------------------- */
-      .rv {
+      /* Scroll-reveal — list-stagger pattern (fade + rise, ~40ms/item),
+         applied via IntersectionObserver below. transition-delay is set
+         per-element in JS so any list length staggers correctly without
+         a fixed nth-child table. */
+      .reveal {
         opacity: 0;
-        transform: translateY(18px);
+        transform: translateY(14px);
         transition:
-          opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
-          transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+          opacity 0.6s var(--ease-out-expo),
+          transform 0.6s var(--ease-out-expo);
       }
-      .rv.in {
+      .reveal.in {
         opacity: 1;
         transform: translateY(0);
       }
-      .rv-d1 {
-        transition-delay: 0.1s;
+
+      /* Hero entrance — plays once on load, not scroll-gated (it's already
+         above the fold). Settles to the resting state fast enough that a
+         slow first paint never leaves it visibly stuck at opacity 0. */
+      .enter {
+        opacity: 0;
+        animation: enterUp 0.7s var(--ease-out-expo) both;
       }
-      .rv-d2 {
-        transition-delay: 0.2s;
+
+      @keyframes enterUp {
+        from {
+          opacity: 0;
+          transform: translateY(14px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      /* A small breathing ring — reused wherever "this one's current"
+         needs to read at a glance, not just in text. */
+      .pulse-dot {
+        position: relative;
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--color-accent);
+        flex: none;
+      }
+      .pulse-dot::after {
+        content: '';
+        position: absolute;
+        inset: -5px;
+        border-radius: 50%;
+        border: 1.5px solid var(--color-accent);
+        animation: pulseRing 2.2s var(--ease-out-expo) infinite;
+      }
+      @keyframes pulseRing {
+        0% {
+          opacity: 0.9;
+          transform: scale(0.6);
+        }
+        80%,
+        100% {
+          opacity: 0;
+          transform: scale(1.9);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .glow {
+          animation: none;
+          opacity: 0.1;
+        }
+        .reveal {
+          opacity: 1;
+          transform: none;
+          transition: none;
+        }
+        .enter {
+          opacity: 1;
+          animation: none;
+        }
+        .pulse-dot::after {
+          animation: none;
+          opacity: 0.5;
+          transform: scale(1);
+        }
       }
 
       header.hero {
@@ -182,11 +296,13 @@
         font-family: var(--font-display);
         font-weight: 700;
         font-size: clamp(2.25rem, 5.5vw, 3.5rem);
-        line-height: 1.08;
+        line-height: 1.06;
         letter-spacing: -0.02em;
         margin: 1.25rem 0;
+        max-width: 18ch;
       }
-      h1 em {
+      h1 em,
+      h2 em {
         color: var(--color-accent);
         font-style: normal;
       }
@@ -194,7 +310,6 @@
         font-size: 1.0625rem;
         color: var(--color-text-secondary);
         max-width: 62ch;
-        font-weight: 300;
       }
       .lede + .lede {
         margin-top: 1.125rem;
@@ -207,7 +322,6 @@
       section {
         padding: 5rem 0;
         border-bottom: 1px solid var(--color-border);
-        position: relative;
       }
       .sec-eyebrow {
         font-family: var(--font-mono);
@@ -231,141 +345,99 @@
       }
 
       /* ---------------------------------------------------------------
-         The spiral — one lit node (Kiulap, the only cycle so far), an
-         Archimedean curve drawn in on scroll (stroke-dashoffset, same
-         technique the legacy page uses), and a dashed tail trailing off
-         into the dark for whatever comes next, unnamed on purpose.
+         Version standings — the version history read as a scoreboard,
+         this product's own vocabulary, rather than the legacy site's
+         spiral diagram. One row per cycle, ranked by recency the way a
+         standings table ranks by score: current cycle at the top.
          --------------------------------------------------------------- */
-      .spiral-layout {
+      .ledger {
+        margin-top: 2.5rem;
+        border: 1px solid var(--color-border);
+        border-radius: 0.75rem;
+        overflow: hidden;
+      }
+      .ledger-row {
         display: grid;
-        grid-template-columns: 1.1fr 0.9fr;
-        gap: 3rem;
-        align-items: center;
-        margin-top: 2.75rem;
+        grid-template-columns: 1.1fr 0.7fr 0.9fr 2fr;
+        gap: 1.25rem;
+        align-items: baseline;
+        padding: 1.25rem 1.5rem;
+        border-bottom: 1px solid var(--color-border);
+        background: var(--color-surface);
+        transition: background 0.25s var(--ease-out-expo);
       }
-      @media (max-width: 760px) {
-        .spiral-layout {
+      .ledger-row:hover {
+        background: var(--color-surface-sunken);
+      }
+      .ledger-row:last-child {
+        border-bottom: none;
+      }
+      .ledger-row.is-next {
+        background: transparent;
+        opacity: 0.6;
+      }
+      .ledger-row.is-next:hover {
+        background: transparent;
+      }
+      @media (max-width: 640px) {
+        .ledger-row {
           grid-template-columns: 1fr;
-          gap: 2rem;
+          gap: 0.375rem;
         }
       }
-      svg#spiral {
-        width: 100%;
-        height: auto;
-        display: block;
-        overflow: visible;
-      }
-      #spiral .orbit-path {
-        fill: none;
-        stroke: var(--color-border);
-        stroke-width: 1.4;
-        stroke-dasharray: 400;
-        stroke-dashoffset: 400;
-        transition: stroke-dashoffset 1.6s cubic-bezier(0.4, 0, 0.2, 1);
-      }
-      .spiral-stage.in #spiral .orbit-path {
-        stroke-dashoffset: 0;
-      }
-      #spiral .tail-path {
-        fill: none;
-        stroke: var(--color-text-muted);
-        stroke-width: 1.2;
-        stroke-dasharray: 3 6;
-        opacity: 0;
-        transition: opacity 0.8s 1.4s;
-      }
-      .spiral-stage.in #spiral .tail-path {
-        opacity: 0.5;
-      }
-      #spiral text {
-        font-family: var(--font-mono);
-      }
-      #spiral .name-lbl {
-        font-size: 13px;
+      .ledger-place {
+        font-family: var(--font-display);
         font-weight: 700;
-        fill: var(--color-text);
-        opacity: 0;
-        transition: opacity 0.6s 0.5s;
+        font-size: 1.125rem;
+        letter-spacing: -0.01em;
       }
-      #spiral .ver-lbl {
-        font-size: 9.5px;
-        fill: var(--color-text-secondary);
-        opacity: 0;
-        transition: opacity 0.6s 0.6s;
-      }
-      .spiral-stage.in #spiral .name-lbl,
-      .spiral-stage.in #spiral .ver-lbl {
-        opacity: 1;
-      }
-      #spiral .kiulap-ring {
-        animation: spiralPulse 2.8s ease-in-out infinite;
-      }
-      @keyframes spiralPulse {
-        0%,
-        100% {
-          opacity: 0.85;
-        }
-        50% {
-          opacity: 0.3;
-        }
-      }
-
-      .spiral-key .sk-title {
+      .ledger-version {
         font-family: var(--font-mono);
-        font-size: 0.6875rem;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        color: var(--color-text-secondary);
-        margin-bottom: 1.25rem;
-      }
-      .spiral-key ul {
-        list-style: none;
-        margin: 0 0 1.5rem;
-        padding: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-      }
-      .spiral-key li {
-        display: flex;
-        gap: 0.75rem;
-        align-items: flex-start;
         font-size: 0.875rem;
         color: var(--color-text-secondary);
       }
-      .spiral-key li b {
-        color: var(--color-text);
-        font-weight: 600;
+      .ledger-status {
+        font-family: var(--font-mono);
+        font-size: 0.6875rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
       }
-      .sk-dot {
-        width: 0.75rem;
-        height: 0.75rem;
-        border-radius: 50%;
-        flex: none;
-        margin-top: 0.25rem;
-      }
-      .sk-dot.now {
-        background: var(--color-accent);
-        box-shadow: 0 0 10px rgba(255, 107, 53, 0.6);
-      }
-      .sk-dot.next {
-        background: transparent;
-        border: 1.5px dashed var(--color-text-muted);
-      }
-      .sk-dot.start {
-        background: var(--color-text-muted);
-      }
-      .sk-dir {
-        font-size: 0.8125rem;
+      .ledger-status.shipped {
         color: var(--color-text-muted);
-        padding-top: 1.25rem;
-        border-top: 1px solid var(--color-border);
       }
-      .sk-nums {
+      .ledger-status.current {
+        color: var(--color-accent);
+      }
+      .ledger-note {
+        font-size: 0.875rem;
+        color: var(--color-text-secondary);
+      }
+      .ledger-head {
+        display: grid;
+        grid-template-columns: 1.1fr 0.7fr 0.9fr 2fr;
+        gap: 1.25rem;
+        padding: 0.875rem 1.5rem;
+        background: var(--color-surface-sunken);
+        font-family: var(--font-mono);
+        font-size: 0.6875rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+      }
+      @media (max-width: 640px) {
+        .ledger-head {
+          display: none;
+        }
+      }
+
+      .stat-row {
         display: flex;
         flex-wrap: wrap;
-        gap: 0.5rem 1.5rem;
-        margin-top: 1.25rem;
+        gap: 0.5rem 2rem;
+        margin-top: 1.5rem;
         font-family: var(--font-mono);
         font-size: 0.6875rem;
         letter-spacing: 0.04em;
@@ -373,12 +445,12 @@
         color: var(--color-text-muted);
         align-items: baseline;
       }
-      .sk-nums span {
+      .stat-row span {
         display: inline-flex;
         align-items: baseline;
         gap: 0.4rem;
       }
-      .sk-nums b {
+      .stat-row b {
         font-family: var(--font-display);
         font-size: 1.25rem;
         color: var(--color-accent);
@@ -386,101 +458,111 @@
       }
 
       /* ---------------------------------------------------------------
-         Phase-by-phase pour — the legacy page's extraction-line timeline,
-         reimplemented: an ember line fills down a track as you scroll,
-         lighting each phase node as the fill passes it.
+         Build log — a flat, scannable list; scroll-revealed with a
+         list-stagger, but never scroll-tracked — a reader jumping to any
+         scroll position sees the whole log settled, not mid-fill.
          --------------------------------------------------------------- */
-      .pour {
-        position: relative;
+      .log {
         margin-top: 3rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0;
       }
-      .pour-track {
-        position: absolute;
-        left: 11px;
-        top: 6px;
-        bottom: 6px;
-        width: 2px;
-        background: var(--color-border);
+      .log-item {
+        position: relative;
+        display: grid;
+        grid-template-columns: 6rem 1fr;
+        gap: 1.5rem;
+        padding: 1.75rem 1rem;
+        margin: 0 -1rem;
+        border-top: 1px solid var(--color-border);
+        border-radius: 0.5rem;
+        transition: background 0.25s var(--ease-out-expo);
       }
-      .pour-fill {
+      .log-item::before {
+        content: '';
         position: absolute;
         left: 0;
-        top: 0;
-        width: 100%;
-        height: 0%;
-        background: linear-gradient(var(--color-accent), var(--color-accent-hover));
-        box-shadow: 0 0 10px rgba(255, 107, 53, 0.5);
-        transition: height 0.1s linear;
+        top: 0.5rem;
+        bottom: 0.5rem;
+        width: 3px;
+        border-radius: 999px;
+        background: var(--color-accent);
+        opacity: 0;
+        transition: opacity 0.3s var(--ease-out-expo);
       }
-      .phase {
-        position: relative;
-        padding: 0 0 2.75rem 3rem;
-        opacity: 0.35;
-        transition: opacity 0.5s;
+      .log-item:hover {
+        background: var(--color-surface);
       }
-      .phase:last-child {
-        padding-bottom: 0.25rem;
+      /* Reading focus — whichever phase currently sits in the vertical
+         center band of the viewport gets a side bar + tint, same idea as a
+         scrollspy's "active section" but for reading rather than
+         navigation. Set via IntersectionObserver below; harmless if it
+         never fires (JS-disabled or reduced-motion just skip it, leaving
+         every item in its plain settled state). */
+      .log-item.is-focused {
+        background: var(--color-surface);
       }
-      .phase.lit {
+      .log-item.is-focused::before {
         opacity: 1;
       }
-      .phase-node {
-        position: absolute;
-        left: 4px;
-        top: 3px;
-        width: 15px;
-        height: 15px;
-        border-radius: 50%;
-        background: var(--color-canvas);
-        border: 2px solid var(--color-text-muted);
-        transition:
-          border-color 0.5s,
-          background 0.5s,
-          box-shadow 0.5s;
-        z-index: 2;
+      .log-item:last-child {
+        padding-bottom: 1.75rem;
       }
-      .phase.lit .phase-node {
-        border-color: var(--color-accent);
-        background: var(--color-accent);
-        box-shadow: 0 0 12px rgba(255, 107, 53, 0.55);
+      @media (max-width: 620px) {
+        .log-item {
+          grid-template-columns: 1fr;
+          gap: 0.5rem;
+        }
       }
-      .phase.current .phase-node {
-        border-color: var(--color-gold);
+      .log-phase {
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+        padding-top: 0.2rem;
       }
-      .phase.current.lit .phase-node {
-        background: var(--color-gold);
-        border-color: var(--color-gold);
-        box-shadow: 0 0 12px rgba(207, 165, 59, 0.55);
+      .log-item.current .log-phase {
+        color: var(--color-accent);
       }
-      .phase-head {
+      .log-head {
         display: flex;
         align-items: baseline;
         gap: 0.875rem;
         flex-wrap: wrap;
-        margin-bottom: 0.4rem;
+        margin-bottom: 0.5rem;
       }
-      .phase-name {
+      .log-name {
         font-family: var(--font-display);
         font-weight: 700;
         font-size: 1.25rem;
       }
-      .phase-ver {
+      .log-ver {
         font-family: var(--font-mono);
         font-size: 0.75rem;
         color: var(--color-accent);
       }
-      .phase-now {
+      .log-now {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
         font-family: var(--font-mono);
         font-size: 0.625rem;
         letter-spacing: 0.1em;
         text-transform: uppercase;
         color: var(--color-canvas);
-        background: var(--color-gold);
+        background: var(--color-accent);
         border-radius: 999px;
         padding: 0.2rem 0.625rem;
         font-weight: 700;
       }
-      .phase-line {
+      .log-now .pulse-dot,
+      .log-now .pulse-dot::after {
+        background: var(--color-canvas);
+        border-color: var(--color-canvas);
+      }
+      .log-line {
         display: flex;
         gap: 0.625rem;
         font-size: 0.9375rem;
@@ -488,7 +570,7 @@
         max-width: 62ch;
         margin-top: 0.5rem;
       }
-      .phase-line .k {
+      .log-line .k {
         font-family: var(--font-mono);
         font-size: 0.625rem;
         letter-spacing: 0.08em;
@@ -498,10 +580,10 @@
         width: 4.5rem;
         padding-top: 0.2rem;
       }
-      .phase-line.shipped .v {
+      .log-line.shipped .v {
         color: var(--color-text-secondary);
       }
-      .phase-line.felt .v {
+      .log-line.felt .v {
         color: var(--color-text-muted);
         font-style: italic;
       }
@@ -526,13 +608,17 @@
         width: 3.5rem;
         height: 3.5rem;
         border-radius: 0.75rem;
-        background: rgba(255, 107, 53, 0.14);
-        border: 1px solid rgba(255, 107, 53, 0.3);
+        background: rgba(191, 226, 63, 0.14);
+        border: 1px solid rgba(191, 226, 63, 0.3);
         display: flex;
         align-items: center;
         justify-content: center;
         color: var(--color-accent);
         flex: none;
+        transition: transform 0.4s var(--ease-out-back);
+      }
+      .bio-card:hover .bio-mark {
+        transform: rotate(-6deg) scale(1.06);
       }
       .bio-mark svg {
         width: 1.75rem;
@@ -584,13 +670,17 @@
         background: var(--color-accent);
         color: var(--color-accent-contrast);
         transition:
-          transform 0.3s,
-          background 0.3s;
+          background 0.2s var(--ease-out-expo),
+          transform 0.4s var(--ease-out-back);
       }
       .btn:hover {
         background: var(--color-accent-hover);
         color: var(--color-accent-contrast);
-        transform: translateY(-2px);
+        transform: translateY(-3px) scale(1.03);
+      }
+      .btn:active {
+        transform: translateY(-1px) scale(0.99);
+        transition-duration: 0.1s;
       }
 
       footer {
@@ -608,38 +698,18 @@
       }
 
       @media (prefers-reduced-motion: reduce) {
-        html {
-          scroll-behavior: auto;
-        }
-        .rv {
-          opacity: 1;
-          transform: none;
+        .btn,
+        .bio-mark,
+        .ledger-row,
+        .log-item,
+        .log-item::before {
           transition: none;
         }
-        .pour-fill {
-          height: 100% !important;
+        .btn:hover {
+          transform: none;
         }
-        .phase {
-          opacity: 1;
-        }
-        .phase .phase-node {
-          border-color: var(--color-accent);
-          background: var(--color-accent);
-        }
-        #spiral .orbit-path {
-          stroke-dashoffset: 0;
-        }
-        #spiral .tail-path,
-        #spiral .name-lbl,
-        #spiral .ver-lbl {
-          opacity: 1;
-        }
-        #spiral .kiulap-ring {
-          animation: none;
-          opacity: 0.6;
-        }
-        .glow {
-          opacity: 0.12;
+        .bio-card:hover .bio-mark {
+          transform: none;
         }
       }
     </style>
@@ -649,12 +719,12 @@
 
     <div class="wrap">
       <header class="hero">
-        <a class="breadcrumb" href="/">&larr; Seduh Score Next</a>
-        <div class="eyebrow rv">Behind the Seduh</div>
-        <h1 class="rv rv-d1">
-          Same brand, a fresh spiral —<br />told <em>one phase at a time.</em>
+        <a class="breadcrumb enter" href="/" style="animation-delay: 0s">&larr; Seduh Score Next</a>
+        <div class="eyebrow enter" style="animation-delay: 0.05s">Behind the Seduh</div>
+        <h1 class="enter" style="animation-delay: 0.1s">
+          Same brand. A different build — told one phase at a time.
         </h1>
-        <p class="lede rv rv-d2">
+        <p class="lede enter" style="animation-delay: 0.18s">
           This is the rebuild, not the pitch.
           <b
             >Seduh Score Next is what happens when the guy who built the original Seduh Score
@@ -663,266 +733,268 @@
           — offline-first this time, a real database instead of Firebase shortcuts, and a fixed
           advancement bug the old app never quite trusted itself with.
         </p>
-        <p class="lede rv rv-d2">
+        <p class="lede enter" style="animation-delay: 0.24s">
           One phase at a time, aimed at a real deadline: the Cup Tasters event on 4 October 2026.
         </p>
       </header>
 
       <section>
-        <div class="sec-eyebrow rv">How we're naming this one</div>
-        <h2 class="rv rv-d1">A separate spiral</h2>
-        <p class="sec-sub rv rv-d1">
-          The legacy site's own spiral ran seven cycles, Kiulap through Seria — the urban core
-          spiralling out toward the frontier, v1.0 through v5.x (<a
-            href="https://seduhscore.com/bts/"
+        <div class="sec-eyebrow reveal">How we're naming this one</div>
+        <h2 class="reveal">The version standings</h2>
+        <p class="sec-sub reveal">
+          The legacy site named its versions after Bruneian places, spreading out from the capital —
+          Kiulap through Seria, v1.0 through v5.x (<a href="https://seduhscore.com/bts/"
             >seduhscore.com/bts/</a
-          >). This codebase doesn't continue that run, but it retraces the same physical journey,
-          same order, same places — deliberately.
+          >). This build keeps that same place order and direction — deliberately — without
+          continuing that run itself. Read top to bottom, most recent first, same as any standings
+          table.
         </p>
-        <div class="spiral-layout">
-          <div class="spiral-stage" id="spiralStage">
-            <svg
-              id="spiral"
-              viewBox="0 0 260 220"
-              aria-label="Codename spiral: two cycles shipped so far, Kiulap then Berakas, with the next unnamed"
-            ></svg>
+
+        <div class="ledger" data-stagger>
+          <div class="ledger-head">
+            <span>Place</span>
+            <span>Version</span>
+            <span>Status</span>
+            <span>Note</span>
           </div>
-          <div class="spiral-key rv rv-d1">
-            <div class="sk-title">Reading the map</div>
-            <ul>
-              <li>
-                <span class="sk-dot start"></span>
-                <span
-                  ><b>Kiulap · v1.x</b> — the urban core, again. Cup Taster plus the Phase 6
-                  hardening pass, done.</span
-                >
-              </li>
-              <li>
-                <span class="sk-dot now"></span>
-                <span
-                  ><b>Berakas · v2.0.0</b> — jumped the queue: the public front door, ahead of
-                  schedule. The current cycle.</span
-                >
-              </li>
-              <li>
-                <span class="sk-dot next"></span>
-                <span
-                  >The next cycle — Gadong, most likely, when Throwdown ships. Named for real only
-                  once it actually starts.</span
-                >
-              </li>
-            </ul>
-            <div class="sk-dir">
-              Same direction as the original: capital core → frontier, one shipped cycle at a time.
-            </div>
-            <div class="sk-nums">
-              <span><b>2</b> cycles</span>
-              <span><b>v2.0.0</b> now</span>
-              <span><b>1 / 4</b> formats</span>
-            </div>
+          <div class="ledger-row reveal">
+            <span class="ledger-place">Berakas</span>
+            <span class="ledger-version">v2.0.0</span>
+            <span class="ledger-status current"><span class="pulse-dot"></span>Current</span>
+            <span class="ledger-note"
+              >The public front door — jumped the queue, ahead of schedule.</span
+            >
           </div>
+          <div class="ledger-row reveal">
+            <span class="ledger-place">Kiulap</span>
+            <span class="ledger-version">v1.x</span>
+            <span class="ledger-status shipped">Shipped</span>
+            <span class="ledger-note">Cup Taster plus the Phase 6 hardening pass, done.</span>
+          </div>
+          <div class="ledger-row is-next reveal">
+            <span class="ledger-place">Next</span>
+            <span class="ledger-version">—</span>
+            <span class="ledger-status shipped">TBD</span>
+            <span class="ledger-note"
+              >Gadong, probably — we're not superstitious, we just don't jinx a milestone by naming
+              it early.</span
+            >
+          </div>
+        </div>
+
+        <div class="stat-row reveal">
+          <span><b>2</b> cycles</span>
+          <span><b>v2.0.0</b> now</span>
+          <span><b>1 / 4</b> formats</span>
         </div>
       </section>
 
       <section class="cycles">
-        <div class="sec-eyebrow rv">The pour, phase by phase</div>
-        <h2 class="rv rv-d1">What shipped — and what it felt like.</h2>
-        <p class="sec-sub rv rv-d1">
+        <div class="sec-eyebrow reveal">The build, phase by phase</div>
+        <h2 class="reveal">What shipped — and what it felt like.</h2>
+        <p class="sec-sub reveal">
           <strong>Kiulap</strong> — seven phases per the project's frozen handoff spec, all shipped.
           Then <strong>Berakas</strong> — a front door nobody had planned for, jumping the queue.
         </p>
 
-        <div class="pour" id="phasePour">
-          <div class="pour-track"><div class="pour-fill" id="phasePourFill"></div></div>
-
-          <div class="phase" data-phase>
-            <div class="phase-node"></div>
-            <div class="phase-head">
-              <span class="phase-name">Phase 0</span>
-              <span class="phase-ver">Foundation</span>
-            </div>
-            <div class="phase-line shipped">
-              <span class="k">Shipped</span
-              ><span class="v"
-                >The scaffold, nine review subagents, four custom ESLint rules, a local Supabase
-                stack wired into CI, and a protected <code>main</code> branch.</span
-              >
-            </div>
-            <div class="phase-line felt">
-              <span class="k">Felt like</span
-              ><span class="v"
-                >writing down the rules before writing any of the code they'd police.</span
-              >
-            </div>
-          </div>
-
-          <div class="phase" data-phase>
-            <div class="phase-node"></div>
-            <div class="phase-head">
-              <span class="phase-name">Phase 1</span>
-              <span class="phase-ver">Schema &amp; security</span>
-            </div>
-            <div class="phase-line shipped">
-              <span class="k">Shipped</span
-              ><span class="v"
-                >Every core and Cup Taster table, row-level security across all thirteen of them,
-                and a dedicated pgTAP gate proving every write policy carries a real
-                <code>WITH CHECK</code>.</span
-              >
-            </div>
-            <div class="phase-line felt">
-              <span class="k">Felt like</span
-              ><span class="v"
-                >finding a live cross-org bug in review before it ever reached a real event.</span
-              >
+        <div class="log" data-stagger>
+          <div class="log-item reveal">
+            <div class="log-phase">Phase 0</div>
+            <div>
+              <div class="log-head">
+                <span class="log-name">Foundation</span>
+              </div>
+              <div class="log-line shipped">
+                <span class="k">Shipped</span
+                ><span class="v"
+                  >The scaffold, nine review subagents, four custom ESLint rules, a local Supabase
+                  stack wired into CI, and a protected <code>main</code> branch.</span
+                >
+              </div>
+              <div class="log-line felt">
+                <span class="k">Felt like</span
+                ><span class="v"
+                  >writing down the rules before writing any of the code they'd police.</span
+                >
+              </div>
             </div>
           </div>
 
-          <div class="phase" data-phase>
-            <div class="phase-node"></div>
-            <div class="phase-head">
-              <span class="phase-name">Phase 2</span>
-              <span class="phase-ver">Core libraries</span>
-            </div>
-            <div class="phase-line shipped">
-              <span class="k">Shipped</span
-              ><span class="v"
-                >Partitioning, ranking, advancement, countdown, time-clamping, and entitlements —
-                pure logic, fuzz-tested against thousands of combinations before a single screen
-                existed.</span
-              >
-            </div>
-            <div class="phase-line felt">
-              <span class="k">Felt like</span
-              ><span class="v"
-                >paying down the old app's advancement bug before it could be reborn here.</span
-              >
-            </div>
-          </div>
-
-          <div class="phase" data-phase>
-            <div class="phase-node"></div>
-            <div class="phase-head">
-              <span class="phase-name">Phase 3</span>
-              <span class="phase-ver">Registry &amp; offline</span>
-            </div>
-            <div class="phase-line shipped">
-              <span class="k">Shipped</span
-              ><span class="v"
-                >Person/entry registration with real dedup, an IndexedDB mirror, and a FIFO outbox
-                queue with idempotency keys — the spine every later screen writes through.</span
-              >
-            </div>
-            <div class="phase-line felt">
-              <span class="k">Felt like</span
-              ><span class="v"
-                >designing for the wifi at the venue, not the wifi in the office.</span
-              >
+          <div class="log-item reveal">
+            <div class="log-phase">Phase 1</div>
+            <div>
+              <div class="log-head">
+                <span class="log-name">Schema &amp; security</span>
+              </div>
+              <div class="log-line shipped">
+                <span class="k">Shipped</span
+                ><span class="v"
+                  >Every core and Cup Taster table, row-level security across all thirteen of them,
+                  and a dedicated pgTAP gate proving every write policy carries a real
+                  <code>WITH CHECK</code>.</span
+                >
+              </div>
+              <div class="log-line felt">
+                <span class="k">Felt like</span
+                ><span class="v"
+                  >finding a live cross-org bug in review before it ever reached a real event.</span
+                >
+              </div>
             </div>
           </div>
 
-          <div class="phase" data-phase>
-            <div class="phase-node"></div>
-            <div class="phase-head">
-              <span class="phase-name">Phase 4</span>
-              <span class="phase-ver">Cup Taster</span>
-            </div>
-            <div class="phase-line shipped">
-              <span class="k">Shipped</span
-              ><span class="v"
-                >Stage setup, roster, heat generation, live timing, the three-state scoring toggle,
-                standings with a real tiebreak flow, a completion report, and export — the format's
-                full loop.</span
-              >
-            </div>
-            <div class="phase-line felt">
-              <span class="k">Felt like</span
-              ><span class="v"
-                >"correct is a count, never a column" stopping being a rule on paper and becoming a
-                real constraint.</span
-              >
-            </div>
-          </div>
-
-          <div class="phase" data-phase>
-            <div class="phase-node"></div>
-            <div class="phase-head">
-              <span class="phase-name">Phase 5</span>
-              <span class="phase-ver">Live surfaces</span>
-            </div>
-            <div class="phase-line shipped">
-              <span class="k">Shipped</span
-              ><span class="v"
-                >A publish path, a shared viewer shell over Supabase Realtime, and two real
-                consumers — projector and phone — proven to agree on the same countdown, to the
-                second.</span
-              >
-            </div>
-            <div class="phase-line felt">
-              <span class="k">Felt like</span
-              ><span class="v"
-                >the point this stopped being an organiser tool and became something a whole room
-                could watch at once.</span
-              >
+          <div class="log-item reveal">
+            <div class="log-phase">Phase 2</div>
+            <div>
+              <div class="log-head">
+                <span class="log-name">Core libraries</span>
+              </div>
+              <div class="log-line shipped">
+                <span class="k">Shipped</span
+                ><span class="v"
+                  >Partitioning, ranking, advancement, countdown, time-clamping, and entitlements —
+                  pure logic, fuzz-tested against thousands of combinations before a single screen
+                  existed.</span
+                >
+              </div>
+              <div class="log-line felt">
+                <span class="k">Felt like</span
+                ><span class="v"
+                  >paying down the old app's advancement bug before it could be reborn here.</span
+                >
+              </div>
             </div>
           </div>
 
-          <div class="phase" data-phase>
-            <div class="phase-node"></div>
-            <div class="phase-head">
-              <span class="phase-name">Phase 6</span>
-              <span class="phase-ver">Hardening</span>
-            </div>
-            <div class="phase-line shipped">
-              <span class="k">Shipped</span
-              ><span class="v"
-                >Accessibility pass, offline soak testing, and a dry run against the real roster —
-                local and production both green. Guess the Bean stayed the working v4.x version,
-                deliberately not rebuilt.</span
-              >
-            </div>
-            <div class="phase-line felt">
-              <span class="k">Felt like</span
-              ><span class="v"
-                >the unglamorous work that decides whether October 4th actually goes well — closed
-                out before the event ever started.</span
-              >
+          <div class="log-item reveal">
+            <div class="log-phase">Phase 3</div>
+            <div>
+              <div class="log-head">
+                <span class="log-name">Registry &amp; offline</span>
+              </div>
+              <div class="log-line shipped">
+                <span class="k">Shipped</span
+                ><span class="v"
+                  >Person/entry registration with real dedup, an IndexedDB mirror, and a FIFO outbox
+                  queue with idempotency keys — the spine every later screen writes through.</span
+                >
+              </div>
+              <div class="log-line felt">
+                <span class="k">Felt like</span
+                ><span class="v"
+                  >designing for the wifi at the venue, not the wifi in the office.</span
+                >
+              </div>
             </div>
           </div>
 
-          <div class="phase current cycle-cap" data-phase>
-            <div class="phase-node"></div>
-            <div class="phase-head">
-              <span class="phase-name">Berakas</span>
-              <span class="phase-ver">v2.0.0</span>
-              <span class="phase-now">Current cycle</span>
+          <div class="log-item reveal">
+            <div class="log-phase">Phase 4</div>
+            <div>
+              <div class="log-head">
+                <span class="log-name">Cup Taster</span>
+              </div>
+              <div class="log-line shipped">
+                <span class="k">Shipped</span
+                ><span class="v"
+                  >Stage setup, roster, heat generation, live timing, the three-state scoring
+                  toggle, standings with a real tiebreak flow, a completion report, and export — the
+                  format's full loop.</span
+                >
+              </div>
+              <div class="log-line felt">
+                <span class="k">Felt like</span
+                ><span class="v"
+                  >"correct is a count, never a column" stopping being a rule on paper and becoming
+                  a real constraint.</span
+                >
+              </div>
             </div>
-            <div class="phase-line shipped">
-              <span class="k">Shipped</span
-              ><span class="v"
-                >The public marketing landing page — out of the original handoff's scope entirely,
-                shipped because it was needed. The console moved to <code>/app/</code> to make room
-                for it; this page you're reading now lives right alongside it.</span
-              >
+          </div>
+
+          <div class="log-item reveal">
+            <div class="log-phase">Phase 5</div>
+            <div>
+              <div class="log-head">
+                <span class="log-name">Live surfaces</span>
+              </div>
+              <div class="log-line shipped">
+                <span class="k">Shipped</span
+                ><span class="v"
+                  >A publish path, a shared viewer shell over Supabase Realtime, and two real
+                  consumers — projector and phone — proven to agree on the same countdown, to the
+                  second.</span
+                >
+              </div>
+              <div class="log-line felt">
+                <span class="k">Felt like</span
+                ><span class="v"
+                  >the point this stopped being an organiser tool and became something a whole room
+                  could watch at once.</span
+                >
+              </div>
             </div>
-            <div class="phase-line felt">
-              <span class="k">Felt like</span
-              ><span class="v"
-                >the moment this stopped being a private rebuild and got an actual public front door
-                — the same thing legacy's own Berakas cycle was, for the same reason.</span
-              >
+          </div>
+
+          <div class="log-item reveal">
+            <div class="log-phase">Phase 6</div>
+            <div>
+              <div class="log-head">
+                <span class="log-name">Hardening</span>
+              </div>
+              <div class="log-line shipped">
+                <span class="k">Shipped</span
+                ><span class="v"
+                  >Accessibility pass, offline soak testing, and a dry run against the real roster —
+                  local and production both green. Guess the Bean stayed the working v4.x version,
+                  deliberately not rebuilt.</span
+                >
+              </div>
+              <div class="log-line felt">
+                <span class="k">Felt like</span
+                ><span class="v"
+                  >the unglamorous work that decides whether October 4th actually goes well — closed
+                  out before the event ever started.</span
+                >
+              </div>
+            </div>
+          </div>
+
+          <div class="log-item current reveal">
+            <div class="log-phase">Berakas</div>
+            <div>
+              <div class="log-head">
+                <span class="log-name">The public front door</span>
+                <span class="log-ver">v2.0.0</span>
+                <span class="log-now"><span class="pulse-dot"></span>Current cycle</span>
+              </div>
+              <div class="log-line shipped">
+                <span class="k">Shipped</span
+                ><span class="v"
+                  >The public marketing landing page — out of the original handoff's scope entirely,
+                  shipped because it was needed. The console moved to <code>/app/</code> to make
+                  room for it; this page you're reading now lives right alongside it.</span
+                >
+              </div>
+              <div class="log-line felt">
+                <span class="k">Felt like</span
+                ><span class="v"
+                  >the moment this stopped being a private rebuild and got an actual public front
+                  door — the same thing legacy's own Berakas cycle was, for the same reason.</span
+                >
+              </div>
             </div>
           </div>
         </div>
       </section>
 
       <section>
-        <div class="sec-eyebrow rv">The one guy</div>
-        <h2 class="rv rv-d1">Firdaus Omar</h2>
-        <p class="sec-sub rv rv-d1">
+        <div class="sec-eyebrow reveal">The one guy</div>
+        <h2 class="reveal">Firdaus Omar</h2>
+        <p class="sec-sub reveal">
           Grey Matter Coffee Werks &middot; Brunei — coffee first, code second, both stubborn.
         </p>
-        <div class="bio-card rv">
+        <div class="bio-card reveal">
           <div class="bio-mark" aria-hidden="true">
             <svg
               viewBox="22 16 56 48"
@@ -952,13 +1024,11 @@
       </section>
 
       <section class="closer" style="border-bottom: none">
-        <div class="sec-eyebrow rv" style="justify-content: center; display: inline-flex">
+        <div class="sec-eyebrow reveal" style="justify-content: center; display: inline-flex">
           Enough of the back room
         </div>
-        <h2 class="rv rv-d1">
-          That's the pour so far.<br />Come back for <em>the next cycle.</em>
-        </h2>
-        <a class="btn rv rv-d2" href="/">&larr; Back to Seduh Score Next</a>
+        <h2 class="reveal">That's the standings so far.<br />No cliffhanger — just more phases.</h2>
+        <a class="btn reveal" href="/">&larr; Back to Seduh Score Next</a>
       </section>
 
       <footer>
@@ -968,156 +1038,68 @@
     </div>
 
     <script>
-      // Reveal-on-scroll — same IntersectionObserver approach as the legacy
-      // page, just gated by prefers-reduced-motion up front rather than only
-      // in a CSS override, so a reduced-motion viewer never even receives the
-      // opacity-0 starting state as a flash of unrevealed content.
+      // Scroll-reveal, list-stagger pattern: each .reveal element inside a
+      // [data-stagger] container gets a 40ms-per-item transition-delay
+      // before the observer flips it to .in, so a group appears as a
+      // reading-order cascade rather than all at once. Elements outside any
+      // [data-stagger] container (section headings, standalone paragraphs)
+      // reveal individually with no delay. Gated on prefers-reduced-motion
+      // up front, same as the hero's .enter animation, so a reduced-motion
+      // visitor never receives an opacity:0 starting state at all.
       (function () {
-        const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         if (reduce) return;
-        const io = new IntersectionObserver(
-          (entries) => {
-            entries.forEach((e) => {
-              if (e.isIntersecting) {
-                e.target.classList.add('in');
-                io.unobserve(e.target);
-              }
-            });
-          },
-          { threshold: 0.14 },
-        );
-        document.querySelectorAll('.rv').forEach((el) => io.observe(el));
-      })();
 
-      // The spiral — two shipped cycles (Kiulap, then Berakas), same
-      // Archimedean-curve technique as the legacy page's seven-cycle
-      // version: a short orbit arc in from the center through both lit
-      // nodes, then a dashed tail continuing outward for whatever comes
-      // next, unnamed.
-      (function () {
-        const svg = document.getElementById('spiral');
-        const stage = document.getElementById('spiralStage');
-        const cx = 100,
-          cy = 100,
-          startR = 14,
-          rStep = 46,
-          aStep = (150 * Math.PI) / 180;
-        const pos = (t) => {
-          const a = t * aStep - Math.PI / 2;
-          const r = startR + t * rStep;
-          return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
-        };
-        const polyline = (from, to) => {
-          const steps = Math.max(2, Math.round((to - from) * 24));
-          let d = '';
-          for (let s = 0; s <= steps; s++) {
-            const p = pos(from + ((to - from) * s) / steps);
-            d += (s ? ' L ' : 'M ') + p.x.toFixed(1) + ' ' + p.y.toFixed(1);
-          }
-          return d;
-        };
-        // Label placement flips above/below the node depending which side of
-        // center it lands on, same rule the legacy page's script uses — two
-        // nodes now close enough together that a fixed "always above" offset
-        // (the N=1 version's original approach) would collide.
-        const label = (p, name, ver, delayName, delayVer) => {
-          const above = p.y < cy;
-          const ly = above ? p.y - 22 : p.y + 26;
-          const vy = above ? p.y - 9 : p.y + 40;
-          return (
-            '<text class="name-lbl" x="' +
-            p.x +
-            '" y="' +
-            ly +
-            '" text-anchor="middle" style="transition-delay:' +
-            delayName +
-            's">' +
-            name +
-            '</text>' +
-            '<text class="ver-lbl" x="' +
-            p.x +
-            '" y="' +
-            vy +
-            '" text-anchor="middle" style="transition-delay:' +
-            delayVer +
-            's">' +
-            ver +
-            '</text>'
-          );
-        };
-        const kiulap = pos(0);
-        const berakas = pos(1);
-        let html = '<path class="orbit-path" d="' + polyline(-1.4, 1) + '"/>';
-        html += '<path class="tail-path" d="' + polyline(1, 2.1) + '"/>';
-
-        // Kiulap — shipped, past. A plain filled dot, no pulse: the pulse is
-        // reserved for whichever node is the CURRENT cycle, same "now" vs
-        // "start" distinction the spiral key list below draws.
-        html +=
-          '<circle cx="' +
-          kiulap.x +
-          '" cy="' +
-          kiulap.y +
-          '" r="6" fill="var(--color-text-muted)"/>';
-        html += label(kiulap, 'KIULAP', 'shipped &middot; v1.x', 0.5, 0.6);
-
-        // Berakas — current cycle, the live pulse.
-        html +=
-          '<circle class="kiulap-ring" cx="' +
-          berakas.x +
-          '" cy="' +
-          berakas.y +
-          '" r="14" fill="none" stroke="var(--color-accent)" stroke-width="1.5"/>';
-        html +=
-          '<circle cx="' +
-          berakas.x +
-          '" cy="' +
-          berakas.y +
-          '" r="7" fill="var(--color-accent)"/>';
-        html += label(berakas, 'BERAKAS', 'now &middot; v2.0.0', 0.7, 0.8);
-        svg.innerHTML = html;
-
-        const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        if (reduce) {
-          stage.classList.add('in');
-          return;
-        }
-        new IntersectionObserver(
-          (es, obs) => {
-            es.forEach((e) => {
-              if (e.isIntersecting) {
-                stage.classList.add('in');
-                obs.disconnect();
-              }
-            });
-          },
-          { threshold: 0.3 },
-        ).observe(stage);
-      })();
-
-      // Phase pour — the ember fill-line tracks scroll progress through the
-      // phase list and lights each node as the fill passes it, same
-      // mechanism as the legacy page's .pour-fill/.cyc-node pairing.
-      (function () {
-        const pour = document.getElementById('phasePour');
-        const fill = document.getElementById('phasePourFill');
-        const items = [...document.querySelectorAll('[data-phase]')];
-        const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        if (reduce) return;
-        function update() {
-          const r = pour.getBoundingClientRect();
-          const vh = window.innerHeight;
-          const progress = Math.min(Math.max((vh * 0.72 - r.top) / r.height, 0), 1);
-          fill.style.height = progress * 100 + '%';
-          const fillY = r.top + r.height * progress;
-          items.forEach((ph) => {
-            const node = ph.querySelector('.phase-node').getBoundingClientRect();
-            ph.classList.toggle('lit', node.top + 7 <= fillY);
+        document.querySelectorAll('[data-stagger]').forEach(function (group) {
+          var items = group.querySelectorAll('.reveal');
+          items.forEach(function (el, i) {
+            el.style.transitionDelay = i * 0.06 + 's';
           });
-        }
-        window.addEventListener('scroll', update, { passive: true });
-        window.addEventListener('resize', update);
-        update();
+        });
+
+        var io = new IntersectionObserver(
+          function (entries) {
+            entries.forEach(function (entry) {
+              if (entry.isIntersecting) {
+                entry.target.classList.add('in');
+                io.unobserve(entry.target);
+              }
+            });
+          },
+          { threshold: 0.12 },
+        );
+        document.querySelectorAll('.reveal').forEach(function (el) {
+          io.observe(el);
+        });
+      })();
+
+      // Reading focus for the build log — a thin trigger band pinned to
+      // the vertical center of the viewport (rootMargin's top/bottom both
+      // pulled in by 45%); whichever .log-item is passing through that
+      // band gets .is-focused (the side bar + tint), everything else
+      // doesn't. Same idea as a scrollspy's "active nav item" but applied
+      // to reading a list instead of navigating one. Skipped entirely
+      // under reduced motion — every item just stays in its plain settled
+      // state, which is a complete, correct reading of the page on its
+      // own, not a degraded one.
+      (function () {
+        var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (reduce) return;
+
+        var items = document.querySelectorAll('.log-item');
+        if (!items.length) return;
+
+        var io = new IntersectionObserver(
+          function (entries) {
+            entries.forEach(function (entry) {
+              entry.target.classList.toggle('is-focused', entry.isIntersecting);
+            });
+          },
+          { rootMargin: '-45% 0px -45% 0px', threshold: 0 },
+        );
+        items.forEach(function (el) {
+          io.observe(el);
+        });
       })();
     </script>
   </body>
