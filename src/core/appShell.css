@@ -179,10 +179,8 @@
   }
 
   .app-shell-auth:not(:empty) {
-    border-top: none;
-    padding-top: 0;
-    border-left: var(--border-hairline) solid var(--color-border);
-    padding-left: var(--space-3);
+    margin-top: 0;
+    margin-left: var(--space-3);
   }
 }
 
@@ -295,20 +293,26 @@
    (2026-09-06 — see that class's own comment), stacked below the nav links
    on mobile and inline alongside them at the desktop breakpoint — the
    divider direction below follows that same layout change, mobile-first. */
-/* Isolated from the nav links with its own divider (found in production
-   UI/UX feedback: the signed-in email sat directly in the nav bar with no
-   visual separation from navigation links). A hairline border rather than
-   a background chip — matches this system's own "hairline border over a
-   filled treatment" register (DESIGN.md's no-shadow rule extends the same
-   instinct to dividers). Only renders when non-empty (renderAuth() below
-   leaves this node childless while signed out), so no floating divider
-   shows with nothing to its right/below. Top border at rest (the mobile
-   stack — this sits BELOW the nav links in that layout); the min-width:640px
-   block below switches it to a left border once auth sits inline in a row
-   instead. */
+/* Isolated from the nav links with EXTRA space rather than a divider line
+   (found in production UI/UX feedback: the signed-in email sat directly in
+   the nav bar with no visual separation from navigation links). A hairline
+   border was the first fix here, but read as visually out of place — every
+   OTHER border in this header is state-conditional (.app-shell-link-active's
+   own border only shows on the current page's link; .app-shell-nav-toggle's
+   is a control affordance, not a divider), so this was the one border always
+   present regardless of state, and it registered as a stray box around just
+   the email+button rather than as a section divider (user feedback,
+   2026-09-11). Extra margin on top of the panel's own existing `gap` gets
+   the same separation without introducing a new visual language — flex
+   items never participate in margin collapsing, so this adds cleanly on top
+   of the container's own gap rather than collapsing into it. Only renders
+   when non-empty (renderAuth() below leaves this node childless while
+   signed out), so no floating gap shows with nothing to its right/below.
+   Top margin at rest (the mobile stack — this sits BELOW the nav links in
+   that layout); the min-width:640px block below switches it to a left
+   margin once auth sits inline in a row instead. */
 .app-shell-auth:not(:empty) {
-  border-top: var(--border-hairline) solid var(--color-border);
-  padding-top: var(--space-2);
+  margin-top: var(--space-2);
 }
 
 .app-shell-auth {

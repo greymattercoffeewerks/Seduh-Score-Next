@@ -117,6 +117,50 @@ dev server (rest state, hover state, both confirmed correct).
 **Status:** Implementation, initial review, and follow-up pass all complete. All findings fixed,
 zero blocking findings. Ready for commit and version bump.
 
+**Live follow-up fix — header border removal:**
+
+After the Cherry rework shipped live (commit fbe9fbb, merged via PR #81), user reviewed the
+rendered organiser header and identified that `.app-shell-auth` (the "signed in as {email} +
+Sign out" cluster in `src/core/appShell.css`) had a hairline border separating it from the nav
+links. This was the only unconditional border in the header not tied to state (unlike
+`.app-shell-link-active`'s border-on-current-page, or `.app-shell-nav-toggle`'s border as a
+control affordance), and it read visually as a stray box rather than a natural grouping. User
+requested removal.
+
+**Fix applied:**
+
+- **Base rule (mobile stack):** `border-top: var(--border-hairline) solid var(--color-border);
+padding-top: var(--space-2);` → `margin-top: var(--space-2);` Margin stacks additively atop
+  the flex container's own `gap` (flex items don't participate in margin collapsing), providing
+  better separation than the border did.
+- **min-width:640px breakpoint (desktop row):** `border-top: none; padding-top: 0; border-left:
+var(--border-hairline) solid var(--color-border); padding-left: var(--space-3);` → `margin-top:
+0; margin-left: var(--space-3);` Consistent pattern, spacing unaffected (24px margin on desktop
+  vs 12px between nav links, still provides visual breathing room).
+- **Doc comment updated:** rationale rewritten to explain why border-only approach failed (stray
+  box appearance) and why margin is semantically correct (flex additive spacing, participates in
+  flex gap calculation).
+
+**Three subagents reviewed, all clean:**
+
+- **`ui-accessibility-reviewer`:** confirmed margin-only spacing provides MORE separation than the
+  original border (20px total on mobile stack vs 4px between nav links; 24px on desktop row vs
+  12px between nav links), and `.app-shell-auth` already carries independent color/shape signals
+  (email text in `--color-text-muted`, Sign-out button with `.btn-outline` border). Removing the
+  divider doesn't remove any signal — it removes visual clutter. No stale border-thickness
+  assumptions found elsewhere in the file.
+- **`module-boundary-checker`:** clean. Pure CSS property swap in `src/core/appShell.css`;
+  `.app-shell-auth` class exists only in core module, zero occurrences in `src/formats/`.
+- **`code-reviewer`:** found and fixed one real issue — initial doc comment incorrectly claimed
+  `.app-shell-link-active` was "borderless," contradicting its own documented active-state border.
+  Corrected: comment now accurately states every other border in the header is state-conditional
+  (active-pill border only on current link, nav-toggle border as control affordance) rather than
+  falsely claiming those elements have no border. Also applied reviewer suggestion to make margin-
+  collapsing reasoning explicit in the comment.
+
+**Verification:** dev server visual check at both 375px (mobile with nav panel expanded) and
+desktop width — clean spacing, no border remnants, no regressions. `npm run lint` passes.
+
 ---
 
 ## Marketing landing page · 2026-09-07
