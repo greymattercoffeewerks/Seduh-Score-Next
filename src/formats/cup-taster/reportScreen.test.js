@@ -9,8 +9,9 @@ import {
   sanitizeFilename,
   mountReportScreen,
   computeAccuracyPct,
-  computeAvgSecsPerSet,
   accuracyTier,
+  renderEventSummaryTable,
+  buildEventSummaryTable,
 } from './reportScreen.js';
 
 function fakeClient({ tables = {} } = {}) {
@@ -273,17 +274,6 @@ describe('computeAccuracyPct', () => {
   });
 });
 
-describe('computeAvgSecsPerSet', () => {
-  it('rounds to the nearest whole second', () => {
-    expect(computeAvgSecsPerSet(100, 3)).toBe(33);
-  });
-
-  it('returns null for zero scored sets or a null total', () => {
-    expect(computeAvgSecsPerSet(100, 0)).toBeNull();
-    expect(computeAvgSecsPerSet(null, 3)).toBeNull();
-  });
-});
-
 describe('accuracyTier', () => {
   it.each([
     [100, 1],
@@ -312,6 +302,138 @@ describe('toCsvSafeDuration', () => {
     // No value to protect from mis-parsing — an apostrophe here would just
     // be a stray character in an otherwise-blank cell.
     expect(toCsvSafeDuration(null)).toBe('');
+  });
+});
+
+describe('renderEventSummaryTable / buildEventSummaryTable', () => {
+  // Same shape computeEventSummary itself produces — matches its own
+  // tests' fixture in analytics.test.js rather than inventing a
+  // differently-shaped one here.
+  const summaries = [
+    {
+      entryId: 'alex',
+      displayName: 'Alex',
+      rounds: [
+        { stageOrdinal: 1, numCorrect: 3, totalElapsedSecs: 90 },
+        { stageOrdinal: 2, numCorrect: 3, totalElapsedSecs: 70 },
+      ],
+      totalScore: 6,
+      totalElapsedSecs: 160,
+      avgSecsPerSet: 27,
+    },
+    {
+      // Eliminated after stage 1 — never reached stage 2 at all.
+      entryId: 'jo',
+      displayName: 'Jo',
+      rounds: [{ stageOrdinal: 1, numCorrect: 1, totalElapsedSecs: 150 }],
+      totalScore: 1,
+      totalElapsedSecs: 150,
+      avgSecsPerSet: 50,
+    },
+  ];
+  const stageReports = [
+    { stage: { kind: 'prelims', ordinal: 1 } },
+    { stage: { kind: 'finals', ordinal: 2 } },
+  ];
+
+  it('renders Rank/Cupper, one Correct+Time column pair per stage, and the three total columns, in row order as given (the real placement order, not re-sorted here)', () => {
+    const table = renderEventSummaryTable(summaries, stageReports);
+    const headerLabels = [...table.querySelectorAll('thead th')].map((th) => th.textContent);
+    expect(headerLabels).toEqual([
+      'Rank',
+      'Cupper',
+      'Preliminary — Correct',
+      'Preliminary — Time',
+      'Finals — Correct',
+      'Finals — Time',
+      'Total score',
+      'Total time',
+      'Avg time/set',
+    ]);
+
+    const rows = table.querySelectorAll('tbody tr');
+    expect(rows[0].querySelector('[data-label="Rank"]').textContent).toBe('1');
+    expect(rows[0].querySelector('[data-label="Cupper"]').textContent).toBe('Alex');
+    expect(rows[0].querySelector('[data-label="Total score"]').textContent).toBe('6');
+    expect(rows[1].querySelector('[data-label="Rank"]').textContent).toBe('2');
+    expect(rows[1].querySelector('[data-label="Cupper"]').textContent).toBe('Jo');
+  });
+
+  it("renders a plain em dash (not '0' or a crash) in both the Correct and Time columns for a stage a cupper never reached — and, in the SAME assertion pass, a cupper who DID reach that stage shows their real values there, not also an em dash", () => {
+    // Found in review (test-auditor): the original version of this test
+    // only checked Jo's own missing-round cells, which a version of the
+    // code that always rendered em dash (for every cupper, every round)
+    // would have passed identically. Alex's row for the SAME "Finals"
+    // columns is what actually proves the em dash is conditional on the
+    // round genuinely being absent, not unconditional.
+    const table = renderEventSummaryTable(summaries, stageReports);
+    const rows = table.querySelectorAll('tbody tr');
+    const [alexRow, joRow] = rows;
+    expect(alexRow.querySelector('[data-label="Finals — Correct"]').textContent).toBe('3');
+    expect(alexRow.querySelector('[data-label="Finals — Time"]').childNodes[0].textContent).toBe(
+      '1:10',
+    );
+    expect(joRow.querySelector('[data-label="Finals — Correct"]').textContent).toBe('—');
+    expect(joRow.querySelector('[data-label="Finals — Time"]').textContent).toBe('—');
+  });
+
+  it('the CSV table mirrors the on-screen column order and Y/N-style em-dash convention exactly, per position not entryId', () => {
+    const table = buildEventSummaryTable(summaries, stageReports);
+    expect(table.title).toBe('Overall — All Rounds');
+    expect(table.columns.map((c) => c.label)).toEqual([
+      'Rank',
+      'Cupper',
+      'Preliminary — Correct',
+      'Preliminary — Time',
+      'Finals — Correct',
+      'Finals — Time',
+      'Total score',
+      'Total time',
+      'Avg time/set',
+    ]);
+    expect(table.rows[0]).toMatchObject({
+      position: 1,
+      displayName: 'Alex',
+      correct1: 3,
+      correct2: 3,
+      totalScore: 6,
+    });
+    expect(table.rows[1]).toMatchObject({
+      position: 2,
+      displayName: 'Jo',
+      correct1: 1,
+      correct2: '—',
+      time2: '—',
+    });
+  });
+
+  it('disambiguates two same-kind stages with a "(Round N)" suffix — found in review (ui-accessibility-reviewer): setup.js\'s own validateStagePlan explicitly allows a repeated kind (e.g. two prelims stages), and a plain stageKindLabel(kind) label would produce two IDENTICAL column headers ("Preliminary — Correct" twice), ambiguous for a sighted user and a screen reader alike, even though the underlying per-round data lands in the correct cells either way', () => {
+    const repeatedKindReports = [
+      { stage: { kind: 'prelims', ordinal: 1 } },
+      { stage: { kind: 'prelims', ordinal: 2 } },
+      { stage: { kind: 'finals', ordinal: 3 } },
+    ];
+    const table = renderEventSummaryTable([], repeatedKindReports);
+    const headerLabels = [...table.querySelectorAll('thead th')].map((th) => th.textContent);
+    expect(headerLabels).toEqual([
+      'Rank',
+      'Cupper',
+      'Preliminary (Round 1) — Correct',
+      'Preliminary (Round 1) — Time',
+      'Preliminary (Round 2) — Correct',
+      'Preliminary (Round 2) — Time',
+      'Finals — Correct', // the only occurrence of its kind — stays plain
+      'Finals — Time',
+      'Total score',
+      'Total time',
+      'Avg time/set',
+    ]);
+  });
+
+  it('keeps the plain, undecorated label when a kind occurs only once — the common case should not carry a "(Round 1)" suffix nobody needs', () => {
+    const table = buildEventSummaryTable([], stageReports);
+    expect(table.columns.map((c) => c.label)).toContain('Preliminary — Correct');
+    expect(table.columns.map((c) => c.label)).not.toContain('Preliminary (Round 1) — Correct');
   });
 });
 
@@ -384,9 +506,25 @@ describe('buildReportTables', () => {
     });
     const tables = buildReportTables([emptyStage('prelims'), emptyStage('finals')]);
     expect(tables.map((t) => t.title)).toEqual([
+      'Overall — All Rounds',
       'Preliminary — Standings',
       'Preliminary — Set difficulty',
       'Preliminary — Score distribution',
+      'Finals — Standings',
+      'Finals — Set difficulty',
+      'Finals — Score distribution',
+    ]);
+  });
+
+  it("skips the cross-round summary entirely for a single-stage report — it would only duplicate that one stage's own standings", () => {
+    const emptyStage = (kind) => ({
+      stage: { kind },
+      ranked: [],
+      difficulty: [],
+      distribution: [],
+    });
+    const tables = buildReportTables([emptyStage('finals')]);
+    expect(tables.map((t) => t.title)).toEqual([
       'Finals — Standings',
       'Finals — Set difficulty',
       'Finals — Score distribution',
@@ -476,7 +614,7 @@ describe('mountReportScreen', () => {
     await mountReportScreen(root, { eventId: 'ev1', client });
 
     const headings = [...root.querySelectorAll('h2')].map((h) => h.textContent);
-    expect(headings).toEqual(['Preliminary', 'Finals']);
+    expect(headings).toEqual(['Overall — All Rounds', 'Preliminary', 'Finals']);
     expect(root.textContent).toContain('Alex');
     expect(root.textContent).toContain('Set difficulty');
     expect(root.textContent).toContain('Score distribution');

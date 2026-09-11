@@ -1,3 +1,81 @@
+## Cup Taster report: cross-round summary (Phase B) · 2026-09-11
+
+**User-requested, not tied to a §14 task ID — the second phase of the WCTC-style report
+analytics upgrade scoped with the user in advance (Phase A shipped separately, same day
+— see that entry below; Phase C, SVG bar charts, not yet built).** The report screen
+gains an "Overall — All Rounds" summary section — one row per cupper who appeared in
+ANY stage of the event, with one Correct+Time column pair per stage plus Total
+score/Total time/Avg time per set — shown once, before the per-stage sections, only when
+an event has more than one stage.
+
+**What shipped:**
+
+- `analytics.js` gained `computeEventSummary(stageReports)` — a pure function rolling
+  every stage's own already-loaded `ranked` list into one per-cupper cross-round
+  summary. Row order is deliberately NOT a fresh ranking of the summed totals — a cupper
+  eliminated early could have a higher raw score sum across fewer rounds than a
+  finalist, and re-ranking by that would misrepresent the real bracket outcome this
+  project's own advancement rules already decided. Instead the order reconstructs each
+  cupper's REAL placement (their most-advanced stage, then `finalPosition` within it)
+  from data `resolve_stage`/`standings.js` already computed — see that function's own
+  module comment for the full account.
+- `reportScreen.js` gained `renderEventSummaryTable`/`buildEventSummaryTable` (on-screen
+  table + matching CSV-export table spec), wired into the existing report flow. A stage
+  a cupper never reached renders as a plain em dash, matching this screen's established
+  "honest no data" convention.
+- `computeAvgSecsPerSet` moved from `reportScreen.js` into `analytics.js` (found
+  duplicated verbatim in review — `computeEventSummary` needed the identical rounding/
+  null-guard logic reportScreen.js's own per-stage Avg-time/set column already had;
+  `reportScreen.js` now imports it from `analytics.js` instead of keeping a second copy).
+- The CSV row's rank column is keyed `position`, not `rank` — this project's own
+  `eslint-rules/no-derived-storage.js` rule flags any object-literal property matching
+  `/rank/i` assigned a computed value (a name+shape heuristic meant to catch a real
+  derived-value-persisted-to-DB bug class, handoff §5.2); this is a pure in-memory CSV
+  row that's never persisted, but the rule can't distinguish that, and this project has
+  no existing eslint-disable precedent for it — renaming matched the established
+  convention over suppressing.
+
+**Four parallel reviews, one clean, three with real findings, all closed:**
+
+- `module-boundary-checker`: clean — confirmed `computeEventSummary` reconstructs
+  already-decided placement rather than duplicating anything `core/ranking.js`/
+  `core/advancement.js` already provides.
+- `ui-accessibility-reviewer` found a real, blocking issue: the per-round column labels
+  were built from plain `stageKindLabel(stage.kind)` alone, but `setup.js`'s own
+  `validateStagePlan` explicitly allows a stage plan to repeat a kind ("repeated prelims
+  heats" named as a valid example) — two same-kind stages would render two columns with
+  IDENTICAL header text ("Preliminary — Correct" twice), ambiguous for sighted and
+  screen-reader users alike, even though the underlying data landed in the right cells
+  either way. Closed by disambiguating with a "(Round N)" suffix, but only when a kind
+  actually repeats within the event — the common single-occurrence case keeps the plain
+  label unchanged. The reviewer also found the SAME class of bug pre-existing (not
+  introduced by this change) in this file's own per-stage `<h2>` headings — flagged as a
+  separate follow-up task rather than fixed here, out of scope for this diff.
+- `test-auditor` found three real test-quality gaps, each confirmed via mutation
+  testing and each closed with a fix independently mutation-verified afterward: the
+  "real placement, not re-ranked" ordering test's fixture didn't actually distinguish
+  the real behavior from a naive `sort by totalScore` mis-implementation (both produced
+  the same order by coincidence of the original numbers) — fixed by giving the
+  early-eliminated cupper a total score that genuinely EXCEEDS the finalist's; the
+  em-dash test for a missing round never proved a PRESENT round shows real data rather
+  than also em-dash (a hardcoded-em-dash mutation passed the old test) — fixed by
+  asserting both sides in one test; the null-vs-NaN test for `avgSecsPerSet` only ever
+  exercised both OR-branches (zero sets scored AND null time) together, leaving the
+  realistic "scored but never timed" case unproven — fixed with an isolated case.
+- `code-reviewer` found the `computeAvgSecsPerSet` duplication (see above), a missing
+  CHANGELOG entry (this one), and two minor items closed with documentation rather than
+  behavior changes: the per-stage table's "Pos" column and this new table's "Rank"
+  column look inconsistent side by side but are genuinely different concepts (one
+  stage's own field vs. the whole event) — now documented at both call sites; and
+  `computeEventSummary` doesn't guard against the same `ct_heat_entries`
+  duplicate-row schema anomaly `computeScoreDistribution` already defends against — left
+  as a documented known gap rather than a silent one, since a correct fix needs a real
+  merge decision, not just a clamp.
+
+Full JS suite: 1030/1030. Verified live in a real browser via `reportScreen.preview.html`
+at both desktop width and 375px (reuses Phase A's existing `.report-standings-table`
+styling — no new CSS needed).
+
 ## Cup Taster report: per-set accuracy grid + accuracy tiers (Phase A) · 2026-09-11
 
 **User-requested, not tied to a §14 task ID — the first phase of a WCTC-style report

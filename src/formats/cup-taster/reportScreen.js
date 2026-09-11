@@ -26,7 +26,12 @@ import { getSupabase } from '../../core/supabaseClient.js';
 import { formatDuration, formatDurationLong } from '../../core/duration.js';
 import { buildCsvForTables, downloadCsv } from '../../core/export.js';
 import { listStagesForEvent, stageKindLabel } from './setup.js';
-import { isEventComplete, computeStageReport } from './analytics.js';
+import {
+  isEventComplete,
+  computeStageReport,
+  computeEventSummary,
+  computeAvgSecsPerSet,
+} from './analytics.js';
 
 // Pure. 1 -> '1st', 2 -> '2nd', 3 -> '3rd', 4 -> '4th', 11-13 -> '11th'/
 // '12th'/'13th' (the standard English-ordinal exception), everything else
@@ -108,15 +113,6 @@ function renderAccuracyCell(numCorrect, setsScored) {
   return el('td', { text: pct == null ? '—' : `${pct}%`, attrs: { 'data-label': 'Accuracy' } });
 }
 
-// Pure. Rounded to the nearest whole second before ever reaching
-// formatDuration — that function's own `%` arithmetic assumes an integer
-// input (see its own module comment/tests); an un-rounded average (e.g.
-// 33.33s) would render as a raw fractional-seconds string instead of M:SS.
-export function computeAvgSecsPerSet(totalElapsedSecs, setsScored) {
-  if (totalElapsedSecs == null || setsScored === 0) return null;
-  return Math.round(totalElapsedSecs / setsScored);
-}
-
 // 2026-09-11, user-requested — a WCTC-style visual-scanning cue on top of
 // the Accuracy cell's own text. Three tiers, not four — found live-testing
 // against a real browser (not caught by unit tests, which only assert the
@@ -169,6 +165,15 @@ function renderSetCell(grid, position, label) {
 // every stage report this screen ever renders already computes both
 // alongside `ranked`, so there's no meaningful "standings without a grid"
 // caller to support as an optional param.
+//
+// This table's own "Pos" column is deliberately a different label from
+// renderEventSummaryTable's own "Rank" column below, not an inconsistency
+// — found worth documenting in review (code-reviewer), since the two
+// tables sit directly above/below each other on this same screen. "Pos" is
+// a cupper's position within THIS ONE stage's own field; "Rank" is their
+// placement across the WHOLE event — genuinely different concepts that
+// happen to both be "which number are they," not the same fact labeled two
+// different ways.
 export function renderStageStandingsTable(ranked, stage, setGrid) {
   const setColumnCount = stage.set_count;
   const rows = ranked.map(({ item, position }) => {
@@ -381,10 +386,163 @@ function buildStageTables(stageReport) {
   ];
 }
 
-// Pure. Every stage's tables, in order — the whole report as one flat list
-// of table specs, ready for core/export.js's buildCsvForTables.
+// Pure. One "Correct"/"Time" column PAIR per stage, for the cross-round
+// summary's own header row AND each row's own per-round cells — kept as one
+// function so the two can never drift out of sync with each other (the same
+// risk `formatSetCellText` closed for the per-stage Set-N columns).
+function eventSummaryRoundColumns(stageReports) {
+  // A stage plan may legitimately repeat a kind — setup.js's own
+  // validateStagePlan explicitly names "repeated prelims heats" as a valid
+  // sequence ("may repeat or be skipped, but never regress"). Found in
+  // review (ui-accessibility-reviewer): with a plain `stageKindLabel(kind)`
+  // label, two same-kind stages produced two column pairs with IDENTICAL
+  // header text ("Preliminary — Correct" twice), ambiguous for a sighted
+  // user and a screen reader alike — the underlying data already landed in
+  // the right cells (keyed by stageOrdinal), only the label collapsed two
+  // distinct rounds into indistinguishable text. Same class of bug this
+  // file already found and fixed once for the per-stage <h3> subheadings
+  // (see renderStageSection's own comment) — that fix assumed kind alone
+  // disambiguates, the same assumption that breaks here.
+  //
+  // Disambiguated only when a kind actually repeats within THIS event — a
+  // typical single-occurrence stage (the common case) keeps the simple
+  // "Preliminary — Correct" label unchanged, matching renderStageSection's
+  // own <h2> convention exactly when there's nothing to disambiguate.
+  const kindCounts = new Map();
+  for (const { stage } of stageReports) {
+    kindCounts.set(stage.kind, (kindCounts.get(stage.kind) ?? 0) + 1);
+  }
+  const occurrenceSoFar = new Map();
+  return stageReports.map(({ stage }) => {
+    const baseLabel = stageKindLabel(stage.kind);
+    let roundLabel = baseLabel;
+    if (kindCounts.get(stage.kind) > 1) {
+      const occurrence = (occurrenceSoFar.get(stage.kind) ?? 0) + 1;
+      occurrenceSoFar.set(stage.kind, occurrence);
+      roundLabel = `${baseLabel} (Round ${occurrence})`;
+    }
+    return {
+      stageOrdinal: stage.ordinal,
+      correctLabel: `${roundLabel} — Correct`,
+      timeLabel: `${roundLabel} — Time`,
+    };
+  });
+}
+
+// Pure. The cross-round summary table (Phase B, 2026-09-11, user-requested
+// — see analytics.js's own computeEventSummary comment for the full design
+// account, especially why row order is the REAL tournament placement, not
+// a fresh ranking of these totals). One row per cupper who appeared in ANY
+// stage; a stage they never reached renders as a plain em dash in both its
+// Correct and Time columns, matching this screen's own established
+// "honest no data" convention rather than a 0 that would misread as "they
+// scored zero here." The "Rank" column below is deliberately a different
+// label from renderStageStandingsTable's own "Pos" (see that function's
+// own comment for why) — event-wide placement, not one stage's own.
+export function renderEventSummaryTable(summaries, stageReports) {
+  const roundColumns = eventSummaryRoundColumns(stageReports);
+
+  const rows = summaries.map((summary, index) => {
+    const roundCells = roundColumns.flatMap(({ stageOrdinal, correctLabel, timeLabel }) => {
+      const round = summary.rounds.find((r) => r.stageOrdinal === stageOrdinal);
+      return [
+        el('td', {
+          text: round ? String(round.numCorrect) : '—',
+          attrs: { 'data-label': correctLabel },
+        }),
+        renderTimeCell(round?.totalElapsedSecs ?? null, timeLabel),
+      ];
+    });
+    return el('tr', { className: 'standings-row' }, [
+      el('td', { text: String(index + 1), attrs: { 'data-label': 'Rank' } }),
+      el('td', { text: summary.displayName, attrs: { 'data-label': 'Cupper' } }),
+      ...roundCells,
+      el('td', { text: String(summary.totalScore), attrs: { 'data-label': 'Total score' } }),
+      renderTimeCell(summary.totalElapsedSecs, 'Total time'),
+      renderTimeCell(summary.avgSecsPerSet, 'Avg time/set'),
+    ]);
+  });
+
+  const roundHeaders = roundColumns.flatMap(({ correctLabel, timeLabel }) => [
+    el('th', { text: correctLabel, attrs: { scope: 'col' } }),
+    el('th', { text: timeLabel, attrs: { scope: 'col' } }),
+  ]);
+
+  return el('table', { className: 'standings-table report-standings-table' }, [
+    el('thead', {}, [
+      el('tr', {}, [
+        el('th', { text: 'Rank', attrs: { scope: 'col' } }),
+        el('th', { text: 'Cupper', attrs: { scope: 'col' } }),
+        ...roundHeaders,
+        el('th', { text: 'Total score', attrs: { scope: 'col' } }),
+        el('th', { text: 'Total time', attrs: { scope: 'col' } }),
+        el('th', { text: 'Avg time/set', attrs: { scope: 'col' } }),
+      ]),
+    ]),
+    el('tbody', {}, rows),
+  ]);
+}
+
+// Pure. The cross-round summary as one core/export.js table spec, mirroring
+// renderEventSummaryTable's own column set and "no data -> em dash, not 0"
+// choice exactly — same "the CSV says what the organiser saw on screen"
+// principle buildStageTables' own comment states.
+export function buildEventSummaryTable(summaries, stageReports) {
+  const roundColumns = eventSummaryRoundColumns(stageReports);
+  return {
+    title: 'Overall — All Rounds',
+    // 'position', not 'rank' — the eslint-rules/no-derived-storage rule
+    // flags a computed value assigned to a property matching /rank/i on
+    // sight, a blunt but deliberate name+shape heuristic (handoff §5.2)
+    // that doesn't distinguish this genuinely-fine in-memory CSV row from
+    // the DB-write shape it actually exists to catch. Renaming sidesteps
+    // the false positive the same way this project's own convention
+    // prefers over a suppression comment (no existing eslint-disable for
+    // this rule anywhere in the codebase).
+    columns: [
+      { key: 'position', label: 'Rank' },
+      { key: 'displayName', label: 'Cupper' },
+      ...roundColumns.flatMap(({ stageOrdinal, correctLabel, timeLabel }) => [
+        { key: `correct${stageOrdinal}`, label: correctLabel },
+        { key: `time${stageOrdinal}`, label: timeLabel },
+      ]),
+      { key: 'totalScore', label: 'Total score' },
+      { key: 'totalTime', label: 'Total time' },
+      { key: 'avgTimePerSet', label: 'Avg time/set' },
+    ],
+    rows: summaries.map((summary, index) => {
+      const roundValues = {};
+      for (const { stageOrdinal } of roundColumns) {
+        const round = summary.rounds.find((r) => r.stageOrdinal === stageOrdinal);
+        roundValues[`correct${stageOrdinal}`] = round ? round.numCorrect : '—';
+        roundValues[`time${stageOrdinal}`] = round
+          ? toCsvSafeDuration(round.totalElapsedSecs)
+          : '—';
+      }
+      return {
+        position: index + 1,
+        displayName: summary.displayName,
+        ...roundValues,
+        totalScore: summary.totalScore,
+        totalTime: toCsvSafeDuration(summary.totalElapsedSecs),
+        avgTimePerSet: toCsvSafeDuration(summary.avgSecsPerSet),
+      };
+    }),
+  };
+}
+
+// Pure. Every stage's tables, in order, with the cross-round summary
+// prepended first (once there's more than one stage — a single-stage
+// event's own "across all rounds" table would just duplicate that one
+// stage's already-shown standings, not add anything) — the whole report as
+// one flat list of table specs, ready for core/export.js's
+// buildCsvForTables.
 export function buildReportTables(stageReports) {
-  return stageReports.flatMap(buildStageTables);
+  const summaryTable =
+    stageReports.length > 1
+      ? [buildEventSummaryTable(computeEventSummary(stageReports), stageReports)]
+      : [];
+  return [...summaryTable, ...stageReports.flatMap(buildStageTables)];
 }
 
 // Pure. Strips the character set Windows forbids in a filename
@@ -577,6 +735,18 @@ export async function mountReportScreen(root, { eventId, client = getSupabase(),
       );
     } else {
       container.appendChild(renderExportActions(data));
+      // Only once there's more than one stage — see buildReportTables' own
+      // comment for why a single-stage event skips this (it would just
+      // duplicate that one stage's already-shown standings).
+      if (data.stageReports.length > 1) {
+        const summaries = computeEventSummary(data.stageReports);
+        container.appendChild(
+          el('div', { className: 'card report-stage-card' }, [
+            el('h2', { text: 'Overall — All Rounds' }),
+            renderEventSummaryTable(summaries, data.stageReports),
+          ]),
+        );
+      }
       for (const stageReport of data.stageReports) {
         container.appendChild(renderStageSection(stageReport));
       }
