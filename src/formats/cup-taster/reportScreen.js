@@ -322,7 +322,14 @@ export function toCsvSafeDuration(secs) {
 // same describeOutcome call) — so the CSV a cupper opens says the same
 // thing the organiser saw on screen, not a second, independently-formatted
 // view of the same numbers.
-function buildStageTables(stageReport) {
+//
+// `roundLabel` is the caller's own already-computed
+// `stageRoundLabels(stageReports).get(stage.ordinal)` — see that function's
+// own comment for the full account of why it exists and why this function
+// was the tracked follow-up. Mirrors `renderStageSection`'s own `roundLabel`
+// parameter exactly, so every heading that names a stage — on-screen or in
+// the CSV — is guaranteed to agree.
+function buildStageTables(stageReport, roundLabel) {
   const { stage, ranked, difficulty, distribution, setGrid } = stageReport;
   const setColumns = [];
   for (let setPosition = 1; setPosition <= stage.set_count; setPosition += 1) {
@@ -330,7 +337,7 @@ function buildStageTables(stageReport) {
   }
   return [
     {
-      title: `${stageKindLabel(stage.kind)} — Standings`,
+      title: `${roundLabel} — Standings`,
       columns: [
         { key: 'position', label: 'Pos' },
         { key: 'displayName', label: 'Cupper' },
@@ -363,7 +370,7 @@ function buildStageTables(stageReport) {
       }),
     },
     {
-      title: `${stageKindLabel(stage.kind)} — Set difficulty`,
+      title: `${roundLabel} — Set difficulty`,
       columns: [
         { key: 'set', label: 'Set' },
         { key: 'correct', label: 'Correct' },
@@ -376,7 +383,7 @@ function buildStageTables(stageReport) {
       })),
     },
     {
-      title: `${stageKindLabel(stage.kind)} — Score distribution`,
+      title: `${roundLabel} — Score distribution`,
       columns: [
         { key: 'correctCount', label: 'Correct answers' },
         { key: 'numCuppers', label: 'Cuppers' },
@@ -407,20 +414,19 @@ function buildStageTables(stageReport) {
 //
 // Centralized here (not duplicated per call site) so every heading that
 // names a stage can share one disambiguation decision and never drift out
-// of sync with each other — used by `renderStageSection` for its <h2>/<h3>s
-// and by `eventSummaryRoundColumns` for the cross-round summary's own
-// column headers. Disambiguated only when a kind actually repeats within
-// THIS event — the common single-occurrence case keeps the plain label
-// unchanged.
+// of sync with each other — used by `renderStageSection` for its <h2>/<h3>s,
+// by `eventSummaryRoundColumns` for the cross-round summary's own column
+// headers, and by `buildStageTables` (via `buildReportTables`, below) for
+// the downloaded CSV's own per-stage table titles. Disambiguated only when
+// a kind actually repeats within THIS event — the common single-occurrence
+// case keeps the plain label unchanged.
 //
-// NOT used by `buildStageTables`' own per-stage CSV table titles (a few
-// functions above) — those still build from a plain `stageKindLabel(kind)`
-// and have the identical collision risk for a repeated kind, a known,
-// tracked gap (found independently by both ui-accessibility-reviewer and
-// code-reviewer reviewing THIS function's own introduction) left
-// out of scope here since the user's own request scoped this fix to the
-// on-screen headings specifically — see the spawned follow-up task for that
-// gap, not silently assumed to already be covered by this function.
+// `buildStageTables` was originally left out of scope when this function
+// was introduced (2026-09-11) — the on-screen headings were the user's own
+// request at the time, and the identical CSV-title collision was spun off
+// as a tracked follow-up rather than silently assumed covered. Closed in a
+// later pass the same day: see `buildReportTables`'s own comment for how it
+// wires this function's output into `buildStageTables`.
 function stageRoundLabels(stageReports) {
   const kindCounts = new Map();
   for (const { stage } of stageReports) {
@@ -565,12 +571,26 @@ export function buildEventSummaryTable(summaries, stageReports) {
 // stage's already-shown standings, not add anything) — the whole report as
 // one flat list of table specs, ready for core/export.js's
 // buildCsvForTables.
+//
+// `stageRoundLabels(stageReports)` is computed once here and each stage's
+// own precomputed label passed into `buildStageTables`, the same shape
+// `renderStageSection` already gets its `roundLabel` in — so two same-kind
+// stages produce distinguishable CSV table titles instead of two tables
+// both titled e.g. "Preliminary — Standings" with no way to tell them apart
+// once downloaded (see `stageRoundLabels`' own comment for the fuller
+// account of this gap).
 export function buildReportTables(stageReports) {
   const summaryTable =
     stageReports.length > 1
       ? [buildEventSummaryTable(computeEventSummary(stageReports), stageReports)]
       : [];
-  return [...summaryTable, ...stageReports.flatMap(buildStageTables)];
+  const roundLabels = stageRoundLabels(stageReports);
+  return [
+    ...summaryTable,
+    ...stageReports.flatMap((stageReport) =>
+      buildStageTables(stageReport, roundLabels.get(stageReport.stage.ordinal)),
+    ),
+  ];
 }
 
 // Pure. Strips the character set Windows forbids in a filename

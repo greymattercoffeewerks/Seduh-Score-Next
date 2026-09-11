@@ -1,3 +1,55 @@
+## Cup Taster report: fix same-kind stage CSV-title collision · 2026-09-11
+
+Closes the tracked follow-up spun off from the previous entry below: `buildStageTables`
+(builds the three CSV table specs per stage — "Standings", "Set difficulty", "Score
+distribution" — downloaded via the report screen's "Download CSV" action) built each
+`title` from a plain `stageKindLabel(stage.kind)`, the identical collision the previous
+fix closed for the on-screen `<h2>`/`<h3>` headings and the cross-round summary's own
+column headers. An event with two same-kind stages (e.g. two "prelims" stages,
+explicitly valid per `setup.js`'s own `validateStagePlan`) produced two downloaded CSV
+tables both titled e.g. "Preliminary — Standings", indistinguishable once opened in a
+spreadsheet — arguably worse than the on-screen case, since there's no surrounding page
+for positional context once the file is opened elsewhere.
+
+**What shipped:** `buildStageTables` now takes a second `roundLabel` parameter — the
+same shape `renderStageSection` already receives — instead of deriving the label itself.
+`buildReportTables` (its only caller) computes the already-existing shared
+`stageRoundLabels(stageReports)` once and passes each stage's own precomputed label
+through, so the CSV's own table titles are now guaranteed to agree with the on-screen
+headings and the cross-round summary for the same event, closing the last of the three
+call sites `stageRoundLabels` was built to serve.
+
+**Three parallel reviews plus an independent duplicate pass, all closed:**
+
+- `code-reviewer` (run twice, independently converging on the same finding): the new
+  `buildStageTables` doc comment restated `stageRoundLabels`' full history rather than
+  pointing to it, which — combined with `stageRoundLabels`' own comment already telling
+  that story — read as two versions of the same narrative drifting apart over time.
+  Trimmed to a one-line pointer, keeping the full account in exactly one place.
+- `ui-accessibility-reviewer`: no collision risk remains anywhere in the report's own
+  CSV or on-screen output; flagged a pre-existing, non-blocking cosmetic inconsistency
+  (the CSV's "Set difficulty"/"Score distribution" titles put the round label first,
+  while the on-screen `<h3>`s put it last) that predates this fix and wasn't introduced
+  by it — left as-is, spun off as its own low-priority follow-up rather than expanding
+  this task's scope.
+- `module-boundary-checker`: clean — confined entirely to `src/formats/cup-taster/`, no
+  new imports, no reimplementation of shared logic.
+- `test-auditor` (run twice) found two real gaps in the new test: the fixture only ever
+  repeated one kind, which couldn't rule out a plausible bug where a single shared
+  counter (rather than one keyed per kind) drives the "(Round N)" numbering — closed by
+  adding a second test interleaving two repeating kinds (prelims/semis/prelims/semis)
+  and asserting each starts its own count at "(Round 1)". Also flagged that the existing
+  "flattens every stage" fixture's `ordinal` fields — added because the new code path
+  keys off `stage.ordinal` — mask a theoretical silent-mislabeling mode if two stages
+  ever shared an `ordinal`; confirmed or not adding a guard for it, since
+  `ct_stages.ordinal` is `not null` with a `unique(event_id, ordinal)` DB constraint
+  (`supabase/migrations/20260821210000_cup_taster_tables.sql`) makes that scenario
+  unreachable through any real construction path — consistent with this project's "no
+  error handling for scenarios that can't happen" convention, and the same conclusion
+  `code-reviewer` reached independently reviewing the same edge case.
+
+Full JS suite: 1033/1033.
+
 ## Cup Taster report: fix same-kind stage heading collision · 2026-09-11
 
 Closes a pre-existing accessibility gap flagged as a follow-up during the Phase B
