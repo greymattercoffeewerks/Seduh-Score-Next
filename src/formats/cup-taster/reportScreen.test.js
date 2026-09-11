@@ -227,7 +227,7 @@ describe('renderStageStandingsTable', () => {
     expect(row.querySelector('[data-label="Set 2"]').textContent).toBe('Y');
   });
 
-  it('marks a 100%-accuracy row with accuracy tier 1, and a 0%-accuracy row with tier 3, as a data attribute the CSS reads — not inline color, matching this project\'s text-carried-first convention', () => {
+  it("marks a 100%-accuracy row with accuracy tier 1, and a 0%-accuracy row with tier 3, as a data attribute the CSS reads — not inline color, matching this project's text-carried-first convention", () => {
     const contrastRanked = [
       {
         item: {

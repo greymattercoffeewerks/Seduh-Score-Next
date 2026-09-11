@@ -187,7 +187,10 @@ export function renderStageStandingsTable(ranked, stage, setGrid) {
         el('td', { text: String(item.numCorrect), attrs: { 'data-label': 'Correct' } }),
         renderTimeCell(item.total_elapsed_secs, 'Time'),
         renderAccuracyCell(item.numCorrect, item.sets_scored),
-        renderTimeCell(computeAvgSecsPerSet(item.total_elapsed_secs, item.sets_scored), 'Avg time/set'),
+        renderTimeCell(
+          computeAvgSecsPerSet(item.total_elapsed_secs, item.sets_scored),
+          'Avg time/set',
+        ),
         ...setCells,
         el('td', { text: describeOutcome(item), attrs: { 'data-label': 'Outcome' } }),
       ],
@@ -346,7 +349,9 @@ function buildStageTables(stageReport) {
           numCorrect: item.numCorrect,
           time: toCsvSafeDuration(item.total_elapsed_secs),
           accuracy: accuracyPct == null ? '—' : `${accuracyPct}%`,
-          avgTimePerSet: toCsvSafeDuration(computeAvgSecsPerSet(item.total_elapsed_secs, item.sets_scored)),
+          avgTimePerSet: toCsvSafeDuration(
+            computeAvgSecsPerSet(item.total_elapsed_secs, item.sets_scored),
+          ),
           ...setValues,
           outcome: describeOutcome(item),
         };
