@@ -370,7 +370,7 @@ function buildStageTables(stageReport, roundLabel) {
       }),
     },
     {
-      title: `${roundLabel} — Set difficulty`,
+      title: `Set difficulty — ${roundLabel}`,
       columns: [
         { key: 'set', label: 'Set' },
         { key: 'correct', label: 'Correct' },
@@ -383,7 +383,7 @@ function buildStageTables(stageReport, roundLabel) {
       })),
     },
     {
-      title: `${roundLabel} — Score distribution`,
+      title: `Score distribution — ${roundLabel}`,
       columns: [
         { key: 'correctCount', label: 'Correct answers' },
         { key: 'numCuppers', label: 'Cuppers' },

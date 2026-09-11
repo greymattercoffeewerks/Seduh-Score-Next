@@ -491,9 +491,9 @@ describe('buildReportTables', () => {
         },
       ],
     });
-    expect(tables[1].title).toBe('Preliminary — Set difficulty');
+    expect(tables[1].title).toBe('Set difficulty — Preliminary');
     expect(tables[1].rows).toEqual([{ set: 'Set 1', correct: '75%', sampleSize: 4 }]);
-    expect(tables[2].title).toBe('Preliminary — Score distribution');
+    expect(tables[2].title).toBe('Score distribution — Preliminary');
     expect(tables[2].rows).toEqual([{ correctCount: 3, numCuppers: 1 }]);
   });
 
@@ -508,11 +508,11 @@ describe('buildReportTables', () => {
     expect(tables.map((t) => t.title)).toEqual([
       'Overall — All Rounds',
       'Preliminary — Standings',
-      'Preliminary — Set difficulty',
-      'Preliminary — Score distribution',
+      'Set difficulty — Preliminary',
+      'Score distribution — Preliminary',
       'Finals — Standings',
-      'Finals — Set difficulty',
-      'Finals — Score distribution',
+      'Set difficulty — Finals',
+      'Score distribution — Finals',
     ]);
   });
 
@@ -526,8 +526,8 @@ describe('buildReportTables', () => {
     const tables = buildReportTables([emptyStage('finals')]);
     expect(tables.map((t) => t.title)).toEqual([
       'Finals — Standings',
-      'Finals — Set difficulty',
-      'Finals — Score distribution',
+      'Set difficulty — Finals',
+      'Score distribution — Finals',
     ]);
   });
 
@@ -546,14 +546,14 @@ describe('buildReportTables', () => {
     expect(tables.map((t) => t.title)).toEqual([
       'Overall — All Rounds',
       'Preliminary (Round 1) — Standings',
-      'Preliminary (Round 1) — Set difficulty',
-      'Preliminary (Round 1) — Score distribution',
+      'Set difficulty — Preliminary (Round 1)',
+      'Score distribution — Preliminary (Round 1)',
       'Preliminary (Round 2) — Standings',
-      'Preliminary (Round 2) — Set difficulty',
-      'Preliminary (Round 2) — Score distribution',
+      'Set difficulty — Preliminary (Round 2)',
+      'Score distribution — Preliminary (Round 2)',
       'Finals — Standings', // the only occurrence of its kind — stays plain
-      'Finals — Set difficulty',
-      'Finals — Score distribution',
+      'Set difficulty — Finals',
+      'Score distribution — Finals',
     ]);
   });
 
@@ -582,17 +582,17 @@ describe('buildReportTables', () => {
     expect(tables.map((t) => t.title)).toEqual([
       'Overall — All Rounds',
       'Preliminary (Round 1) — Standings',
-      'Preliminary (Round 1) — Set difficulty',
-      'Preliminary (Round 1) — Score distribution',
+      'Set difficulty — Preliminary (Round 1)',
+      'Score distribution — Preliminary (Round 1)',
       'Semi-Finals (Round 1) — Standings',
-      'Semi-Finals (Round 1) — Set difficulty',
-      'Semi-Finals (Round 1) — Score distribution',
+      'Set difficulty — Semi-Finals (Round 1)',
+      'Score distribution — Semi-Finals (Round 1)',
       'Preliminary (Round 2) — Standings',
-      'Preliminary (Round 2) — Set difficulty',
-      'Preliminary (Round 2) — Score distribution',
+      'Set difficulty — Preliminary (Round 2)',
+      'Score distribution — Preliminary (Round 2)',
       'Semi-Finals (Round 2) — Standings',
-      'Semi-Finals (Round 2) — Set difficulty',
-      'Semi-Finals (Round 2) — Score distribution',
+      'Set difficulty — Semi-Finals (Round 2)',
+      'Score distribution — Semi-Finals (Round 2)',
     ]);
   });
 });
@@ -902,11 +902,11 @@ describe('mountReportScreen', () => {
         // get silently reinterpreted as a clock time on open.
         '1,"Rivera, Alex",1,\'0:40,100%,\'0:40,Y,Advanced\r\n' +
         '\r\n' +
-        'Finals — Set difficulty\r\n' +
+        'Set difficulty — Finals\r\n' +
         'Set,Correct,Cuppers scored\r\n' +
         'Set 1,100%,1\r\n' +
         '\r\n' +
-        'Finals — Score distribution\r\n' +
+        'Score distribution — Finals\r\n' +
         'Correct answers,Cuppers\r\n' +
         '0,0\r\n' +
         '1,1',
