@@ -386,41 +386,69 @@ function buildStageTables(stageReport) {
   ];
 }
 
-// Pure. One "Correct"/"Time" column PAIR per stage, for the cross-round
-// summary's own header row AND each row's own per-round cells — kept as one
-// function so the two can never drift out of sync with each other (the same
-// risk `formatSetCellText` closed for the per-stage Set-N columns).
-function eventSummaryRoundColumns(stageReports) {
-  // A stage plan may legitimately repeat a kind — setup.js's own
-  // validateStagePlan explicitly names "repeated prelims heats" as a valid
-  // sequence ("may repeat or be skipped, but never regress"). Found in
-  // review (ui-accessibility-reviewer): with a plain `stageKindLabel(kind)`
-  // label, two same-kind stages produced two column pairs with IDENTICAL
-  // header text ("Preliminary — Correct" twice), ambiguous for a sighted
-  // user and a screen reader alike — the underlying data already landed in
-  // the right cells (keyed by stageOrdinal), only the label collapsed two
-  // distinct rounds into indistinguishable text. Same class of bug this
-  // file already found and fixed once for the per-stage <h3> subheadings
-  // (see renderStageSection's own comment) — that fix assumed kind alone
-  // disambiguates, the same assumption that breaks here.
-  //
-  // Disambiguated only when a kind actually repeats within THIS event — a
-  // typical single-occurrence stage (the common case) keeps the simple
-  // "Preliminary — Correct" label unchanged, matching renderStageSection's
-  // own <h2> convention exactly when there's nothing to disambiguate.
+// Pure. One label per stage — the stage kind on its own when it's the only
+// stage of that kind in the event, or with a "(Round N)" suffix when the
+// kind repeats. A stage plan may legitimately repeat a kind — setup.js's
+// own validateStagePlan explicitly names "repeated prelims heats" as a
+// valid sequence ("may repeat or be skipped, but never regress"). Found in
+// review (ui-accessibility-reviewer, 2026-09-11): the per-stage <h2>/<h3>
+// headings AND the cross-round summary's own column headers each used a
+// plain `stageKindLabel(kind)`, so two same-kind stages produced
+// identically-worded text ("Preliminary — Correct" twice, or two
+// "Preliminary" <h2>s) — ambiguous for a sighted user scanning the page and
+// for a screen reader user navigating by headings list alike, even though
+// the underlying data already landed in the right place either way. An
+// EARLIER fix attempt (same review round) added the stage's kind to the
+// per-stage <h3> subheadings alone, on the reasoning that combining with
+// the kind was enough — that reasoning covers telling "Set difficulty"
+// apart from "Score distribution" within one stage, and telling one
+// stage's headings apart from a DIFFERENT kind's, but does nothing when the
+// SAME kind repeats, which is exactly the case this function exists for.
+//
+// Centralized here (not duplicated per call site) so every heading that
+// names a stage can share one disambiguation decision and never drift out
+// of sync with each other — used by `renderStageSection` for its <h2>/<h3>s
+// and by `eventSummaryRoundColumns` for the cross-round summary's own
+// column headers. Disambiguated only when a kind actually repeats within
+// THIS event — the common single-occurrence case keeps the plain label
+// unchanged.
+//
+// NOT used by `buildStageTables`' own per-stage CSV table titles (a few
+// functions above) — those still build from a plain `stageKindLabel(kind)`
+// and have the identical collision risk for a repeated kind, a known,
+// tracked gap (found independently by both ui-accessibility-reviewer and
+// code-reviewer reviewing THIS function's own introduction) left
+// out of scope here since the user's own request scoped this fix to the
+// on-screen headings specifically — see the spawned follow-up task for that
+// gap, not silently assumed to already be covered by this function.
+function stageRoundLabels(stageReports) {
   const kindCounts = new Map();
   for (const { stage } of stageReports) {
     kindCounts.set(stage.kind, (kindCounts.get(stage.kind) ?? 0) + 1);
   }
   const occurrenceSoFar = new Map();
-  return stageReports.map(({ stage }) => {
+  const labels = new Map();
+  for (const { stage } of stageReports) {
     const baseLabel = stageKindLabel(stage.kind);
-    let roundLabel = baseLabel;
+    let label = baseLabel;
     if (kindCounts.get(stage.kind) > 1) {
       const occurrence = (occurrenceSoFar.get(stage.kind) ?? 0) + 1;
       occurrenceSoFar.set(stage.kind, occurrence);
-      roundLabel = `${baseLabel} (Round ${occurrence})`;
+      label = `${baseLabel} (Round ${occurrence})`;
     }
+    labels.set(stage.ordinal, label);
+  }
+  return labels;
+}
+
+// Pure. One "Correct"/"Time" column PAIR per stage, for the cross-round
+// summary's own header row AND each row's own per-round cells — kept as one
+// function so the two can never drift out of sync with each other (the same
+// risk `formatSetCellText` closed for the per-stage Set-N columns).
+function eventSummaryRoundColumns(stageReports) {
+  const labels = stageRoundLabels(stageReports);
+  return stageReports.map(({ stage }) => {
+    const roundLabel = labels.get(stage.ordinal);
     return {
       stageOrdinal: stage.ordinal,
       correctLabel: `${roundLabel} — Correct`,
@@ -556,21 +584,28 @@ export function sanitizeFilename(name) {
   return name.replace(/[\\/:*?"<>|]/g, '-');
 }
 
-// Every heading includes the stage's own kind — found in review: two
-// complete stages (e.g. prelims and finals) each produce an identically-
-// worded "Set difficulty"/"Score distribution" <h3> with nothing to tell
-// them apart in a screen reader's flat headings list (NVDA's Elements List,
+// Every heading includes the stage's own (possibly round-disambiguated —
+// see stageRoundLabels' own comment) label — found in review: two complete
+// stages (e.g. prelims and finals) each produce an identically-worded
+// "Set difficulty"/"Score distribution" <h3> with nothing to tell them
+// apart in a screen reader's flat headings list (NVDA's Elements List,
 // VoiceOver's Rotor, JAWS's headings list — all common navigation modes,
 // not just reading top-to-bottom, where the preceding <h2> alone would be
-// enough context).
-function renderStageSection(stageReport) {
+// enough context) — and, when the SAME kind repeats within one event, the
+// <h2> itself collides too (see stageRoundLabels' own comment for the full
+// account of that follow-up finding). `roundLabel` is the caller's own
+// already-computed `stageRoundLabels(stageReports).get(stage.ordinal)` —
+// computed once for the whole report rather than re-derived per stage, so
+// every stage's heading is guaranteed to agree with every other heading
+// that names it (the cross-round summary's own column headers included).
+function renderStageSection(stageReport, roundLabel) {
   const { stage, ranked, difficulty, distribution, setGrid } = stageReport;
   return el('div', { className: 'card report-stage-card' }, [
-    el('h2', { text: stageKindLabel(stage.kind) }),
+    el('h2', { text: roundLabel }),
     renderStageStandingsTable(ranked, stage, setGrid),
-    el('h3', { text: `Set difficulty — ${stageKindLabel(stage.kind)}` }),
+    el('h3', { text: `Set difficulty — ${roundLabel}` }),
     renderDifficultyTable(difficulty),
-    el('h3', { text: `Score distribution — ${stageKindLabel(stage.kind)}` }),
+    el('h3', { text: `Score distribution — ${roundLabel}` }),
     renderDistributionTable(distribution),
   ]);
 }
@@ -747,8 +782,11 @@ export async function mountReportScreen(root, { eventId, client = getSupabase(),
           ]),
         );
       }
+      const roundLabels = stageRoundLabels(data.stageReports);
       for (const stageReport of data.stageReports) {
-        container.appendChild(renderStageSection(stageReport));
+        container.appendChild(
+          renderStageSection(stageReport, roundLabels.get(stageReport.stage.ordinal)),
+        );
       }
     }
 
