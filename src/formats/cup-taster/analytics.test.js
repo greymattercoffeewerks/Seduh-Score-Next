@@ -4,6 +4,7 @@ import {
   computeSetDifficulty,
   computeScoreDistribution,
   computeStageReport,
+  computeCupperSetGrid,
 } from './analytics.js';
 
 // Same fakeClient shape used throughout this project's format tests — queues
@@ -262,7 +263,7 @@ describe('computeScoreDistribution', () => {
 });
 
 describe('computeStageReport', () => {
-  it('composes standings, difficulty, and distribution for one stage', async () => {
+  it('composes standings, difficulty, distribution, and the per-cupper set grid for one stage', async () => {
     const stage = { id: 's1', event_id: 'ev1', ordinal: 1, set_count: 1, cutoff: null };
     const stageEntries = [{ id: 'se1', stage_id: 's1', entry_id: 'e1' }];
     const standingsRows = [
@@ -278,8 +279,11 @@ describe('computeStageReport', () => {
         event_entries: { data: roster, error: null },
         ct_sets: { data: sets, error: null },
         ct_heats: { data: [{ id: 'h1' }], error: null },
-        ct_heat_entries: { data: [{ id: 'he1' }], error: null },
-        ct_results: { data: [{ set_id: 'set1', correct: true }], error: null },
+        ct_heat_entries: { data: [{ id: 'he1', entry_id: 'e1' }], error: null },
+        ct_results: {
+          data: [{ heat_entry_id: 'he1', set_id: 'set1', correct: true }],
+          error: null,
+        },
       },
     });
 
@@ -294,5 +298,115 @@ describe('computeStageReport', () => {
       { correctCount: 0, numCuppers: 0 },
       { correctCount: 1, numCuppers: 1 },
     ]);
+    expect(report.setGrid.get('e1')).toEqual([{ setId: 'set1', position: 1, correct: true }]);
+  });
+});
+
+describe('computeCupperSetGrid', () => {
+  it('builds a per-cupper, per-set correct/wrong matrix, ordered by set position', async () => {
+    const sets = [
+      { id: 'set1', stage_id: 's1', position: 1, label: null },
+      { id: 'set2', stage_id: 's1', position: 2, label: null },
+    ];
+    const client = fakeClient({
+      tables: {
+        ct_sets: { data: sets, error: null },
+        ct_heats: { data: [{ id: 'h1' }], error: null },
+        ct_heat_entries: {
+          data: [
+            { id: 'he1', entry_id: 'e1' },
+            { id: 'he2', entry_id: 'e2' },
+          ],
+          error: null,
+        },
+        ct_results: {
+          data: [
+            { heat_entry_id: 'he1', set_id: 'set1', correct: true },
+            { heat_entry_id: 'he1', set_id: 'set2', correct: false },
+            { heat_entry_id: 'he2', set_id: 'set1', correct: false },
+            { heat_entry_id: 'he2', set_id: 'set2', correct: true },
+          ],
+          error: null,
+        },
+      },
+    });
+
+    const grid = await computeCupperSetGrid('s1', client);
+
+    expect(grid.get('e1')).toEqual([
+      { setId: 'set1', position: 1, correct: true },
+      { setId: 'set2', position: 2, correct: false },
+    ]);
+    expect(grid.get('e2')).toEqual([
+      { setId: 'set1', position: 1, correct: false },
+      { setId: 'set2', position: 2, correct: true },
+    ]);
+  });
+
+  it('reports null, not false, for a set no result row exists for — honest "not scored" rather than a misleading "wrong"', async () => {
+    const sets = [
+      { id: 'set1', stage_id: 's1', position: 1, label: null },
+      { id: 'set2', stage_id: 's1', position: 2, label: null },
+    ];
+    const client = fakeClient({
+      tables: {
+        ct_sets: { data: sets, error: null },
+        ct_heats: { data: [{ id: 'h1' }], error: null },
+        ct_heat_entries: { data: [{ id: 'he1', entry_id: 'e1' }], error: null },
+        // Only set1 has a result row for e1 — set2 was never scored (e.g. a
+        // heat that ended early).
+        ct_results: {
+          data: [{ heat_entry_id: 'he1', set_id: 'set1', correct: true }],
+          error: null,
+        },
+      },
+    });
+
+    const grid = await computeCupperSetGrid('s1', client);
+
+    expect(grid.get('e1')).toEqual([
+      { setId: 'set1', position: 1, correct: true },
+      { setId: 'set2', position: 2, correct: null },
+    ]);
+  });
+
+  it("genuinely excludes a tiebreak heat's own results — not merely calling .eq('kind', 'normal'), the exclusion actually happens against real, present tiebreak-heat data", async () => {
+    const db = {
+      ct_sets: [{ id: 'set1', stage_id: 's1', position: 1, label: null }],
+      ct_heats: [
+        { id: 'h1', stage_id: 's1', kind: 'normal' },
+        { id: 'h2', stage_id: 's1', kind: 'tiebreak' },
+      ],
+      ct_heat_entries: [
+        { id: 'he1', heat_id: 'h1', entry_id: 'e1' },
+        // Same cupper (e1), but via the TIEBREAK heat's own separate
+        // heat_entry row — if this leaked in, e1's set1 cell would flip
+        // from true to false (whichever result happened to be read last),
+        // silently blending two heats' worth of results into one grid cell.
+        { id: 'he2', heat_id: 'h2', entry_id: 'e1' },
+      ],
+      ct_results: [
+        { heat_entry_id: 'he1', set_id: 'set1', correct: true },
+        { heat_entry_id: 'he2', set_id: 'set1', correct: false },
+      ],
+    };
+
+    const grid = await computeCupperSetGrid('s1', filteringClient(db));
+
+    expect(grid.get('e1')).toEqual([{ setId: 'set1', position: 1, correct: true }]);
+  });
+
+  it('never queries ct_heat_entries or ct_results when the stage has no normal heats', async () => {
+    const sets = [{ id: 'set1', stage_id: 's1', position: 1, label: null }];
+    const client = fakeClient({
+      tables: {
+        ct_sets: { data: sets, error: null },
+        ct_heats: { data: [], error: null },
+      },
+    });
+
+    await computeCupperSetGrid('s1', client);
+    expect(client.calls.some(([, table]) => table === 'ct_heat_entries')).toBe(false);
+    expect(client.calls.some(([, table]) => table === 'ct_results')).toBe(false);
   });
 });

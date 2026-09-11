@@ -242,8 +242,20 @@ export function mountAppShell(
       closeMenu();
       // Re-triggers the router (requireAuth finds no session and shows
       // the login screen) — no extra plumbing needed between this shell
-      // and main.js's own routing.
+      // and main.js's own routing. User-reported, 2026-09-09: signing out
+      // while ALREADY on #/events (a common case, e.g. the organiser
+      // landed there first) left the stale, still-rendered screen on
+      // screen indefinitely, needing a manual refresh — `location.hash =
+      // path` is a no-op when `path` already equals the current hash, so
+      // no `hashchange` event ever fires and router.js's own listener
+      // (`() => resolve(currentPath())`) never runs. Dispatching a
+      // synthetic `hashchange` unconditionally, after the assignment,
+      // forces the router to re-resolve regardless of whether the hash
+      // value actually changed — the listener only reads `location.hash`
+      // fresh via `currentPath()`, never anything off the event itself, so
+      // a plain `Event` (no `oldURL`/`newURL`) is sufficient.
       location.hash = '#/events';
+      window.dispatchEvent(new Event('hashchange'));
     });
     authEl.append(
       el('span', { className: 'app-shell-auth-email', text: session.user.email }),

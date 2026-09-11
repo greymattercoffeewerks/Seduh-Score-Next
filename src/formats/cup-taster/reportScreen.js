@@ -82,37 +82,140 @@ export function describeOutcome(item) {
 
 // An em dash needs no screen-reader expansion (already unambiguous); a real
 // duration gets one, via withSrExpansion — see that helper's own comment
-// (core/dom.js) for why.
-function renderTimeCell(secs) {
-  if (secs == null) return el('td', { text: '—', attrs: { 'data-label': 'Time' } });
+// (core/dom.js) for why. `label` is required, not defaulted — found in
+// review (code-reviewer): both of this file's own call sites already pass
+// one explicitly, so a `= 'Time'` default could never actually execute.
+function renderTimeCell(secs, label) {
+  if (secs == null) return el('td', { text: '—', attrs: { 'data-label': label } });
   return el(
     'td',
-    { attrs: { 'data-label': 'Time' } },
+    { attrs: { 'data-label': label } },
     withSrExpansion(formatDuration(secs), formatDurationLong(secs)),
   );
 }
 
-export function renderStageStandingsTable(ranked) {
-  const rows = ranked.map(({ item, position }) =>
-    el('tr', { className: 'standings-row' }, [
-      el('td', { text: String(position), attrs: { 'data-label': 'Pos' } }),
-      el('td', { text: item.displayName, attrs: { 'data-label': 'Cupper' } }),
-      el('td', { text: String(item.numCorrect), attrs: { 'data-label': 'Correct' } }),
-      renderTimeCell(item.total_elapsed_secs),
-      el('td', { text: describeOutcome(item), attrs: { 'data-label': 'Outcome' } }),
-    ]),
-  );
+// Pure. `numCorrect`/`setsScored` accuracy as a whole percentage — `null`
+// (rendered '—') for a cupper with zero scored sets rather than a
+// division-by-zero `NaN`, the same "honest no data" choice
+// computeSetDifficulty's own `avgCorrect` already makes.
+export function computeAccuracyPct(numCorrect, setsScored) {
+  if (setsScored === 0) return null;
+  return Math.round((numCorrect / setsScored) * 100);
+}
+
+function renderAccuracyCell(numCorrect, setsScored) {
+  const pct = computeAccuracyPct(numCorrect, setsScored);
+  return el('td', { text: pct == null ? '—' : `${pct}%`, attrs: { 'data-label': 'Accuracy' } });
+}
+
+// Pure. Rounded to the nearest whole second before ever reaching
+// formatDuration — that function's own `%` arithmetic assumes an integer
+// input (see its own module comment/tests); an un-rounded average (e.g.
+// 33.33s) would render as a raw fractional-seconds string instead of M:SS.
+export function computeAvgSecsPerSet(totalElapsedSecs, setsScored) {
+  if (totalElapsedSecs == null || setsScored === 0) return null;
+  return Math.round(totalElapsedSecs / setsScored);
+}
+
+// 2026-09-11, user-requested — a WCTC-style visual-scanning cue on top of
+// the Accuracy cell's own text. Three tiers, not four — found live-testing
+// against a real browser (not caught by unit tests, which only assert the
+// NUMBER each tier maps to, never a rendered color): this project's own
+// `--color-gold` (#8a6a1f) and `--color-warning` (#8a5e10) are nearly
+// identical hex values, never designed to sit adjacent to each other as a
+// sequence, so a 4-tier scheme using both made two of the four bands
+// visually indistinguishable — worse than no visual cue at all, since it
+// silently misrepresents "these two rows differ" while the color says
+// they don't. Collapsed to the three colors this project's own token set
+// actually keeps genuinely distinct from one another (success/warning/
+// danger — confirmed via their real computed hex values, not assumed).
+// Not tied to any specific set_count (this project's own set_count is
+// organiser-configurable per stage — a percentage banding stays valid
+// regardless of how many sets a stage has, unlike a raw correct-count
+// one would). Purely additive: the Accuracy column's own text already
+// carries the same information, matching this project's established
+// "text-carried, not color/icon-alone" convention (e.g. standingsScreen.css's
+// own `data-status` styling); `null` (no scored sets yet) gets no tier at
+// all rather than a misleading "lowest" one.
+export function accuracyTier(pct) {
+  if (pct == null) return null;
+  if (pct >= 100) return 1;
+  if (pct >= 50) return 2;
+  return 3;
+}
+
+// Pure. 'Y'/'N'/'—' for one cupper's own grid at a given set position —
+// shared by the on-screen table (renderSetCell below) and the CSV export
+// (buildStageTables) so a future tweak to this convention can't silently
+// drift between them, the same risk buildStageTables' own module comment
+// already calls out for every other column ("so the CSV a cupper opens
+// says the same thing the organiser saw on screen"). Found duplicated
+// verbatim in review (code-reviewer) before this extraction. '—' for a set
+// with no result row (a heat that ended early, or this cupper never
+// reached it) — distinct from 'N' (scored and wrong), same null-vs-false
+// honesty computeCupperSetGrid's own data already carries.
+function formatSetCellText(grid, position) {
+  const cell = grid.find((c) => c.position === position);
+  const correct = cell?.correct ?? null;
+  return correct == null ? '—' : correct ? 'Y' : 'N';
+}
+
+function renderSetCell(grid, position, label) {
+  return el('td', { text: formatSetCellText(grid, position), attrs: { 'data-label': label } });
+}
+
+// `stage` (for `set_count`, the Set 1..N column count) and `setGrid`
+// (`computeCupperSetGrid`'s own Map, keyed by entry_id) are both required —
+// every stage report this screen ever renders already computes both
+// alongside `ranked`, so there's no meaningful "standings without a grid"
+// caller to support as an optional param.
+export function renderStageStandingsTable(ranked, stage, setGrid) {
+  const setColumnCount = stage.set_count;
+  const rows = ranked.map(({ item, position }) => {
+    const tier = accuracyTier(computeAccuracyPct(item.numCorrect, item.sets_scored));
+    const grid = setGrid.get(item.entry_id) ?? [];
+    const setCells = [];
+    for (let setPosition = 1; setPosition <= setColumnCount; setPosition += 1) {
+      setCells.push(renderSetCell(grid, setPosition, `Set ${setPosition}`));
+    }
+    return el(
+      'tr',
+      { className: 'standings-row', attrs: tier ? { 'data-accuracy-tier': String(tier) } : {} },
+      [
+        el('td', { text: String(position), attrs: { 'data-label': 'Pos' } }),
+        el('td', { text: item.displayName, attrs: { 'data-label': 'Cupper' } }),
+        el('td', { text: String(item.numCorrect), attrs: { 'data-label': 'Correct' } }),
+        renderTimeCell(item.total_elapsed_secs, 'Time'),
+        renderAccuracyCell(item.numCorrect, item.sets_scored),
+        renderTimeCell(
+          computeAvgSecsPerSet(item.total_elapsed_secs, item.sets_scored),
+          'Avg time/set',
+        ),
+        ...setCells,
+        el('td', { text: describeOutcome(item), attrs: { 'data-label': 'Outcome' } }),
+      ],
+    );
+  });
+
+  const setHeaders = [];
+  for (let setPosition = 1; setPosition <= setColumnCount; setPosition += 1) {
+    setHeaders.push(el('th', { text: `Set ${setPosition}`, attrs: { scope: 'col' } }));
+  }
+
   // scope='col' on every header, matching heatsScreen.js's own
   // assignment-table convention (its own test asserts it) — found missing
   // here and on standingsScreen.js's near-identical table reviewing the
   // two together.
-  return el('table', { className: 'standings-table' }, [
+  return el('table', { className: 'standings-table report-standings-table' }, [
     el('thead', {}, [
       el('tr', {}, [
         el('th', { text: 'Pos', attrs: { scope: 'col' } }),
         el('th', { text: 'Cupper', attrs: { scope: 'col' } }),
         el('th', { text: 'Correct', attrs: { scope: 'col' } }),
         el('th', { text: 'Time', attrs: { scope: 'col' } }),
+        el('th', { text: 'Accuracy', attrs: { scope: 'col' } }),
+        el('th', { text: 'Avg time/set', attrs: { scope: 'col' } }),
+        ...setHeaders,
         el('th', { text: 'Outcome', attrs: { scope: 'col' } }),
       ]),
     ]),
@@ -215,7 +318,11 @@ export function toCsvSafeDuration(secs) {
 // thing the organiser saw on screen, not a second, independently-formatted
 // view of the same numbers.
 function buildStageTables(stageReport) {
-  const { stage, ranked, difficulty, distribution } = stageReport;
+  const { stage, ranked, difficulty, distribution, setGrid } = stageReport;
+  const setColumns = [];
+  for (let setPosition = 1; setPosition <= stage.set_count; setPosition += 1) {
+    setColumns.push({ key: `set${setPosition}`, label: `Set ${setPosition}` });
+  }
   return [
     {
       title: `${stageKindLabel(stage.kind)} — Standings`,
@@ -224,15 +331,31 @@ function buildStageTables(stageReport) {
         { key: 'displayName', label: 'Cupper' },
         { key: 'numCorrect', label: 'Correct' },
         { key: 'time', label: 'Time' },
+        { key: 'accuracy', label: 'Accuracy' },
+        { key: 'avgTimePerSet', label: 'Avg time/set' },
+        ...setColumns,
         { key: 'outcome', label: 'Outcome' },
       ],
-      rows: ranked.map(({ item, position }) => ({
-        position,
-        displayName: item.displayName,
-        numCorrect: item.numCorrect,
-        time: toCsvSafeDuration(item.total_elapsed_secs),
-        outcome: describeOutcome(item),
-      })),
+      rows: ranked.map(({ item, position }) => {
+        const accuracyPct = computeAccuracyPct(item.numCorrect, item.sets_scored);
+        const grid = setGrid.get(item.entry_id) ?? [];
+        const setValues = {};
+        for (let setPosition = 1; setPosition <= stage.set_count; setPosition += 1) {
+          setValues[`set${setPosition}`] = formatSetCellText(grid, setPosition);
+        }
+        return {
+          position,
+          displayName: item.displayName,
+          numCorrect: item.numCorrect,
+          time: toCsvSafeDuration(item.total_elapsed_secs),
+          accuracy: accuracyPct == null ? '—' : `${accuracyPct}%`,
+          avgTimePerSet: toCsvSafeDuration(
+            computeAvgSecsPerSet(item.total_elapsed_secs, item.sets_scored),
+          ),
+          ...setValues,
+          outcome: describeOutcome(item),
+        };
+      }),
     },
     {
       title: `${stageKindLabel(stage.kind)} — Set difficulty`,
@@ -283,10 +406,10 @@ export function sanitizeFilename(name) {
 // not just reading top-to-bottom, where the preceding <h2> alone would be
 // enough context).
 function renderStageSection(stageReport) {
-  const { stage, ranked, difficulty, distribution } = stageReport;
+  const { stage, ranked, difficulty, distribution, setGrid } = stageReport;
   return el('div', { className: 'card report-stage-card' }, [
     el('h2', { text: stageKindLabel(stage.kind) }),
-    renderStageStandingsTable(ranked),
+    renderStageStandingsTable(ranked, stage, setGrid),
     el('h3', { text: `Set difficulty — ${stageKindLabel(stage.kind)}` }),
     renderDifficultyTable(difficulty),
     el('h3', { text: `Score distribution — ${stageKindLabel(stage.kind)}` }),
