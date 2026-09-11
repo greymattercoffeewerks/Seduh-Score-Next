@@ -1,3 +1,64 @@
+## T6.hardening.a11y: Countdown urgency signal, color-alone signal fixed · 2026-09-12
+
+**Closing the "countdown color-alone signal when urgent state is most critical" a11y gap
+from Phase 6's known open items, user's ranked engineering-deficit item #3.** Both
+organiser-side (`timingScreen.js`) and audience-side (`viewerBody.js`) countdown displays
+used a color-only signal to mark urgency (text color change to --color-danger), leaving
+sighted users with color-vision deficiency and anyone under time pressure unable to
+distinguish the urgent window at a glance. Same issue, both surfaces.
+
+**Implementation:** Added non-color-dependent urgency indicators to both countdown urgency
+states (`[data-urgent='true']`): `font-weight: var(--font-weight-bold)` (700 weight) and
+`outline: var(--border-strong) solid var(--color-danger); outline-offset: var(--space-3);`
+(2px solid outline ring, 12px offset from the text). Deliberately used `outline` rather
+than `border` to eliminate layout shift on the transition (outline never affects box model;
+border does). The countdown now signals urgency via three independent channels: (1) color,
+(2) bold weight, (3) visible outline ring. Pre-existing screen-reader live-region
+announcement ("Less than 10 seconds remaining") was already in place before this task and
+remains untouched — this is purely a sighted-user fix.
+
+**Real finding during review:** `ui-accessibility-reviewer` caught that the outline's total
+visual extension (outline-offset 12px + outline width 2px = 14px) slightly exceeded
+`.viewer-heat-chips`'s pre-existing `margin-top: var(--space-3)` (12px), the DOM sibling
+directly below the countdown on the audience surface, risking a ~2px visual overlap into
+that list's box when a heat turned urgent. Fixed by permanently bumping
+`.viewer-heat-chips`'s margin-top from `--space-3` (12px) to `--space-4` (16px). A
+conditional margin change (only applied while urgent) would itself have reintroduced a
+layout-shift-on-transition problem — the entire point of choosing `outline` over `border`.
+Made unconditional instead.
+
+**Files touched:**
+
+- `src/formats/cup-taster/timingScreen.css` — `.countdown-display[data-urgent='true']` gained
+  `font-weight: var(--font-weight-bold)` and `outline` + `outline-offset` properties.
+- `src/formats/cup-taster/viewerBody.css` — `.viewer-countdown[data-urgent='true']` gained
+  same weight and outline properties; `.viewer-heat-chips` margin-top bumped 12px → 16px for
+  clearance.
+
+**Verification:** `npm run lint` clean, full JS suite 1060/1060 passing. Verified live in dev
+server via both `timingScreen.preview.html` (started a real 20s demo heat, waited into urgent
+window, confirmed bold weight + outline ring rendered correctly) and
+`projectorSurface.preview.html`'s "+ Active heat, countdown <10s (urgent)" demo button
+(confirmed via both screenshot and direct computed-style read: `font-weight: 700`,
+`outline: 1.6px solid rgb(240, 118, 95)`). Verified outline doesn't clip at 360px or against
+any overflow-hidden ancestor in either file.
+
+**Reviews — all clean, zero blocking findings:**
+
+- `module-boundary-checker`: pure CSS token extension, both files already in
+  src/formats/cup-taster/, all four new/extended properties reference tokens already defined
+  in src/ui/tokens/ and already used elsewhere in both files.
+- `ui-accessibility-reviewer`: found and fixed the margin/overlap issue above; verified no
+  clipping risk from overflow-hidden/scroll ancestors; verified outline color maintains
+  strong contrast against both paper-mode (~13.8:1) and stage-mode (~6.4:1) backgrounds using
+  real token values; confirmed outline-offset matches each file's existing spacing vocabulary.
+- `code-reviewer`: verified the 16px/14px clearance math on margin fix; traced actual DOM
+  structure to confirm `.viewer-heat-chips` is the only possible next sibling after countdown;
+  confirmed unconditional-margin approach is correct, not just defensible; confirmed no second
+  unfixed near-miss exists.
+
+---
+
 ## T6.hardening.a11y: No button-disable during in-flight async writes · 2026-09-11
 
 **Closing the "Stop/Save/Start heat buttons stay clickable during their own RPC round-trip"

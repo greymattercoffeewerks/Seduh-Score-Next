@@ -459,13 +459,19 @@ station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can 
   Flagged by: `ui-accessibility-reviewer` (heats/timing group).
 
 - **T6.hardening.a11y — `viewerBody.js` countdown `[data-urgent='true']` color-alone signal,
-  DEFERRED.** The urgent state changes only text color (--color-danger), no accompanying
-  icon/pattern/weight — a color-alone signal on the state most likely to matter under time
-  pressure. Same pattern exists in timingScreen.js on the organiser side. `viewerBody.js`
-  was outside all five reviewed file groups' assigned scope (shared content mounted BY
-  viewer-shell.js, not one of the 17 screen files themselves) — flagged for a future pass
-  rather than fixed out-of-scope. Flagged by: `ui-accessibility-reviewer` (audience/live
-  surfaces group).
+  CLOSED (2026-09-12).** Both the organiser-side `timingScreen.css`'s
+  `.countdown-display[data-urgent='true']` and audience-side `viewerBody.css`'s
+  `.viewer-countdown[data-urgent='true']` gained `font-weight: var(--font-weight-bold)` and
+  `outline: var(--border-strong) solid var(--color-danger); outline-offset: var(--space-3);`
+  to provide non-color-dependent urgency signals (bold weight and bordered outline ring).
+  Outline deliberately chosen over border to prevent layout shift on transition. Pre-existing
+  screen-reader announcement ("Less than 10 seconds remaining") was already in place and
+  remains untouched. `viewerBody.css`'s margin-top on `.viewer-heat-chips` bumped from 12px
+  to 16px to maintain clearance from the countdown's outline-offset ring (outline-offset 12px
+  - outline width 2px = 14px total extension). All three review rounds (module-boundary-checker,
+    ui-accessibility-reviewer, code-reviewer) found zero blocking issues; the margin-overlap
+    risk itself was caught during review and fixed. Verified live at 360px+ and in both paper/stage
+    color modes. Flagged by: `ui-accessibility-reviewer` (audience/live surfaces group, 2026-08-28).
 
 - **T6.hardening.a11y — No button-disable during in-flight async writes, CLOSED (2026-09-11).**
   Every action button across all four affected screens (`heatsScreen.js`, `timingScreen.js`,

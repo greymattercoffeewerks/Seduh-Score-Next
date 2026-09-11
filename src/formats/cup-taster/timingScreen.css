@@ -34,8 +34,19 @@
   padding: var(--space-5) 0;
 }
 
+/* Color alone (ROADMAP.md gap, closed 2026-09-11) is not a sufficient
+   signal here — the countdown crossing into its final 10 seconds is the
+   single moment a judge under time pressure most needs to notice, exactly
+   the state a color-blind organiser is least able to distinguish from
+   "normal" on hue alone. font-weight and a real outline ring both survive
+   any color-vision deficiency; `outline`, not `border`, so the ring never
+   changes this element's own box size and can never introduce a layout
+   shift the instant a heat turns urgent. */
 .countdown-display[data-urgent='true'] {
   color: var(--color-danger);
+  font-weight: var(--font-weight-bold);
+  outline: var(--border-strong) solid var(--color-danger);
+  outline-offset: var(--space-3);
 }
 
 .timing-row-list {
