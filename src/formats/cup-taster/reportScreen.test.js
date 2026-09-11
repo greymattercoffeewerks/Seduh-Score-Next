@@ -616,8 +616,17 @@ describe('mountReportScreen', () => {
     const headings = [...root.querySelectorAll('h2')].map((h) => h.textContent);
     expect(headings).toEqual(['Overall — All Rounds', 'Preliminary', 'Finals']);
     expect(root.textContent).toContain('Alex');
-    expect(root.textContent).toContain('Set difficulty');
-    expect(root.textContent).toContain('Score distribution');
+    // Plain, undecorated labels — each kind occurs only once here, so
+    // neither the <h2> nor the <h3>s should carry a "(Round N)" suffix
+    // nobody needs (see the disambiguation test below for the repeated-kind
+    // case this would otherwise collide on).
+    const subheadings = [...root.querySelectorAll('h3')].map((h) => h.textContent);
+    expect(subheadings).toEqual([
+      'Set difficulty — Preliminary',
+      'Score distribution — Preliminary',
+      'Set difficulty — Finals',
+      'Score distribution — Finals',
+    ]);
 
     // Every column header on every table on this screen (standings,
     // difficulty, distribution — three per stage) uses scope='col',
@@ -640,6 +649,114 @@ describe('mountReportScreen', () => {
     const [, fillPct] = fill.getAttribute('style').match(/width: (\d+)%/);
     const label = bar.parentElement.querySelector('.difficulty-bar-label');
     expect(label.textContent).toBe(`${fillPct}%`);
+  });
+
+  it("disambiguates same-kind stages' own <h2>/<h3> headings with a \"(Round N)\" suffix, leaves a genuinely single-occurrence kind plain in the SAME event, and agrees with the cross-round summary's own column numbering for the SAME stages — found in review (ui-accessibility-reviewer, 2026-09-11), the same class of bug already fixed for the cross-round summary's own column headers (see stageRoundLabels' own comment, reportScreen.js): setup.js's own validateStagePlan explicitly allows a repeated kind (e.g. two prelims stages), and a plain stageKindLabel(kind) label produced two IDENTICAL <h2>s (\"Preliminary\" twice) plus two identical <h3> pairs, ambiguous for a sighted user scanning the page and for a screen reader user navigating by headings list alike. A three-stage fixture (prelims/prelims/finals), not just two same-kind stages, proves the repeat-detection is scoped per kind (would fail if it were gated on \"more than one stage in the event\" instead) — found in review (test-auditor): a two-stage-only fixture couldn't distinguish that from a correct implementation. The same test also asserts the on-screen summary table's own column headers, not just the headings — found in review (test-auditor): renderStageSection and eventSummaryRoundColumns both call the shared stageRoundLabels, but nothing previously proved the two call sites actually stay in agreement for one real event rather than merely each being individually correct in isolation.", async () => {
+    const root = document.createElement('div');
+    const stages = [
+      {
+        id: 's1',
+        event_id: 'ev1',
+        ordinal: 1,
+        kind: 'prelims',
+        set_count: 1,
+        cutoff: 1,
+        status: 'complete',
+      },
+      {
+        id: 's2',
+        event_id: 'ev1',
+        ordinal: 2,
+        kind: 'prelims',
+        set_count: 1,
+        cutoff: null,
+        status: 'complete',
+      },
+      {
+        id: 's3',
+        event_id: 'ev1',
+        ordinal: 3,
+        kind: 'finals',
+        set_count: 1,
+        cutoff: null,
+        status: 'complete',
+      },
+    ];
+    const client = fakeClient({
+      tables: {
+        events: { data: event, error: null },
+        ct_stages: [
+          { data: stages, error: null }, // isEventComplete
+          { data: stages, error: null }, // listStagesForEvent
+          { data: stages[0], error: null }, // computeStageReport(s1) -> findStageById
+          { data: stages[1], error: null }, // computeStageReport(s2) -> findStageById
+          { data: stages[2], error: null }, // computeStageReport(s3) -> findStageById
+        ],
+        ct_stage_entries: { data: [{ id: 'se1', stage_id: 's1', entry_id: 'e1' }], error: null },
+        ct_standings: {
+          data: [
+            {
+              entry_id: 'e1',
+              stage_id: 's1',
+              correct_count: 1,
+              sets_scored: 1,
+              total_elapsed_secs: 40,
+            },
+          ],
+          error: null,
+        },
+        event_entries: { data: [{ id: 'e1', display_name: 'Alex' }], error: null },
+        ct_sets: { data: [{ id: 'set1', stage_id: 's1', position: 1, label: null }], error: null },
+        ct_heats: { data: [{ id: 'h1' }], error: null },
+        ct_heat_entries: { data: [{ id: 'he1' }], error: null },
+        ct_results: { data: [{ set_id: 'set1', correct: true }], error: null },
+      },
+    });
+
+    await mountReportScreen(root, { eventId: 'ev1', client });
+
+    const headings = [...root.querySelectorAll('h2')].map((h) => h.textContent);
+    expect(headings).toEqual([
+      'Overall — All Rounds',
+      'Preliminary (Round 1)',
+      'Preliminary (Round 2)',
+      'Finals',
+    ]);
+
+    const subheadings = [...root.querySelectorAll('h3')].map((h) => h.textContent);
+    expect(subheadings).toEqual([
+      'Set difficulty — Preliminary (Round 1)',
+      'Score distribution — Preliminary (Round 1)',
+      'Set difficulty — Preliminary (Round 2)',
+      'Score distribution — Preliminary (Round 2)',
+      'Set difficulty — Finals',
+      'Score distribution — Finals',
+    ]);
+
+    // Same event, same stages — the "Overall — All Rounds" summary table's
+    // own column headers must name each round with the exact same label the
+    // <h2>/<h3>s above just used, not an independently-drifted numbering.
+    // `.report-standings-table` also matches each per-stage standings table
+    // (renderStageStandingsTable shares the same class), so this takes the
+    // FIRST match specifically — the summary table renders before any
+    // per-stage section, per renderReport's own append order above.
+    const summaryTable = root.querySelector('.report-standings-table');
+    const summaryHeaders = [...summaryTable.querySelectorAll('thead th')].map(
+      (th) => th.textContent,
+    );
+    expect(summaryHeaders).toEqual([
+      'Rank',
+      'Cupper',
+      'Preliminary (Round 1) — Correct',
+      'Preliminary (Round 1) — Time',
+      'Preliminary (Round 2) — Correct',
+      'Preliminary (Round 2) — Time',
+      'Finals — Correct',
+      'Finals — Time',
+      'Total score',
+      'Total time',
+      'Avg time/set',
+    ]);
   });
 
   // Shared by the three export-button tests below — a single normal stage,

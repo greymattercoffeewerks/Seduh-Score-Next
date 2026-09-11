@@ -1,3 +1,59 @@
+## Cup Taster report: fix same-kind stage heading collision · 2026-09-11
+
+Closes a pre-existing accessibility gap flagged as a follow-up during the Phase B
+review (see that entry below): `renderStageSection`'s per-stage `<h2>` heading (and its
+two `<h3>` subheadings, "Set difficulty — X"/"Score distribution — X") were built from a
+plain `stageKindLabel(stage.kind)`. `setup.js`'s own `validateStagePlan` explicitly
+allows a stage plan to repeat a kind ("repeated prelims heats" named as a valid
+example), so an event with two same-kind stages rendered two `<h2>`s with identical
+text and no way to tell them apart — ambiguous for a sighted user scanning the page and
+for a screen-reader user navigating by a flat headings list (NVDA's Elements List,
+VoiceOver's Rotor, JAWS's headings list) alike, even though the underlying data always
+landed in the right place.
+
+**What shipped:** a new shared, private, pure `stageRoundLabels(stageReports)` in
+`reportScreen.js` — one label per stage, the plain kind label when it occurs once in the
+event, or `"<kind> (Round N)"` when it repeats — computed once per report and looked up
+by stage ordinal wherever a heading names one stage. `renderStageSection` now takes the
+precomputed label as a parameter instead of deriving it internally, and
+`eventSummaryRoundColumns` (the function this exact disambiguation approach was
+originally built for, in Phase B) is refactored to call the same shared helper instead
+of keeping its own inline copy — so the per-stage headings and the cross-round
+summary's own column headers can never independently drift apart for the same event.
+
+**Four parallel reviews, two clean, two with real findings, all closed:**
+
+- `ui-accessibility-reviewer`: clean — confirmed the fix closes the collision for both
+  the `<h2>` and both `<h3>`s, verified no other heading/caption on the screen bypasses
+  the new shared helper, and independently flagged that `buildStageTables`'s own CSV
+  table titles have the identical collision risk (see below).
+- `module-boundary-checker`: clean — the whole change is private helper functions
+  within Cup Taster's own report screen, no new imports, no format/core boundary
+  concern.
+- `test-auditor` found two real gaps: the original test used only two same-kind stages,
+  which couldn't distinguish correct per-kind repeat-detection from an incorrect "more
+  than one stage in the event" heuristic; and nothing proved the per-stage headings and
+  the cross-round summary's own column headers actually agree with each other for the
+  same real event, rather than each merely being correct in isolation (the exact drift
+  risk the shared helper exists to prevent). Closed by extending the fixture to three
+  stages (two prelims + one finals) and adding an assertion on the summary table's own
+  column headers in the same test run — both fixes independently mutation-verified
+  (reverting each to the wrong behavior and confirming the strengthened test fails).
+- `code-reviewer` confirmed the refactor is behavior-preserving and the parameter design
+  (caller computes the label map once, passes the single derived value down rather than
+  having the callee re-derive it per stage) is the right shape given `renderStageSection`
+  is called in a loop. It also independently found the same CSV-title gap
+  `ui-accessibility-reviewer` flagged, and that the new `stageRoundLabels` doc comment
+  overclaimed "every heading/title on this screen" without excluding that gap — the
+  comment is now corrected to name the gap explicitly rather than implying it's covered.
+
+The CSV-title gap (`buildStageTables`'s three per-stage table titles still use a plain
+`stageKindLabel(kind)`, so two same-kind stages produce two identically-titled CSV
+tables) is real but was out of scope for this fix per the user's own request — spun off
+as a tracked follow-up task rather than fixed here or left silent.
+
+Full JS suite: 1031/1031.
+
 ## Cup Taster report: cross-round summary (Phase B) · 2026-09-11
 
 **User-requested, not tied to a §14 task ID — the second phase of the WCTC-style report
