@@ -730,28 +730,28 @@ describe('buildReportTables', () => {
         },
       ],
     });
-    expect(tables[1].title).toBe('Preliminary — Set difficulty');
+    expect(tables[1].title).toBe('Set difficulty — Preliminary');
     expect(tables[1].rows).toEqual([{ set: 'Set 1', correct: '75%', sampleSize: 4 }]);
-    expect(tables[2].title).toBe('Preliminary — Score distribution');
+    expect(tables[2].title).toBe('Score distribution — Preliminary');
     expect(tables[2].rows).toEqual([{ correctCount: 3, numCuppers: 1 }]);
   });
 
   it('flattens every stage into one list, in order', () => {
-    const emptyStage = (kind) => ({
-      stage: { kind },
+    const emptyStage = (kind, ordinal) => ({
+      stage: { kind, ordinal },
       ranked: [],
       difficulty: [],
       distribution: [],
     });
-    const tables = buildReportTables([emptyStage('prelims'), emptyStage('finals')]);
+    const tables = buildReportTables([emptyStage('prelims', 1), emptyStage('finals', 2)]);
     expect(tables.map((t) => t.title)).toEqual([
       'Overall — All Rounds',
       'Preliminary — Standings',
-      'Preliminary — Set difficulty',
-      'Preliminary — Score distribution',
+      'Set difficulty — Preliminary',
+      'Score distribution — Preliminary',
       'Finals — Standings',
-      'Finals — Set difficulty',
-      'Finals — Score distribution',
+      'Set difficulty — Finals',
+      'Score distribution — Finals',
     ]);
   });
 
@@ -765,8 +765,73 @@ describe('buildReportTables', () => {
     const tables = buildReportTables([emptyStage('finals')]);
     expect(tables.map((t) => t.title)).toEqual([
       'Finals — Standings',
-      'Finals — Set difficulty',
-      'Finals — Score distribution',
+      'Set difficulty — Finals',
+      'Score distribution — Finals',
+    ]);
+  });
+
+  it("disambiguates two same-kind stages' own CSV table titles with a \"(Round N)\" suffix, leaving a genuinely single-occurrence kind plain in the SAME event — the same class of bug already fixed for the on-screen <h2>/<h3> headings and the cross-round summary's own column headers (see stageRoundLabels' own comment, reportScreen.js): setup.js's own validateStagePlan explicitly allows a repeated kind (e.g. two prelims stages), and a plain stageKindLabel(kind) title would produce two downloaded CSV tables both titled \"Preliminary — Standings\" with no way to tell them apart once opened in a spreadsheet — arguably worse than the on-screen collision since there's no surrounding page for positional context", () => {
+    const emptyStage = (kind, ordinal) => ({
+      stage: { kind, ordinal },
+      ranked: [],
+      difficulty: [],
+      distribution: [],
+    });
+    const tables = buildReportTables([
+      emptyStage('prelims', 1),
+      emptyStage('prelims', 2),
+      emptyStage('finals', 3),
+    ]);
+    expect(tables.map((t) => t.title)).toEqual([
+      'Overall — All Rounds',
+      'Preliminary (Round 1) — Standings',
+      'Set difficulty — Preliminary (Round 1)',
+      'Score distribution — Preliminary (Round 1)',
+      'Preliminary (Round 2) — Standings',
+      'Set difficulty — Preliminary (Round 2)',
+      'Score distribution — Preliminary (Round 2)',
+      'Finals — Standings', // the only occurrence of its kind — stays plain
+      'Set difficulty — Finals',
+      'Score distribution — Finals',
+    ]);
+  });
+
+  it('counts occurrences per kind, not globally — two repeating kinds interleaved with each other still each start their own count at "(Round 1)"', () => {
+    // Found in review (test-auditor): the previous fixture only ever
+    // repeated ONE kind, so it couldn't tell correct per-kind counting
+    // apart from a plausible bug where a single shared counter increments
+    // for ANY stage belonging to ANY repeating kind (which would emit
+    // "(Round 1)"/"(Round 2)"/"(Round 3)"/"(Round 4)" in encounter order
+    // instead of the correct "Round 1"/"Round 1"/"Round 2"/"Round 2" pairs
+    // below). Interleaving two repeating kinds is what actually rules that
+    // bug out — a shared counter and a per-kind counter only disagree once
+    // there's more than one repeating kind in the same event.
+    const emptyStage = (kind, ordinal) => ({
+      stage: { kind, ordinal },
+      ranked: [],
+      difficulty: [],
+      distribution: [],
+    });
+    const tables = buildReportTables([
+      emptyStage('prelims', 1),
+      emptyStage('semis', 2),
+      emptyStage('prelims', 3),
+      emptyStage('semis', 4),
+    ]);
+    expect(tables.map((t) => t.title)).toEqual([
+      'Overall — All Rounds',
+      'Preliminary (Round 1) — Standings',
+      'Set difficulty — Preliminary (Round 1)',
+      'Score distribution — Preliminary (Round 1)',
+      'Semi-Finals (Round 1) — Standings',
+      'Set difficulty — Semi-Finals (Round 1)',
+      'Score distribution — Semi-Finals (Round 1)',
+      'Preliminary (Round 2) — Standings',
+      'Set difficulty — Preliminary (Round 2)',
+      'Score distribution — Preliminary (Round 2)',
+      'Semi-Finals (Round 2) — Standings',
+      'Set difficulty — Semi-Finals (Round 2)',
+      'Score distribution — Semi-Finals (Round 2)',
     ]);
   });
 });
@@ -1084,11 +1149,11 @@ describe('mountReportScreen', () => {
         // get silently reinterpreted as a clock time on open.
         '1,"Rivera, Alex",1,\'0:40,100%,\'0:40,Y,Advanced\r\n' +
         '\r\n' +
-        'Finals — Set difficulty\r\n' +
+        'Set difficulty — Finals\r\n' +
         'Set,Correct,Cuppers scored\r\n' +
         'Set 1,100%,1\r\n' +
         '\r\n' +
-        'Finals — Score distribution\r\n' +
+        'Score distribution — Finals\r\n' +
         'Correct answers,Cuppers\r\n' +
         '0,0\r\n' +
         '1,1',
