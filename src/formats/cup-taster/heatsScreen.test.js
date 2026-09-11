@@ -226,6 +226,62 @@ describe('mountHeatGenerationScreen', () => {
     expect(banner.textContent).toBe('Test Data — Not a Live Event');
   });
 
+  it('disables "Seed roster into this stage" and relabels it "Seeding…" the instant it is clicked, before the write settles — ROADMAP.md gap, closed 2026-09-11', async () => {
+    const root = document.createElement('div');
+    const client = fakeClient({
+      tables: {
+        events: { data: nonTestEvent, error: null },
+        ct_stages: { data: stage, error: null },
+        ct_stage_entries: { data: [], error: null },
+        event_entries: { data: [], error: null },
+        ct_heats: { data: [], error: null },
+      },
+    });
+    await mountHeatGenerationScreen(root, { eventId: 'ev1', stageId: 's1', client });
+    const seedButton = root.querySelector('button');
+
+    seedButton.click();
+
+    // No await in between — the mutation must happen synchronously, before
+    // this handler's own first `await`, or this proves nothing about the
+    // actual in-flight window.
+    expect(seedButton.disabled).toBe(true);
+    expect(seedButton.textContent).toBe('Seeding…');
+  });
+
+  it('re-enables "Seed roster into this stage" and restores its original label if render() itself throws after the write succeeds — otherwise it would stay stuck disabled forever with no on-screen retry path (code-reviewer, 2026-09-11 follow-up)', async () => {
+    const root = document.createElement('div');
+    const roster = [{ id: 'e1', event_id: 'ev1', display_name: 'Cupper One', withdrawn: false }];
+    const client = fakeClient({
+      tables: {
+        // First response serves the initial mount's own loadState(); the
+        // second — an error — serves the post-write render()'s loadState(),
+        // simulating a dropped connection right after the write settled.
+        events: [
+          { data: nonTestEvent, error: null },
+          { data: null, error: new Error('connection dropped') },
+        ],
+        ct_stages: { data: stage, error: null },
+        ct_stage_entries: [
+          { data: [], error: null },
+          { data: [], error: null },
+          { data: [{ id: 'se1', stage_id: 's1', entry_id: 'e1', source: 'seed' }], error: null },
+        ],
+        event_entries: { data: roster, error: null },
+        ct_heats: { data: [], error: null },
+      },
+    });
+    await mountHeatGenerationScreen(root, { eventId: 'ev1', stageId: 's1', client });
+    const seedButton = root.querySelector('button');
+
+    seedButton.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(seedButton.disabled).toBe(false);
+    expect(seedButton.textContent).toBe('Seed roster into this stage');
+    expect(root.querySelector('.screen-feedback').dataset.tone).toBe('error');
+  });
+
   it('clicking "seed" seeds the stage then re-renders showing the roster, refocusing the roster heading', async () => {
     const root = document.createElement('div');
     document.body.appendChild(root); // .focus() is a no-op on a detached element
@@ -270,6 +326,61 @@ describe('mountHeatGenerationScreen', () => {
     await mountHeatGenerationScreen(root, { eventId: 'ev1', stageId: 's1', client });
     expect(root.textContent).toContain('Generate heats (random)');
     expect(root.querySelector('form.manual-assignment-form')).not.toBeNull();
+  });
+
+  it('disables "Generate heats (random)" and relabels it "Generating…" the instant it is clicked, before the write settles — ROADMAP.md gap: this button stayed clickable for the whole round trip with no visible sign a write was in flight', async () => {
+    const root = document.createElement('div');
+    const stageEntries = [{ id: 'se1', stage_id: 's1', entry_id: 'e1' }];
+    const roster = [{ id: 'e1', event_id: 'ev1', display_name: 'Cupper One', withdrawn: false }];
+    const client = fakeClient({
+      tables: {
+        events: { data: nonTestEvent, error: null },
+        ct_stages: { data: stage, error: null },
+        ct_stage_entries: { data: stageEntries, error: null },
+        event_entries: { data: roster, error: null },
+        ct_heats: { data: [], error: null },
+      },
+    });
+    await mountHeatGenerationScreen(root, { eventId: 'ev1', stageId: 's1', client });
+    const randomButton = [...root.querySelectorAll('button')].find(
+      (btn) => btn.textContent === 'Generate heats (random)',
+    );
+
+    randomButton.click();
+
+    // Asserted with NO await in between — the mutation must happen
+    // synchronously, before the click handler's own first `await`, or this
+    // proves nothing about the actual in-flight window (a mutation applied
+    // only after the write settles would pass a test that awaited first,
+    // exactly the gap this task closes).
+    expect(randomButton.disabled).toBe(true);
+    expect(randomButton.textContent).toBe('Generating…');
+  });
+
+  it('disables "Save manual heats" and relabels it "Saving…" the instant a valid submission is clicked, before the write settles — ROADMAP.md gap, closed 2026-09-11', async () => {
+    const root = document.createElement('div');
+    const stageEntries = [{ id: 'se1', stage_id: 's1', entry_id: 'e1' }];
+    const roster = [{ id: 'e1', event_id: 'ev1', display_name: 'Cupper One', withdrawn: false }];
+    const client = fakeClient({
+      tables: {
+        events: { data: nonTestEvent, error: null },
+        ct_stages: { data: stage, error: null },
+        ct_stage_entries: { data: stageEntries, error: null },
+        event_entries: { data: roster, error: null },
+        ct_heats: { data: [], error: null },
+      },
+    });
+    await mountHeatGenerationScreen(root, { eventId: 'ev1', stageId: 's1', client });
+    const manualForm = root.querySelector('form.manual-assignment-form');
+    manualForm.querySelector('input[data-field="heatNumber"]').value = '1';
+    manualForm.querySelector('input[data-field="station"]').value = 'A';
+    const submitButton = manualForm.querySelector('button[type="submit"]');
+
+    manualForm.dispatchEvent(new Event('submit', { cancelable: true }));
+
+    // No await in between — the mutation must happen synchronously.
+    expect(submitButton.disabled).toBe(true);
+    expect(submitButton.textContent).toBe('Saving…');
   });
 
   it('shows the generated heats, grouped by heat, once every stage entry has been placed', async () => {

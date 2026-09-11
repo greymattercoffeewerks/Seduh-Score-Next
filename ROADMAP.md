@@ -447,6 +447,17 @@ station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can 
   patch — out of scope for the grouped accessibility pass. Flagged by:
   `ui-accessibility-reviewer` (core wiring group).
 
+- **T6.hardening.a11y — Disabled-button contrast ratio, NEW GAP (2026-09-11).**
+  `.btn:disabled`'s existing `opacity: 0.6` treatment (in `heatsScreen.css`, loaded globally)
+  computes to roughly 3.4:1 contrast on a colored `.btn-primary` with white text — below the
+  4.5:1 AA floor. Pre-existing on read-only toggles elsewhere in the codebase (which is why
+  `scoringScreen.css` already documented a separate `data-readonly` override with `opacity: 1`);
+  this task substantially increases exposure to the gap by adding many new "…ing" labels that
+  render in the disabled state on timing/scoring surfaces judges read under time pressure. Not
+  fixed here (would require either extending the `data-readonly` override to the new in-flight
+  case, or a documented accepted-exception decision). Flagged as a separate, whole-app pass.
+  Flagged by: `ui-accessibility-reviewer` (heats/timing group).
+
 - **T6.hardening.a11y — `viewerBody.js` countdown `[data-urgent='true']` color-alone signal,
   DEFERRED.** The urgent state changes only text color (--color-danger), no accompanying
   icon/pattern/weight — a color-alone signal on the state most likely to matter under time
@@ -456,13 +467,29 @@ station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can 
   rather than fixed out-of-scope. Flagged by: `ui-accessibility-reviewer` (audience/live
   surfaces group).
 
-- **T6.hardening.a11y — No button-disable during in-flight async writes, NON_BLOCKING.**
-  Stop/Save/Start heat/etc. all stay clickable while their own RPC round-trip is in
-  flight — a systemic pattern across every action button in every screen in this codebase,
-  not introduced or scoped to this pass. Server-side conflict rejection already protects
-  data integrity; fixing only the heats/timing group's own four files would be inconsistent
-  with every other screen. Flagged for a separate, whole-app pass. Flagged by:
-  `ui-accessibility-reviewer` (heats/timing group).
+- **T6.hardening.a11y — No button-disable during in-flight async writes, CLOSED (2026-09-11).**
+  Every action button across all four affected screens (`heatsScreen.js`, `timingScreen.js`,
+  `timingManualScreen.js`, `standingsScreen.js`) now disables synchronously before its first
+  `await`, preventing double-clicks and maintaining correct user feedback throughout the
+  round-trip. Implementation uses direct DOM mutation (`button.disabled = true; button.textContent
+= '...ing…'`) at the start of each click handler, before any await, with a restore callback
+  mechanism gating the post-write `render()` so buttons re-enable with their original label if
+  the render itself throws (fixing a regression the initial fix would have introduced). A second
+  real defect in `standingsScreen.js` was uncovered and fixed: the pre-existing `actionInFlight`
+  guard was only ever evaluated during render, never actually applying the disabled state to the
+  DOM. All 7 affected buttons (seed roster, generate heats random, generate heats manual submit,
+  start heat, per-row stop, manual-entry save, and standingsScreen's 4 write buttons) now have
+  synchronous "disables immediately" tests proving the disable happens before the first await.
+  Two additional regression tests prove button restoration on render() failure. Three files
+  gained synchronous test coverage for this exact synchronous-before-await guarantee
+  (`heatsScreen.test.js`, `standingsScreen.test.js`), and two files use dedicated code-reviewer
+  re-read verification in place of live tests due to fixture complexity (`timingScreen.js`,
+  `timingManualScreen.js`). npm run lint clean, full JS suite 1060/1060 passing. Module-boundary
+  clean; ui-accessibility found three items (missing synchronous tests for 5 buttons — fixed;
+  Stop-button mid-flight focus-loss — documented as accepted tradeoff; disabled-button contrast
+  gap — flagged as new separate follow-up). Code-reviewer (2 rounds) found and fixed: render()
+  failure regression, fragile selector lookups (now direct element references), confirmed all
+  restore callbacks are correct. Flagged by: `ui-accessibility-reviewer` (heats/timing group).
 
 - **T6.hardening.a11y — `viewer-shell.js` render() churn during persistent-h1 fix,
   NON_BLOCKING.** The persistent-h1 fix (real, tested, correct) left `render()` calling

@@ -260,7 +260,23 @@ describe('renderTimingRows', () => {
       },
     );
     rows.querySelector('button').click();
-    expect(onStop).toHaveBeenCalledWith('e1');
+    // A 2nd arg — a restore callback for renderOrShowError to call if
+    // render() itself throws after the write settles (2026-09-11 follow-up,
+    // code-reviewer) — is now always passed alongside the entry id.
+    expect(onStop).toHaveBeenCalledWith('e1', expect.any(Function));
+  });
+
+  it('disables Stop and the manual-entry toggle the instant Stop is clicked — ROADMAP.md gap: this row stayed clickable for the whole tap round trip with no visible sign it was already in flight', () => {
+    const rows = renderTimingRows(
+      [{ entry_id: 'e1', displayName: 'Cupper One', elapsed_secs: null }],
+      { onStop: () => {} },
+    );
+    const stopButton = rows.querySelector('.btn-stop');
+    const manualToggle = rows.querySelector('.btn-manual-toggle');
+    stopButton.click();
+    expect(stopButton.disabled).toBe(true);
+    expect(stopButton.textContent).toBe('Stopping…');
+    expect(manualToggle.disabled).toBe(true);
   });
 
   it('offers a manual-entry fallback alongside Stop for an unstopped entry, hidden by default', () => {
@@ -349,8 +365,35 @@ describe('renderTimingRows', () => {
     // Parsed here, in renderTimingRows' own onSave wrapper, not passed
     // through to the caller as raw strings — onSaveManual (the caller's
     // own handler) only ever sees an already-valid integer, so it never
-    // needs its own parseElapsedInput try/catch.
-    expect(onSaveManual).toHaveBeenCalledWith('e1', 150);
+    // needs its own parseElapsedInput try/catch. The 3rd arg is a restore
+    // callback (2026-09-11 follow-up) — see the onStop test's own comment.
+    expect(onSaveManual).toHaveBeenCalledWith('e1', 150, expect.any(Function));
+  });
+
+  it('disables the manual Save button and relabels it "Saving…" once validation passes — ROADMAP.md gap, closed 2026-09-11 — but leaves it untouched on a local validation failure, since nothing re-renders to reset it', () => {
+    const rows = renderTimingRows(
+      [{ entry_id: 'e1', displayName: 'Cupper One', elapsed_secs: null }],
+      { onStop: () => {}, onSaveManual: () => {} },
+    );
+    const toggle = rows.querySelector('.btn-manual-toggle');
+    toggle.click();
+
+    const fields = rows.querySelector('.manual-time-fields');
+    const [minutesInput, secondsInput] = fields.querySelectorAll('input');
+    const saveButton = [...fields.querySelectorAll('button')].find((b) => b.textContent === 'Save');
+
+    // Invalid first — must NOT disable, since onSaveManual is never even
+    // called and nothing else will re-enable it afterward.
+    minutesInput.value = '2';
+    secondsInput.value = '';
+    saveButton.click();
+    expect(saveButton.disabled).toBe(false);
+
+    // Now valid — must disable immediately, synchronously.
+    secondsInput.value = '30';
+    saveButton.click();
+    expect(saveButton.disabled).toBe(true);
+    expect(saveButton.textContent).toBe('Saving…');
   });
 
   it('an invalid manual time never calls onSaveManual at all, and shows a local error instead — no render(), no network call reachable', () => {
@@ -420,6 +463,26 @@ describe('mountTimingScreen', () => {
     await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
     expect(root.textContent).toContain('Cupper One');
     expect(root.querySelector('button').textContent).toBe('Start heat');
+  });
+
+  it('disables "Start heat" and relabels it "Starting…" the instant it is clicked, before the write settles — ROADMAP.md gap, closed 2026-09-11', async () => {
+    const root = document.createElement('div');
+    const client = buildFakeClient({
+      event: { id: 'ev1', org_id: 'org1', is_test: false },
+      heat: appHeatPending,
+      entries: [{ id: 'he1', heat_id: 'h1', entry_id: 'e1', elapsed_secs: null }],
+      roster: [{ id: 'e1', display_name: 'Cupper One' }],
+    });
+    await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
+    const startButton = root.querySelector('button');
+
+    startButton.click();
+
+    // No await in between — the mutation must happen synchronously, before
+    // this handler's own first `await`, or this proves nothing about the
+    // actual in-flight window.
+    expect(startButton.disabled).toBe(true);
+    expect(startButton.textContent).toBe('Starting…');
   });
 
   it('rejects mounting against a manual-timing-mode heat with an explanatory message, no start button', async () => {

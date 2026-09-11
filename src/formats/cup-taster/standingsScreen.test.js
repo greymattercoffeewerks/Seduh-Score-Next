@@ -275,6 +275,115 @@ describe('mountStandingsScreen', () => {
     document.body.removeChild(root);
   });
 
+  it('disables "Advance to next stage" and relabels it the instant it is clicked, before the write settles — ROADMAP.md gap, closed 2026-09-11: this button stayed clickable for the whole commit round trip with no visible sign a write was in flight', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const stage = {
+      id: 's1',
+      event_id: 'ev1',
+      ordinal: 1,
+      kind: 'prelims',
+      cutoff: 2,
+      status: 'running',
+    };
+    const nextStage = { id: 's2', event_id: 'ev1', ordinal: 2, kind: 'finals', cutoff: null };
+    const standingsRows = [
+      { entry_id: 'e1', stage_id: 's1', correct_count: 5, sets_scored: 6, total_elapsed_secs: 100 },
+      { entry_id: 'e2', stage_id: 's1', correct_count: 4, sets_scored: 6, total_elapsed_secs: 100 },
+      { entry_id: 'e3', stage_id: 's1', correct_count: 1, sets_scored: 6, total_elapsed_secs: 100 },
+    ];
+    const client = fakeClient({
+      tables: {
+        events: { data: event, error: null },
+        ct_stages: [
+          { data: stage, error: null },
+          { data: nextStage, error: null },
+          { data: { ...stage, status: 'complete' }, error: null },
+        ],
+        ct_stage_entries: { data: stageEntries, error: null },
+        ct_standings: { data: standingsRows, error: null },
+        event_entries: { data: roster, error: null },
+        ct_heats: {
+          data: [{ id: 'h1', stage_id: 's1', kind: 'normal', heat_number: 1, status: 'confirmed' }],
+          error: null,
+        },
+        ct_heat_entries: { data: [], error: null },
+      },
+      rpc: () => Promise.resolve({ data: null, error: null }),
+    });
+
+    await mountStandingsScreen(root, { eventId: 'ev1', stageId: 's1', client });
+    const button = root.querySelector('.btn-primary');
+
+    button.click();
+
+    // No await in between — the mutation must happen synchronously, before
+    // commit()'s own first `await`, or this proves nothing about the actual
+    // in-flight window.
+    expect(button.disabled).toBe(true);
+    expect(button.textContent).toBe('Advancing…');
+
+    document.body.removeChild(root);
+  });
+
+  it('re-enables "Advance to next stage" and restores its original label if render() itself throws after the commit succeeds — otherwise it would stay stuck disabled forever with no on-screen retry path (code-reviewer, 2026-09-11 follow-up)', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const stage = {
+      id: 's1',
+      event_id: 'ev1',
+      ordinal: 1,
+      kind: 'prelims',
+      cutoff: 2,
+      status: 'running',
+    };
+    const nextStage = { id: 's2', event_id: 'ev1', ordinal: 2, kind: 'finals', cutoff: null };
+    const standingsRows = [
+      { entry_id: 'e1', stage_id: 's1', correct_count: 5, sets_scored: 6, total_elapsed_secs: 100 },
+      { entry_id: 'e2', stage_id: 's1', correct_count: 4, sets_scored: 6, total_elapsed_secs: 100 },
+      { entry_id: 'e3', stage_id: 's1', correct_count: 1, sets_scored: 6, total_elapsed_secs: 100 },
+    ];
+    const client = fakeClient({
+      tables: {
+        // First response serves the initial mount's own loadState(); the
+        // second — an error — serves the post-commit render()'s
+        // loadState(), simulating a dropped connection right after the
+        // commit already succeeded.
+        events: [
+          { data: event, error: null },
+          { data: null, error: new Error('connection dropped') },
+        ],
+        ct_stages: [
+          { data: stage, error: null },
+          { data: nextStage, error: null },
+          { data: { ...stage, status: 'complete' }, error: null },
+        ],
+        ct_stage_entries: { data: stageEntries, error: null },
+        ct_standings: { data: standingsRows, error: null },
+        event_entries: { data: roster, error: null },
+        ct_heats: {
+          data: [{ id: 'h1', stage_id: 's1', kind: 'normal', heat_number: 1, status: 'confirmed' }],
+          error: null,
+        },
+        ct_heat_entries: { data: [], error: null },
+      },
+      rpc: () => Promise.resolve({ data: null, error: null }),
+    });
+
+    await mountStandingsScreen(root, { eventId: 'ev1', stageId: 's1', client });
+    const button = root.querySelector('.btn-primary');
+
+    button.click();
+    await vi.waitFor(() => {
+      expect(button.disabled).toBe(false);
+    });
+
+    expect(button.textContent).toBe('Advance to next stage');
+    expect(root.querySelector('.screen-feedback').dataset.tone).toBe('error');
+
+    document.body.removeChild(root);
+  });
+
   it('says "Declare champion" at the terminal stage (cutoff: null), and publishes to live_sessions once resolved — the third automatic-publish trigger, alongside heat start/confirm', async () => {
     const root = document.createElement('div');
     document.body.appendChild(root);
@@ -456,6 +565,52 @@ describe('mountStandingsScreen', () => {
     expect(button.textContent).toBe('Create tiebreak heat');
   });
 
+  it('disables "Create tiebreak heat" and relabels it "Creating…" the instant it is clicked, before the write settles — ROADMAP.md gap, closed 2026-09-11', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const stage = {
+      id: 's1',
+      event_id: 'ev1',
+      ordinal: 1,
+      kind: 'prelims',
+      cutoff: 1,
+      status: 'running',
+    };
+    const twoEntries = stageEntries.slice(0, 2);
+    const tiedStandings = [
+      { entry_id: 'e1', stage_id: 's1', correct_count: 4, sets_scored: 6, total_elapsed_secs: 100 },
+      { entry_id: 'e2', stage_id: 's1', correct_count: 4, sets_scored: 6, total_elapsed_secs: 100 },
+    ];
+    const client = fakeClient({
+      tables: {
+        events: { data: event, error: null },
+        ct_stages: [
+          { data: stage, error: null },
+          { data: { id: 's2', event_id: 'ev1', ordinal: 2, cutoff: null }, error: null },
+        ],
+        ct_stage_entries: { data: twoEntries, error: null },
+        ct_standings: { data: tiedStandings, error: null },
+        event_entries: { data: roster, error: null },
+        ct_heats: {
+          data: [{ id: 'h1', stage_id: 's1', kind: 'normal', heat_number: 1, status: 'confirmed' }],
+          error: null,
+        },
+        ct_heat_entries: { data: [], error: null },
+      },
+    });
+
+    await mountStandingsScreen(root, { eventId: 'ev1', stageId: 's1', client });
+    const button = root.querySelector('.btn-primary');
+
+    button.click();
+
+    // No await in between — the mutation must happen synchronously.
+    expect(button.disabled).toBe(true);
+    expect(button.textContent).toBe('Creating…');
+
+    document.body.removeChild(root);
+  });
+
   it("shows the tiebreak heat's status, no action, while it is not yet confirmed", async () => {
     const root = document.createElement('div');
     const stage = {
@@ -492,6 +647,77 @@ describe('mountStandingsScreen', () => {
     await mountStandingsScreen(root, { eventId: 'ev1', stageId: 's1', client });
     expect(root.textContent).toContain('Tiebreak heat 1 is "timing"');
     expect(root.querySelector('.btn-primary')).toBeNull();
+  });
+
+  it('disables the "tiebreak-resolved" commit button and relabels it the instant it is clicked, before the write settles — ROADMAP.md gap, closed 2026-09-11', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const stage = {
+      id: 's1',
+      event_id: 'ev1',
+      ordinal: 1,
+      kind: 'prelims',
+      cutoff: 1,
+      status: 'running',
+    };
+    const twoEntries = stageEntries.slice(0, 2);
+    const tiedStandings = [
+      { entry_id: 'e1', stage_id: 's1', correct_count: 4, sets_scored: 6, total_elapsed_secs: 100 },
+      { entry_id: 'e2', stage_id: 's1', correct_count: 4, sets_scored: 6, total_elapsed_secs: 100 },
+    ];
+    const tiebreakHeat = {
+      id: 'tb1',
+      stage_id: 's1',
+      kind: 'tiebreak',
+      heat_number: 1,
+      status: 'confirmed',
+    };
+    const tiebreakHeatEntries = [
+      { id: 'the1', heat_id: 'tb1', entry_id: 'e1', elapsed_secs: 10 },
+      { id: 'the2', heat_id: 'tb1', entry_id: 'e2', elapsed_secs: 5 },
+    ];
+    const tiebreakResults = [
+      { heat_entry_id: 'the1', set_id: 'set1', correct: true },
+      { heat_entry_id: 'the2', set_id: 'set1', correct: false },
+    ];
+    const client = fakeClient({
+      tables: {
+        events: { data: event, error: null },
+        ct_stages: [
+          { data: stage, error: null },
+          { data: { id: 's2', event_id: 'ev1', ordinal: 2, cutoff: null }, error: null },
+          { data: { ...stage, status: 'complete' }, error: null },
+        ],
+        ct_stage_entries: { data: twoEntries, error: null },
+        ct_standings: { data: tiedStandings, error: null },
+        event_entries: { data: roster, error: null },
+        ct_heats: {
+          data: [
+            { id: 'h1', stage_id: 's1', kind: 'normal', heat_number: 1, status: 'confirmed' },
+            tiebreakHeat,
+          ],
+          error: null,
+        },
+        ct_heat_entries: [
+          { data: [], error: null },
+          { data: [], error: null },
+          { data: tiebreakHeatEntries, error: null },
+        ],
+        ct_results: { data: tiebreakResults, error: null },
+      },
+      rpc: () => Promise.resolve({ data: null, error: null }),
+    });
+
+    await mountStandingsScreen(root, { eventId: 'ev1', stageId: 's1', client });
+    const button = root.querySelector('.btn-primary');
+
+    button.click();
+
+    // No await in between — the mutation must happen synchronously.
+    expect(button.disabled).toBe(true);
+    expect(button.textContent).toBe('Advancing…');
+
+    document.body.removeChild(root);
   });
 
   it('offers "Advance to next stage" once the tiebreak heat resolves the tie cleanly', async () => {
@@ -578,6 +804,83 @@ describe('mountStandingsScreen', () => {
       { stage_entry_id: 'se2', via_coin_toss: false },
     ]);
     expect(resolveStagePayload.p_final_position).toBe(2);
+    document.body.removeChild(root);
+  });
+
+  it('disables the coin-toss submit button and relabels it "Recording coin toss…" the instant a valid submission is clicked, before the write settles — ROADMAP.md gap, closed 2026-09-11', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const stage = {
+      id: 's1',
+      event_id: 'ev1',
+      ordinal: 1,
+      kind: 'prelims',
+      cutoff: 1,
+      status: 'running',
+    };
+    const twoEntries = stageEntries.slice(0, 2);
+    const tiedStandings = [
+      { entry_id: 'e1', stage_id: 's1', correct_count: 4, sets_scored: 6, total_elapsed_secs: 100 },
+      { entry_id: 'e2', stage_id: 's1', correct_count: 4, sets_scored: 6, total_elapsed_secs: 100 },
+    ];
+    const tiebreakHeat = {
+      id: 'tb1',
+      stage_id: 's1',
+      kind: 'tiebreak',
+      heat_number: 1,
+      status: 'confirmed',
+    };
+    const tiebreakHeatEntries = [
+      { id: 'the1', heat_id: 'tb1', entry_id: 'e1', elapsed_secs: 10 },
+      { id: 'the2', heat_id: 'tb1', entry_id: 'e2', elapsed_secs: 10 },
+    ];
+    const tiebreakResults = [
+      { heat_entry_id: 'the1', set_id: 'set1', correct: true },
+      { heat_entry_id: 'the2', set_id: 'set1', correct: true },
+    ];
+    const client = fakeClient({
+      tables: {
+        events: { data: event, error: null },
+        ct_stages: [
+          { data: stage, error: null },
+          { data: { id: 's2', event_id: 'ev1', ordinal: 2, cutoff: null }, error: null },
+        ],
+        ct_stage_entries: { data: twoEntries, error: null },
+        ct_standings: { data: tiedStandings, error: null },
+        event_entries: { data: roster, error: null },
+        ct_heats: {
+          data: [
+            { id: 'h1', stage_id: 's1', kind: 'normal', heat_number: 1, status: 'confirmed' },
+            tiebreakHeat,
+          ],
+          error: null,
+        },
+        ct_heat_entries: [
+          { data: [], error: null },
+          { data: [], error: null },
+          { data: tiebreakHeatEntries, error: null },
+        ],
+        ct_results: { data: tiebreakResults, error: null },
+      },
+      rpc: () => Promise.resolve({ data: null, error: null }),
+    });
+
+    await mountStandingsScreen(root, { eventId: 'ev1', stageId: 's1', client });
+    root.querySelector('.coin-toss-list input[type="checkbox"]').click();
+    const noteInput = root.querySelector('#coin-toss-note');
+    noteInput.value = 'coin toss, witnessed by organiser';
+    noteInput.dispatchEvent(new Event('input'));
+    const submitButton = root.querySelector('.btn-primary');
+
+    submitButton.click();
+
+    // No await in between — the mutation must happen synchronously, and
+    // only because the selection/note validation above already passed (an
+    // invalid submission must NOT disable this button — see the two early
+    // `return`s in standingsScreen.js's own handler).
+    expect(submitButton.disabled).toBe(true);
+    expect(submitButton.textContent).toBe('Recording coin toss…');
+
     document.body.removeChild(root);
   });
 

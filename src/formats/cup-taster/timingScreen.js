@@ -76,13 +76,20 @@ export function renderManualTimeFields(entry, { onSave, extraChildren = [], id }
     onSave(entry.entry_id, minutesInput.value, secondsInput.value),
   );
 
-  return el('div', { className: 'manual-time-fields', id }, [
+  const fields = el('div', { className: 'manual-time-fields', id }, [
     minutesInput,
     el('span', { className: 'manual-time-separator', text: ':' }),
     secondsInput,
     saveButton,
     ...extraChildren,
   ]);
+  // Attached directly rather than left for a caller to re-derive via a
+  // class selector (found in review, code-reviewer) — a selector stays
+  // correct only by coincidence of there being exactly one `.btn-primary`
+  // in this subtree today; a real reference can't silently pick up a wrong
+  // one if `extraChildren` ever grows another primary-styled button.
+  fields.saveButton = saveButton;
+  return fields;
 }
 
 // `onSaveManual` is the mid-heat device-failure fallback (handoff §7.1: "a
@@ -171,11 +178,24 @@ export function renderTimingRows(hydratedEntries, { onStop, onSaveManual }) {
           try {
             rawSecs = parseElapsedInput(minutesRaw, secondsRaw);
           } catch (err) {
+            // A pure local validation failure — no write attempted, no
+            // render() coming to reset anything, so the button (not yet
+            // touched at this point) needs no re-enabling here.
             localError.textContent = err.message;
             return;
           }
           localError.textContent = '';
-          onSaveManual(entryId, rawSecs);
+          // Mutated directly once validation passes — see startButton's own
+          // comment below for why. onSaveManual's own eventual render()
+          // (success or failure) is what actually resets this row.
+          const { saveButton } = manualFields;
+          const originalLabel = saveButton.textContent;
+          saveButton.disabled = true;
+          saveButton.textContent = 'Saving…';
+          onSaveManual(entryId, rawSecs, () => {
+            saveButton.disabled = false;
+            saveButton.textContent = originalLabel;
+          });
         },
         extraChildren: [cancelButton, localError],
       });
@@ -204,7 +224,44 @@ export function renderTimingRows(hydratedEntries, { onStop, onSaveManual }) {
         // cancelButton (just focused) is about to be hidden.
         manualToggle.focus();
       });
-      stopButton.addEventListener('click', () => onStop(entry.entry_id));
+      stopButton.addEventListener('click', () => {
+        // Mutated directly — see mountTimingScreen's own startButton comment
+        // for why (matches this file's established "no full render() for
+        // anything short of a real persisted-state change" philosophy).
+        // Accepted, undocumented-until-now gap flagged in review
+        // (ui-accessibility-reviewer, 2026-09-11): disabling the just-
+        // clicked, currently-focused stopButton blurs it to <body> per
+        // standard browser behavior, and — unlike manualToggle/cancelButton
+        // just above, which each pair their own focus-moving mutation with
+        // an explicit `.focus()` landing spot — nothing here claims a
+        // replacement target for the split second before onStop's own
+        // caller re-renders and lands focus via the normal
+        // focusAfterRender/feedback-region path. Left as a momentary,
+        // self-correcting window rather than inventing a synthetic
+        // intermediate focus target (the row is either about to be replaced
+        // by a result cell on success, or fully rebuilt on failure — there
+        // is no stable mid-flight element worth focusing that wouldn't
+        // itself need discarding a moment later). Revisit if this is ever
+        // reported as a real problem for a keyboard/screen-reader user
+        // rather than left as an accepted tradeoff.
+        // manualToggle is disabled too — switching to manual entry for the
+        // SAME row while its own tap is already in flight isn't a real
+        // choice; onStop's own caller always re-renders once it settles
+        // (success or failure), which is what actually resets this state.
+        stopButton.disabled = true;
+        stopButton.textContent = 'Stopping…';
+        manualToggle.disabled = true;
+        // Passed through so the caller's own renderOrShowError can restore
+        // THIS row specifically if render() itself throws after the write
+        // settles (found in review, code-reviewer, 2026-09-11) — this
+        // function has no other way to reach back into a row it already
+        // returned control of to the caller.
+        onStop(entry.entry_id, () => {
+          stopButton.disabled = false;
+          stopButton.textContent = 'Stop';
+          manualToggle.disabled = false;
+        });
+      });
 
       resultNode = el('div', { className: 'timing-row-actions' }, [
         stopButton,
@@ -299,10 +356,20 @@ export async function mountTimingScreen(
     else delete feedback.dataset.tone;
   }
 
-  async function renderOrShowError(feedback) {
+  // `restoreButton`, when given, fires only if render() ITSELF then throws
+  // — see heatsScreen.js's identical fix for the full account (found in
+  // review, code-reviewer, 2026-09-11): the Start button and per-row
+  // Stop/manual-Save buttons below now mutate themselves directly the
+  // instant they're clicked, and without this restore a render() failure
+  // right after the write settles would leave that button stuck disabled
+  // forever. Not passed by handleExpiry's own call below — that path has no
+  // button of its own to restore (the whole row set is what's being
+  // replaced).
+  async function renderOrShowError(feedback, restoreButton) {
     try {
       await render();
     } catch (err) {
+      restoreButton?.();
       setFeedback(feedback, describeError(err), 'error');
       feedback.scrollIntoView?.({ block: 'nearest' });
       feedback.focus();
@@ -482,6 +549,16 @@ export async function mountTimingScreen(
         text: 'Start heat',
       });
       startButton.addEventListener('click', async () => {
+        // Mutated directly rather than via a full render() — matches this
+        // file's own established philosophy (see its top comment) of never
+        // rebuilding the whole subtree for anything short of a real
+        // persisted-state change; a render() here would also be wasteful
+        // since this same handler already calls one below regardless of
+        // outcome. Without this, the button stayed clickable for the whole
+        // round trip with no visible sign a write was already in flight
+        // (ROADMAP.md gap, closed 2026-09-11).
+        startButton.disabled = true;
+        startButton.textContent = 'Starting…';
         try {
           const { flushResult } = await startHeat(heatId, data.event.org_id, client, {
             handlers: cupTasterOutboxHandlers(client),
@@ -510,7 +587,10 @@ export async function mountTimingScreen(
         } catch (err) {
           pendingError = describeError(err);
         }
-        await renderOrShowError(feedback);
+        await renderOrShowError(feedback, () => {
+          startButton.disabled = false;
+          startButton.textContent = 'Start heat';
+        });
       });
       container.appendChild(
         el('div', { className: 'card' }, [
@@ -535,7 +615,7 @@ export async function mountTimingScreen(
       container.appendChild(countdownEl);
 
       const rows = renderTimingRows(data.hydrated, {
-        onStop: async (entryId) => {
+        onStop: async (entryId, restoreRow) => {
           const stoppedEntry = data.hydrated.find((entry) => entry.entry_id === entryId);
           try {
             const { expectedElapsedSecs, flushResult } = await recordTap(
@@ -554,7 +634,7 @@ export async function mountTimingScreen(
           } catch (err) {
             pendingError = describeError(err);
           }
-          await renderOrShowError(feedback);
+          await renderOrShowError(feedback, restoreRow);
         },
         // The mid-heat device-failure fallback (see this module's own
         // renderTimingRows comment) — reuses recordManualTime and the
@@ -566,7 +646,7 @@ export async function mountTimingScreen(
         // invokes this handler on success, so a bad typo never reaches
         // this far (see that comment for why: a validation failure alone
         // must never trigger a render()).
-        onSaveManual: async (entryId, rawSecs) => {
+        onSaveManual: async (entryId, rawSecs, restoreButton) => {
           const targetEntry = data.hydrated.find((entry) => entry.entry_id === entryId);
           try {
             const { expectedElapsedSecs, flushResult } = await recordManualTime(
@@ -586,7 +666,7 @@ export async function mountTimingScreen(
           } catch (err) {
             pendingError = describeError(err);
           }
-          await renderOrShowError(feedback);
+          await renderOrShowError(feedback, restoreButton);
         },
       });
       container.appendChild(

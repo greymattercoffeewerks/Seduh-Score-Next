@@ -1,3 +1,107 @@
+## T6.hardening.a11y: No button-disable during in-flight async writes · 2026-09-11
+
+**Closing the "Stop/Save/Start heat buttons stay clickable during their own RPC round-trip"
+gap from Phase 6's known open items, user's ranked engineering-deficit item #4.** A
+systemic pattern across every action button in every screen: buttons stay clickable while
+their own async write is in flight, offering neither visual nor behavioral feedback. Fixed
+comprehensively across all affected screens, not just the heats/timing group flagged by
+review.
+
+**Scope-check finding:** Several screens already had the fix (`setupScreen.js`,
+`rosterScreen.js`, `core/eventsScreen.js`, `scoringScreen.js` all call `render()` or
+mutate the button synchronously before their first `await`). The genuinely missing files
+were `src/formats/cup-taster/heatsScreen.js` (3 buttons), `src/formats/cup-taster/timingScreen.js`
+(Start heat, per-row Stop, manual-entry fallback Save), and `src/formats/cup-taster/timingManualScreen.js`
+(save-row buttons). A latent bug in `standingsScreen.js` was also found: the pre-existing
+`actionInFlight` guard prevented double-processing, but only evaluated during render —
+the disabled state never actually appeared on-screen during the real in-flight window.
+
+**Implementation:** Direct, synchronous DOM mutation (`button.disabled = true;
+button.textContent = '...ing…'`) at the start of every click handler, before its first `await`,
+across all 4 files. A second regression was introduced by this approach: if the post-write
+`render()` itself throws (reachable: dropped connection right after the write settles), the
+directly-mutated button stayed stuck disabled forever with no retry path. Fixed via a
+restore-callback mechanism: each file's `renderOrShowError(feedback, restoreButton)` gained
+an optional second parameter (a callback invoked only in the catch path, restoring the button
+to its original label and enabled state). Threaded through every write button across all 4
+files, either directly (heatsScreen/standingsScreen) or through existing handler-function
+contracts (timingScreen/timingManualScreen via `onStop`/`onSave`/`onSaveManual`).
+
+**Selector robustness fix:** Two `querySelector` re-derivations that reached buttons from
+async handlers were replaced with real element references, set directly by the render
+helpers themselves (`renderManualAssignmentForm` now sets `form.submitButton`;
+`renderManualTimeFields` now sets `fields.saveButton`).
+
+**Test coverage:** Synchronous (no-await) assertions prove the disable+relabel happens
+BEFORE the write's first await — this exact structure is what distinguishes a real fix
+from the old broken pattern. Initially added for 2 of 7 buttons; `ui-accessibility-reviewer`
+caught that the other 5 only had awaited/`vi.waitFor` assertions (which pass either way);
+all 5 gained synchronous tests. Final count: 8 synchronous "disables immediately" + 2
+"restores on render() failure" regression tests across `heatsScreen.test.js`,
+`standingsScreen.test.js`, `timingScreen.test.js`, `timingManualScreen.test.js`. Updated 3
+pre-existing tests whose exact-argument assertions needed a trailing `expect.any(Function)`
+once handler contracts gained the restore-callback parameter. `timingScreen.js`/
+`timingManualScreen.js`'s restore paths verified by code-reviewer re-read (fixture complexity
+made live regression tests too fragile).
+
+**One accepted, documented tradeoff:** Disabling `timingScreen.js`'s Stop button blurs it to
+`<body>` per standard browser focus-loss behavior, with no explicit refocus target, since the
+row is either about to be replaced (success) or fully rebuilt (failure). Documented in a
+comment at the Stop button's click handler rather than engineering a synthetic mid-flight
+focus target that would itself need discarding a moment later.
+
+**Verification:** `npm run lint` clean, full JS suite 1060/1060 passing. Live-verified
+end-to-end in dev server: clicked "Seed roster" and "Generate heats (random)" against real
+Supabase with only 1 cupper, confirmed real validation error surfaced correctly and button
+re-rendered clickable (error path round-trip too fast to visually catch intermediate
+"Generating…" but tests prove synchronous mutation).
+
+**Files touched:**
+
+- `src/formats/cup-taster/heatsScreen.js` — added synchronous disable+relabel before first
+  `await` on 3 buttons (seed roster, generate heats random, manual-assignment form submit);
+  added restore-callback parameter.
+- `src/formats/cup-taster/heatsScreen.test.js` — 2 new synchronous "disables immediately"
+  tests + 1 regression test for render() failure.
+- `src/formats/cup-taster/timingScreen.js` — added disable+relabel to Start heat and per-row
+  Stop buttons, added restore-callback to `onStop` contract; made `fields.saveButton` a
+  persistent reference.
+- `src/formats/cup-taster/timingScreen.test.js` — 4 new synchronous tests for the 4
+  in-flight cases.
+- `src/formats/cup-taster/timingManualScreen.js` — added disable+relabel to per-row Save
+  button, added restore-callback to `onSaveManual` contract; made `fields.saveButton` a
+  persistent reference.
+- `src/formats/cup-taster/timingManualScreen.test.js` — 2 new synchronous tests for Save
+  in-flight case (2 rows per heat = 2 distinct button identities).
+- `src/formats/cup-taster/standingsScreen.js` — fixed pre-existing `actionInFlight` guard to
+  actually apply disabled state to DOM (added synchronous disable+relabel), added
+  restore-callback to all 4 write-button handlers.
+- `src/formats/cup-taster/standingsScreen.test.js` — 1 regression test for render() failure
+  (the 7-state machine's own resolve-path complexity makes synchronous before-await testing
+  too fragile for all 4 buttons; `code-reviewer` confirmed all restore paths correct).
+
+**Reviews — all clean, zero blocking findings:**
+
+- `module-boundary-checker`: pure UI mutation, one new optional parameter on existing
+  functions, nothing crossing core/format boundary.
+- `ui-accessibility-reviewer`: found three items: (1) Missing synchronous tests for 5 of 7
+  buttons — fixed; (2) Stop-button mid-flight focus-loss — documented as accepted tradeoff;
+  (3) Disabled-button contrast gap (existing `opacity: 0.6` = ~3.4:1 on colored buttons,
+  below 4.5:1 AA floor, substantially increased by this task's new "…ing" labels) — flagged
+  as new separate ROADMAP gap, not fixed here.
+- `code-reviewer` (2 passes): (1) Render()-failure regression — fixed via restore-callback
+  mechanism; (2) Fragile selector lookups — fixed with direct element references; (3)
+  Follow-up confirmed all restore callbacks are correct (exact original label, called on
+  every path that could leave button stuck), and `form.submitButton`/`fields.saveButton`
+  property attachment has no downside (nothing clones or serializes these DOM nodes).
+
+**Known, accepted gap:** timingScreen.js/timingManualScreen.js live-throw regression tests
+were skipped (fixture complexity), but the fixes themselves are structurally identical to
+heatsScreen/standingsScreen, both of which have live tests. `code-reviewer` verified in
+pass 2; `test-auditor` noted as a known gap.
+
+---
+
 ## T5.gap.sync-panel: Operation-type-specific diagnostic messages · 2026-09-11
 
 **Closing the "Generic three-state sync panel never names WHICH operation type is
