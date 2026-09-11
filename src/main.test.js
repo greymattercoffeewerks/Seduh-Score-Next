@@ -74,8 +74,10 @@ vi.mock('./core/outbox.js', () => ({
   listPendingOperations: (...args) => listPendingOperations(...args),
 }));
 const cupTasterOutboxHandlers = vi.fn(() => ({ fake: 'handlers' }));
+const cupTasterOperationLabels = { fake_type: 'doing a fake thing' };
 vi.mock('./formats/cup-taster/outboxHandlers.js', () => ({
   cupTasterOutboxHandlers: (...args) => cupTasterOutboxHandlers(...args),
+  cupTasterOperationLabels,
 }));
 const stopTrackingInputModality = vi.fn();
 const trackInputModality = vi.fn(() => stopTrackingInputModality);

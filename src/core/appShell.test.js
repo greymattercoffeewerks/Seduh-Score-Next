@@ -675,6 +675,41 @@ describe('mountAppShell — sync panel', () => {
     expect(syncEl.classList.contains('app-shell-sync-pending')).toBe(false);
   });
 
+  it('names the stuck operation type when the caller supplies operationLabels — ROADMAP.md gap: an organiser could not tell a stuck publish apart from a stuck heat-start', async () => {
+    const op = await enqueueOperation('some_op', { id: 1 });
+    await outboxPut({ ...op, attempts: 1, lastError: 'stale conflict' });
+    const root = document.createElement('div');
+    const { setNav } = mountAppShell(root, {
+      client: fakeClient({}),
+      // Deliberately not a real Cup Taster operation type — appShell.js
+      // itself must stay format-agnostic (see its own top comment), so this
+      // proves the wiring works for WHATEVER map a caller supplies, not
+      // specifically for that format's own vocabulary.
+      operationLabels: { some_op: 'doing a thing' },
+    });
+    await setNav({ eventId: 'ev1', links: [] });
+    const syncEl = root.querySelector('.app-shell-sync');
+    await flush(() => {
+      expect(syncEl.textContent).toBe('Not synced — doing a thing failed (1 pending)');
+    });
+    expect(syncEl.classList.contains('app-shell-sync-stuck')).toBe(true);
+  });
+
+  it('falls back to the generic "retrying failed" message for a stuck type absent from operationLabels — an unlabeled type must never render "undefined"', async () => {
+    const op = await enqueueOperation('confirm_heat', { heatId: 'h1' });
+    await outboxPut({ ...op, attempts: 1, lastError: 'stale conflict' });
+    const root = document.createElement('div');
+    const { setNav } = mountAppShell(root, {
+      client: fakeClient({}),
+      operationLabels: { some_other_op: 'doing a different thing' },
+    });
+    await setNav({ eventId: 'ev1', links: [] });
+    const syncEl = root.querySelector('.app-shell-sync');
+    await flush(() => {
+      expect(syncEl.textContent).toBe('Not synced — retrying failed (1 pending)');
+    });
+  });
+
   it('fail-open: a pending operation still reports "not synced", never "off", even with no current event context — computeSyncState()\'s own guarantee, this caller must not accidentally suppress it', async () => {
     await enqueueOperation('confirm_heat', { heatId: 'h1' });
     const root = document.createElement('div');

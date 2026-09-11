@@ -681,6 +681,16 @@ station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can 
   DIAGNOSTIC GAP.** An organiser can't tell a stuck `publish_live_session` apart from a
   stuck `start_heat`/`confirm_heat` from the panel alone. Non-blocking (the panel never
   lies, just isn't specific). Flagged by: `offline-sync-auditor`.
+  **CLOSED 2026-09-11:** `src/core/appShell.js` gained an optional `operationLabels` parameter
+  passed from `src/main.js` (the one file allowed to know both "core" and "this format"),
+  `src/formats/cup-taster/outboxHandlers.js` exports `cupTasterOperationLabels` mapping
+  the 6 operation types to short labels ("starting a heat", "recording a time", etc.),
+  and `renderSync` now renders operation-specific messages like "Not synced — confirming
+  a heat failed" instead of generic "retrying failed." Zero core/format boundary violation
+  — a future format supplies its own label map unedited. All three reviewers (ui-accessibility,
+  module-boundary, code-reviewer) confirmed clean; consistency tests (every handler has a
+  label, every label maps to a handler) newly added. npm run lint clean, 1047/1047 tests
+  passing.
 
 - **`buildLiveSessionPayload` does N+1 sequential DB reads, OPTIMIZATION DEFERRED.** One
   query per heat via `listHeatsForStage`, more per surfaced heat's roster/results. This

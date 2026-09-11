@@ -24,7 +24,10 @@ import { mountScoringScreen } from './formats/cup-taster/scoringScreen.js';
 import { mountProjectorSurface } from './formats/cup-taster/projectorSurface.js';
 import { mountPhoneSummary } from './formats/cup-taster/phoneSummary.js';
 import { flushOutbox } from './core/outbox.js';
-import { cupTasterOutboxHandlers } from './formats/cup-taster/outboxHandlers.js';
+import {
+  cupTasterOutboxHandlers,
+  cupTasterOperationLabels,
+} from './formats/cup-taster/outboxHandlers.js';
 import { trackInputModality } from './core/inputModality.js';
 
 // Same "unreliable venue wifi" holding-state pattern this project already
@@ -287,7 +290,14 @@ export function mountApp(root, { client = getSupabase(), orgId = getDefaultOrgId
   bareRoot.hidden = true;
   root.append(shellRoot, bareRoot);
 
-  const shell = mountAppShell(shellRoot, { client });
+  // operationLabels: this file is the one place allowed to know both
+  // "core" and "this app is Cup Taster" (see this function's own comment
+  // below) — appShell.js itself stays format-agnostic, per its own top
+  // comment.
+  const shell = mountAppShell(shellRoot, {
+    client,
+    operationLabels: cupTasterOperationLabels,
+  });
 
   // Tracked reactively via onAuthStateChange, NOT a fresh client.auth.
   // getSession() call here — found while wiring this: a separate

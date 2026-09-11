@@ -1,3 +1,68 @@
+## T5.gap.sync-panel: Operation-type-specific diagnostic messages · 2026-09-11
+
+**Closing the "Generic three-state sync panel never names WHICH operation type is
+stuck" diagnostic gap from Phase 5's known open items.** User prioritized this as item
+#5 on a ranked list of engineering deficits. The sync panel in `appShell.js` was
+rendering "Not synced — retrying failed (N pending)" for any stuck operation, with no
+indication whether the stuck operation was a heat start, a heat-time record, a heat
+confirmation, or a live-session publish — making troubleshooting harder than it needed
+to be.
+
+**Implementation:** Format-agnostic architecture. `src/core/appShell.js`'s `renderSync`
+gained an optional `operationLabels = {}` parameter (no Cup-Taster-specific strings live
+in this file, per its established "no format vocabulary here" convention). The stuck
+operation branch now looks up `operationLabels[state.stuckOperation.type]` and renders
+`Not synced — ${label} failed (${pendingCount} pending)` if a label exists, falling back
+to the generic message when the type has no entry or no map is supplied. The one file
+allowed to know both "core" and "this format is Cup Taster" — `src/main.js` — imports
+the label map from `src/formats/cup-taster/outboxHandlers.js` and threads it through
+to `mountAppShell`. New export `cupTasterOperationLabels` in `outboxHandlers.js` maps
+the 6 real operation types to short labels: "starting a heat", "recording a time",
+"recording a max time", "confirming a heat", "resolving a stage", "publishing to the
+live view".
+
+**Files touched:**
+
+- `src/core/appShell.js` — added `operationLabels` parameter to `mountAppShell`, updated
+  `renderSync` to render operation-specific messages.
+- `src/formats/cup-taster/outboxHandlers.js` — new export `cupTasterOperationLabels`
+  (same file/reasoning as existing `cupTasterOutboxHandlers` composition).
+- `src/main.js` — imports and threads `cupTasterOperationLabels` through to `mountAppShell`.
+- `src/core/appShell.test.js` — two new tests: one proving a supplied label renders
+  correctly (using deliberately non-Cup-Taster type name to verify appShell.js is
+  format-agnostic), one proving the fallback works for an unlabeled type.
+- `src/formats/cup-taster/outboxHandlers.test.js` — two-way consistency check (every
+  handler type has a label, every label maps to a real handler type).
+- `src/main.test.js` — updated existing outboxHandlers.js mock to also export fake
+  `cupTasterOperationLabels` (was failing once main.js started importing it).
+
+**Live verification:** `npm run lint` clean, full JS suite 1047/1047 passing. Verified
+LIVE in dev server: injected a real stuck operation directly into IndexedDB (type:
+'confirm_heat', attempts: 1), confirmed the sync panel rendered "Not synced — confirming
+a heat failed (1 pending)" with correct danger-toned styling, then cleaned up.
+
+**Reviews — all clean, zero blocking findings:**
+
+- `ui-accessibility-reviewer`: confirmed the longer message still wraps sensibly at 360px
+  (no CSS change needed, `.app-shell-sync` was never nowrap), danger-toned
+  `.app-shell-sync-stuck` styling applies unconditionally, aria-live dedupe key (built
+  from stuckOperation.id) already changes when text does.
+- `module-boundary-checker`: confirmed zero Cup-Taster-specific strings in appShell.js,
+  `outboxHandlers.js` is the correct home (same file/reasoning as handler composition),
+  only main.js imports cupTasterOperationLabels, a hypothetical second format could supply
+  its own label map unedited.
+- `code-reviewer`: confirmed all 6 operation-type strings/labels are accurate against real
+  `enqueueOperation` call sites in timing.js/scoring.js/standings.js/liveSession.js. One
+  non-blocking observation: the consistency test only catches drift within the label map
+  itself, not a typo at an actual call site (e.g., 'start-heat' vs 'start_heat'); this is
+  pre-existing (shared with the "composes every Cup Taster operation type" test directly
+  above), structurally hard to close without app-wide refactoring, flagged as known but
+  not blocking.
+
+**Status:** Done. `npm run lint` clean, 1047/1047 tests passing. No blocking findings.
+
+---
+
 ## T5.gap.automatic-publish: `tieStatus` publication decision closure · 2026-09-11
 
 **Product/scoring decision closure from Phase 5's known open items**, closing the

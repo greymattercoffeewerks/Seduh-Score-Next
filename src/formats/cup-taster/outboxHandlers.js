@@ -35,3 +35,28 @@ export function cupTasterOutboxHandlers(client) {
     ...resolveStageHandlers(client),
   };
 }
+
+// Human-readable labels for this format's own operation types, for the
+// organiser-facing sync panel (core/appShell.js's `renderSync`) to name
+// WHICH operation is stuck rather than a bare "retrying failed" (ROADMAP.md
+// gap, closed 2026-09-11). Lives here, not core/, for the identical reason
+// `cupTasterOutboxHandlers` above does — this format's own vocabulary for
+// its own operation types; appShell.js stays format-agnostic and accepts
+// this map as an optional caller-supplied prop (main.js passes it through,
+// the one file already allowed to know both "core" and "this app is Cup
+// Taster"), falling back to a generic message when a type has no label —
+// see that file's own comment. Kept as a plain object, not derived from
+// `cupTasterOutboxHandlers`'s own keys — a Set of registered handler types
+// doesn't carry the human wording a label needs, and the reverse (deriving
+// handler registration from label keys) would let a typo in this map
+// silently drop a real handler. `outboxHandlers.test.js` instead asserts
+// the two key sets stay in agreement, so drift between them is caught by a
+// test rather than trusted to eyes alone.
+export const cupTasterOperationLabels = {
+  start_heat: 'starting a heat',
+  record_heat_time: 'recording a time',
+  auto_max_heat: 'recording a max time',
+  confirm_heat: 'confirming a heat',
+  resolve_stage: 'resolving a stage',
+  publish_live_session: 'publishing to the live view',
+};
