@@ -20,7 +20,7 @@
 // before writing code, matching core/export.js's own "no new dependency"
 // framing. There is no generated-PDF code path here.
 import { findEvent } from '../../core/events.js';
-import { el, withSrExpansion } from '../../core/dom.js';
+import { el, svgEl, withSrExpansion } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
 import { getSupabase } from '../../core/supabaseClient.js';
 import { formatDuration, formatDurationLong } from '../../core/duration.js';
@@ -584,6 +584,194 @@ export function sanitizeFilename(name) {
   return name.replace(/[\\/:*?"<>|]/g, '-');
 }
 
+// Phase C, 2026-09-11, user-requested — hand-rolled SVG bar charts, no
+// charting library, matching this project's existing "no new dependency"
+// stance for PDF export (see this file's own module comment). Eight
+// categorical colors (reportScreen.css's own `--report-chart-color-N`
+// custom properties), cycling by a cupper's own index in `summaries` — the
+// same order `renderEventSummaryTable` already uses, so a cupper's bar
+// color and legend position match their row position in the table that
+// follows. Colors repeat past the 8th cupper in a single event; acceptable
+// because color is never the only signal a bar's identity depends on (see
+// `renderRoundBarChart`'s own comment for the other two).
+const CHART_SERIES_COLOR_COUNT = 8;
+function chartSeriesColor(index) {
+  return `var(--report-chart-color-${(index % CHART_SERIES_COLOR_COUNT) + 1})`;
+}
+
+// Pure-ish (builds live DOM, but from already-computed data, same as every
+// other render* function on this screen). One grouped bar chart — a round
+// per x-axis group, one bar per cupper who competed in THAT round, at a
+// FIXED horizontal slot matching their own index in `summaries` in every
+// group (not a compacted "only the cuppers present" layout) — so the same
+// cupper sits at the same x-position across every round's group, letting a
+// reader track one cupper's bar across rounds by position alone, not just
+// by color. `getValue(round)` reads the one field this chart is about
+// (numCorrect for "Score by Round", totalElapsedSecs for "Time by Round")
+// from a `summary.rounds[]` entry (analytics.js's own `computeEventSummary`
+// shape); returns `null`/`undefined` for "no bar this round" — a cupper who
+// never reached the round (no entry in `rounds[]`) and a cupper who reached
+// it but has no data for this particular value (e.g. never timed) both
+// collapse to the same "no bar," matching `renderEventSummaryTable`'s own
+// em-dash convention for exactly the same two cases (see that function's
+// own `round?.totalElapsedSecs ?? null` — this isn't a new inconsistency).
+//
+// A single, shared, whole-chart y-scale (not renormalized per round) is
+// deliberate — the whole point of a "by round" chart is comparing
+// magnitude ACROSS rounds, which a per-round-relative scale would actively
+// misrepresent.
+//
+// `role="img"` + a descriptive `aria-label`, not `aria-hidden` — matching
+// `core/dom.js`'s own `brandMark()` precedent for a decorative-but-real SVG
+// rather than removing it from the accessibility tree entirely. Safe to
+// summarize rather than fully expose per-bar, unlike (say) the standings
+// table: the on-screen table this chart sits above already carries every
+// exact value in fully accessible markup — this chart adds a visual trend
+// read, not a second source of data a screen-reader user would otherwise
+// miss. Never color-alone as this chart's only way to tell two cuppers'
+// bars apart, per this project's established convention (see
+// `accuracyTier`'s own comment for the precedent): each bar's own value is
+// rendered as adjacent SVG text (not just implied by height), each cupper
+// keeps one fixed x-slot across every round (a positional cue independent
+// of color), and a text legend below maps every color to its cupper's
+// name. A thin `stroke` on every bar (found in review,
+// ui-accessibility-reviewer: several of the 8 hues cluster closer together
+// than casual inspection suggests under simulated red-green colorblindness
+// — not a WCAG violation given the three cues above, but a visible border
+// keeps adjacent same-round bars separable at a glance even when their
+// fills read as similar).
+export function renderRoundBarChart({
+  titleText,
+  ariaSummary,
+  summaries,
+  stageReports,
+  getValue,
+  formatValue,
+}) {
+  const roundLabels = stageRoundLabels(stageReports);
+  const rounds = stageReports.map(({ stage }) => ({
+    ordinal: stage.ordinal,
+    label: roundLabels.get(stage.ordinal),
+  }));
+
+  let maxValue = 0;
+  const cellsByRound = rounds.map(({ ordinal }) =>
+    summaries.map((summary) => {
+      const round = summary.rounds.find((r) => r.stageOrdinal === ordinal);
+      const value = round ? getValue(round) : null;
+      if (value != null) maxValue = Math.max(maxValue, value);
+      return value;
+    }),
+  );
+  // Guards the division below for the degenerate case (every value in this
+  // chart is null/zero) — shouldn't happen for a real complete event, but
+  // keeps the geometry math from ever dividing by zero if it somehow did.
+  if (maxValue === 0) maxValue = 1;
+
+  const barWidth = 16;
+  const barGap = 4;
+  const groupGap = 24;
+  const sidePadding = 12;
+  const chartAreaHeight = 140;
+  const valueLabelSpace = 16;
+  const axisLabelSpace = 28;
+  const svgHeight = valueLabelSpace + chartAreaHeight + axisLabelSpace;
+  const groupWidth = summaries.length * barWidth + Math.max(0, summaries.length - 1) * barGap;
+  const svgWidth =
+    sidePadding * 2 + rounds.length * groupWidth + Math.max(0, rounds.length - 1) * groupGap;
+
+  const bars = [];
+  rounds.forEach((round, roundIndex) => {
+    const groupX = sidePadding + roundIndex * (groupWidth + groupGap);
+    cellsByRound[roundIndex].forEach((value, cupperIndex) => {
+      if (value == null) return;
+      const summary = summaries[cupperIndex];
+      const barX = groupX + cupperIndex * (barWidth + barGap);
+      const barHeight = Math.max((value / maxValue) * chartAreaHeight, 1);
+      const barY = valueLabelSpace + (chartAreaHeight - barHeight);
+      bars.push(
+        svgEl('rect', {
+          x: barX,
+          y: barY,
+          width: barWidth,
+          height: barHeight,
+          fill: chartSeriesColor(cupperIndex),
+          stroke: 'var(--color-border-strong)',
+          'stroke-width': '0.5',
+          rx: 2,
+          'data-entry': summary.entryId,
+          'data-round': round.ordinal,
+        }),
+      );
+      const valueLabel = svgEl('text', {
+        x: barX + barWidth / 2,
+        y: barY - 3,
+        'text-anchor': 'middle',
+        class: 'report-chart-value',
+      });
+      valueLabel.textContent = formatValue(value);
+      bars.push(valueLabel);
+    });
+
+    const axisLabel = svgEl('text', {
+      x: groupX + groupWidth / 2,
+      y: valueLabelSpace + chartAreaHeight + 16,
+      'text-anchor': 'middle',
+      class: 'report-chart-axis-label',
+    });
+    axisLabel.textContent = round.label;
+    bars.push(axisLabel);
+  });
+
+  const svg = svgEl('svg', {
+    viewBox: `0 0 ${svgWidth} ${svgHeight}`,
+    width: svgWidth,
+    height: svgHeight,
+    class: 'report-chart-svg',
+    role: 'img',
+    'aria-label': ariaSummary,
+  });
+  svg.append(...bars);
+
+  const legend = el(
+    'ul',
+    { className: 'report-chart-legend' },
+    summaries.map((summary, index) =>
+      el('li', { className: 'report-chart-legend-item' }, [
+        el('span', {
+          className: 'report-chart-legend-swatch',
+          attrs: { style: `background: ${chartSeriesColor(index)}` },
+        }),
+        el('span', { text: summary.displayName }),
+      ]),
+    ),
+  );
+
+  return el('div', { className: 'card report-stage-card' }, [
+    el('h2', { text: titleText }),
+    el(
+      'div',
+      {
+        className: 'report-chart-wrap',
+        // Found in review (ui-accessibility-reviewer): `overflow-x: auto`
+        // on a plain, non-focusable <div> can never be reached by a
+        // keyboard-only user — no default keydown scrolling on an
+        // unfocusable element, and no way to Tab into it either. At a
+        // narrow width with enough cuppers to overflow, that left the
+        // chart's own trailing content genuinely unreachable for that
+        // user, not just less convenient. `tabindex="0"` makes it a real
+        // stop in the tab order; its own `aria-label` (not the chart's,
+        // which stays on the `role="img"` child) is what a screen-reader
+        // user hears landing on this wrapper specifically, distinct from
+        // the image's own label a tab-step later.
+        attrs: { tabindex: '0', 'aria-label': 'Scrollable chart area' },
+      },
+      [svg],
+    ),
+    legend,
+  ]);
+}
+
 // Every heading includes the stage's own (possibly round-disambiguated —
 // see stageRoundLabels' own comment) label — found in review: two complete
 // stages (e.g. prelims and finals) each produce an identically-worded
@@ -775,6 +963,28 @@ export async function mountReportScreen(root, { eventId, client = getSupabase(),
       // duplicate that one stage's already-shown standings).
       if (data.stageReports.length > 1) {
         const summaries = computeEventSummary(data.stageReports);
+        container.appendChild(
+          renderRoundBarChart({
+            titleText: 'Score by Round',
+            ariaSummary:
+              'Bar chart: each cupper’s correct count per round. See the table below for exact values.',
+            summaries,
+            stageReports: data.stageReports,
+            getValue: (round) => round.numCorrect,
+            formatValue: (value) => String(value),
+          }),
+        );
+        container.appendChild(
+          renderRoundBarChart({
+            titleText: 'Time by Round',
+            ariaSummary:
+              'Bar chart: each cupper’s total time per round. See the table below for exact values.',
+            summaries,
+            stageReports: data.stageReports,
+            getValue: (round) => round.totalElapsedSecs,
+            formatValue: (value) => formatDuration(value),
+          }),
+        );
         container.appendChild(
           el('div', { className: 'card report-stage-card' }, [
             el('h2', { text: 'Overall — All Rounds' }),

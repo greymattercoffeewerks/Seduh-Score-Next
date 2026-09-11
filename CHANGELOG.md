@@ -1,3 +1,182 @@
+## Cup Taster report: round bar charts (Phase C) · 2026-09-11
+
+**User-requested, not tied to a §14 task ID — the third and final phase of the
+WCTC-style report analytics upgrade scoped with the user in advance (Phase A and Phase B
+shipped separately, same day).** The report screen gains two hand-rolled SVG bar
+charts — "Score by Round" and "Time by Round" — placed between the export toolbar and
+the "Overall — All Rounds" cross-round summary table, shown under the same
+more-than-one-stage gate that section already uses. No charting library, matching this
+project's existing "no new dependency" stance for PDF export (the browser's own Print
+dialog, not a generated file).
+
+Scoped with the user before writing code via two explicit questions: each bar represents
+one cupper, grouped by round (not a single aggregate bar per round), and the charts sit
+before the summary table, not after it.
+
+**What shipped:**
+
+- `renderRoundBarChart({ titleText, ariaSummary, summaries, stageReports, getValue,
+formatValue })` — one call per chart, parameterized by which field to read from each
+  `summary.rounds[]` entry (`numCorrect` vs `totalElapsedSecs`) and how to format it.
+  Built on `core/dom.js`'s existing `svgEl` primitive (its second real consumer, after
+  `brandMark()`) — no changes to `core/dom.js` itself.
+- Each cupper gets a FIXED horizontal slot matching their own index in `summaries` (the
+  same order `renderEventSummaryTable` already uses) in EVERY round's group, not a
+  layout compacted to only the cuppers present that round — so the same cupper sits at
+  the same x-position across every round, letting a reader track one cupper's bar across
+  rounds by position alone. A cupper absent from a round renders no bar at all (never a
+  zero-height one); a real score of 0 still renders a visible 1px-minimum bar, so "didn't
+  compete" and "scored zero" stay visually distinguishable.
+- A single, shared, whole-chart y-scale (not renormalized per round) — the point of a
+  "by round" chart is comparing magnitude across rounds, which a per-round-relative scale
+  would misrepresent.
+- Reuses the existing (Phase B follow-up) private `stageRoundLabels` helper for the
+  chart's own axis labels, so the "(Round N)" disambiguation for a repeated stage kind
+  stays in agreement with the per-stage `<h2>`/`<h3>` headings and the summary table's
+  own column headers — all three now share one label decision.
+- Eight categorical colors, new CSS custom properties (`--report-chart-color-1..8`)
+  scoped to `.report-screen` in `reportScreen.css` — deliberately not added to
+  `src/ui/tokens/`, since a design-system rework is in progress there on a separate
+  branch and this is a categorical, not semantic, palette. Chosen to avoid the ember/gold
+  band (brand accent + ceremonial highlight) and the violet band (reserved exclusively
+  for `is_test`). Color is never the only way to tell two cuppers' bars apart: each bar
+  carries its own adjacent value text, each cupper keeps a fixed x-slot, and a text
+  legend below each chart maps every color to a cupper's name.
+- The whole SVG is `role="img"` with a descriptive `aria-label`, not `aria-hidden` —
+  matching `core/dom.js`'s own `brandMark()` precedent for a decorative-but-real graphic,
+  reasoned as safe to summarize-not-fully-expose because the already-fully-accessible
+  "Overall — All Rounds" table sits immediately below with every exact value in real
+  markup.
+- `.report-chart-wrap { overflow-x: auto; }` lets a chart with many cuppers scroll
+  horizontally rather than overflowing the page or squeezing unreadably narrow at 360px;
+  a `@media print` override shrinks the SVG to fit the page instead (a lossless vector,
+  and a scrollbar has no printed-page equivalent).
+
+**Four parallel reviews, one clean, three with real findings, all closed:**
+
+- `module-boundary-checker`: clean — the whole feature stays private to
+  `src/formats/cup-taster/reportScreen.js`, no new `core/` imports beyond the existing
+  `svgEl`, no reimplementation of any `core/` ranking/duration primitive.
+- `code-reviewer`: clean on code quality (geometry math verified algebraically, no
+  off-by-one; the `getValue`/`formatValue` parameterization judged appropriately scoped
+  for its two real call sites) — flagged the missing CHANGELOG entry (this one) and
+  routed one accessibility question to `ui-accessibility-reviewer` (see below).
+- `ui-accessibility-reviewer` found two real, closed gaps: `.report-chart-wrap`'s
+  `overflow-x: auto` region had no way for a keyboard-only user to reach it (no
+  established table-stacking equivalent exists for a bar chart) — closed with
+  `tabindex="0"` and its own `aria-label` distinct from the chart's own; and the
+  real-zero-bar invariant (a real 0 renders a visible bar, not an omitted one) had no
+  regression test at all — closed with one. Also confirmed the `role="img"`-not-
+  `aria-hidden` reasoning is correct under WAI's own "complex image" pattern (a short
+  `aria-label` plus a full description available elsewhere on the page), which also
+  resolved code-reviewer's routed question about the Time chart's colon-formatted value
+  labels needing `withSrExpansion`: under `role="img"`, an SVG's internal text nodes
+  aren't individually exposed to assistive tech at all, so the ambiguous-vocalization
+  concern that convention exists for doesn't apply here. Suggested (non-blocking) a thin
+  `stroke` on each bar for readability under simulated colorblindness — added, since
+  several of the 8 hues cluster closer together than casual inspection suggested.
+- `test-auditor` found four real test-quality gaps, all fixed and independently
+  mutation-verified: the legend test's only fixture meant a hardcoded legend would have
+  passed identically — fixed with a second, differently-named fixture; the Score chart's
+  value-label test used an identity `formatValue`, which couldn't distinguish "the
+  callback ran" from "a buggy fallback to `String(round.numCorrect)`" — fixed with a
+  non-identity formatter; and — the most significant gap — the chart's own central design
+  claim, the fixed per-cupper x-slot across rounds, was completely untested, since the
+  original fixture (a cupper eliminated after round 1) can't distinguish a fixed slot
+  from a compacted "only cuppers present" layout. Closed with a "late-joining cupper"
+  fixture (absent round 1, present only round 2, at a summaries index after an empty
+  slot) — the one case that actually tells the two implementations apart.
+
+Full JS suite: 1040/1040. Verified live in a real browser at desktop width and 375px
+mobile against `reportScreen.preview.html`'s existing 4-cupper, 2-stage demo event —
+confirmed colors render distinguishably, a real 0 renders as a visible sliver, an
+eliminated cupper's bar correctly disappears from later rounds while keeping their own
+reserved slot, the scroll wrapper is keyboard-focusable, and no console errors.
+
+## Cup Taster report: fix CSV/on-screen word-order mismatch in stage table titles · 2026-09-11
+
+Closes the low-priority follow-up `ui-accessibility-reviewer` flagged reviewing the
+previous entry below: `buildStageTables`'s "Set difficulty"/"Score distribution" CSV
+table titles put the round label first (`` `${roundLabel} — Set difficulty}` ``), while
+`renderStageSection`'s on-screen `<h3>`s for the same two tables put it last
+(`` `Set difficulty — ${roundLabel}` ``) — a word order flip between what an organiser
+sees on screen and what they get in the downloaded CSV. This file's own module comment
+on `buildStageTables` states the CSV should say "the same thing the organiser saw on
+screen"; an organiser comparing a download against a printout or screenshot would notice
+the phrase order flipped, even though both orderings are individually unambiguous and
+the previous fix's own disambiguation ("(Round N)") is correct in each.
+
+**What shipped:** reordered only the two mismatched title templates in `buildStageTables`
+to match `renderStageSection`'s word order (label last). The "Standings" title
+(`` `${roundLabel} — Standings` ``) was left untouched — its on-screen `<h2>` counterpart
+is the bare `roundLabel` with no "Standings" suffix at all, so there was never a mismatch
+there to fix. The cross-round summary's own `correctLabel`/`timeLabel` column headers
+have no mismatch risk by construction (`eventSummaryRoundColumns` computes them once and
+both the on-screen table and the CSV table consume the identical strings, not two
+independently-templated copies) — confirmed, not assumed, during review. Existing test
+assertions for these two title strings, across both the single-occurrence and
+disambiguated `"(Round N)"` cases, updated to match.
+
+**Two reviews, both clean:** `code-reviewer` confirmed the fix is scoped to exactly the
+two mismatched titles with no other stale word-order string left anywhere in the repo;
+`ui-accessibility-reviewer` confirmed this fully closes the follow-up it filed, for both
+the plain and `"(Round N)"`-disambiguated cases, with no remaining mismatch on this
+screen.
+
+Full JS suite: 1033/1033.
+
+## Cup Taster report: fix same-kind stage CSV-title collision · 2026-09-11
+
+Closes the tracked follow-up spun off from the previous entry below: `buildStageTables`
+(builds the three CSV table specs per stage — "Standings", "Set difficulty", "Score
+distribution" — downloaded via the report screen's "Download CSV" action) built each
+`title` from a plain `stageKindLabel(stage.kind)`, the identical collision the previous
+fix closed for the on-screen `<h2>`/`<h3>` headings and the cross-round summary's own
+column headers. An event with two same-kind stages (e.g. two "prelims" stages,
+explicitly valid per `setup.js`'s own `validateStagePlan`) produced two downloaded CSV
+tables both titled e.g. "Preliminary — Standings", indistinguishable once opened in a
+spreadsheet — arguably worse than the on-screen case, since there's no surrounding page
+for positional context once the file is opened elsewhere.
+
+**What shipped:** `buildStageTables` now takes a second `roundLabel` parameter — the
+same shape `renderStageSection` already receives — instead of deriving the label itself.
+`buildReportTables` (its only caller) computes the already-existing shared
+`stageRoundLabels(stageReports)` once and passes each stage's own precomputed label
+through, so the CSV's own table titles are now guaranteed to agree with the on-screen
+headings and the cross-round summary for the same event, closing the last of the three
+call sites `stageRoundLabels` was built to serve.
+
+**Three parallel reviews plus an independent duplicate pass, all closed:**
+
+- `code-reviewer` (run twice, independently converging on the same finding): the new
+  `buildStageTables` doc comment restated `stageRoundLabels`' full history rather than
+  pointing to it, which — combined with `stageRoundLabels`' own comment already telling
+  that story — read as two versions of the same narrative drifting apart over time.
+  Trimmed to a one-line pointer, keeping the full account in exactly one place.
+- `ui-accessibility-reviewer`: no collision risk remains anywhere in the report's own
+  CSV or on-screen output; flagged a pre-existing, non-blocking cosmetic inconsistency
+  (the CSV's "Set difficulty"/"Score distribution" titles put the round label first,
+  while the on-screen `<h3>`s put it last) that predates this fix and wasn't introduced
+  by it — left as-is, spun off as its own low-priority follow-up rather than expanding
+  this task's scope.
+- `module-boundary-checker`: clean — confined entirely to `src/formats/cup-taster/`, no
+  new imports, no reimplementation of shared logic.
+- `test-auditor` (run twice) found two real gaps in the new test: the fixture only ever
+  repeated one kind, which couldn't rule out a plausible bug where a single shared
+  counter (rather than one keyed per kind) drives the "(Round N)" numbering — closed by
+  adding a second test interleaving two repeating kinds (prelims/semis/prelims/semis)
+  and asserting each starts its own count at "(Round 1)". Also flagged that the existing
+  "flattens every stage" fixture's `ordinal` fields — added because the new code path
+  keys off `stage.ordinal` — mask a theoretical silent-mislabeling mode if two stages
+  ever shared an `ordinal`; confirmed or not adding a guard for it, since
+  `ct_stages.ordinal` is `not null` with a `unique(event_id, ordinal)` DB constraint
+  (`supabase/migrations/20260821210000_cup_taster_tables.sql`) makes that scenario
+  unreachable through any real construction path — consistent with this project's "no
+  error handling for scenarios that can't happen" convention, and the same conclusion
+  `code-reviewer` reached independently reviewing the same edge case.
+
+Full JS suite: 1033/1033.
+
 ## Cup Taster report: fix same-kind stage heading collision · 2026-09-11
 
 Closes a pre-existing accessibility gap flagged as a follow-up during the Phase B
