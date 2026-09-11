@@ -1,7 +1,7 @@
 /*
  * Color tokens — Seduh Score Next
  *
- * One warm neutral ramp ("clay") spans both surface modes instead of two
+ * One neutral ramp ("cherry") spans both surface modes instead of two
  * disconnected light/dark palettes: `:root` (no attribute, or
  * `data-surface="paper"`) uses the light end of the ramp for the organiser
  * dashboard and the phone entry surface; `[data-surface="stage"]` uses the
@@ -10,37 +10,57 @@
  * semantic color obeys the same rule: paper-mode semantic colors are always
  * dark tones (safe against the light canvas, paired with a white
  * `-contrast`), stage-mode semantic colors are always light tones (safe
- * against the dark canvas, paired with a clay-950 `-contrast`). See
+ * against the dark canvas, paired with a cherry-950 `-contrast`). See
  * DESIGN.md for the contrast ratios behind every pairing.
+ *
+ * "Cherry" replaces the original "clay"/"ember" identity (2026-09-11 rework):
+ * ground and neutrals are pulled toward bottle-green-black instead of warm
+ * brown, and the brand accent is unripe coffee cherry (a chartreuse green)
+ * instead of roast-orange. See DESIGN.md's References section for why.
  */
 
 :root {
-  /* Clay — warm neutral ramp, 50 (lightest) to 950 (near-black) */
-  --clr-clay-50: #fefcf9;
-  --clr-clay-100: #faf6ef;
-  --clr-clay-200: #f2ebdf;
-  --clr-clay-300: #e6dbc8;
-  --clr-clay-400: #d3c3a8;
-  --clr-clay-500: #a89876;
-  --clr-clay-600: #6b5d49;
-  --clr-clay-700: #574d3c;
-  --clr-clay-800: #362f24;
-  --clr-clay-900: #201b14;
-  --clr-clay-950: #100d0a;
+  /* Cherry — neutral ramp, 50 (lightest) to 950 (near-black bottle-green) */
+  --clr-cherry-50: #f5f3e6;
+  --clr-cherry-100: #ece7d2;
+  --clr-cherry-200: #dcd4ae;
+  --clr-cherry-300: #c2b781;
+  --clr-cherry-400: #8f9463;
+  --clr-cherry-500: #5c6b3f;
+  --clr-cherry-600: #3d4c28;
+  --clr-cherry-700: #2c391c;
+  --clr-cherry-800: #1c2612;
+  --clr-cherry-900: #12190b;
+  --clr-cherry-950: #0c130a;
 
-  /* Ember — primary brand/interactive accent (roast-orange) */
-  --clr-ember-500: #ff6b35;
-  --clr-ember-600: #e0501c;
-  --clr-ember-700: #b83e15;
-  --clr-ember-800: #8f3010;
+  /* Unripe cherry — primary brand/interactive accent (chartreuse green) */
+  --clr-green-500: #bfe23f;
+  --clr-green-600: #a8c936;
+  --clr-green-700: #33490f;
+  --clr-green-800: #24330a;
 
-  /* Gold — secondary, ceremonial accent (podium, champion, finals) */
+  /* Gold — secondary, ceremonial accent (podium, champion, finals). Unchanged
+     by the Cherry rework — already reads correctly against the new near-black
+     canvas; still fill-only, never a text color (see DESIGN.md). */
   --clr-gold-500: #cfa53b;
   --clr-gold-700: #8a6a1f;
 
-  /* Semantic hue ramps — one text-safe shade per surface mode */
-  --clr-danger-300: #e0603a;
-  --clr-danger-500: #9b1b01;
+  /* Semantic hue ramps — one text-safe shade per surface mode. Danger is
+     re-hued to ripe cherry red as part of this rework (was a separate
+     roast-red under the ember identity); success/warning are unchanged —
+     both already cleared contrast against the new cherry canvas.
+     danger-500 is pulled much darker than a "matching" mid-tone red would
+     be — found in review (ui-accessibility-reviewer, 2026-09-11): at the
+     mid-tone this ramp originally used (#8f2416), a deuteranopia simulation
+     put it within an RGB distance of 4 from --color-accent's paper-mode
+     green (#33490f) — the two read as the same dark olive to red-green
+     colorblind users, exactly the "confirm" vs "delete" pairing
+     preview.html's own buttons put side by side. Luminance survives color
+     vision deficiency even when hue doesn't, so the fix is a large
+     luminance gap, not a hue shift — this shade is ~3x darker than the
+     accent rather than close to it. */
+  --clr-danger-300: #f0765f;
+  --clr-danger-500: #4d0a05;
   --clr-success-300: #8fae72;
   --clr-success-500: #3f5c2e;
   --clr-warning-300: #cf9a37;
@@ -51,23 +71,24 @@
    * Violet appears nowhere else in this system, in either surface mode, on
    * purpose: it must never be mistaken for a brand, semantic, or accent
    * color. Never repurpose it for a new feature, badge, or state — if it
-   * shows up anywhere, it means "this is not a live event."
+   * shows up anywhere, it means "this is not a live event." Untouched by
+   * the Cherry rework.
    */
   --clr-test-500: #6b21c9;
 
   /* Semantic tokens — paper mode (default) */
-  --color-canvas: var(--clr-clay-100);
-  --color-surface: var(--clr-clay-50);
-  --color-surface-sunken: var(--clr-clay-200);
-  --color-border: var(--clr-clay-300);
-  --color-border-strong: var(--clr-clay-950);
+  --color-canvas: var(--clr-cherry-100);
+  --color-surface: var(--clr-cherry-50);
+  --color-surface-sunken: var(--clr-cherry-200);
+  --color-border: var(--clr-cherry-300);
+  --color-border-strong: var(--clr-cherry-950);
 
-  --color-text: var(--clr-clay-950);
-  --color-text-secondary: var(--clr-clay-700);
-  --color-text-muted: var(--clr-clay-600);
+  --color-text: var(--clr-cherry-950);
+  --color-text-secondary: var(--clr-cherry-700);
+  --color-text-muted: var(--clr-cherry-600);
 
-  --color-accent: var(--clr-ember-700);
-  --color-accent-hover: var(--clr-ember-800);
+  --color-accent: var(--clr-green-700);
+  --color-accent-hover: var(--clr-green-800);
   --color-accent-contrast: #ffffff;
 
   --color-gold: var(--clr-gold-700);
@@ -92,29 +113,29 @@
 
 /* Stage mode — the projector/audience big-screen surface */
 [data-surface='stage'] {
-  --color-canvas: var(--clr-clay-950);
-  --color-surface: var(--clr-clay-900);
-  --color-surface-sunken: var(--clr-clay-800);
-  --color-border: var(--clr-clay-700);
-  --color-border-strong: var(--clr-clay-50);
+  --color-canvas: var(--clr-cherry-950);
+  --color-surface: var(--clr-cherry-900);
+  --color-surface-sunken: var(--clr-cherry-800);
+  --color-border: var(--clr-cherry-700);
+  --color-border-strong: var(--clr-cherry-50);
 
-  --color-text: var(--clr-clay-50);
-  --color-text-secondary: var(--clr-clay-300);
-  --color-text-muted: var(--clr-clay-500);
+  --color-text: var(--clr-cherry-50);
+  --color-text-secondary: var(--clr-cherry-300);
+  --color-text-muted: var(--clr-cherry-400);
 
-  --color-accent: var(--clr-ember-500);
-  --color-accent-hover: var(--clr-ember-600);
-  --color-accent-contrast: var(--clr-clay-950);
+  --color-accent: var(--clr-green-500);
+  --color-accent-hover: var(--clr-green-600);
+  --color-accent-contrast: var(--clr-cherry-950);
 
   --color-gold: var(--clr-gold-500);
-  --color-gold-contrast: var(--clr-clay-950);
+  --color-gold-contrast: var(--clr-cherry-950);
 
   --color-danger: var(--clr-danger-300);
-  --color-danger-contrast: var(--clr-clay-950);
+  --color-danger-contrast: var(--clr-cherry-950);
   --color-success: var(--clr-success-300);
-  --color-success-contrast: var(--clr-clay-950);
+  --color-success-contrast: var(--clr-cherry-950);
   --color-warning: var(--clr-warning-300);
-  --color-warning-contrast: var(--clr-clay-950);
+  --color-warning-contrast: var(--clr-cherry-950);
 
   --color-focus-ring: var(--color-border-strong);
 }

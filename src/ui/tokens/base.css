@@ -93,15 +93,15 @@ body {
   padding: var(--space-2) var(--space-4);
   /* Stripe width uses --space-3 (12px) so the pattern stays on the spacing
      scale rather than an arbitrary pixel value. Contrast for white text is
-     verified against both stripe colors (7.8:1 and 19.4:1) — see
+     verified against both stripe colors (7.8:1 and 18.9:1) — see
      DESIGN.md — so no text-shadow/elevation effect is needed to read it;
      that would also break this file's "no shadows" rule for no benefit. */
   background: repeating-linear-gradient(
     -45deg,
     var(--color-test),
     var(--color-test) var(--space-3),
-    var(--clr-clay-950) var(--space-3),
-    var(--clr-clay-950) calc(var(--space-3) * 2)
+    var(--clr-cherry-950) var(--space-3),
+    var(--clr-cherry-950) calc(var(--space-3) * 2)
   );
   color: var(--color-test-contrast);
   font-family: var(--font-body);

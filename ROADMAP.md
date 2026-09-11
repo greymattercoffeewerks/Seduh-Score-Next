@@ -112,6 +112,21 @@ contrast failure, undersize tap targets, dead code, fabricated-data accessibilit
 Build/lint/test suite all passing (996 tests). Cloudflare deployment not connected — a
 separate decision per `wrangler.jsonc`. See CHANGELOG.md for the full account.
 
+**Design System rework: Editorial → Cherry (2026-09-11), whole-product visual identity
+refresh**: User feedback on the landing page converged to pitch a new visual direction
+(Cherry — bottle-green neutrals, unripe-cherry chartreuse accent, Bricolage Grotesque/IBM
+Plex fonts, replacing Editorial's warm-brown clay/orange accent/Cabinet Grotesk/Switzer/
+JetBrains Mono stack). Complete rework of `src/ui/tokens/` (colors, fonts, typography,
+DESIGN.md, base.css, preview.html), `src/marketing/` landing redesign (hero section, new
+tokens, accessibility fixes), plus a follow-up pass that confirmed the entire console
+(organiser app, Cup Taster surfaces) renders correctly with the new palette automatically
+(zero code changes needed, all screens already consume only semantic tokens), and closed two
+pre-existing gaps discovered during the audit (eventsScreen.js link color, landing.css
+hardcoded hex). Three reviewers (module-boundary-checker, code-reviewer, ui-accessibility-
+reviewer) found and fixed real issues including a critical deuteranopia accessibility
+failure in the danger color and six other serious a11y gaps. Build/lint/test passing
+(1019 tests). See CHANGELOG.md for the full account.
+
 ---
 
 ## Version cycle plan (nameplate roadmap)

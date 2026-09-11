@@ -31,31 +31,32 @@ the console, and nothing in the console imports from here.
   the night-hours boundary or the storage key ever changes.
 - `landing.css` — day tokens under `:root`, night tokens under `:root[data-theme='night']`,
   same "flip custom properties at a boundary" trick `src/ui/tokens/colors.css` uses for
-  its own `[data-surface]` swap. **Deliberately not the same tokens.** Editorial Nights
-  isn't Editorial with the lights off — ember is demoted from the everyday accent
-  (headline emphasis, buttons, links) to a rare "this is real, right now" signal (the
-  live-status dot, Cup Taster's badge, the "Completed" event tag); a new warm gold
-  ("lantern") takes over the everyday role instead, and the existing ceremonial gold
-  ("brass") stays reserved for the Annual/BTC badge, now as an outline rather than a
-  fill so it doesn't collide with lantern. See the design exploration this was built
-  from (`design/landing-page/Main.dc.html` + `EditorialNights.dc.html`, 2026-09-07) for
-  the full rationale if the "why" behind a specific color ever needs re-litigating.
+  its own `[data-surface]` swap. As of the 2026-09-11 Cherry rework, these are the
+  literal same Cherry Day/Cherry Night values `colors.css` uses for its own paper/stage
+  modes — deliberately so now, not a coincidence: Cherry is one identity across the
+  whole product (see `src/ui/tokens/DESIGN.md`), and the accent hue (unripe-cherry
+  green) is the same family in both modes here, just a dark leaf-green shade by day and
+  a bright chartreuse shade by night — unlike the old Editorial Nights, which swapped
+  ember (day) for an unrelated invented "lantern" gold (night) entirely. That's why
+  `.landing-badge-live` no longer needs a per-theme literal color override — the accent
+  already reads as consistent across both themes.
 
 ## Why this doesn't import `src/ui/tokens/colors.css`
 
 That file's `--color-*` semantic tokens are contrast-checked against the console's own
 three surfaces (organiser/projector/phone) and documented that way in `DESIGN.md`. This
 page reuses the same semantic _names_ (`--color-canvas`, `--color-text`, etc.) because
-they're generic slots any surface can fill, not because it shares `colors.css`'s
-values — the two files are never loaded on the same page, so there's no runtime
-collision, only a naming echo that keeps the pattern recognizable. Mixing a marketing
-day/night concept into `colors.css` itself would be exactly the "token layer gains
-format-specific vocabulary" failure `CONVENTIONS.md` warns against, one layer up: a
-different _product surface_ instead of a different format.
+they're generic slots any surface can fill — the two files are never loaded on the same
+page, so there's no runtime collision. Now that both files intentionally carry the same
+Cherry values too, the remaining reason to keep them separate is architectural, not
+numerical: mixing a marketing day/night concept into `colors.css` itself would still be
+the "token layer gains format-specific vocabulary" failure `CONVENTIONS.md` warns
+against, one layer up — a different _product surface_ instead of a different format,
+even when that surface happens to want the identical palette today.
 
 What this page _does_ reuse from `src/ui/tokens/`, because it's genuinely
-surface-agnostic: `fonts.css` (the real self-hosted Cabinet Grotesk/Switzer/JetBrains
-Mono — no Google Fonts, no CDN, same reasoning as the console), `typography.css` (type
+surface-agnostic: `fonts.css` (the real self-hosted Bricolage Grotesque/IBM Plex
+Sans/IBM Plex Mono — no Google Fonts, no CDN, same reasoning as the console), `typography.css` (type
 scale, weights, tracking), `spacing.css` (spacing/radius/tap-target-min scale), and the
 generic utility classes in `base.css` (`.sr-only`, `.tabular-nums`, `.tap-target`,
 `:focus-visible`, `.status-live-dot`). `index.html` links all four before

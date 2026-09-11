@@ -4,18 +4,17 @@
  * Three self-hosted fonts (see fonts.css for the @font-face rules and
  * licensing notes), each with a system-stack fallback that renders
  * identically in structure if the webfont hasn't painted yet:
- *   - Cabinet Grotesk (display) — a geometric grotesk display face. Replaces
- *     Erode (an editorial serif) as of the 2026-08-28 type refresh — a
- *     cleaner, more contemporary display register, still paired with a
- *     distinct body face rather than one font doing both jobs. (Chillax
- *     briefly held this slot before being swapped for Cabinet Grotesk on
- *     second thought, same day.)
- *   - Switzer (body) — a free, open alternative to Söhne, which is
- *     Assembly Coffee's own documented body-font fallback; picking it here
- *     is a direct, intentional callback to that reference rather than a
- *     generic sans pick. Unchanged by the type refresh.
- *   - JetBrains Mono (mono/numeral) — see the usage note below. Replaces
- *     Tabular as of the same refresh.
+ *   - Bricolage Grotesque (display) — a characterful geometric grotesk with
+ *     more personality than Cabinet Grotesk, which it replaces as of the
+ *     2026-09-11 Cherry rework (see DESIGN.md) — part of moving the whole
+ *     identity away from the warm-cream/roast-orange register that read as
+ *     generic AI-SaaS.
+ *   - IBM Plex Sans (body) — replaces Switzer. A distinct, technical-feeling
+ *     workhorse sans that pairs against Bricolage's display personality
+ *     without competing with it; also IBM's own OFL family, so no license
+ *     ambiguity self-hosting it.
+ *   - IBM Plex Mono (mono/numeral) — see the usage note below. Replaces
+ *     JetBrains Mono; same rationale as Plex Sans (family cohesion, OFL).
  *
  * Self-hosted, not linked from any third-party CDN, on purpose: the app
  * runs at live events on whatever wifi the venue has, and every surface
@@ -29,21 +28,20 @@
  * `--font-mono` is not decorative: every score, timer, and elapsed-time
  * display must use it (with `.tabular-nums` from base.css) so digits don't
  * jitter in width as they change — the projector view is read from across
- * a room, and reflow there reads as a bug, not a stylistic choice.
- * JetBrains Mono is a genuine fixed-width monospace (unlike Tabular, which
- * it replaces — a grotesque sans with tabular lining figures, not actually
- * monospace); `font-variant-numeric: tabular-nums` still does the width-
- * locking work as a belt-and-suspenders guarantee regardless of the active
- * font.
+ * a room, and reflow there reads as a bug, not a stylistic choice. IBM Plex
+ * Mono is a genuine fixed-width monospace; `font-variant-numeric:
+ * tabular-nums` still does the width-locking work as a belt-and-suspenders
+ * guarantee regardless of the active font.
  */
 
 :root {
   --font-display:
-    'Cabinet Grotesk', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    'Bricolage Grotesque', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-body:
-    'Switzer', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
+    sans-serif;
   --font-mono:
-    'JetBrains Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', 'Segoe UI Mono', Consolas,
+    'IBM Plex Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', 'Segoe UI Mono', Consolas,
     'Roboto Mono', monospace;
 
   /* Type scale — roughly a 1.25 (major third) ratio from a 16px base */
