@@ -523,7 +523,7 @@ describe('publishLiveSession', () => {
     expect(new Date(rpcPayload.p_snapshot_at).toISOString()).toBe(rpcPayload.p_snapshot_at);
   });
 
-  it('captures p_snapshot_at BEFORE buildLiveSessionPayload\'s own read chain, not after — so a slower read still reports the earlier, causally-correct moment', async () => {
+  it("captures p_snapshot_at BEFORE buildLiveSessionPayload's own read chain, not after — so a slower read still reports the earlier, causally-correct moment", async () => {
     // A bare before/after Date.now() bracket around the whole call wouldn't
     // actually distinguish "captured before the read" from "captured
     // after" — fakeClient's reads all resolve synchronously, so both
@@ -536,10 +536,13 @@ describe('publishLiveSession', () => {
     const delayMs = 50;
     const rpcCalls = [];
     let ctStagesCallCount = 0;
-    const client = fakeClient({ tables: baseTables(), rpc: (name, payload) => {
-      rpcCalls.push([name, payload]);
-      return Promise.resolve({ data: null, error: null });
-    } });
+    const client = fakeClient({
+      tables: baseTables(),
+      rpc: (name, payload) => {
+        rpcCalls.push([name, payload]);
+        return Promise.resolve({ data: null, error: null });
+      },
+    });
     // Patched IN PLACE, not wrapped-and-returned-as-a-copy — this fake's own
     // `select()`/`eq()` chain methods all close over and return the SAME
     // `builder` object `.from()` constructs, so a copy with an overridden
@@ -563,7 +566,10 @@ describe('publishLiveSession', () => {
     };
 
     const before = Date.now();
-    await publishLiveSession({ orgId: 'org1', eventId: 'ev1', stageId: 's1', isTest: true }, client);
+    await publishLiveSession(
+      { orgId: 'org1', eventId: 'ev1', stageId: 's1', isTest: true },
+      client,
+    );
 
     expect(ctStagesCallCount).toBeGreaterThan(0); // the delay actually applied to a real read
     const [, rpcPayload] = rpcCalls[0];
@@ -600,7 +606,7 @@ describe('publishLiveSession', () => {
     ).rejects.toThrow(/isTest must be explicitly true or false/);
   });
 
-  it('does not mark a 401 (auth/JWT problem) as permanent — this handler hand-rolls its own error-to-permanent mapping since it cannot reuse core/outbox.js\'s buildRpcHandler, so it needs the identical carve-out separately (found in review, code-reviewer, 2026-09-12: the first version of this fix updated buildRpcHandler but missed this second mapping entirely)', async () => {
+  it("does not mark a 401 (auth/JWT problem) as permanent — this handler hand-rolls its own error-to-permanent mapping since it cannot reuse core/outbox.js's buildRpcHandler, so it needs the identical carve-out separately (found in review, code-reviewer, 2026-09-12: the first version of this fix updated buildRpcHandler but missed this second mapping entirely)", async () => {
     const client = fakeClient({
       tables: baseTables(),
       rpc: () =>
