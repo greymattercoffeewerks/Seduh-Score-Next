@@ -71,13 +71,31 @@
   padding: var(--space-3) 0;
 }
 
+/* Matches timingScreen.css's own identical fix (ROADMAP.md gap, closed
+   2026-09-11) — see that rule's own comment for the full account. Color
+   alone here would be even less reliable than on the organiser's own
+   screen: this surface is read from across a room (projector) or glanced
+   at occasionally (phone), so a color-blind audience member has no other
+   context cue to notice the shift by. `outline`, not `border`, so the ring
+   never changes this element's own box size. */
 .viewer-countdown[data-urgent='true'] {
   color: var(--color-danger);
+  font-weight: var(--font-weight-bold);
+  outline: var(--border-strong) solid var(--color-danger);
+  outline-offset: var(--space-3);
 }
 
 .viewer-heat-chips {
   list-style: none;
-  margin: var(--space-3) 0 0 0;
+  /* --space-4 (16px), not --space-3 (12px) — found in review
+     (ui-accessibility-reviewer, 2026-09-11): .viewer-countdown's own urgent
+     outline (outline-offset --space-3 + outline width --border-strong =
+     14px total) would otherwise edge ~2px into this list's own box at
+     --space-3. Sized permanently at this larger gap, not only while
+     urgent — an urgent-only margin change would itself be a layout shift
+     the instant a heat turns urgent, the exact thing choosing `outline`
+     over `border` on that rule was meant to avoid. */
+  margin: var(--space-4) 0 0 0;
   padding: 0;
   display: flex;
   flex-wrap: wrap;

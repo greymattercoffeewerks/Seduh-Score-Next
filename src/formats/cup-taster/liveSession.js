@@ -68,7 +68,7 @@
 import { listHeatsForStage, hydrateEntries } from './heats.js';
 import { fetchStandingsForStage, resolveAdvancement, tieStatusFor } from './standings.js';
 import { listEntriesByIds } from '../../core/registry.js';
-import { enqueueOperation, flushOutbox } from '../../core/outbox.js';
+import { enqueueOperation, flushOutbox, isAuthStatus } from '../../core/outbox.js';
 import { getSupabase } from '../../core/supabaseClient.js';
 
 const RECENT_HEATS_LIMIT = 3;
@@ -231,13 +231,39 @@ export async function buildLiveSessionPayload(stageId, client = getSupabase()) {
 // `live_sessions` payload is built here, at actual flush time, by calling
 // buildLiveSessionPayload fresh — see this module's own top comment for why.
 // Mirrors buildRpcHandler's own error-to-permanent mapping (status: 0 means
-// a network failure, retry later; any real HTTP status means a genuine
-// server rejection, won't succeed on retry) since it can't reuse that
-// generic wrapper directly — the stored payload here isn't the RPC payload
-// yet when the handler is invoked.
+// a network failure, retry later; a real HTTP status other than 401 means a
+// genuine server rejection, won't succeed on retry; 401 means an auth/JWT
+// problem — see outbox.js's own isAuthStatus for the full account, reused
+// here rather than re-derived, found in review, code-reviewer, 2026-09-12:
+// the first version of this fix updated buildRpcHandler but missed this
+// second, hand-rolled mapping entirely, leaving publish_live_session's own
+// RPC failures still misclassified permanent on an expired session) since
+// this handler can't reuse buildRpcHandler directly — the stored payload
+// here isn't the RPC payload yet when the handler is invoked.
 export function publishLiveSessionHandlers(client) {
   return {
     publish_live_session: async ({ orgId, eventId, stageId, format, isTest }) => {
+      // Captured BEFORE the read chain below, not after — this is the
+      // ordering key publish_session's own snapshot_at guard uses to reject
+      // a stale publish that commits LATER than a fresher one (ROADMAP.md's
+      // "No ordering guard on live_sessions's upsert" gap, closed
+      // 2026-09-12 — see that migration's own comment for the full
+      // account). Using the START of the read, not its end, is the
+      // conservative choice: if this read and a second, later-triggered
+      // publish's own read overlap, this one's snapshot is treated as the
+      // older of the two even if buildLiveSessionPayload's own multi-query
+      // chain happens to finish second — matching the real-world causal
+      // order (whichever heat action happened first) rather than whichever
+      // read chain happened to run faster. Wall-clock (`Date.now()`), not a
+      // monotonic clock — two nearly-simultaneous publishes from two
+      // different signed-in devices/browser tabs for the same org (nothing
+      // today prevents that) could theoretically race with a clock-drifted
+      // ordering. The migration's own snapshot_at guard is the actual
+      // backstop against a REGRESSION either way (a stale publish is a
+      // silent no-op, never an error, never a corrupted intermediate
+      // state) — this timestamp only decides WHICH of two real publishes
+      // wins, not whether the result stays internally consistent.
+      const snapshotAt = new Date().toISOString();
       const payload = await buildLiveSessionPayload(stageId, client);
       const { error, status } = await client.rpc('publish_session', {
         p_operation_id: crypto.randomUUID(),
@@ -246,12 +272,13 @@ export function publishLiveSessionHandlers(client) {
         p_format: format,
         p_is_test: isTest,
         p_payload: payload,
+        p_snapshot_at: snapshotAt,
       });
       if (error) {
         const err = new Error(error.message);
         err.code = error.code;
         err.details = error.details;
-        err.permanent = Boolean(status);
+        err.permanent = Boolean(status) && !isAuthStatus(status);
         throw err;
       }
     },

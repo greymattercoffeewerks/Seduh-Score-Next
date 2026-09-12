@@ -459,13 +459,19 @@ station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can 
   Flagged by: `ui-accessibility-reviewer` (heats/timing group).
 
 - **T6.hardening.a11y — `viewerBody.js` countdown `[data-urgent='true']` color-alone signal,
-  DEFERRED.** The urgent state changes only text color (--color-danger), no accompanying
-  icon/pattern/weight — a color-alone signal on the state most likely to matter under time
-  pressure. Same pattern exists in timingScreen.js on the organiser side. `viewerBody.js`
-  was outside all five reviewed file groups' assigned scope (shared content mounted BY
-  viewer-shell.js, not one of the 17 screen files themselves) — flagged for a future pass
-  rather than fixed out-of-scope. Flagged by: `ui-accessibility-reviewer` (audience/live
-  surfaces group).
+  CLOSED (2026-09-12).** Both the organiser-side `timingScreen.css`'s
+  `.countdown-display[data-urgent='true']` and audience-side `viewerBody.css`'s
+  `.viewer-countdown[data-urgent='true']` gained `font-weight: var(--font-weight-bold)` and
+  `outline: var(--border-strong) solid var(--color-danger); outline-offset: var(--space-3);`
+  to provide non-color-dependent urgency signals (bold weight and bordered outline ring).
+  Outline deliberately chosen over border to prevent layout shift on transition. Pre-existing
+  screen-reader announcement ("Less than 10 seconds remaining") was already in place and
+  remains untouched. `viewerBody.css`'s margin-top on `.viewer-heat-chips` bumped from 12px
+  to 16px to maintain clearance from the countdown's outline-offset ring (outline-offset 12px
+  - outline width 2px = 14px total extension). All three review rounds (module-boundary-checker,
+    ui-accessibility-reviewer, code-reviewer) found zero blocking issues; the margin-overlap
+    risk itself was caught during review and fixed. Verified live at 360px+ and in both paper/stage
+    color modes. Flagged by: `ui-accessibility-reviewer` (audience/live surfaces group, 2026-08-28).
 
 - **T6.hardening.a11y — No button-disable during in-flight async writes, CLOSED (2026-09-11).**
   Every action button across all four affected screens (`heatsScreen.js`, `timingScreen.js`,
@@ -499,7 +505,7 @@ station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can 
 
 - **T6.hardening.offline-soak — main.js's hasSession tracking uses a second, separate client.auth.onAuthStateChange subscription alongside appShell.js's own pre-existing one, NON_BLOCKING.** Functionally correct (supabase-js supports multiple listeners fine) but a discretionary duplication. A smaller fix would have mountAppShell() accept an onSessionChange callback (or expose current session reactively) so main.js could reuse appShell's subscription instead of adding its own. Code-reviewer flagged this as discretionary, not required — the duplication is a consequence of appShell.js's returned handle not exposing session state to its caller, not carelessness. Worth a look if appShell.js's own API is revisited for other reasons. Flagged by: `code-reviewer`.
 
-- **T6.hardening.offline-soak — hasSession (main.js) only checks session existence at flush-start time, DEFERRED.** A session valid when attemptReconnectFlush is invoked but that expires partway through a large queued flush would surface a 401/403 (a genuine, non-zero HTTP status) from buildRpcHandler and get correctly-per-the-new-fix-but-still-unluckily classified permanent, discarding a retryable write. Code-reviewer flagged this as offline-sync-auditor's domain judgment call, not asserting it's a bug; offline-sync-auditor's own review did not independently flag it as needing a fix. This is also a pre-existing, systemic characteristic shared by every other flush call site in the app (none re-check session validity mid-flush either) — not something this task's changes made worse, just not something it fixed either. Revisit only if session-expiry-mid-flush is ever confirmed to happen in practice. Flagged by: `code-reviewer` (raised on `offline-sync-auditor`'s behalf).
+- **T6.hardening.offline-soak — hasSession (main.js) only checks session existence at flush-start time, CLOSED (2026-09-12).** Gapped fixed at the core shared layer (`src/core/outbox.js`'s `buildRpcHandler`), not just at main.js's call site — closing the gap for all 8 RPC call sites (timing.js/scoring.js/standings.js/liveSession.js/publish.js) that share this handler-builder. Added `export function isAuthStatus(status) { return status === 401; }` and changed `err.permanent = Boolean(status)` to `err.permanent = Boolean(status) && !isAuthStatus(status)`, treating 401 as blanket-retryable (PostgREST's own JWT-layer response, never a business-logic rejection) while preserving permanent classification for genuine application errors (400+ non-401 statuses). Confirmed empirically against real local Postgres/PostgREST: expired JWT = exactly `401 {"code":"PGRST303"}`, malformed JWT = `401 {"code":"PGRST301"}`, application-level rejection = `400 {"code":"P0001"}` (verified across all 8 RPCs this app calls). A second, real gap found in code-reviewer's first pass: `src/formats/cup-taster/liveSession.js`'s own `publishLiveSessionHandlers` hand-rolls a duplicate error-to-permanent mapping (can't reuse `buildRpcHandler` directly — stored payload is only a small intent, not the full RPC payload). First draft updated only the core handler, missing this second call site. Fixed by exporting `isAuthStatus` and reusing it in liveSession.js too, with its doc comment corrected. Also fixed a non-discriminating test in liveSession.test.js (fakeClient's synchronous reads meant the before/after window would pass regardless — added artificial delay to fakeClient's read, verified by mutation testing the real capture point can move). Tests: 2 new in outbox.test.js (401 → permanent: false; 400 → permanent: true), 2 new in liveSession.test.js for the same cases in publishLiveSessionHandlers, plus corrected snapshot-timing test. npm run lint clean, full JS suite 1065/1065 passing. `offline-sync-auditor` confirmed 401 is safe to treat as blanket-retryable across all 8 RPCs, and verified no new gap introduced with FIFO-blocking retry mechanics. `code-reviewer` ran twice (first pass found the missed second call site, follow-up pass confirmed all fixes). Flagged by: `code-reviewer` (raised on `offline-sync-auditor`'s behalf).
 
 - **No org/membership management UI or RPC exists.** `orgs`/`org_members` are
   deliberately read-only at the RLS+GRANT layer; provisioning the single org for
@@ -726,10 +732,7 @@ station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can 
   `.in('heat_id', heatIds)` in a follow-up, especially for stages with many heats.
   Non-blocking, deferred. Flagged by: `code-reviewer`.
 
-- **No ordering guard on `live_sessions`'s upsert, SELF-HEALING RACE DEFERRED.** Two
-  publishes fired close together for different heats could theoretically commit out of
-  trigger order, causing transient staleness on the audience display until the next heat
-  action. Self-healing, non-blocking, deferred. Flagged by: `offline-sync-auditor`.
+- **No ordering guard on `live_sessions`'s upsert, CLOSED (2026-09-12).** New migration `supabase/migrations/20260912090000_live_sessions_snapshot_ordering_guard.sql` adds `snapshot_at timestamptz not null default now()` column and rebuilds `publish_session` (6 → 7 args) adding `p_snapshot_at timestamptz default now()`. Staleness is checked UP FRONT before any mutation: if an incoming publish's snapshot is older than the target event's already-stored snapshot, the function records it as processed and returns immediately (untouched). Only once staleness is ruled out does the original deactivate-then-upsert sequence run. `src/formats/cup-taster/liveSession.js`'s `publishLiveSessionHandlers` now captures `const snapshotAt = new Date().toISOString()` BEFORE calling `buildLiveSessionPayload` (not after), threading it through as `p_snapshot_at` — the real fix, making the DB-side guard meaningful. **Two real, serious issues found in review and fixed before shipping:** (1) PostgreSQL's `CREATE OR REPLACE FUNCTION` cannot change a function's argument list — the old 6-arg would have remained callable, and the new 7-arg would have started from Postgres's own insecure defaults (no EXECUTE revoke-from-PUBLIC, no search_path pin), regressing two prior hardening migrations. Fixed by explicitly dropping the old 6-arg and reproducing all three hardening properties (`search_path = ''` pin, fully-qualified table references, `grant execute ... to service_role` with PUBLIC revoke), verified live via `has_function_privilege()` against local Postgres. (2) `security-reviewer`'s first pass caught the actual blocking finding: first draft kept the pre-existing unconditional deactivate-others UPDATE running BEFORE the staleness-guarded ON CONFLICT WHERE clause. When staleness guard evaluated false, the UPDATE had ALREADY silently blanked the org's active live sessions, worse than the stale-payload failure mode being fixed (would leave audience view blank until an unrelated publish arrived). Closed by moving staleness check up front (before any mutation, short-circuiting with early return if stale). Two new pgTAP assertions in `supabase/tests/006_publish_session.sql` (plan bumped 18→23→25) prove post-stale-call the session is still active and exactly one session is active for the org — checked immediately, not masking an intermediate all-inactive window. `schema-guardian` ran twice (independently reproduced the zero-active-sessions bug via three methods, then confirmed the fix closes it; executed rollback block in transaction, confirmed byte-for-byte restoration). `security-reviewer` ran twice (first pass found the blocking issue, second pass re-verified search_path/grants/org-ownership-gate and org-ownership edge case). pgTAP suite: 177/177 passing, applied cleanly from empty database. `offline-sync-auditor` clean. Flagged by: `offline-sync-auditor`.
 
 ---
 
@@ -781,14 +784,7 @@ Report screen + CSV export, and `is_test` event deletion.
   right cupper eliminated, correct provenance note) for both a decisive tiebreak
   (Preliminary) and a tiebreak-that-also-drew, requiring a coin toss (Semi-Finals).
 
-- **Known gap, NOT fixed here**: `supabase/tests/008_delete_test_event.sql`'s "exactly
-  the two surviving events remain" assertion (`select count(*) from events`, unscoped)
-  fails whenever the local dev database carries ambient leftover events from other
-  sessions/dev-harness runs — confirmed two such rows ("Layout Check", "E2E Wiring
-  Test...") sitting in this machine's local Postgres, unrelated to this migration or to
-  the dry run's own event (already cleaned up via the Delete-event feature). Pre-existing
-  — the test assumes a freshly-`db:reset` database. Worth scoping the count to the
-  fixture's own org/event ids in a follow-up, not blocking.
+- **pgTAP test scoping fix, CLOSED (2026-09-12).** `supabase/tests/008_delete_test_event.sql`'s final assertion now scopes the count to the fixture's own two known-surviving event ids (`where id in ('...e2', '...e9')`) instead of a bare `count(*) from events`. Eliminates ambient-database-contamination failures when local dev Postgres carries leftover events from other sessions/dev-harness runs (confirmed the "Layout Check" and "E2E Wiring Test..." rows that were sitting in this machine's own instance). pgTAP suite: 170/170 assertions passing before this session's other two fixes, 177/177 after all three. Applies cleanly from empty database via `supabase db reset` (verified multiple times as fixes landed). `schema-guardian` clean.
 
 - **`schema-guardian` PASS** (actually ran the migration from empty, ran the full pgTAP
   suite — 143/143 — and executed the rollback block inside a real transaction to confirm
