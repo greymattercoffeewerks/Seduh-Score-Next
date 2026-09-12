@@ -153,6 +153,14 @@ function buildNav() {
   const navPanel = el('div', { className: 'landing-nav-panel', id: 'landing-nav-panel' }, [
     el('a', { className: 'landing-nav-link', text: 'Tour', attrs: { href: '#' } }),
     el('a', { className: 'landing-nav-link', text: 'Pricing', attrs: { href: '#' } }),
+    // The one real, working destination in this nav besides the format
+    // card below — a free standalone tool (src/tools/timer/), deliberate
+    // promotion for the product (user decision, 2026-09-12).
+    el('a', {
+      className: 'landing-nav-link',
+      text: 'Free Timer',
+      attrs: { href: '/tools/timer/' },
+    }),
     el('a', { className: 'landing-nav-link', text: 'Org login', attrs: { href: '#' } }),
     el('a', {
       className: 'landing-btn landing-btn-primary',
@@ -606,7 +614,11 @@ function buildFooter() {
       text: 'Built by Firdaus Omar · Grey Matter Coffee Werks, Brunei',
     }),
     el('div', { className: 'landing-footer-right' }, [
-      el('span', { className: 'landing-footer-text', text: 'Free tools save to this device.' }),
+      el('a', {
+        className: 'landing-footer-text landing-footer-link',
+        text: 'Free Timer tool — saves to this device →',
+        attrs: { href: '/tools/timer/' },
+      }),
       el('a', {
         className: 'landing-mono landing-badge landing-version-pill',
         attrs: { href: '/bts/' },

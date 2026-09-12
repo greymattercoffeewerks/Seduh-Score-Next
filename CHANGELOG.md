@@ -1,3 +1,146 @@
+## Standalone Timer tool — visual/spacing fix pass · 2026-09-12
+
+**User feedback post-ship on cosmetic requests: spacing, sizing, and visibility follow-up.**
+Four distinct user requests targeting the timer tool's visual polish and usability:
+
+1. Make the countdown number bigger and bolder.
+2. Fix spacing issue: "Minutes"/"Seconds" labels rendered flush against their input boxes with no gap.
+3. Remove the on-page description once the timer starts running.
+4. Make the field labels slightly bigger.
+
+**Root cause for item 2 (the actual bug):** `src/tools/timer/timerScreen.js` builds title/minutes/seconds
+fields via `core/dom.js`'s shared `labeledField()` helper, which emits generic `.form-field` / `.form-field-label`
+classes with zero styling opinion of its own. Every other consumer of that helper is a console screen that gets
+those classes styled by `formats/cup-taster/heatsScreen.css`. This standalone tool deliberately never loads that
+format-specific stylesheet (per its own module-boundary rule). Result: `.form-field-label` (a plain inline `<span>`)
+had zero CSS at all in this tool — rendered flush against its input on the same line, no line break, no gap.
+
+**Fixes applied — all in `src/tools/timer/timer.css` and `src/tools/timer/timerScreen.js`:**
+
+- Added self-contained `.form-field` (flex column, gap, left-aligned) and `.form-field-label`
+  (`font-size: var(--text-md)`, semibold) rules directly in timer.css — NOT an import of heatsScreen.css,
+  keeping the tool's CSS self-contained per module-boundary convention. Fixes item 2, satisfies item 4
+  (labels now visibly bigger, went from zero-styled inline text to a deliberately sized, semibold block label).
+- Removed stale `padding-bottom: var(--space-3)` hack on `.timer-duration-separator` (the colon between
+  Minutes/Seconds) that had been compensating for the old zero-height label. Parent row's `align-items: flex-end`
+  now handles alignment correctly.
+- `.timer-display-value` gained `font-weight: var(--font-weight-bold)` and larger clamp ceiling
+  (`clamp(var(--text-5xl), 22vw, 7.5rem)`, up from the shared 96px ceiling other console surfaces use).
+  Fixes item 1.
+- On-page tagline paragraph in `timerScreen.js`'s `render()` now conditionally rendered only when
+  `getStatus(state) === 'idle'` — hidden once running/paused/expired. Fixes item 3.
+- Pre-existing issue found during review: title input rendered narrower than the presets row beneath it,
+  because `.timer-setup`'s own `align-items: center` shrink-wraps every direct child to its content width by default.
+  Fixed by adding `.timer-title-field` class (via `titleField.classList.add(...)` in timerScreen.js) with
+  `align-self: stretch; width: 100%;`, scoped to only the title field. Narrow Minutes/Seconds `.form-field`
+  instances intentionally keep their shrink-to-fit sizing.
+
+**Verification:**
+
+- Full lint clean, full repo test suite re-run and passing at 1100/1100 (unchanged count — pure CSS/markup-structure
+  fix, no logic or test changes).
+- Verified live in browser at both desktop and 360px widths: labels now stack above inputs with real spacing,
+  countdown visibly larger/bolder, tagline present when idle and absent once running, title input spans the same
+  width as the presets row beneath it.
+
+**Review — ui-accessibility-reviewer (1 pass), signed off clean:**
+
+- Confirmed `labeledField()`'s `aria-hidden` treatment on the label is still correct (all three inputs carry
+  their own explicit `aria-label`).
+- Confirmed removing the tagline from the DOM on re-render has no focus/live-region consequence (was never a
+  focus target).
+- Empirically verified via real headless-browser render at 360px with synthetic "99:59" worst-case duration
+  that the larger countdown font does not cause overflow or horizontal scroll.
+- Noted the pre-existing title-field-width issue as non-blocking, separately-scoped finding; it was fixed
+  immediately after in the same pass, then not re-reviewed (small, mechanical, well-understood
+  CSS/DOM change — a single `align-self: stretch` override scoped to one class).
+
+**Files touched:**
+
+- `src/tools/timer/timer.css` — added `.form-field` and `.form-field-label` self-contained rules;
+  `.timer-display-value` larger/bolder; `.timer-title-field` width override
+- `src/tools/timer/timerScreen.js` — conditional tagline render; `.timer-title-field` class add;
+  removed stale separator padding
+
+---
+
+## Standalone Timer tool — rebrand/cosmetic follow-up · 2026-09-12
+
+**User feedback post-ship (2026-09-12, same day as initial delivery): four cosmetic requests.** The tool was shipped as "Cupping Timer" — too narrow for a general-purpose timer usable in competitions, brewing, or any timed activity. Follow-up pass renamed every surface to be generic ("Timer"), removed cupping-specific language ("Slurp evaluation" preset label, cupping-session preamble), added Seduh Score branding + link to the timer page itself, and wired the tool into the marketing landing page (two new nav/footer links to `/tools/timer/`).
+
+**Scope: purely cosmetic/branding, no functional change:**
+
+- File renames: `src/tools/timer/cuppingTimer.js` → `timer.js`; `cuppingTimer.test.js` → `timer.test.js`; `cuppingTimerScreen.js` → `timerScreen.js`; `cuppingTimerScreen.test.js` → `timerScreen.test.js`; `cuppingTimer.css` → `timer.css`. Exported mount function renamed `mountCuppingTimer` → `mountTimer`. CSS class prefixes renamed `cupping-timer-*` → `timer-*`. localStorage key renamed `seduh-cupping-timer-v1` → `seduh-timer-v1`.
+- Displayed title: 'Seduh Cupping Timer' → 'Seduh Timer'.
+- Preset label: "8:00 — Slurp evaluation" → "8:00" (removed activity-specific description).
+- Preamble tagline: cupping-session-specific wording → generic ("A free, general-purpose timer for anything you time — brewing, competitions, cupping rounds, anything...").
+- Branding: Added Seduh Score brand mark + wordmark link (reusing `core/dom.js`'s `brandMark()` pattern, same as `src/marketing/landingScreen.js`'s nav brand) at top of timer page, linking to "/".
+- Landing page: Added "Free Timer" link to marketing nav (between "Pricing" and "Org login"); converted static footer text ("Free tools save to this device.") into live link to `/tools/timer/` ("Free Timer tool — saves to this device →").
+- Documentation: `src/tools/CLAUDE.md` timer/ entry rewritten to document the rename explicitly (old filename, old export, old CSS prefix, old localStorage key as historical record).
+- Files touched: `src/tools/timer/timer.js`, `src/tools/timer/timer.test.js`, `src/tools/timer/timerScreen.js`, `src/tools/timer/timerScreen.test.js`, `src/tools/timer/timer.css`, `src/tools/timer/main.js`, `tools/timer/index.html`, `vite.config.js`, `src/tools/CLAUDE.md`, `CLAUDE.md`, `src/marketing/landingScreen.js`, `src/marketing/landing.css`.
+
+**Two review rounds found and fixed real issues:**
+
+**Round 1 (ui-accessibility-reviewer):** 2 BLOCKING tap-target-size regressions on the two brand-new links: `.timer-brand-link` on the timer page (new Seduh Score brand mark in header) and `.landing-footer-link` in the marketing footer (new "Free Timer tool" link) both rendered under the project's 44px `--tap-target-min` because neither had been given the same `min-height` + flex-centering treatment other interactive controls in the same files already use. Fixed by adding `min-height: var(--tap-target-min)` + flex centering to both, matching the existing `.timer-preset`/`.timer-btn`/`.landing-nav-link`/`.landing-version-pill` pattern. Verified live via `getBoundingClientRect()` at 375px width: both now measure exactly 44px tall. Rest of review (aria-hidden icon pairing, heading order, focus-visible rings, nav-link inheritance, footer "→" glyph accessibility) passed clean.
+
+**Round 2 (code-reviewer):** Verified the rename was mechanically complete with zero stale references anywhere in the repo via full grep. Verified new brand-link markup correct and no reintroduction of accessibility issues. Verified new nav link correctly inherits the existing close-on-click/Escape-key menu behavior (just another `<a>` inside the same `navPanel` the existing `querySelectorAll('a').forEach(...)` wiring covers). Signed off clean.
+
+**Test suite:** Full repo test count 1100 (unchanged — timer logic/UI untouched, only filenames/strings). Full lint clean. One transient vitest worker crash observed and confirmed non-reproducing on immediate re-run (not a real regression).
+
+**Verification:** Verified live in browser: timer page renders with new branding, both new front-page links navigate correctly to `/tools/timer/`, tap targets confirmed 44px via direct measurement.
+
+**Reviews — all clean, zero blocking findings:**
+
+- `ui-accessibility-reviewer` (1 pass): found and fixed 2 BLOCKING tap-target-size regressions. Verified focus/heading/aria patterns unchanged. Signed off clean.
+- `code-reviewer` (1 pass): verified rename completeness via grep, new markup accessibility, nav-link behavior inheritance. Signed off clean.
+
+---
+
+## Standalone Cupping Timer tool — new /tools/timer/ surface · 2026-09-12
+
+**User-requested standalone timer tool, deliberately built outside the core/formats module boundary** (legacy-Seduh precedent of free community tools, same architectural precedent as `src/marketing/`). Tool ships at route `/tools/timer/`, built on a new third product surface (`src/tools/`), independent from the organiser console app. Investigation that prompted this: formats/cup-taster/timingScreen's countdown appeared to "stop" on tab switch; root-cause found to be screen-rendering lag (the engine itself, core/countdown.js, is drift-free by design). User chose a standalone tool over integrating into the existing timingScreen — wanted to ship a free-for-anyone version rather than embedding it deeper in a gated organiser surface. Integration into timingScreen is possible future work, explicitly deferred.
+
+**Architecture:** Three new pure-logic/presentation-logic separation:
+
+- `src/tools/timer/cuppingTimer.js` — pure duration math (advancing state, pause/resume, expired-state detection, serialization to localStorage, deserialization from JSON, wake-lock request/release, beep scheduling)
+- `src/tools/timer/cuppingTimerScreen.js` — DOM rendering + input event binding + focus management + screen-wake-lock + Web Audio API integration
+- Both are format-agnostic (`src/tools/` not importing from `src/formats/`). CSS is self-contained (`cuppingTimer.css`), tokens reference only semantic `src/ui/tokens/` colors + spacing, no format vocabulary leaked.
+
+**Scope: built-in with presets** (5, 10, 15 min) + custom-duration entry (minutes + seconds, max 99:59), optional title label, state persists to localStorage across reload, wake-lock enabled (prevents device sleep), 3-tone beep sequence on expiry (all three channels, fallback silent on web-audio unavailable), urgent state (≤10s) signaled via bold weight + outline ring (non-color-dependent per CLAUDE.md's own a11y convention), focus moves to alert banner on expiry, alert banner is live region with `role="alert"`.
+
+**Two rounds of review found and fixed real issues:**
+
+**Round 1 (ui-accessibility-reviewer + code-reviewer in parallel):** 2 BLOCKING accessibility issues: (1) expiry signal was audio-only (beep) with zero visible feedback when audio unavailable — fixed by adding a visual alert banner + focus movement to it. (2) Every `render()` call dropped keyboard focus to `<body>` with no restoration — fixed by tracking focused element before render and restoring after (except expiry, where focus moves intentionally to the alert banner itself). 1 HIGH code issue: wake-lock request/release could race — the release would trigger even if a pending request was still in-flight, potentially leaving the screen-wake-lock held indefinitely — fixed by serializing all wake-lock operations (request/release/cancel) through a single promise chain (`promiseChain = promiseChain.then(...)`), so no two operations can overlap. Several medium/low findings: aria-live region announces state every 250ms (violates this project's own "state changes only" convention) — fixed by only announcing on actual transitions (idle→running, running→expired, etc). `parseCustomDuration` was impure logic inside impure screen file — extracted as pure function in the main module. Custom-duration input had no max (could spin past 99:59) — added `max="5999"`. Sound-toggle tap target was 34px (below 44px minimum) — increased to 44px. `loadState` didn't guard against non-object JSON parse result — added guard. All were fixed and verified live in dev server (confirmed urgent state, focus movement, expanded layout at 360px, localStorage persistence across reload, beep+banner on expiry, sound toggle reachability).
+
+**Round 2 (module-boundary-checker + test-auditor in parallel):** module-boundary-checker: CLEAN PASS (no violations either direction, CSS fully self-contained, zero format vocabulary). test-auditor found 2 HIGH-severity test gaps: (1) focus-to-alert-banner on expiry was fixed in code but not precisely asserted by tests — strengthened by adding explicit `expect(document.activeElement).toBe(banner)` assertions. (2) role="alert" on the expiry banner was fixed but not asserted — added assertion for it. Both were verified via mutation testing (commented out the focus-move line, test failed; changed role="alert" to role="status", test failed; reverted both, tests passed). Also fixed on the same pass: a vacuous DOM-level assertion ("paused value stays frozen") that would pass even if pause math were wrong — replaced with mutation testing to confirm pause/resume math (disabled pause logic, test failed; re-enabled, passed). Added paused-state persistence round-trip test (store paused state, reload, confirm state restored). Added focus-after-Pause assertion (previously only checked after Resume). Tightened urgent-threshold test from "value at 11s passes" to "value at 10.1s passes" (confirming the exact <=10s boundary). Strengthened WebAudio/WakeLock unavailable test from "doesn't throw" to "actually reaches expired state with banner visible."
+
+**Test coverage:** 35 new test cases (cuppingTimer.test.js: 12, cuppingTimerScreen.test.js: 23). Total repo test count 1065 → 1100. All new tests verify both success and failure paths (e.g. wake lock unavailable, web audio unavailable, expired-while-backgrounded race that was the original bug in the code).
+
+**Verification:** `npm run lint` clean across new and touched files. JS suite 1100/1100 passing. Verified live in dev server at both 1024px (desktop) and 360px (mobile), confirmed all presets + custom entry work, localStorage persists across reload, urgent state renders at <10s with bold + outline, focus moves to alert banner on expiry, beep plays on expiry (or silent fallback if web audio unavailable), sound toggle is 44px tap target.
+
+**Files touched:**
+
+- `src/tools/timer/cuppingTimer.js` — new, pure timer logic
+- `src/tools/timer/cuppingTimer.test.js` — new, 12 test cases covering state transitions, pause/resume, expiry, wake-lock, storage persistence
+- `src/tools/timer/cuppingTimerScreen.js` — new, DOM + event binding + focus management
+- `src/tools/timer/cuppingTimer.css` — new, self-contained styling (tokens only)
+- `src/tools/timer/main.js` — new, composition root for this tool
+- `tools/timer/index.html` — new, tool entry point, Vite-built at `/tools/timer/`
+- `vite.config.js` — added `toolsTimer` build entry
+- `src/tools/CLAUDE.md` — new, scoped conventions for the tools module (format-agnostic, outside core/formats boundary, free community surfaces)
+- `CLAUDE.md` — root file: added `src/tools/` directory to architecture map
+
+**Reviews — all clean, zero blocking findings:**
+
+- `ui-accessibility-reviewer` (1 pass): found and fixed 2 BLOCKING a11y issues (audio-only expiry + focus-dropping). Verified focus movement works across all state transitions. Verified alert banner contrast, outline clarity, urgent indicators work at 360px. Verified sound-toggle 44px tap target and reachable at 360px. Signed off clean.
+- `code-reviewer` (1 pass): found and fixed 1 HIGH code issue (wake-lock async race). Verified pure-logic/UI separation, exports are necessary/correct, no format-vocabulary leakage, localStorage guard. Verified no drift in countdown engine (core/countdown.js unchanged). Signed off clean.
+- `module-boundary-checker` (1 pass): verified no core/format imports, CSS tokens-only, no format vocabulary anywhere. Verified future formats can skip this module if they don't want a timer. Signed off clean.
+- `test-auditor` (1 pass): found and fixed 2 HIGH test gaps (alert-banner focus and role assertions missing, weak pause-math tests). Verified all fixes via mutation testing. Verified both accessible and unavailable paths tested (audio, wake lock). Signed off clean.
+
+**Known, deliberately-deferred gap:** This tool is NOT wired into `src/formats/cup-taster/timingScreen.js` — that screen's own countdown and UI remain untouched. Integration is possible future work, explicitly not scoped now per user's stated preference for shipping a standalone free tool.
+
+---
+
 ## Three engineering-deficit fixes: pgTAP scoping, live_sessions ordering guard, session-expiry mid-flush · 2026-09-12
 
 **Closed three distinct, independently-reviewable deficits from Phase 6's known open items,

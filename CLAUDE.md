@@ -24,6 +24,8 @@ the context it actually touches:
 - [src/core/CLAUDE.md](src/core/CLAUDE.md) — shared, format-agnostic modules and `main.js`
   wiring.
 - [src/marketing/CLAUDE.md](src/marketing/CLAUDE.md) — the public marketing landing page.
+- [src/tools/CLAUDE.md](src/tools/CLAUDE.md) — standalone free community tools (e.g. the
+  Timer), outside the core/formats module boundary entirely.
 - [src/formats/cup-taster/CLAUDE.md](src/formats/cup-taster/CLAUDE.md) — Cup Taster.
 - [src/formats/throwdown/CLAUDE.md](src/formats/throwdown/CLAUDE.md) — Throwdown (not started).
 - [src/formats/liga-seduh/CLAUDE.md](src/formats/liga-seduh/CLAUDE.md) — Liga Seduh (not started).

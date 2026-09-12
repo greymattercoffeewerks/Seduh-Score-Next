@@ -1,0 +1,290 @@
+/*
+ * Timer — standalone free tool. Self-contained styles: this surface
+ * intentionally does NOT reuse the console's own .btn/.card classes
+ * (heatsScreen.css) since those live in a format directory this tool has no
+ * business depending on — see src/tools/CLAUDE.md. It does reuse the generic
+ * design tokens (fonts/colors/typography/spacing/base) the same way
+ * src/marketing/ does, since those are genuinely surface-agnostic.
+ */
+
+body {
+  margin: 0;
+  background: var(--color-canvas);
+  color: var(--color-text);
+}
+
+.timer {
+  max-width: 32rem;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4) var(--space-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  text-align: center;
+}
+
+/* Prominent, top-of-page branding — this is a free tool given away by
+   Seduh Score (user decision, 2026-09-12), same "brand mark + wordmark"
+   pairing src/marketing/landingScreen.js's own nav brand uses. */
+/* min-height on the whole link, not just its icon+text content — found in
+   review (ui-accessibility-reviewer): without it this rendered at ~27px
+   tall (the text's own line box), well under this file's own
+   consistently-enforced 44px minimum every other interactive control here
+   already has (.timer-preset, .timer-input, .timer-btn, .timer-sound-label). */
+.timer-brand-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  align-self: center;
+  min-height: var(--tap-target-min);
+  padding: 0 var(--space-2);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.timer-brand-mark {
+  width: 1.5rem;
+  height: 1.5rem;
+  color: var(--color-accent);
+}
+
+.timer-brand-name {
+  font-family: var(--font-display);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--text-md);
+}
+
+.timer-heading {
+  font-size: var(--text-2xl);
+  margin: 0;
+}
+
+.timer-tagline {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+.timer-title {
+  font-size: var(--text-lg);
+  margin: 0;
+}
+
+/* Same tabular-nums requirement as the console's own countdown
+   (timingScreen.css) — read at a glance, must not reflow width every
+   second. */
+.timer-display {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  line-height: var(--leading-mono);
+  padding: var(--space-5) 0;
+}
+
+/* Bigger and bolder than the container's own base size (user feedback,
+   2026-09-12) — this is the one thing on the page someone glances at from
+   across a room, same "read at a glance" reasoning the module comment above
+   already gives, just leaned into further: bold at every size, and a wider
+   clamp ceiling than the shared --text-6xl token (96px) since this surface,
+   unlike the console's own timingScreen.css countdown, has no other content
+   competing for space at wide viewports. */
+.timer-display-value {
+  font-weight: var(--font-weight-bold);
+  font-size: clamp(var(--text-5xl), 22vw, 7.5rem);
+}
+
+/* Color alone is never the only urgency signal (same reasoning as
+   timingScreen.css's own [data-urgent] rule) — weight + outline carry the
+   state for anyone who can't distinguish the color shift, and both stay
+   present even when the blink below is suppressed by prefers-reduced-motion. */
+.timer-display[data-urgent='true'] {
+  color: var(--color-danger);
+  font-weight: var(--font-weight-bold);
+  outline: var(--border-strong) solid var(--color-danger);
+  outline-offset: var(--space-3);
+}
+
+/* Blink is scoped to the LAST 10 SECONDS WHILE RUNNING only — deliberately
+   not applied to [data-status='expired'] below, which gets a steady (not
+   blinking) treatment instead. An indefinitely blinking already-stopped
+   clock has no countdown left to draw attention to and risks being a
+   needless, prolonged flashing element on screen. */
+@media (prefers-reduced-motion: no-preference) {
+  .timer-display[data-urgent='true'] {
+    animation: timer-blink 1s step-start infinite;
+  }
+}
+
+@keyframes timer-blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+/* The moment time runs out is the one state this tool must never leave
+   silent for anyone who can't hear the beep — found in review
+   (ui-accessibility-reviewer): the OLD version turned the urgent styling OFF
+   the instant status flipped to 'expired', leaving a plain "0:00" with only
+   an audio cue. This sustains a strong visual treatment (steady, not
+   blinking — see the comment above) until Reset starts a fresh idle state. */
+.timer-display[data-status='expired'] {
+  color: var(--color-danger);
+  font-weight: var(--font-weight-bold);
+  outline: var(--border-strong) solid var(--color-danger);
+  outline-offset: var(--space-3);
+}
+
+.timer-expired-banner {
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-danger);
+  margin: 0;
+}
+
+.timer-setup,
+.timer-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  align-items: center;
+}
+
+.timer-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: center;
+}
+
+.timer-preset {
+  min-height: var(--tap-target-min);
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-md);
+  border: var(--border-hairline) solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.timer-preset[aria-pressed='true'] {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-canvas);
+  font-weight: var(--font-weight-bold);
+}
+
+/* core/dom.js's labeledField() emits a generic .form-field/.form-field-label
+   pair with no styling opinion of its own — every existing consumer
+   supplies its own CSS for these two classes (formats/cup-taster/
+   heatsScreen.css owns them for the console). This tool never loads that
+   file (correctly — src/tools/CLAUDE.md forbids reusing a format's CSS),
+   which meant these two classes had NO styling here at all: the label
+   (an inline <span>) rendered flush against its own input on the same
+   line, with no gap — the cramped, run-together "Minutes8" layout found in
+   user feedback (2026-09-12) — rather than stacked above it. Self-contained
+   fix, not a heatsScreen.css import. */
+.form-field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  text-align: left;
+}
+
+/* Deliberately larger than the console's own --text-2xs/uppercase treatment
+   (heatsScreen.css) — user feedback asked for these labels a touch bigger,
+   not to match that denser, badge-like console style. */
+.form-field-label {
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+}
+
+/* Stretches this one field (and its width: 100% input) to the row's real
+   width, overriding .timer-setup's own align-items: center shrink-wrap —
+   the narrow presets/duration .form-field instances intentionally keep
+   shrink-to-fit sizing, only the title field needs this. */
+.timer-title-field {
+  align-self: stretch;
+  width: 100%;
+}
+
+.timer-custom-duration {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+/* No manual offset needed — .timer-custom-duration's own align-items:
+   flex-end already lines this up with the bottom of the input boxes beside
+   it now that .form-field/.form-field-label (above) give the label its own
+   real height instead of sitting inline with zero height. */
+.timer-duration-separator {
+  font-size: var(--text-lg);
+}
+
+.timer-input {
+  min-height: var(--tap-target-min);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
+  border: var(--border-hairline) solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--text-md);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.timer-input-narrow {
+  width: 4.5rem;
+  text-align: center;
+}
+
+.timer-error {
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+.timer-error:empty {
+  display: none;
+}
+
+.timer-btn {
+  min-height: var(--tap-target-min);
+  min-width: 8rem;
+  padding: 0 var(--space-5);
+  border-radius: var(--radius-md);
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+}
+
+.timer-btn-primary {
+  border: var(--border-hairline) solid var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-canvas);
+}
+
+.timer-btn-outline {
+  border: var(--border-hairline) solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+/* min-height: var(--tap-target-min) on the whole LABEL (not just the native
+   checkbox glyph) — found in review (ui-accessibility-reviewer): every other
+   control on this screen (presets, buttons, inputs) already hits the 44px
+   minimum, but this one relied on the checkbox's own tiny native size. */
+.timer-sound-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--tap-target-min);
+  padding: 0 var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}

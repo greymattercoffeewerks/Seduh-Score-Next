@@ -881,6 +881,16 @@ h3 {
   font-size: var(--text-xs);
   color: var(--color-text-muted);
 }
+/* .landing-footer-text is shared with the plain "Built by..." span, which
+   needs no tap target — this modifier is added only to the new Free Timer
+   link, same fix .landing-version-pill already applies two rules below.
+   Found in review (ui-accessibility-reviewer): a plain text-sized link here
+   rendered at ~13px tall, well under the 44px minimum. */
+.landing-footer-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-target-min);
+}
 .landing-footer-right {
   display: flex;
   align-items: center;
