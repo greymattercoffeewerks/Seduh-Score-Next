@@ -8,16 +8,21 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   build: {
     rollupOptions: {
-      // Two HTML entries, not one: the marketing landing page at root
-      // (index.html) and the console SPA at /app/ (app/index.html — moved
-      // out of root 2026-09-07 so the bare domain serves the landing page
-      // instead of booting straight into the console). Vite's dev server
-      // serves both by filesystem path with no config needed; only the
-      // production build needs to be told about the second entry, or
-      // `vite build` silently drops it from dist/.
+      // Three HTML entries: the marketing landing page at root (index.html),
+      // the console SPA at /app/ (app/index.html — moved out of root
+      // 2026-09-07 so the bare domain serves the landing page instead of
+      // booting straight into the console), and the standalone Timer tool
+      // at /tools/timer/ (2026-09-12 — a free community tool,
+      // not wired into any event/heat, same "new territory outside the
+      // core/formats boundary" precedent as src/marketing/ — see
+      // src/tools/CLAUDE.md). Vite's dev server serves all three by
+      // filesystem path with no config needed; only the production build
+      // needs to be told about entries beyond the first, or `vite build`
+      // silently drops them from dist/.
       input: {
         main: fileURLToPath(new URL('./index.html', import.meta.url)),
         app: fileURLToPath(new URL('./app/index.html', import.meta.url)),
+        toolsTimer: fileURLToPath(new URL('./tools/timer/index.html', import.meta.url)),
       },
     },
   },

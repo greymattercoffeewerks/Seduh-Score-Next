@@ -127,6 +127,30 @@ reviewer) found and fixed real issues including a critical deuteranopia accessib
 failure in the danger color and six other serious a11y gaps. Build/lint/test passing
 (1019 tests). See CHANGELOG.md for the full account.
 
+**Standalone Timer tool (2026-09-12), out of scope per handoff §1 but
+user-requested**: a new third product surface (`src/tools/timer/`) shipping at route
+`/tools/timer/`, built on legacy-Seduh precedent of free community tools alongside the
+organiser console. Standalone countdown timer with presets (5/10/15 min) + custom
+duration, localStorage persistence, optional title label, wake-lock enabled (prevents
+device sleep), beep + visual alert on expiry, accessible urgency signals (bold + outline,
+not color-alone), full focus management on all state transitions. Deliberately outside the
+core/formats module boundary (same architectural precedent as `src/marketing/`). Four
+reviewers in parallel found and fixed real issues: 2 BLOCKING accessibility gaps (audio-only
+expiry signal, focus-dropping on every render), 1 HIGH code issue (wake-lock async race),
+2 HIGH test gaps (missing assertions for accessible features). All fixed and verified live
+at 360px and 1024px. 35 new tests (1100 total repo-wide). **2026-09-12 follow-up 1**: cosmetic
+rebrand pass — renamed from "Cupping Timer" to "Timer" (generic-purpose, not activity-specific),
+removed cupping-session language, added Seduh Score branding to the tool itself and landing-page
+nav links, fixed two BLOCKING tap-target-size regressions in the new links. **2026-09-12 follow-up 2**:
+visual/spacing fix pass — user feedback on four cosmetic items (bigger/bolder countdown, spacing gap
+between labels and inputs, hiding description while running, larger labels). Root cause: `.form-field-label`
+class had zero CSS styling in this tool because the tool deliberately doesn't load the format-specific
+heatsScreen.css stylesheet (module-boundary rule). Fixed by adding self-contained `.form-field` and
+`.form-field-label` rules to timer.css, enlarging countdown font, conditionally hiding tagline, and fixing
+a pre-existing title-field width issue found during review. ui-accessibility-reviewer signed off clean.
+Known gap: not yet integrated into formats/cup-taster/timingScreen — that screen untouched, integration is
+future work. See CHANGELOG.md for the full account.
+
 ---
 
 ## Version cycle plan (nameplate roadmap)
