@@ -136,7 +136,11 @@ describe('persistence', () => {
   });
 
   it('round-trips a running state through save/load', () => {
-    const state = startTimer(createInitialState(), { title: 'Round 1', durationSecs: 300, now: NOW });
+    const state = startTimer(createInitialState(), {
+      title: 'Round 1',
+      durationSecs: 300,
+      now: NOW,
+    });
     saveState(state, storage);
     const loaded = loadState(storage);
     expect(loaded.title).toBe('Round 1');

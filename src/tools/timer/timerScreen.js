@@ -285,10 +285,7 @@ export function mountTimer(root, { storage = window.localStorage, now = Date.now
 
     countdownValueEl = el('span', { className: 'timer-display-value' });
     countdownSrEl = el('span', { className: 'sr-only' });
-    countdownEl = el('div', { className: 'timer-display' }, [
-      countdownValueEl,
-      countdownSrEl,
-    ]);
+    countdownEl = el('div', { className: 'timer-display' }, [countdownValueEl, countdownSrEl]);
     container.appendChild(countdownEl);
 
     // Two distinct live regions, not one shared with the ticking numeral

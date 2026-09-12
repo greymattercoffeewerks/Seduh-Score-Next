@@ -156,7 +156,11 @@ function buildNav() {
     // The one real, working destination in this nav besides the format
     // card below — a free standalone tool (src/tools/timer/), deliberate
     // promotion for the product (user decision, 2026-09-12).
-    el('a', { className: 'landing-nav-link', text: 'Free Timer', attrs: { href: '/tools/timer/' } }),
+    el('a', {
+      className: 'landing-nav-link',
+      text: 'Free Timer',
+      attrs: { href: '/tools/timer/' },
+    }),
     el('a', { className: 'landing-nav-link', text: 'Org login', attrs: { href: '#' } }),
     el('a', {
       className: 'landing-btn landing-btn-primary',
