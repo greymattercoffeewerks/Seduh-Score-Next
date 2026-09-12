@@ -7,6 +7,14 @@
  * src/marketing/ does, since those are genuinely surface-agnostic.
  */
 
+/* 100dvh, not 100vh — accounts for a mobile browser's own address-bar
+   chrome showing/hiding, so 'focus' mode's fill-the-viewport sizing below
+   doesn't overshoot or leave a scrollbar-triggering sliver on phones. */
+html,
+body {
+  height: 100%;
+}
+
 body {
   margin: 0;
   background: var(--color-canvas);
@@ -14,6 +22,7 @@ body {
 }
 
 .timer {
+  min-height: 100dvh;
   max-width: 32rem;
   margin: 0 auto;
   padding: var(--space-5) var(--space-4) var(--space-8);
@@ -21,6 +30,17 @@ body {
   flex-direction: column;
   gap: var(--space-4);
   text-align: center;
+  box-sizing: border-box;
+}
+
+/* Once a countdown is actually running/paused/expired, this number is the
+   ONE thing competitors need to read from across a room (user feedback,
+   2026-09-15) — drop the setup form's comfortable reading-width cap and
+   let the page use its full width; .timer-display below then claims
+   whatever vertical space the (shrunk) chrome around it leaves. */
+.timer[data-mode='focus'] {
+  max-width: none;
+  gap: var(--space-2);
 }
 
 /* Prominent, top-of-page branding — this is a free tool given away by
@@ -60,6 +80,33 @@ body {
   margin: 0;
 }
 
+/* Visually shrunk, not removed, once the countdown is what matters (user
+   feedback, 2026-09-15) — branding and the page's own title still identify
+   what this is, just without competing with the number for space. The 44px
+   min-height/tap target itself is NOT reduced here — this is still a real,
+   live `<a href="/">`, not decoration, and found in review
+   (ui-accessibility-reviewer): an earlier version of this rule dropped
+   `min-height` to `auto`, reintroducing the exact under-44px regression
+   this class's own base rule was written to fix in the first place. Only
+   the icon/wordmark content shrinks (below); the extra space becomes
+   padding inside the same still-44px hit area. */
+.timer[data-mode='focus'] .timer-brand-link {
+  padding: 0 var(--space-2);
+}
+
+.timer[data-mode='focus'] .timer-brand-mark {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.timer[data-mode='focus'] .timer-brand-name {
+  font-size: var(--text-sm);
+}
+
+.timer[data-mode='focus'] .timer-heading {
+  font-size: var(--text-md);
+}
+
 .timer-tagline {
   color: var(--color-text-muted);
   font-size: var(--text-sm);
@@ -83,15 +130,58 @@ body {
 }
 
 /* Bigger and bolder than the container's own base size (user feedback,
-   2026-09-12) — this is the one thing on the page someone glances at from
-   across a room, same "read at a glance" reasoning the module comment above
-   already gives, just leaned into further: bold at every size, and a wider
-   clamp ceiling than the shared --text-6xl token (96px) since this surface,
-   unlike the console's own timingScreen.css countdown, has no other content
-   competing for space at wide viewports. */
+   2026-09-12) — this is the idle-state preview size, shown before Start is
+   pressed. Once actually running, [data-mode='focus'] below takes over with
+   a much larger, viewport-filling size. */
 .timer-display-value {
   font-weight: var(--font-weight-bold);
   font-size: clamp(var(--text-5xl), 22vw, 7.5rem);
+}
+
+/* The main event, once a countdown is actually on screen (user feedback,
+   2026-09-15: "should take up as much of the screen real estate as
+   possible... the main thing on screen for the competitors to see from a
+   distance"). `flex: 1` lets this claim all the vertical space the
+   (shrunk) brand/heading/controls around it don't need; `min(...)` sizes
+   off BOTH viewport axes at once — width so "88:88" (the widest realistic
+   string) never overflows a narrow/portrait screen, height so it doesn't
+   overshoot a short/landscape one — rather than a single clamp() ceiling
+   that only ever reasoned about width, the way the idle-state size above
+   (and the console's own stage-mode countdown, viewerBody.css) does. No
+   upper rem ceiling on purpose: unlike those two, THIS surface has nothing
+   else competing for space once running, so it should keep growing on a
+   large display rather than topping out early. */
+.timer[data-mode='focus'] .timer-display {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  min-height: 0; /* allow the flex item to shrink below its content's intrinsic size if the viewport is very short */
+}
+
+/* This vw/vh formula is a pre-JS baseline only — timerScreen.js's
+   `fitCountdownFont()` overrides it with an inline `style.fontSize` the
+   instant this box is in the DOM, measured against the box's OWN real
+   clientWidth/clientHeight rather than the raw viewport. That JS step is
+   load-bearing, not decorative: a `container-type: size` + `cqh`/`cqw`
+   version of this rule was tried first and measurably failed — `cqh`
+   resolved to a valid value on a plain explicitly-sized test element, but
+   to exactly 0 on this specific `flex: 1`-sized box (a genuine browser
+   limitation around container query units on flex-grow-sized items,
+   confirmed via direct testing, 2026-09-15) — so this plain vw/vh version
+   sizes off the WHOLE VIEWPORT, not the space actually left after the
+   header/controls around it, and on a short/landscape viewport CAN overlap
+   the Pause/Reset/sound-toggle controls below it before JS corrects it.
+   Kept only as the sub-second-before-JS-runs baseline and as a inert
+   fallback if `fitCountdownFont()` ever bails out (e.g. a transient 0
+   clientWidth/clientHeight read) — see that function's own comment for the
+   full account. Same worst-case-string reasoning as the idle-state rule
+   above: "99:59" (MAX_CUSTOM_MINUTES=99 in timer.js) runs ~3em advance
+   width for 5 characters, so 30vw keeps even that string under 100% of a
+   narrow viewport's width. */
+.timer[data-mode='focus'] .timer-display-value {
+  font-size: min(30vw, 55vh);
 }
 
 /* Color alone is never the only urgency signal (same reasoning as
