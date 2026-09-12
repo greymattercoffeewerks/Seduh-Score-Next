@@ -204,6 +204,39 @@ export function mountTimer(root, { storage = window.localStorage, now = Date.now
     updateDisplay();
   }
 
+  // Sizes the running countdown to fill whatever space `.timer-display`
+  // (a `flex: 1` box) actually has left after its siblings, once the
+  // header is shrunk and the controls/sound-toggle below it are laid out —
+  // NOT a CSS-only vw/vh formula, which reasons about the whole viewport
+  // and can't know how much of it the fixed-height chrome around this box
+  // has already consumed (found in review, ui-accessibility-reviewer: on a
+  // short/landscape viewport that chrome can eat most of the height, and a
+  // vh-sized numeral doesn't shrink to match, visually overlapping the
+  // Pause/Reset/sound-toggle controls that come after it). A CSS
+  // `container-type: size` + `cqh`/`cqw` attempt was tried first and
+  // measurably failed in real testing — `cqh` resolved to a valid non-zero
+  // value on a plain explicitly-sized test element, but to 0 specifically
+  // on this `flex: 1`-sized box, a genuine browser limitation around
+  // container query units on flex-grow-sized (not explicitly-sized) items,
+  // not something to paper over with a fallback that only works
+  // sometimes. Measuring the real box directly sidesteps that entirely.
+  //
+  // 3.0 (WORST_CASE_CHAR_RATIO) and the 0.9/0.85 fill fractions mirror the
+  // same reasoning the earlier CSS-only version documented: the widest
+  // string this display can ever show is "99:59" (MAX_CUSTOM_MINUTES=99 in
+  // timer.js), whose advance width in this tabular-nums mono font runs
+  // ~3em for 5 characters — sizing off that worst case, not the common
+  // shorter one, since a single font-size can't grow with string length.
+  const WORST_CASE_CHAR_RATIO = 3.0;
+  function fitCountdownFont() {
+    if (!countdownEl || !countdownValueEl) return;
+    const { clientWidth, clientHeight } = countdownEl;
+    if (clientWidth <= 0 || clientHeight <= 0) return;
+    const byWidth = (clientWidth * 0.9) / WORST_CASE_CHAR_RATIO;
+    const byHeight = clientHeight * 0.85;
+    countdownValueEl.style.fontSize = `${Math.max(16, Math.min(byWidth, byHeight))}px`;
+  }
+
   // The countdown's own numeral is plain, always-present text — readable on
   // demand like formats/cup-taster/timingScreen.js's own countdown, not an
   // aria-live region (a value changing every second would spam screen-reader
@@ -248,6 +281,14 @@ export function mountTimer(root, { storage = window.localStorage, now = Date.now
 
     const status = getStatus(state);
     const container = el('main', { className: 'timer' });
+    // Once a countdown is actually running/paused/expired, the number is
+    // the ONE thing that matters — competitors need to read it from across
+    // a room (user feedback, 2026-09-15). 'focus' mode (styled in
+    // timer.css) drops the page's comfortable reading-width cap and lets
+    // the countdown claim as much of the viewport as it can; 'setup' keeps
+    // the normal boxed form layout, which needs the narrower width to stay
+    // readable.
+    container.dataset.mode = status === 'idle' ? 'setup' : 'focus';
 
     // Branding, prominent — this is a free tool given away by Seduh Score
     // (user decision, 2026-09-12), linking back to the marketing home page.
@@ -317,6 +358,7 @@ export function mountTimer(root, { storage = window.localStorage, now = Date.now
 
     root.appendChild(container);
     updateDisplay();
+    if (status !== 'idle') fitCountdownFont();
 
     if (status === 'running') {
       urgentAnnounced = computeRemaining(state, now()) <= URGENT_THRESHOLD_SECS;
@@ -509,6 +551,16 @@ export function mountTimer(root, { storage = window.localStorage, now = Date.now
   };
   document.addEventListener('visibilitychange', visibilityHandler);
 
+  // Keeps the countdown correctly sized across a window resize or device
+  // rotation without waiting for the next Start/Pause/Resume/Reset —
+  // `fitCountdownFont()` only measures/applies while actually running
+  // (idle mode has its own CSS-only clamp() and no per-frame measuring
+  // need).
+  const resizeHandler = () => {
+    if (getStatus(state) !== 'idle') fitCountdownFont();
+  };
+  window.addEventListener('resize', resizeHandler);
+
   render();
 
   return {
@@ -518,6 +570,7 @@ export function mountTimer(root, { storage = window.localStorage, now = Date.now
         document.removeEventListener('visibilitychange', visibilityHandler);
         visibilityHandler = null;
       }
+      window.removeEventListener('resize', resizeHandler);
       wakeLock.disable();
       document.title = originalTitle;
     },
