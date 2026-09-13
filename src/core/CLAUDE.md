@@ -119,6 +119,16 @@ authenticates. Both `requireAuth`'s `getSession()` call and `loginScreen`'s own
 `DEFAULT_LOAD_TIMEOUT_MS` (found missing in review — without it, a hung connection left
 the whole app, or the login form itself, stuck forever with no feedback).
 
+`scrollReveal` (2026-09-13, Petrol marketing rework) — `revealOnScroll(el, opts)`, a
+one-shot `IntersectionObserver` wrapper (adds a class the first time an element scrolls
+into view, disconnects, never reverts). Its first consumer is
+`src/marketing/landingScreen.js`'s scroll-reveal sections, but nothing in it assumes
+marketing-page specifics — format-agnostic by the same test every other `core/` module
+is held to. Skips attaching an observer entirely under `prefers-reduced-motion: reduce`
+(reveals immediately instead); the caller's own CSS is expected to gate the actual
+transition under the matching `no-preference` query, same discipline as every other
+animation in this codebase.
+
 ## `main.js` (composition root)
 
 Not physically under `core/`, but its conventions live here since it's the wiring that

@@ -1,13 +1,26 @@
 /*
- * Spacing & shape tokens — Seduh Score Next
+ * Spacing & shape tokens — Seduh Score Next — "Petrol" identity
  *
- * No elevation/shadow tokens exist in this system, on purpose. All three
- * reference systems (Acme Cups, Assembly Coffee, Ventriloc) separate
- * surfaces with a hairline border or a flat background-color step, never a
- * drop shadow — see DESIGN.md. For a judging/scoring tool that flat,
- * printed-scoresheet register signals rigor over SaaS gloss, so don't add
- * `box-shadow` anywhere; reach for `--color-border` or a `--color-surface*`
- * step instead.
+ * Spacing scale, borders, max-widths, tap targets, and focus-ring geometry
+ * are UNCHANGED from Cherry — structural values, not part of the visual
+ * swap. Two real changes:
+ *
+ * 1. --radius-* is now 0 across the board. This system commits to hard
+ *    angular cuts, zero border-radius — the opposite of Cherry's softened
+ *    3/6/10px corners. This is a breaking visual change everywhere
+ *    var(--radius-*) is consumed (cards, buttons, inputs, badges,
+ *    .status-live-dot — the dot literally becomes a square blip, which
+ *    matches the marketing exploration's telemetry-blip motif rather than
+ *    a soft "online" dot).
+ *
+ * 2. New --cut-* tokens + base.css utility classes add the angular
+ *    corner-cut (clip-path) shape this identity uses in place of a rounded
+ *    corner wherever a little more visual "commitment" is wanted (primary
+ *    CTAs, tags) — see base.css's .cut-sm/.cut-md/.cut-lg.
+ *
+ * Still no shadow tokens. Flat borders/surface steps only — this rule
+ * predates Cherry and survives this rework unchanged; angular cuts replace
+ * rounding as the shape language, they don't bring back elevation.
  */
 
 :root {
@@ -22,18 +35,26 @@
   --space-8: 4rem; /* 64px */
   --space-9: 6rem; /* 96px */
 
-  /* Acme's tight 3px radius for structural elements; a touch more room for
-     containers that need to read as softer (cards, modals). */
-  --radius-sm: 3px; /* inputs, tags, badges, buttons */
-  --radius-md: 6px; /* cards */
-  --radius-lg: 10px; /* modals, large containers */
-  --radius-full: 999px; /* status pill / live-indicator dot only */
+  /* Angular commitment — zero radius everywhere. radius-full stays a named
+     token (some markup still asks for "the fully-round one") but resolves
+     to 0 too, so a former pill/circle renders as a hard-edged square/blip
+     instead, on purpose. */
+  --radius-sm: 0; /* inputs, tags, badges, buttons */
+  --radius-md: 0; /* cards */
+  --radius-lg: 0; /* modals, large containers */
+  --radius-full: 0; /* status pill / live-indicator dot — now a square blip */
+
+  /* Corner-cut sizes for base.css's .cut-sm/.cut-md/.cut-lg clip-path
+     utilities — the angular alternative to a rounded corner. */
+  --cut-sm: 6px;
+  --cut-md: 10px;
+  --cut-lg: 16px;
 
   --border-hairline: 1px;
   --border-strong: 2px;
 
   --max-width-content: 72rem; /* 1152px */
-  --max-width-reading: 42rem; /* 672px — long-form copy (help text, guidelines) */
+  --max-width-reading: 42rem; /* 672px */
 
   /* WCAG 2.5.5 minimum tap target — the phone entry surface is used
      one-handed, often standing, often by someone who just ran a heat. */

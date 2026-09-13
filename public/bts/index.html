@@ -26,14 +26,31 @@
       prefers-reduced-motion fallback that snaps straight to the settled
       state — nothing here is load-bearing for reading the content.
 
-      Palette: this repo's real [data-surface="stage"] Cherry tokens
+      Reskinned to "Petrol" 2026-09-13, same day the rest of the product
+      (marketing landing page + src/ui/tokens/*) moved off Cherry — see
+      src/ui/tokens/DESIGN.md. Teal accent and graphite neutrals replace
+      Cherry's chartreuse/bottle-green; every --radius-* rounded corner
+      (the ledger/log-item/bio-card containers, the icon plate, the pill
+      buttons and status dots) is now angular/zero-radius or an explicit
+      corner-cut, matching Petrol's "no rounding, angular cuts" shape
+      language (src/ui/tokens/spacing.css) — this page can't reach that
+      file's `.cut-sm`/`.cut-md`/`.cut-lg` utility classes (standalone
+      static asset, see below), so the equivalent `clip-path` is written out
+      by hand instead, same polygon shape those classes generate. The
+      motion vocabulary itself (easing curves, list-stagger, reduced-motion
+      fallbacks) is unchanged — that's identity-independent, not part of
+      the Cherry→Petrol swap.
+
+      Palette: this repo's real [data-surface="stage"] Petrol tokens
       (colors.css), copied inline rather than linked — this file lives under
       public/ and is served as a standalone static asset outside Vite's
       module graph, so it can't reference the built, hashed colors.css
-      output directly. Fonts: the same self-hosted Bricolage
-      Grotesque/IBM Plex Sans/IBM Plex Mono files the rest of the product
-      uses, copied to public/bts/fonts/ for the same reason (no third-party
-      font CDN, per DESIGN.md's self-hosting rule).
+      output directly. Fonts: the same self-hosted Chakra Petch/Hanken
+      Grotesk/IBM Plex Mono files the rest of the product uses, copied to
+      public/bts/fonts/ for the same reason (no third-party font CDN, per
+      DESIGN.md's self-hosting rule) — Hanken Grotesk is one variable-font
+      file reused across weights, same technique src/ui/tokens/fonts.css
+      uses (see that file's own comment for why).
 
       Wired in 2026-09-05: lives here under `public/` (not `design/`, where
       it was drafted) so Vite copies it verbatim to the build output and
@@ -42,22 +59,22 @@
     -->
     <style>
       @font-face {
-        font-family: 'Bricolage Grotesque';
-        src: url('./fonts/bricolage-grotesque-700.woff2') format('woff2');
+        font-family: 'Chakra Petch';
+        src: url('./fonts/chakra-petch-700.woff2') format('woff2');
         font-weight: 700;
         font-style: normal;
         font-display: swap;
       }
       @font-face {
-        font-family: 'IBM Plex Sans';
-        src: url('./fonts/ibm-plex-sans-400.woff2') format('woff2');
+        font-family: 'Hanken Grotesk';
+        src: url('./fonts/hanken-grotesk-variable.woff2') format('woff2');
         font-weight: 400;
         font-style: normal;
         font-display: swap;
       }
       @font-face {
-        font-family: 'IBM Plex Sans';
-        src: url('./fonts/ibm-plex-sans-600.woff2') format('woff2');
+        font-family: 'Hanken Grotesk';
+        src: url('./fonts/hanken-grotesk-variable.woff2') format('woff2');
         font-weight: 600;
         font-style: normal;
         font-display: swap;
@@ -78,36 +95,36 @@
       }
 
       :root {
-        /* Cherry — same neutral ramp + accent src/ui/tokens/colors.css uses
+        /* Petrol — same neutral ramp + accent src/ui/tokens/colors.css uses
            for [data-surface="stage"]. */
-        --clr-cherry-50: #f5f3e6;
-        --clr-cherry-300: #c2b781;
-        --clr-cherry-400: #8f9463;
-        --clr-cherry-700: #2c391c;
-        --clr-cherry-800: #1c2612;
-        --clr-cherry-900: #12190b;
-        --clr-cherry-950: #0c130a;
-        --clr-green-500: #bfe23f;
-        --clr-green-600: #a8c936;
+        --clr-petrol-50: #f4f6f5;
+        --clr-petrol-300: #93a19e;
+        --clr-petrol-400: #6b7d79;
+        --clr-petrol-700: #232b2f;
+        --clr-petrol-800: #1a2124;
+        --clr-petrol-900: #12171a;
+        --clr-petrol-950: #0b0e10;
+        --clr-teal-300: #2dd4c0;
+        --clr-teal-500: #0fb5a3;
         --clr-gold-500: #cfa53b;
 
-        --color-canvas: var(--clr-cherry-950);
-        --color-surface: var(--clr-cherry-900);
-        --color-surface-sunken: var(--clr-cherry-800);
-        --color-border: var(--clr-cherry-700);
-        --color-border-strong: var(--clr-cherry-50);
-        --color-text: var(--clr-cherry-50);
-        --color-text-secondary: var(--clr-cherry-300);
-        --color-text-muted: var(--clr-cherry-400);
-        --color-accent: var(--clr-green-500);
-        --color-accent-hover: var(--clr-green-600);
-        --color-accent-contrast: var(--clr-cherry-950);
+        --color-canvas: var(--clr-petrol-950);
+        --color-surface: var(--clr-petrol-900);
+        --color-surface-sunken: var(--clr-petrol-800);
+        --color-border: var(--clr-petrol-700);
+        --color-border-strong: var(--clr-petrol-50);
+        --color-text: var(--clr-petrol-50);
+        --color-text-secondary: var(--clr-petrol-300);
+        --color-text-muted: var(--clr-petrol-400);
+        --color-accent: var(--clr-teal-300);
+        --color-accent-hover: var(--clr-teal-500);
+        --color-accent-contrast: var(--clr-petrol-950);
         --color-gold: var(--clr-gold-500);
-        --color-gold-contrast: var(--clr-cherry-950);
+        --color-gold-contrast: var(--clr-petrol-950);
 
-        --font-display: 'Bricolage Grotesque', ui-sans-serif, system-ui, -apple-system, sans-serif;
+        --font-display: 'Chakra Petch', ui-sans-serif, system-ui, -apple-system, sans-serif;
         --font-body:
-          'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          'Hanken Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, monospace;
 
         /* Motion vocabulary — three named easing curves, used by role
@@ -214,14 +231,15 @@
         }
       }
 
-      /* A small breathing ring — reused wherever "this one's current"
-         needs to read at a glance, not just in text. */
+      /* A small breathing blip — reused wherever "this one's current"
+         needs to read at a glance, not just in text. Square, not round,
+         matching Petrol's status-live-dot motif (base.css) — the ring
+         becomes a square outline for the same reason. */
       .pulse-dot {
         position: relative;
         display: inline-block;
         width: 8px;
         height: 8px;
-        border-radius: 50%;
         background: var(--color-accent);
         flex: none;
       }
@@ -229,7 +247,6 @@
         content: '';
         position: absolute;
         inset: -5px;
-        border-radius: 50%;
         border: 1.5px solid var(--color-accent);
         animation: pulseRing 2.2s var(--ease-out-expo) infinite;
       }
@@ -353,7 +370,6 @@
       .ledger {
         margin-top: 2.5rem;
         border: 1px solid var(--color-border);
-        border-radius: 0.75rem;
         overflow: hidden;
       }
       .ledger-row {
@@ -476,7 +492,6 @@
         padding: 1.75rem 1rem;
         margin: 0 -1rem;
         border-top: 1px solid var(--color-border);
-        border-radius: 0.5rem;
         transition: background 0.25s var(--ease-out-expo);
       }
       .log-item::before {
@@ -486,7 +501,6 @@
         top: 0.5rem;
         bottom: 0.5rem;
         width: 3px;
-        border-radius: 999px;
         background: var(--color-accent);
         opacity: 0;
         transition: opacity 0.3s var(--ease-out-expo);
@@ -553,7 +567,6 @@
         text-transform: uppercase;
         color: var(--color-canvas);
         background: var(--color-accent);
-        border-radius: 999px;
         padding: 0.2rem 0.625rem;
         font-weight: 700;
       }
@@ -595,7 +608,6 @@
         align-items: start;
         background: var(--color-surface);
         border: 1px solid var(--color-border);
-        border-radius: 0.875rem;
         padding: 2rem;
         margin-top: 2rem;
       }
@@ -607,9 +619,8 @@
       .bio-mark {
         width: 3.5rem;
         height: 3.5rem;
-        border-radius: 0.75rem;
-        background: rgba(191, 226, 63, 0.14);
-        border: 1px solid rgba(191, 226, 63, 0.3);
+        background: rgba(45, 212, 192, 0.14);
+        border: 1px solid rgba(45, 212, 192, 0.3);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -665,10 +676,21 @@
         font-size: 0.8125rem;
         letter-spacing: 0.04em;
         padding: 0.875rem 1.75rem;
-        border-radius: 999px;
         font-weight: 700;
         background: var(--color-accent);
         color: var(--color-accent-contrast);
+        /* Angular corner-cut, not a pill — src/ui/tokens/base.css's
+           .cut-sm generates this exact polygon; this standalone page
+           writes it out by hand since it can't reach that class (see
+           this file's header comment). */
+        clip-path: polygon(
+          6px 0,
+          100% 0,
+          100% calc(100% - 6px),
+          calc(100% - 6px) 100%,
+          0 100%,
+          0 6px
+        );
         transition:
           background 0.2s var(--ease-out-expo),
           transform 0.4s var(--ease-out-back);
