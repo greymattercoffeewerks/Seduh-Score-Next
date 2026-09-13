@@ -46,24 +46,24 @@ exceptions.
 Every pairing below is checked against WCAG 2.1 contrast minimums (4.5:1 normal text,
 3:1 large/headline text) using relative luminance:
 
-| Pairing                                                       | Ratio  |
-| -------------------------------------------------------------- | ------ |
-| `--color-text` on `--color-canvas` (paper)                      | 15.1:1 |
-| `--color-text-secondary` on canvas (paper)                      | 11.2:1 |
-| `--color-text-muted` on canvas (paper)                          | 7.8:1  |
-| `--color-accent` as text on canvas (paper)                      | 6.3:1  |
-| `--color-accent-contrast` on `--color-accent` fill (paper)      | 8.1:1  |
-| `--color-danger` on canvas (paper)                              | 8.0:1  |
-| `--color-success` on canvas (paper)                             | 5.9:1  |
-| `--color-warning` on canvas (paper)                             | 5.3:1  |
-| `--color-text-secondary` on canvas (stage)                      | 7.2:1  |
-| `--color-text-muted` on canvas (stage)                          | 4.5:1  |
-| `--color-accent` as text on canvas (stage)                      | 10.4:1 |
-| `--color-accent-contrast` on `--color-accent` fill (stage)      | 10.4:1 |
-| `--color-danger` on canvas (stage)                              | 6.9:1  |
-| `--color-success` on canvas (stage)                             | 9.6:1  |
-| `--color-warning` on canvas (stage)                             | 9.1:1  |
-| `--color-gold` on canvas (stage — its one real use context)     | 8.4:1  |
+| Pairing                                                     | Ratio  |
+| ----------------------------------------------------------- | ------ |
+| `--color-text` on `--color-canvas` (paper)                  | 15.1:1 |
+| `--color-text-secondary` on canvas (paper)                  | 11.2:1 |
+| `--color-text-muted` on canvas (paper)                      | 7.8:1  |
+| `--color-accent` as text on canvas (paper)                  | 6.3:1  |
+| `--color-accent-contrast` on `--color-accent` fill (paper)  | 8.1:1  |
+| `--color-danger` on canvas (paper)                          | 8.0:1  |
+| `--color-success` on canvas (paper)                         | 5.9:1  |
+| `--color-warning` on canvas (paper)                         | 5.3:1  |
+| `--color-text-secondary` on canvas (stage)                  | 7.2:1  |
+| `--color-text-muted` on canvas (stage)                      | 4.5:1  |
+| `--color-accent` as text on canvas (stage)                  | 10.4:1 |
+| `--color-accent-contrast` on `--color-accent` fill (stage)  | 10.4:1 |
+| `--color-danger` on canvas (stage)                          | 6.9:1  |
+| `--color-success` on canvas (stage)                         | 9.6:1  |
+| `--color-warning` on canvas (stage)                         | 9.1:1  |
+| `--color-gold` on canvas (stage — its one real use context) | 8.4:1  |
 
 `--color-text-muted` on stage sits right at the 4.5:1 floor — same tightness Cherry's own
 table had for a couple of pairings. Don't push it any lighter; if a future accent tweak
