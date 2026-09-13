@@ -151,6 +151,23 @@ a pre-existing title-field width issue found during review. ui-accessibility-rev
 Known gap: not yet integrated into formats/cup-taster/timingScreen — that screen untouched, integration is
 future work. See CHANGELOG.md for the full account.
 
+**Design System rework: Cherry → Petrol (2026-09-13), second visual identity refresh**: User
+decision to adopt an externally-produced design handoff (petrol-teal accent, graphite neutrals,
+zero border-radius/angular cuts) as both the marketing landing-page identity AND the
+app-wide design-token system — reversing every previous landing page's rule of NOT importing
+shared tokens. Complete `src/ui/tokens/` replacement (colors, typography, spacing, base,
+fonts; self-hosted Chakra Petch + Hanken Grotesk), `src/marketing/` landing redesign
+(nav, hero slideshow, ticker, problem/proof/pricing sections, footer), new `src/core/scrollReveal.js`
+(reusable scroll-reveal helper), and `public/bts/` reskinning. Two real bugs fixed while
+porting: format name corrected from "BTC" to "BBTC", and nested `<a>` inside `<a>` on
+format row fixed to `<span>`. Multiple accessibility regressions identified and fixed
+(contrast on dark bands, opacity stacking, tap targets). Three reviewers signed off clean:
+module-boundary-checker (no violations, scrollReveal confirmed reusable), ui-accessibility-
+reviewer (2 BLOCKING + multiple HIGH findings found and fixed), code-reviewer (1 BLOCKING
+nesting bug found and fixed). Build/lint/test passing (1100 tests). Console screens
+(other than Login/Setup) still pending restyling pass against angular shape language, but
+already inherit correct tokens automatically. See CHANGELOG.md for the full account.
+
 ---
 
 ## Version cycle plan (nameplate roadmap)

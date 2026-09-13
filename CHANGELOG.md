@@ -1,3 +1,143 @@
+## Design system rework: Kinetic → Petrol identity, full app-wide token replacement · 2026-09-13
+
+**User decision to adopt externally-produced design handoff as the new marketing and
+app-wide identity system.** Replaces the Kinetic identity (with its styling rules
+isolated to the landing page) with Petrol (petrol-teal accent, graphite neutrals, zero
+border-radius/angular cuts), deployed not only to the landing page but to the entire
+design-token system (`src/ui/tokens/`) so every console screen (login, setup, scoring,
+projector, etc.) inherits the same palette rather than a separate app-only one — a
+reversal of every previous landing-page identity's rule of NOT importing
+`src/ui/tokens/colors.css` into `src/marketing/`.
+
+**Full design token replacement (`src/ui/tokens/` + landing redesign):**
+
+- `colors.css`, `typography.css`, `spacing.css`, `base.css`, `fonts.css` — complete Petrol
+  token value replacement (one neutral ramp, paper/stage dual surface mode, semantic token
+  symmetry). `DESIGN.md` and `preview.html` updated to document new palette.
+- Self-hosted fonts: Chakra Petch (500/600/700 weights) + Hanken Grotesk (single variable
+  font file reused across four @font-face weight declarations, matching Google Fonts'
+  delivery pattern). Removed Bricolage Grotesque + IBM Plex Sans files from previous
+  identity, and the Kinetic-era Anton font.
+- `src/marketing/landingScreen.js` + `landing.css` — complete rebuild against handoff's
+  section spec: responsive nav with hamburger mobile panel, 4-photo auto-rotating hero
+  slideshow with tap/swipe controls, ticker marquee (scrolling tech endorsement), problem
+  statement section, formats lineup (Cup Taster highlighted as "Live now"), proof section
+  reusing real event photo + fact carousel, pricing plate, CTA band, footer. Page root
+  carries `data-surface="stage"` and now imports `src/ui/tokens/index.css` directly instead
+  of a separate `--kinetic-*-style` token block.
+- `src/core/scrollReveal.js` — new reusable scroll-reveal module: IntersectionObserver-based
+  visibility trigger, documented in `src/core/CLAUDE.md` for future consumers. No imports
+  outside `core/`; format-agnostic.
+- `public/bts/index.html` (the standalone "Behind the Seduh" static page, outside Vite's
+  module graph) reskinned to match: same Petrol token values and angular shape language
+  copied in by hand (it cannot reach shared token files directly), fonts copied to
+  `public/bts/fonts/`.
+
+**Two real bugs fixed while porting the handoff design:**
+
+1. Fourth competition format corrected from handoff's "BTC" to this codebase's actual name
+   "BBTC" (matches `src/formats/bbtc/`).
+2. Nested `<a>` inside `<a>` tag on the live Cup Taster format row (found by code-reviewer)
+   — fixed by making the inner element a `<span>`.
+
+**Accessibility fixes from ui-accessibility-reviewer's review round:**
+
+- Dark inline band backgrounds (nav, problem/pricing sections, proof facts, CTA copy panel)
+  using `--clr-petrol-600` with `--color-text-secondary`/`-muted` text measured under 4.5:1
+  AA minimum (actual: 3.7:1 and 2.3:1). Backgrounds bumped to `--clr-petrol-800` (now 6.1:1);
+  muted-on-band usages switched to `text-secondary`.
+- Dimmed/"soon" format rows had `opacity:0.7` stacked on top of already-marginal contrast,
+  dropping text under AA. Removed opacity, kept grayscale + existing tag/border non-color
+  signals for distinction.
+- Several interactive elements under the 44x44px tap-target minimum: hamburger nav toggle
+  (38x34), hero slide dots (26x3), CTA buttons (~43px tall), nav/footer links (no defined
+  tap height). All fixed to `var(--tap-target-min)` or expanded hit-area via flex centering.
+
+**Verification:**
+
+- Prettier + ESLint clean across all changes.
+- Full Vitest suite: 1100 tests, 53 files, 100% passing (unchanged count — pure design/token
+  changes, zero logic).
+- Visual verification in-browser at three breakpoints: desktop (1440px), tablet (768px),
+  mobile (375px). Confirmed landing page layout, hero carousel, problem/proof/pricing sections,
+  navigation responsive behavior, tap targets all reachable.
+- Console app verification: Login and Setup screens rendered correctly under new Petrol
+  tokens at desktop/mobile; Projector stage-mode renders correctly. All other console
+  screens (scoring, standings, viewer, timer, roster, dashboard) already render correctly
+  with new tokens via CSS variables — zero code changes needed, confirming the
+  format-agnostic token design works end-to-end.
+
+**Reviews — three parallel passes:**
+
+**module-boundary-checker (CLEAN PASS):** Confirmed `scrollReveal.js` is genuinely
+format-agnostic with no `src/formats/` imports anywhere in the changes. Verified no
+format-specific vocabulary leaked into tokens. Confirmed future formats can skip this
+module if they don't need scroll-reveal behavior.
+
+**ui-accessibility-reviewer (2 BLOCKING + multiple HIGH findings found and fixed):**
+Identified critical contrast failures on dark band backgrounds and opacity-stacking
+degradation of format-row text contrast; all identified regressions fixed before final
+review. Confirmed hero slide dot tap targets were under minimum; fixed to 44px. Verified
+nav hamburger, CTA buttons, footer link tap targets now meet minimum. Confirmed
+tap-target hits all reachable at 360px without inadvertent scrolling. Checked focus-visible
+rings work with new darker background colors (no color-alone contrast degradation on
+focus outlines). Flagged the hero-section photo's empty `alt` text as a deliberate
+choice (justified by adjacent caption copy) rather than an oversight — not changed.
+Signed off clean on all accessibility fixes.
+
+**code-reviewer (1 BLOCKING bug found and fixed):** Identified nested `<a>` element
+inside the Cup Taster format row's outer `<a>` link — invalid HTML nesting that breaks
+click semantics. Fixed by converting inner `<a>` to `<span>` (still visually linked,
+but semantic structure now correct). Verified scrollReveal.js exports/imports correct,
+no unused variables, function contract clear for future router-mounted consumers.
+Confirmed landing page logic (carousel state, ticker animation, form submission) has no
+regressions. Signed off clean.
+
+**Explicitly out of scope / left as-is:**
+
+- Console screens (other than Login/Setup) have not received the visual restyling pass
+  against the Petrol angular/zero-radius shape language per `DESIGN.md`'s "Open items"
+  section. However, all already inherit correct colors/fonts/spacing via CSS variables,
+  so no functionality or correctness risk — they simply look more "in-progress" than the
+  landing page until the full console restyling happens. Candidate for a dedicated
+  follow-up pass.
+- The proof section's hero-cupping-bowls.jpg photo carries empty `alt=""` text, relying on
+  the adjacent caption copy ("Real event, real stewards") to provide context — flagged
+  by ui-accessibility-reviewer as a defensible but deliberate choice. No change made.
+- The design handoff's external reference material ("Seduh Score Landing Redesign/" folder
+  and `.zip` file) were deliberately NOT committed to the repo — they are consumed
+  reference material excluded the same way prior external design explorations were, no
+  longer needed once their actual values shipped in the source files.
+
+**Files touched:**
+
+- `src/ui/tokens/colors.css` — full Petrol color ramp replacement
+- `src/ui/tokens/typography.css` — new font sizes/line heights for Hanken Grotesk
+- `src/ui/tokens/spacing.css` — unchanged structure, values carried forward
+- `src/ui/tokens/base.css` — updated for zero border-radius, angular shape system
+- `src/ui/tokens/fonts.css` — Chakra Petch + Hanken Grotesk self-hosted replacements
+- `src/ui/tokens/DESIGN.md`, `preview.html` — full documentation + preview update
+- `src/ui/tokens/fonts/` — new font files, old ones removed
+- `src/marketing/landingScreen.js` — complete rebuild: nav, hero, ticker, sections
+- `src/marketing/landing.css` — ~1000 lines, full style rewrite for Petrol + angular layout
+- `src/marketing/CLAUDE.md` — updated with new landing page architecture
+- `src/marketing/theme.js` — deleted (dead from prior Kinetic rework)
+- `src/core/scrollReveal.js` — new, reusable scroll-reveal helper module
+- `src/core/CLAUDE.md` — documented new scrollReveal.js
+- `public/marketing/` — hero images re-compressed (same 4, new sizes), petrol-hero-cupping-bowls.jpg added
+- `public/bts/index.html` — reskinned to match Petrol identity, inline token values + shape language
+- `public/bts/fonts/` — new Chakra Petch + Hanken Grotesk, old IBM Plex/Bricolage removed
+- `index.html` — root landing page (unchanged structure, new nav/branding)
+
+**Known follow-up items:**
+
+- Console screen restyling pass against Petrol's angular shape language (not blocking — all
+  screens already inherit correct tokens; the "unfinished" appearance is purely visual).
+- scrollReveal.js integration into `formats/cup-taster/timingScreen.js` or other tour-style
+  screens — not scoped now; module exists and is reusable for whenever that's prioritized.
+
+---
+
 ## Standalone Timer tool — visual/spacing fix pass · 2026-09-12
 
 **User feedback post-ship on cosmetic requests: spacing, sizing, and visibility follow-up.**
