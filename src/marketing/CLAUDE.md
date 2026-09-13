@@ -16,51 +16,105 @@ the console (`app/index.html`, `src/main.js`, everything under `src/core`/
 deploy to the same Cloudflare project. Nothing in `src/marketing/` is reachable from
 the console, and nothing in the console imports from here.
 
+## Identity history — four attempts, real lessons each time
+
+"Editorial" (2026-09-07) and "Cherry" (2026-09-11) both got the same user-testing
+verdict — "too generic, too Claude-like." Cherry additionally drew "alien" for its
+near-black canvas + saturated chartreuse accent. "Kinetic" (2026-09-13) tried a
+structural rework (warm mineral canvas, coral/indigo/citron, a halftone-dot motif) to
+answer that same complaint by changing shape and typography, not just palette.
+
+**"Petrol" (also 2026-09-13, hours later)** replaced Kinetic before it saw a second
+round of user feedback — a design handoff produced independently (Claude Design)
+delivered a petrol-teal/graphite/angular-cut direction covering both this page AND a
+full app-wide token replacement (`src/ui/tokens/*` — colors, typography, spacing, base,
+fonts), and the user chose to adopt both rather than keep Kinetic's page-only identity
+running alongside a still-Cherry console. This is the fastest-turnaround rework in this
+page's history; if a fifth identity is ever needed, that recurrence is worth raising
+before just shipping another palette swap.
+
+**Real architecture change**: every previous identity (Editorial/Cherry/Kinetic) kept
+its own separate token block and deliberately did NOT import
+`src/ui/tokens/colors.css` — see the "Why this doesn't import" section below for why
+that reasoning applied then and doesn't now.
+
+**No day/night toggle** — unchanged from Kinetic. Both Editorial and Cherry had one
+(`theme.js`, a manual toggle, an inline FOUC-prevention script in `index.html`);
+`theme.js` was deleted in the Kinetic rework, not kept dormant, and Petrol doesn't bring
+it back.
+
+Two real fixes made while porting the handoff's design reference (a single-file mockup
+in a different design tool's own component format, not meant to be copied verbatim)
+into this codebase:
+
+- The fourth competition format is **"BBTC"** everywhere else in this codebase
+  (`src/formats/bbtc/`, `ROADMAP.md`) — the design reference called it "BTC," which
+  isn't this product's real name for it. Corrected in `landingScreen.js`, the same way
+  an earlier rework corrected a fabricated nav link.
+- The design reference hand-picked several one-off graphite/teal hex values for
+  backgrounds and text, entirely independent of the shared token system (it predates
+  the decision to import that system here). See `landing.css`'s header comment for
+  exactly which values were snapped onto existing `--clr-petrol-*` ramp steps instead of
+  becoming new marketing-only hex values.
+
+## Why this DOES import `src/ui/tokens/index.css` now
+
+Kinetic's (and Cherry's, and Editorial's) own CLAUDE.md reasoning was: `colors.css`'s
+tokens are contrast-checked against the console's own three surfaces, and a marketing
+palette with no relationship to the console's palette shouldn't be mixed into that file
+just because both happen to need colors. That reasoning doesn't apply to Petrol — Petrol
+**is** the console's palette. The same design handoff that redesigned this page also
+replaced `src/ui/tokens/colors.css`/`typography.css`/`spacing.css`/`base.css`/`fonts.css`
+app-wide (see `src/ui/tokens/DESIGN.md`'s "Petrol" section), so this page and the
+organiser dashboard/login/setup/projector screens now render from the literal same
+`--color-*`/`--font-*`/`--space-*` values. Maintaining a third, separate
+`--petrol-marketing-*` block duplicating those exact values would be the "token layer
+gains a redundant parallel vocabulary" failure `CONVENTIONS.md` warns against, one layer
+up — so `index.html` links `/src/ui/tokens/index.css` directly, then `landing.css` on
+top of it, same order every console screen's own stylesheet linking follows.
+
+This page's root element carries `data-surface="stage"` (set in
+`landingScreen.js`'s `mountLandingScreen`) rather than hand-picking light-on-dark text
+colors: the whole page is graphite-ground/light-text/teal-accent throughout, which is
+exactly the console's existing "stage" semantic mode (the projector/audience view), not
+"paper" (the organiser dashboard's default light mode). Flipping that one attribute
+resolves every `--color-text`/`--color-text-secondary`/`--color-accent`/`--color-gold`
+pairing correctly, verified against the same contrast table `DESIGN.md` uses for the
+projector — rather than a second, unchecked set of values duplicating what the token
+system already guarantees.
+
+## Files
+
 - `landingScreen.js` — builds the whole page with `core/dom.js`'s `el()`/`svgEl()`/
   `brandMark()`, same as every console screen (`textContent`-only, no `innerHTML` —
-  see `dom.js`'s own header comment for why). `svgEl` was private to `dom.js` until
-  this page's format-card icons became its 2nd real consumer; exported rather than
-  duplicated, per `CONVENTIONS.md`'s "local patches are an anti-pattern" rule.
-- `theme.js` — the day/night logic: auto by local clock (19:00–06:59 = night, else
-  day), a manual toggle that always wins once used, remembered via `localStorage`.
-  Applied as `data-theme="day"|"night"` on `<html>`. `index.html` carries a literal
-  duplicate of this file's storage-read + auto-compute logic as an inline, synchronous
-  `<script>` in `<head>` — that's intentional and documented at both ends: a deferred
-  module script can't run before first paint, so without it every load would flash the
-  default theme before repainting to the stored/computed one. Keep the two in sync if
-  the night-hours boundary or the storage key ever changes.
-- `landing.css` — day tokens under `:root`, night tokens under `:root[data-theme='night']`,
-  same "flip custom properties at a boundary" trick `src/ui/tokens/colors.css` uses for
-  its own `[data-surface]` swap. As of the 2026-09-11 Cherry rework, these are the
-  literal same Cherry Day/Cherry Night values `colors.css` uses for its own paper/stage
-  modes — deliberately so now, not a coincidence: Cherry is one identity across the
-  whole product (see `src/ui/tokens/DESIGN.md`), and the accent hue (unripe-cherry
-  green) is the same family in both modes here, just a dark leaf-green shade by day and
-  a bright chartreuse shade by night — unlike the old Editorial Nights, which swapped
-  ember (day) for an unrelated invented "lantern" gold (night) entirely. That's why
-  `.landing-badge-live` no longer needs a per-theme literal color override — the accent
-  already reads as consistent across both themes.
+  see `dom.js`'s own header comment for why). Its own header comment has the fuller
+  identity-history account and the two real fixes made porting the handoff in.
+- `landing.css` — page-specific layout only (nav, hero, ticker, problem/formats/proof/
+  pricing/cta bands, footer). No `:root` token block of its own — every color/font/
+  space value is `var(--color-*)`/`var(--font-*)`/`var(--space-*)` from the shared
+  system, plus a handful of raw `--clr-petrol-*` ramp steps for this page's own
+  "one step lighter than canvas" band surfaces (see the file's header comment for
+  exactly which, and why those aren't hand-picked hex).
+- `src/core/scrollReveal.js` — the fade-up-on-scroll `IntersectionObserver` helper this
+  page's Problem/Formats/Proof/Pricing/CTA sections use. Lives in `core/`, not here,
+  because it's genuinely format/surface-agnostic (nothing in it assumes marketing-page
+  specifics) — any future screen wanting the same "reveal once, never revert" behavior
+  reuses it rather than hand-rolling a second observer.
 
-## Why this doesn't import `src/ui/tokens/colors.css`
+Petrol has no page-specific font files of its own — Chakra Petch and Hanken Grotesk
+live in the shared `src/ui/tokens/fonts/`, since they're now the whole app's own
+`--font-display`/`--font-body`, not a marketing-only face the way Kinetic's Anton was.
 
-That file's `--color-*` semantic tokens are contrast-checked against the console's own
-three surfaces (organiser/projector/phone) and documented that way in `DESIGN.md`. This
-page reuses the same semantic _names_ (`--color-canvas`, `--color-text`, etc.) because
-they're generic slots any surface can fill — the two files are never loaded on the same
-page, so there's no runtime collision. Now that both files intentionally carry the same
-Cherry values too, the remaining reason to keep them separate is architectural, not
-numerical: mixing a marketing day/night concept into `colors.css` itself would still be
-the "token layer gains format-specific vocabulary" failure `CONVENTIONS.md` warns
-against, one layer up — a different _product surface_ instead of a different format,
-even when that surface happens to want the identical palette today.
+## Fabricated content must stay hidden from assistive tech
 
-What this page _does_ reuse from `src/ui/tokens/`, because it's genuinely
-surface-agnostic: `fonts.css` (the real self-hosted Bricolage Grotesque/IBM Plex
-Sans/IBM Plex Mono — no Google Fonts, no CDN, same reasoning as the console), `typography.css` (type
-scale, weights, tracking), `spacing.css` (spacing/radius/tap-target-min scale), and the
-generic utility classes in `base.css` (`.sr-only`, `.tabular-nums`, `.tap-target`,
-`:focus-visible`, `.status-live-dot`). `index.html` links all four before
-`landing.css`.
+The proof section's real event photo/story callout is genuine (Girls Got Drip Vol. 0 —
+an actual past event), not illustrative — no `aria-hidden` needed there. The hero's four
+rotating photos ARE purely atmospheric (no specific event claimed), so they're
+`aria-hidden="true"` with empty `alt` text on every frame; the headline/body copy next
+to them carries the actual message, same D9-spirited discipline every previous identity
+here has followed. If a future mock/illustrative element gets added to this page, it
+needs the same treatment — `aria-hidden="true"` on its outermost element, full stop, not
+just an empty `alt` or a hopeful `aria-label`.
 
 ## Routing note
 
@@ -76,9 +130,24 @@ listed there.
 
 ## Known placeholders
 
-Every nav link ("Tour", "Pricing", "Org login") and every "Start free"/"Take the tour"
-CTA is `href="#"`. Not an oversight — there's no tour page, no pricing anchor, and no
-sign-up flow yet (`loginScreen.js` is sign-in only; D14's real access control is still
-a stub). Cup Taster's own format card is the one real link (`/app/#/events`), since
-that's the one destination that actually exists today. Wire the rest up as their
-destinations get built, not before.
+"Take the tour" and "Start free" CTAs, and the nav's "Org login" link, are `href="#"`.
+Not an oversight — there's no tour page and no sign-up flow yet (`loginScreen.js` is
+sign-in only; D14's real access control is still a stub). "Formats" and "Pricing" in the
+nav are real same-page anchors (`#formats`, `#pricing`); "Timer" is a real link
+(`/tools/timer/`). Cup Taster's own "Open Cup Taster →" link is the one real
+authenticated-app destination (`/app/#/events`). Wire the rest up as their destinations
+get built, not before — and don't add a nav item or copy claiming a capability (an event
+archive, an org directory, anything) that isn't real product scope yet; check
+`ROADMAP.md` before adding a new claim to this page.
+
+## Assets
+
+`public/marketing/` holds this page's own photos. `hero-tablet.jpg`,
+`hero-projector.jpg`, `petrol-hero-cupping-bowls.jpg`, `hero-bracket.jpg` (the hero
+slideshow) and `cta-pour.jpg` (the CTA band) came with the design handoff and are
+explicitly flagged there as placeholder/reference-quality photography — confirm with
+whoever owns the handoff whether these are final or need reshoots before this page is
+treated as done. `hero-cupping-bowls.jpg` (no `petrol-` prefix) is the real, pre-existing
+event photo from Kinetic's own proof section (Girls Got Drip Vol. 0) — kept under its
+original filename and reused for the proof section here specifically because it's
+genuine, unlike the handoff's own placeholder photo of the same subject.

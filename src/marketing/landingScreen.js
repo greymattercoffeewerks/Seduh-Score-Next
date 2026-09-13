@@ -1,23 +1,52 @@
 // Marketing landing page — Seduh Score Next.
 //
+// "Petrol" identity, 2026-09-13 — replaces "Kinetic" (2026-09-13, same day —
+// see src/marketing/CLAUDE.md's identity history for the full account of why
+// a fourth rework landed hours after the third). Built from a design handoff
+// produced independently (Claude Design), covering both this page and a
+// full app-wide token replacement (src/ui/tokens/*) — a real architecture
+// change from every previous identity: this page now imports the shared
+// design system directly instead of maintaining its own separate
+// `--kinetic-*`/`--cherry-*`-style token block. See landing.css's header
+// comment and src/marketing/CLAUDE.md for why that's safe here specifically.
+//
+// Two real fixes made while porting the handoff's own design reference
+// (a single-file mockup in a different tool's component format, not meant
+// to be copied verbatim) into this codebase's conventions:
+//   - The fourth format is "BBTC" everywhere else in this codebase
+//     (src/formats/bbtc/, ROADMAP.md) — the design reference called it
+//     "BTC," which isn't this product's real name for it. Corrected here,
+//     the same way an earlier rework corrected a fabricated nav link.
+//   - The design reference hand-picked several one-off graphite/teal hex
+//     values for backgrounds and text, entirely independent of the shared
+//     token system (it predates the decision to import that system here).
+//     Backgrounds close enough to an existing `--clr-petrol-*` ramp step
+//     were snapped onto that step; text/accent colors on this page's dark
+//     surfaces resolve via `data-surface="stage"` (the same mechanism the
+//     console's projector view uses) rather than a hand-picked light-on-dark
+//     hex — see landing.css for exactly where and why.
+//
 // Built with core/dom.js's el()/svgEl()/brandMark(), same as every console
-// screen, not raw HTML strings — this page ships real copy and needs the
-// same "never trust interpolated data as markup" discipline dom.js's own
-// header comment states, even though nothing here is currently
-// user-entered. Content and structure carried over from the design
-// exploration (design/landing-page/Main.dc.html + EditorialNights.dc.html,
-// 2026-09-07); this is that same page rebuilt as production code — one
-// file behind a `data-theme` attribute instead of two static mockups.
+// screen (textContent-only, no innerHTML — see dom.js's own header comment
+// for why).
 import { el, svgEl, brandMark } from '../core/dom.js';
+import { revealOnScroll } from '../core/scrollReveal.js';
 import { APP_VERSION } from '../core/version.js';
-import { initTheme } from './theme.js';
 
-function icon(children) {
-  const svg = svgEl('svg', { class: 'landing-icon', viewBox: '0 0 24 24', 'aria-hidden': 'true' });
+function icon(children, { className = 'petrol-icon' } = {}) {
+  const svg = svgEl('svg', {
+    class: className,
+    viewBox: '0 0 24 24',
+    'aria-hidden': 'true',
+  });
   svg.append(...children);
   return svg;
 }
 
+// alertTriangle/laptop/wifiOff/trash/zap/trophy/users are the same Feather-
+// style paths this page's previous identity already defined — ported
+// verbatim rather than redrawn, per the handoff's own note that these are
+// the exact icons it wants.
 const ICONS = {
   alertTriangle: () =>
     icon([
@@ -55,14 +84,6 @@ const ICONS = {
       svgEl('path', { d: 'M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z' }),
       svgEl('path', { d: 'M17 5h3a2 2 0 0 1-2 4M7 5H4a2 2 0 0 0 2 4' }),
     ]),
-  coffee: () =>
-    icon([
-      svgEl('path', { d: 'M17 8h1a4 4 0 1 1 0 8h-1' }),
-      svgEl('path', { d: 'M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V8z' }),
-      svgEl('line', { x1: '6', y1: '1', x2: '6', y2: '4' }),
-      svgEl('line', { x1: '10', y1: '1', x2: '10', y2: '4' }),
-      svgEl('line', { x1: '14', y1: '1', x2: '14', y2: '4' }),
-    ]),
   users: () =>
     icon([
       svgEl('path', { d: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2' }),
@@ -70,579 +91,559 @@ const ICONS = {
       svgEl('path', { d: 'M23 21v-2a4 4 0 0 0-3-3.87' }),
       svgEl('path', { d: 'M16 3.13a4 4 0 0 1 0 7.75' }),
     ]),
-  sun: () =>
-    icon([
-      svgEl('circle', { cx: '12', cy: '12', r: '4' }),
-      svgEl('line', { x1: '12', y1: '2', x2: '12', y2: '4' }),
-      svgEl('line', { x1: '12', y1: '20', x2: '12', y2: '22' }),
-      svgEl('line', { x1: '4.2', y1: '4.2', x2: '5.6', y2: '5.6' }),
-      svgEl('line', { x1: '18.4', y1: '18.4', x2: '19.8', y2: '19.8' }),
-      svgEl('line', { x1: '2', y1: '12', x2: '4', y2: '12' }),
-      svgEl('line', { x1: '20', y1: '12', x2: '22', y2: '12' }),
-      svgEl('line', { x1: '4.2', y1: '19.8', x2: '5.6', y2: '18.4' }),
-      svgEl('line', { x1: '18.4', y1: '5.6', x2: '19.8', y2: '4.2' }),
-    ]),
-  moon: () => icon([svgEl('path', { d: 'M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z' })]),
 };
 
-function buildBloom() {
-  return el('div', { className: 'landing-bloom', attrs: { 'aria-hidden': 'true' } }, [
-    el('span'),
-    el('span'),
-    el('span'),
-  ]);
+function liveDot() {
+  return el('span', { className: 'status-live-dot', attrs: { 'aria-hidden': 'true' } });
 }
 
-// Randomized once per page load (position/drift/duration/delay), same
-// generation shape as the design exploration's Component.renderVals() —
-// ported to plain JS now that this is real app code, not a Design
-// Component template.
-function buildSteamField(count = 14) {
-  const field = el('div', {
-    className: 'landing-steam-field',
-    attrs: { 'aria-hidden': 'true' },
-  });
-  for (let i = 0; i < count; i += 1) {
-    const size = 2 + Math.random() * 3;
-    const left = Math.random() * 100;
-    const drift = Math.random() * 70 - 35;
-    const duration = 12 + Math.random() * 6;
-    const delay = Math.random() * 10;
-    const particle = el('span', { className: 'landing-steam-p' });
-    particle.style.left = `${left.toFixed(2)}%`;
-    particle.style.setProperty('--drift', `${drift.toFixed(2)}px`);
-    particle.style.width = `${size.toFixed(2)}px`;
-    particle.style.height = `${size.toFixed(2)}px`;
-    particle.style.animationDuration = `${duration.toFixed(2)}s`;
-    particle.style.animationDelay = `${delay.toFixed(2)}s`;
-    field.appendChild(particle);
-  }
-  return field;
+// "Take the tour" and "Org login" are href="#" placeholders (no tour page,
+// no sign-up flow — loginScreen.js is sign-in only, D14's real access
+// control is still a stub). "Formats"/"Pricing" are real same-page anchors.
+// "Free Timer" is the one other real destination.
+function navLink(text, href) {
+  return el('a', { className: 'petrol-nav-link', text, attrs: { href } });
 }
 
-function updateThemeToggleIcon(button) {
-  const isNight = document.documentElement.dataset.theme === 'night';
-  button.replaceChildren(isNight ? ICONS.sun() : ICONS.moon());
+function actionLink(text, { primary = false, outline = false, href = '#' } = {}) {
+  const classes = ['petrol-action'];
+  if (primary) classes.push('petrol-action-primary', 'cut-sm');
+  if (outline) classes.push('petrol-action-outline');
+  return el('a', { className: classes.join(' '), text, attrs: { href } });
 }
 
-// "Tour", "Pricing", "Org login", and every "Start free"/"Take the tour"
-// CTA are href="#" placeholders (found in review, code-reviewer, flagged as
-// dead links). Real destinations don't exist yet — there's no tour page,
-// no pricing anchor/page, no sign-up flow (loginScreen.js is sign-in only,
-// D14's real access control is still a stub), and "/app/" requires an
-// account this page doesn't offer a way to create. Left as "#" rather than
-// silently pointed somewhere wrong; wiring these up is follow-on work once
-// those destinations exist, not a gap in this page's own build.
-
+// Single bar at every width — links/CTA hide below the CSS breakpoint,
+// replaced by a hamburger toggle; the toggle only flips a class, visibility
+// of desktop-vs-mobile nav is CSS-only (media query), not JS-computed
+// window.innerWidth state — the design handoff explicitly calls this out as
+// its own hard-won fix from an earlier draft, and it matches this
+// codebase's existing nav-toggle precedent (previous identity's own
+// `.kinetic-nav-panel-open` pattern).
 function buildNav() {
-  const markWrap = el('span', { className: 'landing-brand-mark-wrap' });
   const mark = brandMark();
-  mark.classList.add('landing-brand-mark');
-  // brandMark() sets role="img"/aria-label="Seduh" for call sites where it
-  // stands alone; here it sits right next to the visible "Seduh Score"
-  // text, so a screen reader would announce the name twice back to back —
-  // hide the icon itself instead (found in review, ui-accessibility-reviewer).
+  mark.classList.add('petrol-brand-mark');
   mark.setAttribute('aria-hidden', 'true');
-  markWrap.appendChild(mark);
 
-  const brand = el('div', { className: 'landing-nav-brand' }, [
-    markWrap,
-    el('span', { className: 'landing-brand-name', text: 'Seduh Score' }),
+  const brand = el('div', { className: 'petrol-brand' }, [
+    mark,
+    el('span', { text: 'Seduh Score' }),
   ]);
 
-  const navPanel = el('div', { className: 'landing-nav-panel', id: 'landing-nav-panel' }, [
-    el('a', { className: 'landing-nav-link', text: 'Tour', attrs: { href: '#' } }),
-    el('a', { className: 'landing-nav-link', text: 'Pricing', attrs: { href: '#' } }),
-    // The one real, working destination in this nav besides the format
-    // card below — a free standalone tool (src/tools/timer/), deliberate
-    // promotion for the product (user decision, 2026-09-12).
-    el('a', {
-      className: 'landing-nav-link',
-      text: 'Free Timer',
-      attrs: { href: '/tools/timer/' },
-    }),
-    el('a', { className: 'landing-nav-link', text: 'Org login', attrs: { href: '#' } }),
-    el('a', {
-      className: 'landing-btn landing-btn-primary',
-      text: 'Start free',
-      attrs: { href: '#' },
-    }),
+  const live = el('span', { className: 'petrol-live-indicator' }, [
+    liveDot(),
+    document.createTextNode('Live — Cup Taster'),
   ]);
 
-  const navToggle = el('button', {
-    className: 'landing-nav-toggle tap-target',
+  const secondary = el('span', {
+    className: 'petrol-secondary-label',
+    text: 'No install · no wifi dependency',
+  });
+
+  const links = el('div', { className: 'petrol-nav-links' }, [
+    navLink('Formats', '#formats'),
+    navLink('Pricing', '#pricing'),
+    navLink('Timer', '/tools/timer/'),
+    navLink('Org login', '#'),
+  ]);
+  const desktopCta = actionLink('Start free', { primary: true });
+  const desktopGroup = el('div', { className: 'petrol-nav-desktop' }, [links, desktopCta]);
+
+  const mobileLinks = el('div', { className: 'petrol-nav-mobile-links' }, [
+    navLink('Formats', '#formats'),
+    navLink('Pricing', '#pricing'),
+    navLink('Timer', '/tools/timer/'),
+    navLink('Org login', '#'),
+    actionLink('Start free', { primary: true }),
+  ]);
+  const mobilePanel = el('div', { className: 'petrol-nav-mobile-panel', id: 'petrol-nav-panel' }, [
+    mobileLinks,
+  ]);
+
+  const toggle = el('button', {
+    className: 'petrol-nav-toggle',
     attrs: {
       type: 'button',
       'aria-expanded': 'false',
-      'aria-controls': 'landing-nav-panel',
+      'aria-controls': 'petrol-nav-panel',
       'aria-label': 'Menu',
     },
   });
-  navToggle.append(
-    el('span', { className: 'landing-nav-toggle-bar', attrs: { 'aria-hidden': 'true' } }),
-    el('span', { className: 'landing-nav-toggle-bar', attrs: { 'aria-hidden': 'true' } }),
-    el('span', { className: 'landing-nav-toggle-bar', attrs: { 'aria-hidden': 'true' } }),
+  const burgerIcon = icon(
+    [
+      svgEl('line', { x1: '0', y1: '1', x2: '18', y2: '1' }),
+      svgEl('line', { x1: '0', y1: '6', x2: '18', y2: '6' }),
+      svgEl('line', { x1: '0', y1: '11', x2: '18', y2: '11' }),
+    ],
+    { className: 'petrol-nav-toggle-icon' },
   );
+  burgerIcon.setAttribute('viewBox', '0 0 18 12');
+  burgerIcon.setAttribute('stroke', 'currentColor');
+  burgerIcon.setAttribute('stroke-width', '1.6');
+  const closeIcon = icon(
+    [
+      svgEl('line', { x1: '1', y1: '1', x2: '15', y2: '15' }),
+      svgEl('line', { x1: '15', y1: '1', x2: '1', y2: '15' }),
+    ],
+    { className: 'petrol-nav-toggle-icon petrol-nav-toggle-icon-close' },
+  );
+  closeIcon.setAttribute('viewBox', '0 0 16 16');
+  closeIcon.setAttribute('stroke', 'currentColor');
+  closeIcon.setAttribute('stroke-width', '1.6');
+  toggle.append(burgerIcon, closeIcon);
 
   function closeMenu() {
-    navPanel.classList.remove('landing-nav-panel-open');
-    navToggle.setAttribute('aria-expanded', 'false');
+    mobilePanel.classList.remove('petrol-nav-mobile-panel-open');
+    toggle.classList.remove('petrol-nav-toggle-open');
+    toggle.setAttribute('aria-expanded', 'false');
   }
-  navToggle.addEventListener('click', () => {
-    const open = navPanel.classList.toggle('landing-nav-panel-open');
-    navToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  toggle.addEventListener('click', () => {
+    const open = mobilePanel.classList.toggle('petrol-nav-mobile-panel-open');
+    toggle.classList.toggle('petrol-nav-toggle-open', open);
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
   });
-  navToggle.addEventListener('keydown', (event) => {
+  toggle.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') closeMenu();
   });
-  navPanel.addEventListener('keydown', (event) => {
+  mobilePanel.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
       closeMenu();
-      navToggle.focus();
+      toggle.focus();
     }
   });
-  navPanel.querySelectorAll('a').forEach((link) => link.addEventListener('click', closeMenu));
+  mobilePanel.querySelectorAll('a').forEach((link) => link.addEventListener('click', closeMenu));
 
-  const themeToggle = el('button', {
-    className: 'landing-theme-toggle tap-target',
-    attrs: { type: 'button', 'aria-label': 'Switch between day and night theme' },
-  });
-
-  const navRight = el('div', { className: 'landing-nav-right' }, [
-    navPanel,
-    themeToggle,
-    navToggle,
+  const bar = el('div', { className: 'petrol-nav-bar' }, [
+    brand,
+    live,
+    secondary,
+    desktopGroup,
+    toggle,
   ]);
 
-  const nav = el('nav', { className: 'landing-nav', attrs: { 'aria-label': 'Primary' } }, [
-    el('div', { className: 'landing-wrap' }, [
-      el('div', { className: 'landing-nav-row' }, [brand, navRight]),
-    ]),
-  ]);
-
-  return { nav, themeToggle };
-}
-
-function buildStat(num, label) {
-  return el('div', { className: 'landing-stat-cell' }, [
-    el('div', { className: 'landing-mono landing-stat-num', text: String(num) }),
-    el('div', { className: 'landing-stat-label', text: label }),
+  return el('nav', { className: 'petrol-nav', attrs: { 'aria-label': 'Primary' } }, [
+    bar,
+    mobilePanel,
   ]);
 }
 
-// Full-bleed photo hero — the big, dominant first-screen moment: headline,
-// sub, CTAs, and the stat strip all overlay a single large photo, and
-// everything else on the page (problem, formats, proof, pricing) only
-// appears once a visitor scrolls past it. Same "photo + dark scrim +
-// centered content" pattern as buildFinalCta()'s section at the bottom of
-// the page, reused here rather than invented twice, so the two big photo
-// moments bookend the page with one visual language.
-function buildHero() {
-  const copy = el('div', { className: 'landing-hero-content' }, [
-    el('p', {
-      className: 'landing-eyebrow landing-hero-eyebrow',
-      text: 'Grey Matter Coffee Werks · Brunei',
+// Four rotating full-bleed photos, crossfading on a timer — purely
+// atmospheric (no caption claims a specific real event), so alt text stays
+// empty and the whole strip is aria-hidden; the headline/body copy right
+// next to it carries the actual message. Auto-advance is skipped entirely
+// under prefers-reduced-motion (the dots still work, for a visitor who
+// wants to look at a specific photo) rather than fighting a suppressed CSS
+// transition with a class toggle that has nowhere to animate to.
+const HERO_PHOTOS = [
+  { src: '/marketing/hero-tablet.jpg', alt: '' },
+  { src: '/marketing/hero-projector.jpg', alt: '' },
+  { src: '/marketing/petrol-hero-cupping-bowls.jpg', alt: '' },
+  { src: '/marketing/hero-bracket.jpg', alt: '' },
+];
+const HERO_INTERVAL_MS = 4200;
+
+function buildHeroPhotos() {
+  const frames = HERO_PHOTOS.map(({ src, alt }, i) =>
+    el('img', {
+      className: `petrol-hero-photo${i === 0 ? ' petrol-hero-photo-active' : ''}`,
+      attrs: { src, alt, loading: i === 0 ? 'eager' : 'lazy' },
     }),
-    el('h1', { className: 'landing-hero-headline' }, [
-      document.createTextNode('One tablet. One projector.'),
+  );
+  const dots = HERO_PHOTOS.map((_, i) =>
+    el('button', {
+      className: `petrol-hero-dot${i === 0 ? ' petrol-hero-dot-active' : ''}`,
+      attrs: { type: 'button', 'aria-label': `Show photo ${i + 1} of ${HERO_PHOTOS.length}` },
+    }),
+  );
+
+  let active = 0;
+  function show(index) {
+    frames[active].classList.remove('petrol-hero-photo-active');
+    dots[active].classList.remove('petrol-hero-dot-active');
+    active = index;
+    frames[active].classList.add('petrol-hero-photo-active');
+    dots[active].classList.add('petrol-hero-dot-active');
+  }
+  dots.forEach((dot, i) => dot.addEventListener('click', () => show(i)));
+
+  if (window.matchMedia('(prefers-reduced-motion: no-preference)').matches) {
+    setInterval(() => show((active + 1) % HERO_PHOTOS.length), HERO_INTERVAL_MS);
+  }
+
+  const photos = el(
+    'div',
+    { className: 'petrol-hero-photos', attrs: { 'aria-hidden': 'true' } },
+    frames,
+  );
+  const dotRow = el('div', { className: 'petrol-hero-dots' }, dots);
+  return { photos, dotRow };
+}
+
+function statItem(value, label) {
+  return el('div', { className: 'petrol-stat' }, [
+    el('div', { className: 'petrol-stat-value petrol-mono tabular-nums', text: value }),
+    el('div', { className: 'petrol-stat-label', text: label }),
+  ]);
+}
+
+function buildHero() {
+  const { photos, dotRow } = buildHeroPhotos();
+  const scrim = el('div', { className: 'petrol-hero-scrim', attrs: { 'aria-hidden': 'true' } });
+
+  const content = el('div', { className: 'petrol-hero-content' }, [
+    el('p', { className: 'petrol-kicker', text: 'Grey Matter Coffee Werks · Brunei' }),
+    el('h1', { className: 'petrol-display petrol-hero-headline' }, [
+      document.createTextNode('One tablet.'),
       el('br'),
-      document.createTextNode('A competition that '),
-      el('span', { className: 'landing-accent-text', text: "doesn't fall apart." }),
+      document.createTextNode('One projector.'),
+      el('br'),
+      el('span', { text: 'Zero fall-apart.' }),
     ]),
     el('p', {
-      className: 'landing-hero-sub',
+      className: 'petrol-hero-body',
       text:
         'Seduh Score runs the whole event — brackets, judging, live results — with no ' +
         'install and no dependency on venue wifi. Built for how Southeast Asian organisers ' +
         'actually run events.',
     }),
-    el('div', { className: 'landing-hero-ctas' }, [
-      el('a', {
-        className: 'landing-btn landing-btn-primary',
-        text: 'Start free — no account',
-        attrs: { href: '#' },
-      }),
-      el('a', {
-        className: 'landing-btn landing-btn-ghost',
-        text: 'Take the tour',
-        attrs: { href: '#' },
-      }),
+    el('div', { className: 'petrol-hero-actions' }, [
+      actionLink('Start free — no account', { primary: true }),
+      actionLink('Take the tour', { outline: true }),
     ]),
-    el('div', { className: 'landing-stat-strip' }, [
-      buildStat(1, 'format live today'),
-      buildStat(0, 'installs — pure web'),
-      buildStat(1, 'tablet + projector runs it'),
-      buildStat(3, 'pricing tiers, all public'),
+    el('div', { className: 'petrol-stat-strip' }, [
+      statItem('1', 'format live'),
+      statItem('0', 'installs'),
+      statItem('1', 'tablet runs it'),
+      statItem('3', 'tiers, public'),
     ]),
   ]);
 
-  return el('div', { className: 'landing-hero' }, [
-    buildHeroSlideshow(),
-    el('div', { className: 'landing-hero-overlay', attrs: { 'aria-hidden': 'true' } }),
-    buildBloom(),
-    buildSteamField(),
-    el('div', { className: 'landing-wrap' }, [copy]),
+  return el('section', { className: 'petrol-hero' }, [
+    photos,
+    scrim,
+    el('div', { className: 'petrol-wrap petrol-hero-inner' }, [content]),
+    dotRow,
   ]);
 }
 
-// Hero slideshow — a slow, soft crossfade between a small set of photos,
-// not a carousel (no arrows/dots/user control; this is ambient background,
-// not content someone navigates). Ordered to loosely follow the hero's own
-// pitch ("one tablet, one projector"): cupping → the tablet doing the
-// scoring → a bracket being drawn → the projector moment → the pour shot
-// also used in buildFinalCta(). Designed to take more without any code
-// change — just add paths here. Respects prefers-reduced-motion by never
-// starting the interval, same discipline as buildBloom()/
-// buildSteamField()'s own CSS-level reduced-motion handling — the first
-// photo stays put instead of cycling.
-const HERO_PHOTOS = [
-  '/marketing/hero-cupping-bowls.jpg',
-  '/marketing/hero-cupping.jpg',
-  '/marketing/hero-tablet.jpg',
-  '/marketing/hero-bracket.jpg',
-  '/marketing/hero-projector.jpg',
-  '/marketing/cta-pour.jpg',
-];
-
-function buildHeroSlideshow() {
-  const layer = el('div', { className: 'landing-hero-slideshow' });
-  const images = HERO_PHOTOS.map((src, i) =>
-    el('img', {
-      className: `landing-hero-photo${i === 0 ? ' is-active' : ''}`,
-      attrs: { src, alt: '', loading: i === 0 ? 'eager' : 'lazy' },
-    }),
-  );
-  layer.append(...images);
-
-  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (!reduceMotion && images.length > 1) {
-    let active = 0;
-    setInterval(() => {
-      const next = (active + 1) % images.length;
-      images[active].classList.remove('is-active');
-      images[next].classList.add('is-active');
-      active = next;
-    }, 7000);
-  }
-
-  return layer;
+// Two content copies back-to-back so the -50% translateX loop never shows a
+// gap before it resets — same fix this page's own previous identity already
+// worked out empirically (measure vs. the container's own max width, not a
+// guess), just re-verified for this line's own length against
+// .petrol-wrap's 1360px cap: one copy of this line is comfortably under
+// 700px at the ticker's own 12px/tracked-uppercase sizing, so two copies
+// clears 1360px with real margin at any viewport.
+function ticker() {
+  const line =
+    'Live judging / 0 installs / offline-resilient / no wifi dependency / ' +
+    '3 tiers, public / built in Brunei /';
+  const copies = [line, line];
+  return el('div', { className: 'petrol-ticker', attrs: { 'aria-hidden': 'true' } }, [
+    el(
+      'div',
+      { className: 'petrol-track' },
+      copies.map((text) => el('span', { text })),
+    ),
+  ]);
 }
 
-function buildProblemCard(iconFn, title, body) {
-  return el('div', { className: 'landing-card' }, [
+function ledgerRow(index, iconFn, title, body) {
+  return el('div', { className: 'petrol-ledger-row' }, [
+    el('span', { className: 'petrol-ledger-index petrol-mono', text: index }),
     iconFn(),
-    el('h3', { text: title }),
-    el('p', { text: body }),
+    el('div', {}, [
+      el('span', { className: 'petrol-ledger-title', text: title }),
+      el('span', { className: 'petrol-ledger-body', text: body }),
+    ]),
   ]);
 }
 
-function buildProblem() {
-  const grid = el('div', { className: 'landing-problem-grid' }, [
-    buildProblemCard(
+function problemSection() {
+  const left = el('div', {}, [
+    el('p', { className: 'petrol-eyebrow', text: '01 · The problem' }),
+    el('h2', {
+      className: 'petrol-heading',
+      text: 'Right now, the whole competition rides on one laptop and a group chat.',
+    }),
+    el('p', {
+      className: 'petrol-band-body',
+      text:
+        'A bracket taped to the wall. Scores called out and typed into a spreadsheet one ' +
+        'person guards. The wifi drops and the room waits. A result gets questioned and ' +
+        "there's nothing to point to.",
+    }),
+  ]);
+
+  const right = el('div', { className: 'petrol-ledger' }, [
+    ledgerRow(
+      '01',
       ICONS.alertTriangle,
       'Scattered scoring',
-      "Slips, group chats and three half-open apps — no single source of truth for who's winning.",
+      "Slips, group chats and three half-open apps — no single source of truth for who's " +
+        'winning.',
     ),
-    buildProblemCard(
+    ledgerRow(
+      '02',
       ICONS.laptop,
       'One fragile laptop',
       'The whole event on one spreadsheet, one person, one point of failure.',
     ),
-    buildProblemCard(
+    ledgerRow(
+      '03',
       ICONS.wifiOff,
       'Venue wifi',
       'A live run that hangs on a connection which never quite holds through the finals.',
     ),
-    buildProblemCard(
+    ledgerRow(
+      '04',
       ICONS.trash,
       'Gone afterward',
       "Every result deleted once the trophy's handed out. No record, no history, no proof.",
     ),
   ]);
 
-  return el('div', { className: 'landing-section landing-section-sunken' }, [
-    el('div', { className: 'landing-wrap' }, [
-      el('p', { className: 'landing-eyebrow', text: 'The problem' }),
-      el('h2', {
-        className: 'landing-section-heading landing-problem-heading',
-        text: 'Right now, the whole competition rides on one laptop and a group chat.',
-      }),
-      el('p', {
-        className: 'landing-section-lede',
-        text:
-          'A bracket taped to the wall. Scores called out and typed into a spreadsheet one ' +
-          "person guards. The wifi drops and the room waits. A result gets questioned and there's " +
-          'nothing to point to. Then it ends — and the whole thing is wiped to make room for ' +
-          'the next one.',
-      }),
-      grid,
-    ]),
-  ]);
+  const inner = el('div', { className: 'petrol-wrap petrol-problem-grid' }, [left, right]);
+  const section = el('section', { className: 'petrol-band' }, [inner]);
+  revealOnScroll(inner);
+  return section;
 }
 
-function buildFormatCard({ iconFn, title, body, status }) {
-  const head = el('div', { className: 'landing-format-head' }, [iconFn()]);
+function tag(text, { solid = false } = {}) {
+  return el('span', {
+    className: `petrol-tag${solid ? ' petrol-tag-solid' : ''}`,
+    text,
+  });
+}
 
-  if (status.kind === 'live') {
-    head.appendChild(
-      el('span', { className: 'landing-format-live-status' }, [
-        el('span', {
-          className: 'status-live-dot',
-          attrs: { 'aria-hidden': 'true' },
-        }),
-        el('span', { className: 'landing-badge landing-badge-live', text: status.label }),
-      ]),
-    );
-    const card = el(
-      'a',
-      {
-        className: 'landing-card landing-format-card landing-format-live',
-        attrs: { href: status.href },
-      },
-      [
-        head,
-        el('h3', { text: title }),
-        el('p', { text: body }),
-        el('span', { className: 'landing-format-open', text: status.cta }),
-      ],
-    );
-    return card;
+// Cup Taster is the one real, live format — not dimmed, left-accented, and
+// its own row is a link straight into the app. The other three are real
+// product scope (ROADMAP.md), just not built yet, so they're dimmed rather
+// than equal-weight with Cup Taster. "BBTC," not "BTC" — see this file's
+// header comment for why that's a correction, not a typo carried over.
+function formatRow(index, name, body, { live = false, dimmed = false, href } = {}) {
+  const classes = ['petrol-format-row'];
+  if (live) classes.push('petrol-format-row-live');
+  if (dimmed) classes.push('petrol-format-row-dimmed');
+
+  const nameEl = el('span', { className: 'petrol-format-name', text: name });
+  const children = [nameEl, el('span', { className: 'petrol-format-body', text: body })];
+  if (live) {
+    // A <span>, not an <a> — the whole row is already the link (below).
+    // Nesting a real anchor inside it would be invalid HTML (interactive
+    // content inside <a>) and would give keyboard/screen-reader users two
+    // overlapping tab stops for the same destination.
+    children.push(el('span', { className: 'petrol-format-link', text: 'Open Cup Taster →' }));
   }
 
-  head.appendChild(
-    el('span', { className: 'landing-badge landing-badge-soon', text: 'Coming soon' }),
-  );
-  return el('div', { className: 'landing-card landing-format-card landing-format-disabled' }, [
-    head,
-    el('h3', { text: title }),
-    el('p', { text: body }),
-  ]);
+  const cells = [
+    el('span', { className: 'petrol-format-index petrol-mono', text: index }),
+    el('div', {}, children),
+    live
+      ? el('span', { className: 'petrol-format-status' }, [
+          liveDot(),
+          tag('Basic free', { solid: true }),
+        ])
+      : tag('Soon'),
+  ];
+
+  const tagName = live ? 'a' : 'div';
+  return el(tagName, { className: classes.join(' '), attrs: live ? { href } : {} }, cells);
 }
 
-function buildFormats() {
-  const grid = el('div', { className: 'landing-format-grid' }, [
-    buildFormatCard({
-      iconFn: ICONS.zap,
-      title: 'Throwdown',
-      body:
+function formatsSection() {
+  const inner = el('div', { className: 'petrol-wrap', attrs: { id: 'formats' } }, [
+    el('p', { className: 'petrol-eyebrow', text: '02 · The lineup' }),
+    el('h2', { className: 'petrol-heading', text: 'Four formats. One platform. Zero installs.' }),
+    el('p', {
+      className: 'petrol-band-body',
+      text:
+        'Pure web, offline-resilient, projector-ready. An organiser opens a link and runs ' +
+        'the whole competition from a tablet.',
+    }),
+    el('div', { className: 'petrol-format-list' }, [
+      formatRow(
+        '01',
+        'Throwdown',
         '1v1 knockout — redemption & revival draw, live audience view. The format that ' +
-        'launched the platform.',
-      status: { kind: 'soon' },
-    }),
-    buildFormatCard({
-      iconFn: ICONS.trophy,
-      title: 'Liga Seduh',
-      body:
+          'launched the platform.',
+        { dimmed: true },
+      ),
+      formatRow(
+        '02',
+        'Liga Seduh',
         'Round-robin league — auto-generated schedules, live standings, judged finals, ' +
-        'season reports.',
-      status: { kind: 'soon' },
-    }),
-    buildFormatCard({
-      iconFn: ICONS.coffee,
-      title: 'Cup Taster',
-      body:
+          'season reports.',
+        { dimmed: true },
+      ),
+      formatRow(
+        '03',
+        'Cup Taster',
         'Blind triangulation heats — find the odd cup. Stage advancement, tie detection, ' +
-        'live right/wrong reveals.',
-      status: {
-        kind: 'live',
-        label: 'Basic free',
-        href: '/app/#/events',
-        cta: 'Open Cup Taster →',
-      },
-    }),
-    buildFormatCard({
-      iconFn: ICONS.users,
-      title: 'BTC',
-      body:
+          'live right/wrong reveals.',
+        { live: true, href: '/app/#/events' },
+      ),
+      formatRow(
+        '04',
+        'BBTC',
         'Barista Team Championship — the flagship team format, with branded PDF reporting ' +
-        'piloted here first.',
-      status: { kind: 'soon' },
-    }),
+          'piloted here first.',
+        { dimmed: true },
+      ),
+    ]),
   ]);
+  const section = el('section', { className: 'petrol-formats' }, [inner]);
+  revealOnScroll(inner);
+  return section;
+}
 
-  return el('div', { className: 'landing-wrap landing-section' }, [
-    el('p', { className: 'landing-eyebrow', text: "The product · what's in the cup" }),
-    el('h2', {
-      className: 'landing-section-heading',
-      text: 'Four formats. One platform. Zero installs.',
-    }),
-    el('p', {
-      className: 'landing-section-lede',
-      text:
-        'Pure web, offline-resilient, projector-ready. An organiser opens a link, runs an ' +
-        'entire competition from a tablet, and the audience watches results land in real time.',
-    }),
-    grid,
+function fact(value, copy, accent = false) {
+  return el('article', { className: `petrol-fact${accent ? ' petrol-fact-accent' : ''}` }, [
+    el('b', { className: 'petrol-mono tabular-nums', text: value }),
+    el('p', { text: copy }),
   ]);
 }
 
-function buildProof() {
-  const card = el('div', { className: 'landing-card landing-proof-card' }, [
-    el('div', { className: 'landing-proof-row' }, [
-      el('span', { className: 'landing-proof-name', text: 'Girls Got Drip Vol. 0' }),
-      el('span', { className: 'landing-badge landing-badge-live', text: 'Completed' }),
-    ]),
-    el('div', { className: 'landing-proof-row' }, [
+function proofSection() {
+  const facts = el('div', { className: 'petrol-proof-facts' }, [
+    fact('0', 'installs. Pure web, open it on the day.'),
+    fact('1', 'event flow: setup, roster, stages, then heats.'),
+    fact('3', 'live surfaces: splash screen, projector, and phone.'),
+    fact('1', 'format live today: Cup Taster. More are coming.', true),
+  ]);
+
+  const story = el('div', { className: 'petrol-story' }, [
+    el('img', {
+      className: 'petrol-story-photo',
+      attrs: { src: '/marketing/hero-cupping-bowls.jpg', alt: '', loading: 'lazy' },
+    }),
+    el('div', { className: 'petrol-story-copy' }, [
+      tag('Completed', { solid: true }),
+      el('h2', { className: 'petrol-heading', text: 'Not a demo. Real events, real brackets.' }),
       el('p', {
-        className: 'landing-proof-desc',
+        className: 'petrol-band-body',
         text:
-          '&Coffee Bandar · June 2026 — the first parallel test on a single Android ' +
-          'tablet. What broke got fixed; what survived became the product.',
+          'Girls Got Drip Vol. 0 — &Coffee Bandar, June 2026. The first parallel test on a ' +
+          'single Android tablet. What broke got fixed; what survived became the product.',
       }),
+      el('p', { className: 'petrol-story-next', text: 'Next event — date to be announced.' }),
     ]),
-    el('div', { className: 'landing-proof-row' }, [
+  ]);
+
+  const inner = el('div', { className: 'petrol-wrap petrol-proof-inner' }, [facts, story]);
+  const section = el('section', { className: 'petrol-proof' }, [inner]);
+  revealOnScroll(inner);
+  return section;
+}
+
+function pricingColumn(label, price, suffix, body, { featured = false } = {}) {
+  const priceLine = [document.createTextNode(price)];
+  if (suffix) priceLine.push(el('span', { className: 'petrol-price-suffix', text: suffix }));
+  return el(
+    'div',
+    { className: `petrol-plate-col${featured ? ' petrol-plate-col-featured' : ''}` },
+    [
       el('span', {
-        className: 'landing-proof-next',
-        text: '[ next event — date to be announced ]',
+        className: `petrol-tier-label${featured ? ' petrol-tier-label-accent' : ''}`,
+        text: label,
       }),
-    ]),
-  ]);
-
-  return el('div', { className: 'landing-section landing-section-sunken' }, [
-    el('div', { className: 'landing-wrap landing-proof-grid' }, [
-      el('div', {}, [
-        el('p', { className: 'landing-eyebrow', text: 'Proof' }),
-        el('h2', {
-          className: 'landing-section-heading',
-          text: 'Not a demo. Real events, real brackets.',
-        }),
-        el('p', {
-          className: 'landing-section-lede',
-          text:
-            'Every competition run on Seduh Score keeps its results — each one gets its ' +
-            'own archived page. Proof that outlives the trophy.',
-        }),
-      ]),
-      card,
-    ]),
-  ]);
+      el('div', { className: 'petrol-tier-price petrol-mono tabular-nums' }, priceLine),
+      el('p', { className: 'petrol-band-body', text: body }),
+    ],
+  );
 }
 
-function buildPricingCard({ tier, tierClass, price, period, body, borderStrong }) {
-  const cardClass = borderStrong
-    ? 'landing-card landing-pricing-card landing-pricing-card-featured'
-    : 'landing-card landing-pricing-card';
-  const card = el('div', { className: cardClass });
-  const badgeClass = tierClass
-    ? `landing-badge ${tierClass}`
-    : 'landing-badge landing-badge-neutral';
-  card.appendChild(el('span', { className: badgeClass, text: tier }));
-  card.appendChild(el('div', { className: 'landing-mono landing-price', text: price }));
-  if (period) card.appendChild(el('div', { className: 'landing-price-period', text: period }));
-  card.appendChild(el('p', { text: body }));
-  return card;
-}
-
-function buildPricing() {
-  const grid = el('div', { className: 'landing-pricing-grid' }, [
-    buildPricingCard({
-      tier: 'Community',
-      tierClass: '',
-      price: 'Free',
-      body:
+function pricingSection() {
+  const inner = el('div', { className: 'petrol-wrap', attrs: { id: 'pricing' } }, [
+    el('p', { className: 'petrol-eyebrow', text: '04 · Pricing, stated plainly' }),
+    el('h2', { className: 'petrol-heading', text: 'Three tiers. No access gate.' }),
+    el('div', { className: 'petrol-plate' }, [
+      pricingColumn(
+        'Community',
+        'Free',
+        null,
         'Full platform, unbranded, for organisers just getting started. No account needed ' +
-        'to run a small event.',
-    }),
-    buildPricingCard({
-      tier: 'Per-event',
-      tierClass: 'landing-badge-live',
-      price: 'BND $18',
-      period: 'one-time',
-      body: 'One competition, fully branded, PDF reports included. Pay once, run your event, done.',
-      borderStrong: true,
-    }),
-    buildPricingCard({
-      tier: 'Full platform · annual',
-      tierClass: 'landing-badge-annual',
-      price: 'BND $100',
-      period: 'per year',
-      body:
-        'Every format including BTC, priced for organisers running events all year. ' +
-        'Persistent history across seasons.',
-    }),
-  ]);
-
-  return el('div', { className: 'landing-wrap landing-section' }, [
-    el('p', { className: 'landing-eyebrow', text: 'Pricing, stated plainly' }),
-    el('h2', { className: 'landing-section-heading', text: 'Three tiers. No access gate.' }),
+          'to run a small event.',
+      ),
+      pricingColumn(
+        'Per-event',
+        'BND $18',
+        'one-time',
+        'One competition, fully branded, PDF reports included. Pay once, run your event, ' +
+          'done.',
+        { featured: true },
+      ),
+      pricingColumn(
+        'Annual',
+        'BND $100',
+        'per year',
+        'Every format including BBTC, priced for organisers running events all year. ' +
+          'Persistent history across seasons.',
+      ),
+    ]),
     el('p', {
-      className: 'landing-section-lede',
-      text:
-        'Start free, pay for one event, or run the whole year. Every price is on this page ' +
-        '— nothing to request, nothing to unlock.',
-    }),
-    grid,
-    el('p', {
-      className: 'landing-pricing-note',
+      className: 'petrol-footnote',
       text: 'All prices in Brunei dollars · billed through Grey Matter Coffee Werks.',
     }),
   ]);
+  const section = el('section', { className: 'petrol-band', attrs: { id: 'pricing-band' } }, [
+    inner,
+  ]);
+  revealOnScroll(inner);
+  return section;
 }
 
-function buildFinalCta() {
-  return el('div', { className: 'landing-cta' }, [
+function ctaBand() {
+  const photo = el('div', { className: 'petrol-cta-photo' }, [
     el('img', {
-      className: 'landing-cta-photo',
       attrs: { src: '/marketing/cta-pour.jpg', alt: '', loading: 'lazy' },
     }),
-    el('div', { className: 'landing-cta-overlay' }),
-    el('div', { className: 'landing-wrap landing-cta-inner' }, [
-      el('h2', {
-        className: 'landing-cta-heading',
-        text: 'The next champion is about to be written down — permanently.',
-      }),
-      el('div', { className: 'landing-cta-actions' }, [
-        el('a', {
-          className: 'landing-btn landing-cta-btn-primary',
-          text: 'Start free — no account',
-          attrs: { href: '#' },
-        }),
-        el('a', {
-          className: 'landing-btn landing-cta-btn-ghost',
-          text: 'Take the tour',
-          attrs: { href: '#' },
-        }),
-      ]),
+    el('div', { className: 'petrol-cta-accent', attrs: { 'aria-hidden': 'true' } }),
+  ]);
+  const copy = el('div', { className: 'petrol-cta-copy' }, [
+    el('h2', {
+      className: 'petrol-heading',
+      text: 'The next champion is about to be written down — permanently.',
+    }),
+    el('div', { className: 'petrol-hero-actions' }, [
+      actionLink('Start free — no account', { primary: true }),
+      actionLink('Take the tour', { outline: true }),
     ]),
   ]);
+  const inner = el('div', { className: 'petrol-cta' }, [photo, copy]);
+  revealOnScroll(inner);
+  return inner;
 }
 
 function buildFooter() {
-  return el('div', { className: 'landing-wrap landing-footer' }, [
-    el('span', {
-      className: 'landing-footer-text',
-      text: 'Built by Firdaus Omar · Grey Matter Coffee Werks, Brunei',
-    }),
-    el('div', { className: 'landing-footer-right' }, [
+  return el('footer', { className: 'petrol-footer petrol-mono' }, [
+    el('span', { text: 'Built by Firdaus Omar · Grey Matter Coffee Werks, Brunei' }),
+    el('div', { className: 'petrol-footer-links' }, [
       el('a', {
-        className: 'landing-footer-text landing-footer-link',
-        text: 'Free Timer tool — saves to this device →',
+        className: 'petrol-footer-link',
+        text: 'Free Timer — saves to this device →',
         attrs: { href: '/tools/timer/' },
       }),
       el('a', {
-        className: 'landing-mono landing-badge landing-version-pill',
-        attrs: { href: '/bts/' },
+        className: 'petrol-version',
         text: `v${APP_VERSION}`,
+        attrs: { href: '/bts/' },
       }),
     ]),
   ]);
 }
 
 export function mountLandingScreen(root) {
-  const { nav, themeToggle } = buildNav();
-
-  root.append(
-    nav,
-    buildHero(),
-    buildProblem(),
-    buildFormats(),
-    buildProof(),
-    buildPricing(),
-    buildFinalCta(),
-    buildFooter(),
+  root.replaceChildren(
+    el('div', { className: 'petrol-page', attrs: { 'data-surface': 'stage' } }, [
+      buildNav(),
+      buildHero(),
+      ticker(),
+      problemSection(),
+      formatsSection(),
+      ticker(),
+      proofSection(),
+      pricingSection(),
+      ctaBand(),
+      el('div', { className: 'petrol-wrap' }, [buildFooter()]),
+    ]),
   );
-
-  initTheme(themeToggle);
-  updateThemeToggleIcon(themeToggle);
-  themeToggle.addEventListener('click', () => updateThemeToggleIcon(themeToggle));
 }

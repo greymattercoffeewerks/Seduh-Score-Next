@@ -1,44 +1,26 @@
 /*
- * Typography tokens — Seduh Score Next
+ * Typography tokens — Seduh Score Next — "Petrol" identity
  *
- * Three self-hosted fonts (see fonts.css for the @font-face rules and
- * licensing notes), each with a system-stack fallback that renders
- * identically in structure if the webfont hasn't painted yet:
- *   - Bricolage Grotesque (display) — a characterful geometric grotesk with
- *     more personality than Cabinet Grotesk, which it replaces as of the
- *     2026-09-11 Cherry rework (see DESIGN.md) — part of moving the whole
- *     identity away from the warm-cream/roast-orange register that read as
- *     generic AI-SaaS.
- *   - IBM Plex Sans (body) — replaces Switzer. A distinct, technical-feeling
- *     workhorse sans that pairs against Bricolage's display personality
- *     without competing with it; also IBM's own OFL family, so no license
- *     ambiguity self-hosting it.
- *   - IBM Plex Mono (mono/numeral) — see the usage note below. Replaces
- *     JetBrains Mono; same rationale as Plex Sans (family cohesion, OFL).
+ * Two of the three self-hosted families change; the mono face doesn't:
+ *   - Chakra Petch (display) — replaces Bricolage Grotesque. An angular,
+ *     technical/telemetry-flavored display face, matching the marketing
+ *     exploration's racing-HUD register.
+ *   - Hanken Grotesk (body) — replaces IBM Plex Sans. Plainer and more
+ *     neutral than Plex Sans so it doesn't compete with Chakra Petch's own
+ *     personality at display sizes.
+ *   - IBM Plex Mono (mono/numeral) — UNCHANGED. Already the exact register
+ *     this identity wants for scores/timers; no reason to replace a face
+ *     that already fits.
  *
- * Self-hosted, not linked from any third-party CDN, on purpose: the app
- * runs at live events on whatever wifi the venue has, and every surface
- * (organiser, projector, phone) must not depend on a third-party font
- * request succeeding mid-event. This mirrors the offline-first posture of
- * the Phase 3 sync work — a design token shouldn't be a single point of
- * failure a font CDN outage can take down. `font-display: swap` (fonts.css)
- * means a slow first load still shows the system-stack fallback instantly
- * rather than blocking render.
- *
- * `--font-mono` is not decorative: every score, timer, and elapsed-time
- * display must use it (with `.tabular-nums` from base.css) so digits don't
- * jitter in width as they change — the projector view is read from across
- * a room, and reflow there reads as a bug, not a stylistic choice. IBM Plex
- * Mono is a genuine fixed-width monospace; `font-variant-numeric:
- * tabular-nums` still does the width-locking work as a belt-and-suspenders
- * guarantee regardless of the active font.
+ * Type scale, weights, line-heights, and tracking are UNCHANGED from
+ * Cherry — these are structural, not part of the visual-identity swap, and
+ * every screen's spacing math already depends on them.
  */
 
 :root {
-  --font-display:
-    'Bricolage Grotesque', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Chakra Petch', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-body:
-    'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
+    'Hanken Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
     sans-serif;
   --font-mono:
     'IBM Plex Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', 'Segoe UI Mono', Consolas,
@@ -56,11 +38,9 @@
   --text-2xl: 2.0625rem; /* 33px — heading */
   --text-3xl: 2.5625rem; /* 41px — page/stage title */
   --text-4xl: 3.1875rem; /* 51px */
-  /* --text-5xl and --text-6xl are sized for fixed-canvas surfaces (the
-     projector's 16:9 stage, or a dedicated big-number panel) — not for
-     drop-in use inside an arbitrary responsive container. A narrow
-     container showing these sizes needs its own clamp/media-query step-down
-     or a scrollable wrapper; don't assume they shrink for free. */
+  /* --text-5xl and --text-6xl are for fixed-canvas surfaces (the projector's
+     16:9 stage, or a dedicated big-number panel) only — not for drop-in use
+     in an arbitrary responsive container without its own step-down. */
   --text-5xl: 4rem; /* 64px — organiser score display */
   --text-6xl: 6rem; /* 96px — projector countdown/score, read from across a room */
 
@@ -69,13 +49,13 @@
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
 
-  --leading-tight: 1.1; /* display/headlines */
-  --leading-snug: 1.3; /* headings */
-  --leading-normal: 1.5; /* body */
-  --leading-relaxed: 1.6; /* long-form copy */
-  --leading-mono: 1; /* score/timer digits — vertically compact */
+  --leading-tight: 1.1;
+  --leading-snug: 1.3;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.6;
+  --leading-mono: 1;
 
-  --tracking-tight: -0.02em; /* large display type */
+  --tracking-tight: -0.02em;
   --tracking-normal: 0em;
-  --tracking-wide: 0.02em; /* uppercase labels, badges, tags */
+  --tracking-wide: 0.02em;
 }

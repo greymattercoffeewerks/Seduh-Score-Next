@@ -1,10 +1,16 @@
 /*
- * Base layer — Seduh Score Next
+ * Base layer — Seduh Score Next — "Petrol" identity
  *
  * A handful of global rules and utility classes built directly on the
  * tokens in colors.css/typography.css/spacing.css. Nothing here is
  * format-specific (Cup Taster, Guess the Bean, ...) — this file must stay
  * usable by any future format untouched, same as the rest of `src/core`.
+ *
+ * Identical to Cherry's base.css except for one addition (.cut-sm/.cut-md/
+ * .cut-lg, new) and the is-test-banner stripe now referencing
+ * --clr-petrol-950 instead of --clr-cherry-950 — every other existing rule
+ * here already consumes tokens only, so it re-themes for free from
+ * colors.css/spacing.css alone.
  */
 
 *,
@@ -93,15 +99,15 @@ body {
   padding: var(--space-2) var(--space-4);
   /* Stripe width uses --space-3 (12px) so the pattern stays on the spacing
      scale rather than an arbitrary pixel value. Contrast for white text is
-     verified against both stripe colors (7.8:1 and 18.9:1) — see
-     DESIGN.md — so no text-shadow/elevation effect is needed to read it;
-     that would also break this file's "no shadows" rule for no benefit. */
+     verified against both stripe colors — see DESIGN.md — so no
+     text-shadow/elevation effect is needed to read it; that would also
+     break this file's "no shadows" rule for no benefit. */
   background: repeating-linear-gradient(
     -45deg,
     var(--color-test),
     var(--color-test) var(--space-3),
-    var(--clr-cherry-950) var(--space-3),
-    var(--clr-cherry-950) calc(var(--space-3) * 2)
+    var(--clr-petrol-950) var(--space-3),
+    var(--clr-petrol-950) calc(var(--space-3) * 2)
   );
   color: var(--color-test-contrast);
   font-family: var(--font-body);
@@ -132,8 +138,12 @@ body {
 }
 
 /* A small "LIVE" pulse dot, used sparingly (heat in progress, live
-   session connected). Motion is opt-in via prefers-reduced-motion so it
-   degrades to a static dot rather than being suppressed entirely. */
+   session connected). Now a square blip, not a circle — --radius-full
+   resolves to 0 under this identity's angular commitment (spacing.css),
+   which reads as more "telemetry indicator" than "online dot" and matches
+   the marketing exploration's own motif. Motion is opt-in via
+   prefers-reduced-motion so it degrades to a static blip rather than being
+   suppressed entirely. */
 .status-live-dot {
   display: inline-block;
   width: 0.5rem;
@@ -156,4 +166,44 @@ body {
   50% {
     opacity: 0.4;
   }
+}
+
+/* New for Petrol — the angular alternative to a rounded corner. Apply to
+   any container that would otherwise reach for --radius-* at a size big
+   enough for the cut to read (primary buttons, tags, hero panels). Not a
+   replacement for --radius-* everywhere — most elements are fine simply
+   square; reserve the cut for elements that want a little more visual
+   "commitment" (this mirrors how the marketing page uses it only on CTAs
+   and card corners, not on every box). */
+.cut-sm {
+  clip-path: polygon(
+    var(--cut-sm) 0,
+    100% 0,
+    100% calc(100% - var(--cut-sm)),
+    calc(100% - var(--cut-sm)) 100%,
+    0 100%,
+    0 var(--cut-sm)
+  );
+}
+
+.cut-md {
+  clip-path: polygon(
+    var(--cut-md) 0,
+    100% 0,
+    100% calc(100% - var(--cut-md)),
+    calc(100% - var(--cut-md)) 100%,
+    0 100%,
+    0 var(--cut-md)
+  );
+}
+
+.cut-lg {
+  clip-path: polygon(
+    var(--cut-lg) 0,
+    100% 0,
+    100% calc(100% - var(--cut-lg)),
+    calc(100% - var(--cut-lg)) 100%,
+    0 100%,
+    0 var(--cut-lg)
+  );
 }
