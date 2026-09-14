@@ -1,3 +1,521 @@
+## Guess the Bean Supabase port — Phase 4: Participant entry flow · 2026-09-15
+
+**Task ID**: guess-the-bean-phase4-participant-entry
+
+**Summary**: Participant entry screen (ported from legacy `booth/guess/index.html`),
+participant page Vite entry, submit_guess RPC with atomic multi-table insert, and
+elimination of a real enumeration-oracle bug in app.session_is_open().
+
+**Files touched**:
+
+- `supabase/migrations/20260915100000_guess_the_bean_submit_guess_rpc.sql` — new
+  SECURITY DEFINER RPC handling atomic inserts to both guesses + contacts (satisfying spec's
+  atomicity requirement: "kill network mid-submit, confirm no orphaned guess-without-contact"),
+  generating guess UUID server-side and returning it directly, sidestepping
+  INSERT...RETURNING's RLS constraint
+- `supabase/migrations/20260914121000_guess_the_bean_rls.sql` — fixed real enumeration-oracle
+  bug found independently by schema-guardian and security-reviewer: `app.session_is_open()`
+  returned NULL instead of false for nonexistent session_id via `coalesce(scalar_expr, false)`
+  over a zero-row subquery; switched to `EXISTS(...)` ensuring a genuine boolean regardless
+  of match count. New pgTAP regression test added.
+- `supabase/tests/010_guess_the_bean.sql` — new test assertions
+- `src/community/guess-the-bean/sessions.js` — export for RPC-side session state reads
+- `src/community/guess-the-bean/entryScreen.js` — new participant entry screen porting legacy's
+  7 view states (loading/no-session/not-found/not-active/closed/form/confirmed), validation
+  rules (name ≤80, guess 1–100000000 via `\d+` regex, phone ≤30 / instagram ≤50, one required),
+  demo mode (`?demo=1` skips existence check + actual write), guess_enabled/revealed precedence
+  (enabled wins if both true), and confetti celebration on confirmation. Full accessibility
+  retrofit: setBusyDisabled/withFocusPreservation helpers (from concurrent task_8aad08ec),
+  role="alert" for validation/submit errors, aria-invalid/aria-describedby field wiring, explicit
+  focus management on view transitions, all verified with document.activeElement test assertions.
+- `src/community/guess-the-bean/entryScreen.test.js` — 26 new tests including reverse-direction
+  null-coercion, properly non-vacuous abort-mid-load (held-promise pattern), fetch-call-count
+  strengthened "still open" poll test, 3 new focus-assertion tests (view-change, validation-error
+  redirect, submit-error redirect)
+- `src/community/guess-the-bean/entryScreen.css` — scoped styling for form state, validation
+  feedback, confetti burst
+- `src/community/guess-the-bean/playMain.js` — new Vite entry point for participant page
+- `guess-the-bean/play/index.html` — new participant page HTML serving playMain.js
+- `vite.config.js` — added separate build target for `guess-the-bean/play/index.html`
+
+**Architecture decision mid-task**: Originally built against Supabase Realtime
+(postgres_changes) for the close-watch (poll for session reveal while form open). Live-testing
+proved Realtime does not reliably deliver events for newly-added-to-publication tables on this
+project's LOCAL dev stack (extensively debugged: pg_publication_tables, pg_replication_slots,
+realtime.subscription table, full container/stack restarts, a brand-new probe table — all ruled
+out any Guess-the-Bean-specific cause). Abandoned Realtime, switched to 4-second polling
+(setInterval + mounted/in-flight guards) — documented as a known local-stack limitation that was
+never verified against the actual cloud deployment target (see Known open items below).
+
+**Six reviewers in parallel** (all reviews clean; zero blocking findings):
+
+- **schema-guardian** — found and fixed the enumeration-oracle bug in app.session_is_open()
+  (returns NULL, not false, for a nonexistent session via `coalesce(scalar_expr, false)` over a
+  zero-row subquery), plus a secondary instance in submit_guess's own guard clause — fixed both at
+  the root by switching to `EXISTS(...)`, which always returns genuine boolean. Confirmed the fix
+  by attempting the original exploit (crafted request trying to distinguish "session exists but
+  closed" from "session never existed" via different error shapes) — now returns identical errors.
+  All migrations apply cleanly from empty; rollback blocks verified live.
+- **security-reviewer** — independently caught the same enumeration-oracle bug, flagged it
+  BLOCKING. Confirmed submit_guess's atomicity (both inserts in one transaction, RLS gate on
+  creator-scoped session lookup), no column-export risk (UUID generated server-side, never sent
+  to client via INSERT...RETURNING), and session existence check now returns genuine boolean.
+  Live-verified demo RPC write (created a real organiser session, submitted a real guess+contact
+  pair, both confirmed correct in DB, phone/instagram null-coercion confirmed both directions).
+- **code-reviewer** — found a real gap: boot() never rendered 'loading' before its first await,
+  so participants saw a blank screen during the network round-trip — fixed by calling mount/render
+  immediately in boot before any await. Also noted no in-flight poll guard (could spawn multiple
+  fetches if slow network delayed response) and an unclear ternary fallback name (both fixed).
+- **module-boundary-checker** — clean across both rounds. Only a CLAUDE.md doc update needed
+  (entryScreen.js uses the shared helpers from task_8aad08ec, which shipped in a concurrent
+  session — documented with a cross-reference to that task).
+- **ui-accessibility-reviewer** — found 3 BLOCKING WCAG gaps in round 1: no focus-restoration on
+  form-state transitions (fixed via withFocusPreservation), validation errors dropped focus to
+  body (fixed via role="alert" + explicit focus move), submit-error feedback had no live-region
+  announcement (fixed via role="alert" + aria-live). Round 2 confirmed all three live-verified
+  via test assertions on document.activeElement, reconfirmed the loading-state gap code-reviewer
+  found (already fixed), one stale note about entryScreen not being wired into main.js (resolved:
+  that's playMain.js's separate job for the /play/ route, already verified live).
+- **test-auditor** — found a vacuous poll test (would pass identically with polling deleted) and
+  zero focus-assertion coverage despite substantial focus-management code — both fixed: added
+  fetch-spy to the poll test to verify it actually fetches, added 3 new focus-assertion tests
+  (view-change, validation-error redirect, submit-error redirect). Round 2 confirmed all fixes
+  held.
+
+**Test coverage**: 1189 total (1162 → 1188 JS tests; 207 → 230 pgTAP), all passing. Lint
+clean (`npm run lint`). Browser verification 3 times: demo-mode RPC write (guess+contact pair
+confirmed in DB, phone/instagram null-coercion confirmed both directions), real end-to-end
+reveal-triggers-close via polling, nonexistent-session-id resolves correctly. `npx supabase db
+diff --local` shows zero drift.
+
+**Known open item deliberately carried forward** (not blocking; fixed in polling, worth
+tracking): Supabase Realtime does not reliably deliver postgres_changes events for
+newly-published tables on this project's LOCAL dev stack (root cause never found despite
+extensive debugging). Workaround (polling) works fine everywhere. If a future phase wants real
+Realtime on a new table, budget time to re-verify it actually works in the cloud deployment
+target, not just assume the pre-existing `live_sessions` precedent generalizes — the local-stack
+anomaly was never tested against production.
+
+---
+
+## Focus preservation & aria-disabled refactor, cross-module accessibility hardening · 2026-09-15
+
+**Task ID**: task_8aad08ec (spawned from Phase 2/3 ui-accessibility-reviewer findings)
+
+**Problem**: ui-accessibility-reviewer found identical WCAG 2.1.1 focus-management gaps
+across three screens on different review passes — `src/core/loginScreen.js` and
+`src/community/guess-the-bean/authScreen.js` (Phase 2) and `setupScreen.js` (Phase 3).
+Each screen's `render()` does a full `root.innerHTML = ''` teardown-and-rebuild on every
+state change. Native `disabled` attributes on submit buttons, checkboxes, and selects (the
+controls under focus pressure during rapid state changes) dropped focus to `<body>` with
+no restoration. `setupScreen.js` had a partial fix (focus to `<h1>` on view change) but
+not for in-view interactions like toggling a checkbox, and neither `loginScreen.js` nor
+`authScreen.js` had any focus-restoration logic at all.
+
+**Solution** (two reusable helpers in `src/core/dom.js`):
+
+1. **`setBusyDisabled(node, isBusy)`** — sets `aria-disabled` + `aria-busy` instead of
+   native `disabled`. Native `disabled` removes a control from the focus order entirely,
+   breaking focus restoration; `aria-disabled` keeps it focusable while signaling "busy"
+   visually and to assistive tech. Handlers still need re-entry guards (a click can fire
+   on a stale button node before `render()` rebuilds it), but focus is preserved.
+2. **`withFocusPreservation(root, renderFn)`** — before a teardown, captures the focused
+   element via a `data-focus-key` → `data-field` → `id` fallback chain; after render,
+   restores it by the same chain. Accepts an optional return value from `renderFn` (`true`)
+   to signal the render already moved focus deliberately (e.g., an error message got focus
+   for an announcement), skipping restoration.
+
+Both helpers include fallback for missing `CSS.escape` (jsdom doesn't implement it, tests
+need the fallback).
+
+**Files touched**:
+
+- `src/core/dom.js` — new exports + local `escapeSelectorValue()` utility
+- `src/core/dom.test.js` — new test suites (id-only fallback branch explicitly split out
+  after test-auditor found a combined test title didn't match actual coverage)
+- `src/core/loginScreen.js` + test — every `.disabled =` → `setBusyDisabled()`,
+  every `render()` → `withFocusPreservation()`
+- `src/community/guess-the-bean/authScreen.js` + test — same pattern
+- `src/community/guess-the-bean/setupScreen.js` + test — same pattern; additionally,
+  `handleExport` gained a `state.busy` guard (was completely unguarded against double-
+  click); `handleReveal` gained `if (activeSession()?.revealed) return;` guard;
+  `handleToggle` gained explicit revert-on-busy-early-return (checkboxes/selects mutate
+  their own DOM value before the change listener fires — if busy, need to snap it back)
+- `src/community/guess-the-bean/shared.css` — `[aria-disabled='true']` rules alongside
+  `:disabled` for `.gtb-btn` and `.gtb-input`
+- `src/formats/cup-taster/heatsScreen.css` + `src/tools/timer/timer.css` — same
+
+**Four reviewers in parallel** (all findings were blocking → fixed → re-verified):
+
+- **code-reviewer** — found 2 real issues: (1) unescaped selector interpolation in
+  `withFocusPreservation`'s `getElementById` fallback (fixed by adding the `escapeSelectorValue`
+  utility); (2) checkboxes and selects mutate their own native value before their change
+  listener fires, so a busy early-return can leave the UI reflecting a half-committed state
+  (fixed by explicitly reverting the native value on busy early-return). Both re-verified
+  live with a double-click stress test.
+- **test-auditor** — found 2 real test-coverage gaps: (1) `handleExport`'s new guard had
+  zero test coverage, added explicit double-click concurrency test to verify it suppresses
+  the second fetch; (2) `withFocusPreservation`'s id-only fallback branch (when neither
+  `data-focus-key` nor `data-field` exist) wasn't actually exercised by tests, split it out
+  as an explicit test case.
+- **module-boundary-checker** — zero violations (all new helpers in `core/`, no
+  format-specific logic leaking).
+- **ui-accessibility-reviewer** — zero blocking findings (focus-restoration now live on all
+  three screens; no new WCAG gaps introduced).
+
+**Test coverage**: 1162 tests pass (11 new tests added across dom.test.js + the three screen
+test files). Lint clean.
+
+**Known open item** (deliberately out of scope): Identical bug pattern is still live across
+Cup Taster's organiser screens (eventsScreen.js, heatsScreen/setupScreen/rosterScreen/
+scoringScreen/standingsScreen/timingScreen/timingManualScreen.js — ~24 `.disabled =`
+assignments). This was discovered during review but NOT fixed inline; spawned as a
+separate follow-up task instead, prioritizing judge-facing tap-under-time-pressure surfaces
+(timingScreen.js, timingManualScreen.js, scoringScreen.js). See ROADMAP.md's "Known open
+items" section.
+
+---
+
+## Guess the Bean Supabase port — Phase 3: Session management, organiser flow · 2026-09-14
+
+**Real discovery via legacy source code inspection.** Before building Phase 3, fetched
+and read the actual legacy Guess the Bean implementation (`github.com/greymattercoffee/
+Seduh-Score`, dev branch, `booth/setup/index.html` and `booth/guess/index.html` via
+`gh api repos/<owner>/<repo>/contents/<path>?ref=<branch>` + base64 decode) rather than
+inferring behavior from the spec's prose summary alone. This surfaced two real gaps in the
+already-shipped Phase 1 schema, both invisible to the spec alone:
+
+1. **Missing `sessions.bean_count` column.** Legacy stores the bean count somewhere; Phase
+   5's own "winner spotlight, closest guess" requirement needs the real answer. Phase 1's
+   spec never mentioned it, and neither did Phase 3's own pass/fail list. User confirmed via
+   AskUserQuestion: add the column now, required and immutable after creation (enforced by a
+   `BEFORE UPDATE` trigger, not just client-side). Never exposed via `anon`'s column-scoped
+   `GRANT`; post-reveal access only via a new `app.session_bean_count()` resolver function.
+   New migration `20260914130000_guess_the_bean_bean_count.sql`.
+
+2. **RLS conflict: legacy's Reset Data / End Session danger-zone actions.** Legacy allows
+   a creator to delete guesses and contacts directly. This port's own Phase 1 "LOCKED RLS
+   checklist" forbids DELETE (and UPDATE on `contacts`) to anyone except `service_role`.
+   Decision: a new `sessions_delete` RLS policy (creator-only, matching legacy's End Session
+   permission) and a new `reset_guess_session_data` SECURITY DEFINER RPC (matching the
+   existing `delete_test_event` RPC precedent for Cup Taster, not loosening the checklist).
+   New migration `20260914131000_guess_the_bean_session_lifecycle.sql`.
+
+**Both migrations reviewed clean after fixes.** `schema-guardian` found and I fixed two
+real issues: (1) a TOCTOU gap — `reset_guess_session_data`'s guard check against
+`creator_id = auth.uid()` wasn't repeated on its own mutating `DELETE`/`UPDATE` statements,
+exploitable if Postgres released and re-acquired the lock mid-RPC; fixed by re-checking
+`creator_id = auth.uid()` directly in the `WHERE` clause of each mutating statement. (2)
+An advisory integrity gap — `bean_count` was mutable post-reveal via the existing
+`sessions_update` policy (a creator can update even their own sessions post-reveal), letting
+a creator alter the answer after seeing guesses come in; fixed with a `BEFORE UPDATE`
+trigger that rejects any change to `bean_count` if `revealed_at` is not null. `security-
+reviewer` ran 5 live adversarial probes (leak paths via resolver function, injection
+surface, FK-cascade-bypasses-RLS mechanics, broad authenticated delete grant against
+different-creator rows, anon-elevation via missing GRANT) and signed off clean.
+
+**UI: session management screen** (`src/community/guess-the-bean/setupScreen.js`/`.css`,
+20 new tests). Real production use case: a creator with potentially many concurrent
+sessions (unlike legacy's single localStorage slot). Three views: create-session form (bean
+count + orientation select), session list (table of all creator's sessions), and per-session
+detail view with:
+
+- A `guess_enabled` toggle (checkbox, turns guessing on/off; verified LIVE via direct DB
+  read to confirm persistence)
+- An `orientation` select (verified LIVE)
+- A **Reveal button** to mark the correct answer revealed (verified LIVE)
+- A **real QR code generator** via new npm dependency `qrcode-generator@2.0.4` (zero
+  runtime dependencies; generates inline SVG via `innerHTML`, the one deliberate XSS-safe
+  use in this module — library-generated markup from app-controlled UUID, never user text).
+  Verified LIVE as a genuine ~23KB compound SVG path, not a placeholder, encoding the
+  actual participant URL.
+- A **danger zone** with Export/Reset/End actions, using native `confirm()` dialogs and a
+  toast notification (new) for confirmation feedback.
+
+**Data layer** (`src/community/guess-the-bean/sessions.js`, 12 new tests): `createSession`,
+`listMySessions`, `updateSession` (guess-enabled/orientation toggles), `fetchSessionExport`,
+`endSession`. All route through the RPC layer for Delete/Reset; straight UPDATE for toggles.
+
+**Verified LIVE end-to-end twice** in a real browser (once before the 4-reviewer fixes,
+once after): signed in, created a session, toggled `guess_enabled` (persisted, verified via
+direct DB read), toggled orientation (persisted), clicked Reveal (persisted), rendered a
+real QR code (confirmed genuine SVG, not a placeholder, encoding the correct UUID), clicked
+Reset Data (RPC ran, reset state reverted to guessing-disabled, toast shown), clicked End
+Session (row deleted, cascade worked, UI returned to create-session form). Second verification
+run also explicitly re-verified all accessibility fixes live.
+
+**Deliberate UX departure from legacy, documented in setupScreen.js's own header comment:**
+Legacy shows ONE session at a time (single localStorage slot, shared operator login); this
+port shows a list + detail view since Phase 1's locked model makes sessions per-user-account,
+not per-browser. A real organiser can genuinely own multiple simultaneous sessions.
+
+**Six reviewers in parallel found and fixed real issues:**
+
+**Code-reviewer** found 3 real issues:
+
+1. Asymmetric unmount-discipline gap in `main.js` — `authScreen`'s returned handle was
+   captured and unmounted on auth, but `setupScreen`'s wasn't, leaking the
+   `onAuthStateChange` subscription forever. Fixed by capturing `setupScreen`'s handle,
+   adding a `signingIn` guard against Supabase firing `SIGNED_IN` twice (a real event in
+   Supabase 2.1+, would cause a double-mount), and a `.catch()` so an initial-load failure
+   doesn't disappear as an unhandled rejection.
+2. Missing busy-guard on `handleResetData` / `handleEndSession` — a double-click race where
+   a click already queued against a stale, about-to-be-detached button node still fires
+   regardless of that node's own `disabled` state, since `render()` fully rebuilds the DOM.
+   Fixed by adding the same live `state.busy` re-check that `handleToggle` already had.
+3. Permanent `state.error` banner set once on initial-load failure, never cleared by any
+   later action, bleeding underneath every subsequent view forever. Fixed by converting it
+   to a toast, which naturally expires.
+
+**Module-boundary-checker** — zero violations. Only flagged that the directory's own
+`src/community/guess-the-bean/CLAUDE.md` needed a Phase 2/3 history update (done).
+
+**UI-accessibility-reviewer** found 3 BLOCKING WCAG 4.1.2 gaps and 1 non-blocking:
+
+1. The `guess_enabled` checkbox's `<label>` wrapped only the checkbox itself, not its
+   "Guessing open" text — WCAG 4.1.2 failure, no accessible name and no adequate tap target
+   either. Fixed by moving both the checkbox and its text into one `<label>` element.
+2. The orientation `<select>` had zero accessible name. Fixed with an `aria-label`.
+3. The toast notification (the only confirmation of destructive-action outcomes and errors)
+   had no `role="status"` or `aria-live` at all. Fixed with `role="status" aria-live="polite"`.
+4. (Non-blocking) The QR code's SVG is genuinely redundant with the visible URL text right
+   above it. Fixed with `aria-hidden="true"`. Focus management across the screen's own
+   internal view transitions (create→list→detail) partially fixed by moving focus to the new
+   view's heading on an actual view change, but the reviewer noted a broader pattern (focus
+   loss on every single re-render, not just view transitions, amplified by this screen's many
+   interactive controls) shared with Phase 2's `authScreen.js` and the organiser console's
+   `loginScreen.js`. Dismissed the old Phase 2 follow-up task (`task_cb9d63b0`) and spawned a
+   new, broader-scoped one (`task_8aad08ec`, "Fix focus loss on re-render across three
+   screens") covering all three affected files.
+
+**Test-auditor** found and fixed several real test-strength gaps:
+
+1. The `chainable()` test helper was too permissive (could mask chain-shape/table-name bugs
+   in `listMySessions`, `updateSession`, `endSession`, `createSession`). Fixed by having
+   those tests capture and assert the exact table name and call shape.
+2. The `fetchSessionExport` rejoin test's single-contact fixture couldn't distinguish
+   correct keyed (Map-based) matching from a buggy positional (index-based) one. Fixed with a
+   reversed-order two-contact fixture that only passes under genuinely-keyed matching.
+3. Zero error-path coverage across `setupScreen.test.js`'s original 15 tests despite 5
+   distinct `catch` blocks in the implementation. Fixed with 4 new tests injecting failures
+   via a new `failOn` option on the fake client, plus a double-click-guard test.
+4. Two vacuous tests: "Reveal is disabled" only checked the disabled DOM property without
+   ever clicking (now clicks and asserts no-op). The `unmount()` test only checked it didn't
+   throw without proving the toast timer was actually cleared (now uses fake timers to prove
+   a pending toast render is genuinely suppressed after unmount).
+
+**Test suite:** 1117 → 1149 JS tests (32 new/strengthened across `sessions.test.js` and
+`setupScreen.test.js`). **pgTAP:** 207 → 222 (15 new, covering `bean_count`'s constraints
+and immutability, `session_bean_count()`'s pre/post-reveal behavior, `sessions_delete`'s
+creator-only enforcement, `reset_guess_session_data`'s creator-only enforcement including a
+genuinely-nonexistent-session-id edge case). Full suite passing, lint clean, no schema drift,
+both new migrations' rollback blocks verified live in a transaction.
+
+**New architectural note:** `qrcode-generator@2.0.4` is the first new npm dependency this
+Guess the Bean effort has introduced.
+
+**Spec vs. legacy discovery:** Phase 3's own pass/fail list includes a `?demo=1`-equivalent
+criterion. Verified against the actual legacy source: this behavior lives in
+`booth/guess/index.html` (Phase 4's participant entry page), not `booth/setup/index.html`
+(Phase 3's own page, which carries no demo-mode code at all). Treated as a spec-authoring
+artifact, misattributed to Phase 3. Deferred to Phase 4 where it actually belongs, not
+implemented here.
+
+**Files touched:** `supabase/migrations/20260914130000_guess_the_bean_bean_count.sql`,
+`supabase/migrations/20260914131000_guess_the_bean_session_lifecycle.sql`,
+`supabase/tests/010_guess_the_bean.sql`, `src/community/guess-the-bean/sessions.js`,
+`src/community/guess-the-bean/sessions.test.js`, `src/community/guess-the-bean/setupScreen.js`,
+`src/community/guess-the-bean/setupScreen.test.js`, `src/community/guess-the-bean/setupScreen.css`,
+`src/community/guess-the-bean/shared.css`, `src/community/guess-the-bean/main.js`,
+`src/community/guess-the-bean/CLAUDE.md` (Phase history added), `guess-the-bean/index.html`,
+`package.json`.
+
+**Verifiers:**
+
+- **schema-guardian**: 2 findings (TOCTOU gap + advisory integrity gap), both fixed,
+  rollback verified live, clean sign-off.
+- **security-reviewer**: 5 live adversarial probes (all held up), clean sign-off.
+- **code-reviewer**: 3 findings (unmount leak + double-click + permanent error banner), all
+  fixed and re-verified live, clean sign-off.
+- **module-boundary-checker**: clean, zero boundary violations; doc update flagged and done.
+- **ui-accessibility-reviewer**: 3 BLOCKING gaps + 1 non-blocking, all fixed and
+  re-verified live. Broader focus-loss gap spawned as task_8aad08ec, superseding earlier
+  task_cb9d63b0.
+- **test-auditor**: 4 real gaps, all fixed, clean sign-off.
+
+**Definition of Done met** — acceptance criteria demonstrated (LIVE twice), tests passing
+(1149 JS + 222 pgTAP), lint clean, all reviewer findings zero-blocking, no schema drift,
+migrations' rollback blocks verified, ROADMAP.md updated, version bumped.
+
+## Guess the Bean Supabase port — Phase 2: Magic-link auth stub · 2026-09-14
+
+**New architectural category: `src/community/guess-the-bean/`.** This task required
+deciding where to place Guess the Bean's Phase 2+ UI — it has real auth + Supabase
+(excluding `src/tools/`, which explicitly bans those per its scoped CLAUDE.md), but no
+roster/scoring/advancement (excluding `src/formats/<format>/`, which require those). This
+is a third kind of surface: format-agnostic community/standalone game with auth. Created a
+new top-level module category `src/community/` (parallel to `src/core/` and
+`src/formats/`), placed Guess the Bean inside it, and updated the root `CLAUDE.md`'s
+architecture map to document it. Each community game gets its own scoped `CLAUDE.md` (new
+`src/community/guess-the-bean/CLAUDE.md`). This is a **deliberate scope decision** not to
+reuse the organiser console's `core/loginScreen.js` — Guess the Bean uses magic-link
+(signInWithOtp), no password anywhere per the spec's locked Phase 2 decision, targeting
+many independent creators; the console uses temporary signInWithPassword for the single
+admin org. Different account models, different auth surfaces.
+
+**Magic-link auth screen (`src/community/guess-the-bean/authScreen.js`, 17 new tests):**
+Real production auth flow — users enter email, Supabase sends a magic link via the local
+Supabase stack's Mailpit, clicking the link establishes the session asynchronously and
+redirects back into the app. **Verified LIVE end-to-end twice**: once pre-review, once
+post-fixes. Session establishment uses `client.auth.onAuthStateChange()` (reactive, not a
+one-time poll), same pattern as `appShell.js`'s own sign-in control, because the
+magic-link redirect establishes session _after_ the screen has mounted. Confirmed via
+direct browser JS that `auth.uid()` resolves correctly in an RLS-protected insert against
+the sessions table (both as the original test user and again as a second user post-review).
+
+**Self-contained CSS and new Vite build entry:** `authScreen.css` + `shared.css` with
+`.gtb-*` prefixed classes (never loading `formats/cup-taster/heatsScreen.css`'s shared
+classes like `.btn/.card/.field-input/.screen-container`), matching the module-boundary
+precedent `src/tools/timer/` already established. New Vite build entry `guessTheBean` →
+`guess-the-bean/index.html` for the standalone game, alongside existing `main`/`app`/
+`toolsTimer` entries.
+
+**Code-reviewer found 2 real issues (both fixed):**
+
+1. `main.js` discarded `mountAuthScreen()`'s returned handle, leaking the
+   `onAuthStateChange` subscription forever — no `unmount()` ever called since this app
+   has no router to unmount on nav. Fixed by capturing the handle and calling its
+   unsubscribe on unmount (or when the page unloads).
+2. `emailRedirectTo` used raw `window.location.href` instead of `origin + pathname`,
+   which would round-trip any stray query string/hash from the magic link back into the
+   email link body, corrupting future magic-link verification URLs. Fixed to construct
+   the URL from known parts only.
+
+**Module-boundary-checker clean, no findings:** Verified `src/community/` only imports
+from `src/core/`, no reverse dependency, no core-primitive reimplementation, CSS fully
+self-contained with `.gtb-*` prefix, docs accurate.
+
+**UI-accessibility-reviewer clean, no blocking findings:** Verified tap targets, contrast
+ratios against DESIGN.md's measured table (8.0:1/6.9:1 danger, 5.9:1/9.6:1 success),
+focus management, labeledField() accessible-name computation, autocomplete correctness.
+**One non-blocking, pre-existing gap shared with `core/loginScreen.js` flagged:** no
+aria-live announcement of the in-flight "sending" state, and native `disabled` drops
+keyboard focus. Spawned as a separate cross-cutting follow-up task (`task_cb9d63b0`)
+rather than fixing here — it affects both Guess the Bean and the organiser console, and
+is out of scope for this task.
+
+**Test-auditor found 2 real gaps (both fixed):**
+
+1. The "no password field" negative checks only matched literal `input[type=password]`,
+   missing a differently-attributed regression path. Fixed by adding `hasAnyPasswordLikeInput()`
+   utility that checks both attribute patterns, plus a source-grep test proving no
+   `resetPasswordForEmail`/`signInWithPassword`/`updateUser(password)` call exists anywhere
+   in `authScreen.js`.
+2. The `onSignedIn`/`onAuthStateChange` test only ever fired `SIGNED_IN`, never proving
+   the `if (event === 'SIGNED_IN')` guard itself (an unconditional `onSignedIn()` call would
+   have passed identically). Fixed by adding a negative-event test confirming that
+   `TOKEN_REFRESHED` and `SIGNED_OUT` do NOT call `onSignedIn`.
+
+**Files touched:** `src/community/guess-the-bean/authScreen.js`,
+`src/community/guess-the-bean/authScreen.test.js`, `src/community/guess-the-bean/authScreen.css`,
+`src/community/guess-the-bean/shared.css`, `src/community/guess-the-bean/main.js`,
+`src/community/guess-the-bean/CLAUDE.md`, `guess-the-bean/index.html`, `vite.config.js`,
+`CLAUDE.md` (root).
+
+**Test suite:** 1100 → 1117 (17 new tests for authScreen.js). All passing, lint clean.
+
+**Known gap (accepted, not blocking):** Phase 2 pass/fail verified LIVE in real browser
+(magic link sent via Mailpit's REST API, clicked through, `auth.uid()` confirmed
+resolving in RLS-protected insert twice — before and after fixes), but no automated
+Playwright e2e test yet — only unit tests. Accepted as manual-verification-only for this
+phase; revisit if a regression ever ships undetected.
+
+**Verifiers:**
+
+- **code-reviewer**: 2 findings (leak + URL construction), both fixed, live re-verified, clean sign-off.
+- **module-boundary-checker**: clean, no findings.
+- **ui-accessibility-reviewer**: clean, no blocking findings; one pre-existing gap spawned
+  as task_cb9d63b0.
+- **test-auditor**: 2 findings (DOM check + test guard), both fixed, clean sign-off.
+
+**Definition of Done met** — acceptance criteria demonstrated, tests passing, lint clean,
+all reviewer findings zero-blocking, ROADMAP.md and CHANGELOG.md updated, version bumped.
+
+## Guess the Bean Supabase port — Phase 1: Schema + RLS · 2026-09-14
+
+**User decision reversal: 2026-08-23's "Guess the Bean will NOT be rebuilt" call is
+superseded by the new `Handoffs and Specs/guess-the-bean-next-port-SPEC.md` — proceeding
+with the full Supabase port.** Phase 1 builds the database schema and access controls; the
+spec's remaining phases (2–5) carry the client, session management UI, gameplay, and
+hardening. Today's Phase 1 closes with schema + RLS + the first verification suite.
+
+**Database schema (three new tables):** `sessions` (creator_id, guess_enabled, revealed,
+orientation), `guesses` (session_id, guess_id, emoji), `contacts` (guess_id, creator_id,
+name, color) — migration `20260914120000_guess_the_bean_tables.sql`. Deliberately NOT
+org-scoped, unlike Cup Taster. Sessions anchor directly to `auth.users(id)` per the spec's
+own locked identity-anchor decision (future Seduh ID attaches additively to the same
+UUID). Fixed two real issues during schema-guardian review: missing unique constraint on
+`contacts.guess_id` (1:1 pairing wasn't enforced), and `sessions.creator_id`'s FK had no
+on-delete behavior (added `on delete cascade`, matching this repo's own `org_members.user_id`
+precedent).
+
+**RLS + resolver functions (migration `20260914121000_guess_the_bean_rls.sql`):** Two
+blocking findings from security-reviewer, both fixed:
+
+1. anon had a full-row grant on sessions exposing `creator_id` (the spec's own declared
+   identity anchor) to unauthenticated callers. Fixed with a column-scoped grant
+   (id/guess_enabled/revealed/orientation only), following this repo's own
+   `20260831100000_events_anon_safe_read.sql` precedent (revoke-then-narrow-grant).
+2. Once anon's sessions grant became column-scoped, guesses_select and contacts_insert
+   broke: they read sessions columns directly in cross-table subqueries, and RLS policy
+   evaluation requires the calling role to hold privilege on any column the policy
+   expression reads. Introduced 4 new SECURITY DEFINER STABLE resolver functions
+   (`app.session_is_open`, `is_revealed`, `is_creator`, `session_id_for_guess`) matching
+   this repo's own `app.org_id_for_event` chokepoint pattern, so policies never read
+   sessions/guesses columns directly as the calling role. Also surfaced and fixed a
+   genuine functional bug: a pre-reveal guess isn't visible under guesses_select to a
+   non-creator, so contacts_insert's original raw subquery would have failed for a real
+   anon participant.
+3. Secondary finding (same area): `sessions_select`'s `using(true)` matched authenticated,
+   so any logged-in user could read ANY OTHER creator's `creator_id`/name, violating Phase
+   3 AC. Fixed by splitting into `sessions_select` (to anon, using(true)) and
+   `sessions_select_own` (to authenticated, using(creator_id = auth.uid())).
+
+**Phase 4 implementation constraint discovered:** INSERT...RETURNING requires the
+inserting role to also satisfy the table's SELECT policy — a pre-reveal anon guess insert
+with RETURNING throws an RLS violation. Phase 4's real client MUST generate the guess's
+UUID client-side, never rely on RETURNING/Supabase JS's `.insert().select()`.
+
+**Test suite (migration `supabase/tests/010_guess_the_bean.sql`):** 30 assertions covering
+session creation, read visibility by creator/anon, guess creation and visibility,
+contact insertion, pre-reveal visibility, and post-reveal transitions. All 207 tests pass
+(up from 196 baseline). `supabase db diff --local` shows zero schema drift.
+
+**Verification:**
+
+- Both migrations apply cleanly from an empty database.
+- Rollback blocks tested live in `begin;...rollback;` transactions against the local DB
+  (confirmed clean removal, confirmed nothing lost after rollback).
+- Docker Desktop was not running at session start and had to be started manually before
+  any local verification was possible.
+
+**Reviews:**
+
+- **schema-guardian**: 2 findings (uniqueness, on-delete behavior) found and fixed. Clean
+  sign-off.
+- **security-reviewer**: 2 blocking findings (anon full-row grant, authenticated full-row
+  read of other creators) and 1 non-blocking doc suggestion found across 3 rounds, all
+  fixed. Clean sign-off.
+
+**Known gaps this task (flagged, not blocking):**
+
+- Directory placement for Phase 3+ (session mgmt UI) not yet decided — doesn't fit
+  `src/tools/` (has auth + Supabase, excluded by that dir's own CLAUDE.md) or
+  `src/formats/<format>/` (no roster/scoring/advancement). Needs a decision + scoped
+  CLAUDE.md before Phase 3 starts.
+- guesses pre-reveal SELECT-by-creator behavior not yet confirmed against legacy's actual
+  booth/display/guess/index.html behavior (spec explicitly flags this, does not lock it).
+
 ## Design system rework: Kinetic → Petrol identity, full app-wide token replacement · 2026-09-13
 
 **User decision to adopt externally-produced design handoff as the new marketing and

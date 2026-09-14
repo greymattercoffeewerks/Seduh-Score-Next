@@ -1,0 +1,147 @@
+/*
+ * Guess the Bean — shared primitives across this tool's own screens
+ * (auth, and later setup/entry/display). Self-contained, same "never load
+ * a format's CSS" rule src/tools/timer/timer.css already established for
+ * this codebase's third kind of surface — see
+ * src/community/guess-the-bean/CLAUDE.md. Reuses the generic design tokens
+ * (fonts/colors/typography/spacing/base) the same way src/marketing/ and
+ * src/tools/timer/ both already do, since those are genuinely
+ * surface-agnostic; only the `.gtb-*` component classes below are this
+ * tool's own.
+ */
+
+body {
+  margin: 0;
+  background: var(--color-canvas);
+  color: var(--color-text);
+}
+
+.gtb-screen {
+  max-width: 24rem;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4) var(--space-8);
+  box-sizing: border-box;
+}
+
+.gtb-card {
+  border: var(--border-hairline) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  padding: var(--space-5);
+}
+
+.gtb-input {
+  min-height: var(--tap-target-min);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
+  border: var(--border-hairline) solid var(--color-border);
+  background: var(--color-canvas);
+  color: var(--color-text);
+  font-size: var(--text-md);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.gtb-btn {
+  min-height: var(--tap-target-min);
+  padding: 0 var(--space-5);
+  border-radius: var(--radius-md);
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+  width: 100%;
+}
+
+.gtb-btn-primary {
+  border: var(--border-hairline) solid var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-canvas);
+}
+
+.gtb-btn-outline {
+  border: var(--border-hairline) solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.gtb-btn-danger {
+  border: var(--border-hairline) solid var(--color-danger);
+  background: var(--color-surface);
+  color: var(--color-danger);
+}
+
+.gtb-btn-danger-solid {
+  border: var(--border-hairline) solid var(--color-danger);
+  background: var(--color-danger);
+  color: var(--color-canvas);
+}
+
+.gtb-btn:disabled,
+.gtb-btn[aria-disabled='true'],
+.gtb-input:disabled,
+.gtb-input[aria-disabled='true'],
+input[type='checkbox'][aria-disabled='true'] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.gtb-field-error {
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+/* core/dom.js's labeledField() emits a generic .form-field/.form-field-label
+   pair with no styling opinion of its own (same gap this tool's sibling,
+   src/tools/timer/timer.css, already documents and fixes for itself) — this
+   tool never loads formats/cup-taster/heatsScreen.css, which owns that pair
+   for the console, so it needs its own copy here too. */
+.form-field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  text-align: left;
+  width: 100%;
+}
+
+.form-field-label {
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+}
+
+.gtb-feedback {
+  font-size: var(--text-sm);
+  margin-top: var(--space-3);
+}
+
+.gtb-feedback:empty {
+  display: none;
+}
+
+.gtb-feedback[data-tone='error'] {
+  color: var(--color-danger);
+}
+
+.gtb-feedback[data-tone='success'] {
+  color: var(--color-success);
+}
+
+/* Transient bottom notification — ports legacy's own booth-toast (a fixed,
+   auto-dismissing bar), restyled to design tokens. Text-only, no color-alone
+   signal to carry (unlike an urgency indicator) — every message here states
+   its own outcome in words ("Copied to clipboard.", "Data exported."). */
+.gtb-toast {
+  position: fixed;
+  bottom: var(--space-6);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--color-text);
+  color: var(--color-canvas);
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  z-index: 200;
+}

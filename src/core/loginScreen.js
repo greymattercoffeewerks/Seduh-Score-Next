@@ -10,7 +10,7 @@
 //
 // Lives in core/, not a format directory — auth is format-agnostic.
 import { getSupabase } from './supabaseClient.js';
-import { el, labeledField } from './dom.js';
+import { el, labeledField, setBusyDisabled, withFocusPreservation } from './dom.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
 
 export function validateCredentials(draft) {
@@ -31,7 +31,7 @@ export function renderLoginForm(draft, { disabled }) {
     },
   });
   emailInput.value = draft.email;
-  emailInput.disabled = disabled;
+  setBusyDisabled(emailInput, disabled);
   emailInput.addEventListener('input', () => {
     draft.email = emailInput.value;
   });
@@ -47,7 +47,7 @@ export function renderLoginForm(draft, { disabled }) {
     },
   });
   passwordInput.value = draft.password;
-  passwordInput.disabled = disabled;
+  setBusyDisabled(passwordInput, disabled);
   passwordInput.addEventListener('input', () => {
     draft.password = passwordInput.value;
   });
@@ -55,9 +55,9 @@ export function renderLoginForm(draft, { disabled }) {
   const submitButton = el('button', {
     className: 'btn btn-primary tap-target',
     text: disabled ? 'Signing in…' : 'Sign in',
-    attrs: { type: 'submit' },
+    attrs: { type: 'submit', 'data-focus-key': 'submit' },
   });
-  submitButton.disabled = disabled;
+  setBusyDisabled(submitButton, disabled);
 
   return el('form', { className: 'login-form' }, [
     labeledField('Email', emailInput),
@@ -139,36 +139,39 @@ export async function mountLoginScreen(root, { client = getSupabase(), onSignedI
     // entry point. See ROADMAP.md's "A real DOM-write race between the
     // router..." entry.
     if (signal?.aborted) return;
-    root.innerHTML = '';
-    const container = el('section', { className: 'screen-container login-screen' });
-    container.appendChild(el('h1', { text: 'Sign in' }));
+    withFocusPreservation(root, () => {
+      root.innerHTML = '';
+      const container = el('section', { className: 'screen-container login-screen' });
+      container.appendChild(el('h1', { text: 'Sign in' }));
 
-    // `aria-live`/`role="status"` kept for consistency with every other
-    // screen's feedback region, but the real delivery mechanism on THIS
-    // screen is the explicit feedback.focus() below — root.innerHTML=''
-    // rebuilds this node fresh every render(), and a live-region
-    // announcement isn't reliably triggered by inserting an
-    // already-populated new node (only by mutating an existing one).
-    const feedback = el('div', {
-      className: 'screen-feedback',
-      attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
+      // `aria-live`/`role="status"` kept for consistency with every other
+      // screen's feedback region, but the real delivery mechanism on THIS
+      // screen is the explicit feedback.focus() below — root.innerHTML=''
+      // rebuilds this node fresh every render(), and a live-region
+      // announcement isn't reliably triggered by inserting an
+      // already-populated new node (only by mutating an existing one).
+      const feedback = el('div', {
+        className: 'screen-feedback',
+        attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
+      });
+      if (pendingError) {
+        setFeedback(feedback, pendingError, 'error');
+        pendingError = null;
+      }
+
+      const form = renderLoginForm(draft, { disabled: signingIn });
+      form.addEventListener('submit', handleSubmit);
+
+      container.appendChild(el('div', { className: 'card' }, [form]));
+      container.appendChild(feedback);
+      root.appendChild(container);
+
+      if (feedback.dataset.tone === 'error') {
+        feedback.scrollIntoView?.({ block: 'nearest' });
+        feedback.focus();
+        return true;
+      }
     });
-    if (pendingError) {
-      setFeedback(feedback, pendingError, 'error');
-      pendingError = null;
-    }
-
-    const form = renderLoginForm(draft, { disabled: signingIn });
-    form.addEventListener('submit', handleSubmit);
-
-    container.appendChild(el('div', { className: 'card' }, [form]));
-    container.appendChild(feedback);
-    root.appendChild(container);
-
-    if (feedback.dataset.tone === 'error') {
-      feedback.scrollIntoView?.({ block: 'nearest' });
-      feedback.focus();
-    }
   }
 
   render();
