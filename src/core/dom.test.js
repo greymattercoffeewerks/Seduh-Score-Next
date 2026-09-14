@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { el, labeledField, brandMark } from './dom.js';
+import { el, labeledField, brandMark, setBusyDisabled, withFocusPreservation } from './dom.js';
 
 describe('el', () => {
   it('creates an element with the given tag', () => {
@@ -57,6 +57,116 @@ describe('labeledField', () => {
     const input = el('input');
     const field = labeledField('Label', input);
     expect(field.children).toHaveLength(2); // label span + input, no third child
+  });
+});
+
+describe('setBusyDisabled', () => {
+  it('sets aria-disabled and aria-busy, never the native disabled property', () => {
+    const node = el('button');
+    setBusyDisabled(node, true);
+    expect(node.disabled).toBe(false);
+    expect(node.getAttribute('aria-disabled')).toBe('true');
+    expect(node.getAttribute('aria-busy')).toBe('true');
+  });
+
+  it('removes both attributes when not busy', () => {
+    const node = el('button');
+    setBusyDisabled(node, true);
+    setBusyDisabled(node, false);
+    expect(node.hasAttribute('aria-disabled')).toBe(false);
+    expect(node.hasAttribute('aria-busy')).toBe(false);
+  });
+
+  it('a busy-marked control stays focusable, unlike native disabled', () => {
+    const node = el('button');
+    document.body.appendChild(node);
+    setBusyDisabled(node, true);
+    node.focus();
+    expect(document.activeElement).toBe(node);
+    document.body.removeChild(node);
+  });
+});
+
+describe('withFocusPreservation', () => {
+  it('restores focus, by data-focus-key, to the equivalent control after a full teardown/rebuild', () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    root.appendChild(el('button', { attrs: { 'data-focus-key': 'submit' } }));
+    root.querySelector('[data-focus-key="submit"]').focus();
+    expect(document.activeElement).toBe(root.querySelector('[data-focus-key="submit"]'));
+
+    withFocusPreservation(root, () => {
+      root.innerHTML = '';
+      root.appendChild(el('button', { attrs: { 'data-focus-key': 'submit' } }));
+    });
+
+    expect(document.activeElement).toBe(root.querySelector('[data-focus-key="submit"]'));
+    document.body.removeChild(root);
+  });
+
+  it('falls back to data-field when data-focus-key is absent', () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    root.appendChild(el('input', { attrs: { 'data-field': 'email' } }));
+    root.querySelector('[data-field="email"]').focus();
+
+    withFocusPreservation(root, () => {
+      root.innerHTML = '';
+      root.appendChild(el('input', { attrs: { 'data-field': 'email' } }));
+    });
+
+    expect(document.activeElement).toBe(root.querySelector('[data-field="email"]'));
+    document.body.removeChild(root);
+  });
+
+  it('falls back to id when neither data-focus-key nor data-field is present', () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    root.appendChild(el('input', { id: 'gtb-orientation' }));
+    root.querySelector('#gtb-orientation').focus();
+
+    withFocusPreservation(root, () => {
+      root.innerHTML = '';
+      root.appendChild(el('input', { id: 'gtb-orientation' }));
+    });
+
+    expect(document.activeElement).toBe(root.querySelector('#gtb-orientation'));
+    document.body.removeChild(root);
+  });
+
+  it('does nothing when renderFn reports it already moved focus itself', () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    root.appendChild(el('button', { attrs: { 'data-focus-key': 'submit' } }));
+    root.querySelector('[data-focus-key="submit"]').focus();
+
+    withFocusPreservation(root, () => {
+      root.innerHTML = '';
+      const heading = el('h1', { text: 'Error', attrs: { tabindex: '-1' } });
+      root.appendChild(heading);
+      heading.focus();
+      return true;
+    });
+
+    expect(document.activeElement).toBe(root.querySelector('h1'));
+    document.body.removeChild(root);
+  });
+
+  it('is a no-op when nothing inside root had focus beforehand', () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const outside = document.createElement('button');
+    document.body.appendChild(outside);
+    outside.focus();
+
+    withFocusPreservation(root, () => {
+      root.innerHTML = '';
+      root.appendChild(el('button', { attrs: { 'data-focus-key': 'x' } }));
+    });
+
+    expect(document.activeElement).toBe(outside);
+    document.body.removeChild(root);
+    document.body.removeChild(outside);
   });
 });
 

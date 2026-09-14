@@ -1,6 +1,6 @@
 {
   "name": "seduh-score-next",
-  "version": "2.0.11",
+  "version": "2.0.15",
   "private": true,
   "type": "module",
   "scripts": {
@@ -18,7 +18,8 @@
     "db:test": "supabase test db --local supabase/tests"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.47.10"
+    "@supabase/supabase-js": "^2.47.10",
+    "qrcode-generator": "^2.0.4"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

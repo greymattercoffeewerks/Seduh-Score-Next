@@ -8,21 +8,28 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   build: {
     rollupOptions: {
-      // Three HTML entries: the marketing landing page at root (index.html),
+      // Five HTML entries: the marketing landing page at root (index.html),
       // the console SPA at /app/ (app/index.html — moved out of root
       // 2026-09-07 so the bare domain serves the landing page instead of
-      // booting straight into the console), and the standalone Timer tool
-      // at /tools/timer/ (2026-09-12 — a free community tool,
-      // not wired into any event/heat, same "new territory outside the
-      // core/formats boundary" precedent as src/marketing/ — see
-      // src/tools/CLAUDE.md). Vite's dev server serves all three by
-      // filesystem path with no config needed; only the production build
-      // needs to be told about entries beyond the first, or `vite build`
-      // silently drops them from dist/.
+      // booting straight into the console), the standalone Timer tool at
+      // /tools/timer/ (2026-09-12 — a free community tool, not wired into
+      // any event/heat, same "new territory outside the core/formats
+      // boundary" precedent as src/marketing/ — see src/tools/CLAUDE.md),
+      // Guess the Bean's own organiser entry at /guess-the-bean/ (2026-09-14
+      // — a THIRD kind of outside-the-boundary surface: unlike Timer, it has
+      // real auth+Supabase, so it lives in src/community/, not src/tools/ —
+      // see src/community/guess-the-bean/CLAUDE.md), and its PARTICIPANT
+      // entry at /guess-the-bean/play/ (2026-09-15, Phase 4 — a separate,
+      // unauthenticated page, not a route within the organiser page). Vite's
+      // dev server serves all five by filesystem path with no config
+      // needed; only the production build needs to be told about entries
+      // beyond the first, or `vite build` silently drops them from dist/.
       input: {
         main: fileURLToPath(new URL('./index.html', import.meta.url)),
         app: fileURLToPath(new URL('./app/index.html', import.meta.url)),
         toolsTimer: fileURLToPath(new URL('./tools/timer/index.html', import.meta.url)),
+        guessTheBean: fileURLToPath(new URL('./guess-the-bean/index.html', import.meta.url)),
+        guessTheBeanPlay: fileURLToPath(new URL('./guess-the-bean/play/index.html', import.meta.url)),
       },
     },
   },

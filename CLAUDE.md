@@ -25,7 +25,11 @@ the context it actually touches:
   wiring.
 - [src/marketing/CLAUDE.md](src/marketing/CLAUDE.md) — the public marketing landing page.
 - [src/tools/CLAUDE.md](src/tools/CLAUDE.md) — standalone free community tools (e.g. the
-  Timer), outside the core/formats module boundary entirely.
+  Timer), outside the core/formats module boundary entirely, with no auth/Supabase.
+- [src/community/guess-the-bean/CLAUDE.md](src/community/guess-the-bean/CLAUDE.md) —
+  Guess the Bean, a free Community-tier tool with real auth+Supabase but no
+  roster/scoring/advancement — a third kind of surface, neither `src/tools/` nor
+  `src/formats/`.
 - [src/formats/cup-taster/CLAUDE.md](src/formats/cup-taster/CLAUDE.md) — Cup Taster.
 - [src/formats/throwdown/CLAUDE.md](src/formats/throwdown/CLAUDE.md) — Throwdown (not started).
 - [src/formats/liga-seduh/CLAUDE.md](src/formats/liga-seduh/CLAUDE.md) — Liga Seduh (not started).
@@ -178,16 +182,26 @@ push (2026-08-30) was actually done (the Supabase MCP's `apply_migration`, not
 
 ```
 Handoffs and Specs/SEDUH-NEXT-HANDOFF.md   ← frozen spec, never edited for progress
+Handoffs and Specs/guess-the-bean-next-port-SPEC.md ← Guess the Bean's own spec
 index.html                      ← marketing landing page entry (root domain).
 app/index.html                  ← console SPA entry (moved out of root 2026-09-07 —
                                    see src/marketing/CLAUDE.md for why). Same main.js/
                                    router/screens as always, just served from /app/.
+tools/timer/index.html          ← standalone Timer tool entry. See src/tools/CLAUDE.md.
+guess-the-bean/index.html       ← Guess the Bean entry. See
+                                   src/community/guess-the-bean/CLAUDE.md.
 src/
   core/                         ← shared, format-agnostic modules + main.js wiring.
                                    See src/core/CLAUDE.md.
   marketing/                    ← the public landing page (day/night themed, no auth,
                                    no router). Outside the handoff's original scope —
                                    see src/marketing/CLAUDE.md.
+  tools/                        ← standalone free community tools (e.g. Timer) — no
+                                   auth, no Supabase. See src/tools/CLAUDE.md.
+  community/
+    guess-the-bean/             ← a free Community-tier tool WITH real auth+Supabase
+                                   but no roster/scoring/advancement — a third kind of
+                                   surface. See src/community/guess-the-bean/CLAUDE.md.
   formats/
     cup-taster/                 ← scoring, timing-surface, entry-surface, viewer-body,
                                    analytics. See src/formats/cup-taster/CLAUDE.md.
