@@ -165,7 +165,7 @@ nesting bug found and fixed). Build/lint/test passing (1100 tests). Console scre
 (other than Login/Setup) still pending restyling pass against angular shape language, but
 already inherit correct tokens automatically. See CHANGELOG.md for the full account.
 
-**Guess the Bean Supabase port (2026-09-14), not tied to a phase task**: New spec, new
+**Guess the Bean Supabase port (2026-09-14+), not tied to a phase task**: New spec, new
 Supabase port. Reverses the 2026-08-23 descope decision; user confirmed the new port spec
 supersedes that call.
 
@@ -229,6 +229,28 @@ live. Six reviewers signed off clean. See CHANGELOG.md for full account.
 criterion (verified in legacy: this lives in `booth/guess/index.html`, Phase 4's participant
 entry page, not Phase 3's booth/setup). Deferred to Phase 4 where it actually belongs. See
 CHANGELOG.md for the full account.
+
+**Phase 4: Participant entry flow (2026-09-15)** — Ported the participant-entry screen from
+legacy `booth/guess/index.html`: 7 view states (loading/no-session/not-found/not-active/
+closed/form/confirmed), validation rules (name ≤80, guess 1–100000000, phone ≤30 / instagram
+≤50 with one required), demo mode (`?demo=1`), and guess_enabled/revealed precedence.
+New submit_guess() SECURITY DEFINER RPC (migration 20260915100000) handling atomic
+inserts to both guesses + contacts (satisfying spec's atomicity requirement), generating
+guess UUID server-side. Fixed real enumeration-oracle bug in `app.session_is_open()`: returned
+NULL instead of false for nonexistent session_id via `coalesce(scalar_expr, false)` over a
+zero-row subquery; fixed by switching to `EXISTS(...)`. Full accessibility retrofit
+(setBusyDisabled/withFocusPreservation, role="alert" on errors, aria-invalid/aria-describedby,
+explicit focus management). Originally built against Supabase Realtime (postgres_changes) for
+the close-watch, but live-testing proved Realtime does not reliably deliver events for
+newly-added-to-publication tables on this project's LOCAL dev stack; switched to 4-second
+polling. New Vite entry for participant page (`guess-the-bean/play/`). Six reviewers clean:
+schema-guardian + security-reviewer both independently caught and fixed the enumeration-oracle
+bug (BLOCKING), code-reviewer found loading-state blank-screen gap (fixed), module-boundary-
+checker clean, ui-accessibility-reviewer confirmed all 3 WCAG gaps closed (focus restoration,
+error announcements, explicit focus moves), test-auditor found vacuous poll test + zero focus-
+assertion coverage (both fixed). Test suite: 1162 → 1188 JS, 207 → 230 pgTAP. Verified live
+3 times: demo-mode RPC write, end-to-end reveal-triggered close via polling, nonexistent-
+session resolution. See CHANGELOG.md for full account.
 
 ---
 
@@ -360,7 +382,24 @@ two consumers of the same shell/data. Verifiers per task, `code-reviewer` always
 
 ---
 
-## Known open items carried into Phase 4
+## Known open items from Guess the Bean Phase 4
+
+- **Supabase Realtime unreliability on local dev stack for newly-published tables.**
+  Originally built participant entry's close-watch using Supabase Realtime
+  (postgres_changes). Live-testing proved Realtime does not reliably deliver events for
+  newly-added-to-publication tables on this project's LOCAL dev stack (extensively
+  debugged: pg_publication_tables, pg_replication_slots, realtime.subscription table, full
+  container/stack restarts, a brand-new probe table — all ruled out any Guess-the-Bean-
+  specific cause). Workaround in place: switched to 4-second polling (works everywhere, no
+  open question). If a future phase wants real Postgres Changes Realtime on a new table,
+  budget time to verify it actually works in the cloud deployment target (managed Supabase
+  project, per CLAUDE.md's Repo section), not just assume the pre-existing `live_sessions`
+  precedent generalizes — the local-stack anomaly was never tested against production.
+  Flagged by: kb-sync during Phase 4 closeout.
+
+---
+
+## Known open items carried into Phase 4 (Cup Taster)
 
 - **T4.3/T4.4's direct-write gap is closed (2026-08-29 follow-up)** — `timing.js`/
   `timingManual.js` now route every write (start a heat, a real tap, a manual entry/
