@@ -25,6 +25,7 @@ import {
   resetSessionData,
   endSession,
   buildParticipantUrl,
+  buildDisplayUrl,
   fetchSessionExport,
 } from './sessions.js';
 
@@ -38,6 +39,17 @@ export function validateCreateDraft(draft) {
   return errors;
 }
 
+// `fetchSessionExport()` preserves the guesses query's arrival order. Array
+// sort is stable, so equal-distance entries keep that order: earliest arrival
+// wins, matching the display's Phase 5 rule and making the contact shown here
+// unambiguous.
+export function findWinnerContact(rows, beanCount) {
+  return (
+    [...rows].sort((a, b) => Math.abs(a.guess - beanCount) - Math.abs(b.guess - beanCount))[0] ??
+    null
+  );
+}
+
 export async function mountSetupScreen(root, { client = getSupabase(), signal } = {}) {
   let state = {
     view: 'loading',
@@ -48,6 +60,8 @@ export async function mountSetupScreen(root, { client = getSupabase(), signal } 
     createErrors: {},
     busy: false,
     toastMessage: null,
+    winnerContact: null,
+    winnerError: null,
   };
   let userId = null;
   let toastTimer;
@@ -201,6 +215,26 @@ export async function mountSetupScreen(root, { client = getSupabase(), signal } 
     showToast('Data exported.');
   }
 
+  async function handleFindWinner() {
+    // Same explicit re-check every other danger-zone/toggle handler here
+    // needs: the button is only aria-disabled pre-reveal, and aria-disabled
+    // doesn't itself block a click. Without this, clicking the button on a
+    // still-open session would compute a "winner" from an in-progress game.
+    if (state.busy || !activeSession()?.revealed) return;
+    const session = activeSession();
+    state.busy = true;
+    state.winnerError = null;
+    render();
+    try {
+      const rows = await fetchSessionExport(session.id, client);
+      state.winnerContact = findWinnerContact(rows, session.bean_count);
+    } catch (err) {
+      state.winnerError = describeError(err);
+    }
+    state.busy = false;
+    render();
+  }
+
   async function handleResetData() {
     // Same busy re-check handleToggle already has, needed for the same
     // reason: render() fully replaces the DOM, so a click already queued
@@ -221,6 +255,8 @@ export async function mountSetupScreen(root, { client = getSupabase(), signal } 
       state.sessions = state.sessions.map((s) =>
         s.id === session.id ? { ...s, revealed: false } : s,
       );
+      state.winnerContact = null;
+      state.winnerError = null;
       showToast('Session data cleared. Ready for the next run.');
     } catch (err) {
       showToast(describeError(err));
@@ -288,7 +324,9 @@ export async function mountSetupScreen(root, { client = getSupabase(), signal } 
       labeledField(
         'Session name',
         nameInput,
-        state.createErrors.name ? [el('p', { className: 'gtb-field-error', text: state.createErrors.name })] : [],
+        state.createErrors.name
+          ? [el('p', { className: 'gtb-field-error', text: state.createErrors.name })]
+          : [],
       ),
       labeledField(
         'Real bean count',
@@ -382,13 +420,16 @@ export async function mountSetupScreen(root, { client = getSupabase(), signal } 
       return renderList();
     }
     const participantUrl = buildParticipantUrl(session.id);
+    const displayUrl = buildDisplayUrl(session.id);
 
     const guessToggle = el('input', {
       attrs: { type: 'checkbox', id: 'gtb-guess-enabled-toggle' },
     });
     guessToggle.checked = session.guess_enabled;
     setBusyDisabled(guessToggle, state.busy);
-    guessToggle.addEventListener('change', () => handleToggle('guess_enabled', guessToggle.checked));
+    guessToggle.addEventListener('change', () =>
+      handleToggle('guess_enabled', guessToggle.checked),
+    );
 
     const orientationSelect = el('select', {
       className: 'gtb-input',
@@ -435,6 +476,51 @@ export async function mountSetupScreen(root, { client = getSupabase(), signal } 
     setBusyDisabled(exportButton, state.busy);
     exportButton.addEventListener('click', handleExport);
 
+    const winnerButton = el('button', {
+      className: 'gtb-btn gtb-btn-primary tap-target',
+      text: state.busy ? 'Finding winner…' : 'Show winner contact',
+      attrs: { type: 'button', 'data-focus-key': 'winner' },
+    });
+    setBusyDisabled(winnerButton, state.busy || !session.revealed);
+    winnerButton.addEventListener('click', handleFindWinner);
+
+    const winnerChildren = [
+      el('h2', { className: 'gtb-winner-heading', text: 'Winner contact' }),
+      el('p', {
+        className: 'gtb-winner-help',
+        text: session.revealed
+          ? 'Find the closest guess and the contact details supplied by that player.'
+          : 'Available after you reveal the result.',
+      }),
+      winnerButton,
+    ];
+    if (state.winnerContact) {
+      const winner = state.winnerContact;
+      winnerChildren.push(
+        el(
+          'div',
+          { className: 'gtb-winner-result', attrs: { role: 'status', 'aria-live': 'polite' } },
+          [
+            el('strong', { text: winner.name }),
+            el('span', { text: `Guess: ${winner.guess}` }),
+            el('span', {
+              text: winner.phone
+                ? `Phone / WhatsApp: ${winner.phone}`
+                : `Instagram: ${winner.instagram}`,
+            }),
+          ],
+        ),
+      );
+    } else if (state.winnerError) {
+      winnerChildren.push(
+        el('p', {
+          className: 'gtb-field-error',
+          text: state.winnerError,
+          attrs: { role: 'alert' },
+        }),
+      );
+    }
+
     const resetButton = el('button', {
       className: 'gtb-btn gtb-btn-danger tap-target',
       text: 'Reset data',
@@ -474,8 +560,10 @@ export async function mountSetupScreen(root, { client = getSupabase(), signal } 
       ]),
       el('div', { className: 'gtb-card' }, [
         urlRow('Participant URL (for QR)', participantUrl),
+        urlRow('Display URL (for TV / stage)', displayUrl),
         qrContainer,
       ]),
+      el('div', { className: 'gtb-card gtb-winner-card' }, winnerChildren),
       el('div', { className: 'gtb-card gtb-danger-zone' }, [
         el('p', { className: 'gtb-danger-label', text: '⚠ Danger zone' }),
         exportButton,

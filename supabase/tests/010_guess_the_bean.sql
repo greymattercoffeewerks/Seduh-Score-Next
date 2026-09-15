@@ -2,7 +2,7 @@
 -- and Phase 1 "Test coverage" list: insert-when-closed rejected, insert-when-open
 -- accepted, contact-select-by-non-owner rejected, guess-update rejected.
 begin;
-select plan(53);
+select plan(57);
 
 -- ---------- fixtures (as postgres, bypasses RLS) ----------
 
@@ -53,9 +53,15 @@ insert into contacts (id, guess_id, phone) values
 
 set local role anon;
 select is(
-  (select count(*)::int from sessions),
+  (select count(*)::int from sessions where id in (
+    '00000000-0000-0000-0000-0000000000a1',
+    '00000000-0000-0000-0000-0000000000a2',
+    '00000000-0000-0000-0000-0000000000a3',
+    '00000000-0000-0000-0000-0000000000a4',
+    '00000000-0000-0000-0000-0000000000a5'
+  )),
   5,
-  'an unauthenticated (anon) client can read all sessions (no PII on this row)'
+  'an unauthenticated (anon) client can read every public test-session row'
 );
 reset role;
 
@@ -283,7 +289,7 @@ select is(
 );
 reset role;
 
--- ---------- guesses: select — public once revealed, restricted before ----------
+-- ---------- guesses: select — Phase 5's anonymous display feed is name-only before reveal ----------
 
 set local role anon;
 select is(
@@ -293,8 +299,28 @@ select is(
 );
 select is(
   (select count(*)::int from guesses where session_id = '00000000-0000-0000-0000-0000000000a1'),
+  3,
+  'an anon client CAN read the safe arrival feed from an open, not-yet-revealed session'
+);
+select throws_ok(
+  $$ select guess from guesses where session_id = '00000000-0000-0000-0000-0000000000a1' $$,
+  '42501', null,
+  'an anon client CANNOT read numeric guesses before the reveal'
+);
+select is(
+  (select count(*)::int from app.session_display_guesses('00000000-0000-0000-0000-0000000000a1')),
   0,
-  'an anon client reads zero guesses from an open, not-yet-revealed session'
+  'the gated display RPC returns zero rows before the reveal'
+);
+select is(
+  (select guess from app.session_display_guesses('00000000-0000-0000-0000-0000000000a3')),
+  500,
+  'the gated display RPC returns the numeric guess after the reveal'
+);
+select is(
+  (select public.session_bean_count('00000000-0000-0000-0000-0000000000a3')),
+  500,
+  'the public display RPC wrapper returns bean_count only through the gated app resolver'
 );
 reset role;
 

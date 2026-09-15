@@ -165,6 +165,26 @@ nesting bug found and fixed). Build/lint/test passing (1100 tests). Console scre
 (other than Login/Setup) still pending restyling pass against angular shape language, but
 already inherit correct tokens automatically. See CHANGELOG.md for the full account.
 
+**Guess the Bean Phase 5 (2026-09-15) — done**: Display/stage mode added at
+`/guess-the-bean/display/`, with persisted session orientation, polling-based live
+arrival feed, reveal animation, confetti, and a stable earliest-arrival winner tie
+break. Numeric guesses remain hidden from anonymous readers until reveal through a
+column-grant + narrowly scoped RPC design. Built by Codex (handoff document, this
+session's usage limit), then verified live and given a follow-up manual review pass by
+Claude Code, which found and fixed three real issues: a missing busy/revealed guard on
+the new winner-lookup button, a `[hidden]`-vs-`display` CSS cascade bug hiding neither
+the pre-reveal "?" nor the post-reveal QR footer, and a `@media (orientation: portrait)`
+gate that silently ignored the organiser's persisted orientation setting on a
+mismatched-shape window. See CHANGELOG.md for the full account.
+
+**Guess the Bean Phase 6 (2026-09-15) — partial**: the organiser-facing "find the
+winner's contact without touching the Supabase dashboard" piece is done (a card in
+`setupScreen.js`, gated to post-reveal). **Not done, and not something an agent can
+complete alone**: a real end-to-end session with actual phone submissions, and formally
+marking legacy's `booth/guess`, `booth/display/guess`, `booth/setup` pages retired in
+that repo's own CHANGELOG. Both need the user's own real-world action before Phase 6 can
+be marked fully done.
+
 **Guess the Bean Supabase port (2026-09-14+), not tied to a phase task**: New spec, new
 Supabase port. Reverses the 2026-08-23 descope decision; user confirmed the new port spec
 supersedes that call.

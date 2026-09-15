@@ -55,7 +55,7 @@ body {
 .gtb-btn-primary {
   border: var(--border-hairline) solid var(--color-accent);
   background: var(--color-accent);
-  color: var(--color-canvas);
+  color: var(--color-accent-contrast);
 }
 
 .gtb-btn-outline {
@@ -73,7 +73,7 @@ body {
 .gtb-btn-danger-solid {
   border: var(--border-hairline) solid var(--color-danger);
   background: var(--color-danger);
-  color: var(--color-canvas);
+  color: var(--color-danger-contrast);
 }
 
 .gtb-btn:disabled,

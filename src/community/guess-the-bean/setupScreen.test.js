@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { validateCreateDraft, mountSetupScreen } from './setupScreen.js';
+import { validateCreateDraft, findWinnerContact, mountSetupScreen } from './setupScreen.js';
 
 describe('validateCreateDraft', () => {
   it('requires a non-blank name', () => {
@@ -11,7 +11,9 @@ describe('validateCreateDraft', () => {
   it('requires a positive integer bean count', () => {
     expect(validateCreateDraft({ name: 'x', beanCount: '' }).beanCount).toMatch(/greater than 0/);
     expect(validateCreateDraft({ name: 'x', beanCount: '0' }).beanCount).toMatch(/greater than 0/);
-    expect(validateCreateDraft({ name: 'x', beanCount: 'abc' }).beanCount).toMatch(/greater than 0/);
+    expect(validateCreateDraft({ name: 'x', beanCount: 'abc' }).beanCount).toMatch(
+      /greater than 0/,
+    );
   });
 
   it('is satisfied by a valid draft', () => {
@@ -25,7 +27,7 @@ describe('validateCreateDraft', () => {
 // covered before (test-auditor): a regression that swallowed an error
 // silently, crashed instead of catching, or left `state.busy` stuck true
 // would have passed every one of this file's original tests.
-function fakeClient({ sessions = [], failOn = null } = {}) {
+function fakeClient({ sessions = [], failOn = null, exportRows = [] } = {}) {
   let rows = [...sessions];
   const auth = {
     getUser: () => Promise.resolve({ data: { user: { id: 'u1' } } }),
@@ -37,7 +39,13 @@ function fakeClient({ sessions = [], failOn = null } = {}) {
         ? Promise.resolve({ data: null, error: new Error('could not load sessions') })
         : Promise.resolve({ data: rows, error: null }),
     insert: (row) => {
-      const created = { id: `s${rows.length + 1}`, guess_enabled: true, revealed: false, orientation: 'landscape', ...row };
+      const created = {
+        id: `s${rows.length + 1}`,
+        guess_enabled: true,
+        revealed: false,
+        orientation: 'landscape',
+        ...row,
+      };
       rows = [created, ...rows];
       return {
         select: () => ({ single: () => Promise.resolve({ data: created, error: null }) }),
@@ -48,7 +56,10 @@ function fakeClient({ sessions = [], failOn = null } = {}) {
         select: () => ({
           single: () => {
             if (failOn === 'update') {
-              return Promise.resolve({ data: null, error: new Error('could not save that change') });
+              return Promise.resolve({
+                data: null,
+                error: new Error('could not save that change'),
+              });
             }
             rows = rows.map((r) => (r[col] === val ? { ...r, ...patch } : r));
             return Promise.resolve({ data: rows.find((r) => r[col] === val), error: null });
@@ -70,6 +81,37 @@ function fakeClient({ sessions = [], failOn = null } = {}) {
     auth,
     from: (table) => {
       if (table === 'sessions') return sessionsTable;
+      if (table === 'guesses') {
+        return {
+          select: () => ({
+            eq: () =>
+              Promise.resolve({
+                data: exportRows.map(({ id, name, guess, created_at }) => ({
+                  id,
+                  name,
+                  guess,
+                  created_at,
+                })),
+                error: null,
+              }),
+          }),
+        };
+      }
+      if (table === 'contacts') {
+        return {
+          select: () => ({
+            in: () =>
+              Promise.resolve({
+                data: exportRows.map(({ id, phone, instagram }) => ({
+                  guess_id: id,
+                  phone,
+                  instagram,
+                })),
+                error: null,
+              }),
+          }),
+        };
+      }
       throw new Error(`unexpected table ${table}`);
     },
     rpc: vi.fn(() =>
@@ -81,9 +123,20 @@ function fakeClient({ sessions = [], failOn = null } = {}) {
 }
 
 beforeEach(() => {
-  vi.stubGlobal('confirm', vi.fn(() => true));
+  vi.stubGlobal(
+    'confirm',
+    vi.fn(() => true),
+  );
   if (!global.URL.createObjectURL) global.URL.createObjectURL = vi.fn(() => 'blob:mock');
   if (!global.URL.revokeObjectURL) global.URL.revokeObjectURL = vi.fn();
+});
+
+describe('findWinnerContact', () => {
+  it('uses the earliest arrival when two guesses are equally close', () => {
+    const first = { name: 'First', guess: 420, phone: '111' };
+    const later = { name: 'Later', guess: 436, phone: '222' };
+    expect(findWinnerContact([first, later], 428)).toBe(first);
+  });
 });
 
 describe('mountSetupScreen', () => {
@@ -126,6 +179,7 @@ describe('mountSetupScreen', () => {
 
     expect(root.querySelector('h1').textContent).toBe('Pop-up Session');
     expect(root.textContent).toContain('/guess-the-bean/play/?session=s1');
+    expect(root.textContent).toContain('/guess-the-bean/display/?session=s1');
   });
 
   it('a blank create submit never calls the API and shows validation errors', async () => {
@@ -174,6 +228,80 @@ describe('mountSetupScreen', () => {
     expect(root.querySelector('#gtb-guess-enabled-toggle').checked).toBe(false);
   });
 
+  it('shows the revealed winner contact without needing the Supabase dashboard', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    await mountSetupScreen(root, {
+      client: fakeClient({
+        sessions: [
+          {
+            id: 's1',
+            name: 'Results',
+            bean_count: 428,
+            guess_enabled: true,
+            revealed: true,
+            orientation: 'landscape',
+          },
+        ],
+        exportRows: [
+          { id: 'g1', name: 'Near', guess: 431, phone: '111', instagram: null, created_at: '1' },
+          {
+            id: 'g2',
+            name: 'Winner',
+            guess: 428,
+            phone: null,
+            instagram: '@winner',
+            created_at: '2',
+          },
+        ],
+      }),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    root.querySelector('.gtb-session-row').click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    [...root.querySelectorAll('button')]
+      .find((button) => button.textContent === 'Show winner contact')
+      .click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(root.textContent).toContain('Winner');
+    expect(root.textContent).toContain('Instagram: @winner');
+  });
+
+  it('does not compute a winner from a click on a still-open session', async () => {
+    // The button is only aria-disabled pre-reveal (never native `disabled`,
+    // so it stays focusable) — aria-disabled doesn't itself block a click,
+    // same reason every other danger-zone/toggle handler re-checks state
+    // explicitly rather than trusting the attribute alone.
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    await mountSetupScreen(root, {
+      client: fakeClient({
+        sessions: [
+          {
+            id: 's1',
+            name: 'Still open',
+            bean_count: 428,
+            guess_enabled: true,
+            revealed: false,
+            orientation: 'landscape',
+          },
+        ],
+        exportRows: [
+          { id: 'g1', name: 'Near', guess: 431, phone: '111', instagram: null, created_at: '1' },
+        ],
+      }),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    root.querySelector('.gtb-session-row').click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    [...root.querySelectorAll('button')]
+      .find((button) => button.textContent === 'Show winner contact')
+      .click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(root.textContent).not.toContain('Near');
+    expect(root.textContent).toContain('Available after you reveal the result.');
+  });
+
   it('reverts a native toggle flipped while a previous toggle is still in flight, rather than leaving it stuck wrong', async () => {
     // The checkbox is aria-disabled (not native disabled) while busy —
     // found in review (code-reviewer): unlike a <button>, the browser
@@ -186,7 +314,13 @@ describe('mountSetupScreen', () => {
     let resolveUpdate;
     const client = fakeClient({
       sessions: [
-        { id: 's1', name: 'Session One', guess_enabled: true, revealed: false, orientation: 'landscape' },
+        {
+          id: 's1',
+          name: 'Session One',
+          guess_enabled: true,
+          revealed: false,
+          orientation: 'landscape',
+        },
       ],
     });
     const baseFrom = client.from;
@@ -289,7 +423,13 @@ describe('mountSetupScreen', () => {
     await mountSetupScreen(root, {
       client: fakeClient({
         sessions: [
-          { id: 's1', name: 'Session One', guess_enabled: true, revealed: true, orientation: 'landscape' },
+          {
+            id: 's1',
+            name: 'Session One',
+            guess_enabled: true,
+            revealed: true,
+            orientation: 'landscape',
+          },
         ],
       }),
     });
@@ -315,7 +455,9 @@ describe('mountSetupScreen', () => {
     revealButton.click();
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(root.querySelector('.gtb-toast')).toBeNull();
-    expect([...root.querySelectorAll('button')].find((b) => b.textContent === 'Revealed')).not.toBeUndefined();
+    expect(
+      [...root.querySelectorAll('button')].find((b) => b.textContent === 'Revealed'),
+    ).not.toBeUndefined();
   });
 
   it('End Session asks for confirmation, then removes the session and returns to the create view', async () => {
@@ -324,7 +466,13 @@ describe('mountSetupScreen', () => {
     await mountSetupScreen(root, {
       client: fakeClient({
         sessions: [
-          { id: 's1', name: 'Session One', guess_enabled: true, revealed: false, orientation: 'landscape' },
+          {
+            id: 's1',
+            name: 'Session One',
+            guess_enabled: true,
+            revealed: false,
+            orientation: 'landscape',
+          },
         ],
       }),
     });
@@ -332,7 +480,9 @@ describe('mountSetupScreen', () => {
     root.querySelector('.gtb-session-row').click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const endButton = [...root.querySelectorAll('button')].find((b) => b.textContent === 'End session');
+    const endButton = [...root.querySelectorAll('button')].find(
+      (b) => b.textContent === 'End session',
+    );
     endButton.click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -341,13 +491,22 @@ describe('mountSetupScreen', () => {
   });
 
   it('declining the End Session confirmation leaves the session untouched', async () => {
-    vi.stubGlobal('confirm', vi.fn(() => false));
+    vi.stubGlobal(
+      'confirm',
+      vi.fn(() => false),
+    );
     const root = document.createElement('div');
     document.body.appendChild(root);
     await mountSetupScreen(root, {
       client: fakeClient({
         sessions: [
-          { id: 's1', name: 'Session One', guess_enabled: true, revealed: false, orientation: 'landscape' },
+          {
+            id: 's1',
+            name: 'Session One',
+            guess_enabled: true,
+            revealed: false,
+            orientation: 'landscape',
+          },
         ],
       }),
     });
@@ -355,7 +514,9 @@ describe('mountSetupScreen', () => {
     root.querySelector('.gtb-session-row').click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const endButton = [...root.querySelectorAll('button')].find((b) => b.textContent === 'End session');
+    const endButton = [...root.querySelectorAll('button')].find(
+      (b) => b.textContent === 'End session',
+    );
     endButton.click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -365,7 +526,13 @@ describe('mountSetupScreen', () => {
   it('Reset Data calls the RPC and shows a confirmation toast', async () => {
     const client = fakeClient({
       sessions: [
-        { id: 's1', name: 'Session One', guess_enabled: true, revealed: true, orientation: 'landscape' },
+        {
+          id: 's1',
+          name: 'Session One',
+          guess_enabled: true,
+          revealed: true,
+          orientation: 'landscape',
+        },
       ],
     });
     const root = document.createElement('div');
@@ -375,7 +542,9 @@ describe('mountSetupScreen', () => {
     root.querySelector('.gtb-session-row').click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const resetButton = [...root.querySelectorAll('button')].find((b) => b.textContent === 'Reset data');
+    const resetButton = [...root.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Reset data',
+    );
     resetButton.click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -397,7 +566,13 @@ describe('mountSetupScreen', () => {
     let guessesFetchCount = 0;
     const client = fakeClient({
       sessions: [
-        { id: 's1', name: 'Session One', guess_enabled: true, revealed: false, orientation: 'landscape' },
+        {
+          id: 's1',
+          name: 'Session One',
+          guess_enabled: true,
+          revealed: false,
+          orientation: 'landscape',
+        },
       ],
     });
     const baseFrom = client.from;
@@ -443,7 +618,13 @@ describe('mountSetupScreen', () => {
     await mountSetupScreen(root, {
       client: fakeClient({
         sessions: [
-          { id: 's1', name: 'Session One', guess_enabled: true, revealed: false, orientation: 'landscape' },
+          {
+            id: 's1',
+            name: 'Session One',
+            guess_enabled: true,
+            revealed: false,
+            orientation: 'landscape',
+          },
         ],
       }),
     });
@@ -468,7 +649,13 @@ describe('mountSetupScreen', () => {
       const handle = await mountSetupScreen(root, {
         client: fakeClient({
           sessions: [
-            { id: 's1', name: 'Session One', guess_enabled: true, revealed: false, orientation: 'landscape' },
+            {
+              id: 's1',
+              name: 'Session One',
+              guess_enabled: true,
+              revealed: false,
+              orientation: 'landscape',
+            },
           ],
         }),
       });
@@ -513,7 +700,13 @@ describe('mountSetupScreen', () => {
     await mountSetupScreen(root, {
       client: fakeClient({
         sessions: [
-          { id: 's1', name: 'Session One', guess_enabled: true, revealed: false, orientation: 'landscape' },
+          {
+            id: 's1',
+            name: 'Session One',
+            guess_enabled: true,
+            revealed: false,
+            orientation: 'landscape',
+          },
         ],
         failOn: 'update',
       }),
@@ -528,7 +721,9 @@ describe('mountSetupScreen', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(root.querySelector('.gtb-toast').textContent).toMatch(/could not save that change/i);
-    expect(root.querySelector('#gtb-guess-enabled-toggle').getAttribute('aria-disabled')).toBeNull();
+    expect(
+      root.querySelector('#gtb-guess-enabled-toggle').getAttribute('aria-disabled'),
+    ).toBeNull();
   });
 
   it('a failed Reset Data shows an error toast and re-enables the buttons', async () => {
@@ -537,7 +732,13 @@ describe('mountSetupScreen', () => {
     await mountSetupScreen(root, {
       client: fakeClient({
         sessions: [
-          { id: 's1', name: 'Session One', guess_enabled: true, revealed: true, orientation: 'landscape' },
+          {
+            id: 's1',
+            name: 'Session One',
+            guess_enabled: true,
+            revealed: true,
+            orientation: 'landscape',
+          },
         ],
         failOn: 'rpc',
       }),
@@ -546,7 +747,9 @@ describe('mountSetupScreen', () => {
     root.querySelector('.gtb-session-row').click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const resetButton = [...root.querySelectorAll('button')].find((b) => b.textContent === 'Reset data');
+    const resetButton = [...root.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Reset data',
+    );
     resetButton.click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -564,7 +767,13 @@ describe('mountSetupScreen', () => {
     await mountSetupScreen(root, {
       client: fakeClient({
         sessions: [
-          { id: 's1', name: 'Session One', guess_enabled: true, revealed: false, orientation: 'landscape' },
+          {
+            id: 's1',
+            name: 'Session One',
+            guess_enabled: true,
+            revealed: false,
+            orientation: 'landscape',
+          },
         ],
         failOn: 'delete',
       }),
@@ -573,7 +782,9 @@ describe('mountSetupScreen', () => {
     root.querySelector('.gtb-session-row').click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const endButton = [...root.querySelectorAll('button')].find((b) => b.textContent === 'End session');
+    const endButton = [...root.querySelectorAll('button')].find(
+      (b) => b.textContent === 'End session',
+    );
     endButton.click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -586,7 +797,9 @@ describe('mountSetupScreen', () => {
     document.body.appendChild(root);
     const client = fakeClient({ sessions: [] });
     client.from('sessions').insert = () => ({
-      select: () => ({ single: () => Promise.resolve({ data: null, error: new Error('name already taken') }) }),
+      select: () => ({
+        single: () => Promise.resolve({ data: null, error: new Error('name already taken') }),
+      }),
     });
     await mountSetupScreen(root, { client });
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -620,7 +833,13 @@ describe('mountSetupScreen', () => {
     document.body.appendChild(root);
     const client = fakeClient({
       sessions: [
-        { id: 's1', name: 'Session One', guess_enabled: true, revealed: false, orientation: 'landscape' },
+        {
+          id: 's1',
+          name: 'Session One',
+          guess_enabled: true,
+          revealed: false,
+          orientation: 'landscape',
+        },
       ],
     });
     client.from('sessions').delete = () => ({ eq: deleteSpy });
@@ -629,7 +848,9 @@ describe('mountSetupScreen', () => {
     root.querySelector('.gtb-session-row').click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const endButton = [...root.querySelectorAll('button')].find((b) => b.textContent === 'End session');
+    const endButton = [...root.querySelectorAll('button')].find(
+      (b) => b.textContent === 'End session',
+    );
     endButton.click();
     endButton.click();
     await new Promise((resolve) => setTimeout(resolve, 0));

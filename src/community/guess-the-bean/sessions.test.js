@@ -6,7 +6,10 @@ import {
   resetSessionData,
   endSession,
   buildParticipantUrl,
+  buildDisplayUrl,
   fetchSessionExport,
+  fetchSessionGuessFeed,
+  fetchSessionGuesses,
 } from './sessions.js';
 
 describe('createSession', () => {
@@ -48,12 +51,55 @@ describe('createSession', () => {
   it('throws the raw error on failure', async () => {
     const client = {
       from: () => ({
-        insert: () => ({ select: () => ({ single: () => Promise.resolve({ data: null, error: new Error('boom') }) }) }),
+        insert: () => ({
+          select: () => ({
+            single: () => Promise.resolve({ data: null, error: new Error('boom') }),
+          }),
+        }),
       }),
     };
-    await expect(createSession({ creatorId: 'u1', name: 'x', beanCount: 1 }, client)).rejects.toThrow(
-      'boom',
-    );
+    await expect(
+      createSession({ creatorId: 'u1', name: 'x', beanCount: 1 }, client),
+    ).rejects.toThrow('boom');
+  });
+});
+
+describe('Phase 5 display queries', () => {
+  it('fetches the pre-reveal feed in arrival order without selecting numeric guesses', async () => {
+    const calls = [];
+    const client = {
+      from: (table) => ({
+        select: (columns) => ({
+          eq: (column, id) => ({
+            order: (sort, options) => ({
+              order: (tie, tieOptions) => {
+                calls.push([table, columns, column, id, sort, options, tie, tieOptions]);
+                return Promise.resolve({ data: [], error: null });
+              },
+            }),
+          }),
+        }),
+      }),
+    };
+    await fetchSessionGuessFeed('s1', client);
+    expect(calls).toEqual([
+      [
+        'guesses',
+        'id, name, created_at',
+        'session_id',
+        's1',
+        'created_at',
+        { ascending: true },
+        'id',
+        { ascending: true },
+      ],
+    ]);
+  });
+
+  it('uses the gated result RPC for numeric guesses after reveal', async () => {
+    const rpc = vi.fn(() => Promise.resolve({ data: [{ id: 'g1', guess: 428 }], error: null }));
+    await expect(fetchSessionGuesses('s1', { rpc })).resolves.toEqual([{ id: 'g1', guess: 428 }]);
+    expect(rpc).toHaveBeenCalledWith('session_display_guesses', { p_session_id: 's1' });
   });
 });
 
@@ -104,7 +150,11 @@ describe('updateSession', () => {
             return {
               eq: (col, val) => {
                 calls.push(['eq', col, val]);
-                return { select: () => ({ single: () => Promise.resolve({ data: { id: val, ...patch }, error: null }) }) };
+                return {
+                  select: () => ({
+                    single: () => Promise.resolve({ data: { id: val, ...patch }, error: null }),
+                  }),
+                };
               },
             };
           },
@@ -168,6 +218,14 @@ describe('buildParticipantUrl', () => {
   it('URL-encodes the session id', () => {
     expect(buildParticipantUrl('a b', 'https://example.com')).toBe(
       'https://example.com/guess-the-bean/play/?session=a%20b',
+    );
+  });
+});
+
+describe('buildDisplayUrl', () => {
+  it('builds the separate stage-display URL against the given origin', () => {
+    expect(buildDisplayUrl('abc-123', 'https://example.com')).toBe(
+      'https://example.com/guess-the-bean/display/?session=abc-123',
     );
   });
 });

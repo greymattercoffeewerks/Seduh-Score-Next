@@ -7,10 +7,7 @@
 // this is just plumbing" shape as core/events.js's own comment.
 import { getSupabase } from '../../core/supabaseClient.js';
 
-export async function createSession(
-  { creatorId, name, beanCount },
-  client = getSupabase(),
-) {
+export async function createSession({ creatorId, name, beanCount }, client = getSupabase()) {
   const { data, error } = await client
     .from('sessions')
     .insert({ creator_id: creatorId, name, bean_count: beanCount })
@@ -74,6 +71,13 @@ export function buildParticipantUrl(sessionId, origin = window.location.origin) 
   return `${origin}/guess-the-bean/play/?session=${encodeURIComponent(sessionId)}`;
 }
 
+// The stage/display audience has its own Vite entry, just as the participant
+// form does. Orientation is intentionally not a URL parameter: the display
+// reads the organiser-configured session.orientation value.
+export function buildDisplayUrl(sessionId, origin = window.location.origin) {
+  return `${origin}/guess-the-bean/display/?session=${encodeURIComponent(sessionId)}`;
+}
+
 // Export: the creator's own guesses+contacts for one session, rejoined by
 // guess id — same shape as legacy's own onExportData, which this ports.
 // Read-only; RLS already lets the creator see both tables for their own
@@ -127,6 +131,32 @@ export async function fetchSessionStatus(sessionId, client = getSupabase()) {
     .select('id, guess_enabled, revealed, orientation')
     .eq('id', sessionId)
     .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+// Phase 5's anonymous live feed intentionally reads only these non-sensitive
+// arrival fields.  The numeric guess is deliberately absent before the reveal
+// (see 20260915110000_guess_the_bean_display_feed.sql).
+export async function fetchSessionGuessFeed(sessionId, client = getSupabase()) {
+  const { data, error } = await client
+    .from('guesses')
+    .select('id, name, created_at')
+    .eq('session_id', sessionId)
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true });
+  if (error) throw error;
+  return data;
+}
+
+// The revealed result set comes from a narrowly-scoped RPC rather than a
+// broad anonymous SELECT grant on `guesses.guess`.  It is ordered by arrival
+// time, then id for deterministic same-timestamp ordering; the display's
+// stable closest-guess sort therefore keeps the earliest arrival on a tie.
+export async function fetchSessionGuesses(sessionId, client = getSupabase()) {
+  const { data, error } = await client.rpc('session_display_guesses', {
+    p_session_id: sessionId,
+  });
   if (error) throw error;
   return data;
 }

@@ -1,6 +1,6 @@
 {
   "name": "seduh-score-next",
-  "version": "2.0.15",
+  "version": "2.0.17",
   "private": true,
   "type": "module",
   "scripts": {

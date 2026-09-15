@@ -1,3 +1,99 @@
+## Guess the Bean Supabase port — Phase 5 & 6 (partial): Display/stage mode + organiser winner lookup · 2026-09-15
+
+**Built by Codex** (a separate agent, picked up via a handoff document —
+`Handoffs and Specs/guess-the-bean-phase5-CODEX-HANDOFF.md` — written when the prior
+session ran low on budget), **verified live and given a final review pass by Claude Code**
+before this commit. No custom subagents were available to Codex, so this entry folds in
+both Codex's own account and the issues found in the follow-up manual review.
+
+**Phase 5 — Display/stage mode**, port of legacy `booth/display/guess/index.html`:
+
+- New `/guess-the-bean/display/` page (`displayScreen.js`/`.css`, `displayMain.js`):
+  canvas-based live arrival feed (dots pop in as guesses arrive), 3-2-1 reveal countdown,
+  fly-to-result animation, confetti, and a closest-guess winner spotlight — same visual
+  language as legacy, restyled to this project's tokens.
+- `supabase/migrations/20260915110000_guess_the_bean_display_feed.sql` — closes a real
+  gap flagged since Phase 1/4 (`guesses_select`'s own comment explicitly asked the Phase 5
+  implementer to verify this): legacy's display page is fully unauthenticated and shows a
+  live arrival feed before the reveal, which the existing `guesses_select` RLS policy
+  didn't allow for `anon`. Fixed with a column-scoped anon grant
+  (`id, session_id, name, created_at` — no numeric guess) plus a new
+  `app.session_display_guesses()` SECURITY DEFINER resolver that returns the numeric
+  `guess` column only once `revealed = true`. `contacts` stays untouched — still
+  creator-only, never exposed to the display.
+- `supabase/migrations/20260915120000_guess_the_bean_display_rpc_wrappers.sql` — found and
+  fixed a **real, previously-shipped bug**: `app.session_bean_count()` (added in Phase 3)
+  and the new `app.session_display_guesses()` both live in the `app` schema, but
+  `supabase/config.toml` only exposes `public`/`graphql_public` to PostgREST — meaning
+  `client.rpc('session_bean_count', ...)` was never actually callable from any browser
+  client since Phase 3 shipped it, just never exercised until Phase 5 tried. Fixed with
+  thin `public.*` pass-through wrapper functions; the `app.*` originals remain the only
+  place deciding whether reveal-gated data is returned. **Lesson for future phases**: an
+  `app.*` resolver intended to be called directly via `.rpc(...)` from a client needs a
+  `public.*` wrapper — resolvers used only from inside RLS policies/other SQL functions
+  don't.
+- Orientation is read from the organiser-configured, persisted `sessions.orientation`
+  column (Phase 3), not a `?orientation=` URL parameter like legacy — a deliberate,
+  documented divergence (see `src/community/guess-the-bean/CLAUDE.md`'s Phase 5 section).
+- Winner tie-break matches legacy exactly: `Array#sort` is stable and every guess fetch is
+  ordered `created_at asc`, so an equal-distance tie goes to the earliest arrival. Ported
+  explicitly, with a dedicated test.
+- The countdown-digit restart bug legacy's own source comments document
+  (`cloneNode`/`replaceWith` — a detached node's `replaceWith()` silently no-ops) was
+  ported forward with the same fix technique, not rediscovered.
+- A guess arriving mid-reveal-animation (`countdown`/`flying` phases) isn't a special
+  case: the canvas redraw reads the shared `guesses` array fresh every frame regardless of
+  phase, same as legacy. A poll landing once already `done` re-triggers `showWinner()` in
+  case the new guess is closer, also matching legacy.
+
+**Phase 6 (partial) — organiser winner-contact lookup**, satisfying the spec's
+"organiser can find and read contact info for the winner without touching the Supabase
+dashboard directly" pass/fail item:
+
+- `setupScreen.js` gained a "Show winner contact" card (only enabled once the session is
+  revealed): re-uses the existing `fetchSessionExport()` read, sorts by the same
+  stable/earliest-arrival tie-break rule as the display, and shows the winner's name,
+  guess, and whichever contact method they supplied.
+- **The rest of Phase 6 is not done and needs the user, not an agent**: a real end-to-end
+  session with actual phone submissions, and formally marking legacy's booth pages retired
+  in that repo's own CHANGELOG. Both require real-world action this port can't perform on
+  its own — see ROADMAP.md's open items.
+
+**Found and fixed in the follow-up manual review** (no `security-reviewer`/`code-reviewer`/
+`ui-accessibility-reviewer` subagents were available to Codex, so this project's own
+review discipline was applied by hand before this commit, matching the accessibility
+retrofit precedent from Phase 4):
+
+- `handleFindWinner` (the new winner-lookup button) was missing the explicit
+  `state.busy`/`!session.revealed` re-check every other danger-zone handler in this file
+  already has — `aria-disabled` doesn't itself block a click, so a click on the button
+  before reveal would have computed a "winner" from an in-progress game. Fixed with the
+  same guard pattern as `handleReveal`; added a regression test.
+- **Confirmed live in a real browser** (not just automated tests, which can't exercise CSS
+  cascade in jsdom): `.gtb-display-question`/`.gtb-display-number`/`.gtb-display-qr-wrap`
+  each declare their own `display` value at equal specificity to the browser's own
+  `[hidden] { display: none }` rule, so `displayScreen.js`'s `question.hidden`/
+  `qrWrap.hidden` toggles were silently not hiding either element — the "?" stayed visible
+  overlapping the revealed number, and the QR/"Scan to play" footer stayed up after
+  reveal. Same bug class as `core/splashScreen.css`'s own documented
+  `.status-live-dot[hidden]` fix; fixed the same way.
+- **Confirmed live, a real design-intent bug**: the portrait layout rules were wrapped in
+  `@media (orientation: portrait)`, which silently ignored the organiser's persisted
+  `sessions.orientation = 'portrait'` setting whenever the actual browser/monitor window
+  wasn't itself physically portrait-shaped (e.g. an organiser previewing their own
+  Display URL from an ordinary landscape laptop). Verified live before and after
+  (`data-orientation="portrait"` but `flex-direction: row` at a 1600×900 viewport, before
+  the fix). Removed the media-query gate — the attribute selector alone now decides,
+  matching legacy's own unconditional `html[data-orientation="portrait"]` CSS.
+
+**Verification**: `npm run lint` clean · 1199 Vitest tests passing · 234 pgTAP tests
+passing · `npx supabase db diff --local` shows no drift · both new migrations' rollback
+blocks tested live in a transaction · live-verified in-browser at both orientations
+(540×960 and 1600×900, plus a real portrait-configured session against a landscape
+window specifically to catch the media-query bug above) and through a full demo-mode
+reveal cycle (countdown → fly → confetti → winner spotlight → QR/question mark correctly
+hidden).
+
 ## Guess the Bean Supabase port — Phase 4: Participant entry flow · 2026-09-15
 
 **Task ID**: guess-the-bean-phase4-participant-entry

@@ -3,11 +3,11 @@
 Root non-negotiables apply here too. This is a **third kind of surface**, distinct from
 both existing "outside the core/formats boundary" precedents:
 
-| Directory                    | Auth/Supabase?      | Roster/scoring/advancement? | Fits                       |
-| ----------------------------- | -------------------- | ---------------------------- | --------------------------- |
-| `src/tools/` (e.g. Timer)     | No (`src/tools/CLAUDE.md` explicitly excludes it) | No | standalone utility |
-| `src/formats/<format>/`       | Yes, org-scoped       | Yes                          | a full competition format |
-| `src/community/guess-the-bean/` | **Yes**, but per-user, not org-scoped | **No** | neither of the above |
+| Directory                       | Auth/Supabase?                                    | Roster/scoring/advancement? | Fits                      |
+| ------------------------------- | ------------------------------------------------- | --------------------------- | ------------------------- |
+| `src/tools/` (e.g. Timer)       | No (`src/tools/CLAUDE.md` explicitly excludes it) | No                          | standalone utility        |
+| `src/formats/<format>/`         | Yes, org-scoped                                   | Yes                         | a full competition format |
+| `src/community/guess-the-bean/` | **Yes**, but per-user, not org-scoped             | **No**                      | neither of the above      |
 
 Guess the Bean is a **free Community-tier tool** (per
 `Handoffs and Specs/guess-the-bean-next-port-SPEC.md`) with real auth and a real Supabase
@@ -106,6 +106,7 @@ schema, both closed this phase (new migrations `20260914130000_guess_the_bean_be
 schema-guardian + security-reviewer after real fixes — a TOCTOU gap in
 `reset_guess_session_data`'s creator check, and `bean_count` being mutable post-reveal
 until a trigger locked it):
+
 - `sessions.bean_count` — the real answer, needed for Phase 5's winner-spotlight
   calculation, which Phase 1's schema never carried at all. Required, immutable after
   creation (enforced by a trigger, not just client-side), never exposed via anon's
@@ -135,6 +136,52 @@ suppressed). All fixed and re-verified, including live in a browser a second tim
 the fixes. A broader, still-open accessibility gap (focus loss on every re-render, not
 just the disabled-control case) was spawned as a separate follow-up task rather than
 fixed inline — see ROADMAP.md's known-open-items.
+
+**Phase 5 (2026-09-15)** — display/stage mode (`displayScreen.js`/`.css`,
+`displayMain.js`, `/guess-the-bean/display/`). The display polls every four seconds
+rather than using Supabase Realtime, for the same locally verified delivery and
+column-grant reasons documented for Phase 4. It uses the persisted
+`sessions.orientation` setting as the source of truth, with a dedicated portrait
+layout and 96px QR (landscape remains 112px), rather than requiring every venue URL
+to carry an orientation query parameter. This is a deliberate divergence from the
+legacy presentation-only URL switch: the organiser configures the session once.
+
+Pre-reveal `anon` access is deliberately limited to the arrival-safe
+`id`/`name`/`created_at` fields. `20260915110000_guess_the_bean_display_feed.sql`
+adds a narrow post-reveal RPC for numeric guesses, preserving legacy's live
+name-and-flavour-text feed without allowing a raw REST read of numeric guesses before
+the reveal. Equal-distance winners retain arrival order, so the earliest arrival wins.
+A poll during countdown/flying updates the shared guesses array without interruption;
+a poll after results recomputes the winner banner.
+
+Built by Codex from a handoff document (this session's usage-limit gap), without this
+project's custom subagents available. Follow-up manual review (Claude Code) found and
+fixed three real issues before this shipped, all live-verified in a browser, not just
+caught by the automated suite:
+- `app.session_bean_count()` (Phase 3) and the new `app.session_display_guesses()` both
+  live in the `app` schema, but `supabase/config.toml` only exposes `public`/
+  `graphql_public` to PostgREST — `client.rpc('session_bean_count', ...)` was never
+  actually reachable from a browser since Phase 3 shipped it, just never exercised.
+  `20260915120000_guess_the_bean_display_rpc_wrappers.sql` adds thin `public.*`
+  pass-through wrappers. **Any future `app.*` resolver meant to be called directly via
+  `.rpc(...)` needs one of these** — a resolver only ever called from inside another SQL
+  function or an RLS policy doesn't.
+- `.gtb-display-question`/`.gtb-display-number`/`.gtb-display-qr-wrap` each declared
+  their own `display` value at equal specificity to the browser's `[hidden] { display:
+  none }` rule, so `displayScreen.js`'s own `.hidden` toggles silently didn't hide either
+  — same bug class as `core/splashScreen.css`'s documented `.status-live-dot[hidden]`
+  fix, fixed the same way (an `[hidden]`-qualified override rule).
+- The portrait CSS was wrapped in `@media (orientation: portrait)`, which ignored the
+  organiser's persisted `sessions.orientation` setting whenever the actual window/monitor
+  shape didn't independently happen to match — reintroducing the exact viewport
+  dependency the persisted-column design was meant to avoid (an organiser previewing
+  their own portrait Display URL from a landscape laptop would have seen the wrong
+  layout). Removed the media-query gate; the `[data-orientation='portrait']` attribute
+  selector alone decides now, unconditionally, same as legacy's own CSS.
+- The new "Show winner contact" button (Phase 6, `setupScreen.js`) was missing the
+  explicit `state.busy`/`!session.revealed` re-check every other danger-zone handler in
+  that file already has (`aria-disabled` doesn't block a click) — fixed with the same
+  guard `handleReveal` uses, plus a regression test.
 
 **Phase 4 (2026-09-15)** — participant entry flow, public and fully unauthenticated. Port
 of legacy's `booth/guess/index.html` (github.com/greymattercoffee/Seduh-Score, dev branch

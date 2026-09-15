@@ -100,7 +100,7 @@ function liveDot() {
 // "Take the tour" and "Org login" are href="#" placeholders (no tour page,
 // no sign-up flow — loginScreen.js is sign-in only, D14's real access
 // control is still a stub). "Formats"/"Pricing" are real same-page anchors.
-// "Free Timer" is the one other real destination.
+// "Community Tools" is the one other real destination.
 function navLink(text, href) {
   return el('a', { className: 'petrol-nav-link', text, attrs: { href } });
 }
@@ -142,7 +142,7 @@ function buildNav() {
   const links = el('div', { className: 'petrol-nav-links' }, [
     navLink('Formats', '#formats'),
     navLink('Pricing', '#pricing'),
-    navLink('Timer', '/tools/timer/'),
+    navLink('Community Tools', '/community/'),
     navLink('Org login', '#'),
   ]);
   const desktopCta = actionLink('Start free', { primary: true });
@@ -151,7 +151,7 @@ function buildNav() {
   const mobileLinks = el('div', { className: 'petrol-nav-mobile-links' }, [
     navLink('Formats', '#formats'),
     navLink('Pricing', '#pricing'),
-    navLink('Timer', '/tools/timer/'),
+    navLink('Community Tools', '/community/'),
     navLink('Org login', '#'),
     actionLink('Start free', { primary: true }),
   ]);
@@ -619,8 +619,8 @@ function buildFooter() {
     el('div', { className: 'petrol-footer-links' }, [
       el('a', {
         className: 'petrol-footer-link',
-        text: 'Free Timer — saves to this device →',
-        attrs: { href: '/tools/timer/' },
+        text: 'Community Tools — free, no account needed →',
+        attrs: { href: '/community/' },
       }),
       el('a', {
         className: 'petrol-version',
