@@ -1,5 +1,15 @@
 ## Guess the Bean Supabase port — Phase 5 & 6 (partial): Display/stage mode + organiser winner lookup · 2026-09-15
 
+## Guess the Bean display contrast correction · 2026-09-15
+
+- Corrected a stage-surface inheritance issue in `displayScreen.css`: live-feed participant
+  names and the winner spotlight could inherit the dark paper-surface text colour, making
+  them unreadable against the dark stage. The display root and affected name elements now
+  resolve `--color-text` within the stage surface explicitly.
+- Verification: focused display tests (4) pass; lint, formatting check, and production build
+  pass. Checked at the 360px breakpoint; the available local display session was inactive,
+  so no live name row was available to render during that final visual check.
+
 **Built by Codex** (a separate agent, picked up via a handoff document —
 `Handoffs and Specs/guess-the-bean-phase5-CODEX-HANDOFF.md` — written when the prior
 session ran low on budget), **verified live and given a final review pass by Claude Code**
