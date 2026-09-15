@@ -22,6 +22,7 @@ body {
 }
 
 .timer {
+  position: relative; /* anchors .timer-brand-link's corner placement below */
   min-height: 100dvh;
   max-width: 32rem;
   margin: 0 auto;
@@ -43,22 +44,25 @@ body {
   gap: var(--space-2);
 }
 
-/* Prominent, top-of-page branding — this is a free tool given away by
-   Seduh Score (user decision, 2026-09-12), same "brand mark + wordmark"
-   pairing src/marketing/landingScreen.js's own nav brand uses. */
-/* min-height on the whole link, not just its icon+text content — found in
-   review (ui-accessibility-reviewer): without it this rendered at ~27px
-   tall (the text's own line box), well under this file's own
-   consistently-enforced 44px minimum every other interactive control here
-   already has (.timer-preset, .timer-input, .timer-btn, .timer-sound-label). */
+/* Icon-only branding, corner-anchored (user decision, 2026-09-13 — dropped
+   the "Seduh Score" wordmark so this never competes with the countdown for
+   space, top-left so it never fights the tap targets that live top-right
+   on wider layouts elsewhere in this app). Absolutely positioned against
+   .timer's own `position: relative` above, out of the column flow entirely
+   — a fixed corner icon rather than a full-width row like the old
+   icon+wordmark link. min-width/min-height keep it at this file's own
+   consistently-enforced 44px tap-target minimum (.timer-preset,
+   .timer-input, .timer-btn, .timer-sound-label) even though its visible
+   icon is much smaller. */
 .timer-brand-link {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-2);
-  align-self: center;
+  min-width: var(--tap-target-min);
   min-height: var(--tap-target-min);
-  padding: 0 var(--space-2);
   color: var(--color-text);
   text-decoration: none;
 }
@@ -69,10 +73,12 @@ body {
   color: var(--color-accent);
 }
 
-.timer-brand-name {
-  font-family: var(--font-display);
-  font-weight: var(--font-weight-bold);
-  font-size: var(--text-md);
+/* Hidden once running/paused/expired (user feedback, 2026-09-13) — with the
+   countdown claiming the screen, the "Seduh Timer" heading only ate space
+   the number could use instead. Still shown in idle/setup mode (below,
+   this rule is scoped to [data-mode='focus'] only). */
+.timer[data-mode='focus'] .timer-heading {
+  display: none;
 }
 
 .timer-heading {
@@ -80,31 +86,14 @@ body {
   margin: 0;
 }
 
-/* Visually shrunk, not removed, once the countdown is what matters (user
-   feedback, 2026-09-15) — branding and the page's own title still identify
-   what this is, just without competing with the number for space. The 44px
-   min-height/tap target itself is NOT reduced here — this is still a real,
-   live `<a href="/">`, not decoration, and found in review
-   (ui-accessibility-reviewer): an earlier version of this rule dropped
-   `min-height` to `auto`, reintroducing the exact under-44px regression
-   this class's own base rule was written to fix in the first place. Only
-   the icon/wordmark content shrinks (below); the extra space becomes
-   padding inside the same still-44px hit area. */
-.timer[data-mode='focus'] .timer-brand-link {
-  padding: 0 var(--space-2);
-}
-
+/* Shrunk slightly once running (user feedback, 2026-09-15) — the icon still
+   identifies the page without competing with the countdown for attention.
+   min-width/min-height stay at the full 44px tap target (base rule above)
+   — only the visible glyph shrinks, same "shrink the content, not the hit
+   area" reasoning the old wordmark version of this rule used. */
 .timer[data-mode='focus'] .timer-brand-mark {
   width: 1.125rem;
   height: 1.125rem;
-}
-
-.timer[data-mode='focus'] .timer-brand-name {
-  font-size: var(--text-sm);
-}
-
-.timer[data-mode='focus'] .timer-heading {
-  font-size: var(--text-md);
 }
 
 .timer-tagline {
@@ -232,12 +221,26 @@ body {
   margin: 0;
 }
 
-.timer-setup,
-.timer-controls {
+.timer-setup {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
   align-items: center;
+}
+
+/* Side by side, not stacked (user feedback, 2026-09-13) — frees up the
+   vertical space a column layout cost, letting the countdown above
+   (.timer[data-mode='focus'] .timer-display, flex: 1) claim more of the
+   viewport. wrap is a narrow-viewport safety net, not the intended layout —
+   both buttons are min-width: 8rem (.timer-btn) and two of those plus a gap
+   comfortably fit side by side above typical phone widths. */
+.timer-controls {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  align-items: center;
+  justify-content: center;
 }
 
 .timer-presets {

@@ -1,0 +1,152 @@
+/* Guess the Bean — session management (Phase 3). Layout only; shared.css
+   owns the .gtb-card/.gtb-input/.gtb-btn/.gtb-feedback primitives. */
+
+.gtb-setup-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.gtb-session-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: var(--space-4) 0;
+}
+
+.gtb-session-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 0 var(--space-4);
+  border: var(--border-hairline) solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.gtb-session-row-name {
+  font-weight: var(--font-weight-semibold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gtb-session-row-status {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  flex-shrink: 0;
+}
+
+/* This is now a <label> wrapping BOTH the checkbox and its text (not just
+   the checkbox) — min-height on the whole row, not the bare checkbox glyph,
+   same "enlarge the label, not the native control" precedent
+   src/tools/timer/timer.css's own .timer-sound-label already established.
+   Found in review (ui-accessibility-reviewer): the checkbox alone had no
+   accessible name (text lived in a sibling span, outside the label) and no
+   adequate tap target. */
+.gtb-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--tap-target-min);
+  margin-bottom: var(--space-4);
+  cursor: pointer;
+}
+
+.gtb-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.gtb-url-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border: var(--border-hairline) solid var(--color-border);
+  background: var(--color-canvas);
+  padding: var(--space-2) var(--space-3);
+}
+
+.gtb-url-code {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.gtb-url-row .gtb-btn {
+  width: auto;
+  flex-shrink: 0;
+}
+
+.gtb-qr {
+  width: 100%;
+  max-width: 16rem;
+  margin: var(--space-4) auto 0;
+  background: #fff;
+  padding: var(--space-3);
+  box-sizing: border-box;
+}
+
+.gtb-qr svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.gtb-danger-zone {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border-color: var(--color-danger);
+}
+
+.gtb-danger-label {
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-danger);
+  margin: 0 0 var(--space-2);
+}
+
+/* Cards stack with a gap between them on the detail view — shared.css's
+   .gtb-card has no margin of its own since list/create screens only ever
+   show one at a time. */
+.gtb-screen .gtb-card + .gtb-card {
+  margin-top: var(--space-4);
+}
+
+.gtb-screen > .gtb-btn-outline {
+  width: auto;
+  margin-bottom: var(--space-4);
+}
+
+.gtb-winner-heading {
+  font-size: var(--text-lg);
+  margin: 0 0 var(--space-2);
+}
+
+.gtb-winner-help {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  margin: 0 0 var(--space-4);
+}
+
+.gtb-winner-result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+  border: var(--border-hairline) solid var(--color-success);
+  border-radius: var(--radius-md);
+  background: var(--color-canvas);
+}

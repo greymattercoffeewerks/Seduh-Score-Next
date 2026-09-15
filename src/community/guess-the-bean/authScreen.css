@@ -1,0 +1,18 @@
+/* Guess the Bean — auth screen (Phase 2). Layout only; shared.css owns the
+   .gtb-card/.gtb-input/.gtb-btn/.gtb-feedback primitives this file builds on. */
+
+.gtb-auth-screen {
+  text-align: center;
+}
+
+.gtb-auth-copy {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  margin: var(--space-2) 0 var(--space-5);
+}
+
+.gtb-auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}

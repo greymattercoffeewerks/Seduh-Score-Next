@@ -290,22 +290,31 @@ export function mountTimer(root, { storage = window.localStorage, now = Date.now
     // readable.
     container.dataset.mode = status === 'idle' ? 'setup' : 'focus';
 
-    // Branding, prominent — this is a free tool given away by Seduh Score
-    // (user decision, 2026-09-12), linking back to the marketing home page.
-    // brandMark() is hidden from assistive tech since it sits right next to
-    // the visible "Seduh Score" text (same reasoning as
-    // src/marketing/landingScreen.js's own nav brand, to avoid a doubled
-    // announcement).
+    // Branding — a free tool given away by Seduh Score (user decision,
+    // 2026-09-12), linking back to the marketing home page. Icon-only, no
+    // "Seduh Score" wordmark (user decision, 2026-09-13) — positioned in the
+    // corner (see timer.css) so it never competes with the countdown for
+    // space. The link carries its own aria-label since brandMark() itself is
+    // aria-hidden and there's no visible text left to name it.
     const brandMarkEl = brandMark();
     brandMarkEl.classList.add('timer-brand-mark');
     brandMarkEl.setAttribute('aria-hidden', 'true');
     container.appendChild(
-      el('a', { className: 'timer-brand-link', attrs: { href: '/' } }, [
-        brandMarkEl,
-        el('span', { className: 'timer-brand-name', text: 'Seduh Score' }),
-      ]),
+      el(
+        'a',
+        {
+          className: 'timer-brand-link',
+          attrs: { href: '/', 'aria-label': 'Seduh Score home' },
+        },
+        [brandMarkEl],
+      ),
     );
 
+    // Hidden once running/paused/expired (see .timer[data-mode='focus']
+    // .timer-heading in timer.css) — user feedback, 2026-09-13: with the
+    // countdown already claiming the screen, this heading was just taking up
+    // space the number could use instead. Still rendered (not removed) in
+    // idle/setup mode, where it identifies the page.
     container.appendChild(el('h1', { className: 'timer-heading', text: APP_TITLE }));
     // Only shown before a run starts (user feedback, 2026-09-12) — once
     // there's a countdown on screen, the description has done its job and

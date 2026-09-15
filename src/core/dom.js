@@ -75,6 +75,76 @@ export function brandMark() {
   return svg;
 }
 
+// Marks a control as busy/unavailable via `aria-disabled`/`aria-busy`
+// instead of the native `disabled` attribute. Native `disabled` removes an
+// element from the focus order the instant it's set — if that element
+// currently HAS focus (a submit button mid-click, a checkbox/select
+// mid-toggle), focus silently drops to `<body>` with no way back. Every
+// caller of this helper is expected to already guard its own handler
+// against re-entry while busy (double-submit protection this codebase
+// already has everywhere `disabled` was previously the only such guard) —
+// `aria-disabled` is advisory only and does not itself block events. Found
+// across two ui-accessibility-reviewer passes (core/loginScreen.js +
+// src/community/guess-the-bean/authScreen.js and setupScreen.js).
+export function setBusyDisabled(node, isBusy) {
+  if (isBusy) {
+    node.setAttribute('aria-disabled', 'true');
+    node.setAttribute('aria-busy', 'true');
+  } else {
+    node.removeAttribute('aria-disabled');
+    node.removeAttribute('aria-busy');
+  }
+}
+
+// Wraps a full-teardown render() (`root.innerHTML = ''` then a full
+// rebuild — this codebase's universal screen-render pattern) so the
+// control that had focus keeps it across the rebuild. Without this, every
+// render() call drops focus to `<body>`: the focused DOM node itself is
+// destroyed, not merely relabeled, so the browser has nothing to keep
+// focus on. Identifies the focused control by a stable identifier
+// (`data-focus-key`, falling back to `data-field`, falling back to `id`)
+// rather than by position or node reference, since a rebuild can reorder
+// or entirely replace siblings — the caller is responsible for putting a
+// matching attribute on any control that should survive a rebuild with
+// focus intact. If the equivalent control in the new tree is itself still
+// genuinely unfocusable (real `disabled`, or gone entirely), the browser's
+// own `.focus()` no-op is the fallback, same as focusing nothing.
+//
+// `renderFn` may return `true` to mean "I already moved focus somewhere
+// deliberately this render (e.g. an error announcement)" — that opts out
+// of the restore below, so this helper never fights an intentional focus
+// move with a stale one.
+// `CSS.escape` isn't implemented in every environment this module runs in
+// (notably this project's own jsdom test environment) — this falls back to
+// a minimal manual escape rather than assuming the global exists.
+function escapeSelectorValue(value) {
+  if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') return CSS.escape(value);
+  return String(value).replace(/[^a-zA-Z0-9_-]/g, (ch) => `\\${ch}`);
+}
+
+export function withFocusPreservation(root, renderFn) {
+  const active = document.activeElement;
+  let selector = null;
+  if (active && root.contains(active)) {
+    // Every value currently passed to these attributes is a static,
+    // developer-authored string, so this escaping is cheap insurance
+    // rather than a fix for a live bug — but this module's own contract is
+    // reuse by a future format, and nothing stops a later caller from
+    // deriving an id/data-field value dynamically (a UUID with no
+    // guarantee of being a valid CSS identifier, say). Without
+    // CSS.escape(), such a value could throw a SyntaxError out of
+    // querySelector() and break the entire render, not just the focus
+    // restore. Found in review (code-reviewer).
+    const focusKey = active.getAttribute('data-focus-key');
+    const field = active.getAttribute('data-field');
+    if (focusKey) selector = `[data-focus-key="${escapeSelectorValue(focusKey)}"]`;
+    else if (field) selector = `[data-field="${escapeSelectorValue(field)}"]`;
+    else if (active.id) selector = `#${escapeSelectorValue(active.id)}`;
+  }
+  const focusHandled = renderFn();
+  if (!focusHandled && selector) root.querySelector(selector)?.focus();
+}
+
 // Shared "label above input" wrapper for a screen's own form fields —
 // extracted here on its 2nd verbatim use (setupScreen.js's stage rows
 // originally; roster registration next) per CONVENTIONS.md's own rule,

@@ -86,7 +86,8 @@
   cursor: pointer;
 }
 
-.btn:disabled {
+.btn:disabled,
+.btn[aria-disabled='true'] {
   cursor: not-allowed;
   opacity: 0.6;
 }
@@ -96,7 +97,7 @@
   color: var(--color-accent-contrast);
 }
 
-.btn-primary:hover:not(:disabled) {
+.btn-primary:hover:not(:disabled):not([aria-disabled='true']) {
   background: var(--color-accent-hover);
 }
 
@@ -115,7 +116,7 @@
   border-color: var(--color-border-strong);
 }
 
-.btn-outline:hover:not(:disabled) {
+.btn-outline:hover:not(:disabled):not([aria-disabled='true']) {
   background: var(--color-surface-sunken);
 }
 
@@ -164,7 +165,8 @@
    engines (found in review: the same contrast-reliability class of bug
    this file's own .form-field-hint comment already documents, just not
    yet extended to a disabled input's own foreground text). */
-.field-input:disabled {
+.field-input:disabled,
+.field-input[aria-disabled='true'] {
   color: var(--color-text-secondary);
 }
 

@@ -24,28 +24,25 @@ about original design intent.
 
 ## Current state
 
-| Phase                          | Status  | What it covers                                                                                            |
-| ------------------------------ | ------- | --------------------------------------------------------------------------------------------------------- |
-| Phase 0 — Foundation           | ✅ Done | Scaffold, Claude Code tooling, Supabase local stack + CI, doc seed                                        |
-| Phase 1 — Schema and security  | ✅ Done | Core tables, Cup Taster tables, RLS, `WITH CHECK` gate                                                    |
-| Phase 2 — Core libraries       | ✅ Done | `partition`, `ranking`, `advancement`, `countdown`, `timeclamp`, `entitlements`                           |
-| Phase 3 — Registry and offline | ✅ Done | `registry`, IndexedDB mirror + outbox, sync state panel                                                   |
-| Phase 4 — Cup Taster           | ✅ Done | Setup, heat generation, timing (app + manual), scoring, standings/advancement, report, export             |
-| Phase 5 — Live surfaces        | ✅ Done | `publish`, `viewer-shell`, projector, phone summary, automatic publishing on heat actions                 |
-| Phase 6 — Hardening            | ✅ Done | Accessibility pass, offline soak, dry run (local + production) — **Guess the Bean (descoped, see below)** |
+| Phase                          | Status  | What it covers                                                                                |
+| ------------------------------ | ------- | --------------------------------------------------------------------------------------------- |
+| Phase 0 — Foundation           | ✅ Done | Scaffold, Claude Code tooling, Supabase local stack + CI, doc seed                            |
+| Phase 1 — Schema and security  | ✅ Done | Core tables, Cup Taster tables, RLS, `WITH CHECK` gate                                        |
+| Phase 2 — Core libraries       | ✅ Done | `partition`, `ranking`, `advancement`, `countdown`, `timeclamp`, `entitlements`               |
+| Phase 3 — Registry and offline | ✅ Done | `registry`, IndexedDB mirror + outbox, sync state panel                                       |
+| Phase 4 — Cup Taster           | ✅ Done | Setup, heat generation, timing (app + manual), scoring, standings/advancement, report, export |
+| Phase 5 — Live surfaces        | ✅ Done | `publish`, `viewer-shell`, projector, phone summary, automatic publishing on heat actions     |
+| Phase 6 — Hardening            | ✅ Done | Accessibility pass, offline soak, dry run (local + production)                                |
 
 **Deadline: 4 October 2026, Cup Tasters event.**
 
-**2026-08-23, user decision: Guess the Bean will NOT be rebuilt in this codebase.** The
-original v4.x implementation is booth-only, temporary, and already has zero contact with
-the identity core (D17) — the user decided reusing the working v4.x game as-is is the
-right call rather than reinventing it here, since none of this project's reasons for
-rebuilding Cup Taster (fixed advancement, `is_test` visibility, the outbox/atomic-write
-discipline, etc.) apply to a standalone booth game with no roster/scoring/advancement
-surface. Phase 6 narrows to just the hardening pass (accessibility, offline soak, dry
-run against the real roster) — §5.4/§14's "spec written at the start of the phase" for
-Guess the Bean is moot; there's no spec to write because there's no rebuild. Revisit only
-if the v4.x game turns out not to actually work at the venue.
+**2026-08-23, user decision: Guess the Bean will NOT be rebuilt in this codebase** —
+the v4.x implementation is booth-only, temporary, already zero contact with the identity
+core, reuse it as-is. **2026-09-14, user decision reversal: Guess the Bean WILL be
+ported to Supabase** per `Handoffs and Specs/guess-the-bean-next-port-SPEC.md` (a new
+spec, locked decisions on identity anchoring and identity-ID attaching). Phase 1
+(schema + RLS) complete; Phases 2–5 carry client, session UI, gameplay, hardening. See
+CHANGELOG.md for Phase 1's full account.
 
 **Not tied to a phase task**: the `src/ui/tokens/` design system (colors, typography,
 spacing, base styles, self-hosted fonts, `DESIGN.md`, `preview.html`) shipped
@@ -167,6 +164,113 @@ reviewer (2 BLOCKING + multiple HIGH findings found and fixed), code-reviewer (1
 nesting bug found and fixed). Build/lint/test passing (1100 tests). Console screens
 (other than Login/Setup) still pending restyling pass against angular shape language, but
 already inherit correct tokens automatically. See CHANGELOG.md for the full account.
+
+**Guess the Bean Phase 5 (2026-09-15) — done**: Display/stage mode added at
+`/guess-the-bean/display/`, with persisted session orientation, polling-based live
+arrival feed, reveal animation, confetti, and a stable earliest-arrival winner tie
+break. Numeric guesses remain hidden from anonymous readers until reveal through a
+column-grant + narrowly scoped RPC design. Built by Codex (handoff document, this
+session's usage limit), then verified live and given a follow-up manual review pass by
+Claude Code, which found and fixed three real issues: a missing busy/revealed guard on
+the new winner-lookup button, a `[hidden]`-vs-`display` CSS cascade bug hiding neither
+the pre-reveal "?" nor the post-reveal QR footer, and a `@media (orientation: portrait)`
+gate that silently ignored the organiser's persisted orientation setting on a
+mismatched-shape window. See CHANGELOG.md for the full account.
+
+**Guess the Bean Phase 6 (2026-09-15) — partial**: the organiser-facing "find the
+winner's contact without touching the Supabase dashboard" piece is done (a card in
+`setupScreen.js`, gated to post-reveal). **Not done, and not something an agent can
+complete alone**: a real end-to-end session with actual phone submissions, and formally
+marking legacy's `booth/guess`, `booth/display/guess`, `booth/setup` pages retired in
+that repo's own CHANGELOG. Both need the user's own real-world action before Phase 6 can
+be marked fully done.
+
+**Guess the Bean Supabase port (2026-09-14+), not tied to a phase task**: New spec, new
+Supabase port. Reverses the 2026-08-23 descope decision; user confirmed the new port spec
+supersedes that call.
+
+**Phase 1: Schema + RLS** — database schema (three tables: sessions/guesses/contacts,
+deliberately NOT org-scoped), RLS policies + resolver functions (two blocking security
+findings found and fixed by security-reviewer), and the test suite (30 assertions, all
+pgTAP). Fixed two real schema gaps: missing unique constraint on contacts.guess_id, and
+sessions.creator_id FK lacked on-delete-cascade behavior. Discovered and documented a
+Phase 4 implementation constraint: INSERT...RETURNING throws an RLS violation for
+pre-reveal guesses; Phase 4 must generate guess UUIDs client-side. Both migrations apply
+cleanly from empty, rollback blocks verified live, all 207 tests pass. Schema-guardian and
+security-reviewer both signed off clean.
+
+**Phase 2: Magic-link auth stub (2026-09-14)** — NEW architectural decision: created
+`src/community/` as a third top-level module category (parallel to `src/core/` and
+`src/formats/`) for format-agnostic community/standalone games with real auth +
+Supabase. Guess the Bean now lives in `src/community/guess-the-bean/` with its own
+scoped CLAUDE.md. Built `authScreen.js` (magic-link via signInWithOtp, 17 new tests),
+separate from organiser console's `core/loginScreen.js` (temporary password for single
+org). Real production auth flow verified LIVE twice in browser: magic link sent via
+Mailpit's REST API, verified session establishment and `auth.uid()` resolution in
+RLS-protected insert. New Vite entry for standalone game. Code-reviewer found 2 real
+issues (subscription leak + URL construction), test-auditor found 2 test gaps (DOM check
+depth + unconditional event test), all fixed and re-verified live. Module-boundary-checker
+clean, ui-accessibility-reviewer clean (one non-blocking gap spawned as task_cb9d63b0:
+aria-live "sending" state + focus recovery, shared with core/loginScreen.js). Test suite:
+1100 → 1117 (17 new). All four reviewers signed off clean.
+
+**Phase 3: Session management, organiser flow (2026-09-14)** — Discovered two real Phase 1
+schema gaps by reading actual legacy source code (`booth/setup.html` and `booth/guess.html`
+via `gh api` + base64 decode) rather than inferring from the spec alone: missing
+`sessions.bean_count` (needed for Phase 5's winner-spotlight / closest-guess requirement,
+now required + immutable via trigger, post-reveal-only read via new `app.session_bean_count()`
+resolver), and RLS conflict (legacy's Reset Data / End Session danger-zone actions require
+new `sessions_delete` policy + `reset_guess_session_data` SECURITY DEFINER RPC to match
+existing `delete_test_event` pattern). Two new migrations: `20260914130000_guess_the_bean_
+bean_count.sql` and `20260914131000_guess_the_bean_session_lifecycle.sql`. Schema-guardian
+found and fixed real TOCTOU gap (reset RPC's guard wasn't repeated on mutating statements)
+and advisory integrity gap (bean_count mutable post-reveal; fixed with trigger). Built UI:
+`setupScreen.js` (create-session form → session list → detail view with toggles, Reveal
+button, real QR code via zero-dependency `qrcode-generator@2.0.4` npm module, danger zone
+with Export/Reset/End actions + native confirm dialogs + toast notifications). Data layer:
+`sessions.js` with `createSession`, `listMySessions`, `updateSession`, `fetchSessionExport`,
+`endSession`. Verified LIVE end-to-end twice in real browser: toggled guess-enabled and
+orientation (DB persistence verified), Reveal persisted, QR code rendered as genuine ~23KB
+SVG compound path (not placeholder), Reset/End actions worked. Deliberate UX departure from
+legacy documented: shows list + detail (per-user sessions) vs. legacy's single localStorage
+slot. Code-reviewer found 3 real issues (unmount leak in main.js, double-click race on
+danger-zone buttons, permanent error banner never cleared); module-boundary-checker clean;
+ui-accessibility-reviewer found 3 BLOCKING WCAG 4.1.2 gaps (checkbox label text not wrapped,
+select had no accessible name, toast had no role/aria-live) + spawned broader follow-up
+task_8aad08ec for cross-screen focus-loss-on-render gap (superseding task_cb9d63b0);
+test-auditor found 4 test-strength gaps (chainable() too permissive, rejoin fixture couldn't
+distinguish keyed vs. positional, zero error-path coverage, two vacuous tests). All fixed
+and re-verified. Test suite: 1117 → 1149 JS (32 new); pgTAP: 207 → 222 (15 new covering
+bean_count constraints/immutability, session_bean_count resolver, sessions_delete policy,
+reset_guess_session_data RPC). Migrations apply cleanly from empty, rollback blocks verified
+live. Six reviewers signed off clean. See CHANGELOG.md for full account.
+
+**Known gaps carried to Phase 4**: Phase 3's pass/fail list includes a `?demo=1`-equivalent
+criterion (verified in legacy: this lives in `booth/guess/index.html`, Phase 4's participant
+entry page, not Phase 3's booth/setup). Deferred to Phase 4 where it actually belongs. See
+CHANGELOG.md for the full account.
+
+**Phase 4: Participant entry flow (2026-09-15)** — Ported the participant-entry screen from
+legacy `booth/guess/index.html`: 7 view states (loading/no-session/not-found/not-active/
+closed/form/confirmed), validation rules (name ≤80, guess 1–100000000, phone ≤30 / instagram
+≤50 with one required), demo mode (`?demo=1`), and guess_enabled/revealed precedence.
+New submit_guess() SECURITY DEFINER RPC (migration 20260915100000) handling atomic
+inserts to both guesses + contacts (satisfying spec's atomicity requirement), generating
+guess UUID server-side. Fixed real enumeration-oracle bug in `app.session_is_open()`: returned
+NULL instead of false for nonexistent session_id via `coalesce(scalar_expr, false)` over a
+zero-row subquery; fixed by switching to `EXISTS(...)`. Full accessibility retrofit
+(setBusyDisabled/withFocusPreservation, role="alert" on errors, aria-invalid/aria-describedby,
+explicit focus management). Originally built against Supabase Realtime (postgres_changes) for
+the close-watch, but live-testing proved Realtime does not reliably deliver events for
+newly-added-to-publication tables on this project's LOCAL dev stack; switched to 4-second
+polling. New Vite entry for participant page (`guess-the-bean/play/`). Six reviewers clean:
+schema-guardian + security-reviewer both independently caught and fixed the enumeration-oracle
+bug (BLOCKING), code-reviewer found loading-state blank-screen gap (fixed), module-boundary-
+checker clean, ui-accessibility-reviewer confirmed all 3 WCAG gaps closed (focus restoration,
+error announcements, explicit focus moves), test-auditor found vacuous poll test + zero focus-
+assertion coverage (both fixed). Test suite: 1162 → 1188 JS, 207 → 230 pgTAP. Verified live
+3 times: demo-mode RPC write, end-to-end reveal-triggered close via polling, nonexistent-
+session resolution. See CHANGELOG.md for full account.
 
 ---
 
@@ -298,7 +402,24 @@ two consumers of the same shell/data. Verifiers per task, `code-reviewer` always
 
 ---
 
-## Known open items carried into Phase 4
+## Known open items from Guess the Bean Phase 4
+
+- **Supabase Realtime unreliability on local dev stack for newly-published tables.**
+  Originally built participant entry's close-watch using Supabase Realtime
+  (postgres_changes). Live-testing proved Realtime does not reliably deliver events for
+  newly-added-to-publication tables on this project's LOCAL dev stack (extensively
+  debugged: pg_publication_tables, pg_replication_slots, realtime.subscription table, full
+  container/stack restarts, a brand-new probe table — all ruled out any Guess-the-Bean-
+  specific cause). Workaround in place: switched to 4-second polling (works everywhere, no
+  open question). If a future phase wants real Postgres Changes Realtime on a new table,
+  budget time to verify it actually works in the cloud deployment target (managed Supabase
+  project, per CLAUDE.md's Repo section), not just assume the pre-existing `live_sessions`
+  precedent generalizes — the local-stack anomaly was never tested against production.
+  Flagged by: kb-sync during Phase 4 closeout.
+
+---
+
+## Known open items carried into Phase 4 (Cup Taster)
 
 - **T4.3/T4.4's direct-write gap is closed (2026-08-29 follow-up)** — `timing.js`/
   `timingManual.js` now route every write (start a heat, a real tap, a manual entry/
@@ -537,6 +658,22 @@ station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can 
   gap — flagged as new separate follow-up). Code-reviewer (2 rounds) found and fixed: render()
   failure regression, fragile selector lookups (now direct element references), confirmed all
   restore callbacks are correct. Flagged by: `ui-accessibility-reviewer` (heats/timing group).
+
+- **T6.hardening.a11y — Cup Taster organiser screens focus-loss on state change, PARTIALLY CLOSED
+  (2026-09-15).** Same WCAG 2.1.1 focus-management gap across three screens — every `render()`
+  does a full `root.innerHTML = ''` teardown-and-rebuild, dropping focus from `disabled` controls
+  to `<body>` with no restoration — was closed (2026-09-15) for `src/core/loginScreen.js`,
+  `src/community/guess-the-bean/authScreen.js`, and `setupScreen.js` via new reusable helpers
+  (`setBusyDisabled()` and `withFocusPreservation()` in `core/dom.js`, plus updated CSS rules
+  for `[aria-disabled='true']`). Four reviewers (code-reviewer, test-auditor, module-boundary-checker,
+  ui-accessibility-reviewer) all signed off clean after fixes. Identical bug pattern remains
+  live (unfixed, deliberately) across the rest of the Cup Taster organiser suite: ~24 `.disabled =`
+  assignments in `eventsScreen.js`, `heatsScreen.js`, `rosterScreen.js`, `scoringScreen.js`,
+  `standingsScreen.js`, `timingScreen.js`, `timingManualScreen.js`. Spawned as a separate
+  follow-up task (not yet started) prioritizing the judge-facing, tap-under-time-pressure surfaces
+  (timingScreen, timingManualScreen, scoringScreen) over the organiser-setup surfaces. See
+  CHANGELOG.md's 2026-09-15 entry for the full account. Flagged by: `ui-accessibility-reviewer`
+  (multiple Phase 2/3 reviews, addressed cross-module 2026-09-15).
 
 - **T6.hardening.a11y — `viewer-shell.js` render() churn during persistent-h1 fix,
   NON_BLOCKING.** The persistent-h1 fix (real, tested, correct) left `render()` calling
@@ -867,6 +1004,31 @@ Report screen + CSV export, and `is_test` event deletion.
   Finals never ran) — its correctness rests on the pgTAP suite + three reviewer sign-offs
   above, not on a production-specific run; revisit if a genuine production-data
   verification of that RPC specifically is wanted before the Oct 4 event.
+
+---
+
+## Known open items from Guess the Bean Phase 1–2
+
+- **Directory placement for Phase 3+ (session management UI) — RESOLVED (Phase 2).** New
+  top-level module category `src/community/` created as a home for format-agnostic
+  community/standalone games with auth (has real auth + Supabase, excluding `src/tools/`;
+  no roster/scoring/advancement, excluding `src/formats/`). Guess the Bean now lives in
+  `src/community/guess-the-bean/` with its own scoped CLAUDE.md. Root CLAUDE.md's
+  architecture map updated.
+
+- **guesses pre-reveal SELECT-by-creator behavior not yet confirmed against legacy.**
+  The spec flags "confirm against legacy booth's own behavior, don't assume" for whether
+  an unanswered guess is visible to its own creator before reveal. Phase 1's RLS policies
+  allow it (creator can read pre-reveal via `guesses_select`); Phase 5 will depend on that
+  being the right behavior. Before Phase 5 starts, verify against the real legacy code that
+  this matches what the booth actually did. Flagged by: kb-sync during Phase 1 closeout.
+
+- **Cross-cutting accessibility gap: aria-live "sending" state + focus recovery (task_cb9d63b0).**
+  Affects both `src/community/guess-the-bean/authScreen.js` and `core/loginScreen.js`. No
+  aria-live announcement of in-flight state, and native `disabled` attribute drops keyboard
+  focus. Flagged by ui-accessibility-reviewer during Phase 2; spawned as separate background
+  task since it's out of scope for auth-stub work and requires cross-module coordination.
+  Not blocking Phase 2 closure. Flagged by: ui-accessibility-reviewer during Phase 2.
 
 ---
 

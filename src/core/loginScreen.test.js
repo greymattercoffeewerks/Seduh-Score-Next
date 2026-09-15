@@ -26,11 +26,25 @@ describe('renderLoginForm', () => {
     expect(button.disabled).toBe(false);
   });
 
-  it('disabled shows "Signing in…" and disables every field', () => {
+  it('disabled shows "Signing in…" and marks every field aria-disabled/aria-busy, not native-disabled', () => {
+    // Native `disabled` removes an element from the focus order the
+    // instant it's set — if the field that state applies to currently HAS
+    // focus (e.g. the submit button mid-click), that drops focus to
+    // <body> with no way back. aria-disabled/aria-busy convey the same
+    // "unavailable, in progress" state to assistive tech without doing
+    // that. Found in review (ui-accessibility-reviewer).
     const form = renderLoginForm({ email: '', password: '' }, { disabled: true });
     expect(form.querySelector('button[type="submit"]').textContent).toBe('Signing in…');
-    expect(form.querySelector('input[type="email"]').disabled).toBe(true);
-    expect(form.querySelector('input[type="password"]').disabled).toBe(true);
+    for (const field of [
+      'input[type="email"]',
+      'input[type="password"]',
+      'button[type="submit"]',
+    ]) {
+      const node = form.querySelector(field);
+      expect(node.disabled).toBe(false);
+      expect(node.getAttribute('aria-disabled')).toBe('true');
+      expect(node.getAttribute('aria-busy')).toBe('true');
+    }
   });
 });
 
@@ -139,7 +153,7 @@ describe('mountLoginScreen', () => {
     expect(feedback.textContent).toBe('Invalid login credentials');
     expect(feedback.dataset.tone).toBe('error');
     expect(document.activeElement).toBe(feedback);
-    expect(root.querySelector('button[type="submit"]').disabled).toBe(false);
+    expect(root.querySelector('button[type="submit"]').getAttribute('aria-disabled')).toBeNull();
     expect(onSignedIn).not.toHaveBeenCalled();
   });
 
@@ -165,7 +179,7 @@ describe('mountLoginScreen', () => {
     expect(root.querySelector('.screen-feedback').textContent).toMatch(/check your connection/i);
   });
 
-  it('the submit button is disabled while the sign-in request is in flight', async () => {
+  it('the submit button is marked aria-disabled/aria-busy while the sign-in request is in flight', async () => {
     let resolveSignIn;
     const client = {
       calls: [],
@@ -193,8 +207,53 @@ describe('mountLoginScreen', () => {
       .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(root.querySelector('button[type="submit"]').disabled).toBe(true);
-    expect(root.querySelector('button[type="submit"]').textContent).toBe('Signing in…');
+    const submitButton = root.querySelector('button[type="submit"]');
+    expect(submitButton.disabled).toBe(false);
+    expect(submitButton.getAttribute('aria-disabled')).toBe('true');
+    expect(submitButton.getAttribute('aria-busy')).toBe('true');
+    expect(submitButton.textContent).toBe('Signing in…');
+
+    resolveSignIn();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  it('keeps focus on the submit button across the busy re-render triggered by submitting', async () => {
+    // The specific bug this task closes: root.innerHTML='' on every
+    // render() destroys the previously-focused node outright, and a
+    // native `disabled` attribute on the new one would make it
+    // unfocusable even if something tried to restore focus. With
+    // aria-disabled instead, plus core/dom.js's withFocusPreservation,
+    // the submit button (identified by its stable data-focus-key) should
+    // still hold focus after the busy re-render, not <body>.
+    let resolveSignIn;
+    const client = {
+      auth: {
+        signInWithPassword: () =>
+          new Promise((resolve) => {
+            resolveSignIn = () => resolve({ data: {}, error: null });
+          }),
+      },
+    };
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    await mountLoginScreen(root, { client, onSignedIn: vi.fn() });
+
+    root.querySelector('[data-field="email"]').value = 'a@b.com';
+    root.querySelector('[data-field="email"]').dispatchEvent(new Event('input', { bubbles: true }));
+    root.querySelector('[data-field="password"]').value = 'x';
+    root
+      .querySelector('[data-field="password"]')
+      .dispatchEvent(new Event('input', { bubbles: true }));
+    const submitButton = root.querySelector('button[type="submit"]');
+    submitButton.focus();
+    expect(document.activeElement).toBe(submitButton);
+
+    root
+      .querySelector('form')
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(document.activeElement).toBe(root.querySelector('button[type="submit"]'));
 
     resolveSignIn();
     await new Promise((resolve) => setTimeout(resolve, 0));
