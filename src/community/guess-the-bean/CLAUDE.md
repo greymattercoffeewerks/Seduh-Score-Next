@@ -158,6 +158,7 @@ Built by Codex from a handoff document (this session's usage-limit gap), without
 project's custom subagents available. Follow-up manual review (Claude Code) found and
 fixed three real issues before this shipped, all live-verified in a browser, not just
 caught by the automated suite:
+
 - `app.session_bean_count()` (Phase 3) and the new `app.session_display_guesses()` both
   live in the `app` schema, but `supabase/config.toml` only exposes `public`/
   `graphql_public` to PostgREST — `client.rpc('session_bean_count', ...)` was never
@@ -168,7 +169,7 @@ caught by the automated suite:
   function or an RLS policy doesn't.
 - `.gtb-display-question`/`.gtb-display-number`/`.gtb-display-qr-wrap` each declared
   their own `display` value at equal specificity to the browser's `[hidden] { display:
-  none }` rule, so `displayScreen.js`'s own `.hidden` toggles silently didn't hide either
+none }` rule, so `displayScreen.js`'s own `.hidden` toggles silently didn't hide either
   — same bug class as `core/splashScreen.css`'s documented `.status-live-dot[hidden]`
   fix, fixed the same way (an `[hidden]`-qualified override rule).
 - The portrait CSS was wrapped in `@media (orientation: portrait)`, which ignored the

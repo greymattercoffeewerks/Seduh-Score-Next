@@ -113,7 +113,9 @@ describe('mountAuthScreen', () => {
     expect(client.calls).toHaveLength(1);
     expect(client.calls[0].email).toBe('participant@local.test');
     expect(client.calls[0].password).toBeUndefined();
-    expect(root.querySelector('.gtb-feedback').textContent).toMatch(/check.*participant@local\.test/i);
+    expect(root.querySelector('.gtb-feedback').textContent).toMatch(
+      /check.*participant@local\.test/i,
+    );
     expect(root.querySelector('.gtb-feedback').dataset.tone).toBe('success');
   });
 

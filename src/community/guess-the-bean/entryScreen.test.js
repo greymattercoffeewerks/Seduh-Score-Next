@@ -45,9 +45,9 @@ describe('validateEntry', () => {
   });
 
   it('is satisfied by a valid draft with only phone, or only instagram', () => {
-    expect(validateEntry({ name: 'Alice', guess: '428', phone: '555-1234', instagram: '' })).toEqual(
-      {},
-    );
+    expect(
+      validateEntry({ name: 'Alice', guess: '428', phone: '555-1234', instagram: '' }),
+    ).toEqual({});
     expect(validateEntry({ name: 'Alice', guess: '428', phone: '', instagram: '@alice' })).toEqual(
       {},
     );
@@ -130,13 +130,18 @@ function fakeClient({ session = null, rpcError = null, statusReadError = null } 
               failNextRead = false;
               return Promise.resolve({ data: null, error: statusReadError });
             }
-            return Promise.resolve({ data: currentSession ? { ...currentSession } : null, error: null });
+            return Promise.resolve({
+              data: currentSession ? { ...currentSession } : null,
+              error: null,
+            });
           },
         }),
       }),
     }),
     rpc: vi.fn(() =>
-      rpcError ? Promise.resolve({ error: rpcError }) : Promise.resolve({ data: 'g1', error: null }),
+      rpcError
+        ? Promise.resolve({ error: rpcError })
+        : Promise.resolve({ data: 'g1', error: null }),
     ),
     _setSession: (patch) => {
       currentSession = { ...currentSession, ...patch };
@@ -277,11 +282,17 @@ describe('mountEntryScreen', () => {
       await mountEntryScreen(root, { client, search: search({ session: 's1' }) });
 
       root.querySelector('[data-field="name"]').value = 'Alice';
-      root.querySelector('[data-field="name"]').dispatchEvent(new Event('input', { bubbles: true }));
+      root
+        .querySelector('[data-field="name"]')
+        .dispatchEvent(new Event('input', { bubbles: true }));
       root.querySelector('[data-field="guess"]').value = '428';
-      root.querySelector('[data-field="guess"]').dispatchEvent(new Event('input', { bubbles: true }));
+      root
+        .querySelector('[data-field="guess"]')
+        .dispatchEvent(new Event('input', { bubbles: true }));
       root.querySelector('[data-field="phone"]').value = '555-1234';
-      root.querySelector('[data-field="phone"]').dispatchEvent(new Event('input', { bubbles: true }));
+      root
+        .querySelector('[data-field="phone"]')
+        .dispatchEvent(new Event('input', { bubbles: true }));
       root
         .querySelector('form')
         .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
@@ -472,7 +483,10 @@ describe('mountEntryScreen', () => {
             maybeSingle: () =>
               new Promise((resolve) => {
                 resolveStatus = () =>
-                  resolve({ data: { id: 's1', guess_enabled: true, revealed: false }, error: null });
+                  resolve({
+                    data: { id: 's1', guess_enabled: true, revealed: false },
+                    error: null,
+                  });
               }),
           }),
         }),
