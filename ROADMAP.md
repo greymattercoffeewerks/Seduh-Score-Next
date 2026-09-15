@@ -185,6 +185,12 @@ marking legacy's `booth/guess`, `booth/display/guess`, `booth/setup` pages retir
 that repo's own CHANGELOG. Both need the user's own real-world action before Phase 6 can
 be marked fully done.
 
+**Guess the Bean display contrast correction (2026-09-15) — done**: participant names
+in the stage live feed and winner spotlight now explicitly resolve the stage-surface text
+token. This prevents the paper-surface dark text colour inherited from `body` from making
+names illegible against the dark display surface. Focused display tests, lint, formatting,
+and the production build all passed.
+
 **Guess the Bean Supabase port (2026-09-14+), not tied to a phase task**: New spec, new
 Supabase port. Reverses the 2026-08-23 descope decision; user confirmed the new port spec
 supersedes that call.

@@ -184,6 +184,14 @@ none }` rule, so `displayScreen.js`'s own `.hidden` toggles silently didn't hide
   that file already has (`aria-disabled` doesn't block a click) — fixed with the same
   guard `handleReveal` uses, plus a regression test.
 
+**Display contrast correction (2026-09-15)** — `body` resolves its inherited `color`
+while the paper surface is active. Descendants of `.gtb-display` therefore kept that
+already-computed dark value even though `data-surface="stage"` supplies a light
+`--color-text` token. Set `color: var(--color-text)` on the display root and explicitly
+on live-feed/result and winner-name elements. When creating a token-scoped surface, set
+properties that inherit computed values on that surface root; changing only a custom
+property does not recompute an already-inherited `color` value.
+
 **Phase 4 (2026-09-15)** — participant entry flow, public and fully unauthenticated. Port
 of legacy's `booth/guess/index.html` (github.com/greymattercoffee/Seduh-Score, dev branch
 — fetched via `gh api`, same discipline as Phase 3). `entryScreen.js`/`.css`, `playMain.js`
