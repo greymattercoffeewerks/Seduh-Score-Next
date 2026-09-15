@@ -16,16 +16,25 @@ import { mountSetupScreen } from './setupScreen.js';
 // rejection with the user stranded on the just-unmounted auth screen with
 // no error and no recovery path short of a reload. Found in review
 // (code-reviewer).
+// Wrapped in an async IIFE rather than a top-level `await` — this project's
+// vite build target (chrome87/edge88/es2020/firefox78/safari14, set for
+// broad compatibility) doesn't support top-level await at the module scope
+// esbuild sees during production bundling, even though it runs fine
+// unbundled in dev. Sibling entries (playMain.js/displayMain.js) never
+// needed this because they don't hold onto their mount's return value across
+// an async boundary the way `authHandle` is here.
 let signingIn = false;
-const authHandle = await mountAuthScreen(document.getElementById('app'), {
-  onSignedIn: () => {
-    if (signingIn) return;
-    signingIn = true;
-    authHandle.unmount();
-    mountSetupScreen(document.getElementById('app')).catch((err) => {
-      document.getElementById('app').innerHTML =
-        '<section class="gtb-screen"><p class="gtb-field-error">Something went wrong loading your sessions — try reloading the page.</p></section>';
-      console.error(err);
-    });
-  },
-});
+(async () => {
+  const authHandle = await mountAuthScreen(document.getElementById('app'), {
+    onSignedIn: () => {
+      if (signingIn) return;
+      signingIn = true;
+      authHandle.unmount();
+      mountSetupScreen(document.getElementById('app')).catch((err) => {
+        document.getElementById('app').innerHTML =
+          '<section class="gtb-screen"><p class="gtb-field-error">Something went wrong loading your sessions — try reloading the page.</p></section>';
+        console.error(err);
+      });
+    },
+  });
+})();
