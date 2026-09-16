@@ -6583,3 +6583,33 @@ IPv6 loopback first on this Windows machine, so Playwright's readiness check aga
 `server.host`/`preview.host` pinned to `127.0.0.1` in `vite.config.js` fixes it.
 
 Verifier: self-verified (same bootstrapping-order note as T0.2).
+
+## Public Tour: Cup Taster focus + Community handoff · 2026-09-16
+
+- Rebuilt the legacy `/tour/` concept as a new Petrol design-system page at `/tour/`.
+  Cup Taster is the sole live competition format, presented with the repository's genuine
+  cupping photo and an organiser-console link; Throwdown, Liga Seduh and BTC (Barista Team
+  Competition) are clearly marked as planned instead of masquerading as working modules.
+- Added the two current Community tools after the competition content, with direct links to
+  Competition Timer, Guess the Bean and the `/community/` hub. The landing page's two
+  "Take the tour" CTAs now reach this real destination.
+- Added a Vite production entry and a DOM regression test covering the live Cup Taster,
+  photo, planned-format statuses, BTC name, and Community destinations.
+
+## Public Tour and Community shared framing · 2026-09-16
+
+- Replaced the simplified, page-specific Tour and Community headers and footers with shared
+  public-site components. They now share the landing page's sticky Petrol header, display
+  wordmark, body-font navigation, live-format signal, responsive menu, version trail and
+  companion-page footer links.
+- Corrected the sticky header behaviour: page roots use horizontal `clip`, rather than a
+  scroll-container overflow mode that prevents `position: sticky` from adhering to the
+  viewport.
+- Matched the shared public footer precisely to the landing page's footer typography,
+  spacing and version chip, removing the extra border and uppercase treatment.
+- Hid the non-essential live-format and connection-status labels on the shared public
+  header so mobile keeps the wordmark and hamburger menu on one compact row.
+- Applied the same compact header treatment to the marketing landing page, keeping all
+  public surfaces consistent.
+- Footer links are explicitly non-underlined, preserving the landing-page link treatment
+  without the extra rule line the first shared-footer draft introduced.

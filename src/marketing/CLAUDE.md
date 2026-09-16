@@ -116,6 +116,32 @@ here has followed. If a future mock/illustrative element gets added to this page
 needs the same treatment — `aria-hidden="true"` on its outermost element, full stop, not
 just an empty `alt` or a hopeful `aria-label`.
 
+## Tour page (2026-09-16)
+
+`tour/index.html` is a second public entry in this module, composed by `tourMain.js` and
+`tourScreen.js` with `tour.css`. It is a static, link-out page: it must not import the app
+router, auth, Supabase, or a competition implementation. It uses the legacy tour only as
+historical reference while stating the current truth: Cup Taster is live; Throwdown, Liga
+Seduh and BTC (Barista Team Competition) are planned; Community is a separate final section.
+
+The landing page's two "Take the tour" CTAs point to `/tour/`. Keep that link and the Vite
+`tour` input together whenever this entry moves: development finds HTML by path, but the
+production build omits it if it is not listed in `vite.config.js`. `hero-cupping-bowls.jpg`
+is the only real event photo used by the Tour; its Cup Taster overlay is presentational and
+aria-hidden.
+
+## Shared public framing (2026-09-16)
+
+`publicHeader.js`/`.css` and `publicFooter.js` are shared components for the Tour and
+Community entries. They use the landing page's Petrol framing without importing the landing
+screen. The header is sticky and compact: at mobile widths it keeps only the Seduh Score
+wordmark and the hamburger control. Do not reintroduce live-format or connection-status
+labels there.
+
+The footer follows the landing page's mono rhythm, attribution, companion-page link and BTS
+version link. Its links must remain non-underlined. Tour and Community roots use
+`overflow-x: clip`, not `hidden`, so the sticky header remains pinned to the viewport.
+
 ## Routing note
 
 The console's hash router (`src/core/router.js`) only ever reads `location.hash` — it
@@ -129,6 +155,10 @@ file by filesystem path automatically, but the production build only bundles ent
 listed there.
 
 ## Known placeholders
+
+**Route status update (2026-09-16):** The two landing-page “Take the tour” calls are now
+real links to `/tour/`; Community Tools links to `/community/`; and Cup Taster links to
+`/app/#/events`. The remaining Start free and Org login destinations are still placeholders.
 
 "Take the tour" and "Start free" CTAs, and the nav's "Org login" link, are `href="#"`.
 Not an oversight — there's no tour page and no sign-up flow yet (`loginScreen.js` is

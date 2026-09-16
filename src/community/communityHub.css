@@ -7,7 +7,9 @@ body {
 
 .community-hub {
   min-height: 100vh;
-  overflow: hidden;
+  /* `overflow: hidden` here captures sticky descendants in a non-scrolling
+     containing block. Horizontal clipping is all the decorative backdrop needs. */
+  overflow-x: clip;
   background: var(--color-canvas);
   color: var(--color-text);
 }

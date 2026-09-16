@@ -165,6 +165,12 @@ a {
   color: var(--color-text-secondary);
   white-space: nowrap;
 }
+/* The public header now prioritises a compact brand/navigation row across
+   every public page; these status labels are intentionally hidden here too. */
+.petrol-live-indicator,
+.petrol-secondary-label {
+  display: none;
+}
 .petrol-nav-desktop {
   display: none;
   align-items: center;

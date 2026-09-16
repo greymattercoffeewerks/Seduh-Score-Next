@@ -1,7 +1,9 @@
 // Community is a small public hub, not a format or a router destination. It
 // deliberately links out to self-contained tools rather than importing either
 // tool's logic or styling; future community gifts can be added as another card.
-import { brandMark, el, svgEl } from '../core/dom.js';
+import { el, svgEl } from '../core/dom.js';
+import { buildPublicFooter } from '../marketing/publicFooter.js';
+import { buildPublicHeader } from '../marketing/publicHeader.js';
 
 function icon(paths, label) {
   const svg = svgEl('svg', {
@@ -64,21 +66,6 @@ function toolCard({ number, title, eyebrow, body, href, meta, instrument }) {
       el('span', { className: 'community-tool-meta', text: meta }),
       arrow(),
     ]),
-  ]);
-}
-
-function buildHeader() {
-  const mark = brandMark();
-  mark.classList.add('community-brand-mark');
-  mark.setAttribute('aria-hidden', 'true');
-
-  return el('header', { className: 'community-header' }, [
-    el(
-      'a',
-      { className: 'community-brand', attrs: { href: '/', 'aria-label': 'Seduh Score home' } },
-      [mark, el('span', { text: 'Seduh Score' })],
-    ),
-    el('a', { className: 'community-home-link', text: 'Main site ↗', attrs: { href: '/' } }),
   ]);
 }
 
@@ -175,21 +162,14 @@ function buildFuture() {
   );
 }
 
-function buildFooter() {
-  return el('footer', { className: 'community-footer' }, [
-    el('span', { text: 'Seduh Score / Grey Matter Coffee Werks / Brunei' }),
-    el('a', { text: 'Back to top ↑', attrs: { href: '#community-title' } }),
-  ]);
-}
-
 function mountCommunityHub(root) {
   root.replaceChildren(
     el('main', { className: 'community-hub', attrs: { 'data-surface': 'stage' } }, [
-      buildHeader(),
+      buildPublicHeader({ active: 'community' }),
       buildHero(),
       buildShelf(),
       buildFuture(),
-      buildFooter(),
+      buildPublicFooter({ companionHref: '/tour/', companionText: 'Take the tour →' }),
     ]),
   );
 }

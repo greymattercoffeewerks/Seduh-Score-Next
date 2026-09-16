@@ -184,6 +184,7 @@ push (2026-08-30) was actually done (the Supabase MCP's `apply_migration`, not
 Handoffs and Specs/SEDUH-NEXT-HANDOFF.md   ← frozen spec, never edited for progress
 Handoffs and Specs/guess-the-bean-next-port-SPEC.md ← Guess the Bean's own spec
 index.html                      ← marketing landing page entry (root domain).
+tour/index.html                 ← public format/Community tour (marketing-only, no auth).
 app/index.html                  ← console SPA entry (moved out of root 2026-09-07 —
                                    see src/marketing/CLAUDE.md for why). Same main.js/
                                    router/screens as always, just served from /app/.
@@ -194,8 +195,8 @@ guess-the-bean/index.html       ← Guess the Bean entry. See
 src/
   core/                         ← shared, format-agnostic modules + main.js wiring.
                                    See src/core/CLAUDE.md.
-  marketing/                    ← the public landing page (day/night themed, no auth,
-                                   no router). Outside the handoff's original scope —
+  marketing/                    ← public landing + Tour pages (no auth, no router).
+                                   Outside the handoff's original scope —
                                    see src/marketing/CLAUDE.md.
   tools/                        ← standalone free community tools (e.g. Timer) — no
                                    auth, no Supabase. See src/tools/CLAUDE.md.

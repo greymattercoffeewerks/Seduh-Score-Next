@@ -1,0 +1,219 @@
+/* Shared static header for public subpages. Mirrors the landing page's Petrol
+   navigation treatment while keeping its page content independently scoped. */
+.public-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--clr-petrol-800);
+  border-bottom: var(--border-hairline) solid rgba(255, 255, 255, 0.08);
+  color: var(--color-text);
+}
+.public-header-bar {
+  display: flex;
+  align-items: center;
+  gap: clamp(14px, 2.6vw, 32px);
+  flex-wrap: wrap;
+  max-width: 1360px;
+  margin: 0 auto;
+  padding: 14px clamp(20px, 4vw, 40px);
+}
+.public-header-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: inherit;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
+  text-decoration: none;
+}
+.public-header-brand-mark {
+  width: 22px;
+  height: 22px;
+  color: var(--color-accent);
+}
+.public-header-live,
+.public-header-secondary,
+.public-header-link,
+.public-header-action {
+  font-family: var(--font-body);
+}
+.public-header-live {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-accent);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.public-header-live-dot {
+  width: 7px;
+  height: 7px;
+  background: var(--color-accent);
+}
+.public-header-secondary {
+  display: none;
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+}
+/* Public subpages keep the shared header compact: these status labels add no
+   navigation value and force the mobile bar into two rows. */
+.public-header-live,
+.public-header-secondary {
+  display: none;
+}
+.public-header-desktop {
+  display: none;
+  align-items: center;
+  gap: clamp(14px, 2.6vw, 28px);
+  margin-left: auto;
+}
+.public-header-links {
+  display: flex;
+  align-items: center;
+  gap: clamp(14px, 2.6vw, 28px);
+}
+.public-header-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-target-min);
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--tracking-wide);
+  text-decoration: none;
+  text-transform: uppercase;
+}
+.public-header-link:hover,
+.public-header-link-active {
+  color: var(--color-accent);
+}
+.public-header-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tap-target-min);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
+  text-decoration: none;
+  text-transform: uppercase;
+}
+.public-header-action:hover {
+  background: var(--color-accent-hover);
+}
+.public-header-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap-target-min);
+  height: var(--tap-target-min);
+  margin-left: auto;
+  padding: 0;
+  border: var(--border-hairline) solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+}
+.public-header-toggle-icon-close,
+.public-header-toggle-open .public-header-toggle-icon {
+  display: none;
+}
+.public-header-toggle-open .public-header-toggle-icon-close {
+  display: block;
+}
+.public-header-mobile-panel {
+  display: none;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4) clamp(20px, 4vw, 40px) var(--space-5);
+  background: var(--clr-petrol-700);
+  border-top: var(--border-hairline) solid rgba(255, 255, 255, 0.1);
+}
+.public-header-mobile-panel-open {
+  display: flex;
+}
+.public-header-mobile-links {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.public-header-mobile-links .public-header-link {
+  font-size: var(--text-sm);
+}
+.public-header-mobile-links .public-header-action {
+  align-self: flex-start;
+}
+@media (min-width: 761px) {
+  .public-header-desktop {
+    display: flex;
+  }
+  .public-header-toggle,
+  .public-header-mobile-panel {
+    display: none !important;
+  }
+}
+@media (min-width: 1120px) {
+  .public-header-secondary {
+    display: block;
+  }
+}
+.public-footer-wrap {
+  max-width: 1360px;
+  margin: 0 auto;
+  padding: 0 clamp(20px, 4vw, 40px);
+}
+.public-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 22px 0;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+.public-footer-links {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+.public-footer-link,
+.public-footer-version {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-target-min);
+  color: inherit;
+  text-decoration: none;
+}
+.public-footer-link:hover,
+.public-footer-version:hover {
+  color: var(--color-accent);
+}
+.public-footer-version {
+  padding: 4px 10px;
+  border: var(--border-hairline) solid rgba(255, 255, 255, 0.16);
+}
+@media (max-width: 760px) {
+  .public-footer-wrap {
+    padding-inline: 20px;
+  }
+}
+
+/* Keep status text off every breakpoint; the compact wordmark/menu row is
+   intentionally the whole public-subpage header on mobile. */
+.public-header-live,
+.public-header-secondary {
+  display: none;
+}
