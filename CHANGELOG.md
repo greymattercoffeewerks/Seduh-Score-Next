@@ -1,3 +1,19 @@
+## Organiser wordmark home link · 2026-09-16
+
+- Made the persistent Seduh Score icon and wordmark in the organiser `/app/` shell a single
+  accessible link back to the public main page. This gives sign-in and event screens an
+  always-available route home without adding another navigation control.
+- Added a regression test covering the link destination, accessible name, and the icon/name
+  grouping.
+
+## Behind the Seduh progress refresh · 2026-09-16
+
+- Updated the public BTS page to reflect the current Berakas cycle at v2.0.17: the Community
+  tools hub, Competition Timer, and the Supabase-backed Guess the Bean port are now part of
+  its public narrative.
+- Removed the stale claim that Guess the Bean remained a legacy-only v4.x implementation;
+  preserved the distinction that its final real-world cutover checks still require the user.
+
 ## Community tools hub · 2026-09-15
 
 - Replaced the empty `/community/` placeholder with a public Community shelf for the two

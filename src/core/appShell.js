@@ -77,6 +77,18 @@ export function mountAppShell(
     brandMark(),
   ]);
   const nameEl = el('p', { className: 'app-shell-name', text: appName });
+  // The organiser shell lives at /app/, but it is part of the public site,
+  // not a closed destination. Keep the full wordmark as one link back to
+  // the root landing page so there is always an obvious route out of an
+  // event or sign-in screen. Root-relative works for both production hosts.
+  const brandEl = el(
+    'a',
+    {
+      className: 'app-shell-brand',
+      attrs: { href: '/', 'aria-label': `${appName} home` },
+    },
+    [markEl, nameEl],
+  );
   const breadcrumbEl = el('span', { className: 'app-shell-breadcrumb' });
   const navEl = el('nav', {
     className: 'app-shell-nav',
@@ -177,8 +189,7 @@ export function mountAppShell(
     attrs: { role: 'status', 'aria-live': 'polite' },
   });
   const header = el('header', { className: 'app-shell-header' }, [
-    markEl,
-    nameEl,
+    brandEl,
     breadcrumbEl,
     navToggle,
     navPanel,

@@ -50,6 +50,17 @@ describe('mountAppShell', () => {
     expect(root.querySelector('.app-shell-name').textContent).toBe('Custom');
   });
 
+  it('wraps the icon and wordmark in one link to the public home page, so an organiser can always leave the /app/ shell', () => {
+    const root = document.createElement('div');
+    mountAppShell(root, { client: fakeClient({}) });
+    const brand = root.querySelector('.app-shell-brand');
+    expect(brand.tagName).toBe('A');
+    expect(brand.getAttribute('href')).toBe('/');
+    expect(brand.getAttribute('aria-label')).toBe('Seduh Score home');
+    expect(brand.querySelector('.app-shell-mark')).not.toBeNull();
+    expect(brand.querySelector('.app-shell-name').textContent).toBe('Seduh Score');
+  });
+
   it('renders a footer with the app name, nameplate, and version — for quick, glance-based bug-report verification (CONVENTIONS.md "Versioning")', () => {
     const root = document.createElement('div');
     mountAppShell(root, { client: fakeClient({}) });
