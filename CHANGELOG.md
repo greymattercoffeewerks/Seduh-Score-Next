@@ -1,3 +1,14 @@
+## Community tools hub · 2026-09-15
+
+- Replaced the empty `/community/` placeholder with a public Community shelf for the two
+  current tools: Competition Timer and Guess the Bean. Both cards link to their own
+  standalone surfaces; the hub imports neither tool implementation nor tool-specific CSS.
+- Built a responsive Petrol design-system page with an instrument-style graphic for each
+  tool, keyboard-visible card links, and an intentionally non-fictional future area for
+  downloadable guides, templates, and additional tools.
+- Verification: visual checks at 360px and desktop; lint, formatting check, and production
+  build pass.
+
 ## Guess the Bean display contrast correction · 2026-09-15
 
 - Corrected a stage-surface inheritance issue in `displayScreen.css`: live-feed participant

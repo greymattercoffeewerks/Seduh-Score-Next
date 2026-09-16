@@ -1,0 +1,197 @@
+// Community is a small public hub, not a format or a router destination. It
+// deliberately links out to self-contained tools rather than importing either
+// tool's logic or styling; future community gifts can be added as another card.
+import { brandMark, el, svgEl } from '../core/dom.js';
+
+function icon(paths, label) {
+  const svg = svgEl('svg', {
+    viewBox: '0 0 48 48',
+    fill: 'none',
+    stroke: 'currentColor',
+    'stroke-width': '2.4',
+    'stroke-linecap': 'square',
+    'stroke-linejoin': 'miter',
+    role: 'img',
+    'aria-label': label,
+  });
+  paths.forEach((attrs) => svg.append(svgEl(attrs.tag, attrs)));
+  return svg;
+}
+
+function timerInstrument() {
+  return icon(
+    [
+      { tag: 'circle', cx: '24', cy: '26', r: '14' },
+      { tag: 'path', d: 'M24 5v7M19 5h10M24 26l8-5M24 26v8' },
+      { tag: 'path', d: 'M11 15l-4-4M37 15l4-4' },
+    ],
+    'Stopwatch',
+  );
+}
+
+function beanInstrument() {
+  return icon(
+    [
+      { tag: 'path', d: 'M14 10h20l3 30H11z' },
+      { tag: 'path', d: 'M17 10V6h14v4M15 18h18' },
+      { tag: 'ellipse', cx: '19', cy: '26', rx: '3', ry: '4' },
+      { tag: 'ellipse', cx: '27', cy: '31', rx: '3', ry: '4' },
+      { tag: 'ellipse', cx: '30', cy: '23', rx: '3', ry: '4' },
+    ],
+    'Jar of coffee beans',
+  );
+}
+
+function arrow() {
+  return el('span', { className: 'community-card-arrow', text: 'Open tool →' });
+}
+
+function toolCard({ number, title, eyebrow, body, href, meta, instrument }) {
+  return el('a', { className: 'community-tool-card', attrs: { href } }, [
+    el('div', { className: 'community-card-top' }, [
+      el('span', { className: 'community-tool-number', text: number }),
+      el('span', { className: 'community-tool-status', text: 'Available now' }),
+    ]),
+    el('div', { className: 'community-instrument', attrs: { 'aria-hidden': 'true' } }, [
+      instrument,
+    ]),
+    el('div', { className: 'community-card-copy' }, [
+      el('p', { className: 'community-card-eyebrow', text: eyebrow }),
+      el('h2', { text: title }),
+      el('p', { className: 'community-card-body', text: body }),
+    ]),
+    el('div', { className: 'community-card-bottom' }, [
+      el('span', { className: 'community-tool-meta', text: meta }),
+      arrow(),
+    ]),
+  ]);
+}
+
+function buildHeader() {
+  const mark = brandMark();
+  mark.classList.add('community-brand-mark');
+  mark.setAttribute('aria-hidden', 'true');
+
+  return el('header', { className: 'community-header' }, [
+    el(
+      'a',
+      { className: 'community-brand', attrs: { href: '/', 'aria-label': 'Seduh Score home' } },
+      [mark, el('span', { text: 'Seduh Score' })],
+    ),
+    el('a', { className: 'community-home-link', text: 'Main site ↗', attrs: { href: '/' } }),
+  ]);
+}
+
+function buildHero() {
+  return el(
+    'section',
+    { className: 'community-hero', attrs: { 'aria-labelledby': 'community-title' } },
+    [
+      el('div', { className: 'community-hero-grid', attrs: { 'aria-hidden': 'true' } }),
+      el('div', {
+        className: 'community-hero-orbit community-hero-orbit-one',
+        attrs: { 'aria-hidden': 'true' },
+      }),
+      el('div', {
+        className: 'community-hero-orbit community-hero-orbit-two',
+        attrs: { 'aria-hidden': 'true' },
+      }),
+      el('p', { className: 'community-kicker', text: 'Seduh Score / Community shelf' }),
+      el('h1', { id: 'community-title' }, [
+        document.createTextNode('Useful on the '),
+        el('span', { text: 'day of.' }),
+      ]),
+      el('p', {
+        className: 'community-intro',
+        text: 'A growing collection of practical tools for coffee people running things, making things, and bringing a room together.',
+      }),
+      el('div', { className: 'community-hero-note' }, [
+        el('span', { className: 'community-note-mark', text: '02' }),
+        el('span', { text: 'Free tools, built in Brunei.' }),
+      ]),
+    ],
+  );
+}
+
+function buildShelf() {
+  return el(
+    'section',
+    { className: 'community-shelf', attrs: { 'aria-labelledby': 'tools-title' } },
+    [
+      el('div', { className: 'community-section-heading' }, [
+        el('p', { className: 'community-kicker', text: 'On the shelf now' }),
+        el('h2', { id: 'tools-title', text: 'Pick up a tool.' }),
+        el('p', {
+          text: 'No clutter, no feature maze. Just a good thing to open when you need it.',
+        }),
+      ]),
+      el('div', { className: 'community-tool-grid' }, [
+        toolCard({
+          number: '01',
+          title: 'Competition Timer',
+          eyebrow: 'For keeping the room moving',
+          body: 'A clear, full-screen timer for heats, routines, brews and the moments everyone needs to see at once.',
+          href: '/tools/timer/',
+          meta: 'No account needed',
+          instrument: timerInstrument(),
+        }),
+        toolCard({
+          number: '02',
+          title: 'Guess the Bean',
+          eyebrow: 'For a little friendly suspense',
+          body: 'Set the jar, share the link, and let the room guess. A simple booth game with a live display built in.',
+          href: '/guess-the-bean/',
+          meta: 'Set up with email',
+          instrument: beanInstrument(),
+        }),
+      ]),
+    ],
+  );
+}
+
+function buildFuture() {
+  return el(
+    'section',
+    { className: 'community-future', attrs: { 'aria-labelledby': 'future-title' } },
+    [
+      el('div', { className: 'community-future-index', text: '03' }),
+      el('div', { className: 'community-future-copy' }, [
+        el('p', { className: 'community-kicker', text: 'More to share' }),
+        el('h2', { id: 'future-title', text: 'A home for the useful extras.' }),
+        el('p', {
+          text: 'As Seduh Score grows, this shelf will make room for downloadable guides, templates and more small tools worth passing around.',
+        }),
+      ]),
+      el(
+        'div',
+        { className: 'community-future-list', attrs: { 'aria-label': 'Planned additions' } },
+        [
+          el('span', { text: 'GUIDES' }),
+          el('span', { text: 'TEMPLATES' }),
+          el('span', { text: 'TOOLS' }),
+        ],
+      ),
+    ],
+  );
+}
+
+function buildFooter() {
+  return el('footer', { className: 'community-footer' }, [
+    el('span', { text: 'Seduh Score / Grey Matter Coffee Werks / Brunei' }),
+    el('a', { text: 'Back to top ↑', attrs: { href: '#community-title' } }),
+  ]);
+}
+
+function mountCommunityHub(root) {
+  root.replaceChildren(
+    el('main', { className: 'community-hub', attrs: { 'data-surface': 'stage' } }, [
+      buildHeader(),
+      buildHero(),
+      buildShelf(),
+      buildFuture(),
+      buildFooter(),
+    ]),
+  );
+}
+
+mountCommunityHub(document.querySelector('#app'));

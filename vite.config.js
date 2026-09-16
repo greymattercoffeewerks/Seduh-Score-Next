@@ -21,10 +21,11 @@ export default defineConfig({
       // see src/community/guess-the-bean/CLAUDE.md), its PARTICIPANT
       // entry at /guess-the-bean/play/ (2026-09-15, Phase 4 — a separate,
       // unauthenticated page, not a route within the organiser page), and a
-      // new /community/ hub (2026-09-14) — the landing page's old "Timer"
-      // nav link now points here instead of straight to /tools/timer/; the
-      // page itself is still an empty shell (no main.js wired up yet) until
-      // it's built out to link out to Timer and Guess the Bean. Vite's dev
+      // /community/ hub (2026-09-14, built 2026-09-15) — the landing page's
+      // old "Timer" nav link points here instead of straight to /tools/timer/.
+      // It is a public link-out shelf for Timer, Guess the Bean, and future
+      // community resources; it deliberately imports neither tool itself.
+      // Vite's dev
       // server serves all seven by filesystem path with no config needed;
       // only the production build needs to be told about entries beyond the
       // first, or `vite build` silently drops them from dist/.

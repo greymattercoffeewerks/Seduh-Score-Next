@@ -191,6 +191,11 @@ token. This prevents the paper-surface dark text colour inherited from `body` fr
 names illegible against the dark display surface. Focused display tests, lint, formatting,
 and the production build all passed.
 
+**Community tools hub (2026-09-15) — done**: `/community/` now provides a public,
+design-system-native landing page for Competition Timer and Guess the Bean. It remains a
+link-out shelf, not a router or a new shared tool abstraction, and reserves a factual
+extension area for future downloadable guides, templates, and community tools.
+
 **Guess the Bean Supabase port (2026-09-14+), not tied to a phase task**: New spec, new
 Supabase port. Reverses the 2026-08-23 descope decision; user confirmed the new port spec
 supersedes that call.
