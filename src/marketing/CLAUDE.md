@@ -130,6 +130,20 @@ production build omits it if it is not listed in `vite.config.js`. `hero-cupping
 is the only real event photo used by the Tour; its Cup Taster overlay is presentational and
 aria-hidden.
 
+## Public-page prerendering (2026-09-16)
+
+`npm run build` runs Vite first, then `tools/prerender-public-pages.mjs`. It writes the
+already-rendered HTML into the production output for the landing page, Tour, Community hub,
+and Timer. These are the only routes in scope because their content is stable and public.
+The console and Guess the Bean routes remain client-rendered and `noindex`: they are
+authenticated, session-specific, or both.
+
+The prerender utility imports each built entry bundle into a lightweight build-time DOM, then
+copies the rendered `#app` content into that route's `dist/.../index.html`. It does not add a
+runtime server, framework, or browser dependency. Keep its route list and the raw-response
+Playwright assertions in `tests/e2e/smoke.spec.js` synchronized whenever a public route is
+added or removed.
+
 ## Shared public framing (2026-09-16)
 
 `publicHeader.js`/`.css` and `publicFooter.js` are shared components for the Tour and
