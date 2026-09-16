@@ -12,3 +12,21 @@ test('app entry mounts the real app shell and routes to the events screen', asyn
   await expect(page.locator('.app-shell-name')).toHaveText('Seduh Score');
   await expect(page.getByRole('link', { name: 'Events' })).toBeVisible();
 });
+
+test('public pages ship meaningful HTML before client JavaScript runs', async ({ page }) => {
+  const pages = [
+    ['/', '<div class="petrol-page"', 'One tablet.'],
+    ['/tour/', '<main class="tour-page"', 'A better way to '],
+    ['/community/', '<main class="community-hub"', 'Useful on the '],
+    ['/tools/timer/', '<main class="timer"', 'Seduh Timer'],
+  ];
+
+  for (const [path, element, copy] of pages) {
+    const response = await page.request.get(path);
+    const html = await response.text();
+
+    expect(response.ok()).toBe(true);
+    expect(html).toContain(element);
+    expect(html).toContain(copy);
+  }
+});

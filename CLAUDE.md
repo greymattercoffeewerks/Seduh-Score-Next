@@ -242,7 +242,8 @@ tests/e2e/                      ← Playwright — see CONVENTIONS.md for the th
 
 Local: `C:\Users\mfosa\OneDrive\Documents\seduh-score-next`
 GitHub: `github.com/greymattercoffeewerks/Seduh-Score-Next` (public)
-Live: `https://seduh-score-next.greymatter-cw.workers.dev/` — marketing landing page at
+Live: `https://www.seduhscore.com/` (canonical public host; the workers.dev hostname remains
+an infrastructure endpoint) — marketing landing page at
 root, console app at `/app/`. Cloudflare Workers Builds deploys automatically on every
 merge to `main` (confirmed via `wrangler deployments list`, PR #68, 2026-09-07 — see
 `wrangler.jsonc`'s own comment for the fuller account of this being connected earlier

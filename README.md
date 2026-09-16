@@ -40,8 +40,9 @@ npm run db:reset   # apply all migrations to a fresh local database
 | Command                           | Does                                              |
 | --------------------------------- | ------------------------------------------------- |
 | `npm run dev`                     | Vite dev server                                   |
-| `npm run build`                   | Production build                                  |
+| `npm run build`                   | Production build; prerenders stable public pages  |
 | `npm run preview`                 | Serve the production build locally                |
+| `npm run prerender:public`        | Prerender the landing, Tour, Community, and Timer |
 | `npm test`                        | Vitest unit tests                                 |
 | `npm run test:watch`              | Vitest in watch mode                              |
 | `npm run test:e2e`                | Playwright end-to-end tests                       |

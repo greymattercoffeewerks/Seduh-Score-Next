@@ -1,3 +1,16 @@
+## Public SEO foundation and prerendering · 2026-09-16
+
+- Added canonical URLs, social-sharing metadata, robots guidance, WebSite structured data,
+  and a sitemap for the public landing page, Tour, Community hub, and Competition Timer.
+  `www.seduhscore.com` is now the canonical public host; the console and Guess the Bean
+  session surfaces explicitly remain out of search indexing.
+- `npm run build` now prerenders those four stable public routes into their production HTML.
+  The build executes each already-bundled entry in a lightweight DOM and retains the existing
+  client-side behavior for visitors; it introduces neither server-side runtime work nor a
+  browser-binary requirement in Cloudflare or normal CI builds.
+- Added production-response checks proving each rendered page includes its meaningful HTML
+  before client JavaScript runs.
+
 ## Organiser wordmark home link · 2026-09-16
 
 - Made the persistent Seduh Score icon and wordmark in the organiser `/app/` shell a single
