@@ -188,6 +188,7 @@ app/index.html                  ← console SPA entry (moved out of root 2026-09
                                    see src/marketing/CLAUDE.md for why). Same main.js/
                                    router/screens as always, just served from /app/.
 tools/timer/index.html          ← standalone Timer tool entry. See src/tools/CLAUDE.md.
+community/index.html            ← public hub linking community tools and future resources.
 guess-the-bean/index.html       ← Guess the Bean entry. See
                                    src/community/guess-the-bean/CLAUDE.md.
 src/
