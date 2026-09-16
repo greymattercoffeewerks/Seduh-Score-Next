@@ -56,6 +56,10 @@
       it was drafted) so Vite copies it verbatim to the build output and
       Cloudflare Workers Static Assets serves it at `/bts/` — appShell.js's
       footer links its rendered version number here.
+
+      Progress update, 2026-09-16: Berakas is now v2.0.17. The public front
+      door gained a Community shelf, and Guess the Bean was ported from the
+      legacy booth implementation to its own Supabase-backed public tool.
     -->
     <style>
       @font-face {
@@ -756,7 +760,8 @@
           advancement bug the old app never quite trusted itself with.
         </p>
         <p class="lede enter" style="animation-delay: 0.24s">
-          One phase at a time, aimed at a real deadline: the Cup Tasters event on 4 October 2026.
+          One phase at a time, aimed at the Cup Tasters event on 4 October 2026 — and now with a
+          public shelf for the smaller things a coffee community actually uses between events.
         </p>
       </header>
 
@@ -781,10 +786,10 @@
           </div>
           <div class="ledger-row reveal">
             <span class="ledger-place">Berakas</span>
-            <span class="ledger-version">v2.0.0</span>
+            <span class="ledger-version">v2.0.17</span>
             <span class="ledger-status current"><span class="pulse-dot"></span>Current</span>
             <span class="ledger-note"
-              >The public front door — jumped the queue, ahead of schedule.</span
+              >The public front door, the Community shelf, and the Guess the Bean port.</span
             >
           </div>
           <div class="ledger-row reveal">
@@ -806,8 +811,8 @@
 
         <div class="stat-row reveal">
           <span><b>2</b> cycles</span>
-          <span><b>v2.0.0</b> now</span>
-          <span><b>1 / 4</b> formats</span>
+          <span><b>v2.0.17</b> now</span>
+          <span><b>2</b> community tools</span>
         </div>
       </section>
 
@@ -816,7 +821,8 @@
         <h2 class="reveal">What shipped — and what it felt like.</h2>
         <p class="sec-sub reveal">
           <strong>Kiulap</strong> — seven phases per the project's frozen handoff spec, all shipped.
-          Then <strong>Berakas</strong> — a front door nobody had planned for, jumping the queue.
+          Then <strong>Berakas</strong> — a front door nobody had planned for, followed by a public
+          shelf for the useful extras.
         </p>
 
         <div class="log" data-stagger>
@@ -968,8 +974,8 @@
                 <span class="k">Shipped</span
                 ><span class="v"
                   >Accessibility pass, offline soak testing, and a dry run against the real roster —
-                  local and production both green. Guess the Bean stayed the working v4.x version,
-                  deliberately not rebuilt.</span
+                  local and production both green. The Cup Taster hardening pass closed before the
+                  event, leaving room for the public tools that followed.</span
                 >
               </div>
               <div class="log-line felt">
@@ -987,7 +993,7 @@
             <div>
               <div class="log-head">
                 <span class="log-name">The public front door</span>
-                <span class="log-ver">v2.0.0</span>
+                <span class="log-ver">v2.0.17</span>
                 <span class="log-now"><span class="pulse-dot"></span>Current cycle</span>
               </div>
               <div class="log-line shipped">
@@ -995,14 +1001,43 @@
                 ><span class="v"
                   >The public marketing landing page — out of the original handoff's scope entirely,
                   shipped because it was needed. The console moved to <code>/app/</code> to make
-                  room for it; this page you're reading now lives right alongside it.</span
+                  room for it; the new <code>/community/</code> shelf now links Competition Timer
+                  and Guess the Bean from the same public front door.</span
                 >
               </div>
               <div class="log-line felt">
                 <span class="k">Felt like</span
                 ><span class="v"
                   >the moment this stopped being a private rebuild and got an actual public front
-                  door — the same thing legacy's own Berakas cycle was, for the same reason.</span
+                  door — then a shelf beside it for the tools people can simply pick up and
+                  use.</span
+                >
+              </div>
+            </div>
+          </div>
+
+          <div class="log-item current reveal">
+            <div class="log-phase">Community</div>
+            <div>
+              <div class="log-head">
+                <span class="log-name">Guess the Bean, rebuilt</span>
+                <span class="log-ver">v2.0.17</span>
+                <span class="log-now"><span class="pulse-dot"></span>Live now</span>
+              </div>
+              <div class="log-line shipped">
+                <span class="k">Shipped</span
+                ><span class="v"
+                  >Guess the Bean moved off the legacy booth page into its own Supabase-backed flow:
+                  magic-link organiser setup, participant entry, a live stage display and
+                  post-reveal winner contact lookup. The Community shelf gives it a proper public
+                  home next to Competition Timer.</span
+                >
+              </div>
+              <div class="log-line felt">
+                <span class="k">Felt like</span
+                ><span class="v"
+                  >taking a good little booth game seriously enough to give it the same reliable
+                  foundations as the rest of the product — without making it feel heavyweight.</span
                 >
               </div>
             </div>
@@ -1049,7 +1084,9 @@
         <div class="sec-eyebrow reveal" style="justify-content: center; display: inline-flex">
           Enough of the back room
         </div>
-        <h2 class="reveal">That's the standings so far.<br />No cliffhanger — just more phases.</h2>
+        <h2 class="reveal">
+          That's the standings so far.<br />No cliffhanger — just more tools and phases.
+        </h2>
         <a class="btn reveal" href="/">&larr; Back to Seduh Score Next</a>
       </section>
 

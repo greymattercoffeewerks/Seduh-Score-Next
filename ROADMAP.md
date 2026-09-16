@@ -196,6 +196,10 @@ design-system-native landing page for Competition Timer and Guess the Bean. It r
 link-out shelf, not a router or a new shared tool abstraction, and reserves a factual
 extension area for future downloadable guides, templates, and community tools.
 
+**Behind the Seduh progress refresh (2026-09-16) — done**: the public `/bts/` history now
+names the current Berakas work accurately at v2.0.17, including the Community shelf and
+the Guess the Bean Supabase port; it no longer claims Guess the Bean remains legacy-only.
+
 **Guess the Bean Supabase port (2026-09-14+), not tied to a phase task**: New spec, new
 Supabase port. Reverses the 2026-08-23 descope decision; user confirmed the new port spec
 supersedes that call.
