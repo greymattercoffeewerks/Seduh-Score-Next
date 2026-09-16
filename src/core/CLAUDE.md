@@ -129,6 +129,11 @@ is held to. Skips attaching an observer entirely under `prefers-reduced-motion: 
 transition under the matching `no-preference` query, same discipline as every other
 animation in this codebase.
 
+**Wordmark home link (2026-09-16)** — the header mark and name are now one root-relative
+`/` link with the accessible name “Seduh Score home.” The organiser app is served from
+`/app/`, so this keeps an explicit exit route available even at sign-in; do not split the
+icon and name into separate destinations or leave either as a non-interactive faux brand.
+
 ## `main.js` (composition root)
 
 Not physically under `core/`, but its conventions live here since it's the wiring that

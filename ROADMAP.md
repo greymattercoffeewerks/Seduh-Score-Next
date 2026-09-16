@@ -200,6 +200,9 @@ extension area for future downloadable guides, templates, and community tools.
 names the current Berakas work accurately at v2.0.17, including the Community shelf and
 the Guess the Bean Supabase port; it no longer claims Guess the Bean remains legacy-only.
 
+**Organiser wordmark home link (2026-09-16) — done**: the persistent top-left Seduh Score
+wordmark in `/app/` now returns to the public main page, including from the sign-in screen.
+
 **Guess the Bean Supabase port (2026-09-14+), not tied to a phase task**: New spec, new
 Supabase port. Reverses the 2026-08-23 descope decision; user confirmed the new port spec
 supersedes that call.
