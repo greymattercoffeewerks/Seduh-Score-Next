@@ -307,7 +307,7 @@ function buildHero() {
     }),
     el('div', { className: 'petrol-hero-actions' }, [
       actionLink('Start free — no account', { primary: true }),
-      actionLink('Take the tour', { outline: true }),
+      actionLink('Take the tour', { outline: true, href: '/tour/' }),
     ]),
     el('div', { className: 'petrol-stat-strip' }, [
       statItem('1', 'format live'),
@@ -605,7 +605,7 @@ function ctaBand() {
     }),
     el('div', { className: 'petrol-hero-actions' }, [
       actionLink('Start free — no account', { primary: true }),
-      actionLink('Take the tour', { outline: true }),
+      actionLink('Take the tour', { outline: true, href: '/tour/' }),
     ]),
   ]);
   const inner = el('div', { className: 'petrol-cta' }, [photo, copy]);

@@ -8,7 +8,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   build: {
     rollupOptions: {
-      // Seven HTML entries: the marketing landing page at root (index.html),
+      // Eight HTML entries: the marketing landing page at root (index.html),
       // the console SPA at /app/ (app/index.html — moved out of root
       // 2026-09-07 so the bare domain serves the landing page instead of
       // booting straight into the console), the standalone Timer tool at
@@ -41,6 +41,7 @@ export default defineConfig({
           new URL('./guess-the-bean/display/index.html', import.meta.url),
         ),
         community: fileURLToPath(new URL('./community/index.html', import.meta.url)),
+        tour: fileURLToPath(new URL('./tour/index.html', import.meta.url)),
       },
     },
   },

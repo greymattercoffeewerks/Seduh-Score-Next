@@ -1,5 +1,13 @@
 # Seduh Score Next — Roadmap
 
+> **Public Tour: Cup Taster focus + Community handoff (2026-09-16) — done.** `/tour/`
+> now translates the legacy format tour into the current Petrol design system. Cup Taster is
+> live; Throwdown, Liga Seduh and BTC (Barista Team Competition) remain planned. The page
+> finishes with the two existing Community tools and the Community hub, while the marketing
+> landing page's “Take the tour” CTAs now link there. Tour and Community also share a
+> compact sticky Petrol header/footer system with the public site; mobile keeps only the
+> wordmark and hamburger control in its header bar.
+
 _State: Phase 0 done; Phase 1 done (T1.1–T1.4); Phase 2 done (T2.1–T2.6); Phase 3 done
 (T3.1–T3.3); Phase 4 done (T4.1–T4.8, plus two 2026-08-27 follow-ups closing T4.1's
 stage-plan UI gap and its roster-registration UI gap, a 2026-08-29 follow-up closing
