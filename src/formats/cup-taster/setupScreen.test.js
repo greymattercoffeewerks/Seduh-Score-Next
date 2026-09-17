@@ -239,7 +239,7 @@ describe('renderStageRow', () => {
     const el = renderStageRow(row, 0, 2, { onMoveUp() {}, onMoveDown() {}, onRemove() {} });
     expect(el.querySelector('select[aria-label="Stage 1: kind"]').value).toBe('prelims');
     expect(el.querySelector('input[aria-label="Stage 1: set count"]').value).toBe('5');
-    expect(el.querySelector('input[aria-label="Stage 1: duration in seconds"]').value).toBe('480');
+    expect(el.querySelector('input[aria-label="Stage 1: duration in minutes"]').value).toBe('8');
     expect(el.querySelector('input[aria-label="Stage 1: cutoff"]').value).toBe('8');
   });
 
@@ -737,8 +737,8 @@ describe('mountSetupScreen', () => {
     });
     await mountSetupScreen(root, { eventId: 'ev1', client });
 
-    const durationInput = root.querySelector('input[aria-label="Stage 1: duration in seconds"]');
-    durationInput.value = '300';
+    const durationInput = root.querySelector('input[aria-label="Stage 1: duration in minutes"]');
+    durationInput.value = '5';
     durationInput.dispatchEvent(new Event('input', { bubbles: true }));
 
     const saveButton = [...root.querySelectorAll('button')].find(
@@ -778,8 +778,8 @@ describe('mountSetupScreen', () => {
     // fresh stageHasHeats check must still catch it.
     client.db.ct_heats.push({ id: 'h1', stage_id: 's1' });
 
-    const durationInput = root.querySelector('input[aria-label="Stage 1: duration in seconds"]');
-    durationInput.value = '300';
+    const durationInput = root.querySelector('input[aria-label="Stage 1: duration in minutes"]');
+    durationInput.value = '5';
     durationInput.dispatchEvent(new Event('input', { bubbles: true }));
 
     const saveButton = [...root.querySelectorAll('button')].find(
