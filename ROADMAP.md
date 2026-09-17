@@ -219,6 +219,28 @@ the Guess the Bean Supabase port; it no longer claims Guess the Bean remains leg
 **Organiser wordmark home link (2026-09-16) — done**: the persistent top-left Seduh Score
 wordmark in `/app/` now returns to the public main page, including from the sign-in screen.
 
+**Cup Taster public results publishing (2026-09-17), not tied to a phase task**: User-
+requested feature. Adds an organiser-controlled publish pipeline so the public `/results/`
+archive page (previously showing only fabricated sample data) can show real Cup Taster
+event results. New `events.city` column (alongside existing `venue`), new `public_results`
+table with RLS and publish/unpublish RPCs, real `resultsPublishing.js` logic composing
+existing `analytics.js` output, and `resultsScreen.js` re-wired to show real published
+events instead of static samples. Schema-guardian and security-reviewer independently
+caught and fixed a critical raw-insert bypass vulnerability (missing per-row org/event-id
+trigger + overly-permissive table grants). Ui-accessibility-reviewer and code-reviewer
+found and fixed five real issues: focus-drop on publish/unpublish clicks (fixed via
+withFocusPreservation), missing load timeout (fixed via raceTimeout), aria-live region
+rebuilt alongside siblings (fixed), missing CSS, and missing signal?.aborted guard. Code-
+reviewer also caught format-agnostic results page hard-coded `'Cup Taster'` string and
+null-crashes on missing event dates/cafe info — all fixed with format threading and
+guards. Test-auditor strengthened an under-differentiating stats test fixture. Final
+state: 1238/1238 Vitest tests, 252/252 pgTAP tests, lint clean, migrations apply from
+empty and rollback verified live, live-verified against both local and cloud Supabase.
+Deployed to main via PR #95, migration pushed to cloud project `wxzwanprluqmgoagbkpv`.
+Known open items (not blocking): `/results/` deliberately unlinked/noindexed — nav
+wiring is a separate, later decision once real event content exists; no real Cup Taster
+event published yet.
+
 **Guess the Bean Supabase port (2026-09-14+), not tied to a phase task**: New spec, new
 Supabase port. Reverses the 2026-08-23 descope decision; user confirmed the new port spec
 supersedes that call.

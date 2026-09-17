@@ -1,3 +1,110 @@
+## Cup Taster public results publishing · 2026-09-17
+
+User-requested feature: a real, organiser-controlled publish pipeline so the public
+`/results/` archive page (which previously showed only fabricated preview data) can show
+real Cup Taster results.
+
+**Schema** (`supabase/migrations/20260917130000_public_results.sql`):
+
+- `events.city` — new nullable text column, alongside the existing `venue` column (the
+  results archive wants City and Venue as separate fields).
+- New `public_results` table: `org_id`, `event_id` (unique — one published snapshot per
+  event), `payload jsonb` (a one-way snapshot, not a live re-derivation — explicit,
+  documented exception to `no-derived-storage`, same category as existing
+  `event_entries.display_name`/`cafe` snapshot columns), `published_at`, `published_by`.
+  RLS: anon-public read (same shape/caveat as `events_anon_safe_read`), org-member
+  read+write (defense-in-depth behind the RPCs).
+- Two `SECURITY INVOKER` RPCs: `publish_event_results`/`unpublish_event_results`, modeled
+  on `delete_test_event`'s exact shape (unified "not found" error for wrong-org/
+  nonexistent, `is_test` rejection checked twice — guard clause and the write statement).
+
+**Real security bugs found and fixed before ship**:
+
+Both **schema-guardian** and **security-reviewer** independently flagged the same
+critical gap: `public_results.org_id`/`event_id` were independent FKs with no trigger
+tying them together, and `authenticated` had direct table grants beyond just the RPCs.
+This meant an org member could bypass `publish_event_results` entirely via a raw INSERT
+(forging another org's `event_id`, or publishing their own test event's payload), and
+since the table is anon-readable, plant attacker-controlled content on a publicly-readable
+row. Same class of gap this codebase had already closed twice before
+(`app.check_live_session_org()`, `app.check_ct_results_set_stage()`). Fixed with a new
+`before insert or update` trigger `app.check_public_results_org()` enforcing both checks
+at the table level. Also added a missing `org_id` index and tightened anon's grants
+(explicit revoke before the narrow grant, matching `events_anon_safe_read`'s precedent).
+All confirmed via 18 new pgTAP assertions in `supabase/tests/011_public_results.sql`, plus
+manual live verification (raw-insert bypass attempts, non-member/anon behavior, is_test
+rejection) via direct psql against the local stack. Migration applies cleanly from empty;
+rollback verified live in a transaction, twice.
+
+**Application code**:
+
+- `src/core/eventsScreen.js`/`events.js` — City field on event creation, same pattern as
+  the existing Venue field.
+- `src/formats/cup-taster/resultsPublishing.js` (new) — pure function building the
+  publish payload from `analytics.js`'s already-reviewed `computeEventSummary()` output
+  (reuses existing, correct placement logic rather than re-deriving it — podium is
+  literally the top 3 of an already-correctly-sorted array).
+- `src/formats/cup-taster/reportScreen.js` — new "Public results" publish/unpublish card,
+  the first stateful/re-rendering element on an otherwise render-once screen. **Found and
+  fixed 5 real issues in ui-accessibility-reviewer + code-reviewer rounds**: (1) focus
+  dropped to `<body>` on every click because the card rebuilt its feedback/heading/body
+  together — fixed by making `heading`/`feedback` static children and using
+  `core/dom.js`'s `withFocusPreservation` + a shared `data-focus-key` on both buttons,
+  with a new regression test asserting `document.activeElement` survives the rebuild;
+  (2) no load timeout on the initial publish-state check — fixed with
+  `core/timeout.js`'s `raceTimeout`, with its own fake-timer regression test; (3) the
+  aria-live feedback region was being torn down and rebuilt alongside unrelated siblings
+  (risking a dropped screen-reader announcement), and error feedback never called
+  `.focus()`/`.scrollIntoView()` unlike this same screen's existing CSV/print export
+  actions — fixed to match that precedent; (4) missing CSS for the new row layout;
+  (5) `handlePublish`/`handleUnpublish` were missing the `signal?.aborted` post-await
+  guard every other screen in this format already uses.
+- `src/core/publicResults.js` (new) — anon-safe `listPublishedResults()` plus the
+  org-scoped `findPublishedResultForEvent()` and thin RPC wrappers
+  `publishEventResults`/`unpublishEventResults`.
+- `src/marketing/resultsScreen.js` — rewired from fabricated static data
+  (`resultsSampleData.js`, now deleted) to a real fetch via `listPublishedResults()`,
+  with genuine loading/empty/error states this page never needed before. **Found and fixed
+  4 real issues in code review and live browser testing**: `formatDate(null)` crashed
+  unconditionally on the documented-nullable `eventDate` field; `archiveRow` assumed
+  `event.podium[0]` always existed with no guard; a podium finisher with no `cafe` on
+  record crashed rendering (`appendChild(null)`) until filtered; a hardcoded `'Cup
+Taster'` string leaked format-specific assumptions into a page documented as
+  format-agnostic — fixed by threading `event.format` through the payload itself and
+  adding a `formatLabel()` helper with sensible fallbacks. **test-auditor** also caught
+  that the stats-derivation test's fixture could pass with a wrong formula (all rows had
+  matching values) — fixture strengthened with genuinely distinguishing data.
+- `results/index.html` — deliberately still `noindex, nofollow`, still NOT linked from
+  nav or the homepage (explicit user decision, both at start of this build and
+  re-confirmed after cloud deploy) — wiring that in is a separate, later, deliberate
+  step once there's a real event's worth of published content.
+- `supabase/seed.sql` — two realistic sample published rows added for local dev, so
+  `/results/` has something to show without running a real event locally.
+
+**Process**: every phase went through required subagent review per this repo's delegation
+table (schema-guardian, security-reviewer, scoring-auditor implicitly via the
+no-derived-storage reasoning, ui-accessibility-reviewer, module-boundary-checker,
+code-reviewer, test-auditor) — most rounds found real issues, all fixed and re-verified,
+consistent with this repo's "every review should find something" expectation.
+
+**Verification**: 1238/1238 Vitest tests passing · 252/252 pgTAP tests passing · lint
+clean (`npm run lint`) · `npx supabase db diff --local` shows no drift · both migrations
+apply cleanly from empty, rollback blocks tested live in transactions · live-verified
+in-browser against both local and the real cloud database (a throwaway real event was
+published and then unpublished during verification — no lingering test artifacts on the
+live `public_results` table).
+
+**Deploy**: committed to `dev` as `2a05c48`, PR #95 opened and merged to `main`
+(automatic Cloudflare frontend deploy triggered), migration pushed to the cloud Supabase
+project (`wxzwanprluqmgoagbkpv`) via Supabase MCP's `apply_migration` immediately after
+— confirmed registered via `list_migrations`, and `get_advisors` (security) returned no
+new findings.
+
+**Known open items, not blocking**: `/results/` is live and functional but deliberately
+unlinked/noindexed — nav/homepage wiring is an explicit, deferred follow-up. No real
+(non-test, non-throwaway) Cup Taster event has been published yet — the actual Oct 4
+event hasn't happened.
+
 ## Public SEO foundation and prerendering · 2026-09-16
 
 - Added canonical URLs, social-sharing metadata, robots guidance, WebSite structured data,
