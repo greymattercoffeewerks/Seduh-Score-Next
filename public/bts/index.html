@@ -60,6 +60,12 @@
       Progress update, 2026-09-16: Berakas is now v2.0.17. The public front
       door gained a Community shelf, and Guess the Bean was ported from the
       legacy booth implementation to its own Supabase-backed public tool.
+
+      Progress update, 2026-09-17: still v2.0.17 (no cycle bump — Berakas
+      stays current). A real /tour/ page, a shared header/footer across the
+      public surfaces, SEO/prerendering, and a real publish/unpublish
+      pipeline for /results/ (replacing fabricated preview data) all landed
+      the same week.
     -->
     <style>
       @font-face {
@@ -789,7 +795,8 @@
             <span class="ledger-version">v2.0.17</span>
             <span class="ledger-status current"><span class="pulse-dot"></span>Current</span>
             <span class="ledger-note"
-              >The public front door, the Community shelf, and the Guess the Bean port.</span
+              >The public front door, the Community shelf, the Guess the Bean port, and a real
+              public results archive.</span
             >
           </div>
           <div class="ledger-row reveal">
@@ -1038,6 +1045,63 @@
                 ><span class="v"
                   >taking a good little booth game seriously enough to give it the same reliable
                   foundations as the rest of the product — without making it feel heavyweight.</span
+                >
+              </div>
+            </div>
+          </div>
+
+          <div class="log-item current reveal">
+            <div class="log-phase">Berakas</div>
+            <div>
+              <div class="log-head">
+                <span class="log-name">A real public tour</span>
+                <span class="log-ver">v2.0.17</span>
+                <span class="log-now"><span class="pulse-dot"></span>Live now</span>
+              </div>
+              <div class="log-line shipped">
+                <span class="k">Shipped</span
+                ><span class="v"
+                  >The legacy tour concept, rebuilt at <code>/tour/</code> — Cup Taster shown as the
+                  one live format, with Throwdown, Liga Seduh and BTC clearly marked planned rather
+                  than pretending to work. Tour, Community and the landing page now share one header
+                  and footer; the organiser wordmark links home; and canonical URLs, sharing
+                  metadata and a sitemap mean the public site is finally something a search engine —
+                  and not just a direct link — can find.</span
+                >
+              </div>
+              <div class="log-line felt">
+                <span class="k">Felt like</span
+                ><span class="v"
+                  >tidying up the front door after enough people had already walked through
+                  it.</span
+                >
+              </div>
+            </div>
+          </div>
+
+          <div class="log-item current reveal">
+            <div class="log-phase">Berakas</div>
+            <div>
+              <div class="log-head">
+                <span class="log-name">Results stop being disposable</span>
+                <span class="log-ver">v2.0.17</span>
+                <span class="log-now"><span class="pulse-dot"></span>Live now</span>
+              </div>
+              <div class="log-line shipped">
+                <span class="k">Shipped</span
+                ><span class="v"
+                  >An organiser-controlled publish/unpublish pipeline for <code>/results/</code> —
+                  the public archive, previously filled with fake preview data, can now show real,
+                  organiser-approved event results. A report-screen card handles the publish
+                  decision; the public page reads them back anonymously, with no assumption Cup
+                  Taster stays the only format that ever publishes here.</span
+                >
+              </div>
+              <div class="log-line felt">
+                <span class="k">Felt like</span
+                ><span class="v"
+                  >the moment a champion's result stopped disappearing the day after the
+                  event.</span
                 >
               </div>
             </div>
