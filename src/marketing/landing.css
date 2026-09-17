@@ -805,39 +805,9 @@ a {
   font-size: clamp(1.6rem, 2.6vw + 1rem, 2.4rem);
 }
 
-/* ---- Footer ---- */
-.petrol-footer {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 22px 0;
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-}
-.petrol-footer-links {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  flex-wrap: wrap;
-}
-.petrol-footer-link {
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--tap-target-min);
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-}
-.petrol-version {
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--tap-target-min);
-  padding: 4px 10px;
-  border: var(--border-hairline) solid rgba(255, 255, 255, 0.16);
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-}
+/* Footer styles now come from publicHeader.css's shared .public-footer-*
+   rules (buildPublicFooter(), src/marketing/publicFooter.js) — landing.css
+   no longer defines its own .petrol-footer* block. */
 
 /* ---- Responsive ---- */
 @media (max-width: 860px) {
