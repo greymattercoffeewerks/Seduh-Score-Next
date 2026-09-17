@@ -1,5 +1,13 @@
 # Seduh Score Next — Roadmap
 
+> **Public SEO foundation and prerendering (2026-09-16) — done.** The landing page, Tour,
+> Community hub, and Competition Timer now carry canonical URLs, social-sharing metadata,
+> robots guidance, and WebSite structured data, plus a sitemap; `www.seduhscore.com` is the
+> canonical public host, with the console and Guess the Bean session surfaces explicitly
+> excluded from indexing. `npm run build` prerenders those four routes into their production
+> HTML (client-side behavior is unchanged for visitors), and production-response checks
+> confirm each rendered page ships meaningful HTML before its JavaScript runs.
+
 > **Public Tour: Cup Taster focus + Community handoff (2026-09-16) — done.** `/tour/`
 > now translates the legacy format tour into the current Petrol design system. Cup Taster is
 > live; Throwdown, Liga Seduh and BTC (Barista Team Competition) remain planned. The page
