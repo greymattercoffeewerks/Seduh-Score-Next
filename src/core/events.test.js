@@ -66,7 +66,7 @@ describe('createEvent', () => {
     expect(payload.config).toEqual({});
   });
 
-  it('passes eventDate/venue/isTest/config through when given', async () => {
+  it('passes eventDate/venue/city/isTest/config through when given', async () => {
     const client = fakeClient({ data: { id: 'ev4' }, error: null });
     await createEvent(
       'org1',
@@ -75,6 +75,7 @@ describe('createEvent', () => {
         name: 'Test Run',
         eventDate: '2026-10-04',
         venue: 'Grey Matter HQ',
+        city: 'Bandar Seri Begawan',
         isTest: true,
         config: { theme: 'dark' },
       },
@@ -83,8 +84,16 @@ describe('createEvent', () => {
     const [, , payload] = client.calls[0];
     expect(payload.event_date).toBe('2026-10-04');
     expect(payload.venue).toBe('Grey Matter HQ');
+    expect(payload.city).toBe('Bandar Seri Begawan');
     expect(payload.is_test).toBe(true);
     expect(payload.config).toEqual({ theme: 'dark' });
+  });
+
+  it('defaults city to null when not given', async () => {
+    const client = fakeClient({ data: { id: 'ev5' }, error: null });
+    await createEvent('org1', { format: 'cup_taster', name: 'No City Event' }, client);
+    const [, , payload] = client.calls[0];
+    expect(payload.city).toBeNull();
   });
 
   it('throws on an insert error rather than silently succeeding', async () => {

@@ -98,3 +98,60 @@ values (
   'organiser'
 )
 on conflict (org_id, user_id) do nothing;
+
+-- Two already-published sample events (2026-09-17, results-archive feature)
+-- so /results/ has something real to read locally without running a whole
+-- event through the console first — `public_results.payload` is a one-way
+-- snapshot (see 20260917130000_public_results.sql's own comment), so this
+-- only needs an `events` row for the FK/org/is_test checks the publish
+-- trigger enforces, not a full stage/heat/result tree behind it. Real,
+-- low-numbered UUIDs avoided for the same reason this file's own header
+-- comment already gives for orgs/auth.users.
+insert into events (id, org_id, format, name, city, venue, event_date, status, is_test)
+values
+  ('7c2b6a2a-2f3a-4b6e-9b0a-2e6b4a1c9d01', '10c8c375-afe6-41c7-a54e-ffaa15429612',
+   'cup_taster', 'Jakarta Cup Tasters #09', 'Jakarta', 'Ambang Coffee Lab', '2026-09-14', 'concluded', false),
+  ('7c2b6a2a-2f3a-4b6e-9b0a-2e6b4a1c9d02', '10c8c375-afe6-41c7-a54e-ffaa15429612',
+   'cup_taster', 'Bandung Coffee Week', 'Bandung', 'Serumpun Coffee House', '2026-08-31', 'concluded', false)
+on conflict (id) do nothing;
+
+insert into public_results (org_id, event_id, payload)
+values
+  (
+    '10c8c375-afe6-41c7-a54e-ffaa15429612',
+    '7c2b6a2a-2f3a-4b6e-9b0a-2e6b4a1c9d01',
+    jsonb_build_object(
+      'format', 'cup_taster',
+      'eventName', 'Jakarta Cup Tasters #09',
+      'city', 'Jakarta',
+      'venue', 'Ambang Coffee Lab',
+      'eventDate', '2026-09-14',
+      'competitors', 60,
+      'rounds', 3,
+      'winningTimeSecs', 102,
+      'podium', jsonb_build_array(
+        jsonb_build_object('rank', 1, 'name', 'Raka Pradana', 'cafe', 'Kedai Runduk', 'correct', 7, 'total', 8),
+        jsonb_build_object('rank', 2, 'name', 'Nadine Putri', 'cafe', 'Ambang Coffee Lab', 'correct', 7, 'total', 8),
+        jsonb_build_object('rank', 3, 'name', 'Bagas Mahendra', 'cafe', 'Muara Roasters', 'correct', 6, 'total', 8)
+      )
+    )
+  ),
+  (
+    '10c8c375-afe6-41c7-a54e-ffaa15429612',
+    '7c2b6a2a-2f3a-4b6e-9b0a-2e6b4a1c9d02',
+    jsonb_build_object(
+      'format', 'cup_taster',
+      'eventName', 'Bandung Coffee Week',
+      'city', 'Bandung',
+      'venue', 'Serumpun Coffee House',
+      'eventDate', '2026-08-31',
+      'competitors', 42,
+      'rounds', 2,
+      'winningTimeSecs', 95,
+      'podium', jsonb_build_array(
+        jsonb_build_object('rank', 1, 'name', 'Salsa Anindita', 'cafe', 'Serumpun Coffee House', 'correct', 6, 'total', 6),
+        jsonb_build_object('rank', 2, 'name', 'Dimas Aditya', 'cafe', 'Petra & Co.', 'correct', 5, 'total', 6)
+      )
+    )
+  )
+on conflict (event_id) do nothing;

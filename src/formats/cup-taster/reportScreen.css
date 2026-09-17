@@ -32,6 +32,24 @@
   gap: var(--space-3);
 }
 
+/* Found missing in review (ui-accessibility-reviewer) — the class existed
+   with no rule at all, silently falling back to default block stacking.
+   Same wrap-at-narrow-widths shape as .report-actions above: paragraph and
+   button share a row when there's room, stack (button full-width below the
+   text) once there isn't. */
+.report-public-results-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  justify-content: space-between;
+}
+.report-public-results-row p {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 16rem;
+}
+
 /* Set-difficulty bar-fill — found missing in production feedback ("no
    graphical info in the report"). Track/fill, not a <progress> element:
    this needs to sit inline with its own percentage label in a way

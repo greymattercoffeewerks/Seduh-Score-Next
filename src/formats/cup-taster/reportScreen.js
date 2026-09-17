@@ -20,11 +20,24 @@
 // before writing code, matching core/export.js's own "no new dependency"
 // framing. There is no generated-PDF code path here.
 import { findEvent } from '../../core/events.js';
-import { el, svgEl, withSrExpansion } from '../../core/dom.js';
+import {
+  el,
+  svgEl,
+  withSrExpansion,
+  setBusyDisabled,
+  withFocusPreservation,
+} from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
 import { getSupabase } from '../../core/supabaseClient.js';
 import { formatDuration, formatDurationLong } from '../../core/duration.js';
 import { buildCsvForTables, downloadCsv } from '../../core/export.js';
+import { listEntriesByIds } from '../../core/registry.js';
+import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
+import {
+  findPublishedResultForEvent,
+  publishEventResults,
+  unpublishEventResults,
+} from '../../core/publicResults.js';
 import { listStagesForEvent, stageKindLabel } from './setup.js';
 import {
   isEventComplete,
@@ -32,6 +45,7 @@ import {
   computeEventSummary,
   computeAvgSecsPerSet,
 } from './analytics.js';
+import { buildResultsPayload } from './resultsPublishing.js';
 
 // Pure. 1 -> '1st', 2 -> '2nd', 3 -> '3rd', 4 -> '4th', 11-13 -> '11th'/
 // '12th'/'13th' (the standard English-ordinal exception), everything else
@@ -956,6 +970,190 @@ export async function mountReportScreen(root, { eventId, client = getSupabase(),
     ]);
   }
 
+  // The one card on this otherwise render-once screen (see the module
+  // comment's own "no re-render after mount" framing) that manages its own
+  // internal state — a publish/unpublish TOGGLE genuinely needs one, unlike
+  // the CSV/print actions above (each a one-shot side effect with nothing to
+  // reflect afterward). Scoped to mutating only its own `container` element,
+  // never calling the outer screen's render()/loadState() again — the
+  // already-loaded `data.stageReports` this card derives its payload from
+  // stays exactly what the organiser is currently looking at.
+  //
+  // Never rendered at all for an is_test event (D9 spirit — don't even offer
+  // a capability that server-side (the migration's own trigger) and the RPC
+  // both refuse anyway) — matches renderDeleteAction's own "only offered
+  // where it could actually succeed" precedent (eventsScreen.js).
+  function renderPublicResultsCard(data) {
+    if (data.event.is_test) return null;
+
+    // `heading`/`feedback` are static children, appended ONCE — never part of
+    // the `bodyHost` rebuild below. Found in review (ui-accessibility-reviewer,
+    // BLOCKING): an earlier version rebuilt the feedback node itself via
+    // `container.replaceChildren(...)` on every state change, which can
+    // detach and reattach an aria-live region in the same tick as the text
+    // change it's meant to announce — some AT/browser combinations drop a
+    // live-region announcement made this way. Keeping `feedback` permanently
+    // mounted means only its text/tone ever changes, never its own presence
+    // in the DOM.
+    const container = el('div', { className: 'card report-public-results no-print' });
+    const heading = el('h2', { text: 'Public results' });
+    const bodyHost = el('div', {});
+    const feedback = el('div', {
+      className: 'screen-feedback',
+      attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
+    });
+    container.append(heading, bodyHost, feedback);
+
+    // `published` is null until the initial check resolves ("checking"
+    // state), then true/false. `busy` is a separate axis (which action is
+    // in flight, if any) so a failed publish attempt can still show
+    // "not published" afterward rather than getting stuck reflecting
+    // whichever state was mid-flight when it errored.
+    let published = null;
+    let busy = null; // null | 'publishing' | 'unpublishing'
+
+    // Matches renderExportActions' own showActionError above — an error
+    // needs to actually be seen, not just exist in an aria-live region
+    // nobody's looking at (found in review, ui-accessibility-reviewer).
+    function setFeedback(message, tone) {
+      feedback.textContent = message ?? '';
+      if (tone) feedback.dataset.tone = tone;
+      else delete feedback.dataset.tone;
+      if (tone === 'error') {
+        feedback.scrollIntoView?.({ block: 'nearest' });
+        feedback.focus();
+      }
+    }
+
+    function renderBody() {
+      if (published == null) {
+        return el('p', { text: 'Checking public results status…' });
+      }
+      if (published) {
+        const unpublishButton = el('button', {
+          className: 'btn btn-outline tap-target',
+          text: busy === 'unpublishing' ? 'Unpublishing…' : 'Unpublish',
+          attrs: { type: 'button', 'data-focus-key': 'public-results-toggle' },
+        });
+        setBusyDisabled(unpublishButton, busy != null);
+        unpublishButton.addEventListener('click', handleUnpublish);
+        return el('div', { className: 'report-public-results-row' }, [
+          el('p', { text: 'This event’s results are published to the public archive.' }),
+          unpublishButton,
+        ]);
+      }
+      const publishButton = el('button', {
+        className: 'btn btn-primary tap-target',
+        text: busy === 'publishing' ? 'Publishing…' : 'Publish to results archive',
+        attrs: { type: 'button', 'data-focus-key': 'public-results-toggle' },
+      });
+      setBusyDisabled(publishButton, busy != null);
+      publishButton.addEventListener('click', handlePublish);
+      return el('div', { className: 'report-public-results-row' }, [
+        el('p', { text: 'Not published to the public results archive yet.' }),
+        publishButton,
+      ]);
+    }
+
+    // Both the publish and unpublish buttons share the same
+    // `data-focus-key` — withFocusPreservation matches the OLD focused
+    // node's key against whichever element carries it in the freshly
+    // rebuilt tree, so a click that swaps "Publish" for "Unpublish" (or
+    // either for its own busy label) keeps focus on the one control this
+    // card ever offers, rather than dropping to <body> on every rebuild
+    // (found in review, ui-accessibility-reviewer, BLOCKING — the same bug
+    // class core/loginScreen.js and setupScreen.js already needed this same
+    // fix for).
+    function renderCard() {
+      withFocusPreservation(bodyHost, () => {
+        bodyHost.replaceChildren(renderBody());
+      });
+    }
+
+    // Cafe is only ever fetched for the podium's own top 3 entries — no need
+    // to thread it through analytics.js's whole pipeline (resultsPublishing.js's
+    // own comment has the full reasoning).
+    async function buildPayload() {
+      const summary = computeEventSummary(data.stageReports);
+      const podiumEntryIds = summary.slice(0, 3).map((row) => row.entryId);
+      const podiumEntries = await listEntriesByIds(podiumEntryIds, client);
+      const cafeByEntryId = new Map(podiumEntries.map((entry) => [entry.id, entry.cafe ?? null]));
+      return buildResultsPayload({
+        event: data.event,
+        stageReports: data.stageReports,
+        summary,
+        cafeByEntryId,
+      });
+    }
+
+    async function handlePublish() {
+      if (busy) return;
+      busy = 'publishing';
+      renderCard();
+      try {
+        const payload = await buildPayload();
+        await publishEventResults(data.event.org_id, data.event.id, payload, client);
+        // A discarded-but-still-in-flight publish (this handler's own await
+        // still resolving after the router already navigated elsewhere) must
+        // never write to this card's closure state or call renderCard()
+        // again — same guard every other post-await continuation in this
+        // format checks (see src/formats/cup-taster/CLAUDE.md's own account
+        // of closing this across every screen). Found missing here in
+        // review (code-reviewer).
+        if (signal?.aborted) return;
+        published = true;
+        setFeedback('Published to the public results archive.', 'success');
+      } catch (err) {
+        if (signal?.aborted) return;
+        setFeedback(describeError(err), 'error');
+      }
+      busy = null;
+      renderCard();
+    }
+
+    async function handleUnpublish() {
+      if (busy) return;
+      busy = 'unpublishing';
+      renderCard();
+      try {
+        await unpublishEventResults(data.event.org_id, data.event.id, client);
+        if (signal?.aborted) return;
+        published = false;
+        setFeedback('Removed from the public results archive.', 'success');
+      } catch (err) {
+        if (signal?.aborted) return;
+        setFeedback(describeError(err), 'error');
+      }
+      busy = null;
+      renderCard();
+    }
+
+    renderCard();
+    // Raced against a timeout, same pattern setupScreen.js/rosterScreen.js/
+    // viewer-shell.js all use for their own initial load — found in review
+    // (ui-accessibility-reviewer): an unraced hang left "Checking…" as a
+    // permanent resting state with no stated failure path.
+    raceTimeout(findPublishedResultForEvent(data.event.id, client), DEFAULT_LOAD_TIMEOUT_MS)
+      .then((existing) => {
+        if (signal?.aborted) return;
+        published = Boolean(existing);
+        renderCard();
+      })
+      .catch((err) => {
+        if (signal?.aborted) return;
+        published = false;
+        setFeedback(
+          err.timedOut
+            ? 'This is taking longer than expected — check your connection.'
+            : describeError(err),
+          'error',
+        );
+        renderCard();
+      });
+
+    return container;
+  }
+
   function renderReport(data) {
     root.innerHTML = '';
     const container = el('section', { className: 'screen-container report-screen' });
@@ -978,6 +1176,8 @@ export async function mountReportScreen(root, { eventId, client = getSupabase(),
       );
     } else {
       container.appendChild(renderExportActions(data));
+      const publicResultsCard = renderPublicResultsCard(data);
+      if (publicResultsCard) container.appendChild(publicResultsCard);
       // Only once there's more than one stage — see buildReportTables' own
       // comment for why a single-stage event skips this (it would just
       // duplicate that one stage's already-shown standings).
@@ -1044,7 +1244,15 @@ export async function mountReportScreen(root, { eventId, client = getSupabase(),
 
   return {
     unmount() {
-      // No live state, no listeners, no timers — nothing to tear down.
+      // No timers, and no listeners beyond the DOM subtree itself (removed
+      // wholesale by the caller). The Public results card's own in-flight
+      // reads/writes (findPublishedResultForEvent's initial check,
+      // handlePublish/handleUnpublish's RPC calls) guard every post-await
+      // continuation with `signal?.aborted` instead — same pattern this
+      // screen's own render() and every other screen in this format uses —
+      // so nothing here needs an explicit cancellation beyond that. Found
+      // stale in review (code-reviewer) once that card's own async work was
+      // added; kept the comment honest rather than removing it.
     },
   };
 }

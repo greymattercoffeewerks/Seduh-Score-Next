@@ -14,6 +14,7 @@ export async function createEvent(orgId, event, client = getSupabase()) {
       name: event.name,
       event_date: event.eventDate ?? null,
       venue: event.venue ?? null,
+      city: event.city ?? null,
       is_test: event.isTest ?? false,
       config: event.config ?? {},
     })

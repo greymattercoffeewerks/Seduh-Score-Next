@@ -20,7 +20,7 @@ import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
 import { createEvent, listEventsForOrg, deleteTestEvent } from './events.js';
 
 export function blankDraft() {
-  return { name: '', eventDate: '', venue: '', isTest: false };
+  return { name: '', eventDate: '', venue: '', city: '', isTest: false };
 }
 
 // Pure. Name is the only required field — date/venue are optional
@@ -92,7 +92,7 @@ export function renderEventsList(events, { deleteStates = {}, deleteHandlers = {
       text: event.name,
       attrs: { href: `#/events/${event.id}` },
     });
-    const meta = [event.event_date, event.venue].filter(Boolean).join(' · ');
+    const meta = [event.event_date, event.venue, event.city].filter(Boolean).join(' · ');
     const children = [link];
     if (meta) children.push(el('span', { className: 'stage-meta', text: meta }));
     if (event.is_test) {
@@ -139,6 +139,20 @@ export function renderCreateForm(draft, { disabled }) {
     draft.venue = venueInput.value;
   });
 
+  // Separate from Venue (a public results archive wants "City" and "Venue" as
+  // two distinct fields — user decision, 2026-09-17), not derived from it —
+  // an organiser could otherwise run the same venue in two different cities
+  // over time with no way to tell them apart on the archive page.
+  const cityInput = el('input', {
+    className: 'field-input',
+    attrs: { type: 'text', 'aria-label': 'City (optional)', 'data-field': 'city' },
+  });
+  cityInput.value = draft.city;
+  cityInput.disabled = disabled;
+  cityInput.addEventListener('input', () => {
+    draft.city = cityInput.value;
+  });
+
   // Defaults UNCHECKED — D9's "unmistakable" bar means the organiser
   // actively opts IN to marking something test data, never the reverse.
   // Every other screen in this app only ever DISPLAYS is_test (the
@@ -172,6 +186,7 @@ export function renderCreateForm(draft, { disabled }) {
     // must agree on the same information.
     labeledField('Event date (optional)', dateInput),
     labeledField('Venue (optional)', venueInput),
+    labeledField('City (optional)', cityInput),
     isTestField,
     submitButton,
   ]);
@@ -282,6 +297,7 @@ export async function mountEventsScreen(
           name: draft.name.trim(),
           eventDate: draft.eventDate || null,
           venue: draft.venue.trim() || null,
+          city: draft.city.trim() || null,
           isTest: draft.isTest,
         },
         client,
