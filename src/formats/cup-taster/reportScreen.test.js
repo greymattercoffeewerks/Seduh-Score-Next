@@ -1,6 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as exportModule from '../../core/export.js';
 import { formatDuration } from '../../core/duration.js';
+import { DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
 import {
   ordinalLabel,
   describeOutcome,
@@ -16,7 +17,7 @@ import {
   renderRoundBarChart,
 } from './reportScreen.js';
 
-function fakeClient({ tables = {} } = {}) {
+function fakeClient({ tables = {}, rpc: rpcResults = {} } = {}) {
   const queues = {};
   for (const [table, response] of Object.entries(tables)) {
     queues[table] = Array.isArray(response) ? [...response] : [response];
@@ -25,6 +26,10 @@ function fakeClient({ tables = {} } = {}) {
 
   return {
     calls,
+    rpc(name, payload) {
+      calls.push(['rpc', name, payload]);
+      return Promise.resolve(rpcResults[name] ?? { data: null, error: null });
+    },
     from(table) {
       const queue = queues[table] ?? [{ data: null, error: null }];
       const resolve = () => (queue.length > 1 ? queue.shift() : queue[0]);
@@ -919,6 +924,7 @@ describe('mountReportScreen', () => {
 
     const headings = [...root.querySelectorAll('h2')].map((h) => h.textContent);
     expect(headings).toEqual([
+      'Public results',
       'Score by Round',
       'Time by Round',
       'Overall — All Rounds',
@@ -959,6 +965,292 @@ describe('mountReportScreen', () => {
     const [, fillPct] = fill.getAttribute('style').match(/width: (\d+)%/);
     const label = bar.parentElement.querySelector('.difficulty-bar-label');
     expect(label.textContent).toBe(`${fillPct}%`);
+  });
+
+  describe('the Public results card', () => {
+    const stages = [
+      {
+        id: 's1',
+        event_id: 'ev1',
+        ordinal: 1,
+        kind: 'prelims',
+        set_count: 1,
+        cutoff: 1,
+        status: 'complete',
+      },
+      {
+        id: 's2',
+        event_id: 'ev1',
+        ordinal: 2,
+        kind: 'finals',
+        set_count: 1,
+        cutoff: null,
+        status: 'complete',
+      },
+    ];
+
+    function completeEventTables(overrides = {}) {
+      return {
+        events: { data: event, error: null },
+        ct_stages: [
+          { data: stages, error: null },
+          { data: stages, error: null },
+          { data: stages[0], error: null },
+          { data: stages[1], error: null },
+        ],
+        ct_stage_entries: { data: [{ id: 'se1', stage_id: 's1', entry_id: 'e1' }], error: null },
+        ct_standings: {
+          data: [
+            {
+              entry_id: 'e1',
+              stage_id: 's1',
+              correct_count: 1,
+              sets_scored: 1,
+              total_elapsed_secs: 40,
+            },
+          ],
+          error: null,
+        },
+        event_entries: {
+          data: [{ id: 'e1', display_name: 'Alex', cafe: 'Kedai Runduk' }],
+          error: null,
+        },
+        ct_sets: { data: [{ id: 'set1', stage_id: 's1', position: 1, label: null }], error: null },
+        ct_heats: { data: [{ id: 'h1' }], error: null },
+        ct_heat_entries: { data: [{ id: 'he1' }], error: null },
+        ct_results: { data: [{ set_id: 'set1', correct: true }], error: null },
+        public_results: { data: null, error: null },
+        ...overrides,
+      };
+    }
+
+    // The card's own initial check (findPublishedResultForEvent) fires
+    // fire-and-forget from inside the synchronous render — mountReportScreen's
+    // own await only covers loadState()/renderReport(), not this card's own
+    // extra network round trip. A macrotask flush (not just Promise.resolve())
+    // is needed since the real chain (.from().select().eq().maybeSingle())
+    // is several microtask hops deep.
+    async function flush() {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    it('is not rendered at all for an is_test event — never offers a capability the RPC/trigger would refuse anyway', async () => {
+      const root = document.createElement('div');
+      const client = fakeClient({
+        tables: completeEventTables({ events: { data: { ...event, is_test: true }, error: null } }),
+      });
+      await mountReportScreen(root, { eventId: 'ev1', client });
+      expect(root.textContent).not.toContain('Public results');
+    });
+
+    it('settles to "Not published" once the initial publish-state check resolves', async () => {
+      // Not asserting the transient "Checking…" text itself here — the fake
+      // client's own single-microtask maybeSingle() can settle before or
+      // after mountReportScreen's own outer await returns (both chains race
+      // independently), so asserting an intermediate state right after
+      // mountReportScreen resolves would be inherently flaky. What matters —
+      // and is real, deterministic behavior — is the state this card
+      // actually settles into.
+      const root = document.createElement('div');
+      const client = fakeClient({ tables: completeEventTables() });
+      await mountReportScreen(root, { eventId: 'ev1', client });
+      await flush();
+      expect(root.textContent).toContain('Not published to the public results archive yet.');
+      expect(root.querySelector('.report-public-results button').textContent).toBe(
+        'Publish to results archive',
+      );
+    });
+
+    it('shows "published" immediately when a row already exists for this event', async () => {
+      const root = document.createElement('div');
+      const client = fakeClient({
+        tables: completeEventTables({
+          public_results: {
+            data: { event_id: 'ev1', payload: {}, published_at: '2026-09-17T00:00:00Z' },
+            error: null,
+          },
+        }),
+      });
+      await mountReportScreen(root, { eventId: 'ev1', client });
+      await flush();
+      expect(root.textContent).toContain('published to the public archive');
+      expect(root.querySelector('.report-public-results button').textContent).toBe('Unpublish');
+    });
+
+    it('clicking Publish calls publish_event_results with a payload built from the already-loaded report data, and flips to "published"', async () => {
+      const root = document.createElement('div');
+      const client = fakeClient({
+        tables: completeEventTables(),
+        rpc: { publish_event_results: { data: null, error: null } },
+      });
+      await mountReportScreen(root, { eventId: 'ev1', client });
+      await flush();
+
+      root.querySelector('.report-public-results button').click();
+      await flush();
+
+      const [, rpcName, rpcPayload] = client.calls.find(([kind]) => kind === 'rpc');
+      expect(rpcName).toBe('publish_event_results');
+      expect(rpcPayload.p_org_id).toBe('org1');
+      expect(rpcPayload.p_event_id).toBe('ev1');
+      expect(rpcPayload.p_payload.eventName).toBe('Autumn Cup Tasters');
+      expect(rpcPayload.p_payload.podium[0]).toEqual({
+        rank: 1,
+        name: 'Alex',
+        cafe: 'Kedai Runduk',
+        correct: 1,
+        total: 1,
+      });
+
+      expect(root.textContent).toContain('published to the public archive');
+      expect(root.textContent).toContain('Published to the public results archive.');
+    });
+
+    it('clicking Unpublish calls unpublish_event_results and flips back to "not published"', async () => {
+      const root = document.createElement('div');
+      const client = fakeClient({
+        tables: completeEventTables({
+          public_results: {
+            data: { event_id: 'ev1', payload: {}, published_at: '2026-09-17T00:00:00Z' },
+            error: null,
+          },
+        }),
+        rpc: { unpublish_event_results: { data: null, error: null } },
+      });
+      await mountReportScreen(root, { eventId: 'ev1', client });
+      await flush();
+
+      root.querySelector('.report-public-results button').click();
+      await flush();
+
+      const [, rpcName, rpcPayload] = client.calls.find(([kind]) => kind === 'rpc');
+      expect(rpcName).toBe('unpublish_event_results');
+      expect(rpcPayload.p_org_id).toBe('org1');
+      expect(rpcPayload.p_event_id).toBe('ev1');
+
+      expect(root.textContent).toContain('Not published to the public results archive yet.');
+      expect(root.textContent).toContain('Removed from the public results archive.');
+    });
+
+    it('shows a focused error message, not a crash, when publishing fails — and the button reverts so a retry is possible', async () => {
+      const root = document.createElement('div');
+      const client = fakeClient({
+        tables: completeEventTables(),
+        rpc: { publish_event_results: { data: null, error: { message: 'network error' } } },
+      });
+      await mountReportScreen(root, { eventId: 'ev1', client });
+      await flush();
+
+      const button = root.querySelector('.report-public-results button');
+      button.click();
+      await flush();
+
+      expect(root.textContent).toContain('Not published to the public results archive yet.');
+      const feedback = root.querySelector('.report-public-results .screen-feedback');
+      expect(feedback.dataset.tone).toBe('error');
+      expect(root.querySelector('.report-public-results button').textContent).toBe(
+        'Publish to results archive',
+      );
+    });
+
+    it('keeps focus on the toggle button across a click-triggered rebuild, instead of dropping it to <body> — found in review (ui-accessibility-reviewer, BLOCKING): the card used to rebuild its own feedback/heading/body together via container.replaceChildren() on every state change, destroying the just-clicked button node with nothing to restore focus afterward', async () => {
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      const client = fakeClient({
+        tables: completeEventTables(),
+        rpc: { publish_event_results: { data: null, error: null } },
+      });
+      await mountReportScreen(root, { eventId: 'ev1', client });
+      await flush();
+
+      const publishButton = root.querySelector('.report-public-results button');
+      publishButton.focus();
+      expect(document.activeElement).toBe(publishButton);
+
+      publishButton.click(); // triggers a rebuild to the busy "Publishing…" label
+      expect(document.activeElement).not.toBe(document.body);
+      expect(document.activeElement.getAttribute('data-focus-key')).toBe('public-results-toggle');
+
+      await flush(); // triggers a second rebuild, to the settled "Unpublish" label
+      expect(document.activeElement).not.toBe(document.body);
+      expect(document.activeElement.getAttribute('data-focus-key')).toBe('public-results-toggle');
+      expect(document.activeElement.textContent).toBe('Unpublish');
+
+      document.body.removeChild(root);
+    });
+
+    it("disables the button (aria-disabled/aria-busy, not native disabled) while a publish is in flight — never native disabled, per this project's own focus-preservation convention", async () => {
+      const root = document.createElement('div');
+      let resolveRpc;
+      const client = fakeClient({ tables: completeEventTables() });
+      client.rpc = (name, payload) => {
+        client.calls.push(['rpc', name, payload]);
+        return new Promise((resolve) => {
+          resolveRpc = () => resolve({ data: null, error: null });
+        });
+      };
+      await mountReportScreen(root, { eventId: 'ev1', client });
+      await flush();
+
+      const button = root.querySelector('.report-public-results button');
+      button.click();
+      await flush();
+
+      const busyButton = root.querySelector('.report-public-results button');
+      expect(busyButton.getAttribute('aria-disabled')).toBe('true');
+      expect(busyButton.getAttribute('aria-busy')).toBe('true');
+      expect(busyButton.disabled).toBe(false); // native disabled never used
+      expect(busyButton.textContent).toBe('Publishing…');
+
+      resolveRpc();
+      await flush();
+    });
+
+    describe('a genuinely hung initial publish-state check', () => {
+      beforeEach(() => {
+        vi.useFakeTimers();
+      });
+      afterEach(() => {
+        vi.useRealTimers();
+      });
+
+      it('times out rather than leaving "Checking…" as a permanent resting state, and shows a distinct message', async () => {
+        function hungBuilder() {
+          const builder = {
+            select: () => builder,
+            eq: () => builder,
+            maybeSingle: () => new Promise(() => {}), // never settles
+          };
+          return builder;
+        }
+        const root = document.createElement('div');
+        const client = fakeClient({ tables: completeEventTables() });
+        const realFrom = client.from.bind(client);
+        // Only public_results hangs — every other table this screen's own
+        // loadState() needs (events/ct_stages/etc.) resolves normally, so
+        // the report itself renders and only this card's own extra
+        // network round trip is under test.
+        client.from = (table) => (table === 'public_results' ? hungBuilder() : realFrom(table));
+
+        const mountPromise = mountReportScreen(root, { eventId: 'ev1', client });
+        await vi.advanceTimersByTimeAsync(0);
+        await mountPromise;
+        expect(root.textContent).toContain('Checking public results status…');
+
+        // Pins the actual shared constant, not just "a timeout eventually
+        // fires" — same discipline rosterScreen.test.js/setupScreen.test.js's
+        // own identical timeout tests already established.
+        await vi.advanceTimersByTimeAsync(DEFAULT_LOAD_TIMEOUT_MS - 1);
+        expect(root.textContent).toContain('Checking public results status…');
+
+        await vi.advanceTimersByTimeAsync(1);
+
+        const feedback = root.querySelector('.report-public-results .screen-feedback');
+        expect(feedback.dataset.tone).toBe('error');
+        expect(feedback.textContent).toMatch(/taking longer than expected/i);
+        expect(root.textContent).toContain('Not published to the public results archive yet.');
+      });
+    });
   });
 
   it("disambiguates same-kind stages' own <h2>/<h3> headings with a \"(Round N)\" suffix, leaves a genuinely single-occurrence kind plain in the SAME event, and agrees with the cross-round summary's own column numbering for the SAME stages — found in review (ui-accessibility-reviewer, 2026-09-11), the same class of bug already fixed for the cross-round summary's own column headers (see stageRoundLabels' own comment, reportScreen.js): setup.js's own validateStagePlan explicitly allows a repeated kind (e.g. two prelims stages), and a plain stageKindLabel(kind) label produced two IDENTICAL <h2>s (\"Preliminary\" twice) plus two identical <h3> pairs, ambiguous for a sighted user scanning the page and for a screen reader user navigating by headings list alike. A three-stage fixture (prelims/prelims/finals), not just two same-kind stages, proves the repeat-detection is scoped per kind (would fail if it were gated on \"more than one stage in the event\" instead) — found in review (test-auditor): a two-stage-only fixture couldn't distinguish that from a correct implementation. The same test also asserts the on-screen summary table's own column headers, not just the headings — found in review (test-auditor): renderStageSection and eventSummaryRoundColumns both call the shared stageRoundLabels, but nothing previously proved the two call sites actually stay in agreement for one real event rather than merely each being individually correct in isolation.", async () => {
@@ -1027,6 +1319,7 @@ describe('mountReportScreen', () => {
 
     const headings = [...root.querySelectorAll('h2')].map((h) => h.textContent);
     expect(headings).toEqual([
+      'Public results',
       'Score by Round',
       'Time by Round',
       'Overall — All Rounds',

@@ -277,7 +277,7 @@ export function mountTourScreen(root) {
       buildCommunity(),
       buildPublicFooter({
         companionHref: '/community/',
-        companionText: 'Community tools — free, no account needed →',
+        companionText: 'Community Tools →',
       }),
     ]),
   );

@@ -45,13 +45,21 @@ describe('renderEventsList', () => {
     expect(rows[1].querySelector('.is-test-indicator')).toBeNull();
   });
 
-  it('shows date and venue as meta text when present', () => {
+  it('shows date, venue, and city as meta text when present', () => {
     const events = [
-      { id: 'ev1', name: 'October Cup', event_date: '2026-10-04', venue: 'HQ', is_test: false },
+      {
+        id: 'ev1',
+        name: 'October Cup',
+        event_date: '2026-10-04',
+        venue: 'HQ',
+        city: 'Bandar Seri Begawan',
+        is_test: false,
+      },
     ];
     const list = renderEventsList(events);
     expect(list.querySelector('li').textContent).toContain('2026-10-04');
     expect(list.querySelector('li').textContent).toContain('HQ');
+    expect(list.querySelector('li').textContent).toContain('Bandar Seri Begawan');
   });
 
   it("offers a Delete action on a test event, but not on a real one — matches delete_test_event's own server-side guard", () => {
@@ -101,17 +109,30 @@ describe('renderEventsList', () => {
 });
 
 describe('renderCreateForm', () => {
-  it('the visible label text for date/venue matches their own aria-label — both say "(optional)", so a sighted user and a screen-reader user get the same information (found in the app-wiring holistic pass)', () => {
+  it('the visible label text for date/venue/city matches their own aria-label — both say "(optional)", so a sighted user and a screen-reader user get the same information (found in the app-wiring holistic pass)', () => {
     const form = renderCreateForm(blankDraft(), { disabled: false });
     const labels = [...form.querySelectorAll('.form-field-label')].map((el) => el.textContent);
     expect(labels).toContain('Event date (optional)');
     expect(labels).toContain('Venue (optional)');
+    expect(labels).toContain('City (optional)');
     expect(form.querySelector('[data-field="eventDate"]').getAttribute('aria-label')).toBe(
       'Event date (optional)',
     );
     expect(form.querySelector('[data-field="venue"]').getAttribute('aria-label')).toBe(
       'Venue (optional)',
     );
+    expect(form.querySelector('[data-field="city"]').getAttribute('aria-label')).toBe(
+      'City (optional)',
+    );
+  });
+
+  it('typing into the City field updates the draft, same as Venue', () => {
+    const draft = blankDraft();
+    const form = renderCreateForm(draft, { disabled: false });
+    const cityInput = form.querySelector('[data-field="city"]');
+    cityInput.value = 'Bandar Seri Begawan';
+    cityInput.dispatchEvent(new Event('input'));
+    expect(draft.city).toBe('Bandar Seri Begawan');
   });
 });
 

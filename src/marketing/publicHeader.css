@@ -183,6 +183,17 @@
   font-family: var(--font-mono);
   font-size: var(--text-xs);
 }
+.public-footer-credit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.public-footer-flag-icon {
+  width: 18px;
+  height: 12px;
+  flex-shrink: 0;
+  border: var(--border-hairline) solid rgba(255, 255, 255, 0.16);
+}
 .public-footer-links {
   display: flex;
   align-items: center;

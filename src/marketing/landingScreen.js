@@ -31,7 +31,7 @@
 // for why).
 import { el, svgEl, brandMark } from '../core/dom.js';
 import { revealOnScroll } from '../core/scrollReveal.js';
-import { APP_VERSION } from '../core/version.js';
+import { buildPublicFooter } from './publicFooter.js';
 
 function icon(children, { className = 'petrol-icon' } = {}) {
   const svg = svgEl('svg', {
@@ -613,24 +613,6 @@ function ctaBand() {
   return inner;
 }
 
-function buildFooter() {
-  return el('footer', { className: 'petrol-footer petrol-mono' }, [
-    el('span', { text: 'Built by Firdaus Omar · Grey Matter Coffee Werks, Brunei' }),
-    el('div', { className: 'petrol-footer-links' }, [
-      el('a', {
-        className: 'petrol-footer-link',
-        text: 'Community Tools — free, no account needed →',
-        attrs: { href: '/community/' },
-      }),
-      el('a', {
-        className: 'petrol-version',
-        text: `v${APP_VERSION}`,
-        attrs: { href: '/bts/' },
-      }),
-    ]),
-  ]);
-}
-
 export function mountLandingScreen(root) {
   root.replaceChildren(
     el('div', { className: 'petrol-page', attrs: { 'data-surface': 'stage' } }, [
@@ -643,7 +625,10 @@ export function mountLandingScreen(root) {
       proofSection(),
       pricingSection(),
       ctaBand(),
-      el('div', { className: 'petrol-wrap' }, [buildFooter()]),
+      buildPublicFooter({
+        companionHref: '/community/',
+        companionText: 'Community Tools →',
+      }),
     ]),
   );
 }

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Results — Seduh Score</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="icon" href="/favicon-16.png" sizes="16x16" type="image/png" />
+    <link rel="stylesheet" href="/src/ui/tokens/index.css" />
+    <link rel="stylesheet" href="/src/marketing/publicHeader.css" />
+    <link rel="stylesheet" href="/src/marketing/results.css" />
+    <meta
+      name="description"
+      content="Published Seduh Score competition results — the community results archive."
+    />
+    <!-- Reads real published-event data (see src/core/publicResults.js).
+         Deliberately kept noindex,nofollow, out of
+         tools/prerender-public-pages.mjs's route list, and unlinked from
+         nav/the homepage until there's a real event's worth of published
+         content to show — see src/marketing/CLAUDE.md and this repo's
+         "Nav wiring" decision (2026-09-17): the plan is to wire this in
+         deliberately, once, not silently the moment the pipe exists. -->
+    <meta name="robots" content="noindex, nofollow" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/marketing/resultsMain.js"></script>
+  </body>
+</html>

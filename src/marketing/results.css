@@ -1,0 +1,299 @@
+/* Public Results archive (design preview, 2026-09-17). Own class prefix and
+   own token consumption, same convention as tour.css/communityHub.css — no
+   :root block of its own, every color/font/space value comes from the
+   shared src/ui/tokens system. */
+body {
+  min-width: 320px;
+}
+.results-page {
+  min-height: 100vh;
+  overflow-x: clip;
+  background: var(--color-canvas);
+  color: var(--color-text);
+}
+.results-hero,
+.results-latest,
+.results-archive {
+  width: min(100% - 2.5rem, 1160px);
+  margin-inline: auto;
+}
+
+/* ---- Sample-data disclosure ---- */
+.results-sample-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--color-test),
+    var(--color-test) var(--space-3),
+    var(--clr-petrol-950) var(--space-3),
+    var(--clr-petrol-950) calc(var(--space-3) * 2)
+  );
+  color: var(--color-test-contrast);
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-semibold);
+  text-align: center;
+}
+.results-sample-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-3);
+  border: var(--border-hairline) solid var(--color-test);
+  color: var(--color-test);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+/* ---- Hero ---- */
+.results-hero {
+  padding-block: clamp(3.5rem, 8vw, 6rem) clamp(2.5rem, 5vw, 4rem);
+}
+.results-kicker {
+  margin: 0 0 var(--space-2);
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+.results-hero h1 {
+  margin: 0 0 var(--space-4);
+  font-family: var(--font-display);
+  font-size: clamp(2.25rem, 6vw, 3.5rem);
+  line-height: 1.05;
+}
+.results-hero h1 span {
+  color: var(--color-accent);
+}
+.results-hero-intro {
+  max-width: 46rem;
+  margin: 0 0 var(--space-6);
+  color: var(--color-text-secondary);
+  font-size: var(--text-lg);
+  line-height: 1.5;
+}
+.results-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-5);
+  padding-top: var(--space-5);
+  border-top: var(--border-hairline) solid var(--color-border);
+}
+.results-stat b {
+  display: block;
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 4vw, 2.25rem);
+  color: var(--color-accent);
+}
+.results-stat p {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+/* ---- Latest result ---- */
+.results-latest {
+  padding-block: clamp(2rem, 5vw, 3.5rem);
+}
+.results-latest-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.results-latest-heading h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 4vw, 2.25rem);
+}
+.results-latest-meta {
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+.results-latest-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  border: var(--border-hairline) solid var(--color-border);
+  background: var(--clr-petrol-800);
+}
+.results-latest-summary {
+  padding: var(--space-5);
+  border-bottom: var(--border-hairline) solid var(--color-border);
+}
+.results-eyebrow {
+  margin: 0 0 var(--space-3);
+  /* --color-text-muted is only contrast-checked against the canvas
+     (--clr-petrol-950) — this card sits one step lighter
+     (--clr-petrol-800), where muted falls under 4.5:1. Secondary is
+     verified against petrol-800 too, so it's the correct token here, not
+     muted. Found in ui-accessibility-reviewer. */
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+.results-fact-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+.results-fact-list b {
+  color: var(--color-text);
+  font-family: var(--font-display);
+}
+.results-podium {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.results-podium-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: var(--border-hairline) solid var(--color-border);
+}
+.results-podium-row:last-child {
+  border-bottom: none;
+}
+.results-podium-rank {
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-bold);
+}
+.results-podium-who {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.results-podium-name {
+  font-family: var(--font-display);
+  font-size: var(--text-base);
+}
+.results-podium-venue {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+.results-score {
+  color: var(--color-accent);
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+}
+
+/* ---- Archive table ---- */
+.results-archive {
+  padding-block: clamp(2rem, 5vw, 3.5rem) clamp(3rem, 6vw, 5rem);
+}
+.results-archive-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.results-archive-heading h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 4vw, 2.25rem);
+}
+.results-table-wrap {
+  overflow-x: auto;
+  border: var(--border-hairline) solid var(--color-border);
+  /* Keyboard-operable scroll region (found in ui-accessibility-reviewer) —
+     the table has no other focusable content, so this is the only way a
+     keyboard-only user can pan it at narrow widths. */
+  outline-offset: -2px;
+}
+.results-table-wrap:focus-visible {
+  outline: var(--border-hairline) solid var(--color-accent);
+}
+.results-archive-date {
+  text-transform: uppercase;
+}
+.results-table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+.results-table th,
+.results-table td {
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  vertical-align: top;
+  border-bottom: var(--border-hairline) solid var(--color-border);
+}
+.results-table th {
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+.results-archive-row:last-child td {
+  border-bottom: none;
+}
+.results-archive-name {
+  display: block;
+  font-family: var(--font-display);
+}
+.results-archive-format {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+.results-archive-winner {
+  color: var(--color-accent);
+}
+.results-archive-result .results-score {
+  font-size: var(--text-base);
+}
+
+@media (min-width: 720px) {
+  .results-latest-card {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .results-latest-summary {
+    border-bottom: none;
+    border-right: var(--border-hairline) solid var(--color-border);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .results-latest,
+  .results-archive {
+    opacity: 0;
+    transform: translateY(24px);
+    transition:
+      opacity 0.7s var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1)),
+      transform 0.7s var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1));
+  }
+  .is-revealed {
+    opacity: 1 !important;
+    transform: translateY(0) !important;
+  }
+}
