@@ -5,11 +5,29 @@
  * own extract-on-2nd-use convention (CONVENTIONS.md) — mirrors
  * src/community/guess-the-bean/shared.css's own role for its directory.
  *
- * These rules duplicate .screen-container/.card/.btn*/.form-field*/
- * .field-input/.roster-list/.screen-feedback/.stage-meta from
- * src/formats/cup-taster/heatsScreen.css — a format can't link to another
- * format's own CSS file (module boundary), so this is a deliberate, flagged
- * duplication, not an oversight. See src/formats/btc/CLAUDE.md's "Known
+ * These rules duplicate .screen-container/.card/.btn*/
+.form-field*/
+  *
+  .field-input/.roster-list/.screen-feedback/.stage-meta
+  from
+  *
+  src/formats/cup-taster/heatsScreen.css
+  —
+  a
+  format
+  can't link to another
+ * format's
+  own
+  CSS
+  file
+  (module boundary),
+so this is a deliberate,
+flagged * duplication,
+not
+  an
+  oversight.
+  See
+  src/formats/btc/CLAUDE.md's "Known
  * debt" note. Values copied verbatim so every format renders identically
  * until a shared, format-agnostic extraction happens (e.g.
  * src/ui/tokens/components.css). `.is-test-banner`/`.tap-target` are NOT
@@ -53,9 +71,21 @@
   padding: var(--space-5);
 }
 
-/* Paired with .card above — see heatsScreen.css's own comment on this exact
-   rule for the focused-card/focus-ring-fusion bug it fixes. */
-.card:focus-visible {
+/* Paired with .card above — see heatsScreen.css's
+  own
+  comment
+  on
+  this
+  exact
+  rule
+  for
+  the
+  focused-card/focus-ring-fusion
+  bug
+  it
+  fixes.
+  */
+  .card:focus-visible {
   outline-offset: calc(var(--focus-ring-offset) + var(--border-strong));
 }
 

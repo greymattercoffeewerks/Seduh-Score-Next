@@ -122,11 +122,7 @@ export async function mountMatchesScreen(root, { eventId, client = getSupabase()
     state.formError = null;
     render();
     try {
-      const match = await createMatch(
-        eventId,
-        { round: ROUND, ...state.draft },
-        client,
-      );
+      const match = await createMatch(eventId, { round: ROUND, ...state.draft }, client);
       state.matches = [...state.matches, { match, judgeIds: state.draft.judgeIds }];
       const t1 = teamName(state.draft.team1Id);
       const t2 = teamName(state.draft.team2Id);
@@ -226,31 +222,35 @@ export async function mountMatchesScreen(root, { eventId, client = getSupabase()
     });
     setBusyDisabled(submitButton, state.busy);
 
-    const form = el('form', { className: 'btc-match-form' }, [
-      el('div', { className: 'btc-match-form-teams' }, [
-        labeledField('Team 1', team1Select),
-        el('span', { className: 'btc-match-vs', text: 'vs', attrs: { 'aria-hidden': 'true' } }),
-        labeledField('Team 2', team2Select),
-      ]),
-      el('fieldset', { className: 'btc-judge-fieldset' }, [
-        el('legend', { text: 'Judges (select exactly 3)' }),
-        el('div', { className: 'btc-judge-checkboxes' }, judgeCheckboxes),
-        el('p', {
-          className: 'stage-meta',
-          text: `${state.draft.judgeIds.length} of 3 selected`,
-          attrs: { role: 'status', 'aria-live': 'polite' },
-        }),
-      ]),
-      state.formError
-        ? el('p', {
-            id: errorId,
-            className: 'btc-field-error',
-            text: state.formError,
-            attrs: { role: 'alert' },
-          })
-        : null,
-      submitButton,
-    ].filter(Boolean));
+    const form = el(
+      'form',
+      { className: 'btc-match-form' },
+      [
+        el('div', { className: 'btc-match-form-teams' }, [
+          labeledField('Team 1', team1Select),
+          el('span', { className: 'btc-match-vs', text: 'vs', attrs: { 'aria-hidden': 'true' } }),
+          labeledField('Team 2', team2Select),
+        ]),
+        el('fieldset', { className: 'btc-judge-fieldset' }, [
+          el('legend', { text: 'Judges (select exactly 3)' }),
+          el('div', { className: 'btc-judge-checkboxes' }, judgeCheckboxes),
+          el('p', {
+            className: 'stage-meta',
+            text: `${state.draft.judgeIds.length} of 3 selected`,
+            attrs: { role: 'status', 'aria-live': 'polite' },
+          }),
+        ]),
+        state.formError
+          ? el('p', {
+              id: errorId,
+              className: 'btc-field-error',
+              text: state.formError,
+              attrs: { role: 'alert' },
+            })
+          : null,
+        submitButton,
+      ].filter(Boolean),
+    );
     form.addEventListener('submit', handleCreateMatch);
 
     return el('div', { className: 'card btc-match-form-card' }, [
@@ -287,7 +287,11 @@ export async function mountMatchesScreen(root, { eventId, client = getSupabase()
         removeButton,
       ]);
     });
-    return el('ul', { className: 'roster-list', attrs: { 'aria-label': 'Preliminary matches' } }, items);
+    return el(
+      'ul',
+      { className: 'roster-list', attrs: { 'aria-label': 'Preliminary matches' } },
+      items,
+    );
   }
 
   function renderLoading() {

@@ -77,11 +77,7 @@ describe('createJudge', () => {
     const client = fakeClient({ tables: { btc_judges: { data: created, error: null } } });
     const result = await createJudge('e1', 'Alex', client);
     expect(result).toEqual(created);
-    expect(client.calls).toContainEqual([
-      'insert',
-      'btc_judges',
-      { event_id: 'e1', name: 'Alex' },
-    ]);
+    expect(client.calls).toContainEqual(['insert', 'btc_judges', { event_id: 'e1', name: 'Alex' }]);
   });
 
   it('recovers from a unique-violation by returning the existing row, not throwing', async () => {

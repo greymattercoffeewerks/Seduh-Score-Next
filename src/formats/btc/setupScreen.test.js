@@ -306,9 +306,9 @@ describe('mountSetupScreen', () => {
     const errorNode = root.querySelector('.btc-field-error');
     expect(errorNode.getAttribute('role')).toBe('alert');
     expect(errorNode.id).toBeTruthy();
-    expect(root.querySelector('input[aria-label="Team name"]').getAttribute('aria-describedby')).toBe(
-      errorNode.id,
-    );
+    expect(
+      root.querySelector('input[aria-label="Team name"]').getAttribute('aria-describedby'),
+    ).toBe(errorNode.id);
     expect(root.querySelector('input[aria-label="Team name"]').getAttribute('aria-invalid')).toBe(
       'true',
     );
@@ -321,7 +321,9 @@ describe('mountSetupScreen', () => {
     const teamInput = root.querySelector('input[aria-label="Team name"]');
     teamInput.value = 'Gamma';
     teamInput.dispatchEvent(new Event('input'));
-    teamInput.closest('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    teamInput
+      .closest('form')
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
 
     await Promise.resolve();
     await Promise.resolve();

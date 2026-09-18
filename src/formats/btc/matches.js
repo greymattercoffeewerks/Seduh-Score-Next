@@ -24,7 +24,11 @@ export function validateMatchDraft({ team1Id, team2Id, judgeIds }) {
   return null;
 }
 
-export async function createMatch(eventId, { round, team1Id, team2Id, judgeIds }, client = getSupabase()) {
+export async function createMatch(
+  eventId,
+  { round, team1Id, team2Id, judgeIds },
+  client = getSupabase(),
+) {
   const { data, error } = await client.rpc('create_btc_match', {
     p_event_id: eventId,
     p_round: round,

@@ -144,7 +144,9 @@ describe('mountMatchesScreen', () => {
       checkbox.dispatchEvent(new Event('change'));
     }
 
-    root.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    root
+      .querySelector('form')
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
@@ -164,7 +166,9 @@ describe('mountMatchesScreen', () => {
     root.querySelector('select[data-field="team2Id"]').value = 't2';
     root.querySelector('select[data-field="team2Id"]').dispatchEvent(new Event('change'));
 
-    root.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    root
+      .querySelector('form')
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     await Promise.resolve();
 
     expect(root.textContent).toContain('Exactly 3 distinct judges must be selected.');
@@ -173,7 +177,9 @@ describe('mountMatchesScreen', () => {
 
   it('shows a describeError message when the RPC rejects the match', async () => {
     const client = fakeClient(baseDb(), {
-      rpcResult: { error: { code: 'P0001', message: 'create_btc_match: a team cannot play itself' } },
+      rpcResult: {
+        error: { code: 'P0001', message: 'create_btc_match: a team cannot play itself' },
+      },
     });
     await mountMatchesScreen(root, { eventId: 'ev1', client });
 
@@ -185,7 +191,9 @@ describe('mountMatchesScreen', () => {
       checkbox.checked = true;
       checkbox.dispatchEvent(new Event('change'));
     }
-    root.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    root
+      .querySelector('form')
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     await Promise.resolve();
     await Promise.resolve();
 
@@ -238,7 +246,9 @@ describe('mountMatchesScreen', () => {
       checkbox.checked = true;
       checkbox.dispatchEvent(new Event('change'));
     }
-    root.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    root
+      .querySelector('form')
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
@@ -248,7 +258,9 @@ describe('mountMatchesScreen', () => {
 
   it('removes a match after confirmation', async () => {
     const db = baseDb();
-    db.btc_matches = [{ id: 'm1', event_id: 'ev1', round: 'preliminary', team1_id: 't1', team2_id: 't2' }];
+    db.btc_matches = [
+      { id: 'm1', event_id: 'ev1', round: 'preliminary', team1_id: 't1', team2_id: 't2' },
+    ];
     db.btc_match_judges = [
       { match_id: 'm1', judge_id: 'j1' },
       { match_id: 'm1', judge_id: 'j2' },
@@ -259,9 +271,9 @@ describe('mountMatchesScreen', () => {
     await mountMatchesScreen(root, { eventId: 'ev1', client });
 
     expect(root.textContent).toContain('Alpha vs Beta');
-    root.querySelector('button[aria-label="Remove Alpha vs Beta"]').dispatchEvent(
-      new Event('click', { bubbles: true }),
-    );
+    root
+      .querySelector('button[aria-label="Remove Alpha vs Beta"]')
+      .dispatchEvent(new Event('click', { bubbles: true }));
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
@@ -272,7 +284,9 @@ describe('mountMatchesScreen', () => {
 
   it('does nothing when the confirmation dialog is declined', async () => {
     const db = baseDb();
-    db.btc_matches = [{ id: 'm1', event_id: 'ev1', round: 'preliminary', team1_id: 't1', team2_id: 't2' }];
+    db.btc_matches = [
+      { id: 'm1', event_id: 'ev1', round: 'preliminary', team1_id: 't1', team2_id: 't2' },
+    ];
     db.btc_match_judges = [
       { match_id: 'm1', judge_id: 'j1' },
       { match_id: 'm1', judge_id: 'j2' },
@@ -282,9 +296,9 @@ describe('mountMatchesScreen', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(false);
     await mountMatchesScreen(root, { eventId: 'ev1', client });
 
-    root.querySelector('button[aria-label="Remove Alpha vs Beta"]').dispatchEvent(
-      new Event('click', { bubbles: true }),
-    );
+    root
+      .querySelector('button[aria-label="Remove Alpha vs Beta"]')
+      .dispatchEvent(new Event('click', { bubbles: true }));
     await Promise.resolve();
 
     expect(root.querySelector('button[aria-label="Remove Alpha vs Beta"]')).not.toBeNull();

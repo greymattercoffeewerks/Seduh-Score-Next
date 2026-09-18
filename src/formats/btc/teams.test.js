@@ -79,11 +79,7 @@ describe('createTeam', () => {
     const client = fakeClient({ tables: { btc_teams: { data: created, error: null } } });
     const result = await createTeam('e1', 'Alpha', client);
     expect(result).toEqual(created);
-    expect(client.calls).toContainEqual([
-      'insert',
-      'btc_teams',
-      { event_id: 'e1', name: 'Alpha' },
-    ]);
+    expect(client.calls).toContainEqual(['insert', 'btc_teams', { event_id: 'e1', name: 'Alpha' }]);
   });
 
   // A double-tap on "Add team," or a retry after a dropped response whose

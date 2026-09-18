@@ -75,9 +75,9 @@ describe('validateMatchDraft', () => {
   });
 
   it('rejects a team playing itself', () => {
-    expect(
-      validateMatchDraft({ team1Id: 't1', team2Id: 't1', judgeIds: ['j1', 'j2', 'j3'] }),
-    ).toBe('A team cannot play itself.');
+    expect(validateMatchDraft({ team1Id: 't1', team2Id: 't1', judgeIds: ['j1', 'j2', 'j3'] })).toBe(
+      'A team cannot play itself.',
+    );
   });
 
   it('requires exactly 3 judges', () => {
@@ -87,9 +87,9 @@ describe('validateMatchDraft', () => {
   });
 
   it('rejects 3 judges with a duplicate', () => {
-    expect(
-      validateMatchDraft({ team1Id: 't1', team2Id: 't2', judgeIds: ['j1', 'j1', 'j2'] }),
-    ).toBe('Exactly 3 distinct judges must be selected.');
+    expect(validateMatchDraft({ team1Id: 't1', team2Id: 't2', judgeIds: ['j1', 'j1', 'j2'] })).toBe(
+      'Exactly 3 distinct judges must be selected.',
+    );
   });
 
   it('accepts a valid draft', () => {
