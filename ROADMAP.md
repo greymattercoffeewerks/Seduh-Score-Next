@@ -1121,6 +1121,35 @@ in a transaction.
 cloud Supabase project migrations must be pushed manually (via MCP `apply_migration`) after
 PR merge, per the 2026-09-05 incident note in CLAUDE.md.
 
+### Phase T-BTC.2 — Setup and match creation (increment 1) · In progress
+
+**First two of six sub-steps (per Claude Docs plan §6):**
+
+- **Setup screen** (teams/judges roster): idempotent CRUD for team and judge registration
+  (`teams.js`, `judges.js` with race-recovery on UNIQUE_VIOLATION); organiser UI with `is_test`
+  banner, add/remove forms, live counts. Found and fixed during review: aria-label/error mismatch,
+  missing focus-visible CSS, three blocking a11y gaps (no focus-preservation, no focus-move on
+  success, unassociated error regions), and a real double-render bug where inline toast calls stole
+  focus back from a newly-rebuilt success region. 51 tests passing.
+
+- **Preliminary match creation**: new `create_btc_match` RPC (migration
+  `20260918100000_btc_create_match_rpc.sql`) atomically creates a `btc_matches` row + exactly-3-judges
+  assignment. Found and fixed during first review round: the RPC had no idempotency key, meaning a
+  dropped-response retry could create silent duplicates; fixed by adding `removeMatch()` (plain
+  DELETE, cascades properly) and a window.confirm-gated Remove button, matching `guess-the-bean/`'s
+  precedent. Explicitly added `SECURITY INVOKER` per reviewer nit. 34 new pgTAP assertions covering
+  validation branches. 51 JS tests.
+
+**Review outcome:** Two-pass review cycle. First round (schema-guardian, security-reviewer,
+module-boundary-checker, ui-accessibility-reviewer, code-reviewer, parallel) found idempotency gap
+(schema-guardian) and multiple UI bugs; second round (targeted at removeMatch fix) passed clean.
+All reviewers passed once issues fixed. 286/286 pgTAP tests passing; 1293/1293 JS tests passing.
+Rollback verified live twice (before and after the removeMatch fix). All 4 BTC migrations now live
+on the cloud project.
+
+**Not done, carry forward:** Phases T-BTC.2 scoring/standings/bracket/history (sub-steps 3–6);
+app-wiring pass (deliberate, following Cup Taster precedent of standalone screens first).
+
 ---
 
 ## Versioning system (2026-09-05) — closed

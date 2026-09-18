@@ -1,3 +1,92 @@
+## BTC (Barista Team Championship) Phase T-BTC.2, increment 1: Setup and match creation · 2026-09-18
+
+First two sub-steps of T-BTC.2 (per Claude Docs plan §6): team/judge rosters and
+match creation, with preliminary match lifecycle. Phases T-BTC.2 scoring/standings/
+bracket/history remain, plus app-wiring pass.
+
+**Directory rename**: `src/formats/bbtc/` → `src/formats/btc/` at session start, per
+established naming decision (BTC = Barista Team Championship; BBTC = Brunei-specific
+instance only). CLAUDE.md moved and updated.
+
+**Setup screen** (`src/formats/btc/setupScreen.js`/`.css`, teams.js, judges.js):
+
+- `teams.js`/`judges.js` — idempotent CRUD (create-with-race-recovery on
+  UNIQUE_VIOLATION, mirrors `core/registry.js`'s `registerPerson` pattern). Both use a
+  `setup_organiser_id` transaction-level variable, set by the calling screen, to enforce
+  org-scoped uniqueness at the DB level without trusting client-supplied `org_id` fields.
+- `setupScreen.js`/`.css` — organiser UI with `is_test` banner, add/remove forms for
+  both rosters, live count display. **Found and fixed during review (ui-accessibility-reviewer
+  - code-reviewer, two rounds)**: (1) aria-label/error-text mismatch on inputs; (2) missing
+    `.card:focus-visible` CSS; (3) three blocking a11y gaps (no focus-preservation keys,
+    no focus-move on load success, unassociated validation error regions); (4) **real
+    double-render bug** where `showToast()` rendered itself AND the caller's trailing
+    `render()` ran right after, stealing focus back — fixed by moving success feedback
+    inline instead of calling `showToast()`, and adding a regression test asserting
+    `document.activeElement` survives the rebuild.
+- 51 tests (Vitest), all passing.
+
+**Match creation** (`src/formats/btc/matches.js`, matchesScreen.js/.css, shared.css):
+
+- New migration `supabase/migrations/20260918100000_btc_create_match_rpc.sql` —
+  `create_btc_match(team1_id, team2_id, judge_id1, judge_id2, judge_id3)` RPC, atomically
+  creates `btc_matches` row + exactly-3-judges assignment in `btc_match_judges` in one
+  transaction. `SECURITY INVOKER` explicit (per reviewer feedback). Closes a validation
+  gap T-BTC.1's schema comment deliberately deferred — no idempotency ledger (deliberate:
+  setup-time write, not outbox-routed). **Found and fixed during review (schema-guardian,
+  two rounds)**: `create_btc_match` had no idempotency key and the app had NO recovery
+  path for dropped-response retries creating silent duplicates. Fixed by adding
+  `matches.js`'s `removeMatch()` (plain DELETE, existing `btc_matches_write` RLS policy
+  covers it, cascades on `match_id`) plus a window.confirm-gated Remove button in the
+  match list, matching `guess-the-bean/setupScreen.js`'s own danger-zone pattern. Also
+  explicitly added `SECURITY INVOKER` to the RPC per reviewer nit.
+- `matches.js` — `validateMatchDraft`, `createMatch`, `listMatches`,
+  `listJudgeIdsForMatch`, `removeMatch`.
+- `matchesScreen.js`/`.css` — create-match form (2 team selects, 3-judge checkbox
+  fieldset with live "X of 3 selected" count and hard cap at 3) plus match list with
+  Remove buttons. **First review round** (schema-guardian, security-reviewer,
+  module-boundary-checker, ui-accessibility-reviewer, code-reviewer, parallel): module-
+  boundary-checker and ui-accessibility-reviewer passed clean; security-reviewer passed
+  clean after independently verifying `create_btc_match`'s RLS-reliant validation is sound;
+  code-reviewer found one dead-code nit (unused `id` attribute, removed); schema-guardian
+  found the idempotency gap documented above. **Second review round** (code-reviewer,
+  ui-accessibility-reviewer, module-boundary-checker, targeted at `removeMatch` addition):
+  all passed clean, one trivial finding (a comment explaining why remove-errors use a
+  toast not inline error, added).
+- `shared.css` — extracted from setupScreen.css on the 2nd screen needing the same
+  base component shapes (mirrors `src/community/guess-the-bean/shared.css`'s precedent);
+  setupScreen.css/matchesScreen.css now hold only screen-specific rules.
+- 34 pgTAP assertions (`013_btc_create_match_rpc.sql`, new) covering every validation
+  branch, atomic creation, and non-member rejection. 51 JS tests for match CRUD.
+
+**Verification**:
+
+- `npm run db:reset` applies all 4 BTC migrations (090000/091000/092000/100000) cleanly
+  from empty (multiple iterations).
+- `npm run db:test` passes 286/286 pgTAP.
+- `npm run vitest run` passes 1293/1293 JS tests.
+- `npx eslint .` clean.
+- `create_btc_match` migration rollback block run LIVE inside `begin;...rollback;` via
+  `docker exec` psql (twice: once before removeMatch fix, once after adding `SECURITY
+INVOKER`) — confirmed function fully removed then restored correctly.
+
+**Cloud deploy**: all 4 BTC migrations now live on Supabase cloud project
+`wxzwanprluqmgoagbkpv`, confirmed via `list_migrations` matching local exactly. Security
+advisories checked — no new findings (the 3 existing WARN-level advisories are all
+pre-existing, unrelated).
+
+**Not yet done, explicitly deferred**:
+
+- T-BTC.2 remaining sub-steps (scoring, standings, bracket generation/advancement,
+  history) — deferred to future session.
+- App wiring: screens are still NOT wired into `main.js`/`core/router.js` (deliberate,
+  following Cup Taster's precedent — build standalone with `.preview.html` harnesses
+  first, then an app-wiring pass).
+
+**Status**: Task complete. Zero blocking findings. All changes on-disk only (not yet
+committed).
+
+---
+
 ## BTC (Barista Team Championship) Phase T-BTC.1: Schema and security · 2026-09-18
 
 New format ported from legacy Firebase repo. User explicitly scoped this work ahead of

@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BTC Preliminary Matches — preview</title>
+    <link rel="stylesheet" href="/src/ui/tokens/index.css" />
+    <link rel="stylesheet" href="/src/formats/btc/shared.css" />
+    <link rel="stylesheet" href="/src/formats/btc/matchesScreen.css" />
+  </head>
+  <body>
+    <!--
+      Demo-only harness for the BTC preliminary-matches screen — not part of
+      the shipped module graph, same role as setupScreen.preview.html. No
+      live Supabase connection: an in-memory fake client (below) stands in
+      for the real one, including a working create_btc_match RPC simulation.
+      Seeded with 4 teams and 3 judges. Try: creating a match (pick 2 teams +
+      all 3 judge checkboxes), and submitting with fewer than 3 judges
+      checked (shows the validation error).
+    -->
+    <p>
+      <button id="demo-normal">Mount (normal)</button>
+      <button id="demo-small-roster">Mount (roster too small)</button>
+      <button id="demo-failed">Mount (load fails)</button>
+    </p>
+    <div id="app"></div>
+    <script type="module">
+      import { mountMatchesScreen } from './matchesScreen.js';
+
+      function createDemoClient({ smallRoster = false } = {}) {
+        const db = {
+          events: [{ id: 'ev1', org_id: 'org1', name: 'BTC Demo Event', is_test: true }],
+          btc_teams: smallRoster
+            ? [{ id: 't1', event_id: 'ev1', name: 'Grey Matter' }]
+            : [
+                { id: 't1', event_id: 'ev1', name: 'Grey Matter' },
+                { id: 't2', event_id: 'ev1', name: 'Coffee Cartel' },
+                { id: 't3', event_id: 'ev1', name: 'Kopi O Collective' },
+                { id: 't4', event_id: 'ev1', name: 'Berakas Brew' },
+              ],
+          btc_judges: [
+            { id: 'j1', event_id: 'ev1', name: 'Alex Rivera' },
+            { id: 'j2', event_id: 'ev1', name: 'Jordan Lee' },
+            { id: 'j3', event_id: 'ev1', name: 'Casey Tan' },
+          ],
+          btc_matches: [],
+          btc_match_judges: [],
+        };
+        let idCounter = 0;
+
+        function matchesFilters(row, filters) {
+          return filters.every(([col, val]) => row[col] === val);
+        }
+
+        function makeBuilder(table) {
+          const filters = [];
+          const builder = {
+            select() {
+              return builder;
+            },
+            eq(col, val) {
+              filters.push([col, val]);
+              return builder;
+            },
+            order() {
+              return builder;
+            },
+            single() {
+              const rows = (db[table] ?? []).filter((r) => matchesFilters(r, filters));
+              return Promise.resolve({ data: rows[0] ?? null, error: null });
+            },
+            then(resolve, reject) {
+              const rows = (db[table] ?? []).filter((r) => matchesFilters(r, filters));
+              return Promise.resolve({ data: rows, error: null }).then(resolve, reject);
+            },
+          };
+          return builder;
+        }
+
+        return {
+          from: (table) => makeBuilder(table),
+          rpc: (name, args) => {
+            if (args.p_team1_id === args.p_team2_id) {
+              return Promise.resolve({
+                data: null,
+                error: { code: 'P0001', message: 'create_btc_match: a team cannot play itself' },
+              });
+            }
+            idCounter += 1;
+            const created = {
+              id: `m${idCounter}`,
+              event_id: args.p_event_id,
+              round: args.p_round,
+              team1_id: args.p_team1_id,
+              team2_id: args.p_team2_id,
+            };
+            db.btc_matches.push(created);
+            db.btc_match_judges.push(
+              ...args.p_judge_ids.map((judge_id) => ({ match_id: created.id, judge_id })),
+            );
+            return Promise.resolve({ data: created, error: null });
+          },
+        };
+      }
+
+      function failingClient() {
+        return { from: () => ({ from: () => {} }) };
+      }
+
+      function mount(client) {
+        document.getElementById('app').innerHTML = '';
+        mountMatchesScreen(document.getElementById('app'), { eventId: 'ev1', client });
+      }
+
+      document
+        .getElementById('demo-normal')
+        .addEventListener('click', () => mount(createDemoClient()));
+      document
+        .getElementById('demo-small-roster')
+        .addEventListener('click', () => mount(createDemoClient({ smallRoster: true })));
+      document
+        .getElementById('demo-failed')
+        .addEventListener('click', () => mount(failingClient()));
+
+      mount(createDemoClient());
+    </script>
+  </body>
+</html>

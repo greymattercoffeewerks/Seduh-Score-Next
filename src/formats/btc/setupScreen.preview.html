@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BTC Setup — preview</title>
+    <link rel="stylesheet" href="/src/ui/tokens/index.css" />
+    <link rel="stylesheet" href="/src/formats/btc/shared.css" />
+    <link rel="stylesheet" href="/src/formats/btc/setupScreen.css" />
+  </head>
+  <body>
+    <!--
+      Demo-only harness for the BTC Setup screen — not part of the shipped
+      module graph, same role as rosterScreen.preview.html/setupScreen.preview.html
+      (cup-taster). No live Supabase connection: an in-memory fake client
+      (below) stands in for the real one. Seeded with two teams and one
+      judge. Try: adding a team/judge, removing one, and re-adding a name
+      that already exists (shows the existing row rather than erroring).
+    -->
+    <p>
+      <button id="demo-normal">Mount (normal)</button>
+      <button id="demo-failed">Mount (load fails)</button>
+      <button id="demo-hung">Mount (load hangs — real 10s timeout)</button>
+    </p>
+    <div id="app"></div>
+    <script type="module">
+      import { mountSetupScreen } from './setupScreen.js';
+
+      function createDemoClient() {
+        const db = {
+          events: [{ id: 'ev1', org_id: 'org1', name: 'BTC Demo Event', is_test: true }],
+          btc_teams: [
+            { id: 't1', event_id: 'ev1', name: 'Grey Matter' },
+            { id: 't2', event_id: 'ev1', name: 'Coffee Cartel' },
+          ],
+          btc_judges: [{ id: 'j1', event_id: 'ev1', name: 'Alex Rivera' }],
+        };
+        let idCounter = 0;
+
+        function matchesFilters(row, filters) {
+          return filters.every(([col, val]) => row[col] === val);
+        }
+
+        function makeBuilder(table) {
+          const filters = [];
+          const builder = {
+            select() {
+              return builder;
+            },
+            eq(col, val) {
+              filters.push([col, val]);
+              return builder;
+            },
+            order() {
+              return builder;
+            },
+            insert(payload) {
+              idCounter += 1;
+              const inserted = { id: `${table}-${idCounter}`, ...payload };
+              db[table] = [...(db[table] ?? []), inserted];
+              return {
+                select: () => ({ single: () => Promise.resolve({ data: inserted, error: null }) }),
+              };
+            },
+            delete() {
+              return {
+                eq: (col, val) => {
+                  db[table] = (db[table] ?? []).filter((row) => row[col] !== val);
+                  return Promise.resolve({ data: null, error: null });
+                },
+              };
+            },
+            single() {
+              const rows = (db[table] ?? []).filter((r) => matchesFilters(r, filters));
+              return Promise.resolve({ data: rows[0] ?? null, error: null });
+            },
+            maybeSingle() {
+              const rows = (db[table] ?? []).filter((r) => matchesFilters(r, filters));
+              return Promise.resolve({ data: rows[0] ?? null, error: null });
+            },
+            then(resolve, reject) {
+              const rows = (db[table] ?? []).filter((r) => matchesFilters(r, filters));
+              return Promise.resolve({ data: rows, error: null }).then(resolve, reject);
+            },
+          };
+          return builder;
+        }
+
+        return { from: (table) => makeBuilder(table) };
+      }
+
+      function failingClient() {
+        return { from: () => ({ from: () => {} }) };
+      }
+      function hungClient() {
+        function builder() {
+          const b = {
+            select: () => b,
+            eq: () => b,
+            order: () => b,
+            single: () => new Promise(() => {}),
+            maybeSingle: () => new Promise(() => {}),
+            then: () => new Promise(() => {}),
+          };
+          return b;
+        }
+        return { from: () => builder() };
+      }
+
+      function mount(client) {
+        document.getElementById('app').innerHTML = '';
+        mountSetupScreen(document.getElementById('app'), { eventId: 'ev1', client });
+      }
+
+      document
+        .getElementById('demo-normal')
+        .addEventListener('click', () => mount(createDemoClient()));
+      document
+        .getElementById('demo-failed')
+        .addEventListener('click', () => mount(failingClient()));
+      document.getElementById('demo-hung').addEventListener('click', () => mount(hungClient()));
+
+      mount(createDemoClient());
+    </script>
+  </body>
+</html>

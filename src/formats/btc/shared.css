@@ -1,0 +1,168 @@
+/*
+ * BTC — shared screen-chrome component shapes, used by every screen in this
+ * directory (setupScreen.css, matchesScreen.css, and any that follow).
+ * Extracted here on the 2nd screen needing them, matching this codebase's
+ * own extract-on-2nd-use convention (CONVENTIONS.md) — mirrors
+ * src/community/guess-the-bean/shared.css's own role for its directory.
+ *
+ * These rules duplicate .screen-container/.card/.btn*/.form-field*/
+ * .field-input/.roster-list/.screen-feedback/.stage-meta from
+ * src/formats/cup-taster/heatsScreen.css — a format can't link to another
+ * format's own CSS file (module boundary), so this is a deliberate, flagged
+ * duplication, not an oversight. See src/formats/btc/CLAUDE.md's "Known
+ * debt" note. Values copied verbatim so every format renders identically
+ * until a shared, format-agnostic extraction happens (e.g.
+ * src/ui/tokens/components.css). `.is-test-banner`/`.tap-target` are NOT
+ * duplicated — those already live in src/ui/tokens/base.css, genuinely
+ * shared, loaded on every page.
+ */
+
+.screen-container {
+  max-width: var(--max-width-content);
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.screen-container h1 {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  line-height: var(--leading-tight);
+  margin: 0;
+}
+
+.screen-container h2 {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  line-height: var(--leading-snug);
+  margin: 0 0 var(--space-3) 0;
+}
+
+.stage-meta {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  margin: var(--space-1) 0 0 0;
+}
+
+.card {
+  background: var(--color-surface);
+  border: var(--border-strong) solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+}
+
+/* Paired with .card above — see heatsScreen.css's own comment on this exact
+   rule for the focused-card/focus-ring-fusion bug it fixes. */
+.card:focus-visible {
+  outline-offset: calc(var(--focus-ring-offset) + var(--border-strong));
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tap-target-min);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-sm);
+  border: var(--border-hairline) solid transparent;
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+
+.btn:disabled,
+.btn[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.btn-primary {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+}
+
+.btn-primary:hover:not(:disabled):not([aria-disabled='true']) {
+  background: var(--color-accent-hover);
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+}
+
+.btn-outline:hover:not(:disabled):not([aria-disabled='true']) {
+  background: var(--color-surface-sunken);
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.form-field-label {
+  font-size: var(--text-2xs);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+}
+
+.field-input {
+  min-height: var(--tap-target-min);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-hairline) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+}
+
+.field-input:disabled,
+.field-input[aria-disabled='true'] {
+  color: var(--color-text-secondary);
+}
+
+.roster-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.roster-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: var(--border-hairline) solid var(--color-border);
+}
+
+.screen-feedback {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+
+.screen-feedback[data-tone='error'] {
+  background: var(--color-surface-sunken);
+  border: var(--border-hairline) solid var(--color-danger);
+  color: var(--color-danger);
+}
+
+/* Shared across every BTC screen's own inline field errors
+   (setupScreen.js's btc-field-error, matchesScreen.js's own). */
+.btc-field-error {
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+  margin: 0;
+}
