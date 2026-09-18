@@ -1,0 +1,33 @@
+/*
+ * BTC Setup screen (Phase T-BTC.2). The base screen-chrome shapes (screen
+ * container, card, buttons, form fields, field inputs, roster list, screen
+ * feedback, stage meta, field errors) live in shared.css, loaded alongside
+ * this file. See the header comment there for why they are duplicated from
+ * the Cup Taster heatsScreen.css file rather than imported.
+ */
+
+/* A compact roster-add form, one per card (teams, judges) — the input+button
+   pair stacks single-column from the smallest supported viewport (360px)
+   rather than needing a breakpoint, same reasoning rosterScreen.css
+   documents for its own form fields. */
+.btc-roster-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.btc-roster-card + .btc-roster-card {
+  margin-top: 0;
+}
+
+@media (min-width: 640px) {
+  .btc-roster-form {
+    flex-direction: row;
+    align-items: flex-end;
+  }
+
+  .btc-roster-form .form-field {
+    flex: 1 1 auto;
+  }
+}

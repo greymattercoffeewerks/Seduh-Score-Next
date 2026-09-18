@@ -33,7 +33,9 @@ the context it actually touches:
 - [src/formats/cup-taster/CLAUDE.md](src/formats/cup-taster/CLAUDE.md) — Cup Taster.
 - [src/formats/throwdown/CLAUDE.md](src/formats/throwdown/CLAUDE.md) — Throwdown (not started).
 - [src/formats/liga-seduh/CLAUDE.md](src/formats/liga-seduh/CLAUDE.md) — Liga Seduh (not started).
-- [src/formats/bbtc/CLAUDE.md](src/formats/bbtc/CLAUDE.md) — BBTC (not started).
+- [src/formats/btc/CLAUDE.md](src/formats/btc/CLAUDE.md) — BTC (Barista Team
+  Championship; BBTC is the Brunei-specific instance, not the format's name — in
+  progress, Phase T-BTC.2).
 
 Any invariant that applies across _every_ format (not just one) belongs here, in
 Non-negotiables — not duplicated into each scoped file.
@@ -209,7 +211,8 @@ src/
                                    analytics. See src/formats/cup-taster/CLAUDE.md.
     throwdown/                  ← not started. See src/formats/throwdown/CLAUDE.md.
     liga-seduh/                 ← not started. See src/formats/liga-seduh/CLAUDE.md.
-    bbtc/                       ← not started. See src/formats/bbtc/CLAUDE.md.
+    btc/                        ← Barista Team Championship, in progress. See
+                                   src/formats/btc/CLAUDE.md.
   ui/
     tokens/                     ← design tokens (plain CSS custom properties) — the
                                    console's own paper/stage system; src/marketing/ does

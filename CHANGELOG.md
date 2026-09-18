@@ -1,3 +1,163 @@
+## BTC (Barista Team Championship) Phase T-BTC.2, increment 1: Setup and match creation · 2026-09-18
+
+First two sub-steps of T-BTC.2 (per Claude Docs plan §6): team/judge rosters and
+match creation, with preliminary match lifecycle. Phases T-BTC.2 scoring/standings/
+bracket/history remain, plus app-wiring pass.
+
+**Directory rename**: `src/formats/bbtc/` → `src/formats/btc/` at session start, per
+established naming decision (BTC = Barista Team Championship; BBTC = Brunei-specific
+instance only). CLAUDE.md moved and updated.
+
+**Setup screen** (`src/formats/btc/setupScreen.js`/`.css`, teams.js, judges.js):
+
+- `teams.js`/`judges.js` — idempotent CRUD (create-with-race-recovery on
+  UNIQUE_VIOLATION, mirrors `core/registry.js`'s `registerPerson` pattern). Both use a
+  `setup_organiser_id` transaction-level variable, set by the calling screen, to enforce
+  org-scoped uniqueness at the DB level without trusting client-supplied `org_id` fields.
+- `setupScreen.js`/`.css` — organiser UI with `is_test` banner, add/remove forms for
+  both rosters, live count display. **Found and fixed during review (ui-accessibility-reviewer
+  - code-reviewer, two rounds)**: (1) aria-label/error-text mismatch on inputs; (2) missing
+    `.card:focus-visible` CSS; (3) three blocking a11y gaps (no focus-preservation keys,
+    no focus-move on load success, unassociated validation error regions); (4) **real
+    double-render bug** where `showToast()` rendered itself AND the caller's trailing
+    `render()` ran right after, stealing focus back — fixed by moving success feedback
+    inline instead of calling `showToast()`, and adding a regression test asserting
+    `document.activeElement` survives the rebuild.
+- 51 tests (Vitest), all passing.
+
+**Match creation** (`src/formats/btc/matches.js`, matchesScreen.js/.css, shared.css):
+
+- New migration `supabase/migrations/20260918100000_btc_create_match_rpc.sql` —
+  `create_btc_match(team1_id, team2_id, judge_id1, judge_id2, judge_id3)` RPC, atomically
+  creates `btc_matches` row + exactly-3-judges assignment in `btc_match_judges` in one
+  transaction. `SECURITY INVOKER` explicit (per reviewer feedback). Closes a validation
+  gap T-BTC.1's schema comment deliberately deferred — no idempotency ledger (deliberate:
+  setup-time write, not outbox-routed). **Found and fixed during review (schema-guardian,
+  two rounds)**: `create_btc_match` had no idempotency key and the app had NO recovery
+  path for dropped-response retries creating silent duplicates. Fixed by adding
+  `matches.js`'s `removeMatch()` (plain DELETE, existing `btc_matches_write` RLS policy
+  covers it, cascades on `match_id`) plus a window.confirm-gated Remove button in the
+  match list, matching `guess-the-bean/setupScreen.js`'s own danger-zone pattern. Also
+  explicitly added `SECURITY INVOKER` to the RPC per reviewer nit.
+- `matches.js` — `validateMatchDraft`, `createMatch`, `listMatches`,
+  `listJudgeIdsForMatch`, `removeMatch`.
+- `matchesScreen.js`/`.css` — create-match form (2 team selects, 3-judge checkbox
+  fieldset with live "X of 3 selected" count and hard cap at 3) plus match list with
+  Remove buttons. **First review round** (schema-guardian, security-reviewer,
+  module-boundary-checker, ui-accessibility-reviewer, code-reviewer, parallel): module-
+  boundary-checker and ui-accessibility-reviewer passed clean; security-reviewer passed
+  clean after independently verifying `create_btc_match`'s RLS-reliant validation is sound;
+  code-reviewer found one dead-code nit (unused `id` attribute, removed); schema-guardian
+  found the idempotency gap documented above. **Second review round** (code-reviewer,
+  ui-accessibility-reviewer, module-boundary-checker, targeted at `removeMatch` addition):
+  all passed clean, one trivial finding (a comment explaining why remove-errors use a
+  toast not inline error, added).
+- `shared.css` — extracted from setupScreen.css on the 2nd screen needing the same
+  base component shapes (mirrors `src/community/guess-the-bean/shared.css`'s precedent);
+  setupScreen.css/matchesScreen.css now hold only screen-specific rules.
+- 34 pgTAP assertions (`013_btc_create_match_rpc.sql`, new) covering every validation
+  branch, atomic creation, and non-member rejection. 51 JS tests for match CRUD.
+
+**Verification**:
+
+- `npm run db:reset` applies all 4 BTC migrations (090000/091000/092000/100000) cleanly
+  from empty (multiple iterations).
+- `npm run db:test` passes 286/286 pgTAP.
+- `npm run vitest run` passes 1293/1293 JS tests.
+- `npx eslint .` clean.
+- `create_btc_match` migration rollback block run LIVE inside `begin;...rollback;` via
+  `docker exec` psql (twice: once before removeMatch fix, once after adding `SECURITY
+INVOKER`) — confirmed function fully removed then restored correctly.
+
+**Cloud deploy**: all 4 BTC migrations now live on Supabase cloud project
+`wxzwanprluqmgoagbkpv`, confirmed via `list_migrations` matching local exactly. Security
+advisories checked — no new findings (the 3 existing WARN-level advisories are all
+pre-existing, unrelated).
+
+**Not yet done, explicitly deferred**:
+
+- T-BTC.2 remaining sub-steps (scoring, standings, bracket generation/advancement,
+  history) — deferred to future session.
+- App wiring: screens are still NOT wired into `main.js`/`core/router.js` (deliberate,
+  following Cup Taster's precedent — build standalone with `.preview.html` harnesses
+  first, then an app-wiring pass).
+
+**Status**: Task complete. Zero blocking findings. All changes on-disk only (not yet
+committed).
+
+---
+
+## BTC (Barista Team Championship) Phase T-BTC.1: Schema and security · 2026-09-18
+
+New format ported from legacy Firebase repo. User explicitly scoped this work ahead of
+Throwdown for an early-November 2026 presentation (4–8 team regional event prep). Phase
+T-BTC.1 is schema and RLS; Phases T-BTC.2–5 (setup/matches/scoring/standings/bracket UI,
+live surfaces, export/timer, hardening) deferred and tracked in a Claude Docs plan artifact.
+
+**Migrations** (3 new):
+
+- `supabase/migrations/20260918090000_btc_tables.sql` — 7 tables (`btc_teams`, `btc_judges`,
+  `btc_matches`, `btc_match_judges` junction, `btc_cup_votes` fact table, `btc_match_bonuses`,
+  `btc_bracket_slots`) plus 2 derived views (`btc_cup_totals`, `btc_match_totals`, `btc_standings`
+  with `security_invoker=true`, mirroring `ct_standings`). **Critical design decision, found and
+  fixed during review**: original draft stored pre-summed team1_tokens/team2_tokens PER CUP as
+  stored columns, violating the `correct`-is-a-count-never-a-column non-negotiable. Fixed by
+  replacing with `btc_cup_votes` (raw fact table, one row per judge's vote per cup) and deriving
+  totals via `count(*) filter` in views — same pattern as `ct_results`→`ct_standings`. Constraints:
+  self-play rejection (match.team1 ≠ match.team2), duplicate-judge-vote rejection
+  (`btc_match_judges` unique on match/judge; `btc_cup_votes` unique on vote/judge/cup), cross-
+  table participant validation via triggers.
+- `supabase/migrations/20260918091000_btc_rls_policies.sql` — RLS on all 7 tables via new
+  `app.org_id_for_btc_match(uuid)` resolver chained onto `app.org_id_for_event`, following
+  T1.3's chokepoint pattern. Read+write policies with explicit `WITH CHECK` on every write.
+- `supabase/migrations/20260918092000_btc_grants.sql` — explicit revoke-then-grant,
+  `authenticated` only (no `anon` access — live/audience surfaces deferred to T-BTC.3).
+
+**Test coverage** (`supabase/tests/012_btc_tables.sql`): 23 pgTAP assertions. Schema
+constraints (self-play, duplicate judges, cross-table validation), non-member-read-zero-rows
+across all 7 tables + both views, `anon` has no privilege, live standings math with real fixture
+data (all passing).
+
+**Review history**:
+
+- **schema-guardian, FIRST pass**: Found blocking finding — stored team-vote tallies violate
+  non-negotiable. Also noted: missing indexes on `btc_bracket_slots.feeder_slot_1/feeder_slot_2/
+match_id`, inconsistent ON DELETE on match FKs. **SECOND pass (after fix)**: PASS.
+  Pre-summed-columns defect closed, indexes added, ON DELETE tightened, no new issues.
+- **security-reviewer**: PASS. Verified all 7 tables have read+write policies with WITH CHECK,
+  `org_id_for_btc_match` resolver correct (no recursion/escalation), grants secure (zero anon
+  exposure), both views `security_invoker=true`, negative-rows pgTAP test is real.
+- **code-reviewer**: Found 3 non-blocking naming/comment issues (all fixed): `btc_match_totals`
+  columns renamed team1_tokens/team2_tokens for consistency with `btc_cup_totals`;
+  `btc_bracket_slots.slot_label` comment corrected from "third" to "third_place" (matches CHECK
+  constraint); `btc_match_judges` "exactly 3 judges" TODO-comment tightened to explicitly reference
+  T-BTC.2's match-creation RPC (deferred work) where scoring-auditor will review it.
+
+**Verification**:
+
+- `npm run db:reset` applies all 3 migrations cleanly from empty (tested multiple times across
+  iterations).
+- `npm run db:test` passes 275/275 (23/23 new in `012_btc_tables.sql`).
+- Full 3-migration rollback chain run live inside `begin;...rollback;` via `docker exec`
+  psql, confirming zero remaining btc_* tables/views/app-schema functions before rollback, and
+  real local DB untouched afterward (run twice: once on original draft, once on fixed version).
+
+**Not done, carry forward to T-BTC.2+**:
+
+- UI: `src/formats/bbtc/` directory exists but not yet renamed to `src/formats/btc/` (out of
+  scope for schema-only phase).
+- Plan doc (Claude Docs artifact) carries full T-BTC.2–5 roadmap; implementation phases TBD
+  per November event prep schedule.
+- Cloud Supabase project (`wxzwanprluqmgoagbkpv`) has NOT been updated yet — per CLAUDE.md's
+  2026-09-05 incident note, this is a manual separate step (via Supabase MCP `apply_migration`)
+  that must happen after PR merge, not assumed automatic. (Will happen immediately after PR merges
+  to main.)
+
+**Status**: Task complete. Zero blocking findings. Ready to merge to `dev` and push to main;
+cloud migrations follow once merged.
+
+---
+
 ## Cup Taster public results publishing · 2026-09-17
 
 User-requested feature: a real, organiser-controlled publish pipeline so the public
