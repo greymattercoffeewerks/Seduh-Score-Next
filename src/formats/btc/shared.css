@@ -1,38 +1,25 @@
 /*
  * BTC — shared screen-chrome component shapes, used by every screen in this
  * directory (setupScreen.css, matchesScreen.css, and any that follow).
- * Extracted here on the 2nd screen needing them, matching this codebase's
- * own extract-on-2nd-use convention (CONVENTIONS.md) — mirrors
- * src/community/guess-the-bean/shared.css's own role for its directory.
+ * Extracted here on the 2nd screen needing them, matching the extract-on-2nd-use
+ * convention in CONVENTIONS.md. Mirrors the role of
+ * src/community/guess-the-bean/shared.css for its own directory.
  *
- * These rules duplicate .screen-container/.card/.btn*/
-.form-field*/
-  *
-  .field-input/.roster-list/.screen-feedback/.stage-meta
-  from
-  *
-  src/formats/cup-taster/heatsScreen.css
-  —
-  a
-  format
-  can't link to another
- * format's
-  own
-  CSS
-  file
-  (module boundary),
-so this is a deliberate,
-flagged * duplication,
-not
-  an
-  oversight.
-  See
-  src/formats/btc/CLAUDE.md's "Known
- * debt" note. Values copied verbatim so every format renders identically
- * until a shared, format-agnostic extraction happens (e.g.
- * src/ui/tokens/components.css). `.is-test-banner`/`.tap-target` are NOT
- * duplicated — those already live in src/ui/tokens/base.css, genuinely
+ * These rules duplicate the screen container, card, button, form field, field
+ * input, roster list, screen feedback and stage meta shapes from
+ * src/formats/cup-taster/heatsScreen.css. A format cannot link to another
+ * format's own CSS file (module boundary), so this is a deliberate, flagged
+ * duplication, not an oversight. See the Known debt note in
+ * src/formats/btc/CLAUDE.md. Values are copied verbatim so every format renders
+ * identically until a shared, format-agnostic extraction happens (for example
+ * src/ui/tokens/components.css). The is-test-banner and tap-target classes are
+ * NOT duplicated: those already live in src/ui/tokens/base.css, genuinely
  * shared, loaded on every page.
+ *
+ * Do not write a slash directly after an asterisk in this comment, for example
+ * when listing class-name globs. That sequence closes the comment early and the
+ * rest of the header is then parsed as CSS, which silently drops the first real
+ * rules below it. jsdom-based tests cannot see this class of bug.
  */
 
 .screen-container {
@@ -71,21 +58,9 @@ not
   padding: var(--space-5);
 }
 
-/* Paired with .card above — see heatsScreen.css's
-  own
-  comment
-  on
-  this
-  exact
-  rule
-  for
-  the
-  focused-card/focus-ring-fusion
-  bug
-  it
-  fixes.
-  */
-  .card:focus-visible {
+/* Paired with .card above. See the comment on this exact rule in
+   heatsScreen.css for the focused-card/focus-ring-fusion bug it fixes. */
+.card:focus-visible {
   outline-offset: calc(var(--focus-ring-offset) + var(--border-strong));
 }
 
@@ -190,7 +165,7 @@ not
 }
 
 /* Shared across every BTC screen's own inline field errors
-   (setupScreen.js's btc-field-error, matchesScreen.js's own). */
+   (the setup screen and the matches screen both use this class). */
 .btc-field-error {
   color: var(--color-danger);
   font-size: var(--text-sm);
