@@ -1088,6 +1088,41 @@ Report screen + CSV export, and `is_test` event deletion.
 
 ---
 
+## BTC (Barista Team Championship) — Out-of-handoff format, prioritized for November 2026 regional event
+
+Not in the original handoff (§1.2, March decision to leave Throwdown/Liga/BTC in maintenance
+mode on live Seduh Score). User decision reversal (2026-09-18): prioritized ahead of
+Throwdown for a 4–8 team regional championship in early November. Schema and security work
+is Phase T-BTC.1 (done); Phases T-BTC.2–5 (setup/matches/scoring/standings/bracket UI, live
+surfaces, export/timer, hardening) tracked in a Claude Docs plan artifact and deferred to
+November event prep schedule.
+
+### Phase T-BTC.1 — Schema and security · Done
+
+**Three migrations deployed:**
+
+- `supabase/migrations/20260918090000_btc_tables.sql` — 7 tables (`btc_teams`, `btc_judges`,
+  `btc_matches`, `btc_match_judges`, `btc_cup_votes` fact table, `btc_match_bonuses`,
+  `btc_bracket_slots`) plus 2 derived views (`btc_cup_totals`, `btc_match_totals`, `btc_standings`).
+- `supabase/migrations/20260918091000_btc_rls_policies.sql` — RLS on all 7 tables via new
+  `app.org_id_for_btc_match(uuid)` resolver.
+- `supabase/migrations/20260918092000_btc_grants.sql` — explicit `authenticated`-only grants
+  (no `anon` yet — live surfaces deferred to T-BTC.3).
+
+**Test coverage:** 23 pgTAP assertions (`supabase/tests/012_btc_tables.sql`).
+
+**Review outcome:** Two-pass schema-guardian run (first pass caught critical stored-column
+violation, fixed by replacing with fact table + view-based aggregation); clean security-reviewer
+and code-reviewer passes (3 non-blocking naming items fixed). All 275 local tests passing.
+Live rollback verification: all 3 migrations apply cleanly from empty and roll back cleanly
+in a transaction.
+
+**Not done, carry forward:** Directory not yet renamed (`src/formats/bbtc/` → `src/formats/btc/`);
+cloud Supabase project migrations must be pushed manually (via MCP `apply_migration`) after
+PR merge, per the 2026-09-05 incident note in CLAUDE.md.
+
+---
+
 ## Versioning system (2026-09-05) — closed
 
 All four applicable reviewers ran clean: `code-reviewer` (2 findings, both fixed —
