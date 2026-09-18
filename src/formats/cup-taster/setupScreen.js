@@ -123,7 +123,7 @@ export function renderStageRow(
       }),
       el('p', {
         className: 'stage-meta',
-        text: `${row.setCount} sets, ${row.durationSecs}s, cutoff ${row.cutoff ?? '—'} — locked, heats already generated`,
+        text: `${row.setCount} sets, ${row.durationSecs / 60}min, cutoff ${row.cutoff ?? '—'} — locked, heats already generated`,
       }),
     ]);
   }
@@ -182,18 +182,24 @@ export function renderStageRow(
     row.setCount = Number(setCountInput.value);
   });
 
+  // The DB and every other module (timeclamp.js, countdown.js, timing/
+  // scoring/standings/report screens) keep working in duration_secs — this
+  // input is a display-only minutes conversion at the screen boundary, same
+  // as core/duration.js's own M:SS formatting elsewhere. setup.js's
+  // validateStagePlan still requires durationSecs to be a positive integer,
+  // so only whole minutes are accepted here (min="1", no fractional step).
   const durationInput = el('input', {
     className: 'field-input',
     attrs: {
       type: 'number',
       min: '1',
-      'aria-label': `${stageLabel}: duration in seconds`,
-      'data-field': 'durationSecs',
+      'aria-label': `${stageLabel}: duration in minutes`,
+      'data-field': 'durationMinutes',
     },
   });
-  durationInput.value = String(row.durationSecs);
+  durationInput.value = String(row.durationSecs / 60);
   durationInput.addEventListener('input', () => {
-    row.durationSecs = Number(durationInput.value);
+    row.durationSecs = Number(durationInput.value) * 60;
   });
 
   const cutoffInput = el('input', {
@@ -271,7 +277,7 @@ export function renderStageRow(
     el('div', { className: 'stage-row-fields' }, [
       labeledField('Kind', kindSelect, kindHint ? [kindHint] : []),
       labeledField('Set count', setCountInput),
-      labeledField('Duration (seconds)', durationInput),
+      labeledField('Duration (minutes)', durationInput),
       labeledField('Cutoff', cutoffInput, cutoffHint ? [cutoffHint] : []),
     ]),
     el('div', { className: 'stage-row-actions' }, [moveUpButton, moveDownButton, removeButton]),
