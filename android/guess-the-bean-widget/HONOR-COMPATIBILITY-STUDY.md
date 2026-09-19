@@ -37,7 +37,8 @@ persists, and works after remove + re-add) and a live session showing real data.
 **Signed release verified (2026-09-19):** a fresh release APK (signed with the project key,
 same certificate as the previous install, production Supabase) was installed in place on the
 Magic V5; the widget was re-added from the real app and shows live data after Refresh. The
-probe app was then uninstalled. **Still to verify:** the Honor tablet (and a Nothing phone).
+probe app was then uninstalled. The same signed release was also verified on a Nothing Phone (2)
+(Android 16, Nothing Launcher): renders correctly with live data. **Still to verify:** the Honor tablet.
 
 **Second fix, same day — tall Honor tiles.** With live data, Refresh was clipped at the bottom
 (a 4×2 tile is ~177dp tall on Honor vs ~110dp on stock launchers). Sizing the content from

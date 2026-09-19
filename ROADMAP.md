@@ -1,7 +1,7 @@
 # Seduh Score Next — Roadmap
 
-> **Guess the Bean Android widget (2026-09-19) — done on the Honor Magic V5; tablet and
-> Nothing phone pending.** A native Kotlin/Glance home-screen widget under
+> **Guess the Bean Android widget (2026-09-19) — done on the Honor Magic V5; tablet
+> pending; Nothing phone verified.** A native Kotlin/Glance home-screen widget under
 > `android/guess-the-bean-widget/` (outside `src/`, not part of the web build). Honor MagicOS
 > initially rejected it ("Cannot add widget."); root cause was Glance's `Button` not
 > rendering in Honor's launcher, fixed, plus a tall-tile layout fix. Verified on the Magic V5
@@ -1077,8 +1077,8 @@ Report screen + CSV export, and `is_test` event deletion.
 - **Honor MagicOS — fixed 2026-09-19; phone verified, tablet pending.** Cause was Glance's
   `Button` failing to render in Honor's launcher (shown as "Cannot add widget."), not launcher
   policy; replaced with Box+Text+clickable. Verified on the Magic V5 (cover + unfolded screens,
-  live session, fresh signed release build installed in place). **Still to verify:** the Honor
-  tablet and a Nothing phone. Honor Smart Services Card integration is not needed and is not
+  live session, fresh signed release build installed in place). **Nothing Phone (2) also verified.** **Still to verify:** the
+  Honor tablet. Honor Smart Services Card integration is not needed and is not
   planned.
 - **No automated tests** for URL parsing, status mapping, API error/`Content-Range`
   parsing.

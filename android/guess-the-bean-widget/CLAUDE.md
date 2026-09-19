@@ -9,8 +9,8 @@ screen and links through to the existing web display page
 
 _Status (2026-09-19): feature-complete prototype. **Honor Magic V5 (MagicOS 10) works**
 after the Glance `Button` fix below — cover screen, unfolded screen, a live session and a
-fresh signed release build (with the tall-tile layout fix) verified on the Magic V5; Honor tablet (and Nothing phone) still
-to verify. Not yet distributed; no automated tests
+fresh signed release build (with the tall-tile layout fix) verified on the Magic V5; Nothing Phone (2), Android 16, also verified (2026-09-19); Honor
+tablet still to verify. Not yet distributed; no automated tests
 beyond the Android Studio template stubs. Full diagnosis:
 `HONOR-COMPATIBILITY-STUDY.md`._
 
