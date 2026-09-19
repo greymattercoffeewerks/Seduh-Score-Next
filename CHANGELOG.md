@@ -46,7 +46,8 @@ default MagicOS launcher lists the widget but cannot place it** — the same APK
 Samsung, and adding Honor's `honorcard` metadata removed the widget from the picker, so
 Honor default-launcher support is **not claimed** and remains out of scope pending full
 Honor Smart Services/Card integration. A prior release APK is stale; rebuild + sign before
-distributing.
+distributing. **[Superseded later the same day: the Honor failure was Glance's `Button`, not
+launcher policy, and is fixed — see the two entries above.]**
 
 Not a web-app change: no `src/` edit, no migration, no version bump. Repo-level hygiene
 done alongside: `.prettierignore` gains `android/` (Gradle build reports otherwise fail

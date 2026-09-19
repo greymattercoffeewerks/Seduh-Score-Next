@@ -39,6 +39,14 @@ same certificate as the previous install, production Supabase) was installed in 
 Magic V5; the widget was re-added from the real app and shows live data after Refresh. The
 probe app was then uninstalled. **Still to verify:** the Honor tablet (and a Nothing phone).
 
+**Second fix, same day — tall Honor tiles.** With live data, Refresh was clipped at the bottom
+(a 4×2 tile is ~177dp tall on Honor vs ~110dp on stock launchers). Sizing the content from
+`LocalSize` (`SizeMode.Exact`) rendered fine but under-filled the card: **Honor reports the
+tile as 132×408dp when it is really ~177×312dp**, so that data can't be trusted. Final
+layout: footer row (Updated + Refresh) pinned to the bottom, body column with
+`defaultWeight()` showing up to 3 names that clip instead of pushing Refresh out. Verified on
+the phone with the probe app, then a fresh signed release.
+
 **Reusable lesson:** when a widget "can't be added" on one OEM only, bisect the _content_
 (one Glance feature per probe widget) before assuming launcher policy, and use
 `screencap -d <displayId>` + `dumpsys appwidget` when logs are silenced.

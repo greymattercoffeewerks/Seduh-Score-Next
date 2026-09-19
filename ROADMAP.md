@@ -1,5 +1,14 @@
 # Seduh Score Next — Roadmap
 
+> **Guess the Bean Android widget (2026-09-19) — done on the Honor Magic V5; tablet and
+> Nothing phone pending.** A native Kotlin/Glance home-screen widget under
+> `android/guess-the-bean-widget/` (outside `src/`, not part of the web build). Honor MagicOS
+> initially rejected it ("Cannot add widget."); root cause was Glance's `Button` not
+> rendering in Honor's launcher, fixed, plus a tall-tile layout fix. Verified on the Magic V5
+> cover + unfolded screens with live data and a signed release build. Details: its scoped
+> `CLAUDE.md`, `HONOR-COMPATIBILITY-STUDY.md`, and CHANGELOG.md. See "Known open items from the
+> Guess the Bean Android widget" below.
+
 > **Public SEO foundation and prerendering (2026-09-16) — done.** The landing page, Tour,
 > Community hub, and Competition Timer now carry canonical URLs, social-sharing metadata,
 > robots guidance, and WebSite structured data, plus a sitemap; `www.seduhscore.com` is the
