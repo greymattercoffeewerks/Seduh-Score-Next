@@ -3,3 +3,7 @@ dist/
 test-results/
 playwright-report/
 Handoffs and Specs/
+
+# Android companion project — Kotlin/Gradle, not a prettier target; build output
+# (reports, generated JSON/HTML) would otherwise fail format:check locally.
+android/

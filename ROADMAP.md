@@ -1,5 +1,14 @@
 # Seduh Score Next — Roadmap
 
+> **Guess the Bean Android widget (2026-09-19) — done on the Honor Magic V5; tablet
+> pending; Nothing phone verified.** A native Kotlin/Glance home-screen widget under
+> `android/guess-the-bean-widget/` (outside `src/`, not part of the web build). Honor MagicOS
+> initially rejected it ("Cannot add widget."); root cause was Glance's `Button` not
+> rendering in Honor's launcher, fixed, plus a tall-tile layout fix. Verified on the Magic V5
+> cover + unfolded screens with live data and a signed release build. Details: its scoped
+> `CLAUDE.md`, `HONOR-COMPATIBILITY-STUDY.md`, and CHANGELOG.md. See "Known open items from the
+> Guess the Bean Android widget" below.
+
 > **Public SEO foundation and prerendering (2026-09-16) — done.** The landing page, Tour,
 > Community hub, and Competition Timer now carry canonical URLs, social-sharing metadata,
 > robots guidance, and WebSite structured data, plus a sitemap; `www.seduhscore.com` is the
@@ -1060,6 +1069,22 @@ Report screen + CSV export, and `is_test` event deletion.
   Finals never ran) — its correctness rests on the pgTAP suite + three reviewer sign-offs
   above, not on a production-specific run; revisit if a genuine production-data
   verification of that RPC specifically is wanted before the Oct 4 event.
+
+---
+
+## Known open items from the Guess the Bean Android widget (2026-09-19)
+
+- **Honor MagicOS — fixed 2026-09-19; phone verified, tablet pending.** Cause was Glance's
+  `Button` failing to render in Honor's launcher (shown as "Cannot add widget."), not launcher
+  policy; replaced with Box+Text+clickable. Verified on the Magic V5 (cover + unfolded screens,
+  live session, fresh signed release build installed in place). **Nothing Phone (2) also verified.** **Still to verify:** the
+  Honor tablet. Honor Smart Services Card integration is not needed and is not
+  planned.
+- **No automated tests** for URL parsing, status mapping, API error/`Content-Range`
+  parsing.
+- **Distribution path undecided** (Play internal testing vs. managed signed release).
+
+See `android/guess-the-bean-widget/CLAUDE.md`.
 
 ---
 

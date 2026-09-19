@@ -30,6 +30,9 @@ the context it actually touches:
   Guess the Bean, a free Community-tier tool with real auth+Supabase but no
   roster/scoring/advancement — a third kind of surface, neither `src/tools/` nor
   `src/formats/`.
+- [android/guess-the-bean-widget/CLAUDE.md](android/guess-the-bean-widget/CLAUDE.md) —
+  native Kotlin/Glance Android home-screen widget for one public Guess the Bean session;
+  outside `src/` entirely (own Gradle build, anonymous-only Supabase reads).
 - [src/formats/cup-taster/CLAUDE.md](src/formats/cup-taster/CLAUDE.md) — Cup Taster.
 - [src/formats/throwdown/CLAUDE.md](src/formats/throwdown/CLAUDE.md) — Throwdown (not started).
 - [src/formats/liga-seduh/CLAUDE.md](src/formats/liga-seduh/CLAUDE.md) — Liga Seduh (not started).
@@ -190,6 +193,8 @@ tour/index.html                 ← public format/Community tour (marketing-only
 app/index.html                  ← console SPA entry (moved out of root 2026-09-07 —
                                    see src/marketing/CLAUDE.md for why). Same main.js/
                                    router/screens as always, just served from /app/.
+android/guess-the-bean-widget/  ← native Android (Kotlin/Glance) widget, own Gradle build;
+                                   not part of the web build. See its own CLAUDE.md.
 tools/timer/index.html          ← standalone Timer tool entry. See src/tools/CLAUDE.md.
 community/index.html            ← public hub linking community tools and future resources.
 guess-the-bean/index.html       ← Guess the Bean entry. See

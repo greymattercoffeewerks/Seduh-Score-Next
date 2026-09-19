@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Probe-only receivers for bisecting the Honor MagicOS render failure.
+     See HONOR-COMPATIBILITY-STUDY.md. Never part of the debug or release builds. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <application android:label="GtB PROBE" tools:replace="android:label">
+        <receiver android:name=".probe.Probe1Receiver" android:exported="true" android:label="Probe 1 - plain text">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/probe_widget_info" />
+        </receiver>
+        <receiver android:name=".probe.Probe2Receiver" android:exported="true" android:label="Probe 2 - opaque bg + colour">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/probe_widget_info" />
+        </receiver>
+        <receiver android:name=".probe.Probe3Receiver" android:exported="true" android:label="Probe 3 - translucent bg">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/probe_widget_info" />
+        </receiver>
+        <receiver android:name=".probe.Probe4Receiver" android:exported="true" android:label="Probe 4 - whole-card click">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/probe_widget_info" />
+        </receiver>
+        <receiver android:name=".probe.Probe5Receiver" android:exported="true" android:label="Probe 5 - Button">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/probe_widget_info" />
+        </receiver>
+        <receiver android:name=".probe.Probe6Receiver" android:exported="true" android:label="Probe 6 - Row + weighted spacer">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/probe_widget_info" />
+        </receiver>
+        <receiver android:name=".probe.Probe7PlainReceiver" android:exported="true" android:label="Probe 7 - plain RemoteViews (no Glance)">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/probe_plain_widget_info" />
+        </receiver>
+    </application>
+</manifest>

@@ -1,3 +1,64 @@
+## Guess the Bean Android widget: layout fix for tall Honor tiles · 2026-09-19
+
+With live data (2 guesses) the Refresh control was clipped at the bottom of the card on the
+Magic V5: the fixed layout stacked names, an "Updated" line and Refresh, taller than the tile.
+First attempt (`SizeMode.Exact` + a height budget from `LocalSize`) rendered fine but
+under-filled the card, because Honor reports a wrong tile size (132×408dp reported vs ~177×312dp
+real). Final layout: footer row (Updated + Refresh) pinned at the bottom, body column with
+`defaultWeight()` and up to 3 names that clip instead of pushing Refresh out, 12dp padding.
+Verified on the Magic V5 cover screen via the probe app. A fresh signed release build is needed
+to ship it (Android Studio, then install). No `src/` change, no migration.
+
+## Guess the Bean Android widget: Honor MagicOS fix · 2026-09-19
+
+Supersedes the earlier same-day entry's "Honor unsupported" conclusion. On the user's Honor
+Magic V5 (MagicOS 10, Android 16) the widget listed but showed "Cannot add widget."; over USB
+debugging the cause was traced to **Glance's `Button` composable not rendering in Honor's
+launcher** (launcher places the tile, shows the loading layout, then swaps in its error view
+when applying our RemoteViews). Not launcher policy, install source, profile, sizing or
+`honorcard`. Found by (1) `dumpsys appwidget` (widget bound, views non-null), (2) `screencap -d
+<display>` capturing the failure (Honor sets `persist.log.tag=S`, so no logcat), (3) a new
+`probe` build type with seven one-feature widgets (`app/src/probe/`; only the Glance `Button`
+probe failed). Fix: Refresh control is now `Box` + `Text` + `clickable(actionRunCallback)` in
+`LatestGuessesWidget.kt`. Verified on the Magic V5 cover and unfolded screens and with a live session (user-tested). Also: `probe` build
+type in `app/build.gradle.kts` (own applicationId suffix, debug-signed). Full diagnosis in
+`android/guess-the-bean-widget/HONOR-COMPATIBILITY-STUDY.md`; lesson recorded in the widget's
+`CLAUDE.md`. Open: Honor tablet, fresh signed release APK
+(the previously installed release still contains the `Button`). No `src/` change, no migration,
+no version bump.
+
+## Guess the Bean Android widget · 2026-09-19
+
+Added an Android Kotlin/Jetpack Glance companion project under
+`android/guess-the-bean-widget/` (source handoff:
+`Handoffs and Specs/guess-the-bean-android-widget-HANDOFF.md`). A user connects a public
+Guess the Bean session link and sees safe live activity — latest names, exact total,
+`OPEN`/`CLOSED`/`REVEALED` status, last-refresh time, and post-reveal guesses — in a 4×2
+home-screen widget. Supports manual refresh, network-constrained WorkManager periodic
+refresh (requested every 15 min; Android may defer it), display-page tap-through, and a
+local disconnect. Uses the production public Supabase client config via ignored
+`local.properties`; never reads `contacts`, hidden `bean_count`, or pre-reveal numeric
+guesses.
+
+Verified: repeated `assembleDebug` builds; Pixel 9 emulator (add, connect, name/count/
+status/refresh/tap-through); Samsung physical device (widget adds). **Honor Magic V5's
+default MagicOS launcher lists the widget but cannot place it** — the same APK places on
+Samsung, and adding Honor's `honorcard` metadata removed the widget from the picker, so
+Honor default-launcher support is **not claimed** and remains out of scope pending full
+Honor Smart Services/Card integration. A prior release APK is stale; rebuild + sign before
+distributing. **[Superseded later the same day: the Honor failure was Glance's `Button`, not
+launcher policy, and is fixed — see the two entries above.]**
+
+Not a web-app change: no `src/` edit, no migration, no version bump. Repo-level hygiene
+done alongside: `.prettierignore` gains `android/` (Gradle build reports otherwise fail
+`format:check` locally); the project's own `.gitignore` gains `/app/release/`, `*.apk`,
+`*.aab`, keystores, `.kotlin/`, `.idea/` — found while preparing to commit that the stale
+`app/release/app-release.apk` (~9.8 MB, bakes in BuildConfig) was untracked-but-**not**
+ignored. KB notes (Honor finding, Glance, refresh cadence, privacy) live in the new
+scoped `android/guess-the-bean-widget/CLAUDE.md`. Open: unit tests (URL parsing, status
+mapping, count parsing), signed-release distribution path. Reviewers not run — no
+`src/**`, schema, RLS, or test-file change.
+
 ## BTC (Barista Team Championship) Phase T-BTC.2, increment 1: Setup and match creation · 2026-09-18
 
 First two sub-steps of T-BTC.2 (per Claude Docs plan §6): team/judge rosters and
