@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Guess the Bean Widget</string>
+    <string name="widget_name">Latest Guess the Bean activity</string>
+    <string name="widget_description">Latest public Guess the Bean activity for a selected session.</string>
+</resources>

@@ -1,0 +1,27 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Release artefacts and signing material — a built APK bakes in BuildConfig
+# (Supabase URL/anon key) and goes stale after every source change; never commit one.
+/app/release/
+*.apk
+*.aab
+*.jks
+*.keystore
+
+# Kotlin compiler session state and full IDE project dir
+.kotlin/
+.idea/

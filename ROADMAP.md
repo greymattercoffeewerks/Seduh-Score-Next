@@ -1063,6 +1063,22 @@ Report screen + CSV export, and `is_test` event deletion.
 
 ---
 
+## Known open items from the Guess the Bean Android widget (2026-09-19)
+
+- **Honor MagicOS — fixed 2026-09-19; phone verified, tablet pending.** Cause was Glance's
+  `Button` failing to render in Honor's launcher (shown as "Cannot add widget."), not launcher
+  policy; replaced with Box+Text+clickable. Verified on the Magic V5 (cover + unfolded screens,
+  live session, fresh signed release build installed in place). **Still to verify:** the Honor
+  tablet and a Nothing phone. Honor Smart Services Card integration is not needed and is not
+  planned.
+- **No automated tests** for URL parsing, status mapping, API error/`Content-Range`
+  parsing.
+- **Distribution path undecided** (Play internal testing vs. managed signed release).
+
+See `android/guess-the-bean-widget/CLAUDE.md`.
+
+---
+
 ## Known open items from Guess the Bean Phase 1–2
 
 - **Directory placement for Phase 3+ (session management UI) — RESOLVED (Phase 2).** New
