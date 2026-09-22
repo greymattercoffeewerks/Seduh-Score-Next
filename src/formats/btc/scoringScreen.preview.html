@@ -86,12 +86,12 @@
                 status: 400,
               };
             }
-            const need = (round === 'preliminary' ? 15 : 20) * 3;
+            const need = round === 'preliminary' ? 15 : 20;
             if (args.p_votes.length !== need) {
               return {
                 error: {
                   code: 'P0001',
-                  message: `confirm_btc_match: ${need - args.p_votes.length} of ${need} judge votes are missing`,
+                  message: `confirm_btc_match: ${need - args.p_votes.length} of ${need} cups are missing a score`,
                 },
                 status: 400,
               };
@@ -103,8 +103,7 @@
             db.btc_cup_votes = args.p_votes.map((v) => ({
               match_id: 'm1',
               cup_number: v.cup_number,
-              judge_id: v.judge_id,
-              team_id: v.team_id,
+              team1_tokens: v.team1_tokens,
             }));
             db.btc_match_bonuses = [
               {

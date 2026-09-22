@@ -1,3 +1,70 @@
+## BTC scoring: per-judge votes → per-cup tokens (design correction) · 2026-09-22
+
+Same-day follow-up to the scoring entry below (T-BTC.2 sub-step 3, 2026-09-22): user caught
+a modelling error before PR #101 merged by comparing against the legacy Seduh Score UI. A
+cup's score is a single 0–3 token count for team1 (team2 auto-balances to 3 minus that),
+never split per-judge. Judges remain assigned to a match (exactly 3, still validated) purely
+for record/transparency — not tied to any vote.
+
+**Design rationale**: Legacy UI's per-cup UI control (not per-judge radio buttons) proved
+clearer and faster. A cup is the actual scored unit; judges rotate across cups in a match,
+but the scoring happens cup-by-cup, not judge-by-judge. Per-cup token totals, with team2's
+share auto-derived, eliminates vote-matrix complexity and matches organiser mental model.
+
+**Migrations**: Two new forward-only migrations supersede the vote-storage shape of the
+three already-pushed 20260922090000/091000/092000 migrations (never edited, per repo rule):
+
+- `20260922100000_btc_cup_votes_per_cup_tokens.sql` (cloud version 20260922052416): drops
+  `judge_id`/`team_id` from `btc_cup_votes`, adds `team1_tokens smallint CHECK (team1_tokens
+BETWEEN 0 AND 3)`, makes `(match_id, cup_number)` unique, recreates `btc_cup_totals` /
+  `btc_match_totals` / `btc_match_scores` views with per-cup-token logic.
+- `20260922101000_btc_confirm_match_rpc_per_cup_tokens.sql` (cloud version 20260922052439):
+  `CREATE OR REPLACE` for `confirm_btc_match` with same signature; parameter `p_votes` now
+  `{cup_number, team1_tokens}[]` instead of `{cup_number, judge_id, team_id}[]`; completeness
+  check counts `count(*) = cups` instead of `cups * 3`.
+
+**Client changes**: `src/formats/btc/scoring.js` — `draft.votes[cup]` is now a single 0–3
+number (not per-judge map); `withCupTokens(votes, cupNumber, newValue)` enforces 0–3 range.
+`src/formats/btc/scoringScreen.js` — per-cup UI is a 4-button segmented control (0/1/2/3)
+with live team2-balance text ("Team B: 3 tokens"). Judges listed once in a summary line for
+the record only, not interactive. `scoringScreen.css` updated for new control layout.
+`scoringScreen.preview.html` demonstrates the new UI shape.
+
+**pgTAP updates**: `supabase/tests/012_btc_tables.sql` (plan 23, no change from
+pre-correction state — this test file focuses on schema/RLS/grants, not vote shape);
+`supabase/tests/014_btc_scoring.sql` (plan 60, rewritten for per-cup-token fixtures,
+same fixture parity: 37/15, 47/24, 32/30, 4/65, 0/50 as JS). Fixture counts mirrored
+between JS and SQL to catch silent drift.
+
+**Review**: All 7 reviewers ran (module-boundary-checker not re-run: no `src/core/` or
+cross-format changes). All PASSED, zero blocking. Schema-guardian and security-reviewer
+verified both new migrations live (rollback + reapply fingerprint-identical; RLS/grants/
+CHECK/unique constraints all hold). Scoring-auditor and test-auditor independently
+confirmed fixture parity (37/15, 47/24, 32/30, 4/65, 0/50) and mutation-tested `team2 =
+3 - team1` arithmetic on both JS and SQL sides. Offline-sync-auditor confirmed confirm/
+pending/dropped state machine untouched; re-verified previously-weak ledger-decides-success
+test now uses genuine mid-flight mutation hook. UI-accessibility-reviewer confirmed 4-button
+token control meets tap-target (48px), aria-pressed, focus-order requirements (code-level;
+user independently browser-verified at 360px). Code-reviewer found no blocking issues.
+
+**Test suite**: 360 pgTAP (012: 23, 014: 60, 015: 14, others: 263); 1411 JS (1408 BTC
+
+- 3 new within scoring.test.js). Lint/format clean.
+
+**Cloud**: Both migrations pushed to project wxzwanprluqmgoagbkpv same day
+(20260922052416, 20260922052439).
+
+**Verifier sign-offs**: schema-guardian (clean live verification), security-reviewer (clean),
+scoring-auditor (fixture parity confirmed), offline-sync-auditor (clean), ui-accessibility-
+reviewer (clean, code-level + live 360px), test-auditor (clean), code-reviewer (clean).
+Definition of Done met; zero blocking findings remain.
+
+**Known gaps (deferred to ROADMAP)**: JSONB RPC cast lacks numeric-type guard (pre-existing,
+affects the v->>'team1_tokens'::int cast in the RPC; JS client always validates, so
+unreachable via the app; same pattern existed for cup_number before this migration).
+
+---
+
 ## BTC Phase T-BTC.2, sub-step 3: Scoring · 2026-09-22
 
 Atomic scoring across judges and cups, per-team bonuses, and one-transaction match

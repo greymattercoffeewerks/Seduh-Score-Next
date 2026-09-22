@@ -61,7 +61,7 @@ vi.mock('../../core/outbox.js', () => ({
         processed: 0,
         stopped: false,
         permanentFailure: true,
-        error: { code: 'P0001', message: 'confirm_btc_match: 3 of 45 judge votes are missing' },
+        error: { code: 'P0001', message: 'confirm_btc_match: 3 of 15 cups are missing a score' },
       };
     }
     return { processed: 0, stopped: true, permanentFailure: false }; // offline: stays queued
@@ -140,12 +140,12 @@ const flush = async () => {
   for (let i = 0; i < 25; i += 1) await Promise.resolve();
 };
 
+// Every cup gets 3 tokens to team1 — the simplest "fully recorded, all to one side"
+// fixture, matching the scoring.test.js 'all2'-style total (45 tokens, +5) but for team1.
 function confirmedDb() {
   db.btc_matches[0] = { ...db.btc_matches[0], status: 'confirmed' };
   for (let cup = 1; cup <= 15; cup += 1) {
-    for (const judge_id of ['j1', 'j2', 'j3']) {
-      db.btc_cup_votes.push({ match_id: 'm1', cup_number: cup, judge_id, team_id: 't1' });
-    }
+    db.btc_cup_votes.push({ match_id: 'm1', cup_number: cup, team1_tokens: 3 });
   }
 }
 
@@ -174,42 +174,44 @@ describe('mountScoringScreen', () => {
 
   const mount = (extra = {}) =>
     mountScoringScreen(root, { matchId: 'm1', client: fakeClient(), ...extra });
-  const buttons = () => [...root.querySelectorAll('.btc-vote')];
+  const cupRows = () => [...root.querySelectorAll('.btc-cup-row')];
+  const tokenButtons = (cup) => [...cupRows()[cup - 1].querySelectorAll('.btc-token')];
+  const tapCup = (cup, value) => tokenButtons(cup)[value].click();
+  const pressedValue = (cup) => {
+    const pressed = tokenButtons(cup).find((b) => b.getAttribute('aria-pressed') === 'true');
+    return pressed ? Number(pressed.dataset.value) : null;
+  };
+  const team2Value = (cup) => cupRows()[cup - 1].querySelector('.btc-cup-team2-value').textContent;
   const feedback = () => root.querySelector('[data-region="feedback"]');
   const notice = () => root.querySelector('[data-region="notice"]');
   const saveNotice = () => root.querySelectorAll('.screen-feedback')[0];
   const confirmButton = () => root.querySelector('[data-focus-key="confirm-match"]');
   const byText = (text) => [...root.querySelectorAll('button')].find((b) => b.textContent === text);
-  const mark = (button) => button.querySelector('.btc-vote-mark').textContent;
-  const tally = (row = 0) =>
-    root.querySelectorAll('.btc-cup-tally')[row].querySelector('[aria-hidden]').textContent;
   const setTime = (which, value) => {
     const input = root.querySelector(`[data-field="time-${which}"]`);
     input.value = value;
     input.dispatchEvent(new Event('input'));
   };
-  // Cups run 1..N and judges j1..j3 within each cup, so vote index = (cup-1)*3 + judgeIndex.
-  async function fillAll({ splitThird = true } = {}) {
-    for (const [index, button] of buttons().entries()) {
-      button.click();
-      if (splitThird && index % 3 === 2) button.click(); // judge 3 -> team 2
-    }
+  // 2 tokens to team1, 1 to team2, for every cup of the round — the 'split' fixture
+  // scoring.test.js and 014_btc_scoring.sql both pin (37/15 with fastest team1).
+  async function fillAll(cups = 15) {
+    for (let cup = 1; cup <= cups; cup += 1) tapCup(cup, 2);
     await flush();
   }
 
-  it('renders the match, 15 cups for a preliminary round, and 3 judge buttons per cup', async () => {
+  it('renders the match, 15 cups for a preliminary round, and a 4-way token control per cup', async () => {
     await mount();
     expect(root.querySelector('h2').textContent).toBe('Alpha vs Beta');
     expect(root.textContent).toContain('Preliminary · 15 cups');
-    expect(root.querySelectorAll('.btc-cup-row')).toHaveLength(15);
-    expect(buttons()).toHaveLength(45);
+    expect(cupRows()).toHaveLength(15);
+    expect(tokenButtons(1)).toHaveLength(4);
     expect(root.querySelector('.is-test-banner')).not.toBeNull();
   });
 
   it('renders 20 cups for a knockout round', async () => {
     db = baseDb('final');
     await mount();
-    expect(root.querySelectorAll('.btc-cup-row')).toHaveLength(20);
+    expect(cupRows()).toHaveLength(20);
   });
 
   it('moves focus to the heading once loaded', async () => {
@@ -217,98 +219,89 @@ describe('mountScoringScreen', () => {
     expect(document.activeElement).toBe(root.querySelector('h1'));
   });
 
-  it('cycles a vote none -> team 1 -> team 2 -> none, updating name, tally and totals', async () => {
+  it('lists judges for the record, but nothing about them is interactive', async () => {
     await mount();
-    const first = buttons()[0];
-    expect(mark(first)).toBe('–');
-    // Short, unrepeated accessible name: the shared instruction hangs off aria-describedby.
-    expect(first.getAttribute('aria-label')).toBe('Cup 1, Jo, no vote');
-    expect(first.getAttribute('aria-describedby')).toBe('btc-vote-help');
-    expect(root.querySelector('#btc-vote-help').textContent).toMatch(/Tap a judge to cycle/);
+    expect(root.textContent).toContain('judges (record only): Jo, Kim, Lee');
+    expect(root.querySelectorAll('button[data-judge]')).toHaveLength(0);
+  });
 
-    first.click();
-    expect(mark(first)).toBe('1');
-    expect(first.getAttribute('aria-label')).toBe('Cup 1, Jo, Alpha');
-    expect(tally()).toBe('1–0');
-    expect(root.querySelector('.btc-cup-tally .sr-only').textContent).toBe('Alpha 1, Beta 0');
-    expect(root.textContent).toContain('Alpha: 6 points (1 tokens)');
+  it('selecting a token value updates the pressed state, the auto team2 balance, and totals', async () => {
+    await mount();
+    expect(pressedValue(1)).toBeNull();
+    expect(team2Value(1)).toBe('–');
+    expect(tokenButtons(1)[0].getAttribute('aria-label')).toBe('Cup 1, 0 for Alpha');
 
-    first.click();
-    expect(mark(first)).toBe('2');
-    expect(first.getAttribute('aria-label')).toBe('Cup 1, Jo, Beta');
-    expect(tally()).toBe('0–1');
+    tapCup(1, 1);
+    expect(pressedValue(1)).toBe(1);
+    expect(team2Value(1)).toBe('2');
+    // team2 has strictly more tokens on the only scored cup, so it gets the +5
+    expect(root.textContent).toContain('Alpha: 1 points (1 tokens)');
+    expect(root.textContent).toContain('Beta: 7 points (2 tokens)');
 
-    first.click();
-    expect(mark(first)).toBe('–');
-    expect(tally()).toBe('0–0');
+    tapCup(1, 3);
+    expect(pressedValue(1)).toBe(3);
+    expect(team2Value(1)).toBe('0');
+
+    tapCup(1, 0);
+    expect(pressedValue(1)).toBe(0);
+    expect(team2Value(1)).toBe('3');
   });
 
   it('announces each tap in a live region that already exists, so a screen reader hears it', async () => {
     await mount();
     const announce = root.querySelector('.sr-only[aria-live]');
     expect(announce.textContent).toBe('');
-    buttons()[1].click();
-    expect(announce.textContent).toBe('Cup 1, Kim: Alpha');
-    buttons()[1].click();
-    expect(announce.textContent).toBe('Cup 1, Kim: Beta');
-    buttons()[1].click();
-    expect(announce.textContent).toBe('Cup 1, Kim: no vote');
-  });
-
-  it('shows a legend for 1 and 2, hidden from assistive tech (the buttons name the team already)', async () => {
-    await mount();
-    const legend = root.querySelector('.btc-legend');
-    expect(legend.textContent).toBe('1 Alpha · 2 Beta');
-    expect(legend.getAttribute('aria-hidden')).toBe('true');
+    tapCup(1, 2);
+    expect(announce.textContent).toBe('Cup 1: 2 for Alpha, 1 for Beta');
+    tapCup(1, 0);
+    expect(announce.textContent).toBe('Cup 1: 0 for Alpha, 3 for Beta');
   });
 
   it('updates in place: the tapped button is the SAME node afterwards, so scroll and focus never reset', async () => {
     await mount();
-    const first = buttons()[0];
+    const first = tokenButtons(1)[2];
     first.focus();
     first.click();
-    expect(buttons()[0]).toBe(first);
+    expect(tokenButtons(1)[2]).toBe(first);
     expect(document.activeElement).toBe(first);
   });
 
-  it('keeps Confirm disabled, with the missing count explained, until every judge voted on every cup', async () => {
+  it('keeps Confirm disabled, with the missing count explained, until every cup has a score', async () => {
     await mount();
     expect(confirmButton().getAttribute('aria-disabled')).toBe('true');
-    expect(root.querySelector('#btc-confirm-hint').textContent).toContain('45 votes still missing');
+    expect(root.querySelector('#btc-confirm-hint').textContent).toContain('15 cups still missing');
     expect(confirmButton().getAttribute('aria-describedby')).toBe('btc-confirm-hint');
 
-    buttons()[0].click();
-    expect(root.querySelector('#btc-confirm-hint').textContent).toContain('44 votes still missing');
+    tapCup(1, 2);
+    expect(root.querySelector('#btc-confirm-hint').textContent).toContain('14 cups still missing');
 
     await fillAll();
     expect(confirmButton().getAttribute('aria-disabled')).toBeNull();
     expect(root.querySelector('#btc-confirm-hint').hidden).toBe(true);
   });
 
-  it('refuses an incomplete confirm, names the first missing vote, and can take the scorer there', async () => {
+  it('refuses an incomplete confirm, names the first missing cup, and can take the scorer there', async () => {
     await mount();
-    buttons()[0].click(); // cup 1 / Jo voted, so the first gap is cup 1 / Kim
+    tapCup(1, 2); // cup 1 scored, so the first gap is cup 2
     confirmButton().click();
     await flush();
     expect(queue).toHaveLength(0);
-    expect(feedback().textContent).toBe(
-      'Every judge must vote on every cup. First missing: cup 1, Kim.',
-    );
-    const goto = byText('Go to first missing vote');
+    expect(feedback().textContent).toBe('Every cup needs a score. First missing: cup 2.');
+    const goto = byText('Go to first missing cup');
     expect(goto.hidden).toBe(false);
     goto.click();
-    expect(document.activeElement).toBe(buttons()[1]);
+    expect(document.activeElement).toBe(tokenButtons(2)[0]);
   });
 
   it('hides the go-to-missing button again once feedback changes', async () => {
     await mount();
     confirmButton().click();
     await flush();
-    expect(byText('Go to first missing vote').hidden).toBe(false);
+    expect(byText('Go to first missing cup').hidden).toBe(false);
     await fillAll();
     confirmButton().click();
     await flush();
-    expect(byText('Go to first missing vote').hidden).toBe(true);
+    expect(byText('Go to first missing cup').hidden).toBe(true);
   });
 
   it('only offers signature-beverage in knockout rounds', async () => {
@@ -368,7 +361,8 @@ describe('mountScoringScreen', () => {
     expect(payload.p_match_id).toBe('m1');
     expect(payload.p_org_id).toBe('org1');
     expect(payload.p_expected_updated_at).toBe('T0');
-    expect(payload.p_votes).toHaveLength(45);
+    expect(payload.p_votes).toHaveLength(15);
+    expect(payload.p_votes[0]).toEqual({ cup_number: 1, team1_tokens: 2 });
     expect(payload.p_fastest_team_id).toBe('t1');
     expect(payload.p_team1_time_note).toBe(' 8:42 ');
     // Saved BEFORE enqueuing: a reload can resolve exactly this operation.
@@ -433,14 +427,13 @@ describe('mountScoringScreen', () => {
     expect(confirmButton().getAttribute('aria-disabled')).toBe('true');
   });
 
-  it('blocks vote taps while a confirm is in flight', async () => {
+  it('blocks cup taps while a confirm is in flight', async () => {
     await mount();
     await fillAll();
-    const first = buttons()[0];
-    const before = mark(first);
+    const before = pressedValue(1);
     confirmButton().click();
-    first.click();
-    expect(mark(first)).toBe(before);
+    tapCup(1, 3);
+    expect(pressedValue(1)).toBe(before);
     await flush();
   });
 
@@ -455,8 +448,8 @@ describe('mountScoringScreen', () => {
       expect(notice().textContent).not.toBe('');
       expect(byText('Discard my edits and reload').hidden).toBe(false);
       expect(confirmButton().getAttribute('aria-disabled')).toBe('true');
-      buttons()[0].click(); // locked: no change
-      expect(mark(buttons()[0])).toBe('1');
+      tapCup(1, 3); // locked: no change
+      expect(pressedValue(1)).toBe(2);
       const saved = cache.get('btc-scoring-draft:m1');
       expect(saved).toBeTruthy();
       expect(saved.confirmOpId).toBeNull();
@@ -471,7 +464,7 @@ describe('mountScoringScreen', () => {
       byText('Discard my edits and reload').click();
       await flush();
       expect(cache.get('btc-scoring-draft:m1')).toBeNull();
-      expect(mark(buttons()[0])).toBe('–');
+      expect(pressedValue(1)).toBeNull();
       expect(notice().textContent).toBe(
         'Your edits were discarded and the latest scores were loaded.',
       ); // says what happened
@@ -484,11 +477,11 @@ describe('mountScoringScreen', () => {
       await fillAll();
       confirmButton().click();
       await flush();
-      expect(feedback().textContent).toBe('Could not confirm: 3 of 45 judge votes are missing.');
+      expect(feedback().textContent).toBe('Could not confirm: 3 of 15 cups are missing a score.');
       expect(feedback().dataset.tone).toBe('error');
       expect(confirmButton().getAttribute('aria-disabled')).toBeNull();
-      buttons()[0].click();
-      expect(mark(buttons()[0])).toBe('2');
+      tapCup(1, 0);
+      expect(pressedValue(1)).toBe(0);
       expect(cache.get('btc-scoring-draft:m1').confirmOpId).toBeNull();
     });
   });
@@ -509,8 +502,8 @@ describe('mountScoringScreen', () => {
       expect(byText('Discard my edits and reload').hidden).toBe(true);
       expect(confirmButton().getAttribute('aria-disabled')).toBe('true');
       expect(root.querySelector('.screen-feedback[data-tone="success"]')).toBeNull();
-      buttons()[0].click();
-      expect(mark(buttons()[0])).toBe('1'); // unchanged
+      tapCup(1, 3);
+      expect(pressedValue(1)).toBe(2); // unchanged
       for (const control of root.querySelectorAll('[data-field]')) {
         expect(control.disabled).toBe(true);
       }
@@ -535,7 +528,7 @@ describe('mountScoringScreen', () => {
       db = baseDb('final');
       flushOutcome = 'offline';
       await mount();
-      await fillAll();
+      await fillAll(20);
       confirmButton().click();
       await flush();
       const box = root.querySelector('[data-field="signature-team1"]');
@@ -584,7 +577,7 @@ describe('mountScoringScreen', () => {
       await mount();
       expect(notice().textContent).toMatch(/waiting to sync/);
       expect(confirmButton().getAttribute('aria-disabled')).toBe('true');
-      expect(mark(buttons()[0])).toBe('1'); // the saved votes are still there
+      expect(pressedValue(1)).toBe(2); // the saved scores are still there
     });
 
     it('a reload after it applied shows the confirmed record and drops the stale draft', async () => {
@@ -605,7 +598,7 @@ describe('mountScoringScreen', () => {
       await mount();
       expect(notice().textContent).toMatch(/was not applied/);
       expect(notice().textContent).not.toBe('');
-      expect(mark(buttons()[0])).toBe('1'); // votes kept
+      expect(pressedValue(1)).toBe(2); // scores kept
       expect(confirmButton().getAttribute('aria-disabled')).toBeNull();
       expect(cache.get('btc-scoring-draft:m1').confirmOpId).toBeNull();
     });
@@ -613,7 +606,7 @@ describe('mountScoringScreen', () => {
 
   it('a draft built on an older version of the match is locked, never sent with the current one', async () => {
     cache.set('btc-scoring-draft:m1', {
-      votes: { 1: { j1: 't2' } },
+      votes: { 1: 0 },
       fastest: null,
       signature: { team1: false, team2: false },
       times: { team1: '', team2: '' },
@@ -623,51 +616,51 @@ describe('mountScoringScreen', () => {
     await mount();
     expect(notice().textContent).toMatch(/changed elsewhere/);
     expect(confirmButton().getAttribute('aria-disabled')).toBe('true');
-    buttons()[1].click();
-    expect(mark(buttons()[1])).toBe('–');
+    tapCup(2, 3);
+    expect(pressedValue(2)).toBeNull();
     byText('Discard my edits and reload').click();
     await flush();
     expect(cache.get('btc-scoring-draft:m1')).toBeNull();
     expect(notice().textContent).toBe(
       'Your edits were discarded and the latest scores were loaded.',
     );
-    expect(mark(buttons()[0])).toBe('–');
+    expect(pressedValue(1)).toBeNull();
   });
 
   it('restores an in-progress edit saved on this device', async () => {
     cache.set('btc-scoring-draft:m1', {
-      votes: { 1: { j1: 't2' } },
+      votes: { 1: 0 },
       fastest: null,
       signature: { team1: false, team2: false },
       times: { team1: '', team2: '' },
       baseUpdatedAt: 'T0',
     });
     await mount();
-    expect(mark(buttons()[0])).toBe('2');
-    expect(tally()).toBe('0–1');
+    expect(pressedValue(1)).toBe(0);
+    expect(team2Value(1)).toBe('3');
     expect(notice().textContent).toBe('');
   });
 
   it('an in-progress edit wins over the recorded scores of a confirmed match', async () => {
-    confirmedDb(); // every vote recorded for team 1
+    confirmedDb(); // every cup recorded as 3-0 for team1
     cache.set('btc-scoring-draft:m1', {
-      votes: { 1: { j1: 't2' } },
+      votes: { 1: 0 },
       fastest: null,
       signature: { team1: false, team2: false },
       times: { team1: '', team2: '' },
       baseUpdatedAt: 'T0',
     });
     await mount();
-    expect(mark(buttons()[0])).toBe('2'); // the draft, not the recorded '1'
-    expect(mark(buttons()[1])).toBe('–'); // and NOT merged with the recorded votes
+    expect(pressedValue(1)).toBe(0); // the draft, not the recorded '3'
+    expect(pressedValue(2)).toBeNull(); // and NOT merged with the recorded scores
   });
 
   it('persists the draft after each tap, starting from the match version it was built on', async () => {
     await mount();
-    buttons()[0].click();
+    tapCup(1, 2);
     await flush();
     const saved = cache.get('btc-scoring-draft:m1');
-    expect(saved.votes[1].j1).toBe('t1');
+    expect(saved.votes[1]).toBe(2);
     expect(saved.baseUpdatedAt).toBe('T0');
   });
 
@@ -678,13 +671,13 @@ describe('mountScoringScreen', () => {
       const live = saveNotice();
       expect(live.getAttribute('aria-live')).toBe('polite');
       expect(live.textContent).toBe('');
-      buttons()[0].click();
+      tapCup(1, 2);
       await flush();
       expect(saveNotice()).toBe(live);
       expect(live.textContent).toMatch(/could not be saved on this device/);
-      // A later success does not clear it: the earlier votes may still be unsaved.
+      // A later success does not clear it: the earlier scores may still be unsaved.
       cacheSetFails = false;
-      buttons()[1].click();
+      tapCup(2, 1);
       await flush();
       expect(live.textContent).toMatch(/could not be saved on this device/);
     });
@@ -693,14 +686,7 @@ describe('mountScoringScreen', () => {
   it('starts a confirmed match from its recorded scores and offers Re-confirm', async () => {
     db.btc_matches[0] = { ...db.btc_matches[0], status: 'confirmed', team1_time_note: '8:42' };
     for (let cup = 1; cup <= 15; cup += 1) {
-      for (const judge_id of ['j1', 'j2', 'j3']) {
-        db.btc_cup_votes.push({
-          match_id: 'm1',
-          cup_number: cup,
-          judge_id,
-          team_id: judge_id === 'j3' ? 't2' : 't1',
-        });
-      }
+      db.btc_cup_votes.push({ match_id: 'm1', cup_number: cup, team1_tokens: 2 });
     }
     db.btc_match_bonuses = [
       {
@@ -721,7 +707,7 @@ describe('mountScoringScreen', () => {
   it('recognises a successful RE-confirm even though status was already confirmed', async () => {
     confirmedDb();
     await mount();
-    buttons()[0].click(); // edit one vote
+    tapCup(1, 2); // edit one cup
     await flush();
     confirmButton().click();
     await flush();
@@ -735,7 +721,7 @@ describe('mountScoringScreen', () => {
     confirmedDb();
     flushOutcome = 'offline';
     await mount();
-    buttons()[0].click();
+    tapCup(1, 2);
     await flush();
     confirmButton().click();
     await flush();
@@ -757,8 +743,8 @@ describe('mountScoringScreen', () => {
     expect(feedback().textContent).toBe('Match confirmed.');
     expect(notice().textContent).toMatch(/Reload this page before editing/);
     expect(confirmButton().getAttribute('aria-disabled')).toBe('true');
-    buttons()[0].click();
-    expect(mark(buttons()[0])).toBe('1');
+    tapCup(1, 3);
+    expect(pressedValue(1)).toBe(2);
   });
 
   describe('focus after a confirm attempt', () => {
@@ -843,7 +829,7 @@ describe('mountScoringScreen', () => {
     const { enqueueOperation } = await import('../../core/outbox.js');
     expect(enqueueOperation.mock.calls.at(-1)[1].p_expected_updated_at).toBe('T0');
 
-    buttons()[0].click(); // edit one vote (clears the old success message too)
+    tapCup(1, 2); // edit one cup (clears the old success message too)
     expect(feedback().textContent).toBe('');
     await flush();
     confirmButton().click();
@@ -854,14 +840,14 @@ describe('mountScoringScreen', () => {
     expect(db.processed_operations).toHaveLength(2);
   });
 
-  it('an out-of-date message is cleared as soon as the scorer edits a vote', async () => {
+  it('an out-of-date message is cleared as soon as the scorer edits a cup', async () => {
     await mount();
     confirmButton().click();
     await flush();
-    expect(byText('Go to first missing vote').hidden).toBe(false);
-    buttons()[0].click();
+    expect(byText('Go to first missing cup').hidden).toBe(false);
+    tapCup(1, 2);
     expect(feedback().textContent).toBe('');
-    expect(byText('Go to first missing vote').hidden).toBe(true);
+    expect(byText('Go to first missing cup').hidden).toBe(true);
   });
 
   describe('local storage trouble while resolving or tidying', () => {
@@ -885,14 +871,14 @@ describe('mountScoringScreen', () => {
       root.innerHTML = '';
       cacheSetFails = true;
       await mount();
-      expect(root.querySelectorAll('.btc-cup-row')).toHaveLength(15);
+      expect(cupRows()).toHaveLength(15);
       expect(notice().textContent).toMatch(/was not applied/);
       expect(saveNotice().textContent).toMatch(/could not be saved on this device/);
     });
 
     it('discarding when the draft cannot be cleared still reloads, and warns', async () => {
       cache.set('btc-scoring-draft:m1', {
-        votes: { 1: { j1: 't2' } },
+        votes: { 1: 0 },
         fastest: null,
         signature: { team1: false, team2: false },
         times: { team1: '', team2: '' },
@@ -911,7 +897,7 @@ describe('mountScoringScreen', () => {
     db.btc_match_judges = db.btc_match_judges.slice(0, 2);
     await mount();
     expect(root.textContent).toContain('needs exactly 3');
-    expect(root.querySelectorAll('.btc-cup-row')).toHaveLength(0);
+    expect(cupRows()).toHaveLength(0);
   });
 
   it('shows a load error with Retry, and Retry really reloads', async () => {
@@ -921,7 +907,7 @@ describe('mountScoringScreen', () => {
     failSingle = false;
     byText('Retry').click();
     await flush();
-    expect(root.querySelectorAll('.btc-cup-row')).toHaveLength(15);
+    expect(cupRows()).toHaveLength(15);
     expect(document.activeElement).toBe(root.querySelector('h1'));
   });
 

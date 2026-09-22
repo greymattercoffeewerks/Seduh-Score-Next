@@ -1,13 +1,18 @@
-// BTC match scoring (Phase T-BTC.2, scoring sub-step). The scorer records, per cup,
-// which team each of the match's 3 judges voted for. Those raw votes are the
-// only stored fact (btc_cup_votes) — token totals and points are always derived,
-// never persisted (root CLAUDE.md non-negotiable; scoring-auditor verifies).
+// BTC match scoring (Phase T-BTC.2, scoring sub-step). Each cup holds exactly 3
+// tokens, split between the two teams: the scorer enters ONE number — team1's share
+// (0-3) — and team2's share is always the balance (3 - team1). Judges are still
+// assigned to the match, exactly 3, and shown on the scoring screen for the record,
+// but no vote is attributed to one of them (design correction, 2026-09-22 — caught
+// against the legacy Seduh Score UI before this shipped; see
+// supabase/migrations/20260922100000_btc_cup_votes_per_cup_tokens.sql's header for
+// the full account of what this superseded). Token totals and points are always
+// derived, never persisted (root CLAUDE.md non-negotiable; scoring-auditor verifies).
 //
 // Write model, identical to cup-taster/scoring.js and for the same reason: taps
 // accumulate in a local IndexedDB draft and are never written to the database
 // one at a time. Confirming submits the WHOLE match as ONE operation through the
-// outbox to the confirm_btc_match RPC (migration 20260922091000), so a dropped
-// connection can never leave a half-scored match behind.
+// outbox to the confirm_btc_match RPC, so a dropped connection can never leave a
+// half-scored match behind.
 //
 // The scoring formula's authority is the btc_match_scores SQL view. computeScores
 // below is a PREVIEW of it for the live totals panel; scoring.test.js pins both to
@@ -22,10 +27,10 @@ import {
 } from '../../core/outbox.js';
 import { getSupabase } from '../../core/supabaseClient.js';
 
+// A match must still carry exactly 3 assigned judges before it can be confirmed —
+// an on-the-record fact about who scored the match, not a per-vote attribution.
 export const JUDGES_PER_MATCH = 3;
-const ROUND_WINNER_BONUS = 5;
-const FASTEST_BONUS = 2;
-const SIGNATURE_BEVERAGE_BONUS = 2;
+export const TOKENS_PER_CUP = 3;
 
 const ROUND_LABELS = {
   preliminary: 'Preliminary',
@@ -52,7 +57,7 @@ export function cupsForRound(round) {
 // draft, so a reload can tell "confirmed", "still queued" and "rejected" apart.
 export function blankDraft() {
   return {
-    votes: {}, // votes[cupNumber][judgeId] = teamId
+    votes: {}, // votes[cupNumber] = team1's token share, 0-3 (team2 = 3 - that)
     fastest: null, // 'team1' | 'team2' | null
     signature: { team1: false, team2: false },
     times: { team1: '', team2: '' },
@@ -61,91 +66,61 @@ export function blankDraft() {
   };
 }
 
-// Three-state, like Cup Taster's toggle: no vote -> team 1 -> team 2 -> no vote, so a
-// mis-tap is always recoverable within three taps.
-export function toggleVote(current, team1Id, team2Id) {
-  if (current == null) return team1Id;
-  if (current === team1Id) return team2Id;
-  return null;
+// Immutable update. team1Tokens must be an integer 0-3; anything else is rejected
+// rather than silently clamped, so a caller bug shows up immediately instead of
+// quietly mis-scoring a cup.
+export function withCupTokens(draft, cup, team1Tokens) {
+  if (!Number.isInteger(team1Tokens) || team1Tokens < 0 || team1Tokens > TOKENS_PER_CUP) {
+    throw new RangeError(`withCupTokens: team1Tokens must be 0-${TOKENS_PER_CUP}`);
+  }
+  return { ...draft, votes: { ...draft.votes, [cup]: team1Tokens } };
 }
 
-// Immutable update; a null vote removes the key rather than storing null.
-export function withVote(draft, cup, judgeId, teamId) {
-  const cupVotes = { ...(draft.votes[cup] ?? {}) };
-  if (teamId == null) delete cupVotes[judgeId];
-  else cupVotes[judgeId] = teamId;
-  const votes = { ...draft.votes, [cup]: cupVotes };
-  if (Object.keys(cupVotes).length === 0) delete votes[cup];
-  return { ...draft, votes };
-}
-
-// Only votes that could actually be sent count: a cup inside the round, a judge on
-// this match, a team that is one of its two participants. Everything below derives from
-// this ONE filter, so a tally, the totals and the completeness check can never disagree
-// about which votes exist.
-function validVoteEntries(draft, match, judgeIds, round) {
+// Only a cup inside the round counts — matches the SQL view's own filter, so the
+// two can never disagree about a stray value (e.g. left over from a round change).
+function validCupEntries(draft, round) {
   const cups = cupsForRound(round);
-  const judges = new Set(judgeIds);
-  const teams = new Set([match.team1_id, match.team2_id]);
-  const entries = [];
-  for (let cup = 1; cup <= cups; cup += 1) {
-    for (const [judgeId, teamId] of Object.entries(draft.votes[cup] ?? {})) {
-      if (judges.has(judgeId) && teams.has(teamId)) entries.push({ cup, judgeId, teamId });
-    }
-  }
-  return entries;
+  return Object.entries(draft.votes)
+    .map(([cup, team1Tokens]) => [Number(cup), team1Tokens])
+    .filter(([cup]) => cup >= 1 && cup <= cups);
 }
 
-export function tokensForCup(draft, cup, match, judgeIds, round) {
-  const entries = validVoteEntries(draft, match, judgeIds, round).filter((e) => e.cup === cup);
-  return {
-    team1: entries.filter((e) => e.teamId === match.team1_id).length,
-    team2: entries.filter((e) => e.teamId === match.team2_id).length,
-  };
+// { team1, team2 } for one cup, or null if that cup has not been scored yet.
+export function cupTokens(draft, cup, round) {
+  const team1 = draft.votes[cup];
+  if (team1 == null || cup < 1 || cup > cupsForRound(round)) return null;
+  return { team1, team2: TOKENS_PER_CUP - team1 };
 }
 
-export function missingVoteCount(draft, match, judgeIds, round) {
-  const total = cupsForRound(round) * judgeIds.length;
-  return total - validVoteEntries(draft, match, judgeIds, round).length;
+export function missingCupCount(draft, round) {
+  return cupsForRound(round) - validCupEntries(draft, round).length;
 }
 
-export function isMatchComplete(draft, match, judgeIds, round) {
-  return (
-    judgeIds.length === JUDGES_PER_MATCH && missingVoteCount(draft, match, judgeIds, round) === 0
-  );
+export function isMatchComplete(draft, judgeCount, round) {
+  return judgeCount === JUDGES_PER_MATCH && missingCupCount(draft, round) === 0;
 }
 
-// The first (cup, judge) cell with no valid vote, in cup order then judge order, so a
-// scorer with 45 to 60 buttons can be told exactly where to look.
-export function firstMissingVote(draft, match, judgeIds, round) {
-  const present = new Set(
-    validVoteEntries(draft, match, judgeIds, round).map((e) => `${e.cup}:${e.judgeId}`),
-  );
+// The first cup (in order) with no score yet, or null once every cup has one.
+export function firstMissingCup(draft, round) {
+  const scored = new Set(validCupEntries(draft, round).map(([cup]) => cup));
   for (let cup = 1; cup <= cupsForRound(round); cup += 1) {
-    for (const judgeId of judgeIds) {
-      if (!present.has(`${cup}:${judgeId}`)) return { cup, judgeId };
-    }
+    if (!scored.has(cup)) return cup;
   }
   return null;
 }
 
-// One team's total, mirroring one half of the btc_match_scores view: judge tokens,
-// +5 if strictly more tokens than the opponent (a tie awards nobody), +2 fastest, and +2
-// signature beverage outside the preliminary round.
+// One team's total, mirroring one half of the btc_match_scores view: cup tokens,
+// +5 if strictly more tokens than the opponent (a tie awards nobody), +2 fastest, and
+// +2 signature beverage outside the preliminary round.
 function teamTotal(own, opponent, isFastest, hasSignature, knockout) {
-  return (
-    own +
-    (own > opponent ? ROUND_WINNER_BONUS : 0) +
-    (isFastest ? FASTEST_BONUS : 0) +
-    (knockout && hasSignature ? SIGNATURE_BEVERAGE_BONUS : 0)
-  );
+  return own + (own > opponent ? 5 : 0) + (isFastest ? 2 : 0) + (knockout && hasSignature ? 2 : 0);
 }
 
 // PREVIEW of btc_match_scores (see the header).
-export function computeScores(draft, match, judgeIds, round) {
-  const entries = validVoteEntries(draft, match, judgeIds, round);
-  const team1Tokens = entries.filter((e) => e.teamId === match.team1_id).length;
-  const team2Tokens = entries.filter((e) => e.teamId === match.team2_id).length;
+export function computeScores(draft, round) {
+  const entries = validCupEntries(draft, round);
+  const team1Tokens = entries.reduce((sum, [, team1]) => sum + team1, 0);
+  const team2Tokens = entries.reduce((sum, [, team1]) => sum + (TOKENS_PER_CUP - team1), 0);
   const knockout = round !== 'preliminary';
   return {
     team1Tokens,
@@ -167,17 +142,16 @@ export function computeScores(draft, match, judgeIds, round) {
   };
 }
 
-// The one place a confirm_btc_match payload is built. Unset votes are OMITTED, never
-// sent as null: an incomplete payload is then simply short on votes, which the RPC's
-// own strict-confirm count rejects with its friendly message (the same reasoning as
-// cup-taster/scoring.js's buildConfirmEntries), instead of tripping a raw NOT NULL.
-export function buildConfirmParams(match, draft, judgeIds, round) {
+// The one place a confirm_btc_match payload is built. An unscored cup is OMITTED,
+// never sent as some placeholder value: an incomplete payload is then simply short on
+// cups, which the RPC's own strict-confirm count rejects with its friendly message,
+// instead of tripping a raw constraint error.
+export function buildConfirmParams(match, draft, round) {
   const knockout = round !== 'preliminary';
   return {
-    p_votes: validVoteEntries(draft, match, judgeIds, round).map((e) => ({
-      cup_number: e.cup,
-      judge_id: e.judgeId,
-      team_id: e.teamId,
+    p_votes: validCupEntries(draft, round).map(([cup, team1Tokens]) => ({
+      cup_number: cup,
+      team1_tokens: team1Tokens,
     })),
     p_fastest_team_id:
       draft.fastest === 'team1'
@@ -237,7 +211,7 @@ export async function loadConfirmedDraft(match, client = getSupabase()) {
   if (bonusError) throw bonusError;
 
   let draft = blankDraft();
-  for (const row of votes) draft = withVote(draft, row.cup_number, row.judge_id, row.team_id);
+  for (const row of votes) draft = withCupTokens(draft, row.cup_number, row.team1_tokens);
   return {
     ...draft,
     fastest:
@@ -315,16 +289,18 @@ export async function isOperationQueued(operationId) {
 // message naming columns, a raw database error) gets a generic sentence instead of
 // leaking internals into the UI.
 const CURATED_MESSAGES = [
-  /^\d+ of \d+ judge votes are missing$/,
+  /^\d+ of \d+ cups are missing a score$/,
   /^cup numbers must be between \d+ and \d+ for a \w+ match$/,
+  /^each cup's tokens must be between 0 and 3$/,
   /^the signature-beverage bonus does not apply in the preliminary round$/,
   /^match not found$/,
   /^match must have exactly \d+ judges \(has \d+\)$/,
 ];
 
 // P0002 is the optimistic-concurrency conflict; P0001 is one of this RPC's own validation
-// messages (or a trigger's). Returns null for anything else so the caller falls through to
-// core/errors' generic describeError.
+// messages (or a trigger's, which gets the generic sentence below instead — the curated
+// list can only ever match the RPC's own wording). Returns null for anything else so the
+// caller falls through to core/errors' generic describeError.
 export function describeConfirmError(err) {
   if (err?.code === 'P0002') {
     return 'This match was changed elsewhere after you started scoring it. Discard your edits to reload the latest scores, then re-enter your changes.';

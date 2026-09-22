@@ -1,5 +1,12 @@
--- T-BTC.2 scoring: confirm_btc_match RPC, the per-team signature-beverage bonus, and
--- the single-source btc_match_scores formula.
+-- T-BTC.2 scoring: confirm_btc_match RPC, per-cup token totals, the per-team
+-- signature-beverage bonus, and the single-source btc_match_scores formula.
+--
+-- Per-cup tokens, not per-judge votes (design correction, 2026-09-22, see
+-- 20260922100000_btc_cup_votes_per_cup_tokens.sql's own header): a cup holds exactly
+-- 3 tokens split between the two teams; the scorer enters team1's share (0-3) and
+-- team2's share is always the balance. Judges are still assigned to a match (exactly
+-- 3, checked below) for the record, but no vote is attributed to one.
+--
 -- The fixture numbers below (37/15, 47/24, 32/30, 4/65, 0/50) are mirrored by
 -- src/formats/btc/scoring.test.js so the SQL authority and the JS preview cannot
 -- silently drift apart.
@@ -58,40 +65,31 @@ cross join (values ('00000000-0000-0000-0000-0000000000c1'::uuid),
 insert into btc_match_judges (match_id, judge_id) values
   ('00000000-0000-0000-0000-0000000000d5', '00000000-0000-0000-0000-0000000000c1'),
   ('00000000-0000-0000-0000-0000000000d5', '00000000-0000-0000-0000-0000000000c2');
--- d4 is PENDING but already holds a full set of votes for Team C: standings must ignore it.
-insert into btc_cup_votes (match_id, cup_number, judge_id, team_id)
-select '00000000-0000-0000-0000-0000000000d4', c, j.id, '00000000-0000-0000-0000-0000000000b3'
-from generate_series(1, 15) c
-cross join (values ('00000000-0000-0000-0000-0000000000c1'::uuid),
-                   ('00000000-0000-0000-0000-0000000000c2'::uuid),
-                   ('00000000-0000-0000-0000-0000000000c3'::uuid)) j(id);
+-- d4 is PENDING but already holds a full set of votes, all 3 tokens/cup to team1 (b3):
+-- standings must ignore it regardless.
+insert into btc_cup_votes (match_id, cup_number, team1_tokens)
+select '00000000-0000-0000-0000-0000000000d4', c, 3
+from generate_series(1, 15) c;
 
--- Test-only payload builder (rolled back with the transaction).
---   'split': judges 1 and 2 vote team1, judge 3 votes team2 on every cup
---   'all2' : every vote is team2
---   'tie'  : cups 1-10 split 2-1 for team1, cups 11-20 split 1-2 (30 tokens each over 20 cups)
--- p_drop removes that many votes from the end; p_first is the first cup number.
-create function public.tmp_votes(p_cups int, p_pattern text, p_drop int default 0, p_first int default 1)
+-- Test-only payload builder (rolled back with the transaction). One entry per cup,
+-- team1_tokens 0-3 (team2's share is always 3 - team1_tokens).
+--   'split': every cup gives 2 tokens to team1, 1 to team2 (30/15 over 15 cups)
+--   'all2' : every cup gives all 3 tokens to team2
+--   'tie'  : cups 1-10 give 2 to team1, cups 11-20 give 1 to team1 (30 tokens each over 20 cups)
+-- p_drop removes that many cups from the end; p_first is the first cup number.
+create function public.tmp_cup_tokens(p_cups int, p_pattern text, p_drop int default 0, p_first int default 1)
 returns jsonb language sql as $$
-  select jsonb_agg(jsonb_build_object('cup_number', v.c, 'judge_id', v.jid, 'team_id', v.tid) order by v.c, v.n)
-  from (
-    select c, n, jid,
-           case
-             when p_pattern = 'all2' then '00000000-0000-0000-0000-0000000000b2'::uuid
-             when p_pattern = 'tie' and c <= 10 and n = 3 then '00000000-0000-0000-0000-0000000000b2'::uuid
-             when p_pattern = 'tie' and c > 10 and n <> 1 then '00000000-0000-0000-0000-0000000000b2'::uuid
-             when p_pattern = 'split' and n = 3 then '00000000-0000-0000-0000-0000000000b2'::uuid
-             else '00000000-0000-0000-0000-0000000000b1'::uuid
-           end as tid
-    from generate_series(p_first, p_first + p_cups - 1) c
-    cross join (values (1, '00000000-0000-0000-0000-0000000000c1'::uuid),
-                       (2, '00000000-0000-0000-0000-0000000000c2'::uuid),
-                       (3, '00000000-0000-0000-0000-0000000000c3'::uuid)) j(n, jid)
-    order by c, n
-    limit p_cups * 3 - p_drop
-  ) v;
+  select jsonb_agg(jsonb_build_object('cup_number', c, 'team1_tokens',
+    case
+      when p_pattern = 'all2' then 0
+      when p_pattern = 'tie' and c <= p_first + 9 then 2
+      when p_pattern = 'tie' then 1
+      else 2 -- 'split'
+    end
+  ) order by c)
+  from generate_series(p_first, p_first + (p_cups - p_drop) - 1) c;
 $$;
-grant execute on function public.tmp_votes(int, text, int, int) to authenticated;
+grant execute on function public.tmp_cup_tokens(int, text, int, int) to authenticated;
 
 -- ---------- cup counts ----------
 
@@ -109,14 +107,14 @@ select lives_ok(
        '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-000000000010',
        '00000000-0000-0000-0000-0000000000d1',
        (select updated_at from btc_matches where id = '00000000-0000-0000-0000-0000000000d1'),
-       public.tmp_votes(15, 'split'), '00000000-0000-0000-0000-0000000000b1', false, false,
+       public.tmp_cup_tokens(15, 'split'), '00000000-0000-0000-0000-0000000000b1', false, false,
        '  8:42  ', '   ') $$,
   'a complete preliminary payload confirms'
 );
 select is((select status from btc_matches where id = '00000000-0000-0000-0000-0000000000d1'),
           'confirmed', 'match status flips to confirmed');
 select is((select count(*)::int from btc_cup_votes where match_id = '00000000-0000-0000-0000-0000000000d1'),
-          45, '45 raw judge votes were written (15 cups x 3 judges)');
+          15, '15 cup rows were written, one per cup, not one per judge');
 select is((select team1_time_note from btc_matches where id = '00000000-0000-0000-0000-0000000000d1'),
           '8:42', 'free-text time note is trimmed');
 select is((select team2_time_note from btc_matches where id = '00000000-0000-0000-0000-0000000000d1'),
@@ -142,7 +140,7 @@ select throws_ok(
   $$ select confirm_btc_match(
        '00000000-0000-0000-0000-0000000000a2', '00000000-0000-0000-0000-000000000010',
        '00000000-0000-0000-0000-0000000000d1', '2000-01-01T00:00:00Z',
-       public.tmp_votes(15, 'split'), null, false, false, null, null) $$,
+       public.tmp_cup_tokens(15, 'split'), null, false, false, null, null) $$,
   'P0002', null,
   'a stale expected_updated_at is a CONFLICT (P0002), never a silent overwrite'
 );
@@ -150,7 +148,7 @@ select throws_ok(
   $$ select confirm_btc_match(
        '00000000-0000-0000-0000-0000000000a2', '00000000-0000-0000-0000-000000000010',
        '00000000-0000-0000-0000-0000000000d1', null,
-       public.tmp_votes(15, 'split'), null, false, false, null, null) $$,
+       public.tmp_cup_tokens(15, 'split'), null, false, false, null, null) $$,
   'P0002', null,
   'a NULL expected_updated_at is also a conflict: the guard cannot be skipped by omitting it'
 );
@@ -160,19 +158,19 @@ select throws_ok(
        '00000000-0000-0000-0000-0000000000a3', '00000000-0000-0000-0000-000000000010',
        '00000000-0000-0000-0000-0000000000d1',
        (select updated_at from btc_matches where id = '00000000-0000-0000-0000-0000000000d1'),
-       public.tmp_votes(15, 'split', 1), null, false, false, null, null) $$,
-  'P0001', 'confirm_btc_match: 1 of 45 judge votes are missing',
-  'strict confirm: one missing judge vote is rejected with a friendly message'
+       public.tmp_cup_tokens(15, 'split', 1), null, false, false, null, null) $$,
+  'P0001', 'confirm_btc_match: 1 of 15 cups are missing a score',
+  'strict confirm: one missing cup is rejected with a friendly message'
 );
 select is((select count(*)::int from btc_cup_votes where match_id = '00000000-0000-0000-0000-0000000000d1'),
-          45, 'the failed re-confirm rolled back atomically: the earlier 45 votes are intact');
+          15, 'the failed re-confirm rolled back atomically: the earlier 15 cup rows are intact');
 
 select throws_ok(
   $$ select confirm_btc_match(
        '00000000-0000-0000-0000-0000000000a4', '00000000-0000-0000-0000-000000000010',
        '00000000-0000-0000-0000-0000000000d1',
        (select updated_at from btc_matches where id = '00000000-0000-0000-0000-0000000000d1'),
-       public.tmp_votes(15, 'split'), null, true, false, null, null) $$,
+       public.tmp_cup_tokens(15, 'split'), null, true, false, null, null) $$,
   'P0001', 'confirm_btc_match: the signature-beverage bonus does not apply in the preliminary round',
   'signature-beverage for team 1 is rejected in the preliminary round'
 );
@@ -181,7 +179,7 @@ select throws_ok(
        '00000000-0000-0000-0000-0000000000a4', '00000000-0000-0000-0000-000000000010',
        '00000000-0000-0000-0000-0000000000d1',
        (select updated_at from btc_matches where id = '00000000-0000-0000-0000-0000000000d1'),
-       public.tmp_votes(15, 'split'), null, false, true, null, null) $$,
+       public.tmp_cup_tokens(15, 'split'), null, false, true, null, null) $$,
   'P0001', 'confirm_btc_match: the signature-beverage bonus does not apply in the preliminary round',
   'and so is signature-beverage for team 2'
 );
@@ -191,7 +189,7 @@ select throws_ok(
        '00000000-0000-0000-0000-0000000000a5', '00000000-0000-0000-0000-000000000010',
        '00000000-0000-0000-0000-0000000000d1',
        (select updated_at from btc_matches where id = '00000000-0000-0000-0000-0000000000d1'),
-       public.tmp_votes(16, 'split'), null, false, false, null, null) $$,
+       public.tmp_cup_tokens(16, 'split'), null, false, false, null, null) $$,
   'P0001', 'confirm_btc_match: cup numbers must be between 1 and 15 for a preliminary match',
   'a cup number above the round''s cup count is rejected'
 );
@@ -200,9 +198,34 @@ select throws_ok(
        '00000000-0000-0000-0000-0000000000a5', '00000000-0000-0000-0000-000000000010',
        '00000000-0000-0000-0000-0000000000d1',
        (select updated_at from btc_matches where id = '00000000-0000-0000-0000-0000000000d1'),
-       public.tmp_votes(15, 'split', 0, 0), null, false, false, null, null) $$,
+       public.tmp_cup_tokens(15, 'split', 0, 0), null, false, false, null, null) $$,
   'P0001', 'confirm_btc_match: cup numbers must be between 1 and 15 for a preliminary match',
   'cup number 0 (below the range) is rejected too'
+);
+
+select throws_ok(
+  $$ select confirm_btc_match(
+       '00000000-0000-0000-0000-00000000005b', '00000000-0000-0000-0000-000000000010',
+       '00000000-0000-0000-0000-0000000000d1',
+       (select updated_at from btc_matches where id = '00000000-0000-0000-0000-0000000000d1'),
+       jsonb_build_array(jsonb_build_object('cup_number', 1, 'team1_tokens', 4))
+         || (select jsonb_agg(v) from jsonb_array_elements(public.tmp_cup_tokens(15, 'split')) v
+             where (v->>'cup_number')::int <> 1),
+       null, false, false, null, null) $$,
+  'P0001', 'confirm_btc_match: each cup''s tokens must be between 0 and 3',
+  'a token count above 3 is rejected with a friendly message, not a raw constraint error'
+);
+select throws_ok(
+  $$ select confirm_btc_match(
+       '00000000-0000-0000-0000-00000000005c', '00000000-0000-0000-0000-000000000010',
+       '00000000-0000-0000-0000-0000000000d1',
+       (select updated_at from btc_matches where id = '00000000-0000-0000-0000-0000000000d1'),
+       jsonb_build_array(jsonb_build_object('cup_number', 1, 'team1_tokens', -1))
+         || (select jsonb_agg(v) from jsonb_array_elements(public.tmp_cup_tokens(15, 'split')) v
+             where (v->>'cup_number')::int <> 1),
+       null, false, false, null, null) $$,
+  'P0001', 'confirm_btc_match: each cup''s tokens must be between 0 and 3',
+  'a negative token count is rejected with the same friendly message'
 );
 
 select throws_ok(
@@ -210,7 +233,7 @@ select throws_ok(
        '00000000-0000-0000-0000-0000000000a6', '00000000-0000-0000-0000-000000000010',
        '00000000-0000-0000-0000-0000000000d1',
        (select updated_at from btc_matches where id = '00000000-0000-0000-0000-0000000000d1'),
-       public.tmp_votes(15, 'split'), '00000000-0000-0000-0000-0000000000b3', false, false, null, null) $$,
+       public.tmp_cup_tokens(15, 'split'), '00000000-0000-0000-0000-0000000000b3', false, false, null, null) $$,
   'P0001', 'btc_match_bonuses.fastest_team_id must be a participant of the match',
   'fastest team must be one of the two participants'
 );
@@ -220,9 +243,9 @@ select throws_ok(
        '00000000-0000-0000-0000-0000000000a7', '00000000-0000-0000-0000-000000000010',
        '00000000-0000-0000-0000-0000000000d5',
        (select updated_at from btc_matches where id = '00000000-0000-0000-0000-0000000000d5'),
-       public.tmp_votes(15, 'split'), null, false, false, null, null) $$,
+       public.tmp_cup_tokens(15, 'split'), null, false, false, null, null) $$,
   'P0001', 'confirm_btc_match: match must have exactly 3 judges (has 2)',
-  'a match without exactly 3 assigned judges cannot be confirmed'
+  'a match without exactly 3 assigned judges cannot be confirmed, even though votes carry no judge_id'
 );
 
 select throws_ok(
@@ -230,24 +253,11 @@ select throws_ok(
        '00000000-0000-0000-0000-0000000000a8', '00000000-0000-0000-0000-000000000010',
        '00000000-0000-0000-0000-0000000000d1',
        (select updated_at from btc_matches where id = '00000000-0000-0000-0000-0000000000d1'),
-       public.tmp_votes(15, 'split')
-         || jsonb_build_array(jsonb_build_object('cup_number', 1,
-              'judge_id', '00000000-0000-0000-0000-0000000000c1',
-              'team_id', '00000000-0000-0000-0000-0000000000b1')),
+       public.tmp_cup_tokens(15, 'split')
+         || jsonb_build_array(jsonb_build_object('cup_number', 1, 'team1_tokens', 3)),
        null, false, false, null, null) $$,
   '23505', null,
-  'a duplicate (cup, judge) vote is rejected by the unique constraint'
-);
-select throws_ok(
-  $$ select confirm_btc_match(
-       '00000000-0000-0000-0000-0000000000a8', '00000000-0000-0000-0000-000000000010',
-       '00000000-0000-0000-0000-0000000000d1',
-       (select updated_at from btc_matches where id = '00000000-0000-0000-0000-0000000000d1'),
-       jsonb_set(public.tmp_votes(15, 'split'), '{0,judge_id}',
-                 to_jsonb('00000000-0000-0000-0000-0000000000c4'::text)),
-       null, false, false, null, null) $$,
-  'P0001', 'btc_cup_votes.judge_id must be assigned to the match',
-  'a vote from a judge who is not assigned to this match is rejected'
+  'a duplicate cup_number entry is rejected by the unique constraint'
 );
 
 select throws_ok(
@@ -255,7 +265,7 @@ select throws_ok(
        '00000000-0000-0000-0000-0000000000a9', '00000000-0000-0000-0000-000000000099',
        '00000000-0000-0000-0000-0000000000d1',
        (select updated_at from btc_matches where id = '00000000-0000-0000-0000-0000000000d1'),
-       public.tmp_votes(15, 'split'), null, false, false, null, null) $$,
+       public.tmp_cup_tokens(15, 'split'), null, false, false, null, null) $$,
   'P0001', 'confirm_btc_match: match not found',
   'an org id that does not own the match is reported as not found (and never echoes the match id)'
 );
@@ -270,7 +280,7 @@ select is((select wins from btc_standings where team_id = '00000000-0000-0000-00
 select is((select total_points from btc_standings where team_id = '00000000-0000-0000-0000-0000000000b2'),
           15, 'standings: team2 = 15 tokens, no bonuses');
 select is((select count(*)::int from btc_standings where team_id = '00000000-0000-0000-0000-0000000000b3'),
-          0, 'a PENDING match, even one holding a full set of votes, never reaches the standings');
+          0, 'a PENDING match, even one holding a full set of cup scores, never reaches the standings');
 
 -- Final (20 cups), split: team1 40, team2 20; fastest = team2 (+2); BOTH teams earn
 -- signature-beverage (+2 each, the case the old single column could not hold).
@@ -279,7 +289,7 @@ select lives_ok(
        '00000000-0000-0000-0000-0000000000b0', '00000000-0000-0000-0000-000000000010',
        '00000000-0000-0000-0000-0000000000d2',
        (select updated_at from btc_matches where id = '00000000-0000-0000-0000-0000000000d2'),
-       public.tmp_votes(20, 'split'), '00000000-0000-0000-0000-0000000000b2', true, true, null, null) $$,
+       public.tmp_cup_tokens(20, 'split'), '00000000-0000-0000-0000-0000000000b2', true, true, null, null) $$,
   'a complete 20-cup final confirms with both teams holding signature-beverage'
 );
 select is((select team1_total from btc_match_scores where match_id = '00000000-0000-0000-0000-0000000000d2'),
@@ -293,7 +303,7 @@ select lives_ok(
        '00000000-0000-0000-0000-0000000000b1', '00000000-0000-0000-0000-000000000010',
        '00000000-0000-0000-0000-0000000000d3',
        (select updated_at from btc_matches where id = '00000000-0000-0000-0000-0000000000d3'),
-       public.tmp_votes(20, 'tie'), '00000000-0000-0000-0000-0000000000b1', false, false, null, null) $$,
+       public.tmp_cup_tokens(20, 'tie'), '00000000-0000-0000-0000-0000000000b1', false, false, null, null) $$,
   'a token-tied semifinal confirms'
 );
 select is((select team1_total from btc_match_scores where match_id = '00000000-0000-0000-0000-0000000000d3'),
@@ -302,14 +312,14 @@ select is((select team2_total from btc_match_scores where match_id = '00000000-0
           30::bigint, 'tie: team2 = 30 tokens, and NO round-winner bonus');
 
 -- ---------- re-confirming REPLACES votes and bonuses, it does not append ----------
--- Final again: every vote to team2, fastest now team1, signature for team1 ONLY.
--- team1 = 0 + 2 fastest + 2 signature = 4; team2 = 60 tokens + 5 round winner = 65.
+-- Final again: every cup gives all 3 tokens to team2, fastest now team1, signature for
+-- team1 ONLY. team1 = 0 + 2 fastest + 2 signature = 4; team2 = 60 tokens + 5 round winner = 65.
 select lives_ok(
   $$ select confirm_btc_match(
        '00000000-0000-0000-0000-0000000000b2', '00000000-0000-0000-0000-000000000010',
        '00000000-0000-0000-0000-0000000000d2',
        (select updated_at from btc_matches where id = '00000000-0000-0000-0000-0000000000d2'),
-       public.tmp_votes(20, 'all2'), '00000000-0000-0000-0000-0000000000b1', true, false, null, null) $$,
+       public.tmp_cup_tokens(20, 'all2'), '00000000-0000-0000-0000-0000000000b1', true, false, null, null) $$,
   'an already-confirmed final can be edited by re-confirming'
 );
 select is(
@@ -328,7 +338,7 @@ select lives_ok(
        '00000000-0000-0000-0000-0000000000b3', '00000000-0000-0000-0000-000000000010',
        '00000000-0000-0000-0000-0000000000d1',
        (select updated_at from btc_matches where id = '00000000-0000-0000-0000-0000000000d1'),
-       public.tmp_votes(15, 'all2'), null, false, false, null, null) $$,
+       public.tmp_cup_tokens(15, 'all2'), null, false, false, null, null) $$,
   'an already-confirmed preliminary match can be edited too'
 );
 select is((select team2_total from btc_match_scores where match_id = '00000000-0000-0000-0000-0000000000d1'),
@@ -350,30 +360,21 @@ update btc_match_bonuses set team2_signature_beverage = true
 select is((select team2_total from btc_match_scores where match_id = '00000000-0000-0000-0000-0000000000d1'),
           50::bigint, 'the same guard holds for team 2 (45 tokens + 5, no +2)');
 
--- ---------- the view counts only votes the RPC could have written ----------
--- A stray vote past the round's last cup (cup 16 of a 15-cup match) must not count, exactly
--- like the client preview, which drops it.
-insert into btc_cup_votes (match_id, cup_number, judge_id, team_id) values
-  ('00000000-0000-0000-0000-0000000000d1', 16, '00000000-0000-0000-0000-0000000000c1',
-   '00000000-0000-0000-0000-0000000000b1');
+-- ---------- the view counts only cups the RPC could have written ----------
+-- A stray row past the round's last cup (cup 16 of a 15-cup match) must not count,
+-- exactly like the client preview, which drops it.
+insert into btc_cup_votes (match_id, cup_number, team1_tokens) values
+  ('00000000-0000-0000-0000-0000000000d1', 16, 3);
 select is((select team1_tokens from btc_match_scores where match_id = '00000000-0000-0000-0000-0000000000d1'),
-          0::bigint, 'a direct-written vote past the last cup of the round is not counted');
--- A judge no longer assigned to the match stops counting (the preview drops them too).
-delete from btc_match_judges
-  where match_id = '00000000-0000-0000-0000-0000000000d1'
-    and judge_id = '00000000-0000-0000-0000-0000000000c3';
-select is((select team2_tokens from btc_match_scores where match_id = '00000000-0000-0000-0000-0000000000d1'),
-          30::bigint, 'votes by a judge who is no longer assigned are not counted (45 -> 30 tokens)');
-insert into btc_match_judges (match_id, judge_id) values
-  ('00000000-0000-0000-0000-0000000000d1', '00000000-0000-0000-0000-0000000000c3');
+          0::bigint, 'a direct-written cup past the last cup of the round is not counted');
 delete from btc_cup_votes
   where match_id = '00000000-0000-0000-0000-0000000000d1' and cup_number = 16;
 
--- A match flipped to confirmed by a direct table write, holding no votes, must not reach
--- the standings (only complete, valid vote sets do).
+-- A match flipped to confirmed by a direct table write, holding no cup scores, must
+-- not reach the standings (only complete, valid vote sets do).
 update btc_matches set status = 'confirmed' where id = '00000000-0000-0000-0000-0000000000d5';
 select is((select played::int from btc_standings where team_id = '00000000-0000-0000-0000-0000000000b1'),
-          1, 'a directly-confirmed match with no votes does not count as played in the standings');
+          1, 'a directly-confirmed match with no cup scores does not count as played in the standings');
 
 -- ---------- a member of a DIFFERENT org ----------
 
@@ -384,7 +385,7 @@ select throws_ok(
   $$ select confirm_btc_match(
        '00000000-0000-0000-0000-0000000000c1', '00000000-0000-0000-0000-000000000020',
        '00000000-0000-0000-0000-0000000000d1', now(),
-       public.tmp_votes(15, 'split'), null, false, false, null, null) $$,
+       public.tmp_cup_tokens(15, 'split'), null, false, false, null, null) $$,
   'P0001', 'confirm_btc_match: match not found',
   'a member of another org, passing THEIR OWN org id, cannot confirm this match'
 );
@@ -392,7 +393,7 @@ select throws_ok(
   $$ select confirm_btc_match(
        '00000000-0000-0000-0000-0000000000c2', '00000000-0000-0000-0000-000000000010',
        '00000000-0000-0000-0000-0000000000d1', now(),
-       public.tmp_votes(15, 'split'), null, false, false, null, null) $$,
+       public.tmp_cup_tokens(15, 'split'), null, false, false, null, null) $$,
   'P0001', 'confirm_btc_match: match not found',
   'nor by passing the true owning org id: RLS hides the row, so it is the same not-found'
 );
@@ -409,7 +410,7 @@ select throws_ok(
   $$ select confirm_btc_match(
        '00000000-0000-0000-0000-0000000000c3', '00000000-0000-0000-0000-000000000010',
        '00000000-0000-0000-0000-0000000000d1', now(),
-       public.tmp_votes(15, 'split'), null, false, false, null, null) $$,
+       public.tmp_cup_tokens(15, 'split'), null, false, false, null, null) $$,
   'P0001', 'confirm_btc_match: match not found',
   'a non-member cannot confirm: RLS hides the row, so it is reported as not found'
 );

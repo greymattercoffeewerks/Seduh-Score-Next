@@ -1,12 +1,12 @@
 /*
  * BTC match scoring screen (Phase T-BTC.2). The base screen-chrome shapes (screen
  * container, card, buttons, form fields, screen feedback) live in shared.css,
- * loaded alongside this file. Mobile-first: each cup is one row with the three
- * judge buttons in a three-column grid, so it fits a 360px screen without any
- * horizontal scrolling. Nothing here needs a breakpoint.
+ * loaded alongside this file. Mobile-first: each cup is one row with a 4-button
+ * 0/1/2/3 token selector, so it fits a 360px screen without any horizontal scrolling.
+ * Nothing here needs a breakpoint.
  *
- * A vote is never carried by color alone: every button shows the digit 1 or 2 (or a
- * dash for no vote) and its accessible name spells out the team.
+ * A cup's score is never carried by color alone: the selected button carries
+ * aria-pressed and its own digit; team2's balance is shown as text next to it.
  */
 
 .btc-cups {
@@ -33,78 +33,54 @@
   font-weight: var(--font-weight-semibold);
 }
 
-.btc-cup-tally {
+.btc-cup-team2 {
   color: var(--color-text-secondary);
   font-size: var(--text-sm);
-  font-variant-numeric: tabular-nums;
 }
 
-.btc-cup-votes {
+.btc-cup-team2-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-semibold);
+}
+
+.btc-cup-tokens {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-2);
 }
 
-.btc-vote {
+.btc-token {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--space-1);
   min-width: 0;
+  min-height: var(--tap-target-min);
   padding: var(--space-2);
   border: var(--border-strong) solid var(--color-border-strong);
   border-radius: var(--radius-sm);
   background: var(--color-surface);
   color: var(--color-text);
   font-family: var(--font-body);
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-bold);
   cursor: pointer;
   touch-action: manipulation;
-  /* keeps a focused cell clear of the sticky legend above the list */
+  /* keeps a focused cell clear of the sticky app header */
   scroll-margin-top: 4rem;
 }
 
-/* A locked cell (confirming, waiting to sync, stale) must not look tappable. The dash
-   border and the changed cursor are shape cues, not only a dimmer colour. */
-.btc-vote[aria-disabled='true'] {
-  opacity: 0.6;
-  cursor: not-allowed;
-  border-style: dashed;
-}
-
-.btc-vote-judge {
-  max-width: 100%;
-  overflow-wrap: anywhere;
-  text-align: center;
-  line-height: 1.2;
-  color: var(--color-text-secondary);
-  font-size: var(--text-xs);
-}
-
-.btc-vote-mark {
-  font-size: var(--text-xl);
-  font-weight: var(--font-weight-bold);
-  line-height: 1;
-}
-
-.btc-vote[data-vote='team1'] {
+.btc-token[aria-pressed='true'] {
   background: var(--color-accent);
   border-color: var(--color-accent);
   color: var(--color-accent-contrast);
 }
 
-.btc-vote[data-vote='team1'] .btc-vote-judge {
-  color: var(--color-accent-contrast);
-}
-
-.btc-vote[data-vote='team2'] {
-  background: var(--color-text);
-  border-color: var(--color-text);
-  color: var(--color-canvas);
-}
-
-.btc-vote[data-vote='team2'] .btc-vote-judge {
-  color: var(--color-canvas);
+/* A locked cell (confirming, waiting to sync, stale) must not look tappable. The dash
+   border and the changed cursor are shape cues, not only a dimmer colour. */
+.btc-token[aria-disabled='true'] {
+  opacity: 0.6;
+  cursor: not-allowed;
+  border-style: dashed;
 }
 
 .btc-fieldset {
@@ -146,21 +122,6 @@
 .btc-status-stack > .screen-feedback:not(:empty),
 .btc-status-stack > .btn:not([hidden]) {
   margin-top: var(--space-2);
-}
-
-/* Stays in view while the scorer works down 15 to 20 cup rows, so 1 and 2 are never
-   more than a glance from what they mean. Purely visual: the buttons' own accessible
-   names spell out the team. */
-.btc-legend {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  margin: 0 0 var(--space-2) 0;
-  padding: var(--space-1) 0;
-  background: var(--color-surface);
-  color: var(--color-text-secondary);
-  font-size: var(--text-sm);
-  font-weight: var(--font-weight-semibold);
 }
 
 /* The live regions (save warning, notice, confirm feedback) are always in the page so a

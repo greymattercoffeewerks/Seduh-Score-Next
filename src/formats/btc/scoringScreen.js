@@ -1,10 +1,13 @@
-// BTC match scoring screen (Phase T-BTC.2, scoring sub-step). The scorer taps, per
-// cup, each of the 3 judges' votes; on Confirm the whole match goes to the database
-// as ONE outbox operation (see scoring.js's header for the write model).
+// BTC match scoring screen (Phase T-BTC.2, scoring sub-step). Each cup holds exactly
+// 3 tokens: the scorer taps one of 4 buttons (0/1/2/3) to set team1's share, and
+// team2's share is always shown as the balance. Judges are listed for the record
+// (assigned via matches.js, not tied to a vote) but play no part in the vote UI. On
+// Confirm the whole match goes to the database as ONE outbox operation (see
+// scoring.js's header for the write model and the per-cup-token design correction).
 //
 // Unlike the roster/match screens this one updates the DOM IN PLACE after the first
-// render rather than rebuilding it on every action. A scorer taps up to 60 cells in a
-// row; a full rebuild per tap would collapse the page height and jump the scroll
+// render rather than rebuilding it on every action. A scorer taps through 15-20 cups
+// in a row; a full rebuild per tap would collapse the page height and jump the scroll
 // position back to the top mid-scoring. Full renders happen only for loading, a
 // failed load, and the initial build.
 //
@@ -25,35 +28,35 @@ import { listJudges } from './judges.js';
 import { findMatchById, listJudgeIdsForMatch } from './matches.js';
 import {
   JUDGES_PER_MATCH,
+  TOKENS_PER_CUP,
   blankDraft,
   buildConfirmParams,
   clearDraft,
   computeScores,
+  cupTokens,
   cupsForRound,
   describeConfirmError,
-  firstMissingVote,
+  firstMissingCup,
   flushPending,
   isMatchComplete,
   isOperationQueued,
   loadConfirmedDraft,
   loadDraft,
-  missingVoteCount,
+  missingCupCount,
   roundLabel,
   saveDraft,
   submitConfirmMatch,
-  toggleVote,
-  tokensForCup,
   wasOperationProcessed,
-  withVote,
+  withCupTokens,
 } from './scoring.js';
 
 const STALE_MESSAGE =
   'This match was changed elsewhere after you started scoring it. Discard your edits to load the latest scores, then re-enter your changes.';
 const SAVE_FAILED_MESSAGE =
-  'Progress could not be saved on this device. Reloading this page would lose the votes entered so far.';
-const DISCARDED_MESSAGE = 'Your edits were discarded and the latest scores were loaded.';
+  'Progress could not be saved on this device. Reloading this page would lose the scores entered so far.';
 const NOT_APPLIED_MESSAGE =
-  'Your last confirmation was not applied. Your votes are still here: review them and confirm again.';
+  'Your last confirmation was not applied. Your scores are still here: review them and confirm again.';
+const TOKEN_OPTIONS = [0, 1, 2, 3];
 
 export async function mountScoringScreen(
   root,
@@ -88,14 +91,6 @@ export async function mountScoringScreen(
 
   function judgeLabel(judgeId) {
     return state.data.judges.find((judge) => judge.id === judgeId)?.name ?? 'Judge';
-  }
-
-  // Which of the two teams a vote is for, or null.
-  function sideOf(teamId) {
-    const { match } = state.data;
-    if (teamId === match.team1_id) return 'team1';
-    if (teamId === match.team2_id) return 'team2';
-    return null;
   }
 
   async function loadPersisted() {
@@ -190,7 +185,7 @@ export async function mountScoringScreen(
 
   function persistDraft() {
     // Once a save has failed the notice stays for the session: a later success does
-    // not prove the earlier votes are safe, and a quietly vanishing warning is worse
+    // not prove the earlier scores are safe, and a quietly vanishing warning is worse
     // than one that lingers.
     saveDraft(matchId, state.draft).catch(() => setSaveFailed());
   }
@@ -209,36 +204,29 @@ export async function mountScoringScreen(
 
   // ---------- in-place updates ----------
 
-  function updateVoteButton(button, cup, judgeId) {
-    const side = sideOf(state.draft.votes[cup]?.[judgeId] ?? null);
-    button.querySelector('.btc-vote-mark').textContent =
-      side === 'team1' ? '1' : side === 'team2' ? '2' : '–';
-    button.dataset.vote = side ?? 'none';
-    button.setAttribute(
-      'aria-label',
-      `Cup ${cup}, ${judgeLabel(judgeId)}, ${side ? teamLabel(side) : 'no vote'}`,
-    );
-  }
-
-  function updateCupTally(cup) {
-    const { match, judgeIds } = state.data;
-    const tally = tokensForCup(state.draft, cup, match, judgeIds, match.round);
-    const { visible, spoken } = ui.cupTallies.get(cup);
-    visible.textContent = `${tally.team1}–${tally.team2}`;
-    spoken.textContent = `${teamLabel('team1')} ${tally.team1}, ${teamLabel('team2')} ${tally.team2}`;
+  function updateCupControl(cup) {
+    const { match } = state.data;
+    const row = ui.cupRows.get(cup);
+    const tokens = cupTokens(state.draft, cup, match.round);
+    for (const button of row.buttons) {
+      const value = Number(button.dataset.value);
+      const selected = tokens?.team1 === value;
+      button.setAttribute('aria-pressed', String(selected));
+    }
+    row.team2Value.textContent = tokens ? String(tokens.team2) : '–';
   }
 
   function updateTotals() {
-    const { match, judgeIds } = state.data;
-    const scores = computeScores(state.draft, match, judgeIds, match.round);
+    const { match } = state.data;
+    const scores = computeScores(state.draft, match.round);
     ui.totals.team1.textContent = `${scores.team1Total} points (${scores.team1Tokens} tokens)`;
     ui.totals.team2.textContent = `${scores.team2Total} points (${scores.team2Tokens} tokens)`;
   }
 
   function updateConfirm() {
     const { match, judgeIds } = state.data;
-    const isComplete = isMatchComplete(state.draft, match, judgeIds, match.round);
-    const missing = isComplete ? 0 : missingVoteCount(state.draft, match, judgeIds, match.round);
+    const isComplete = isMatchComplete(state.draft, judgeIds.length, match.round);
+    const missing = isComplete ? 0 : missingCupCount(state.draft, match.round);
     ui.confirmButton.textContent = state.confirmInFlight
       ? 'Confirming…'
       : match.status === 'confirmed'
@@ -250,7 +238,7 @@ export async function mountScoringScreen(
       ui.confirmHint.hidden = true;
     } else {
       ui.confirmButton.setAttribute('aria-describedby', ui.confirmHint.id);
-      ui.confirmHint.textContent = `Confirm unlocks once every judge has voted on every cup. ${missing} vote${missing === 1 ? '' : 's'} still missing.`;
+      ui.confirmHint.textContent = `Confirm unlocks once every cup has a score. ${missing} cup${missing === 1 ? '' : 's'} still missing.`;
       ui.confirmHint.hidden = false;
     }
     ui.statusNote.textContent =
@@ -263,7 +251,9 @@ export async function mountScoringScreen(
   // while locked is reverted here rather than silently accepted.
   function updateControls() {
     const isLocked = locked();
-    for (const button of ui.voteButtons) setBusyDisabled(button, isLocked);
+    for (const row of ui.cupRows.values()) {
+      for (const button of row.buttons) setBusyDisabled(button, isLocked);
+    }
     for (const control of ui.controls) control.disabled = isLocked;
     for (const radio of ui.radios) {
       radio.node.checked = (state.draft.fastest ?? 'none') === radio.value;
@@ -292,7 +282,7 @@ export async function mountScoringScreen(
 
   function refreshAll() {
     const { match } = state.data;
-    for (let cup = 1; cup <= cupsForRound(match.round); cup += 1) updateCupTally(cup);
+    for (let cup = 1; cup <= cupsForRound(match.round); cup += 1) updateCupControl(cup);
     updateTotals();
     updateConfirm();
     updateControls();
@@ -301,25 +291,17 @@ export async function mountScoringScreen(
 
   // ---------- actions ----------
 
-  function onVoteTap(cup, judgeId, button) {
+  function onCupTap(cup, team1Tokens) {
     if (locked()) return;
-    const { match } = state.data;
-    const next = toggleVote(
-      state.draft.votes[cup]?.[judgeId] ?? null,
-      match.team1_id,
-      match.team2_id,
-    );
-    state.draft = withVote(state.draft, cup, judgeId, next);
+    state.draft = withCupTokens(state.draft, cup, team1Tokens);
     // An earlier message ("first missing: cup 3", "Match confirmed.") is out of date now.
     if (ui.feedback.textContent) setFeedback(null);
-    updateVoteButton(button, cup, judgeId);
-    updateCupTally(cup);
+    updateCupControl(cup);
     updateTotals();
     updateConfirm();
     persistDraft();
-    // Sighted scorers see the button change; this is what a screen reader hears.
-    const side = sideOf(next);
-    ui.announce.textContent = `Cup ${cup}, ${judgeLabel(judgeId)}: ${side ? teamLabel(side) : 'no vote'}`;
+    // Sighted scorers see the buttons change; this is what a screen reader hears.
+    ui.announce.textContent = `Cup ${cup}: ${team1Tokens} for ${teamLabel('team1')}, ${TOKENS_PER_CUP - team1Tokens} for ${teamLabel('team2')}`;
   }
 
   function discardEdits() {
@@ -328,7 +310,7 @@ export async function mountScoringScreen(
         // The reload below re-resolves whatever draft is left; only tell the scorer.
         state.saveFailed = true;
       })
-      .then(() => attemptLoad(DISCARDED_MESSAGE));
+      .then(() => attemptLoad('Your edits were discarded and the latest scores were loaded.'));
   }
 
   // What became of an operation this screen submitted: 'confirmed', 'pending' or
@@ -411,18 +393,17 @@ export async function mountScoringScreen(
   async function handleConfirm() {
     if (locked()) return;
     const { match, judgeIds, event } = state.data;
-    const missing = firstMissingVote(state.draft, match, judgeIds, match.round);
+    const missing = firstMissingCup(state.draft, match.round);
     if (missing || judgeIds.length !== JUDGES_PER_MATCH) {
       setFeedback(
         missing
-          ? `Every judge must vote on every cup. First missing: cup ${missing.cup}, ${judgeLabel(missing.judgeId)}.`
+          ? `Every cup needs a score. First missing: cup ${missing}.`
           : `This match needs exactly ${JUDGES_PER_MATCH} judges.`,
         'error',
       );
       if (missing) {
         ui.gotoMissing.hidden = false;
-        ui.gotoMissing.dataset.cup = String(missing.cup);
-        ui.gotoMissing.dataset.judge = missing.judgeId;
+        ui.gotoMissing.dataset.cup = String(missing);
       }
       ui.feedback.focus();
       return;
@@ -452,7 +433,7 @@ export async function mountScoringScreen(
     }
     let flushError = null;
     try {
-      const params = buildConfirmParams(match, state.draft, judgeIds, match.round);
+      const params = buildConfirmParams(match, state.draft, match.round);
       const { result } = await submitConfirmMatch(
         match,
         event.org_id,
@@ -505,9 +486,9 @@ export async function mountScoringScreen(
     else focusResult();
   }
 
-  function goToMissingVote() {
-    const { cup, judge } = ui.gotoMissing.dataset;
-    const target = root.querySelector(`[data-focus-key="vote-${cup}-${judge}"]`);
+  function goToMissingCup() {
+    const { cup } = ui.gotoMissing.dataset;
+    const target = root.querySelector(`[data-focus-key="cup-${cup}"]`);
     if (!target) return;
     target.scrollIntoView?.({ block: 'center' });
     target.focus();
@@ -516,40 +497,36 @@ export async function mountScoringScreen(
   // ---------- rendering ----------
 
   function buildCupRow(cup) {
-    const { judgeIds } = state.data;
-    const buttons = judgeIds.map((judgeId) => {
-      const button = el(
-        'button',
-        {
-          className: 'btc-vote tap-target',
-          attrs: {
-            type: 'button',
-            'data-focus-key': `vote-${cup}-${judgeId}`,
-            'aria-describedby': 'btc-vote-help',
-          },
+    const buttons = TOKEN_OPTIONS.map((value, index) => {
+      const button = el('button', {
+        className: 'btc-token tap-target',
+        text: String(value),
+        attrs: {
+          type: 'button',
+          'aria-pressed': 'false',
+          'aria-label': `Cup ${cup}, ${value} for ${teamLabel('team1')}`,
+          'aria-describedby': 'btc-token-help',
+          'data-value': String(value),
+          ...(index === 0 ? { 'data-focus-key': `cup-${cup}` } : {}),
         },
-        [
-          el('span', { className: 'btc-vote-judge', text: judgeLabel(judgeId) }),
-          el('span', { className: 'btc-vote-mark', attrs: { 'aria-hidden': 'true' } }),
-        ],
-      );
-      updateVoteButton(button, cup, judgeId);
-      button.addEventListener('click', () => onVoteTap(cup, judgeId, button));
-      ui.voteButtons.push(button);
+      });
+      button.addEventListener('click', () => onCupTap(cup, value));
       return button;
     });
-    const visible = el('span', { attrs: { 'aria-hidden': 'true' } });
-    const spoken = el('span', { className: 'sr-only' });
-    ui.cupTallies.set(cup, { visible, spoken });
+    const team2Value = el('span', { className: 'btc-cup-team2-value' });
+    ui.cupRows.set(cup, { buttons, team2Value });
     return el(
       'div',
       { className: 'btc-cup-row', attrs: { role: 'group', 'aria-label': `Cup ${cup}` } },
       [
         el('div', { className: 'btc-cup-head' }, [
           el('span', { className: 'btc-cup-number', text: `Cup ${cup}` }),
-          el('span', { className: 'btc-cup-tally' }, [visible, spoken]),
+          el('span', { className: 'btc-cup-team2', attrs: { 'aria-hidden': 'true' } }, [
+            el('span', { text: `${teamLabel('team2')}: ` }),
+            team2Value,
+          ]),
         ]),
-        el('div', { className: 'btc-cup-votes' }, buttons),
+        el('div', { className: 'btc-cup-tokens' }, buttons),
       ],
     );
   }
@@ -656,9 +633,8 @@ export async function mountScoringScreen(
   function renderLoaded() {
     const { match, judgeIds, event } = state.data;
     ui = {
-      cupTallies: new Map(),
+      cupRows: new Map(),
       totals: {},
-      voteButtons: [],
       controls: [],
       radios: [],
       boxes: [],
@@ -680,7 +656,7 @@ export async function mountScoringScreen(
       el('h2', { text: `${teamLabel('team1')} vs ${teamLabel('team2')}` }),
       el('p', {
         className: 'stage-meta',
-        text: `${roundLabel(match.round)} · ${cupsForRound(match.round)} cups · judges: ${judgeIds.map(judgeLabel).join(', ')}`,
+        text: `${roundLabel(match.round)} · ${cupsForRound(match.round)} cups · judges (record only): ${judgeIds.map(judgeLabel).join(', ')}`,
       }),
       ui.statusNote,
     ]);
@@ -748,16 +724,11 @@ export async function mountScoringScreen(
     for (let cup = 1; cup <= cupsForRound(match.round); cup += 1) cupRows.push(buildCupRow(cup));
     container.appendChild(
       el('div', { className: 'card' }, [
-        el('h2', { text: 'Judge votes' }),
+        el('h2', { text: 'Cup scores' }),
         el('p', {
-          id: 'btc-vote-help',
+          id: 'btc-token-help',
           className: 'stage-meta',
-          text: `Tap a judge to cycle their vote for that cup: – (none), then 1 (${teamLabel('team1')}), then 2 (${teamLabel('team2')}), then back to none.`,
-        }),
-        el('p', {
-          className: 'btc-legend',
-          attrs: { 'aria-hidden': 'true' },
-          text: `1 ${teamLabel('team1')} · 2 ${teamLabel('team2')}`,
+          text: `Each cup holds 3 tokens. Tap the number of tokens for ${teamLabel('team1')}; the rest go to ${teamLabel('team2')} automatically.`,
         }),
         el('div', { className: 'btc-cups' }, cupRows),
       ]),
@@ -796,11 +767,11 @@ export async function mountScoringScreen(
     });
     ui.gotoMissing = el('button', {
       className: 'btn btn-outline tap-target',
-      text: 'Go to first missing vote',
+      text: 'Go to first missing cup',
       attrs: { type: 'button' },
     });
     ui.gotoMissing.hidden = true;
-    ui.gotoMissing.addEventListener('click', goToMissingVote);
+    ui.gotoMissing.addEventListener('click', goToMissingCup);
     container.appendChild(
       el('div', { className: 'card' }, [
         ui.confirmButton,

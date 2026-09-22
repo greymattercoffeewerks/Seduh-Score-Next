@@ -40,16 +40,11 @@ insert into btc_match_judges (match_id, judge_id) values
   ('00000000-0000-0000-0000-0000000000d1', '00000000-0000-0000-0000-0000000000c2'),
   ('00000000-0000-0000-0000-0000000000d1', '00000000-0000-0000-0000-0000000000c3');
 
--- Cup 1: judges c1 and c2 vote team A (b1), judge c3 votes team B (b2) —
--- team1_token_sum = 2, team2_token_sum = 1, same scenario the old
--- pre-aggregated fixture encoded, now as three raw per-judge votes.
-insert into btc_cup_votes (match_id, cup_number, judge_id, team_id) values
-  ('00000000-0000-0000-0000-0000000000d1', 1, '00000000-0000-0000-0000-0000000000c1',
-   '00000000-0000-0000-0000-0000000000b1'),
-  ('00000000-0000-0000-0000-0000000000d1', 1, '00000000-0000-0000-0000-0000000000c2',
-   '00000000-0000-0000-0000-0000000000b1'),
-  ('00000000-0000-0000-0000-0000000000d1', 1, '00000000-0000-0000-0000-0000000000c3',
-   '00000000-0000-0000-0000-0000000000b2');
+-- Cup 1: 2 of the 3 tokens to team A (b1), 1 to team B (b2) — judges are on record
+-- (assigned above) but no vote is attributed to one; see T-BTC.2's per-cup-token
+-- design correction in 20260922100000_btc_cup_votes_per_cup_tokens.sql.
+insert into btc_cup_votes (match_id, cup_number, team1_tokens) values
+  ('00000000-0000-0000-0000-0000000000d1', 1, 2);
 
 insert into btc_match_bonuses (match_id, fastest_team_id) values
   ('00000000-0000-0000-0000-0000000000d1', '00000000-0000-0000-0000-0000000000b1');
@@ -70,30 +65,26 @@ select throws_ok(
 );
 
 select throws_ok(
-  $$ insert into btc_cup_votes (match_id, cup_number, judge_id, team_id) values
-       ('00000000-0000-0000-0000-0000000000d1', 1, '00000000-0000-0000-0000-0000000000c1',
-        '00000000-0000-0000-0000-0000000000b2') $$,
+  $$ insert into btc_cup_votes (match_id, cup_number, team1_tokens) values
+       ('00000000-0000-0000-0000-0000000000d1', 1, 1) $$,
   '23505',
   null,
-  'btc_cup_votes rejects the same judge voting twice on the same cup'
+  'btc_cup_votes rejects a second row for the same (match, cup)'
 );
 
 select throws_ok(
-  $$ insert into btc_cup_votes (match_id, cup_number, judge_id, team_id) values
-       ('00000000-0000-0000-0000-0000000000d1', 2, '00000000-0000-0000-0000-0000000000c1',
-        gen_random_uuid()) $$,
-  'P0001',
-  'btc_cup_votes.team_id must be a participant of the match',
-  'btc_cup_votes rejects a team_id that is not one of the match''s two teams'
+  $$ insert into btc_cup_votes (match_id, cup_number, team1_tokens) values
+       ('00000000-0000-0000-0000-0000000000d1', 2, 4) $$,
+  '23514',
+  null,
+  'btc_cup_votes rejects a team1_tokens value above 3'
 );
-
 select throws_ok(
-  $$ insert into btc_cup_votes (match_id, cup_number, judge_id, team_id) values
-       ('00000000-0000-0000-0000-0000000000d1', 2, gen_random_uuid(),
-        '00000000-0000-0000-0000-0000000000b1') $$,
-  'P0001',
-  'btc_cup_votes.judge_id must be assigned to the match',
-  'btc_cup_votes rejects a judge_id that is not assigned to the match'
+  $$ insert into btc_cup_votes (match_id, cup_number, team1_tokens) values
+       ('00000000-0000-0000-0000-0000000000d1', 2, -1) $$,
+  '23514',
+  null,
+  'btc_cup_votes rejects a negative team1_tokens value'
 );
 
 select throws_ok(

@@ -1190,6 +1190,14 @@ round 2 all passed, 0 blocking after fixes + delta re-review by schema/security 
 
 ## Known open items from BTC Phase T-BTC.2 scoring (2026-09-22)
 
+- **RPC JSONB casts lack numeric-type guard (pre-existing, found in correction pass 2026-09-22).**
+  Both `confirm_btc_match` (the v->>'team1_tokens'::int cast) and the earlier vote-storage
+  shape (cup_number extraction) lack a numeric-type guard, so a non-integer value surfaces
+  as a raw Postgres cast error rather than a curated message. The JS client always validates
+  (`withCupTokens` enforces 0–3 range for team1_tokens), so unreachable via the app today
+  (same pattern already existed for cup_number before the correction migration). Deferred as
+  a robustness improvement over a blocking defect — caught during review, deliberate not-to-fix
+  per scoring-auditor assessment.
 - **core/outbox.js buildRpcHandler treats 408/429/5xx as permanent (data-loss risk on flaky wifi;
   affects Cup Taster too).** Classification of timeout/throttle status codes as permanent write loss
   instead of transient needs decision.

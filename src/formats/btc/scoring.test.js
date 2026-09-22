@@ -20,12 +20,11 @@ vi.mock('../../core/outbox.js', () => ({
 const {
   cupsForRound,
   blankDraft,
-  toggleVote,
-  withVote,
-  tokensForCup,
-  missingVoteCount,
+  withCupTokens,
+  cupTokens,
+  missingCupCount,
   isMatchComplete,
-  firstMissingVote,
+  firstMissingCup,
   computeScores,
   buildConfirmParams,
   loadDraft,
@@ -39,11 +38,12 @@ const {
   isOperationQueued,
   describeConfirmError,
   roundLabel,
+  JUDGES_PER_MATCH,
+  TOKENS_PER_CUP,
 } = await import('./scoring.js');
 
 const T1 = 'team-1';
 const T2 = 'team-2';
-const JUDGES = ['j1', 'j2', 'j3'];
 const match = {
   id: 'm1',
   team1_id: T1,
@@ -52,15 +52,14 @@ const match = {
   team2_time_note: null,
 };
 
-// The same vote patterns supabase/tests/014_btc_scoring.sql builds: 'split' = judges 1
-// and 2 vote team 1, judge 3 votes team 2 on every cup; 'all2' = every vote team 2.
+// The same per-cup patterns supabase/tests/014_btc_scoring.sql builds: 'split' gives
+// 2 tokens to team1 every cup, 'all2' gives all 3 to team2, 'tie' gives 2 to team1 for
+// the first 10 cups and 1 for the rest.
 function draftWith(cups, pattern) {
   let draft = blankDraft();
   for (let cup = 1; cup <= cups; cup += 1) {
-    JUDGES.forEach((judgeId, index) => {
-      const team = pattern === 'all2' || index === 2 ? T2 : T1;
-      draft = withVote(draft, cup, judgeId, team);
-    });
+    const team1Tokens = pattern === 'all2' ? 0 : pattern === 'tie' ? (cup <= 10 ? 2 : 1) : 2; // 'split'
+    draft = withCupTokens(draft, cup, team1Tokens);
   }
   return draft;
 }
@@ -84,101 +83,86 @@ describe('round configuration', () => {
     expect(roundLabel('third_place')).toBe('Third place');
     expect(roundLabel('mystery')).toBe('mystery');
   });
-});
 
-describe('toggleVote', () => {
-  it('cycles no vote -> team 1 -> team 2 -> no vote', () => {
-    expect(toggleVote(undefined, T1, T2)).toBe(T1);
-    expect(toggleVote(T1, T1, T2)).toBe(T2);
-    expect(toggleVote(T2, T1, T2)).toBeNull();
-    expect(toggleVote(null, T1, T2)).toBe(T1);
+  it('a cup always holds exactly 3 tokens; JUDGES_PER_MATCH is still 3, for the record only', () => {
+    expect(TOKENS_PER_CUP).toBe(3);
+    expect(JUDGES_PER_MATCH).toBe(3);
   });
 });
 
-describe('withVote', () => {
-  it('sets a vote without mutating the original draft', () => {
+describe('withCupTokens', () => {
+  it('sets a cup without mutating the original draft', () => {
     const before = blankDraft();
-    const after = withVote(before, 3, 'j1', T1);
-    expect(after.votes[3].j1).toBe(T1);
+    const after = withCupTokens(before, 3, 2);
+    expect(after.votes[3]).toBe(2);
     expect(before.votes).toEqual({});
   });
 
-  it('removes the cup entry entirely once its last vote is cleared', () => {
-    const set = withVote(blankDraft(), 3, 'j1', T1);
-    const cleared = withVote(set, 3, 'j1', null);
-    expect(cleared.votes).toEqual({});
+  it('rejects anything outside 0-3 rather than silently clamping it', () => {
+    expect(() => withCupTokens(blankDraft(), 1, 4)).toThrow(RangeError);
+    expect(() => withCupTokens(blankDraft(), 1, -1)).toThrow(RangeError);
+    expect(() => withCupTokens(blankDraft(), 1, 1.5)).toThrow(RangeError);
+  });
+
+  it('overwrites a previous value for the same cup (setting, not accumulating)', () => {
+    let draft = withCupTokens(blankDraft(), 1, 2);
+    draft = withCupTokens(draft, 1, 0);
+    expect(draft.votes[1]).toBe(0);
   });
 });
 
-describe('tokensForCup', () => {
-  it('counts each team for one cup', () => {
-    const draft = withVote(withVote(blankDraft(), 1, 'j1', T1), 1, 'j2', T2);
-    expect(tokensForCup(draft, 1, match, JUDGES, 'preliminary')).toEqual({ team1: 1, team2: 1 });
-    expect(tokensForCup(draft, 2, match, JUDGES, 'preliminary')).toEqual({ team1: 0, team2: 0 });
+describe('cupTokens', () => {
+  it('team2 is always the balance to 3', () => {
+    const draft = withCupTokens(blankDraft(), 1, 2);
+    expect(cupTokens(draft, 1, 'preliminary')).toEqual({ team1: 2, team2: 1 });
   });
 
-  it('counts only votes that could be sent, exactly like the totals do', () => {
-    let draft = withVote(blankDraft(), 1, 'j1', T1);
-    draft = withVote(draft, 1, 'stranger', T1); // not a judge on this match
-    draft = withVote(draft, 1, 'j2', 'some-other-team'); // not a participant
-    expect(tokensForCup(draft, 1, match, JUDGES, 'preliminary')).toEqual({ team1: 1, team2: 0 });
-    // the tally can never disagree with the totals panel
-    expect(computeScores(draft, match, JUDGES, 'preliminary').team1Tokens).toBe(1);
-    // a cup past the round is not counted
-    const late = withVote(blankDraft(), 16, 'j1', T1);
-    expect(tokensForCup(late, 16, match, JUDGES, 'preliminary')).toEqual({ team1: 0, team2: 0 });
+  it('0 is a real, explicit score (all 3 tokens to team2) — not "unscored"', () => {
+    const draft = withCupTokens(blankDraft(), 1, 0);
+    expect(cupTokens(draft, 1, 'preliminary')).toEqual({ team1: 0, team2: 3 });
+  });
+
+  it('is null for a cup that has never been tapped', () => {
+    expect(cupTokens(blankDraft(), 1, 'preliminary')).toBeNull();
+  });
+
+  it('is null for a cup past the round, even if a value happens to be stored', () => {
+    const draft = withCupTokens(blankDraft(), 16, 2);
+    expect(cupTokens(draft, 16, 'preliminary')).toBeNull();
   });
 });
 
 describe('completeness', () => {
-  it('counts missing votes against cups x judges for the round', () => {
-    expect(missingVoteCount(blankDraft(), match, JUDGES, 'preliminary')).toBe(45);
-    expect(missingVoteCount(blankDraft(), match, JUDGES, 'final')).toBe(60);
-    expect(missingVoteCount(draftWith(15, 'split'), match, JUDGES, 'preliminary')).toBe(0);
+  it('counts missing cups against the round total', () => {
+    expect(missingCupCount(blankDraft(), 'preliminary')).toBe(15);
+    expect(missingCupCount(blankDraft(), 'final')).toBe(20);
+    expect(missingCupCount(draftWith(15, 'split'), 'preliminary')).toBe(0);
   });
 
-  it('is complete only when every judge voted on every cup', () => {
-    expect(isMatchComplete(draftWith(15, 'split'), match, JUDGES, 'preliminary')).toBe(true);
-    expect(isMatchComplete(draftWith(14, 'split'), match, JUDGES, 'preliminary')).toBe(false);
+  it('is complete only when every cup in the round has a score', () => {
+    expect(isMatchComplete(draftWith(15, 'split'), 3, 'preliminary')).toBe(true);
+    expect(isMatchComplete(draftWith(14, 'split'), 3, 'preliminary')).toBe(false);
   });
 
-  it('is never complete without exactly 3 judges', () => {
-    expect(isMatchComplete(draftWith(15, 'split'), match, ['j1', 'j2'], 'preliminary')).toBe(false);
+  it('is never complete without exactly 3 judges, even with every cup scored', () => {
+    expect(isMatchComplete(draftWith(15, 'split'), 2, 'preliminary')).toBe(false);
   });
 
-  it('ignores votes that could never be sent: a foreign judge, a foreign team, a cup past the round', () => {
-    let draft = draftWith(15, 'split');
-    draft = withVote(draft, 16, 'j1', T1); // past a preliminary round
-    draft = withVote(draft, 1, 'stranger', T1); // not a judge on this match
-    draft = withVote(draft, 2, 'j1', 'some-other-team'); // not a participant
-    // cup 2 / j1 now points at a foreign team, so exactly that one vote is missing
-    expect(missingVoteCount(draft, match, JUDGES, 'preliminary')).toBe(1);
+  it('ignores a cup past the round when counting completeness', () => {
+    const draft = withCupTokens(draftWith(15, 'split'), 16, 1);
+    expect(missingCupCount(draft, 'preliminary')).toBe(0);
   });
 });
 
-describe('firstMissingVote', () => {
-  it('names the first empty cell in cup order, then judge order', () => {
-    expect(firstMissingVote(blankDraft(), match, JUDGES, 'preliminary')).toEqual({
-      cup: 1,
-      judgeId: 'j1',
-    });
-    const draft = withVote(withVote(blankDraft(), 1, 'j1', T1), 1, 'j3', T1);
-    expect(firstMissingVote(draft, match, JUDGES, 'preliminary')).toEqual({
-      cup: 1,
-      judgeId: 'j2',
-    });
+describe('firstMissingCup', () => {
+  it('names the first unscored cup, in order', () => {
+    expect(firstMissingCup(blankDraft(), 'preliminary')).toBe(1);
+    const draft = withCupTokens(blankDraft(), 1, 2);
+    expect(firstMissingCup(draft, 'preliminary')).toBe(2);
   });
 
-  it('is null once every cell holds a valid vote', () => {
-    expect(firstMissingVote(draftWith(15, 'split'), match, JUDGES, 'preliminary')).toBeNull();
-  });
-
-  it('does not count a vote for a foreign team as present', () => {
-    const draft = withVote(draftWith(15, 'split'), 4, 'j2', 'some-other-team');
-    expect(firstMissingVote(draft, match, JUDGES, 'preliminary')).toEqual({
-      cup: 4,
-      judgeId: 'j2',
-    });
+  it('is null once every cup holds a score', () => {
+    expect(firstMissingCup(draftWith(15, 'split'), 'preliminary')).toBeNull();
   });
 });
 
@@ -186,7 +170,7 @@ describe('firstMissingVote', () => {
 describe('computeScores: pinned to the SQL btc_match_scores fixtures', () => {
   it('preliminary split, fastest team 1 => 37 / 15', () => {
     const draft = { ...draftWith(15, 'split'), fastest: 'team1' };
-    expect(computeScores(draft, match, JUDGES, 'preliminary')).toEqual({
+    expect(computeScores(draft, 'preliminary')).toEqual({
       team1Tokens: 30,
       team2Tokens: 15,
       team1Total: 37,
@@ -200,7 +184,7 @@ describe('computeScores: pinned to the SQL btc_match_scores fixtures', () => {
       fastest: 'team2',
       signature: { team1: true, team2: true },
     };
-    expect(computeScores(draft, match, JUDGES, 'final')).toEqual({
+    expect(computeScores(draft, 'final')).toEqual({
       team1Tokens: 40,
       team2Tokens: 20,
       team1Total: 47,
@@ -210,30 +194,25 @@ describe('computeScores: pinned to the SQL btc_match_scores fixtures', () => {
 
   it('a signature-beverage flag never counts in the preliminary round', () => {
     const draft = { ...draftWith(15, 'split'), signature: { team1: true, team2: true } };
-    const scores = computeScores(draft, match, JUDGES, 'preliminary');
+    const scores = computeScores(draft, 'preliminary');
     expect(scores.team1Total).toBe(35); // 30 + 5, no +2
     expect(scores.team2Total).toBe(15);
   });
 
   it('a tie on tokens awards the round-winner bonus to nobody', () => {
+    // A single cup always sums to 3 (never a tie by itself); two cups split
+    // oppositely (1-2, then 2-1) give 3 tokens each overall.
     let draft = blankDraft();
-    draft = withVote(draft, 1, 'j1', T1);
-    draft = withVote(draft, 1, 'j2', T2);
-    const scores = computeScores(draft, match, JUDGES, 'preliminary');
-    expect(scores.team1Total).toBe(1);
-    expect(scores.team2Total).toBe(1);
+    draft = withCupTokens(draft, 1, 1);
+    draft = withCupTokens(draft, 2, 2);
+    const scores = computeScores(draft, 'preliminary');
+    expect(scores.team1Total).toBe(3);
+    expect(scores.team2Total).toBe(3);
   });
 
   it('semifinal token tie, fastest team 1 => 32 / 30, no round-winner bonus', () => {
-    // 014 'tie' pattern: cups 1-10 split 2-1 for team 1, cups 11-20 split 1-2.
-    let draft = blankDraft();
-    for (let cup = 1; cup <= 20; cup += 1) {
-      JUDGES.forEach((judgeId, index) => {
-        const team1Vote = cup <= 10 ? index !== 2 : index === 0;
-        draft = withVote(draft, cup, judgeId, team1Vote ? T1 : T2);
-      });
-    }
-    expect(computeScores({ ...draft, fastest: 'team1' }, match, JUDGES, 'semifinal')).toEqual({
+    const draft = { ...draftWith(20, 'tie'), fastest: 'team1' };
+    expect(computeScores(draft, 'semifinal')).toEqual({
       team1Tokens: 30,
       team2Tokens: 30,
       team1Total: 32,
@@ -241,13 +220,13 @@ describe('computeScores: pinned to the SQL btc_match_scores fixtures', () => {
     });
   });
 
-  it('edited final: all votes team 2, fastest team 1, signature for team 1 ONLY => 4 / 65', () => {
+  it('edited final: all tokens to team 2, fastest team 1, signature for team 1 ONLY => 4 / 65', () => {
     const draft = {
       ...draftWith(20, 'all2'),
       fastest: 'team1',
       signature: { team1: true, team2: false },
     };
-    expect(computeScores(draft, match, JUDGES, 'final')).toEqual({
+    expect(computeScores(draft, 'final')).toEqual({
       team1Tokens: 0,
       team2Tokens: 60,
       team1Total: 4,
@@ -255,8 +234,8 @@ describe('computeScores: pinned to the SQL btc_match_scores fixtures', () => {
     });
   });
 
-  it('all votes for team 2 => 45 tokens and the +5', () => {
-    const scores = computeScores(draftWith(15, 'all2'), match, JUDGES, 'preliminary');
+  it('all tokens for team 2 => 45 tokens and the +5', () => {
+    const scores = computeScores(draftWith(15, 'all2'), 'preliminary');
     expect(scores.team2Total).toBe(50);
     expect(scores.team1Total).toBe(0);
   });
@@ -270,9 +249,9 @@ describe('buildConfirmParams', () => {
       signature: { team1: true, team2: false },
       times: { team1: ' 8:42 ', team2: ' 9:10 ' },
     };
-    const params = buildConfirmParams(match, draft, JUDGES, 'final');
-    expect(params.p_votes).toHaveLength(60);
-    expect(params.p_votes[0]).toEqual({ cup_number: 1, judge_id: 'j1', team_id: T1 });
+    const params = buildConfirmParams(match, draft, 'final');
+    expect(params.p_votes).toHaveLength(20);
+    expect(params.p_votes[0]).toEqual({ cup_number: 1, team1_tokens: 2 });
     expect(params.p_fastest_team_id).toBe(T2);
     expect(params.p_team1_signature).toBe(true);
     expect(params.p_team2_signature).toBe(false);
@@ -280,28 +259,27 @@ describe('buildConfirmParams', () => {
     expect(params.p_team2_time_note).toBe(' 9:10 ');
   });
 
-  it('maps fastest team 1 to the first team and never to the second', () => {
-    const draft = { ...draftWith(15, 'split'), fastest: 'team1' };
-    expect(buildConfirmParams(match, draft, JUDGES, 'preliminary').p_fastest_team_id).toBe(T1);
-  });
-
-  it('omits unset votes rather than sending null, so the RPC can give its friendly missing-votes error', () => {
-    const params = buildConfirmParams(match, draftWith(14, 'split'), JUDGES, 'preliminary');
-    expect(params.p_votes).toHaveLength(42);
-    expect(params.p_votes.every((vote) => vote.team_id)).toBe(true);
+  it('omits unscored cups rather than sending a placeholder, so the RPC can give its friendly missing-cups error', () => {
+    let draft = draftWith(15, 'split');
+    draft = { ...draft, votes: Object.fromEntries(Object.entries(draft.votes).slice(0, 14)) };
+    const params = buildConfirmParams(match, draft, 'preliminary');
+    expect(params.p_votes).toHaveLength(14);
   });
 
   it('never sends signature-beverage for a preliminary match, whatever the draft holds', () => {
     const draft = { ...draftWith(15, 'split'), signature: { team1: true, team2: true } };
-    const params = buildConfirmParams(match, draft, JUDGES, 'preliminary');
+    const params = buildConfirmParams(match, draft, 'preliminary');
     expect(params.p_team1_signature).toBe(false);
     expect(params.p_team2_signature).toBe(false);
   });
 
   it('sends a null fastest team when nobody was marked', () => {
-    expect(
-      buildConfirmParams(match, blankDraft(), JUDGES, 'preliminary').p_fastest_team_id,
-    ).toBeNull();
+    expect(buildConfirmParams(match, blankDraft(), 'preliminary').p_fastest_team_id).toBeNull();
+  });
+
+  it('maps fastest team 1 to the first team and never to the second', () => {
+    const draft = { ...draftWith(15, 'split'), fastest: 'team1' };
+    expect(buildConfirmParams(match, draft, 'preliminary').p_fastest_team_id).toBe(T1);
   });
 });
 
@@ -311,9 +289,9 @@ describe('draft persistence', () => {
   });
 
   it('round-trips a draft and normalises missing fields', async () => {
-    await saveDraft('m1', withVote(blankDraft(), 1, 'j1', T1));
+    await saveDraft('m1', withCupTokens(blankDraft(), 1, 2));
     const loaded = await loadDraft('m1');
-    expect(loaded.votes[1].j1).toBe(T1);
+    expect(loaded.votes[1]).toBe(2);
     expect(loaded.signature).toEqual({ team1: false, team2: false });
     expect(loaded.times).toEqual({ team1: '', team2: '' });
     expect(loaded.confirmOpId).toBeNull();
@@ -321,7 +299,7 @@ describe('draft persistence', () => {
 
   it('keeps the confirm operation id and base version so a reload can resolve them', async () => {
     await saveDraft('m1', {
-      ...withVote(blankDraft(), 1, 'j1', T1),
+      ...withCupTokens(blankDraft(), 1, 2),
       baseUpdatedAt: 'T0',
       confirmOpId: 'op-1',
     });
@@ -331,7 +309,7 @@ describe('draft persistence', () => {
   });
 
   it('clearDraft leaves nothing to resurface', async () => {
-    await saveDraft('m1', withVote(blankDraft(), 1, 'j1', T1));
+    await saveDraft('m1', withCupTokens(blankDraft(), 1, 2));
     await clearDraft('m1');
     expect(await loadDraft('m1')).toBeNull();
   });
@@ -352,13 +330,13 @@ describe('loadConfirmedDraft', () => {
     };
   }
 
-  it('rebuilds the draft shape from the recorded votes, bonuses and time notes', async () => {
+  it('rebuilds the draft shape from the recorded cup scores, bonuses and time notes', async () => {
     const draft = await loadConfirmedDraft(
       { ...match, team1_time_note: '8:42', team2_time_note: null },
       client({
         votes: [
-          { cup_number: 1, judge_id: 'j1', team_id: T1 },
-          { cup_number: 1, judge_id: 'j2', team_id: T2 },
+          { cup_number: 1, team1_tokens: 2 },
+          { cup_number: 2, team1_tokens: 0 },
         ],
         bonuses: {
           fastest_team_id: T2,
@@ -367,7 +345,8 @@ describe('loadConfirmedDraft', () => {
         },
       }),
     );
-    expect(draft.votes[1]).toEqual({ j1: T1, j2: T2 });
+    expect(draft.votes[1]).toBe(2);
+    expect(draft.votes[2]).toBe(0);
     expect(draft.fastest).toBe('team2');
     expect(draft.signature).toEqual({ team1: true, team2: false });
     expect(draft.times).toEqual({ team1: '8:42', team2: '' });
@@ -421,7 +400,7 @@ describe('confirmHandlers', () => {
 });
 
 describe('submitConfirmMatch', () => {
-  const params = () => buildConfirmParams(match, draftWith(15, 'split'), JUDGES, 'preliminary');
+  const params = () => buildConfirmParams(match, draftWith(15, 'split'), 'preliminary');
 
   it('enqueues ONE confirm_btc_match operation under the given operation id, then flushes', async () => {
     const handlers = { custom: true };
@@ -444,7 +423,7 @@ describe('submitConfirmMatch', () => {
     // The server timestamp is passed through as the raw string: converting it to a
     // JS Date would drop microseconds and make every optimistic-concurrency check fail.
     expect(payload.p_expected_updated_at).toBe('2026-09-22T00:00:00.123456+00:00');
-    expect(payload.p_votes).toHaveLength(45);
+    expect(payload.p_votes).toHaveLength(15);
     expect(flushOutbox).toHaveBeenCalledWith(handlers);
     expect(submitted).toEqual({ operationId: 'op-fixed', result: { ok: true } });
   });
@@ -531,7 +510,7 @@ describe('describeConfirmError', () => {
   });
 
   it.each([
-    ['confirm_btc_match: 3 of 45 judge votes are missing', '3 of 45 judge votes are missing'],
+    ['confirm_btc_match: 3 of 15 cups are missing a score', '3 of 15 cups are missing a score'],
     [
       'confirm_btc_match: match must have exactly 3 judges (has 2)',
       'match must have exactly 3 judges (has 2)',
@@ -539,6 +518,10 @@ describe('describeConfirmError', () => {
     [
       'confirm_btc_match: cup numbers must be between 1 and 15 for a preliminary match',
       'cup numbers must be between 1 and 15 for a preliminary match',
+    ],
+    [
+      "confirm_btc_match: each cup's tokens must be between 0 and 3",
+      "each cup's tokens must be between 0 and 3",
     ],
     [
       'confirm_btc_match: the signature-beverage bonus does not apply in the preliminary round',
