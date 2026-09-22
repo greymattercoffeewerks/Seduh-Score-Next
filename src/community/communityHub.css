@@ -202,7 +202,7 @@ body {
 
 .community-tool-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-5);
   margin-top: clamp(2.5rem, 5vw, 4.5rem);
 }
@@ -239,10 +239,10 @@ body {
 }
 
 .community-tool-status {
-  padding: 0.3rem 0.5rem;
+  padding: var(--space-1) var(--space-2);
   border: var(--border-hairline) solid var(--color-success);
   color: var(--color-success);
-  font-size: 0.62rem;
+  font-size: var(--text-3xs);
   letter-spacing: 0.1em;
 }
 
@@ -274,7 +274,7 @@ body {
 .community-card-eyebrow {
   margin: 0 0 var(--space-2);
   color: var(--color-text-secondary);
-  font-size: 0.65rem;
+  font-size: var(--text-3xs);
 }
 
 .community-tool-card h2 {
@@ -295,7 +295,7 @@ body {
 
 .community-tool-meta {
   color: var(--color-text-secondary);
-  font-size: 0.62rem;
+  font-size: var(--text-3xs);
   letter-spacing: 0.1em;
 }
 
@@ -344,8 +344,14 @@ body {
   padding-block: var(--space-6);
   border-top: var(--border-hairline) solid var(--color-border);
   color: var(--color-text-secondary);
-  font-size: 0.62rem;
+  font-size: var(--text-3xs);
   letter-spacing: 0.11em;
+}
+
+@media (max-width: 960px) {
+  .community-tool-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 700px) {
@@ -397,11 +403,11 @@ body {
   }
 
   .community-brand {
-    font-size: 0.65rem;
+    font-size: var(--text-3xs);
   }
 
   .community-home-link {
-    font-size: 0.58rem;
+    font-size: var(--text-3xs);
   }
 
   .community-hero h1 {
