@@ -1,0 +1,80 @@
+/*
+ * BTC standings screen (Phase T-BTC.2, sub-step 4). The base screen-chrome shapes
+ * (screen container, card, screen feedback) live in shared.css, loaded alongside this
+ * file. The table shape below duplicates cup-taster/standingsScreen.css's own
+ * .standings-table — the module boundary rules out linking to another format's CSS
+ * file directly (see src/formats/btc/CLAUDE.md's "Known debt" note on shared.css for
+ * the same reasoning already applied there). No coin-toss/tiebreak styling here: this
+ * screen has no advancement actions, only a read-only table.
+ */
+
+.standings-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.standings-table th {
+  text-align: left;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  padding: var(--space-2);
+  border-bottom: var(--border-strong) solid var(--color-border-strong);
+}
+
+.standings-table td {
+  padding: var(--space-2);
+  border-bottom: var(--border-hairline) solid var(--color-border);
+  vertical-align: middle;
+}
+
+.standings-played,
+.standings-wins,
+.standings-points {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* Same reasoning as cup-taster's own table at this breakpoint: a 6-column table
+   can't stay readable at 360px, so it becomes a stacked card layout instead of
+   shrinking columns further. */
+@media (max-width: 480px) {
+  .standings-table,
+  .standings-table thead,
+  .standings-table tbody,
+  .standings-table tr,
+  .standings-table td {
+    display: block;
+    width: 100%;
+  }
+  .standings-table thead {
+    display: none;
+  }
+  .standings-table tr {
+    border-bottom: var(--border-strong) solid var(--color-border-strong);
+    padding: var(--space-3) 0;
+  }
+  .standings-table td {
+    border-bottom: none;
+    padding: var(--space-1) 0;
+  }
+  .standings-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    font-size: var(--text-2xs);
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+  }
+}
+
+/* A team that hasn't played yet — a real, token-colored state, not left unstyled
+   (matching this project's "every meaningful state gets its own design" discipline,
+   e.g. scoringScreen.css's own locked-cell treatment). --color-text-secondary, not
+   --color-text-muted: DESIGN.md only certifies text-muted's 4.5:1 AA floor against
+   --color-canvas, not against a .card's --color-surface (measurably lighter in dark
+   mode) this text actually sits on — text-muted here computes to ~4.16:1, below AA.
+   Found in review, ui-accessibility-reviewer. */
+.standings-row[data-status='pending'] .standings-status {
+  color: var(--color-text-secondary);
+}

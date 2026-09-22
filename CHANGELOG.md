@@ -1,3 +1,46 @@
+## BTC Phase T-BTC.2, sub-step 4: Preliminary standings screen · 2026-09-22
+
+Read-only standings screen built entirely on the existing `btc_standings` SQL view
+(from T-BTC.1 schema), no new migration needed. `standings.js` merges every registered
+`btc_teams` row with its `btc_standings` row (missing standings zero-filled to 0 played/
+wins/points), so an event mid-competition shows the full field, not just teams that have
+played. Reuses `core/ranking.js`'s `rank()` and `chainComparators()` unedited: points
+desc, then wins desc, no name comparator (to avoid treating a genuine tie as distinct;
+display order among tied teams relies on `btc_teams` being alphabetically ordered by name,
+Array#sort stable). `standingsScreen` displays the ranked table with team name, wins,
+points, and position; deliberately does NOT reuse Cup Taster's tiebreak/coin-toss/
+advancement state machine — that logic belongs to bracket generation (sub-step 5).
+`standingsScreen.css` duplicates Cup Taster's `.standings-table` shape rather than
+importing it (module boundary rule).
+
+**Files touched**: `src/formats/btc/standings.js`, `standings.test.js`, `standingsScreen.js`,
+`standingsScreen.css`, `standingsScreen.test.js`, `standingsScreen.preview.html`. No
+migrations, no schema/RLS/storage changes.
+
+**Review outcome**: Four reviewers ran in parallel (module-boundary-checker, ui-accessibility-
+reviewer, test-auditor, code-reviewer — no schema/security/scoring/offline-sync review needed,
+no writes). **Two blocking findings, both fixed:**
+
+- **Contrast regression (dark mode)**: `.standings-row[data-status='pending'] .standings-status`
+  used `--color-text-muted`, certified in DESIGN.md only against `--color-canvas` (4.5:1 floor),
+  not against a `.card`'s `--color-surface` where it actually renders (measured ~4.16:1 in dark
+  mode, below AA). Fixed by swapping to `--color-text-secondary` (verified 6.73:1 on
+  `--color-surface` dark, mathematically computed from `src/ui/tokens/colors.css` hex values,
+  cross-checked against live browser computed styles).
+- **Test weakness**: tie-order test's fake client implemented `.order()` as a no-op and fed an
+  already-alphabetical fixture, so it passed even with `.order('name')` deleted from
+  `standings.js` (proved by auditor's own mutation). Fixed by making fake client's `.order()`
+  really sort; fixture fed out-of-alphabetical order; re-verified by mutation (deleting
+  `.order('name')` from standings.js now correctly fails that test; restored, git diff clean).
+
+**Test suite**: 1424 JS tests total (13 new in standings/standingsScreen tests). Verified live
+in a real browser at 360px (light mode + the contrast fix computed for dark). Lint/format
+clean.
+
+**Definition of Done met**: zero blocking findings remain.
+
+---
+
 ## BTC scoring: per-judge votes → per-cup tokens (design correction) · 2026-09-22
 
 Same-day follow-up to the scoring entry below (T-BTC.2 sub-step 3, 2026-09-22): user caught

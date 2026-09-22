@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BTC Standings — preview</title>
+    <link rel="stylesheet" href="/src/ui/tokens/index.css" />
+    <link rel="stylesheet" href="/src/formats/btc/shared.css" />
+    <link rel="stylesheet" href="/src/formats/btc/standingsScreen.css" />
+  </head>
+  <body>
+    <!-- Demo-only harness, not part of the shipped module graph. No live Supabase: an
+         in-memory fake client stands in. -->
+    <p>
+      <button id="demo-mixed">Mixed standings (a tie, an unplayed team)</button>
+      <button id="demo-empty">No teams yet</button>
+    </p>
+    <div id="app"></div>
+    <script type="module">
+      import { mountStandingsScreen } from './standingsScreen.js';
+
+      function createDemoClient({ empty }) {
+        const db = {
+          events: [{ id: 'ev1', org_id: 'org1', is_test: true }],
+          btc_teams: empty
+            ? []
+            : [
+                { id: 't1', event_id: 'ev1', name: 'Grey Matter' },
+                { id: 't2', event_id: 'ev1', name: 'Coffee Cartel' },
+                { id: 't3', event_id: 'ev1', name: 'Third Wave' },
+                { id: 't4', event_id: 'ev1', name: 'Bean There' },
+              ],
+          btc_standings: empty
+            ? []
+            : [
+                { event_id: 'ev1', team_id: 't1', played: 3, wins: 3, total_points: 111 },
+                { event_id: 'ev1', team_id: 't2', played: 3, wins: 1, total_points: 65 },
+                { event_id: 'ev1', team_id: 't3', played: 3, wins: 1, total_points: 65 },
+              ],
+        };
+        function makeBuilder(table) {
+          const filters = [];
+          const rows = () => (db[table] ?? []).filter((r) => filters.every(([c, v]) => r[c] === v));
+          const b = {
+            select: () => b,
+            eq: (c, v) => (filters.push([c, v]), b),
+            order: () => b,
+            single: () => Promise.resolve({ data: rows()[0] ?? null, error: null }),
+            then: (res, rej) => Promise.resolve({ data: rows(), error: null }).then(res, rej),
+          };
+          return b;
+        }
+        return { from: makeBuilder };
+      }
+
+      async function mount(opts) {
+        document.getElementById('app').innerHTML = '';
+        await mountStandingsScreen(document.getElementById('app'), {
+          eventId: 'ev1',
+          client: createDemoClient(opts),
+        });
+      }
+
+      document.getElementById('demo-mixed').addEventListener('click', () => mount({}));
+      document.getElementById('demo-empty').addEventListener('click', () => mount({ empty: true }));
+
+      mount({});
+    </script>
+  </body>
+</html>

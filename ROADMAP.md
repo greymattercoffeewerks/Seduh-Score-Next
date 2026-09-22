@@ -1146,9 +1146,9 @@ in a transaction.
 cloud Supabase project migrations must be pushed manually (via MCP `apply_migration`) after
 PR merge, per the 2026-09-05 incident note in CLAUDE.md.
 
-### Phase T-BTC.2 — Setup, match creation, and scoring (increments 1–2) · In progress
+### Phase T-BTC.2 — Setup, match creation, scoring, and standings (sub-steps 1–4) · Done
 
-**First three of six sub-steps (per Claude Docs plan §6):**
+**All four completed sub-steps (per Claude Docs plan §6):**
 
 - **Setup screen** (teams/judges roster): idempotent CRUD for team and judge registration
   (`teams.js`, `judges.js` with race-recovery on UNIQUE_VIOLATION); organiser UI with `is_test`
@@ -1165,7 +1165,7 @@ PR merge, per the 2026-09-05 incident note in CLAUDE.md.
   precedent. Explicitly added `SECURITY INVOKER` per reviewer nit. 34 new pgTAP assertions covering
   validation branches. 51 JS tests.
 
-- **Scoring** (increment 2, 2026-09-22): per-judge per-cup voting with per-team bonuses (fastest +2,
+- **Scoring** (2026-09-22): per-judge per-cup voting with per-team bonuses (fastest +2,
   signature beverage +2, token-plurality +5). Three new migrations: `20260922090000`
   (per-team signature_beverage booleans, fixes T-BTC.1 single-column design), `20260922091000`
   (`confirm_btc_match` RPC with processed_operations idempotency + optimistic row-lock concurrency,
@@ -1174,8 +1174,17 @@ PR merge, per the 2026-09-05 incident note in CLAUDE.md.
   formula fixtures; full a11y (focus on locked outcomes, live regions, sr-only announcer, sticky
   legend). 60 pgTAP + 14 cross-event assertions; 1408 JS tests total (was 1293). Round 1: all 8
   reviewers found real issues (offline-sync 2 blocking, ui-a11y 2 blocking on focus/contrast, plus
-  schema/code/test findings); all fixed. Round 2: all passed clean, 0 blocking. Migrations pushed to
-  cloud project 2026-09-22. Definition of Done met.
+  schema/code/test findings); all fixed. Round 2: all passed clean, 0 blocking. Same-day design
+  correction: per-cup-token model (not per-judge votes). Migrations pushed to cloud project 2026-09-22.
+  Definition of Done met.
+
+- **Preliminary standings** (2026-09-22): read-only ranked table built on `btc_standings` SQL view
+  (no new migration), merging all registered teams with their standings (zero-filling unplayed).
+  Reuses `core/ranking.js` unedited (points desc, wins desc, no name comparator to preserve ties).
+  Does NOT reuse Cup Taster's advancement machinery (bracket generation, sub-step 5, different flow).
+  Four reviewers, two blocking findings fixed: dark-mode contrast on pending-status text (4.16:1 →
+  6.73:1 via `--color-text-secondary`), and test weakness (fake `.order()` was a no-op; fixed to really
+  sort, fixture non-alphabetical, mutation-verified). 1424 JS tests; verified live at 360px.
 
 **Review outcome (across both increments):** First increment, two-pass review cycle found idempotency gap (schema-guardian)
 and multiple UI bugs; all reviewers passed once issues fixed. Second increment, 2-round review: all 8 reviewers ran in
@@ -1183,7 +1192,7 @@ round 1 with 5+ blocking findings (offline-sync, ui-accessibility, scoring-audit
 round 2 all passed, 0 blocking after fixes + delta re-review by schema/security on migration changes. 360 pgTAP total;
 1408 JS tests. Rollback verified live. All 7 BTC migrations now live on cloud project.
 
-**Not done, carry forward:** Phases T-BTC.2 standings/bracket/history (sub-steps 4–6); app-wiring pass
+**Not done, carry forward:** Phases T-BTC.2 bracket/history (sub-steps 5–6); app-wiring pass
 (deliberate, following Cup Taster precedent of standalone screens first).
 
 ---
