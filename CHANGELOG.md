@@ -1,3 +1,72 @@
+## BTC Phase T-BTC.2, sub-step 5: Bracket generation and advancement · 2026-09-22
+
+Backend-only task: four new migrations (already applied locally via db:reset, pgTAP
+passing at 399 tests total, pushed to cloud project `wxzwanprluqmgoagbkpv`). Bracket UI
+screen deferred to follow-up sub-step 6.
+
+**Four new migrations:**
+
+- `20260922130000_btc_bracket_generate_rpc.sql` — `generate_btc_bracket(p_org_id,
+p_event_id)`: seeds fixed 8-slot bracket (4 QF seeded from top 8 of `btc_standings`,
+  2 SF, 1 final, 1 third_place, feeder-linked) from preliminary standings. Refuses to
+  generate if an unresolved tie exists at the 8th/9th qualifying boundary. Uses advisory
+  lock to serialize concurrent calls for same event.
+- `20260922131000_btc_create_bracket_match_rpc.sql` — `create_btc_bracket_match(p_org_id,
+p_slot_id, p_judge_ids)`: creates `btc_matches` row from fully-seeded slot, assigns
+  judges, links slot back via `match_id`, row-locked to serialize against downstream
+  advancement writes.
+- `20260922132000_btc_confirm_match_bracket_advancement.sql` — forward-only `CREATE OR
+REPLACE` on existing `confirm_btc_match` RPC: after pre-existing write path, reads
+  winner/loser from `btc_match_scores` view and pushes result into every downstream
+  bracket slot the confirmed match's slot feeds (SF feeds both `final` via winner and
+  `third_place` via loser). Refuses if downstream slot already has match (would change
+  winners). Genuine ties leave downstream slots unresolved, never auto-decided.
+- `20260922133000_btc_bracket_slots_feeder_distinct_check.sql` — defense-in-depth
+  `CHECK (feeder_slot_1 IS NULL OR feeder_slot_2 IS NULL OR feeder_slot_1 <>
+feeder_slot_2)` on `btc_bracket_slots`.
+- `supabase/tests/016_btc_bracket.sql` — 39 new pgTAP assertions covering seeding,
+  tie-boundary rejection, feeder-link correctness, match creation, advancement
+  (QF→SF→final/third_place split), already-advanced guard, cross-org/non-member
+  rejection.
+
+**Review cycle** (all 6 subagents ran in parallel; round 1 found and fixed 7 findings,
+zero blocking remain):
+
+- **security-reviewer**: 2 blocking findings (missing explicit `revoke execute ... from
+anon` on the two new RPCs — same bug fixed once this phase already on 13 other RPCs;
+  no negative pgTAP test for wrong-org/non-member caller rejection) — both fixed.
+- **schema-guardian**: 2 high-severity races (missing `for update` row locks in
+  `create_btc_bracket_match` and `confirm_btc_match`'s advancement loop; generate-then-write
+  check-then-insert race) — both fixed by adding row locks and merging advancement loop's
+  two passes into one locked transaction.
+- **scoring-auditor**: independently found same TOCTOU race (medium severity) + confirmed
+  scoring/tie/rollback-safety invariants sound; 2 low findings (inaccurate third_place
+  error message, missing feeder_slot_1<>feeder_slot_2 constraint) — all fixed.
+- **code-reviewer**: 1 moderate (duplicated `v_target` derivation across two loops) — fixed
+  by loop merge above.
+- **test-auditor**: confirmed self-found bugs fixed correctly; independently re-derived
+  team1_id→team2_id fix sound; 1 minor gap (qf2/qf4 team2_id assertions) — all fixed.
+- **module-boundary-checker**: clean, no findings.
+
+Migrations apply cleanly from empty database, rollback blocks verified live in
+transactions, identical schema fingerprints before/after forward+rollback cycle.
+Full pgTAP suite 399 tests passing. Definition of Done met.
+
+**Files touched**: `supabase/migrations/20260922130000_btc_bracket_generate_rpc.sql`,
+`20260922131000_btc_create_bracket_match_rpc.sql`,
+`20260922132000_btc_confirm_match_bracket_advancement.sql`,
+`20260922133000_btc_bracket_slots_feeder_distinct_check.sql`,
+`supabase/tests/016_btc_bracket.sql`.
+
+**Known gaps carried forward** (not defects, deliberately out of scope this sub-step):
+
+- No seeding-tie-break UI yet — organiser must resolve ties outside the app; bracket
+  generation blocks until resolved (pre-existing gap, tracked in ROADMAP.md).
+- Bracket UI screen (`bracketScreen.js`) not built yet — backend-only this turn,
+  deliberately deferred to follow-up task (sub-step 6).
+
+---
+
 ## BTC Phase T-BTC.2, sub-step 4: Preliminary standings screen · 2026-09-22
 
 Read-only standings screen built entirely on the existing `btc_standings` SQL view

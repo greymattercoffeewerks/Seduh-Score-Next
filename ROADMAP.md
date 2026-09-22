@@ -1197,6 +1197,19 @@ round 2 all passed, 0 blocking after fixes + delta re-review by schema/security 
 
 ---
 
+## Known open items from BTC Phase T-BTC.2 bracket generation (2026-09-22)
+
+- **No seeding-tie-break UI yet.** When an unresolved tie exists at the 8th/9th qualifying
+  boundary, `generate_btc_bracket` refuses to proceed; organiser must resolve the tie
+  outside the app. A future seeding tie-break UI would let the organiser decide from within
+  the app itself. (Pre-existing gap; same issue noted during T-BTC.2 sub-step 4 standings
+  review.)
+- **Bracket UI screen not built yet.** The backend (schema, RPCs, tests) is complete this
+  sub-step; the organiser-facing bracket display screen (`bracketScreen.js` / bracket
+  client module) is deferred to sub-step 6 (next unstarted item in the build plan).
+
+---
+
 ## Known open items from BTC Phase T-BTC.2 scoring (2026-09-22)
 
 - **RPC JSONB casts lack numeric-type guard (pre-existing, found in correction pass 2026-09-22).**
