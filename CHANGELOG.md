@@ -1,3 +1,59 @@
+## BTC Phase T-BTC.2, sub-step 6: Bracket UI screen · 2026-09-23
+
+Organiser-facing bracket display and match-creation UI, closing out all of Phase T-BTC.2
+(sub-steps 1–6). Pure client-side, no migrations — builds on sub-step 5's already-merged
+backend (generate_btc_bracket, create_btc_bracket_match, confirm_btc_match's advancement).
+
+**Six new files:**
+
+- `src/formats/btc/bracket.js` — data layer: `generateBracket`/`createBracketMatch` (thin
+  RPC wrappers, unrouted, matching create_btc_match's own precedent), `fetchBracket`
+  (composes btc_bracket_slots with each slot's btc_matches.status, sorted into bracket
+  display order via BRACKET_ROUND_ORDER rather than alphabetical). `validateBracketMatchJudges`
+  (pure, mirrors matches.js validation).
+- `src/formats/btc/bracketScreen.js` — organiser UI: shows "Generate bracket" action until
+  bracket exists; once generated, displays bracket tree grouped by round (Quarterfinals/
+  Semifinals/Final/Third Place), each slot showing "TeamA vs TeamB" (or "TBD"). Depending
+  on state: status label correctly distinguishing btc_matches.status's three values
+  (pending→"Match scheduled — not yet scored", scoring→"Scoring in progress", confirmed→
+  "Confirmed"), inline "Create match" 3-judge-picker form (submit/cancel), or "Waiting on
+  earlier round". Built on the exact same loading/error/retry/toast/focus shape as
+  matchesScreen.js/standingsScreen.js.
+- `src/formats/btc/bracketScreen.css` — bracket-tree layout only; reuses shared.css and
+  matchesScreen.css's pre-existing component shapes.
+- `src/formats/btc/bracket.test.js` (12 tests), `src/formats/btc/bracketScreen.test.js`
+  (18 tests after fixes) — 30 new JS tests total.
+- `src/formats/btc/bracketScreen.preview.html` — standalone demo harness.
+
+**Review cycle (4 reviewers, 1 round):**
+
+- **ui-accessibility-reviewer**: 1 blocking (opening/cancelling inline create-match form
+  dropped keyboard focus to <body> — no shared data-focus-key between departing button and
+  arriving form, core/dom.js can't restore focus). Fixed with explicit `pendingFocus`
+  branches ('create-form'/'create-button'), matching 'heading'/'toast' pattern, verified
+  via unit test and live browser trace. 1 non-blocking note (slot-card border contrast weak
+  in stage/dark mode — pre-existing --color-border/--border-hairline token already used
+  elsewhere, stage-mode unlikely here, flagged not fixed).
+- **test-auditor**: 1 finding (cap-at-3-judges test only had 3 judges in fixture, so 4th
+  rejection never exercised). Fixed by adding dedicated 4th-judge test mirroring
+  matchesScreen.test.js's own. 1 minor gap (partial-team slot state untested) — fixed.
+- **code-reviewer**: 1 moderate (matchStatusLabel collapsed pending/scoring into same label,
+  hiding whether match is untouched vs. mid-scoring). Fixed with third label branch
+  ("Scoring in progress") + new test. 1 trivial (const vs let state, inconsistent with
+  sibling).
+- **module-boundary-checker**: clean, no findings.
+
+**Known gaps carried forward (not defects, scope decision):**
+
+- BTC screens (setup/matches/scoring/standings/bracket) not yet routed in main.js — a
+  pre-existing, cross-screen gap this task doesn't change.
+- No deep link from pending/scoring bracket-match slot into scoringScreen.js — organiser
+  navigates separately until routing exists.
+
+**Final state**: 1455 JS tests (1424 + 31 new), ESLint clean. Definition of Done met.
+
+---
+
 ## BTC Phase T-BTC.2, sub-step 5: Bracket generation and advancement · 2026-09-22
 
 Backend-only task: four new migrations (already applied locally via db:reset, pgTAP
