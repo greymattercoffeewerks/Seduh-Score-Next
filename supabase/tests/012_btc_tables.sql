@@ -148,14 +148,14 @@ update btc_matches set status = 'confirmed' where id = '00000000-0000-0000-0000-
 select is(
   (select total_points from btc_standings
      where team_id = '00000000-0000-0000-0000-0000000000b1'),
-  9,
-  'btc_standings: team1 gets 2 tokens (from btc_cup_votes) + 5 round-winner bonus + 2 fastest-team bonus once confirmed'
+  null,
+  'btc_standings excludes a match marked confirmed that does not hold a complete set of votes (the numbers for a complete match are pinned in 014)'
 );
 select is(
   (select total_points from btc_standings
      where team_id = '00000000-0000-0000-0000-0000000000b2'),
-  1,
-  'btc_standings: team2 gets its 1 token with no bonuses'
+  null,
+  'btc_standings excludes the same incomplete match for team 2 too'
 );
 
 reset role;

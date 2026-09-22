@@ -4,6 +4,7 @@ import {
   createMatch,
   listMatches,
   listJudgeIdsForMatch,
+  findMatchById,
   removeMatch,
 } from './matches.js';
 
@@ -37,6 +38,17 @@ function fakeClient({ tables = {}, rpc, errorOn } = {}) {
       },
       order() {
         return builder;
+      },
+      single() {
+        if (fails(table, 'single')) {
+          return Promise.resolve({ data: null, error: { code: '42501' } });
+        }
+        const row = (db[table] ?? []).find((r) => matchesFilters(r, filters));
+        return Promise.resolve(
+          row
+            ? { data: { ...row }, error: null }
+            : { data: null, error: { code: 'PGRST116', message: 'no rows' } },
+        );
       },
       delete() {
         if (fails(table, 'delete')) {
@@ -200,5 +212,36 @@ describe('removeMatch', () => {
       errorOn: 'btc_matches.delete',
     });
     await expect(removeMatch('m1', client)).rejects.toMatchObject({ code: '42501' });
+  });
+});
+
+describe('findMatchById', () => {
+  it('returns exactly the requested match', async () => {
+    const client = fakeClient({
+      tables: {
+        btc_matches: [
+          { id: 'm1', event_id: 'ev1', round: 'preliminary' },
+          { id: 'm2', event_id: 'ev1', round: 'final' },
+        ],
+      },
+    });
+    expect(await findMatchById('m2', client)).toEqual({
+      id: 'm2',
+      event_id: 'ev1',
+      round: 'final',
+    });
+  });
+
+  it('throws when there is no such match (or it is not visible), never returning null', async () => {
+    const client = fakeClient({ tables: { btc_matches: [] } });
+    await expect(findMatchById('nope', client)).rejects.toMatchObject({ code: 'PGRST116' });
+  });
+
+  it('throws the raw error on a failed read rather than swallowing it', async () => {
+    const client = fakeClient({
+      tables: { btc_matches: [{ id: 'm1' }] },
+      errorOn: 'btc_matches.single',
+    });
+    await expect(findMatchById('m1', client)).rejects.toMatchObject({ code: '42501' });
   });
 });

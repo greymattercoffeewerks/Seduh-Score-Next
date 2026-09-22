@@ -1,3 +1,61 @@
+## BTC Phase T-BTC.2, sub-step 3: Scoring · 2026-09-22
+
+Atomic scoring across judges and cups, per-team bonuses, and one-transaction match
+confirmation gated by consensus. Three new migrations implementing the +5 for strictly-more-token
+team, +2 for fastest, +2 for signature beverage (per-team, outside preliminary), with the vote
+ledger fact-table and three derived views pinned to the same numeric fixtures; new
+`confirm_btc_match` RPC with `processed_operations` idempotency and optimistic row-lock
+concurrency; local IndexedDB drafting with baseUpdatedAt tracking; UI preview showing the
+exact server formula in real time; and full a11y (focus on locked outcomes, live regions,
+sr-only tap announcer, sticky scoring legend). Three new scoring-related tests files + updated
+exiting ones; 360 pgTAP total (was 253 at start); 1408 JS tests.
+
+**Migrations**: `20260922090000_btc_bonuses_per_team_signature.sql` (fixes T-BTC.1 design where
+signature_beverage_team_id couldn't represent per-team flags; replaces with team1/team2 boolean
+columns, recreates downstream views), `20260922091000_btc_confirm_match_rpc.sql` (atomic
+confirm_btc_match with strict 3-judge + full-cup-set validation, processed_operations
+idempotency, optimistic concurrency lock on btc_matches.updated_at), `20260922092000_btc_cross_event_integrity.sql`
+(triggers prevent matches/match_judges/bracket_slots from referencing another event's rows;
+btc_teams/btc_judges immutably scoped to event).
+
+**Files**: src/formats/btc/scoring.js/scoringScreen.js/.css/scoringScreen.test.js/scoringScreen.preview.html,
+outboxHandlers.js/.test.js, matches.js (findMatchById), main.js (allOutboxHandlers merges
+Cup Taster + BTC; operationLabels merged), main.test.js; supabase/tests/014_btc_scoring.sql
+(60 assertions), 015_btc_cross_event_integrity.sql (14 assertions).
+
+**Review**: Round 1 — all 8 reviewers ran, found real issues (offline-sync-auditor FAILED
+2 blocking on double-submit + missing outbox merge; ui-accessibility 2 blocking on focus +
+dark-theme contrast; schema, security, code, test, module-boundary findings); all fixed.
+Round 2 — all passed, no blocking: offline-sync (B1/B2 closed), ui-a11y (2 blocking fixed
+
+- browser-verified at 360px), test-auditor, code-reviewer, scoring-auditor (SQL view vote
+  filter blocking fixed), module-boundary, schema-guardian + security-reviewer delta-review
+  after migration changes (clean). Live rollback of migrations C+B+A executed and re-applied
+  with identical schema fingerprint.
+
+**Known gaps (deferred, copied to ROADMAP)**: 18 items flagged: core/outbox.js 408/429/5xx
+permanent loss (data-loss on flaky wifi; affects Cup Taster too) · processed_operations.id
+op-id poisoning across orgs · app.org_id_for_btc_match anon-executable · btc_matches_write
+lets member set status=confirmed directly · btc_match_judges editable after confirmation ·
+unindexed FKs (cup_votes team_id/judge_id, bonuses fastest_team_id, bracket_slots team1/team2)
+· btc_cup_totals counts out-of-range votes · btc_bracket_slots.event_id still movable ·
+public/anon EXECUTE on 9 older trigger functions (consistency cleanup only, unreachable) ·
+scoring screen needs network (no offline reload) · screens/handlers wired (setup/matches/scoring
+not routed; main.js must pass allOutboxHandlers; cross-format head-of-line blocking until then)
+· setBusyDisabled incorrectly sets aria-busy on locked controls · main.test.js no assertion
+btcOperationLabels reach shell · no pgTAP fixture pins token winner != fastest · bracket
+step must guard editing confirmed matches with winners that advanced · bracket step must
+decide KO on bonus-inclusive totals, leave ties unresolved.
+
+**Cloud**: Migrations pushed 2026-09-22 to project wxzwanprluqmgoagbkpv via apply_migration
+(versions 20260922004915/004940/005001).
+
+**Verifier sign-offs**: schema-guardian (clean, after delta re-review), security-reviewer
+(clean, after delta re-review), scoring-auditor (1 blocking fixed), offline-sync-auditor
+(2 blocking fixed), module-boundary-checker (clean), ui-accessibility-reviewer (2 blocking
+fixed), test-auditor (clean), code-reviewer (clean). Definition of Done met; zero blocking
+findings remain.
+
 ## Guess the Bean Android widget: layout fix for tall Honor tiles · 2026-09-19
 
 With live data (2 guesses) the Refresh control was clipped at the bottom of the card on the

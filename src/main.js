@@ -24,6 +24,7 @@ import { mountScoringScreen } from './formats/cup-taster/scoringScreen.js';
 import { mountProjectorSurface } from './formats/cup-taster/projectorSurface.js';
 import { mountPhoneSummary } from './formats/cup-taster/phoneSummary.js';
 import { flushOutbox } from './core/outbox.js';
+import { btcOutboxHandlers, btcOperationLabels } from './formats/btc/outboxHandlers.js';
 import {
   cupTasterOutboxHandlers,
   cupTasterOperationLabels,
@@ -248,6 +249,13 @@ export function buildRoutes({ orgId, bareRoot, routerRef }) {
   ];
 }
 
+// Every format's operation types in ONE map: a flush registers handlers per call, so a
+// queued operation whose type is missing here throws "no handler" and stops the whole
+// FIFO queue behind it, including other formats' operations.
+function allOutboxHandlers(client) {
+  return { ...cupTasterOutboxHandlers(client), ...btcOutboxHandlers(client) };
+}
+
 // Sync-on-reconnect (D4: "local-first with sync-on-reconnect") — found
 // missing in review (Phase 6 offline soak): every real write already
 // enqueues-then-flushes in the SAME call (timing.js/scoring.js/publish.js),
@@ -271,7 +279,7 @@ export function buildRoutes({ orgId, bareRoot, routerRef }) {
 // non-permanent result (or no error at all) clears any previously-reported
 // one, the same way a screen's own retry clears its local error state.
 function attemptReconnectFlush(client, shell) {
-  flushOutbox(cupTasterOutboxHandlers(client))
+  flushOutbox(allOutboxHandlers(client))
     .then((result) => {
       shell.reportFlushError(result.permanentFailure ? result.error : null);
     })
@@ -296,7 +304,7 @@ export function mountApp(root, { client = getSupabase(), orgId = getDefaultOrgId
   // comment.
   const shell = mountAppShell(shellRoot, {
     client,
-    operationLabels: cupTasterOperationLabels,
+    operationLabels: { ...cupTasterOperationLabels, ...btcOperationLabels },
   });
 
   // Tracked reactively via onAuthStateChange, NOT a fresh client.auth.
