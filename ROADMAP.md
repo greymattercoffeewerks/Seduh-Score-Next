@@ -1146,9 +1146,9 @@ in a transaction.
 cloud Supabase project migrations must be pushed manually (via MCP `apply_migration`) after
 PR merge, per the 2026-09-05 incident note in CLAUDE.md.
 
-### Phase T-BTC.2 — Setup and match creation (increment 1) · In progress
+### Phase T-BTC.2 — Setup, match creation, and scoring (increments 1–2) · In progress
 
-**First two of six sub-steps (per Claude Docs plan §6):**
+**First three of six sub-steps (per Claude Docs plan §6):**
 
 - **Setup screen** (teams/judges roster): idempotent CRUD for team and judge registration
   (`teams.js`, `judges.js` with race-recovery on UNIQUE_VIOLATION); organiser UI with `is_test`
@@ -1165,15 +1165,71 @@ PR merge, per the 2026-09-05 incident note in CLAUDE.md.
   precedent. Explicitly added `SECURITY INVOKER` per reviewer nit. 34 new pgTAP assertions covering
   validation branches. 51 JS tests.
 
-**Review outcome:** Two-pass review cycle. First round (schema-guardian, security-reviewer,
-module-boundary-checker, ui-accessibility-reviewer, code-reviewer, parallel) found idempotency gap
-(schema-guardian) and multiple UI bugs; second round (targeted at removeMatch fix) passed clean.
-All reviewers passed once issues fixed. 286/286 pgTAP tests passing; 1293/1293 JS tests passing.
-Rollback verified live twice (before and after the removeMatch fix). All 4 BTC migrations now live
-on the cloud project.
+- **Scoring** (increment 2, 2026-09-22): per-judge per-cup voting with per-team bonuses (fastest +2,
+  signature beverage +2, token-plurality +5). Three new migrations: `20260922090000`
+  (per-team signature_beverage booleans, fixes T-BTC.1 single-column design), `20260922091000`
+  (`confirm_btc_match` RPC with processed_operations idempotency + optimistic row-lock concurrency,
+  strict 3-judge + full-cup-set validation), `20260922092000` (cross-event reference integrity
+  triggers). Local IndexedDB drafting with baseUpdatedAt concurrency; UI preview pinned to server
+  formula fixtures; full a11y (focus on locked outcomes, live regions, sr-only announcer, sticky
+  legend). 60 pgTAP + 14 cross-event assertions; 1408 JS tests total (was 1293). Round 1: all 8
+  reviewers found real issues (offline-sync 2 blocking, ui-a11y 2 blocking on focus/contrast, plus
+  schema/code/test findings); all fixed. Round 2: all passed clean, 0 blocking. Migrations pushed to
+  cloud project 2026-09-22. Definition of Done met.
 
-**Not done, carry forward:** Phases T-BTC.2 scoring/standings/bracket/history (sub-steps 3–6);
-app-wiring pass (deliberate, following Cup Taster precedent of standalone screens first).
+**Review outcome (across both increments):** First increment, two-pass review cycle found idempotency gap (schema-guardian)
+and multiple UI bugs; all reviewers passed once issues fixed. Second increment, 2-round review: all 8 reviewers ran in
+round 1 with 5+ blocking findings (offline-sync, ui-accessibility, scoring-auditor, plus schema/code/test), all fixed;
+round 2 all passed, 0 blocking after fixes + delta re-review by schema/security on migration changes. 360 pgTAP total;
+1408 JS tests. Rollback verified live. All 7 BTC migrations now live on cloud project.
+
+**Not done, carry forward:** Phases T-BTC.2 standings/bracket/history (sub-steps 4–6); app-wiring pass
+(deliberate, following Cup Taster precedent of standalone screens first).
+
+---
+
+## Known open items from BTC Phase T-BTC.2 scoring (2026-09-22)
+
+- **RPC JSONB casts lack numeric-type guard (pre-existing, found in correction pass 2026-09-22).**
+  Both `confirm_btc_match` (the v->>'team1_tokens'::int cast) and the earlier vote-storage
+  shape (cup_number extraction) lack a numeric-type guard, so a non-integer value surfaces
+  as a raw Postgres cast error rather than a curated message. The JS client always validates
+  (`withCupTokens` enforces 0–3 range for team1_tokens), so unreachable via the app today
+  (same pattern already existed for cup_number before the correction migration). Deferred as
+  a robustness improvement over a blocking defect — caught during review, deliberate not-to-fix
+  per scoring-auditor assessment.
+- **core/outbox.js buildRpcHandler treats 408/429/5xx as permanent (data-loss risk on flaky wifi;
+  affects Cup Taster too).** Classification of timeout/throttle status codes as permanent write loss
+  instead of transient needs decision.
+- **processed_operations.id is a global primary key (op-id poisoning across orgs).** Suggest schema
+  change to `(org_id, id)`.
+- **app.org_id_for_btc_match is anon-executable.** Should require `authenticated` role.
+- **btc_matches_write is FOR ALL: a member can set status=confirmed directly, bypassing the RPC,**
+  letting any member confirm a match without the full validation the RPC provides.
+- **btc_match_judges can be edited after confirmation** and nothing outside the RPC caps them at 3,
+  enabling race conditions between scoring and judge removal.
+- **Unindexed foreign keys:** btc_cup_votes.team_id/judge_id, btc_match_bonuses.fastest_team_id,
+  btc_bracket_slots.team1_id/team2_id (performance risk).
+- **btc_cup_totals still counts out-of-range cup votes** (match totals and standings are filtered,
+  but the view itself is inconsistent).
+- **btc_bracket_slots.event_id can still be moved; freeze it with forbid_btc_event_change** in the
+  bracket step (feeder links must not be trusted blindly).
+- **Nine older trigger functions keep PUBLIC/anon EXECUTE** (check_btc_cup_vote_participants,
+  check_btc_match_bonus_teams, and 7 pre-BTC ones): unreachable, consistency cleanup only.
+- **Scoring screen load needs the network** (no offline reload capability).
+- **Three screens (setup/matches/scoring) are not yet routed in main.js.** When routed, main.js must
+  pass allOutboxHandlers as `handlers` parameter. Cross-format head-of-line blocking: Cup Taster
+  screens default to Cup-Taster-only handler map, BTC screens to BTC-only.
+- **setBusyDisabled (core/dom.js) sets aria-busy on merely locked or incomplete controls,** not
+  just genuinely disabled ones (semantically imprecise).
+- **main.test.js has no assertion that btcOperationLabels reach the shell** (outboxHandlers.test.js
+  asserts label/handler keys agree, but end-to-end flow is untested).
+- **No pgTAP fixture pins btc_standings.wins for a token winner who is not the fastest team** (both
+  paths valid but only one tested).
+- **Bracket step must decide knockout winners on bonus-inclusive totals, leave total ties unresolved,
+  and guard editing a confirmed match whose winner already advanced.** Deferred to bracket step.
+- **Standings completeness rests on exactly 3 judges per match;** nothing outside the RPC caps
+  btc_match_judges at 3 (see btc_match_judges editable gap above).
 
 ---
 

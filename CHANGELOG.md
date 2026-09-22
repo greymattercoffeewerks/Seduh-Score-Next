@@ -1,3 +1,128 @@
+## BTC scoring: per-judge votes → per-cup tokens (design correction) · 2026-09-22
+
+Same-day follow-up to the scoring entry below (T-BTC.2 sub-step 3, 2026-09-22): user caught
+a modelling error before PR #101 merged by comparing against the legacy Seduh Score UI. A
+cup's score is a single 0–3 token count for team1 (team2 auto-balances to 3 minus that),
+never split per-judge. Judges remain assigned to a match (exactly 3, still validated) purely
+for record/transparency — not tied to any vote.
+
+**Design rationale**: Legacy UI's per-cup UI control (not per-judge radio buttons) proved
+clearer and faster. A cup is the actual scored unit; judges rotate across cups in a match,
+but the scoring happens cup-by-cup, not judge-by-judge. Per-cup token totals, with team2's
+share auto-derived, eliminates vote-matrix complexity and matches organiser mental model.
+
+**Migrations**: Two new forward-only migrations supersede the vote-storage shape of the
+three already-pushed 20260922090000/091000/092000 migrations (never edited, per repo rule):
+
+- `20260922100000_btc_cup_votes_per_cup_tokens.sql` (cloud version 20260922052416): drops
+  `judge_id`/`team_id` from `btc_cup_votes`, adds `team1_tokens smallint CHECK (team1_tokens
+BETWEEN 0 AND 3)`, makes `(match_id, cup_number)` unique, recreates `btc_cup_totals` /
+  `btc_match_totals` / `btc_match_scores` views with per-cup-token logic.
+- `20260922101000_btc_confirm_match_rpc_per_cup_tokens.sql` (cloud version 20260922052439):
+  `CREATE OR REPLACE` for `confirm_btc_match` with same signature; parameter `p_votes` now
+  `{cup_number, team1_tokens}[]` instead of `{cup_number, judge_id, team_id}[]`; completeness
+  check counts `count(*) = cups` instead of `cups * 3`.
+
+**Client changes**: `src/formats/btc/scoring.js` — `draft.votes[cup]` is now a single 0–3
+number (not per-judge map); `withCupTokens(votes, cupNumber, newValue)` enforces 0–3 range.
+`src/formats/btc/scoringScreen.js` — per-cup UI is a 4-button segmented control (0/1/2/3)
+with live team2-balance text ("Team B: 3 tokens"). Judges listed once in a summary line for
+the record only, not interactive. `scoringScreen.css` updated for new control layout.
+`scoringScreen.preview.html` demonstrates the new UI shape.
+
+**pgTAP updates**: `supabase/tests/012_btc_tables.sql` (plan 23, no change from
+pre-correction state — this test file focuses on schema/RLS/grants, not vote shape);
+`supabase/tests/014_btc_scoring.sql` (plan 60, rewritten for per-cup-token fixtures,
+same fixture parity: 37/15, 47/24, 32/30, 4/65, 0/50 as JS). Fixture counts mirrored
+between JS and SQL to catch silent drift.
+
+**Review**: All 7 reviewers ran (module-boundary-checker not re-run: no `src/core/` or
+cross-format changes). All PASSED, zero blocking. Schema-guardian and security-reviewer
+verified both new migrations live (rollback + reapply fingerprint-identical; RLS/grants/
+CHECK/unique constraints all hold). Scoring-auditor and test-auditor independently
+confirmed fixture parity (37/15, 47/24, 32/30, 4/65, 0/50) and mutation-tested `team2 =
+3 - team1` arithmetic on both JS and SQL sides. Offline-sync-auditor confirmed confirm/
+pending/dropped state machine untouched; re-verified previously-weak ledger-decides-success
+test now uses genuine mid-flight mutation hook. UI-accessibility-reviewer confirmed 4-button
+token control meets tap-target (48px), aria-pressed, focus-order requirements (code-level;
+user independently browser-verified at 360px). Code-reviewer found no blocking issues.
+
+**Test suite**: 360 pgTAP (012: 23, 014: 60, 015: 14, others: 263); 1411 JS (1408 BTC
+
+- 3 new within scoring.test.js). Lint/format clean.
+
+**Cloud**: Both migrations pushed to project wxzwanprluqmgoagbkpv same day
+(20260922052416, 20260922052439).
+
+**Verifier sign-offs**: schema-guardian (clean live verification), security-reviewer (clean),
+scoring-auditor (fixture parity confirmed), offline-sync-auditor (clean), ui-accessibility-
+reviewer (clean, code-level + live 360px), test-auditor (clean), code-reviewer (clean).
+Definition of Done met; zero blocking findings remain.
+
+**Known gaps (deferred to ROADMAP)**: JSONB RPC cast lacks numeric-type guard (pre-existing,
+affects the v->>'team1_tokens'::int cast in the RPC; JS client always validates, so
+unreachable via the app; same pattern existed for cup_number before this migration).
+
+---
+
+## BTC Phase T-BTC.2, sub-step 3: Scoring · 2026-09-22
+
+Atomic scoring across judges and cups, per-team bonuses, and one-transaction match
+confirmation gated by consensus. Three new migrations implementing the +5 for strictly-more-token
+team, +2 for fastest, +2 for signature beverage (per-team, outside preliminary), with the vote
+ledger fact-table and three derived views pinned to the same numeric fixtures; new
+`confirm_btc_match` RPC with `processed_operations` idempotency and optimistic row-lock
+concurrency; local IndexedDB drafting with baseUpdatedAt tracking; UI preview showing the
+exact server formula in real time; and full a11y (focus on locked outcomes, live regions,
+sr-only tap announcer, sticky scoring legend). Three new scoring-related tests files + updated
+exiting ones; 360 pgTAP total (was 253 at start); 1408 JS tests.
+
+**Migrations**: `20260922090000_btc_bonuses_per_team_signature.sql` (fixes T-BTC.1 design where
+signature_beverage_team_id couldn't represent per-team flags; replaces with team1/team2 boolean
+columns, recreates downstream views), `20260922091000_btc_confirm_match_rpc.sql` (atomic
+confirm_btc_match with strict 3-judge + full-cup-set validation, processed_operations
+idempotency, optimistic concurrency lock on btc_matches.updated_at), `20260922092000_btc_cross_event_integrity.sql`
+(triggers prevent matches/match_judges/bracket_slots from referencing another event's rows;
+btc_teams/btc_judges immutably scoped to event).
+
+**Files**: src/formats/btc/scoring.js/scoringScreen.js/.css/scoringScreen.test.js/scoringScreen.preview.html,
+outboxHandlers.js/.test.js, matches.js (findMatchById), main.js (allOutboxHandlers merges
+Cup Taster + BTC; operationLabels merged), main.test.js; supabase/tests/014_btc_scoring.sql
+(60 assertions), 015_btc_cross_event_integrity.sql (14 assertions).
+
+**Review**: Round 1 — all 8 reviewers ran, found real issues (offline-sync-auditor FAILED
+2 blocking on double-submit + missing outbox merge; ui-accessibility 2 blocking on focus +
+dark-theme contrast; schema, security, code, test, module-boundary findings); all fixed.
+Round 2 — all passed, no blocking: offline-sync (B1/B2 closed), ui-a11y (2 blocking fixed
+
+- browser-verified at 360px), test-auditor, code-reviewer, scoring-auditor (SQL view vote
+  filter blocking fixed), module-boundary, schema-guardian + security-reviewer delta-review
+  after migration changes (clean). Live rollback of migrations C+B+A executed and re-applied
+  with identical schema fingerprint.
+
+**Known gaps (deferred, copied to ROADMAP)**: 18 items flagged: core/outbox.js 408/429/5xx
+permanent loss (data-loss on flaky wifi; affects Cup Taster too) · processed_operations.id
+op-id poisoning across orgs · app.org_id_for_btc_match anon-executable · btc_matches_write
+lets member set status=confirmed directly · btc_match_judges editable after confirmation ·
+unindexed FKs (cup_votes team_id/judge_id, bonuses fastest_team_id, bracket_slots team1/team2)
+· btc_cup_totals counts out-of-range votes · btc_bracket_slots.event_id still movable ·
+public/anon EXECUTE on 9 older trigger functions (consistency cleanup only, unreachable) ·
+scoring screen needs network (no offline reload) · screens/handlers wired (setup/matches/scoring
+not routed; main.js must pass allOutboxHandlers; cross-format head-of-line blocking until then)
+· setBusyDisabled incorrectly sets aria-busy on locked controls · main.test.js no assertion
+btcOperationLabels reach shell · no pgTAP fixture pins token winner != fastest · bracket
+step must guard editing confirmed matches with winners that advanced · bracket step must
+decide KO on bonus-inclusive totals, leave ties unresolved.
+
+**Cloud**: Migrations pushed 2026-09-22 to project wxzwanprluqmgoagbkpv via apply_migration
+(versions 20260922004915/004940/005001).
+
+**Verifier sign-offs**: schema-guardian (clean, after delta re-review), security-reviewer
+(clean, after delta re-review), scoring-auditor (1 blocking fixed), offline-sync-auditor
+(2 blocking fixed), module-boundary-checker (clean), ui-accessibility-reviewer (2 blocking
+fixed), test-auditor (clean), code-reviewer (clean). Definition of Done met; zero blocking
+findings remain.
+
 ## Guess the Bean Android widget: layout fix for tall Honor tiles · 2026-09-19
 
 With live data (2 guesses) the Refresh control was clipped at the bottom of the card on the

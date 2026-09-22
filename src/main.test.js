@@ -79,6 +79,12 @@ vi.mock('./formats/cup-taster/outboxHandlers.js', () => ({
   cupTasterOutboxHandlers: (...args) => cupTasterOutboxHandlers(...args),
   cupTasterOperationLabels,
 }));
+const btcOutboxHandlers = vi.fn(() => ({ fake_btc: 'btc-handlers' }));
+const btcOperationLabels = { fake_btc_type: 'doing a fake btc thing' };
+vi.mock('./formats/btc/outboxHandlers.js', () => ({
+  btcOutboxHandlers: (...args) => btcOutboxHandlers(...args),
+  btcOperationLabels,
+}));
 const stopTrackingInputModality = vi.fn();
 const trackInputModality = vi.fn(() => stopTrackingInputModality);
 vi.mock('./core/inputModality.js', () => ({
@@ -584,8 +590,11 @@ describe('sync-on-reconnect', () => {
     await startApp({ client });
     await new Promise((resolve) => setTimeout(resolve, 0)); // let the async INITIAL_SESSION callback fire
 
-    expect(flushOutbox).toHaveBeenCalledWith({ fake: 'handlers' });
+    // Both formats' handlers must be in the ONE reconnect flush: a queued operation type
+    // with no handler stops the whole FIFO queue, blocking everything behind it.
+    expect(flushOutbox).toHaveBeenCalledWith({ fake: 'handlers', fake_btc: 'btc-handlers' });
     expect(cupTasterOutboxHandlers).toHaveBeenCalledWith(client);
+    expect(btcOutboxHandlers).toHaveBeenCalledWith(client);
   });
 
   it('does NOT attempt a flush before a session is known — an unauthenticated RPC error would be misclassified as permanent by buildRpcHandler and silently discard real pending writes', async () => {

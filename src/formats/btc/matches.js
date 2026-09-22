@@ -62,6 +62,12 @@ export async function listMatches(eventId, round, client = getSupabase()) {
   return withJudges;
 }
 
+export async function findMatchById(matchId, client = getSupabase()) {
+  const { data, error } = await client.from('btc_matches').select('*').eq('id', matchId).single();
+  if (error) throw error;
+  return data;
+}
+
 export async function listJudgeIdsForMatch(matchId, client = getSupabase()) {
   const { data, error } = await client
     .from('btc_match_judges')

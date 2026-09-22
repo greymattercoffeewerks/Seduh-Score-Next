@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BTC Match Scoring — preview</title>
+    <link rel="stylesheet" href="/src/ui/tokens/index.css" />
+    <link rel="stylesheet" href="/src/formats/btc/shared.css" />
+    <link rel="stylesheet" href="/src/formats/btc/scoringScreen.css" />
+  </head>
+  <body>
+    <!--
+      Demo-only harness for the BTC scoring screen, not part of the shipped module
+      graph. No live Supabase: an in-memory fake client stands in, including a
+      confirm_btc_match simulation that enforces the same strict-confirm and
+      concurrency rules as the real RPC. The REAL outbox and IndexedDB draft store
+      are used, so reloading mid-scoring restores your votes. Try: tap votes, fill
+      every cup, confirm; switch to the Final (signature-beverage appears); use
+      "Conflict" to see a stale-data rejection.
+    -->
+    <p>
+      <button id="demo-prelim">Preliminary (15 cups)</button>
+      <button id="demo-final">Final (20 cups)</button>
+      <button id="demo-conflict">Preliminary, server conflict</button>
+    </p>
+    <div id="app"></div>
+    <script type="module">
+      import { mountScoringScreen } from './scoringScreen.js';
+      import { clearDraft } from './scoring.js';
+
+      function createDemoClient({ round, conflict }) {
+        const db = {
+          events: [{ id: 'ev1', org_id: 'org1', is_test: true }],
+          btc_teams: [
+            { id: 't1', event_id: 'ev1', name: 'Grey Matter' },
+            { id: 't2', event_id: 'ev1', name: 'Coffee Cartel' },
+          ],
+          btc_judges: [
+            { id: 'j1', event_id: 'ev1', name: 'Alex Rivera' },
+            { id: 'j2', event_id: 'ev1', name: 'Jordan Lee' },
+            { id: 'j3', event_id: 'ev1', name: 'Casey Tan' },
+          ],
+          btc_matches: [
+            {
+              id: 'm1',
+              event_id: 'ev1',
+              round,
+              team1_id: 't1',
+              team2_id: 't2',
+              status: 'pending',
+              updated_at: '2026-09-22T00:00:00.000001+00:00',
+              team1_time_note: null,
+              team2_time_note: null,
+            },
+          ],
+          btc_match_judges: ['j1', 'j2', 'j3'].map((judge_id) => ({ match_id: 'm1', judge_id })),
+          btc_cup_votes: [],
+          btc_match_bonuses: [],
+          processed_operations: [],
+        };
+        function makeBuilder(table) {
+          const filters = [];
+          const rows = () =>
+            (db[table] ?? [])
+              .filter((r) => filters.every(([c, v]) => r[c] === v))
+              .map((r) => ({ ...r }));
+          const b = {
+            select: () => b,
+            eq: (c, v) => (filters.push([c, v]), b),
+            order: () => b,
+            single: () => Promise.resolve({ data: rows()[0] ?? null, error: null }),
+            maybeSingle: () => Promise.resolve({ data: rows()[0] ?? null, error: null }),
+            then: (res, rej) => Promise.resolve({ data: rows(), error: null }).then(res, rej),
+          };
+          return b;
+        }
+        return {
+          from: makeBuilder,
+          rpc: async (name, args) => {
+            if (name !== 'confirm_btc_match')
+              return { error: { message: 'unknown rpc' }, status: 404 };
+            const match = db.btc_matches[0];
+            if (conflict || args.p_expected_updated_at !== match.updated_at) {
+              return {
+                error: { code: 'P0002', message: 'CONFLICT: match modified', details: '{}' },
+                status: 400,
+              };
+            }
+            const need = round === 'preliminary' ? 15 : 20;
+            if (args.p_votes.length !== need) {
+              return {
+                error: {
+                  code: 'P0001',
+                  message: `confirm_btc_match: ${need - args.p_votes.length} of ${need} cups are missing a score`,
+                },
+                status: 400,
+              };
+            }
+            db.processed_operations.push({ id: args.p_operation_id });
+            match.status = 'confirmed';
+            match.updated_at = new Date().toISOString();
+            match.team1_time_note = args.p_team1_time_note?.trim() || null;
+            db.btc_cup_votes = args.p_votes.map((v) => ({
+              match_id: 'm1',
+              cup_number: v.cup_number,
+              team1_tokens: v.team1_tokens,
+            }));
+            db.btc_match_bonuses = [
+              {
+                match_id: 'm1',
+                fastest_team_id: args.p_fastest_team_id,
+                team1_signature_beverage: args.p_team1_signature,
+                team2_signature_beverage: args.p_team2_signature,
+              },
+            ];
+            return { error: null, status: 200 };
+          },
+        };
+      }
+
+      async function mount(opts, keepDraft = false) {
+        if (!keepDraft) await clearDraft('m1');
+        document.getElementById('app').innerHTML = '';
+        await mountScoringScreen(document.getElementById('app'), {
+          matchId: 'm1',
+          client: createDemoClient(opts),
+        });
+      }
+
+      document
+        .getElementById('demo-prelim')
+        .addEventListener('click', () => mount({ round: 'preliminary' }));
+      document
+        .getElementById('demo-final')
+        .addEventListener('click', () => mount({ round: 'final' }));
+      document
+        .getElementById('demo-conflict')
+        .addEventListener('click', () => mount({ round: 'preliminary', conflict: true }));
+
+      mount({ round: 'preliminary' }, true);
+    </script>
+  </body>
+</html>

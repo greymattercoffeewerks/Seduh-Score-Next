@@ -130,3 +130,67 @@ Final: 1293/1293 tests (60 BTC-specific across `teams`/`judges`/`setupScreen`/`m
 `013_btc_create_match_rpc.sql`), ESLint clean, migration applies cleanly from empty and
 its rollback verified live in a transaction (twice — once before, once after the
 `removeMatch` fix, since the fix also added `security invoker` explicitly to the RPC).
+
+`scoring`, `scoringScreen`, `outboxHandlers` (T-BTC.2, 2026-09-22) — **Describes intermediate
+per-judge voting design; see design correction below (2026-09-22) for the shipped per-cup-token
+model.** Three migrations: `20260922090000_btc_bonuses_per_team_signature.sql`
+(fixes T-BTC.1's single-column design where signature_beverage_team_id couldn't represent
+per-team flags; replaces with team1_signature_beverage/team2_signature_beverage booleans,
+recreates dependent views), `20260922091000_btc_confirm_match_rpc.sql` (atomic
+`confirm_btc_match` enforcing exactly 3 judges + all cups voted, with `processed_operations`
+idempotency key and optimistic concurrency lock on `btc_matches.updated_at` for edit-after-confirm
+support), `20260922092000_btc_cross_event_integrity.sql` (triggers prevent matches/judges/
+bracket_slots from referencing another event's rows; btc_teams/judges immutably scoped to
+event). `scoring.js` — pure vote aggregation following the +5 formula (strict token plurality,
+no shared bonus) + 2 fastest (exclusive) + 2 signature-bev (per-team, outside preliminary),
+called by the UI preview to stay in sync with `btc_match_scores` view. `scoringScreen.js`
+— per-match scoring form with live vote totals, locked states on incomplete/pending/confirmed
+outcomes, baseUpdatedAt concurrency tracking, and local IndexedDB drafting (confirmOpId saved
+BEFORE enqueue). `outboxHandlers.js` — `confirm_btc_match_operation` handler merged into
+`main.js`'s `allOutboxHandlers` alongside Cup Taster's for cross-format reconnect flush.
+UI/a11y: focus moves to live-region alert on locked outcomes; sr-only tap announcer; sticky
+scoring legend; live regions collapsed with `:empty` (no spurious announcements). Design: draft
+states (editing/pending w/ busy lock/dropped w/ discard-only); stale drafts (baseUpdatedAt !=
+match.updated_at) locked for discard-only.
+
+**Two-round review with 5+ blocking findings fixed in round 1, zero blocking in round 2.**
+Round 1 (all 8 reviewers parallel): offline-sync-auditor FAILED with 2 blocking (double-submit
+on pending → fixed by ledger-first queue read, and outbox merge missing from main.js → fixed
+by merging BTC handlers), ui-accessibility-reviewer 2 blocking (focus landing on empty region
+→ fixed focus move, and dark-theme label contrast → fixed semantic token), schema-guardian
+(fixed cross-event reference gap via migration C), security-reviewer (clean after schema fix),
+scoring-auditor 1 blocking (SQL views counted stray votes unlike JS → fixed filter in migration
+A), code-reviewer (clean), test-auditor (clean), module-boundary-checker (clean). Round 2:
+delta re-review by schema-guardian + security-reviewer after migration changes (clean);
+all others passed, zero blocking. 360 pgTAP total (60 scoring assertions + 14 cross-event in
+new tests 014/015; was 286); 1408 JS tests (1293 + 115 new across scoring/scoringScreen/
+outboxHandlers). Live rollback of all three migrations executed in a transaction and re-applied
+forward with identical schema fingerprint. All 7 BTC migrations pushed to cloud project
+2026-09-22. Definition of Done met.
+
+**Design correction (2026-09-22): per-judge votes → per-cup tokens.** User caught a modelling
+error before the first scoring PR merged by comparing against the legacy Seduh Score UI: a
+cup's score should be a single 0–3 token count for team1 (team2 auto-balances), not split
+per-judge. Judges stay assigned to a match (exactly 3, still validated) for record-only;
+no vote is attributed to a judge. Two new forward-only migrations (never editing the three
+above, per repo rule) supersede the vote-storage shape: `20260922100000_btc_cup_votes_per_cup_tokens.sql`
+(drops judge_id/team_id from btc_cup_votes, adds team1_tokens 0–3, recreates views) and
+`20260922101000_btc_confirm_match_rpc_per_cup_tokens.sql` (CREATE OR REPLACE confirm_btc_match
+with per-cup-token param shape, completeness check count(*) = cups instead of cups * 3).
+`scoring.js` rewritten: `draft.votes[cup]` is now a single 0–3 number. `scoringScreen.js`
+rewritten: 4-button segmented control per cup (0/1/2/3) with live team2-balance text;
+judges listed once for record, non-interactive. `supabase/tests/012_btc_tables.sql` (plan 23,
+unchanged) and `014_btc_scoring.sql` (plan 60, rewritten for per-cup-token fixtures, same
+parity: 37/15, 47/24, 32/30, 4/65, 0/50) updated; fixture counts mirrored between JS/SQL.
+All 7 reviewers re-ran, all PASSED, zero blocking. Schema-guardian/security-reviewer verified
+both new migrations live (rollback identical). Scoring-auditor/test-auditor confirmed fixture
+parity and mutation-tested team2=3-team1 arithmetic both sides. Offline-sync/ui-accessibility/
+code-reviewer passed clean. 360 pgTAP + 1411 JS tests (3 new in scoring.test.js). Both
+migrations pushed to cloud project 2026-09-22. Definition of Done met.
+
+**Handlers and labels wired into main.js (2026-09-22)**, but scoring/setup/matches screens
+still not routed — Cup Taster's own app-wiring pass happened well after all its screens existed,
+same precedent applied here. When the three BTC screens are routed, main.js must pass
+`allOutboxHandlers` as the `handlers` parameter (not the BTC-only map) to prevent cross-format
+head-of-line blocking with Cup Taster screens, and Cup Taster screens must receive the same
+treatment — currently hardcoded to Cup-Taster-only handlers.

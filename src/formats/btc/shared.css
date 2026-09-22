@@ -111,9 +111,17 @@
 
 .form-field-label {
   font-size: var(--text-2xs);
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   text-transform: uppercase;
   letter-spacing: var(--tracking-wide);
+}
+
+/* A real, token-colored explanation line, not placeholder text alone (same shape as
+   Cup Taster's own; duplicated here rather than imported, per this file's header). */
+.form-field-hint {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
 }
 
 .field-input {
