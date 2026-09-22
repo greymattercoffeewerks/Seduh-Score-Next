@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BTC Bracket — preview</title>
+    <link rel="stylesheet" href="/src/ui/tokens/index.css" />
+    <link rel="stylesheet" href="/src/formats/btc/shared.css" />
+    <link rel="stylesheet" href="/src/formats/btc/matchesScreen.css" />
+    <link rel="stylesheet" href="/src/formats/btc/bracketScreen.css" />
+  </head>
+  <body>
+    <!--
+      Demo-only harness for the BTC bracket screen — not part of the shipped module
+      graph, same role as matchesScreen.preview.html. No live Supabase connection: an
+      in-memory fake client (below) stands in for generate_btc_bracket and
+      create_btc_bracket_match. Try: Generate bracket (seeds 4 QF slots from 8 fake
+      teams), then Create match on a filled QF slot (pick all 3 judges).
+    -->
+    <p>
+      <button id="demo-pre-bracket">Mount (before bracket generated)</button>
+      <button id="demo-post-bracket">Mount (bracket already generated)</button>
+      <button id="demo-failed">Mount (load fails)</button>
+    </p>
+    <div id="app"></div>
+    <script type="module">
+      import { mountBracketScreen } from './bracketScreen.js';
+
+      function createDemoClient({ preGenerated = false } = {}) {
+        const db = {
+          events: [{ id: 'ev1', org_id: 'org1', name: 'BTC Demo Event', is_test: true }],
+          btc_teams: Array.from({ length: 8 }, (_, i) => ({
+            id: `t${i + 1}`,
+            event_id: 'ev1',
+            name: `Team ${i + 1}`,
+          })),
+          btc_judges: [
+            { id: 'j1', event_id: 'ev1', name: 'Alex Rivera' },
+            { id: 'j2', event_id: 'ev1', name: 'Jordan Lee' },
+            { id: 'j3', event_id: 'ev1', name: 'Casey Tan' },
+          ],
+          btc_bracket_slots: preGenerated
+            ? [
+                {
+                  id: 's-qf1',
+                  event_id: 'ev1',
+                  round: 'quarterfinal',
+                  slot_label: 'qf1',
+                  team1_id: 't1',
+                  team2_id: 't8',
+                  match_id: null,
+                },
+                {
+                  id: 's-qf2',
+                  event_id: 'ev1',
+                  round: 'quarterfinal',
+                  slot_label: 'qf2',
+                  team1_id: 't4',
+                  team2_id: 't5',
+                  match_id: null,
+                },
+                {
+                  id: 's-qf3',
+                  event_id: 'ev1',
+                  round: 'quarterfinal',
+                  slot_label: 'qf3',
+                  team1_id: 't3',
+                  team2_id: 't6',
+                  match_id: null,
+                },
+                {
+                  id: 's-qf4',
+                  event_id: 'ev1',
+                  round: 'quarterfinal',
+                  slot_label: 'qf4',
+                  team1_id: 't2',
+                  team2_id: 't7',
+                  match_id: null,
+                },
+                {
+                  id: 's-sf1',
+                  event_id: 'ev1',
+                  round: 'semifinal',
+                  slot_label: 'sf1',
+                  team1_id: null,
+                  team2_id: null,
+                  match_id: null,
+                },
+                {
+                  id: 's-sf2',
+                  event_id: 'ev1',
+                  round: 'semifinal',
+                  slot_label: 'sf2',
+                  team1_id: null,
+                  team2_id: null,
+                  match_id: null,
+                },
+                {
+                  id: 's-final',
+                  event_id: 'ev1',
+                  round: 'final',
+                  slot_label: 'final',
+                  team1_id: null,
+                  team2_id: null,
+                  match_id: null,
+                },
+                {
+                  id: 's-third',
+                  event_id: 'ev1',
+                  round: 'third_place',
+                  slot_label: 'third_place',
+                  team1_id: null,
+                  team2_id: null,
+                  match_id: null,
+                },
+              ]
+            : [],
+          btc_matches: [],
+        };
+        let idCounter = 0;
+
+        function matchesFilters(row, filters, inFilters) {
+          return (
+            filters.every(([col, val]) => row[col] === val) &&
+            inFilters.every(([col, vals]) => vals.includes(row[col]))
+          );
+        }
+
+        function makeBuilder(table) {
+          const filters = [];
+          const inFilters = [];
+          const builder = {
+            select() {
+              return builder;
+            },
+            eq(col, val) {
+              filters.push([col, val]);
+              return builder;
+            },
+            in(col, vals) {
+              inFilters.push([col, vals]);
+              return builder;
+            },
+            order() {
+              return builder;
+            },
+            single() {
+              const rows = (db[table] ?? []).filter((r) => matchesFilters(r, filters, inFilters));
+              return Promise.resolve({ data: rows[0] ?? null, error: null });
+            },
+            then(resolve, reject) {
+              const rows = (db[table] ?? []).filter((r) => matchesFilters(r, filters, inFilters));
+              return Promise.resolve({ data: rows, error: null }).then(resolve, reject);
+            },
+          };
+          return builder;
+        }
+
+        return {
+          from: (table) => makeBuilder(table),
+          rpc: (name, args) => {
+            if (name === 'generate_btc_bracket') {
+              if (db.btc_bracket_slots.length > 0) {
+                return Promise.resolve({
+                  data: null,
+                  error: { code: 'P0001', message: 'a bracket already exists for this event' },
+                });
+              }
+              const seeds = db.btc_teams.map((t) => t.id);
+              const qf = [
+                { label: 'qf1', t1: seeds[0], t2: seeds[7] },
+                { label: 'qf2', t1: seeds[3], t2: seeds[4] },
+                { label: 'qf3', t1: seeds[2], t2: seeds[5] },
+                { label: 'qf4', t1: seeds[1], t2: seeds[6] },
+              ];
+              for (const q of qf) {
+                db.btc_bracket_slots.push({
+                  id: `s-${q.label}`,
+                  event_id: 'ev1',
+                  round: 'quarterfinal',
+                  slot_label: q.label,
+                  team1_id: q.t1,
+                  team2_id: q.t2,
+                  match_id: null,
+                });
+              }
+              for (const [label, round] of [
+                ['sf1', 'semifinal'],
+                ['sf2', 'semifinal'],
+                ['final', 'final'],
+                ['third_place', 'third_place'],
+              ]) {
+                db.btc_bracket_slots.push({
+                  id: `s-${label}`,
+                  event_id: 'ev1',
+                  round,
+                  slot_label: label,
+                  team1_id: null,
+                  team2_id: null,
+                  match_id: null,
+                });
+              }
+              return Promise.resolve({ data: db.btc_bracket_slots, error: null });
+            }
+            if (name === 'create_btc_bracket_match') {
+              const slot = db.btc_bracket_slots.find((s) => s.id === args.p_slot_id);
+              if (slot.match_id) {
+                return Promise.resolve({
+                  data: null,
+                  error: { code: 'P0001', message: 'this slot already has a match' },
+                });
+              }
+              idCounter += 1;
+              const created = {
+                id: `m${idCounter}`,
+                event_id: slot.event_id,
+                round: slot.round,
+                team1_id: slot.team1_id,
+                team2_id: slot.team2_id,
+                status: 'pending',
+              };
+              db.btc_matches.push(created);
+              slot.match_id = created.id;
+              return Promise.resolve({ data: created, error: null });
+            }
+            return Promise.resolve({ data: null, error: null });
+          },
+        };
+      }
+
+      function failingClient() {
+        return { from: () => ({ from: () => {} }) };
+      }
+
+      function mount(client) {
+        document.getElementById('app').innerHTML = '';
+        mountBracketScreen(document.getElementById('app'), { eventId: 'ev1', client });
+      }
+
+      document
+        .getElementById('demo-pre-bracket')
+        .addEventListener('click', () => mount(createDemoClient()));
+      document
+        .getElementById('demo-post-bracket')
+        .addEventListener('click', () => mount(createDemoClient({ preGenerated: true })));
+      document
+        .getElementById('demo-failed')
+        .addEventListener('click', () => mount(failingClient()));
+
+      mount(createDemoClient());
+    </script>
+  </body>
+</html>

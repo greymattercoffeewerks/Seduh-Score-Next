@@ -1146,9 +1146,9 @@ in a transaction.
 cloud Supabase project migrations must be pushed manually (via MCP `apply_migration`) after
 PR merge, per the 2026-09-05 incident note in CLAUDE.md.
 
-### Phase T-BTC.2 — Setup, match creation, scoring, and standings (sub-steps 1–4) · Done
+### Phase T-BTC.2 — Setup, match creation, scoring, standings, bracket generation and UI · Done
 
-**All four completed sub-steps (per Claude Docs plan §6):**
+**All six completed sub-steps (per Claude Docs plan §6):**
 
 - **Setup screen** (teams/judges roster): idempotent CRUD for team and judge registration
   (`teams.js`, `judges.js` with race-recovery on UNIQUE_VIOLATION); organiser UI with `is_test`
@@ -1165,18 +1165,16 @@ PR merge, per the 2026-09-05 incident note in CLAUDE.md.
   precedent. Explicitly added `SECURITY INVOKER` per reviewer nit. 34 new pgTAP assertions covering
   validation branches. 51 JS tests.
 
-- **Scoring** (2026-09-22): per-judge per-cup voting with per-team bonuses (fastest +2,
-  signature beverage +2, token-plurality +5). Three new migrations: `20260922090000`
-  (per-team signature_beverage booleans, fixes T-BTC.1 single-column design), `20260922091000`
-  (`confirm_btc_match` RPC with processed_operations idempotency + optimistic row-lock concurrency,
-  strict 3-judge + full-cup-set validation), `20260922092000` (cross-event reference integrity
-  triggers). Local IndexedDB drafting with baseUpdatedAt concurrency; UI preview pinned to server
-  formula fixtures; full a11y (focus on locked outcomes, live regions, sr-only announcer, sticky
-  legend). 60 pgTAP + 14 cross-event assertions; 1408 JS tests total (was 1293). Round 1: all 8
-  reviewers found real issues (offline-sync 2 blocking, ui-a11y 2 blocking on focus/contrast, plus
-  schema/code/test findings); all fixed. Round 2: all passed clean, 0 blocking. Same-day design
-  correction: per-cup-token model (not per-judge votes). Migrations pushed to cloud project 2026-09-22.
-  Definition of Done met.
+- **Scoring** (2026-09-22): per-cup 0–3 token count for each team (not per-judge votes — design
+  correction 2026-09-22). Three migrations (bonuses-per-team fix, confirm_btc_match RPC with idempotency,
+  cross-event reference integrity) plus two follow-on per-cup-token corrections. Local IndexedDB drafting
+  with baseUpdatedAt concurrency; UI with live vote totals, locked states, sr-only announcer, sticky
+  legend. Full a11y pass (focus on locked outcomes, live regions). 60 pgTAP (revised fixtures) + 14
+  cross-event assertions; 1411 JS tests (post-correction). Round 1: all 8 reviewers, 5+ blocking findings
+  (offline-sync, ui-a11y, scoring-auditor, schema, test); all fixed. Round 2: all passed clean, 0 blocking
+  after delta review. Design correction same-day (per-judge → per-cup tokens); all 7 reviewers re-ran
+  post-correction, passed clean. All 9 BTC migrations pushed to cloud project 2026-09-22. Definition of
+  Done met.
 
 - **Preliminary standings** (2026-09-22): read-only ranked table built on `btc_standings` SQL view
   (no new migration), merging all registered teams with their standings (zero-filling unplayed).
@@ -1186,27 +1184,40 @@ PR merge, per the 2026-09-05 incident note in CLAUDE.md.
   6.73:1 via `--color-text-secondary`), and test weakness (fake `.order()` was a no-op; fixed to really
   sort, fixture non-alphabetical, mutation-verified). 1424 JS tests; verified live at 360px.
 
-**Review outcome (across both increments):** First increment, two-pass review cycle found idempotency gap (schema-guardian)
-and multiple UI bugs; all reviewers passed once issues fixed. Second increment, 2-round review: all 8 reviewers ran in
-round 1 with 5+ blocking findings (offline-sync, ui-accessibility, scoring-auditor, plus schema/code/test), all fixed;
-round 2 all passed, 0 blocking after fixes + delta re-review by schema/security on migration changes. 360 pgTAP total;
-1408 JS tests. Rollback verified live. All 7 BTC migrations now live on cloud project.
+- **Bracket generation and advancement** (2026-09-22, backend only): four migrations seeding fixed 8-slot
+  bracket from top-8 standings (refusing ties at 8th/9th boundary), creating bracket matches, advancing
+  winners/losers through downstream slots (QF→SF→final/third_place split), with row-locks preventing
+  races. 39 pgTAP assertions; all 6 reviewers found and fixed 7 findings (security-reviewer 2 blocking,
+  schema-guardian 2 race-condition fixes, scoring-auditor, code-reviewer, test-auditor — zero blocking
+  post-fix). Definition of Done met.
 
-**Not done, carry forward:** Phases T-BTC.2 bracket/history (sub-steps 5–6); app-wiring pass
-(deliberate, following Cup Taster precedent of standalone screens first).
+- **Bracket UI screen** (2026-09-23): organiser-facing bracket display and match-creation UI. Pure
+  client-side (bracket.js, bracketScreen.js), no migrations — builds on sub-step 5's backend. Shows
+  "Generate bracket" action until generated; once generated, bracket tree grouped by round
+  (Quarterfinals/Semifinals/Final/Third Place), each slot showing teams/TBD with inline create-match
+  form (3-judge picker, capped validation). Status label correctly distinguishes pending/scoring/confirmed.
+  Four reviewers: ui-a11y 1 blocking (form open/cancel dropped focus to <body>) — fixed with pendingFocus
+  branches; test-auditor 1 finding (4th-judge fixture gap) — fixed; code-reviewer 1 moderate (pending vs
+  scoring label collapse) — fixed with third label branch; module-boundary-checker clean. 30 new JS tests
+  (1455 total). Definition of Done met.
+
+**Review outcome:** Across all 6 sub-steps, 40+ issues found and fixed across 4+ review rounds; zero
+blocking in final state. 360 pgTAP + 1455 JS tests. Rollback verified live. All 9 BTC migrations now live
+on cloud project.
+
+**Not done, carry forward:** app-wiring pass (deliberate, following Cup Taster precedent of standalone
+screens first — all format screens exist; wiring them into main.js, main.test.js, and closing the
+handler-routing cross-format head-of-line blocker is a separate, later step).
 
 ---
 
-## Known open items from BTC Phase T-BTC.2 bracket generation (2026-09-22)
+## Known open items from BTC Phase T-BTC.2 (2026-09-23)
 
 - **No seeding-tie-break UI yet.** When an unresolved tie exists at the 8th/9th qualifying
   boundary, `generate_btc_bracket` refuses to proceed; organiser must resolve the tie
   outside the app. A future seeding tie-break UI would let the organiser decide from within
   the app itself. (Pre-existing gap; same issue noted during T-BTC.2 sub-step 4 standings
   review.)
-- **Bracket UI screen not built yet.** The backend (schema, RPCs, tests) is complete this
-  sub-step; the organiser-facing bracket display screen (`bracketScreen.js` / bracket
-  client module) is deferred to sub-step 6 (next unstarted item in the build plan).
 
 ---
 
@@ -1239,7 +1250,7 @@ round 2 all passed, 0 blocking after fixes + delta re-review by schema/security 
 - **Nine older trigger functions keep PUBLIC/anon EXECUTE** (check_btc_cup_vote_participants,
   check_btc_match_bonus_teams, and 7 pre-BTC ones): unreachable, consistency cleanup only.
 - **Scoring screen load needs the network** (no offline reload capability).
-- **Three screens (setup/matches/scoring) are not yet routed in main.js.** When routed, main.js must
+- **Four screens (setup/matches/scoring/bracket) are not yet routed in main.js.** When routed, main.js must
   pass allOutboxHandlers as `handlers` parameter. Cross-format head-of-line blocking: Cup Taster
   screens default to Cup-Taster-only handler map, BTC screens to BTC-only.
 - **setBusyDisabled (core/dom.js) sets aria-busy on merely locked or incomplete controls,** not

@@ -1,0 +1,58 @@
+/*
+ * BTC Bracket screen (Phase T-BTC.2, sub-step 6). Base screen-chrome shapes live in
+ * shared.css, loaded alongside this file. The judge-checkbox/fieldset shapes
+ * (.btc-judge-fieldset, .btc-judge-checkboxes, .btc-judge-checkbox-label) and
+ * .btc-match-teams/.btc-field-error are already defined in matchesScreen.css, loaded
+ * alongside this file too — this stylesheet only adds the bracket-tree layout and the
+ * per-slot card/form shapes matchesScreen.css has no equivalent of.
+ */
+
+.btc-bracket-rounds {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.btc-bracket-round h2 {
+  margin: 0 0 var(--space-3) 0;
+}
+
+.btc-bracket-slot-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.btc-bracket-slot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: var(--border-hairline) solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.btc-bracket-create-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.btc-bracket-form-actions {
+  display: flex;
+  gap: var(--space-3);
+}
+
+@media (min-width: 640px) {
+  .btc-bracket-slot-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .btc-bracket-slot {
+    flex: 1 1 280px;
+  }
+}

@@ -208,9 +208,32 @@ findings fixed: dark-mode contrast on pending-status text (swapped `--color-text
 sort and feeding non-alphabetical fixture, mutation-verified). 1424 JS tests total (13 new);
 verified live at 360px light and dark modes. Definition of Done met.
 
-**Handlers and labels wired into main.js (2026-09-22)**, but scoring/setup/matches/standings screens
-still not routed — Cup Taster's own app-wiring pass happened well after all its screens existed,
-same precedent applied here. When the screens are routed, main.js must pass
+`bracket`, `bracketScreen` (T-BTC.2, 2026-09-23, sub-step 6 of 6) — organiser-facing bracket
+display and match-creation UI, closing out all of Phase T-BTC.2. Pure client-side, no migrations
+— builds on sub-step 5's already-merged backend (generate_btc_bracket, create_btc_bracket_match,
+confirm_btc_match's advancement). `bracket.js` — data layer: `generateBracket`/`createBracketMatch`
+(thin RPC wrappers, unrouted), `fetchBracket` (composes btc_bracket_slots with each slot's own
+btc_matches.status, sorted by BRACKET_ROUND_ORDER rather than alphabetical), `validateBracketMatchJudges`
+(pure, mirrors matches.js validation). `bracketScreen.js` — organiser UI: "Generate bracket" action
+until bracket exists; once generated, bracket tree grouped by round (Quarterfinals/Semifinals/Final/
+Third Place), each slot showing "TeamA vs TeamB" (or "TBD"). Depending on state: status label
+correctly distinguishing btc_matches.status's three values (pending→"Match scheduled", scoring→
+"Scoring in progress", confirmed→"Confirmed"), inline 3-judge-picker form with capped validation,
+or "Waiting on earlier round". Built on exact same loading/error/retry/toast/focus shape as
+matchesScreen.js/standingsScreen.js; reuses shared.css and matchesScreen.css component shapes.
+
+**Four-reviewer clean round, 4 findings fixed.** ui-accessibility-reviewer 1 blocking (open/cancel
+form transitions dropped focus to <body>) — fixed with pendingFocus branches ('create-form'/
+'create-button') matching 'heading'/'toast' pattern, verified via unit test + live trace. test-auditor
+1 finding (4th-judge fixture gap on cap-at-3 test) — fixed by adding dedicated test with 4th judge.
+code-reviewer 1 moderate (pending/scoring collapsed to same label, hiding mid-scoring state) — fixed
+with third label branch + new test; 1 trivial (const vs let inconsistency) — fixed. module-boundary-checker
+clean. 30 new JS tests (1455 total post-fixes). bracketScreen.preview.html — standalone demo harness.
+Definition of Done met.
+
+**Handlers and labels wired into main.js (2026-09-22)**, but all BTC screens (setup/matches/scoring/
+standings/bracket) still not routed — Cup Taster's own app-wiring pass happened well after all its
+screens existed, same precedent applied here. When the screens are routed, main.js must pass
 `allOutboxHandlers` as the `handlers` parameter (not the BTC-only map) to prevent cross-format
 head-of-line blocking with Cup Taster screens, and Cup Taster screens must receive the same
 treatment — currently hardcoded to Cup-Taster-only handlers.
