@@ -44,12 +44,24 @@ function beanInstrument() {
   );
 }
 
-function arrow() {
-  return el('span', { className: 'community-card-arrow', text: 'Open tool →' });
+function widgetInstrument() {
+  return icon(
+    [
+      { tag: 'rect', x: '13', y: '5', width: '22', height: '38', rx: '3' },
+      { tag: 'rect', x: '17', y: '13', width: '14', height: '11', rx: '1' },
+      { tag: 'path', d: 'M20 17h8M20 20h5' },
+      { tag: 'circle', cx: '24', cy: '33', r: '2' },
+    ],
+    'Phone showing the widget on its home screen',
+  );
 }
 
-function toolCard({ number, title, eyebrow, body, href, meta, instrument }) {
-  return el('a', { className: 'community-tool-card', attrs: { href } }, [
+function arrow(text) {
+  return el('span', { className: 'community-card-arrow', text: text ?? 'Open tool →' });
+}
+
+function toolCard({ number, title, eyebrow, body, href, meta, instrument, arrowText, attrs }) {
+  return el('a', { className: 'community-tool-card', attrs: { href, ...attrs } }, [
     el('div', { className: 'community-card-top' }, [
       el('span', { className: 'community-tool-number', text: number }),
       el('span', { className: 'community-tool-status', text: 'Available now' }),
@@ -64,7 +76,7 @@ function toolCard({ number, title, eyebrow, body, href, meta, instrument }) {
     ]),
     el('div', { className: 'community-card-bottom' }, [
       el('span', { className: 'community-tool-meta', text: meta }),
-      arrow(),
+      arrow(arrowText),
     ]),
   ]);
 }
@@ -130,6 +142,17 @@ function buildShelf() {
           href: '/guess-the-bean/',
           meta: 'Set up with email',
           instrument: beanInstrument(),
+        }),
+        toolCard({
+          number: '03',
+          title: 'Guess the Bean Widget',
+          eyebrow: 'For a glance from the home screen',
+          body: 'A free Android widget that keeps the latest guesses, status and count one tap away — no app to open, no tab to find.',
+          href: 'https://github.com/greymattercoffeewerks/Seduh-Score-Next/releases/latest/download/guess-the-bean-widget.apk',
+          meta: 'Android · free download',
+          instrument: widgetInstrument(),
+          arrowText: 'Download APK →',
+          attrs: { rel: 'noopener' },
         }),
       ]),
     ],
