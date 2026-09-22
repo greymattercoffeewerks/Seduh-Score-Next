@@ -188,9 +188,29 @@ parity and mutation-tested team2=3-team1 arithmetic both sides. Offline-sync/ui-
 code-reviewer passed clean. 360 pgTAP + 1411 JS tests (3 new in scoring.test.js). Both
 migrations pushed to cloud project 2026-09-22. Definition of Done met.
 
-**Handlers and labels wired into main.js (2026-09-22)**, but scoring/setup/matches screens
+`standings`, `standingsScreen` (T-BTC.2, 2026-09-22) — read-only preliminary standings.
+`standings.js` merges every registered `btc_teams` row with its row from the existing
+`btc_standings` SQL view (built in T-BTC.1 schema, no new migration needed); unplayed teams
+zero-filled to 0 played/wins/points. Reuses `core/ranking.js`'s `rank()` and `chainComparators()`
+unedited: points desc, then wins desc, no name comparator (the test for reuse is "can a future
+format reuse this?" — adding a name comparator would break that test, as it would make rank()
+treat every team as distinct rather than sharing a position for genuine ties). Display order
+among a genuine tie relies on the `btc_teams` query being ordered by name (Array#sort stable).
+Deliberately does NOT reuse Cup Taster's `standingsScreen.js`'s tiebreak/coin-toss/advancement
+state machine — that logic belongs to bracket generation (sub-step 5, a materially different,
+later decision). `standingsScreen.css` duplicates Cup Taster's `.standings-table` shape rather
+than importing it (module boundary: can't link to another format's own CSS file) — same known-debt
+pattern as `shared.css`. Four reviewers (module-boundary-checker, ui-accessibility-reviewer,
+test-auditor, code-reviewer; no schema/security/scoring/offline-sync review needed); two blocking
+findings fixed: dark-mode contrast on pending-status text (swapped `--color-text-muted` to
+`--color-text-secondary`, verified 6.73:1 on `.card`'s `--color-surface` dark), and test weakness
+(fake client's `.order()` no-op with already-sorted fixture — fixed by making `.order()` really
+sort and feeding non-alphabetical fixture, mutation-verified). 1424 JS tests total (13 new);
+verified live at 360px light and dark modes. Definition of Done met.
+
+**Handlers and labels wired into main.js (2026-09-22)**, but scoring/setup/matches/standings screens
 still not routed — Cup Taster's own app-wiring pass happened well after all its screens existed,
-same precedent applied here. When the three BTC screens are routed, main.js must pass
+same precedent applied here. When the screens are routed, main.js must pass
 `allOutboxHandlers` as the `handlers` parameter (not the BTC-only map) to prevent cross-format
 head-of-line blocking with Cup Taster screens, and Cup Taster screens must receive the same
 treatment — currently hardcoded to Cup-Taster-only handlers.
