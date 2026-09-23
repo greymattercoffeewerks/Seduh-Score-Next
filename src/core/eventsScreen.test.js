@@ -206,6 +206,79 @@ describe('mountEventsScreen', () => {
     expect(insertCall[2].format).toBe('guess_the_bean');
   });
 
+  it('renders no format selector when formatOptions is omitted — every existing single-format caller keeps its exact prior form shape', async () => {
+    const root = document.createElement('div');
+    const client = fakeClient({});
+    await mountEventsScreen(root, { orgId: 'org1', client, defaultFormat: 'cup_taster' });
+    expect(root.querySelector('select[data-field="format"]')).toBeNull();
+  });
+
+  it('renders no format selector when only one format option is given', async () => {
+    const root = document.createElement('div');
+    const client = fakeClient({});
+    await mountEventsScreen(root, {
+      orgId: 'org1',
+      client,
+      defaultFormat: 'cup_taster',
+      formatOptions: [{ value: 'cup_taster', label: 'Cup Taster' }],
+    });
+    expect(root.querySelector('select[data-field="format"]')).toBeNull();
+  });
+
+  it('renders a format selector defaulted to defaultFormat when more than one option is given, and creates using the SELECTED format, not defaultFormat', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const client = fakeClient({});
+    await mountEventsScreen(root, {
+      orgId: 'org1',
+      client,
+      defaultFormat: 'cup_taster',
+      formatOptions: [
+        { value: 'cup_taster', label: 'Cup Taster' },
+        { value: 'btc', label: 'BTC' },
+      ],
+    });
+
+    const select = root.querySelector('select[data-field="format"]');
+    expect(select).not.toBeNull();
+    expect(select.value).toBe('cup_taster');
+
+    select.value = 'btc';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    root.querySelector('[data-field="name"]').value = 'Regional Bracket';
+    root.querySelector('[data-field="name"]').dispatchEvent(new Event('input', { bubbles: true }));
+    root
+      .querySelector('form')
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const insertCall = client.calls.find(([action]) => action === 'insert');
+    expect(insertCall[2].format).toBe('btc');
+  });
+
+  it("shows each event's own format label in the list when more than one format option is given", async () => {
+    const root = document.createElement('div');
+    const client = fakeClient({
+      events: [
+        { id: 'ev1', org_id: 'org1', name: 'October Cup', format: 'cup_taster', is_test: false },
+        { id: 'ev2', org_id: 'org1', name: 'Regional Bracket', format: 'btc', is_test: false },
+      ],
+    });
+    await mountEventsScreen(root, {
+      orgId: 'org1',
+      client,
+      defaultFormat: 'cup_taster',
+      formatOptions: [
+        { value: 'cup_taster', label: 'Cup Taster' },
+        { value: 'btc', label: 'BTC' },
+      ],
+    });
+
+    const rows = [...root.querySelectorAll('.events-list li')];
+    expect(rows[0].textContent).toContain('Cup Taster');
+    expect(rows[1].textContent).toContain('BTC');
+  });
+
   it('defaults the "This is test data" checkbox to unchecked (D9: opt in, never the reverse)', async () => {
     const root = document.createElement('div');
     const client = fakeClient({});

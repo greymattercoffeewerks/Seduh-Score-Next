@@ -19,8 +19,8 @@ import { describeError } from './errors.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
 import { createEvent, listEventsForOrg, deleteTestEvent } from './events.js';
 
-export function blankDraft() {
-  return { name: '', eventDate: '', venue: '', city: '', isTest: false };
+export function blankDraft(defaultFormat) {
+  return { name: '', eventDate: '', venue: '', city: '', isTest: false, format: defaultFormat };
 }
 
 // Pure. Name is the only required field — date/venue are optional
@@ -83,10 +83,19 @@ function renderDeleteAction(
   return deleteButton;
 }
 
-export function renderEventsList(events, { deleteStates = {}, deleteHandlers = {} } = {}) {
+export function renderEventsList(
+  events,
+  { deleteStates = {}, deleteHandlers = {}, formatOptions } = {},
+) {
   if (events.length === 0) {
     return el('p', { className: 'stage-meta', text: 'No events yet — create one below.' });
   }
+  // Only shown when more than one format is actually configured
+  // (formatOptions.length > 1) — with a single format there's nothing for the label to
+  // distinguish, and every existing single-format caller (every test that doesn't pass
+  // formatOptions at all) keeps its exact prior list shape.
+  const formatLabel = (formatValue) =>
+    formatOptions?.find((option) => option.value === formatValue)?.label ?? formatValue;
   const items = events.map((event) => {
     const link = el('a', {
       text: event.name,
@@ -94,6 +103,9 @@ export function renderEventsList(events, { deleteStates = {}, deleteHandlers = {
     });
     const meta = [event.event_date, event.venue, event.city].filter(Boolean).join(' · ');
     const children = [link];
+    if (formatOptions?.length > 1) {
+      children.push(el('span', { className: 'stage-meta', text: formatLabel(event.format) }));
+    }
     if (meta) children.push(el('span', { className: 'stage-meta', text: meta }));
     if (event.is_test) {
       children.push(el('span', { className: 'is-test-indicator', text: 'Test data' }));
@@ -108,7 +120,31 @@ export function renderEventsList(events, { deleteStates = {}, deleteHandlers = {
 // `disabled`, not a checked-state-only lock — matches renderRegistrationForm's
 // own established shape (rosterScreen.js) for a create form disabled
 // in-flight.
-export function renderCreateForm(draft, { disabled }) {
+export function renderCreateForm(draft, { disabled, formatOptions }) {
+  // Only rendered when more than one format is actually configured — with a single
+  // format there's nothing to choose between, and draft.format already carries the
+  // caller's defaultFormat, so every existing single-format caller keeps creating
+  // exactly the same event shape with no new field in the form.
+  const formatField =
+    formatOptions?.length > 1
+      ? (() => {
+          const formatSelect = el('select', {
+            className: 'field-input',
+            attrs: { 'aria-label': 'Format', 'data-field': 'format' },
+          });
+          for (const option of formatOptions) {
+            const optionEl = el('option', { text: option.label, attrs: { value: option.value } });
+            if (option.value === draft.format) optionEl.selected = true;
+            formatSelect.appendChild(optionEl);
+          }
+          formatSelect.disabled = disabled;
+          formatSelect.addEventListener('change', () => {
+            draft.format = formatSelect.value;
+          });
+          return labeledField('Format', formatSelect);
+        })()
+      : null;
+
   const nameInput = el('input', {
     className: 'field-input',
     attrs: { type: 'text', 'aria-label': 'Event name', 'data-field': 'name', required: 'required' },
@@ -177,27 +213,32 @@ export function renderCreateForm(draft, { disabled }) {
   });
   submitButton.disabled = disabled;
 
-  return el('form', { className: 'create-event-form' }, [
-    labeledField('Event name', nameInput),
-    // Visible label text now matches each input's own aria-label
-    // ("(optional)") — found in the app-wiring holistic pass: a sighted
-    // user had no visual cue these two fields were optional while a
-    // screen-reader user (hearing the aria-label) did; the two modalities
-    // must agree on the same information.
-    labeledField('Event date (optional)', dateInput),
-    labeledField('Venue (optional)', venueInput),
-    labeledField('City (optional)', cityInput),
-    isTestField,
-    submitButton,
-  ]);
+  return el(
+    'form',
+    { className: 'create-event-form' },
+    [
+      formatField,
+      labeledField('Event name', nameInput),
+      // Visible label text now matches each input's own aria-label
+      // ("(optional)") — found in the app-wiring holistic pass: a sighted
+      // user had no visual cue these two fields were optional while a
+      // screen-reader user (hearing the aria-label) did; the two modalities
+      // must agree on the same information.
+      labeledField('Event date (optional)', dateInput),
+      labeledField('Venue (optional)', venueInput),
+      labeledField('City (optional)', cityInput),
+      isTestField,
+      submitButton,
+    ].filter(Boolean),
+  );
 }
 
 export async function mountEventsScreen(
   root,
-  { orgId, client = getSupabase(), defaultFormat, signal } = {},
+  { orgId, client = getSupabase(), defaultFormat, formatOptions, signal } = {},
 ) {
   let events = [];
-  let draft = blankDraft();
+  let draft = blankDraft(defaultFormat);
   let creating = false;
   let loading = false;
   let pendingError = null;
@@ -293,7 +334,7 @@ export async function mountEventsScreen(
       await createEvent(
         orgId,
         {
-          format: defaultFormat,
+          format: draft.format,
           name: draft.name.trim(),
           eventDate: draft.eventDate || null,
           venue: draft.venue.trim() || null,
@@ -302,7 +343,7 @@ export async function mountEventsScreen(
         },
         client,
       );
-      draft = blankDraft();
+      draft = blankDraft(defaultFormat);
       events = await listEventsForOrg(orgId, client);
       pendingSuccess = 'Event created.';
       focusAfterRender = '#events-heading';
@@ -421,11 +462,12 @@ export async function mountEventsScreen(
             onConfirmDelete: handleConfirmDelete,
             onCancelDelete: handleCancelDelete,
           },
+          formatOptions,
         }),
       ]),
     );
 
-    const form = renderCreateForm(draft, { disabled: creating });
+    const form = renderCreateForm(draft, { disabled: creating, formatOptions });
     form.addEventListener('submit', handleCreate);
     container.appendChild(
       el('div', { className: 'card' }, [el('h2', { text: 'Create event' }), form]),

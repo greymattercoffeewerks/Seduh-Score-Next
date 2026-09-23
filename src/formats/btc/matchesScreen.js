@@ -265,6 +265,14 @@ export async function mountMatchesScreen(root, { eventId, client = getSupabase()
     }
     const items = state.matches.map(({ match, judgeIds }) => {
       const judgeNames = judgeIds.map(judgeName).join(', ');
+      const scoreLink = el('a', {
+        className: 'btn btn-outline tap-target',
+        text: 'Score',
+        attrs: {
+          href: `#/events/${eventId}/btc/matches/${match.id}/scoring`,
+          'aria-label': `Score ${teamName(match.team1_id)} vs ${teamName(match.team2_id)}`,
+        },
+      });
       const removeButton = el('button', {
         className: 'btn btn-outline tap-target',
         text: 'Remove',
@@ -284,7 +292,7 @@ export async function mountMatchesScreen(root, { eventId, client = getSupabase()
           }),
           el('span', { className: 'stage-meta', text: `Judges: ${judgeNames}` }),
         ]),
-        removeButton,
+        el('div', { className: 'btc-match-actions' }, [scoreLink, removeButton]),
       ]);
     });
     return el(

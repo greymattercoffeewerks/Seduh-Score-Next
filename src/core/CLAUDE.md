@@ -149,7 +149,19 @@ organiser nav to an audience. Gained `requireAuth()` (temporary login screen pas
 first) read lazily by `requireAuth`'s own `onSignedIn`/retry callbacks, which only ever
 fire after `mountApp` has set it.
 
-**When a second format (Throwdown/Liga Seduh/BBTC) starts wiring in**: `main.js` is where
-the `defaultFormat` assumption gets revisited — currently hardcoded to `'cup_taster'`.
-That's expected to change into something route- or event-driven once a second format
-exists; it isn't a bug today, just a placeholder scoped to "only one format exists yet."
+**BTC app-wiring pass (2026-09-23)** — `main.js` added `mountEventHomeScreen(outlet, eventId,
+signal, client)`, a format-aware dispatcher that reads `event.format` and mounts either
+`formats/cup-taster/eventDashboardScreen.js` or `formats/btc/eventDashboardScreen.js`. Added
+`formatOptions = ['cup_taster', 'btc']` list passed into `core/eventsScreen.js` so organisers
+can actually create BTC events through the UI (previously hardcoded `cup_taster` in the create
+form, making BTC events impossible to create by hand). Wired all 5 BTC routes
+(`/events/:eventId/btc/setup`, `/matches`, `/standings`, `/bracket`,
+`/matches/:matchId/scoring`), reusing the same `allOutboxHandlers(client)` composition
+`src/formats/cup-taster/outboxHandlers.js` and `src/formats/btc/outboxHandlers.js` already
+export. Both scoring routes now pass `allOutboxHandlers` (fixes Cup Taster scoring route,
+which was hardcoded to Cup-Taster-only handlers — when a BTC operation queued ahead of a Cup
+Taster one, the flush would throw "no handler" and silently stop, head-of-line blocking the
+organiser's own Cup Taster operation). `eventsScreen.js` gained optional `formatOptions` prop
+(renders `<select>` in create form only when `>1` option; every pre-existing call omitting it
+renders byte-identical to before; all tests pass unmodified). See CHANGELOG.md's "BTC
+app-wiring pass" entry for full review account.

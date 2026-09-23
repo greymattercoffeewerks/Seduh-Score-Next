@@ -1,3 +1,99 @@
+## BTC app-wiring pass: format-aware routing and handler composition · 2026-09-23
+
+Final carry-forward item from Phase T-BTC.2, closing the "app-wiring pass" gap (all 5 BTC
+screens built, none yet routed). Routes setup/matches/standings/bracket/scoring screens into
+`main.js`, adds format-aware `mountEventHomeScreen` dispatcher for per-event hub routing (Cup
+Taster's or BTC's depending on `events.format`), adds `formatOptions` prop to
+`core/eventsScreen.js` so organisers can create BTC events through the UI (previously hardcoded
+`cup_taster`), fixes a cross-format outbox-handler head-of-line blocker (Cup Taster scoring
+route didn't get the same `allOutboxHandlers` threading as new BTC route, causing silent
+failures if BTC operations queued before Cup Taster ones). Pure app-wiring with one real bug
+fix; no migrations.
+
+**Four files modified, three new files:**
+
+- `src/main.js` — added 5 new routes (`/events/:eventId/btc/setup`, `/matches`, `/standings`,
+  `/bracket`, `/matches/:matchId/scoring`); added `mountEventHomeScreen(outlet, eventId,
+signal, client)` dispatcher reading `event.format` and mounting either
+  `formats/cup-taster/eventDashboardScreen.js` or the new
+  `formats/btc/eventDashboardScreen.js`; added `formatOptions` list passed into
+  `core/eventsScreen.js` so the create form actually offers BTC as a choice.
+- `src/core/eventsScreen.js` — gained optional `formatOptions` prop; renders a `<select>` in
+  the create form only when `formatOptions.length > 1`, and per-event format label in the
+  events list. Every pre-existing call omitting this prop renders byte-identical to before
+  (all existing tests pass unmodified).
+- `src/formats/btc/eventDashboardScreen.js` (new) — BTC's per-event hub, mirroring Cup
+  Taster's: heading, `is_test` banner, links to Setup/Matches/Standings/Bracket.
+- `src/formats/btc/eventDashboardScreen.css` (new) — standard card/link styling.
+- `src/formats/btc/eventDashboardScreen.preview.html` (new).
+- `src/formats/btc/eventDashboardScreen.test.js` (new) — 4 tests (render checks, navigation
+  link presence).
+- `src/formats/btc/matchesScreen.js` and `src/formats/btc/bracketScreen.js` — each gained a
+  "Score" link per match/slot; these screens were reachable but had no way to enter scoring.
+- `src/formats/cup-taster/scoringScreen.js` — gained optional `handlers` parameter threaded
+  into `submitConfirmHeat` call (function already accepted optional override, just wasn't
+  given one). This is the core fix: both scoring routes now pass
+  `allOutboxHandlers(client)` from `main.js`, so a flush triggered from either screen can
+  process ANY queued Cup Taster or BTC operation type.
+- `app/index.html` — added 7 missing `<link rel="stylesheet">` tags for every BTC CSS file
+  (btc/setupScreen.css, btc/matchesScreen.css, btc/bracketScreen.css, btc/scoringScreen.css,
+  btc/standingsScreen.css, btc/eventDashboardScreen.css). These files were built and tested
+  in isolation (preview.html loads them directly), but the real shipped app never linked
+  them, so every btc-* class rendered unstyled.
+
+**Review cycle (5 subagents in parallel, 1 round — no migrations/RLS/scoring changes):**
+
+- **ui-accessibility-reviewer found two issues, one blocking**: (1) BLOCKING — app.index.html
+  had zero BTC CSS `<link>` tags, so the shipped app rendered every BTC screen completely
+  unstyled (judge-checkbox tap targets, layout, colors). Fixed by adding all 7 missing links.
+  (2) Moderate — new "Score" links had no aria-label distinguishing which match. Fixed with
+  descriptive labels (`Score {team1} vs {team2}`). Both verified live in real browser against
+  local Supabase instance: signed in, created a BTC event through new format selector, routed
+  to BTC dashboard (not Cup Taster's), clicked Setup → added teams/judges → Matches → created
+  match → clicked Score link → landed on BTC scoring screen with proper styling throughout,
+  zero console errors.
+
+- **offline-sync-auditor found one issue, blocking**: a newly-live regression introduced by
+  this task's own routing — once BTC operations can actually reach the outbox queue, a Cup
+  Taster `confirm_heat` operation could sit behind a queued `confirm_btc_match`, and a flush
+  using only Cup-Taster handlers would throw "no handler for confirm_btc_match" and silently
+  stop mid-queue, never reaching the organiser's own Cup Taster confirm (head-of-line blocker,
+  the exact gap ROADMAP.md already named). Fixed by threading optional `handlers` parameter
+  through `src/formats/cup-taster/scoringScreen.js` into its existing `submitConfirmHeat`
+  call, and passing `allOutboxHandlers(client)` from both scoring routes in `main.js` now.
+  Verified with a real mixed-operation scenario: Cup Taster operation queued, BTC operation
+  queued behind it, flush from either scoring screen processes both types successfully.
+
+- **code-reviewer found two issues, both moderate**: (1) Three near-identical error DOM shapes
+  (renderAuthCheckError, renderEventLookupError, a third inline in mountEventHomeScreen)
+  consolidated into one shared `renderRetryableError(outlet, message, retry)` helper. (2)
+  Dead fallback `draft.format ?? defaultFormat` in eventsScreen.js, unreachable since
+  `blankDraft(defaultFormat)` already guarantees `draft.format` is set; simplified.
+
+- **test-auditor found one issue, moderate**: format-dispatch test's two-queued
+  `mockResolvedValueOnce` pattern (both router dispatcher AND breadcrumb fetch call mocked
+  `findEvent` on one navigation) had no assertion pinning the call count, risking a future
+  third caller or caching change silently leaking stale queued values into unrelated tests.
+  Fixed by adding explicit `toHaveBeenCalledTimes(2)` assertion documenting the dependency.
+
+- **module-boundary-checker**: clean, no findings — confirmed `main.js` remains the only
+  file that knows about both formats, `eventsScreen.js`'s `formatOptions` prop stays pure
+  caller-supplied data.
+
+**Known gaps carried forward (not defects, scope decision):**
+
+- Pre-existing "no seeding-tie-break UI" gap (unrelated, tracked in ROADMAP.md).
+- `flushPending`'s own "manual sync now" retry path in both formats still defaults to
+  format-only handler map when called with no `handlers` arg — offline-sync-auditor noted
+  this as a latent version of the exact bug this task just fixed, worth checking if a
+  "retry sync" UI button is ever wired without passing `allOutboxHandlers`; no such UI
+  exists yet.
+
+**Final state**: 1475 JS tests (1455 + 20 new), ESLint clean, live-verified in browser. All
+findings fixed. Definition of Done met.
+
+---
+
 ## BTC Phase T-BTC.2, sub-step 6: Bracket UI screen · 2026-09-23
 
 Organiser-facing bracket display and match-creation UI, closing out all of Phase T-BTC.2

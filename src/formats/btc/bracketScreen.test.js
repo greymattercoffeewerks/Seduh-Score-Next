@@ -222,6 +222,27 @@ describe('mountBracketScreen', () => {
     expect(root.querySelector('button[data-focus-key="create-slot-s-qf1"]')).toBeNull();
   });
 
+  it('links a slot with a match to its own scoring route', async () => {
+    const db = baseDb();
+    db.btc_bracket_slots = [
+      {
+        id: 's-qf1',
+        event_id: 'ev1',
+        round: 'quarterfinal',
+        slot_label: 'qf1',
+        team1_id: 't1',
+        team2_id: 't2',
+        match_id: 'm1',
+      },
+    ];
+    db.btc_matches = [{ id: 'm1', status: 'pending' }];
+    const client = fakeClient(db);
+    await mountBracketScreen(root, { eventId: 'ev1', client });
+
+    const scoreLink = [...root.querySelectorAll('a')].find((a) => a.textContent === 'Score');
+    expect(scoreLink.getAttribute('href')).toBe('#/events/ev1/btc/matches/m1/scoring');
+  });
+
   it('shows "Confirmed" for a confirmed match', async () => {
     const db = baseDb();
     db.btc_bracket_slots = [

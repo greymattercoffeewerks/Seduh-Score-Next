@@ -139,7 +139,7 @@ export function renderScoringRows(
 
 export async function mountScoringScreen(
   root,
-  { eventId, heatId, client = getSupabase(), signal } = {},
+  { eventId, heatId, client = getSupabase(), signal, handlers } = {},
 ) {
   let focusAfterRender = null;
   let pendingError = null;
@@ -327,7 +327,16 @@ export async function mountScoringScreen(
             data.heat.updated_at,
             entries,
             client,
-            cupTasterOutboxHandlers(client),
+            // `handlers`, when the caller passed one, covers every format's queued
+            // operations, not just Cup Taster's own — the shared outbox is ONE FIFO
+            // queue across every format, so a Cup-Taster-only handler map can throw
+            // "no handler" and stop the whole flush behind a queued operation from a
+            // different format ahead of it (same head-of-line-blocking gap BTC's own
+            // scoring route already closed for itself — see main.js's own comment on
+            // its BTC scoring route for the fuller account). Falls back to
+            // cupTasterOutboxHandlers(client) for any caller that doesn't pass one
+            // (this screen's own tests, and any future caller not yet updated).
+            handlers ?? cupTasterOutboxHandlers(client),
           );
           // Ground truth, not the flush's own bookkeeping: the outbox is a
           // single shared queue, so `result` can reflect an unrelated

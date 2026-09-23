@@ -197,6 +197,16 @@ export async function mountBracketScreen(root, { eventId, client = getSupabase()
     const statusLabel = matchStatusLabel(match);
     if (statusLabel) {
       children.push(el('span', { className: 'stage-meta', text: statusLabel }));
+      children.push(
+        el('a', {
+          className: 'btn btn-outline tap-target',
+          text: 'Score',
+          attrs: {
+            href: `#/events/${eventId}/btc/matches/${match.id}/scoring`,
+            'aria-label': `Score ${teamName(slot.team1_id)} vs ${teamName(slot.team2_id)}`,
+          },
+        }),
+      );
     } else if (slot.team1_id && slot.team2_id) {
       if (state.creatingSlotId === slot.id) {
         children.push(renderCreateForm(entry));

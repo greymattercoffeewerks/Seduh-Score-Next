@@ -59,6 +59,37 @@ vi.mock('./core/splashScreen.js', () => ({
 vi.mock('./core/loginScreen.js', () => ({
   mountLoginScreen: (...args) => mountLoginScreen(...args),
 }));
+const mountBtcEventDashboardScreen = vi.fn();
+vi.mock('./formats/btc/eventDashboardScreen.js', () => ({
+  mountBtcEventDashboardScreen: (...args) => mountBtcEventDashboardScreen(...args),
+}));
+const mountBtcSetupScreen = vi.fn();
+vi.mock('./formats/btc/setupScreen.js', () => ({
+  mountSetupScreen: (...args) => mountBtcSetupScreen(...args),
+}));
+const mountBtcMatchesScreen = vi.fn();
+vi.mock('./formats/btc/matchesScreen.js', () => ({
+  mountMatchesScreen: (...args) => mountBtcMatchesScreen(...args),
+}));
+const mountBtcStandingsScreen = vi.fn();
+vi.mock('./formats/btc/standingsScreen.js', () => ({
+  mountStandingsScreen: (...args) => mountBtcStandingsScreen(...args),
+}));
+const mountBtcBracketScreen = vi.fn();
+vi.mock('./formats/btc/bracketScreen.js', () => ({
+  mountBracketScreen: (...args) => mountBtcBracketScreen(...args),
+}));
+const mountBtcScoringScreen = vi.fn();
+vi.mock('./formats/btc/scoringScreen.js', () => ({
+  mountScoringScreen: (...args) => mountBtcScoringScreen(...args),
+}));
+// Defaults every event lookup to a Cup Taster event, so every test written before
+// the format-dispatch existed keeps testing exactly what it did before, unmodified —
+// only the new tests specifically about dispatch override this per-call.
+const findEvent = vi.fn(() => Promise.resolve({ id: 'ev1', format: 'cup_taster' }));
+vi.mock('./core/events.js', () => ({
+  findEvent: (...args) => findEvent(...args),
+}));
 
 // Mocked at the module level, same as every screen above — appShell.js
 // (mounted for real in every test here, unlike the routed screens) ALSO
@@ -201,6 +232,135 @@ describe('mountApp routing', () => {
       expect.anything(),
       expect.objectContaining({ eventId: 'ev1' }),
     );
+  });
+
+  it('#/events/:eventId routes to the BTC dashboard (not Cup Taster\'s) for an event whose format is "btc"', async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    stubScreen(mountBtcEventDashboardScreen, 'BTC_DASHBOARD_SCREEN');
+    // TWO queued values, not one — appShell.js's own breadcrumb fetch (setNav ->
+    // findEvent, deliberately NOT gated by requireAuth per its own CLAUDE.md note)
+    // also calls this same mocked findEvent for this event, alongside this
+    // dispatcher's own call. `mockResolvedValueOnce` (not a persistent
+    // `mockResolvedValue`) so this test's override can't leak into a LATER test —
+    // `vi.clearAllMocks()` in afterEach clears call history, not a configured
+    // return value, so a persistent override here would silently break every
+    // subsequent test's own default cup_taster dispatch (found exactly this way).
+    const btcEvent = { id: 'ev1', format: 'btc', name: 'Regional Bracket' };
+    findEvent.mockResolvedValueOnce(btcEvent).mockResolvedValueOnce(btcEvent);
+    const { root } = await startApp();
+    location.hash = '#/events/ev1';
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(root.textContent).toContain('BTC_DASHBOARD_SCREEN');
+    expect(mountBtcEventDashboardScreen).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ eventId: 'ev1' }),
+    );
+    expect(mountEventDashboardScreen).not.toHaveBeenCalled();
+    // Documents the assumption the two queued mockResolvedValueOnce values above
+    // depend on: exactly two independent callers (this dispatcher + appShell's own
+    // breadcrumb fetch) read findEvent for this one navigation. If that count ever
+    // drifts — a third caller added, or the breadcrumb stops re-fetching — this
+    // assertion fails here, at the line that explains why, instead of silently
+    // leaking a stale queued value into a later, unrelated test.
+    expect(findEvent).toHaveBeenCalledTimes(2);
+  });
+
+  it('passes both configured formats to the events screen as formatOptions', async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    await startApp();
+    expect(mountEventsScreen).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        formatOptions: [
+          { value: 'cup_taster', label: 'Cup Taster' },
+          { value: 'btc', label: 'BTC' },
+        ],
+      }),
+    );
+  });
+
+  it('#/events/:eventId/btc/setup routes to the BTC setup screen with the right param', async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    stubScreen(mountBtcSetupScreen, 'BTC_SETUP_SCREEN');
+    const { root } = await startApp();
+    location.hash = '#/events/ev1/btc/setup';
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(root.textContent).toContain('BTC_SETUP_SCREEN');
+    expect(mountBtcSetupScreen).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ eventId: 'ev1' }),
+    );
+  });
+
+  it('#/events/:eventId/btc/matches routes to the BTC matches screen with the right param', async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    stubScreen(mountBtcMatchesScreen, 'BTC_MATCHES_SCREEN');
+    const { root } = await startApp();
+    location.hash = '#/events/ev1/btc/matches';
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(root.textContent).toContain('BTC_MATCHES_SCREEN');
+    expect(mountBtcMatchesScreen).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ eventId: 'ev1' }),
+    );
+  });
+
+  it('#/events/:eventId/btc/standings routes to the BTC standings screen with the right param', async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    stubScreen(mountBtcStandingsScreen, 'BTC_STANDINGS_SCREEN');
+    const { root } = await startApp();
+    location.hash = '#/events/ev1/btc/standings';
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(root.textContent).toContain('BTC_STANDINGS_SCREEN');
+    expect(mountBtcStandingsScreen).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ eventId: 'ev1' }),
+    );
+  });
+
+  it('#/events/:eventId/btc/bracket routes to the BTC bracket screen with the right param', async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    stubScreen(mountBtcBracketScreen, 'BTC_BRACKET_SCREEN');
+    const { root } = await startApp();
+    location.hash = '#/events/ev1/btc/bracket';
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(root.textContent).toContain('BTC_BRACKET_SCREEN');
+    expect(mountBtcBracketScreen).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ eventId: 'ev1' }),
+    );
+  });
+
+  it('#/events/:eventId/btc/matches/:matchId/scoring routes to the BTC scoring screen with the right param and allOutboxHandlers, not the BTC-only handler map', async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    stubScreen(mountBtcScoringScreen, 'BTC_SCORING_SCREEN');
+    const { root } = await startApp();
+    location.hash = '#/events/ev1/btc/matches/m1/scoring';
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(root.textContent).toContain('BTC_SCORING_SCREEN');
+    expect(mountBtcScoringScreen).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ matchId: 'm1' }),
+    );
+    // Not just btcOutboxHandlers(client) alone — the whole point of this route
+    // passing `handlers` at all is to cover every format's queued operations, not
+    // just BTC's own (closing the head-of-line-blocking gap CLAUDE.md flagged).
+    const call = mountBtcScoringScreen.mock.calls[0][1];
+    expect(call.handlers).toEqual({ ...cupTasterOutboxHandlers(), ...btcOutboxHandlers() });
+  });
+
+  it("#/events/:eventId/heats/:heatId/scoring passes allOutboxHandlers to Cup Taster's own scoring screen too, not just Cup-Taster-only handlers — now that BTC operations genuinely exist in the shared outbox queue, a Cup Taster confirm flush can no longer assume nothing else is ever ahead of it", async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    stubScreen(mountScoringScreen, 'CT_SCORING_SCREEN');
+    const { root } = await startApp();
+    location.hash = '#/events/ev1/heats/h1/scoring';
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(root.textContent).toContain('CT_SCORING_SCREEN');
+    const call = mountScoringScreen.mock.calls[0][1];
+    expect(call).toEqual(
+      expect.objectContaining({ eventId: 'ev1', heatId: 'h1', signal: expect.any(AbortSignal) }),
+    );
+    expect(call.handlers).toEqual({ ...cupTasterOutboxHandlers(), ...btcOutboxHandlers() });
   });
 
   it("always shows the three /live/* audience links (org-scoped, not event-scoped) alongside the event's own nav, each opening in a new tab", async () => {

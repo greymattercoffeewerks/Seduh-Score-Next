@@ -1205,9 +1205,13 @@ PR merge, per the 2026-09-05 incident note in CLAUDE.md.
 blocking in final state. 360 pgTAP + 1455 JS tests. Rollback verified live. All 9 BTC migrations now live
 on cloud project.
 
-**Not done, carry forward:** app-wiring pass (deliberate, following Cup Taster precedent of standalone
-screens first — all format screens exist; wiring them into main.js, main.test.js, and closing the
-handler-routing cross-format head-of-line blocker is a separate, later step).
+**App-wiring pass (2026-09-23) — DONE.** All 5 BTC screens (setup/matches/standings/bracket/scoring)
+now routed in `main.js`; `mountEventHomeScreen` dispatcher reads `events.format` and mounts the
+right per-event hub (Cup Taster or BTC); organisers can create BTC events through the UI via new
+`formatOptions` prop on `core/eventsScreen.js`; the cross-format outbox-handler head-of-line
+blocker (Cup Taster scoring route silently dropping BTC operations) is fixed with optional
+`handlers` threading. Five reviewers in parallel; zero blocking findings remain; 1475 JS tests;
+live-verified in browser. Definition of Done met. See CHANGELOG.md's dated entry for full account.
 
 ---
 
@@ -1250,9 +1254,11 @@ handler-routing cross-format head-of-line blocker is a separate, later step).
 - **Nine older trigger functions keep PUBLIC/anon EXECUTE** (check_btc_cup_vote_participants,
   check_btc_match_bonus_teams, and 7 pre-BTC ones): unreachable, consistency cleanup only.
 - **Scoring screen load needs the network** (no offline reload capability).
-- **Four screens (setup/matches/scoring/bracket) are not yet routed in main.js.** When routed, main.js must
-  pass allOutboxHandlers as `handlers` parameter. Cross-format head-of-line blocking: Cup Taster
-  screens default to Cup-Taster-only handler map, BTC screens to BTC-only.
+- **Four screens routed in app-wiring pass (2026-09-23) — CLOSED.** All 5 BTC screens
+  (setup/matches/standings/bracket/scoring) now have routes in `main.js`; `allOutboxHandlers` is
+  passed as `handlers` parameter throughout; cross-format head-of-line blocker fixed (Cup Taster
+  scoring route now receives full handler map, not just Cup-Taster-only). See CHANGELOG.md for
+  full account.
 - **setBusyDisabled (core/dom.js) sets aria-busy on merely locked or incomplete controls,** not
   just genuinely disabled ones (semantically imprecise).
 - **main.test.js has no assertion that btcOperationLabels reach the shell** (outboxHandlers.test.js
