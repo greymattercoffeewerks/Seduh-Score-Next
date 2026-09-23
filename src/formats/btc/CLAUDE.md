@@ -231,9 +231,11 @@ with third label branch + new test; 1 trivial (const vs let inconsistency) — f
 clean. 30 new JS tests (1455 total post-fixes). bracketScreen.preview.html — standalone demo harness.
 Definition of Done met.
 
-**Handlers and labels wired into main.js (2026-09-22)**, but all BTC screens (setup/matches/scoring/
-standings/bracket) still not routed — Cup Taster's own app-wiring pass happened well after all its
-screens existed, same precedent applied here. When the screens are routed, main.js must pass
-`allOutboxHandlers` as the `handlers` parameter (not the BTC-only map) to prevent cross-format
-head-of-line blocking with Cup Taster screens, and Cup Taster screens must receive the same
-treatment — currently hardcoded to Cup-Taster-only handlers.
+**All BTC screens wired into main.js (2026-09-23) — DONE.** The app-wiring pass routed all 5
+screens (setup/matches/scoring/standings/bracket) with proper `allOutboxHandlers` threading.
+New `mountEventHomeScreen` dispatcher in `main.js` reads `event.format` and mounts the right
+per-event hub (Cup Taster or BTC). Organisers can create BTC events through the UI via new
+`formatOptions` prop on `core/eventsScreen.js`. Cup Taster scoring route fixed to receive
+`allOutboxHandlers`, closing the cross-format head-of-line blocker (BTC operations no longer
+silently dropped when queued before Cup Taster ones). See CHANGELOG.md's "BTC app-wiring pass"
+entry for full account.

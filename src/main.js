@@ -9,6 +9,8 @@ import { mountAppShell } from './core/appShell.js';
 import { getDefaultOrgId } from './core/config.js';
 import { getSupabase } from './core/supabaseClient.js';
 import { el } from './core/dom.js';
+import { describeError } from './core/errors.js';
+import { findEvent } from './core/events.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './core/timeout.js';
 import { mountEventsScreen } from './core/eventsScreen.js';
 import { mountLoginScreen } from './core/loginScreen.js';
@@ -23,6 +25,12 @@ import { mountTimingRouteScreen } from './formats/cup-taster/timingRouteScreen.j
 import { mountScoringScreen } from './formats/cup-taster/scoringScreen.js';
 import { mountProjectorSurface } from './formats/cup-taster/projectorSurface.js';
 import { mountPhoneSummary } from './formats/cup-taster/phoneSummary.js';
+import { mountBtcEventDashboardScreen } from './formats/btc/eventDashboardScreen.js';
+import { mountSetupScreen as mountBtcSetupScreen } from './formats/btc/setupScreen.js';
+import { mountMatchesScreen as mountBtcMatchesScreen } from './formats/btc/matchesScreen.js';
+import { mountStandingsScreen as mountBtcStandingsScreen } from './formats/btc/standingsScreen.js';
+import { mountBracketScreen as mountBtcBracketScreen } from './formats/btc/bracketScreen.js';
+import { mountScoringScreen as mountBtcScoringScreen } from './formats/btc/scoringScreen.js';
 import { flushOutbox } from './core/outbox.js';
 import { btcOutboxHandlers, btcOperationLabels } from './formats/btc/outboxHandlers.js';
 import {
@@ -31,17 +39,31 @@ import {
 } from './formats/cup-taster/outboxHandlers.js';
 import { trackInputModality } from './core/inputModality.js';
 
+// Every configured format an organiser can create an event as — passed into
+// core/eventsScreen.js as `formatOptions` so its create form can offer a real choice
+// once more than one format exists (see that file's own comment: it never hardcodes a
+// format itself, this is the one composition-root file allowed to know both).
+const FORMAT_OPTIONS = [
+  { value: 'cup_taster', label: 'Cup Taster' },
+  { value: 'btc', label: 'BTC' },
+];
+
 // Same "unreliable venue wifi" holding-state pattern this project already
 // established for setupScreen.js/rosterScreen.js/eventsScreen.js's own
 // initial loads — found missing in review: getSession() is a real network
 // call (a token refresh can round-trip), and without this, a hang left the
-// ENTIRE app blank forever with no feedback, not just one screen.
-function renderAuthCheckError(outlet, retry) {
+// ENTIRE app blank forever with no feedback, not just one screen. Shared by
+// every main.js-level failure that needs a Retry action (the auth check
+// below, and the event-format lookup further down) — found in review
+// (code-reviewer) that this file had grown three near-identical copies of
+// this exact shape; this is the one, with only the message and retry
+// callback varying per caller.
+function renderRetryableError(outlet, message, retry) {
   outlet.innerHTML = '';
   const container = el('section', { className: 'screen-container' });
   const feedback = el('div', {
     className: 'screen-feedback',
-    text: 'This is taking longer than expected — check your connection and try Retry.',
+    text: message,
     attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
   });
   feedback.dataset.tone = 'error';
@@ -58,6 +80,9 @@ function renderAuthCheckError(outlet, retry) {
   feedback.focus();
   return { unmount() {} };
 }
+
+const TIMEOUT_MESSAGE =
+  'This is taking longer than expected — check your connection and try Retry.';
 
 // Temporary auth gate (2026-08-30) — deliberately confined to this file,
 // not core/router.js, since router.js is meant to be reused unedited by a
@@ -90,7 +115,7 @@ function requireAuth(mount, routerRef) {
       // error screen here would clobber whatever's actually showing now.
       // See ROADMAP.md's "A real DOM-write race between the router..." entry.
       if (params.signal?.aborted) return undefined;
-      return renderAuthCheckError(outlet, resolveCurrentPath);
+      return renderRetryableError(outlet, TIMEOUT_MESSAGE, resolveCurrentPath);
     }
 
     if (params.signal?.aborted) return undefined;
@@ -101,6 +126,38 @@ function requireAuth(mount, routerRef) {
       signal: params.signal,
     });
   };
+}
+
+// Format-aware dispatch for the per-event hub: an event's own `format` decides which
+// format's dashboard mounts — Cup Taster's (stage cards) and BTC's (setup/matches/
+// standings/bracket links) show completely different content for what is otherwise the
+// same route pattern (`/events/:eventId`). Lives here, not in either format's own
+// dashboard file — this is the one file already allowed to know about every format
+// that exists (see this file's own header comment), and neither dashboard screen should
+// have to know the other exists.
+//
+// This does mean the Cup Taster path reads the event row TWICE (once here for the
+// dispatch decision, once inside mountEventDashboardScreen's own loadState()) — a small,
+// accepted redundant read rather than restructuring that already-shipped, already-
+// reviewed screen to accept a pre-fetched event; same tradeoff requireAuth() below
+// already makes with its own extra getSession() hop.
+function mountEventHomeScreen(outlet, { eventId, orgId, client, signal }) {
+  async function attempt() {
+    let event;
+    try {
+      event = await raceTimeout(findEvent(eventId, client), DEFAULT_LOAD_TIMEOUT_MS);
+    } catch (err) {
+      if (signal?.aborted) return undefined;
+      const message = err.timedOut ? TIMEOUT_MESSAGE : describeError(err);
+      return renderRetryableError(outlet, message, attempt);
+    }
+    if (signal?.aborted) return undefined;
+    if (event.format === 'btc') {
+      return mountBtcEventDashboardScreen(outlet, { eventId, client, signal });
+    }
+    return mountEventDashboardScreen(outlet, { eventId, orgId, client, signal });
+  }
+  return attempt();
 }
 
 function mountNotFoundScreen(root) {
@@ -137,7 +194,13 @@ export function buildRoutes({ orgId, bareRoot, routerRef }) {
       pattern: '/events',
       mount: requireAuth(
         (outlet, { client, signal }) =>
-          mountEventsScreen(outlet, { orgId, client, defaultFormat: 'cup_taster', signal }),
+          mountEventsScreen(outlet, {
+            orgId,
+            client,
+            defaultFormat: 'cup_taster',
+            formatOptions: FORMAT_OPTIONS,
+            signal,
+          }),
         routerRef,
       ),
     },
@@ -145,7 +208,7 @@ export function buildRoutes({ orgId, bareRoot, routerRef }) {
       pattern: '/events/:eventId',
       mount: requireAuth(
         (outlet, { eventId, client, signal }) =>
-          mountEventDashboardScreen(outlet, { eventId, orgId, client, signal }),
+          mountEventHomeScreen(outlet, { eventId, orgId, client, signal }),
         routerRef,
       ),
     },
@@ -199,9 +262,80 @@ export function buildRoutes({ orgId, bareRoot, routerRef }) {
     },
     {
       pattern: '/events/:eventId/heats/:heatId/scoring',
+      // Passes allOutboxHandlers(client), same reasoning as the BTC scoring route
+      // below — now that BTC operations genuinely exist in the shared outbox queue,
+      // a confirm flush triggered from THIS screen using only Cup-Taster handlers
+      // could throw "no handler" on a queued BTC operation ahead of it and stop the
+      // whole flush, silently blocking the organiser's own confirm. Closes the
+      // asymmetry this file used to defer (found by offline-sync-auditor review,
+      // 2026-09-23 BTC app-wiring pass: real once BTC screens were actually routed,
+      // not hypothetical).
       mount: requireAuth(
         (outlet, { eventId, heatId, client, signal }) =>
-          mountScoringScreen(outlet, { eventId, heatId, client, signal }),
+          mountScoringScreen(outlet, {
+            eventId,
+            heatId,
+            client,
+            signal,
+            handlers: allOutboxHandlers(client),
+          }),
+        routerRef,
+      ),
+    },
+    {
+      pattern: '/events/:eventId/btc/setup',
+      mount: requireAuth(
+        (outlet, { eventId, client, signal }) =>
+          mountBtcSetupScreen(outlet, { eventId, client, signal }),
+        routerRef,
+      ),
+    },
+    {
+      pattern: '/events/:eventId/btc/matches',
+      mount: requireAuth(
+        (outlet, { eventId, client, signal }) =>
+          mountBtcMatchesScreen(outlet, { eventId, client, signal }),
+        routerRef,
+      ),
+    },
+    {
+      pattern: '/events/:eventId/btc/standings',
+      mount: requireAuth(
+        (outlet, { eventId, client, signal }) =>
+          mountBtcStandingsScreen(outlet, { eventId, client, signal }),
+        routerRef,
+      ),
+    },
+    {
+      pattern: '/events/:eventId/btc/bracket',
+      mount: requireAuth(
+        (outlet, { eventId, client, signal }) =>
+          mountBtcBracketScreen(outlet, { eventId, client, signal }),
+        routerRef,
+      ),
+    },
+    {
+      pattern: '/events/:eventId/btc/matches/:matchId/scoring',
+      // Passes allOutboxHandlers(client), not btcOutboxHandlers(client) alone — a
+      // confirm queued from this screen must be able to flush ANY format's pending
+      // operations ahead of it in the shared FIFO outbox, not just BTC's own (see
+      // core/outbox.js's own "no handler" comment on allOutboxHandlers below: a
+      // queued operation whose type is missing from the map throws "no handler" and
+      // stops the whole queue behind it). This closes the exact gap
+      // src/formats/btc/CLAUDE.md already flagged: "main.js must pass
+      // allOutboxHandlers ... to prevent cross-format head-of-line blocking." The
+      // Cup Taster scoring route above gets the identical treatment for the same
+      // reason — BTC operations now genuinely exist in the shared queue for the
+      // first time once this route exists, so a Cup Taster confirm can no longer
+      // assume nothing else is ever ahead of it.
+      mount: requireAuth(
+        (outlet, { matchId, client, signal }) =>
+          mountBtcScoringScreen(outlet, {
+            matchId,
+            client,
+            signal,
+            handlers: allOutboxHandlers(client),
+          }),
         routerRef,
       ),
     },

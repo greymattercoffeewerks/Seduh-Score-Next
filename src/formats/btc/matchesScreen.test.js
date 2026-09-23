@@ -256,6 +256,23 @@ describe('mountMatchesScreen', () => {
     expect(document.activeElement?.textContent).toBe('Alpha vs Beta created.');
   });
 
+  it('links each match to its own scoring route', async () => {
+    const db = baseDb();
+    db.btc_matches = [
+      { id: 'm1', event_id: 'ev1', round: 'preliminary', team1_id: 't1', team2_id: 't2' },
+    ];
+    db.btc_match_judges = [
+      { match_id: 'm1', judge_id: 'j1' },
+      { match_id: 'm1', judge_id: 'j2' },
+      { match_id: 'm1', judge_id: 'j3' },
+    ];
+    const client = fakeClient(db);
+    await mountMatchesScreen(root, { eventId: 'ev1', client });
+
+    const scoreLink = [...root.querySelectorAll('a')].find((a) => a.textContent === 'Score');
+    expect(scoreLink.getAttribute('href')).toBe('#/events/ev1/btc/matches/m1/scoring');
+  });
+
   it('removes a match after confirmation', async () => {
     const db = baseDb();
     db.btc_matches = [

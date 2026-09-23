@@ -1,0 +1,10 @@
+/*
+ * BTC event dashboard screen (app-wiring pass). Base screen-chrome shapes live in
+ * shared.css, loaded alongside this file.
+ */
+
+.btc-event-dashboard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
