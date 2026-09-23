@@ -40,7 +40,7 @@ export function buildPublicHeader({ active }) {
   mark.setAttribute('aria-hidden', 'true');
 
   const links = [
-    navLink('Formats', '/tour/#cup-taster', active === 'tour'),
+    navLink('Formats', '/tour/', active === 'tour'),
     navLink('Pricing', '/#pricing'),
     navLink('Community Tools', '/community/', active === 'community'),
     navLink('Org login', '/#'),
