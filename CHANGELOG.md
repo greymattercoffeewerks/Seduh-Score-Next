@@ -1,3 +1,23 @@
+## Marketing site nav: Formats link consistency · 2026-09-23
+
+Quick link sweep of the public marketing site (landing page, Tour, Community, Timer, Guess the Bean, console) found one real inconsistency. The landing page's own header anchors "Formats" to an in-page `#formats` section (correct); the Tour and Community pages share a separate header component whose "Formats" link was hardcoded to `/tour/#cup-taster` — a deep link to one specific format instead of the formats overview, despite the plural label.
+
+**One-line fix:** `src/marketing/publicHeader.js` line 43, `navLink('Formats', '/tour/#cup-taster', ...)` → `navLink('Formats', '/tour/', ...)`. Now "Formats" lands on the top of `/tour/` (all four formats: Cup Taster live, Throwdown/Liga Seduh/BTC coming) instead of scrolling into Cup Taster alone.
+
+**Files modified:**
+
+- `src/marketing/publicHeader.js` — nav href change; the `#cup-taster` anchor id remains valid and tested (`tourScreen.test.js`), just no longer the internal link target.
+
+**Review cycle (3 subagents in parallel, 1 round — no blocking findings):**
+
+- **code-reviewer**: No correctness issue. Confirmed anchor still exists and is tested. Rationale is sound; one non-blocking note: `#cup-taster` is now unreferenced internally but could be linked externally — flagged as possible future cleanup.
+- **module-boundary-checker**: Clean. Actually reduces format-specific coupling (removes hardcoded `cup-taster` reference from shared component). Noted one pre-existing gap: `publicHeader.js` line 104 hardcodes `'Live — Cup Taster'` status, will need dynamic threading once a second format goes live — not in scope.
+- **ui-accessibility-reviewer**: No regression, actually an improvement. Old `aria-current="page"` was a minor semantic mismatch (current-page state via a sub-page anchor); new href aligns correctly. Mobile panel (360px) identical to desktop. Non-blocking UX note: `/tour/` now starts at page top vs. scrolled to Cup Taster — navigation intent, not a11y issue.
+
+**Verification:** `npx eslint src/marketing/publicHeader.js` clean. Dev server navigation confirms both "Formats" links (desktop + mobile) now read `href="/tour/"`. Grep found no other `/tour/#cup-taster` references. One-file, one-line. Definition of Done met.
+
+---
+
 ## BTC app-wiring pass: format-aware routing and handler composition · 2026-09-23
 
 Final carry-forward item from Phase T-BTC.2, closing the "app-wiring pass" gap (all 5 BTC
