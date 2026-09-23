@@ -4,9 +4,10 @@ Root non-negotiables apply here unconditionally. This module may freely import f
 `src/core/`, but never the reverse — see
 [the repo root CLAUDE.md](../../../CLAUDE.md) for the full non-negotiables list and the
 delegation table. This is also the reference implementation for the module-boundary test
-("can a future format reuse `src/core/` without editing it?") — when Throwdown/Liga
-Seduh/BBTC start, this file is the worked example of what "format-specific" actually
-looks like in practice.
+("can a future format reuse `src/core/` without editing it?") — BTC (built and shipped,
+Phase T-BTC.1–2) already proved this in practice, reusing `core/dom.js`, `core/ranking.js`,
+`core/timeout.js`, etc. unedited; Throwdown/Liga Seduh get held to the same standard once
+they start, with this file as the worked example.
 
 Scoring, timing-surface, entry-surface, viewer-body, analytics — Cup Taster-specific,
 built on `core/`.

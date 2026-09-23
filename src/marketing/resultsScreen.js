@@ -38,7 +38,13 @@ const FORMAT_LABELS = {
   cup_taster: 'Cup Taster',
   throwdown: 'Throwdown',
   liga_seduh: 'Liga Seduh',
-  bbtc: 'BBTC',
+  // A real bug, not just a naming nit: btc_tables.sql's own events row and every BTC
+  // fixture/seed in this codebase use format = 'btc' (BBTC is the Brunei-specific
+  // INSTANCE of the format, not the format's own name — see src/formats/btc/CLAUDE.md).
+  // This key used to read 'bbtc', which no real BTC event's format column has ever
+  // matched — a published BTC result would have silently fallen through to the generic
+  // snake_case-to-title-case fallback below ("Btc") instead of showing this label.
+  btc: 'BTC',
 };
 
 function formatLabel(format) {

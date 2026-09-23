@@ -181,6 +181,19 @@ describe('mountResultsScreen', () => {
     expect(root.querySelector('.results-eyebrow').textContent).toBe('Liga Seduh');
   });
 
+  it('shows "BTC" for a published BTC result — regression coverage for a real bug where this key used to read "bbtc", which no real BTC event\'s format column has ever matched (BBTC is the Brunei-specific instance, not the format\'s own name)', async () => {
+    const rows = [
+      {
+        event_id: 'ev1',
+        payload: samplePayload({ format: 'btc' }),
+        published_at: '2026-09-16T00:00:00Z',
+      },
+    ];
+    const client = fakeClient({ data: rows, error: null });
+    await mountResultsScreen(root, { client });
+    expect(root.querySelector('.results-eyebrow').textContent).toBe('BTC');
+  });
+
   it('skips an archive row entirely (not a crash) for a published event with an empty podium', async () => {
     const rows = [
       { event_id: 'ev1', payload: samplePayload(), published_at: '2026-09-16T00:00:00Z' },

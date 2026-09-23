@@ -1,3 +1,36 @@
+## BTC marketing go-live: public site reflects BTC as live · 2026-09-23
+
+The public marketing site (landing page, Tour page) was still calling BTC "BBTC" and listing it as "coming soon" after BTC's app-wiring pass shipped and made the format fully usable in the organiser console. This task closes the marketing-surface consistency gap, making the public presence match the actual shipped product.
+
+**Core changes:**
+
+- `src/marketing/landingScreen.js` — BTC's row flipped from `{ dimmed: true }` (labelled "BBTC") to `{ live: true }` (labelled "BTC," same destination as Cup Taster), description rewritten to describe what's actually shipped (round-robin prelims, bracket generation, automatic advancement) instead of aspirational "branded PDF reporting" claims. Proof-section stat and pricing-section copy updated to match. Fixed two real hardcoding bugs found live in the browser: (1) `formatRow()`'s "Open X →" link text was literally "Open Cup Taster →" for every live row, so BTC's row said the wrong thing — fixed to template off the row's own name; (2) the nav bar's "Live — Cup Taster" status text (same bug, different string) — fixed to "Live — Cup Taster, BTC".
+- `src/marketing/tourScreen.js` — BTC moved out of the "Coming soon" planned-formats grid into a new live-format section (`buildBtc()`), positioned right after Cup Taster. Deliberately photo-less (unlike Cup Taster's real event photography) to match this module's "fabricated content must stay hidden" discipline. Section numbering renumbered throughout (Cup Taster 01, BTC 02, planned-formats 03, Community 04).
+- `src/marketing/publicHeader.js` — same "Live — Cup Taster" → "Live — Cup Taster, BTC" fix as landingScreen.js's nav (shared header component used by Tour/Community pages).
+- `src/marketing/resultsScreen.js` — fixed a real, previously-dormant bug in the `FORMAT_LABELS` map: key was `'bbtc'`, which no actual BTC event's `format` column has ever matched (every real BTC fixture/seed uses `'btc'`). A published BTC result would silently show "Btc" (a generic fallback) instead of "BTC" on the public Results archive.
+- `src/marketing/landingScreen.test.js` (new) — landingScreen.js had ZERO prior test coverage, and the hardcoding bug this task found and fixed live in the browser shipped with no automated regression test. Added 3 tests (per-row live-link text genuinely per-row, both live rows point at real app destination, BTC named "BTC" not "BBTC") plus a 4th for the nav-indicator fix. Mutation-verified (reverted fix, test failed at exact right assertion, restored).
+- `src/marketing/tour.css` — new `.tour-cup-solo` class (single-column wrapper with same top margin as `.tour-cup-grid`) for BTC's photo-less Tour section, after ui-accessibility-reviewer found the section skipped the grid wrapper entirely, losing its margin — rendered with zero gap between section label and icon at all viewport widths.
+- Test files updated: `tourScreen.test.js`, `resultsScreen.test.js`.
+- Docs updated: `src/marketing/CLAUDE.md` (new "BTC goes live" section), `src/formats/cup-taster/CLAUDE.md` (fixed one stale "BBTC" reference).
+
+**Review cycle (4 subagents in parallel, 1 round):**
+
+- **ui-accessibility-reviewer found 1 BLOCKING, 1 non-blocking**: BLOCKING — `buildBtc()`'s new Tour section skipped `.tour-cup-grid`'s wrapper div (no photo column), losing its `margin-top` — section label sat flush against the icon below it with zero gap at every viewport width, not just 360px. Fixed with new `.tour-cup-solo` class carrying the same margin, verified live in browser before/after. Non-blocking (pre-existing, not fixed): the live-format-row's 3-column grid in `landing.css` squeezes at 360px — now doubly visible with 2 rows live instead of 1, but layout itself wasn't part of this task's diff.
+- **test-auditor found 1 BLOCKING**: landingScreen.js had ZERO test coverage and the exact hardcoding bug found live in the browser (`formatRow()`'s "Open Cup Taster →" text on every row) shipped with no automated regression test. Fixed by adding `landingScreen.test.js` from scratch with 4 tests, mutation-verified (reverted fix, test failed at correct line, restored).
+- **module-boundary-checker**: Clean — confirmed `src/marketing/` makes no new imports from app router, auth, Supabase, `src/formats/`, or `src/core/router.js`; the `/app/#/events` hrefs are plain strings matching Cup Taster's existing pattern.
+- **code-reviewer**: Clean, no findings.
+
+**Scope decisions:**
+
+- Kept BTC's Tour section deliberately photo-less (unlike Cup Taster's real event photo) rather than reusing one of the landing page's generic atmospheric hero photos and implying it depicts a real BTC match — matches this module's "fabricated content must stay hidden" discipline.
+- Flagged (didn't renumber) ROADMAP.md's versioning-nameplate table, which assumed BTC would ship 4th — it actually shipped 2nd, ahead of Throwdown/Liga Seduh. Renumbering the entire nameplate scheme is a bigger call than this task's scope.
+
+**Definition of Done:**
+
+Acceptance demonstrated via live local dev server (landing page, Tour page, Results archive, navigation between all three); both landing and Tour verified in browser console for errors (zero). 1483/1483 tests pass (including new regression suite). Lint/format clean. No new TODOs. Two doc files already updated as part of task diff (`src/marketing/CLAUDE.md`, `src/formats/cup-taster/CLAUDE.md` — see those files for full detail). No migrations/policy/storage changes, zero blocking findings.
+
+---
+
 ## Marketing site nav: Formats link consistency · 2026-09-23
 
 Quick link sweep of the public marketing site (landing page, Tour, Community, Timer, Guess the Bean, console) found one real inconsistency. The landing page's own header anchors "Formats" to an in-page `#formats` section (correct); the Tour and Community pages share a separate header component whose "Formats" link was hardcoded to `/tour/#cup-taster` — a deep link to one specific format instead of the formats overview, despite the plural label.

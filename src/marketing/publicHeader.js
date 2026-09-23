@@ -101,7 +101,7 @@ export function buildPublicHeader({ active }) {
       ),
       el('span', { className: 'public-header-live' }, [
         el('span', { className: 'public-header-live-dot', attrs: { 'aria-hidden': 'true' } }),
-        document.createTextNode('Live — Cup Taster'),
+        document.createTextNode('Live — Cup Taster, BTC'),
       ]),
       el('span', { className: 'public-header-secondary', text: 'No install · no wifi dependency' }),
       el('div', { className: 'public-header-desktop' }, [

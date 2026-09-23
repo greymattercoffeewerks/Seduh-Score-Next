@@ -160,6 +160,13 @@ body {
   align-items: center;
   margin-top: clamp(2.5rem, 5vw, 4.5rem);
 }
+
+/* A single-column variant for a live-format section with no photo column (BTC's
+   own tourScreen.js section) — same top margin .tour-cup-grid gives its two-column
+   sibling, without reserving grid track space for a second column nothing fills. */
+.tour-cup-solo {
+  margin-top: clamp(2.5rem, 5vw, 4.5rem);
+}
 .tour-icon {
   display: grid;
   width: 4rem;
