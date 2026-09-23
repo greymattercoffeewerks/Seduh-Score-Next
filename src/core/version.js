@@ -23,7 +23,15 @@
 // turning a personal tool into something a stranger could actually sign into." Jumped
 // the queue ahead of the originally-planned v2.0/Gadong (Throwdown) since it shipped
 // first — see ROADMAP.md for the reordering.
+//
+// Berakas -> Gadong, 2026-09-23: BTC (Barista Team Championship, renamed from BBTC
+// at the start of Phase T-BTC.2, 2026-09-18) shipped as the platform's second real
+// competition format — schema, bracket generation/advancement, five organiser
+// screens, and the public marketing site all went live the same day. Not Throwdown,
+// which this slot originally assumed — the nameplate tracks ship ORDER, not a
+// specific named format, same reordering class as the Berakas jump above. See
+// ROADMAP.md's "Version cycle plan" table for the corrected sequence.
 import pkg from '../../package.json';
 
 export const APP_VERSION = pkg.version;
-export const NAMEPLATE = 'Berakas';
+export const NAMEPLATE = 'Gadong';

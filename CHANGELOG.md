@@ -1,3 +1,15 @@
+## Version cycle: Berakas → Gadong, v2.0.28 → v3.0.0 · 2026-09-23
+
+**Major bump, triggered by BTC shipping as the platform's second real competition format** (see this file's own "BTC app-wiring pass" and "BTC marketing go-live" entries for the full account, committed separately). Per CONVENTIONS.md's "Versioning" rule, a major version/nameplate move is reserved for a genuine capability-era boundary — a new format shipping is the textbook case, and today BTC (Barista Team Championship, renamed from BBTC 2026-09-18) went from schema to five organiser screens to a live public marketing presence, all in one day. Near-exact match to legacy's own Gadong cycle ("realising one format was never going to be enough").
+
+**What changed:** `package.json` version `2.0.28` → `3.0.0`; `src/core/version.js`'s `NAMEPLATE` `'Berakas'` → `'Gadong'` (the organiser-app footer, `appShell.js`, now reads "Seduh Score · Gadong · v3.0.0"). `CONVENTIONS.md`'s "Versioning" section and `ROADMAP.md`'s "Version cycle plan" table both updated to record the trigger and the reordering.
+
+**A real reordering, not just filling in a blank — the second time this has happened**: ROADMAP.md's nameplate plan had reserved v3.0/Gadong for Throwdown, the format everyone assumed would ship second. BTC beat it there. Kiarong and Menglait no longer name fixed formats — they now track "whichever of Throwdown/Liga Seduh ships 3rd" and "4th" respectively, since only ship order is known, not which format will occupy which slot. Same class of correction Berakas already set the precedent for (jumping the original Gadong/Throwdown v2.0 slot); flagged in ROADMAP.md the moment BTC actually shipped, then resolved here rather than left as a standing correction note.
+
+**Not run this task:** no schema/RLS/scoring/offline-sync/UI-logic change (a version string and doc updates) — `schema-guardian`/`security-reviewer`/`scoring-auditor`/`offline-sync-auditor`/`code-reviewer`/`module-boundary-checker`/`ui-accessibility-reviewer` don't apply to a version-number-only change with no code behavior change. `npm run build`/`test`/`lint` re-run clean after the bump.
+
+---
+
 ## BTC marketing go-live: public site reflects BTC as live · 2026-09-23
 
 The public marketing site (landing page, Tour page) was still calling BTC "BBTC" and listing it as "coming soon" after BTC's app-wiring pass shipped and made the format fully usable in the organiser console. This task closes the marketing-surface consistency gap, making the public presence match the actual shipped product.

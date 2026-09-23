@@ -285,17 +285,26 @@ shipping, or a major cross-cutting relaunch — never on a fixed schedule. See R
 "Version cycle plan" for the planned future sequence; a cycle's name is picked (and this
 section updated) when that cycle actually starts, not before.
 
-**Current cycle: Berakas, v2.0.0** (moved 2026-09-07, from Kiulap/v1.x). Trigger: the
-public marketing landing page (`src/marketing/`) shipped, the site's first real front
-door — the console moved to `/app/`, matching legacy's own Berakas cycle almost exactly
-("the front door — seduhscore.com, an organiser zone... Cup Taster as the fourth
-format"). This jumped the queue ahead of the originally-planned v2.0/Gadong (Throwdown,
-per ROADMAP.md's earlier plan) since the landing page shipped first — Gadong/Kiarong/
-Menglait each shifted one cycle later; see ROADMAP.md's "Version cycle plan" table for
-the corrected sequence. Cloudflare deployment of the landing page itself was still
-pending at the moment of this bump — the version/nameplate move tracks the code shipping
-to the repo, not the separate deploy step (same distinction CLAUDE.md's Repo section
-already draws for migrations).
+**Current cycle: Gadong, v3.0.0** (moved 2026-09-23, from Berakas/v2.x). Trigger: BTC
+(Barista Team Championship, renamed from BBTC at the start of Phase T-BTC.2, 2026-09-18)
+shipped as the platform's second real competition format — schema, bracket generation
+and advancement, five organiser screens, and the public marketing site (landing + Tour)
+all went live the same day. Matches legacy's own Gadong cycle almost exactly ("realising
+one format was never going to be enough"), even though the _specific_ format differs —
+ROADMAP.md's earlier plan had assumed Throwdown would ship second and reserved v3.0/Gadong
+for it. BTC beat Throwdown there, so the nameplate moved on ship ORDER, not on which named
+format arrived; see ROADMAP.md's "Version cycle plan" table for the corrected sequence
+(Kiarong/Menglait now track "whichever of Throwdown/Liga Seduh ships 3rd/4th", not fixed
+format assignments). Second time this exact reordering has happened — Berakas jumped
+queue ahead of the original Gadong/Throwdown slot in the same way.
+
+**Previous cycle: Berakas, v2.0.0** (2026-09-07, from Kiulap/v1.x). Trigger: the public
+marketing landing page (`src/marketing/`) shipped, the site's first real front door — the
+console moved to `/app/`, matching legacy's own Berakas cycle almost exactly ("the front
+door — seduhscore.com, an organiser zone... Cup Taster as the fourth format"). Cloudflare
+deployment of the landing page itself was still pending at the moment of this bump — the
+version/nameplate move tracks the code shipping to the repo, not the separate deploy step
+(same distinction CLAUDE.md's Repo section already draws for migrations).
 
 ---
 
