@@ -47,10 +47,14 @@ Two real fixes made while porting the handoff's design reference (a single-file 
 in a different design tool's own component format, not meant to be copied verbatim)
 into this codebase:
 
-- The fourth competition format is **"BBTC"** everywhere else in this codebase
-  (`src/formats/bbtc/`, `ROADMAP.md`) — the design reference called it "BTC," which
-  isn't this product's real name for it. Corrected in `landingScreen.js`, the same way
-  an earlier rework corrected a fabricated nav link.
+- The fourth competition format was, at the time (2026-09-13), called **"BBTC"**
+  elsewhere in this codebase (`src/formats/bbtc/`, `ROADMAP.md`) — the design reference
+  called it "BTC," which didn't match. "Corrected" in `landingScreen.js` to BBTC, the
+  same way an earlier rework corrected a fabricated nav link. **That correction is now
+  itself reversed** (2026-09-23): the app renamed `bbtc/` → `btc/` at the start of Phase
+  T-BTC.2 (2026-09-18) — BBTC is the Brunei-specific _instance_ of the format, not the
+  format's own name — so the design reference's original "BTC" was right all along. See
+  "BTC goes live" below for the fuller account.
 - The design reference hand-picked several one-off graphite/teal hex values for
   backgrounds and text, entirely independent of the shared token system (it predates
   the decision to import that system here). See `landing.css`'s header comment for
@@ -121,8 +125,46 @@ just an empty `alt` or a hopeful `aria-label`.
 `tour/index.html` is a second public entry in this module, composed by `tourMain.js` and
 `tourScreen.js` with `tour.css`. It is a static, link-out page: it must not import the app
 router, auth, Supabase, or a competition implementation. It uses the legacy tour only as
-historical reference while stating the current truth: Cup Taster is live; Throwdown, Liga
-Seduh and BTC (Barista Team Competition) are planned; Community is a separate final section.
+historical reference while stating the current truth: Cup Taster and BTC are live;
+Throwdown and Liga Seduh are planned; Community is a separate final section.
+
+## BTC goes live (2026-09-23)
+
+The BTC app-wiring pass (routing all 5 of BTC's organiser screens into `src/main.js`)
+made this page's own copy stale in two ways at once: it still called the format "BBTC"
+(the design-reference correction described above, itself wrong since the app's own
+2026-09-18 rename), and it still listed BTC under the Tour's "next rounds"/the landing
+page's dimmed rows as not-yet-live, when the app itself had just made it fully usable.
+Fixed together:
+
+- `landingScreen.js`'s format list: BTC's row is now `{ live: true, href:
+'/app/#/events' }` (same destination as Cup Taster's row — which format an organiser
+  gets from there is a per-event choice, not a per-format URL), renamed from "BBTC," and
+  its description rewritten to describe what's actually shipped (round-robin prelims,
+  bracket generation, automatic advancement) rather than an aspirational "branded PDF
+  reporting" claim BTC doesn't have (only Cup Taster's `reportScreen.js` does). The
+  proof section's "N formats live today" stat and the pricing section's format mention
+  both updated to match.
+- `tourScreen.js`: BTC moved out of `buildPlannedFormats()`'s "Coming soon" grid into
+  its own live-format section (`buildBtc()`), positioned right after Cup Taster's. It
+  deliberately has **no photo** — Cup Taster's own section uses a real, genuine event
+  photo (Girls Got Drip Vol. 0); BTC has no equivalent yet, and reaching for one of the
+  landing page's own atmospheric hero photos (`hero-bracket.jpg` etc., already
+  `aria-hidden` there precisely because they're generic, not tied to any real event)
+  would have implied it depicts an actual BTC match. `buildBtc()` reuses
+  `buildCupTaster()`'s typographic classes (`.tour-cup`/`.tour-copy`/`.tour-note`/
+  `.tour-primary-link`) without the `.tour-cup-grid`/`.tour-cup-media` photo column —
+  text-first is the honest choice here, not a corner cut. Section numbering shifted
+  accordingly (Cup Taster 01, BTC 02, the planned-format map 03, Community 04); the
+  planned grid now only lists Throwdown and Liga Seduh.
+- `resultsScreen.js`'s `FORMAT_LABELS` map: found and fixed a real bug while touching
+  this, not just a naming nit — its key was `bbtc`, which no actual BTC event's
+  `format` column has ever matched (every BTC fixture/seed in this codebase uses
+  `'btc'`, confirmed against `supabase/tests/012_btc_tables.sql` etc.). A published BTC
+  result would have silently fallen through to the generic snake_case-to-title-case
+  fallback ("Btc") instead of showing "BTC" on the public Results archive. This bug
+  predates 2026-09-23; it was simply never caught because no BTC event has been
+  published to the archive yet.
 
 The landing page's two "Take the tour" CTAs point to `/tour/`. Keep that link and the Vite
 `tour` input together whenever this entry moves: development finds HTML by path, but the
@@ -178,11 +220,14 @@ real links to `/tour/`; Community Tools links to `/community/`; and Cup Taster l
 Not an oversight — there's no tour page and no sign-up flow yet (`loginScreen.js` is
 sign-in only; D14's real access control is still a stub). "Formats" and "Pricing" in the
 nav are real same-page anchors (`#formats`, `#pricing`); "Timer" is a real link
-(`/tools/timer/`). Cup Taster's own "Open Cup Taster →" link is the one real
-authenticated-app destination (`/app/#/events`). Wire the rest up as their destinations
-get built, not before — and don't add a nav item or copy claiming a capability (an event
-archive, an org directory, anything) that isn't real product scope yet; check
-`ROADMAP.md` before adding a new claim to this page.
+(`/tools/timer/`). Cup Taster's and BTC's own "Open X →" links (2026-09-23: BTC's row
+went live alongside Cup Taster's, once the app itself routed all 5 of BTC's screens —
+see "BTC goes live" above) both point at the same real authenticated-app destination
+(`/app/#/events`) — an organiser picks the format per event once signed in, not via a
+per-format URL. Wire the rest up as their destinations get built, not before — and don't
+add a nav item or copy claiming a capability (an event archive, an org directory,
+anything) that isn't real product scope yet; check `ROADMAP.md` before adding a new
+claim to this page.
 
 ## Assets
 

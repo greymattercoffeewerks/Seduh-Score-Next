@@ -1,6 +1,23 @@
-// Public format tour. It states the current truth: Cup Taster is live,
-// the remaining competition formats are planned, and Community tools are
-// separate link-out utilities.
+// Public format tour. It states the current truth: Cup Taster and BTC are
+// live, the remaining competition formats are planned, and Community tools
+// are separate link-out utilities.
+//
+// BTC (2026-09-23) — the app-wiring pass that routed BTC's screens into the
+// organiser console (src/main.js) made this page's own copy stale: it still
+// named BTC "BBTC" and listed it under "The next rounds" as not-yet-live.
+// That naming was already wrong before this fix too — the app itself
+// renamed the format from bbtc/ to btc/ back at the start of Phase T-BTC.2
+// (2026-09-18; BBTC is the Brunei-specific INSTANCE of the format, not the
+// format's own name), but this page was built independently against an
+// older design handoff and never got the correction. BTC has no real event
+// photography yet (unlike Cup Taster's genuine Girls Got Drip Vol. 0 photo),
+// so its own live section below is icon-only, text-first — reusing
+// buildCupTaster's typographic classes (.tour-cup/.tour-copy/.tour-note/
+// .tour-primary-link) without the photo column, rather than reaching for
+// one of the landing page's own atmospheric hero photos (hero-bracket.jpg
+// etc.) and implying it depicts a real BTC match, which it doesn't — see
+// this module's own CLAUDE.md "Fabricated content must stay hidden from
+// assistive tech" section for why that distinction matters here.
 import { el, svgEl } from '../core/dom.js';
 import { buildPublicFooter } from './publicFooter.js';
 import { buildPublicHeader } from './publicHeader.js';
@@ -85,7 +102,7 @@ function buildHero() {
     }),
     el('div', { className: 'tour-hero-status' }, [
       el('span', { className: 'tour-status-mark', text: '01' }),
-      el('span', { text: 'Cup Taster is live now. More formats are on the way.' }),
+      el('span', { text: 'Cup Taster and BTC are live now. More formats are on the way.' }),
     ]),
   ]);
 }
@@ -148,6 +165,46 @@ function buildCupTaster() {
   );
 }
 
+// Icon-only, text-first — no photo column, unlike buildCupTaster's bespoke
+// hero treatment. See this file's own header comment for why: no real BTC
+// event photography exists yet, and reaching for one of the landing page's
+// generic bracket photos here would misrepresent it as a real match.
+function buildBtc() {
+  return el(
+    'section',
+    { className: 'tour-cup', attrs: { id: 'btc', 'aria-labelledby': 'btc-title' } },
+    [
+      el('div', { className: 'tour-section-label' }, [
+        el('span', { text: '02' }),
+        el('span', { text: 'Live format' }),
+      ]),
+      // .tour-cup-solo, not .tour-cup-grid — buildCupTaster's own two-column grid
+      // exists to hold ITS photo column too; a single child inside that grid would
+      // still reserve empty space for the unused second track. This carries just
+      // the top margin .tour-cup-grid normally supplies (found missing live in
+      // review, ui-accessibility-reviewer: without it, the icon sat flush against
+      // the section label above with zero gap, at every viewport width).
+      el('div', { className: 'tour-cup-solo' }, [
+        el('div', { className: 'tour-icon', attrs: { 'aria-hidden': 'true' } }, [ICONS.team()]),
+        el('p', { className: 'tour-kicker', text: 'Team head-to-head' }),
+        el('h2', { id: 'btc-title', text: 'BTC.' }),
+        el('p', {
+          className: 'tour-copy',
+          text: 'Two teams, one set of cups, scored cup-by-cup. A round-robin preliminary round seeds a full bracket — quarterfinals, semifinals, and a final — with standings and advancement handled automatically.',
+        }),
+        el('p', {
+          className: 'tour-note',
+          text: 'Live in the organiser console. Sign in to set up and run an event.',
+        }),
+        el('a', { className: 'tour-primary-link cut-sm', attrs: { href: '/app/#/events' } }, [
+          el('span', { text: 'Open BTC' }),
+          arrow(),
+        ]),
+      ]),
+    ],
+  );
+}
+
 function plannedFormat({ number, title, label, description, icon: iconName }) {
   return el('article', { className: 'tour-planned-card' }, [
     el('div', { className: 'tour-planned-top' }, [
@@ -171,7 +228,7 @@ function buildPlannedFormats() {
       el('div', { className: 'tour-planned-intro' }, [
         el('div', {}, [
           el('div', { className: 'tour-section-label' }, [
-            el('span', { text: '02' }),
+            el('span', { text: '03' }),
             el('span', { text: 'The format map' }),
           ]),
           el('h2', { id: 'planned-title', text: 'The next rounds.' }),
@@ -182,7 +239,7 @@ function buildPlannedFormats() {
       ]),
       el('div', { className: 'tour-planned-grid' }, [
         plannedFormat({
-          number: '02',
+          number: '01',
           title: 'Throwdown',
           label: '1v1 knockout',
           description:
@@ -190,20 +247,12 @@ function buildPlannedFormats() {
           icon: 'bracket',
         }),
         plannedFormat({
-          number: '03',
+          number: '02',
           title: 'Liga Seduh',
           label: 'Round robin league',
           description:
             'A league format where a small field brews across rounds and the standings evolve as each result lands.',
           icon: 'league',
-        }),
-        plannedFormat({
-          number: '04',
-          title: 'BTC',
-          label: 'Barista Team Competition',
-          description:
-            'A team head-to-head format with cup-by-cup scoring and the scale for a season, not just one afternoon.',
-          icon: 'team',
         }),
       ]),
     ],
@@ -229,7 +278,7 @@ function buildCommunity() {
     },
     [
       el('div', { className: 'tour-section-label' }, [
-        el('span', { text: '03' }),
+        el('span', { text: '04' }),
         el('span', { text: 'Community tools' }),
       ]),
       el('div', { className: 'tour-community-heading' }, [
@@ -273,6 +322,7 @@ export function mountTourScreen(root) {
       buildPublicHeader({ active: 'tour' }),
       buildHero(),
       buildCupTaster(),
+      buildBtc(),
       buildPlannedFormats(),
       buildCommunity(),
       buildPublicFooter({

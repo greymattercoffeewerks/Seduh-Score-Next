@@ -13,10 +13,17 @@
 // Two real fixes made while porting the handoff's own design reference
 // (a single-file mockup in a different tool's component format, not meant
 // to be copied verbatim) into this codebase's conventions:
-//   - The fourth format is "BBTC" everywhere else in this codebase
-//     (src/formats/bbtc/, ROADMAP.md) — the design reference called it
-//     "BTC," which isn't this product's real name for it. Corrected here,
-//     the same way an earlier rework corrected a fabricated nav link.
+//   - The design reference called the fourth format "BTC" — at the time
+//     this page was first built (2026-09-13), the rest of this codebase
+//     still called it "BBTC" (src/formats/bbtc/, ROADMAP.md), so it was
+//     "corrected" to BBTC here, the same way an earlier rework corrected a
+//     fabricated nav link. That correction is now itself reversed: the app
+//     renamed bbtc/ -> btc/ at the start of Phase T-BTC.2 (2026-09-18) —
+//     BBTC is the Brunei-specific INSTANCE of the format, not the format's
+//     own name — so the design reference's original "BTC" was right all
+//     along. Fixed here 2026-09-23, alongside actually shipping BTC as a
+//     live row below (it was still marked dimmed/"Soon" even after the app
+//     itself had routed all 5 of its screens).
 //   - The design reference hand-picked several one-off graphite/teal hex
 //     values for backgrounds and text, entirely independent of the shared
 //     token system (it predates the decision to import that system here).
@@ -131,7 +138,7 @@ function buildNav() {
 
   const live = el('span', { className: 'petrol-live-indicator' }, [
     liveDot(),
-    document.createTextNode('Live — Cup Taster'),
+    document.createTextNode('Live — Cup Taster, BTC'),
   ]);
 
   const secondary = el('span', {
@@ -414,11 +421,14 @@ function tag(text, { solid = false } = {}) {
   });
 }
 
-// Cup Taster is the one real, live format — not dimmed, left-accented, and
-// its own row is a link straight into the app. The other three are real
-// product scope (ROADMAP.md), just not built yet, so they're dimmed rather
-// than equal-weight with Cup Taster. "BBTC," not "BTC" — see this file's
-// header comment for why that's a correction, not a typo carried over.
+// Cup Taster and BTC are the two real, live formats — not dimmed,
+// left-accented, and each row is a link straight into the app (both go to
+// the same /app/#/events; which format an organiser gets from there is a
+// per-event choice, not a per-format URL). Throwdown and Liga Seduh are
+// real product scope (ROADMAP.md), just not built yet, so they stay dimmed.
+// "BTC," not "BBTC" — see this file's header comment for the naming
+// history (the design reference had it right; this codebase was wrong for
+// a while, not the other way around).
 function formatRow(index, name, body, { live = false, dimmed = false, href } = {}) {
   const classes = ['petrol-format-row'];
   if (live) classes.push('petrol-format-row-live');
@@ -430,8 +440,12 @@ function formatRow(index, name, body, { live = false, dimmed = false, href } = {
     // A <span>, not an <a> — the whole row is already the link (below).
     // Nesting a real anchor inside it would be invalid HTML (interactive
     // content inside <a>) and would give keyboard/screen-reader users two
-    // overlapping tab stops for the same destination.
-    children.push(el('span', { className: 'petrol-format-link', text: 'Open Cup Taster →' }));
+    // overlapping tab stops for the same destination. Per-row `name`, not a
+    // literal "Open Cup Taster →" — found live in the browser while
+    // verifying BTC's own row: this text was hardcoded, so BTC's row read
+    // "Open Cup Taster →" too, pointing a visitor at the wrong format's
+    // name for the exact link that's supposed to name its own destination.
+    children.push(el('span', { className: 'petrol-format-link', text: `Open ${name} →` }));
   }
 
   const cells = [
@@ -483,10 +497,10 @@ function formatsSection() {
       ),
       formatRow(
         '04',
-        'BBTC',
-        'Barista Team Championship — the flagship team format, with branded PDF reporting ' +
-          'piloted here first.',
-        { dimmed: true },
+        'BTC',
+        'Team head-to-head, cup-by-cup — round-robin prelims seed a full bracket, with ' +
+          'standings and advancement handled automatically.',
+        { live: true, href: '/app/#/events' },
       ),
     ]),
   ]);
@@ -507,7 +521,7 @@ function proofSection() {
     fact('0', 'installs. Pure web, open it on the day.'),
     fact('1', 'event flow: setup, roster, stages, then heats.'),
     fact('3', 'live surfaces: splash screen, projector, and phone.'),
-    fact('1', 'format live today: Cup Taster. More are coming.', true),
+    fact('2', 'formats live today: Cup Taster, BTC. More are coming.', true),
   ]);
 
   const story = el('div', { className: 'petrol-story' }, [
@@ -575,7 +589,7 @@ function pricingSection() {
         'Annual',
         'BND $100',
         'per year',
-        'Every format including BBTC, priced for organisers running events all year. ' +
+        'Every format including BTC, priced for organisers running events all year. ' +
           'Persistent history across seasons.',
       ),
     ]),
