@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1000" viewBox="0 0 1000 1000" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Seduh Score mark</title>
+  <desc id="desc">A warm terracotta coffee-signal mark: a dot above three nested arches.</desc>
+  <g stroke="#B83E15" stroke-width="80" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="500" cy="325" r="70" fill="#B83E15" stroke="none"/>
+    <path d="M200 750a300 300 0 0 1 600 0"/>
+    <path d="M312.5 750a187.5 187.5 0 0 1 375 0"/>
+    <path d="M425 750a75 75 0 0 1 150 0"/>
+  </g>
+</svg>
