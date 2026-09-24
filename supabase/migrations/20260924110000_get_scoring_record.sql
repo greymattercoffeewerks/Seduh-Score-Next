@@ -32,6 +32,13 @@
 --   * rehearsal_flag_changes counts every `events` row in the log, which today is exactly
 --     the is_test flips (that is all the log trigger writes for events). If that trigger
 --     ever logs another events column this count must be narrowed.
+--   * OVERFLOW: reading the log costs time proportional to its rows, and any org member
+--     can add rows by editing after confirmation. If an event has more than 15,000 logged
+--     after-confirmation changes the function does NOT attempt the summary (a big enough
+--     log would push an anonymous call past its 3-second statement timeout and make the
+--     record silently fail). It returns overflow = true, the true number of logged changes,
+--     and a cheap per-area count instead, so a flooded log shows up as a visible red flag,
+--     never as a missing page. The exact record is in the dispute pack.
 --   * The correction list is capped at 200 entries (correction_count still reports the
 --     true total, and `truncated` says so); the cap bounds what an anonymous caller can
 --     make the server compute and send.
@@ -71,6 +78,9 @@ declare
   v_flips       int;
   v_flips_after int;
   v_published   timestamptz;
+  v_rows        bigint;
+  v_overflow    boolean;
+  v_by_area     jsonb;
 begin
   select pr.published_at into v_published
     from public.public_results pr where pr.event_id = p_event_id;
@@ -78,6 +88,31 @@ begin
     return null;
   end if;
 
+  -- Cheap bound first (an index range scan on (event_id, changed_at)), before any sorting.
+  select count(*) into v_rows
+    from public.score_change_log l
+   where l.event_id = p_event_id and l.after_confirm and l.table_name <> 'events';
+  v_overflow := v_rows > 15000;
+
+  if v_overflow then
+    v_corrections := '[]'::jsonb;
+    v_total := null;
+    select coalesce(jsonb_object_agg(x.area, x.n), '{}'::jsonb) into v_by_area
+      from (select case l.table_name
+                     when 'ct_heat_entries'   then 'times'
+                     when 'ct_results'        then 'results'
+                     when 'ct_heats'          then 'heat status'
+                     when 'ct_stages'         then 'stage settings'
+                     when 'ct_stage_entries'  then 'stage placings'
+                     when 'btc_cup_votes'     then 'votes'
+                     when 'btc_match_bonuses' then 'bonuses'
+                     when 'btc_matches'       then 'match details'
+                     when 'btc_bracket_slots' then 'bracket'
+                   end as area, count(*) as n
+              from public.score_change_log l
+             where l.event_id = p_event_id and l.after_confirm and l.table_name <> 'events'
+             group by l.table_name) x;
+  else
   with base as (
     select l.id, l.txid, l.table_name, l.action, l.old_value, l.new_value, l.context,
            l.row_id, l.changed_at, l.reason,
@@ -198,6 +233,7 @@ begin
          coalesce(max(r.total), 0)
     into v_corrections, v_total
     from ranked r;
+  end if;
 
   -- How a placing was decided, by category and count only. No free text, no entry ids.
   select coalesce(jsonb_agg(
@@ -222,7 +258,10 @@ begin
   return jsonb_build_object(
     'corrections', v_corrections,
     'correction_count', v_total,
-    'truncated', v_total > 200,
+    'truncated', v_overflow or coalesce(v_total, 0) > 200,
+    'overflow', v_overflow,
+    'logged_changes', v_rows,
+    'by_area', case when v_overflow then v_by_area end,
     'placings', v_placings,
     'rehearsal_flag_changes', v_flips,
     'rehearsal_flag_changes_after_publish', v_flips_after

@@ -12,7 +12,7 @@
 -- txids and times, so the grouping/ordering rules can be tested independently of the
 -- triggers; a few run through the real triggers to prove the two fit together.
 begin;
-select plan(36);
+select plan(46);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-000000000001', 'member@test.seduh-next'),
@@ -27,7 +27,13 @@ insert into events (id, org_id, format, name) values
   ('00000000-0000-0000-0000-0000000000e3', '00000000-0000-0000-0000-000000000010', 'btc', 'BTC Event'),
   ('00000000-0000-0000-0000-0000000000e5', '00000000-0000-0000-0000-000000000010', 'cup_taster', 'Synthetic'),
   ('00000000-0000-0000-0000-0000000000e6', '00000000-0000-0000-0000-000000000010', 'cup_taster', 'Cap'),
-  ('00000000-0000-0000-0000-0000000000e7', '00000000-0000-0000-0000-000000000010', 'cup_taster', 'Scale');
+  ('00000000-0000-0000-0000-0000000000e7', '00000000-0000-0000-0000-000000000010', 'cup_taster', 'Scale'),
+  ('00000000-0000-0000-0000-0000000000e8', '00000000-0000-0000-0000-000000000010', 'cup_taster', 'Churn values'),
+  ('00000000-0000-0000-0000-0000000000e9', '00000000-0000-0000-0000-000000000010', 'cup_taster', 'Exactly 200'),
+  ('00000000-0000-0000-0000-0000000000ea', '00000000-0000-0000-0000-000000000010', 'cup_taster', 'Exactly 201'),
+  ('00000000-0000-0000-0000-0000000000eb', '00000000-0000-0000-0000-000000000010', 'cup_taster', 'Other event placings'),
+  ('00000000-0000-0000-0000-0000000000ec', '00000000-0000-0000-0000-000000000010', 'cup_taster', 'Overflow'),
+  ('00000000-0000-0000-0000-0000000000ed', '00000000-0000-0000-0000-000000000010', 'cup_taster', 'Just under overflow');
 insert into event_entries (id, event_id, display_name) values
   ('00000000-0000-0000-0000-0000000000ee', '00000000-0000-0000-0000-0000000000e1', 'Cupper One');
 insert into ct_stages (id, event_id, kind, ordinal, set_count, duration_secs) values
@@ -61,15 +67,33 @@ update ct_heat_entries set elapsed_secs = 300 where id = '00000000-0000-0000-000
 update ct_heats set status = 'confirmed' where id = '00000000-0000-0000-0000-0000000000f1';
 update btc_matches set status = 'confirmed' where id = '00000000-0000-0000-0000-000000000d01';
 -- tie-break provenance: a coin toss whose free-text note names people (must not leak)
-insert into ct_stage_entries (stage_id, entry_id, source, position_note) values
-  ('00000000-0000-0000-0000-0000000000b1', '00000000-0000-0000-0000-0000000000ee', 'coin_toss', 'Alice vs Bob, witnessed');
+insert into event_entries (id, event_id, display_name) values
+  ('00000000-0000-0000-0000-0000000000e8', '00000000-0000-0000-0000-0000000000e1', 'Cupper Two'),
+  ('00000000-0000-0000-0000-0000000000e9', '00000000-0000-0000-0000-0000000000e1', 'Cupper Three'),
+  ('00000000-0000-0000-0000-0000000000ea', '00000000-0000-0000-0000-0000000000e1', 'Cupper Four'),
+  ('00000000-0000-0000-0000-0000000000eb', '00000000-0000-0000-0000-0000000000e1', 'Cupper Five'),
+  ('00000000-0000-0000-0000-0000000000ec', '00000000-0000-0000-0000-0000000000eb', 'Other Event Cupper');
+insert into ct_stages (id, event_id, kind, ordinal, set_count, duration_secs) values
+  ('00000000-0000-0000-0000-0000000000b3', '00000000-0000-0000-0000-0000000000e1', 'semis', 2, 1, 480),
+  ('00000000-0000-0000-0000-0000000000b4', '00000000-0000-0000-0000-0000000000eb', 'prelims', 1, 1, 480);
+-- placings: two coin tosses + one tiebreak in Prelims, one tiebreak in Semis, a plain
+-- advancement (must be excluded), and a coin toss on ANOTHER event (must not appear)
+insert into ct_stage_entries (id, stage_id, entry_id, source, position_note) values
+  ('00000000-0000-0000-0000-000000000a51', '00000000-0000-0000-0000-0000000000b1', '00000000-0000-0000-0000-0000000000ee', 'coin_toss', 'Alice vs Bob, witnessed'),
+  ('00000000-0000-0000-0000-000000000a52', '00000000-0000-0000-0000-0000000000b1', '00000000-0000-0000-0000-0000000000e8', 'coin_toss', null),
+  ('00000000-0000-0000-0000-000000000a53', '00000000-0000-0000-0000-0000000000b1', '00000000-0000-0000-0000-0000000000e9', 'tiebreak_won', null),
+  ('00000000-0000-0000-0000-000000000a54', '00000000-0000-0000-0000-0000000000b3', '00000000-0000-0000-0000-0000000000ea', 'tiebreak_won', null),
+  ('00000000-0000-0000-0000-000000000a55', '00000000-0000-0000-0000-0000000000b3', '00000000-0000-0000-0000-0000000000eb', 'advanced', null),
+  ('00000000-0000-0000-0000-000000000a56', '00000000-0000-0000-0000-0000000000b4', '00000000-0000-0000-0000-0000000000ec', 'coin_toss', null);
 
 -- publish e1, e3, e5, e6, e7 (e2 stays unpublished)
 insert into public_results (org_id, event_id, payload)
 select '00000000-0000-0000-0000-000000000010', e, '{}'::jsonb
   from unnest(array['00000000-0000-0000-0000-0000000000e1', '00000000-0000-0000-0000-0000000000e3',
                     '00000000-0000-0000-0000-0000000000e5', '00000000-0000-0000-0000-0000000000e6',
-                    '00000000-0000-0000-0000-0000000000e7']::uuid[]) e;
+                    '00000000-0000-0000-0000-0000000000e7', '00000000-0000-0000-0000-0000000000e8',
+                    '00000000-0000-0000-0000-0000000000e9', '00000000-0000-0000-0000-0000000000ea',
+                    '00000000-0000-0000-0000-0000000000ec', '00000000-0000-0000-0000-0000000000ed']::uuid[]) e;
 
 -- ---------- nothing for unpublished / unknown ----------
 set local role anon;
@@ -131,8 +155,8 @@ select is(
     || '/' || (get_scoring_record('00000000-0000-0000-0000-0000000000e1') ->> 'rehearsal_flag_changes_after_publish')::int,
   '2/0', 'rehearsal-flag flips are counted, and none happened after publication here');
 select is(get_scoring_record('00000000-0000-0000-0000-0000000000e1') -> 'placings',
-  '[{"count": 1, "stage": "Prelims", "decided_by": "coin toss"}]'::jsonb,
-  'a coin-toss placing is shown by stage, category and count only; the organiser''s note is not returned');
+  '[{"count": 2, "stage": "Prelims", "decided_by": "coin toss"}, {"count": 1, "stage": "Prelims", "decided_by": "tiebreak"}, {"count": 1, "stage": "Semis", "decided_by": "tiebreak"}]'::jsonb,
+  'placings are counted by stage and category, ordered by stage; plain advancement and another event''s coin toss are excluded; no note text');
 -- BTC through the real triggers
 select is(
   (select (c ->> 'area') || '/' || (c ->> 'label') from jsonb_array_elements(get_scoring_record('00000000-0000-0000-0000-0000000000e3') -> 'corrections') c),
@@ -217,6 +241,119 @@ select is(
     || '/' || (get_scoring_record('00000000-0000-0000-0000-0000000000e5') ->> 'rehearsal_flag_changes_after_publish')::int,
   '2/1', 'rehearsal flips are split into all and those after publication');
 reset role;
+
+-- ---------- churn collapse must compare VALUES, not just counts, and scope by txid and context ----------
+-- (a real replace-all edit that CHANGES a vote must never be swallowed as a re-save)
+insert into score_change_log
+  (org_id, event_id, table_name, row_id, action, old_value, new_value, context, after_confirm, txid, changed_at)
+select '00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-0000000000e8', 'btc_cup_votes', gen_random_uuid(),
+       v.action, case when v.action = 'delete' then jsonb_build_object('team1_tokens', v.val) end,
+       case when v.action = 'insert' then jsonb_build_object('team1_tokens', v.val) end,
+       jsonb_build_object('match_id', '00000000-0000-0000-0000-000000000d01', 'cup_number', v.cup),
+       true, v.txid, v.at
+  from (values
+    -- P1: delete {2}, insert {3}, same txn + context: a real change (2 -> 3), NOT a re-save
+    ('delete', 2, 1, 301, '2026-04-01 10:00+00'::timestamptz), ('insert', 3, 1, 301, '2026-04-01 10:00+00'),
+    -- P2: same counts, values differ as a multiset: deletes {1},{2} vs inserts {1},{3}
+    ('delete', 1, 2, 302, '2026-04-01 11:00+00'), ('delete', 2, 2, 302, '2026-04-01 11:00+00'),
+    ('insert', 1, 2, 302, '2026-04-01 11:00+00'), ('insert', 3, 2, 302, '2026-04-01 11:00+00'),
+    -- P3: count mismatch: two identical deletes, one identical insert
+    ('delete', 1, 3, 303, '2026-04-01 12:00+00'), ('delete', 1, 3, 303, '2026-04-01 12:00+00'),
+    ('insert', 1, 3, 303, '2026-04-01 12:00+00'),
+    -- S1: one txn, cup 4 is a pure re-save, cup 5 a real change: cup 5 kept, cup 4 dropped
+    ('delete', 2, 4, 304, '2026-04-01 13:00+00'), ('insert', 2, 4, 304, '2026-04-01 13:00+00'),
+    ('delete', 2, 5, 304, '2026-04-01 13:00+00'), ('insert', 3, 5, 304, '2026-04-01 13:00+00'),
+    -- S2: a later txn with a differing pair on cup 4 is not cancelled by cup 4's earlier re-save
+    ('delete', 2, 4, 305, '2026-04-01 14:00+00'), ('insert', 3, 4, 305, '2026-04-01 14:00+00')
+  ) as v(action, val, cup, txid, at);
+
+set local role anon;
+select is(
+  (select array_agg((c ->> 'changes')::int order by (c ->> 'at')::timestamptz)
+     from jsonb_array_elements(get_scoring_record('00000000-0000-0000-0000-0000000000e8') -> 'corrections') c),
+  array[2, 4, 3, 2, 2],
+  'a changed value is kept even when counts match (2, 4, 3 records); only the pure re-save inside a mixed transaction is dropped (2 kept of 4); a later differing pair is not cancelled by an earlier re-save');
+select is((get_scoring_record('00000000-0000-0000-0000-0000000000e8') ->> 'correction_count')::int, 5,
+  'exactly five corrections come from those scenarios');
+reset role;
+
+-- ---------- re-opens are visible, with their labels (through the real triggers) ----------
+set local role authenticated;
+set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000000001';
+update ct_heats set status = 'scoring' where id = '00000000-0000-0000-0000-0000000000f1';
+update btc_matches set status = 'scoring' where id = '00000000-0000-0000-0000-000000000d01';
+update ct_stages set status = 'complete' where id = '00000000-0000-0000-0000-0000000000b1';
+update ct_stage_entries set final_position = 1 where id = '00000000-0000-0000-0000-000000000a51';
+reset role;
+set local role anon;
+select ok(
+  (select array_agg((c ->> 'area') || '/' || (c ->> 'label'))
+     from jsonb_array_elements(get_scoring_record('00000000-0000-0000-0000-0000000000e1') -> 'corrections') c)
+     @> array['heat status/Prelims · heat 1', 'stage placings/Prelims']
+  and (select array_agg((c ->> 'area') || '/' || (c ->> 'label'))
+     from jsonb_array_elements(get_scoring_record('00000000-0000-0000-0000-0000000000e3') -> 'corrections') c)
+     @> array['match details/Preliminary match'],
+  're-opening a confirmed heat or match, and editing a placing after a stage completes, each appear with the right area and label');
+reset role;
+
+-- ---------- the truncation boundary: exactly 200 is not truncated, 201 is ----------
+insert into score_change_log
+  (org_id, event_id, table_name, row_id, action, old_value, new_value, context, after_confirm, txid, changed_at)
+select '00000000-0000-0000-0000-000000000010', e.ev, 'ct_heat_entries', gen_random_uuid(), 'update',
+       '{"elapsed_secs":1}', '{"elapsed_secs":2}',
+       '{"heat_id":"00000000-0000-0000-0000-0000000000f1","entry_id":"00000000-0000-0000-0000-0000000000ee"}',
+       true, e.base + g, '2026-05-01'::timestamptz + g * interval '1 second'
+  from (values ('00000000-0000-0000-0000-0000000000e9'::uuid, 5000, 200),
+               ('00000000-0000-0000-0000-0000000000ea'::uuid, 6000, 201)) as e(ev, base, n)
+  cross join lateral generate_series(1, e.n) g;
+set local role anon;
+select is(
+  (get_scoring_record('00000000-0000-0000-0000-0000000000e9') ->> 'correction_count')::int
+    || '/' || jsonb_array_length(get_scoring_record('00000000-0000-0000-0000-0000000000e9') -> 'corrections')
+    || '/' || (get_scoring_record('00000000-0000-0000-0000-0000000000e9') ->> 'truncated'),
+  '200/200/false', 'exactly 200 corrections is not truncated');
+select is(
+  (get_scoring_record('00000000-0000-0000-0000-0000000000ea') ->> 'correction_count')::int
+    || '/' || jsonb_array_length(get_scoring_record('00000000-0000-0000-0000-0000000000ea') -> 'corrections')
+    || '/' || (get_scoring_record('00000000-0000-0000-0000-0000000000ea') ->> 'truncated'),
+  '201/200/true', '201 corrections is truncated to 200, with the true total reported');
+reset role;
+
+-- ---------- overflow: a log too large to summarise fails VISIBLY, and fast ----------
+insert into score_change_log
+  (org_id, event_id, table_name, row_id, action, old_value, new_value, context, after_confirm, txid, changed_at)
+select '00000000-0000-0000-0000-000000000010', e.ev,
+       case when g % 2 = 0 then 'ct_results' else 'ct_heat_entries' end, gen_random_uuid(), 'update',
+       '{"elapsed_secs":1}', '{"elapsed_secs":2}', '{}',
+       true, e.base + g % 500, '2026-06-01'::timestamptz + g * interval '1 millisecond'
+  from (values ('00000000-0000-0000-0000-0000000000ec'::uuid, 100000, 15001),
+               ('00000000-0000-0000-0000-0000000000ed'::uuid, 200000, 15000)) as e(ev, base, n)
+  cross join lateral generate_series(1, e.n) g;
+select set_config('t.t2', clock_timestamp()::text, false);
+set local role anon;
+select is(
+  (get_scoring_record('00000000-0000-0000-0000-0000000000ec') ->> 'overflow')
+    || '/' || (get_scoring_record('00000000-0000-0000-0000-0000000000ec') ->> 'logged_changes')
+    || '/' || coalesce(get_scoring_record('00000000-0000-0000-0000-0000000000ec') ->> 'correction_count', 'null')
+    || '/' || jsonb_array_length(get_scoring_record('00000000-0000-0000-0000-0000000000ec') -> 'corrections')
+    || '/' || (get_scoring_record('00000000-0000-0000-0000-0000000000ec') ->> 'truncated'),
+  'true/15001/null/0/true',
+  'more than 15,000 logged changes: the function reports overflow, the true count, no summary, and truncated — it does not error');
+select is(get_scoring_record('00000000-0000-0000-0000-0000000000ec') -> 'by_area',
+  '{"times": 7501, "results": 7500}'::jsonb,
+  'an overflowed record still gives a cheap per-area count, so a flood is visible');
+reset role;
+select ok(clock_timestamp() - current_setting('t.t2')::timestamptz < interval '2 seconds',
+  'the overflow answer is fast (three calls in well under anon''s 3-second timeout)');
+select set_config('t.t3', clock_timestamp()::text, false);
+set local role anon;
+select is(
+  (get_scoring_record('00000000-0000-0000-0000-0000000000ed') ->> 'overflow')
+    || '/' || (get_scoring_record('00000000-0000-0000-0000-0000000000ed') ->> 'logged_changes'),
+  'false/15000', 'exactly 15,000 logged changes is still summarised, not overflowed');
+reset role;
+select ok(clock_timestamp() - current_setting('t.t3')::timestamptz < interval '2.5 seconds',
+  'and the largest summarised size stays well inside anon''s 3-second timeout');
 
 -- ---------- the 200-entry cap, and a scale bound ----------
 insert into score_change_log
