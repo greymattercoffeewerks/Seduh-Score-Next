@@ -30,7 +30,8 @@ import {
 import { describeError } from '../../core/errors.js';
 import { getSupabase } from '../../core/supabaseClient.js';
 import { formatDuration, formatDurationLong } from '../../core/duration.js';
-import { buildCsvForTables, downloadCsv } from '../../core/export.js';
+import { buildCsvForTables, downloadCsv, downloadJson } from '../../core/export.js';
+import { getDisputePack } from '../../core/disputePack.js';
 import { listEntriesByIds } from '../../core/registry.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
 import {
@@ -983,6 +984,73 @@ export async function mountReportScreen(root, { eventId, client = getSupabase(),
   // a capability that server-side (the migration's own trigger) and the RPC
   // both refuse anyway) — matches renderDeleteAction's own "only offered
   // where it could actually succeed" precedent (eventsScreen.js).
+  // The organiser-only exact record of the event (T-TRUST.2b): every recorded time and right/wrong
+  // plus the full change log with old and new values, from get_dispute_pack(). The public page only
+  // ever shows the SHAPE of what changed; this is what the organiser hands over, on request, when a
+  // result is disputed. Rendered for every complete event including a rehearsal one (the pack then
+  // carries an unmistakable test-data warning and the filename is marked, D9 — same discipline as the
+  // CSV export). Static children only: the status region is mounted once and only its text changes,
+  // and the button is never rebuilt, so keyboard focus survives busy/idle/error (aria-disabled, not
+  // disabled, which a browser blurs).
+  function renderDisputePackCard(data) {
+    const container = el('div', { className: 'card report-dispute-pack no-print' });
+    const heading = el('h2', { text: 'Dispute pack' });
+    const intro = el('p', {
+      text:
+        'The exact record of this event, for settling a dispute: every recorded time and right/wrong, ' +
+        'and the full change log with old and new values. It names competitors and shows every score, ' +
+        'so share it only with the people involved.',
+    });
+    const button = el('button', {
+      className: 'btn btn-outline tap-target',
+      text: 'Download dispute pack',
+      attrs: { type: 'button' },
+    });
+    const feedback = el('div', {
+      className: 'screen-feedback',
+      attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
+    });
+    container.append(heading, intro, button, feedback);
+
+    function setFeedback(message, tone) {
+      feedback.textContent = message ?? '';
+      if (tone) feedback.dataset.tone = tone;
+      else delete feedback.dataset.tone;
+      if (tone === 'error') {
+        feedback.scrollIntoView?.({ block: 'nearest' });
+        feedback.focus();
+      }
+    }
+
+    let busy = false;
+    button.addEventListener('click', async () => {
+      if (busy) return;
+      busy = true;
+      setBusyDisabled(button, true);
+      button.textContent = 'Preparing…';
+      setFeedback('');
+      try {
+        const pack = await getDisputePack(data.event.org_id, data.event.id, client);
+        if (signal?.aborted) return;
+        const filenamePrefix = data.event.is_test ? 'TEST — ' : '';
+        downloadJson(
+          `${filenamePrefix}${sanitizeFilename(data.event.name)} dispute pack.json`,
+          pack,
+        );
+        setFeedback('Dispute pack downloaded. Share it only with the people involved.', 'success');
+      } catch (err) {
+        if (signal?.aborted) return;
+        setFeedback(describeError(err), 'error');
+      } finally {
+        busy = false;
+        setBusyDisabled(button, false);
+        button.textContent = 'Download dispute pack';
+      }
+    });
+
+    return container;
+  }
+
   function renderPublicResultsCard(data) {
     if (data.event.is_test) return null;
 
@@ -1176,6 +1244,7 @@ export async function mountReportScreen(root, { eventId, client = getSupabase(),
       );
     } else {
       container.appendChild(renderExportActions(data));
+      container.appendChild(renderDisputePackCard(data));
       const publicResultsCard = renderPublicResultsCard(data);
       if (publicResultsCard) container.appendChild(publicResultsCard);
       // Only once there's more than one stage — see buildReportTables' own

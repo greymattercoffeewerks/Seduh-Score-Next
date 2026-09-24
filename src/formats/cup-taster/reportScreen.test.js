@@ -924,6 +924,7 @@ describe('mountReportScreen', () => {
 
     const headings = [...root.querySelectorAll('h2')].map((h) => h.textContent);
     expect(headings).toEqual([
+      'Dispute pack',
       'Public results',
       'Score by Round',
       'Time by Round',
@@ -1251,6 +1252,190 @@ describe('mountReportScreen', () => {
         expect(root.textContent).toContain('Not published to the public results archive yet.');
       });
     });
+
+    describe('the Dispute pack card', () => {
+      const pack = {
+        pack_version: 1,
+        event: { name: 'Autumn Cup Tasters' },
+        cup_taster: { results: [{ correct: true }] },
+      };
+
+      afterEach(() => {
+        vi.restoreAllMocks();
+      });
+
+      it('is offered on a complete event, with a plain warning that it names competitors and shows every score', async () => {
+        const root = document.createElement('div');
+        const client = fakeClient({ tables: completeEventTables() });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+
+        const card = root.querySelector('.report-dispute-pack');
+        expect(card).not.toBeNull();
+        expect(card.querySelector('h2').textContent).toBe('Dispute pack');
+        expect(card.textContent).toContain('names competitors and shows every score');
+        expect(card.querySelector('button').textContent).toBe('Download dispute pack');
+        expect(card.querySelector('[role="status"]')).not.toBeNull();
+      });
+
+      it('is not offered until the competition is complete (there is no record to settle yet)', async () => {
+        const root = document.createElement('div');
+        const incomplete = [
+          { id: 's1', event_id: 'ev1', ordinal: 1, cutoff: 8, status: 'complete' },
+          { id: 's2', event_id: 'ev1', ordinal: 2, cutoff: null, status: 'running' },
+        ];
+        const client = fakeClient({
+          tables: {
+            events: { data: event, error: null },
+            ct_stages: { data: incomplete, error: null },
+          },
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+
+        expect(root.querySelector('.report-dispute-pack')).toBeNull();
+      });
+
+      it('is offered for a rehearsal event too (unlike publishing), because the pack carries its own test-data marking', async () => {
+        const root = document.createElement('div');
+        const client = fakeClient({
+          tables: completeEventTables({
+            events: { data: { ...event, is_test: true }, error: null },
+          }),
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+
+        expect(root.querySelector('.report-dispute-pack')).not.toBeNull();
+      });
+
+      it('clicking it fetches the pack for this org and event and downloads exactly that pack under a readable filename', async () => {
+        const root = document.createElement('div');
+        const download = vi.spyOn(exportModule, 'downloadJson').mockImplementation(() => {});
+        const client = fakeClient({
+          tables: completeEventTables(),
+          rpc: { get_dispute_pack: { data: pack, error: null } },
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+
+        root.querySelector('.report-dispute-pack button').click();
+        await vi.waitFor(() => expect(download).toHaveBeenCalledTimes(1));
+
+        const rpcCall = client.calls.find(
+          ([kind, name]) => kind === 'rpc' && name === 'get_dispute_pack',
+        );
+        expect(rpcCall[2]).toEqual({ p_org_id: 'org1', p_event_id: 'ev1' });
+        expect(download).toHaveBeenCalledWith('Autumn Cup Tasters dispute pack.json', pack);
+        const status = root.querySelector('.report-dispute-pack [role="status"]');
+        expect(status.textContent).toContain('Dispute pack downloaded');
+        expect(status.dataset.tone).toBe('success');
+        expect(root.querySelector('.report-dispute-pack button').textContent).toBe(
+          'Download dispute pack',
+        );
+      });
+
+      it("marks a rehearsal event's file in its name so it can never be mistaken for a real record (D9)", async () => {
+        const root = document.createElement('div');
+        const download = vi.spyOn(exportModule, 'downloadJson').mockImplementation(() => {});
+        const client = fakeClient({
+          tables: completeEventTables({
+            events: { data: { ...event, is_test: true }, error: null },
+          }),
+          rpc: { get_dispute_pack: { data: { ...pack, is_test: true }, error: null } },
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+
+        root.querySelector('.report-dispute-pack button').click();
+        await vi.waitFor(() => expect(download).toHaveBeenCalledTimes(1));
+
+        expect(download.mock.calls[0][0]).toBe('TEST — Autumn Cup Tasters dispute pack.json');
+      });
+
+      it("shows a server refusal as an error, downloads nothing, and puts the reader's attention on it", async () => {
+        const root = document.createElement('div');
+        document.body.appendChild(root);
+        const download = vi.spyOn(exportModule, 'downloadJson').mockImplementation(() => {});
+        const client = fakeClient({
+          tables: completeEventTables(),
+          rpc: {
+            get_dispute_pack: {
+              data: null,
+              error: { message: 'get_dispute_pack: event ev1 not found' },
+            },
+          },
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+
+        root.querySelector('.report-dispute-pack button').click();
+        const status = root.querySelector('.report-dispute-pack [role="status"]');
+        await vi.waitFor(() => expect(status.dataset.tone).toBe('error'));
+
+        expect(download).not.toHaveBeenCalled();
+        expect(status.textContent.length).toBeGreaterThan(0);
+        expect(document.activeElement).toBe(status);
+        expect(root.querySelector('.report-dispute-pack button').textContent).toBe(
+          'Download dispute pack',
+        );
+        root.remove();
+      });
+
+      it('is busy while preparing: a second click starts nothing, the button stays focusable, and it announces politely', async () => {
+        const root = document.createElement('div');
+        document.body.appendChild(root);
+        vi.spyOn(exportModule, 'downloadJson').mockImplementation(() => {});
+        let release;
+        const client = fakeClient({ tables: completeEventTables() });
+        const rpc = vi.fn(
+          () =>
+            new Promise((resolve) => {
+              release = resolve;
+            }),
+        );
+        client.rpc = (name, payload) => {
+          client.calls.push(['rpc', name, payload]);
+          return rpc(name, payload);
+        };
+        await mountReportScreen(root, { eventId: 'ev1', client });
+
+        const button = root.querySelector('.report-dispute-pack button');
+        button.focus();
+        button.click();
+        button.click();
+        button.click();
+
+        expect(rpc).toHaveBeenCalledTimes(1);
+        expect(button.getAttribute('aria-disabled')).toBe('true');
+        expect(button.getAttribute('aria-busy')).toBe('true');
+        expect(button.disabled).toBe(false);
+        expect(button.textContent).toBe('Preparing…');
+        expect(document.activeElement).toBe(button);
+
+        release({ data: pack, error: null });
+        await vi.waitFor(() => expect(button.getAttribute('aria-disabled')).toBeNull());
+        expect(button.textContent).toBe('Download dispute pack');
+        root.remove();
+      });
+
+      it('does not touch the screen or download anything if the reader navigated away before the pack arrived', async () => {
+        const root = document.createElement('div');
+        const download = vi.spyOn(exportModule, 'downloadJson').mockImplementation(() => {});
+        const controller = new AbortController();
+        let release;
+        const client = fakeClient({ tables: completeEventTables() });
+        client.rpc = (name, payload) => {
+          client.calls.push(['rpc', name, payload]);
+          return new Promise((resolve) => {
+            release = resolve;
+          });
+        };
+        await mountReportScreen(root, { eventId: 'ev1', client, signal: controller.signal });
+
+        root.querySelector('.report-dispute-pack button').click();
+        controller.abort();
+        release({ data: pack, error: null });
+        await new Promise((resolve) => setTimeout(resolve, 20));
+
+        expect(download).not.toHaveBeenCalled();
+        expect(root.querySelector('.report-dispute-pack [role="status"]').textContent).toBe('');
+      });
+    });
   });
 
   it("disambiguates same-kind stages' own <h2>/<h3> headings with a \"(Round N)\" suffix, leaves a genuinely single-occurrence kind plain in the SAME event, and agrees with the cross-round summary's own column numbering for the SAME stages — found in review (ui-accessibility-reviewer, 2026-09-11), the same class of bug already fixed for the cross-round summary's own column headers (see stageRoundLabels' own comment, reportScreen.js): setup.js's own validateStagePlan explicitly allows a repeated kind (e.g. two prelims stages), and a plain stageKindLabel(kind) label produced two IDENTICAL <h2>s (\"Preliminary\" twice) plus two identical <h3> pairs, ambiguous for a sighted user scanning the page and for a screen reader user navigating by headings list alike. A three-stage fixture (prelims/prelims/finals), not just two same-kind stages, proves the repeat-detection is scoped per kind (would fail if it were gated on \"more than one stage in the event\" instead) — found in review (test-auditor): a two-stage-only fixture couldn't distinguish that from a correct implementation. The same test also asserts the on-screen summary table's own column headers, not just the headings — found in review (test-auditor): renderStageSection and eventSummaryRoundColumns both call the shared stageRoundLabels, but nothing previously proved the two call sites actually stay in agreement for one real event rather than merely each being individually correct in isolation.", async () => {
@@ -1319,6 +1504,7 @@ describe('mountReportScreen', () => {
 
     const headings = [...root.querySelectorAll('h2')].map((h) => h.textContent);
     expect(headings).toEqual([
+      'Dispute pack',
       'Public results',
       'Score by Round',
       'Time by Round',

@@ -61,3 +61,20 @@ export function downloadCsv(filename, csvContent) {
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 }
+
+// DOM. Same client-side "save this as a file" pattern as downloadCsv, for a JSON document (the
+// dispute pack). Pretty-printed with two-space indent so the file is readable as well as machine-
+// parseable — it is a record a person may open in a text editor, not just feed to a program.
+export function downloadJson(filename, value) {
+  const blob = new Blob([JSON.stringify(value, null, 2)], {
+    type: 'application/json;charset=utf-8;',
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
