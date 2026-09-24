@@ -102,7 +102,7 @@ function buildRecordBody(record) {
 
   const nodes = [
     paragraph(
-      'Every score on Seduh Score is logged the moment it is entered, and the log cannot be edited or deleted. ' +
+      'Every score on Seduh Score is logged the moment it is entered, and organisers cannot edit or delete the log. ' +
         'This section shows what changed after results were confirmed. It does not show individual scores.',
     ),
   ];
