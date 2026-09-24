@@ -1308,6 +1308,10 @@ display/registry names unlogged (documented); parent-status read at trigger time
 churn (txid column lets a reader collapse it). **Do not add copy claiming an audit trail until
 the migration is pushed to cloud project AND T-TRUST.2 ships.** The log itself is functional
 locally; the platform-level transparency feature depends on both.
+Guard `018_score_log_column_coverage.sql` (22 assertions) fails if any column on a logged table is
+unclassified as logged / immutable / consciously-metadata, or if those classifications drift from
+the live trigger definitions — so a future scoring column cannot silently escape the trail.
+Mutation-checked: an added column, a dropped logged key and a loosened immutability trigger each fail it.
 
 Planned (not started):
 
