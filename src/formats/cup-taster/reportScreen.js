@@ -34,6 +34,11 @@ import { buildCsvForTables, downloadCsv, downloadJson } from '../../core/export.
 import { getDisputePack } from '../../core/disputePack.js';
 import { listEntriesByIds } from '../../core/registry.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
+
+// The dispute pack reads every table of the event plus up to 20,000 log rows, so it is allowed longer
+// than an ordinary screen load — but it is bounded, so a stalled request becomes an error with a retry
+// instead of a button stuck on "Preparing…".
+const DISPUTE_PACK_TIMEOUT_MS = 30_000;
 import {
   findPublishedResultForEvent,
   publishEventResults,
@@ -616,7 +621,17 @@ export function buildReportTables(stageReports) {
 // (`CON`, `PRN`, `COM1`, …) — low-probability inputs for a coffee-event
 // name, not covered here.
 export function sanitizeFilename(name) {
-  return name.replace(/[\\/:*?"<>|]/g, '-');
+  return (
+    name
+      .replace(/[\\/:*?"<>|]/g, '-')
+      // control characters (newlines, tabs, NUL...) have no business in a filename
+      .replace(/\p{Cc}/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      // a very long event name must not push the whole filename past what a filesystem accepts
+      .slice(0, 100)
+      .trim()
+  );
 }
 
 // Phase C, 2026-09-11, user-requested — hand-rolled SVG bar charts, no
@@ -971,19 +986,6 @@ export async function mountReportScreen(root, { eventId, client = getSupabase(),
     ]);
   }
 
-  // The one card on this otherwise render-once screen (see the module
-  // comment's own "no re-render after mount" framing) that manages its own
-  // internal state — a publish/unpublish TOGGLE genuinely needs one, unlike
-  // the CSV/print actions above (each a one-shot side effect with nothing to
-  // reflect afterward). Scoped to mutating only its own `container` element,
-  // never calling the outer screen's render()/loadState() again — the
-  // already-loaded `data.stageReports` this card derives its payload from
-  // stays exactly what the organiser is currently looking at.
-  //
-  // Never rendered at all for an is_test event (D9 spirit — don't even offer
-  // a capability that server-side (the migration's own trigger) and the RPC
-  // both refuse anyway) — matches renderDeleteAction's own "only offered
-  // where it could actually succeed" precedent (eventsScreen.js).
   // The organiser-only exact record of the event (T-TRUST.2b): every recorded time and right/wrong
   // plus the full change log with old and new values, from get_dispute_pack(). The public page only
   // ever shows the SHAPE of what changed; this is what the organiser hands over, on request, when a
@@ -997,9 +999,8 @@ export async function mountReportScreen(root, { eventId, client = getSupabase(),
     const heading = el('h2', { text: 'Dispute pack' });
     const intro = el('p', {
       text:
-        'The exact record of this event, for settling a dispute: every recorded time and right/wrong, ' +
-        'and the full change log with old and new values. It names competitors and shows every score, ' +
-        'so share it only with the people involved.',
+        'This file names competitors and shows every score. Share it only with the people involved. ' +
+        'It records every time and right/wrong, and every change made, with before and after.',
     });
     const button = el('button', {
       className: 'btn btn-outline tap-target',
@@ -1022,25 +1023,45 @@ export async function mountReportScreen(root, { eventId, client = getSupabase(),
       }
     }
 
+    // Its own wording: the shared describeError says "saving that", which is wrong for an export,
+    // and a refusal ("not found") should not read like a network fault. Nothing internal is shown.
+    function describePackError(err) {
+      if (err?.timedOut) return 'This is taking longer than expected — try again.';
+      if (/not found/i.test(err?.message ?? '')) {
+        return 'You don’t have access to this event’s dispute pack.';
+      }
+      return 'Could not prepare the dispute pack — check your connection and try again.';
+    }
+
     let busy = false;
     button.addEventListener('click', async () => {
       if (busy) return;
       busy = true;
       setBusyDisabled(button, true);
       button.textContent = 'Preparing…';
-      setFeedback('');
+      // A neutral, toneless message rather than clearing the region: a screen-reader user hears that
+      // something is happening (a button whose label changes while focused is often not re-announced).
+      setFeedback('Preparing dispute pack…');
       try {
-        const pack = await getDisputePack(data.event.org_id, data.event.id, client);
+        const pack = await raceTimeout(
+          getDisputePack(data.event.org_id, data.event.id, client),
+          DISPUTE_PACK_TIMEOUT_MS,
+        );
         if (signal?.aborted) return;
         const filenamePrefix = data.event.is_test ? 'TEST — ' : '';
         downloadJson(
           `${filenamePrefix}${sanitizeFilename(data.event.name)} dispute pack.json`,
           pack,
         );
-        setFeedback('Dispute pack downloaded. Share it only with the people involved.', 'success');
+        // "ready", not "downloaded": the code clicks a link and cannot confirm a save (a browser may
+        // prompt, open it, or block it).
+        setFeedback(
+          'Dispute pack ready. Check your downloads, and share it only with the people involved.',
+          'success',
+        );
       } catch (err) {
         if (signal?.aborted) return;
-        setFeedback(describeError(err), 'error');
+        setFeedback(describePackError(err), 'error');
       } finally {
         busy = false;
         setBusyDisabled(button, false);
@@ -1051,6 +1072,19 @@ export async function mountReportScreen(root, { eventId, client = getSupabase(),
     return container;
   }
 
+  // The one card on this otherwise render-once screen (see the module
+  // comment's own "no re-render after mount" framing) that manages its own
+  // internal state — a publish/unpublish TOGGLE genuinely needs one, unlike
+  // the CSV/print actions above (each a one-shot side effect with nothing to
+  // reflect afterward). Scoped to mutating only its own `container` element,
+  // never calling the outer screen's render()/loadState() again — the
+  // already-loaded `data.stageReports` this card derives its payload from
+  // stays exactly what the organiser is currently looking at.
+  //
+  // Never rendered at all for an is_test event (D9 spirit — don't even offer
+  // a capability that server-side (the migration's own trigger) and the RPC
+  // both refuse anyway) — matches renderDeleteAction's own "only offered
+  // where it could actually succeed" precedent (eventsScreen.js).
   function renderPublicResultsCard(data) {
     if (data.event.is_test) return null;
 

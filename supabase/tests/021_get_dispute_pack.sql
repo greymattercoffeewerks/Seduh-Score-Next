@@ -5,7 +5,7 @@
 -- contact detail; it is deterministic; a test event exports with an unmistakable warning; the log cap
 -- is exact at the boundary; it covers BTC tables too; and it is configured safely.
 begin;
-select plan(24);
+select plan(29);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-000000000001', 'member@test.seduh-next'),
@@ -57,6 +57,9 @@ insert into ct_heat_entries (id, heat_id, entry_id, station) values
   ('00000000-0000-0000-0000-000000000a02', '00000000-0000-0000-0000-0000000000d2', '00000000-0000-0000-0000-0000000000ef', 'Table A'),
   ('00000000-0000-0000-0000-000000000a04', '00000000-0000-0000-0000-0000000000d4', '00000000-0000-0000-0000-0000000000f0', 'Table A'),
   ('00000000-0000-0000-0000-000000000a05', '00000000-0000-0000-0000-0000000000d5', '00000000-0000-0000-0000-0000000000f1', 'Table A');
+insert into ct_stage_entries (id, stage_id, entry_id) values
+  ('00000000-0000-0000-0000-000000000a51', '00000000-0000-0000-0000-0000000000b1', '00000000-0000-0000-0000-0000000000ee'),
+  ('00000000-0000-0000-0000-000000000a55', '00000000-0000-0000-0000-0000000000b5', '00000000-0000-0000-0000-0000000000f1');
 insert into ct_results (id, heat_entry_id, set_id, correct) values
   ('00000000-0000-0000-0000-000000000b01', '00000000-0000-0000-0000-000000000a01', '00000000-0000-0000-0000-0000000000c1', false),
   ('00000000-0000-0000-0000-000000000b02', '00000000-0000-0000-0000-000000000a01', '00000000-0000-0000-0000-0000000000c2', true),
@@ -80,6 +83,38 @@ insert into btc_cup_votes (match_id, cup_number, team1_tokens) values
 insert into btc_match_bonuses (match_id, fastest_team_id) values
   ('00000000-0000-0000-0000-000000000d01', '00000000-0000-0000-0000-000000000c01');
 
+insert into btc_bracket_slots (id, event_id, round, slot_label) values
+  ('00000000-0000-0000-0000-000000000a61', '00000000-0000-0000-0000-0000000000e3', 'quarterfinal', 'qf1');
+-- SIBLING BTC events (same org, and another org), each with one of EVERYTHING, so an unscoped
+-- query in any BTC section would put a foreign row into e3's pack
+insert into events (id, org_id, format, name) values
+  ('00000000-0000-0000-0000-0000000000e8', '00000000-0000-0000-0000-000000000010', 'btc', 'BTC Sibling'),
+  ('00000000-0000-0000-0000-0000000000e9', '00000000-0000-0000-0000-000000000020', 'btc', 'BTC Other Org');
+insert into btc_teams (id, event_id, name) values
+  ('00000000-0000-0000-0000-000000000c11', '00000000-0000-0000-0000-0000000000e8', 'Sib A'),
+  ('00000000-0000-0000-0000-000000000c12', '00000000-0000-0000-0000-0000000000e8', 'Sib B'),
+  ('00000000-0000-0000-0000-000000000c21', '00000000-0000-0000-0000-0000000000e9', 'Oth A'),
+  ('00000000-0000-0000-0000-000000000c22', '00000000-0000-0000-0000-0000000000e9', 'Oth B');
+insert into btc_judges (id, event_id, name) values
+  ('00000000-0000-0000-0000-000000000f11', '00000000-0000-0000-0000-0000000000e8', 'Sib J'),
+  ('00000000-0000-0000-0000-000000000f21', '00000000-0000-0000-0000-0000000000e9', 'Oth J');
+insert into btc_matches (id, event_id, round, team1_id, team2_id) values
+  ('00000000-0000-0000-0000-000000000d11', '00000000-0000-0000-0000-0000000000e8', 'preliminary',
+   '00000000-0000-0000-0000-000000000c11', '00000000-0000-0000-0000-000000000c12'),
+  ('00000000-0000-0000-0000-000000000d21', '00000000-0000-0000-0000-0000000000e9', 'preliminary',
+   '00000000-0000-0000-0000-000000000c21', '00000000-0000-0000-0000-000000000c22');
+insert into btc_match_judges (match_id, judge_id) values
+  ('00000000-0000-0000-0000-000000000d11', '00000000-0000-0000-0000-000000000f11'),
+  ('00000000-0000-0000-0000-000000000d21', '00000000-0000-0000-0000-000000000f21');
+insert into btc_cup_votes (match_id, cup_number, team1_tokens) values
+  ('00000000-0000-0000-0000-000000000d11', 1, 1), ('00000000-0000-0000-0000-000000000d21', 1, 1);
+insert into btc_match_bonuses (match_id, fastest_team_id) values
+  ('00000000-0000-0000-0000-000000000d11', '00000000-0000-0000-0000-000000000c11'),
+  ('00000000-0000-0000-0000-000000000d21', '00000000-0000-0000-0000-000000000c21');
+insert into btc_bracket_slots (id, event_id, round, slot_label) values
+  ('00000000-0000-0000-0000-000000000a71', '00000000-0000-0000-0000-0000000000e8', 'quarterfinal', 'qf1'),
+  ('00000000-0000-0000-0000-000000000a72', '00000000-0000-0000-0000-0000000000e9', 'quarterfinal', 'qf1');
+
 -- confirm the real heat, then make a reasoned correction after confirmation, as the organiser
 update ct_heat_entries set elapsed_secs = 300 where id = '00000000-0000-0000-0000-000000000a01';
 update ct_heats set status = 'confirmed' where id = '00000000-0000-0000-0000-0000000000d1';
@@ -96,9 +131,30 @@ select is((get_dispute_pack('00000000-0000-0000-0000-000000000010', '00000000-00
 select is(get_dispute_pack('00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-0000000000e1') -> 'event' ->> 'name',
   'Real Event', 'it identifies the event');
 select is(
-  (select (c ->> 'entries') || '/' || (c ->> 'stages') || '/' || (c ->> 'heats') || '/' || (c ->> 'heat_entries') || '/' || (c ->> 'results')
+  (select (c ->> 'entries') || '/' || (c ->> 'stages') || '/' || (c ->> 'sets') || '/' || (c ->> 'stage_entries') || '/' || (c ->> 'heats') || '/' || (c ->> 'heat_entries') || '/' || (c ->> 'results')
      from (select get_dispute_pack('00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-0000000000e1') -> 'counts' as c) q),
-  '1/1/1/1/2', 'the counts describe this event only (1 entry, 1 stage, 1 heat, 1 heat entry, 2 results)');
+  '1/1/2/1/1/1/2', 'every Cup Taster section holds this event only (1 entry, 1 stage, 2 sets, 1 stage entry, 1 heat, 1 heat entry, 2 results) — sibling events with rows in every one of those tables do not leak in');
+select is(
+  (select (c ->> 'btc_teams') || '/' || (c ->> 'btc_judges') || '/' || (c ->> 'btc_matches') || '/' || (c ->> 'btc_match_judges') || '/' || (c ->> 'btc_cup_votes') || '/' || (c ->> 'btc_match_bonuses') || '/' || (c ->> 'btc_bracket_slots')
+     from (select get_dispute_pack('00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-0000000000e3') -> 'counts' as c) q),
+  '2/1/1/1/2/1/1', 'every BTC section holds this event only (2 teams, 1 judge, 1 match, 1 match judge, 2 votes, 1 bonus, 1 bracket slot) — a sibling BTC event in the same org and one in another org, each with a row in every table, do not leak in');
+select is(
+  get_dispute_pack('00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-0000000000e3')::text ~ '(Sib A|Sib J|Oth A|Oth J|BTC Sibling|BTC Other Org)',
+  false, 'no name from a sibling or other-org BTC event appears anywhere in this BTC event''s pack');
+select is(
+  (select array_agg(k order by k) from jsonb_object_keys(get_dispute_pack('00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-0000000000e1') -> 'event') k),
+  (select array_agg(column_name::text order by column_name::text) from information_schema.columns where table_schema = 'public' and table_name = 'events'),
+  'the event section is exactly events'' columns; adding a column to events fails this test until someone decides it is fit for a dispute party');
+select is(
+  (select array_agg(k order by k) from jsonb_object_keys(get_dispute_pack('00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-0000000000e1') -> 'cup_taster' -> 'entries' -> 0) k),
+  array['bib', 'cafe', 'created_at', 'display_name', 'event_id', 'id', 'person_id', 'withdrawn'],
+  'an entry carries exactly these columns (names, cafe, bib, withdrawn — never contact details); a new column fails this test until reviewed');
+select is(
+  (get_dispute_pack('00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-0000000000e1') ->> 'warning') is null
+    and abs(extract(epoch from now() - (get_dispute_pack('00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-0000000000e1') ->> 'generated_at')::timestamptz)) < 5
+    and (get_dispute_pack('00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-0000000000e1') -> 'event' ->> 'org_id') = '00000000-0000-0000-0000-000000000010'
+    and (get_dispute_pack('00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-0000000000e1') ->> 'is_test') = 'false',
+  true, 'a live event carries no test warning, a real generation time, its org id and is_test = false');
 select is(
   (get_dispute_pack('00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-0000000000e1') -> 'cup_taster' -> 'heat_entries' -> 0 ->> 'elapsed_secs'),
   '310', 'the exact recorded time is in the pack (the public page never shows this)');

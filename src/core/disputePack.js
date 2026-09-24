@@ -1,7 +1,8 @@
 // The organiser-only exact record of one event (T-TRUST.2b), via get_dispute_pack()
-// (supabase/migrations/20260925100000_get_dispute_pack.sql). Format-agnostic: the function reads
-// both Cup Taster's and BTC's tables in one consistent snapshot, so any format's report screen
-// calls this same wrapper — nothing here knows a stage, a heat or a match.
+// (supabase/migrations/20260925100000_get_dispute_pack.sql). This wrapper is format-agnostic:
+// it takes two ids and returns the pack untouched, knowing nothing of a stage, a heat or a match.
+// (The SQL function itself reads the ct_* and btc_* tables, so a third format's tables would need
+// that function extended in a new migration — a known limit, not a JS one.)
 //
 // The pack holds every recorded score, the competitors' names, and the full change log with old
 // and new values. It is what the organiser hands over when a result is disputed; the public page

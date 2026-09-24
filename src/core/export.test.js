@@ -157,4 +157,25 @@ describe('downloadJson', () => {
     // the temporary link does not linger in the document
     expect(document.querySelector('a[download]')).toBeNull();
   });
+
+  it('writes a very large document compact instead of pretty-printing it', async () => {
+    let capturedBlob = null;
+    vi.spyOn(URL, 'createObjectURL').mockImplementation((blob) => {
+      capturedBlob = blob;
+      return 'blob:big';
+    });
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+    downloadJson('big.json', { rows: ['x'.repeat(5_100_000)] });
+
+    const text = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsText(capturedBlob);
+    });
+    expect(text.startsWith('{"rows":["x')).toBe(true);
+    expect(text).not.toContain('\n');
+  });
 });

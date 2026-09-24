@@ -127,6 +127,16 @@ describe('describeOutcome', () => {
 });
 
 describe('sanitizeFilename', () => {
+  it('replaces control characters and collapses whitespace, so a name with a newline or tab is a clean filename', () => {
+    expect(sanitizeFilename('Autumn\nCup\tTasters')).toBe('Autumn Cup Tasters');
+    expect(sanitizeFilename('  padded  ')).toBe('padded');
+  });
+
+  it('caps a very long name at 100 characters', () => {
+    const out = sanitizeFilename('n'.repeat(500));
+    expect(out).toHaveLength(100);
+  });
+
   it('replaces every character in the function\'s own stated unsafe set (\\/:*?"<>|), not just a sample of them', () => {
     expect(sanitizeFilename('a\\b/c:d*e?f"g<h>i|j')).toBe('a-b-c-d-e-f-g-h-i-j');
   });
@@ -1324,7 +1334,8 @@ describe('mountReportScreen', () => {
         expect(rpcCall[2]).toEqual({ p_org_id: 'org1', p_event_id: 'ev1' });
         expect(download).toHaveBeenCalledWith('Autumn Cup Tasters dispute pack.json', pack);
         const status = root.querySelector('.report-dispute-pack [role="status"]');
-        expect(status.textContent).toContain('Dispute pack downloaded');
+        expect(status.textContent).toContain('Dispute pack ready');
+        expect(status.textContent).not.toContain('downloaded');
         expect(status.dataset.tone).toBe('success');
         expect(root.querySelector('.report-dispute-pack button').textContent).toBe(
           'Download dispute pack',
@@ -1413,6 +1424,175 @@ describe('mountReportScreen', () => {
         root.remove();
       });
 
+      it('announces that it is preparing, toneless, instead of clearing the region', async () => {
+        const root = document.createElement('div');
+        vi.spyOn(exportModule, 'downloadJson').mockImplementation(() => {});
+        let release;
+        const client = fakeClient({ tables: completeEventTables() });
+        client.rpc = (name, payload) => {
+          client.calls.push(['rpc', name, payload]);
+          return new Promise((resolve) => {
+            release = resolve;
+          });
+        };
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        const status = root.querySelector('.report-dispute-pack [role="status"]');
+
+        root.querySelector('.report-dispute-pack button').click();
+        expect(status.textContent).toBe('Preparing dispute pack…');
+        expect(status.dataset.tone).toBeUndefined();
+
+        release({ data: pack, error: null });
+        await vi.waitFor(() => expect(status.textContent).toContain('Dispute pack ready'));
+      });
+
+      it('cleans a hostile event name out of the filename (path characters, control characters, length)', async () => {
+        const root = document.createElement('div');
+        const download = vi.spyOn(exportModule, 'downloadJson').mockImplementation(() => {});
+        const hostile = { ...event, name: 'A/B: "C"\nD' + 'x'.repeat(200) };
+        const client = fakeClient({
+          tables: completeEventTables({ events: { data: hostile, error: null } }),
+          rpc: { get_dispute_pack: { data: pack, error: null } },
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+
+        root.querySelector('.report-dispute-pack button').click();
+        await vi.waitFor(() => expect(download).toHaveBeenCalledTimes(1));
+
+        const filename = download.mock.calls[0][0];
+        expect(filename).toMatch(/ dispute pack\.json$/);
+        expect(filename).not.toMatch(/[\\/:*?"<>|\n]/);
+        expect(filename.length).toBeLessThan(140);
+      });
+
+      it('can be used again after a successful export (the busy state resets)', async () => {
+        const root = document.createElement('div');
+        const download = vi.spyOn(exportModule, 'downloadJson').mockImplementation(() => {});
+        const client = fakeClient({
+          tables: completeEventTables(),
+          rpc: { get_dispute_pack: { data: pack, error: null } },
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        const button = root.querySelector('.report-dispute-pack button');
+
+        button.click();
+        await vi.waitFor(() => expect(download).toHaveBeenCalledTimes(1));
+        await vi.waitFor(() => expect(button.getAttribute('aria-disabled')).toBeNull());
+        button.click();
+        await vi.waitFor(() => expect(download).toHaveBeenCalledTimes(2));
+
+        expect(
+          client.calls.filter(([kind, name]) => kind === 'rpc' && name === 'get_dispute_pack'),
+        ).toHaveLength(2);
+      });
+
+      it('a successful retry replaces the earlier error: text and tone are reset', async () => {
+        const root = document.createElement('div');
+        document.body.appendChild(root);
+        vi.spyOn(exportModule, 'downloadJson').mockImplementation(() => {});
+        const client = fakeClient({ tables: completeEventTables() });
+        let calls = 0;
+        client.rpc = (name, payload) => {
+          client.calls.push(['rpc', name, payload]);
+          calls += 1;
+          return Promise.resolve(
+            calls === 1
+              ? { data: null, error: { message: 'connection reset' } }
+              : { data: pack, error: null },
+          );
+        };
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        const button = root.querySelector('.report-dispute-pack button');
+        const status = root.querySelector('.report-dispute-pack [role="status"]');
+
+        button.click();
+        await vi.waitFor(() => expect(status.dataset.tone).toBe('error'));
+        button.click();
+        await vi.waitFor(() => expect(status.dataset.tone).toBe('success'));
+
+        expect(status.textContent).toContain('Dispute pack ready');
+        expect(status.textContent).not.toContain('Could not prepare');
+        root.remove();
+      });
+
+      it('words a refusal, a timeout and a network fault differently, and never shows the raw server message', async () => {
+        async function messageFor(rpcResult) {
+          const root = document.createElement('div');
+          document.body.appendChild(root);
+          vi.spyOn(exportModule, 'downloadJson').mockImplementation(() => {});
+          const client = fakeClient({
+            tables: completeEventTables(),
+            rpc: { get_dispute_pack: rpcResult },
+          });
+          await mountReportScreen(root, { eventId: 'ev1', client });
+          root.querySelector('.report-dispute-pack button').click();
+          const status = root.querySelector('.report-dispute-pack [role="status"]');
+          await vi.waitFor(() => expect(status.dataset.tone).toBe('error'));
+          const text = status.textContent;
+          root.remove();
+          return text;
+        }
+
+        const refused = await messageFor({
+          data: null,
+          error: { message: 'get_dispute_pack: event ev1 not found' },
+        });
+        const network = await messageFor({
+          data: null,
+          error: { message: 'FetchError: connection reset at 10.0.0.1' },
+        });
+
+        expect(refused).toContain('don’t have access');
+        expect(refused).not.toContain('get_dispute_pack');
+        expect(network).toContain('check your connection');
+        expect(network).not.toContain('10.0.0.1');
+        expect(network).not.toContain('saving');
+        expect(refused).not.toBe(network);
+      });
+
+      it('turns a stalled request into an error with a way to retry, instead of hanging on Preparing…', async () => {
+        vi.useFakeTimers();
+        const root = document.createElement('div');
+        vi.spyOn(exportModule, 'downloadJson').mockImplementation(() => {});
+        const client = fakeClient({ tables: completeEventTables() });
+        client.rpc = () => new Promise(() => {});
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        const button = root.querySelector('.report-dispute-pack button');
+        const status = root.querySelector('.report-dispute-pack [role="status"]');
+
+        button.click();
+        expect(status.textContent).toBe('Preparing dispute pack…');
+        await vi.advanceTimersByTimeAsync(31_000);
+
+        expect(status.dataset.tone).toBe('error');
+        expect(status.textContent).toContain('taking longer than expected');
+        expect(button.getAttribute('aria-disabled')).toBeNull();
+        expect(button.textContent).toBe('Download dispute pack');
+        vi.useRealTimers();
+      });
+
+      it('writes nothing if the reader navigated away and the request then FAILS', async () => {
+        const root = document.createElement('div');
+        vi.spyOn(exportModule, 'downloadJson').mockImplementation(() => {});
+        const controller = new AbortController();
+        let reject;
+        const client = fakeClient({ tables: completeEventTables() });
+        client.rpc = () =>
+          new Promise((_, rej) => {
+            reject = rej;
+          });
+        await mountReportScreen(root, { eventId: 'ev1', client, signal: controller.signal });
+
+        root.querySelector('.report-dispute-pack button').click();
+        controller.abort();
+        reject(new Error('late failure'));
+        await new Promise((resolve) => setTimeout(resolve, 20));
+
+        const status = root.querySelector('.report-dispute-pack [role="status"]');
+        expect(status.dataset.tone).toBeUndefined();
+        expect(status.textContent).not.toContain('Could not prepare');
+      });
+
       it('does not touch the screen or download anything if the reader navigated away before the pack arrived', async () => {
         const root = document.createElement('div');
         const download = vi.spyOn(exportModule, 'downloadJson').mockImplementation(() => {});
@@ -1433,7 +1613,10 @@ describe('mountReportScreen', () => {
         await new Promise((resolve) => setTimeout(resolve, 20));
 
         expect(download).not.toHaveBeenCalled();
-        expect(root.querySelector('.report-dispute-pack [role="status"]').textContent).toBe('');
+        // only the toneless "Preparing…" it announced at the click; no success, no error, no download
+        const status = root.querySelector('.report-dispute-pack [role="status"]');
+        expect(status.textContent).toBe('Preparing dispute pack…');
+        expect(status.dataset.tone).toBeUndefined();
       });
     });
   });

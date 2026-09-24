@@ -22,6 +22,11 @@
 -- non-member with one unified "not found" error (never distinguishing "no such event" from "not
 -- yours"). Not executable by anon. search_path is pinned to empty; every reference is qualified.
 --
+-- NOTE: the event and entries are exported as WHOLE rows (to_jsonb(row)), so any column added to
+-- events or event_entries later would ride into every pack automatically. supabase/tests/
+-- 021_get_dispute_pack.sql asserts the exact column lists, so adding one fails a test and forces a
+-- decision (is it fit to hand to a dispute party?) instead of leaking silently.
+--
 -- Covers BOTH formats' tables: a Cup Taster event simply has empty btc_* arrays and vice versa, so
 -- the BTC screens need only a button, not another function.
 --
@@ -39,6 +44,9 @@
 --   revoke execute on function get_dispute_pack(uuid, uuid) from authenticated, service_role;
 --   drop function if exists get_dispute_pack(uuid, uuid);
 
+-- STABLE is load-bearing: a stable function runs every statement in its body on the CALLER's
+-- single query snapshot, which is what makes the pack one consistent snapshot. Do not change
+-- it to VOLATILE without re-deriving that claim.
 create or replace function get_dispute_pack(p_org_id uuid, p_event_id uuid)
 returns jsonb
 language plpgsql
@@ -124,12 +132,15 @@ begin
     'is_test', v_is_test,
     'warning', case when v_is_test then 'TEST DATA — NOT A LIVE EVENT' end,
     'confidentiality',
-      'Contains competitors'' names and every recorded score. Share it only with the people involved in the dispute.',
+      'Contains competitors'' names, cafes and bib numbers and every recorded score. Share it only with the people involved in the dispute.',
     'about', jsonb_build_array(
       'Every table below is read in one consistent snapshot at generated_at.',
-      'change_log lists every logged change to a score, time, heat or stage state, or placing, with old and new values, oldest first. It starts on 2026-09-24: an event scored before then has no history.',
-      'Rehearsal (test) events are not logged, but every change to an event''s rehearsal flag is.',
-      'A stated reason is the organiser''s own text and is not verified. changed_by is a user id; a null changed_by means a change made outside the app.',
+      'change_log lists every logged change to a score, time, heat or stage state, or placing (Cup Taster), and to a match, cup vote, bonus or bracket slot (BTC), with old and new values, oldest first. It starts on 2026-09-24: an event scored before then has no history.',
+      'NOT logged: edits to competitors'' names, cafes or bib numbers, withdrawals, and which judges are assigned to a BTC match. The current values of those are in the tables below.',
+      'Any text value in old_value or new_value (for example a time note) is cut to its first 500 characters followed by an ellipsis. The full current text is in the tables below.',
+      'Rehearsal (test) events are not logged, but every change to an event''s rehearsal flag is. An event that was rehearsal and later became real has no history from before that change.',
+      'If change_log_truncated is true, only the oldest 20,000 log rows are included; change_log_total is the true count.',
+      'A stated reason is the organiser''s own text and is not verified. changed_by is a user id; a null changed_by means a change made without a signed-in user (for example directly in the database).',
       'A change is after_confirm = true when it was made after the heat, match or stage was confirmed or completed.'
     ),
     'event', v_event,
@@ -141,11 +152,18 @@ begin
     'counts', jsonb_build_object(
       'entries', jsonb_array_length(v_comp -> 'entries'),
       'stages', jsonb_array_length(v_comp -> 'stages'),
+      'sets', jsonb_array_length(v_comp -> 'sets'),
+      'stage_entries', jsonb_array_length(v_comp -> 'stage_entries'),
       'heats', jsonb_array_length(v_comp -> 'heats'),
       'heat_entries', jsonb_array_length(v_comp -> 'heat_entries'),
       'results', jsonb_array_length(v_comp -> 'results'),
+      'btc_teams', jsonb_array_length(v_btc -> 'teams'),
+      'btc_judges', jsonb_array_length(v_btc -> 'judges'),
       'btc_matches', jsonb_array_length(v_btc -> 'matches'),
+      'btc_match_judges', jsonb_array_length(v_btc -> 'match_judges'),
       'btc_cup_votes', jsonb_array_length(v_btc -> 'cup_votes'),
+      'btc_match_bonuses', jsonb_array_length(v_btc -> 'match_bonuses'),
+      'btc_bracket_slots', jsonb_array_length(v_btc -> 'bracket_slots'),
       'change_log_rows_in_pack', jsonb_array_length(v_log)
     )
   );

@@ -62,11 +62,18 @@ export function downloadCsv(filename, csvContent) {
   URL.revokeObjectURL(url);
 }
 
+// Above this many characters of compact JSON, skip the pretty-printing: indenting a very large
+// document costs a lot of memory and time (on a phone especially) for a file nobody reads in full.
+const PRETTY_JSON_LIMIT_CHARS = 5_000_000;
+
 // DOM. Same client-side "save this as a file" pattern as downloadCsv, for a JSON document (the
 // dispute pack). Pretty-printed with two-space indent so the file is readable as well as machine-
-// parseable — it is a record a person may open in a text editor, not just feed to a program.
+// parseable — it is a record a person may open in a text editor, not just feed to a program —
+// unless it is very large, when it is written compact.
 export function downloadJson(filename, value) {
-  const blob = new Blob([JSON.stringify(value, null, 2)], {
+  const compact = JSON.stringify(value);
+  const json = compact.length > PRETTY_JSON_LIMIT_CHARS ? compact : JSON.stringify(value, null, 2);
+  const blob = new Blob([json], {
     type: 'application/json;charset=utf-8;',
   });
   const url = URL.createObjectURL(blob);
