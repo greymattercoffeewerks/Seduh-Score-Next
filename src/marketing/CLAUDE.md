@@ -216,11 +216,11 @@ listed there.
 real links to `/tour/`; Community Tools links to `/community/`; and Cup Taster links to
 `/app/#/events`. The remaining Start free and Org login destinations are still placeholders.
 
-"Take the tour" and "Start free" CTAs, and the nav's "Org login" link, are `href="#"`.
-Not an oversight — there's no tour page and no sign-up flow yet (`loginScreen.js` is
-sign-in only; D14's real access control is still a stub). "Formats" and "Pricing" in the
-nav are real same-page anchors (`#formats`, `#pricing`); "Timer" is a real link
-(`/tools/timer/`). Cup Taster's and BTC's own "Open X →" links (2026-09-23: BTC's row
+**Update (2026-09-24, site critique pass):** "Start free" now points to `/app/#/events` and
+"Org login" to `/app/` — there is still no separate sign-up flow (`loginScreen.js` is
+sign-in only; D14's real access control is still a stub), so both land in the console.
+"Formats" and "Pricing" in the nav are real same-page anchors (`#formats`, `#pricing`);
+"Timer" is a real link (`/tools/timer/`). Cup Taster's and BTC's own "Open X →" links (2026-09-23: BTC's row
 went live alongside Cup Taster's, once the app itself routed all 5 of BTC's screens —
 see "BTC goes live" above) both point at the same real authenticated-app destination
 (`/app/#/events`) — an organiser picks the format per event once signed in, not via a
