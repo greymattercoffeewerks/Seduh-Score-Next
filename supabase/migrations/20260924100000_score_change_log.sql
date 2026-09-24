@@ -14,7 +14,7 @@
 --   ct_heat_entries     elapsed_secs, elapsed_secs_raw, maxed, time_source, time_note
 --   ct_results          correct
 --   ct_heats            kind, status         (a re-open of a confirmed heat is a change)
---   ct_stages           set_count, cutoff
+--   ct_stages           kind, ordinal, set_count, cutoff
 --   ct_stage_entries    source, final_position, position_note   (tiebreak/coin-toss provenance)
 --   btc_cup_votes       team1_tokens         (team2's share is 3 - team1)
 --   btc_match_bonuses   fastest_team_id, team1_signature_beverage, team2_signature_beverage
@@ -58,9 +58,12 @@
 -- claim is that ordinary operation, including every app role, cannot rewrite history.
 --
 -- Moving a row between parents would dodge the log: re-parent a stage onto a rehearsal
--- event, edit its scores (skipped as is_test), move it back. Rather than log every
--- parent key, the parent columns are immutable (BEFORE UPDATE trigger below); nothing
--- in the app re-parents these rows, and BTC already does the same for teams/judges.
+-- event, edit its scores (skipped as is_test), move it back. Likewise re-pointing a
+-- result at another set, an entry at another cupper, a vote at another cup, or
+-- rewriting any primary key. Rather than log every such column, parent and identity
+-- columns (and `id` on every logged table) are immutable via a BEFORE UPDATE trigger
+-- at the bottom; nothing in the app changes them, and BTC already does the same for
+-- teams/judges.
 --
 -- Deleting a parent (heat/stage/match/event) cascades its scored children. The
 -- children's own DELETE rows are skipped (their parent is already gone), but nothing
@@ -196,7 +199,7 @@ begin
       -- after-confirm change.
       v_confirmed := coalesce(v_old ->> 'status', v_row ->> 'status') = 'confirmed';
     when 'ct_stages' then
-      v_keys := array['set_count', 'cutoff'];
+      v_keys := array['kind', 'ordinal', 'set_count', 'cutoff'];
       v_ctx_keys := array['kind', 'ordinal'];
       v_event_id := (v_row ->> 'event_id')::uuid;
       v_confirmed := coalesce(v_old ->> 'status', v_row ->> 'status') = 'complete';
@@ -317,48 +320,55 @@ create trigger trg_events_log
   after update of is_test or delete on events
   for each row execute function app.log_score_change();
 
--- Parent columns are immutable, so the is_test / org lookups above can never be
--- dodged by re-parenting a row. TG_ARGV[0] names the column.
+-- Parent AND identity columns are immutable, so neither the is_test / org lookups above
+-- nor the logged history can be dodged by re-parenting a row, or by re-pointing it at a
+-- different cupper / set / cup / slot (which would silently re-attribute a score), or by
+-- rewriting a primary key (which would orphan a row's history under its old row_id).
+-- TG_ARGV lists the immutable columns.
 create or replace function app.forbid_parent_change()
 returns trigger
 language plpgsql
 set search_path = ''
 as $$
+declare
+  v_col text;
 begin
-  if to_jsonb(new) -> tg_argv[0] is distinct from to_jsonb(old) -> tg_argv[0] then
-    raise exception '%.% is immutable', tg_table_name, tg_argv[0] using errcode = '23001';
-  end if;
+  foreach v_col in array tg_argv loop
+    if to_jsonb(new) -> v_col is distinct from to_jsonb(old) -> v_col then
+      raise exception '%.% is immutable', tg_table_name, v_col using errcode = '23001';
+    end if;
+  end loop;
   return new;
 end;
 $$;
 
 create trigger trg_ct_stages_parent_immutable
-  before update of event_id on ct_stages
-  for each row execute function app.forbid_parent_change('event_id');
+  before update of id, event_id on ct_stages
+  for each row execute function app.forbid_parent_change('id', 'event_id');
 create trigger trg_ct_heats_parent_immutable
-  before update of stage_id on ct_heats
-  for each row execute function app.forbid_parent_change('stage_id');
+  before update of id, stage_id, heat_number on ct_heats
+  for each row execute function app.forbid_parent_change('id', 'stage_id', 'heat_number');
 create trigger trg_ct_heat_entries_parent_immutable
-  before update of heat_id on ct_heat_entries
-  for each row execute function app.forbid_parent_change('heat_id');
+  before update of id, heat_id, entry_id on ct_heat_entries
+  for each row execute function app.forbid_parent_change('id', 'heat_id', 'entry_id');
 create trigger trg_ct_results_parent_immutable
-  before update of heat_entry_id on ct_results
-  for each row execute function app.forbid_parent_change('heat_entry_id');
+  before update of id, heat_entry_id, set_id on ct_results
+  for each row execute function app.forbid_parent_change('id', 'heat_entry_id', 'set_id');
 create trigger trg_ct_stage_entries_parent_immutable
-  before update of stage_id on ct_stage_entries
-  for each row execute function app.forbid_parent_change('stage_id');
+  before update of id, stage_id, entry_id on ct_stage_entries
+  for each row execute function app.forbid_parent_change('id', 'stage_id', 'entry_id');
 create trigger trg_btc_matches_parent_immutable
-  before update of event_id on btc_matches
-  for each row execute function app.forbid_parent_change('event_id');
+  before update of id, event_id on btc_matches
+  for each row execute function app.forbid_parent_change('id', 'event_id');
 create trigger trg_btc_cup_votes_parent_immutable
-  before update of match_id on btc_cup_votes
-  for each row execute function app.forbid_parent_change('match_id');
+  before update of id, match_id, cup_number on btc_cup_votes
+  for each row execute function app.forbid_parent_change('id', 'match_id', 'cup_number');
 create trigger trg_btc_match_bonuses_parent_immutable
   before update of match_id on btc_match_bonuses
   for each row execute function app.forbid_parent_change('match_id');
 create trigger trg_btc_bracket_slots_parent_immutable
-  before update of event_id on btc_bracket_slots
-  for each row execute function app.forbid_parent_change('event_id');
+  before update of id, event_id, round, slot_label on btc_bracket_slots
+  for each row execute function app.forbid_parent_change('id', 'event_id', 'round', 'slot_label');
 create trigger trg_events_org_immutable
-  before update of org_id on events
-  for each row execute function app.forbid_parent_change('org_id');
+  before update of id, org_id on events
+  for each row execute function app.forbid_parent_change('id', 'org_id');

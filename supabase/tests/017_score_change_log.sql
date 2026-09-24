@@ -8,7 +8,7 @@
 -- of ANOTHER org, and anon each read zero of an org's rows; deleting an event neither
 -- fails on nor erases its history, and the deletion itself is recorded.
 begin;
-select plan(56);
+select plan(77);
 
 -- ---------- fixtures (as postgres, bypasses RLS) ----------
 
@@ -365,6 +365,86 @@ select throws_ok($$update btc_cup_votes set match_id = '00000000-0000-0000-0000-
   '23001', 'btc_cup_votes.match_id is immutable', 'a BTC vote cannot be moved to another match');
 select throws_ok($$update events set org_id = '00000000-0000-0000-0000-000000000020' where id = '00000000-0000-0000-0000-0000000000e3'$$,
   '23001', 'events.org_id is immutable', 'an event cannot be moved to another org');
+
+select throws_ok($$update ct_results set set_id = '00000000-0000-0000-0000-0000000000c2' where heat_entry_id = '00000000-0000-0000-0000-000000000a01'$$,
+  '23001', 'ct_results.set_id is immutable', 'a result cannot be re-pointed at another set');
+select throws_ok($$update ct_results set id = gen_random_uuid() where heat_entry_id = '00000000-0000-0000-0000-000000000a01'$$,
+  '23001', 'ct_results.id is immutable', 'a row''s primary key cannot be rewritten (its history would be orphaned)');
+select throws_ok($$update ct_heat_entries set entry_id = '00000000-0000-0000-0000-0000000000ef' where id = '00000000-0000-0000-0000-000000000a01'$$,
+  '23001', 'ct_heat_entries.entry_id is immutable', 'a time and result row cannot be re-attributed to another cupper');
+select throws_ok($$update btc_cup_votes set cup_number = 16 where match_id = '00000000-0000-0000-0000-000000000d01' and cup_number = 2$$,
+  '23001', 'btc_cup_votes.cup_number is immutable', 'a BTC vote cannot be shifted to another cup');
+select throws_ok($$update ct_heats set heat_number = 2 where id = '00000000-0000-0000-0000-0000000000f1'$$,
+  '23001', 'ct_heats.heat_number is immutable', 'a heat cannot be renumbered');
+select throws_ok($$update btc_bracket_slots set slot_label = 'qf9' where id = '00000000-0000-0000-0000-000000000a61'$$,
+  '23001', 'btc_bracket_slots.slot_label is immutable', 'a bracket slot cannot be relabelled');
+select throws_ok($$update ct_stage_entries set entry_id = '00000000-0000-0000-0000-0000000000ef' where id = '00000000-0000-0000-0000-000000000a51'$$,
+  '23001', 'ct_stage_entries.entry_id is immutable', 'a stage entry cannot be re-pointed at another cupper');
+
+-- A BTC match's teams are bound to its event by an older trigger that fires first, so a
+-- move is rejected there (the immutability trigger is the second line of defence).
+select throws_ok($$update btc_matches set event_id = '00000000-0000-0000-0000-0000000000e2' where id = '00000000-0000-0000-0000-000000000d01'$$,
+  'P0001', 'btc_matches: both teams must belong to the match''s event', 'a BTC match cannot be moved to another event');
+-- With no fastest-team participant check in the way, the immutability trigger itself fires.
+update btc_match_bonuses set fastest_team_id = null where match_id = '00000000-0000-0000-0000-000000000d01';
+select throws_ok($$update btc_match_bonuses set match_id = '00000000-0000-0000-0000-000000000d02' where match_id = '00000000-0000-0000-0000-000000000d01'$$,
+  '23001', 'btc_match_bonuses.match_id is immutable', 'a bonus row cannot be moved to another match');
+
+-- ---------- remaining logged columns, after-confirm on stages, reason length ----------
+update ct_heats set kind = 'tiebreak' where id = '00000000-0000-0000-0000-0000000000f1';
+select is((select new_value ->> 'kind' from score_change_log
+            where row_id = '00000000-0000-0000-0000-0000000000f1' and new_value ->> 'kind' = 'tiebreak'),
+  'tiebreak', 'a heat''s kind change is logged');
+update btc_match_bonuses set team1_signature_beverage = true where match_id = '00000000-0000-0000-0000-000000000d01';
+select is((select new_value ->> 'team1_signature_beverage' from score_change_log
+            where table_name = 'btc_match_bonuses' and action = 'update'
+              and new_value ->> 'team1_signature_beverage' = 'true'),
+  'true', 'a signature-beverage bonus change is logged');
+update btc_matches set team2_time_note = '9:00' where id = '00000000-0000-0000-0000-000000000d01';
+select is((select new_value ->> 'team2_time_note' from score_change_log
+            where row_id = '00000000-0000-0000-0000-000000000d01' and new_value ->> 'team2_time_note' = '9:00'),
+  '9:00', 'a match time-note change is logged');
+update btc_bracket_slots set match_id = '00000000-0000-0000-0000-000000000d01' where id = '00000000-0000-0000-0000-000000000a61';
+select is((select new_value ->> 'match_id' from score_change_log
+            where row_id = '00000000-0000-0000-0000-000000000a61' and new_value ->> 'match_id' is not null),
+  '00000000-0000-0000-0000-000000000d01', 'a bracket slot''s match assignment (advancement) is logged');
+
+update ct_stages set status = 'complete' where id = '00000000-0000-0000-0000-0000000000b1';
+select set_config('app.change_reason', repeat('x', 600), true);
+update ct_stages set cutoff = 2 where id = '00000000-0000-0000-0000-0000000000b1';
+select set_config('app.change_reason', '', true);
+select is((select after_confirm from score_change_log
+            where row_id = '00000000-0000-0000-0000-0000000000b1' and new_value ->> 'cutoff' = '2'),
+  true, 'a stage change after the stage is complete is flagged after_confirm');
+select is((select length(reason) from score_change_log
+            where row_id = '00000000-0000-0000-0000-0000000000b1' and new_value ->> 'cutoff' = '2'),
+  500, 'an over-long reason is truncated to 500 characters rather than failing the write');
+update ct_stage_entries set final_position = 2 where id = '00000000-0000-0000-0000-000000000a51';
+select is((select after_confirm from score_change_log
+            where row_id = '00000000-0000-0000-0000-000000000a51' and new_value ->> 'final_position' = '2'),
+  true, 'a stage entry change after the stage is complete is flagged after_confirm');
+
+-- ---------- deleting a parent logs the deletion at that level ----------
+select set_config('t.entry_deletes', (select count(*)::text from score_change_log
+  where table_name = 'ct_heat_entries' and action = 'delete'), false);
+select set_config('t.vote_deletes', (select count(*)::text from score_change_log
+  where table_name = 'btc_cup_votes' and action = 'delete'), false);
+delete from ct_heats where id = '00000000-0000-0000-0000-0000000000f1';
+select is((select count(*)::int from score_change_log
+            where table_name = 'ct_heats' and action = 'delete' and row_id = '00000000-0000-0000-0000-0000000000f1'),
+  1, 'deleting a heat logs one delete row for the heat');
+select is((select count(*)::int from score_change_log where table_name = 'ct_heat_entries' and action = 'delete'),
+  current_setting('t.entry_deletes')::int, 'and its cascaded entries add no delete rows (their history is already logged)');
+delete from ct_stages where id = '00000000-0000-0000-0000-0000000000b1';
+select is((select count(*)::int from score_change_log
+            where table_name = 'ct_stages' and action = 'delete' and row_id = '00000000-0000-0000-0000-0000000000b1'),
+  1, 'deleting a stage logs one delete row for the stage');
+delete from btc_matches where id = '00000000-0000-0000-0000-000000000d01';
+select is((select count(*)::int from score_change_log
+            where table_name = 'btc_matches' and action = 'delete' and row_id = '00000000-0000-0000-0000-000000000d01'),
+  1, 'deleting a BTC match logs one delete row for the match');
+select is((select count(*)::int from score_change_log where table_name = 'btc_cup_votes' and action = 'delete'),
+  current_setting('t.vote_deletes')::int, 'and its cascaded votes add no delete rows');
 
 -- ---------- deleting an event neither fails nor erases history ----------
 select set_config('t.e1_scored_before', (select count(*)::text from score_change_log
