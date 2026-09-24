@@ -8,7 +8,7 @@
 -- of ANOTHER org, and anon each read zero of an org's rows; deleting an event neither
 -- fails on nor erases its history, and the deletion itself is recorded.
 begin;
-select plan(77);
+select plan(80);
 
 -- ---------- fixtures (as postgres, bypasses RLS) ----------
 
@@ -408,7 +408,21 @@ update btc_bracket_slots set match_id = '00000000-0000-0000-0000-000000000d01' w
 select is((select new_value ->> 'match_id' from score_change_log
             where row_id = '00000000-0000-0000-0000-000000000a61' and new_value ->> 'match_id' is not null),
   '00000000-0000-0000-0000-000000000d01', 'a bracket slot''s match assignment (advancement) is logged');
+update btc_matches set status = 'confirmed' where id = '00000000-0000-0000-0000-000000000d01';
+update btc_bracket_slots set team2_id = '00000000-0000-0000-0000-000000000c02' where id = '00000000-0000-0000-0000-000000000a61';
+select is((select after_confirm from score_change_log
+             where row_id = '00000000-0000-0000-0000-000000000a61' and new_value ->> 'team2_id' is not null),
+  true, 'a bracket slot edit after its linked match is confirmed is flagged after_confirm');
 
+
+update ct_stages set status = 'complete' where id = '00000000-0000-0000-0000-0000000000b1';
+select is((select (old_value ->> 'status') || '->' || (new_value ->> 'status') || ':' || after_confirm::text
+             from score_change_log where row_id = '00000000-0000-0000-0000-0000000000b1' and new_value ->> 'status' = 'complete'),
+  'pending->complete:false', 'completing a stage is logged and is not itself an after-confirm change');
+update ct_stages set status = 'running' where id = '00000000-0000-0000-0000-0000000000b1';
+select is((select after_confirm from score_change_log
+             where row_id = '00000000-0000-0000-0000-0000000000b1' and new_value ->> 'status' = 'running'),
+  true, 're-opening a complete stage is logged as an after-confirm change, so it cannot be used to hide later edits');
 update ct_stages set status = 'complete' where id = '00000000-0000-0000-0000-0000000000b1';
 select set_config('app.change_reason', repeat('x', 600), true);
 update ct_stages set cutoff = 2 where id = '00000000-0000-0000-0000-0000000000b1';

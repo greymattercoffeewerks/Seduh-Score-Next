@@ -14,7 +14,7 @@
 --   ct_heat_entries     elapsed_secs, elapsed_secs_raw, maxed, time_source, time_note
 --   ct_results          correct
 --   ct_heats            kind, status         (a re-open of a confirmed heat is a change)
---   ct_stages           kind, ordinal, set_count, cutoff
+--   ct_stages           kind, ordinal, status, set_count, cutoff   (re-opening a complete stage is a change)
 --   ct_stage_entries    source, final_position, position_note   (tiebreak/coin-toss provenance)
 --   btc_cup_votes       team1_tokens         (team2's share is 3 - team1)
 --   btc_match_bonuses   fastest_team_id, team1_signature_beverage, team2_signature_beverage
@@ -199,7 +199,7 @@ begin
       -- after-confirm change.
       v_confirmed := coalesce(v_old ->> 'status', v_row ->> 'status') = 'confirmed';
     when 'ct_stages' then
-      v_keys := array['kind', 'ordinal', 'set_count', 'cutoff'];
+      v_keys := array['kind', 'ordinal', 'status', 'set_count', 'cutoff'];
       v_ctx_keys := array['kind', 'ordinal'];
       v_event_id := (v_row ->> 'event_id')::uuid;
       v_confirmed := coalesce(v_old ->> 'status', v_row ->> 'status') = 'complete';
@@ -227,6 +227,10 @@ begin
       v_keys := array['team1_id', 'team2_id', 'match_id'];
       v_ctx_keys := array['round', 'slot_label'];
       v_event_id := (v_row ->> 'event_id')::uuid;
+      -- An advancement edit after the linked match was confirmed is an after-confirm change.
+      select m.status = 'confirmed' into v_confirmed
+        from public.btc_matches m
+       where m.id = coalesce((v_old ->> 'match_id')::uuid, (v_row ->> 'match_id')::uuid);
     when 'events' then
       v_keys := array['is_test'];
       v_ctx_keys := array[]::text[];
