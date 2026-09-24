@@ -196,6 +196,9 @@ export function buildScoringRecord(eventId, { client, title } = {}) {
   let state = 'idle';
 
   async function load() {
+    // Captured BEFORE the content is replaced: every path below removes the button that may
+    // hold keyboard focus, and focus must not fall to <body>.
+    const hadFocus = content.contains(document.activeElement);
     state = 'loading';
     status.textContent = 'Loading the scoring record\u2026';
     let record;
@@ -213,10 +216,13 @@ export function buildScoringRecord(eventId, { client, title } = {}) {
       });
       retry.addEventListener('click', () => {
         if (state === 'loading') return;
-        retry.disabled = true;
+        // aria-disabled, not disabled: a disabled button is blurred by the browser, which would
+        // lose the keyboard user's place before load() can hand focus on.
+        retry.setAttribute('aria-disabled', 'true');
         load();
       });
       content.replaceChildren(retry);
+      if (hadFocus) retry.focus();
       return;
     }
     // Built in its own try, apart from the fetch: a rendering bug must not masquerade as a
@@ -230,12 +236,10 @@ export function buildScoringRecord(eventId, { client, title } = {}) {
       console.error('scoringRecord: could not render the scoring record', err);
       status.textContent = 'The scoring record could not be displayed.';
       content.replaceChildren();
+      if (hadFocus) summary.focus();
       return;
     }
     state = 'loaded';
-    // If keyboard focus is on the retry button that is about to be removed, hand it to the
-    // summary rather than letting it fall to <body>.
-    const hadFocus = content.contains(document.activeElement);
     status.textContent = '';
     content.replaceChildren(...nodes);
     if (hadFocus) summary.focus();

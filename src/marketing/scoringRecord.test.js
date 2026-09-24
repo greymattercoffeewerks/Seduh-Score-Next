@@ -374,7 +374,7 @@ describe('buildScoringRecord', () => {
     retry.focus();
     expect(document.activeElement).toBe(retry);
     retry.click();
-    expect(retry.disabled).toBe(true);
+    expect(retry.getAttribute('aria-disabled')).toBe('true');
     await vi.waitFor(() => expect(client.rpc).toHaveBeenCalledTimes(2));
     await vi.waitFor(() =>
       expect(text(details)).toContain(
@@ -384,6 +384,52 @@ describe('buildScoringRecord', () => {
 
     expect(details.querySelector('.results-record-retry')).toBeNull();
     expect(document.activeElement).toBe(details.querySelector('summary'));
+  });
+
+  it('keeps keyboard focus on the new retry button when a retry fails again', async () => {
+    const client = recordClient(
+      { data: null, error: new Error('boom') },
+      { data: null, error: new Error('boom again') },
+    );
+    const details = buildScoringRecord('ev1', { client });
+    document.body.append(details);
+    await open(details, client);
+
+    const first = details.querySelector('.results-record-retry');
+    first.focus();
+    first.click();
+    await vi.waitFor(() => expect(client.rpc).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(details.querySelector('.results-record-retry')).not.toBe(first));
+
+    const second = details.querySelector('.results-record-retry');
+    expect(second).not.toBeNull();
+    expect(document.activeElement).toBe(second);
+  });
+
+  it('a second click on retry while it is loading does not start another request', async () => {
+    let release;
+    const client = {
+      rpc: vi
+        .fn()
+        .mockResolvedValueOnce({ data: null, error: new Error('boom') })
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              release = resolve;
+            }),
+        ),
+    };
+    const details = buildScoringRecord('ev1', { client });
+    document.body.append(details);
+    await open(details, client);
+
+    const retry = details.querySelector('.results-record-retry');
+    retry.click();
+    retry.click();
+    retry.click();
+    await vi.waitFor(() => expect(client.rpc).toHaveBeenCalledTimes(2));
+    expect(client.rpc).toHaveBeenCalledTimes(2);
+    release({ data: record(), error: null });
   });
 
   it('reports a timeout distinctly from a failure', async () => {
