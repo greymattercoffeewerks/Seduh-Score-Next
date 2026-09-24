@@ -1,3 +1,54 @@
+## Hardening: revoke TRUNCATE/REFERENCES/TRIGGER/MAINTAIN from the API roles · 2026-09-25
+
+**Task:** non-phase hardening, found in a read-only review of the Supabase advisors (2026-09-25).
+19 of 27 public tables (18 tables plus the `ct_standings` view) let `anon` and `authenticated` hold
+`TRUNCATE`, `REFERENCES`, `TRIGGER` and, on Postgres 17, `MAINTAIN`. Nothing in the app uses any of
+them. `TRUNCATE` is not subject to RLS, so it is a defence-in-depth gap rather than a live hole:
+PostgREST does not expose it and neither role has a direct connection (security-reviewer confirmed
+there was no API-reachable path). The same excess had already been stripped by hand from the btc_*
+tables and the score-log tables.
+
+**Migration:** `20260925090000_revoke_excess_table_privileges.sql` — `revoke truncate, references,
+trigger, maintain on all tables in schema public from anon, authenticated`, and, the part a one-off
+revoke cannot do, `alter default privileges for role postgres in schema public revoke ...` so tables
+created by later migrations do not receive them again (Supabase's default privileges granted `Dxtm`
+to `anon`/`authenticated`/`service_role` on every new table). Untouched, deliberately: the
+SELECT/INSERT/UPDATE/DELETE grants (the real access model, gated by RLS) and `service_role` (the
+trusted server-side key; trimming it is a separate decision).
+
+**Tests:** `supabase/tests/020_no_excess_table_privileges.sql` (10 assertions): no public table or view
+grants any of the four to either role; the default no longer grants them; a probe table created in the
+test inherits none; spot checks that the guess, contact, session, results-write, public-archive and
+live-session access all remain. Also guards future migrations. Three deliberate regressions (a re-grant
+on one table, the default re-opened, a later migration `grant all` on a new table) each fail it. Suite:
+564 pgTAP pass. Rollback verified in a transaction: restores exactly the 18 tables (plus the view) and
+the default ACL to its original value, without re-opening the deliberately clean tables.
+
+**Reviews:** schema-guardian — no blocking findings (views handled by the revoke; MAINTAIN acceptable
+unguarded since local and cloud are both 17.6; the `postgres` default is the right scope). The
+default-privilege half of the rollback, not initially verified, was then verified. security-reviewer —
+PASSED, no blocking findings.
+
+**Applied to the cloud project (`wxzwanprluqmgoagbkpv`) 2026-09-25** via `apply_migration`, after
+checking the ledger and privileges immediately before. Verified there: excess grants 152 → 0 (19
+relations × 2 roles × 4 privileges), the `postgres` default for tables now `postgres=arwdDxtm,
+service_role=Dxtm`, every guarded access still granted, `service_role` unchanged, RLS on for all tables,
+`list_migrations` matches the repo. Smoke test as `anon`: public archive and live-session reads work,
+`get_scoring_record` executes, `submit_guess` runs and refuses a non-open session as designed, and
+`TRUNCATE` on the guesses and results tables is refused (`42501`). Ordinary writes still succeed and
+existing rows are intact.
+
+**Deferred / non-blocking (from the security review):** the default privileges for _sequences_ grant
+`anon`/`authenticated`/`service_role` `setval`. Inert today (no sequences in `public`), but the first
+serial or identity column would inherit it — worth tightening in a later migration. Trimming
+`service_role`'s `Dxtm` is a separate, optional decision. The other advisor findings reviewed the same
+day were left as-is: `rls_auto_enable()` is Supabase's own event-trigger safety net (harmless, callable
+but a no-op), `reset_guess_session_data` enforces creator-only, and `submit_guess` is public by design
+(no rate limiting: an app/Cloudflare-layer concern). Leaked-password protection is Pro-only and not
+available on the current plan.
+
+---
+
 ## T-TRUST.2a: public scoring record + disclosure UI · 2026-09-24
 
 **Task:** T-TRUST.2a (handoff §14). After T-TRUST.1 shipped the append-only change log,
