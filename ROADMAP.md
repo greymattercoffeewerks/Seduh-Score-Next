@@ -1315,9 +1315,22 @@ Mutation-checked: an added column, a dropped logged key and a loosened immutabil
 
 Planned (not started):
 
-- **T-TRUST.2 — Per-event "how this was scored" page.** Read-only: raw scores, rules and
-  tie-break applied, change log from T-TRUST.1. Depends on T-TRUST.1. Verifiers:
-  `ui-accessibility-reviewer` (360px first), `security-reviewer` for what it exposes.
+- **T-TRUST.2 — Public "how this was scored" page + dispute pack.** Decisions (2026-09-24):
+  corrections are public by default; the actor is shown by ROLE ("Organiser"), never by name;
+  **no raw per-cupper/per-cup scores are ever shown publicly** — exact raw data is released only
+  through the dispute pack on request. Cup Taster first, BTC after.
+  - **2a — public page** (linked from the results archive): rules and tie-break method, stage
+    cutoffs, tiebreak/coin-toss provenance (`position_note`/`source`), a **correction summary**
+    (count, stage/heat, time, role label, stated reason — NOT old/new values), and a note if the
+    event was ever flagged a rehearsal. The correction summary MUST be computed server-side inside
+    `publish_event_results` from `score_change_log`, never assembled by the browser (a
+    client-built summary lets an organiser omit corrections). Needs schema-guardian +
+    security-reviewer + test-auditor + ui-accessibility-reviewer (360px first).
+  - **2b — dispute pack:** organiser-only export of exact raw scores + the full change log
+    (real timestamps, old/new values). A competitor requests it from the organiser via the
+    contact details on the results page. No public request form yet (avoids collecting personal
+    data); revisit only if dispute volume justifies it.
+  - Not doing: public raw scores, hash chains/external anchoring, server-side reason plumbing.
 - **T-TRUST.3 — Neutrality & independence page** (public, marketing surface). Draft:
   `design/copy/neutrality-page-draft.md`. Includes the independent sign-off rule for events
   where Grey Matter or its students compete. Needs owner sign-off on the policy wording.
