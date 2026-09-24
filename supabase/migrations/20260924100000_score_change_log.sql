@@ -6,38 +6,66 @@
 -- reinserts every vote), and no table records WHO edited (only created_at/
 -- updated_at). This migration adds the missing trail.
 --
--- Mechanism: AFTER row triggers on the five scored tables, not per-RPC logging.
--- The RLS write policies on these tables are `for all` for any org member, so a
--- direct table write bypasses every RPC; only a trigger sees every write path.
+-- Mechanism: AFTER row triggers, not per-RPC logging. The RLS write policies on
+-- these tables are `for all` for any org member, so a direct table write bypasses
+-- every RPC; only a trigger sees every write path.
 --
---   ct_heat_entries      elapsed_secs, elapsed_secs_raw, maxed, time_source, time_note
---   ct_results           correct
---   btc_cup_votes        team1_tokens (one row per cup; team2's share is 3 - team1)
---   btc_match_bonuses    fastest_team_id, team1_signature_beverage, team2_signature_beverage
---   btc_matches          team1_id, team2_id, status, team1_time_note, team2_time_note
+-- What is logged (scored inputs, and the state that decides how they count):
+--   ct_heat_entries     elapsed_secs, elapsed_secs_raw, maxed, time_source, time_note
+--   ct_results          correct
+--   ct_heats            kind, status         (a re-open of a confirmed heat is a change)
+--   ct_stages           set_count, cutoff
+--   ct_stage_entries    source, final_position, position_note   (tiebreak/coin-toss provenance)
+--   btc_cup_votes       team1_tokens         (team2's share is 3 - team1)
+--   btc_match_bonuses   fastest_team_id, team1_signature_beverage, team2_signature_beverage
+--   btc_matches         round, team1_id, team2_id, status, team1_time_note, team2_time_note
+--   btc_bracket_slots   team1_id, team2_id, match_id   (advancement outcomes)
+--   events              is_test              (see "is_test" below); DELETE of a real event
 --
--- Only real value changes are logged: an UPDATE that changes none of the scored
--- columns writes nothing. A replace-all write (btc delete+reinsert of votes) still
--- logs each delete and insert — the diff is what shows a vote actually changed.
+-- NOT logged, deliberately: derived values (standings, tallies, totals — those stay
+-- views, handoff §5.2), display/registry data (people, entries' names), which judges
+-- are assigned to a match (btc_match_judges), and timestamps/metadata.
 --
--- Deliberate scope decisions (2026-09-24):
---   * is_test events are NOT logged (rehearsal noise must not pollute real audit
---     history — D9's spirit).
---   * Rows whose parent chain no longer resolves (cascade delete, e.g.
---     delete_test_event) are skipped, and the log has NO foreign keys to scored
---     rows, so deleting an event never deletes or blocks on its history.
---   * `reason` is read from the transaction-local setting `app.change_reason`
---     (null when unset). No RPC passes it yet; `after_confirm` flags changes made
---     after the heat/match was already confirmed, so an un-reasoned correction is
---     visible as after_confirm = true and reason is null. Enforcing a reason needs
---     a console prompt and is a later step.
---   * Insert-only: no update/delete policy exists for any role, and a trigger
---     rejects UPDATE/DELETE/TRUNCATE even for the table owner.
+-- Only real value changes are logged: an UPDATE that changes none of the logged
+-- columns writes nothing. confirm_btc_match replaces ALL votes (delete + reinsert),
+-- so re-saving an unchanged match logs a delete and an insert per cup with
+-- after_confirm = true. That churn is not a changed score: every row carries `txid`,
+-- so a reader (T-TRUST.2) can collapse delete+insert pairs of an identical value
+-- within one transaction.
+--
+-- is_test (D9): rehearsal events are NOT logged, so rehearsal noise cannot pollute
+-- real audit history. That skip would otherwise be a bypass (flip is_test, edit
+-- scores, flip back), so every change to events.is_test IS logged, on any event,
+-- and so is deleting a real (non-test) event. History is not retroactively
+-- backfilled when a rehearsal event is later promoted to real.
+--
+-- Cascades: a row whose parent chain no longer resolves (it is being deleted along
+-- with its event/stage/heat) is skipped rather than attributed to nothing. The
+-- deletion itself is still recorded, at the level that was deleted: ct_stages,
+-- ct_heats, btc_matches and events all log their own DELETE. The log has NO foreign
+-- keys to logged rows, so deleting an event never deletes or blocks on its history.
+--
+-- reason: read from the transaction-local setting `app.change_reason` (null when
+-- unset, truncated to 500 chars). It is UNVERIFIED, caller-supplied context — any
+-- session can set it — not audit-grade until an RPC sets it server-side. No RPC does
+-- yet. `after_confirm` flags changes made after the heat/match/stage was already
+-- confirmed/complete, so an un-reasoned correction shows as after_confirm = true
+-- with a null reason. Enforcing a reason needs a console prompt: a later step.
+--
+-- Tamper-evidence, not tamper-proofing: no role has an update/delete/insert
+-- privilege or policy, and a trigger rejects UPDATE/DELETE/TRUNCATE statements even
+-- from the table owner. A superuser or owner can still disable the triggers; the
+-- claim is that ordinary operation, including every app role, cannot rewrite history.
 --
 -- rollback:
+--   drop trigger if exists trg_events_log on events;
+--   drop trigger if exists trg_btc_bracket_slots_log on btc_bracket_slots;
 --   drop trigger if exists trg_btc_matches_log on btc_matches;
 --   drop trigger if exists trg_btc_match_bonuses_log on btc_match_bonuses;
 --   drop trigger if exists trg_btc_cup_votes_log on btc_cup_votes;
+--   drop trigger if exists trg_ct_stage_entries_log on ct_stage_entries;
+--   drop trigger if exists trg_ct_stages_log on ct_stages;
+--   drop trigger if exists trg_ct_heats_log on ct_heats;
 --   drop trigger if exists trg_ct_results_log on ct_results;
 --   drop trigger if exists trg_ct_heat_entries_log on ct_heat_entries;
 --   drop function if exists app.log_score_change();
@@ -58,12 +86,17 @@ create table score_change_log (
   reason         text,
   changed_by     uuid,          -- auth.uid(); null for service-role/SQL writes
   changed_at     timestamptz not null default now(),
+  txid           bigint not null default txid_current(),
   constraint score_change_log_action_valid check (action in ('insert', 'update', 'delete')),
   constraint score_change_log_table_valid check (
-    table_name in ('ct_heat_entries', 'ct_results', 'btc_cup_votes', 'btc_match_bonuses', 'btc_matches')
+    table_name in (
+      'ct_heat_entries', 'ct_results', 'ct_heats', 'ct_stages', 'ct_stage_entries',
+      'btc_cup_votes', 'btc_match_bonuses', 'btc_matches', 'btc_bracket_slots', 'events'
+    )
   )
 );
 alter table score_change_log enable row level security;
+create index on score_change_log (org_id, changed_at);
 create index on score_change_log (event_id, changed_at);
 create index on score_change_log (row_id, changed_at);
 
@@ -73,6 +106,11 @@ create policy score_change_log_read on score_change_log
   for select
   using (app.is_org_member(org_id));
 
+-- Supabase's default privileges hand every API role broad grants on new tables
+-- (TRUNCATE, REFERENCES, TRIGGER, and service_role's write access). Strip them all;
+-- only SELECT for signed-in users is intended. The trigger function (owner) is the
+-- one and only writer.
+revoke all on score_change_log from public, anon, authenticated, service_role;
 grant select on score_change_log to authenticated;
 
 create or replace function app.forbid_score_change_log_mutation()
@@ -105,9 +143,8 @@ declare
   v_keys      text[];
   v_ctx_keys  text[];
   v_event_id  uuid;
-  v_confirmed boolean;
-  v_is_test   boolean;
   v_org_id    uuid;
+  v_confirmed boolean := false;
   v_old_scope jsonb;
   v_new_scope jsonb;
   v_row_id    uuid;
@@ -127,6 +164,24 @@ begin
         join public.ct_heats h on h.id = he.heat_id
         join public.ct_stages s on s.id = h.stage_id
        where he.id = (v_row ->> 'heat_entry_id')::uuid;
+    when 'ct_heats' then
+      v_keys := array['kind', 'status'];
+      v_ctx_keys := array['stage_id', 'heat_number'];
+      select s.event_id into v_event_id
+        from public.ct_stages s where s.id = (v_row ->> 'stage_id')::uuid;
+      -- The state BEFORE this change: re-opening a confirmed heat is itself an
+      -- after-confirm change.
+      v_confirmed := coalesce(v_old ->> 'status', v_row ->> 'status') = 'confirmed';
+    when 'ct_stages' then
+      v_keys := array['set_count', 'cutoff'];
+      v_ctx_keys := array['kind', 'ordinal'];
+      v_event_id := (v_row ->> 'event_id')::uuid;
+      v_confirmed := coalesce(v_old ->> 'status', v_row ->> 'status') = 'complete';
+    when 'ct_stage_entries' then
+      v_keys := array['source', 'final_position', 'position_note'];
+      v_ctx_keys := array['stage_id', 'entry_id'];
+      select s.event_id, s.status = 'complete' into v_event_id, v_confirmed
+        from public.ct_stages s where s.id = (v_row ->> 'stage_id')::uuid;
     when 'btc_cup_votes' then
       v_keys := array['team1_tokens'];
       v_ctx_keys := array['match_id', 'cup_number'];
@@ -138,12 +193,18 @@ begin
       select m.event_id, m.status = 'confirmed' into v_event_id, v_confirmed
         from public.btc_matches m where m.id = (v_row ->> 'match_id')::uuid;
     when 'btc_matches' then
-      v_keys := array['team1_id', 'team2_id', 'status', 'team1_time_note', 'team2_time_note'];
-      v_ctx_keys := array['event_id', 'round'];
+      v_keys := array['round', 'team1_id', 'team2_id', 'status', 'team1_time_note', 'team2_time_note'];
+      v_ctx_keys := array[]::text[];
       v_event_id := (v_row ->> 'event_id')::uuid;
-      -- The state the match was in BEFORE this change: a re-open of a confirmed
-      -- match is itself an after-confirm change.
       v_confirmed := coalesce(v_old ->> 'status', v_row ->> 'status') = 'confirmed';
+    when 'btc_bracket_slots' then
+      v_keys := array['team1_id', 'team2_id', 'match_id'];
+      v_ctx_keys := array['round', 'slot_label'];
+      v_event_id := (v_row ->> 'event_id')::uuid;
+    when 'events' then
+      v_keys := array['is_test'];
+      v_ctx_keys := array[]::text[];
+      v_event_id := (v_row ->> 'id')::uuid;
   end case;
 
   -- Parent chain gone (cascade delete) or event missing: nothing to attribute to.
@@ -151,10 +212,23 @@ begin
     return null;
   end if;
 
-  select e.org_id, e.is_test into v_org_id, v_is_test
-    from public.events e where e.id = v_event_id;
-  if v_org_id is null or v_is_test then
-    return null;
+  if tg_table_name = 'events' then
+    -- Not a scored table: only an is_test flip (either direction) and the deletion
+    -- of a real event are recorded. Inserts, and any other column, are not.
+    if tg_op = 'INSERT' then
+      return null;
+    end if;
+    v_org_id := (v_row ->> 'org_id')::uuid;
+    if tg_op = 'DELETE' and coalesce((v_old ->> 'is_test')::boolean, false) then
+      return null;
+    end if;
+  else
+    -- Rehearsal events are skipped (their flag flips are logged via `events`).
+    select e.org_id into v_org_id
+      from public.events e where e.id = v_event_id and not e.is_test;
+    if v_org_id is null then
+      return null;
+    end if;
   end if;
 
   select coalesce(jsonb_object_agg(k, v_old -> k), '{}'::jsonb) into v_old_scope
@@ -178,7 +252,7 @@ begin
     case when v_new is null then null else v_new_scope end,
     (select coalesce(jsonb_object_agg(k, v_row -> k), '{}'::jsonb) from unnest(v_ctx_keys) as k),
     coalesce(v_confirmed, false),
-    nullif(current_setting('app.change_reason', true), ''),
+    left(nullif(current_setting('app.change_reason', true), ''), 500),
     auth.uid()
   );
   return null;
@@ -193,6 +267,15 @@ create trigger trg_ct_heat_entries_log
 create trigger trg_ct_results_log
   after insert or update or delete on ct_results
   for each row execute function app.log_score_change();
+create trigger trg_ct_heats_log
+  after insert or update or delete on ct_heats
+  for each row execute function app.log_score_change();
+create trigger trg_ct_stages_log
+  after insert or update or delete on ct_stages
+  for each row execute function app.log_score_change();
+create trigger trg_ct_stage_entries_log
+  after insert or update or delete on ct_stage_entries
+  for each row execute function app.log_score_change();
 create trigger trg_btc_cup_votes_log
   after insert or update or delete on btc_cup_votes
   for each row execute function app.log_score_change();
@@ -201,4 +284,12 @@ create trigger trg_btc_match_bonuses_log
   for each row execute function app.log_score_change();
 create trigger trg_btc_matches_log
   after insert or update or delete on btc_matches
+  for each row execute function app.log_score_change();
+create trigger trg_btc_bracket_slots_log
+  after insert or update or delete on btc_bracket_slots
+  for each row execute function app.log_score_change();
+-- events: only an is_test flip or a real event's deletion writes a row (see above);
+-- restricting the trigger keeps every other events update off this function's path.
+create trigger trg_events_log
+  after update of is_test or delete on events
   for each row execute function app.log_score_change();
