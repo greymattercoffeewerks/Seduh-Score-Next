@@ -12,7 +12,7 @@
 -- txids and times, so the grouping/ordering rules can be tested independently of the
 -- triggers; a few run through the real triggers to prove the two fit together.
 begin;
-select plan(33);
+select plan(36);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-000000000001', 'member@test.seduh-next'),
@@ -249,6 +249,27 @@ select isnt(get_scoring_record('00000000-0000-0000-0000-0000000000e7'), null, 't
 reset role;
 select ok(clock_timestamp() - current_setting('t.t0')::timestamptz < interval '2.5 seconds',
   '8,000 log rows (mixed replace-all churn) are summarised well inside anon''s 3-second statement timeout');
+
+-- ---------- large free-text values cannot slow the public read ----------
+-- An organiser writing megabyte notes through the real trigger: the log must store a bounded
+-- copy, and the public function must stay fast (cost must not scale with bytes written).
+do $$
+begin
+  for i in 1..40 loop
+    update btc_matches set team1_time_note = repeat('x', 1000000) || i
+     where id = '00000000-0000-0000-0000-000000000d01';
+  end loop;
+end $$;
+select ok(
+  (select max(length(new_value ->> 'team1_time_note')) <= 501
+     from score_change_log where event_id = '00000000-0000-0000-0000-0000000000e3' and table_name = 'btc_matches'),
+  'the log stores a bounded copy of a megabyte-sized note');
+select set_config('t.t1', clock_timestamp()::text, false);
+set local role anon;
+select isnt(get_scoring_record('00000000-0000-0000-0000-0000000000e3'), null, 'the record is still returned after megabyte-sized note edits');
+reset role;
+select ok(clock_timestamp() - current_setting('t.t1')::timestamptz < interval '2.5 seconds',
+  'and stays well inside anon''s 3-second statement timeout');
 
 -- ---------- privileges and configuration ----------
 select is((select prosecdef and provolatile = 's' and proconfig = array['search_path=""']

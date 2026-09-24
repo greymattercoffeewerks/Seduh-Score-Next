@@ -45,6 +45,11 @@
 -- ct_heats, btc_matches and events all log their own DELETE. The log has NO foreign
 -- keys to logged rows, so deleting an event never deletes or blocks on its history.
 --
+-- Bounded values: any string value in old_value/new_value is cut to 500 characters (plus
+-- an ellipsis). The full value of a long note is still what the live row holds and what the
+-- change detection compares; the log keeps a bounded copy so it cannot be used to bloat the
+-- database or to make readers slow. (Scored numbers/booleans/ids are never affected.)
+--
 -- reason: read from the transaction-local setting `app.change_reason` (null when
 -- unset, truncated to 500 chars). It is UNVERIFIED, caller-supplied context — any
 -- session can set it — not audit-grade until an RPC sets it server-side. No RPC does
@@ -261,14 +266,27 @@ begin
     end if;
   end if;
 
-  select coalesce(jsonb_object_agg(k, v_old -> k), '{}'::jsonb) into v_old_scope
-    from unnest(v_keys) as k where v_old is not null;
-  select coalesce(jsonb_object_agg(k, v_new -> k), '{}'::jsonb) into v_new_scope
-    from unnest(v_keys) as k where v_new is not null;
-
-  if tg_op = 'UPDATE' and v_old_scope = v_new_scope then
+  -- "Did anything logged actually change?" is decided on the FULL values, before any
+  -- truncation below, so an edit past the 500th character of a note is still a change.
+  if tg_op = 'UPDATE'
+     and not exists (select 1 from unnest(v_keys) as k where (v_old -> k) is distinct from (v_new -> k)) then
     return null;
   end if;
+
+  -- Free-text values (time/position notes) are unbounded columns; the log stores at most
+  -- 500 characters of any string value, suffixed with an ellipsis when cut. This bounds
+  -- both log growth and the cost of anything that reads it (get_scoring_record compares
+  -- deleted/inserted values, whose cost otherwise scales with bytes an organiser can write).
+  select coalesce(jsonb_object_agg(k, case when jsonb_typeof(v_old -> k) = 'string'
+                                             and length(v_old ->> k) > 500
+                                            then to_jsonb(left(v_old ->> k, 500) || '…')
+                                            else v_old -> k end), '{}'::jsonb) into v_old_scope
+    from unnest(v_keys) as k where v_old is not null;
+  select coalesce(jsonb_object_agg(k, case when jsonb_typeof(v_new -> k) = 'string'
+                                             and length(v_new ->> k) > 500
+                                            then to_jsonb(left(v_new ->> k, 500) || '…')
+                                            else v_new -> k end), '{}'::jsonb) into v_new_scope
+    from unnest(v_keys) as k where v_new is not null;
 
   -- btc_match_bonuses is keyed by match_id (its primary key), not a surrogate id.
   v_row_id := (v_row ->> case when tg_table_name = 'btc_match_bonuses' then 'match_id' else 'id' end)::uuid;

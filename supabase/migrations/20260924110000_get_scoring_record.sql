@@ -47,10 +47,11 @@
 -- Replace-all churn: confirm_btc_match deletes and reinserts every vote, so re-saving an
 -- unchanged match logs delete+insert pairs. Per (transaction, table, context), if the
 -- deleted values exactly equal the inserted values the whole group is dropped, so a plain
--- re-save is not reported as a correction. This is a set-based grouping (linear-ish),
--- NOT a per-row self-join: the original self-join was quadratic and, at a few thousand
--- log rows, timed out under anon's statement_timeout — which would have let an organiser
--- suppress the record by inflating the log.
+-- re-save is not reported as a correction. This uses window functions only, NOT a join and
+-- NOT a per-row self-join: the first version was quadratic, and a join-based rewrite was
+-- still planner-dependent (a stale row estimate right after a burst of inserts chose a
+-- nested loop and timed out under anon's statement_timeout — which would have let an
+-- organiser suppress the record by inflating the log).
 --
 -- rollback:
 --   revoke execute on function get_scoring_record(uuid) from anon, authenticated, service_role;
@@ -113,23 +114,49 @@ begin
        and l.table_name <> 'events'
   ),
   -- Replace-all churn: a (txn, table, context) group whose deleted values equal its
-  -- inserted values (as multisets) is a re-save, not a correction.
-  pairs as (
-    select txid, table_name, context,
-           array_agg(old_value::text order by old_value::text) filter (where action = 'delete') as d,
-           array_agg(new_value::text order by new_value::text) filter (where action = 'insert') as i
-      from base
-     group by txid, table_name, context
+  -- inserted values (as multisets) is a re-save, not a correction. Decided with WINDOW
+  -- functions only — deliberately no join. An earlier join-based version was fast or
+  -- catastrophically slow depending on the planner's row estimate, and estimates are stale
+  -- right after a burst of inserts (exactly when an organiser could be inflating the log):
+  -- rank each delete and each insert within its group by value, pair the r-th delete with
+  -- the r-th insert, and cancel the group only if every pair matches and the counts agree.
+  ranked_di as (
+    select b.*,
+           row_number() over (partition by b.txid, b.table_name, b.context, b.action
+                              order by coalesce(b.old_value, b.new_value)::text, b.id) as rn
+      from base b
+     where b.action in ('delete', 'insert')
   ),
-  cancelled as (
-    select txid, table_name, context from pairs where d is not null and i is not null and d = i
+  paired as (
+    select r.*,
+           max(r.new_value::text) filter (where r.action = 'insert')
+             over (partition by r.txid, r.table_name, r.context, r.rn) as ins_val,
+           max(r.old_value::text) filter (where r.action = 'delete')
+             over (partition by r.txid, r.table_name, r.context, r.rn) as del_val
+      from ranked_di r
+  ),
+  judged as (
+    select p.*,
+           bool_and(coalesce(case p.action
+                               when 'delete' then p.old_value::text = p.ins_val
+                               else p.new_value::text = p.del_val end, false))
+             over (partition by p.txid, p.table_name, p.context) as all_paired,
+           count(*) filter (where p.action = 'delete')
+             over (partition by p.txid, p.table_name, p.context) as n_del,
+           count(*) filter (where p.action = 'insert')
+             over (partition by p.txid, p.table_name, p.context) as n_ins
+      from paired p
   ),
   kept as (
-    select b.*
+    select b.id, b.txid, b.table_name, b.action, b.old_value, b.new_value, b.context,
+           b.row_id, b.changed_at, b.reason, b.area, b.heat_id, b.stage_id, b.match_id
       from base b
-      left join cancelled c
-             on c.txid = b.txid and c.table_name = b.table_name and c.context = b.context
-     where c.txid is null or b.action = 'update'
+     where b.action = 'update'
+    union all
+    select j.id, j.txid, j.table_name, j.action, j.old_value, j.new_value, j.context,
+           j.row_id, j.changed_at, j.reason, j.area, j.heat_id, j.stage_id, j.match_id
+      from judged j
+     where not (j.all_paired and j.n_del = j.n_ins)
   ),
   labelled as (
     select k.*,
