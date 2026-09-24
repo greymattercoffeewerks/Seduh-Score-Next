@@ -57,7 +57,30 @@
 -- from the table owner. A superuser or owner can still disable the triggers; the
 -- claim is that ordinary operation, including every app role, cannot rewrite history.
 --
+-- Moving a row between parents would dodge the log: re-parent a stage onto a rehearsal
+-- event, edit its scores (skipped as is_test), move it back. Rather than log every
+-- parent key, the parent columns are immutable (BEFORE UPDATE trigger below); nothing
+-- in the app re-parents these rows, and BTC already does the same for teams/judges.
+--
+-- Deleting a parent (heat/stage/match/event) cascades its scored children. The
+-- children's own DELETE rows are skipped (their parent is already gone), but nothing
+-- is lost: every child was logged on insert and on every change, so its full history
+-- and last value are already in the log; the parent's DELETE row records that the
+-- deletion happened, and by whom. (Rows that pre-date this migration have no history
+-- before it — the log starts when it is applied.)
+--
 -- rollback:
+--   drop trigger if exists trg_events_org_immutable on events;
+--   drop trigger if exists trg_btc_bracket_slots_parent_immutable on btc_bracket_slots;
+--   drop trigger if exists trg_btc_match_bonuses_parent_immutable on btc_match_bonuses;
+--   drop trigger if exists trg_btc_cup_votes_parent_immutable on btc_cup_votes;
+--   drop trigger if exists trg_btc_matches_parent_immutable on btc_matches;
+--   drop trigger if exists trg_ct_stage_entries_parent_immutable on ct_stage_entries;
+--   drop trigger if exists trg_ct_results_parent_immutable on ct_results;
+--   drop trigger if exists trg_ct_heat_entries_parent_immutable on ct_heat_entries;
+--   drop trigger if exists trg_ct_heats_parent_immutable on ct_heats;
+--   drop trigger if exists trg_ct_stages_parent_immutable on ct_stages;
+--   drop function if exists app.forbid_parent_change();
 --   drop trigger if exists trg_events_log on events;
 --   drop trigger if exists trg_btc_bracket_slots_log on btc_bracket_slots;
 --   drop trigger if exists trg_btc_matches_log on btc_matches;
@@ -293,3 +316,49 @@ create trigger trg_btc_bracket_slots_log
 create trigger trg_events_log
   after update of is_test or delete on events
   for each row execute function app.log_score_change();
+
+-- Parent columns are immutable, so the is_test / org lookups above can never be
+-- dodged by re-parenting a row. TG_ARGV[0] names the column.
+create or replace function app.forbid_parent_change()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if to_jsonb(new) -> tg_argv[0] is distinct from to_jsonb(old) -> tg_argv[0] then
+    raise exception '%.% is immutable', tg_table_name, tg_argv[0] using errcode = '23001';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger trg_ct_stages_parent_immutable
+  before update of event_id on ct_stages
+  for each row execute function app.forbid_parent_change('event_id');
+create trigger trg_ct_heats_parent_immutable
+  before update of stage_id on ct_heats
+  for each row execute function app.forbid_parent_change('stage_id');
+create trigger trg_ct_heat_entries_parent_immutable
+  before update of heat_id on ct_heat_entries
+  for each row execute function app.forbid_parent_change('heat_id');
+create trigger trg_ct_results_parent_immutable
+  before update of heat_entry_id on ct_results
+  for each row execute function app.forbid_parent_change('heat_entry_id');
+create trigger trg_ct_stage_entries_parent_immutable
+  before update of stage_id on ct_stage_entries
+  for each row execute function app.forbid_parent_change('stage_id');
+create trigger trg_btc_matches_parent_immutable
+  before update of event_id on btc_matches
+  for each row execute function app.forbid_parent_change('event_id');
+create trigger trg_btc_cup_votes_parent_immutable
+  before update of match_id on btc_cup_votes
+  for each row execute function app.forbid_parent_change('match_id');
+create trigger trg_btc_match_bonuses_parent_immutable
+  before update of match_id on btc_match_bonuses
+  for each row execute function app.forbid_parent_change('match_id');
+create trigger trg_btc_bracket_slots_parent_immutable
+  before update of event_id on btc_bracket_slots
+  for each row execute function app.forbid_parent_change('event_id');
+create trigger trg_events_org_immutable
+  before update of org_id on events
+  for each row execute function app.forbid_parent_change('org_id');

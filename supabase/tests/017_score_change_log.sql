@@ -8,7 +8,7 @@
 -- of ANOTHER org, and anon each read zero of an org's rows; deleting an event neither
 -- fails on nor erases its history, and the deletion itself is recorded.
 begin;
-select plan(51);
+select plan(56);
 
 -- ---------- fixtures (as postgres, bypasses RLS) ----------
 
@@ -353,6 +353,18 @@ reset role;
 select throws_ok($$update score_change_log set reason = 'tamper'$$, '42501', 'score_change_log is append-only', 'the owner cannot update log rows');
 select throws_ok($$delete from score_change_log$$, '42501', 'score_change_log is append-only', 'the owner cannot delete log rows');
 select throws_ok($$truncate score_change_log$$, '42501', 'score_change_log is append-only', 'the owner cannot truncate the log');
+
+-- ---------- a row cannot be re-parented (which would dodge the is_test skip) ----------
+select throws_ok($$update ct_stages set event_id = '00000000-0000-0000-0000-0000000000e2' where id = '00000000-0000-0000-0000-0000000000b1'$$,
+  '23001', 'ct_stages.event_id is immutable', 'a stage cannot be moved to another event');
+select throws_ok($$update ct_heats set stage_id = '00000000-0000-0000-0000-0000000000b2' where id = '00000000-0000-0000-0000-0000000000f1'$$,
+  '23001', 'ct_heats.stage_id is immutable', 'a heat cannot be moved to another stage');
+select throws_ok($$update ct_heat_entries set heat_id = '00000000-0000-0000-0000-0000000000f2' where id = '00000000-0000-0000-0000-000000000a01'$$,
+  '23001', 'ct_heat_entries.heat_id is immutable', 'a heat entry cannot be moved to another heat');
+select throws_ok($$update btc_cup_votes set match_id = '00000000-0000-0000-0000-000000000d02' where cup_number = 2 and match_id = '00000000-0000-0000-0000-000000000d01'$$,
+  '23001', 'btc_cup_votes.match_id is immutable', 'a BTC vote cannot be moved to another match');
+select throws_ok($$update events set org_id = '00000000-0000-0000-0000-000000000020' where id = '00000000-0000-0000-0000-0000000000e3'$$,
+  '23001', 'events.org_id is immutable', 'an event cannot be moved to another org');
 
 -- ---------- deleting an event neither fails nor erases history ----------
 select set_config('t.e1_scored_before', (select count(*)::text from score_change_log
