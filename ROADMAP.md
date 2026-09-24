@@ -1290,7 +1290,7 @@ live-verified in browser. Definition of Done met. See CHANGELOG.md's dated entry
 
 ## Trust and transparency
 
-**T-TRUST.1 (2026-09-24) — Append-only score-change log; migration NOT yet pushed to cloud.**
+**T-TRUST.1 (2026-09-24) — Append-only score-change log; applied to the cloud project 2026-09-24.**
 The platform raised the dispute problem ("a result gets questioned and there's nothing to point
 to") without solving it — today it records `time_source` (tap vs manual) but had no append-only
 change history. Migration `20260924100000_score_change_log.sql` adds `score_change_log` table
@@ -1313,7 +1313,7 @@ unclassified as logged / immutable / consciously-metadata, or if those classific
 the live trigger definitions — so a future scoring column cannot silently escape the trail.
 Mutation-checked: an added column, a dropped logged key and a loosened immutability trigger each fail it.
 
-**T-TRUST.2a (2026-09-24) — Public "how this was scored" disclosure + API; migrations NOT yet pushed to cloud.**
+**T-TRUST.2a (2026-09-24) — Public "how this was scored" disclosure + API; migrations applied to the cloud project 2026-09-24.**
 After T-TRUST.1 shipped the append-only change log, 2a builds the transparency feature: when
 results are published, the public results page displays a lazy-loading disclosure "How this was
 scored" showing a corrections summary (count, stage/heat, when, who by role, stated reason — NOT
@@ -1339,9 +1339,12 @@ format-agnostic). Deferred/non-blocking: rehearsal-flag-count and summary scan s
 log rows (partial indexes (event_id) where after_confirm future optimization); orphaned counter rows
 after event delete (no FK, low risk); table bloat (autovacuum handles); edits during re-open uncounted
 as corrections (re-open itself logged; dispute pack will surface this); results page unlinked/noindex
-(nav integration later decision); all survivors low-risk, documented. **Migrations NOT yet pushed to
-cloud — both apply in order after PR merges via `apply_migration`.** Until cloud updated, disclosure
-shows unavailable state. Definition of Done met; no blocking findings.
+(nav integration later decision); all survivors low-risk, documented. **Both migrations were applied
+to the cloud project (`wxzwanprluqmgoagbkpv`) on 2026-09-24 via `apply_migration`, in order (`score_change_log`
+then `get_scoring_record`), and verified there: objects and triggers present, RLS on, grants as designed,
+the counter unreadable by every API role, writes still work, `list_migrations` matches the repo.** Logging
+starts from that moment: events scored before it have no history, and no cloud event is real or published
+yet. Definition of Done met; no blocking findings.
 
 Planned (not started):
 

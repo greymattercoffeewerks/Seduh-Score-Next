@@ -121,11 +121,15 @@ rows trigger fallback `logged_changes`+`by_area` instead of summary)/truncated (
   public visibility. Results archive itself already ships (T-Cup-5.3 completed); this task surfaces
   scoring transparency via the disclosure only.
 
-**Migration status:** Locally complete and tested. **NOT YET pushed to cloud project** — two
-migrations apply in order: `20260924100000_score_change_log.sql` (amended, counter table +
-truncation logic), then `20260924110000_get_scoring_record.sql` (the function). Both must
-be applied via `apply_migration` after this PR merges. Until migrations land, UI shows
-unavailable state. Once cloud is updated, the disclosure activates for published events.
+**Migration status:** APPLIED to the cloud project (`wxzwanprluqmgoagbkpv`) on 2026-09-24 via
+`apply_migration`, in order: `score_change_log` (20260924100000, as amended: counter table + value
+truncation), then `get_scoring_record` (20260924110000). Verified on the cloud: 12 log + 10 immutability
+triggers, RLS on both tables, the log readable only by signed-in org members, the counter unreadable by
+every API role, the trigger function not executable by `anon`/`authenticated`, ordinary writes still
+succeed (no-op updates on existing rows), `list_migrations` matches the repo. Supabase advisors flag
+only the intended items (no-policy RLS on the counter; the public read function) plus pre-existing
+unrelated ones. Logging starts now: nothing scored earlier has history, and the cloud currently has no
+real or published event.
 Deferred items documented; none block shipment of the disclosure feature itself.
 
 **Definition of Done:**
@@ -231,11 +235,9 @@ enforced. Insert-only enforcement on log itself. A non-member of the org reads z
 checked). All deferred items documented; none block shipment of the log itself (reason enforcement,
 display-name unlogging, churn collapse are follow-ups).
 
-**Migration status:** Locally complete and tested. **NOT YET pushed to cloud project** —
-that is a separate manual `apply_migration` step after this PR merges (same pattern as every
-prior migration: merge to `main` deploys frontend, cloud DB update is a separate step). Do not
-add platform-level copy claiming an audit trail until migration lands on cloud AND T-TRUST.2
-(the "how this was scored" page reading from the log) ships.
+**Migration status:** applied to the cloud project 2026-09-24 together with T-TRUST.2a's function
+(see that entry for the verification). Site copy may describe the change log only for events scored
+after that date, and must not promise exact-score release until the dispute pack (T-TRUST.2b) exists.
 
 ---
 
