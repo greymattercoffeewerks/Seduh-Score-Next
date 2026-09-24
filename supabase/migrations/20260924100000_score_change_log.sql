@@ -45,6 +45,22 @@
 -- ct_heats, btc_matches and events all log their own DELETE. The log has NO foreign
 -- keys to logged rows, so deleting an event never deletes or blocks on its history.
 --
+-- Bounded values: any string value in old_value/new_value is cut to 500 characters (plus
+-- an ellipsis). The full value of a long note is still what the live row holds and what the
+-- change detection compares; the log keeps a bounded copy so it cannot be used to bloat the
+-- database or to make readers slow. (Scored numbers/booleans/ids are never affected.)
+--
+-- score_change_counts: an exact per-(event, table) counter of AFTER-CONFIRMATION log rows
+-- (rows with after_confirm = true, excluding `events`), maintained by the same trigger in
+-- the same transaction. It exists so get_scoring_record can decide "is this log too big to
+-- summarise?" and give a per-area breakdown in O(areas) instead of counting log rows,
+-- which cost time proportional to the log (an organiser could inflate it past anon's
+-- statement timeout, and dead tuples from rolled-back writes make a scan slower still).
+-- Only after-confirm rows touch it, which are rare, so it adds no contention to live
+-- scoring. No role can read or write it directly (all privileges revoked); only the
+-- security-definer trigger function writes it, and rows that are inserted into the log
+-- some other way (e.g. by a superuser) are, by design, not counted.
+--
 -- reason: read from the transaction-local setting `app.change_reason` (null when
 -- unset, truncated to 500 chars). It is UNVERIFIED, caller-supplied context — any
 -- session can set it — not audit-grade until an RPC sets it server-side. No RPC does
@@ -73,6 +89,7 @@
 -- before it — the log starts when it is applied.)
 --
 -- rollback:
+--   drop table if exists score_change_counts;
 --   drop trigger if exists trg_events_org_immutable on events;
 --   drop trigger if exists trg_btc_bracket_slots_parent_immutable on btc_bracket_slots;
 --   drop trigger if exists trg_btc_match_bonuses_parent_immutable on btc_match_bonuses;
@@ -125,6 +142,15 @@ alter table score_change_log enable row level security;
 create index on score_change_log (org_id, changed_at);
 create index on score_change_log (event_id, changed_at);
 create index on score_change_log (row_id, changed_at);
+
+create table score_change_counts (
+  event_id    uuid   not null,
+  table_name  text   not null,
+  n           bigint not null default 0,
+  primary key (event_id, table_name)
+);
+alter table score_change_counts enable row level security;
+revoke all on score_change_counts from public, anon, authenticated, service_role;
 
 -- Read: org members, own org only. No insert/update/delete policy for any role —
 -- writes happen only through the security-definer trigger function below.
@@ -261,14 +287,27 @@ begin
     end if;
   end if;
 
-  select coalesce(jsonb_object_agg(k, v_old -> k), '{}'::jsonb) into v_old_scope
-    from unnest(v_keys) as k where v_old is not null;
-  select coalesce(jsonb_object_agg(k, v_new -> k), '{}'::jsonb) into v_new_scope
-    from unnest(v_keys) as k where v_new is not null;
-
-  if tg_op = 'UPDATE' and v_old_scope = v_new_scope then
+  -- "Did anything logged actually change?" is decided on the FULL values, before any
+  -- truncation below, so an edit past the 500th character of a note is still a change.
+  if tg_op = 'UPDATE'
+     and not exists (select 1 from unnest(v_keys) as k where (v_old -> k) is distinct from (v_new -> k)) then
     return null;
   end if;
+
+  -- Free-text values (time/position notes) are unbounded columns; the log stores at most
+  -- 500 characters of any string value, suffixed with an ellipsis when cut. This bounds
+  -- both log growth and the cost of anything that reads it (get_scoring_record compares
+  -- deleted/inserted values, whose cost otherwise scales with bytes an organiser can write).
+  select coalesce(jsonb_object_agg(k, case when jsonb_typeof(v_old -> k) = 'string'
+                                             and length(v_old ->> k) > 500
+                                            then to_jsonb(left(v_old ->> k, 500) || '…')
+                                            else v_old -> k end), '{}'::jsonb) into v_old_scope
+    from unnest(v_keys) as k where v_old is not null;
+  select coalesce(jsonb_object_agg(k, case when jsonb_typeof(v_new -> k) = 'string'
+                                             and length(v_new ->> k) > 500
+                                            then to_jsonb(left(v_new ->> k, 500) || '…')
+                                            else v_new -> k end), '{}'::jsonb) into v_new_scope
+    from unnest(v_keys) as k where v_new is not null;
 
   -- btc_match_bonuses is keyed by match_id (its primary key), not a surrogate id.
   v_row_id := (v_row ->> case when tg_table_name = 'btc_match_bonuses' then 'match_id' else 'id' end)::uuid;
@@ -285,6 +324,11 @@ begin
     left(nullif(current_setting('app.change_reason', true), ''), 500),
     auth.uid()
   );
+  if coalesce(v_confirmed, false) and tg_table_name <> 'events' then
+    insert into public.score_change_counts (event_id, table_name, n)
+    values (v_event_id, tg_table_name, 1)
+    on conflict (event_id, table_name) do update set n = public.score_change_counts.n + 1;
+  end if;
   return null;
 end;
 $$;

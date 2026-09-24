@@ -53,3 +53,14 @@ export async function unpublishEventResults(orgId, eventId, client = getSupabase
   });
   if (error) throw error;
 }
+
+// Public, shape-only scoring record for a PUBLISHED event (T-TRUST.2a): what changed after
+// results were confirmed, computed server-side from the append-only score log at read time
+// (supabase/migrations/20260924110000_get_scoring_record.sql). Returns null for an
+// unpublished or unknown event. Anon-safe. Contains no raw scores; `reason` strings are
+// organiser-typed free text — callers must render them as text, never as markup.
+export async function getScoringRecord(eventId, client = getSupabase()) {
+  const { data, error } = await client.rpc('get_scoring_record', { p_event_id: eventId });
+  if (error) throw error;
+  return data ?? null;
+}

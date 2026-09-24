@@ -8,7 +8,7 @@
 -- of ANOTHER org, and anon each read zero of an org's rows; deleting an event neither
 -- fails on nor erases its history, and the deletion itself is recorded.
 begin;
-select plan(80);
+select plan(86);
 
 -- ---------- fixtures (as postgres, bypasses RLS) ----------
 
@@ -459,6 +459,43 @@ select is((select count(*)::int from score_change_log
   1, 'deleting a BTC match logs one delete row for the match');
 select is((select count(*)::int from score_change_log where table_name = 'btc_cup_votes' and action = 'delete'),
   current_setting('t.vote_deletes')::int, 'and its cascaded votes add no delete rows');
+
+-- ---------- long free-text values are bounded, and long edits are still detected ----------
+insert into btc_teams (id, event_id, name) values
+  ('00000000-0000-0000-0000-000000000c05', '00000000-0000-0000-0000-0000000000e3', 'Long A'),
+  ('00000000-0000-0000-0000-000000000c06', '00000000-0000-0000-0000-0000000000e3', 'Long B');
+insert into btc_matches (id, event_id, round, team1_id, team2_id) values
+  ('00000000-0000-0000-0000-000000000d03', '00000000-0000-0000-0000-0000000000e3', 'preliminary',
+   '00000000-0000-0000-0000-000000000c05', '00000000-0000-0000-0000-000000000c06');
+update btc_matches set team1_time_note = repeat('a', 600) where id = '00000000-0000-0000-0000-000000000d03';
+select is(
+  (select length(new_value ->> 'team1_time_note') from score_change_log
+    where row_id = '00000000-0000-0000-0000-000000000d03' and action = 'update'),
+  501, 'a 600-character note is stored as 500 characters plus an ellipsis');
+update btc_matches set team1_time_note = repeat('a', 599) || 'b' where id = '00000000-0000-0000-0000-000000000d03';
+select is(
+  (select count(*)::int from score_change_log
+    where row_id = '00000000-0000-0000-0000-000000000d03' and action = 'update'),
+  2, 'an edit that differs only past the 500th character is still logged as a change');
+
+-- ---------- the after-confirm counter always equals the log ----------
+select is(
+  (select coalesce(string_agg(l.event_id || '/' || l.table_name || '/' || l.n, ',' order by l.event_id, l.table_name), '')
+     from (select event_id, table_name, count(*) as n from score_change_log
+            where after_confirm and table_name <> 'events' group by 1, 2) l),
+  (select coalesce(string_agg(c.event_id || '/' || c.table_name || '/' || c.n, ',' order by c.event_id, c.table_name), '')
+     from score_change_counts c),
+  'score_change_counts equals, per event and table, the number of after-confirm rows in the log');
+select ok((select count(*) from score_change_counts) > 0,
+  'and it is not vacuously empty: after-confirm changes were counted');
+
+-- ---------- nobody but the trigger can read or write the counter ----------
+set local role authenticated;
+select throws_ok($$select 1 from score_change_counts$$, '42501', 'permission denied for table score_change_counts',
+  'authenticated cannot read the counter');
+select throws_ok($$update score_change_counts set n = 0$$, '42501', 'permission denied for table score_change_counts',
+  'authenticated cannot reset the counter (which would re-enable a flood)');
+reset role;
 
 -- ---------- deleting an event neither fails nor erases history ----------
 select set_config('t.e1_scored_before', (select count(*)::text from score_change_log

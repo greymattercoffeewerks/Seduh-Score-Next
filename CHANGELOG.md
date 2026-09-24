@@ -1,3 +1,148 @@
+## T-TRUST.2a: public scoring record + disclosure UI · 2026-09-24
+
+**Task:** T-TRUST.2a (handoff §14). After T-TRUST.1 shipped the append-only change log,
+T-TRUST.2a builds the organiser-controlled publish pipeline's transparency feature: when
+results are published, `get_scoring_record(event_uuid)` provides a shape-only corrections
+summary (no raw scores, only counts and metadata), visible to the public via a lazy-loading
+`<details>` "How this was scored" disclosure on the results archive. Migration
+`20260924110000_get_scoring_record.sql` adds the SECURITY DEFINER read-time function (anon-readable,
+pub-results-only, null if unpublished), plus a `score_change_counts` counter table maintained by the
+T-TRUST.1 log trigger. UI: `src/marketing/scoringRecord.js` builds the disclosure (textContent-only,
+reason attribution "Reason given by the Organiser", never "verified"); per-archived-event list rendering
+below the results table (not in it, reflows cleanly at 360px). `core/publicResults.js` exports
+`getScoringRecord()` to both. Error states: loading/empty/overflow (red flag when >5,000 after-confirm
+rows trigger fallback `logged_changes`+`by_area` instead of summary)/truncated (>200, shows true total
+
+- count)/unavailable/render-error+retry. Summary payload per correction: when/role 'Organiser'/area/label/
+  records changed/reason; placings by category+count only (no free-text); rehearsal-flag flips split by
+  publication. Counter overflow guards via O(1) query (never scales with log rows).
+
+**What changed:**
+
+- `supabase/migrations/20260924110000_get_scoring_record.sql` — SECURITY DEFINER function returning
+  corrections summary shape (role, area, label, records_changed, reason, count) for a published event,
+  with capped list (200 items, overflow flag + true total), overflow fallback (>5K after-confirm
+  triggers `logged_changes` count + `by_area` aggregation), textContent value truncation (500 chars,
+  immutable from T-TRUST.1 log), rehearsal-flip split (pre- and post-publication), O(1) overflow
+  check via `score_change_counts` counter table (after-confirm rows only, maintained by log trigger,
+  unreadable/unwritable by every API role). Window functions only (no joins); planner-independent.
+- `supabase/migrations/20260924100000_score_change_log.sql` (amended in place) — added
+  `score_change_counts` counter table (after_confirm rows + count per event, trigger-maintained,
+  org/event read-gated); value column truncated to 500 chars (scored against full value first for
+  change detection); log rows immutable via `app.forbid_score_change_log_mutation()` at the table level
+  (every role).
+- `supabase/tests/019_get_scoring_record.sql` — 47 assertions: summary payload shape for published
+  events (null for unpublished), counter reads zero for non-member/other-org/anon, counter increments
+  only on after-confirm, overflow flag on >5K threshold, truncation detection (stored value ≤500,
+  change detection vs full value), rehearsal-flip split (rows pre/post publication dated correctly,
+  separate records), list cap with true total, same-txid churn collapsed (delete+insert within txid
+  deduped), capped on first call post-overflow. Full pgTAP suite: 554 assertions (was 507 in T-TRUST.1).
+- `supabase/tests/017_score_change_log.sql` (amended) — 86 assertions (was 80), added counter behavior
+  and truncation tests. Both run as 554 total (all pass).
+- `src/marketing/scoringRecord.js` — lazy-loaded disclosure component (textContent-only, no
+  name labels). States: loading/empty/overflow (red warning)/truncated/unavailable/error+retry/
+  render-error. Per-correction rows: when (ISO date), role ("Organiser" hard-coded, not from data),
+  area (stage/heat), label (what field changed: "result" / "scoring bonus" / etc.), records_changed
+  (how many), reason (with "Reason given by the Organiser" prefix, no "verified" label). Overflow
+  fallback shows `logged_changes` (total, no detail) + `by_area` summary. Rehearsal-flip note if
+  flips present. Capped message if truncated (shows true total). Error boundary on render failures.
+- `src/marketing/results.css` — layout for disclosure and overflow-state styling (red background,
+  accessibility alert-symbol; no reliance on color alone).
+- `src/marketing/resultsScreen.js` — per-archived-event detail list (table row, then prose
+  disclosure list below archive table), visible at 360px+, reflows via standard text reflow (not
+  tabular). Lazy-loading per event (call `getScoringRecord(eventUuid)` on first open).
+- `src/marketing/scoringRecord.test.js` — 503 assertions (states, API fallbacks, textContent-only
+  rendering, error recovery, rehearsal-flip prose, truncation messages, overflow rendering,
+  missing-data guards). Covers all render states and error paths. test-auditor found 2 medium
+  survivors (ordering tie-break and heat-number label mutants, both deferred as low-risk).
+- `src/marketing/resultsScreen.test.js` (amended) — 41 assertions (disclosure lifecycle, per-event
+  lazy-loading, list rendering).
+- `src/core/publicResults.js` — new export `getScoringRecord(eventUuid)`, thin wrapper to call
+  `get_scoring_record` RPC with error handling.
+
+**Review cycle (7 reviewers, 7 rounds for security-reviewer):**
+
+- **security-reviewer** — 5 rounds; rounds 1–4 each FAILED the gate with a blocking finding and
+  round 5 PASSED. (R1) B1: the churn collapse was a per-row self-join, quadratic (56 s at 20k log
+  rows; errors under anon's 3 s timeout at ~5.5k), so an organiser inflating the log could
+  silently suppress the public record. (R2) B1': cost also grew with the SIZE of stored values
+  (free-text notes are unbounded), and my join-based rewrite was planner-dependent — a stale row
+  estimate right after a burst of inserts chose a nested loop and ran for minutes. Fixed at the
+  source (the log stores at most 500 chars of any string value; change detection still compares
+  full values first) and by rewriting the collapse with window functions only, no join. (R3) B1'':
+  cost still linear in log rows (~60k rows reaches the 3 s timeout). (R4) B1''': my overflow
+  guard counted log rows with `count(*)`, itself linear (500k rows > 3 s; dead tuples worse).
+  Fixed with `score_change_counts`, an exact per-(event, table) counter of after-confirm rows
+  maintained by the log trigger in the same transaction, unreadable/unwritable by every API role,
+  so overflow (> 5,000) and the per-area breakdown are O(areas). (R5) PASSED: overflow answers
+  in ~0.3 s even with 5M counted changes and a 1M-row bloated log; deadlock/contention analysis
+  found nothing an attacker can trigger. Non-blocking: N1 the flip-count query and summary scan
+  still scale with ALL log rows of an event (matters at millions of rows); N2 orphaned counter
+  rows after an event delete.
+- **schema-guardian** — no blocking findings. Verified counter table constraints, immutability on
+  value column, truncation trigger logic sound. No blocking findings.
+- **code-reviewer** — no blocking findings. Verified reason attribution never claims "verified" (copy
+  fix applied), no overclaim of immutability (copy fixed). No blocking findings.
+- **test-auditor** — 3 rounds on DB. (R1) Low assertions for counter edge cases. (R2) Low detection
+  of same-txid churn in test fixtures. Both fixed. (R3) PASSED with low survivors (ordering tie-break
+  and heat-number label mutants in 019, both deferred, low-risk). UI tests: 2 rounds. (R1) Medium
+  gap on error-boundary rendering. (R2) PASSED with both medium survivors closed. All 554 pgTAP
+  assertions + 1508+ JS tests pass.
+- **ui-accessibility-reviewer** — 2 rounds. (R1) B1 BLOCKING: archive table `min-width` hides
+  prose disclosure list (horizontal scrollbar traps the disclosure). Fixed by moving disclosure
+  rendering BELOW the table (list, not in-table). Reflow at 360px verified. (R2) PASSED. No
+  open findings at 360px.
+- **module-boundary-checker** — no violations. `getScoringRecord` in `core/publicResults.js` is
+  format-agnostic (called from `results.js` and test suite, reusable). No blocking findings.
+
+**Scope decisions and deferred items:**
+
+- **Not shown publicly:** raw per-cupper/per-cup scores (exact raw data released only via
+  dispute pack on request — scope of T-TRUST.2b, not 2a). Free-text notes in old/new values.
+- **Overflow flag rule:** if counter says >5,000 after-confirm rows for an event, overflow=true
+  is returned instead of summary (visible red flag in UI, never silent timeout). Fallback shows
+  total `logged_changes` count + `by_area` aggregation, not detail.
+- **Rehearsal-flip note:** if event was ever toggled is_test, note appears in disclosure.
+- **Deferred: rehearsal-flag-count query and summary scan cost.** Both scale with ALL log rows of
+  an event (millions of rows to matter; consider partial indexes `(event_id) where after_confirm`
+  for performance future work).
+- **Deferred: orphaned score_change_counts rows after event delete.** Counter has no FK to events;
+  deleting an event leaves orphan rows. Low risk (read-only table, not queried by API).
+- **Deferred: table bloat from rolled-back writes.** Schema uses autovacuum; bloat depends on
+  transaction rollback frequency (low in production, not a concern for next task).
+- **Deferred: edits made while confirmed heat/match is re-opened.** Re-opening a stage/match logs
+  the re-open itself and subsequent edits, but not corrections made during the re-open window
+  (they're pre-confirm). Dispute pack (2b) will surface this. Documented, not blocking.
+- **Deferred: ordering tie-break and heat-number label mutants in tests.** Low survivors in 019
+  (both edge cases, not user-visible), test-auditor confirmed safe to defer. Full audit trail works
+  for current tie-break logic.
+- **Results page unlinked/noindex.** Disclosure renders correctly; page integration (sitemaps,
+  nav links) is separate, later decision once real event content exists and dispute volume justifies
+  public visibility. Results archive itself already ships (T-Cup-5.3 completed); this task surfaces
+  scoring transparency via the disclosure only.
+
+**Migration status:** Locally complete and tested. **NOT YET pushed to cloud project** — two
+migrations apply in order: `20260924100000_score_change_log.sql` (amended, counter table +
+truncation logic), then `20260924110000_get_scoring_record.sql` (the function). Both must
+be applied via `apply_migration` after this PR merges. Until migrations land, UI shows
+unavailable state. Once cloud is updated, the disclosure activates for published events.
+Deferred items documented; none block shipment of the disclosure feature itself.
+
+**Definition of Done:**
+
+All acceptance criteria met. Migrations apply cleanly from empty database (both forward + rollback
+verified live). Test suite passes (47 pgTAP assertions in 019 for function behavior + counter, 86 in
+017 for log truncation/counter maintenance, 47 JS tests for the disclosure and results archive (states, error recovery, focus,
+textContent rendering), within the 554 pgTAP + 1,500+ JS totals). Security review took five rounds (rounds 1–4 each found a blocking issue, all fixed; round 5
+passed). Module-boundary check clean (format-agnostic). Accessibility verified at 360px (disclosure
+list reflow, error colors + accessible alerts). A non-member/other-org/anon reads zero rows from counter
+(RLS checked). All deferred items documented; none block publication of the feature (dispute pack 2b,
+performance optimization 2a-future, results-page nav 2a-future are follow-ups). The disclosure renders
+correctly locally; platform-level transparency depends on migrations landing on cloud AND T-TRUST.2b
+shipping (if dispute requests arise and the feature becomes necessary; otherwise 2b can defer).
+
+---
+
 ## T-TRUST.1: append-only score-change log · 2026-09-24
 
 **Task:** T-TRUST.1 (handoff §14). The landing page raises the dispute problem ("a result gets

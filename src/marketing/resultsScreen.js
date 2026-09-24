@@ -14,6 +14,7 @@ import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../core/timeout.js';
 import { listPublishedResults } from '../core/publicResults.js';
 import { buildPublicFooter } from './publicFooter.js';
 import { buildPublicHeader } from './publicHeader.js';
+import { buildScoringRecord } from './scoringRecord.js';
 
 const DATE_FORMAT = new Intl.DateTimeFormat('en-GB', {
   day: '2-digit',
@@ -142,7 +143,7 @@ function podiumRow(entry) {
   ]);
 }
 
-function buildLatestResult(event) {
+function buildLatestResult(event, client) {
   const timeSpan = el('span', { className: 'tabular-nums' }, [
     ...withSrExpansion(
       formatDuration(event.winningTimeSecs),
@@ -189,6 +190,7 @@ function buildLatestResult(event) {
         ]),
         el('ol', { className: 'results-podium' }, event.podium.map(podiumRow)),
       ]),
+      buildScoringRecord(event.eventId, { client, title: event.eventName }),
     ],
   );
 }
@@ -219,7 +221,7 @@ function archiveRow(event) {
   ]);
 }
 
-function buildArchive(events) {
+function buildArchive(events, client) {
   return el(
     'section',
     { className: 'results-archive', attrs: { 'aria-labelledby': 'archive-title' } },
@@ -253,6 +255,15 @@ function buildArchive(events) {
             el('tbody', {}, events.map(archiveRow).filter(Boolean)),
           ]),
         ],
+      ),
+      // Outside the (horizontally scrolling) table on purpose: this is prose and must reflow
+      // at 360px, and a full-width row per event would also break the table's semantics.
+      el(
+        'div',
+        { className: 'results-archive-records' },
+        events
+          .filter((event) => event.podium?.[0])
+          .map((event) => buildScoringRecord(event.eventId, { client, title: event.eventName })),
       ),
     ],
   );
@@ -344,10 +355,10 @@ export async function mountResultsScreen(root, { client } = {}) {
   };
 
   const hero = buildHero(stats);
-  const latestSection = buildLatestResult(latest);
+  const latestSection = buildLatestResult(latest, client);
   // events[0] is already the "Latest result" feature above — the archive
   // table below covers everything else, not a repeat of the same row.
-  const archiveSection = events.length > 1 ? buildArchive(events.slice(1)) : null;
+  const archiveSection = events.length > 1 ? buildArchive(events.slice(1), client) : null;
 
   renderMain(hero, latestSection, ...(archiveSection ? [archiveSection] : []));
 

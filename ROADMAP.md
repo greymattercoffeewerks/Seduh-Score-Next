@@ -1313,11 +1313,46 @@ unclassified as logged / immutable / consciously-metadata, or if those classific
 the live trigger definitions — so a future scoring column cannot silently escape the trail.
 Mutation-checked: an added column, a dropped logged key and a loosened immutability trigger each fail it.
 
+**T-TRUST.2a (2026-09-24) — Public "how this was scored" disclosure + API; migrations NOT yet pushed to cloud.**
+After T-TRUST.1 shipped the append-only change log, 2a builds the transparency feature: when
+results are published, the public results page displays a lazy-loading disclosure "How this was
+scored" showing a corrections summary (count, stage/heat, when, who by role, stated reason — NOT
+raw scores). Built `get_scoring_record(event_uuid)` SECURITY DEFINER read-time function (anon-readable,
+pub-results-only) returning shape-only summaries; maintained via T-TRUST.1's log trigger + a new
+`score_change_counts` counter table (O(1) overflow check, avoids log-scan timeout). UI: `src/marketing/
+scoringRecord.js` renders disclosure (textContent-only, reason attribution "Reason given by the
+Organiser" never "verified"); per-archived-event list below archive table (reflows cleanly at 360px).
+Error states: loading/empty/overflow (red flag when >5,000 after-confirm rows triggers fallback
+aggregation)/truncated (>200 detail, true total shown)/unavailable/error+retry. Migrations:
+`20260924100000_score_change_log.sql` (amended: counter table + value truncation to 500 chars),
+`20260924110000_get_scoring_record.sql` (the function; no new table). Suite `019_get_scoring_record.sql` runs
+47 assertions; total pgTAP 554 (all pass). Review rounds: security-reviewer 5 rounds (rounds 1–4 each FAILED the gate: quadratic collapse; value
+size and a planner-dependent join; cost linear in log rows; the overflow `count(*)` itself linear —
+fixed by window functions, 500-char value truncation at write, and the `score_change_counts`
+counter; round 5 PASSED); schema-guardian no blocking findings (counter constraints + immutability
+verified); code-reviewer no blocking findings (copy fixes: no overclaim of immutability, reason never
+"verified"); test-auditor 3 DB rounds (low counter/churn edge cases, PASSED; survivors: ordering tie-break
+and heat-number label mutants, deferred low-risk); 2 UI rounds (error-boundary rendering, PASSED with
+medium survivors closed); ui-accessibility-reviewer 2 rounds (disclosure table-hiding overflow B1 fixed
+by moving list below table, 360px verified, PASSED); module-boundary-checker clean (getScoringRecord
+format-agnostic). Deferred/non-blocking: rehearsal-flag-count and summary scan still scale with all
+log rows (partial indexes (event_id) where after_confirm future optimization); orphaned counter rows
+after event delete (no FK, low risk); table bloat (autovacuum handles); edits during re-open uncounted
+as corrections (re-open itself logged; dispute pack will surface this); results page unlinked/noindex
+(nav integration later decision); all survivors low-risk, documented. **Migrations NOT yet pushed to
+cloud — both apply in order after PR merges via `apply_migration`.** Until cloud updated, disclosure
+shows unavailable state. Definition of Done met; no blocking findings.
+
 Planned (not started):
 
-- **T-TRUST.2 — Per-event "how this was scored" page.** Read-only: raw scores, rules and
-  tie-break applied, change log from T-TRUST.1. Depends on T-TRUST.1. Verifiers:
-  `ui-accessibility-reviewer` (360px first), `security-reviewer` for what it exposes.
+- **T-TRUST.2b — Dispute pack.** Standing decisions (2026-09-24): corrections are public; the actor
+  is shown by ROLE ("Organiser"), never by name; **no raw per-cupper/per-cup scores are ever shown
+  publicly** — exact raw data is released only through this pack, on request. Not doing: public raw
+  scores, hash chains/external anchoring, server-side reason plumbing. The disclosure's "can be
+  requested from the organiser" line is only a process until this exists. Organiser-only export of exact raw scores + full change log
+  (real timestamps, old/new values). A competitor requests it from the organiser via the contact
+  details on the results page. No public request form yet (avoids collecting personal data);
+  revisit only if dispute volume justifies it.
 - **T-TRUST.3 — Neutrality & independence page** (public, marketing surface). Draft:
   `design/copy/neutrality-page-draft.md`. Includes the independent sign-off rule for events
   where Grey Matter or its students compete. Needs owner sign-off on the policy wording.

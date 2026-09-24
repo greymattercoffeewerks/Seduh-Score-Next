@@ -128,6 +128,26 @@ describe('mountResultsScreen', () => {
     expect(bandungRow.querySelector('.results-archive-result').textContent).toContain('6/6');
     expect(bandungRow.textContent).toContain('Bandung');
 
+    // "How this was scored": the latest event's disclosure sits under its card; every archived
+    // event's sits in a list BELOW the table (prose must reflow at 360px, and a full-width row
+    // per event would break the table's semantics), each named after its own event. Each event
+    // still has exactly one plain row in the table.
+    expect(root.querySelector('.results-latest .results-record summary').textContent).toBe(
+      'How “Jakarta Cup Tasters #09” was scored',
+    );
+    expect(root.querySelectorAll('.results-table td[colspan]')).toHaveLength(0);
+    expect(root.querySelectorAll('.results-table tbody tr')).toHaveLength(3);
+    expect(
+      [...root.querySelectorAll('.results-archive-records .results-record summary')].map(
+        (summary) => summary.textContent,
+      ),
+    ).toEqual([
+      'How “Bandung Coffee Week” was scored',
+      'How “Jakarta Youth Cup” was scored',
+      'How “Pop-Up Cupping” was scored',
+    ]);
+    expect(root.querySelector('.results-table .results-record')).toBeNull();
+
     // ev3 has no eventDate — the archive date column falls back to an
     // em dash rather than throwing (formatDate(null) would crash).
     const jakartaYouthRow = archiveRows[1];
@@ -270,5 +290,26 @@ describe('mountResultsScreen', () => {
       await mountPromise;
       expect(root.textContent).toContain('taking longer than expected');
     });
+  });
+  it('gives an archived event with no winner neither a table row nor a disclosure', async () => {
+    const rows = [
+      { event_id: 'ev1', payload: samplePayload(), published_at: '2026-09-16T00:00:00Z' },
+      {
+        event_id: 'ev2',
+        payload: samplePayload({ eventName: 'No Podium Event', podium: [] }),
+        published_at: '2026-08-30T00:00:00Z',
+      },
+      {
+        event_id: 'ev3',
+        payload: samplePayload({ eventName: 'Has Podium' }),
+        published_at: '2026-08-01T00:00:00Z',
+      },
+    ];
+    await mountResultsScreen(root, { client: fakeClient({ data: rows, error: null }) });
+
+    expect(root.querySelectorAll('.results-table tbody tr')).toHaveLength(1);
+    expect(
+      [...root.querySelectorAll('.results-archive-records summary')].map((s) => s.textContent),
+    ).toEqual(['How “Has Podium” was scored']);
   });
 });
