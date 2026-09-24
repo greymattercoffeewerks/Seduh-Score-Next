@@ -196,7 +196,8 @@ values
   ('00000000-0000-0000-0000-000000000010','00000000-0000-0000-0000-0000000000e5','ct_heat_entries','00000000-0000-0000-0000-0000000000a9','update','{"elapsed_secs":1}','{"elapsed_secs":2}','{"heat_id":"00000000-0000-0000-0000-0000000000f1","entry_id":"00000000-0000-0000-0000-0000000000ee"}',true,'<script>alert(1)</script>',112,'2026-02-01 18:00+00'),
   -- K: rehearsal flips: one before publication, one after; even flagged after_confirm they are not corrections
   ('00000000-0000-0000-0000-000000000010','00000000-0000-0000-0000-0000000000e5','events','00000000-0000-0000-0000-0000000000e5','update','{"is_test":false}','{"is_test":true}','{}',true,null,113, now() - interval '1 hour'),
-  ('00000000-0000-0000-0000-000000000010','00000000-0000-0000-0000-0000000000e5','events','00000000-0000-0000-0000-0000000000e5','update','{"is_test":true}','{"is_test":false}','{}',true,null,114, now() + interval '1 hour');
+  ('00000000-0000-0000-0000-000000000010','00000000-0000-0000-0000-0000000000e5','events','00000000-0000-0000-0000-0000000000e5','update','{"is_test":true}','{"is_test":false}','{}',true,null,114, now() + interval '1 hour'),
+  ('00000000-0000-0000-0000-000000000010','00000000-0000-0000-0000-0000000000e5','events','00000000-0000-0000-0000-0000000000e5','update','{"is_test":false}','{"is_test":true}','{}',true,null,115, now() - interval '2 hours');
 
 set local role anon;
 select is((get_scoring_record('00000000-0000-0000-0000-0000000000e5') ->> 'correction_count')::int, 12,
@@ -241,7 +242,7 @@ select is(
 select is(
   (get_scoring_record('00000000-0000-0000-0000-0000000000e5') ->> 'rehearsal_flag_changes')::int
     || '/' || (get_scoring_record('00000000-0000-0000-0000-0000000000e5') ->> 'rehearsal_flag_changes_after_publish')::int,
-  '2/1', 'rehearsal flips are split into all and those after publication');
+  '3/1', 'rehearsal flips are split into all (3) and those after publication (1); the split is asymmetric so a boundary slip cannot hide');
 reset role;
 
 -- ---------- churn collapse must compare VALUES, not just counts, and scope by txid and context ----------
