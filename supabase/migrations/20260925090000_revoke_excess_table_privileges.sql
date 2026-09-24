@@ -35,7 +35,8 @@
 -- broader than a long-lived one) and the cloud project converge on the same result.
 -- MAINTAIN exists from Postgres 17; local and cloud are both 17.6.
 --
--- rollback (restores exactly what these tables held before; do NOT use a blanket
+-- rollback (restores what anon/authenticated held on these tables before — verified in a
+-- transaction, including the default privileges; do NOT use a blanket
 -- `grant ... on all tables`, which would also re-open the tables that were deliberately clean):
 --   alter default privileges for role postgres in schema public
 --     grant truncate, references, trigger, maintain on tables to anon, authenticated;

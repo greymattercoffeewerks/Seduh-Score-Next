@@ -21,7 +21,7 @@ select is(
 
 -- 2. the default privileges no longer hand them to future tables
 select is(
-  (select coalesce(array_agg(pg_get_userbyid(a.grantee) || ':' || a.privilege_type order by 1), '{}'::text[])
+  (select coalesce(array_agg(pg_get_userbyid(a.grantee) || ':' || a.privilege_type order by pg_get_userbyid(a.grantee), a.privilege_type), '{}'::text[])
      from pg_default_acl d
      join pg_namespace n on n.oid = d.defaclnamespace and n.nspname = 'public'
      cross join lateral aclexplode(d.defaclacl) a
