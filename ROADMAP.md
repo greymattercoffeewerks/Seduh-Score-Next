@@ -1288,19 +1288,29 @@ live-verified in browser. Definition of Done met. See CHANGELOG.md's dated entry
 
 ---
 
-## Trust and transparency (2026-09-24) — planned, not started
+## Trust and transparency
 
-Source: an external site critique (2026-09-24) found the landing page raises the dispute
-problem ("a result gets questioned and there's nothing to point to") without answering it.
-Today's platform records `time_source` (tap vs manual) and derives standings from raw
-per-cupper results, but has **no append-only change history** — an edit overwrites the row.
-Do not add copy claiming an audit trail until T-TRUST.1 ships (check this file before
-adding any such claim).
+**T-TRUST.1 (2026-09-24) — Append-only score-change log; migration NOT yet pushed to cloud.**
+The platform raised the dispute problem ("a result gets questioned and there's nothing to point
+to") without solving it — today it records `time_source` (tap vs manual) but had no append-only
+change history. Migration `20260924100000_score_change_log.sql` adds `score_change_log` table
+and 10 AFTER row triggers (one per table: ct_heat_entries, ct_results, ct_heats, ct_stages,
+ct_stage_entries, btc_cup_votes, btc_match_bonuses, btc_matches, btc_bracket_slots, events),
+plus `app.forbid_parent_change()` enforcing immutable parent/identity columns, plus
+`app.forbid_score_change_log_mutation()` enforcing insert-only access. Suite `017_score_change_log.sql`
+runs 80 assertions across 479 total (all pass). Review rounds: schema-guardian no blocking findings (org_id
+index + grants fixed); security-reviewer 5 rounds (B1 is_test-toggle bypass, S1 re-parenting
+bypass, S4 identity-column bypass, B1 ct_stages.status unlogged, PASSED); scoring-auditor
+no blocking findings (ct_heats status/provenance/bracket coverage added); test-auditor gates passed (medium
+gaps closed); code-reviewer no blocking findings (comment accuracy, v_is_test cleanup done). Deferred/non-blocking:
+display/registry names unlogged (documented); parent-status read at trigger time for stage_entries/votes/slots
+(re-open itself is logged); reason forgeable until an RPC sets it; replace-all BTC re-confirm
+churn (txid column lets a reader collapse it). **Do not add copy claiming an audit trail until
+the migration is pushed to cloud project AND T-TRUST.2 ships.** The log itself is functional
+locally; the platform-level transparency feature depends on both.
 
-- **T-TRUST.1 — Append-only score-change log.** Insert-only table recording who/what/when
-  and old/new value for every score or time edit, plus a required reason on post-confirm
-  corrections. Verifiers: `schema-guardian` + `security-reviewer` (non-member reads zero
-  rows), `scoring-auditor`, `test-auditor`.
+Planned (not started):
+
 - **T-TRUST.2 — Per-event "how this was scored" page.** Read-only: raw scores, rules and
   tie-break applied, change log from T-TRUST.1. Depends on T-TRUST.1. Verifiers:
   `ui-accessibility-reviewer` (360px first), `security-reviewer` for what it exposes.

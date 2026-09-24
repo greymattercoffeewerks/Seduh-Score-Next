@@ -1,3 +1,99 @@
+## T-TRUST.1: append-only score-change log · 2026-09-24
+
+**Task:** T-TRUST.1 (handoff §14). The landing page raises the dispute problem ("a result gets
+questioned and there's nothing to point to") without solving it — today the platform records
+`time_source` (tap vs manual) but had no append-only change history. An edit overwrote the row
+(confirm_heat upserts `correct`; confirm_btc_match deletes and reinserts every vote), and no
+table recorded who edited. Migration adds the missing trail via insert-only log + immutable
+parent/identity columns.
+
+**What changed:**
+
+- `supabase/migrations/20260924100000_score_change_log.sql` — new table `score_change_log`
+  (row_id, table_name, action, old_value, new_value, changed_by, reason, after_confirm, context,
+  org_id, event_id, txid, created_at) plus 10 AFTER-trigger pairs logging writes to ct_heat_entries,
+  ct_results, ct_heats, ct_stages, ct_stage_entries, btc_cup_votes, btc_match_bonuses, btc_matches,
+  btc_bracket_slots, and events. Parent/identity columns (id, *_id columns, org_id on every table,
+  event_id on every child) immutable via `app.forbid_parent_change()` BEFORE UPDATE trigger. Log
+  itself insert-only for every role via `app.forbid_score_change_log_mutation()` (rejects UPDATE/DELETE/TRUNCATE).
+  is_test events skipped from logging, but is_test flips on any event ARE logged (closes bypass
+  via flip/edit/flip). Reason is unverified GUC-based (`app.change_reason`); no RPC sets it yet.
+  ct_stages.status now logged on change (before: unlogged, causing loss on re-open detection).
+- `supabase/tests/017_score_change_log.sql` — 80 assertions verifying every logged table's
+  writes captured with who/old/new/context; no-op updates write nothing; is_test skip cannot
+  bypass (flips logged); post-confirm changes flagged with (unverified) reason; real RPCs
+  (confirm_heat, confirm_btc_match) log correctly; log is insert-only for every role, tamper-evident
+  for owner; non-member/other-org/anon each read zero rows; event deletion doesn't fail on/erase
+  history, deletion itself recorded. Suite runs as 80 tests within the full pgTAP stack of 479
+  passing tests.
+
+**Review cycle (5 reviewers, 5 rounds for security-reviewer):**
+
+- **schema-guardian** — no blocking findings. Identified and fixed org_id index gap in grants (allow select
+  on v_is_test). No blocking findings.
+- **security-reviewer** — 5 rounds. (R1) B1 BLOCKING: is_test toggle on an event allows
+  toggling the log skip — edit scores on real event, flip to is_test, scores now skipped.
+  Fixed by logging is_test flips themselves, rendering the bypass ineffective (history visible
+  on the toggle row itself). (R2) S1 re-parenting bypass: moving a row between parents dodges
+  log (re-parent stage to rehearsal, edit scores skipped, move back). Fixed by enforcing
+  immutable parent/identity columns via `app.forbid_parent_change()` BEFORE UPDATE trigger.
+  (R3) S4 identity-column bypass: deleting and reinserting changes a row's PK without logging
+  the edit (same value, new row object). Fixed by immutable id columns alongside parent
+  enforcement. (R4) B1 ct_stages.status unlogged: re-opening a complete stage is a state
+  change but status column not in trigger's logged columns — dropped from visibility. Fixed
+  by adding status to logged columns. (R5) PASSED — reran full suite including all 4 fixes.
+  No open findings.
+- **scoring-auditor** — no blocking findings. Verified ct_heats' kind/status/provenance/bracket logged correctly
+  and post-confirmation flags working. No blocking findings.
+- **test-auditor** — gate passed (T-TRUST.1 does not set gates per the plan, a later task).
+  Confirmed 017_score_change_log.sql gates flow properly; medium-gap assertions added during
+  review. No open findings.
+- **code-reviewer** — no blocking findings. Confirmed trigger logic correct, function signatures sound, comment
+  accuracy re: is_test/reason/tamper-evidence. Cleanup on v_is_test visibility (org_id grant
+  addition) already done via schema-guardian fix. No blocking findings.
+
+**Scope decisions and deferred items:**
+
+- **Not logged:** derived values (standings, tallies, totals — those stay views per handoff §5.2),
+  display/registry data (people, entries' names, judge rosters on matches), timestamps/metadata
+  (created_at, updated_at). Deliberately documented in migration top comment.
+- **Cascades on parent delete:** a child row's deletion logs an insert-only; parent DELETE rows
+  are recorded at the level deleted (events, ct_stages, ct_heats, btc_matches). Rows pre-dating
+  migration have no history before it. The log has no foreign keys to logged rows, so deleting
+  an event never fails on/blocks on its history.
+- **Deferred: reason enforcement (T-TRUST.2 or later).** Reason is now logged and unverified
+  (caller-supplied, any session can set). Enforcing a required reason on post-confirm corrections
+  needs a console prompt — a later task. Today it flags after_confirm = true with null reason.
+- **Deferred: parent-status reads at trigger time.** Stage-entry/vote/bracket-slot triggers
+  read parent status (heat confirmed? stage complete?) at the moment of the child write, not
+  logged. Re-opening itself is logged at its level (ct_heats, ct_stages), so a reader still
+  sees the timing. Optimisation for later.
+- **Deferred: BTC re-confirm churn.** confirm_btc_match deletes and reinserts all votes per cup
+  (even unchanged ones) — logs a delete + insert per cup per re-save. Not a changed score per
+  se (reader can collapse identical delete+insert within one txid). txid column lets a future
+  dedupe step collapse these. Documented as "same-value churn, use txid to collapse."
+- **Deferred: Reason forgeability until RPC sets it.** Any session can set `app.change_reason`.
+  Once an RPC (e.g., a hypothetical future `correct_score_with_reason()`) sets it server-side,
+  the reason becomes audit-grade. No RPC does this yet.
+
+**Definition of Done:**
+
+All acceptance criteria met. Migrations apply cleanly from empty database. Test suite passes
+(80 new assertions + all existing 479). No schema/RLS/scoring/offline-sync findings blocking
+DoD. Integration verified: real RPCs (confirm_heat from Cup Taster; confirm_btc_match from BTC)
+trigger log entries correctly. is_test bypass closed by logging flips. Parent/identity immutability
+enforced. Insert-only enforcement on log itself. A non-member of the org reads zero rows (RLS
+checked). All deferred items documented; none block shipment of the log itself (reason enforcement,
+display-name unlogging, churn collapse are follow-ups).
+
+**Migration status:** Locally complete and tested. **NOT YET pushed to cloud project** —
+that is a separate manual `apply_migration` step after this PR merges (same pattern as every
+prior migration: merge to `main` deploys frontend, cloud DB update is a separate step). Do not
+add platform-level copy claiming an audit trail until migration lands on cloud AND T-TRUST.2
+(the "how this was scored" page reading from the log) ships.
+
+---
+
 ## Version cycle: Berakas → Gadong, v2.0.28 → v3.0.0 · 2026-09-23
 
 **Major bump, triggered by BTC shipping as the platform's second real competition format** (see this file's own "BTC app-wiring pass" and "BTC marketing go-live" entries for the full account, committed separately). Per CONVENTIONS.md's "Versioning" rule, a major version/nameplate move is reserved for a genuine capability-era boundary — a new format shipping is the textbook case, and today BTC (Barista Team Championship, renamed from BBTC 2026-09-18) went from schema to five organiser screens to a live public marketing presence, all in one day. Near-exact match to legacy's own Gadong cycle ("realising one format was never going to be enough").
