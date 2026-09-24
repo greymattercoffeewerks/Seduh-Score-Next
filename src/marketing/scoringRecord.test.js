@@ -134,6 +134,7 @@ describe('buildScoringRecord', () => {
     expect(items[0]).toContain('Results · Prelims · heat 2');
     expect(items[0]).toContain('2 records changed by the Organiser.');
     expect(items[0]).toContain('Reason given by the Organiser: “judge recount”');
+    expect(items[0]).not.toContain('given for');
     expect(items[1]).toContain('Times · Prelims · heat 2');
     expect(items[1]).toContain('1 record changed by the Organiser.');
     expect(items[1]).toContain('No reason given.');
@@ -183,7 +184,9 @@ describe('buildScoringRecord', () => {
     const details = buildScoringRecord('ev1', { client });
     await open(details, client);
 
-    expect(text(details)).toContain('“recount” (given for 1 of 3 records)');
+    expect(text(details)).toContain(
+      'Reason given by the Organiser: “recount” (given for 1 of 3 records)',
+    );
   });
 
   it('treats a blank or whitespace-only reason as no reason, and a missing role as the Organiser', async () => {
@@ -211,6 +214,8 @@ describe('buildScoringRecord', () => {
     const data = record({
       overflow: true,
       truncated: true,
+      // present on purpose: an overflowed record must never list changes, even if some arrive
+      corrections: [correction()],
       correction_count: null,
       logged_changes: 500001,
       by_area: { times: 250001, results: 250000 },
@@ -228,6 +233,34 @@ describe('buildScoringRecord', () => {
     expect(details.querySelector('.results-record-item')).toBeNull();
     // the list is not shown, so it must not claim a re-open "is listed above"
     expect(text(details)).not.toContain('listed above');
+  });
+
+  it('does not claim a re-open is listed above for an overflowed record even when it is not marked truncated', async () => {
+    const data = record({
+      overflow: true,
+      truncated: false,
+      logged_changes: 9000,
+      by_area: { results: 9000 },
+    });
+    const client = recordClient({ data, error: null });
+    const details = buildScoringRecord('ev1', { client });
+    await open(details, client);
+
+    expect(text(details)).toContain('9,000 changes were recorded');
+    expect(text(details)).not.toContain('listed above');
+  });
+
+  it('says no reason was given when a reason string is present but no record carried one', async () => {
+    const data = record({
+      corrections: [correction({ reason: 'stale text', reasoned: 0 })],
+      correction_count: 1,
+    });
+    const client = recordClient({ data, error: null });
+    const details = buildScoringRecord('ev1', { client });
+    await open(details, client);
+
+    expect(text(details)).toContain('No reason given.');
+    expect(text(details)).not.toContain('stale text');
   });
 
   it('says when the list is truncated, and does not claim a re-open is listed above', async () => {
