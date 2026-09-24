@@ -104,15 +104,14 @@ function liveDot() {
   return el('span', { className: 'status-live-dot', attrs: { 'aria-hidden': 'true' } });
 }
 
-// "Take the tour" and "Org login" are href="#" placeholders (no tour page,
-// no sign-up flow — loginScreen.js is sign-in only, D14's real access
-// control is still a stub). "Formats"/"Pricing" are real same-page anchors.
-// "Community Tools" is the one other real destination.
+// "Org login" goes to the console root, "Start free" to its events list (no
+// separate sign-up flow exists — loginScreen.js is sign-in only, D14's real
+// access control is still a stub). "Formats"/"Pricing" are same-page anchors.
 function navLink(text, href) {
   return el('a', { className: 'petrol-nav-link', text, attrs: { href } });
 }
 
-function actionLink(text, { primary = false, outline = false, href = '#' } = {}) {
+function actionLink(text, { primary = false, outline = false, href = '/app/#/events' } = {}) {
   const classes = ['petrol-action'];
   if (primary) classes.push('petrol-action-primary', 'cut-sm');
   if (outline) classes.push('petrol-action-outline');
@@ -150,7 +149,7 @@ function buildNav() {
     navLink('Formats', '#formats'),
     navLink('Pricing', '#pricing'),
     navLink('Community Tools', '/community/'),
-    navLink('Org login', '#'),
+    navLink('Org login', '/app/'),
   ]);
   const desktopCta = actionLink('Start free', { primary: true });
   const desktopGroup = el('div', { className: 'petrol-nav-desktop' }, [links, desktopCta]);
@@ -159,7 +158,7 @@ function buildNav() {
     navLink('Formats', '#formats'),
     navLink('Pricing', '#pricing'),
     navLink('Community Tools', '/community/'),
-    navLink('Org login', '#'),
+    navLink('Org login', '/app/'),
     actionLink('Start free', { primary: true }),
   ]);
   const mobilePanel = el('div', { className: 'petrol-nav-mobile-panel', id: 'petrol-nav-panel' }, [
@@ -317,7 +316,7 @@ function buildHero() {
       actionLink('Take the tour', { outline: true, href: '/tour/' }),
     ]),
     el('div', { className: 'petrol-stat-strip' }, [
-      statItem('1', 'format live'),
+      statItem('2', 'formats live'),
       statItem('0', 'installs'),
       statItem('1', 'tablet runs it'),
       statItem('3', 'tiers, public'),
@@ -527,7 +526,11 @@ function proofSection() {
   const story = el('div', { className: 'petrol-story' }, [
     el('img', {
       className: 'petrol-story-photo',
-      attrs: { src: '/marketing/hero-cupping-bowls.jpg', alt: '', loading: 'lazy' },
+      attrs: {
+        src: '/marketing/hero-cupping-bowls.jpg',
+        alt: 'Cupping bowls lined up at Girls Got Drip Vol. 0',
+        loading: 'lazy',
+      },
     }),
     el('div', { className: 'petrol-story-copy' }, [
       tag('Completed', { solid: true }),
@@ -567,15 +570,15 @@ function pricingColumn(label, price, suffix, body, { featured = false } = {}) {
 
 function pricingSection() {
   const inner = el('div', { className: 'petrol-wrap', attrs: { id: 'pricing' } }, [
-    el('p', { className: 'petrol-eyebrow', text: '04 · Pricing, stated plainly' }),
-    el('h2', { className: 'petrol-heading', text: 'Three tiers. No access gate.' }),
+    el('p', { className: 'petrol-eyebrow', text: '03 · Pricing, stated plainly' }),
+    el('h2', { className: 'petrol-heading', text: 'Three tiers. Start free.' }),
     el('div', { className: 'petrol-plate' }, [
       pricingColumn(
         'Community',
         'Free',
         null,
-        'Full platform, unbranded, for organisers just getting started. No account needed ' +
-          'to run a small event.',
+        'Every live format, unbranded, for organisers just getting started. No account ' +
+          'needed to run a small event.',
       ),
       pricingColumn(
         'Per-event',
@@ -589,7 +592,7 @@ function pricingSection() {
         'Annual',
         'BND $100',
         'per year',
-        'Every format including BTC, priced for organisers running events all year. ' +
+        'Every format, priced for organisers running events all year. ' +
           'Persistent history across seasons.',
       ),
     ]),
@@ -615,7 +618,7 @@ function ctaBand() {
   const copy = el('div', { className: 'petrol-cta-copy' }, [
     el('h2', {
       className: 'petrol-heading',
-      text: 'The next champion is about to be written down — permanently.',
+      text: 'The next champion is about to be written down.',
     }),
     el('div', { className: 'petrol-hero-actions' }, [
       actionLink('Start free — no account', { primary: true }),
