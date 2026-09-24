@@ -32,13 +32,19 @@
 --   * rehearsal_flag_changes counts every `events` row in the log, which today is exactly
 --     the is_test flips (that is all the log trigger writes for events). If that trigger
 --     ever logs another events column this count must be narrowed.
---   * OVERFLOW: reading the log costs time proportional to its rows, and any org member
---     can add rows by editing after confirmation. If an event has more than 15,000 logged
+--   * OVERFLOW: summarising costs time proportional to the log's rows, and any org member
+--     can add rows by editing after confirmation. If an event has more than 5,000 logged
 --     after-confirmation changes the function does NOT attempt the summary (a big enough
 --     log would push an anonymous call past its 3-second statement timeout and make the
 --     record silently fail). It returns overflow = true, the true number of logged changes,
---     and a cheap per-area count instead, so a flooded log shows up as a visible red flag,
---     never as a missing page. The exact record is in the dispute pack.
+--     and a per-area count instead, so a flooded log shows up as a visible red flag,
+--     never as a missing page. The exact record is in the dispute pack. The decision and
+--     the per-area count come from score_change_counts, an exact counter the log trigger
+--     maintains (see the log migration) — NOT from counting log rows, whose cost grows
+--     with the very log an attacker is inflating and with dead tuples from rolled-back
+--     writes. Table bloat can still slow the summary path itself; autovacuum is expected
+--     to keep it in check, and the threshold leaves headroom (worst measured shape at the
+--     threshold is well under half the 3-second limit).
 --   * The correction list is capped at 200 entries (correction_count still reports the
 --     true total, and `truncated` says so); the cap bounds what an anonymous caller can
 --     make the server compute and send.
@@ -88,17 +94,16 @@ begin
     return null;
   end if;
 
-  -- Cheap bound first (an index range scan on (event_id, changed_at)), before any sorting.
-  select count(*) into v_rows
-    from public.score_change_log l
-   where l.event_id = p_event_id and l.after_confirm and l.table_name <> 'events';
-  v_overflow := v_rows > 15000;
+  -- O(areas): read the maintained counter, never count log rows.
+  select coalesce(sum(c.n), 0) into v_rows
+    from public.score_change_counts c where c.event_id = p_event_id;
+  v_overflow := v_rows > 5000;
 
   if v_overflow then
     v_corrections := '[]'::jsonb;
     v_total := null;
     select coalesce(jsonb_object_agg(x.area, x.n), '{}'::jsonb) into v_by_area
-      from (select case l.table_name
+      from (select case c.table_name
                      when 'ct_heat_entries'   then 'times'
                      when 'ct_results'        then 'results'
                      when 'ct_heats'          then 'heat status'
@@ -108,10 +113,9 @@ begin
                      when 'btc_match_bonuses' then 'bonuses'
                      when 'btc_matches'       then 'match details'
                      when 'btc_bracket_slots' then 'bracket'
-                   end as area, count(*) as n
-              from public.score_change_log l
-             where l.event_id = p_event_id and l.after_confirm and l.table_name <> 'events'
-             group by l.table_name) x;
+                   end as area, c.n
+              from public.score_change_counts c
+             where c.event_id = p_event_id) x;
   else
   with base as (
     select l.id, l.txid, l.table_name, l.action, l.old_value, l.new_value, l.context,

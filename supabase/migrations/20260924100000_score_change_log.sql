@@ -50,6 +50,17 @@
 -- change detection compares; the log keeps a bounded copy so it cannot be used to bloat the
 -- database or to make readers slow. (Scored numbers/booleans/ids are never affected.)
 --
+-- score_change_counts: an exact per-(event, table) counter of AFTER-CONFIRMATION log rows
+-- (rows with after_confirm = true, excluding `events`), maintained by the same trigger in
+-- the same transaction. It exists so get_scoring_record can decide "is this log too big to
+-- summarise?" and give a per-area breakdown in O(areas) instead of counting log rows,
+-- which cost time proportional to the log (an organiser could inflate it past anon's
+-- statement timeout, and dead tuples from rolled-back writes make a scan slower still).
+-- Only after-confirm rows touch it, which are rare, so it adds no contention to live
+-- scoring. No role can read or write it directly (all privileges revoked); only the
+-- security-definer trigger function writes it, and rows that are inserted into the log
+-- some other way (e.g. by a superuser) are, by design, not counted.
+--
 -- reason: read from the transaction-local setting `app.change_reason` (null when
 -- unset, truncated to 500 chars). It is UNVERIFIED, caller-supplied context — any
 -- session can set it — not audit-grade until an RPC sets it server-side. No RPC does
@@ -78,6 +89,7 @@
 -- before it — the log starts when it is applied.)
 --
 -- rollback:
+--   drop table if exists score_change_counts;
 --   drop trigger if exists trg_events_org_immutable on events;
 --   drop trigger if exists trg_btc_bracket_slots_parent_immutable on btc_bracket_slots;
 --   drop trigger if exists trg_btc_match_bonuses_parent_immutable on btc_match_bonuses;
@@ -130,6 +142,15 @@ alter table score_change_log enable row level security;
 create index on score_change_log (org_id, changed_at);
 create index on score_change_log (event_id, changed_at);
 create index on score_change_log (row_id, changed_at);
+
+create table score_change_counts (
+  event_id    uuid   not null,
+  table_name  text   not null,
+  n           bigint not null default 0,
+  primary key (event_id, table_name)
+);
+alter table score_change_counts enable row level security;
+revoke all on score_change_counts from public, anon, authenticated, service_role;
 
 -- Read: org members, own org only. No insert/update/delete policy for any role —
 -- writes happen only through the security-definer trigger function below.
@@ -303,6 +324,11 @@ begin
     left(nullif(current_setting('app.change_reason', true), ''), 500),
     auth.uid()
   );
+  if coalesce(v_confirmed, false) and tg_table_name <> 'events' then
+    insert into public.score_change_counts (event_id, table_name, n)
+    values (v_event_id, tg_table_name, 1)
+    on conflict (event_id, table_name) do update set n = public.score_change_counts.n + 1;
+  end if;
   return null;
 end;
 $$;

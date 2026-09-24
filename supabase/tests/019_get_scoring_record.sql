@@ -12,7 +12,7 @@
 -- txids and times, so the grouping/ordering rules can be tested independently of the
 -- triggers; a few run through the real triggers to prove the two fit together.
 begin;
-select plan(46);
+select plan(47);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-000000000001', 'member@test.seduh-next'),
@@ -33,7 +33,8 @@ insert into events (id, org_id, format, name) values
   ('00000000-0000-0000-0000-0000000000ea', '00000000-0000-0000-0000-000000000010', 'cup_taster', 'Exactly 201'),
   ('00000000-0000-0000-0000-0000000000eb', '00000000-0000-0000-0000-000000000010', 'cup_taster', 'Other event placings'),
   ('00000000-0000-0000-0000-0000000000ec', '00000000-0000-0000-0000-000000000010', 'cup_taster', 'Overflow'),
-  ('00000000-0000-0000-0000-0000000000ed', '00000000-0000-0000-0000-000000000010', 'cup_taster', 'Just under overflow');
+  ('00000000-0000-0000-0000-0000000000ed', '00000000-0000-0000-0000-000000000010', 'cup_taster', 'Just under overflow'),
+  ('00000000-0000-0000-0000-0000000000ef', '00000000-0000-0000-0000-000000000010', 'cup_taster', 'Just over overflow');
 insert into event_entries (id, event_id, display_name) values
   ('00000000-0000-0000-0000-0000000000ee', '00000000-0000-0000-0000-0000000000e1', 'Cupper One');
 insert into ct_stages (id, event_id, kind, ordinal, set_count, duration_secs) values
@@ -93,7 +94,8 @@ select '00000000-0000-0000-0000-000000000010', e, '{}'::jsonb
                     '00000000-0000-0000-0000-0000000000e5', '00000000-0000-0000-0000-0000000000e6',
                     '00000000-0000-0000-0000-0000000000e7', '00000000-0000-0000-0000-0000000000e8',
                     '00000000-0000-0000-0000-0000000000e9', '00000000-0000-0000-0000-0000000000ea',
-                    '00000000-0000-0000-0000-0000000000ec', '00000000-0000-0000-0000-0000000000ed']::uuid[]) e;
+                    '00000000-0000-0000-0000-0000000000ec', '00000000-0000-0000-0000-0000000000ed',
+                    '00000000-0000-0000-0000-0000000000ef']::uuid[]) e;
 
 -- ---------- nothing for unpublished / unknown ----------
 set local role anon;
@@ -320,15 +322,21 @@ select is(
 reset role;
 
 -- ---------- overflow: a log too large to summarise fails VISIBLY, and fast ----------
+-- Overflow is decided from score_change_counts, not by counting log rows, so it stays O(areas)
+-- however large the log is. A 500,000-row flood is represented by its counters alone (there is
+-- deliberately no 500,000-row insert here: the point is that the answer does not depend on it).
+insert into score_change_counts (event_id, table_name, n) values
+  ('00000000-0000-0000-0000-0000000000ec', 'ct_heat_entries', 250001),
+  ('00000000-0000-0000-0000-0000000000ec', 'ct_results', 250000),
+  ('00000000-0000-0000-0000-0000000000ed', 'ct_heat_entries', 5000),
+  ('00000000-0000-0000-0000-0000000000ef', 'ct_heat_entries', 5001);
 insert into score_change_log
   (org_id, event_id, table_name, row_id, action, old_value, new_value, context, after_confirm, txid, changed_at)
-select '00000000-0000-0000-0000-000000000010', e.ev,
-       case when g % 2 = 0 then 'ct_results' else 'ct_heat_entries' end, gen_random_uuid(), 'update',
+select '00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-0000000000ed',
+       'ct_heat_entries', gen_random_uuid(), 'update',
        '{"elapsed_secs":1}', '{"elapsed_secs":2}', '{}',
-       true, e.base + g % 500, '2026-06-01'::timestamptz + g * interval '1 millisecond'
-  from (values ('00000000-0000-0000-0000-0000000000ec'::uuid, 100000, 15001),
-               ('00000000-0000-0000-0000-0000000000ed'::uuid, 200000, 15000)) as e(ev, base, n)
-  cross join lateral generate_series(1, e.n) g;
+       true, 200000 + g % 500, '2026-06-01'::timestamptz + g * interval '1 millisecond'
+  from generate_series(1, 5000) g;
 select set_config('t.t2', clock_timestamp()::text, false);
 set local role anon;
 select is(
@@ -337,22 +345,26 @@ select is(
     || '/' || coalesce(get_scoring_record('00000000-0000-0000-0000-0000000000ec') ->> 'correction_count', 'null')
     || '/' || jsonb_array_length(get_scoring_record('00000000-0000-0000-0000-0000000000ec') -> 'corrections')
     || '/' || (get_scoring_record('00000000-0000-0000-0000-0000000000ec') ->> 'truncated'),
-  'true/15001/null/0/true',
-  'more than 15,000 logged changes: the function reports overflow, the true count, no summary, and truncated — it does not error');
+  'true/500001/null/0/true',
+  'more than 5,000 logged changes: overflow, the true count, no summary, truncated — and no error');
+select is(
+  (get_scoring_record('00000000-0000-0000-0000-0000000000ef') ->> 'overflow')
+    || '/' || (get_scoring_record('00000000-0000-0000-0000-0000000000ef') ->> 'logged_changes'),
+  'true/5001', 'one change over the threshold (5,001) overflows: the boundary is exact');
 select is(get_scoring_record('00000000-0000-0000-0000-0000000000ec') -> 'by_area',
-  '{"times": 7501, "results": 7500}'::jsonb,
-  'an overflowed record still gives a cheap per-area count, so a flood is visible');
+  '{"times": 250001, "results": 250000}'::jsonb,
+  'an overflowed record still gives a per-area count, so a flood is visible');
 reset role;
-select ok(clock_timestamp() - current_setting('t.t2')::timestamptz < interval '2 seconds',
-  'the overflow answer is fast (three calls in well under anon''s 3-second timeout)');
+select ok(clock_timestamp() - current_setting('t.t2')::timestamptz < interval '0.5 seconds',
+  'the overflow answer is effectively instant (it reads two counter rows, however large the log)');
 select set_config('t.t3', clock_timestamp()::text, false);
 set local role anon;
 select is(
   (get_scoring_record('00000000-0000-0000-0000-0000000000ed') ->> 'overflow')
     || '/' || (get_scoring_record('00000000-0000-0000-0000-0000000000ed') ->> 'logged_changes'),
-  'false/15000', 'exactly 15,000 logged changes is still summarised, not overflowed');
+  'false/5000', 'exactly 5,000 logged changes is still summarised, not overflowed');
 reset role;
-select ok(clock_timestamp() - current_setting('t.t3')::timestamptz < interval '2.5 seconds',
+select ok(clock_timestamp() - current_setting('t.t3')::timestamptz < interval '1.5 seconds',
   'and the largest summarised size stays well inside anon''s 3-second timeout');
 
 -- ---------- the 200-entry cap, and a scale bound ----------
@@ -379,13 +391,13 @@ select '00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-00000000
        case when g % 2 = 1 then '{"team1_tokens":1}'::jsonb end,
        jsonb_build_object('match_id', '00000000-0000-0000-0000-000000000d01', 'cup_number', g / 2),
        true, 2000 + (g % 40), now() + g * interval '1 millisecond'
-  from generate_series(1, 8000) g;
+  from generate_series(1, 5000) g;
 select set_config('t.t0', clock_timestamp()::text, false);
 set local role anon;
 select isnt(get_scoring_record('00000000-0000-0000-0000-0000000000e7'), null, 'the scale event returns a record');
 reset role;
 select ok(clock_timestamp() - current_setting('t.t0')::timestamptz < interval '2.5 seconds',
-  '8,000 log rows (mixed replace-all churn) are summarised well inside anon''s 3-second statement timeout');
+  '5,000 log rows (mixed replace-all churn, the largest size still summarised) return well inside anon''s 3-second statement timeout');
 
 -- ---------- large free-text values cannot slow the public read ----------
 -- An organiser writing megabyte notes through the real trigger: the log must store a bounded
