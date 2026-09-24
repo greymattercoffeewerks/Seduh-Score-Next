@@ -1288,6 +1288,28 @@ live-verified in browser. Definition of Done met. See CHANGELOG.md's dated entry
 
 ---
 
+## Trust and transparency (2026-09-24) — planned, not started
+
+Source: an external site critique (2026-09-24) found the landing page raises the dispute
+problem ("a result gets questioned and there's nothing to point to") without answering it.
+Today's platform records `time_source` (tap vs manual) and derives standings from raw
+per-cupper results, but has **no append-only change history** — an edit overwrites the row.
+Do not add copy claiming an audit trail until T-TRUST.1 ships (check this file before
+adding any such claim).
+
+- **T-TRUST.1 — Append-only score-change log.** Insert-only table recording who/what/when
+  and old/new value for every score or time edit, plus a required reason on post-confirm
+  corrections. Verifiers: `schema-guardian` + `security-reviewer` (non-member reads zero
+  rows), `scoring-auditor`, `test-auditor`.
+- **T-TRUST.2 — Per-event "how this was scored" page.** Read-only: raw scores, rules and
+  tie-break applied, change log from T-TRUST.1. Depends on T-TRUST.1. Verifiers:
+  `ui-accessibility-reviewer` (360px first), `security-reviewer` for what it exposes.
+- **T-TRUST.3 — Neutrality & independence page** (public, marketing surface). Draft:
+  `design/copy/neutrality-page-draft.md`. Includes the independent sign-off rule for events
+  where Grey Matter or its students compete. Needs owner sign-off on the policy wording.
+- **T-TRUST.4 — Trust pages strategy (About, contact, privacy, terms).** Needs a strategy
+  discussion first; the privacy page must be written from the real schema, not a template.
+
 ## Versioning system (2026-09-05) — closed
 
 All four applicable reviewers ran clean: `code-reviewer` (2 findings, both fixed —
