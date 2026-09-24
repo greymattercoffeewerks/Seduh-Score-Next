@@ -14,6 +14,7 @@ import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../core/timeout.js';
 import { listPublishedResults } from '../core/publicResults.js';
 import { buildPublicFooter } from './publicFooter.js';
 import { buildPublicHeader } from './publicHeader.js';
+import { buildScoringRecord } from './scoringRecord.js';
 
 const DATE_FORMAT = new Intl.DateTimeFormat('en-GB', {
   day: '2-digit',
@@ -142,7 +143,7 @@ function podiumRow(entry) {
   ]);
 }
 
-function buildLatestResult(event) {
+function buildLatestResult(event, client) {
   const timeSpan = el('span', { className: 'tabular-nums' }, [
     ...withSrExpansion(
       formatDuration(event.winningTimeSecs),
@@ -189,11 +190,12 @@ function buildLatestResult(event) {
         ]),
         el('ol', { className: 'results-podium' }, event.podium.map(podiumRow)),
       ]),
+      buildScoringRecord(event.eventId, { client }),
     ],
   );
 }
 
-function archiveRow(event) {
+function archiveRow(event, client) {
   // `payload` is caller-assembled, unvalidated jsonb (this migration's own
   // comment: "never re-derives or validates the payload's own internal
   // shape") — a row with no podium isn't something the schema rules out,
@@ -202,7 +204,7 @@ function archiveRow(event) {
   // version assumed `event.podium[0]` always exists.
   const winner = event.podium[0];
   if (!winner) return null;
-  return el('tr', { className: 'results-archive-row' }, [
+  const row = el('tr', { className: 'results-archive-row' }, [
     el('td', { className: 'results-archive-date' }, [
       el('span', {
         className: 'tabular-nums',
@@ -217,9 +219,17 @@ function archiveRow(event) {
     el('td', { className: 'results-archive-winner', text: winner.name }),
     el('td', { className: 'results-archive-result' }, [scoreCell(winner.correct, winner.total)]),
   ]);
+  // A second row spanning the table carries the "How this was scored" disclosure, so each
+  // archived event has the same transparency as the latest one.
+  const recordRow = el('tr', { className: 'results-archive-record-row' }, [
+    el('td', { className: 'results-archive-record-cell', attrs: { colspan: '5' } }, [
+      buildScoringRecord(event.eventId, { client }),
+    ]),
+  ]);
+  return [row, recordRow];
 }
 
-function buildArchive(events) {
+function buildArchive(events, client) {
   return el(
     'section',
     { className: 'results-archive', attrs: { 'aria-labelledby': 'archive-title' } },
@@ -250,7 +260,11 @@ function buildArchive(events) {
                 el('th', { attrs: { scope: 'col' }, text: 'Result' }),
               ]),
             ]),
-            el('tbody', {}, events.map(archiveRow).filter(Boolean)),
+            el(
+              'tbody',
+              {},
+              events.flatMap((event) => archiveRow(event, client) ?? []),
+            ),
           ]),
         ],
       ),
@@ -344,10 +358,10 @@ export async function mountResultsScreen(root, { client } = {}) {
   };
 
   const hero = buildHero(stats);
-  const latestSection = buildLatestResult(latest);
+  const latestSection = buildLatestResult(latest, client);
   // events[0] is already the "Latest result" feature above — the archive
   // table below covers everything else, not a repeat of the same row.
-  const archiveSection = events.length > 1 ? buildArchive(events.slice(1)) : null;
+  const archiveSection = events.length > 1 ? buildArchive(events.slice(1), client) : null;
 
   renderMain(hero, latestSection, ...(archiveSection ? [archiveSection] : []));
 
