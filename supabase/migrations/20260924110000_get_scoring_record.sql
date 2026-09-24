@@ -10,20 +10,47 @@
 -- Decisions (2026-09-24): corrections are public; the actor is shown by ROLE only
 -- ("Organiser"), never a name or user id; NO raw scores appear — no old/new values, no
 -- per-cupper or per-cup data. Exact raw data is released only through the organiser's
--- dispute pack (T-TRUST.2b). Returned per correction: when, role label, area, a
--- stage/heat label where resolvable, how many values changed, and the stated reason
--- (caller-supplied and UNVERIFIED — label it "reason given" wherever it is shown).
+-- dispute pack (T-TRUST.2b).
+--
+-- Per correction: when, role label, area, a stage/heat/match label where resolvable,
+-- how many RECORDS changed (a record is one logged row: one update to a result or time,
+-- not one column), and the stated reason with how many of those records carried one.
+-- The reason is organiser-typed, UNVERIFIED free text (capped at 500 chars by the log
+-- trigger): it can contain anything, including a score or a name, so every consumer must
+-- render it as plain text and label it "reason given". The console's future reason
+-- prompt should tell the organiser not to include scores or names. Tie-break/coin-toss
+-- provenance is exposed as a CATEGORY and count only — the organiser's free-text
+-- position_note is deliberately NOT returned (it can name people).
+--
+-- Limits, stated so the UI copy can be honest:
+--   * Edits made while a confirmed heat/match/stage is RE-OPENED are logged with
+--     after_confirm = false and are not listed here; the re-open itself is (as a
+--     "heat status" / "match details" / "stage settings" correction), so a viewer can
+--     see that a re-open happened. The full record is in the dispute pack.
+--   * Labels resolve for Cup Taster heats/stages and BTC matches/bracket slots. If the
+--     parent has since been deleted the label is null; the correction is still counted.
+--   * rehearsal_flag_changes counts every `events` row in the log, which today is exactly
+--     the is_test flips (that is all the log trigger writes for events). If that trigger
+--     ever logs another events column this count must be narrowed.
+--   * The correction list is capped at 200 entries (correction_count still reports the
+--     true total, and `truncated` says so); the cap bounds what an anonymous caller can
+--     make the server compute and send.
 --
 -- Security shape: SECURITY DEFINER (anon has no access to score_change_log), so the
 -- output contract is the whole protection: it is built only from the columns named
 -- below, and returns null for any event that is not in public_results (an unpublished
--- event reveals nothing, and neither does an unknown id). Every reference is
--- schema-qualified under search_path = ''.
+-- event reveals nothing, and neither does an unknown id; whether an event is published
+-- is already public via public_results' anon-read policy). Every reference is
+-- schema-qualified under search_path = ''. Hard-codes the ct_*/btc_* tables: a new
+-- format's tables need a new migration before they appear here.
 --
 -- Replace-all churn: confirm_btc_match deletes and reinserts every vote, so re-saving an
--- unchanged match logs delete+insert pairs. A delete whose same-transaction insert
--- restores the identical value (and vice versa) is dropped, so a plain re-save is not
--- reported as a correction.
+-- unchanged match logs delete+insert pairs. Per (transaction, table, context), if the
+-- deleted values exactly equal the inserted values the whole group is dropped, so a plain
+-- re-save is not reported as a correction. This is a set-based grouping (linear-ish),
+-- NOT a per-row self-join: the original self-join was quadratic and, at a few thousand
+-- log rows, timed out under anon's statement_timeout — which would have let an organiser
+-- suppress the record by inflating the log.
 --
 -- rollback:
 --   revoke execute on function get_scoring_record(uuid) from anon, authenticated, service_role;
@@ -38,16 +65,21 @@ set search_path = ''
 as $$
 declare
   v_corrections jsonb;
+  v_total       int;
   v_placings    jsonb;
   v_flips       int;
+  v_flips_after int;
+  v_published   timestamptz;
 begin
-  if not exists (select 1 from public.public_results where event_id = p_event_id) then
+  select pr.published_at into v_published
+    from public.public_results pr where pr.event_id = p_event_id;
+  if v_published is null then
     return null;
   end if;
 
   with base as (
     select l.id, l.txid, l.table_name, l.action, l.old_value, l.new_value, l.context,
-           l.changed_at, l.reason,
+           l.row_id, l.changed_at, l.reason,
            case l.table_name
              when 'ct_heat_entries'   then 'times'
              when 'ct_results'        then 'results'
@@ -59,7 +91,7 @@ begin
              when 'btc_matches'       then 'match details'
              when 'btc_bracket_slots' then 'bracket'
            end as area,
-           -- Which heat a Cup Taster row belongs to, where it can still be resolved.
+           -- Which heat / stage / match this row belongs to, where it can still be resolved.
            case l.table_name
              when 'ct_heat_entries' then (l.context ->> 'heat_id')::uuid
              when 'ct_heats'        then l.row_id
@@ -69,69 +101,104 @@ begin
            case l.table_name
              when 'ct_stages'        then l.row_id
              when 'ct_stage_entries' then (l.context ->> 'stage_id')::uuid
-           end as stage_id_direct
+           end as stage_id,
+           case l.table_name
+             when 'btc_cup_votes'     then (l.context ->> 'match_id')::uuid
+             when 'btc_match_bonuses' then (l.context ->> 'match_id')::uuid
+             when 'btc_matches'       then l.row_id
+           end as match_id
       from public.score_change_log l
      where l.event_id = p_event_id
        and l.after_confirm
        and l.table_name <> 'events'
   ),
+  -- Replace-all churn: a (txn, table, context) group whose deleted values equal its
+  -- inserted values (as multisets) is a re-save, not a correction.
+  pairs as (
+    select txid, table_name, context,
+           array_agg(old_value::text order by old_value::text) filter (where action = 'delete') as d,
+           array_agg(new_value::text order by new_value::text) filter (where action = 'insert') as i
+      from base
+     group by txid, table_name, context
+  ),
+  cancelled as (
+    select txid, table_name, context from pairs where d is not null and i is not null and d = i
+  ),
   kept as (
-    select b.* from base b
-     where not exists (
-       select 1 from base o
-        where o.txid = b.txid and o.table_name = b.table_name
-          and o.context = b.context and o.id <> b.id
-          and ((b.action = 'delete' and o.action = 'insert' and o.new_value = b.old_value)
-            or (b.action = 'insert' and o.action = 'delete' and o.old_value = b.new_value))
-     )
+    select b.*
+      from base b
+      left join cancelled c
+             on c.txid = b.txid and c.table_name = b.table_name and c.context = b.context
+     where c.txid is null or b.action = 'update'
   ),
   labelled as (
-    select r.*,
+    select k.*,
            coalesce(
-             (select initcap(s.kind) || case when h.id is not null then ' · heat ' || h.heat_number end
+             (select initcap(s.kind) || ' · heat ' || h.heat_number
                 from public.ct_heats h join public.ct_stages s on s.id = h.stage_id
-               where h.id = r.heat_id),
-             (select initcap(s.kind) from public.ct_stages s where s.id = r.stage_id_direct)
-           ) as label
-      from kept r
+               where h.id = k.heat_id),
+             (select initcap(s.kind) from public.ct_stages s where s.id = k.stage_id),
+             (select initcap(replace(m.round, '_', ' ')) || ' match'
+                from public.btc_matches m where m.id = k.match_id),
+             case when k.table_name = 'btc_bracket_slots'
+                  then 'Bracket · ' || initcap(replace(k.context ->> 'round', '_', ' ')) end
+           ) as label,
+           -- what one correction is about: keeps corrections to different heats/matches
+           -- inside one transaction as separate entries even when a label is null or shared
+           coalesce(k.heat_id, k.stage_id, k.match_id,
+                    case when k.table_name = 'btc_bracket_slots' then k.row_id end) as scope_id
+      from kept k
   ),
   grouped as (
-    select txid, area, label,
+    select txid, area, label, scope_id,
            min(changed_at) as at,
            count(*)        as changes,
-           max(reason)     as reason
+           (array_agg(reason order by changed_at, id) filter (where reason is not null))[1] as reason,
+           count(reason)   as reasoned
       from labelled
-     group by txid, area, label
+     group by txid, area, label, scope_id
+  ),
+  ranked as (
+    select g.*, row_number() over (order by g.at, g.area, g.label, g.txid) as rn,
+           count(*) over () as total
+      from grouped g
   )
   select coalesce(jsonb_agg(
            jsonb_build_object(
-             'at', g.at, 'by', 'Organiser', 'area', g.area, 'label', g.label,
-             'changes', g.changes, 'reason', g.reason)
-           order by g.at, g.area), '[]'::jsonb)
-    into v_corrections
-    from grouped g;
+             'at', r.at, 'by', 'Organiser', 'area', r.area, 'label', r.label,
+             'changes', r.changes, 'reason', r.reason, 'reasoned', r.reasoned)
+           order by r.rn) filter (where r.rn <= 200), '[]'::jsonb),
+         coalesce(max(r.total), 0)
+    into v_corrections, v_total
+    from ranked r;
 
-  -- Tie-break / coin-toss provenance: stage, how the placing was decided, and the
-  -- organiser's note. No entry ids, no cupper names.
+  -- How a placing was decided, by category and count only. No free text, no entry ids.
   select coalesce(jsonb_agg(
-           jsonb_build_object('stage', initcap(s.kind), 'source', se.source, 'note', se.position_note)
-           order by s.ordinal, se.source), '[]'::jsonb)
+           jsonb_build_object('stage', x.stage, 'decided_by', x.decided_by, 'count', x.n)
+           order by x.ordinal, x.decided_by), '[]'::jsonb)
     into v_placings
-    from public.ct_stage_entries se
-    join public.ct_stages s on s.id = se.stage_id
-   where s.event_id = p_event_id and se.position_note is not null;
+    from (select initcap(s.kind) as stage, s.ordinal,
+                 case se.source when 'coin_toss' then 'coin toss' else 'tiebreak' end as decided_by,
+                 count(*) as n
+            from public.ct_stage_entries se
+            join public.ct_stages s on s.id = se.stage_id
+           where s.event_id = p_event_id and se.source in ('coin_toss', 'tiebreak_won')
+           group by s.kind, s.ordinal, se.source) x;
 
-  -- Times the rehearsal (is_test) flag was changed: flips are logged precisely so the
-  -- rehearsal skip cannot hide an edit window.
-  select count(*) into v_flips
+  -- Rehearsal-flag flips, split by whether they happened after publication (a flip after
+  -- publishing is the suspicious one; a flip before is usually a legitimate promotion).
+  select count(*), count(*) filter (where l.changed_at > v_published)
+    into v_flips, v_flips_after
     from public.score_change_log l
    where l.event_id = p_event_id and l.table_name = 'events' and l.action = 'update';
 
   return jsonb_build_object(
     'corrections', v_corrections,
-    'correction_count', jsonb_array_length(v_corrections),
-    'placing_notes', v_placings,
-    'rehearsal_flag_changes', v_flips
+    'correction_count', v_total,
+    'truncated', v_total > 200,
+    'placings', v_placings,
+    'rehearsal_flag_changes', v_flips,
+    'rehearsal_flag_changes_after_publish', v_flips_after
   );
 end;
 $$;
