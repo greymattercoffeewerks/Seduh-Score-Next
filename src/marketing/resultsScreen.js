@@ -190,12 +190,12 @@ function buildLatestResult(event, client) {
         ]),
         el('ol', { className: 'results-podium' }, event.podium.map(podiumRow)),
       ]),
-      buildScoringRecord(event.eventId, { client }),
+      buildScoringRecord(event.eventId, { client, title: event.eventName }),
     ],
   );
 }
 
-function archiveRow(event, client) {
+function archiveRow(event) {
   // `payload` is caller-assembled, unvalidated jsonb (this migration's own
   // comment: "never re-derives or validates the payload's own internal
   // shape") — a row with no podium isn't something the schema rules out,
@@ -204,7 +204,7 @@ function archiveRow(event, client) {
   // version assumed `event.podium[0]` always exists.
   const winner = event.podium[0];
   if (!winner) return null;
-  const row = el('tr', { className: 'results-archive-row' }, [
+  return el('tr', { className: 'results-archive-row' }, [
     el('td', { className: 'results-archive-date' }, [
       el('span', {
         className: 'tabular-nums',
@@ -219,14 +219,6 @@ function archiveRow(event, client) {
     el('td', { className: 'results-archive-winner', text: winner.name }),
     el('td', { className: 'results-archive-result' }, [scoreCell(winner.correct, winner.total)]),
   ]);
-  // A second row spanning the table carries the "How this was scored" disclosure, so each
-  // archived event has the same transparency as the latest one.
-  const recordRow = el('tr', { className: 'results-archive-record-row' }, [
-    el('td', { className: 'results-archive-record-cell', attrs: { colspan: '5' } }, [
-      buildScoringRecord(event.eventId, { client }),
-    ]),
-  ]);
-  return [row, recordRow];
 }
 
 function buildArchive(events, client) {
@@ -260,13 +252,18 @@ function buildArchive(events, client) {
                 el('th', { attrs: { scope: 'col' }, text: 'Result' }),
               ]),
             ]),
-            el(
-              'tbody',
-              {},
-              events.flatMap((event) => archiveRow(event, client) ?? []),
-            ),
+            el('tbody', {}, events.map(archiveRow).filter(Boolean)),
           ]),
         ],
+      ),
+      // Outside the (horizontally scrolling) table on purpose: this is prose and must reflow
+      // at 360px, and a full-width row per event would also break the table's semantics.
+      el(
+        'div',
+        { className: 'results-archive-records' },
+        events
+          .filter((event) => event.podium?.[0])
+          .map((event) => buildScoringRecord(event.eventId, { client, title: event.eventName })),
       ),
     ],
   );

@@ -311,10 +311,27 @@ body {
   min-height: 44px;
   display: flex;
   align-items: center;
+  gap: var(--space-2);
+  overflow-wrap: anywhere;
   font-family: var(--font-display);
   font-size: var(--text-sm);
   font-weight: var(--font-weight-semibold);
   color: var(--color-text);
+}
+/* Native disclosure markers are hidden by display:flex; draw an explicit +/- so it is obvious
+   the row expands and whether it is open. Decorative: the state is exposed natively. */
+.results-record-summary::before {
+  content: '+';
+  flex: none;
+  width: 1ch;
+  font-family: var(--font-mono);
+  color: var(--color-accent);
+}
+.results-record[open] > .results-record-summary::before {
+  content: '\2212';
+}
+.results-record-summary::-webkit-details-marker {
+  display: none;
 }
 .results-record-body {
   padding: 0 var(--space-4) var(--space-4);
@@ -369,12 +386,21 @@ body {
   font: inherit;
   color: var(--color-text);
   background: transparent;
-  border: var(--border-hairline) solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border-strong);
   border-radius: var(--radius-sm);
   cursor: pointer;
 }
-.results-archive-record-cell {
-  padding-top: 0;
+.results-record-content {
+  display: grid;
+  gap: var(--space-3);
+}
+.results-record-note:empty {
+  display: none;
+}
+.results-archive-records {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
 }
 @media (prefers-reduced-motion: reduce) {
   .results-record-summary {

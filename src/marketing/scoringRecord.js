@@ -18,12 +18,12 @@ import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../core/timeout.js';
 const AREA_LABELS = {
   times: 'Times',
   results: 'Results',
-  'heat status': 'Heat status (for example re-opened)',
+  'heat status': 'Heat status',
   'stage settings': 'Stage settings',
   'stage placings': 'Stage placings',
   votes: 'Votes',
   bonuses: 'Bonuses',
-  'match details': 'Match details (for example re-opened)',
+  'match details': 'Match details',
   bracket: 'Bracket',
 };
 
@@ -33,10 +33,16 @@ const WHEN_FORMAT = new Intl.DateTimeFormat('en-GB', {
   year: 'numeric',
   hour: '2-digit',
   minute: '2-digit',
+  timeZoneName: 'short',
 });
+const COUNT_FORMAT = new Intl.NumberFormat('en-GB');
 
 function areaLabel(area) {
   return AREA_LABELS[area] ?? area;
+}
+
+function count(n) {
+  return COUNT_FORMAT.format(Number(n) || 0);
 }
 
 function plural(n, one, many) {
@@ -53,18 +59,20 @@ function paragraph(text, className = 'results-record-note') {
 }
 
 function buildCorrection(c) {
+  const by = c.by || 'Organiser';
+  const reason = typeof c.reason === 'string' ? c.reason.trim() : '';
   const where = [areaLabel(c.area), c.label].filter(Boolean).join(' · ');
   const when = formatWhen(c.at);
   const changes = Number(c.changes) || 0;
   const reasoned = Number(c.reasoned) || 0;
 
   let reasonText;
-  if (reasoned === 0 || !c.reason) {
+  if (reasoned === 0 || !reason) {
     reasonText = 'No reason given.';
   } else if (reasoned < changes) {
-    reasonText = `Reason given by the ${c.by}: “${c.reason}” (given for ${reasoned} of ${changes} records)`;
+    reasonText = `Reason given by the ${by}: “${reason}” (given for ${reasoned} of ${changes} records)`;
   } else {
-    reasonText = `Reason given by the ${c.by}: “${c.reason}”`;
+    reasonText = `Reason given by the ${by}: “${reason}”`;
   }
 
   return el(
@@ -75,7 +83,7 @@ function buildCorrection(c) {
       when ? el('span', { className: 'results-record-when tabular-nums', text: when }) : null,
       el('span', {
         className: 'results-record-what',
-        text: `${plural(changes, 'record', 'records')} changed by the ${c.by}.`,
+        text: `${plural(changes, 'record', 'records')} changed by the ${by}.`,
       }),
       el('span', { className: 'results-record-reason', text: reasonText }),
     ].filter(Boolean),
@@ -84,11 +92,11 @@ function buildCorrection(c) {
 
 function buildOverflow(record) {
   const areas = Object.entries(record.by_area ?? {}).map(([area, n]) =>
-    el('li', { text: `${areaLabel(area)}: ${n}` }),
+    el('li', { text: `${areaLabel(area)}: ${count(n)}` }),
   );
   return [
     paragraph(
-      `${record.logged_changes} changes were recorded after results were confirmed — too many to list here.`,
+      `${count(record.logged_changes)} changes were recorded after results were confirmed — too many to list here.`,
     ),
     areas.length ? el('ul', { className: 'results-record-areas' }, areas) : null,
     paragraph('Ask the organiser for the full record.'),
@@ -102,7 +110,7 @@ function buildRecordBody(record) {
 
   const nodes = [
     paragraph(
-      'Every score on Seduh Score is logged the moment it is entered, and organisers cannot edit or delete the log. ' +
+      'Every score on Seduh Score is logged when it is entered, and organisers cannot edit or delete this log from the app. ' +
         'This section shows what changed after results were confirmed. It does not show individual scores.',
     ),
   ];
@@ -113,13 +121,13 @@ function buildRecordBody(record) {
     nodes.push(paragraph('No scores were changed after a heat, match or stage was confirmed.'));
   } else {
     nodes.push(
-      el('h4', { className: 'results-record-heading', text: 'Changes after confirmation' }),
+      el('h3', { className: 'results-record-heading', text: 'Changes after confirmation' }),
       el('ul', { className: 'results-record-list' }, record.corrections.map(buildCorrection)),
     );
     if (record.truncated) {
       nodes.push(
         paragraph(
-          `Showing the first ${record.corrections.length} of ${record.correction_count} changes. Ask the organiser for the full record.`,
+          `Showing the first ${count(record.corrections.length)} of ${count(record.correction_count)} changes. Ask the organiser for the full record.`,
         ),
       );
     }
@@ -127,7 +135,7 @@ function buildRecordBody(record) {
 
   if (record.placings?.length) {
     nodes.push(
-      el('h4', {
+      el('h3', {
         className: 'results-record-heading',
         text: 'Placings decided by tiebreak or coin toss',
       }),
@@ -154,62 +162,83 @@ function buildRecordBody(record) {
     );
   }
 
+  // "Re-opened" changes are listed with the others, so only say so when the list is complete.
+  if (!record.overflow && !record.truncated) {
+    nodes.push(
+      paragraph('If a confirmed heat or match was re-opened, the re-opening is listed above.'),
+    );
+  }
   nodes.push(
     paragraph(
-      'If a confirmed heat or match was re-opened, the re-opening is listed above. The exact scores and every ' +
-        'individual change are available on request: contact the organiser and ask for the full record.',
+      'The exact scores and every individual change can be requested from the organiser: ask for the full record.',
     ),
   );
   return nodes;
 }
 
-export function buildScoringRecord(eventId, { client } = {}) {
-  const body = el('div', { className: 'results-record-body' });
-  const details = el('details', { className: 'results-record' }, [
-    el('summary', { className: 'results-record-summary', text: 'How this was scored' }),
-    body,
-  ]);
+// `title` (the event's name) makes each disclosure's accessible name unique when several sit on
+// one page ("How “Jakarta Cup #09” was scored"); without it the label is the plain phrase.
+export function buildScoringRecord(eventId, { client, title } = {}) {
+  // One persistent, empty-at-first status region: a live region inserted already populated is
+  // often not announced, so the text is set on an element that already exists.
+  const status = el('p', {
+    className: 'results-record-note',
+    attrs: { role: 'status', 'aria-live': 'polite' },
+  });
+  const content = el('div', { className: 'results-record-content' });
+  const body = el('div', { className: 'results-record-body' }, [status, content]);
+  const summary = el('summary', {
+    className: 'results-record-summary',
+    text: title ? `How \u201c${title}\u201d was scored` : 'How this was scored',
+  });
+  const details = el('details', { className: 'results-record' }, [summary, body]);
 
   let state = 'idle';
 
-  function showStatus(text) {
-    body.replaceChildren(
-      el('p', {
-        className: 'results-record-note',
-        text,
-        attrs: { role: 'status', 'aria-live': 'polite' },
-      }),
-    );
-  }
-
   async function load() {
     state = 'loading';
-    showStatus('Loading the scoring record…');
+    status.textContent = 'Loading the scoring record\u2026';
+    let record;
     try {
-      const record = await raceTimeout(getScoringRecord(eventId, client), DEFAULT_LOAD_TIMEOUT_MS);
-      state = 'loaded';
-      body.replaceChildren(...buildRecordBody(record));
+      record = await raceTimeout(getScoringRecord(eventId, client), DEFAULT_LOAD_TIMEOUT_MS);
     } catch (err) {
       state = 'error';
+      status.textContent = err?.timedOut
+        ? 'This is taking longer than expected.'
+        : 'Something went wrong loading the scoring record.';
       const retry = el('button', {
         className: 'results-record-retry',
         text: 'Try again',
         attrs: { type: 'button' },
       });
       retry.addEventListener('click', () => {
-        if (state !== 'loading') load();
+        if (state === 'loading') return;
+        retry.disabled = true;
+        load();
       });
-      body.replaceChildren(
-        el('p', {
-          className: 'results-record-note',
-          text: err?.timedOut
-            ? 'This is taking longer than expected.'
-            : 'Something went wrong loading the scoring record.',
-          attrs: { role: 'status', 'aria-live': 'polite' },
-        }),
-        retry,
-      );
+      content.replaceChildren(retry);
+      return;
     }
+    // Built in its own try, apart from the fetch: a rendering bug must not masquerade as a
+    // network failure (a retry would just re-fetch and fail the same way). It gets its own
+    // message with no retry, and is logged so it is seen.
+    let nodes;
+    try {
+      nodes = buildRecordBody(record);
+    } catch (err) {
+      state = 'error-render';
+      console.error('scoringRecord: could not render the scoring record', err);
+      status.textContent = 'The scoring record could not be displayed.';
+      content.replaceChildren();
+      return;
+    }
+    state = 'loaded';
+    // If keyboard focus is on the retry button that is about to be removed, hand it to the
+    // summary rather than letting it fall to <body>.
+    const hadFocus = content.contains(document.activeElement);
+    status.textContent = '';
+    content.replaceChildren(...nodes);
+    if (hadFocus) summary.focus();
   }
 
   details.addEventListener('toggle', () => {

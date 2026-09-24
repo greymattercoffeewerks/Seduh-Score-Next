@@ -1,12 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildScoringRecord } from './scoringRecord.js';
 
 function recordClient(...responses) {
   const rpc = vi.fn();
-  for (const r of responses) {
-    if (r instanceof Error) rpc.mockRejectedValueOnce(r);
-    else rpc.mockResolvedValueOnce(r);
-  }
+  for (const r of responses) rpc.mockResolvedValueOnce(r);
   return { rpc };
 }
 
@@ -38,16 +35,22 @@ function correction(overrides = {}) {
   };
 }
 
+const text = (node) => node.textContent.replace(/\s+/g, ' ');
+const statusOf = (details) => details.querySelector('[role="status"]');
+
 // Setting `open` makes jsdom fire the same `toggle` event a browser does (asynchronously), so
 // this must NOT also dispatch one by hand — a second event would be a second, spurious load.
-async function open(details) {
+// Waits on observable state, not a fixed delay.
+async function open(details, client) {
   details.open = true;
-  // let jsdom's toggle event, the awaited rpc and raceTimeout all settle
-  await new Promise((resolve) => setTimeout(resolve, 10));
-  await new Promise((resolve) => setTimeout(resolve, 10));
+  await vi.waitFor(() => expect(client.rpc).toHaveBeenCalled());
+  await vi.waitFor(() => expect(text(statusOf(details))).not.toContain('Loading'));
 }
 
-const text = (node) => node.textContent.replace(/\s+/g, ' ');
+afterEach(() => {
+  document.body.replaceChildren();
+  vi.useRealTimers();
+});
 
 describe('buildScoringRecord', () => {
   it('fetches nothing until the reader opens the disclosure, and only once', async () => {
@@ -57,21 +60,50 @@ describe('buildScoringRecord', () => {
     expect(client.rpc).not.toHaveBeenCalled();
     expect(details.querySelector('summary').textContent).toBe('How this was scored');
 
-    await open(details);
+    await open(details, client);
     expect(client.rpc).toHaveBeenCalledTimes(1);
     expect(client.rpc).toHaveBeenCalledWith('get_scoring_record', { p_event_id: 'ev1' });
 
     details.open = false;
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    await open(details);
+    await vi.waitFor(() => expect(details.open).toBe(false));
+    details.open = true;
+    await new Promise((resolve) => setTimeout(resolve, 20));
     expect(client.rpc).toHaveBeenCalledTimes(1);
   });
 
+  it('opening again while it is still loading does not start a second request', async () => {
+    let release;
+    const client = {
+      rpc: vi.fn(
+        () =>
+          new Promise((resolve) => {
+            release = resolve;
+          }),
+      ),
+    };
+    const details = buildScoringRecord('ev1', { client });
+
+    details.open = true;
+    await vi.waitFor(() => expect(client.rpc).toHaveBeenCalledTimes(1));
+    details.open = false;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    details.open = true;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(client.rpc).toHaveBeenCalledTimes(1);
+    release({ data: record(), error: null });
+  });
+
+  it('names each disclosure after its event so several on one page are distinguishable', () => {
+    const client = recordClient();
+    const named = buildScoringRecord('ev1', { client, title: 'Jakarta Cup #09' });
+    expect(named.querySelector('summary').textContent).toBe('How “Jakarta Cup #09” was scored');
+  });
+
   it('says plainly when nothing was changed after confirmation', async () => {
-    const details = buildScoringRecord('ev1', {
-      client: recordClient({ data: record(), error: null }),
-    });
-    await open(details);
+    const client = recordClient({ data: record(), error: null });
+    const details = buildScoringRecord('ev1', { client });
+    await open(details, client);
 
     expect(text(details)).toContain(
       'No scores were changed after a heat, match or stage was confirmed.',
@@ -79,7 +111,7 @@ describe('buildScoringRecord', () => {
     expect(details.querySelector('.results-record-list')).toBeNull();
   });
 
-  it('lists each change with its area, label, count, role and reason, never an individual score', async () => {
+  it('lists each change with its area, label, count, role and reason', async () => {
     const data = record({
       corrections: [
         correction({
@@ -93,8 +125,9 @@ describe('buildScoringRecord', () => {
       ],
       correction_count: 2,
     });
-    const details = buildScoringRecord('ev1', { client: recordClient({ data, error: null }) });
-    await open(details);
+    const client = recordClient({ data, error: null });
+    const details = buildScoringRecord('ev1', { client });
+    await open(details, client);
 
     const items = [...details.querySelectorAll('.results-record-item')].map(text);
     expect(items).toHaveLength(2);
@@ -104,8 +137,25 @@ describe('buildScoringRecord', () => {
     expect(items[1]).toContain('Times · Prelims · heat 2');
     expect(items[1]).toContain('1 record changed by the Organiser.');
     expect(items[1]).toContain('No reason given.');
-    // shape-only: the record carries no scores, and the component never asks for them
-    expect(text(details)).not.toMatch(/elapsed|correct|old_value|new_value/);
+  });
+
+  it('shows nothing but the documented fields: a stray raw-value field in the record is never rendered', async () => {
+    const data = record({
+      corrections: [
+        correction({
+          old_value: { correct: false },
+          new_value: { correct: true },
+          row_id: 'SECRET-ROW',
+        }),
+      ],
+      correction_count: 1,
+    });
+    const client = recordClient({ data, error: null });
+    const details = buildScoringRecord('ev1', { client });
+    await open(details, client);
+
+    expect(text(details)).not.toContain('SECRET-ROW');
+    expect(text(details)).not.toContain('old_value');
   });
 
   it('renders an organiser-typed reason as inert text, never as markup', async () => {
@@ -114,8 +164,9 @@ describe('buildScoringRecord', () => {
       corrections: [correction({ reason: hostile, reasoned: 1 })],
       correction_count: 1,
     });
-    const details = buildScoringRecord('ev1', { client: recordClient({ data, error: null }) });
-    await open(details);
+    const client = recordClient({ data, error: null });
+    const details = buildScoringRecord('ev1', { client });
+    await open(details, client);
 
     expect(details.querySelector('img')).toBeNull();
     expect(details.querySelector('script')).toBeNull();
@@ -128,10 +179,32 @@ describe('buildScoringRecord', () => {
       corrections: [correction({ changes: 3, reason: 'recount', reasoned: 1 })],
       correction_count: 1,
     });
-    const details = buildScoringRecord('ev1', { client: recordClient({ data, error: null }) });
-    await open(details);
+    const client = recordClient({ data, error: null });
+    const details = buildScoringRecord('ev1', { client });
+    await open(details, client);
 
     expect(text(details)).toContain('“recount” (given for 1 of 3 records)');
+  });
+
+  it('treats a blank or whitespace-only reason as no reason, and a missing role as the Organiser', async () => {
+    const data = record({
+      corrections: [
+        correction({ reason: '   ', reasoned: 1 }),
+        correction({ reason: null, reasoned: 2 }),
+        correction({ by: null, changes: 1 }),
+      ],
+      correction_count: 3,
+    });
+    const client = recordClient({ data, error: null });
+    const details = buildScoringRecord('ev1', { client });
+    await open(details, client);
+
+    const items = [...details.querySelectorAll('.results-record-item')].map(text);
+    expect(items[0]).toContain('No reason given.');
+    expect(items[1]).toContain('No reason given.');
+    expect(items[2]).toContain('changed by the Organiser.');
+    expect(text(details)).not.toContain('undefined');
+    expect(text(details)).not.toContain('null');
   });
 
   it('shows a too-large log as a visible flag with the true count and breakdown, and lists no changes', async () => {
@@ -142,28 +215,49 @@ describe('buildScoringRecord', () => {
       logged_changes: 500001,
       by_area: { times: 250001, results: 250000 },
     });
-    const details = buildScoringRecord('ev1', { client: recordClient({ data, error: null }) });
-    await open(details);
+    const client = recordClient({ data, error: null });
+    const details = buildScoringRecord('ev1', { client });
+    await open(details, client);
 
     expect(text(details)).toContain(
-      '500001 changes were recorded after results were confirmed — too many to list here.',
+      '500,001 changes were recorded after results were confirmed — too many to list here.',
     );
-    expect(text(details)).toContain('Times: 250001');
-    expect(text(details)).toContain('Results: 250000');
+    expect(text(details)).toContain('Times: 250,001');
+    expect(text(details)).toContain('Results: 250,000');
     expect(text(details)).toContain('Ask the organiser for the full record.');
     expect(details.querySelector('.results-record-item')).toBeNull();
+    // the list is not shown, so it must not claim a re-open "is listed above"
+    expect(text(details)).not.toContain('listed above');
   });
 
-  it('says when the list is truncated and how many there really are', async () => {
-    const data = record({
-      corrections: [correction()],
-      correction_count: 250,
-      truncated: true,
-    });
-    const details = buildScoringRecord('ev1', { client: recordClient({ data, error: null }) });
-    await open(details);
+  it('says when the list is truncated, and does not claim a re-open is listed above', async () => {
+    const data = record({ corrections: [correction()], correction_count: 250, truncated: true });
+    const client = recordClient({ data, error: null });
+    const details = buildScoringRecord('ev1', { client });
+    await open(details, client);
 
     expect(text(details)).toContain('Showing the first 1 of 250 changes.');
+    expect(text(details)).not.toContain('listed above');
+  });
+
+  it('says a re-open is listed above only when the list is complete', async () => {
+    const client = recordClient({
+      data: record({ corrections: [correction()], correction_count: 1 }),
+      error: null,
+    });
+    const details = buildScoringRecord('ev1', { client });
+    await open(details, client);
+
+    expect(text(details)).toContain('the re-opening is listed above');
+  });
+
+  it('never promises the exact scores: it says they can be requested from the organiser', async () => {
+    const client = recordClient({ data: record(), error: null });
+    const details = buildScoringRecord('ev1', { client });
+    await open(details, client);
+
+    expect(text(details)).toContain('can be requested from the organiser');
+    expect(text(details)).not.toContain('available on request');
   });
 
   it('describes tiebreak and coin-toss placings by category only', async () => {
@@ -173,66 +267,72 @@ describe('buildScoringRecord', () => {
         { stage: 'Semis', decided_by: 'tiebreak', count: 1 },
       ],
     });
-    const details = buildScoringRecord('ev1', { client: recordClient({ data, error: null }) });
-    await open(details);
+    const client = recordClient({ data, error: null });
+    const details = buildScoringRecord('ev1', { client });
+    await open(details, client);
 
     const items = [...details.querySelectorAll('.results-record-item')].map(text);
     expect(items).toEqual(['Prelims: 2 by coin toss', 'Semis: 1 by tiebreak']);
   });
 
-  it('mentions rehearsal-status changes, and the ones after publication, and stays quiet when there are none', async () => {
+  it('shows an unknown area as its raw name and omits the time for an invalid date', async () => {
+    const data = record({
+      corrections: [correction({ area: 'mystery area', at: 'not-a-date' })],
+      correction_count: 1,
+    });
+    const client = recordClient({ data, error: null });
+    const details = buildScoringRecord('ev1', { client });
+    await open(details, client);
+
+    expect(text(details)).toContain('mystery area · Prelims · heat 2');
+    expect(details.querySelector('.results-record-when')).toBeNull();
+  });
+
+  it('shows the time with its zone so two readers cannot see different unlabelled times', async () => {
+    const data = record({
+      corrections: [correction({ at: '2026-09-14T10:30:00+00:00' })],
+      correction_count: 1,
+    });
+    const client = recordClient({ data, error: null });
+    const details = buildScoringRecord('ev1', { client });
+    await open(details, client);
+
+    expect(details.querySelector('.results-record-when').textContent).toMatch(/2026/);
+    expect(details.querySelector('.results-record-when').textContent).toMatch(
+      /[A-Z]{2,5}|GMT|UTC|[+-]\d/,
+    );
+  });
+
+  it('mentions rehearsal-status changes, the ones after publication, and stays quiet when there are none', async () => {
     const some = record({ rehearsal_flag_changes: 3, rehearsal_flag_changes_after_publish: 1 });
-    const d1 = buildScoringRecord('ev1', { client: recordClient({ data: some, error: null }) });
-    await open(d1);
+    const c1 = recordClient({ data: some, error: null });
+    const d1 = buildScoringRecord('ev1', { client: c1 });
+    await open(d1, c1);
     expect(text(d1)).toContain(
       'rehearsal (test) status was changed 3 times, 1 of them after results were published.',
     );
 
     const one = record({ rehearsal_flag_changes: 1, rehearsal_flag_changes_after_publish: 0 });
-    const d2 = buildScoringRecord('ev1', { client: recordClient({ data: one, error: null }) });
-    await open(d2);
+    const c2 = recordClient({ data: one, error: null });
+    const d2 = buildScoringRecord('ev1', { client: c2 });
+    await open(d2, c2);
     expect(text(d2)).toContain('was changed 1 time.');
 
-    const none = buildScoringRecord('ev1', {
-      client: recordClient({ data: record(), error: null }),
-    });
-    await open(none);
+    const c3 = recordClient({ data: record(), error: null });
+    const none = buildScoringRecord('ev1', { client: c3 });
+    await open(none, c3);
     expect(text(none)).not.toContain('rehearsal');
   });
 
   it('says a record is not available when the server returns nothing', async () => {
-    const details = buildScoringRecord('ev1', {
-      client: recordClient({ data: null, error: null }),
-    });
-    await open(details);
+    const client = recordClient({ data: null, error: null });
+    const details = buildScoringRecord('ev1', { client });
+    await open(details, client);
 
     expect(text(details)).toContain('A scoring record is not available for this event.');
   });
 
-  it('shows an error with a retry that loads again and succeeds', async () => {
-    const client = recordClient(
-      { data: null, error: new Error('boom') },
-      { data: record(), error: null },
-    );
-    const details = buildScoringRecord('ev1', { client });
-    await open(details);
-
-    expect(text(details)).toContain('Something went wrong loading the scoring record.');
-    const retry = details.querySelector('.results-record-retry');
-    expect(retry).not.toBeNull();
-
-    retry.click();
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    await new Promise((resolve) => setTimeout(resolve, 10));
-
-    expect(client.rpc).toHaveBeenCalledTimes(2);
-    expect(text(details)).toContain(
-      'No scores were changed after a heat, match or stage was confirmed.',
-    );
-    expect(details.querySelector('.results-record-retry')).toBeNull();
-  });
-
-  it('announces its loading and error states politely', async () => {
+  it('announces loading, then the error, in one persistent polite live region', async () => {
     let release;
     const client = {
       rpc: vi.fn(
@@ -243,14 +343,82 @@ describe('buildScoringRecord', () => {
       ),
     };
     const details = buildScoringRecord('ev1', { client });
+    const region = statusOf(details);
+
+    // the live region exists before anything is announced (a region inserted already
+    // populated is often not read out) and is empty until there is something to say
+    expect(region).not.toBeNull();
+    expect(region.textContent).toBe('');
+    expect(region.getAttribute('aria-live')).toBe('polite');
+
     details.open = true;
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await vi.waitFor(() => expect(region.textContent).toContain('Loading'));
+    release({ data: null, error: new Error('boom') });
+    await vi.waitFor(() => expect(region.textContent).toContain('Something went wrong'));
+    expect(statusOf(details)).toBe(region);
+  });
 
-    const status = details.querySelector('[role="status"]');
-    expect(status.getAttribute('aria-live')).toBe('polite');
-    expect(status.textContent).toContain('Loading');
+  it('shows an error with a retry that loads again and succeeds, keeping keyboard focus', async () => {
+    const client = recordClient(
+      { data: null, error: new Error('boom') },
+      { data: record(), error: null },
+    );
+    const details = buildScoringRecord('ev1', { client });
+    document.body.append(details);
+    await open(details, client);
 
-    release({ data: record(), error: null });
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(text(details)).toContain('Something went wrong loading the scoring record.');
+    const retry = details.querySelector('.results-record-retry');
+    expect(retry).not.toBeNull();
+
+    retry.focus();
+    expect(document.activeElement).toBe(retry);
+    retry.click();
+    expect(retry.disabled).toBe(true);
+    await vi.waitFor(() => expect(client.rpc).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() =>
+      expect(text(details)).toContain(
+        'No scores were changed after a heat, match or stage was confirmed.',
+      ),
+    );
+
+    expect(details.querySelector('.results-record-retry')).toBeNull();
+    expect(document.activeElement).toBe(details.querySelector('summary'));
+  });
+
+  it('reports a timeout distinctly from a failure', async () => {
+    vi.useFakeTimers();
+    const client = { rpc: vi.fn(() => new Promise(() => {})) };
+    const details = buildScoringRecord('ev1', { client });
+    details.open = true;
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(text(statusOf(details))).toContain('This is taking longer than expected.');
+    expect(details.querySelector('.results-record-retry')).not.toBeNull();
+  });
+
+  it('shows a rendering bug as its own message with no retry, and logs it', async () => {
+    // a corrections entry that makes the renderer throw
+    const bad = correction();
+    Object.defineProperty(bad, 'changes', {
+      get() {
+        throw new Error('render bug');
+      },
+    });
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const client = recordClient({
+      data: record({ corrections: [bad], correction_count: 1 }),
+      error: null,
+    });
+    const details = buildScoringRecord('ev1', { client });
+    await open(details, client);
+
+    expect(text(statusOf(details))).toContain('The scoring record could not be displayed.');
+    expect(text(details)).not.toContain('Loading');
+    expect(text(details)).not.toContain('Something went wrong loading');
+    expect(details.querySelector('.results-record-retry')).toBeNull();
+    expect(logged).toHaveBeenCalled();
+    logged.mockRestore();
   });
 });
