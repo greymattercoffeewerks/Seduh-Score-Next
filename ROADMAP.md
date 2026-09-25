@@ -1372,8 +1372,8 @@ Planned (not started):
   entered name). Terms is basic; pricing is left out of it. The `[VERIFY]` items are
   resolved. Still open before building the pages: the temporary contact address
   (`greymatter.cw@outlook.com`, swap for `hello@seduhscore.com` once the mailbox exists),
-  the Neutrality page's "Your data" and "Raising a concern" sections, and the remaining
-  `[OWNER TO CONFIRM]` marks in the drafts. No pages are built or published yet.
+  and the remaining `[OWNER TO CONFIRM]` marks in the drafts. The Neutrality page's "Your
+  data" and "Raising a concern" sections are now filled in. No pages are built or published yet.
 
 ## Versioning system (2026-09-05) — closed
 

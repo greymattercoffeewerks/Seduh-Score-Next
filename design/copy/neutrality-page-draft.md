@@ -27,8 +27,8 @@ If there's a potential Conflict of Interest (COI):
 
 ## Your data
 
-Event data belongs to the organiser. [VERIFY: export and deletion options before stating them; see the privacy page, T-TRUST.4]
+Event data belongs to the organiser. Only the owner of Seduh Score has access to the database. You can ask us to delete or correct data we hold about you, and we aim to do so within 14 working days. The Privacy page sets out what we hold and who can see it.
 
 ## Raising a concern
 
-[TBD: contact route, ties to the contact page in T-TRUST.4]
+If you disagree with a result, ask the organiser first. They can give you the full record of the event. If you still have a concern about how the platform behaved, or about a conflict of interest, email greymatter.cw@outlook.com and we will look into it. See the Contact page. [TEMPORARY: swap for hello@seduhscore.com once it is set up.]
