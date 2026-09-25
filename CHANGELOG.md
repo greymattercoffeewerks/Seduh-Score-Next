@@ -1,3 +1,70 @@
+## T-TRUST.2b: organiser dispute pack — the exact record of an event · 2026-09-25
+
+**Task:** T-TRUST.2b. The public "How this was scored" disclosure (T-TRUST.2a) is shape-only and says
+exact scores "can be requested from the organiser". This is what the organiser then hands over: a
+JSON file holding every recorded time and right/wrong of an event plus the full change log with old
+and new values, for settling a dispute. Exact data is released only this way, on request, by the
+organiser; the public page never shows it. Cup Taster ships first; BTC's tables are already in the
+pack, so its screens need only a button later.
+
+**Migration:** `20260925100000_get_dispute_pack.sql` — `get_dispute_pack(p_org_id, p_event_id)`, STABLE
+SECURITY INVOKER (the caller's own RLS applies), plus an explicit membership guard that raises one
+unified "not found" (a wrong org id, an unknown event and a non-member are indistinguishable);
+search_path pinned; execute for `authenticated` and `service_role` only (anon is refused, 42501). One
+consistent-snapshot read (STABLE is load-bearing for that) returning: event entries (names, cafe, bib —
+never people.phone/email), Cup Taster stages/sets/stage_entries/heats/heat_entries/results, BTC
+teams/judges/matches/match_judges/cup_votes/match_bonuses/bracket_slots, and `score_change_log`
+(oldest first, the oldest 20,000 rows, with `change_log_total` and `change_log_truncated`). The pack
+carries a `confidentiality` notice, an `about` list stating its own limits (the log starts 2026-09-24;
+edits to names/cafe/bib, withdrawals and BTC judge assignments are not logged; text values are cut to
+500 characters; rehearsal events are not logged and a promoted rehearsal event has a gap; the log may
+be truncated; a stated reason is unverified; a null `changed_by` means a change made without a
+signed-in user), per-section `counts`, and an `is_test` flag with an unmistakable warning (D9).
+
+**UI:** a "Dispute pack" card on the Cup Taster report screen, offered on complete events including
+rehearsal ones (whose file name is prefixed "TEST — "). `core/disputePack.js` exports the
+format-agnostic `getDisputePack(orgId, eventId, client)` wrapper (throws on error or empty data);
+`core/export.js` gained `downloadJson(filename, value)` (pretty-printed, written compact above 5 MB).
+The card has a persistent polite status region, a toneless "Preparing dispute pack…" announcement,
+`aria-disabled` (not `disabled`) busy state so keyboard focus survives, a 30 s request timeout that
+becomes an error with a retry, its own error wording (never the raw server message), and says
+"ready", not "downloaded", because the code cannot confirm a save. `sanitizeFilename` in
+`reportScreen.js` now also strips control characters and caps names at 100 characters.
+
+**Tests:** pgTAP `021_get_dispute_pack.sql` (30 assertions): exact values present; the log with old/new
+values, reason and who; cross-event and cross-org isolation in every Cup Taster section and all seven
+BTC tables; no contact details; column allowlists for events and entries (a new column fails the test
+until reviewed); refusal for a non-member, another org, a wrong org id and anon; test-event warning;
+deterministic output; the 20,000/20,001 log boundary keeping the OLDEST rows; results listed in set
+order; configuration (invoker, stable, search_path, no PUBLIC execute). JS: `core/disputePack.test.js`,
+a `downloadJson` case in `core/export.test.js`, and a "Dispute pack card" block in
+`reportScreen.test.js`. Full suites at close: pgTAP 594, JS 1,532 (all pass). Verified through the
+local API (organiser gets the pack; anon 401; wrong org refused) and in the preview harness at 360px
+(card 328px wide, 44px button, idle to busy to error with focus moved to the message). Worst measured
+case: a 20,001-row log of bulky rows = 39 MB, about 1.4 s, inside the 8 s authenticated timeout.
+
+**Reviews:** schema-guardian: no blocking findings. security-reviewer: PASSED (non-blocking notes,
+addressed: whole-row exports guarded by the allowlist tests, compact JSON for large packs, dedicated error
+wording). ui-accessibility-reviewer: PASSED (the busy-state announcement was fixed; the shared
+`.screen-feedback:empty { display:none }` pattern is logged as a follow-up, not changed here).
+module-boundary-checker: PASS. code-reviewer: no blocking findings; two mediums fixed (the pack's text
+overstated what the log holds; the request had no timeout). test-auditor: round 1 FAILED (cross-event
+isolation asserted in only some sections; no BTC isolation), round 2 PASSED after the fixes, and its two
+remaining cheap lows were then also fixed. Remaining low survivors: ordering tie-break keys on
+entries/sets/heat_entries/teams/votes; the org-mismatch guard and the membership guard are equivalent
+mutants, because the events RLS refuses a non-member first (deliberate two-layer defence).
+
+**Not yet applied to the cloud project (`wxzwanprluqmgoagbkpv`).** After the PR merges, apply
+`20260925100000_get_dispute_pack` with `apply_migration`, verify it, and compare `list_migrations` with
+the repo; until then the RPC does not exist there and the button shows its error state.
+
+**Deferred / non-blocking:** ordering tie-break keys untested; the Blob URL is revoked immediately after
+the click, as `downloadCsv` does (Safari/Firefox may cancel a very large download); a third format's
+tables would need the SQL function extended in a new migration; the sequences default-privilege nit and
+optionally trimming `service_role` from the earlier privilege hardening.
+
+---
+
 ## Hardening: revoke TRUNCATE/REFERENCES/TRIGGER/MAINTAIN from the API roles · 2026-09-25
 
 **Task:** non-phase hardening, found in a read-only review of the Supabase advisors (2026-09-25).

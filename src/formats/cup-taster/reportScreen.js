@@ -30,9 +30,15 @@ import {
 import { describeError } from '../../core/errors.js';
 import { getSupabase } from '../../core/supabaseClient.js';
 import { formatDuration, formatDurationLong } from '../../core/duration.js';
-import { buildCsvForTables, downloadCsv } from '../../core/export.js';
+import { buildCsvForTables, downloadCsv, downloadJson } from '../../core/export.js';
+import { getDisputePack } from '../../core/disputePack.js';
 import { listEntriesByIds } from '../../core/registry.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
+
+// The dispute pack reads every table of the event plus up to 20,000 log rows, so it is allowed longer
+// than an ordinary screen load — but it is bounded, so a stalled request becomes an error with a retry
+// instead of a button stuck on "Preparing…".
+const DISPUTE_PACK_TIMEOUT_MS = 30_000;
 import {
   findPublishedResultForEvent,
   publishEventResults,
@@ -615,7 +621,17 @@ export function buildReportTables(stageReports) {
 // (`CON`, `PRN`, `COM1`, …) — low-probability inputs for a coffee-event
 // name, not covered here.
 export function sanitizeFilename(name) {
-  return name.replace(/[\\/:*?"<>|]/g, '-');
+  return (
+    name
+      .replace(/[\\/:*?"<>|]/g, '-')
+      // control characters (newlines, tabs, NUL...) have no business in a filename
+      .replace(/\p{Cc}/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      // a very long event name must not push the whole filename past what a filesystem accepts
+      .slice(0, 100)
+      .trim()
+  );
 }
 
 // Phase C, 2026-09-11, user-requested — hand-rolled SVG bar charts, no
@@ -970,6 +986,92 @@ export async function mountReportScreen(root, { eventId, client = getSupabase(),
     ]);
   }
 
+  // The organiser-only exact record of the event (T-TRUST.2b): every recorded time and right/wrong
+  // plus the full change log with old and new values, from get_dispute_pack(). The public page only
+  // ever shows the SHAPE of what changed; this is what the organiser hands over, on request, when a
+  // result is disputed. Rendered for every complete event including a rehearsal one (the pack then
+  // carries an unmistakable test-data warning and the filename is marked, D9 — same discipline as the
+  // CSV export). Static children only: the status region is mounted once and only its text changes,
+  // and the button is never rebuilt, so keyboard focus survives busy/idle/error (aria-disabled, not
+  // disabled, which a browser blurs).
+  function renderDisputePackCard(data) {
+    const container = el('div', { className: 'card report-dispute-pack no-print' });
+    const heading = el('h2', { text: 'Dispute pack' });
+    const intro = el('p', {
+      text:
+        'This file names competitors and shows every score. Share it only with the people involved. ' +
+        'It records every time and right/wrong, and every change made, with before and after.',
+    });
+    const button = el('button', {
+      className: 'btn btn-outline tap-target',
+      text: 'Download dispute pack',
+      attrs: { type: 'button' },
+    });
+    const feedback = el('div', {
+      className: 'screen-feedback',
+      attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
+    });
+    container.append(heading, intro, button, feedback);
+
+    function setFeedback(message, tone) {
+      feedback.textContent = message ?? '';
+      if (tone) feedback.dataset.tone = tone;
+      else delete feedback.dataset.tone;
+      if (tone === 'error') {
+        feedback.scrollIntoView?.({ block: 'nearest' });
+        feedback.focus();
+      }
+    }
+
+    // Its own wording: the shared describeError says "saving that", which is wrong for an export,
+    // and a refusal ("not found") should not read like a network fault. Nothing internal is shown.
+    function describePackError(err) {
+      if (err?.timedOut) return 'This is taking longer than expected — try again.';
+      if (/not found/i.test(err?.message ?? '')) {
+        return 'You don’t have access to this event’s dispute pack.';
+      }
+      return 'Could not prepare the dispute pack — check your connection and try again.';
+    }
+
+    let busy = false;
+    button.addEventListener('click', async () => {
+      if (busy) return;
+      busy = true;
+      setBusyDisabled(button, true);
+      button.textContent = 'Preparing…';
+      // A neutral, toneless message rather than clearing the region: a screen-reader user hears that
+      // something is happening (a button whose label changes while focused is often not re-announced).
+      setFeedback('Preparing dispute pack…');
+      try {
+        const pack = await raceTimeout(
+          getDisputePack(data.event.org_id, data.event.id, client),
+          DISPUTE_PACK_TIMEOUT_MS,
+        );
+        if (signal?.aborted) return;
+        const filenamePrefix = data.event.is_test ? 'TEST — ' : '';
+        downloadJson(
+          `${filenamePrefix}${sanitizeFilename(data.event.name)} dispute pack.json`,
+          pack,
+        );
+        // "ready", not "downloaded": the code clicks a link and cannot confirm a save (a browser may
+        // prompt, open it, or block it).
+        setFeedback(
+          'Dispute pack ready. Check your downloads, and share it only with the people involved.',
+          'success',
+        );
+      } catch (err) {
+        if (signal?.aborted) return;
+        setFeedback(describePackError(err), 'error');
+      } finally {
+        busy = false;
+        setBusyDisabled(button, false);
+        button.textContent = 'Download dispute pack';
+      }
+    });
+
+    return container;
+  }
+
   // The one card on this otherwise render-once screen (see the module
   // comment's own "no re-render after mount" framing) that manages its own
   // internal state — a publish/unpublish TOGGLE genuinely needs one, unlike
@@ -1176,6 +1278,7 @@ export async function mountReportScreen(root, { eventId, client = getSupabase(),
       );
     } else {
       container.appendChild(renderExportActions(data));
+      container.appendChild(renderDisputePackCard(data));
       const publicResultsCard = renderPublicResultsCard(data);
       if (publicResultsCard) container.appendChild(publicResultsCard);
       // Only once there's more than one stage — see buildReportTables' own

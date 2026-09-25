@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { buildCsv, buildCsvForTables, downloadCsv } from './export.js';
+import { buildCsv, buildCsvForTables, downloadCsv, downloadJson } from './export.js';
 
 describe('buildCsv', () => {
   const table = {
@@ -120,5 +120,62 @@ describe('downloadCsv', () => {
     createSpy.mockRestore();
     revokeSpy.mockRestore();
     clickSpy.mockRestore();
+  });
+});
+
+describe('downloadJson', () => {
+  it('saves the value as pretty-printed JSON under the given filename, then revokes the URL', async () => {
+    let capturedBlob = null;
+    vi.spyOn(URL, 'createObjectURL').mockImplementation((blob) => {
+      capturedBlob = blob;
+      return 'blob:fake-json-url';
+    });
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    let capturedDownload = null;
+    const clickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(function click() {
+        capturedDownload = this.download;
+      });
+
+    const value = { pack_version: 1, cup_taster: { results: [{ correct: true, note: 'a, "b"' }] } };
+    downloadJson('Event dispute pack.json', value);
+
+    expect(capturedBlob.type).toBe('application/json;charset=utf-8;');
+    const text = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsText(capturedBlob);
+    });
+    // exactly the value, round-trippable, and readable (indented), not a minified line
+    expect(JSON.parse(text)).toEqual(value);
+    expect(text).toContain('\n  "pack_version": 1');
+    expect(capturedDownload).toBe('Event dispute pack.json');
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    expect(revokeSpy).toHaveBeenCalledWith('blob:fake-json-url');
+    // the temporary link does not linger in the document
+    expect(document.querySelector('a[download]')).toBeNull();
+  });
+
+  it('writes a very large document compact instead of pretty-printing it', async () => {
+    let capturedBlob = null;
+    vi.spyOn(URL, 'createObjectURL').mockImplementation((blob) => {
+      capturedBlob = blob;
+      return 'blob:big';
+    });
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+    downloadJson('big.json', { rows: ['x'.repeat(5_100_000)] });
+
+    const text = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsText(capturedBlob);
+    });
+    expect(text.startsWith('{"rows":["x')).toBe(true);
+    expect(text).not.toContain('\n');
   });
 });

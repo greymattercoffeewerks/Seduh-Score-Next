@@ -1346,16 +1346,23 @@ the counter unreadable by every API role, writes still work, `list_migrations` m
 starts from that moment: events scored before it have no history, and no cloud event is real or published
 yet. Definition of Done met; no blocking findings.
 
+**T-TRUST.2b (2026-09-25) — Organiser dispute pack; built locally, migration NOT yet applied to the cloud.**
+`get_dispute_pack(org, event)` (STABLE SECURITY INVOKER + explicit membership guard, unified "not found",
+authenticated only) returns one consistent snapshot of the exact record of an event — entries (no contact
+details), Cup Taster and BTC tables, and the change log with old/new values (the oldest 20,000 rows, with
+the true total and a truncated flag) — plus a self-describing `about` list of its own limits and a test-event
+warning. The Cup Taster report screen has a "Dispute pack" card that downloads it as JSON (file marked
+"TEST — " for rehearsal events). Reviews: security PASSED, schema no blocking, module boundary PASS, a11y
+PASSED, code review no blocking (two mediums fixed), test-auditor FAILED round 1 then PASSED round 2 after
+isolation fixes. pgTAP 021 = 30 assertions; suites at close: pgTAP 594, JS 1,532. **Apply
+`20260925100000_get_dispute_pack` to the cloud after the PR merges and verify against `list_migrations`;
+until then the button shows its error state.** The public disclosure's "can be requested from the
+organiser" line is now backed by this feature (Cup Taster only; BTC needs a button). Deferred (low):
+ordering tie-break keys untested; empty live-region `display:none` is a shared pattern; huge-Blob revoke
+timing; a third format needs the SQL function extended.
+
 Planned (not started):
 
-- **T-TRUST.2b — Dispute pack.** Standing decisions (2026-09-24): corrections are public; the actor
-  is shown by ROLE ("Organiser"), never by name; **no raw per-cupper/per-cup scores are ever shown
-  publicly** — exact raw data is released only through this pack, on request. Not doing: public raw
-  scores, hash chains/external anchoring, server-side reason plumbing. The disclosure's "can be
-  requested from the organiser" line is only a process until this exists. Organiser-only export of exact raw scores + full change log
-  (real timestamps, old/new values). A competitor requests it from the organiser via the contact
-  details on the results page. No public request form yet (avoids collecting personal data);
-  revisit only if dispute volume justifies it.
 - **T-TRUST.3 — Neutrality & independence page** (public, marketing surface). Draft:
   `design/copy/neutrality-page-draft.md`. Includes the independent sign-off rule for events
   where Grey Matter or its students compete. Needs owner sign-off on the policy wording.
