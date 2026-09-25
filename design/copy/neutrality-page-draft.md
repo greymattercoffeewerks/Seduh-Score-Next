@@ -1,6 +1,6 @@
 # Neutrality & independence — page draft
 
-*Status: DRAFT for owner review. Nothing here is published. Claims marked ]VERIFY\] depend on platform behaviour that must be confirmed or built first. ]OWNER TO CONFIRM\] marks policy only you can decide.*
+_Status: DRAFT for owner review. Nothing here is published. Claims marked ]VERIFY\] depend on platform behaviour that must be confirmed or built first. ]OWNER TO CONFIRM\] marks policy only you can decide._
 
 ## Headline
 

@@ -1,6 +1,6 @@
 # About page — draft
 
-*Status: DRAFT for owner review. Nothing here is published. I used only facts already in your Neutrality draft and the repo, and left placeholders for anything else, since I do not know it. ]OWNER TO CONFIRM\] marks things only you can supply.*
+_Status: DRAFT for owner review. Nothing here is published. I used only facts already in your Neutrality draft and the repo, and left placeholders for anything else, since I do not know it. ]OWNER TO CONFIRM\] marks things only you can supply._
 
 ## Headline
 

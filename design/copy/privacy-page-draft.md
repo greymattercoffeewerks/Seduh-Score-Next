@@ -1,6 +1,6 @@
 # Privacy page — draft
 
-*Status: DRAFT for owner review. Nothing here is published. Written from the actual database schema and code as of 2026-09-25, describing what exists today, not what we might build. ]OWNER TO CONFIRM\] marks commitments only you can make; ]VERIFY\] marks facts I could not fully confirm from the code.*
+_Status: DRAFT for owner review. Nothing here is published. Written from the actual database schema and code as of 2026-09-25, describing what exists today, not what we might build. ]OWNER TO CONFIRM\] marks commitments only you can make; ]VERIFY\] marks facts I could not fully confirm from the code._
 
 ## Headline
 

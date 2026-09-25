@@ -1,6 +1,6 @@
 # Contact page — draft
 
-*Status: DRAFT for owner review. Nothing here is published. The address is temporary until the seduhscore.com mailbox exists. ]OWNER TO CONFIRM\] marks things only you can decide.*
+_Status: DRAFT for owner review. Nothing here is published. The address is temporary until the seduhscore.com mailbox exists. ]OWNER TO CONFIRM\] marks things only you can decide._
 
 ## Headline
 
