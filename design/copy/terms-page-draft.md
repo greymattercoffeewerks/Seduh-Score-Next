@@ -35,7 +35,7 @@ Event data belongs to the organiser. What we hold and how to ask us to remove it
 
 ## How the platform behaves
 
-- Scores are worked out by fixed, public rules from the raw entries. Changes to a score or time after it is entered are logged.
+- Scores are worked out by fixed, public rules from the raw entries. Since 24 September 2026, changes to a score or time after it is entered are logged.
 - Timing and confirming heats are saved on the device first and sent to our servers when the connection returns. Until then the data is only on that device, so do not clear the browser's data. We cannot recover what was never sent.
 - We work to keep the service running but do not promise it will always be available or free of errors.
 
@@ -49,7 +49,7 @@ Seduh Score is provided as it is. To the extent the law allows, we are not respo
 
 ## The software
 
-The source code is publicly viewable for transparency. It is not open source: the licence in the repository's LICENSE file lets anyone read it, but copying, modifying, self-hosting or selling it needs our written permission. The Seduh Score name and logo remain ours.
+The source code is publicly viewable for transparency. It is not open source: the licence in the repository's LICENSE.md file lets anyone read it, but copying, modifying, self-hosting or selling it needs our written permission. The Seduh Score name and logo remain ours.
 
 ## Changes
 

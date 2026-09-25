@@ -32,6 +32,20 @@ const ROUTES = [
     rootMarker: '<main class="timer"',
     marker: 'Seduh Timer',
   },
+  // The trust pages share one entry module and pick their page from #app's data-page.
+  ...[
+    ['about', 'Scoring for coffee competitions'],
+    ['contact', 'Get in touch.'],
+    ['privacy', 'What we hold, who can see it'],
+    ['terms', 'The ground rules for using'],
+    ['neutrality', 'We run the platform.'],
+  ].map(([page, marker]) => ({
+    output: `${page}/index.html`,
+    url: `https://www.seduhscore.com/${page}/`,
+    page,
+    rootMarker: '<main class="trust-article"',
+    marker,
+  })),
 ];
 const GLOBAL_KEYS = [
   'document',
@@ -68,13 +82,15 @@ function matchMedia(query) {
   };
 }
 
-async function prerenderRoute({ output, url, rootMarker, marker }) {
+async function prerenderRoute({ output, url, rootMarker, marker, page }) {
   const outputPath = resolve(DIST_DIRECTORY, output);
   const builtHtml = await readFile(outputPath, 'utf8');
   const outputDom = new JSDOM(builtHtml);
-  const renderDom = new JSDOM('<!doctype html><html><body><div id="app"></div></body></html>', {
-    url,
-  });
+  const pageAttribute = page ? ` data-page="${page}"` : '';
+  const renderDom = new JSDOM(
+    `<!doctype html><html><body><div id="app"${pageAttribute}></div></body></html>`,
+    { url },
+  );
   const previousGlobals = Object.fromEntries(GLOBAL_KEYS.map((key) => [key, globalThis[key]]));
 
   renderDom.window.matchMedia = matchMedia;
@@ -92,13 +108,23 @@ async function prerenderRoute({ output, url, rootMarker, marker }) {
   });
 
   try {
-    const bundleSrc = outputDom.window.document
-      .querySelector('script[type="module"]')
-      ?.getAttribute('src');
-    if (!bundleSrc?.startsWith('/assets/'))
-      throw new Error(`Could not find the built bundle for /${output}.`);
+    // Vite lists an entry's shared chunks as module scripts before the entry itself
+    // (the trust pages share several), so import them all, in page order: the entry
+    // is last and is the one that mounts the page.
+    const bundleSrcs = [...outputDom.window.document.querySelectorAll('script[type="module"]')]
+      .map((script) => script.getAttribute('src'))
+      .filter((src) => src?.startsWith('/assets/'));
+    if (bundleSrcs.length === 0) throw new Error(`Could not find the built bundle for /${output}.`);
 
-    await import(pathToFileURL(resolve(DIST_DIRECTORY, bundleSrc.slice(1))).href);
+    for (const [index, bundleSrc] of bundleSrcs.entries()) {
+      const bundleUrl = pathToFileURL(resolve(DIST_DIRECTORY, bundleSrc.slice(1))).href;
+      // Several routes can share one entry module (the trust pages all mount from
+      // trustMain.js, choosing their page from #app's data-page). Node caches a
+      // module after its first import, so the entry gets a per-route query to be
+      // evaluated again for this route's DOM.
+      const isEntry = index === bundleSrcs.length - 1;
+      await import(isEntry ? `${bundleUrl}?route=${encodeURIComponent(output)}` : bundleUrl);
+    }
 
     const renderedContent = renderDom.window.document.querySelector('#app').innerHTML;
     if (!renderedContent.includes(rootMarker) || !renderedContent.includes(marker)) {

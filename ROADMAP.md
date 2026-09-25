@@ -1362,18 +1362,12 @@ timing; a third format needs the SQL function extended.
 
 Planned (not started):
 
-- **T-TRUST.3 — Neutrality & independence page** (public, marketing surface). Owner-edited
-  draft: `design/copy/neutrality-page-draft.md` (2026-09-25). Still to do: fill "Your data"
-  and "Raising a concern" from the privacy and contact drafts, then build the page.
-- **T-TRUST.4 — Trust pages (About, Contact, Privacy, Terms).** Copy drafted 2026-09-25 and
-  owner-edited in Docs, saved as `design/copy/{about,contact,privacy,terms}-page-draft.md`.
-  Privacy was written from the real schema (what is held, who sees it; no fixed retention
-  period; deletion or correction on request within 14 working days; past results keep the
-  entered name). Terms is basic; pricing is left out of it. The `[VERIFY]` items are
-  resolved. Still open before building the pages: the temporary contact address
-  (`greymatter.cw@outlook.com`, swap for `hello@seduhscore.com` once the mailbox exists),
-  and the remaining `[OWNER TO CONFIRM]` marks in the drafts. The Neutrality page's "Your
-  data" and "Raising a concern" sections are now filled in. No pages are built or published yet.
+- **T-TRUST.3 / T-TRUST.4 — Trust pages (Neutrality, About, Contact, Privacy, Terms): built 2026-09-25.**
+  Five static public pages at `/neutrality/`, `/about/`, `/contact/`, `/privacy/` and `/terms/`,
+  linked from every public footer. Copy source: `design/copy/*-page-draft.md`. Open: swap the
+  temporary contact address for `hello@seduhscore.com` once it exists (`CONTACT_EMAIL` in
+  `src/marketing/trustContent.js`); the Privacy page must be updated in the same PR as any change
+  to what personal data is held or who can read it.
 
 ## Versioning system (2026-09-05) — closed
 

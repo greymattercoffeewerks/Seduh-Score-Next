@@ -1,3 +1,53 @@
+## T-TRUST.3/4: public trust pages — About, Contact, Privacy, Terms, Neutrality · 2026-09-25
+
+**Task:** T-TRUST.3 and T-TRUST.4. The site critique noted there were no About, contact, privacy or
+terms pages on a product that holds competitor data, and nothing on neutrality. Five static public
+pages now exist at `/about/`, `/contact/`, `/privacy/`, `/terms/` and `/neutrality/`, rendered from the
+owner-edited copy in `design/copy/*-page-draft.md`.
+
+**What shipped:** `src/marketing/trustContent.js` (the copy, with every review marker resolved),
+`trustScreen.js` (renders it with `createElement`/`textContent` only; a small inline parser for bold and
+same-site or `mailto:` links, and nothing else), `trustMain.js` (one entry module for all five, choosing
+its page from `#app`'s `data-page`), `trust.css`, and five HTML entries. All five are in `vite.config.js`,
+`public/sitemap.xml`, the prerender step and the e2e smoke spec. Every public page's footer now links the
+five pages in an "About and legal" row (`publicFooter.js`). The contact address is one constant
+(`CONTACT_EMAIL`), currently the temporary `greymatter.cw@outlook.com`.
+
+**Prerender fix:** the five pages share one entry module, so `tools/prerender-public-pages.mjs` now imports
+every module script of a page in order and evaluates the entry fresh per route (a `?route=` query);
+previously it took the first module script, which was a shared chunk, and Node's module cache would have
+rendered only the first page.
+
+**Copy corrections from the fact-check:** the code review checked the Privacy and Terms sentences against
+the schema and found overstatements, fixed here and in the drafts: the public also sees each event's name
+and date and the live audience view while an event is running, not only published results; Guess the Bean's
+live display shows names (not guesses) before the reveal; direct database access is described as
+restricted to the owner rather than exclusive; Guess the Bean local storage is named; the change log is
+dated from 24 September 2026; resetting a Guess the Bean session is permanent and participants must email to
+have theirs removed; the licence file is `LICENSE.md`; and the Neutrality "Who we are" sentence was
+reworded to match About.
+
+**Reviews:** module-boundary-checker PASS. ui-accessibility-reviewer: no blocking findings; fixed the
+header and footer sitting inside `<main>` (the trust pages now wrap in a `div` with `<main>` around the
+article only), footer links under 44px wide, small muted footer text just under 4.5:1 contrast, the link
+underline now set explicitly, and a non-colour current-page cue. Not fixed and shared with Tour/Results:
+their header/footer are still inside `<main>`. test-auditor: 14 of 19 mutations caught; the gaps (extra
+address in a heading or in a `mailto:` link, a narrow marker regex, protocol-relative links, prerender and
+smoke markers not checked against the rendered copy) are closed. code-reviewer: no blocking code findings;
+`isSafeHref` no longer accepts `//` links.
+
+**Verified:** the full vitest suite passes, lint and Prettier clean,
+`npm run build` succeeds and all five pages are prerendered with their content. NOT verified: the pages
+were not seen rendered at 360px (the browser pane's viewport emulation and screenshots were unreliable);
+only DOM and CSS were checked. Look at one on a phone.
+
+**Still open:** swap the contact address once `hello@seduhscore.com` exists (one line in `trustContent.js`,
+plus the same address in the `design/copy` drafts); Cloudflare Web Analytics and Search Console/Bing use is
+stated on the Privacy page from the owner's account, not from anything in the repo; a lawyer has not
+reviewed Terms or Privacy; the About page's "why we built it" is in the owner's own words.
+
+---
+
 ## T-TRUST.2b: organiser dispute pack — the exact record of an event · 2026-09-25
 
 **Task:** T-TRUST.2b. The public "How this was scored" disclosure (T-TRUST.2a) is shape-only and says
