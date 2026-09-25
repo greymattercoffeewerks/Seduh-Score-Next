@@ -1362,11 +1362,18 @@ timing; a third format needs the SQL function extended.
 
 Planned (not started):
 
-- **T-TRUST.3 — Neutrality & independence page** (public, marketing surface). Draft:
-  `design/copy/neutrality-page-draft.md`. Includes the independent sign-off rule for events
-  where Grey Matter or its students compete. Needs owner sign-off on the policy wording.
-- **T-TRUST.4 — Trust pages strategy (About, contact, privacy, terms).** Needs a strategy
-  discussion first; the privacy page must be written from the real schema, not a template.
+- **T-TRUST.3 — Neutrality & independence page** (public, marketing surface). Owner-edited
+  draft: `design/copy/neutrality-page-draft.md` (2026-09-25). Still to do: fill "Your data"
+  and "Raising a concern" from the privacy and contact drafts, then build the page.
+- **T-TRUST.4 — Trust pages (About, Contact, Privacy, Terms).** Copy drafted 2026-09-25 and
+  owner-edited in Docs, saved as `design/copy/{about,contact,privacy,terms}-page-draft.md`.
+  Privacy was written from the real schema (what is held, who sees it, no automatic deletion;
+  past results keep the entered name). Terms is basic and marked pending legal review; pricing
+  is left out of it. Still open before building the pages: the temporary contact address
+  (`greymatter.cw@outlook.com`, swap for `hello@seduhscore.com` once the mailbox exists),
+  the `[VERIFY]` items (published-results fields, staff database access, Cloudflare
+  analytics, whether BTC is live), and a lawyer's look at Terms and Privacy. No pages are
+  built or published yet.
 
 ## Versioning system (2026-09-05) — closed
 
