@@ -170,5 +170,11 @@ begin
 end;
 $$;
 
-revoke execute on function get_dispute_pack(uuid, uuid) from public;
+-- Revoke from anon EXPLICITLY, not just from PUBLIC. Whether a new function already carries an
+-- anon/authenticated EXECUTE grant depends on the environment's default privileges (a fresh CI
+-- database grants it; the long-lived local and cloud databases do not — found when CI's pgTAP
+-- "anon cannot execute it" failed while every local run passed). Revoking first and granting exactly
+-- what is intended makes the result identical everywhere, same principle as
+-- 20260918092000_btc_grants.sql.
+revoke execute on function get_dispute_pack(uuid, uuid) from public, anon;
 grant execute on function get_dispute_pack(uuid, uuid) to authenticated, service_role;
