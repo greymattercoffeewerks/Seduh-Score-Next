@@ -1367,13 +1367,13 @@ Planned (not started):
   and "Raising a concern" from the privacy and contact drafts, then build the page.
 - **T-TRUST.4 — Trust pages (About, Contact, Privacy, Terms).** Copy drafted 2026-09-25 and
   owner-edited in Docs, saved as `design/copy/{about,contact,privacy,terms}-page-draft.md`.
-  Privacy was written from the real schema (what is held, who sees it, no automatic deletion;
-  past results keep the entered name). Terms is basic and marked pending legal review; pricing
-  is left out of it. Still open before building the pages: the temporary contact address
+  Privacy was written from the real schema (what is held, who sees it; no fixed retention
+  period; deletion or correction on request within 14 working days; past results keep the
+  entered name). Terms is basic; pricing is left out of it. The `[VERIFY]` items are
+  resolved. Still open before building the pages: the temporary contact address
   (`greymatter.cw@outlook.com`, swap for `hello@seduhscore.com` once the mailbox exists),
-  the `[VERIFY]` items (published-results fields, staff database access, Cloudflare
-  analytics, whether BTC is live), and a lawyer's look at Terms and Privacy. No pages are
-  built or published yet.
+  the Neutrality page's "Your data" and "Raising a concern" sections, and the remaining
+  `[OWNER TO CONFIRM]` marks in the drafts. No pages are built or published yet.
 
 ## Versioning system (2026-09-05) — closed
 

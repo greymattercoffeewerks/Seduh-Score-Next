@@ -1,6 +1,6 @@
 # Terms page — draft
 
-_Status: DRAFT for owner review. Nothing here is published. A basic, plain-language version, not yet reviewed by a lawyer. [OWNER TO CONFIRM] marks decisions only you can make._
+_Status: DRAFT for owner review. Nothing here is published. A basic, plain-language version. [OWNER TO CONFIRM] marks decisions only you can make._
 
 ## Headline
 

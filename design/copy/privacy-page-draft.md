@@ -46,16 +46,16 @@ Data is stored with Supabase in Singapore (AWS ap-southeast-1). The website is s
 
 ## How long we keep it
 
-There is no automatic deletion today. Data stays until it is deleted, either by the organiser or by us at your request. [OWNER TO CONFIRM: if you want to state a retention period, add it here and build it.]
+There is no automatic deletion today. Data stays until it is deleted, either by the organiser or by us at your request. We do not apply a fixed retention period.
 
 ## Asking us to remove or correct your data
 
-Email us. We will delete or correct what we hold about you. [OWNER TO CONFIRM: a time limit, for example within 14 days.]
+Email us. We will delete or correct what we hold about you. We aim to do this within 14 working days.
 
 Things to know:
 
 - Deleting deletes what we can find by name, phone or email. Tell us which events you took part in to make sure we get everything.
-- **Past results keep the name as it was entered for that event.** Each event entry stores the name and cafe as they were on the day, so a result is not rewritten later. If you want a name removed or changed from a past published result, tell us and we will handle it with the organiser. [OWNER TO CONFIRM: how you want to handle this]
+- **Past results keep the name as it was entered for that event.** Each event entry stores the name and cafe as they were on the day, so a result is not rewritten later. If you want a name removed or changed from a past published result, tell us and we will handle it with the organiser.
 - Guess the Bean sessions can be ended or reset by whoever created them, which removes the guesses and contact details.
 
 ## Changes to this page
