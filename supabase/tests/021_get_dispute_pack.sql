@@ -5,7 +5,10 @@
 -- contact detail; it is deterministic; a test event exports with an unmistakable warning; the log cap
 -- is exact at the boundary; it covers BTC tables too; and it is configured safely.
 begin;
-select plan(29);
+select plan(30);
+-- NOTE: membership is enforced twice — by the explicit guard in the function AND by the caller's own RLS
+-- (an event a non-member cannot read makes the function raise the same "not found"). Removing either
+-- guard alone therefore cannot be detected from outside; that is deliberate defence in depth, not a gap.
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-000000000001', 'member@test.seduh-next'),
@@ -61,8 +64,8 @@ insert into ct_stage_entries (id, stage_id, entry_id) values
   ('00000000-0000-0000-0000-000000000a51', '00000000-0000-0000-0000-0000000000b1', '00000000-0000-0000-0000-0000000000ee'),
   ('00000000-0000-0000-0000-000000000a55', '00000000-0000-0000-0000-0000000000b5', '00000000-0000-0000-0000-0000000000f1');
 insert into ct_results (id, heat_entry_id, set_id, correct) values
-  ('00000000-0000-0000-0000-000000000b01', '00000000-0000-0000-0000-000000000a01', '00000000-0000-0000-0000-0000000000c1', false),
-  ('00000000-0000-0000-0000-000000000b02', '00000000-0000-0000-0000-000000000a01', '00000000-0000-0000-0000-0000000000c2', true),
+  ('00000000-0000-0000-0000-000000000b01', '00000000-0000-0000-0000-000000000a01', '00000000-0000-0000-0000-0000000000c2', false),
+  ('00000000-0000-0000-0000-000000000b02', '00000000-0000-0000-0000-000000000a01', '00000000-0000-0000-0000-0000000000c1', true),
   ('00000000-0000-0000-0000-000000000b03', '00000000-0000-0000-0000-000000000a02', '00000000-0000-0000-0000-0000000000c3', true),
   ('00000000-0000-0000-0000-000000000b04', '00000000-0000-0000-0000-000000000a04', '00000000-0000-0000-0000-0000000000c4', true),
   ('00000000-0000-0000-0000-000000000b05', '00000000-0000-0000-0000-000000000a05', '00000000-0000-0000-0000-0000000000c5', true);
@@ -159,9 +162,14 @@ select is(
   (get_dispute_pack('00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-0000000000e1') -> 'cup_taster' -> 'heat_entries' -> 0 ->> 'elapsed_secs'),
   '310', 'the exact recorded time is in the pack (the public page never shows this)');
 select is(
-  (select array_agg((r ->> 'correct')::boolean order by ord)
+  (select array_agg((r ->> 'correct')::boolean)
+     from jsonb_array_elements(get_dispute_pack('00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-0000000000e1') -> 'cup_taster' -> 'results') r),
+  array[true, true], 'the exact right/wrong for every set is in the pack');
+select is(
+  (select array_agg(r ->> 'set_id' order by ord)
      from jsonb_array_elements(get_dispute_pack('00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-0000000000e1') -> 'cup_taster' -> 'results') with ordinality t(r, ord)),
-  array[true, true], 'the exact right/wrong for every set is in the pack, in set order');
+  array['00000000-0000-0000-0000-0000000000c1', '00000000-0000-0000-0000-0000000000c2'],
+  'results are listed in SET order (set 1 then set 2), which here is the reverse of id order, so the ordering is really being applied');
 
 -- ---------- the full change log with old and new values ----------
 select ok(

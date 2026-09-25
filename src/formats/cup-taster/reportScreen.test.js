@@ -1486,20 +1486,21 @@ describe('mountReportScreen', () => {
         ).toHaveLength(2);
       });
 
-      it('a successful retry replaces the earlier error: text and tone are reset', async () => {
+      it('a retry clears the earlier error style at once, and a successful retry replaces the error text', async () => {
         const root = document.createElement('div');
         document.body.appendChild(root);
         vi.spyOn(exportModule, 'downloadJson').mockImplementation(() => {});
         const client = fakeClient({ tables: completeEventTables() });
         let calls = 0;
+        let release;
         client.rpc = (name, payload) => {
           client.calls.push(['rpc', name, payload]);
           calls += 1;
-          return Promise.resolve(
-            calls === 1
-              ? { data: null, error: { message: 'connection reset' } }
-              : { data: pack, error: null },
-          );
+          if (calls === 1)
+            return Promise.resolve({ data: null, error: { message: 'connection reset' } });
+          return new Promise((resolve) => {
+            release = resolve;
+          });
         };
         await mountReportScreen(root, { eventId: 'ev1', client });
         const button = root.querySelector('.report-dispute-pack button');
@@ -1507,9 +1508,15 @@ describe('mountReportScreen', () => {
 
         button.click();
         await vi.waitFor(() => expect(status.dataset.tone).toBe('error'));
-        button.click();
-        await vi.waitFor(() => expect(status.dataset.tone).toBe('success'));
 
+        // second attempt, still pending: "Preparing…" must NOT inherit the error style
+        button.click();
+        await vi.waitFor(() => expect(calls).toBe(2));
+        expect(status.textContent).toBe('Preparing dispute pack…');
+        expect(status.dataset.tone).toBeUndefined();
+
+        release({ data: pack, error: null });
+        await vi.waitFor(() => expect(status.dataset.tone).toBe('success'));
         expect(status.textContent).toContain('Dispute pack ready');
         expect(status.textContent).not.toContain('Could not prepare');
         root.remove();
