@@ -198,6 +198,27 @@ The footer follows the landing page's mono rhythm, attribution, companion-page l
 version link. Its links must remain non-underlined. Tour and Community roots use
 `overflow-x: clip`, not `hidden`, so the sticky header remains pinned to the viewport.
 
+## Trust pages (2026-09-25)
+
+`about/`, `contact/`, `privacy/`, `terms/` and `neutrality/` are five static entries, all mounted
+by `trustMain.js` (which reads its page from `#app`'s `data-page`) and rendered by
+`trustScreen.js` from the copy in `trustContent.js`. The wording's source of truth is
+`design/copy/*-page-draft.md`, owner-edited; `trustContent.js` is that copy with every review
+marker resolved or removed, and `trustScreen.test.js` fails if a `[OWNER TO CONFIRM]`/`[VERIFY]`/
+`[TEMPORARY]` note ever reaches a page.
+
+- The contact address is one constant, `CONTACT_EMAIL` in `trustContent.js`. It is temporary
+  (`greymatter.cw@outlook.com`) until a `hello@seduhscore.com` mailbox exists; swap it there and
+  nowhere else (the test asserts no other address appears on any page).
+- `publicFooter.js` links all five pages from every public page's footer (a `nav` labelled
+  "About and legal"); `currentSlug` marks the page being viewed with `aria-current`.
+- Each route is in `vite.config.js`'s inputs, `public/sitemap.xml`, `tools/prerender-public-pages.mjs`
+  and `tests/e2e/smoke.spec.js`; a test fails if any of those is missed for a new page.
+- The prerender step imports every module script of a page in order and evaluates the entry
+  fresh per route (`?route=` query), because the five pages share one entry module.
+- Privacy states what the code and schema really do. Change it in the same PR as any change to
+  what personal data is held, who can read it, or which analytics run.
+
 ## Routing note
 
 The console's hash router (`src/core/router.js`) only ever reads `location.hash` — it

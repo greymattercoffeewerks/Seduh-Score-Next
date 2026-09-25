@@ -228,3 +228,25 @@
 .public-header-secondary {
   display: none;
 }
+
+/* Trust-page links (About, Contact, Privacy, Terms, Neutrality) sit on their own
+   full-width row under the credit/companion row, so they wrap cleanly at 360px. */
+.public-footer-legal {
+  display: flex;
+  flex-wrap: wrap;
+  flex-basis: 100%;
+  gap: 4px 18px;
+  padding-top: 8px;
+  border-top: var(--border-hairline) solid var(--color-border);
+}
+.public-footer-legal .public-footer-link {
+  min-width: var(--tap-target-min);
+  justify-content: center;
+  /* muted text on the stage canvas is just under 4.5:1; these links are small text */
+  color: var(--color-text-secondary);
+}
+/* The current page is marked by more than colour: a bar as well as the lighter text. */
+.public-footer-legal .public-footer-link[aria-current='page'] {
+  color: var(--color-text);
+  box-shadow: inset 0 -2px 0 var(--color-accent);
+}

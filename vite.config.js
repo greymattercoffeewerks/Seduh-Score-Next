@@ -8,7 +8,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   build: {
     rollupOptions: {
-      // Eight HTML entries: the marketing landing page at root (index.html),
+      // Fourteen HTML entries: the marketing landing page at root (index.html),
       // the console SPA at /app/ (app/index.html — moved out of root
       // 2026-09-07 so the bare domain serves the landing page instead of
       // booting straight into the console), the standalone Timer tool at
@@ -49,6 +49,13 @@ export default defineConfig({
         // a real event's worth of published content exists — see
         // src/marketing/CLAUDE.md and resultsScreen.js's own header comment.
         results: fileURLToPath(new URL('./results/index.html', import.meta.url)),
+        // Public trust pages (2026-09-25): static prose, one entry each, all mounted by
+        // src/marketing/trustMain.js from their own data-page attribute.
+        about: fileURLToPath(new URL('./about/index.html', import.meta.url)),
+        contact: fileURLToPath(new URL('./contact/index.html', import.meta.url)),
+        privacy: fileURLToPath(new URL('./privacy/index.html', import.meta.url)),
+        terms: fileURLToPath(new URL('./terms/index.html', import.meta.url)),
+        neutrality: fileURLToPath(new URL('./neutrality/index.html', import.meta.url)),
       },
     },
   },

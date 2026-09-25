@@ -2,6 +2,7 @@
 // landing page's version trail and avoids each surface inventing a new footer.
 import { el, svgEl } from '../core/dom.js';
 import { APP_VERSION } from '../core/version.js';
+import { TRUST_LINKS } from './trustContent.js';
 
 // Inline SVG rather than the 🇧🇳 regional-indicator emoji — confirmed live
 // that Chrome on Windows has no color-flag-emoji font and falls back to
@@ -25,7 +26,25 @@ function bruneiFlag() {
   return svg;
 }
 
-export function buildPublicFooter({ companionHref, companionText }) {
+// The trust pages (About, Contact, Privacy, Terms, Neutrality) are linked from every
+// public page's footer, so a visitor can find them from wherever they land.
+// `currentSlug` marks the page being viewed, if it is one of them.
+function buildTrustNav(currentSlug) {
+  return el(
+    'nav',
+    { className: 'public-footer-legal', attrs: { 'aria-label': 'About and legal' } },
+    TRUST_LINKS.map(({ href, text }) =>
+      el('a', {
+        className: 'public-footer-link',
+        text,
+        attrs:
+          currentSlug && href === `/${currentSlug}/` ? { href, 'aria-current': 'page' } : { href },
+      }),
+    ),
+  );
+}
+
+export function buildPublicFooter({ companionHref, companionText, currentSlug }) {
   return el('div', { className: 'public-footer-wrap' }, [
     el('footer', { className: 'public-footer' }, [
       el('span', { className: 'public-footer-credit' }, [
@@ -44,6 +63,7 @@ export function buildPublicFooter({ companionHref, companionText }) {
           attrs: { href: '/bts/' },
         }),
       ]),
+      buildTrustNav(currentSlug),
     ]),
   ]);
 }
