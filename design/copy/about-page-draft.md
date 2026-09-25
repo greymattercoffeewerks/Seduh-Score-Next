@@ -1,6 +1,6 @@
 # About page — draft
 
-_Status: DRAFT for owner review. Nothing here is published. I used only facts already in your Neutrality draft and the repo, and left placeholders for anything else, since I do not know it. ]OWNER TO CONFIRM\] marks things only you can supply._
+_Status: DRAFT for owner review. Nothing here is published. I used only facts already in your Neutrality draft and the repo, and left placeholders for anything else, since I do not know it. [OWNER TO CONFIRM] marks things only you can supply._
 
 ## Headline
 
@@ -10,7 +10,7 @@ Scoring for coffee competitions, built by people in the coffee community.
 
 Seduh Score is a platform for running coffee competitions. It handles registering competitors, timing and scoring heats, working out the standings, and publishing results. It is built to keep working when the connection is poor, and to make every result something the organiser can explain and show.
 
-It supports two competition formats today, Cup Taster and BTC (Barista Team Championship). Throwdown and Liga Seduh are still to come. ]VERIFY: the Behind the Seduh page says BTC is live, but the project notes still call it in progress. Confirm before publishing.\] We also offer free community tools, including a Timer and Guess the Bean, and a public archive of published results.
+It supports two competition formats today, Cup Taster and BTC (Barista Team Championship). Throwdown and Liga Seduh are still to come. We also offer free community tools, including a Timer and Guess the Bean, and a public archive of published results.
 
 ## Who builds it
 
@@ -30,7 +30,7 @@ We run the platform. We don't run your competition. The organiser decides the fo
 
 ## Where we are
 
-With love from Old Kiulap, Negara Brunei Darussalam. ]OWNER TO CONFIRM: add the town or address only if you want it shown, and whether you host events or accept enquiries from outside Brunei.\]
+With love from Old Kiulap, Negara Brunei Darussalam. [OWNER TO CONFIRM: add the town or address only if you want it shown, and whether you host events or accept enquiries from outside Brunei.]
 
 ## Get in touch
 

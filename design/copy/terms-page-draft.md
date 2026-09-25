@@ -1,6 +1,6 @@
 # Terms page — draft
 
-_Status: DRAFT for owner review. Nothing here is published. A basic, plain-language version, not yet reviewed by a lawyer. ]OWNER TO CONFIRM\] marks decisions only you can make._
+_Status: DRAFT for owner review. Nothing here is published. A basic, plain-language version, not yet reviewed by a lawyer. [OWNER TO CONFIRM] marks decisions only you can make._
 
 ## Headline
 
@@ -8,7 +8,7 @@ The ground rules for using Seduh Score.
 
 ## Who we are
 
-Seduh Score is run by Grey Matter Coffee Werks in Brunei ("we", "us"). By using the website or the app you agree to these terms. If you do not agree, please do not use it. Contact: greymatter.cw@outlook.com. ]TEMPORARY: swap for hello@seduhscore.com later.\]
+Seduh Score is run by Grey Matter Coffee Werks in Brunei ("we", "us"). By using the website or the app you agree to these terms. If you do not agree, please do not use it. Contact: greymatter.cw@outlook.com. [TEMPORARY: swap for hello@seduhscore.com later.]
 
 ## What Seduh Score is
 
@@ -41,7 +41,7 @@ Event data belongs to the organiser. What we hold and how to ask us to remove it
 
 ## Pricing
 
-Pricing is set out on the Pricing page and is not part of these terms. ]LINK: Pricing page, once it exists\]
+Pricing is set out on the Pricing page and is not part of these terms. [LINK: Pricing page, once it exists]
 
 ## Our responsibility
 

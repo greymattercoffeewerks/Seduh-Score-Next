@@ -1,6 +1,6 @@
 # Contact page — draft
 
-_Status: DRAFT for owner review. Nothing here is published. The address is temporary until the seduhscore.com mailbox exists. ]OWNER TO CONFIRM\] marks things only you can decide._
+_Status: DRAFT for owner review. Nothing here is published. The address is temporary until the seduhscore.com mailbox exists. [OWNER TO CONFIRM] marks things only you can decide._
 
 ## Headline
 
@@ -10,9 +10,9 @@ Get in touch.
 
 greymatter.cw@outlook.com
 
-[TEMPORARY: swap for hello@seduhscore.com once it is set up, and update the Neutrality page's "Raising a concern" section to match.\]
+[TEMPORARY: swap for hello@seduhscore.com once it is set up, and update the Neutrality page's "Raising a concern" section to match.]
 
-We are a small team, so email is the best route. We read everything. ]OWNER TO CONFIRM: a response-time promise, for example "within 3 working days". Only state one you will keep.\]
+We are a small team, so email is the best route. We read everything. [OWNER TO CONFIRM: a response-time promise, for example "within 3 working days". Only state one you will keep.]
 
 ## What to email us about
 

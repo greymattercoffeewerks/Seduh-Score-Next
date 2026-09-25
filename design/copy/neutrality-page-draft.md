@@ -1,6 +1,6 @@
 # Neutrality & independence — page draft
 
-_Status: DRAFT for owner review. Nothing here is published. Claims marked ]VERIFY\] depend on platform behaviour that must be confirmed or built first. ]OWNER TO CONFIRM\] marks policy only you can decide._
+_Status: DRAFT for owner review. Nothing here is published. Claims marked [VERIFY] depend on platform behaviour that must be confirmed or built first. [OWNER TO CONFIRM] marks policy only you can decide._
 
 ## Headline
 
@@ -27,8 +27,8 @@ If there's a potential Conflict of Interest (COI):
 
 ## Your data
 
-Event data belongs to the organiser. ]VERIFY: export and deletion options before stating them; see the privacy page, T-TRUST.4\]
+Event data belongs to the organiser. [VERIFY: export and deletion options before stating them; see the privacy page, T-TRUST.4]
 
 ## Raising a concern
 
-[TBD: contact route, ties to the contact page in T-TRUST.4\]
+[TBD: contact route, ties to the contact page in T-TRUST.4]
