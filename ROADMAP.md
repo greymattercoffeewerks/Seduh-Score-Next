@@ -1346,7 +1346,7 @@ the counter unreadable by every API role, writes still work, `list_migrations` m
 starts from that moment: events scored before it have no history, and no cloud event is real or published
 yet. Definition of Done met; no blocking findings.
 
-**T-TRUST.2b (2026-09-25) — Organiser dispute pack; built locally, migration NOT yet applied to the cloud.**
+**T-TRUST.2b (2026-09-25) — Organiser dispute pack; shipped, migration applied to the cloud 2026-09-25.**
 `get_dispute_pack(org, event)` (STABLE SECURITY INVOKER + explicit membership guard, unified "not found",
 authenticated only) returns one consistent snapshot of the exact record of an event — entries (no contact
 details), Cup Taster and BTC tables, and the change log with old/new values (the oldest 20,000 rows, with
@@ -1354,9 +1354,8 @@ the true total and a truncated flag) — plus a self-describing `about` list of 
 warning. The Cup Taster report screen has a "Dispute pack" card that downloads it as JSON (file marked
 "TEST — " for rehearsal events). Reviews: security PASSED, schema no blocking, module boundary PASS, a11y
 PASSED, code review no blocking (two mediums fixed), test-auditor FAILED round 1 then PASSED round 2 after
-isolation fixes. pgTAP 021 = 30 assertions; suites at close: pgTAP 594, JS 1,532. **Apply
-`20260925100000_get_dispute_pack` to the cloud after the PR merges and verify against `list_migrations`;
-until then the button shows its error state.** The public disclosure's "can be requested from the
+isolation fixes. pgTAP 021 = 30 assertions; suites at close: pgTAP 594, JS 1,532. **Applied
+to the cloud 2026-09-25 and verified (privileges, refusals, ledger).** The public disclosure's "can be requested from the
 organiser" line is now backed by this feature (Cup Taster only; BTC needs a button). Deferred (low):
 ordering tie-break keys untested; empty live-region `display:none` is a shared pattern; huge-Blob revoke
 timing; a third format needs the SQL function extended.

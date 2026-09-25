@@ -54,9 +54,11 @@ remaining cheap lows were then also fixed. Remaining low survivors: ordering tie
 entries/sets/heat_entries/teams/votes; the org-mismatch guard and the membership guard are equivalent
 mutants, because the events RLS refuses a non-member first (deliberate two-layer defence).
 
-**Not yet applied to the cloud project (`wxzwanprluqmgoagbkpv`).** After the PR merges, apply
-`20260925100000_get_dispute_pack` with `apply_migration`, verify it, and compare `list_migrations` with
-the repo; until then the RPC does not exist there and the button shows its error state.
+**Applied to the cloud project (`wxzwanprluqmgoagbkpv`) on 2026-09-25** via `apply_migration` (ledger
+name `get_dispute_pack`, version `20260925004824`), after the PR merged. Verified there: SECURITY INVOKER,
+STABLE, `search_path=""`; EXECUTE for `authenticated` and `service_role` only (anon false, no PUBLIC);
+anon is refused (42501) and a non-member gets the unified "not found"; existing data untouched (2 events,
+15 results); the security advisors list nothing new for it.
 
 **Deferred / non-blocking:** ordering tie-break keys untested; the Blob URL is revoked immediately after
 the click, as `downloadCsv` does (Safari/Firefox may cancel a very large download); a third format's
