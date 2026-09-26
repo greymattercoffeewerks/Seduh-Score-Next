@@ -321,6 +321,10 @@ export function mountAppShell(
   // been. `reportFlushError()` below is how a caller outside any screen
   // (main.js's reconnect trigger) surfaces that same conflict here instead.
   let lastFlushError = null;
+  // How many dropped writes have been reported since the last clear —
+  // lastFlushError only holds the latest one, and a second loss must not
+  // read the same as the first (ui-accessibility-reviewer, 2026-09-26).
+  let lostWriteCount = 0;
   let lastSyncKey = null;
   function renderSync(state) {
     syncEl.innerHTML = '';
@@ -338,13 +342,31 @@ export function mountAppShell(
     // actually needs a human's attention (repeatedly failing, not just
     // in-flight), so it gets its own distinct, more alarming styling rather
     // than being indistinguishable from an ordinary few-seconds-behind
-    // pending state. A surfaced lastFlushError with ZERO pending operations
-    // is a different, also-urgent case: the write is gone, not retrying —
-    // same danger-toned styling as stuckOperation, but its own wording,
-    // since "N pending" would be actively misleading here (N is 0).
-    if (state.pendingCount === 0 && state.lastFlushError) {
+    // pending state. A surfaced lastFlushError is a different, also-urgent
+    // case: the write is gone, not retrying — same danger-toned styling as
+    // stuckOperation, but its own wording.
+    //
+    // That lost-write notice wins over everything else (2026-09-26, found in
+    // review: offline-sync-auditor). main.js keeps the report until reload
+    // — a dropped write never comes back — so hiding it whenever anything
+    // else is queued would hide it for most of a busy event. A later stuck
+    // operation is still named alongside it, so the notice never masks a
+    // new, retrying failure. The pending count is left out: this is a live
+    // region, and
+    // re-announcing the whole sentence on every tap/flush only to change a
+    // number drowned out the timing and scoring screens for screen-reader
+    // users (ui-accessibility-reviewer, 2026-09-26). Not "Not synced"
+    // either — later writes may well have landed; what's true is that
+    // these ones were lost.
+    if (state.lastFlushError) {
       syncEl.classList.add('app-shell-sync-stuck');
-      syncEl.textContent = 'Not synced — a write failed to save and was not retried';
+      const lost = lostWriteCount > 1 ? `${lostWriteCount} writes` : '1 write';
+      let text = `${lost} lost — not saved and not retried`;
+      if (state.stuckOperation) {
+        const label = operationLabels[state.stuckOperation.type];
+        text += label ? `; ${label} failed` : '; retrying failed';
+      }
+      syncEl.textContent = text;
     } else if (state.stuckOperation) {
       syncEl.classList.add('app-shell-sync-stuck');
       const label = operationLabels[state.stuckOperation.type];
@@ -358,7 +380,16 @@ export function mountAppShell(
   }
 
   async function refreshSync() {
-    const operations = await listPendingOperations();
+    // A failed IndexedDB read keeps the panel's last state rather than
+    // throwing an unhandled rejection on every poll tick (found in review:
+    // code-reviewer, 2026-09-26).
+    let operations;
+    try {
+      operations = await listPendingOperations();
+    } catch (err) {
+      console.error('appShell: pending-operation read failed', err);
+      return;
+    }
     const state = computeSyncState({
       enabled: cachedEventId != null,
       operations,
@@ -368,10 +399,16 @@ export function mountAppShell(
     // actually changed since the last poll — found in review: without this,
     // every 3s tick would re-mutate syncEl even while idle at "live",
     // spamming an aria-live announcement for no real change.
-    const key = `${state.status}:${state.pendingCount}:${state.stuckOperation?.id ?? ''}:${Boolean(state.lastFlushError)}`;
+    const pendingPart = state.lastFlushError ? '' : state.pendingCount;
+    const key = `${state.status}:${pendingPart}:${state.stuckOperation?.type ?? ''}:${state.stuckOperation?.id ?? ''}:${state.lastFlushError ? lostWriteCount : 0}`;
     if (key === lastSyncKey) return;
     lastSyncKey = key;
     renderSync(state);
+    // The panel's height changes with its text (a lost-write notice wraps
+    // to two lines at 360px) — keep the sticky-header offset that
+    // scroll-margin-top relies on in step, or focused content can land
+    // behind the header (ui-accessibility-reviewer, 2026-09-26).
+    syncHeaderHeightVar();
   }
 
   const syncIntervalId = setInterval(refreshSync, syncPollMs);
@@ -541,6 +578,7 @@ export function mountAppShell(
     // out silently).
     reportFlushError(error = null) {
       lastFlushError = error;
+      lostWriteCount = error ? lostWriteCount + 1 : 0;
       refreshSync();
     },
     unmount() {

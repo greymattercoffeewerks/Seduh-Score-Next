@@ -6,7 +6,7 @@ import {
   flushOutbox,
   buildRpcHandler,
 } from './outbox.js';
-import { _clearAllForTests } from './db.js';
+import { _clearAllForTests, outboxRemove } from './db.js';
 
 beforeEach(async () => {
   await _clearAllForTests();
@@ -50,17 +50,16 @@ describe('buildRpcHandler', () => {
   });
 
   it('wraps a GENUINE server-side rejection (a real HTTP response came back) as a permanent outbox failure, preserving code/details/message', async () => {
-    // status: 409 — a real, non-zero HTTP status is what actually means
-    // "the server received this and rejected it," per the module comment
-    // above. Confirmed against a real local Postgrest instance: a genuine
-    // rejection carries status 404/409/etc.; a network failure carries
-    // status 0 — see the next test.
+    // status: 500 — what PostgREST actually sends for P0002 (it maps P0001
+    // to 400 but every other P0*** to 500; see isTransientFailure's own
+    // comment). The code, not the status, is what marks this permanent. A
+    // network failure carries status 0 instead — see the next test.
     const client = {
       rpc: () =>
         Promise.resolve({
           data: null,
           error: { message: 'stale conflict', code: 'P0002', details: 'v1 vs v2' },
-          status: 409,
+          status: 500,
         }),
     };
     const handler = buildRpcHandler(client, 'confirm_heat');
@@ -140,6 +139,90 @@ describe('buildRpcHandler', () => {
       permanent: true,
     });
   });
+
+  // Pre-event hardening (2026-09-26): a response that reached the server is
+  // not automatically permanent. Each row is the real shape PostgREST (or the
+  // gateway / Cloudflare in front of it) returns for that failure.
+  it.each([
+    ['a request timeout, no code', 408, undefined],
+    ['a rate limit, no code', 429, undefined],
+    ['a gateway 502 with a non-JSON body', 502, undefined],
+    ['a 503 from the API gateway', 503, undefined],
+    ['a Cloudflare 522 connection timeout', 522, undefined],
+    ['a bare 500 with no code', 500, undefined],
+    ['a deadlock', 500, '40P01'],
+    ['a serialization failure', 500, '40001'],
+    ['a statement timeout', 500, '57014'],
+    ['a lock that could not be acquired', 500, '55P03'],
+    ['a generic connection exception', 503, '08000'],
+    ['a client unable to connect', 503, '08001'],
+    ['a connection that no longer exists', 503, '08003'],
+    ['a dropped database connection', 503, '08006'],
+    ['insufficient database resources', 503, '53000'],
+    ['a full database disk', 503, '53100'],
+    ['a database out of memory', 503, '53200'],
+    ['a database out of connections', 503, '53300'],
+    ['a PostgREST connection-pool timeout', 504, 'PGRST003'],
+    ['PostgREST unable to reach the database', 503, 'PGRST000'],
+    ['a PostgREST internal connection error', 503, 'PGRST001'],
+    ['a PostgREST schema cache still loading', 503, 'PGRST002'],
+    ['a database admin shutdown', 503, '57P01'],
+    ['a database crash shutdown', 503, '57P02'],
+    ['a database still starting up', 503, '57P03'],
+  ])('keeps %s retryable (status %s, code %s)', async (_label, status, code) => {
+    const client = {
+      rpc: () => Promise.resolve({ data: null, error: { message: 'try again', code }, status }),
+    };
+    await expect(buildRpcHandler(client, 'confirm_heat')({})).rejects.toMatchObject({
+      permanent: false,
+    });
+  });
+
+  // The trap the code-first rule exists for: PostgREST maps P0001 to 400 but
+  // every other P0*** — including P0002, the stale-conflict code the heat and
+  // match RPCs raise — to 500. Retrying it would wedge the conflict at the
+  // head of the FIFO queue forever, blocking every write behind it.
+  it.each([
+    ['a stale-data conflict (P0002 arrives as 500)', 500, 'P0002'],
+    ['an internal Postgres error', 500, 'XX000'],
+    ['an unknown RPC', 404, 'PGRST202'],
+    ['a check-constraint violation', 400, '23514'],
+    ['a gateway 400 with a non-JSON body', 400, undefined],
+    ['a 404 with no code', 404, undefined],
+  ])('still marks %s permanent (status %s, code %s)', async (_label, status, code) => {
+    const client = {
+      rpc: () => Promise.resolve({ data: null, error: { message: 'rejected', code }, status }),
+    };
+    await expect(buildRpcHandler(client, 'confirm_heat')({})).rejects.toMatchObject({
+      permanent: true,
+    });
+  });
+
+  it('falls back to the status rule when a gateway body carries a non-string code, instead of throwing', async () => {
+    const client = {
+      rpc: () =>
+        Promise.resolve({ data: null, error: { message: 'upstream', code: 503 }, status: 503 }),
+    };
+    await expect(buildRpcHandler(client, 'confirm_heat')({})).rejects.toMatchObject({
+      message: 'upstream',
+      permanent: false,
+    });
+  });
+
+  it.each([
+    ['a protocol violation', 500, '08P01'],
+    ['a configuration limit exceeded', 500, '53400'],
+  ])(
+    'keeps %s permanent — same SQLSTATE class as a transient code, but fails the same way every retry',
+    async (_label, status, code) => {
+      const client = {
+        rpc: () => Promise.resolve({ data: null, error: { message: 'rejected', code }, status }),
+      };
+      await expect(buildRpcHandler(client, 'confirm_heat')({})).rejects.toMatchObject({
+        permanent: true,
+      });
+    },
+  );
 
   it('does not mark a network-level rejection (client.rpc itself throwing) as permanent', async () => {
     expect.assertions(2);
@@ -222,6 +305,9 @@ describe('flushOutbox', () => {
     expect(result.permanentFailure).toBe(true);
     expect(result.stopped).toBe(false);
     expect(result.error).toBe(err);
+    // What main.js reports to the sync panel — the common "one conflict,
+    // queue drains" shape (test-auditor, 2026-09-26).
+    expect(result.permanentError).toBe(err);
     expect(await countPendingOperations()).toBe(0);
   });
 
@@ -246,6 +332,7 @@ describe('flushOutbox', () => {
     expect(handler).toHaveBeenCalledTimes(2);
     expect(result.processed).toBe(1);
     expect(result.permanentFailure).toBe(true);
+    expect(result.permanentError.message).toBe('stale conflict');
     expect(await countPendingOperations()).toBe(0);
   });
 
@@ -278,6 +365,9 @@ describe('flushOutbox', () => {
     expect(result.stopped).toBe(true);
     expect(result.error.message).toBe('network timeout');
     expect(result.permanentFailure).toBe(true);
+    // The dropped write's own error, not the stopping one — what a caller
+    // reporting "this write was lost" needs (code-reviewer, 2026-09-26).
+    expect(result.permanentError.message).toBe('stale conflict');
     expect(handler).toHaveBeenCalledTimes(2);
     // 'stale-conflict' was removed (permanent). 'network-fails' is left
     // queued for retry (attempts bumped). 'never-reached' is ALSO still
@@ -543,5 +633,76 @@ describe('offline soak', () => {
     expect(result.processed).toBe(9); // every operation except the one permanent failure
     expect(await countPendingOperations()).toBe(0); // the permanent failure is removed too, not left stuck
     expect(handler).toHaveBeenCalledTimes(10);
+  });
+});
+
+// Found in review (offline-sync-auditor, 2026-09-26): the reentrancy guard
+// only covers one tab, and two organiser tabs share one IndexedDB outbox.
+// A fake Web Lock stands in for "another tab is flushing right now".
+describe('cross-tab flush lock', () => {
+  it('waits for another tab holding the flush lock, then runs against whatever is left in the queue', async () => {
+    let releaseOtherTab;
+    const otherTabDone = new Promise((resolve) => {
+      releaseOtherTab = resolve;
+    });
+    const requested = [];
+    let held = otherTabDone; // another tab already holds it
+    const locks = {
+      request: (name, fn) => {
+        requested.push(name);
+        const run = held.then(() => fn());
+        held = run.catch(() => {});
+        return run;
+      },
+    };
+    vi.stubGlobal('navigator', { ...navigator, locks });
+    try {
+      await enqueueOperation('confirm_heat', { heatId: 'h1' });
+      const drainedElsewhere = await enqueueOperation('confirm_heat', { heatId: 'h2' });
+      const handler = vi.fn(async () => {});
+
+      const pending = flushOutbox({ confirm_heat: handler });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(handler).not.toHaveBeenCalled();
+
+      // The other tab drains h2 while holding the lock.
+      await outboxRemove(drainedElsewhere.id);
+      releaseOtherTab();
+      const result = await pending;
+
+      expect(requested).toEqual(['seduh-outbox-flush']);
+      expect(handler).toHaveBeenCalledTimes(1);
+      expect(handler).toHaveBeenCalledWith({ heatId: 'h1' });
+      expect(result).toEqual({ processed: 1, stopped: false, permanentFailure: false });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('uses handlers merged in by a same-tab caller while this tab was still waiting for the lock', async () => {
+    let releaseOtherTab;
+    const otherTabDone = new Promise((resolve) => {
+      releaseOtherTab = resolve;
+    });
+    const locks = { request: (_name, fn) => otherTabDone.then(() => fn()) };
+    vi.stubGlobal('navigator', { ...navigator, locks });
+    try {
+      await enqueueOperation('confirm_heat', { heatId: 'h1' });
+      await enqueueOperation('start_heat', { heatId: 'h2' });
+      const confirmHandler = vi.fn(async () => {});
+      const startHandler = vi.fn(async () => {});
+
+      const first = flushOutbox({ confirm_heat: confirmHandler });
+      const second = flushOutbox({ start_heat: startHandler }); // joins the waiting flush
+      releaseOtherTab();
+      const [a, b] = await Promise.all([first, second]);
+
+      expect(a).toBe(b);
+      expect(confirmHandler).toHaveBeenCalledTimes(1);
+      expect(startHandler).toHaveBeenCalledTimes(1);
+      expect(await countPendingOperations()).toBe(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

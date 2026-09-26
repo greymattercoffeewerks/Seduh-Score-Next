@@ -136,14 +136,14 @@ function makeRpc(db, calls) {
         return Promise.resolve({
           data: null,
           error: { code: 'P0002', message: `CONFLICT: heat is ${heat.status} now` },
-          status: 400,
+          status: 500,
         });
       }
       if (payload.p_conflict_policy === 'reject' && entry.elapsed_secs != null) {
         return Promise.resolve({
           data: null,
           error: { code: 'P0002', message: 'CONFLICT: heat entry already has a recorded time' },
-          status: 400,
+          status: 500,
         });
       }
       entry.elapsed_secs = payload.p_elapsed_secs;

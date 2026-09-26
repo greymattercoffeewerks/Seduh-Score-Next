@@ -31,7 +31,7 @@ import { mountMatchesScreen as mountBtcMatchesScreen } from './formats/btc/match
 import { mountStandingsScreen as mountBtcStandingsScreen } from './formats/btc/standingsScreen.js';
 import { mountBracketScreen as mountBtcBracketScreen } from './formats/btc/bracketScreen.js';
 import { mountScoringScreen as mountBtcScoringScreen } from './formats/btc/scoringScreen.js';
-import { flushOutbox } from './core/outbox.js';
+import { flushOutbox, listPendingOperations } from './core/outbox.js';
 import { btcOutboxHandlers, btcOperationLabels } from './formats/btc/outboxHandlers.js';
 import {
   cupTasterOutboxHandlers,
@@ -409,18 +409,30 @@ function allOutboxHandlers(client) {
 // silently discarded from the outbox with nobody told, and the very next
 // sync-panel poll saw an empty queue and reported "Synced" — a false
 // all-clear for a write that never actually landed, exactly the "conflict
-// silently resolved" failure mode §9 exists to prevent. A resolved,
-// non-permanent result (or no error at all) clears any previously-reported
-// one, the same way a screen's own retry clears its local error state.
+// silently resolved" failure mode §9 exists to prevent.
+//
+// Sticky, not cleared by a later clean flush (2026-09-26, found in review:
+// code-reviewer). A dropped write never comes back, so a later, unrelated
+// success must not hide it — and once the periodic retry below existed, a
+// conflict dropped alongside a transient failure was cleared within 15s.
+// Reports `permanentError` (the dropped operation's own error), not
+// `error`, which is whatever failure stopped the pass.
 function attemptReconnectFlush(client, shell) {
   flushOutbox(allOutboxHandlers(client))
     .then((result) => {
-      shell.reportFlushError(result.permanentFailure ? result.error : null);
+      // `?? result.error`: reportFlushError(undefined) would CLEAR the
+      // report (its default is null) — never let a missing field turn a
+      // dropped write into a false "Synced".
+      if (result.permanentFailure) {
+        shell.reportFlushError(result.permanentError ?? result.error);
+      }
     })
     .catch((err) => {
       console.error('main: reconnect flush failed', err);
     });
 }
+
+const PENDING_RETRY_MS = 15000;
 
 export function mountApp(root, { client = getSupabase(), orgId = getDefaultOrgId() } = {}) {
   root.innerHTML = '';
@@ -454,29 +466,64 @@ export function mountApp(root, { client = getSupabase(), orgId = getDefaultOrgId
   // fresh sign-in transition, for free) and "attempt on reconnect" below.
   //
   // Guarded on a real session, not attempted unconditionally: buildRpcHandler()
-  // (core/outbox.js) marks EVERY client.rpc() error `permanent: true`, on
-  // the reasoning that a response which reached the server and came back
-  // rejected (as opposed to the request never reaching it at all) means
-  // retrying the identical payload fails the identical way forever. That
-  // reasoning holds for a stale-conflict rejection, but an unauthenticated
+  // (core/outbox.js) originally marked EVERY client.rpc() error `permanent:
+  // true` (since narrowed — 401 and transient failures now stay queued, see
+  // its isTransientFailure), on the reasoning that a response which reached
+  // the server and came back rejected means retrying the identical payload
+  // fails the identical way forever. That reasoning holds for a
+  // stale-conflict rejection, but an unauthenticated
   // call also resolves with an error object rather than throwing — firing
-  // before sign-in would misclassify a purely transient "not signed in yet"
+  // before sign-in could misclassify a purely transient "not signed in yet"
   // state as permanent and silently discard real pending writes. Every
   // EXISTING flush call site avoided this by construction (each only ever
   // runs from inside an already-`requireAuth()`-gated screen's own write
   // handler); this is the first call site that can fire before that gate.
+  //
+  // `onConsoleRoute` (2026-09-26, found in review: offline-sync-auditor):
+  // the projector/phone/splash links open this same SPA in another tab,
+  // sharing this session and this IndexedDB outbox. That tab has no
+  // visible shell (chrome: false), so a conflict its flush discovers would
+  // be removed from the shared queue and reported to a hidden panel — the
+  // organiser's own tab would then show "Synced". Only a tab showing the
+  // organiser console drains the queue. Starts false and is set by
+  // updateChrome() below, which also attempts the first flush if the
+  // session was already known before the first route resolved.
   let hasSession = false;
+  let onConsoleRoute = false;
+  function flushIfOwner() {
+    if (hasSession && onConsoleRoute) attemptReconnectFlush(client, shell);
+  }
   const {
     data: { subscription: reconnectAuthSubscription },
   } = client.auth.onAuthStateChange((_event, session) => {
     hasSession = Boolean(session);
-    if (hasSession) attemptReconnectFlush(client, shell);
+    flushIfOwner();
   });
 
   function onOnline() {
-    if (hasSession) attemptReconnectFlush(client, shell);
+    flushIfOwner();
   }
   window.addEventListener('online', onOnline);
+
+  // A transient server failure (a gateway 5xx, a rate limit, a statement
+  // timeout — see core/outbox.js's isTransientFailure) leaves its write
+  // queued, but the browser never fires 'online' for it: the device was
+  // online the whole time. Without this, that write sat unsynced until the
+  // organiser's next action happened to flush again. Only fires while
+  // something is actually queued, so an idle console makes no requests —
+  // and not while the device is offline, where every attempt would only
+  // bump `attempts` and make an ordinary offline queue look stuck (the
+  // 'online' listener above already covers coming back).
+  const retryIntervalId = setInterval(() => {
+    if (!hasSession || !onConsoleRoute || !navigator.onLine) return;
+    listPendingOperations()
+      .then((operations) => {
+        if (operations.length > 0) attemptReconnectFlush(client, shell);
+      })
+      .catch((err) => {
+        console.error('main: pending-operation check failed', err);
+      });
+  }, PENDING_RETRY_MS);
   // Still null here — createRouter() below needs `routes` already built,
   // but requireAuth()'s onSignedIn only reads routerRef.current lazily,
   // once a real sign-in actually happens, by which point it's set.
@@ -487,6 +534,9 @@ export function mountApp(root, { client = getSupabase(), orgId = getDefaultOrgId
     const showChrome = route.chrome !== false;
     shellRoot.hidden = !showChrome;
     bareRoot.hidden = showChrome;
+    const wasOnConsoleRoute = onConsoleRoute;
+    onConsoleRoute = showChrome;
+    if (!wasOnConsoleRoute) flushIfOwner();
     if (!showChrome) return;
     const links = [{ label: 'Events', href: '#/events', active: !params.eventId }];
     if (params.eventId) {
@@ -544,6 +594,7 @@ export function mountApp(root, { client = getSupabase(), orgId = getDefaultOrgId
       await router.stop();
       shell.unmount();
       window.removeEventListener('online', onOnline);
+      clearInterval(retryIntervalId);
       reconnectAuthSubscription.unsubscribe();
       stopTrackingInputModality();
     },

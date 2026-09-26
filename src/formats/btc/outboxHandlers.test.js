@@ -62,7 +62,7 @@ describe('a server refusal of a queued confirm', () => {
         Promise.resolve({
           data: null,
           error: { code: 'P0002', message: 'CONFLICT: match modified', details: '{}' },
-          status: 400,
+          status: 500,
         }),
     };
     await enqueueOperation('confirm_btc_match', { p_operation_id: 'op-1' });
