@@ -5,6 +5,7 @@ import {
   listPendingOperations,
   flushOutbox,
   buildRpcHandler,
+  isTransientErrorCode,
 } from './outbox.js';
 import { _clearAllForTests, outboxRemove } from './db.js';
 
@@ -240,6 +241,21 @@ describe('buildRpcHandler', () => {
       expect(err.message).toBe('fetch failed');
       expect(err.permanent).toBeUndefined();
     });
+  });
+});
+
+// For callers holding only a code — a failed read, where postgrest-js's
+// error carries no status (formats/cup-taster/liveSession.js).
+describe('isTransientErrorCode', () => {
+  it.each(['57014', '40P01', '08006', 'PGRST003', 'PGRST301', 'PGRST302', 'PGRST303'])(
+    'is true for %s',
+    (code) => {
+      expect(isTransientErrorCode(code)).toBe(true);
+    },
+  );
+
+  it.each(['42501', 'P0002', 'PGRST116', '08P01', '', undefined])('is false for %s', (code) => {
+    expect(isTransientErrorCode(code)).toBe(false);
   });
 });
 

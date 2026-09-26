@@ -68,8 +68,14 @@
 import { listHeatsForStage, hydrateEntries } from './heats.js';
 import { fetchStandingsForStage, resolveAdvancement, tieStatusFor } from './standings.js';
 import { listEntriesByIds } from '../../core/registry.js';
-import { enqueueOperation, flushOutbox, isTransientFailure } from '../../core/outbox.js';
+import {
+  enqueueOperation,
+  flushOutbox,
+  isTransientErrorCode,
+  isTransientFailure,
+} from '../../core/outbox.js';
 import { getSupabase } from '../../core/supabaseClient.js';
+import { ROW_NOT_FOUND } from '../../core/errors.js';
 
 const RECENT_HEATS_LIMIT = 3;
 
@@ -239,6 +245,66 @@ export async function buildLiveSessionPayload(stageId, client = getSupabase()) {
 // buildRpcHandler but missed this second, hand-rolled mapping entirely.
 // This handler can't reuse buildRpcHandler directly — the stored payload
 // here isn't the RPC payload yet when the handler is invoked.
+//
+// The READ chain before the RPC needs the same treatment (2026-09-27, found
+// in review: offline-sync-auditor). Every read helper it calls throws
+// postgrest-js's own error object unclassified, and an error with no
+// `.permanent` stays at the head of the FIFO queue — retried forever, with
+// no manual discard, blocking every write queued behind it. The realistic
+// trigger: a rehearsal event's publish is still queued on the organiser's
+// device when that test event is deleted, so findStageById's `.single()`
+// finds no row (PGRST116) on every attempt, on event day.
+//
+// - A TEST event's stage gone (PGRST116): nothing left to publish. The
+//   operation completes as a no-op — not a "lost write": nothing the
+//   organiser did was lost, the thing it described no longer exists. Only
+//   for `isTest` intents: delete_test_event is the only delete path and it
+//   refuses a real event, so PGRST116 on a real event means a different
+//   account or an RLS problem — permanent and reported, never skipped
+//   silently (offline-sync-auditor, 2026-09-27).
+// - Network drop / timeout (code ''), a gateway body with no code, an
+//   expired JWT or a transient SQLSTATE: retryable, stays queued.
+// - Permission denied (42501): retryable here. An authenticated organiser
+//   can't hit it on these tables; it's what an ANONYMOUS read gets once a
+//   failed token refresh drops the session. The RPC path keeps that same
+//   case queued as a 401, but these read helpers throw away the status, so
+//   without this a publish at the head of the queue was dropped while the
+//   writes around it waited for the session to come back.
+// - Anything else — e.g. a malformed id, or a plain Error from a bug while
+//   building the payload: permanent. A publish is always rebuilt from
+//   fresh state, so the next one repairs whatever this one would have said.
+//   postgrest-js never throws Error instances from these reads (it returns
+//   plain objects carrying a `code`, '' for a network drop), so an Error
+//   with no `code` at all is our own code, not the network. Checking for
+//   the missing `code` too keeps a future postgrest-js that returns real
+//   PostgrestError instances (which do carry one) on the network path.
+const INSUFFICIENT_PRIVILEGE = '42501';
+
+function isTransientReadFailure(error) {
+  // The code's VALUE, not the key's presence: a helper that re-wraps an
+  // error the way buildRpcHandler does (`err.code = error.code`) can carry
+  // `code: undefined`, and must not be mistaken for a network failure.
+  if (error instanceof Error && error.code == null) return false;
+  const code = error?.code;
+  if (typeof code !== 'string' || code === '') return true;
+  return code === INSUFFICIENT_PRIVILEGE || isTransientErrorCode(code);
+}
+
+async function buildPayloadOrClassify(stageId, isTest, client) {
+  try {
+    return await buildLiveSessionPayload(stageId, client);
+  } catch (error) {
+    if (error?.code === ROW_NOT_FOUND && isTest === true) return null;
+    // `cause` keeps the original stack — the permanent branch exists mostly
+    // to catch a bug in our own payload building, which needs it to debug.
+    const err = new Error(error?.message ?? String(error), { cause: error });
+    err.code = error?.code;
+    err.details = error?.details;
+    err.permanent = !isTransientReadFailure(error);
+    throw err;
+  }
+}
+
 export function publishLiveSessionHandlers(client) {
   return {
     publish_live_session: async ({ orgId, eventId, stageId, format, isTest }) => {
@@ -263,7 +329,8 @@ export function publishLiveSessionHandlers(client) {
       // state) — this timestamp only decides WHICH of two real publishes
       // wins, not whether the result stays internally consistent.
       const snapshotAt = new Date().toISOString();
-      const payload = await buildLiveSessionPayload(stageId, client);
+      const payload = await buildPayloadOrClassify(stageId, isTest, client);
+      if (payload === null) return; // stage/event gone — see above
       const { error, status } = await client.rpc('publish_session', {
         p_operation_id: crypto.randomUUID(),
         p_org_id: orgId,
@@ -286,10 +353,13 @@ export function publishLiveSessionHandlers(client) {
 
 // The automatic trigger itself. Enqueues the intent FIRST — a pure local
 // IndexedDB write that can't fail just because the device is offline — then
-// attempts a flush; if that flush can't complete right now (offline, or the
-// read chain inside the handler above fails), the operation stays queued
-// exactly like any other tracked write, and drains on the next flush
-// (another screen action, or main.js's existing reconnect-triggered flush).
+// attempts a flush; if that flush can't complete right now (offline, or a
+// transient failure in the read chain inside the handler above), the
+// operation stays queued exactly like any other tracked write, and drains on
+// the next flush (another screen action, or main.js's existing
+// reconnect-triggered flush). A missing stage completes as a no-op and a
+// non-transient read failure is dropped — see the read-chain note on
+// publishLiveSessionHandlers.
 // `isTest` is threaded straight through from the caller's already-loaded
 // event (D9 propagation), never re-derived here.
 //
