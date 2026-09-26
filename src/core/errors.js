@@ -17,3 +17,10 @@ export function describeError(err) {
 // check-then-recover pattern for registerEntry, since core/ can't import
 // from formats/ (handoff §6).
 export const UNIQUE_VIOLATION = '23505';
+
+// PostgREST's "JSON object requested, multiple (or no) rows returned" — what
+// a `.single()` read gets when the row it asked for doesn't exist (or isn't
+// visible). Raw PostgREST vocabulary, same reasoning as UNIQUE_VIOLATION:
+// formats/cup-taster/liveSession.js uses it to tell "the stage/event this
+// publish describes is gone" apart from a failure worth retrying.
+export const ROW_NOT_FOUND = 'PGRST116';

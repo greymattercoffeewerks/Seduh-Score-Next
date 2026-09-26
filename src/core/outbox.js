@@ -136,7 +136,20 @@ const TRANSIENT_SQLSTATES = new Set([
   'PGRST001', // PostgREST internal connection error
   'PGRST002', // PostgREST schema cache not yet loaded
   'PGRST003', // PostgREST connection-pool acquisition timeout
+  // JWT problems — always sent as 401, which isTransientFailure already
+  // treats as retryable; listed so a caller holding only a code (a failed
+  // read, where postgrest-js's thrown error carries no status) agrees.
+  'PGRST301', // JWT invalid / could not be decoded
+  'PGRST302', // no JWT sent where one is required
+  'PGRST303', // JWT expired / claims invalid
 ]);
+
+// For a caller that has an error CODE but no HTTP status — a read helper
+// that throws postgrest-js's error object as-is (formats/cup-taster/
+// liveSession.js's payload read chain). Same list isTransientFailure uses.
+export function isTransientErrorCode(code) {
+  return TRANSIENT_SQLSTATES.has(code);
+}
 
 // Exported, not module-private — found in review (code-reviewer,
 // 2026-09-12): liveSession.js's own publishLiveSessionHandlers can't reuse

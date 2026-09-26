@@ -4,7 +4,7 @@ import {
   publishLiveSession,
   publishLiveSessionHandlers,
 } from './liveSession.js';
-import { flushOutbox, listPendingOperations } from '../../core/outbox.js';
+import { enqueueOperation, flushOutbox, listPendingOperations } from '../../core/outbox.js';
 import { _clearAllForTests } from '../../core/db.js';
 
 // Same queue-per-table fake as standings.test.js/heats.test.js — a table
@@ -677,9 +677,16 @@ describe('publishLiveSession', () => {
   it('enqueues the publish intent even when the device is offline — a read-chain failure must not drop it (found in review: offline-sync-auditor)', async () => {
     // Every read fails exactly like a real dropped connection resolving
     // with an error rather than rejecting (core/outbox.js's own documented
-    // supabase-js behavior) — a plain Error with no `.permanent` flag, so
-    // it's retryable, not a genuine server rejection.
-    const networkError = new Error('network unreachable');
+    // supabase-js behavior). The exact shape postgrest-js returns for a
+    // fetch failure — a plain object with `code: ''` (status 0), not an
+    // Error instance (updated 2026-09-27: the read-chain classifier treats
+    // a code-less Error as a bug in our own payload building).
+    const networkError = {
+      message: 'TypeError: Failed to fetch',
+      details: 'TypeError: Failed to fetch',
+      hint: '',
+      code: '',
+    };
     const offlineBuilder = {
       select: () => offlineBuilder,
       eq: () => offlineBuilder,
@@ -736,5 +743,140 @@ describe('publishLiveSession', () => {
     expect(rpcCalls).toHaveLength(1);
     expect(rpcCalls[0][1].p_is_test).toBe(false);
     expect(rpcCalls[0][1].p_payload.activeHeat.heatNumber).toBe(2);
+  });
+});
+
+// 2026-09-27 (offline-sync-auditor, pre-event): the read chain before the
+// RPC threw postgrest-js's error objects unclassified, so a publish for a
+// stage that no longer exists sat at the head of the FIFO queue forever.
+describe('publish_live_session read-chain failures', () => {
+  beforeEach(async () => {
+    await _clearAllForTests();
+  });
+
+  const intent = {
+    orgId: 'org1',
+    eventId: 'ev1',
+    stageId: 's1',
+    format: 'cup_taster',
+    isTest: true,
+  };
+
+  function failingStageRead(error) {
+    const rpcCalls = [];
+    const client = fakeClient({
+      tables: { ...baseTables(), ct_stages: { data: null, error, status: 406 } },
+      rpc: (...args) => {
+        rpcCalls.push(args);
+        return Promise.resolve({ data: null, error: null });
+      },
+    });
+    return { client, rpcCalls };
+  }
+
+  it('a leftover publish for a deleted test event completes as a no-op and no longer blocks the write queued behind it', async () => {
+    const { client, rpcCalls } = failingStageRead({
+      code: 'PGRST116',
+      message: 'JSON object requested, multiple (or no) rows returned',
+      details: 'The result contains 0 rows',
+    });
+    await enqueueOperation('publish_live_session', intent);
+    await enqueueOperation('later_write', { id: 'w1' });
+    const laterWrites = [];
+
+    const result = await flushOutbox({
+      ...publishLiveSessionHandlers(client),
+      later_write: async (payload) => laterWrites.push(payload),
+    });
+
+    expect(rpcCalls).toEqual([]); // nothing to publish
+    expect(laterWrites).toEqual([{ id: 'w1' }]);
+    expect(result).toEqual({ processed: 2, stopped: false, permanentFailure: false });
+    expect(await listPendingOperations()).toEqual([]);
+  });
+
+  it.each([
+    [
+      'a dropped connection (postgrest-js: code "")',
+      { message: 'TypeError: Failed to fetch', code: '' },
+    ],
+    ['a gateway error body with no code', { message: '<html>502 Bad Gateway</html>' }],
+    ['an expired JWT', { message: 'JWT expired', code: 'PGRST303' }],
+    ['an invalid JWT', { message: 'JWSError', code: 'PGRST301' }],
+    ['a missing JWT', { message: 'anonymous access disabled', code: 'PGRST302' }],
+    // A future postgrest-js returning real PostgrestError instances is an
+    // Error that DOES carry a code — it must stay on the network path, not
+    // be mistaken for a bug in our own payload building.
+    [
+      'an Error instance carrying a transient code',
+      Object.assign(new Error('canceling statement'), { code: '57014' }),
+    ],
+    ['a statement timeout', { message: 'canceling statement', code: '57014' }],
+    [
+      'a non-string code (defensive — postgrest-js itself sends "")',
+      { message: 'TimeoutError: signal timed out', code: 23 },
+    ],
+  ])('keeps the publish queued on %s', async (_label, error) => {
+    const { client } = failingStageRead(error);
+    await expect(
+      publishLiveSessionHandlers(client).publish_live_session(intent),
+    ).rejects.toMatchObject({
+      permanent: false,
+    });
+  });
+
+  it('drops a publish whose read is refused for a non-transient reason (e.g. a malformed id), rather than blocking the queue', async () => {
+    const { client } = failingStageRead({
+      message: 'invalid input syntax for type uuid: "s1"',
+      code: '22P02',
+      details: 'bad stage id',
+    });
+    await expect(
+      publishLiveSessionHandlers(client).publish_live_session(intent),
+    ).rejects.toMatchObject({
+      message: 'invalid input syntax for type uuid: "s1"',
+      code: '22P02',
+      details: 'bad stage id',
+      permanent: true,
+    });
+  });
+
+  // offline-sync-auditor, 2026-09-27: an authenticated organiser never gets
+  // 42501 on these tables; an anonymous read does, once a failed token
+  // refresh drops the session. The RPC path keeps that case queued (401);
+  // the read chain must agree rather than drop the publish.
+  it('keeps the publish queued on permission denied — the session-lost case, not a real refusal', async () => {
+    const { client } = failingStageRead({
+      message: 'permission denied for table ct_stages',
+      code: '42501',
+    });
+    await expect(
+      publishLiveSessionHandlers(client).publish_live_session(intent),
+    ).rejects.toMatchObject({ code: '42501', permanent: false });
+  });
+
+  // Only test events can be deleted (delete_test_event refuses a real one),
+  // so "row not found" on a REAL event means a different account or an RLS
+  // problem — reported, never skipped silently.
+  it('reports, rather than silently skips, a missing stage on a real (non-test) event', async () => {
+    const { client, rpcCalls } = failingStageRead({
+      code: 'PGRST116',
+      message: 'JSON object requested, multiple (or no) rows returned',
+    });
+    await expect(
+      publishLiveSessionHandlers(client).publish_live_session({ ...intent, isTest: false }),
+    ).rejects.toMatchObject({ code: 'PGRST116', permanent: true });
+    expect(rpcCalls).toEqual([]);
+  });
+
+  it('drops a publish when building the payload hits a bug (a plain Error), rather than retrying it forever', async () => {
+    const client = fakeClient({
+      tables: { ...baseTables(), ct_standings: { data: null, error: null } }, // null rows -> TypeError in the builder
+    });
+    await expect(
+      publishLiveSessionHandlers(client).publish_live_session(intent),
+    ).rejects.toMatchObject({
+      permanent: true,
+    });
   });
 });
