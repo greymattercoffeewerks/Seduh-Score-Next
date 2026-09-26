@@ -1,3 +1,40 @@
+## T-HARDEN.live-publish-read-chain: classify publish_live_session read-chain errors · 2026-09-27
+
+**Task:** T-HARDEN.live-publish-read-chain (pre-event hardening for 4 Oct Cup Taster event). Offline-sync-auditor finding B3 from PR #125: `publish_live_session` reads the stage (`findStageById` → `.single()`) before its RPC, and those reads threw postgrest-js error objects **unclassified**. An error with no `.permanent` flag stays at the head of the FIFO outbox forever with no manual discard, so a rehearsal event's publish still queued when that test event is deleted (PGRST116 on every attempt) would block every tap, score, or timing change behind it on event day.
+
+**What shipped:** `src/formats/cup-taster/liveSession.js` wraps the read chain in `buildPayloadOrClassify`:
+
+| Read failure                                                                                            | Result                                                                                                                      |
+| ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| PGRST116 (row not found) on a **test** event                                                            | no-op success — nothing to publish, not a "lost write"                                                                      |
+| PGRST116 on a **real** event                                                                            | permanent + reported (real events can't be deleted; signals RLS/wrong account)                                              |
+| Network drop / timeout (`code: ''`), gateway body with no code, expired/invalid JWT, transient SQLSTATE | retryable, stays queued                                                                                                     |
+| 42501 permission denied                                                                                 | retryable — only an anonymous read after a failed token refresh hits it; the RPC path already keeps that case queued as 401 |
+| Anything else (malformed id, bug while building the payload)                                            | permanent — the next publish rebuilds from fresh state                                                                      |
+
+- `core/outbox.js`: exports `isTransientErrorCode(code)` for callers holding a code but no status; PGRST301–303 added (always sent as 401, so no change for `isTransientFailure`).
+- `core/errors.js`: `ROW_NOT_FOUND = 'PGRST116'` alongside `UNIQUE_VIOLATION`.
+- Tests: key test drives the real `flushOutbox` — a leftover publish for a deleted test stage no longer blocks the write queued behind it. Existing offline test's network-error fixture corrected from `new Error(...)` to postgrest-js's real `{code: ''}` shape.
+
+**Files changed:** `src/core/errors.js`, `src/core/outbox.js`, `src/core/outbox.test.js`, `src/formats/cup-taster/liveSession.js`, `src/formats/cup-taster/liveSession.test.js`.
+
+**Tests:** 1,638 JS tests passing; lint + Prettier clean. Mutation-checked: 7 mutants all caught.
+
+**Review cycle:** module-boundary-checker clean. Offline-sync-auditor, code-reviewer, test-auditor — 0 blocking findings; non-blocking items fixed. Deferred findings 4 below.
+
+**Known gaps (deferred, not blocking, before 4 Oct):**
+
+- **Screen-triggered flushes discard permanentError** (separate task in progress): scoringScreen/standingsScreen/timingScreen `publishLiveSession` calls and timingScreen `flushResult` discard any permanently-dropped op. Route permanentError from every screen flush to shell.reportFlushError so the sync panel shows the error, not "Synced".
+- **A non-JSON 4xx gateway page (no code) on a read** is treated as transient by the read classifier since read helpers drop HTTP status. Real fix: carry status through the read helpers.
+- **postgrest-js retries GETs 3× (1/2/4s) each up to the 30s timeout** — one stalled read can hold a flush ~2 min. Consider `retry: false` or a read-chain total timeout.
+- **Deleting a test event while the outbox is non-empty** should warn or refuse. The lostWriteCount counts flushes, not dropped ops (5 leftovers show "1 write lost"). Runbook: confirm **Synced** on the event device before 4 Oct. Rehearsal-leftover heat/score ops for a deleted heat are correctly dropped but show as "1 write lost" (alarming on event day).
+
+**No migrations.**
+
+**PR:** #127 (fix/live-publish-poison-op → dev), commit 69e0a76, merged 2026-09-27 (merge commit e264f4d). CI green 4/4.
+
+---
+
 ## T-HARDEN.outbox-transient: outbox transient-failure retry, 15s periodic drain · 2026-09-26
 
 **Task:** T-HARDEN.outbox-transient (pre-event hardening for 4 Oct Cup Taster event). ROADMAP item "core/outbox.js buildRpcHandler treats 408/429/5xx as permanent (data-loss risk on flaky wifi; affects Cup Taster too)" — a timeout, rate limit, gateway error or database conflict on venue wifi silently dropped a real tap or confirm from the outbox, leaving no way to recover without manual deletion or a rewrite.

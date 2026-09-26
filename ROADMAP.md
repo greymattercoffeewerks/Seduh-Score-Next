@@ -1300,10 +1300,11 @@ Cup Taster event._
   documented error-code mapping, not empirical verification (Docker off this session). One-off
   check once Docker is up. Flagged by: `test-auditor`.
 
-- **Pre-existing B3: `publish_live_session` read-chain errors are never classified.** If the read
-  path after a `delete_test_event` returns a stale-session error (PGRST116) or any other non-RPC
-  error, the publish intent stays queued forever. Must land before 4 Oct as its own task.
-  Flagged by: `offline-sync-auditor`.
+- **CLOSED (2026-09-27, PR #127): `publish_live_session` read-chain errors are now classified.**
+  The read path errors are wrapped in `buildPayloadOrClassify`: PGRST116 on a test event is
+  a no-op success (nothing to publish), on a real event is permanent + reported (RLS/wrong
+  account). Network/timeout/expired JWT/transient SQLSTATE: retryable. Everything else:
+  permanent. Flagged by: `offline-sync-auditor`.
 
 - **Lost-write report is in-memory per tab (lost on reload, invisible to a second console tab),
   and there is no Acknowledge control.** Persist dropped-op records in IndexedDB + add acknowledge
@@ -1314,6 +1315,30 @@ Cup Taster event._
 
 - **360px/200% zoom/screen-reader verification of lost-write pill not done.** Playwright run
   needed. Flagged by: `ui-accessibility-reviewer`.
+
+- **A permanently-dropped `publish_live_session` still shows the sticky "1 write lost" notice**
+  on reconnect, though the next publish rebuilds everything. Product decision: should
+  live-view publishes count as lost writes for the outbox report? Flagged by: `code-reviewer`.
+
+- **Screen-triggered flushes discard permanentError (pre-4-Oct, separate task in progress).**
+  scoringScreen/standingsScreen/timingScreen `publishLiveSession` calls and timingScreen
+  `flushResult` discard any permanently-dropped op, so it never reaches the sync panel (shows
+  "Synced"). Route permanentError from every screen flush to shell.reportFlushError.
+  Flagged by: `offline-sync-auditor`.
+
+- **Non-JSON 4xx gateway body (no `code` field) on a read is treated as transient** by the
+  read classifier since read helpers drop HTTP status. Real fix: carry HTTP status through
+  the read helpers. Flagged by: `code-reviewer`.
+
+- **postgrest-js retries GETs 3× (1/2/4s each) up to the 30s timeout — one stalled read
+  can hold a flush ~2 min.** Consider `retry: false` on the read or a read-chain total
+  timeout. Flagged by: `offline-sync-auditor`.
+
+- **Deleting a test event while the outbox is non-empty should warn or refuse.** lostWriteCount
+  counts flushes, not dropped ops (5 leftovers show "1 write lost"). Rehearsal-leftover
+  heat/score ops for a deleted heat are correctly dropped but alarming on event day.
+  Runbook: confirm the event device shows **Synced** before 4 Oct. Flagged by:
+  `offline-sync-auditor`.
 
 ---
 
