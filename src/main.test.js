@@ -815,6 +815,175 @@ describe('sync-on-reconnect', () => {
     expect(flushOutbox).not.toHaveBeenCalled();
   });
 
+  // Pre-event hardening (2026-09-26): a transient server failure leaves its
+  // write queued, but the device never went offline, so no 'online' event
+  // will ever retry it. Only setInterval is faked — the INITIAL_SESSION
+  // callback and the flush chain still run on real microtasks/timeouts.
+  describe('periodic retry while writes are queued', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+      // clearAllMocks() in the top-level afterEach clears call history only,
+      // not a configured implementation — without this, the queued operation
+      // below leaks into every later test's sync panel.
+      listPendingOperations.mockImplementation(() => Promise.resolve([]));
+    });
+
+    async function settle() {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    it('retries a flush every 15s while the queue still holds an operation', async () => {
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const client = fakeReactiveClient({ session: { user: { email: 'organiser@test.com' } } });
+      await startApp({ client });
+      await settle();
+      flushOutbox.mockClear();
+      listPendingOperations.mockResolvedValue([{ id: 'op-1', attempts: 1 }]);
+
+      vi.advanceTimersByTime(14999);
+      await settle();
+      expect(flushOutbox).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(1);
+      await settle();
+      expect(flushOutbox).toHaveBeenCalledTimes(1);
+      expect(flushOutbox).toHaveBeenCalledWith({ fake: 'handlers', fake_btc: 'btc-handlers' });
+
+      // Keeps going, not a one-shot.
+      vi.advanceTimersByTime(15000);
+      await settle();
+      expect(flushOutbox).toHaveBeenCalledTimes(2);
+    });
+
+    it('makes no flush request while the queue is empty', async () => {
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const client = fakeReactiveClient({ session: { user: { email: 'organiser@test.com' } } });
+      await startApp({ client });
+      await settle();
+      flushOutbox.mockClear();
+
+      vi.advanceTimersByTime(60000);
+      await settle();
+
+      expect(flushOutbox).not.toHaveBeenCalled();
+    });
+
+    it('does not retry before a session is known', async () => {
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const client = fakeReactiveClient({ session: null });
+      await startApp({ client });
+      await settle();
+      listPendingOperations.mockResolvedValue([{ id: 'op-1', attempts: 1 }]);
+
+      vi.advanceTimersByTime(15000);
+      await settle();
+
+      expect(flushOutbox).not.toHaveBeenCalled();
+    });
+
+    it('starts retrying once the organiser signs in after mount — the session is read at each tick, not captured at mount', async () => {
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const client = fakeReactiveClient({ session: null });
+      await startApp({ client });
+      await settle();
+      listPendingOperations.mockResolvedValue([{ id: 'op-1', attempts: 1 }]);
+
+      client.setSession({ user: { email: 'organiser@test.com' } });
+      await settle();
+      flushOutbox.mockClear(); // the sign-in itself flushes once — not what this test is about
+
+      vi.advanceTimersByTime(15000);
+      await settle();
+
+      expect(flushOutbox).toHaveBeenCalledTimes(1);
+    });
+
+    it('logs and skips the tick when the queue itself cannot be read, without flushing', async () => {
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const client = fakeReactiveClient({ session: { user: { email: 'organiser@test.com' } } });
+      await startApp({ client });
+      await settle();
+      flushOutbox.mockClear();
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      listPendingOperations.mockRejectedValue(new Error('idb unavailable'));
+
+      try {
+        vi.advanceTimersByTime(15000);
+        await settle();
+
+        expect(flushOutbox).not.toHaveBeenCalled();
+        expect(consoleError).toHaveBeenCalledWith(
+          'main: pending-operation check failed',
+          expect.objectContaining({ message: 'idb unavailable' }),
+        );
+      } finally {
+        // Reset before the shell's own 3s poll reads it again — a lingering
+        // rejection there is not what this test is about.
+        listPendingOperations.mockImplementation(() => Promise.resolve([]));
+        consoleError.mockRestore();
+      }
+    });
+
+    it('skips the tick while the device is offline — the online listener covers coming back', async () => {
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const client = fakeReactiveClient({ session: { user: { email: 'organiser@test.com' } } });
+      await startApp({ client });
+      await settle();
+      flushOutbox.mockClear();
+      listPendingOperations.mockResolvedValue([{ id: 'op-1', attempts: 1 }]);
+      const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+
+      try {
+        vi.advanceTimersByTime(15000);
+        await settle();
+
+        expect(flushOutbox).not.toHaveBeenCalled();
+      } finally {
+        onLine.mockRestore();
+      }
+    });
+
+    // Found in review (offline-sync-auditor, 2026-09-26): the projector/
+    // phone/splash links open this same SPA in another tab, sharing the
+    // session and the IndexedDB outbox. A conflict that tab's flush found
+    // would be removed from the shared queue and reported to a hidden
+    // panel, leaving the organiser's own tab showing "Synced".
+    it('never drains the shared queue from an audience tab (chrome: false) — not at load, not on online, not on the timer', async () => {
+      stubScreen(mountProjectorSurface, 'PROJECTOR_SCREEN');
+      location.hash = '#/live/projector';
+      await settleHashDispatch();
+      const client = fakeReactiveClient({ session: { user: { email: 'organiser@test.com' } } });
+      await startApp({ client });
+      await settle();
+      listPendingOperations.mockResolvedValue([{ id: 'op-1', attempts: 1 }]);
+
+      window.dispatchEvent(new Event('online'));
+      vi.advanceTimersByTime(15000);
+      await settle();
+
+      expect(flushOutbox).not.toHaveBeenCalled();
+    });
+
+    it('stops retrying after unmount', async () => {
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const client = fakeReactiveClient({ session: { user: { email: 'organiser@test.com' } } });
+      const { app } = await startApp({ client });
+      await settle();
+      await app.unmount();
+      activeApp = null; // already torn down — afterEach must not double-unmount it
+      flushOutbox.mockClear();
+      listPendingOperations.mockResolvedValue([{ id: 'op-1', attempts: 1 }]);
+
+      vi.advanceTimersByTime(15000);
+      await settle();
+
+      expect(flushOutbox).not.toHaveBeenCalled();
+    });
+  });
+
   // Focus-ring fix (2026-09-05, user-reported): a visible focus outline
   // appearing after a mouse-driven navigation, closed by tracking real-time
   // input modality (core/inputModality.js) so base.css can suppress the ring
@@ -853,13 +1022,40 @@ describe('sync-on-reconnect', () => {
       stopped: false,
       permanentFailure: true,
       error: new Error('stale conflict'),
+      permanentError: new Error('stale conflict'),
     });
     const client = fakeReactiveClient({ session: { user: { email: 'organiser@test.com' } } });
     const { root } = await startApp({ client });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(root.querySelector('.app-shell-sync').textContent).toBe(
-      'Not synced — a write failed to save and was not retried',
+      '1 write lost — not saved and not retried',
+    );
+  });
+
+  // Found in review (code-reviewer, 2026-09-26): once the periodic retry
+  // existed, a conflict dropped alongside a transient failure was wiped by
+  // the next clean flush 15s later — the panel flipped to "Synced" and
+  // nobody learned the write was lost. A dropped write never comes back, so
+  // its report must outlive later, unrelated successes.
+  it('keeps a dropped write reported after a later, clean flush — a later success does not bring it back', async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    flushOutbox.mockResolvedValueOnce({
+      processed: 0,
+      stopped: true,
+      error: new Error('upstream 503'),
+      permanentFailure: true,
+      permanentError: new Error('stale conflict'),
+    });
+    const client = fakeReactiveClient({ session: { user: { email: 'organiser@test.com' } } });
+    const { root } = await startApp({ client });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    window.dispatchEvent(new Event('online')); // default mock: a clean flush
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(root.querySelector('.app-shell-sync').textContent).toBe(
+      '1 write lost — not saved and not retried',
     );
   });
 

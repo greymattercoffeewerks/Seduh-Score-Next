@@ -134,7 +134,7 @@ describe('recordManualTime', () => {
       Promise.resolve({
         data: null,
         error: { code: 'P0002', message: 'CONFLICT: heat h1 is scoring now, expected pending' },
-        status: 400,
+        status: 500,
       }),
     );
     const { flushResult } = await recordManualTime(

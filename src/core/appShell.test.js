@@ -789,7 +789,7 @@ describe('mountAppShell — sync panel', () => {
 
     reportFlushError(new Error('stale conflict'));
     await flush(() => {
-      expect(syncEl.textContent).toBe('Not synced — a write failed to save and was not retried');
+      expect(syncEl.textContent).toBe('1 write lost — not saved and not retried');
     });
     expect(syncEl.classList.contains('app-shell-sync-stuck')).toBe(true);
   });
@@ -804,7 +804,7 @@ describe('mountAppShell — sync panel', () => {
     });
     reportFlushError(new Error('stale conflict'));
     await flush(() => {
-      expect(syncEl.textContent).toBe('Not synced — a write failed to save and was not retried');
+      expect(syncEl.textContent).toBe('1 write lost — not saved and not retried');
     });
 
     reportFlushError(null);
@@ -813,18 +813,60 @@ describe('mountAppShell — sync panel', () => {
     });
   });
 
+  // 2026-09-26 (ui-accessibility-reviewer / offline-sync-auditor): the
+  // report is sticky now, so later losses and later stuck operations must
+  // still reach the panel rather than being masked by the first notice.
+  it('counts each further reported loss instead of reading the same as the first', async () => {
+    const root = document.createElement('div');
+    const { setNav, reportFlushError } = mountAppShell(root, { client: fakeClient({}) });
+    await setNav({ eventId: 'ev1', links: [] });
+    const syncEl = root.querySelector('.app-shell-sync');
+    reportFlushError(new Error('stale conflict'));
+    await flush(() => {
+      expect(syncEl.textContent).toBe('1 write lost — not saved and not retried');
+    });
+
+    reportFlushError(new Error('another conflict'));
+    await flush(() => {
+      expect(syncEl.textContent).toBe('2 writes lost — not saved and not retried');
+    });
+  });
+
+  it.each([
+    ['names a labelled stuck operation', { some_op: 'doing a thing' }, '; doing a thing failed'],
+    ['falls back to generic wording for an unlabelled one', {}, '; retrying failed'],
+  ])(
+    '%s alongside a lost write, so the notice never masks a new failure',
+    async (_l, labels, suffix) => {
+      const op = await enqueueOperation('some_op', { id: 1 });
+      await outboxPut({ ...op, attempts: 1, lastError: 'upstream 503' });
+      const root = document.createElement('div');
+      const { setNav, reportFlushError } = mountAppShell(root, {
+        client: fakeClient({}),
+        operationLabels: labels,
+      });
+      await setNav({ eventId: 'ev1', links: [] });
+      reportFlushError(new Error('stale conflict'));
+      await flush(() => {
+        expect(root.querySelector('.app-shell-sync').textContent).toBe(
+          `1 write lost — not saved and not retried${suffix}`,
+        );
+      });
+    },
+  );
+
   it('fail-open also covers a reported flush error: it still reports "not synced", never "off", with no current event context', async () => {
     const root = document.createElement('div');
     const { reportFlushError } = mountAppShell(root, { client: fakeClient({}) }); // no setNav — cachedEventId stays null
     reportFlushError(new Error('stale conflict'));
     await flush(() => {
       expect(root.querySelector('.app-shell-sync').textContent).toBe(
-        'Not synced — a write failed to save and was not retried',
+        '1 write lost — not saved and not retried',
       );
     });
   });
 
-  it('a genuinely pending operation takes priority over a stale reported flush error in the displayed text — the "N pending" case is the more actionable one', async () => {
+  it('a reported dropped write stays visible while other operations are queued, naming both — main.js no longer clears it, so hiding it behind "N pending" would hide it for most of an event', async () => {
     const root = document.createElement('div');
     const { setNav, reportFlushError } = mountAppShell(root, {
       client: fakeClient({}),
@@ -837,18 +879,15 @@ describe('mountAppShell — sync panel', () => {
     });
     reportFlushError(new Error('stale conflict'));
     await flush(() => {
-      expect(syncEl.textContent).toBe('Not synced — a write failed to save and was not retried');
+      expect(syncEl.textContent).toBe('1 write lost — not saved and not retried');
     });
     // Enqueued directly, same as the "picks up a change on its own poll
     // cycle" test above — nothing calls refreshSync() directly here, only
     // the poll itself observes it.
     await enqueueOperation('confirm_heat', { heatId: 'h1' });
-    // Not the zero-pending "a write failed to save" wording — a real
-    // operation is sitting in the queue now, so the ordinary pending count
-    // is what's actionable (it hasn't even had a failed attempt of its
-    // own yet — attempts starts at 0 on enqueue).
     await flush(() => {
-      expect(syncEl.textContent).toBe('Not synced (1 pending)');
+      expect(syncEl.textContent).toBe('1 write lost — not saved and not retried');
     });
+    expect(syncEl.classList.contains('app-shell-sync-stuck')).toBe(true);
   });
 });
