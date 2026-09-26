@@ -420,7 +420,12 @@ function allOutboxHandlers(client) {
 function attemptReconnectFlush(client, shell) {
   flushOutbox(allOutboxHandlers(client))
     .then((result) => {
-      if (result.permanentFailure) shell.reportFlushError(result.permanentError);
+      // `?? result.error`: reportFlushError(undefined) would CLEAR the
+      // report (its default is null) — never let a missing field turn a
+      // dropped write into a false "Synced".
+      if (result.permanentFailure) {
+        shell.reportFlushError(result.permanentError ?? result.error);
+      }
     })
     .catch((err) => {
       console.error('main: reconnect flush failed', err);

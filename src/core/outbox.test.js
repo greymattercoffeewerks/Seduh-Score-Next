@@ -6,7 +6,7 @@ import {
   flushOutbox,
   buildRpcHandler,
 } from './outbox.js';
-import { _clearAllForTests } from './db.js';
+import { _clearAllForTests, outboxRemove } from './db.js';
 
 beforeEach(async () => {
   await _clearAllForTests();
@@ -154,7 +154,13 @@ describe('buildRpcHandler', () => {
     ['a serialization failure', 500, '40001'],
     ['a statement timeout', 500, '57014'],
     ['a lock that could not be acquired', 500, '55P03'],
+    ['a generic connection exception', 503, '08000'],
+    ['a client unable to connect', 503, '08001'],
+    ['a connection that no longer exists', 503, '08003'],
     ['a dropped database connection', 503, '08006'],
+    ['insufficient database resources', 503, '53000'],
+    ['a full database disk', 503, '53100'],
+    ['a database out of memory', 503, '53200'],
     ['a database out of connections', 503, '53300'],
     ['a PostgREST connection-pool timeout', 504, 'PGRST003'],
     ['PostgREST unable to reach the database', 503, 'PGRST000'],
@@ -299,6 +305,9 @@ describe('flushOutbox', () => {
     expect(result.permanentFailure).toBe(true);
     expect(result.stopped).toBe(false);
     expect(result.error).toBe(err);
+    // What main.js reports to the sync panel — the common "one conflict,
+    // queue drains" shape (test-auditor, 2026-09-26).
+    expect(result.permanentError).toBe(err);
     expect(await countPendingOperations()).toBe(0);
   });
 
@@ -323,6 +332,7 @@ describe('flushOutbox', () => {
     expect(handler).toHaveBeenCalledTimes(2);
     expect(result.processed).toBe(1);
     expect(result.permanentFailure).toBe(true);
+    expect(result.permanentError.message).toBe('stale conflict');
     expect(await countPendingOperations()).toBe(0);
   });
 
@@ -648,17 +658,21 @@ describe('cross-tab flush lock', () => {
     vi.stubGlobal('navigator', { ...navigator, locks });
     try {
       await enqueueOperation('confirm_heat', { heatId: 'h1' });
+      const drainedElsewhere = await enqueueOperation('confirm_heat', { heatId: 'h2' });
       const handler = vi.fn(async () => {});
 
       const pending = flushOutbox({ confirm_heat: handler });
       await new Promise((resolve) => setTimeout(resolve, 20));
       expect(handler).not.toHaveBeenCalled();
 
+      // The other tab drains h2 while holding the lock.
+      await outboxRemove(drainedElsewhere.id);
       releaseOtherTab();
       const result = await pending;
 
       expect(requested).toEqual(['seduh-outbox-flush']);
       expect(handler).toHaveBeenCalledTimes(1);
+      expect(handler).toHaveBeenCalledWith({ heatId: 'h1' });
       expect(result).toEqual({ processed: 1, stopped: false, permanentFailure: false });
     } finally {
       vi.unstubAllGlobals();

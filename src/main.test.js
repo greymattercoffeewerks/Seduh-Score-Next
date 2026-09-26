@@ -766,6 +766,45 @@ describe('sync-on-reconnect', () => {
     expect(flushOutbox).not.toHaveBeenCalled();
   });
 
+  // Found in review (test-auditor, 2026-09-26): the load-time flush has two
+  // possible triggers depending on which lands first — the auth callback or
+  // the first route. These pin each ordering to exactly one flush.
+  it('flushes exactly once at load when the session is known before the first route resolves', async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    const client = fakeReactiveClient({ session: { user: { email: 'organiser@test.com' } } });
+    // Fire INITIAL_SESSION synchronously, so hasSession is already true
+    // while onConsoleRoute is still false — updateChrome() must flush.
+    const subscribe = client.auth.onAuthStateChange;
+    client.auth.onAuthStateChange = (cb) => {
+      cb('INITIAL_SESSION', { user: { email: 'organiser@test.com' } });
+      return subscribe(() => {});
+    };
+    await startApp({ client });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(flushOutbox).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not flush again when moving between console screens, but does when an audience tab navigates into the console', async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    stubScreen(mountEventDashboardScreen, 'DASHBOARD_SCREEN');
+    stubScreen(mountProjectorSurface, 'PROJECTOR_SCREEN');
+    location.hash = '#/live/projector';
+    await settleHashDispatch();
+    const client = fakeReactiveClient({ session: { user: { email: 'organiser@test.com' } } });
+    await startApp({ client });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(flushOutbox).not.toHaveBeenCalled();
+
+    location.hash = '#/events';
+    await settleHashDispatch();
+    expect(flushOutbox).toHaveBeenCalledTimes(1);
+
+    location.hash = '#/events/ev1';
+    await settleHashDispatch();
+    expect(flushOutbox).toHaveBeenCalledTimes(1);
+  });
+
   it("attempts a flush when the browser fires 'online', given a known session", async () => {
     stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
     const client = fakeReactiveClient({ session: { user: { email: 'organiser@test.com' } } });
