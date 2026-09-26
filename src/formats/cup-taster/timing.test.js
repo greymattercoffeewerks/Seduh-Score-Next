@@ -185,7 +185,7 @@ describe('recordTap', () => {
       Promise.resolve({
         data: null,
         error: { code: 'P0002', message: 'CONFLICT: heat entry he1 already has a recorded time' },
-        status: 400,
+        status: 500,
       }),
     );
     const { flushResult } = await recordTap(appHeatTiming, heatEntry, 'org1', client, {

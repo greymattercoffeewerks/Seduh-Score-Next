@@ -68,7 +68,7 @@
 import { listHeatsForStage, hydrateEntries } from './heats.js';
 import { fetchStandingsForStage, resolveAdvancement, tieStatusFor } from './standings.js';
 import { listEntriesByIds } from '../../core/registry.js';
-import { enqueueOperation, flushOutbox, isAuthStatus } from '../../core/outbox.js';
+import { enqueueOperation, flushOutbox, isTransientFailure } from '../../core/outbox.js';
 import { getSupabase } from '../../core/supabaseClient.js';
 
 const RECENT_HEATS_LIMIT = 3;
@@ -230,15 +230,14 @@ export async function buildLiveSessionPayload(stageId, client = getSupabase()) {
 // (orgId/eventId/stageId/isTest); the real, current-as-of-right-now
 // `live_sessions` payload is built here, at actual flush time, by calling
 // buildLiveSessionPayload fresh — see this module's own top comment for why.
-// Mirrors buildRpcHandler's own error-to-permanent mapping (status: 0 means
-// a network failure, retry later; a real HTTP status other than 401 means a
-// genuine server rejection, won't succeed on retry; 401 means an auth/JWT
-// problem — see outbox.js's own isAuthStatus for the full account, reused
-// here rather than re-derived, found in review, code-reviewer, 2026-09-12:
-// the first version of this fix updated buildRpcHandler but missed this
-// second, hand-rolled mapping entirely, leaving publish_live_session's own
-// RPC failures still misclassified permanent on an expired session) since
-// this handler can't reuse buildRpcHandler directly — the stored payload
+// Mirrors buildRpcHandler's own error-to-permanent mapping: a network drop,
+// a 401, a timeout/rate-limit/gateway 5xx or a transient SQLSTATE means
+// retry later; any other server answer is a genuine rejection that won't
+// succeed on retry. See outbox.js's own isTransientFailure for the full
+// account. It's reused here rather than re-derived — found in review
+// (code-reviewer, 2026-09-12): the first version of the 401 fix updated
+// buildRpcHandler but missed this second, hand-rolled mapping entirely.
+// This handler can't reuse buildRpcHandler directly — the stored payload
 // here isn't the RPC payload yet when the handler is invoked.
 export function publishLiveSessionHandlers(client) {
   return {
@@ -278,7 +277,7 @@ export function publishLiveSessionHandlers(client) {
         const err = new Error(error.message);
         err.code = error.code;
         err.details = error.details;
-        err.permanent = Boolean(status) && !isAuthStatus(status);
+        err.permanent = !isTransientFailure({ status, code: error.code });
         throw err;
       }
     },

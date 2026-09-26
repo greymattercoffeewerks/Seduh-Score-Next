@@ -650,6 +650,30 @@ describe('publishLiveSession', () => {
     ).rejects.toMatchObject({ message: 'event not found', permanent: true });
   });
 
+  // Pre-event hardening (2026-09-26): this handler shares
+  // core/outbox.js's isTransientFailure. The two cases above give the same
+  // answer under the old "any real status is permanent" rule; these two
+  // don't, so reverting this call site to a hand-rolled rule fails here.
+  it.each([
+    ['a gateway 503 with no code stays retryable', 503, undefined, false],
+    ['a P0002 conflict (sent as 500) stays permanent', 500, 'P0002', true],
+  ])('%s', async (_label, status, code, permanent) => {
+    const client = fakeClient({
+      tables: baseTables(),
+      rpc: () => Promise.resolve({ data: null, error: { message: 'failed', code }, status }),
+    });
+    const handlers = publishLiveSessionHandlers(client);
+    await expect(
+      handlers.publish_live_session({
+        orgId: 'org1',
+        eventId: 'ev1',
+        stageId: 's1',
+        format: 'cup_taster',
+        isTest: false,
+      }),
+    ).rejects.toMatchObject({ permanent });
+  });
+
   it('enqueues the publish intent even when the device is offline — a read-chain failure must not drop it (found in review: offline-sync-auditor)', async () => {
     // Every read fails exactly like a real dropped connection resolving
     // with an error rather than rejecting (core/outbox.js's own documented

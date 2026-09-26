@@ -54,7 +54,8 @@ export async function enqueueOperation(type, payload) {
 // publish_session, start_heat/record_heat_time/auto_max_heat) rejects a
 // stale/conflicting payload the exact same way: retrying the identical
 // payload against the RPC's own idempotency/conflict check fails the exact
-// same way forever — permanent. Extracted here — not `formats/cup-taster/` —
+// same way forever — permanent (which failures are instead retryable is
+// isTransientFailure's job, below). Extracted here — not `formats/cup-taster/` —
 // because it's pure RPC-wrapping mechanics with zero knowledge of any
 // operation type's name or payload shape; three call sites
 // (timing.js/scoring.js/publish.js) had each hand-rolled this identical
@@ -81,7 +82,9 @@ export async function enqueueOperation(type, payload) {
 // token), always BEFORE the RPC body or any RLS policy ever runs. A real
 // rejection from inside the function (a `raise exception`, a constraint
 // violation, an RLS denial) always carries some OTHER non-zero status (400
-// for a plpgsql exception, 403/other for RLS) — confirmed empirically
+// for a plain `raise exception`/P0001, 500 for other P0*** codes, 403/other
+// for RLS — status alone is no longer the classifier, see
+// isTransientFailure below) — confirmed empirically
 // against a real local Postgres/PostgREST instance, not assumed: an expired
 // JWT returns `401 {"code":"PGRST303","message":"JWT expired"}`, a malformed
 // one `401 {"code":"PGRST301", ...}`, while a genuine application-level
@@ -92,14 +95,59 @@ export async function enqueueOperation(type, payload) {
 // large queued flush, and every call site sharing this one handler-builder
 // (not just main.js's reconnect trigger) would otherwise misclassify that
 // stale-token 401 as permanent, discarding a perfectly retryable write.
-// Exported, not module-private — found in review (code-reviewer, 2026-09-12):
-// liveSession.js's own publishLiveSessionHandlers hand-rolls an identical
-// error-to-permanent mapping (it can't reuse buildRpcHandler directly — see
-// that module's own comment on why), so this needs to be shared rather than
-// re-derived a second time, the exact "single call site" premise a private
-// helper here would have wrongly assumed.
-export function isAuthStatus(status) {
+function isAuthStatus(status) {
   return status === 401;
+}
+
+// Transient failures (2026-09-26, pre-event hardening): a response that
+// reached the server is NOT automatically permanent. A request timeout, a
+// rate limit, a gateway/Cloudflare 5xx, a deadlock or a statement timeout
+// says nothing about the payload — the same write can succeed a moment
+// later. Classifying those permanent silently discarded a real tap or
+// confirm on flaky venue wifi.
+//
+// Decided by the error CODE first, HTTP status only when there is no code.
+// Status alone is not enough: PostgREST maps plpgsql's P0001 to 400 but
+// every other P0*** (including P0002, the stale-conflict code confirm_heat/
+// record_heat_time/confirm_btc_match raise) to 500. "Retry every 5xx" would
+// leave each genuine conflict wedged at the head of the FIFO queue forever —
+// there is no manual discard — so a Postgres or PostgREST code is trusted
+// as the more specific answer, and only the listed ones are retryable.
+// Listed individually, not by SQLSTATE class: class 08 also holds
+// protocol_violation (08P01) and class 53 config_limit_exceeded (53400),
+// which would fail the same way on every retry.
+const TRANSIENT_SQLSTATES = new Set([
+  '08000', // connection_exception
+  '08001', // sqlclient_unable_to_establish_sqlconnection
+  '08003', // connection_does_not_exist
+  '08006', // connection_failure
+  '53000', // insufficient_resources
+  '53100', // disk_full
+  '53200', // out_of_memory
+  '53300', // too_many_connections
+  '40001', // serialization_failure
+  '40P01', // deadlock_detected
+  '55P03', // lock_not_available
+  '57014', // query_canceled (statement timeout)
+  '57P01', // admin_shutdown
+  '57P02', // crash_shutdown
+  '57P03', // cannot_connect_now
+  'PGRST000', // PostgREST could not connect to the database
+  'PGRST001', // PostgREST internal connection error
+  'PGRST002', // PostgREST schema cache not yet loaded
+  'PGRST003', // PostgREST connection-pool acquisition timeout
+]);
+
+// Exported, not module-private — found in review (code-reviewer,
+// 2026-09-12): liveSession.js's own publishLiveSessionHandlers can't reuse
+// buildRpcHandler directly (see that module's own comment on why), so it
+// needs this shared rather than re-derived a second time.
+export function isTransientFailure({ status, code }) {
+  if (!status || isAuthStatus(status)) return true;
+  // A gateway can send a JSON body whose `code` isn't a SQLSTATE string —
+  // fall through to the status rule rather than guessing from it.
+  if (typeof code === 'string' && code) return TRANSIENT_SQLSTATES.has(code);
+  return status === 408 || status === 429 || status >= 500;
 }
 
 export function buildRpcHandler(client, type) {
@@ -109,7 +157,7 @@ export function buildRpcHandler(client, type) {
       const err = new Error(error.message);
       err.code = error.code;
       err.details = error.details;
-      err.permanent = Boolean(status) && !isAuthStatus(status);
+      err.permanent = !isTransientFailure({ status, code: error.code });
       throw err;
     }
   };
@@ -164,6 +212,21 @@ export async function listPendingOperations() {
 let inFlightFlush = null;
 let activeHandlers = null;
 
+// The reentrancy guard above only covers this tab. Two organiser tabs (say
+// timing in one, standings in another) share one IndexedDB outbox, and
+// once main.js retried on a timer both drained it every 15s — running the
+// same operation twice, the loser failing the ledger insert with a false
+// "failed to save" for a write that actually landed (found in review:
+// offline-sync-auditor, 2026-09-26). A Web Lock makes flushes take turns
+// across tabs; the waiting tab re-reads the queue when its turn comes, so
+// it only sees what's still left. Falls back to running directly where the
+// API doesn't exist (older browsers, jsdom).
+const FLUSH_LOCK_NAME = 'seduh-outbox-flush';
+function withCrossTabLock(fn) {
+  const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
+  return locks ? locks.request(FLUSH_LOCK_NAME, fn) : fn();
+}
+
 // Replays every queued operation, strictly in FIFO (createdAt) order,
 // stopping at the first operation that fails for a genuine reason — a
 // dependent operation queued after one that hasn't succeeded yet must never
@@ -193,7 +256,7 @@ export function flushOutbox(handlers) {
     return inFlightFlush;
   }
   activeHandlers = { ...handlers };
-  inFlightFlush = runFlush(activeHandlers).finally(() => {
+  inFlightFlush = withCrossTabLock(() => runFlush(activeHandlers)).finally(() => {
     inFlightFlush = null;
     activeHandlers = null;
   });
@@ -215,7 +278,13 @@ async function runFlush(handlers) {
     const operations = await outboxListAll();
     if (operations.length === 0) {
       return lastPermanentError
-        ? { processed, stopped: false, error: lastPermanentError, permanentFailure: true }
+        ? {
+            processed,
+            stopped: false,
+            error: lastPermanentError,
+            permanentFailure: true,
+            permanentError: lastPermanentError,
+          }
         : { processed, stopped: false, permanentFailure: false };
     }
 
@@ -268,7 +337,21 @@ async function runFlush(handlers) {
         // way), but a caller inspecting only `stopped`/`error` would
         // otherwise have no way to learn something else was also dropped
         // during this same call.
-        return { processed, stopped: true, error, permanentFailure: Boolean(lastPermanentError) };
+        //
+        // `permanentError` carries the dropped operation's own error for a
+        // caller that must report WHAT was lost — found in review
+        // (code-reviewer, 2026-09-26): main.js's background retry was
+        // reporting `error` here, the stopping transient failure, so the
+        // sync panel never named the write that was actually discarded.
+        return lastPermanentError
+          ? {
+              processed,
+              stopped: true,
+              error,
+              permanentFailure: true,
+              permanentError: lastPermanentError,
+            }
+          : { processed, stopped: true, error, permanentFailure: false };
       }
     }
     // Loop again: operations enqueued while this pass was running should be
