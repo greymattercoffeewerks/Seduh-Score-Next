@@ -918,16 +918,12 @@ station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can 
   Confirmed with the user (2026-09-04): the toggle is gated to paid Supabase plans, and
   the linked cloud project is on the free tier. Revisit only if/when the project
   upgrades tiers — no action available today.
-- **`anon`'s TRUNCATE/REFERENCES/TRIGGER/MAINTAIN grant on every table — not closed,
-  found while diagnosing the anon-safe events-read migration
-  (`20260831100000_events_anon_safe_read.sql`).** Every table in this schema carries a
-  default `anon=...Dxtm` grant regardless of RLS — TRUNCATE in particular is not
-  governed by RLS at all in Postgres, so it's a full bypass wherever it's reachable.
-  Confirmed NOT currently exploitable (PostgREST never issues TRUNCATE, and no other
-  anon-reachable raw-SQL path exists in this app), so — same shape as the write-RPC
-  EXECUTE gap above — this is defense-in-depth, not a live hole. Schema-wide, not
-  specific to `events`; deliberately left as its own follow-up rather than folded into
-  that migration's already-large scope.
+- **`anon`'s TRUNCATE/REFERENCES/TRIGGER/MAINTAIN grant on every table — CLOSED 2026-09-25.**
+  Migration `20260925090000_revoke_excess_table_privileges.sql` revoked these from `anon` and
+  `authenticated` on all 19 affected tables + the `ct_standings` view, and `alter default privileges`
+  so tables created by later migrations do not receive them again. PostgREST never issues TRUNCATE,
+  and no API-reachable path exists, so was not exploitable; this is defense-in-depth. Applied to
+  the cloud project 2026-09-25. See CHANGELOG.md for the full account.
 - **Production feedback (2026-09-04): `reportScreen.js`'s new `renderDifficultyCell()` has
   only one call site today, NON_BLOCKING.** Code-reviewer assessed this as a reasonable
   readability extraction (keeps `renderDifficultyTable`'s own `.map()` body scannable), not
@@ -1252,8 +1248,9 @@ live-verified in browser. Definition of Done met. See CHANGELOG.md's dated entry
   a robustness improvement over a blocking defect — caught during review, deliberate not-to-fix
   per scoring-auditor assessment.
 - **core/outbox.js buildRpcHandler treats 408/429/5xx as permanent (data-loss risk on flaky wifi;
-  affects Cup Taster too).** Classification of timeout/throttle status codes as permanent write loss
-  instead of transient needs decision.
+  affects Cup Taster too) — CLOSED 2026-09-26 (PR #125).** Classified 408/429/5xx as transient,
+  retried via periodic 15s drain and Web Lock safety; lost writes stay reported until reload. See
+  CHANGELOG.md for the full account.
 - **processed_operations.id is a global primary key (op-id poisoning across orgs).** Suggest schema
   change to `(org_id, id)`.
 - **app.org_id_for_btc_match is anon-executable.** Should require `authenticated` role.
@@ -1285,6 +1282,38 @@ live-verified in browser. Definition of Done met. See CHANGELOG.md's dated entry
   and guard editing a confirmed match whose winner already advanced.** Deferred to bracket step.
 - **Standings completeness rests on exactly 3 judges per match;** nothing outside the RPC caps
   btc_match_judges at 3 (see btc_match_judges editable gap above).
+
+---
+
+## Known open items from pre-event hardening (2026-09-26)
+
+_Deferred findings from T-HARDEN.outbox-transient, flagged and documented but not blocking the 4 Oct
+Cup Taster event._
+
+- **No attempt cap / discard for an operation that stays transient forever (persistent 429/503).**
+  A persistent rate limiter or service overload stays classified as transient (will retry forever).
+  By design, now reachable via more outbox paths. Not a data-loss defect — the operation never
+  leaves the queue — but an organiser with a stuck operation has no manual discard path except
+  editing the browser's IndexedDB directly. Flagged by: `code-reviewer`.
+
+- **P0002 → HTTP 500 mapping not verified against a live stack.** The fix relies on PostgREST's
+  documented error-code mapping, not empirical verification (Docker off this session). One-off
+  check once Docker is up. Flagged by: `test-auditor`.
+
+- **Pre-existing B3: `publish_live_session` read-chain errors are never classified.** If the read
+  path after a `delete_test_event` returns a stale-session error (PGRST116) or any other non-RPC
+  error, the publish intent stays queued forever. Must land before 4 Oct as its own task.
+  Flagged by: `offline-sync-auditor`.
+
+- **Lost-write report is in-memory per tab (lost on reload, invisible to a second console tab),
+  and there is no Acknowledge control.** Persist dropped-op records in IndexedDB + add acknowledge
+  state. Flagged by: `offline-sync-auditor`.
+
+- **Lost-write notice doesn't name the operation type.** permanentError carries only the error
+  itself, not the RPC name or operation type. Flagged by: `offline-sync-auditor`.
+
+- **360px/200% zoom/screen-reader verification of lost-write pill not done.** Playwright run
+  needed. Flagged by: `ui-accessibility-reviewer`.
 
 ---
 
@@ -1360,14 +1389,14 @@ organiser" line is now backed by this feature (Cup Taster only; BTC needs a butt
 ordering tie-break keys untested; empty live-region `display:none` is a shared pattern; huge-Blob revoke
 timing; a third format needs the SQL function extended.
 
-Planned (not started):
+**T-TRUST.3 / T-TRUST.4 — Trust pages (Neutrality, About, Contact, Privacy, Terms): built 2026-09-25.**
+Five static public pages at `/neutrality/`, `/about/`, `/contact/`, `/privacy/` and `/terms/`,
+linked from every public footer. Copy source: `design/copy/*-page-draft.md`. Open: swap the
+temporary contact address for `hello@seduhscore.com` once it exists (`CONTACT_EMAIL` in
+`src/marketing/trustContent.js`); the Privacy page must be updated in the same PR as any change
+to what personal data is held or who can read it.
 
-- **T-TRUST.3 / T-TRUST.4 — Trust pages (Neutrality, About, Contact, Privacy, Terms): built 2026-09-25.**
-  Five static public pages at `/neutrality/`, `/about/`, `/contact/`, `/privacy/` and `/terms/`,
-  linked from every public footer. Copy source: `design/copy/*-page-draft.md`. Open: swap the
-  temporary contact address for `hello@seduhscore.com` once it exists (`CONTACT_EMAIL` in
-  `src/marketing/trustContent.js`); the Privacy page must be updated in the same PR as any change
-  to what personal data is held or who can read it.
+Planned (not started) — Pre-event hardening items carried to future tasks
 
 ## Versioning system (2026-09-05) — closed
 

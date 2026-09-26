@@ -1,3 +1,35 @@
+## T-HARDEN.outbox-transient: outbox transient-failure retry, 15s periodic drain · 2026-09-26
+
+**Task:** T-HARDEN.outbox-transient (pre-event hardening for 4 Oct Cup Taster event). ROADMAP item "core/outbox.js buildRpcHandler treats 408/429/5xx as permanent (data-loss risk on flaky wifi; affects Cup Taster too)" — a timeout, rate limit, gateway error or database conflict on venue wifi silently dropped a real tap or confirm from the outbox, leaving no way to recover without manual deletion or a rewrite.
+
+**What shipped:** `core/outbox.js` gained `isTransientFailure()` that classifies errors by Postgres/PostgREST error code first, HTTP status only when there is no code. Transient (retry): network drop (status 0), 401, Postgres deadlock/serialization/statement timeout/lock codes, DB connection and resource codes, and PGRST000–003; with no code: 408, 429, ≥500. Everything else stays permanent. Why code-first: PostgREST sends every `P0***` error (including **P0002**, the RPCs' own stale-conflict code) as HTTP 500. A blanket "retry every 5xx" would wedge each conflict at the queue head forever with no manual discard path. `main.js` now retries the outbox every 15s while writes are queued, signed in, and online (a 5xx while online never fires an `online` event, so without this an error waited for the organiser's next action). Cross-tab safety: only console tabs (chrome:true) drain the shared outbox; `flushOutbox` takes a navigator.locks Web Lock so two console tabs take turns instead of running the same operation twice. Lost writes stay reported: `runFlush` returns `permanentError` unchanged; the sync panel keeps "N write(s) lost — not saved and not retried" until reload instead of clearing it on a later, unrelated success, still names a newly stuck operation alongside it, leaves pending count out of the live-region text, and re-syncs the sticky-header height. Every Supabase request gets a 30s timeout (core/supabaseClient.js) so a half-open connection can't hang a flush (retry is safe — every outbox RPC is idempotent). `appShell`'s `refreshSync` now catches a failed IndexedDB read instead of throwing every 3s. `formats/cup-taster/liveSession.js` hand-rolled error mapping now reuses the shared classifier.
+
+**Files changed:** `src/core/appShell.js` (flush loop, lost-write report, refreshSync error handling), `src/core/outbox.js` (isTransientFailure classifier, flush retry), `src/core/supabaseClient.js` (30s fetch timeout), `src/main.js` (15s retry loop, Web Lock safety, flush-error reporting), plus test updates for all three and format-specific outbox test fixes (Cup Taster liveSession, BTC outboxHandlers, all Cup Taster timing paths).
+
+**Tests:** full vitest suite 1,612 JS tests passing. Mutation-checked: classifier itself (3 mutants caught), sticky lost-write report, load-time flush trigger (2 mutants). P0002 test fixtures moved from 400/409 status (not what production sends) to 500 (the status PostgREST actually sends). Lint and Prettier clean.
+
+**Review cycle (5 rounds across reviewers):**
+
+- **module-boundary-checker** — round 1 PASS: appShell and supabaseClient changes are core-internal, no format reuse changes. Clean.
+- **offline-sync-auditor** — round 1 FAIL (N6/N9/N10 findings); round 2 PASS after fixes. N6: flush interval race on mount; N9: lost writes reported without naming the operation; N10: no Acknowledge control. All three fixed in new code. N7/N8 deferred (persist lost-write records in IndexedDB; no cross-tab lost-write visibility; update remaining pending).
+- **code-reviewer** — round 1: no blocking. Round 2: B1 (unhandled rejection in appShell.test.js firing every 3s) fixed; appShell `refreshSync` now catches IndexedDB read errors. Non-blocking 2–6 found and fixed.
+- **test-auditor** — round 1: no blocking. Round 2: B1 already fixed during code review; B2 + N1–N7 fixed in 28529ed (mutation-checked classifier rows, permanentError assertions, every transient SQLSTATE covered, lock test proving waiting tab only runs what the other left, supabaseClient timeout tests, main load-time flush trigger for session/route ordering, no re-flush between console screens). All caught.
+- **ui-accessibility-reviewer** — round 1: 0 blocking. Fixed: sync panel header-height resync on state change; lost-write pill height and layout; count of lost writes now shown correctly; pending count removed from live-region text to avoid redundancy. Deferred: Acknowledge control, Playwright 360px/200% zoom/screen-reader verification of lost-write pill (Docker not available).
+
+**Verified:** vitest suite passes. Lint/Prettier clean. CI green (4/4 checks). NOT verified live: P0002 → HTTP 500 mapping relied on PostgREST's documented pgErrorStatus table (Docker was off). No migrations in this PR, nothing to push to the cloud DB.
+
+**Known gaps (deferred, not blocking):**
+
+- **No attempt cap / discard for an operation that stays transient forever** (persistent 429/503 from a live rate limiter or service). By design, now reachable via more paths. Classified as transient (will retry), but no max-age/attempt boundary.
+- **P0002-as-500 not verified against a live stack.** One-off check once Docker is up.
+- **Pre-existing B3: `publish_live_session` read-chain errors** (e.g. PGRST116 after `delete_test_event` succeeds) are never classified, so a stale publish intent blocks the queue head permanently. Must land before 4 Oct as its own task.
+- **Lost-write report is in-memory per tab:** lost on reload, not shown in a second console tab, can't be acknowledged. Persist dropped-op records in IndexedDB + add Acknowledge state. D2: report doesn't say which operation was lost (permanentError has no op type).
+- **360px/200% zoom/screen-reader verification of lost-write pill** not done (Playwright run needed).
+
+**PR:** #125 (fix/outbox-transient-retry → dev), commits 71f50b1 + 28529ed, merged 2026-09-26 (merge commit 8ca7ea4).
+
+---
+
 ## T-TRUST.3/4: public trust pages — About, Contact, Privacy, Terms, Neutrality · 2026-09-25
 
 **Task:** T-TRUST.3 and T-TRUST.4. The site critique noted there were no About, contact, privacy or
