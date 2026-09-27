@@ -6,6 +6,9 @@ import {
   flushOutbox,
   buildRpcHandler,
   isTransientErrorCode,
+  onOperationDropped,
+  droppedErrorFor,
+  isFlushInProgress,
 } from './outbox.js';
 import { _clearAllForTests, outboxRemove } from './db.js';
 
@@ -720,5 +723,204 @@ describe('cross-tab flush lock', () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+// 2026-09-27 (offline-sync-auditor): only main.js's reconnect flush used to
+// forward a drop to the sync panel; every screen-triggered flush discarded it.
+// The outbox now announces each drop itself, so whoever triggered the flush,
+// the shell hears about it.
+describe('onOperationDropped', () => {
+  function permanent(message) {
+    return Object.assign(new Error(message), { permanent: true });
+  }
+
+  it('announces each dropped operation once, with the operation and its own error — not once per flush', async () => {
+    const a = await enqueueOperation('confirm_heat', { heatId: 'a' });
+    await enqueueOperation('confirm_heat', { heatId: 'lands' });
+    const b = await enqueueOperation('confirm_heat', { heatId: 'b' });
+    const errA = permanent('conflict a');
+    const errB = permanent('conflict b');
+    const listener = vi.fn();
+    const stop = onOperationDropped(listener);
+
+    try {
+      await flushOutbox({
+        confirm_heat: async (payload) => {
+          if (payload.heatId === 'a') throw errA;
+          if (payload.heatId === 'b') throw errB;
+        },
+      });
+    } finally {
+      stop();
+    }
+
+    expect(listener).toHaveBeenCalledTimes(2);
+    expect(listener.mock.calls[0][0].operation.id).toBe(a.id);
+    expect(listener.mock.calls[0][0].error).toBe(errA);
+    expect(listener.mock.calls[1][0].operation.id).toBe(b.id);
+    expect(listener.mock.calls[1][0].error).toBe(errB);
+  });
+
+  it('announces a drop even when a later ordinary failure stops the pass', async () => {
+    await enqueueOperation('confirm_heat', { heatId: 'stale' });
+    await enqueueOperation('confirm_heat', { heatId: 'offline' });
+    const listener = vi.fn();
+    const stop = onOperationDropped(listener);
+
+    try {
+      const result = await flushOutbox({
+        confirm_heat: async (payload) => {
+          if (payload.heatId === 'stale') throw permanent('stale conflict');
+          throw new Error('network timeout');
+        },
+      });
+      expect(result.stopped).toBe(true);
+    } finally {
+      stop();
+    }
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener.mock.calls[0][0].error.message).toBe('stale conflict');
+  });
+
+  it('never announces an ordinary (retryable) failure or a success', async () => {
+    await enqueueOperation('confirm_heat', { heatId: 'lands' });
+    await enqueueOperation('confirm_heat', { heatId: 'offline' });
+    const listener = vi.fn();
+    const stop = onOperationDropped(listener);
+
+    try {
+      await flushOutbox({
+        confirm_heat: async (payload) => {
+          if (payload.heatId === 'offline') throw new Error('network timeout');
+        },
+      });
+    } finally {
+      stop();
+    }
+
+    expect(listener).not.toHaveBeenCalled();
+    expect(await countPendingOperations()).toBe(1);
+  });
+
+  it('a throwing listener neither aborts the flush nor starves the other listeners', async () => {
+    await enqueueOperation('confirm_heat', { heatId: 'stale' });
+    await enqueueOperation('confirm_heat', { heatId: 'lands' });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const broken = vi.fn(() => {
+      throw new Error('listener bug');
+    });
+    const healthy = vi.fn();
+    const stopBroken = onOperationDropped(broken);
+    const stopHealthy = onOperationDropped(healthy);
+    const handler = vi.fn(async (payload) => {
+      if (payload.heatId === 'stale') throw permanent('stale conflict');
+    });
+
+    let result;
+    try {
+      result = await flushOutbox({ confirm_heat: handler });
+    } finally {
+      stopBroken();
+      stopHealthy();
+      consoleError.mockRestore();
+    }
+
+    expect(broken).toHaveBeenCalledTimes(1);
+    expect(healthy).toHaveBeenCalledTimes(1);
+    // The operation behind the drop still got its turn and landed.
+    expect(handler).toHaveBeenCalledTimes(2);
+    expect(result.processed).toBe(1);
+    expect(await countPendingOperations()).toBe(0);
+  });
+
+  it('stops calling a listener once it unsubscribes', async () => {
+    const listener = vi.fn();
+    onOperationDropped(listener)();
+
+    await enqueueOperation('confirm_heat', { heatId: 'stale' });
+    await flushOutbox({
+      confirm_heat: async () => {
+        throw permanent('stale conflict');
+      },
+    });
+
+    expect(listener).not.toHaveBeenCalled();
+  });
+});
+
+describe('droppedErrorFor', () => {
+  it("returns only the named operation's own drop error — never another operation's, and never the stopping failure", async () => {
+    const other = await enqueueOperation('confirm_heat', { heatId: 'other' });
+    const mine = await enqueueOperation('confirm_heat', { heatId: 'mine' });
+    const otherErr = Object.assign(new Error('other conflict'), { permanent: true });
+
+    // `mine` is still queued (transient) while `other` was dropped — the
+    // exact case where reading `flushResult.error` blamed the wrong action.
+    const result = await flushOutbox({
+      confirm_heat: async (payload) => {
+        if (payload.heatId === 'other') throw otherErr;
+        throw new Error('network timeout');
+      },
+    });
+
+    expect(result.permanentFailure).toBe(true);
+    expect(result.dropped).toEqual([
+      { operationId: other.id, type: 'confirm_heat', error: otherErr },
+    ]);
+    expect(droppedErrorFor(result, other.id)).toBe(otherErr);
+    expect(droppedErrorFor(result, mine.id)).toBeNull();
+  });
+
+  it('is null for a flush with no drops, and for a missing result', async () => {
+    const op = await enqueueOperation('confirm_heat', { heatId: 'lands' });
+    const result = await flushOutbox({ confirm_heat: async () => {} });
+    expect(result).not.toHaveProperty('dropped');
+    expect(droppedErrorFor(result, op.id)).toBeNull();
+    expect(droppedErrorFor(undefined, op.id)).toBeNull();
+  });
+});
+
+describe('enqueueOperation persistence failure', () => {
+  // offline-sync-auditor, 2026-09-27: the best-effort live-view publishes
+  // swallow a throw from enqueueOperation, so a write IndexedDB refused was
+  // lost with no report at all. A payload IndexedDB can't clone is a real
+  // outboxPut failure (DataCloneError), no mocking needed.
+  it('announces the operation as dropped and rethrows, leaving nothing queued', async () => {
+    const listener = vi.fn();
+    const stop = onOperationDropped(listener);
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    let thrown;
+    try {
+      await enqueueOperation('publish_live_session', { notCloneable: () => {} });
+    } catch (error) {
+      thrown = error;
+    } finally {
+      stop();
+      consoleWarn.mockRestore();
+    }
+
+    expect(thrown).toBeDefined();
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener.mock.calls[0][0].operation.type).toBe('publish_live_session');
+    expect(listener.mock.calls[0][0].error).toBe(thrown);
+    expect(await countPendingOperations()).toBe(0);
+  });
+});
+
+describe('isFlushInProgress', () => {
+  it('is true only while a flush is running', async () => {
+    await enqueueOperation('confirm_heat', { heatId: 'h1' });
+    let release;
+    const stalled = new Promise((resolve) => {
+      release = resolve;
+    });
+    expect(isFlushInProgress()).toBe(false);
+    const running = flushOutbox({ confirm_heat: () => stalled });
+    expect(isFlushInProgress()).toBe(true);
+    release();
+    await running;
+    expect(isFlushInProgress()).toBe(false);
   });
 });

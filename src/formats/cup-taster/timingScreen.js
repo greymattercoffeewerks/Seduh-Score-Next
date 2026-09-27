@@ -23,6 +23,7 @@ import { remainingSecs, isExpired } from '../../core/countdown.js';
 import { getSupabase } from '../../core/supabaseClient.js';
 import { el } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
+import { droppedErrorFor } from '../../core/outbox.js';
 import { formatDuration } from '../../core/duration.js';
 
 const URGENT_THRESHOLD_SECS = 10;
@@ -330,7 +331,11 @@ export async function mountTimingScreen(
   // truth shows the action did NOT visibly take — never to override what
   // the fresh reload actually shows, which is what keeps a stale/unrelated
   // flushResult from ever being reported as if it were about the wrong
-  // action.
+  // action. Even as a fallback, only THIS action's own dropped operation
+  // (matched by `operationId`, via core/outbox.js's droppedErrorFor) is
+  // described — `flushResult.error` can be any queued operation's
+  // (offline-sync-auditor, 2026-09-27); any other drop reaches the sync
+  // panel through the outbox's own drop announcement instead.
   let pendingHeatCheck = null;
   let pendingEntryCheck = null;
 
@@ -413,10 +418,13 @@ export async function mountTimingScreen(
     // this against fresh, reloaded state before actually reporting success.
     const stillRunningCount = data.hydrated.filter((entry) => entry.elapsed_secs == null).length;
     try {
-      const flushResult = await autoMaxRemainingEntries(heatId, data.event.org_id, client, {
-        handlers: cupTasterOutboxHandlers(client),
-      });
-      pendingHeatCheck = { expect: 'past-timing', stillRunningCount, flushResult };
+      const { operationId, flushResult } = await autoMaxRemainingEntries(
+        heatId,
+        data.event.org_id,
+        client,
+        { handlers: cupTasterOutboxHandlers(client) },
+      );
+      pendingHeatCheck = { expect: 'past-timing', stillRunningCount, operationId, flushResult };
     } catch (err) {
       pendingError = describeError(err);
     }
@@ -471,8 +479,9 @@ export async function mountTimingScreen(
     // against THIS render's freshly-reloaded state, before anything below
     // reads pendingError/pendingSuccess to build the feedback region.
     if (pendingHeatCheck) {
-      const { expect, stillRunningCount, flushResult } = pendingHeatCheck;
+      const { expect, stillRunningCount, operationId, flushResult } = pendingHeatCheck;
       pendingHeatCheck = null;
+      const ownDropError = droppedErrorFor(flushResult, operationId);
       if (expect === 'timing' && data.heat.status === 'timing') {
         focusAfterRender = '#countdown-heading';
       } else if (expect === 'past-timing' && data.heat.status !== 'timing') {
@@ -480,17 +489,18 @@ export async function mountTimingScreen(
           stillRunningCount > 0
             ? `Time's up — ${stillRunningCount} cupper${stillRunningCount === 1 ? '' : 's'} automatically maxed.`
             : "Time's up — every cupper already had a final time.";
-      } else if (flushResult?.permanentFailure) {
-        pendingError =
-          describeTimingConflict(flushResult.error) ?? describeError(flushResult.error);
+      } else if (ownDropError) {
+        pendingError = describeTimingConflict(ownDropError) ?? describeError(ownDropError);
       } else {
         pendingError =
           'This has not synced yet — it may still be waiting to sync. Try again in a moment.';
       }
     }
     if (pendingEntryCheck) {
-      const { heatEntryId, displayName, expectedElapsedSecs, flushResult } = pendingEntryCheck;
+      const { heatEntryId, displayName, expectedElapsedSecs, operationId, flushResult, source } =
+        pendingEntryCheck;
       pendingEntryCheck = null;
+      const ownDropError = droppedErrorFor(flushResult, operationId);
       const freshEntry = data.hydrated.find((entry) => entry.id === heatEntryId);
       // Compares against the EXACT value this call attempted to write, not
       // just non-null — a rejected duplicate tap leaves a non-null
@@ -499,12 +509,19 @@ export async function mountTimingScreen(
       // comment in timing.js).
       if (freshEntry?.elapsed_secs === expectedElapsedSecs) {
         pendingSuccess = `${displayName ?? 'Cupper'}'s time recorded.`;
-      } else if (flushResult?.permanentFailure) {
-        pendingError =
-          describeTimingConflict(flushResult.error) ?? describeError(flushResult.error);
+      } else if (ownDropError) {
+        pendingError = describeTimingConflict(ownDropError) ?? describeError(ownDropError);
       } else {
+        // A tap must not say "try again": a still-queued tap WILL land, and
+        // a second tap behind it is rejected ('reject' policy) and dropped —
+        // a false "write lost" on the panel (ui-accessibility-reviewer,
+        // 2026-09-27). Not "watch the sync status" either: once any write
+        // has been lost, the panel no longer shows a pending tap landing. A
+        // manual save uses 'overwrite', so saving again is harmless.
         pendingError =
-          "This cupper's time has not synced yet — it may still be waiting to sync. Try again in a moment.";
+          source === 'tap'
+            ? "Saved on this device, not synced yet. Don't tap again — it will sync automatically."
+            : "This cupper's time has not synced yet — it may still be waiting to sync. Try again in a moment.";
       }
     }
 
@@ -560,10 +577,10 @@ export async function mountTimingScreen(
         startButton.disabled = true;
         startButton.textContent = 'Starting…';
         try {
-          const { flushResult } = await startHeat(heatId, data.event.org_id, client, {
+          const { operationId, flushResult } = await startHeat(heatId, data.event.org_id, client, {
             handlers: cupTasterOutboxHandlers(client),
           });
-          pendingHeatCheck = { expect: 'timing', flushResult };
+          pendingHeatCheck = { expect: 'timing', operationId, flushResult };
           try {
             await publishLiveSession(
               {
@@ -575,14 +592,21 @@ export async function mountTimingScreen(
               client,
               cupTasterOutboxHandlers(client),
             );
-          } catch {
+          } catch (publishError) {
+            console.error(
+              'timingScreen: live-view publish failed (may still be queued)',
+              publishError,
+            );
             // Best-effort (§8.2's automatic publish): publishLiveSession
             // enqueues its own intent before doing any network read, so an
             // offline/failed attempt here still leaves a real, retryable
             // entry in the outbox (drained by a later screen action or
-            // main.js's reconnect flush) rather than vanishing — this catch
-            // only guards the enqueue call itself (e.g. IndexedDB unusable),
-            // which doesn't change whether the heat itself started.
+            // main.js's reconnect flush) rather than vanishing. A throw here
+            // is the enqueue failing (IndexedDB unusable — the outbox itself
+            // reports that lost publish to the sync panel), the flush itself
+            // failing after a successful enqueue (still queued), or a code
+            // bug (e.g. a missing isTest) — none changes whether the heat
+            // started, and all are logged rather than swallowed.
           }
         } catch (err) {
           pendingError = describeError(err);
@@ -618,7 +642,7 @@ export async function mountTimingScreen(
         onStop: async (entryId, restoreRow) => {
           const stoppedEntry = data.hydrated.find((entry) => entry.entry_id === entryId);
           try {
-            const { expectedElapsedSecs, flushResult } = await recordTap(
+            const { expectedElapsedSecs, operationId, flushResult } = await recordTap(
               data.heat,
               stoppedEntry,
               data.event.org_id,
@@ -629,7 +653,9 @@ export async function mountTimingScreen(
               heatEntryId: stoppedEntry.id,
               displayName: stoppedEntry.displayName,
               expectedElapsedSecs,
+              operationId,
               flushResult,
+              source: 'tap',
             };
           } catch (err) {
             pendingError = describeError(err);
@@ -649,7 +675,7 @@ export async function mountTimingScreen(
         onSaveManual: async (entryId, rawSecs, restoreButton) => {
           const targetEntry = data.hydrated.find((entry) => entry.entry_id === entryId);
           try {
-            const { expectedElapsedSecs, flushResult } = await recordManualTime(
+            const { expectedElapsedSecs, operationId, flushResult } = await recordManualTime(
               data.heat,
               targetEntry,
               rawSecs,
@@ -661,7 +687,9 @@ export async function mountTimingScreen(
               heatEntryId: targetEntry.id,
               displayName: targetEntry.displayName,
               expectedElapsedSecs,
+              operationId,
               flushResult,
+              source: 'manual',
             };
           } catch (err) {
             pendingError = describeError(err);
@@ -719,7 +747,7 @@ export async function mountTimingScreen(
       // earlier in the DOM, not toward it. Gated on 'success' specifically
       // (not any tone) — found in a second review pass: a concurrent tap
       // that loses the race to complete this same heat reports an ERROR
-      // tone on this exact branch (pendingEntryCheck's permanentFailure/
+      // tone on this exact branch (pendingEntryCheck's own-drop/
       // not-yet-synced cases), and `feedback` has tabindex="-1" (out of
       // tab order), so redirecting focus to the heading on an error tone
       // would leave a keyboard-only user with no way to reach their own
