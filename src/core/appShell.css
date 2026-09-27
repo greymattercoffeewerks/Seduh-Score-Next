@@ -299,6 +299,38 @@
   color: var(--color-danger-contrast);
 }
 
+/* The status's own full-width header row, at every width, with a min-height
+   sized for the tallest notice it shows — so a change of status (the quiet
+   "Synced" becoming a danger pill) never changes the sticky header's height
+   and never shifts the screen below it, e.g. the timing screen's Stop
+   buttons mid-heat (see appShell.js's syncRow). Measured with the real
+   header (nav links + signed-in email): inline, the status grew the header
+   by 8–41px at 640–1280px as well as at phone width.
+   Two pill lines (2 lines of --text-sm at the body's --leading-normal, plus
+   the pill's vertical padding) below 1024px; one above, where the longest
+   notice — "123 writes lost, not retried; publishing to the live view
+   failed", the longest operationLabels entry — fits on a line. A future,
+   longer label needs re-measuring.
+   While the panel is 'off' the row is `display: contents`, not `none`: the
+   role=status span must stay in the accessibility tree, or a notice that
+   appears at the same moment as its region may not be announced. */
+.app-shell-sync-row {
+  display: contents;
+}
+
+.app-shell-sync-row-active {
+  display: flex;
+  align-items: center;
+  flex-basis: 100%;
+  min-height: calc(2 * var(--leading-normal) * var(--text-sm) + 2 * var(--space-1));
+}
+
+@media (min-width: 1024px) {
+  .app-shell-sync-row-active {
+    min-height: calc(var(--leading-normal) * var(--text-sm) + 2 * var(--space-1));
+  }
+}
+
 /* Temporary (2026-08-30) — "signed in as X" + sign out, ahead of any real
    access-control UI. Empty (no children) while signed out, so it takes no
    layout space until a session exists. Now lives inside .app-shell-nav-panel

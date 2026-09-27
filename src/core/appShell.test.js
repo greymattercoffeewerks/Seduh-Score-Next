@@ -943,7 +943,7 @@ describe('mountAppShell — sync panel', () => {
       });
       await flush(() => {
         expect(root.querySelector('.app-shell-sync').textContent).toBe(
-          `1 write lost — not saved and not retried${suffix}`,
+          `1 write lost, not retried${suffix}`,
         );
       });
     },
@@ -1469,6 +1469,138 @@ describe('mountAppShell — sync panel', () => {
     } finally {
       setItem.mockRestore();
     }
+  });
+
+  // ui-accessibility-reviewer, 2026-09-27: at 360px the status wrapped onto
+  // its own header row and grew from "Synced" to a two-line pill mid-heat,
+  // shifting the Stop buttons under a judge's finger (and, with the real nav
+  // and email, at 640–1280px too). The row is now reserved (min-height in
+  // appShell.css) whenever there's anything to report — jsdom does no
+  // layout, so these pin when the row is reserved and the CSS rules behind
+  // it; the heights were measured in a real browser at
+  // 320/360/640/800/1024/1280px.
+  describe('reserved status row (no header shift)', () => {
+    const row = (root) => root.querySelector('.app-shell-sync-row');
+
+    it('wraps the status in the row, and leaves it unreserved while there is nothing to report', async () => {
+      const root = document.createElement('div');
+      mountTracked(root, { client: fakeClient({}) }); // no event context: 'off'
+      await tick(30);
+      expect(row(root).contains(root.querySelector('.app-shell-sync'))).toBe(true);
+      // A direct child of the (flex-wrap) header — that's what lets
+      // flex-basis: 100% give it its own line.
+      expect(row(root).parentElement).toBe(root.querySelector('.app-shell-header'));
+      expect(root.querySelector('.app-shell-sync').textContent).toBe('');
+      expect(row(root).classList.contains('app-shell-sync-row-active')).toBe(false);
+    });
+
+    it('reserves the row on an event screen and keeps it through every status change', async () => {
+      const root = document.createElement('div');
+      const { setNav } = mountTracked(root, {
+        client: fakeClient({}),
+        syncPollMs: 20,
+        dropCheckMs: 10,
+      });
+      await setNav({ eventId: 'ev1', links: [] });
+      const syncEl = root.querySelector('.app-shell-sync');
+      const states = [];
+      // Reserved exactly while the status has something to show.
+      const record = () =>
+        states.push([
+          syncEl.textContent,
+          row(root).classList.contains('app-shell-sync-row-active') === (syncEl.textContent !== ''),
+        ]);
+      await flush(() => expect(syncEl.textContent).toBe('Synced'));
+      record();
+      await enqueueOperation('confirm_heat', { heatId: 'h1' });
+      await flush(() => expect(syncEl.textContent).toBe('Not synced (1 pending)'));
+      record();
+      await flushOutbox({
+        confirm_heat: async () => {
+          throw permanentError('stale conflict');
+        },
+      });
+      await flush(() =>
+        expect(syncEl.textContent).toBe('1 write lost — not saved and not retried'),
+      );
+      record();
+
+      expect(states.every(([, reserved]) => reserved)).toBe(true);
+    });
+
+    it('reserves the row for the immediate "Not synced" when a drop lands on an empty panel', async () => {
+      const root = document.createElement('div');
+      mountTracked(root, { client: fakeClient({}), syncPollMs: 60000, dropCheckMs: 10 });
+      await tick(30);
+      expect(row(root).classList.contains('app-shell-sync-row-active')).toBe(false);
+      await enqueueOperation('doomed_op', {});
+      await enqueueOperation('slow_op', {});
+      let release;
+      const stalled = new Promise((resolve) => {
+        release = resolve;
+      });
+      const running = flushOutbox({
+        doomed_op: async () => {
+          throw permanentError('stale conflict');
+        },
+        slow_op: () => stalled,
+      });
+      try {
+        await flush(() =>
+          expect(root.querySelector('.app-shell-sync').textContent).toBe('Not synced'),
+        );
+        expect(row(root).classList.contains('app-shell-sync-row-active')).toBe(true);
+      } finally {
+        release();
+        await running;
+      }
+      // test-auditor, 2026-09-27: the announced notice, still with no event
+      // context, must keep the row — keyed on the event context instead, a
+      // loss on the events list would sit in an unreserved row.
+      await flush(() =>
+        expect(root.querySelector('.app-shell-sync').textContent).toBe(
+          '1 write lost — not saved and not retried',
+        ),
+      );
+      expect(row(root).classList.contains('app-shell-sync-row-active')).toBe(true);
+    });
+
+    // jsdom does no layout; this pins the CSS half against accidental
+    // deletion, from the source text (same approach as countdown.test.js).
+    it('keeps the row rules in appShell.css: contents while empty, a reserved min-height while active', async () => {
+      const fs = await import('node:fs');
+      const path = await import('node:path');
+      const { fileURLToPath } = await import('node:url');
+      const dir = path.dirname(fileURLToPath(import.meta.url));
+      const css = fs.readFileSync(path.join(dir, 'appShell.css'), 'utf8');
+      const rule = (selector) => {
+        const start = css.indexOf(`\n${selector} {`);
+        return start === -1 ? '' : css.slice(start, css.indexOf('}', start));
+      };
+      expect(rule('.app-shell-sync-row')).toMatch(/display:\s*contents/);
+      expect(rule('.app-shell-sync-row-active')).toMatch(/display:\s*flex/);
+      expect(rule('.app-shell-sync-row-active')).toMatch(/flex-basis:\s*100%/);
+      expect(rule('.app-shell-sync-row-active')).toMatch(
+        /min-height:\s*calc\(2 \* var\(--leading-normal\) \* var\(--text-sm\) \+ 2 \* var\(--space-1\)\)/,
+      );
+      // One line at 1024px+, where the longest notice fits on a line.
+      expect(css).toMatch(
+        /@media \(min-width: 1024px\)\s*\{\s*\.app-shell-sync-row-active\s*\{[^}]*min-height:\s*calc\(var\(--leading-normal\) \* var\(--text-sm\) \+ 2 \* var\(--space-1\)\)/,
+      );
+    });
+
+    it('releases the row when navigation leaves the event and nothing is pending or lost', async () => {
+      const root = document.createElement('div');
+      const { setNav } = mountTracked(root, { client: fakeClient({}) });
+      await setNav({ eventId: 'ev1', links: [] });
+      await flush(() =>
+        expect(row(root).classList.contains('app-shell-sync-row-active')).toBe(true),
+      );
+      await setNav({ eventId: null, links: [] });
+      await flush(() =>
+        expect(row(root).classList.contains('app-shell-sync-row-active')).toBe(false),
+      );
+    });
   });
 
   // Drops in one pass each follow a server round trip, which on venue wifi
