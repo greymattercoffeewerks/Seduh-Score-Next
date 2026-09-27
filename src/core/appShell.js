@@ -223,12 +223,19 @@ export function mountAppShell(
     className: 'app-shell-sync',
     attrs: { role: 'status', 'aria-live': 'polite' },
   });
+  // The status gets its own full-width header row, sized for the tallest
+  // notice (see .app-shell-sync-row in appShell.css) and present whenever
+  // there's anything to report — so "Synced" turning into a two-line
+  // "N writes lost…" pill never grows the sticky header mid-heat and pushes
+  // the Stop buttons out from under a judge's finger
+  // (ui-accessibility-reviewer, 2026-09-27).
+  const syncRow = el('div', { className: 'app-shell-sync-row' }, [syncEl]);
   const header = el('header', { className: 'app-shell-header' }, [
     brandEl,
     breadcrumbEl,
     navToggle,
     navPanel,
-    syncEl,
+    syncRow,
   ]);
   const outlet = el('main', { className: 'app-shell-outlet' });
   // Quick, glance-based verification for bug reports (2026-09-05) — mirrors
@@ -452,6 +459,7 @@ export function mountAppShell(
   // see the drop listener above. No count: the dropped operation is already
   // gone from the queue, and the real count follows when the pass ends.
   function showNotSyncedWhileHolding() {
+    syncRow.classList.add('app-shell-sync-row-active');
     syncEl.className = 'app-shell-sync app-shell-sync-stuck';
     syncEl.textContent = 'Not synced';
     lastSyncKey = 'holding';
@@ -459,6 +467,13 @@ export function mountAppShell(
     syncHeaderHeightVar();
   }
   function renderSync(state) {
+    // Row reserved exactly while there's something to show — 'off' (no
+    // event context, nothing pending or lost) takes no space. Not keyed on
+    // the event context: a loss on the events list must show too. Only
+    // navigation, or a write queued, lost or drained off an event screen,
+    // moves it in or out — never a write on the timing/scoring screens,
+    // which always have an event context and so are never 'off'.
+    syncRow.classList.toggle('app-shell-sync-row-active', state.status !== 'off');
     syncEl.innerHTML = '';
     syncEl.className = 'app-shell-sync';
     if (state.status === 'off') return; // nothing to report — no context yet, not a warning
@@ -493,12 +508,14 @@ export function mountAppShell(
     if (state.lastFlushError) {
       syncEl.classList.add('app-shell-sync-stuck');
       const lost = lostWriteCount > 1 ? `${lostWriteCount} writes` : '1 write';
-      let text = `${lost} lost — not saved and not retried`;
-      if (state.stuckOperation) {
-        const label = operationLabels[state.stuckOperation.type];
-        text += label ? `; ${label} failed` : '; retrying failed';
-      }
-      syncEl.textContent = text;
+      // Shorter when a stuck operation is named alongside, so the longest
+      // combination stays within the status row's reserved two lines at
+      // 360px, including at 130% text size or with a fallback font
+      // (ui-accessibility-reviewer, 2026-09-27).
+      const stuckLabel = state.stuckOperation && operationLabels[state.stuckOperation.type];
+      syncEl.textContent = state.stuckOperation
+        ? `${lost} lost, not retried; ${stuckLabel ? `${stuckLabel} failed` : 'retrying failed'}`
+        : `${lost} lost — not saved and not retried`;
     } else if (state.stuckOperation) {
       syncEl.classList.add('app-shell-sync-stuck');
       const label = operationLabels[state.stuckOperation.type];
@@ -552,9 +569,10 @@ export function mountAppShell(
     lastSyncStatus = state.status;
     lastRenderedLostCount = state.lastFlushError ? lostWriteCount : 0;
     renderSync(state);
-    // The panel's height changes with its text (a lost-write notice wraps
-    // to two lines at 360px) — keep the sticky-header offset that
-    // scroll-margin-top relies on in step, or focused content can land
+    // The status row's reserved height absorbs text changes, but the row
+    // appearing or disappearing ('off' <-> anything else) and extreme text
+    // sizes still change the header's height — keep the sticky-header offset
+    // that scroll-margin-top relies on in step, or focused content can land
     // behind the header (ui-accessibility-reviewer, 2026-09-26).
     syncHeaderHeightVar();
   }
