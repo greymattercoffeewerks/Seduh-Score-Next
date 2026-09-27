@@ -1354,9 +1354,23 @@ Cup Taster event._
 - **Pre-existing: if listPendingOperations fails, refreshSync keeps the last state (may show green
   'Synced').** Flagged by: `offline-sync-auditor`.
 
-- **At 360px the sticky header grows 1-2 lines when the lost-write notice appears,** potentially
-  shifting Stop buttons mid-tap. Reserve space (min-height on sync row <640px) or render outside
-  the flow. Pre-existing for 'Not synced (N pending)' too. Flagged by: `ui-accessibility-reviewer`.
+- **CLOSED (2026-09-27, branch `fix/sync-panel-360-no-shift`): At 360px the sticky header no longer grows when the lost-write notice appears.** The sync status now sits in its own full-width header row at every width, with min-height reserved for the tallest notice (two lines below 1024px, one above). Measured with the real header and worst-case text: header constant at 320/360/640/800/1024/1280px across all status states; Stop buttons never shift. See CHANGELOG.md for full account. Flagged by: `ui-accessibility-reviewer`.
+
+- **At 200% text/zoom the reserved header still takes ~55–73% of a phone viewport.** Not a WCAG 1.4.4 failure (no content is lost), but a real usability problem for a low-vision judge. Fix: un-stick the sync row or cap with max-height below a viewport-height threshold. Flagged by: `ui-accessibility-reviewer`.
+
+- **Residual 3-line wraps at 320px with 130% text and Verdana.** The shortened wording still wraps to 3 lines at 320px with 130% text, and with Verdana at 130%. Primary target (360px, Hanken self-hosted) holds at 2 lines. Flagged by: `ui-accessibility-reviewer`.
+
+- **Reserve sized for the current longest operationLabels entry.** The reserve is fitted for "publishing to the live view"; a future format adding a longer label silently re-opens the 360px shift. Re-measure when adding labels. Flagged by: `code-reviewer`.
+
+- **No automated browser height check.** A dev-harness page (mountAppShell + fake client + status drivers) and a Playwright spec asserting constant header height at 320/360/1024px would pin the measurement against accidental drift. Flagged by: `test-auditor`.
+
+- **Header is always ~29px (phones) / up to ~50px taller on event screens from the start.** "Synced" sits centred in the reserved row. Accepted as the price of zero shift mid-heat. Flagged by: `ui-accessibility-reviewer`.
+
+- **Lost and stuck wording is inconsistent.** The same loss is worded two ways: "1 write lost — not saved and not retried" alone vs "1 write lost, not retried; …" with a stuck op. Unify on the short form (touches many test expectations; re-measure). Flagged by: `ui-accessibility-reviewer`.
+
+- **Combined notice reads as final rather than retrying.** "…; publishing to the live view failed" lacks a "retrying" cue, so the organiser reading it thinks the retry has stopped, though it's still running (pre-existing). E.g. "…failed, retrying" — must still fit two lines at 360px; re-measure. Flagged by: `ui-accessibility-reviewer`.
+
+- **Off → active announcement risk.** Switching the wrapper from `display: contents` to `flex` in the same task that fills the text may not announce the content appearing. Browsers building AT objects from layout frames may miss the first frame. Unverified without NVDA+Firefox / VoiceOver+Safari; timing/scoring screens are never 'off'. Flagged by: `ui-accessibility-reviewer`.
 
 - **Older appShell tests mount shells without unmounting, leaking drop listeners/intervals** across
   tests. Harmless to current assertions. Flagged by: `offline-sync-auditor`.

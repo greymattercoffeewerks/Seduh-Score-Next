@@ -1,3 +1,97 @@
+## T-HARDEN.sync-panel-360-shift: the sync panel no longer grows the sticky header (Stop buttons stop shifting mid-heat) · 2026-09-27
+
+**Task:** T-HARDEN.sync-panel-360-shift (pre-event hardening for the 4 Oct Cup Taster event).
+At 360px the sync status wrapped onto its own header row and grew from "Synced" to a
+two-line pill mid-heat, shifting the Stop buttons under a judge's finger. With the real
+header (nav links + signed-in email) the same shift happened at 640–1280px too.
+
+**What shipped:**
+
+- The sync status now sits in its own full-width header row (`.app-shell-sync-row`) at
+  **every width**, with space reserved so a change of status (the quiet "Synced" becoming
+  a danger pill) never changes the sticky header's height. Measured with the real header
+  in the built-in browser: header heights are constant at 320px→174, 360px→174, 640px→238,
+  800px→238, 1024px→161, 1280px→118 across all status states (Synced → worst-case notice).
+- Reserved min-height: two pill lines (2 × `--leading-normal` × `--text-sm` + 2 ×
+  `--space-1`) below 1024px, one line above, where the longest notice ("123 writes lost,
+  not retried; publishing to the live view failed") fits on a line. Kept within the
+  reserved space at 360px, Hanken at 100/130%, and Arial/Verdana at 100%.
+- While the panel is 'off' (no event context, nothing pending or lost) the row is
+  `display: contents`, not `none`: the `role=status` span must stay in the accessibility
+  tree, or a notice appearing at the same moment as its region may not be announced
+  (timing/scoring screens are never 'off').
+- Lost + stuck wording shortened to "N writes lost, not retried; [label] failed" (when a
+  stuck operation is named alongside, keeping the worst case at two lines at 360px at 130%
+  text size). Lost-only case keeps "— not saved and not retried".
+- Row reserved exactly while there's something to report — `status !== 'off'` — not keyed
+  on the event context. A write queued/lost/stuck elsewhere must show its notice, e.g. a
+  loss on the events list.
+
+**Files changed:** `src/core/appShell.js`, `src/core/appShell.css`, `src/core/appShell.test.js`.
+
+**Tests:** 1,689 JS tests passing; lint + Prettier clean. jsdom does no layout, so the
+tests pin when the row is reserved (toggle mutants — no toggle, always on, no reserve during
+the hold, keyed on event context — all killed) and the CSS rules behind it (source-text
+test; removing `flex-basis: 100%`, the reserve calc, the ≥1024px one-line rule, or switching
+the empty row to `display: none` each fail it). Heights come from the real-browser
+measurement above.
+
+**Review cycle:** 2 rounds across ui-accessibility-reviewer, code-reviewer, test-auditor,
+module-boundary-checker.
+**Blocking findings fixed:** Round 1 (test-auditor): a test gap — a toggle keyed on the
+event context instead of `status !== 'off'` would have passed every test, yet hidden a loss
+on the events list on phones. The code was already right; tests now assert the row is
+reserved exactly while the status has text, including an announced loss with no event open.
+Round 1 also found (code-reviewer + ui-accessibility-reviewer) that the first version —
+phone-width only, `display: none` while empty — still shifted at 640–1280px and dropped the
+live region from the accessibility tree; both fixed before round 2. Zero blocking remain.
+
+**Known gaps (deferred, not blocking, before 4 Oct):**
+
+- **At 200% text/zoom the reserve doesn't hold.** The sticky header takes ~55–73% of a
+  phone viewport (header grows 414→540px at 200% root text, 360px). Not a WCAG 1.4.4
+  failure (no content is lost), but a real usability problem for a low-vision judge. Fix:
+  un-stick the sync row or cap with max-height below a viewport-height threshold.
+  Flagged by: `ui-accessibility-reviewer`.
+
+- **Residual 3-line cases at 320px with 130% text and Verdana.** The shortened wording
+  still wraps to 3 lines at 320px with 130% text, and with Verdana at 130% — the header
+  shifts there. Primary target (360px, Hanken self-hosted) holds. Flagged by:
+  `ui-accessibility-reviewer`.
+
+- **Reserve sized for a single operationLabels entry; a longer label silently re-opens the
+  shift.** The reserve is fitted for "publishing to the live view" (the current longest
+  label). A future format adding a longer label needs re-measuring.
+  Flagged by: `code-reviewer`.
+
+- **No automated browser height check across widths.** A dev-harness page (mountAppShell +
+  fake client + status drivers) and a Playwright spec asserting constant header height at
+  320/360/1024px would pin the measurement against accidental drift.
+  Flagged by: `test-auditor`.
+
+- **Header is always ~29px (phones) / up to ~50px taller on event screens from the start.**
+  "Synced" sits centred in the reserved row. Accepted as the price of zero mid-heat shift.
+  Flagged by: `ui-accessibility-reviewer`.
+
+- **Lost and stuck wording is inconsistent.** The same loss is worded two ways: "1 write
+  lost — not saved and not retried" alone vs "1 write lost, not retried; …" with a stuck
+  op. Unify on the short form (touches many test expectations; re-measure).
+  Flagged by: `ui-accessibility-reviewer`.
+
+- **Combined notice reads as final rather than retrying.** "…; publishing to the live view
+  failed" lacks a "retrying" cue, so the organiser reading the combined notice thinks the
+  retry has stopped, though it's still running (pre-existing). E.g. "…failed, retrying" —
+  must still fit two lines at 360px; re-measure.
+  Flagged by: `ui-accessibility-reviewer`.
+
+- **Off → active announcement risk.** Switching the wrapper from `display: contents` to
+  `flex` in the same task that fills the text may not announce the content appearing.
+  Browsers building AT objects from layout frames may miss the first frame. Unverified
+  without NVDA+Firefox / VoiceOver+Safari; timing/scoring screens are never 'off'.
+  Flagged by: `ui-accessibility-reviewer`.
+
+---
+
 ## T-HARDEN.lost-write-persistence: lost-write notice survives a tab reload; delete warns about unsynced writes · 2026-09-27
 
 **Task:** T-HARDEN.lost-write-persistence (pre-event hardening follow-ups to PR #129).
