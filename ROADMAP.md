@@ -1308,10 +1308,17 @@ Cup Taster event._
 
 - **Lost-write report is in-memory per tab (lost on reload, invisible to a second console tab),
   and there is no Acknowledge control.** Persist dropped-op records in IndexedDB + add acknowledge
-  state. Flagged by: `offline-sync-auditor`.
+  state. Since 2026-09-27 the notice is sticky per tab and also survives sign-out/sign-in in the
+  same tab (conservative); console.warn is the only trace after a reload. The sticky count can't be
+  cleared after a successful retry, and an enqueue failure on a loud caller (confirm/tap/resolve) is
+  reported by the screen AND as a sticky lost write, each failed retry adding one — the acknowledge
+  should cover this. Flagged by: `offline-sync-auditor`, `ui-accessibility-reviewer`.
 
-- **Lost-write notice doesn't name the operation type.** permanentError carries only the error
-  itself, not the RPC name or operation type. Flagged by: `offline-sync-auditor`.
+- **Lost-write notice doesn't name the operation type.** The data now exists (2026-09-27): the
+  onOperationDropped listener receives the operation (with `type`) and flush results carry
+  `dropped[].type` — only the panel doesn't render it yet. Render it via `operationLabels`, so a
+  dropped live-view publish doesn't read the same as a lost heat confirm. Flagged by:
+  `offline-sync-auditor`.
 
 - **360px/200% zoom/screen-reader verification of lost-write pill not done.** Playwright run
   needed. Flagged by: `ui-accessibility-reviewer`.
@@ -1320,11 +1327,53 @@ Cup Taster event._
   on reconnect, though the next publish rebuilds everything. Product decision: should
   live-view publishes count as lost writes for the outbox report? Flagged by: `code-reviewer`.
 
-- **Screen-triggered flushes discard permanentError (pre-4-Oct, separate task in progress).**
-  scoringScreen/standingsScreen/timingScreen `publishLiveSession` calls and timingScreen
-  `flushResult` discard any permanently-dropped op, so it never reaches the sync panel (shows
-  "Synced"). Route permanentError from every screen flush to shell.reportFlushError.
-  Flagged by: `offline-sync-auditor`.
+- **CLOSED (2026-09-27, branch `fix/screen-flush-drop-reporting`): Every permanently-dropped operation now reaches the sync panel.**
+  core/outbox.js onOperationDropped announces every drop; appShell holds rendering with "Not synced"
+  until the flush ends (capped 5s), covers every flush caller (scoringScreen, standingsScreen,
+  timingScreen, main.js, BTC). Dropped live-view publishes now count as lost writes (no later repair
+  trigger). See CHANGELOG.md for full account. Flagged by: `offline-sync-auditor`.
+
+- **Misattribution in remaining screens** (post-screen-flush-drops, lower impact now every drop reaches
+  panel): scoringScreen/standingsScreen (Cup Taster) and btc/scoringScreen still render the whole flush
+  error rather than droppedErrorFor. Confirm/commit paths need to return operationId. Flagged by:
+  `self`, `code-reviewer`, `test-auditor`.
+
+- **Drop announcements are same-tab only.** A drop in organiser tab A leaves tab B green 'Synced';
+  B's own dropped tap shows only 'not synced yet'. Fix: BroadcastChannel relay deduped by operation id
+  (no-Web-Locks fallback can drop the same op in two tabs). Flagged by: `offline-sync-auditor`,
+  `ui-accessibility-reviewer`.
+
+- **Pre-existing: if listPendingOperations fails, refreshSync keeps the last state (may show green
+  'Synced').** Flagged by: `offline-sync-auditor`.
+
+- **At 360px the sticky header grows 1-2 lines when the lost-write notice appears,** potentially
+  shifting Stop buttons mid-tap. Reserve space (min-height on sync row <640px) or render outside
+  the flow. Pre-existing for 'Not synced (N pending)' too. Flagged by: `ui-accessibility-reviewer`.
+
+- **Older appShell tests mount shells without unmounting, leaking drop listeners/intervals** across
+  tests. Harmless to current assertions. Flagged by: `offline-sync-auditor`.
+
+- **The tap 'saved, not synced yet — don't tap again' message uses the danger 'error' tone** (no
+  pending/warning tone), and the row still shows an enabled Stop button the message says not to tap.
+  A row-level 'Pending sync' state would be sturdier. Flagged by: `ui-accessibility-reviewer`.
+
+- **A tap dropped by another tab's flush still shows 'saved… don't tap again' here** (same-tab
+  listeners; see the cross-tab drop-announcement entry). Flagged by: `ui-accessibility-reviewer`.
+
+- **timingScreen.test.js 'announces once' under countdown-urgent-threshold failed once under load,
+  then passed 3/3.** Real 1s interval timing; looks like a pre-existing flake. Flagged by: `self`.
+
+- **Pre-existing: two refreshSync calls can resolve out of order,** so an older stuck-operation suffix
+  briefly overwrites a newer one (never green — lastFlushError wins). A requestSeq guard like
+  viewer-shell.js would close it. Flagged by: `offline-sync-auditor`.
+
+- **Latent production hang in core/db.js withStore:** tx.onabort/onerror/oncomplete attached only
+  after `await fn(store)`, so a transaction completing before await resumes never settles the promise.
+  Attach handlers before awaiting the request. Flagged by: `test-auditor`.
+
+- **timingScreen.test.js (file-wide, pre-existing): document.body.removeChild(root) not in a finally,**
+  so one failing test leaves its root attached and cascades into later focus/activeElement assertions.
+  Sweep with an afterEach that clears document.body. Flagged by: `test-auditor`.
 
 - **Non-JSON 4xx gateway body (no `code` field) on a read is treated as transient** by the
   read classifier since read helpers drop HTTP status. Real fix: carry HTTP status through
@@ -1334,8 +1383,9 @@ Cup Taster event._
   can hold a flush ~2 min.** Consider `retry: false` on the read or a read-chain total
   timeout. Flagged by: `offline-sync-auditor`.
 
-- **Deleting a test event while the outbox is non-empty should warn or refuse.** lostWriteCount
-  counts flushes, not dropped ops (5 leftovers show "1 write lost"). Rehearsal-leftover
+- **Deleting a test event while the outbox is non-empty should warn or refuse.** (Since
+  2026-09-27 lostWriteCount counts dropped ops, not flushes — 5 leftovers now show "5 writes
+  lost".) Rehearsal-leftover
   heat/score ops for a deleted heat are correctly dropped but alarming on event day.
   Runbook: confirm the event device shows **Synced** before 4 Oct. Flagged by:
   `offline-sync-auditor`.

@@ -1,3 +1,111 @@
+## T-HARDEN.screen-flush-drops: every permanently-dropped operation reaches the sync panel · 2026-09-27
+
+**Task:** T-HARDEN.screen-flush-drops (pre-event hardening for the 4 Oct Cup Taster event).
+Offline-sync-auditor finding N4 from T-HARDEN.live-publish-read-chain's review (PR #127): only
+`main.js`'s background reconnect flush forwarded a permanently-dropped operation to the sync panel.
+Flushes triggered from screens — the `publishLiveSession` calls in scoringScreen, standingsScreen
+and timingScreen, and timing taps flushing past someone else's leftover — discarded it, so the next
+poll showed a green "Synced" for a write that was gone (handoff §8.4/§9). The champion publish from
+standingsScreen has no later trigger to repair a dropped publish. timingScreen also described
+`flushResult.error` — possibly another operation's — as its own action's conflict.
+
+**What shipped:**
+
+- `core/outbox.js` announces every drop at the source: `onOperationDropped(listener)` is called
+  once per operation removed as permanent during a flush, and once for a write `enqueueOperation`
+  couldn't persist at all (announced, then rethrown). Each drop is also `console.warn`ed. Flush
+  results that report a drop carry `dropped: [{ operationId, type, error }]`;
+  `droppedErrorFor(result, operationId)` returns only that operation's error; `isFlushInProgress()`
+  is new.
+- `core/appShell.js` subscribes on mount (unsubscribes on unmount), counting lost writes per
+  dropped operation, not per flush. While a drop is unannounced the panel never renders, so it can't
+  read the emptied queue as "Synced"; a green or empty panel switches at once to a plain,
+  danger-styled "Not synced". The pass's drops are announced together once its flush ends
+  (re-checked every 250ms, capped at 5s on a monotonic clock), and the notice shows even if the queue
+  read then fails. A drop with a null error (a transaction aborted without one) still counts.
+  `reportFlushError` removed; `main.js` no longer forwards flush results (it would double-count).
+- Dropped live-view publishes (`publish_live_session`) deliberately count as lost writes —
+  resolves code-reviewer #4 from the previous task.
+- `timing.js`/`timingManual.js` return each operation's `operationId`; timingScreen and
+  timingManualScreen describe a failure only when their own operation was dropped. A still-queued
+  tap now reads "Saved on this device, not synced yet. Don't tap again — it will sync
+  automatically." (a re-tap would be rejected and dropped); manual saves keep "Try again".
+- The three swallowed `publishLiveSession` catches now `console.error`.
+
+**Files changed:** `src/core/outbox.js`, `src/core/outbox.test.js`, `src/core/appShell.js`, `src/core/appShell.test.js`,
+`src/main.js`, `src/main.test.js`, `src/formats/cup-taster/timing.js`, `src/formats/cup-taster/timing.test.js`,
+`src/formats/cup-taster/timingManual.js`, `src/formats/cup-taster/timingManualScreen.js`, `src/formats/cup-taster/
+timingScreen.js`, `src/formats/cup-taster/timingScreen.test.js`, `src/formats/cup-taster/timingManualScreen.test.js`,
+`src/formats/cup-taster/scoringScreen.js`, `src/formats/cup-taster/standingsScreen.js`.
+
+**Tests:** 1,669 JS tests passing; lint + Prettier clean. Mutation-checked: every round found and killed mutants
+(render hold, drop tracking via operation ID, per-operation error fallback, announced-drop count vs rendered count).
+
+**Review cycle:** 5 rounds across offline-sync-auditor, code-reviewer, test-auditor, ui-accessibility-reviewer.
+**Blocking findings fixed:** Round 1: publishLiveSession enqueue failure swallowed (three screens now console.error);
+Round 2: a 750ms debounce opened a window where a poll announced a false "Synced" (replaced by the
+render hold + announce-when-the-flush-ends), and the unmount test passed with the listener leaked. Zero blocking remain.
+
+**Known gaps (deferred, not blocking, before 4 Oct):**
+
+- **Misattribution pattern in remaining screens:** cup-taster scoringScreen.js (result.error), standingsScreen.js
+  (flushResult.error), and btc/scoringScreen.js (fallback flushError = result?.error) still render the whole flush
+  error rather than using droppedErrorFor. Confirm/commit paths need to return operationId. Lower impact: every
+  drop now reaches the panel. Flagged by: `self`, `code-reviewer`, `test-auditor`.
+
+- **Drop announcements are same-tab only.** A drop in organiser tab A leaves tab B green 'Synced' (and B's own
+  dropped tap shows only 'not synced yet'). Fix: BroadcastChannel relay deduped by operation id (no-Web-Locks
+  fallback can drop the same op in two tabs). Flagged by: `offline-sync-auditor`, `ui-accessibility-reviewer`.
+
+- **The panel doesn't name WHAT was lost.** A dropped live-view publish reads the same as a lost heat confirm.
+  Data is now there (listener's operation.type / dropped[].type); render via operationLabels. Flagged by:
+  `offline-sync-auditor`.
+
+- **Lost-write notice is in-memory only:** reload or OS tab kill erases it; console.warn is the only trace.
+  Full fix: persisted IndexedDB dropped-writes list with explicit acknowledge. Also survives sign-out/sign-in
+  in the same tab (conservative). Sticky count can't be cleared after a successful retry; each enqueue failure
+  on a loud caller adds one. Flagged by: `offline-sync-auditor`, `ui-accessibility-reviewer`.
+
+- **Pre-existing: if listPendingOperations fails, refreshSync keeps the last state (may be green 'Synced').**
+  Flagged by: `offline-sync-auditor`.
+
+- **At 360px the sticky header shifts when the lost-write notice appears** (grows 1-2 lines), potentially
+  shifting Stop buttons mid-tap. Reserve space or render outside the flow. Pre-existing for 'Not synced (N pending)'.
+  Flagged by: `ui-accessibility-reviewer`.
+
+- **Older appShell tests mount shells without unmounting, leaking drop listeners/intervals** across tests.
+  Harmless to current assertions. Flagged by: `offline-sync-auditor`.
+
+- **The tap 'saved, not synced yet — don't tap again' message uses the danger 'error' tone** (no pending/warning
+  tone exists), and the row still shows an enabled Stop button the message says not to tap. A row-level
+  'Pending sync' state would be sturdier. Flagged by: `ui-accessibility-reviewer`.
+
+- **A tap dropped by another tab's flush still shows 'saved… don't tap again' here** (same-tab listeners; see
+  the cross-tab entry). Flagged by: `ui-accessibility-reviewer`.
+
+- **timingScreen.test.js 'announces once, via the live region, when the countdown first crosses the urgent
+  threshold' failed once under load then passed 3/3.** Real 1s interval timing — looks like a pre-existing
+  flake. Flagged by: `self`.
+
+- **Pre-existing: two refreshSync calls can resolve out of order,** so an older stuck-operation suffix can
+  briefly overwrite a newer one (never green — lastFlushError wins). A requestSeq guard like viewer-shell.js
+  would close it. Flagged by: `offline-sync-auditor`.
+
+- **Latent production hang in core/db.js withStore:** tx.onabort/onerror/oncomplete attached only after
+  `await fn(store)`, so a transaction completing before await resumes never settles the promise. Attach
+  handlers before awaiting the request. Flagged by: `test-auditor`.
+
+- **timingScreen.test.js (file-wide, pre-existing): document.body.removeChild(root) not in a finally,**
+  so one failing test leaves its root attached and cascades into later focus/activeElement assertions.
+  Sweep with an afterEach that clears document.body. Flagged by: `test-auditor`.
+
+**No migrations.**
+
+**PR:** #128 (fix/screen-flush-drop-reporting → dev), branch up to date with origin/dev c9160a2. Commits
+pending; CI not run yet.
+
+---
+
 ## T-HARDEN.live-publish-read-chain: classify publish_live_session read-chain errors · 2026-09-27
 
 **Task:** T-HARDEN.live-publish-read-chain (pre-event hardening for 4 Oct Cup Taster event). Offline-sync-auditor finding B3 from PR #125: `publish_live_session` reads the stage (`findStageById` → `.single()`) before its RPC, and those reads threw postgrest-js error objects **unclassified**. An error with no `.permanent` flag stays at the head of the FIFO outbox forever with no manual discard, so a rehearsal event's publish still queued when that test event is deleted (PGRST116 on every attempt) would block every tap, score, or timing change behind it on event day.
