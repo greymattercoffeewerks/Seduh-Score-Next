@@ -49,6 +49,31 @@ const SYNC_POLL_MS = 3000;
 const DROP_CHECK_MS = 250;
 const DROP_MAX_WAIT_MS = 5000;
 
+// Where the lost-write notice is kept across a reload of this tab (see
+// saveLostWriteCount/loadLostWriteCount in mountAppShell).
+const LOST_WRITES_STORAGE_KEY = 'seduh-lost-writes';
+
+// Only the count is kept: the panel never displays the error itself.
+// sessionStorage can be missing or throw (private mode, blocked site data);
+// both helpers then fall back to in-memory only, the pre-2026-09-27 state.
+function loadLostWriteCount() {
+  try {
+    const count = JSON.parse(sessionStorage.getItem(LOST_WRITES_STORAGE_KEY))?.count;
+    if (Number.isInteger(count) && count > 0) return count;
+  } catch {
+    // unreadable or malformed — start clean
+  }
+  return 0;
+}
+
+function saveLostWriteCount(count) {
+  try {
+    sessionStorage.setItem(LOST_WRITES_STORAGE_KEY, JSON.stringify({ count }));
+  } catch {
+    // storage unavailable — the in-memory notice still shows
+  }
+}
+
 export function mountAppShell(
   root,
   {
@@ -328,8 +353,15 @@ export function mountAppShell(
   // screen-triggered flush (publishLiveSession, a timing tap, a confirm)
   // never reached the panel and the next poll showed "Synced". Subscribing
   // at the source catches every flush in this tab, whoever triggered it.
-  // Sticky until reload: a dropped write never comes back, so a later,
-  // unrelated success must not clear it.
+  // Sticky: a dropped write never comes back, so a later, unrelated success
+  // must not clear it. Kept in sessionStorage, so it also survives a reload
+  // of this tab — and usually the browser restoring a tab the OS discarded,
+  // common on venue phones — instead of vanishing with the only record of
+  // the loss (offline-sync-auditor D4, 2026-09-27). Closing the tab still
+  // clears it; persisting and acknowledging lost writes is ROADMAP's (and
+  // should replace this key, not sit beside it). Deliberately not scoped to
+  // the signed-in user: the writes were lost on this device, so a sign-out
+  // and sign-in in the same tab keeps the notice.
   let lastFlushError = null;
   // How many operations have been dropped — counted per operation, not per
   // flush (five leftovers dropped in one pass are five lost writes, not
@@ -361,6 +393,11 @@ export function mountAppShell(
   // stepped backwards (NTP, a manual fix on an event-day tablet) would
   // otherwise make the wait negative and hold the panel indefinitely.
   let lostWriteCount = 0;
+  const restoredLostWriteCount = loadLostWriteCount();
+  if (restoredLostWriteCount > 0) {
+    lostWriteCount = restoredLostWriteCount;
+    lastFlushError = new Error('outbox: operation dropped (before this page loaded)');
+  }
   // What the panel last rendered: its dedupe key, and the status alone
   // ('live' | 'not synced' | 'off' | 'holding') so the drop listener needn't
   // parse the key.
@@ -368,8 +405,8 @@ export function mountAppShell(
   let lastSyncStatus = null;
   // The lost-write count the panel last showed (0 while it shows none).
   let lastRenderedLostCount = 0;
-  let pendingFlushError = null;
-  let pendingLostCount = 0;
+  let pendingFlushError = lastFlushError;
+  let pendingLostCount = lostWriteCount;
   let firstUnannouncedDropAt = 0;
   let dropCheckTimer = null;
   function hasUnannouncedDrops() {
@@ -401,6 +438,12 @@ export function mountAppShell(
     // the panel back to "Synced" (code-reviewer, 2026-09-27).
     pendingFlushError = error ?? new Error('outbox: operation dropped');
     pendingLostCount += 1;
+    // Saved at once, not when announced: a reload during the hold (up to
+    // DROP_MAX_WAIT_MS — exactly when a stalled-looking panel invites one)
+    // would otherwise lose these drops. Restore seeds both counters from it,
+    // so they come back as already announced (offline-sync-auditor,
+    // 2026-09-27).
+    saveLostWriteCount(pendingLostCount);
     if (!dropCheckTimer) {
       dropCheckTimer = setTimeout(announceDropsWhenFlushEnds, dropCheckMs);
     }
@@ -436,8 +479,8 @@ export function mountAppShell(
     // stuckOperation, but its own wording.
     //
     // That lost-write notice wins over everything else (2026-09-26, found in
-    // review: offline-sync-auditor). The report is kept until reload
-    // — a dropped write never comes back — so hiding it whenever anything
+    // review: offline-sync-auditor). The report is kept for the life of the
+    // tab — a dropped write never comes back — so hiding it whenever anything
     // else is queued would hide it for most of a busy event. A later stuck
     // operation is still named alongside it, so the notice never masks a
     // new, retrying failure. The pending count is left out: this is a live

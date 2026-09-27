@@ -194,6 +194,8 @@ async function settleHashDispatch() {
 
 beforeEach(async () => {
   location.hash = '';
+  // The real appShell keeps its lost-write notice in sessionStorage.
+  sessionStorage.clear();
   await settleHashDispatch();
 });
 

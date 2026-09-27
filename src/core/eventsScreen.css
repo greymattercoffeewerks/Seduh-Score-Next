@@ -108,6 +108,14 @@
   gap: var(--space-2);
 }
 
+/* Unsynced-writes warning inside the confirm step: its own full-width line
+   so it reads before the buttons at 360px; weight, not colour, carries the
+   emphasis (the text itself says what's at stake). */
+.event-delete-warning {
+  flex-basis: 100%;
+  font-weight: var(--font-weight-semibold);
+}
+
 .create-event-form {
   display: flex;
   flex-direction: column;

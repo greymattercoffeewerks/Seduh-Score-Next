@@ -7,6 +7,15 @@ import {
   mountEventsScreen,
 } from './eventsScreen.js';
 import { DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
+import { _clearAllForTests } from './db.js';
+import { enqueueOperation } from './outbox.js';
+
+// Delete now reads this device's outbox before showing its confirm step, so
+// the step appears after an await rather than synchronously.
+async function openDeleteConfirm(root, eventId) {
+  root.querySelector(`#delete-event-${eventId}`).click();
+  await vi.waitFor(() => expect(root.querySelector(`#confirm-delete-${eventId}`)).not.toBeNull());
+}
 
 describe('validateDraft', () => {
   it('requires a non-blank name', () => {
@@ -79,6 +88,9 @@ describe('renderEventsList', () => {
     expect(list.querySelector('#delete-event-ev1')).toBeNull();
     expect(list.querySelector('#confirm-delete-ev1')).not.toBeNull();
     expect(list.querySelector('#cancel-delete-ev1')).not.toBeNull();
+    // No count passed: no unsynced-writes warning (never "undefined writes").
+    expect(list.querySelector('#delete-warning-ev1')).toBeNull();
+    expect(list.querySelector('#confirm-delete-ev1').hasAttribute('aria-describedby')).toBe(false);
   });
 
   it('shows a disabled "Deleting…" state, with no clickable controls, while deleteStates marks that event as deleting', () => {
@@ -421,6 +433,180 @@ describe('mountEventsScreen', () => {
     expect(root.textContent).not.toContain('No events yet');
   });
 
+  // offline-sync-auditor D1, 2026-09-27: deleting a test event while this
+  // device still has queued writes turns the leftovers into "N writes lost"
+  // on the sync panel — a false alarm on event day. The confirm step says so.
+  describe('unsynced-writes warning on delete', () => {
+    const PLURAL_2 = `2 writes on this device haven't synced yet. Deleting now can make them show as lost on the sync panel until this tab is closed. Cancel, wait a moment, then click Delete again to re-check.`;
+    const COULD_NOT_CHECK = `Couldn't check this device for writes that haven't synced yet. Cancel, then click Delete again to re-check.`;
+
+    beforeEach(async () => {
+      await _clearAllForTests();
+    });
+
+    function mountWithTestEvent(root, options = {}) {
+      const client = fakeClient({
+        events: [{ id: 'ev1', org_id: 'org1', name: 'Test Run', is_test: true }],
+      });
+      return {
+        client,
+        mounted: mountEventsScreen(root, {
+          orgId: 'org1',
+          client,
+          defaultFormat: 'cup_taster',
+          ...options,
+        }),
+      };
+    }
+
+    it('warns in the confirm step, and on the focused Confirm button, counting writes queued up to the click', async () => {
+      await enqueueOperation('confirm_heat', { heatId: 'h1' });
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      try {
+        await mountWithTestEvent(root).mounted;
+        // Queued after mount: the count must be read at click time.
+        await enqueueOperation('record_heat_time', { heatEntryId: 'he1' });
+
+        await openDeleteConfirm(root, 'ev1');
+
+        expect(root.querySelector('#delete-warning-ev1').textContent).toBe(PLURAL_2);
+        const confirm = root.querySelector('#confirm-delete-ev1');
+        expect(confirm.getAttribute('aria-describedby')).toBe('delete-warning-ev1');
+        expect(document.activeElement).toBe(confirm);
+      } finally {
+        document.body.removeChild(root);
+      }
+    });
+
+    it('shows no warning when nothing is queued', async () => {
+      const root = document.createElement('div');
+      await mountWithTestEvent(root).mounted;
+
+      await openDeleteConfirm(root, 'ev1');
+
+      expect(root.querySelector('#delete-warning-ev1')).toBeNull();
+      expect(root.querySelector('#confirm-delete-ev1').hasAttribute('aria-describedby')).toBe(
+        false,
+      );
+    });
+
+    it("says it couldn't check when the queue read fails, rather than staying silent", async () => {
+      const root = document.createElement('div');
+      // A long timeout, so only the rejection path can produce the message.
+      await mountWithTestEvent(root, { unsyncedCheckTimeoutMs: 60000 }).mounted;
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const realGetAll = IDBIndex.prototype.getAll; // outboxListAll reads via the createdAt index
+      IDBIndex.prototype.getAll = function failingGetAll() {
+        throw new Error('IndexedDB unavailable');
+      };
+      try {
+        await openDeleteConfirm(root, 'ev1');
+        // Logged, not swallowed.
+        expect(consoleError).toHaveBeenCalledWith(
+          'eventsScreen: unsynced-writes count failed',
+          expect.any(Error),
+        );
+      } finally {
+        IDBIndex.prototype.getAll = realGetAll;
+        consoleError.mockRestore();
+      }
+
+      expect(root.querySelector('#delete-warning-ev1').textContent).toBe(COULD_NOT_CHECK);
+    });
+
+    it("says it couldn't check when the queue read hangs, instead of leaving Delete dead", async () => {
+      const root = document.createElement('div');
+      await mountWithTestEvent(root, { unsyncedCheckTimeoutMs: 50 }).mounted;
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const realGetAll = IDBIndex.prototype.getAll;
+      // A request that never fires success or error — a stalled open/read.
+      IDBIndex.prototype.getAll = function hangingGetAll() {
+        return {};
+      };
+      try {
+        await openDeleteConfirm(root, 'ev1');
+      } finally {
+        IDBIndex.prototype.getAll = realGetAll;
+        consoleError.mockRestore();
+      }
+
+      expect(root.querySelector('#delete-warning-ev1').textContent).toBe(COULD_NOT_CHECK);
+    });
+
+    // code-reviewer, 2026-09-27: with the count read before the confirm step,
+    // a double-click's late second read could reopen the confirm step over a
+    // delete already in flight — and a second Confirm would call the RPC twice.
+    // The second click's read is made to hang until the (short) timeout, so
+    // its result lands deterministically after Confirm. Two guards cover
+    // this (no second read starts; a late read is ignored) — each alone is
+    // enough, so this test fails only with both gone.
+    it('a double-clicked Delete opens one confirm step, and a late read never reopens it over a delete in flight', async () => {
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      const realGetAll = IDBIndex.prototype.getAll;
+      let reads = 0;
+      IDBIndex.prototype.getAll = function secondReadHangs(...args) {
+        reads += 1;
+        return reads === 1 ? realGetAll.apply(this, args) : {};
+      };
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        const { client, mounted } = mountWithTestEvent(root, { unsyncedCheckTimeoutMs: 250 });
+        await mounted;
+        // The delete RPC stays in flight until released by hand — no timer
+        // race between it and the hung read's timeout.
+        const realRpc = client.rpc;
+        let releaseRpc;
+        client.rpc = (...args) =>
+          new Promise((resolve) => {
+            releaseRpc = resolve;
+          }).then(() => realRpc(...args));
+        const deleteButton = root.querySelector('#delete-event-ev1');
+        const clickedAt = performance.now();
+        deleteButton.click();
+        deleteButton.click(); // before the first click's read resolves
+        await vi.waitFor(() => expect(root.querySelector('#confirm-delete-ev1')).not.toBeNull(), {
+          interval: 5,
+        });
+        // Precondition: Confirm must land before the hung read times out, or
+        // this test could no longer catch a late read reopening the step.
+        expect(performance.now() - clickedAt).toBeLessThan(250);
+
+        root.querySelector('#confirm-delete-ev1').click();
+        await new Promise((resolve) => setTimeout(resolve, 300)); // past the hung read's timeout
+        expect(root.querySelector('#confirm-delete-ev1')).toBeNull();
+        expect(root.textContent).toContain('Deleting…');
+
+        releaseRpc();
+        await vi.waitFor(() => expect(root.textContent).toContain('Event deleted.'));
+        expect(client.calls.filter(([action]) => action === 'rpc')).toHaveLength(1);
+      } finally {
+        IDBIndex.prototype.getAll = realGetAll;
+        consoleError.mockRestore();
+        document.body.removeChild(root);
+      }
+    });
+
+    it('uses the singular for one queued write', () => {
+      const list = renderEventsList([{ id: 'ev1', name: 'Test Run', is_test: true }], {
+        deleteStates: { ev1: 'confirming' },
+        unsyncedWrites: 1,
+      });
+      expect(list.querySelector('#delete-warning-ev1').textContent).toBe(
+        `1 write on this device hasn't synced yet. Deleting now can make it show as lost on the sync panel until this tab is closed. Cancel, wait a moment, then click Delete again to re-check.`,
+      );
+    });
+
+    it("renders the couldn't-check wording for a null count", () => {
+      const list = renderEventsList([{ id: 'ev1', name: 'Test Run', is_test: true }], {
+        deleteStates: { ev1: 'confirming' },
+        unsyncedWrites: null,
+      });
+      expect(list.querySelector('#delete-warning-ev1').textContent).toBe(COULD_NOT_CHECK);
+    });
+  });
+
   it('clicking Delete then Cancel returns to the plain Delete button, without ever calling the RPC', async () => {
     const root = document.createElement('div');
     document.body.appendChild(root);
@@ -429,7 +615,7 @@ describe('mountEventsScreen', () => {
     });
     await mountEventsScreen(root, { orgId: 'org1', client, defaultFormat: 'cup_taster' });
 
-    root.querySelector('#delete-event-ev1').click();
+    await openDeleteConfirm(root, 'ev1');
     expect(root.querySelector('#confirm-delete-ev1')).not.toBeNull();
 
     root.querySelector('#cancel-delete-ev1').click();
@@ -455,7 +641,7 @@ describe('mountEventsScreen', () => {
     });
     await mountEventsScreen(root, { orgId: 'org1', client, defaultFormat: 'cup_taster' });
 
-    root.querySelector('#delete-event-ev1').click();
+    await openDeleteConfirm(root, 'ev1');
     expect(root.querySelector('#delete-event-ev2')).not.toBeNull(); // untouched while ev1 confirms
     root.querySelector('#confirm-delete-ev1').click();
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -482,7 +668,7 @@ describe('mountEventsScreen', () => {
     });
     await mountEventsScreen(root, { orgId: 'org1', client, defaultFormat: 'cup_taster' });
 
-    root.querySelector('#delete-event-ev1').click();
+    await openDeleteConfirm(root, 'ev1');
     const confirmButton = root.querySelector('#confirm-delete-ev1');
     // Both clicks dispatched before either handler's own await yields —
     // proves the guard itself (deleteStates[eventId] === 'deleting'), not
@@ -506,7 +692,7 @@ describe('mountEventsScreen', () => {
     });
     await mountEventsScreen(root, { orgId: 'org1', client, defaultFormat: 'cup_taster' });
 
-    root.querySelector('#delete-event-ev2').click();
+    await openDeleteConfirm(root, 'ev2');
     root.querySelector('#confirm-delete-ev2').click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
