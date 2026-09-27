@@ -1,3 +1,306 @@
+## T-HARDEN.sync-panel-360-shift: the sync panel no longer grows the sticky header (Stop buttons stop shifting mid-heat) · 2026-09-27
+
+**Task:** T-HARDEN.sync-panel-360-shift (pre-event hardening for the 4 Oct Cup Taster event).
+At 360px the sync status wrapped onto its own header row and grew from "Synced" to a
+two-line pill mid-heat, shifting the Stop buttons under a judge's finger. With the real
+header (nav links + signed-in email) the same shift happened at 640–1280px too.
+
+**What shipped:**
+
+- The sync status now sits in its own full-width header row (`.app-shell-sync-row`) at
+  **every width**, with space reserved so a change of status (the quiet "Synced" becoming
+  a danger pill) never changes the sticky header's height. Measured with the real header
+  in the built-in browser: header heights are constant at 320px→174, 360px→174, 640px→238,
+  800px→238, 1024px→161, 1280px→118 across all status states (Synced → worst-case notice).
+- Reserved min-height: two pill lines (2 × `--leading-normal` × `--text-sm` + 2 ×
+  `--space-1`) below 1024px, one line above, where the longest notice ("123 writes lost,
+  not retried; publishing to the live view failed") fits on a line. Kept within the
+  reserved space at 360px, Hanken at 100/130%, and Arial/Verdana at 100%.
+- While the panel is 'off' (no event context, nothing pending or lost) the row is
+  `display: contents`, not `none`: the `role=status` span must stay in the accessibility
+  tree, or a notice appearing at the same moment as its region may not be announced
+  (timing/scoring screens are never 'off').
+- Lost + stuck wording shortened to "N writes lost, not retried; [label] failed" (when a
+  stuck operation is named alongside, keeping the worst case at two lines at 360px at 130%
+  text size). Lost-only case keeps "— not saved and not retried".
+- Row reserved exactly while there's something to report — `status !== 'off'` — not keyed
+  on the event context. A write queued/lost/stuck elsewhere must show its notice, e.g. a
+  loss on the events list.
+
+**Files changed:** `src/core/appShell.js`, `src/core/appShell.css`, `src/core/appShell.test.js`.
+
+**Tests:** 1,689 JS tests passing; lint + Prettier clean. jsdom does no layout, so the
+tests pin when the row is reserved (toggle mutants — no toggle, always on, no reserve during
+the hold, keyed on event context — all killed) and the CSS rules behind it (source-text
+test; removing `flex-basis: 100%`, the reserve calc, the ≥1024px one-line rule, or switching
+the empty row to `display: none` each fail it). Heights come from the real-browser
+measurement above.
+
+**Review cycle:** 2 rounds across ui-accessibility-reviewer, code-reviewer, test-auditor,
+module-boundary-checker.
+**Blocking findings fixed:** Round 1 (test-auditor): a test gap — a toggle keyed on the
+event context instead of `status !== 'off'` would have passed every test, yet hidden a loss
+on the events list on phones. The code was already right; tests now assert the row is
+reserved exactly while the status has text, including an announced loss with no event open.
+Round 1 also found (code-reviewer + ui-accessibility-reviewer) that the first version —
+phone-width only, `display: none` while empty — still shifted at 640–1280px and dropped the
+live region from the accessibility tree; both fixed before round 2. Zero blocking remain.
+
+**Known gaps (deferred, not blocking, before 4 Oct):**
+
+- **At 200% text/zoom the reserve doesn't hold.** The sticky header takes ~55–73% of a
+  phone viewport (header grows 414→540px at 200% root text, 360px). Not a WCAG 1.4.4
+  failure (no content is lost), but a real usability problem for a low-vision judge. Fix:
+  un-stick the sync row or cap with max-height below a viewport-height threshold.
+  Flagged by: `ui-accessibility-reviewer`.
+
+- **Residual 3-line cases at 320px with 130% text and Verdana.** The shortened wording
+  still wraps to 3 lines at 320px with 130% text, and with Verdana at 130% — the header
+  shifts there. Primary target (360px, Hanken self-hosted) holds. Flagged by:
+  `ui-accessibility-reviewer`.
+
+- **Reserve sized for a single operationLabels entry; a longer label silently re-opens the
+  shift.** The reserve is fitted for "publishing to the live view" (the current longest
+  label). A future format adding a longer label needs re-measuring.
+  Flagged by: `code-reviewer`.
+
+- **No automated browser height check across widths.** A dev-harness page (mountAppShell +
+  fake client + status drivers) and a Playwright spec asserting constant header height at
+  320/360/1024px would pin the measurement against accidental drift.
+  Flagged by: `test-auditor`.
+
+- **Header is always ~29px (phones) / up to ~50px taller on event screens from the start.**
+  "Synced" sits centred in the reserved row. Accepted as the price of zero mid-heat shift.
+  Flagged by: `ui-accessibility-reviewer`.
+
+- **Lost and stuck wording is inconsistent.** The same loss is worded two ways: "1 write
+  lost — not saved and not retried" alone vs "1 write lost, not retried; …" with a stuck
+  op. Unify on the short form (touches many test expectations; re-measure).
+  Flagged by: `ui-accessibility-reviewer`.
+
+- **Combined notice reads as final rather than retrying.** "…; publishing to the live view
+  failed" lacks a "retrying" cue, so the organiser reading the combined notice thinks the
+  retry has stopped, though it's still running (pre-existing). E.g. "…failed, retrying" —
+  must still fit two lines at 360px; re-measure.
+  Flagged by: `ui-accessibility-reviewer`.
+
+- **Off → active announcement risk.** Switching the wrapper from `display: contents` to
+  `flex` in the same task that fills the text may not announce the content appearing.
+  Browsers building AT objects from layout frames may miss the first frame. Unverified
+  without NVDA+Firefox / VoiceOver+Safari; timing/scoring screens are never 'off'.
+  Flagged by: `ui-accessibility-reviewer`.
+
+---
+
+## T-HARDEN.lost-write-persistence: lost-write notice survives a tab reload; delete warns about unsynced writes · 2026-09-27
+
+**Task:** T-HARDEN.lost-write-persistence (pre-event hardening follow-ups to PR #129).
+After T-HARDEN.screen-flush-drops' `onOperationDropped` listener announced every drop,
+the next reload lost the notice entirely — leaving a venue organiser unaware that writes
+were lost, with only `console.warn` as a trace (offline-sync-auditor D4 from the previous
+task's review). Also closes a separate UX gap (offline-sync-auditor D1): deleting a test
+event while unsynced writes remain shows no warning that the leftover ops will become
+lost-write records (event-day alarm — a day's worth of stale heat/score entries suddenly
+appearing on the sync panel).
+
+**What shipped:**
+
+- `appShell.js` saves the lost-write count to `sessionStorage('seduh-lost-writes')` at
+  every drop (not just on announce, so a reload during the 5s hold keeps the count); on
+  mount it restores the count and seeds both `lostWriteCount` and `pendingLostCount` so
+  the drop is rendered as already announced. try/catch on both get and set — storage
+  unavailable (private mode, blocked site data, quota) falls back to in-memory only (the
+  pre-2026-09-27 state). Deliberately not scoped to the signed-in user: the loss is per
+  device, and a sign-out/sign-in in the same tab keeps the notice (conservative, and
+  matches the wording's "until this tab is closed").
+- `eventsScreen.js`: clicking Delete reads `countPendingOperations()`, bounded by a 2s
+  timeout (`UNSYNCED_CHECK_TIMEOUT_MS`), before the Confirm step renders. A hang or error is
+  logged and produces `null` → "Couldn't check" wording. Double-click guarded: the click puts
+  the row in a `'checking'` state, a second click during it is ignored, and a read that
+  resolves after the row has left `'checking'` is discarded — so a late read can never reopen
+  the confirm step over a delete in flight. The warning (if any) is a full-width line,
+  `aria-describedby`'d to the focused Confirm button.
+- The warning wording deliberately points at re-clicking Delete to re-check (which
+  re-reads the count), not at the sync panel's "Synced" state (which never appears on
+  eventsScreen itself), and notes the loss lasts "until this tab is closed" — matching
+  the sessionStorage lifetime (ui-accessibility-reviewer and offline-sync-auditor, round-1
+  blocking, fixed before round 2).
+- Warn, don't refuse: leftovers for a deleted test event can never sync back to the
+  database, so refusing would block the delete forever (offline-sync-auditor agreed).
+
+**Files changed:** `src/core/appShell.js`, `src/core/appShell.test.js`, `src/core/outbox.js`,
+`src/core/eventsScreen.js`, `src/core/eventsScreen.css`, `src/core/eventsScreen.test.js`,
+`src/main.test.js`.
+
+**Tests:** 1,684 JS tests passing; lint + Prettier clean. Mutation-checked every round —
+save/restore and its guards, count validation, save-at-drop, count read at click time, the
+read-failure and timeout paths, the double-click guards, the warning's `aria-describedby`,
+singular/plural wording, and the failure logging each have a test that fails when broken.
+
+**Review cycle:** 3 rounds across offline-sync-auditor, ui-accessibility-reviewer, code-reviewer,
+test-auditor.
+**Blocking findings fixed:** Round 1 (2026-09-27): the first warning told organisers to wait
+for "Synced" on the sync panel (which never appears on eventsScreen) — found by both
+ui-accessibility-reviewer and offline-sync-auditor; rephrased to "re-click Delete to re-check"
+instead. Zero blocking remain.
+
+**Known gaps (deferred, not blocking, before 4 Oct):**
+
+- **Sticky inflation — rehearsal leftovers.** The count saves at drop time, persists across
+  reloads of the same tab. A lost write never comes back, but a duplicated tab _copies_ the
+  count. A day-long rehearsal with (say) 10 dropped ops accumulates "10 writes lost" all day;
+  the count never clears without closing the tab. An event-day rehearsal contaminates the
+  evening count. Runbook: 4 Oct event, if the notice persists from morning setup into evening,
+  re-open the organiser console in a fresh tab. Full fix: persisted IndexedDB list + explicit
+  Acknowledge, which should REPLACE the sessionStorage key (not sit beside it).
+  Flagged by: `offline-sync-auditor`, `ui-accessibility-reviewer`.
+
+- **Lost when the tab closes; invisible to other tabs.** sessionStorage lives only as long as
+  the tab: closing it (or a device restart) clears the notice, and a second console tab doesn't
+  see a loss from the first (a duplicated tab copies the count). Full fix: a persisted, cross-tab
+  list (IndexedDB + a BroadcastChannel relay of drops).
+  Flagged by: `offline-sync-auditor`.
+
+- **No Acknowledge control.** Once the organiser sees "N writes lost", there's no way to mark
+  it acknowledged. A noisy caller (a loop of failed confirms, or stalled heat edits) keeps
+  adding to the count without clear recovery guidance beyond "wait for network". Full fix:
+  explicit-dismiss button (the persisted list above would carry seen/unseen state).
+  Flagged by: `offline-sync-auditor`.
+
+- **Delete warning's count is a snapshot at click time, shared across rows.** It doesn't update
+  while the confirm step is open (the wording tells the organiser to re-click Delete to
+  re-check), and it counts the whole device's queue, not the one event's.
+  Flagged by: `code-reviewer`, `offline-sync-auditor`.
+
+- **A poison operation keeps the delete warning's count above zero.** An operation that fails
+  on every retry stays queued, so "wait, then click Delete again" repeats indefinitely and the
+  organiser deletes through the warning. Runbook: if the count doesn't drop after a wait, check
+  the sync panel for a failed operation before deleting.
+  Flagged by: `offline-sync-auditor`.
+
+- **The 'checking' state (unsynced-writes read, normally milliseconds, capped at 2s) renders
+  nothing visible.** A hung IndexedDB open is rare but possible on a loaded device. If it
+  happens, the Delete button stays enabled for 2s looking unresponsive. Add a 'Checking…'
+  label like 'Deleting…' if slow opens show up in practice.
+  Flagged by: `ui-accessibility-reviewer`.
+
+- **Sign-out in the same tab keeps the lost-write notice — documented as deliberate but untested.**
+  A user-scoped key would change this silently; a future session signing in as a different org
+  user would see the previous user's loss report. This is conservative (keeping the data rather
+  than losing it), and correct given that the writes were lost on this _device_, not to this
+  user. An untested edge case if sign-outs become common during an event.
+  Flagged by: `test-auditor`.
+
+---
+
+## T-HARDEN.screen-flush-drops: every permanently-dropped operation reaches the sync panel · 2026-09-27
+
+**Task:** T-HARDEN.screen-flush-drops (pre-event hardening for the 4 Oct Cup Taster event).
+Offline-sync-auditor finding N4 from T-HARDEN.live-publish-read-chain's review (PR #127): only
+`main.js`'s background reconnect flush forwarded a permanently-dropped operation to the sync panel.
+Flushes triggered from screens — the `publishLiveSession` calls in scoringScreen, standingsScreen
+and timingScreen, and timing taps flushing past someone else's leftover — discarded it, so the next
+poll showed a green "Synced" for a write that was gone (handoff §8.4/§9). The champion publish from
+standingsScreen has no later trigger to repair a dropped publish. timingScreen also described
+`flushResult.error` — possibly another operation's — as its own action's conflict.
+
+**What shipped:**
+
+- `core/outbox.js` announces every drop at the source: `onOperationDropped(listener)` is called
+  once per operation removed as permanent during a flush, and once for a write `enqueueOperation`
+  couldn't persist at all (announced, then rethrown). Each drop is also `console.warn`ed. Flush
+  results that report a drop carry `dropped: [{ operationId, type, error }]`;
+  `droppedErrorFor(result, operationId)` returns only that operation's error; `isFlushInProgress()`
+  is new.
+- `core/appShell.js` subscribes on mount (unsubscribes on unmount), counting lost writes per
+  dropped operation, not per flush. While a drop is unannounced the panel never renders, so it can't
+  read the emptied queue as "Synced"; a green or empty panel switches at once to a plain,
+  danger-styled "Not synced". The pass's drops are announced together once its flush ends
+  (re-checked every 250ms, capped at 5s on a monotonic clock), and the notice shows even if the queue
+  read then fails. A drop with a null error (a transaction aborted without one) still counts.
+  `reportFlushError` removed; `main.js` no longer forwards flush results (it would double-count).
+- Dropped live-view publishes (`publish_live_session`) deliberately count as lost writes —
+  resolves code-reviewer #4 from the previous task.
+- `timing.js`/`timingManual.js` return each operation's `operationId`; timingScreen and
+  timingManualScreen describe a failure only when their own operation was dropped. A still-queued
+  tap now reads "Saved on this device, not synced yet. Don't tap again — it will sync
+  automatically." (a re-tap would be rejected and dropped); manual saves keep "Try again".
+- The three swallowed `publishLiveSession` catches now `console.error`.
+
+**Files changed:** `src/core/outbox.js`, `src/core/outbox.test.js`, `src/core/appShell.js`, `src/core/appShell.test.js`,
+`src/main.js`, `src/main.test.js`, `src/formats/cup-taster/timing.js`, `src/formats/cup-taster/timing.test.js`,
+`src/formats/cup-taster/timingManual.js`, `src/formats/cup-taster/timingManualScreen.js`, `src/formats/cup-taster/
+timingScreen.js`, `src/formats/cup-taster/timingScreen.test.js`, `src/formats/cup-taster/timingManualScreen.test.js`,
+`src/formats/cup-taster/scoringScreen.js`, `src/formats/cup-taster/standingsScreen.js`.
+
+**Tests:** 1,669 JS tests passing; lint + Prettier clean. Mutation-checked: every round found and killed mutants
+(render hold, drop tracking via operation ID, per-operation error fallback, announced-drop count vs rendered count).
+
+**Review cycle:** 5 rounds across offline-sync-auditor, code-reviewer, test-auditor, ui-accessibility-reviewer.
+**Blocking findings fixed:** Round 1: publishLiveSession enqueue failure swallowed (three screens now console.error);
+Round 2: a 750ms debounce opened a window where a poll announced a false "Synced" (replaced by the
+render hold + announce-when-the-flush-ends), and the unmount test passed with the listener leaked. Zero blocking remain.
+
+**Known gaps (deferred, not blocking, before 4 Oct):**
+
+- **Misattribution pattern in remaining screens:** cup-taster scoringScreen.js (result.error), standingsScreen.js
+  (flushResult.error), and btc/scoringScreen.js (fallback flushError = result?.error) still render the whole flush
+  error rather than using droppedErrorFor. Confirm/commit paths need to return operationId. Lower impact: every
+  drop now reaches the panel. Flagged by: `self`, `code-reviewer`, `test-auditor`.
+
+- **Drop announcements are same-tab only.** A drop in organiser tab A leaves tab B green 'Synced' (and B's own
+  dropped tap shows only 'not synced yet'). Fix: BroadcastChannel relay deduped by operation id (no-Web-Locks
+  fallback can drop the same op in two tabs). Flagged by: `offline-sync-auditor`, `ui-accessibility-reviewer`.
+
+- **The panel doesn't name WHAT was lost.** A dropped live-view publish reads the same as a lost heat confirm.
+  Data is now there (listener's operation.type / dropped[].type); render via operationLabels. Flagged by:
+  `offline-sync-auditor`.
+
+- **Lost-write notice is in-memory only:** reload or OS tab kill erases it; console.warn is the only trace.
+  Full fix: persisted IndexedDB dropped-writes list with explicit acknowledge. Also survives sign-out/sign-in
+  in the same tab (conservative). Sticky count can't be cleared after a successful retry; each enqueue failure
+  on a loud caller adds one. Flagged by: `offline-sync-auditor`, `ui-accessibility-reviewer`.
+
+- **Pre-existing: if listPendingOperations fails, refreshSync keeps the last state (may be green 'Synced').**
+  Flagged by: `offline-sync-auditor`.
+
+- **At 360px the sticky header shifts when the lost-write notice appears** (grows 1-2 lines), potentially
+  shifting Stop buttons mid-tap. Reserve space or render outside the flow. Pre-existing for 'Not synced (N pending)'.
+  Flagged by: `ui-accessibility-reviewer`.
+
+- **Older appShell tests mount shells without unmounting, leaking drop listeners/intervals** across tests.
+  Harmless to current assertions. Flagged by: `offline-sync-auditor`.
+
+- **The tap 'saved, not synced yet — don't tap again' message uses the danger 'error' tone** (no pending/warning
+  tone exists), and the row still shows an enabled Stop button the message says not to tap. A row-level
+  'Pending sync' state would be sturdier. Flagged by: `ui-accessibility-reviewer`.
+
+- **A tap dropped by another tab's flush still shows 'saved… don't tap again' here** (same-tab listeners; see
+  the cross-tab entry). Flagged by: `ui-accessibility-reviewer`.
+
+- **timingScreen.test.js 'announces once, via the live region, when the countdown first crosses the urgent
+  threshold' failed once under load then passed 3/3.** Real 1s interval timing — looks like a pre-existing
+  flake. Flagged by: `self`.
+
+- **Pre-existing: two refreshSync calls can resolve out of order,** so an older stuck-operation suffix can
+  briefly overwrite a newer one (never green — lastFlushError wins). A requestSeq guard like viewer-shell.js
+  would close it. Flagged by: `offline-sync-auditor`.
+
+- **Latent production hang in core/db.js withStore:** tx.onabort/onerror/oncomplete attached only after
+  `await fn(store)`, so a transaction completing before await resumes never settles the promise. Attach
+  handlers before awaiting the request. Flagged by: `test-auditor`.
+
+- **timingScreen.test.js (file-wide, pre-existing): document.body.removeChild(root) not in a finally,**
+  so one failing test leaves its root attached and cascades into later focus/activeElement assertions.
+  Sweep with an afterEach that clears document.body. Flagged by: `test-auditor`.
+
+**No migrations.**
+
+**PR:** #128 (fix/screen-flush-drop-reporting → dev), branch up to date with origin/dev c9160a2. Commits
+pending; CI not run yet.
+
+---
+
 ## T-HARDEN.live-publish-read-chain: classify publish_live_session read-chain errors · 2026-09-27
 
 **Task:** T-HARDEN.live-publish-read-chain (pre-event hardening for 4 Oct Cup Taster event). Offline-sync-auditor finding B3 from PR #125: `publish_live_session` reads the stage (`findStageById` → `.single()`) before its RPC, and those reads threw postgrest-js error objects **unclassified**. An error with no `.permanent` flag stays at the head of the FIFO outbox forever with no manual discard, so a rehearsal event's publish still queued when that test event is deleted (PGRST116 on every attempt) would block every tap, score, or timing change behind it on event day.

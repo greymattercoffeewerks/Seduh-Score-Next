@@ -400,36 +400,16 @@ function allOutboxHandlers(client) {
 // already owns everything about HOW a flush behaves (ordering, permanent-
 // failure handling); this only decides WHEN one starts.
 //
-// `shell.reportFlushError(...)` — found in review (offline-sync-auditor):
-// every PRE-EXISTING flush call site reads its own flushResult off the same
-// await that triggered the write and surfaces a real conflict to whichever
-// screen the organiser is looking at (timingScreen.js's own
-// pendingHeatCheck, etc.). This trigger has no screen watching it at all —
-// without this, a genuine conflict (flushResult.permanentFailure) got
-// silently discarded from the outbox with nobody told, and the very next
-// sync-panel poll saw an empty queue and reported "Synced" — a false
-// all-clear for a write that never actually landed, exactly the "conflict
-// silently resolved" failure mode §9 exists to prevent.
-//
-// Sticky, not cleared by a later clean flush (2026-09-26, found in review:
-// code-reviewer). A dropped write never comes back, so a later, unrelated
-// success must not hide it — and once the periodic retry below existed, a
-// conflict dropped alongside a transient failure was cleared within 15s.
-// Reports `permanentError` (the dropped operation's own error), not
-// `error`, which is whatever failure stopped the pass.
-function attemptReconnectFlush(client, shell) {
-  flushOutbox(allOutboxHandlers(client))
-    .then((result) => {
-      // `?? result.error`: reportFlushError(undefined) would CLEAR the
-      // report (its default is null) — never let a missing field turn a
-      // dropped write into a false "Synced".
-      if (result.permanentFailure) {
-        shell.reportFlushError(result.permanentError ?? result.error);
-      }
-    })
-    .catch((err) => {
-      console.error('main: reconnect flush failed', err);
-    });
+// Not reported from here: a permanently-dropped operation reaches the sync
+// panel through core/outbox.js's onOperationDropped, which appShell.js
+// subscribes to — the same path for this background trigger and for every
+// screen-triggered flush (2026-09-27, offline-sync-auditor: forwarding the
+// result from here alone left every screen's flush silently dropping writes
+// behind a green "Synced").
+function attemptReconnectFlush(client) {
+  flushOutbox(allOutboxHandlers(client)).catch((err) => {
+    console.error('main: reconnect flush failed', err);
+  });
 }
 
 const PENDING_RETRY_MS = 15000;
@@ -479,19 +459,19 @@ export function mountApp(root, { client = getSupabase(), orgId = getDefaultOrgId
   // runs from inside an already-`requireAuth()`-gated screen's own write
   // handler); this is the first call site that can fire before that gate.
   //
-  // `onConsoleRoute` (2026-09-26, found in review: offline-sync-auditor):
-  // the projector/phone/splash links open this same SPA in another tab,
-  // sharing this session and this IndexedDB outbox. That tab has no
-  // visible shell (chrome: false), so a conflict its flush discovers would
-  // be removed from the shared queue and reported to a hidden panel — the
+  // `onConsoleRoute` (2026-09-26, found in review: offline-sync-auditor): the
+  // projector/phone/splash links open this same SPA in another tab, sharing
+  // this session and this IndexedDB outbox. That tab has no visible shell
+  // (chrome: false), so a conflict its flush discovers would be removed from
+  // the shared queue and announced in a tab with no sync panel listening — the
   // organiser's own tab would then show "Synced". Only a tab showing the
   // organiser console drains the queue. Starts false and is set by
-  // updateChrome() below, which also attempts the first flush if the
-  // session was already known before the first route resolved.
+  // updateChrome() below, which also attempts the first flush if the session
+  // was already known before the first route resolved.
   let hasSession = false;
   let onConsoleRoute = false;
   function flushIfOwner() {
-    if (hasSession && onConsoleRoute) attemptReconnectFlush(client, shell);
+    if (hasSession && onConsoleRoute) attemptReconnectFlush(client);
   }
   const {
     data: { subscription: reconnectAuthSubscription },
@@ -518,7 +498,7 @@ export function mountApp(root, { client = getSupabase(), orgId = getDefaultOrgId
     if (!hasSession || !onConsoleRoute || !navigator.onLine) return;
     listPendingOperations()
       .then((operations) => {
-        if (operations.length > 0) attemptReconnectFlush(client, shell);
+        if (operations.length > 0) attemptReconnectFlush(client);
       })
       .catch((err) => {
         console.error('main: pending-operation check failed', err);

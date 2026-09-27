@@ -18,6 +18,7 @@ import { el, labeledField } from './dom.js';
 import { describeError } from './errors.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
 import { createEvent, listEventsForOrg, deleteTestEvent } from './events.js';
+import { countPendingOperations } from './outbox.js';
 
 export function blankDraft(defaultFormat) {
   return { name: '', eventDate: '', venue: '', city: '', isTest: false, format: defaultFormat };
@@ -34,14 +35,45 @@ export function validateDraft(draft) {
 // delete_test_event's own server-side guard (supabase/migrations/
 // 20260905130000_delete_test_event_rpc.sql) exactly, so the button is never
 // shown somewhere it could only ever fail. `deleteState` is one of
-// undefined | 'confirming' | 'deleting', keyed by event id in the caller's
+// undefined | 'checking' | 'confirming' | 'deleting' ('checking', the brief
+// unsynced-writes read, renders like undefined), keyed by event id in the caller's
 // own closure state — only ever one row's own delete action is mid-flow at
 // a time in practice, but this is per-row, not a single shared value, so a
 // stale confirm on one row never bleeds into another's.
+//
+// Short: the count is a local IndexedDB read that normally takes
+// milliseconds; this only bounds a hung open.
+const UNSYNCED_CHECK_TIMEOUT_MS = 2000;
+
+// `unsyncedWrites` is this device's outbox size when Delete was clicked
+// (null if it couldn't be read). Deleting a test event with writes still
+// queued turns its leftovers into "N writes lost" on the sync panel — a
+// false alarm on event day (offline-sync-auditor D1, 2026-09-27) — so the
+// confirm step says so. It counts every queued write on this device, not
+// just this event's: the outbox is format-agnostic and doesn't know which
+// event a payload belongs to.
+//
+// The advice points at re-clicking Delete, which re-reads the count, not at
+// the sync panel: with no event open the panel never says "Synced" (an empty
+// queue renders blank), and once any write is lost it stays on that notice
+// (ui-accessibility-reviewer + offline-sync-auditor, 2026-09-27).
+function unsyncedWritesWarning(unsyncedWrites) {
+  if (unsyncedWrites === 0 || unsyncedWrites === undefined) return null;
+  if (unsyncedWrites === null) {
+    return "Couldn't check this device for writes that haven't synced yet. Cancel, then click Delete again to re-check.";
+  }
+  const [writes, them] =
+    unsyncedWrites === 1
+      ? ["1 write on this device hasn't", 'it']
+      : [`${unsyncedWrites} writes on this device haven't`, 'them'];
+  return `${writes} synced yet. Deleting now can make ${them} show as lost on the sync panel until this tab is closed. Cancel, wait a moment, then click Delete again to re-check.`;
+}
+
 function renderDeleteAction(
   event,
   deleteState,
   { onDeleteClick, onConfirmDelete, onCancelDelete },
+  unsyncedWrites,
 ) {
   if (!event.is_test) return null;
 
@@ -49,6 +81,8 @@ function renderDeleteAction(
     return el('span', { className: 'stage-meta', text: 'Deleting…' });
   }
   if (deleteState === 'confirming') {
+    const warning = unsyncedWritesWarning(unsyncedWrites);
+    const warningId = `delete-warning-${event.id}`;
     const confirmButton = el('button', {
       className: 'btn btn-outline tap-target',
       id: `confirm-delete-${event.id}`,
@@ -56,6 +90,8 @@ function renderDeleteAction(
       attrs: {
         type: 'button',
         'aria-label': `Confirm deleting "${event.name}" — this cannot be undone`,
+        // Focus lands on this button, so the warning must reach it too.
+        ...(warning ? { 'aria-describedby': warningId } : {}),
       },
     });
     confirmButton.addEventListener('click', () => onConfirmDelete(event.id));
@@ -68,6 +104,9 @@ function renderDeleteAction(
     cancelButton.addEventListener('click', () => onCancelDelete(event.id));
     return el('span', { className: 'event-delete-confirm' }, [
       el('span', { text: 'Delete this test event? This cannot be undone.' }),
+      ...(warning
+        ? [el('span', { className: 'event-delete-warning', id: warningId, text: warning })]
+        : []),
       confirmButton,
       cancelButton,
     ]);
@@ -85,7 +124,7 @@ function renderDeleteAction(
 
 export function renderEventsList(
   events,
-  { deleteStates = {}, deleteHandlers = {}, formatOptions } = {},
+  { deleteStates = {}, deleteHandlers = {}, formatOptions, unsyncedWrites } = {},
 ) {
   if (events.length === 0) {
     return el('p', { className: 'stage-meta', text: 'No events yet — create one below.' });
@@ -110,7 +149,12 @@ export function renderEventsList(
     if (event.is_test) {
       children.push(el('span', { className: 'is-test-indicator', text: 'Test data' }));
     }
-    const deleteAction = renderDeleteAction(event, deleteStates[event.id], deleteHandlers);
+    const deleteAction = renderDeleteAction(
+      event,
+      deleteStates[event.id],
+      deleteHandlers,
+      unsyncedWrites,
+    );
     if (deleteAction) children.push(deleteAction);
     return el('li', {}, children);
   });
@@ -235,7 +279,16 @@ export function renderCreateForm(draft, { disabled, formatOptions }) {
 
 export async function mountEventsScreen(
   root,
-  { orgId, client = getSupabase(), defaultFormat, formatOptions, signal } = {},
+  {
+    orgId,
+    client = getSupabase(),
+    defaultFormat,
+    formatOptions,
+    signal,
+    // How long Delete waits for the unsynced-writes count before falling
+    // back to "Couldn't check" — overridable for tests.
+    unsyncedCheckTimeoutMs = UNSYNCED_CHECK_TIMEOUT_MS,
+  } = {},
 ) {
   let events = [];
   let draft = blankDraft(defaultFormat);
@@ -245,10 +298,14 @@ export async function mountEventsScreen(
   let pendingSuccess = null;
   let loadFailedMessage = null;
   let focusAfterRender = null;
-  // Per-event-id delete confirmation state ('confirming' | 'deleting') —
+  // Per-event-id delete state ('checking' | 'confirming' | 'deleting') —
   // see renderEventsList's own comment for why this is keyed by id rather
   // than a single shared value.
   let deleteStates = {};
+  // This device's outbox size as of the last Delete click — see
+  // unsyncedWritesWarning. Deliberately one value, not per row: it counts the
+  // whole device's queue, so the latest read is the right one for any row.
+  let unsyncedWrites;
 
   function setFeedback(feedback, message, tone) {
     feedback.textContent = message ?? '';
@@ -360,7 +417,24 @@ export async function mountEventsScreen(
   // anything by itself. `deleteStates` is mutated per id, never wholesale
   // reset, so a confirm/cancel/delete on one row never disturbs another
   // row's own independent state.
-  function handleDeleteClick(eventId) {
+  async function handleDeleteClick(eventId) {
+    // A second click while the count is still being read (a double-click)
+    // does nothing: without this, a late read could reopen the confirm step
+    // over a delete already in flight (code-reviewer, 2026-09-27).
+    if (deleteStates[eventId]) return;
+    deleteStates = { ...deleteStates, [eventId]: 'checking' };
+    // Read before showing the confirm step so its warning is in place when
+    // focus lands on "Confirm delete" (see unsyncedWritesWarning). Bounded:
+    // a hung IndexedDB open must degrade to "Couldn't check", not leave
+    // Delete doing nothing.
+    const count = await raceTimeout(countPendingOperations(), unsyncedCheckTimeoutMs).catch(
+      (err) => {
+        console.error('eventsScreen: unsynced-writes count failed', err);
+        return null;
+      },
+    );
+    if (deleteStates[eventId] !== 'checking') return;
+    unsyncedWrites = count;
     deleteStates = { ...deleteStates, [eventId]: 'confirming' };
     focusAfterRender = `#confirm-delete-${eventId}`;
     render();
@@ -463,6 +537,7 @@ export async function mountEventsScreen(
             onCancelDelete: handleCancelDelete,
           },
           formatOptions,
+          unsyncedWrites,
         }),
       ]),
     );

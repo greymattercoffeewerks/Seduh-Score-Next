@@ -63,8 +63,9 @@ export function parseElapsedInput(minutesRaw, secondsRaw) {
 // same reason: this must succeed (i.e. enqueue) purely from local
 // knowledge, with no network dependency of its own.
 //
-// Returns the clamped `expectedElapsedSecs` this call attempted to write, alongside
-// the flush result — same reason as recordTap's own identical return shape
+// Returns the clamped `expectedElapsedSecs` this call attempted to write, its
+// own `operationId` (see timing.js's submitTimingOperation), and the flush
+// result — same reason as recordTap's own identical return shape
 // (see its comment): a caller checking "did MY save take" against fresh,
 // reloaded state must compare against this exact value. It matters even
 // more here than for a tap — 'overwrite' means a correction can land on an
@@ -89,11 +90,11 @@ export async function recordManualTime(
   const update = buildClampedUpdate(rawSecs, heat.duration_secs, 'manual', nowMs);
 
   const payload = buildRecordHeatTimePayload(heat, heatEntry, orgId, update, 'overwrite');
-  await enqueueOperation('record_heat_time', payload);
+  const { id: operationId } = await enqueueOperation('record_heat_time', payload);
   // See timing.js's own module comment: `handlers`, when passed, is the
   // cross-module composed map (cupTasterOutboxHandlers) so this flush can
   // also walk past a queued confirm_heat/publish_session, not just this
   // module's own three operation types.
   const flushResult = await flushOutbox(handlers ?? timingHandlers(client));
-  return { expectedElapsedSecs: update.elapsed_secs, flushResult };
+  return { expectedElapsedSecs: update.elapsed_secs, operationId, flushResult };
 }

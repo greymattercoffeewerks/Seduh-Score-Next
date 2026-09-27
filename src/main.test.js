@@ -100,9 +100,21 @@ const flushOutbox = vi.fn(() =>
   Promise.resolve({ processed: 0, stopped: false, permanentFailure: false }),
 );
 const listPendingOperations = vi.fn(() => Promise.resolve([]));
+// The real appShell.js subscribes here for dropped operations; a test
+// simulating a drop calls every live listener, exactly as the real
+// outbox's runFlush does, and an unmounted shell must have removed its own.
+const dropListeners = new Set();
+function announceDrop(error) {
+  for (const listener of dropListeners) listener({ operation: { type: 'fake_type' }, error });
+}
 vi.mock('./core/outbox.js', () => ({
   flushOutbox: (...args) => flushOutbox(...args),
   listPendingOperations: (...args) => listPendingOperations(...args),
+  isFlushInProgress: () => false,
+  onOperationDropped: (listener) => {
+    dropListeners.add(listener);
+    return () => dropListeners.delete(listener);
+  },
 }));
 const cupTasterOutboxHandlers = vi.fn(() => ({ fake: 'handlers' }));
 const cupTasterOperationLabels = { fake_type: 'doing a fake thing' };
@@ -182,6 +194,8 @@ async function settleHashDispatch() {
 
 beforeEach(async () => {
   location.hash = '';
+  // The real appShell keeps its lost-write notice in sessionStorage.
+  sessionStorage.clear();
   await settleHashDispatch();
 });
 
@@ -1047,25 +1061,64 @@ describe('sync-on-reconnect', () => {
     expect(stopTrackingInputModality).toHaveBeenCalledTimes(1);
   });
 
-  // Found in review (offline-sync-auditor): every OTHER flush call site has
-  // a screen reading its own flushResult off the same await that triggered
-  // the write; this trigger has none. Without surfacing permanentFailure
-  // here, a genuine conflict got silently discarded from the outbox with
-  // the real appShell.js sync panel then reporting a false "Synced" right
-  // after — regression coverage against the REAL (unmocked) appShell.js,
-  // not a mock, since the bug was specifically about what the panel shows.
-  it('surfaces a permanently-failed reconnect flush on the real sync panel, not a false "Synced"', async () => {
+  // Found in review (offline-sync-auditor): the background reconnect flush
+  // has no screen reading its result, and a dropped operation left the real
+  // sync panel on a false "Synced". Since 2026-09-27 the drop reaches the
+  // panel through the outbox's own drop announcement (onOperationDropped),
+  // not through main.js forwarding the result — coverage stays against the
+  // REAL (unmocked) appShell.js, since the bug is about what the panel shows.
+  it('surfaces an operation dropped during the reconnect flush on the real sync panel, not a false "Synced"', async () => {
     stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
-    flushOutbox.mockResolvedValueOnce({
-      processed: 0,
-      stopped: false,
-      permanentFailure: true,
-      error: new Error('stale conflict'),
-      permanentError: new Error('stale conflict'),
+    flushOutbox.mockImplementationOnce(async () => {
+      announceDrop(new Error('stale conflict'));
+      return {
+        processed: 0,
+        stopped: false,
+        permanentFailure: true,
+        error: new Error('stale conflict'),
+        permanentError: new Error('stale conflict'),
+      };
     });
     const client = fakeReactiveClient({ session: { user: { email: 'organiser@test.com' } } });
     const { root } = await startApp({ client });
-    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(flushOutbox).toHaveBeenCalled();
+    // The shell announces a pass's drops once its flush ends (checked every
+    // DROP_CHECK_MS, 250ms).
+    await vi.waitFor(
+      () =>
+        expect(root.querySelector('.app-shell-sync').textContent).toBe(
+          '1 write lost — not saved and not retried',
+        ),
+      { timeout: 3000 },
+    );
+  });
+
+  // main.js must not ALSO report the result it gets back: the shell already
+  // heard about the drop from the outbox, and a second report would count
+  // one lost write as two.
+  it('counts a dropped operation once, not once from the outbox and again from the flush result', async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    flushOutbox.mockImplementationOnce(async () => {
+      announceDrop(new Error('stale conflict'));
+      return {
+        processed: 0,
+        stopped: false,
+        permanentFailure: true,
+        error: new Error('stale conflict'),
+        permanentError: new Error('stale conflict'),
+      };
+    });
+    const client = fakeReactiveClient({ session: { user: { email: 'organiser@test.com' } } });
+    const { root } = await startApp({ client });
+    await vi.waitFor(
+      () => expect(root.querySelector('.app-shell-sync').textContent).toContain('lost'),
+      { timeout: 3000 },
+    );
+    // Past the shell's drop check (DROP_CHECK_MS, 250ms — the mocked outbox
+    // reports no flush in progress), so a second (duplicate) report would
+    // already have been counted. Keep this wait above DROP_CHECK_MS.
+    await new Promise((resolve) => setTimeout(resolve, 600));
 
     expect(root.querySelector('.app-shell-sync').textContent).toBe(
       '1 write lost — not saved and not retried',
@@ -1079,23 +1132,41 @@ describe('sync-on-reconnect', () => {
   // its report must outlive later, unrelated successes.
   it('keeps a dropped write reported after a later, clean flush — a later success does not bring it back', async () => {
     stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
-    flushOutbox.mockResolvedValueOnce({
-      processed: 0,
-      stopped: true,
-      error: new Error('upstream 503'),
-      permanentFailure: true,
-      permanentError: new Error('stale conflict'),
+    flushOutbox.mockImplementationOnce(async () => {
+      announceDrop(new Error('stale conflict'));
+      return {
+        processed: 0,
+        stopped: true,
+        error: new Error('upstream 503'),
+        permanentFailure: true,
+        permanentError: new Error('stale conflict'),
+      };
     });
     const client = fakeReactiveClient({ session: { user: { email: 'organiser@test.com' } } });
     const { root } = await startApp({ client });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
+    await vi.waitFor(
+      () => expect(root.querySelector('.app-shell-sync').textContent).toContain('lost'),
+      { timeout: 3000 },
+    );
     window.dispatchEvent(new Event('online')); // default mock: a clean flush
     await new Promise((resolve) => setTimeout(resolve, 0));
 
+    expect(flushOutbox).toHaveBeenCalledTimes(2);
     expect(root.querySelector('.app-shell-sync').textContent).toBe(
       '1 write lost — not saved and not retried',
     );
+  });
+
+  it('stops listening for dropped operations once the app unmounts', async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    const { app } = await startApp();
+    expect(dropListeners.size).toBe(1);
+    await app.unmount();
+    activeApp = null; // already torn down — afterEach must not double-unmount it
+
+    expect(dropListeners.size).toBe(0);
   });
 
   it('a clean (non-permanent-failure) reconnect flush leaves the sync panel reporting normally, not stuck on a stale error', async () => {

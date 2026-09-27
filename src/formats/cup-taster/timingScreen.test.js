@@ -984,6 +984,185 @@ describe('mountTimingScreen', () => {
     document.body.removeChild(root);
   });
 
+  // Found in review (offline-sync-auditor, 2026-09-27): the fallback message
+  // read `flushResult.error` whenever the flush had dropped ANYTHING — so a
+  // rehearsal leftover dropped ahead of this tap was reported as if it were
+  // this tap's own conflict, while the tap itself was still queued. Only the
+  // tap's own drop may explain it; the leftover's loss is the sync panel's to
+  // report (via the outbox's drop announcement, covered in appShell.test.js).
+  it("a tap still queued behind another operation's drop says it hasn't synced yet — never that other operation's conflict", async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const timingHeat = {
+      ...appHeatPending,
+      status: 'timing',
+      started_at: '2026-08-22T10:00:00.000Z',
+    };
+    const client = buildFakeClient({
+      event: { id: 'ev1', org_id: 'org1', is_test: false },
+      heat: timingHeat,
+      entries: [{ id: 'he1', heat_id: 'h1', entry_id: 'e1', elapsed_secs: null }],
+      roster: [{ id: 'e1', display_name: 'Cupper One' }],
+    });
+    await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
+
+    // A leftover write for a heat entry that no longer exists — makeRpc
+    // rejects it with a real P0002, so the flush drops it.
+    const { enqueueOperation } = await import('../../core/outbox.js');
+    const leftover = await enqueueOperation('record_heat_time', {
+      p_operation_id: 'leftover-op',
+      p_heat_entry_id: 'deleted-entry',
+    });
+    // This tap's own write fails at the network level (status 0), so it
+    // stays queued rather than landing or being dropped.
+    const realRpc = client.rpc;
+    client.rpc = (name, payload) =>
+      payload.p_heat_entry_id === 'he1'
+        ? Promise.resolve({ data: null, error: { message: 'Failed to fetch' }, status: 0 })
+        : realRpc(name, payload);
+
+    root.querySelector('.btn-stop').click();
+    await flush(() => {
+      expect(root.querySelector('.screen-feedback').dataset.tone).toBe('error');
+    });
+
+    const feedback = root.querySelector('.screen-feedback');
+    expect(feedback.textContent).toBe(
+      "Saved on this device, not synced yet. Don't tap again — it will sync automatically.",
+    );
+    expect(feedback.textContent).not.toContain('moved on');
+    // The leftover really was dropped, and the tap really is still queued.
+    expect(client.calls.some(([, p]) => p.p_heat_entry_id === 'deleted-entry')).toBe(true);
+    const { listPendingOperations } = await import('../../core/outbox.js');
+    const pending = await listPendingOperations();
+    expect(pending.map((op) => op.id)).not.toContain(leftover.id);
+    expect(pending.map((op) => op.payload.p_heat_entry_id)).toEqual(['he1']);
+
+    document.body.removeChild(root);
+  });
+
+  // Same misattribution, heat-level path (test-auditor, 2026-09-27): a
+  // Start still queued behind another operation's drop must not report that
+  // operation's conflict as "this heat has moved on".
+  it("a Start still queued behind another operation's drop says it hasn't synced yet — never that other operation's conflict", async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const client = buildFakeClient({
+      event: { id: 'ev1', org_id: 'org1', is_test: false },
+      heat: appHeatPending,
+      entries: [{ id: 'he1', heat_id: 'h1', entry_id: 'e1', elapsed_secs: null }],
+      roster: [{ id: 'e1', display_name: 'Cupper One' }],
+    });
+    await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
+
+    const { enqueueOperation, listPendingOperations } = await import('../../core/outbox.js');
+    await enqueueOperation('record_heat_time', {
+      p_operation_id: 'leftover-op',
+      p_heat_entry_id: 'deleted-entry',
+    });
+    const realRpc = client.rpc;
+    client.rpc = (name, payload) =>
+      name === 'start_heat'
+        ? Promise.resolve({ data: null, error: { message: 'Failed to fetch' }, status: 0 })
+        : realRpc(name, payload);
+
+    root.querySelector('button').click();
+    await flush(() => {
+      expect(root.querySelector('.screen-feedback').dataset.tone).toBe('error');
+    });
+
+    const feedback = root.querySelector('.screen-feedback');
+    expect(feedback.textContent).toBe(
+      'This has not synced yet — it may still be waiting to sync. Try again in a moment.',
+    );
+    expect(feedback.textContent).not.toContain('moved on');
+    expect(client.calls.some(([, p]) => p.p_heat_entry_id === 'deleted-entry')).toBe(true);
+    const pending = await listPendingOperations();
+    expect(pending.map((op) => op.type)).toContain('start_heat');
+    expect(pending.map((op) => op.payload.p_heat_entry_id)).not.toContain('deleted-entry');
+
+    document.body.removeChild(root);
+  });
+
+  // code-reviewer, 2026-09-27: the tap's "don't tap again" wording was on the
+  // shared entry check, so a mid-heat manual save got it too — but the
+  // organiser didn't tap, and re-saving ('overwrite') is harmless.
+  it('a manual save still queued keeps the neutral "try again" wording, not the tap-only "don\'t tap again"', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const timingHeat = {
+      ...appHeatPending,
+      status: 'timing',
+      started_at: '2026-08-22T10:00:00.000Z',
+    };
+    const client = buildFakeClient({
+      event: { id: 'ev1', org_id: 'org1', is_test: false },
+      heat: timingHeat,
+      entries: [{ id: 'he1', heat_id: 'h1', entry_id: 'e1', elapsed_secs: null }],
+      roster: [{ id: 'e1', display_name: 'Cupper One' }],
+    });
+    await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
+    const realRpc = client.rpc;
+    client.rpc = (name, payload) =>
+      payload.p_heat_entry_id === 'he1'
+        ? Promise.resolve({ data: null, error: { message: 'Failed to fetch' }, status: 0 })
+        : realRpc(name, payload);
+
+    root.querySelector('.btn-manual-toggle').click();
+    const [minutesInput, secondsInput] = root
+      .querySelector('.manual-time-fields')
+      .querySelectorAll('input');
+    minutesInput.value = '2';
+    secondsInput.value = '30';
+    [...root.querySelectorAll('.manual-time-fields button')]
+      .find((b) => b.textContent === 'Save')
+      .click();
+    await flush(() => {
+      expect(root.querySelector('.screen-feedback').dataset.tone).toBe('error');
+    });
+
+    expect(root.querySelector('.screen-feedback').textContent).toBe(
+      "This cupper's time has not synced yet — it may still be waiting to sync. Try again in a moment.",
+    );
+
+    document.body.removeChild(root);
+  });
+
+  // test-auditor, 2026-09-27: the heat-level own-drop path had only the
+  // negative case — a Start whose OWN operation is rejected must still say
+  // so, via the operationId it now carries.
+  it('a Start whose own operation is rejected reports that conflict', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const client = buildFakeClient({
+      event: { id: 'ev1', org_id: 'org1', is_test: false },
+      heat: appHeatPending,
+      entries: [{ id: 'he1', heat_id: 'h1', entry_id: 'e1', elapsed_secs: null }],
+      roster: [{ id: 'e1', display_name: 'Cupper One' }],
+    });
+    await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
+    const realRpc = client.rpc;
+    client.rpc = (name, payload) =>
+      name === 'start_heat'
+        ? Promise.resolve({
+            data: null,
+            error: { code: 'P0002', message: 'CONFLICT: heat is scoring now' },
+            status: 500,
+          })
+        : realRpc(name, payload);
+
+    root.querySelector('button').click();
+    await flush(() => {
+      expect(root.querySelector('.screen-feedback').dataset.tone).toBe('error');
+    });
+
+    expect(root.querySelector('.screen-feedback').textContent).toContain('moved on');
+    const { listPendingOperations } = await import('../../core/outbox.js');
+    expect((await listPendingOperations()).map((op) => op.type)).not.toContain('start_heat');
+
+    document.body.removeChild(root);
+  });
+
   it('a plain navigation straight to an already-complete heat leaves focus untouched', async () => {
     // No tap/save/auto-max just happened here (no pendingHeatCheck/
     // pendingEntryCheck, no success/error tone) — the completing-transition

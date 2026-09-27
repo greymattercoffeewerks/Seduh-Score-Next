@@ -23,7 +23,7 @@
 import { el, brandMark } from './dom.js';
 import { findEvent } from './events.js';
 import { getSupabase } from './supabaseClient.js';
-import { listPendingOperations } from './outbox.js';
+import { isFlushInProgress, listPendingOperations, onOperationDropped } from './outbox.js';
 import { computeSyncState } from './syncState.js';
 import { APP_VERSION, NAMEPLATE } from './version.js';
 
@@ -41,12 +41,47 @@ const APP_NAME = 'Seduh Score';
 // the poll actually fires needs a genuinely short interval, not a faked one.
 const SYNC_POLL_MS = 3000;
 
+// How the sync panel batches dropped operations (see the drop listener in
+// mountAppShell): it re-checks every DROP_CHECK_MS and announces once the
+// flush that dropped them has finished, or after DROP_MAX_WAIT_MS at the
+// latest so a long or stalled pass can't hold a lost write back. Both are
+// overridable via mountAppShell's dropCheckMs/dropMaxWaitMs (test seams).
+const DROP_CHECK_MS = 250;
+const DROP_MAX_WAIT_MS = 5000;
+
+// Where the lost-write notice is kept across a reload of this tab (see
+// saveLostWriteCount/loadLostWriteCount in mountAppShell).
+const LOST_WRITES_STORAGE_KEY = 'seduh-lost-writes';
+
+// Only the count is kept: the panel never displays the error itself.
+// sessionStorage can be missing or throw (private mode, blocked site data);
+// both helpers then fall back to in-memory only, the pre-2026-09-27 state.
+function loadLostWriteCount() {
+  try {
+    const count = JSON.parse(sessionStorage.getItem(LOST_WRITES_STORAGE_KEY))?.count;
+    if (Number.isInteger(count) && count > 0) return count;
+  } catch {
+    // unreadable or malformed — start clean
+  }
+  return 0;
+}
+
+function saveLostWriteCount(count) {
+  try {
+    sessionStorage.setItem(LOST_WRITES_STORAGE_KEY, JSON.stringify({ count }));
+  } catch {
+    // storage unavailable — the in-memory notice still shows
+  }
+}
+
 export function mountAppShell(
   root,
   {
     appName = APP_NAME,
     client = getSupabase(),
     syncPollMs = SYNC_POLL_MS,
+    dropCheckMs = DROP_CHECK_MS,
+    dropMaxWaitMs = DROP_MAX_WAIT_MS,
     // Optional map of outbox operation `type` -> a short, lowercase gerund
     // phrase (e.g. "confirming a heat"), for the sync panel to name WHICH
     // operation is stuck (ROADMAP.md gap, closed 2026-09-11) instead of the
@@ -188,12 +223,19 @@ export function mountAppShell(
     className: 'app-shell-sync',
     attrs: { role: 'status', 'aria-live': 'polite' },
   });
+  // The status gets its own full-width header row, sized for the tallest
+  // notice (see .app-shell-sync-row in appShell.css) and present whenever
+  // there's anything to report — so "Synced" turning into a two-line
+  // "N writes lost…" pill never grows the sticky header mid-heat and pushes
+  // the Stop buttons out from under a judge's finger
+  // (ui-accessibility-reviewer, 2026-09-27).
+  const syncRow = el('div', { className: 'app-shell-sync-row' }, [syncEl]);
   const header = el('header', { className: 'app-shell-header' }, [
     brandEl,
     breadcrumbEl,
     navToggle,
     navPanel,
-    syncEl,
+    syncRow,
   ]);
   const outlet = el('main', { className: 'app-shell-outlet' });
   // Quick, glance-based verification for bug reports (2026-09-05) — mirrors
@@ -305,28 +347,133 @@ export function mountAppShell(
   // "off" just because the organiser navigated back to the plain events
   // list — fail-open is computeSyncState's own job, not this caller's.
   //
-  // `lastFlushError` — found in review (offline-sync-auditor, Phase 6
-  // offline soak): main.js's own sync-on-reconnect flush attempt
-  // (attemptReconnectFlush) runs with no screen watching its result, unlike
-  // every pre-existing flush call site (each reads its own flushResult off
-  // the same await that triggered the write, and surfaces a real conflict
-  // via its own pendingHeatCheck-style handling). A permanently-failed
-  // operation is REMOVED from the outbox by design (core/outbox.js's own
-  // runFlush — a conflict that will never succeed must not block every
-  // later, unrelated operation behind it forever) — but with nobody reading
-  // that removal's reason, the very next poll saw an empty queue and
-  // reported "Synced," a false all-clear for a write that was actually
-  // discarded. That's exactly the "conflict silently resolved" failure mode
-  // §9 exists to prevent, and worse than staying "not synced" would have
-  // been. `reportFlushError()` below is how a caller outside any screen
-  // (main.js's reconnect trigger) surfaces that same conflict here instead.
+  // `lastFlushError` — a dropped operation is REMOVED from the outbox by
+  // design (core/outbox.js's runFlush: a conflict that will never succeed
+  // must not block every later operation behind it), so without this the
+  // very next poll sees an empty queue and reports a false "Synced" — the
+  // "conflict silently resolved" failure §9 exists to prevent (found in
+  // review, offline-sync-auditor, Phase 6 offline soak).
+  //
+  // Fed by core/outbox.js's onOperationDropped, not by callers reporting
+  // results (2026-09-27, offline-sync-auditor): main.js's reconnect flush
+  // used to be the only caller forwarding a drop here, so a drop during any
+  // screen-triggered flush (publishLiveSession, a timing tap, a confirm)
+  // never reached the panel and the next poll showed "Synced". Subscribing
+  // at the source catches every flush in this tab, whoever triggered it.
+  // Sticky: a dropped write never comes back, so a later, unrelated success
+  // must not clear it. Kept in sessionStorage, so it also survives a reload
+  // of this tab — and usually the browser restoring a tab the OS discarded,
+  // common on venue phones — instead of vanishing with the only record of
+  // the loss (offline-sync-auditor D4, 2026-09-27). Closing the tab still
+  // clears it; persisting and acknowledging lost writes is ROADMAP's (and
+  // should replace this key, not sit beside it). Deliberately not scoped to
+  // the signed-in user: the writes were lost on this device, so a sign-out
+  // and sign-in in the same tab keeps the notice.
   let lastFlushError = null;
-  // How many dropped writes have been reported since the last clear —
-  // lastFlushError only holds the latest one, and a second loss must not
-  // read the same as the first (ui-accessibility-reviewer, 2026-09-26).
+  // How many operations have been dropped — counted per operation, not per
+  // flush (five leftovers dropped in one pass are five lost writes, not
+  // one). lastFlushError only holds the latest error, and a second loss
+  // must not read the same as the first (ui-accessibility-reviewer,
+  // 2026-09-26).
+  //
+  // A pass's drops are collected and announced together once that flush is
+  // over: each render is a polite announcement, and ten rehearsal leftovers
+  // dropped one by one — each after its own server round trip — would
+  // otherwise queue "1 write lost…", "2 writes lost…", … ahead of the timing
+  // screen's own "Less than 10 seconds remaining" (ui-accessibility-
+  // reviewer, 2026-09-27). A quiet-time debounce couldn't tell a pass's end
+  // on slow venue wifi.
+  //
+  // While any drop is still unannounced, the panel doesn't render at all
+  // (refreshSync holds): the dropped operation has already left the queue,
+  // so a render in that window would read an empty queue and announce a
+  // false "Synced" (offline-sync-auditor, 2026-09-27). It keeps showing its
+  // last state — "Not synced (N pending)" or earlier losses — until then,
+  // except that a green "Synced" (or an empty "off") is replaced at once by a
+  // plain "Not synced": a write enqueued and dropped between two polls never
+  // showed as pending, so holding would leave a lost write green for up to
+  // DROP_MAX_WAIT_MS (offline-sync-auditor, 2026-09-27). That plain "Not
+  // synced" uses the danger style: the panel already knows a write is lost
+  // (ui-accessibility-reviewer, 2026-09-27).
+  //
+  // The cap is timed with performance.now(), not Date.now(): a wall clock
+  // stepped backwards (NTP, a manual fix on an event-day tablet) would
+  // otherwise make the wait negative and hold the panel indefinitely.
   let lostWriteCount = 0;
+  const restoredLostWriteCount = loadLostWriteCount();
+  if (restoredLostWriteCount > 0) {
+    lostWriteCount = restoredLostWriteCount;
+    lastFlushError = new Error('outbox: operation dropped (before this page loaded)');
+  }
+  // What the panel last rendered: its dedupe key, and the status alone
+  // ('live' | 'not synced' | 'off' | 'holding') so the drop listener needn't
+  // parse the key.
   let lastSyncKey = null;
+  let lastSyncStatus = null;
+  // The lost-write count the panel last showed (0 while it shows none).
+  let lastRenderedLostCount = 0;
+  let pendingFlushError = lastFlushError;
+  let pendingLostCount = lostWriteCount;
+  let firstUnannouncedDropAt = 0;
+  let dropCheckTimer = null;
+  function hasUnannouncedDrops() {
+    return pendingLostCount > lostWriteCount;
+  }
+  function announceDropsWhenFlushEnds() {
+    dropCheckTimer = null;
+    const waitedMs = performance.now() - firstUnannouncedDropAt;
+    if (isFlushInProgress() && waitedMs < dropMaxWaitMs) {
+      dropCheckTimer = setTimeout(announceDropsWhenFlushEnds, dropCheckMs);
+      return;
+    }
+    lastFlushError = pendingFlushError;
+    lostWriteCount = pendingLostCount;
+    refreshSync();
+  }
+  const stopListeningForDrops = onOperationDropped(({ error }) => {
+    if (!hasUnannouncedDrops()) {
+      firstUnannouncedDropAt = performance.now();
+      // Already "not synced" (pending, stuck, an earlier loss) or already
+      // holding: leave it — re-rendering would re-announce or downgrade an
+      // earlier lost-write notice.
+      if (lastSyncStatus !== 'not synced' && lastSyncStatus !== 'holding') {
+        showNotSyncedWhileHolding();
+      }
+    }
+    // Never null: a transaction aborted without an error rejects with
+    // `tx.error === null`, and a null here would read as "no loss" and turn
+    // the panel back to "Synced" (code-reviewer, 2026-09-27).
+    pendingFlushError = error ?? new Error('outbox: operation dropped');
+    pendingLostCount += 1;
+    // Saved at once, not when announced: a reload during the hold (up to
+    // DROP_MAX_WAIT_MS — exactly when a stalled-looking panel invites one)
+    // would otherwise lose these drops. Restore seeds both counters from it,
+    // so they come back as already announced (offline-sync-auditor,
+    // 2026-09-27).
+    saveLostWriteCount(pendingLostCount);
+    if (!dropCheckTimer) {
+      dropCheckTimer = setTimeout(announceDropsWhenFlushEnds, dropCheckMs);
+    }
+  });
+  // Rendered once when a drop lands while the panel reads "Synced"/"off" —
+  // see the drop listener above. No count: the dropped operation is already
+  // gone from the queue, and the real count follows when the pass ends.
+  function showNotSyncedWhileHolding() {
+    syncRow.classList.add('app-shell-sync-row-active');
+    syncEl.className = 'app-shell-sync app-shell-sync-stuck';
+    syncEl.textContent = 'Not synced';
+    lastSyncKey = 'holding';
+    lastSyncStatus = 'holding';
+    syncHeaderHeightVar();
+  }
   function renderSync(state) {
+    // Row reserved exactly while there's something to show — 'off' (no
+    // event context, nothing pending or lost) takes no space. Not keyed on
+    // the event context: a loss on the events list must show too. Only
+    // navigation, or a write queued, lost or drained off an event screen,
+    // moves it in or out — never a write on the timing/scoring screens,
+    // which always have an event context and so are never 'off'.
+    syncRow.classList.toggle('app-shell-sync-row-active', state.status !== 'off');
     syncEl.innerHTML = '';
     syncEl.className = 'app-shell-sync';
     if (state.status === 'off') return; // nothing to report — no context yet, not a warning
@@ -347,8 +494,8 @@ export function mountAppShell(
     // stuckOperation, but its own wording.
     //
     // That lost-write notice wins over everything else (2026-09-26, found in
-    // review: offline-sync-auditor). main.js keeps the report until reload
-    // — a dropped write never comes back — so hiding it whenever anything
+    // review: offline-sync-auditor). The report is kept for the life of the
+    // tab — a dropped write never comes back — so hiding it whenever anything
     // else is queued would hide it for most of a busy event. A later stuck
     // operation is still named alongside it, so the notice never masks a
     // new, retrying failure. The pending count is left out: this is a live
@@ -361,12 +508,14 @@ export function mountAppShell(
     if (state.lastFlushError) {
       syncEl.classList.add('app-shell-sync-stuck');
       const lost = lostWriteCount > 1 ? `${lostWriteCount} writes` : '1 write';
-      let text = `${lost} lost — not saved and not retried`;
-      if (state.stuckOperation) {
-        const label = operationLabels[state.stuckOperation.type];
-        text += label ? `; ${label} failed` : '; retrying failed';
-      }
-      syncEl.textContent = text;
+      // Shorter when a stuck operation is named alongside, so the longest
+      // combination stays within the status row's reserved two lines at
+      // 360px, including at 130% text size or with a fallback font
+      // (ui-accessibility-reviewer, 2026-09-27).
+      const stuckLabel = state.stuckOperation && operationLabels[state.stuckOperation.type];
+      syncEl.textContent = state.stuckOperation
+        ? `${lost} lost, not retried; ${stuckLabel ? `${stuckLabel} failed` : 'retrying failed'}`
+        : `${lost} lost — not saved and not retried`;
     } else if (state.stuckOperation) {
       syncEl.classList.add('app-shell-sync-stuck');
       const label = operationLabels[state.stuckOperation.type];
@@ -380,6 +529,8 @@ export function mountAppShell(
   }
 
   async function refreshSync() {
+    // Held while a drop is unannounced — see the drop listener above.
+    if (hasUnannouncedDrops()) return;
     // A failed IndexedDB read keeps the panel's last state rather than
     // throwing an unhandled rejection on every poll tick (found in review:
     // code-reviewer, 2026-09-26).
@@ -388,8 +539,20 @@ export function mountAppShell(
       operations = await listPendingOperations();
     } catch (err) {
       console.error('appShell: pending-operation read failed', err);
-      return;
+      // A newly announced loss needs nothing from the queue — show it anyway
+      // rather than leave "Not synced (N pending)", the holding marker, or an
+      // under-counted earlier notice up. A failed persist (the likeliest
+      // drop when IndexedDB is failing) makes this read likely to fail too
+      // (offline-sync-auditor, 2026-09-27). A stuck operation is named again
+      // on the next successful read.
+      if (!lastFlushError || hasUnannouncedDrops() || lostWriteCount === lastRenderedLostCount) {
+        return;
+      }
+      operations = [];
     }
+    // A drop can land during that read — its operation is already missing
+    // from `operations`, so rendering them now would under-report.
+    if (hasUnannouncedDrops()) return;
     const state = computeSyncState({
       enabled: cachedEventId != null,
       operations,
@@ -403,10 +566,13 @@ export function mountAppShell(
     const key = `${state.status}:${pendingPart}:${state.stuckOperation?.type ?? ''}:${state.stuckOperation?.id ?? ''}:${state.lastFlushError ? lostWriteCount : 0}`;
     if (key === lastSyncKey) return;
     lastSyncKey = key;
+    lastSyncStatus = state.status;
+    lastRenderedLostCount = state.lastFlushError ? lostWriteCount : 0;
     renderSync(state);
-    // The panel's height changes with its text (a lost-write notice wraps
-    // to two lines at 360px) — keep the sticky-header offset that
-    // scroll-margin-top relies on in step, or focused content can land
+    // The status row's reserved height absorbs text changes, but the row
+    // appearing or disappearing ('off' <-> anything else) and extreme text
+    // sizes still change the header's height — keep the sticky-header offset
+    // that scroll-margin-top relies on in step, or focused content can land
     // behind the header (ui-accessibility-reviewer, 2026-09-26).
     syncHeaderHeightVar();
   }
@@ -568,21 +734,10 @@ export function mountAppShell(
   return {
     outlet,
     setNav,
-    // Lets a caller outside any screen (main.js's own sync-on-reconnect
-    // trigger) surface a permanently-failed flush the sync panel would
-    // otherwise have no way to learn about — see the lastFlushError comment
-    // above. Pass an Error to report one, or `null`/no argument to clear a
-    // previously-reported one once a later attempt genuinely succeeds
-    // (deliberately NOT auto-cleared by the poll itself — a real conflict
-    // must stay visible until something concrete supersedes it, not time
-    // out silently).
-    reportFlushError(error = null) {
-      lastFlushError = error;
-      lostWriteCount = error ? lostWriteCount + 1 : 0;
-      refreshSync();
-    },
     unmount() {
       clearInterval(syncIntervalId);
+      stopListeningForDrops();
+      clearTimeout(dropCheckTimer);
       authSubscription.unsubscribe();
       root.innerHTML = '';
     },

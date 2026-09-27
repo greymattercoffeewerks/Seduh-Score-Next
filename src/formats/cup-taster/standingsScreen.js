@@ -386,8 +386,15 @@ export async function mountStandingsScreen(
             client,
             cupTasterOutboxHandlers(client),
           );
-        } catch {
-          // best-effort — see comment above.
+        } catch (publishError) {
+          console.error(
+            'standingsScreen: live-view publish failed (may still be queued)',
+            publishError,
+          );
+          // Best-effort — see comment above. Logged, not swallowed: the
+          // outbox announces an enqueue it couldn't persist (so the panel
+          // reports the lost champion publish), but a code bug would
+          // otherwise vanish.
         }
       } else if (flushResult.error) {
         pendingError = describeError(flushResult.error);
