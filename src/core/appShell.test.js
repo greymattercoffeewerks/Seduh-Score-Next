@@ -35,6 +35,12 @@ function fakeClient(eventsById) {
   };
 }
 
+// The lost-write notice survives a reload via sessionStorage — no test may
+// inherit another's losses, in any describe block.
+beforeEach(() => {
+  sessionStorage.clear();
+});
+
 describe('mountAppShell', () => {
   it('renders the app name and an empty outlet', () => {
     const root = document.createElement('div');
@@ -1334,6 +1340,135 @@ describe('mountAppShell — sync panel', () => {
     });
     observer.disconnect();
     expect(seen).not.toContain('Synced');
+  });
+
+  // offline-sync-auditor D4, 2026-09-27: the notice was in memory only, so a
+  // reload — or the browser restoring a tab the OS discarded — erased the
+  // only record that a write was lost.
+  it('keeps the lost-write notice across a reload of the tab, via sessionStorage', async () => {
+    const root = document.createElement('div');
+    const first = mountTracked(root, { client: fakeClient({}), dropCheckMs: 10 });
+    await first.setNav({ eventId: 'ev1', links: [] });
+    await dropOperations(2);
+    await flush(() => {
+      expect(root.querySelector('.app-shell-sync').textContent).toBe(
+        '2 writes lost — not saved and not retried',
+      );
+    });
+    first.unmount(); // the page going away
+    // Held in storage, not module state.
+    expect(JSON.parse(sessionStorage.getItem('seduh-lost-writes'))).toEqual({ count: 2 });
+
+    const reloaded = document.createElement('div');
+    const second = mountTracked(reloaded, { client: fakeClient({}), dropCheckMs: 10 });
+    await second.setNav({ eventId: 'ev1', links: [] });
+    const syncEl = reloaded.querySelector('.app-shell-sync');
+    await flush(() => {
+      expect(syncEl.textContent).toBe('2 writes lost — not saved and not retried');
+    });
+
+    // A later loss adds to the restored count rather than starting over.
+    await dropOperations(1);
+    await flush(() => {
+      expect(syncEl.textContent).toBe('3 writes lost — not saved and not retried');
+    });
+
+    // And with storage cleared, a fresh mount starts clean.
+    sessionStorage.clear();
+    const fresh = document.createElement('div');
+    const third = mountTracked(fresh, { client: fakeClient({}) });
+    await third.setNav({ eventId: 'ev1', links: [] });
+    await flush(() => {
+      expect(fresh.querySelector('.app-shell-sync').textContent).toBe('Synced');
+    });
+  });
+
+  // offline-sync-auditor, 2026-09-27: saving only at announcement left the
+  // hold (up to DROP_MAX_WAIT_MS) unsaved — a reload then lost those drops.
+  it('saves a drop at once, before the hold ends', async () => {
+    const root = document.createElement('div');
+    const { setNav } = mountTracked(root, {
+      client: fakeClient({}),
+      syncPollMs: 60000,
+      dropCheckMs: 10,
+    });
+    await setNav({ eventId: 'ev1', links: [] });
+    await enqueueOperation('doomed_op', {});
+    await enqueueOperation('slow_op', {});
+    let release;
+    const stalled = new Promise((resolve) => {
+      release = resolve;
+    });
+    const running = flushOutbox({
+      doomed_op: async () => {
+        throw permanentError('stale conflict');
+      },
+      slow_op: () => stalled,
+    });
+    try {
+      await flush(() => {
+        expect(root.querySelector('.app-shell-sync').textContent).toBe('Not synced');
+      });
+      // Still holding — not announced yet — but already saved.
+      expect(JSON.parse(sessionStorage.getItem('seduh-lost-writes'))).toEqual({ count: 1 });
+    } finally {
+      release();
+      await running;
+    }
+  });
+
+  it.each([
+    ['unreadable JSON', '{not json'],
+    ['a zero count', '{"count":0}'],
+    ['a negative count', '{"count":-1}'],
+    ['a non-integer count', '{"count":"2"}'],
+  ])('starts clean when the saved record holds %s', async (_label, saved) => {
+    sessionStorage.setItem('seduh-lost-writes', saved);
+    const root = document.createElement('div');
+    const { setNav } = mountTracked(root, { client: fakeClient({}) });
+    await setNav({ eventId: 'ev1', links: [] });
+    await flush(() => {
+      expect(root.querySelector('.app-shell-sync').textContent).toBe('Synced');
+    });
+  });
+
+  // test-auditor, 2026-09-27: private or site-data-blocked browsers throw
+  // from getItem itself; that must not take the whole console down.
+  it('starts clean, not crashed, when sessionStorage refuses the read', async () => {
+    const getItem = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new DOMException('denied', 'SecurityError');
+    });
+    try {
+      const root = document.createElement('div');
+      const { setNav } = mountTracked(root, { client: fakeClient({}) });
+      await setNav({ eventId: 'ev1', links: [] });
+      await flush(() => {
+        expect(root.querySelector('.app-shell-sync').textContent).toBe('Synced');
+      });
+      expect(getItem).toHaveBeenCalled();
+    } finally {
+      getItem.mockRestore();
+    }
+  });
+
+  it('still shows the notice in memory when sessionStorage refuses the write', async () => {
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('QuotaExceededError');
+    });
+    try {
+      const root = document.createElement('div');
+      const { setNav } = mountTracked(root, { client: fakeClient({}), dropCheckMs: 10 });
+      await setNav({ eventId: 'ev1', links: [] });
+      await dropOperations(1);
+      await flush(() => {
+        expect(root.querySelector('.app-shell-sync').textContent).toBe(
+          '1 write lost — not saved and not retried',
+        );
+      });
+      expect(setItem).toHaveBeenCalled();
+    } finally {
+      setItem.mockRestore();
+    }
   });
 
   // Drops in one pass each follow a server round trip, which on venue wifi

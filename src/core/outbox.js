@@ -273,8 +273,8 @@ export function onOperationDropped(listener) {
 }
 
 function announceDrop(operation, error, reason = 'dropped') {
-  // Logged too: the panel's notice lives in memory, so after a reload the
-  // console is the only record of what was lost.
+  // Logged too: the panel keeps only a count, and only for the life of the
+  // tab, so the console is the only record of WHICH operation was lost.
   console.warn(`outbox: operation "${operation.type}" (${operation.id}) ${reason}`, error);
   for (const listener of dropListeners) {
     // A throwing listener must not abort the flush: the operation is

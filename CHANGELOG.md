@@ -1,3 +1,104 @@
+## T-HARDEN.lost-write-persistence: lost-write notice survives a tab reload; delete warns about unsynced writes · 2026-09-27
+
+**Task:** T-HARDEN.lost-write-persistence (pre-event hardening follow-ups to PR #129).
+After T-HARDEN.screen-flush-drops' `onOperationDropped` listener announced every drop,
+the next reload lost the notice entirely — leaving a venue organiser unaware that writes
+were lost, with only `console.warn` as a trace (offline-sync-auditor D4 from the previous
+task's review). Also closes a separate UX gap (offline-sync-auditor D1): deleting a test
+event while unsynced writes remain shows no warning that the leftover ops will become
+lost-write records (event-day alarm — a day's worth of stale heat/score entries suddenly
+appearing on the sync panel).
+
+**What shipped:**
+
+- `appShell.js` saves the lost-write count to `sessionStorage('seduh-lost-writes')` at
+  every drop (not just on announce, so a reload during the 5s hold keeps the count); on
+  mount it restores the count and seeds both `lostWriteCount` and `pendingLostCount` so
+  the drop is rendered as already announced. try/catch on both get and set — storage
+  unavailable (private mode, blocked site data, quota) falls back to in-memory only (the
+  pre-2026-09-27 state). Deliberately not scoped to the signed-in user: the loss is per
+  device, and a sign-out/sign-in in the same tab keeps the notice (conservative, and
+  matches the wording's "until this tab is closed").
+- `eventsScreen.js`: clicking Delete reads `countPendingOperations()`, bounded by a 2s
+  timeout (`UNSYNCED_CHECK_TIMEOUT_MS`), before the Confirm step renders. A hang or error is
+  logged and produces `null` → "Couldn't check" wording. Double-click guarded: the click puts
+  the row in a `'checking'` state, a second click during it is ignored, and a read that
+  resolves after the row has left `'checking'` is discarded — so a late read can never reopen
+  the confirm step over a delete in flight. The warning (if any) is a full-width line,
+  `aria-describedby`'d to the focused Confirm button.
+- The warning wording deliberately points at re-clicking Delete to re-check (which
+  re-reads the count), not at the sync panel's "Synced" state (which never appears on
+  eventsScreen itself), and notes the loss lasts "until this tab is closed" — matching
+  the sessionStorage lifetime (ui-accessibility-reviewer and offline-sync-auditor, round-1
+  blocking, fixed before round 2).
+- Warn, don't refuse: leftovers for a deleted test event can never sync back to the
+  database, so refusing would block the delete forever (offline-sync-auditor agreed).
+
+**Files changed:** `src/core/appShell.js`, `src/core/appShell.test.js`, `src/core/outbox.js`,
+`src/core/eventsScreen.js`, `src/core/eventsScreen.css`, `src/core/eventsScreen.test.js`,
+`src/main.test.js`.
+
+**Tests:** 1,684 JS tests passing; lint + Prettier clean. Mutation-checked every round —
+save/restore and its guards, count validation, save-at-drop, count read at click time, the
+read-failure and timeout paths, the double-click guards, the warning's `aria-describedby`,
+singular/plural wording, and the failure logging each have a test that fails when broken.
+
+**Review cycle:** 3 rounds across offline-sync-auditor, ui-accessibility-reviewer, code-reviewer,
+test-auditor.
+**Blocking findings fixed:** Round 1 (2026-09-27): the first warning told organisers to wait
+for "Synced" on the sync panel (which never appears on eventsScreen) — found by both
+ui-accessibility-reviewer and offline-sync-auditor; rephrased to "re-click Delete to re-check"
+instead. Zero blocking remain.
+
+**Known gaps (deferred, not blocking, before 4 Oct):**
+
+- **Sticky inflation — rehearsal leftovers.** The count saves at drop time, persists across
+  reloads of the same tab. A lost write never comes back, but a duplicated tab _copies_ the
+  count. A day-long rehearsal with (say) 10 dropped ops accumulates "10 writes lost" all day;
+  the count never clears without closing the tab. An event-day rehearsal contaminates the
+  evening count. Runbook: 4 Oct event, if the notice persists from morning setup into evening,
+  re-open the organiser console in a fresh tab. Full fix: persisted IndexedDB list + explicit
+  Acknowledge, which should REPLACE the sessionStorage key (not sit beside it).
+  Flagged by: `offline-sync-auditor`, `ui-accessibility-reviewer`.
+
+- **Lost when the tab closes; invisible to other tabs.** sessionStorage lives only as long as
+  the tab: closing it (or a device restart) clears the notice, and a second console tab doesn't
+  see a loss from the first (a duplicated tab copies the count). Full fix: a persisted, cross-tab
+  list (IndexedDB + a BroadcastChannel relay of drops).
+  Flagged by: `offline-sync-auditor`.
+
+- **No Acknowledge control.** Once the organiser sees "N writes lost", there's no way to mark
+  it acknowledged. A noisy caller (a loop of failed confirms, or stalled heat edits) keeps
+  adding to the count without clear recovery guidance beyond "wait for network". Full fix:
+  explicit-dismiss button (the persisted list above would carry seen/unseen state).
+  Flagged by: `offline-sync-auditor`.
+
+- **Delete warning's count is a snapshot at click time, shared across rows.** It doesn't update
+  while the confirm step is open (the wording tells the organiser to re-click Delete to
+  re-check), and it counts the whole device's queue, not the one event's.
+  Flagged by: `code-reviewer`, `offline-sync-auditor`.
+
+- **A poison operation keeps the delete warning's count above zero.** An operation that fails
+  on every retry stays queued, so "wait, then click Delete again" repeats indefinitely and the
+  organiser deletes through the warning. Runbook: if the count doesn't drop after a wait, check
+  the sync panel for a failed operation before deleting.
+  Flagged by: `offline-sync-auditor`.
+
+- **The 'checking' state (unsynced-writes read, normally milliseconds, capped at 2s) renders
+  nothing visible.** A hung IndexedDB open is rare but possible on a loaded device. If it
+  happens, the Delete button stays enabled for 2s looking unresponsive. Add a 'Checking…'
+  label like 'Deleting…' if slow opens show up in practice.
+  Flagged by: `ui-accessibility-reviewer`.
+
+- **Sign-out in the same tab keeps the lost-write notice — documented as deliberate but untested.**
+  A user-scoped key would change this silently; a future session signing in as a different org
+  user would see the previous user's loss report. This is conservative (keeping the data rather
+  than losing it), and correct given that the writes were lost on this _device_, not to this
+  user. An untested edge case if sign-outs become common during an event.
+  Flagged by: `test-auditor`.
+
+---
+
 ## T-HARDEN.screen-flush-drops: every permanently-dropped operation reaches the sync panel · 2026-09-27
 
 **Task:** T-HARDEN.screen-flush-drops (pre-event hardening for the 4 Oct Cup Taster event).
