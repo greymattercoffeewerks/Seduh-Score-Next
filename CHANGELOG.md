@@ -1,3 +1,59 @@
+## T-HARDEN.btc-event-delete-fk: BTC event deletion succeeds; cloud database migration pending · 2026-09-27
+
+**Task:** T-HARDEN.btc-event-delete-fk (pre-event hardening for the 4 Oct Cup Taster event).
+In production, deleting the "BTC Test" event raised `update or delete on table "btc_teams"
+violates foreign key constraint "btc_match_bonuses_fastest_team_id_fkey"`. Caused by the
+cascading deletion order: `btc_teams` and `btc_judges` (with ON DELETE CASCADE) deleted before
+their RESTRICT and NO ACTION foreign keys (`btc_matches.team1_id/team2_id`,
+`btc_bracket_slots.team1_id/team2_id`, `btc_match_judges.judge_id`, and
+`btc_match_bonuses.fastest_team_id`) had cleared. Cup Taster's deletion chain is all ON
+DELETE CASCADE, so it never hit this constraint collision.
+
+**What shipped:**
+
+- New migration `supabase/migrations/20260927090000_btc_event_delete_cleanup.sql`: a BEFORE
+  DELETE trigger `trg_events_btc_delete_cleanup` on the `events` table (SECURITY INVOKER,
+  search_path set to empty string per best practice) fires only for `format = 'btc'` and calls
+  a new app-level function `app.btc_delete_event_children()` to delete the event's
+  `btc_bracket_slots` then `btc_matches` — clearing all RESTRICT refs so the cascade
+  completes. No WHEN filter on format immutability (events.format is not immutable); Core
+  `delete_test_event` RPC unchanged (module boundary preserved).
+
+- Behaviour change: a direct DELETE of a real BTC event now succeeds (previously failed
+  accidentally on the FK constraint), matching Cup Taster's semantics. A test event deletion
+  still refuses real events (enforced in RLS + `delete_test_event` call). Cascades via the
+  existing Cup Taster + BTC triggers now log score_change_log rows for the event's matches
+  and slots (after_confirm for confirmed matches) — extra history, broader than the prior
+  migration's CASCADE description said.
+
+**Files changed:** `supabase/migrations/20260927090000_btc_event_delete_cleanup.sql` (new),
+`supabase/tests/022_btc_delete_test_event.sql` (new).
+
+**Tests:** New 15-assertion test file covers event deletion with full negative cases
+(non-member must see zero rows, both for test and real events). All 23 test files / 609
+assertions pass after fresh `db reset`. Migration rollback verified in a transaction.
+
+**Review cycle:** 4 agents in sequence.
+**Blocking findings fixed:** `security-reviewer` (Round 1): missing non-member read test;
+added. `security-reviewer` and `code-reviewer` both recommended SECURITY INVOKER; applied.
+Zero blocking remain.
+
+**Known gaps (deferred, pre-existing, not from this change):**
+
+- **`delete_test_event` lets a non-member distinguish "not yours" from "not found".** Passing
+  the event's true org_id to `delete_test_event` returns silent success (RLS hides is_test,
+  so refusal never fires, DELETE matches 0 rows) while a wrong org_id raises "not found". App
+  has no audit trail this deletion was attempted. Additionally, `app.org_id_for_event` is
+  callable by any authenticated user and returns another org's id. Nothing is deleted. Track
+  separately as a pre-existing RLS precision gap.
+
+**Next step:** This migration has not yet been applied to the cloud project. Push via
+Supabase MCP `apply_migration` after merge (normal post-merge step, distinct from the PR
+merge itself — the cloud database does not auto-update on a main branch merge). This should
+be done before any live-event deletion in production.
+
+---
+
 ## T-HARDEN.sync-panel-360-shift: the sync panel no longer grows the sticky header (Stop buttons stop shifting mid-heat) · 2026-09-27
 
 **Task:** T-HARDEN.sync-panel-360-shift (pre-event hardening for the 4 Oct Cup Taster event).

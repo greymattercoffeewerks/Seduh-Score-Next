@@ -1291,6 +1291,23 @@ live-verified in browser. Definition of Done met. See CHANGELOG.md's dated entry
 _Deferred findings from T-HARDEN.outbox-transient, flagged and documented but not blocking the 4 Oct
 Cup Taster event._
 
+- **CLOSED (2026-09-27, branch `fix/btc-event-delete-fk`): BTC event deletion now succeeds; constraint collision fixed.**
+  A BEFORE DELETE trigger on events calls a new `app.btc_delete_event_children()` function
+  to clear btc_bracket_slots and btc_matches before their RESTRICT foreign keys block the
+  cascade. Direct deletion of a real BTC event now works (matching Cup Taster semantics);
+  test-event deletion via `delete_test_event` still refuses real events. Cascades now log
+  score_change_log rows for the event's matches and slots (extra history, documented change).
+  Migration pending cloud-project push via Supabase MCP. See CHANGELOG.md for full account.
+  Flagged by: `schema-guardian`, `security-reviewer`, `test-auditor`, `code-reviewer`.
+
+- **`delete_test_event` leaks which org owns an event (pre-existing, found by
+  `security-reviewer` during T-HARDEN.btc-event-delete-fk).** Not an RLS bypass — nothing is
+  deleted or read. A non-member passing an event's true org_id gets a silent success (RLS
+  hides the row, so the is_test refusal never fires and the DELETE matches 0 rows), while a
+  wrong org_id raises "not found" — contradicting the RPC's own "not found and not yours are
+  indistinguishable" claim. Separately, `app.org_id_for_event` is callable by any
+  authenticated user and returns another org's id. Track as its own task.
+
 - **No attempt cap / discard for an operation that stays transient forever (persistent 429/503).**
   A persistent rate limiter or service overload stays classified as transient (will retry forever).
   By design, now reachable via more outbox paths. Not a data-loss defect — the operation never
