@@ -111,9 +111,15 @@ export function timingHandlers(client) {
 // gap described in this file's own module comment above. Omitting it keeps
 // this function's original, narrower behavior — used by tests and any
 // caller that doesn't need cross-module composition.
+//
+// Returns the queued operation's own `operationId` with the flush result, so
+// a caller can ask whether THIS operation was the one dropped
+// (core/outbox.js's droppedErrorFor) rather than reading `flushResult.error`,
+// which may belong to any operation in the shared queue.
 async function submitTimingOperation(type, payload, client, handlers) {
-  await enqueueOperation(type, payload);
-  return flushOutbox(handlers ?? timingHandlers(client));
+  const { id: operationId } = await enqueueOperation(type, payload);
+  const flushResult = await flushOutbox(handlers ?? timingHandlers(client));
+  return { operationId, flushResult };
 }
 
 // Idempotent by the RPC's own contract (a heat already timing/scoring/
@@ -125,9 +131,9 @@ async function submitTimingOperation(type, payload, client, handlers) {
 // shipped, already-Playwright-tested cross-viewer agreement design depends
 // on (tests/e2e/cross-surface-countdown.spec.js), and it lets the caller
 // render its own countdown immediately, before any network round trip
-// completes. Returns both the captured value AND the flush result — the
-// caller's job to reconcile the two against fresh, reloaded state (see
-// timingScreen.js), never this function's, matching scoring.js's
+// completes. Returns the captured value, its `operationId`, AND the flush
+// result — the caller's job to reconcile the two against fresh, reloaded
+// state (see timingScreen.js), never this function's, matching scoring.js's
 // established "ground truth over flush bookkeeping" principle.
 export async function startHeat(
   heatId,
@@ -137,7 +143,7 @@ export async function startHeat(
 ) {
   const startedAtMs = now();
   const startedAtIso = new Date(startedAtMs).toISOString();
-  const flushResult = await submitTimingOperation(
+  const { operationId, flushResult } = await submitTimingOperation(
     'start_heat',
     {
       p_operation_id: crypto.randomUUID(),
@@ -148,7 +154,7 @@ export async function startHeat(
     client,
     handlers,
   );
-  return { startedAtMs, startedAtIso, flushResult };
+  return { startedAtMs, startedAtIso, operationId, flushResult };
 }
 
 // `heat` and `heatEntry` are the CALLER's own already-loaded, already-
@@ -159,15 +165,15 @@ export async function startHeat(
 // made while genuinely offline is captured immediately rather than blocked
 // on a read that can't complete.
 //
-// Returns the clamped `expectedElapsedSecs` this call attempted to write, alongside
-// the flush result — a caller checking "did MY tap take" against fresh,
-// reloaded state must compare against this exact value, not just whether
-// the entry is non-null: a 'reject'-policy conflict means someone else's
-// write is what's actually sitting there, and a bare null-check can't tell
-// the two apart (found in review while designing timingScreen.js's own
-// ground-truth check — an earlier draft used exactly that null-check and
-// would have silently attributed a rejected duplicate tap to the wrong
-// action as a false "recorded" success).
+// Returns the clamped `expectedElapsedSecs` this call attempted to write, its
+// `operationId`, and the flush result — a caller checking "did MY tap take"
+// against fresh, reloaded state must compare against this exact value, not just
+// whether the entry is non-null: a 'reject'-policy conflict means someone
+// else's write is what's actually sitting there, and a bare null-check can't
+// tell the two apart (found in review while designing timingScreen.js's own
+// ground-truth check — an earlier draft used exactly that null-check and would
+// have silently attributed a rejected duplicate tap to the wrong action as a
+// false "recorded" success).
 export async function recordTap(
   heat,
   heatEntry,
@@ -183,13 +189,13 @@ export async function recordTap(
     );
   }
   const update = buildClampedUpdate(rawSecs, heat.duration_secs, 'tapped', nowMs);
-  const flushResult = await submitTimingOperation(
+  const { operationId, flushResult } = await submitTimingOperation(
     'record_heat_time',
     buildRecordHeatTimePayload(heat, heatEntry, orgId, update, 'reject'),
     client,
     handlers,
   );
-  return { expectedElapsedSecs: update.elapsed_secs, flushResult };
+  return { expectedElapsedSecs: update.elapsed_secs, operationId, flushResult };
 }
 
 // One operation for the whole sweep, not one per still-running cupper —
@@ -221,6 +227,7 @@ export function describeTimingConflict(err) {
   return 'This heat has moved on since this screen last loaded — refresh this page before trying again.';
 }
 
+// Returns { operationId, flushResult } — see submitTimingOperation.
 export async function autoMaxRemainingEntries(
   heatId,
   orgId,

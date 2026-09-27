@@ -8,6 +8,7 @@ import {
   timingHandlers,
 } from './timing.js';
 import { _clearAllForTests } from '../../core/db.js';
+import { droppedErrorFor } from '../../core/outbox.js';
 
 beforeEach(async () => {
   await _clearAllForTests();
@@ -202,7 +203,7 @@ describe('recordTap', () => {
 describe('autoMaxRemainingEntries', () => {
   it('enqueues then flushes auto_max_heat as ONE operation for the whole sweep — no duration_secs sent, the RPC reads it server-side', async () => {
     const client = fakeRpcClient(() => Promise.resolve({ data: null, error: null }));
-    const flushResult = await autoMaxRemainingEntries('h1', 'org1', client, { now: fixedNow });
+    const { flushResult } = await autoMaxRemainingEntries('h1', 'org1', client, { now: fixedNow });
     expect(flushResult.processed).toBe(1);
     const [name, payload] = client.calls[0];
     expect(name).toBe('auto_max_heat');
@@ -219,8 +220,15 @@ describe('autoMaxRemainingEntries', () => {
         status: 400,
       }),
     );
-    const flushResult = await autoMaxRemainingEntries('h1', 'org1', client, { now: fixedNow });
+    const { operationId, flushResult } = await autoMaxRemainingEntries('h1', 'org1', client, {
+      now: fixedNow,
+    });
     expect(flushResult.permanentFailure).toBe(true);
+    // The returned id is the queued operation's own — what lets a screen
+    // tell its own drop apart from another operation's.
+    expect(droppedErrorFor(flushResult, operationId)?.message).toBe(
+      'auto_max_heat: heat h1 not found',
+    );
   });
 });
 

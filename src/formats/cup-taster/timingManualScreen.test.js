@@ -569,6 +569,53 @@ describe('mountManualTimingScreen', () => {
     document.body.removeChild(root);
   });
 
+  // Found in review (offline-sync-auditor / test-auditor, 2026-09-27): the
+  // fallback read `flushResult.error` whenever the flush dropped ANYTHING, so
+  // a leftover dropped ahead of this save was reported as this save's own
+  // conflict while the save itself was still queued.
+  it("a save still queued behind another operation's drop says it hasn't synced yet — never that other operation's conflict", async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const client = buildFakeClient({
+      event: { id: 'ev1', org_id: 'org1', is_test: false },
+      heat: manualHeatPending,
+      entries: [{ id: 'he1', heat_id: 'h1', entry_id: 'e1', elapsed_secs: null }],
+      roster: [{ id: 'e1', display_name: 'Cupper One' }],
+    });
+    await mountManualTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
+
+    const { enqueueOperation, listPendingOperations } = await import('../../core/outbox.js');
+    const leftover = await enqueueOperation('record_heat_time', {
+      p_operation_id: 'leftover-op',
+      p_heat_entry_id: 'deleted-entry',
+    });
+    const realRpc = client.rpc;
+    client.rpc = (name, payload) =>
+      payload.p_heat_entry_id === 'he1'
+        ? Promise.resolve({ data: null, error: { message: 'Failed to fetch' }, status: 0 })
+        : realRpc(name, payload);
+
+    const inputs = root.querySelectorAll('input');
+    inputs[0].value = '3';
+    inputs[1].value = '0';
+    root.querySelector('button').click();
+    await flush(() => {
+      expect(root.querySelector('.screen-feedback').dataset.tone).toBe('error');
+    });
+
+    const feedback = root.querySelector('.screen-feedback');
+    expect(feedback.textContent).toBe(
+      "This cupper's time has not synced yet — it may still be waiting to sync. Try again in a moment.",
+    );
+    expect(feedback.textContent).not.toContain('moved on');
+    expect(client.calls.some(([, p]) => p.p_heat_entry_id === 'deleted-entry')).toBe(true);
+    const pending = await listPendingOperations();
+    expect(pending.map((op) => op.id)).not.toContain(leftover.id);
+    expect(pending.map((op) => op.payload.p_heat_entry_id)).toEqual(['he1']);
+
+    document.body.removeChild(root);
+  });
+
   it('advances to the read-only complete view once every entry has a manual time, no longer editable', async () => {
     const root = document.createElement('div');
     const client = buildFakeClient({

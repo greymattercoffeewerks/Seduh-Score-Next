@@ -368,15 +368,20 @@ export async function mountScoringScreen(
                 client,
                 cupTasterOutboxHandlers(client),
               );
-            } catch {
+            } catch (publishError) {
+              console.error(
+                'scoringScreen: live-view publish failed (may still be queued)',
+                publishError,
+              );
               // Best-effort (§8.1/D23's automatic publish): publishLiveSession
               // enqueues its own intent before doing any network read, so an
               // offline/failed attempt here still leaves a real, retryable
               // entry in the outbox (drained by a later screen action or
-              // main.js's reconnect flush) rather than vanishing — this
-              // catch only guards the enqueue call itself (e.g. IndexedDB
-              // unusable), which doesn't change whether the heat itself
-              // confirmed.
+              // main.js's reconnect flush) rather than vanishing. A throw
+              // here is the enqueue failing (the outbox reports that lost
+              // publish to the sync panel), the flush failing after a
+              // successful enqueue (still queued), or a code bug — none
+              // changes whether the heat confirmed, and all are logged.
             }
           } else if (result.error) {
             pendingError = describeConfirmError(result.error) ?? describeError(result.error);

@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mountAppShell } from './appShell.js';
 import { _clearAllForTests, outboxPut } from './db.js';
-import { enqueueOperation } from './outbox.js';
+import { enqueueOperation, flushOutbox } from './outbox.js';
 import { APP_VERSION, NAMEPLATE } from './version.js';
 
 // Every fake client needs a minimal auth shape now — mountAppShell's own
@@ -770,66 +770,142 @@ describe('mountAppShell — sync panel', () => {
     expect(syncEl.textContent).toBe('Synced');
   });
 
-  // reportFlushError() — found in review (offline-sync-auditor): main.js's
-  // own sync-on-reconnect trigger has no screen watching its flush result,
-  // unlike every other flush call site. Without a way to surface a genuine
-  // conflict here, a permanently-failed (and therefore removed-from-the-
-  // queue) operation left the very next poll seeing zero pending operations
-  // and reporting "Synced" — a false all-clear for a write that was
-  // actually discarded, exactly the "conflict silently resolved" failure
-  // mode §9 exists to prevent.
-  it('reportFlushError() surfaces a permanently-failed write even with zero pending operations, instead of falsely reporting "Synced"', async () => {
+  // Lost writes reach the panel from the outbox itself (onOperationDropped),
+  // whoever triggered the flush — found in review (offline-sync-auditor,
+  // 2026-09-27): only main.js's background reconnect flush used to forward a
+  // drop here, so a drop during a screen's own flush (publishLiveSession from
+  // scoring/standings/timing, a tap flushing past a rehearsal leftover) left
+  // the next poll on a false "Synced" — the "conflict silently resolved"
+  // failure §8.4/§9 exist to prevent. These tests drop operations through the
+  // REAL flushOutbox with no main.js involved, which is exactly what a
+  // screen-triggered flush is.
+  const mountedShells = [];
+  function mountTracked(root, options) {
+    const shell = mountAppShell(root, options);
+    mountedShells.push(shell);
+    return shell;
+  }
+  afterEach(() => {
+    while (mountedShells.length) mountedShells.pop().unmount();
+  });
+
+  function permanentError(message) {
+    return Object.assign(new Error(message), { permanent: true });
+  }
+
+  // Enqueues `count` operations that can never succeed, then flushes them
+  // the way any screen would — one flushOutbox() call, its result ignored.
+  async function dropOperations(count) {
+    for (let i = 0; i < count; i += 1) {
+      await enqueueOperation('doomed_op', { i });
+    }
+    return flushOutbox({
+      doomed_op: async () => {
+        throw permanentError('stale conflict');
+      },
+    });
+  }
+
+  it('an operation dropped during a flush the shell did not trigger shows the lost-write notice, instead of falsely reporting "Synced"', async () => {
     const root = document.createElement('div');
-    const { setNav, reportFlushError } = mountAppShell(root, { client: fakeClient({}) });
+    const { setNav } = mountTracked(root, { client: fakeClient({}) });
     await setNav({ eventId: 'ev1', links: [] });
     const syncEl = root.querySelector('.app-shell-sync');
     await flush(() => {
       expect(syncEl.textContent).toBe('Synced');
     });
 
-    reportFlushError(new Error('stale conflict'));
+    const result = await dropOperations(1);
+    expect(result.permanentFailure).toBe(true); // the drop really happened
     await flush(() => {
       expect(syncEl.textContent).toBe('1 write lost — not saved and not retried');
     });
     expect(syncEl.classList.contains('app-shell-sync-stuck')).toBe(true);
   });
 
-  it('reportFlushError(null) clears a previously-reported error once a later attempt succeeds', async () => {
+  // Counted per dropped operation, not per flush (offline-sync-auditor D1,
+  // 2026-09-27): five rehearsal leftovers dropped in one pass are five lost
+  // writes — "1 write lost" undersold it.
+  it('counts every operation dropped in one flush, not the flush as one loss', async () => {
     const root = document.createElement('div');
-    const { setNav, reportFlushError } = mountAppShell(root, { client: fakeClient({}) });
+    const { setNav } = mountTracked(root, { client: fakeClient({}) });
     await setNav({ eventId: 'ev1', links: [] });
     const syncEl = root.querySelector('.app-shell-sync');
-    await flush(() => {
-      expect(syncEl.textContent).toBe('Synced');
-    });
-    reportFlushError(new Error('stale conflict'));
-    await flush(() => {
-      expect(syncEl.textContent).toBe('1 write lost — not saved and not retried');
-    });
 
-    reportFlushError(null);
+    await dropOperations(3);
     await flush(() => {
-      expect(syncEl.textContent).toBe('Synced');
+      expect(syncEl.textContent).toBe('3 writes lost — not saved and not retried');
     });
   });
 
-  // 2026-09-26 (ui-accessibility-reviewer / offline-sync-auditor): the
-  // report is sticky now, so later losses and later stuck operations must
-  // still reach the panel rather than being masked by the first notice.
-  it('counts each further reported loss instead of reading the same as the first', async () => {
+  // Every render of this live region is announced — a burst of drops in one
+  // pass must be announced once with its final count, not once per drop
+  // (ui-accessibility-reviewer, 2026-09-27).
+  it('announces a burst of drops once, with the final count — never the intermediate counts', async () => {
     const root = document.createElement('div');
-    const { setNav, reportFlushError } = mountAppShell(root, { client: fakeClient({}) });
+    const { setNav } = mountTracked(root, { client: fakeClient({}), dropCheckMs: 50 });
     await setNav({ eventId: 'ev1', links: [] });
     const syncEl = root.querySelector('.app-shell-sync');
-    reportFlushError(new Error('stale conflict'));
+    await flush(() => {
+      expect(syncEl.textContent).toBe('Synced');
+    });
+    const seen = [];
+    const observer = new MutationObserver(() => seen.push(syncEl.textContent));
+    observer.observe(syncEl, { childList: true, characterData: true, subtree: true });
+
+    await dropOperations(3);
+    await flush(() => {
+      expect(syncEl.textContent).toBe('3 writes lost — not saved and not retried');
+    });
+    observer.disconnect();
+
+    const lostTexts = [...new Set(seen.filter((text) => text.includes('lost')))];
+    expect(lostTexts).toEqual(['3 writes lost — not saved and not retried']);
+  });
+
+  // 2026-09-26 (ui-accessibility-reviewer / offline-sync-auditor): the
+  // report is sticky, so later losses must still reach the panel rather than
+  // reading the same as the first.
+  it('counts a loss in a later flush on top of the earlier one — never downgrading the first notice to a plain "Not synced"', async () => {
+    const root = document.createElement('div');
+    const { setNav } = mountTracked(root, { client: fakeClient({}) });
+    await setNav({ eventId: 'ev1', links: [] });
+    const syncEl = root.querySelector('.app-shell-sync');
+    await dropOperations(1);
+    await flush(() => {
+      expect(syncEl.textContent).toBe('1 write lost — not saved and not retried');
+    });
+    const seen = [];
+    const observer = new MutationObserver(() => seen.push(syncEl.textContent));
+    observer.observe(syncEl, { childList: true, characterData: true, subtree: true });
+
+    await dropOperations(1);
+    await flush(() => {
+      expect(syncEl.textContent).toBe('2 writes lost — not saved and not retried');
+    });
+    observer.disconnect();
+    // test-auditor, 2026-09-27 (A6): an unconditional holding render
+    // replaced the earlier notice with "Not synced" for the whole hold.
+    expect(seen).not.toContain('Not synced');
+  });
+
+  // A dropped write never comes back, so a later, unrelated success must
+  // not flip the panel back to "Synced" (code-reviewer, 2026-09-26).
+  it('keeps the notice after a later flush lands cleanly', async () => {
+    const root = document.createElement('div');
+    const { setNav } = mountTracked(root, { client: fakeClient({}), syncPollMs: 20 });
+    await setNav({ eventId: 'ev1', links: [] });
+    const syncEl = root.querySelector('.app-shell-sync');
+    await dropOperations(1);
     await flush(() => {
       expect(syncEl.textContent).toBe('1 write lost — not saved and not retried');
     });
 
-    reportFlushError(new Error('another conflict'));
-    await flush(() => {
-      expect(syncEl.textContent).toBe('2 writes lost — not saved and not retried');
-    });
+    await enqueueOperation('fine_op', {});
+    const clean = await flushOutbox({ fine_op: async () => {} });
+    expect(clean).toEqual({ processed: 1, stopped: false, permanentFailure: false });
+    await tick(60); // several poll cycles over the now-empty queue
+    expect(syncEl.textContent).toBe('1 write lost — not saved and not retried');
   });
 
   it.each([
@@ -838,15 +914,27 @@ describe('mountAppShell — sync panel', () => {
   ])(
     '%s alongside a lost write, so the notice never masks a new failure',
     async (_l, labels, suffix) => {
-      const op = await enqueueOperation('some_op', { id: 1 });
-      await outboxPut({ ...op, attempts: 1, lastError: 'upstream 503' });
       const root = document.createElement('div');
-      const { setNav, reportFlushError } = mountAppShell(root, {
+      const { setNav } = mountTracked(root, {
         client: fakeClient({}),
         operationLabels: labels,
+        // The drop announcement renders mid-flush, before the stuck
+        // operation's attempts are persisted; the next poll picks that up.
+        syncPollMs: 20,
       });
       await setNav({ eventId: 'ev1', links: [] });
-      reportFlushError(new Error('stale conflict'));
+      // Dropped first, then the same pass stops on a transient failure that
+      // stays queued with attempts > 0.
+      await enqueueOperation('doomed_op', {});
+      await enqueueOperation('some_op', { id: 1 });
+      await flushOutbox({
+        doomed_op: async () => {
+          throw permanentError('stale conflict');
+        },
+        some_op: async () => {
+          throw new Error('upstream 503');
+        },
+      });
       await flush(() => {
         expect(root.querySelector('.app-shell-sync').textContent).toBe(
           `1 write lost — not saved and not retried${suffix}`,
@@ -855,10 +943,10 @@ describe('mountAppShell — sync panel', () => {
     },
   );
 
-  it('fail-open also covers a reported flush error: it still reports "not synced", never "off", with no current event context', async () => {
+  it('fail-open also covers a dropped write: it still reports "not synced", never "off", with no current event context', async () => {
     const root = document.createElement('div');
-    const { reportFlushError } = mountAppShell(root, { client: fakeClient({}) }); // no setNav — cachedEventId stays null
-    reportFlushError(new Error('stale conflict'));
+    mountTracked(root, { client: fakeClient({}) }); // no setNav — cachedEventId stays null
+    await dropOperations(1);
     await flush(() => {
       expect(root.querySelector('.app-shell-sync').textContent).toBe(
         '1 write lost — not saved and not retried',
@@ -866,9 +954,9 @@ describe('mountAppShell — sync panel', () => {
     });
   });
 
-  it('a reported dropped write stays visible while other operations are queued, naming both — main.js no longer clears it, so hiding it behind "N pending" would hide it for most of an event', async () => {
+  it('a dropped write stays visible while other operations are queued — hiding it behind "N pending" would hide it for most of an event', async () => {
     const root = document.createElement('div');
-    const { setNav, reportFlushError } = mountAppShell(root, {
+    const { setNav } = mountTracked(root, {
       client: fakeClient({}),
       syncPollMs: 20,
     });
@@ -877,7 +965,7 @@ describe('mountAppShell — sync panel', () => {
     await flush(() => {
       expect(syncEl.textContent).toBe('Synced');
     });
-    reportFlushError(new Error('stale conflict'));
+    await dropOperations(1);
     await flush(() => {
       expect(syncEl.textContent).toBe('1 write lost — not saved and not retried');
     });
@@ -885,9 +973,473 @@ describe('mountAppShell — sync panel', () => {
     // cycle" test above — nothing calls refreshSync() directly here, only
     // the poll itself observes it.
     await enqueueOperation('confirm_heat', { heatId: 'h1' });
+    await tick(60);
+    expect(syncEl.textContent).toBe('1 write lost — not saved and not retried');
+    expect(syncEl.classList.contains('app-shell-sync-stuck')).toBe(true);
+  });
+
+  // offline-sync-auditor / ui-accessibility-reviewer, 2026-09-27: the
+  // dropped operation leaves the queue before the panel announces it; a poll
+  // in between read an empty queue and announced a false "Synced".
+  it('never shows "Synced" between a drop and its announcement, even with polls landing in between', async () => {
+    const root = document.createElement('div');
+    const { setNav } = mountTracked(root, {
+      client: fakeClient({}),
+      syncPollMs: 10,
+      dropCheckMs: 150,
+    });
+    await setNav({ eventId: 'ev1', links: [] });
+    const syncEl = root.querySelector('.app-shell-sync');
+    await enqueueOperation('doomed_op', {});
+    await flush(() => {
+      expect(syncEl.textContent).toBe('Not synced (1 pending)');
+    });
+    const seen = [];
+    const observer = new MutationObserver(() => seen.push(syncEl.textContent));
+    observer.observe(syncEl, { childList: true, characterData: true, subtree: true });
+
+    await flushOutbox({
+      doomed_op: async () => {
+        throw permanentError('stale conflict');
+      },
+    });
     await flush(() => {
       expect(syncEl.textContent).toBe('1 write lost — not saved and not retried');
     });
-    expect(syncEl.classList.contains('app-shell-sync-stuck')).toBe(true);
+    observer.disconnect();
+
+    expect(seen).not.toContain('Synced');
+    // Already "Not synced (1 pending)": the hold keeps that (true) text rather
+    // than replacing it with the plain holding marker.
+    expect(seen).not.toContain('Not synced');
+  });
+
+  // offline-sync-auditor, round 3: a write enqueued and dropped between two
+  // polls never showed as pending, so holding the last render kept a lost
+  // write green until the pass ended.
+  it('leaves "Synced" at once when a drop lands between polls, and never shows it again before the notice', async () => {
+    const root = document.createElement('div');
+    const { setNav } = mountTracked(root, {
+      client: fakeClient({}),
+      syncPollMs: 60000, // no poll during the test — only the drop itself can move the panel
+      dropCheckMs: 10,
+      dropMaxWaitMs: 5000,
+    });
+    await setNav({ eventId: 'ev1', links: [] });
+    const syncEl = root.querySelector('.app-shell-sync');
+    await flush(() => {
+      expect(syncEl.textContent).toBe('Synced');
+    });
+    const seen = [];
+    const observer = new MutationObserver(() => seen.push(syncEl.textContent));
+    observer.observe(syncEl, { childList: true, characterData: true, subtree: true });
+
+    await enqueueOperation('doomed_op', {});
+    await enqueueOperation('slow_op', {});
+    let release;
+    const stalled = new Promise((resolve) => {
+      release = resolve;
+    });
+    const running = flushOutbox({
+      doomed_op: async () => {
+        throw permanentError('stale conflict');
+      },
+      slow_op: () => stalled,
+    });
+    try {
+      // The flush is still running, so the count isn't announced yet — but
+      // the panel must already have left green.
+      await flush(() => {
+        expect(syncEl.textContent).toBe('Not synced');
+      });
+      expect(syncEl.classList.contains('app-shell-sync-live')).toBe(false);
+    } finally {
+      release();
+      await running;
+    }
+    await flush(() => {
+      expect(syncEl.textContent).toBe('1 write lost — not saved and not retried');
+    });
+    observer.disconnect();
+
+    expect(seen).not.toContain('Synced');
+  });
+
+  // offline-sync-auditor, round 3: the cap is what bounds the hold, so it must
+  // not depend on a wall clock that can step backwards mid-event.
+  it('still announces at the cap when the wall clock steps backwards during the hold', async () => {
+    const root = document.createElement('div');
+    const { setNav } = mountTracked(root, {
+      client: fakeClient({}),
+      syncPollMs: 20,
+      dropCheckMs: 10,
+      dropMaxWaitMs: 100,
+    });
+    await setNav({ eventId: 'ev1', links: [] });
+    const syncEl = root.querySelector('.app-shell-sync');
+    await enqueueOperation('doomed_op', {});
+    await enqueueOperation('slow_op', {});
+    let release;
+    const stalled = new Promise((resolve) => {
+      release = resolve;
+    });
+    const running = flushOutbox({
+      doomed_op: async () => {
+        throw permanentError('stale conflict');
+      },
+      slow_op: () => stalled,
+    });
+    let clockBack;
+    try {
+      await flush(() => {
+        expect(syncEl.textContent).toBe('Not synced');
+      });
+      const realNow = Date.now();
+      clockBack = vi.spyOn(Date, 'now').mockReturnValue(realNow - 60 * 60 * 1000);
+      await flush(
+        () => {
+          expect(syncEl.textContent).toBe('1 write lost — not saved and not retried');
+        },
+        { timeout: 3000 },
+      );
+    } finally {
+      clockBack?.mockRestore();
+      release();
+      await running;
+    }
+  });
+
+  // test-auditor, 2026-09-27 (A2): the hold AFTER refreshSync's read is what
+  // stops a read that started before a drop from rendering "Synced" over it.
+  // An uncloneable payload fails outboxPut, so the drop is announced while
+  // the read setNav started is still in flight.
+  it('a drop landing while a read is in flight never lets that read render "Synced"', async () => {
+    const root = document.createElement('div');
+    const shell = mountTracked(root, {
+      client: fakeClient({}),
+      syncPollMs: 60000,
+      dropCheckMs: 10,
+    });
+    const syncEl = root.querySelector('.app-shell-sync');
+    const seen = [];
+    const observer = new MutationObserver(() => seen.push(syncEl.textContent));
+    observer.observe(syncEl, { childList: true, characterData: true, subtree: true });
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    try {
+      const nav = shell.setNav({ eventId: 'ev1', links: [] }); // starts a read
+      await enqueueOperation('doomed_op', { notCloneable: () => {} }).catch(() => {});
+      await nav;
+      await flush(() => {
+        expect(syncEl.textContent).toBe('1 write lost — not saved and not retried');
+      });
+    } finally {
+      observer.disconnect();
+      consoleWarn.mockRestore();
+    }
+    expect(seen).not.toContain('Synced');
+  });
+
+  // test-auditor, 2026-09-27 (A3/A21): the cap is measured from each pass's
+  // own first drop — measured from the first-ever drop, every later pass
+  // would be announced mid-flush with a partial count.
+  it("holds a later pass until it ends, capped from that pass's own first drop", async () => {
+    const root = document.createElement('div');
+    const { setNav } = mountTracked(root, {
+      client: fakeClient({}),
+      syncPollMs: 60000,
+      dropCheckMs: 10,
+      dropMaxWaitMs: 1500, // wide margin: a CPU stall must not reach the cap mid-pass
+    });
+    await setNav({ eventId: 'ev1', links: [] });
+    const syncEl = root.querySelector('.app-shell-sync');
+    await dropOperations(1);
+    await flush(() => {
+      expect(syncEl.textContent).toBe('1 write lost — not saved and not retried');
+    });
+    await tick(1600); // past the cap, measured from the FIRST pass's drop
+
+    await enqueueOperation('doomed_op', {});
+    await enqueueOperation('slow_op', {});
+    let release;
+    const stalled = new Promise((resolve) => {
+      release = resolve;
+    });
+    const running = flushOutbox({
+      doomed_op: async () => {
+        throw permanentError('stale conflict');
+      },
+      slow_op: () => stalled,
+    });
+    try {
+      await tick(150); // several drop checks, well inside this pass's own cap
+      expect(syncEl.textContent).toBe('1 write lost — not saved and not retried');
+    } finally {
+      release();
+      await running;
+    }
+    await flush(() => {
+      expect(syncEl.textContent).toBe('2 writes lost — not saved and not retried');
+    });
+  });
+
+  // A transaction aborted without an error rejects with `tx.error === null`;
+  // announced as-is, that null read as "no loss" and the panel went back to
+  // "Synced" (code-reviewer, 2026-09-27). Reproduced for real: the put
+  // succeeds, then its transaction is aborted with no error.
+  it('a write lost to a transaction aborted with no error still shows as lost, never "Synced"', async () => {
+    const root = document.createElement('div');
+    const { setNav } = mountTracked(root, {
+      client: fakeClient({}),
+      syncPollMs: 60000,
+      dropCheckMs: 10,
+    });
+    await setNav({ eventId: 'ev1', links: [] });
+    const syncEl = root.querySelector('.app-shell-sync');
+    await flush(() => {
+      expect(syncEl.textContent).toBe('Synced');
+    });
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const realPut = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = function abortingPut(...args) {
+      // One-shot: if the enqueue below ever hung, a lingering patch would
+      // abort every later put in this file and bury the real failure.
+      IDBObjectStore.prototype.put = realPut;
+      const request = realPut.apply(this, args);
+      const tx = this.transaction;
+      request.addEventListener('success', () => tx.abort());
+      return request;
+    };
+    let thrown = 'not thrown';
+    try {
+      await enqueueOperation('doomed_op', {}).catch((error) => {
+        thrown = error;
+      });
+    } finally {
+      IDBObjectStore.prototype.put = realPut;
+    }
+    try {
+      expect(thrown).toBeNull(); // the case under test: rejected with null
+      await flush(() => {
+        expect(syncEl.textContent).toBe('1 write lost — not saved and not retried');
+      });
+    } finally {
+      consoleWarn.mockRestore();
+    }
+  });
+
+  // offline-sync-auditor, 2026-09-27: a failed persist (the likeliest drop
+  // when IndexedDB is failing) makes the announcing read likely to fail too —
+  // the notice must not stay a plain "Not synced", which reads as "will
+  // catch up".
+  it('shows the lost-write notice even when the queue read fails as the hold ends', async () => {
+    const root = document.createElement('div');
+    const { setNav } = mountTracked(root, {
+      client: fakeClient({}),
+      syncPollMs: 60000,
+      dropCheckMs: 10,
+    });
+    await setNav({ eventId: 'ev1', links: [] });
+    const syncEl = root.querySelector('.app-shell-sync');
+    await flush(() => {
+      expect(syncEl.textContent).toBe('Synced');
+    });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    // Every later outboxListAll read fails; the drop itself is announced
+    // from inside the flush before that matters.
+    const realGetAll = IDBIndex.prototype.getAll; // outboxListAll reads via the createdAt index
+    IDBIndex.prototype.getAll = function failingGetAll() {
+      throw new Error('IndexedDB unavailable');
+    };
+    try {
+      await enqueueOperation('doomed_op', { notCloneable: () => {} }).catch(() => {});
+      await flush(() => {
+        expect(syncEl.textContent).toBe('1 write lost — not saved and not retried');
+      });
+    } finally {
+      IDBIndex.prototype.getAll = realGetAll;
+      consoleError.mockRestore();
+    }
+  });
+
+  // offline-sync-auditor, 2026-09-27 (round 5): the fallback first covered
+  // only a hold; a new loss on top of an earlier notice (or a pending
+  // count) stayed under-counted while reads kept failing.
+  it('updates an earlier lost-write notice when reads fail as a later loss is announced', async () => {
+    const root = document.createElement('div');
+    const { setNav } = mountTracked(root, {
+      client: fakeClient({}),
+      syncPollMs: 60000,
+      dropCheckMs: 10,
+    });
+    await setNav({ eventId: 'ev1', links: [] });
+    const syncEl = root.querySelector('.app-shell-sync');
+    await dropOperations(1);
+    await flush(() => {
+      expect(syncEl.textContent).toBe('1 write lost — not saved and not retried');
+    });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const realGetAll = IDBIndex.prototype.getAll;
+    IDBIndex.prototype.getAll = function failingGetAll() {
+      throw new Error('IndexedDB unavailable');
+    };
+    try {
+      await enqueueOperation('doomed_op', { notCloneable: () => {} }).catch(() => {});
+      await flush(() => {
+        expect(syncEl.textContent).toBe('2 writes lost — not saved and not retried');
+      });
+    } finally {
+      IDBIndex.prototype.getAll = realGetAll;
+      consoleError.mockRestore();
+      consoleWarn.mockRestore();
+    }
+  });
+
+  // ui-accessibility-reviewer, 2026-09-27: from an empty ("off") panel — no
+  // event context, e.g. the events list during a reconnect flush — a drop
+  // goes to "Not synced" then the notice, never "Synced".
+  it('from an empty panel with no event context, a drop shows "Not synced" then the notice, never "Synced"', async () => {
+    const root = document.createElement('div');
+    mountTracked(root, { client: fakeClient({}), syncPollMs: 60000, dropCheckMs: 10 });
+    const syncEl = root.querySelector('.app-shell-sync');
+    await tick(30);
+    expect(syncEl.textContent).toBe('');
+    const seen = [];
+    const observer = new MutationObserver(() => seen.push(syncEl.textContent));
+    observer.observe(syncEl, { childList: true, characterData: true, subtree: true });
+
+    await enqueueOperation('doomed_op', {});
+    await enqueueOperation('slow_op', {});
+    let release;
+    const stalled = new Promise((resolve) => {
+      release = resolve;
+    });
+    const running = flushOutbox({
+      doomed_op: async () => {
+        throw permanentError('stale conflict');
+      },
+      slow_op: () => stalled,
+    });
+    try {
+      await flush(() => {
+        expect(syncEl.textContent).toBe('Not synced');
+      });
+    } finally {
+      release();
+      await running;
+    }
+    await flush(() => {
+      expect(syncEl.textContent).toBe('1 write lost — not saved and not retried');
+    });
+    observer.disconnect();
+    expect(seen).not.toContain('Synced');
+  });
+
+  // Drops in one pass each follow a server round trip, which on venue wifi
+  // is longer than any fixed quiet window — the pass is announced once it
+  // is over, not once it goes quiet.
+  it('announces a pass whose drops arrive slowly once, when the flush ends', async () => {
+    const root = document.createElement('div');
+    const { setNav } = mountTracked(root, {
+      client: fakeClient({}),
+      syncPollMs: 10,
+      dropCheckMs: 10,
+    });
+    await setNav({ eventId: 'ev1', links: [] });
+    const syncEl = root.querySelector('.app-shell-sync');
+    const seen = [];
+    const observer = new MutationObserver(() => seen.push(syncEl.textContent));
+    observer.observe(syncEl, { childList: true, characterData: true, subtree: true });
+
+    for (let i = 0; i < 3; i += 1) await enqueueOperation('doomed_op', { i });
+    await flushOutbox({
+      doomed_op: async () => {
+        await tick(40); // each round trip is longer than dropCheckMs
+        throw permanentError('stale conflict');
+      },
+    });
+    await flush(() => {
+      expect(syncEl.textContent).toBe('3 writes lost — not saved and not retried');
+    });
+    observer.disconnect();
+
+    const lostTexts = [...new Set(seen.filter((text) => text.includes('lost')))];
+    expect(lostTexts).toEqual(['3 writes lost — not saved and not retried']);
+  });
+
+  // A pass that keeps running (or stalls on a slow request) must not hold a
+  // lost write back indefinitely.
+  it('announces a drop after the maximum wait even while its flush is still running', async () => {
+    const root = document.createElement('div');
+    const { setNav } = mountTracked(root, {
+      client: fakeClient({}),
+      syncPollMs: 20,
+      dropCheckMs: 10,
+      dropMaxWaitMs: 100,
+    });
+    await setNav({ eventId: 'ev1', links: [] });
+    const syncEl = root.querySelector('.app-shell-sync');
+    await enqueueOperation('doomed_op', {});
+    await enqueueOperation('slow_op', {});
+    let release;
+    const stalled = new Promise((resolve) => {
+      release = resolve;
+    });
+    const running = flushOutbox({
+      doomed_op: async () => {
+        throw permanentError('stale conflict');
+      },
+      slow_op: () => stalled,
+    });
+
+    try {
+      await flush(
+        () => {
+          expect(syncEl.textContent).toBe('1 write lost — not saved and not retried');
+        },
+        { timeout: 3000 },
+      );
+    } finally {
+      release();
+      await running;
+    }
+  });
+
+  // Waits well past dropCheckMs, so a leaked listener's announcement would
+  // have landed (test-auditor, 2026-09-27: the first version waited less
+  // than the settle delay and passed with the listener leaked).
+  it('an unmounted shell stops listening — a drop after unmount does not touch its panel', async () => {
+    const root = document.createElement('div');
+    const shell = mountAppShell(root, { client: fakeClient({}), dropCheckMs: 10 });
+    await shell.setNav({ eventId: 'ev1', links: [] });
+    const syncEl = root.querySelector('.app-shell-sync');
+    await flush(() => {
+      expect(syncEl.textContent).toBe('Synced');
+    });
+    shell.unmount(); // clears root; syncEl is detached but still inspectable
+
+    await dropOperations(1);
+    await tick(80);
+    expect(syncEl.textContent).toBe('Synced');
+  });
+
+  it('a drop still unannounced at unmount never renders into the torn-down panel', async () => {
+    const root = document.createElement('div');
+    const shell = mountAppShell(root, { client: fakeClient({}), dropCheckMs: 30 });
+    await shell.setNav({ eventId: 'ev1', links: [] });
+    const syncEl = root.querySelector('.app-shell-sync');
+    await flush(() => {
+      expect(syncEl.textContent).toBe('Synced');
+    });
+
+    // Two drops: a second drop must not orphan the first timer, which
+    // clearTimeout at unmount would then miss (test-auditor, 2026-09-27).
+    await dropOperations(2); // announcement scheduled, not yet due
+    const atUnmount = syncEl.textContent; // 'Not synced' — the hold's own marker
+    shell.unmount();
+    await tick(100);
+    expect(syncEl.textContent).toBe(atUnmount);
+    expect(syncEl.textContent).not.toContain('lost');
   });
 });

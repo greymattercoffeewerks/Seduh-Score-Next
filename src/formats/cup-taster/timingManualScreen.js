@@ -21,6 +21,7 @@ import { renderTimingRows, buildScoringLink, renderManualTimeFields } from './ti
 import { getSupabase } from '../../core/supabaseClient.js';
 import { el } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
+import { droppedErrorFor } from '../../core/outbox.js';
 import { formatDuration } from '../../core/duration.js';
 
 // Local, non-network validation feedback — mirrors timingScreen.js's own
@@ -182,8 +183,12 @@ export async function mountManualTimingScreen(
     // pendingError/pendingSuccess. Same principle as timingScreen.js's own
     // pendingEntryCheck (see its comment there).
     if (pendingEntryCheck) {
-      const { heatEntryId, displayName, expectedElapsedSecs, flushResult } = pendingEntryCheck;
+      const { heatEntryId, displayName, expectedElapsedSecs, operationId, flushResult } =
+        pendingEntryCheck;
       pendingEntryCheck = null;
+      // Only THIS save's own drop explains it — `flushResult.error` may be
+      // another operation's (see core/outbox.js's droppedErrorFor).
+      const ownDropError = droppedErrorFor(flushResult, operationId);
       const freshEntry = data.hydrated.find((entry) => entry.id === heatEntryId);
       // Compares against the EXACT value this call attempted to write —
       // matters even more for 'overwrite' than a real tap's 'reject': a
@@ -198,9 +203,8 @@ export async function mountManualTimingScreen(
         // right before this save — checked against this same freshly-
         // loaded status just below, only once the save itself is confirmed.
         checkForCompletionOnNextRender = true;
-      } else if (flushResult?.permanentFailure) {
-        pendingError =
-          describeTimingConflict(flushResult.error) ?? describeError(flushResult.error);
+      } else if (ownDropError) {
+        pendingError = describeTimingConflict(ownDropError) ?? describeError(ownDropError);
       } else {
         pendingError =
           "This cupper's time has not synced yet — it may still be waiting to sync. Try again in a moment.";
@@ -258,7 +262,7 @@ export async function mountManualTimingScreen(
         onSave: async (entryId, totalSecs, restoreButton) => {
           const savedEntry = data.hydrated.find((entry) => entry.entry_id === entryId);
           try {
-            const { expectedElapsedSecs, flushResult } = await recordManualTime(
+            const { expectedElapsedSecs, operationId, flushResult } = await recordManualTime(
               data.heat,
               savedEntry,
               totalSecs,
@@ -270,6 +274,7 @@ export async function mountManualTimingScreen(
               heatEntryId: savedEntry.id,
               displayName: savedEntry.displayName,
               expectedElapsedSecs,
+              operationId,
               flushResult,
             };
           } catch (err) {

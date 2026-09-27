@@ -45,7 +45,21 @@ export async function enqueueOperation(type, payload) {
     attempts: 0,
     lastError: null,
   };
-  await outboxPut(operation);
+  try {
+    await outboxPut(operation);
+  } catch (error) {
+    // Never persisted, so never queued: this write is as lost as a dropped
+    // one, and nothing would ever retry or report it. Announced the same way
+    // so the sync panel says so even when the caller swallows the throw —
+    // the best-effort live-view publishes do (offline-sync-auditor,
+    // 2026-09-27: an IndexedDB quota failure on the champion publish had no
+    // later trigger and no report at all). A caller that shows the throw on
+    // its own screen raises the panel's sticky notice too, even if the user
+    // then retries successfully — accepted as the conservative side until
+    // lost writes can be acknowledged (ROADMAP's persisted-list item).
+    announceDrop(operation, error, 'not persisted');
+    throw error;
+  }
   return operation;
 }
 
@@ -176,6 +190,15 @@ export function buildRpcHandler(client, type) {
   };
 }
 
+// The error that dropped `operationId` during the flush that returned
+// `flushResult`, or null if that operation wasn't dropped by it (it landed,
+// is still queued, or was never part of this flush). `flushResult.error`
+// alone can't answer that: it is the latest drop or the stopping failure,
+// which may belong to any operation in the shared queue.
+export function droppedErrorFor(flushResult, operationId) {
+  return flushResult?.dropped?.find((drop) => drop.operationId === operationId)?.error ?? null;
+}
+
 export async function countPendingOperations() {
   return (await outboxListAll()).length;
 }
@@ -225,6 +248,52 @@ export async function listPendingOperations() {
 let inFlightFlush = null;
 let activeHandlers = null;
 
+// Every permanently-dropped operation is announced here, once per operation,
+// from inside runFlush itself (and from enqueueOperation when a write can't
+// even be persisted) — found in review (offline-sync-auditor,
+// 2026-09-27): only main.js's background reconnect flush forwarded
+// `permanentError` to the sync panel. Every screen-triggered flush
+// (publishLiveSession from scoring/standings/timing, a timing tap flushing
+// past someone else's leftover op) returned the drop to a caller that either
+// ignored it or only looked at its own operation — the panel's next poll saw
+// an empty queue and showed "Synced" for a write that was gone (§8.4/§9).
+// Announcing from the one place every drop happens covers every caller,
+// present and future (any format), without each screen having to remember
+// to forward a result it has no reason to understand. Listeners are
+// same-tab only: a flush run in another tab announces to that tab's shell.
+const dropListeners = new Set();
+
+// `listener({ operation, error })` is called once per dropped operation.
+// `operation` carries `type`, so a listener can name WHAT was lost — the
+// panel doesn't yet (ROADMAP's "report doesn't say which operation was
+// lost"). Returns an unsubscribe function.
+export function onOperationDropped(listener) {
+  dropListeners.add(listener);
+  return () => dropListeners.delete(listener);
+}
+
+function announceDrop(operation, error, reason = 'dropped') {
+  // Logged too: the panel's notice lives in memory, so after a reload the
+  // console is the only record of what was lost.
+  console.warn(`outbox: operation "${operation.type}" (${operation.id}) ${reason}`, error);
+  for (const listener of dropListeners) {
+    // A throwing listener must not abort the flush: the operation is
+    // already removed, and the operations behind it still need their turn.
+    try {
+      listener({ operation, error });
+    } catch (listenerError) {
+      console.error('outbox: drop listener failed', listenerError);
+    }
+  }
+}
+
+// Whether this tab has a flush running (or waiting for the cross-tab lock).
+// Lets the sync panel hold a drop until the pass that dropped it is over,
+// so a whole pass's drops are announced once (see appShell.js).
+export function isFlushInProgress() {
+  return inFlightFlush !== null;
+}
+
 // The reentrancy guard above only covers this tab. Two organiser tabs (say
 // timing in one, standings in another) share one IndexedDB outbox, and
 // once main.js retried on a timer both drained it every 15s — running the
@@ -259,8 +328,9 @@ function withCrossTabLock(fn) {
 // continues, instead of stopping: nothing is "waiting" on an operation that
 // will never succeed, so letting later operations proceed doesn't violate
 // the FIFO guarantee above (that guarantee protects operations that MIGHT
-// still succeed). The failure itself is still reported back to the caller
-// via the returned `error`/`permanentFailure`, not silently discarded.
+// still succeed). The failure itself is never silently discarded: each drop
+// is announced to onOperationDropped's listeners (the sync panel), and the
+// caller gets it back via the returned `permanentFailure`/`dropped`/`error`.
 //
 // `handlers` maps an operation `type` to `(payload) => Promise<void>`.
 export function flushOutbox(handlers) {
@@ -286,6 +356,12 @@ async function runFlush(handlers) {
   // distinctly from the returned `permanentFailure` boolean field below —
   // this holds the actual Error, that's a flag.
   let lastPermanentError = null;
+  // Every operation dropped during this call, in drop order — lets a caller
+  // tell whether ITS OWN operation was the one dropped (compare
+  // `operationId` against the id enqueueOperation returned) instead of
+  // blaming its action for another operation's error. Present only
+  // alongside `permanentFailure: true`.
+  const dropped = [];
 
   for (;;) {
     const operations = await outboxListAll();
@@ -297,6 +373,7 @@ async function runFlush(handlers) {
             error: lastPermanentError,
             permanentFailure: true,
             permanentError: lastPermanentError,
+            dropped,
           }
         : { processed, stopped: false, permanentFailure: false };
     }
@@ -326,6 +403,8 @@ async function runFlush(handlers) {
           // still get its turn.
           await outboxRemove(operation.id);
           lastPermanentError = error;
+          dropped.push({ operationId: operation.id, type: operation.type, error });
+          announceDrop(operation, error);
           continue;
         }
         // A missing handler is a failure like any other — it must go through
@@ -351,11 +430,9 @@ async function runFlush(handlers) {
         // otherwise have no way to learn something else was also dropped
         // during this same call.
         //
-        // `permanentError` carries the dropped operation's own error for a
-        // caller that must report WHAT was lost — found in review
-        // (code-reviewer, 2026-09-26): main.js's background retry was
-        // reporting `error` here, the stopping transient failure, so the
-        // sync panel never named the write that was actually discarded.
+        // `permanentError` is the most recent dropped operation's own error
+        // (never the stopping failure, which is `error`) — kept as the
+        // one-field summary; `dropped` has every drop with its operation id.
         return lastPermanentError
           ? {
               processed,
@@ -363,6 +440,7 @@ async function runFlush(handlers) {
               error,
               permanentFailure: true,
               permanentError: lastPermanentError,
+              dropped,
             }
           : { processed, stopped: true, error, permanentFailure: false };
       }
