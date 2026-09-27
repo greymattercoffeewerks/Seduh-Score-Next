@@ -41,13 +41,27 @@ function settle(ms = 50) {
 // arbitrary fixed deadline. `flush()` polls for the real outcome instead of
 // sleeping a guessed duration and hoping, so it stays correct regardless of
 // how busy the machine happens to be when the full suite runs alongside
-// everything else — same principle as this file's own existing
-// `vi.waitFor(() => expect(resolveEvent).toBeDefined())` use further down,
-// generalized here for reuse. A generous 3s timeout keeps this from ever
+// everything else. A generous 3s timeout keeps this from ever
 // masking a genuine regression as a hang; a real pass still resolves in
 // tens of milliseconds on an idle machine.
+//
+// Deliberately NOT `vi.waitFor`: with fake timers installed, vitest's waitFor
+// calls `vi.advanceTimersByTime(interval)` on every poll — here that moves the
+// faked `Date` 20ms per check, so an assertion waiting on the countdown's real
+// 1-second tick reads a drifted clock on a slow machine (CI, 2026-09-27:
+// expected '7:57' after `setSystemTime(10:00:03)`, got '7:55' — ~2s of polls
+// had pushed Date to 10:00:05). setTimeout and performance.now are real in this
+// suite (only Date is faked), so this polls without touching the clock.
 async function flush(assertFn, { timeout = 3000 } = {}) {
-  await vi.waitFor(assertFn, { timeout, interval: 20 });
+  const deadline = performance.now() + timeout;
+  for (;;) {
+    try {
+      return await assertFn();
+    } catch (err) {
+      if (performance.now() >= deadline) throw err;
+      await settle(20);
+    }
+  }
 }
 
 function matchesFilters(row, filters) {
@@ -1550,7 +1564,7 @@ describe('mountTimingScreen', () => {
       signal: controller.signal,
     });
 
-    await vi.waitFor(() => expect(resolveEvent).toBeDefined());
+    await flush(() => expect(resolveEvent).toBeDefined());
 
     // Simulate another, now-current screen having already rendered onto
     // this SAME shared root — exactly what a router navigation away from

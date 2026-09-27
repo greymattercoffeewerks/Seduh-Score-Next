@@ -31,8 +31,20 @@ function settle(ms = 50) {
 // else. A generous 3s timeout keeps this from ever masking a genuine
 // regression as a hang; a real pass still resolves in tens of milliseconds
 // on an idle machine.
+//
+// Not `vi.waitFor`: with fake timers installed it advances the faked `Date` on
+// every poll — see timingScreen.test.js's own flush() comment for the CI flake
+// that caused. setTimeout and performance.now are real here (only Date is faked).
 async function flush(assertFn, { timeout = 3000 } = {}) {
-  await vi.waitFor(assertFn, { timeout, interval: 20 });
+  const deadline = performance.now() + timeout;
+  for (;;) {
+    try {
+      return await assertFn();
+    } catch (err) {
+      if (performance.now() >= deadline) throw err;
+      await settle(20);
+    }
+  }
 }
 
 function matchesFilters(row, filters) {
@@ -822,7 +834,7 @@ describe('mountManualTimingScreen', () => {
       signal: controller.signal,
     });
 
-    await vi.waitFor(() => expect(resolveEvent).toBeDefined());
+    await flush(() => expect(resolveEvent).toBeDefined());
 
     // Simulate another, now-current screen having already rendered onto
     // this SAME shared root — exactly what a router navigation away from
