@@ -1249,7 +1249,8 @@ live-verified in browser. Definition of Done met. See CHANGELOG.md's dated entry
   per scoring-auditor assessment.
 - **core/outbox.js buildRpcHandler treats 408/429/5xx as permanent (data-loss risk on flaky wifi;
   affects Cup Taster too) — CLOSED 2026-09-26 (PR #125).** Classified 408/429/5xx as transient,
-  retried via periodic 15s drain and Web Lock safety; lost writes stay reported until reload. See
+  retried via periodic 15s drain and Web Lock safety; lost writes stay reported for the life of
+  the tab (survive reload via sessionStorage as of 2026-09-27, cleared on tab close). See
   CHANGELOG.md for the full account.
 - **processed_operations.id is a global primary key (op-id poisoning across orgs).** Suggest schema
   change to `(org_id, id)`.
@@ -1306,13 +1307,20 @@ Cup Taster event._
   account). Network/timeout/expired JWT/transient SQLSTATE: retryable. Everything else:
   permanent. Flagged by: `offline-sync-auditor`.
 
-- **Lost-write report is in-memory per tab (lost on reload, invisible to a second console tab),
-  and there is no Acknowledge control.** Persist dropped-op records in IndexedDB + add acknowledge
-  state. Since 2026-09-27 the notice is sticky per tab and also survives sign-out/sign-in in the
-  same tab (conservative); console.warn is the only trace after a reload. The sticky count can't be
-  cleared after a successful retry, and an enqueue failure on a loud caller (confirm/tap/resolve) is
-  reported by the screen AND as a sticky lost write, each failed retry adding one — the acknowledge
-  should cover this. Flagged by: `offline-sync-auditor`, `ui-accessibility-reviewer`.
+- **Lost-write report persists per tab via sessionStorage (2026-09-27), but lost when the tab
+  closes, invisible to a second console tab, and there is no Acknowledge control.** The count now
+  survives a reload of the same tab — and usually the browser restoring a tab the OS discarded
+  (common on venue phones and tablets) — instead of losing the only record. A device restart or a
+  closed tab still clears it. Still open: persisting
+  across tab close (IndexedDB), cross-tab visibility (BroadcastChannel relay), and acknowledging
+  the notice (explicit-dismiss button). Also open: sticky inflation — a rehearsal morning's stray
+  drops accumulate and show as "N writes lost" all day (runbook: re-open in a fresh tab); a
+  duplicated tab copies the count. Full fix: persisted IndexedDB list with explicit Acknowledge,
+  which should REPLACE the sessionStorage key (not sit beside it). The sticky count can't be
+  cleared after a successful retry, and an enqueue failure on a loud caller (confirm/tap/resolve)
+  is reported by the screen AND as a sticky lost write, each failed retry adding one. Also still
+  open: sign-out in the same tab keeps the notice (documented as deliberate, untested). Flagged by:
+  `offline-sync-auditor`, `ui-accessibility-reviewer`.
 
 - **Lost-write notice doesn't name the operation type.** The data now exists (2026-09-27): the
   onOperationDropped listener receives the operation (with `type`) and flush results carry
@@ -1383,12 +1391,28 @@ Cup Taster event._
   can hold a flush ~2 min.** Consider `retry: false` on the read or a read-chain total
   timeout. Flagged by: `offline-sync-auditor`.
 
-- **Deleting a test event while the outbox is non-empty should warn or refuse.** (Since
-  2026-09-27 lostWriteCount counts dropped ops, not flushes — 5 leftovers now show "5 writes
-  lost".) Rehearsal-leftover
-  heat/score ops for a deleted heat are correctly dropped but alarming on event day.
-  Runbook: confirm the event device shows **Synced** before 4 Oct. Flagged by:
-  `offline-sync-auditor`.
+- **CLOSED (2026-09-27, branch `fix/lost-write-persistence-and-delete-guard`): Deleting a test event now warns about unsynced writes.**
+  Clicking Delete reads `countPendingOperations()` (bounded at 2s; a failure or hang shows
+  "Couldn't check") before the Confirm step renders, showing how many writes on this device
+  haven't synced yet. If non-zero, the
+  warning notes that deleting now can make them "show as lost on the sync panel until this tab is
+  closed" and advises canceling, waiting, and re-clicking Delete to re-check. Warns rather than
+  refuses because leftovers for a deleted event can never sync back — refusing would block the
+  delete forever. See CHANGELOG.md for full account. Flagged by: `offline-sync-auditor`.
+
+- **Delete warning's count is a snapshot, shared across rows.** It's read once per Delete click
+  and doesn't update while the confirm step is open (the wording tells the organiser to re-click
+  Delete to re-check); it counts the whole device's queue, not the one event's. Flagged by:
+  `code-reviewer`, `offline-sync-auditor`.
+
+- **A poison operation keeps the delete warning's count above zero forever.** "Wait, then click
+  Delete again" then repeats indefinitely and the organiser deletes through the warning. Runbook:
+  if the count doesn't drop after a wait, check the sync panel for a failed operation before
+  deleting. Flagged by: `offline-sync-auditor`.
+
+- **No visible state while Delete checks for unsynced writes** (normally milliseconds, capped at
+  2s). Add a "Checking…" label like the existing "Deleting…" if slow IndexedDB opens show up in
+  practice. Flagged by: `ui-accessibility-reviewer`.
 
 ---
 
