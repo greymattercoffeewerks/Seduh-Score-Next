@@ -1559,23 +1559,28 @@ describe('mountReportScreen', () => {
 
       it('turns a stalled request into an error with a way to retry, instead of hanging on Preparing…', async () => {
         vi.useFakeTimers();
-        const root = document.createElement('div');
-        vi.spyOn(exportModule, 'downloadJson').mockImplementation(() => {});
-        const client = fakeClient({ tables: completeEventTables() });
-        client.rpc = () => new Promise(() => {});
-        await mountReportScreen(root, { eventId: 'ev1', client });
-        const button = root.querySelector('.report-dispute-pack button');
-        const status = root.querySelector('.report-dispute-pack [role="status"]');
+        // try/finally, not a trailing useRealTimers(): a failed assertion would
+        // otherwise skip it and leave fake timers on for every later test here.
+        try {
+          const root = document.createElement('div');
+          vi.spyOn(exportModule, 'downloadJson').mockImplementation(() => {});
+          const client = fakeClient({ tables: completeEventTables() });
+          client.rpc = () => new Promise(() => {});
+          await mountReportScreen(root, { eventId: 'ev1', client });
+          const button = root.querySelector('.report-dispute-pack button');
+          const status = root.querySelector('.report-dispute-pack [role="status"]');
 
-        button.click();
-        expect(status.textContent).toBe('Preparing dispute pack…');
-        await vi.advanceTimersByTimeAsync(31_000);
+          button.click();
+          expect(status.textContent).toBe('Preparing dispute pack…');
+          await vi.advanceTimersByTimeAsync(31_000);
 
-        expect(status.dataset.tone).toBe('error');
-        expect(status.textContent).toContain('taking longer than expected');
-        expect(button.getAttribute('aria-disabled')).toBeNull();
-        expect(button.textContent).toBe('Download dispute pack');
-        vi.useRealTimers();
+          expect(status.dataset.tone).toBe('error');
+          expect(status.textContent).toContain('taking longer than expected');
+          expect(button.getAttribute('aria-disabled')).toBeNull();
+          expect(button.textContent).toBe('Download dispute pack');
+        } finally {
+          vi.useRealTimers();
+        }
       });
 
       it('writes nothing if the reader navigated away and the request then FAILS', async () => {
