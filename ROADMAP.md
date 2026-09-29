@@ -1454,15 +1454,14 @@ Cup Taster event._
 - **Viewer-shell hardening: edge cases deferred (low-priority, not blocking).**
   unmount() would throw if a stub client's removeChannel threw synchronously (supabase-js is async,
   unrealistic); double unmount() calls removeChannel twice (pre-existing, router unmounts once);
-  splash screen doesn't use viewer-shell (was not in the reproduction). Not yet verified against
-  production seduhscore.com after Cloudflare deploy; needs re-test of projector ↔ phone switch in
-  one tab to confirm live-environment fix.
+  splash screen doesn't use viewer-shell (was not in the reproduction). Production verification
+  complete (2026-09-29): projector ↔ phone ↔ splash ↔ projector in one tab all render correctly,
+  no console errors, fix confirmed in live environment.
 
-- **Test Cupper rows remain in people table from production smoke test.** Three 'Test Cupper A/B/C'
-  rows (fake phones +6738000001-3) still exist in the org-level `people` table after a "Prod Smoke
-  Test" is_test event was deleted via the app's Delete button. The live_sessions row cascaded away
-  correctly; the orphaned cupper rows suggest the people table has no event-scoped foreign key.
-  User decision pending on cleanup policy (manual delete, cascade, or retain for audit trail).
+- **Test Cupper rows deleted from people table (2026-09-29).** Three 'Test Cupper A/B/C' rows
+  (fake phones +6738000001-3) were deleted at the user's request on 2026-09-29 after a "Prod Smoke
+  Test" is_test event was deleted via the app's Delete button. People table count: 25 → 22, no
+  'Test Cupper' rows remain. Cleanup complete per user decision.
 
 ---
 

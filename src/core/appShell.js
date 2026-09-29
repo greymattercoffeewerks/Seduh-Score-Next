@@ -622,6 +622,14 @@ export function mountAppShell(
     const height = header.getBoundingClientRect().height;
     if (height > 0) root.style.setProperty('--app-shell-header-height', `${height}px`);
   }
+  // The header's height also changes without any setNav()/sync-notice call:
+  // opening the hamburger menu, a window resize or a tablet rotation across
+  // the 1366px breakpoint. Without re-measuring, scroll-margin-top (which
+  // reads this var) could leave a focused heading or error behind the sticky
+  // header. Absent in jsdom, where nothing lays out anyway.
+  const headerResizeObserver =
+    typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(syncHeaderHeightVar);
+  headerResizeObserver?.observe(header);
 
   async function setNav({ eventId = null, links = [] } = {}) {
     navEl.innerHTML = '';
@@ -735,6 +743,7 @@ export function mountAppShell(
     outlet,
     setNav,
     unmount() {
+      headerResizeObserver?.disconnect();
       clearInterval(syncIntervalId);
       stopListeningForDrops();
       clearTimeout(dropCheckTimer);

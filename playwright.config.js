@@ -21,6 +21,11 @@ export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
   reporter: 'list',
+  // A desktop-width default, above the organiser header's 1366px hamburger
+  // cut-over (appShell.css): Playwright's own 1280x720 default would put the
+  // nav links behind the hamburger and break every test that clicks one.
+  // organiser-flow.spec.js's header test sets its own widths on both sides.
+  use: { viewport: { width: 1440, height: 900 } },
   webServer: [
     {
       command: 'npm run preview',

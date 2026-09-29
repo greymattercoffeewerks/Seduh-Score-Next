@@ -1,3 +1,69 @@
+## T-HARDEN.nav-hamburger-breakpoint: organiser header hamburger threshold moved from 640px to 1366px (no more stacking at 731px) · 2026-09-29
+
+**Task:** T-HARDEN.nav-hamburger-breakpoint (pre-event hardening for the 4 Oct Cup Taster event).
+A user testing on a 731px-wide built-in browser reported the signed-in organiser header stacking
+into three left-aligned rows (brand; nav links; email + Sign out), making buttons unreachable.
+The header width with 4 nav links + email ~930px, plus ~150–220px for event-name breadcrumb,
+exceeds the 640px hamburger threshold, causing unnecessary collapse.
+
+**Root cause:** `src/core/appShell.css` collapsed the nav into the hamburger below 640px, designed
+before signed-in headers existed. The threshold underestimated real header content width and
+didn't account for header height changing when the menu opens/closes on tablet widths.
+
+**What shipped:**
+
+- Hamburger threshold moved from 640px to 1366px (`min-width:1366px` in appShell.css). Measured
+  on local dev with 32-char event name + 54-char email: header is one row at 1366px (118px tall),
+  wraps to a second row at 1280px (161px), so 1366 is the safe cutover. Below 1366px: hamburger
+  menu; at 1366px and up: inline auth cluster on the same row as the brand/event name.
+- `src/core/appShell.js` added a ResizeObserver watching the header to re-measure
+  `--app-shell-header-height` on every resize, not just on setNav() or sync-notice updates,
+  because header height now changes when the menu opens/closes and on tablet rotation across the
+  1366px breakpoint. Observer disconnected on unmount; guarded for jsdom (no ResizeObserver in
+  jsdom tests).
+- Stale comments updated in appShell.css reflecting the new breakpoint and menu behavior.
+- Playwright default viewport enlarged to 1440x900 (was 1280x720) because the 1280 width now
+  triggers hamburger mode and hides nav links from tests that click them.
+
+**Files changed:** `src/core/appShell.css`, `src/core/appShell.js`, `src/core/appShell.test.js`,
+`tests/e2e/organiser-flow.spec.js`, `playwright.config.js`.
+
+**Tests:** New unit test in appShell.test.js: fake ResizeObserver observes the header, callback
+re-measures `--app-shell-header-height`, observer disconnects on unmount; fails if observe call
+is removed or disconnect is skipped. New e2e test in organiser-flow.spec.js: "the organiser header
+collapses into the hamburger below 1366px and is one inline row from 1366px up" — verifies at
+360px, 731px, 1365px (all collapsed, hamburger toggles menu open/closed, nav hidden until opened,
+no horizontal overflow) and 1366px (inline row, auth cluster on brand's row, no hamburger). Full
+JS suite: 1698 passing (81 files), e2e: 8/8 passing, build exit 0, prettier + src lint clean.
+
+**Review cycle:** 1 agent (ui-accessibility-reviewer).
+**Blocking findings fixed:** None. **Non-blocking/deferred findings:**
+
+- MEDIUM: `--app-shell-header-height` ResizeObserver — not blocking, required by the new dynamic
+  header-height behavior (found and confirmed good-to-fix).
+- LOW: Breakpoint was tight at 1280px with long email/event name — moved to 1366px and verified
+  (found during measurement; resolved by threshold increase).
+- LOW: Stale CSS comments about the 640px breakpoint — updated (found during measurement; resolved
+  in files changed).
+- MEDIUM: Open menu at tablet widths is a full-width stacked column (~230–280px of sticky header);
+  could be laid out as a wrapping row for 640–1365px widths later — accepted as future work.
+- LOW: Focus falls to `<body>` if viewport crosses 1366px with the toggle focused and menu open
+  (rare live resize) — deferred, low-risk edge case.
+- LOW: Icon-only toggle (aria-label 'Menu', no visible text) at tablet widths — deferred.
+- Side effect: 1280px-wide laptops now get the hamburger (previously inline).
+
+**Known gaps (deferred, not fixed, not blocking):**
+
+- **Open menu at tablet widths is a full-width stacked column.** Could be refactored to wrap as a
+  row for 640–1365px widths later; accepted as future refinement.
+- **Focus management on live resize above 1366px.** Rare edge case; low-risk.
+- **Icon-only toggle at tablet widths.** No visible "Menu" text, aria-label only — acceptable a11y
+  per Petrol conventions; could add visible label later.
+
+**Next step:** Merge and deploy. No further hardening needed for this task.
+
+---
+
 ## T-HARDEN.viewer-shell-channel-topic: viewer-shell channel no longer reused on view switch (navigating between audience views in one tab works) · 2026-09-29
 
 **Task:** T-HARDEN.viewer-shell-channel-topic (pre-event hardening for the 4 Oct Cup Taster event).
