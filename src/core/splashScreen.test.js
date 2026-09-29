@@ -286,6 +286,71 @@ describe('mountSplashScreen', () => {
     expect(root.innerHTML).toBe('');
   });
 
+  it("unmount() leaves a screen that was mounted into the same shared root after it untouched — the router's mount-new-then-unmount-old order", async () => {
+    // router.js mounts the NEW route first and only then unmounts the old
+    // one; splash, projector and phone all share one root. An unmount() that
+    // cleared the whole root wiped the screen that had just been mounted
+    // (found on production: projector -> phone left a blank page).
+    const root = document.createElement('div');
+    const client = fakeClient({ tables: { events: { data: null, error: null } } });
+
+    const splash = mountSplashScreen(root, { orgId: 'org1', client });
+    await settle();
+    // What the next route does on mount: reset the root, paint its own DOM.
+    root.innerHTML = '';
+    const next = document.createElement('div');
+    next.className = 'next-screen';
+    root.appendChild(next);
+
+    splash.unmount();
+
+    // Only the next screen remains — none of the four nodes splash appended.
+    expect(root.children).toHaveLength(1);
+    expect(root.querySelector('.next-screen')).toBe(next);
+    expect(root.querySelector('.splash-content')).toBeNull();
+  });
+
+  it('unmount() leaves a real viewer-shell screen mounted into the same root afterwards untouched — projector <- splash', async () => {
+    const root = document.createElement('div');
+    const client = fakeClient({ tables: { events: { data: null, error: null } } });
+    const splash = mountSplashScreen(root, { orgId: 'org1', client });
+    await settle();
+
+    // The router mounts the next route before unmounting splash.
+    const { mountViewerShell } = await import('./viewer-shell.js');
+    const shellClient = {
+      from: () => {
+        const builder = {
+          select: () => builder,
+          eq: () => builder,
+          order: () => builder,
+          limit: () => builder,
+          maybeSingle: () => Promise.resolve({ data: null, error: null }),
+        };
+        return builder;
+      },
+      channel: () => {
+        const chan = { on: () => chan, subscribe: () => chan };
+        return chan;
+      },
+      removeChannel: () => Promise.resolve('ok'),
+    };
+    const shell = await mountViewerShell(root, {
+      orgId: 'org1',
+      renderBody: () => {},
+      showChrome: false,
+      client: shellClient,
+    });
+    const shellContainer = root.querySelector('.viewer-shell');
+
+    splash.unmount();
+
+    expect(root.children).toHaveLength(1);
+    expect(root.querySelector('.viewer-shell')).toBe(shellContainer);
+    expect(root.querySelector('.splash-content')).toBeNull();
+    shell.unmount();
+  });
+
   it('anchors the glow at a randomized position within the documented range, off the exact edges and off dead-center', () => {
     const root = document.createElement('div');
     const client = fakeClient({ tables: { events: { data: null, error: null } } });

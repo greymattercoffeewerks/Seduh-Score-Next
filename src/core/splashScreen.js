@@ -28,7 +28,7 @@ export function mountSplashScreen(root, { orgId, client = getSupabase(), signal 
   // This route shares its outlet (bareRoot, main.js) with #/live/projector
   // and #/live/phone — neither this screen's own unmount() nor
   // viewer-shell.js's own unmount() ever clears a root's OWN classList/
-  // attributes, only its children (`root.innerHTML = ''`), so a stale
+  // attributes, only its own child nodes, so a stale
   // sibling route's surface class/attribute could otherwise persist across
   // a direct cross-navigation. main.js's buildRoutes() resets the shared
   // root before calling this mount function, not this screen itself — a
@@ -111,7 +111,10 @@ export function mountSplashScreen(root, { orgId, client = getSupabase(), signal 
   // states that don't.
   const testBannerHost = el('div', { className: 'splash-test-banner-host' });
 
-  root.append(glowDrift, content, badgeHost, testBannerHost);
+  // The one list both append and unmount() use, so a node added here can't
+  // be forgotten there and leak into the shared root.
+  const ownNodes = [glowDrift, content, badgeHost, testBannerHost];
+  root.append(...ownNodes);
 
   loadEvent(orgId, client)
     .then((event) => {
@@ -152,10 +155,15 @@ export function mountSplashScreen(root, { orgId, client = getSupabase(), signal 
       // leaves this DOM subtree (and its live-region nodes) orphaned under
       // the now-hidden bareRoot for the rest of the session, since nothing
       // at the default outlet ever touches bareRoot again. viewer-shell.js's
-      // own unmount() does exactly this for the same reason; splash's own
+      // own unmount() removes its own DOM for the same reason; splash's own
       // "no timer, no subscription" comment answered the wrong question —
       // it ruled out leaked async resources, not leaked DOM.
-      root.innerHTML = '';
+      //
+      // Removes only the nodes this screen appended, not the whole root: the
+      // router mounts the NEW screen before unmounting this one, and the
+      // audience routes share one root, so `root.innerHTML = ''` here wiped
+      // whichever screen had just been mounted into it.
+      for (const node of ownNodes) node.remove();
     },
   };
 }

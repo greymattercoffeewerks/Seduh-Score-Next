@@ -1445,6 +1445,25 @@ Cup Taster event._
   2s). Add a "Checking…" label like the existing "Deleting…" if slow IndexedDB opens show up in
   practice. Flagged by: `ui-accessibility-reviewer`.
 
+- **CLOSED (2026-09-29, branch `harden/viewer-shell-channel-topic`): Navigating between audience views in one tab no longer stuck on "Connecting".**
+  Fixed by per-mount channel topic `live_sessions:${orgId}:${mountSeq}` (module-level counter);
+  channel reuse within a tab never happens now. Callbacks guarded with `!mounted` so a leaked
+  channel stays inert. See CHANGELOG.md for full account. Flagged by: `code-reviewer`, `test-auditor`,
+  `module-boundary-checker`.
+
+- **Viewer-shell hardening: edge cases deferred (low-priority, not blocking).**
+  unmount() would throw if a stub client's removeChannel threw synchronously (supabase-js is async,
+  unrealistic); double unmount() calls removeChannel twice (pre-existing, router unmounts once);
+  splash screen doesn't use viewer-shell (was not in the reproduction). Not yet verified against
+  production seduhscore.com after Cloudflare deploy; needs re-test of projector ↔ phone switch in
+  one tab to confirm live-environment fix.
+
+- **Test Cupper rows remain in people table from production smoke test.** Three 'Test Cupper A/B/C'
+  rows (fake phones +6738000001-3) still exist in the org-level `people` table after a "Prod Smoke
+  Test" is_test event was deleted via the app's Delete button. The live_sessions row cascaded away
+  correctly; the orphaned cupper rows suggest the people table has no event-scoped foreign key.
+  User decision pending on cleanup policy (manual delete, cascade, or retain for audit trail).
+
 ---
 
 ## Trust and transparency

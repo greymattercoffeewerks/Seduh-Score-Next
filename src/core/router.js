@@ -112,12 +112,16 @@ export function createRouter({ routes, client = getSupabase(), notFoundMount, on
     // sharing the same outlet and wholesale-clearing it
     // (`root.innerHTML = ''`) on its own mount. That convention silently
     // breaks across an outlet override, since the next screen at the
-    // DEFAULT outlet never touches the overridden one. `viewer-shell.js`
-    // (the only outlet-override consumer today, `/live/projector` and
-    // `/live/phone`) is safe because its own `unmount()` genuinely clears
-    // its root — found worth codifying explicitly in review, since
-    // nothing here enforces the pairing for a future outlet-override route
-    // built on a no-op-unmount screen.
+    // DEFAULT outlet never touches the overridden one.
+    //
+    // Two things follow for such an `unmount()` (`/live/projector`,
+    // `/live/phone` and `/live/splash` all share one outlet, main.js's
+    // bareRoot): it must remove the DOM it added, AND ONLY that — below,
+    // the NEW screen is mounted before the outgoing one is unmounted, so an
+    // `unmount()` that clears the whole outlet wipes the screen that was
+    // just mounted into it (found on production: projector -> phone left a
+    // blank page). `viewer-shell.js` and `splashScreen.js` each remove only
+    // their own nodes.
     const outlet = route.outlet ?? defaultOutlet;
     const mounted =
       (await route.mount(outlet, { ...params, client, signal: abortController.signal })) ?? null;

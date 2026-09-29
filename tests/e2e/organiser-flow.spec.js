@@ -251,15 +251,27 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
 
     await navigateHash(page, '#/live/phone');
     await expect(page.locator('.app-shell-root')).toBeHidden();
-    // A generous, explicit timeout, not the 5s default — this is a real
-    // Supabase Realtime WebSocket handshake (viewer-shell.js's own
-    // connecting-holding-state), which can legitimately take longer than
-    // 5s under load; this project's own "unreliable venue wifi" design
-    // target treats that as expected, not a bug. Found flaking under CI's
-    // more resource-constrained runner (passed reliably every time
-    // locally) — this isn't testing exact timing precision, just that the
-    // badge eventually renders.
-    await expect(page.getByText('NOT LIVE')).toBeVisible({ timeout: 15000 });
+    // The phone view's own status badge — "Live" or "Not live" depending on
+    // whether an earlier test in this serial file left an active live session
+    // behind (its Start heat publishes one), so match either. This test used
+    // to assert "NOT LIVE" and only ever passed because the phone view was
+    // stuck on its initial "Connecting…" card (no session read yet) after a
+    // projector -> phone switch in the same page: a reused, already-subscribed
+    // realtime channel threw before the first read, and once that was fixed
+    // the outgoing projector's unmount wiped the shared root. A working phone
+    // view shows the badge for whatever the session really is.
+    //
+    // A generous, explicit timeout, not the 5s default — the first read is a
+    // real round trip to a real Supabase stack, which can take longer than 5s
+    // on CI's more resource-constrained runner.
+    await expect(page.locator('.app-bare-root .viewer-badge')).toHaveText(/live/i, {
+      timeout: 15000,
+    });
+    // ...and it must have actually left the initial "Connecting…" card. Not
+    // redundant with the badge check: the badge renders DURING "Connecting…"
+    // too (as "Not live", since no session has been read yet), so only this
+    // proves the first read completed.
+    await expect(page.getByText('Connecting…')).toBeHidden({ timeout: 15000 });
   });
 
   test('an unknown route shows an inline "Page not found" with a link back to events', async ({

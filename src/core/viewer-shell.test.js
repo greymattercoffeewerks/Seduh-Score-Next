@@ -1041,6 +1041,177 @@ describe('mountViewerShell', () => {
     expect(root.innerHTML).toBe('');
   });
 
+  describe('switching between audience views in one tab', () => {
+    // Mirrors the two supabase-js behaviours that caused the production bug:
+    // channel(topic) returns the channel already registered under that topic,
+    // and on() throws once that channel has subscribed. `removeChannelOk`
+    // false models removeChannel()'s unsubscribe answering 'timed out' — the
+    // channel is then never deregistered.
+    function reusingClient({ removeChannelOk }) {
+      const registered = new Map();
+      const state = { payload: { a: 1 }, reads: 0 };
+      return {
+        state,
+        registered,
+        from: (table) => {
+          const builder = {
+            select: () => builder,
+            eq: () => builder,
+            order: () => builder,
+            limit: () => builder,
+            maybeSingle: () => {
+              if (table === 'live_sessions') state.reads += 1;
+              return Promise.resolve({
+                data:
+                  table === 'events' ? { id: 'ev1' } : session({ payload: { ...state.payload } }),
+                error: null,
+              });
+            },
+          };
+          return builder;
+        },
+        channel(topic) {
+          if (registered.has(topic)) return registered.get(topic);
+          const chan = {
+            subscribed: false,
+            onChange: null,
+            on(_event, _filter, handler) {
+              if (chan.subscribed) {
+                throw new Error(
+                  `cannot add \`postgres_changes\` callbacks for realtime:${topic} after \`subscribe()\`.`,
+                );
+              }
+              chan.onChange = handler;
+              return chan;
+            },
+            subscribe(cb) {
+              chan.subscribed = true;
+              Promise.resolve().then(() => cb('SUBSCRIBED'));
+              return chan;
+            },
+          };
+          registered.set(topic, chan);
+          return chan;
+        },
+        removeChannel: (chan) => {
+          if (removeChannelOk) {
+            for (const [topic, c] of registered) if (c === chan) registered.delete(topic);
+          }
+          return Promise.resolve(removeChannelOk ? 'ok' : 'timed out');
+        },
+      };
+    }
+
+    async function mountOn(client, root = document.createElement('div')) {
+      const handle = await mountViewerShell(root, {
+        orgId: 'org1',
+        renderBody: (container, payload) => {
+          container.textContent = `BODY ${JSON.stringify(payload)}`;
+        },
+        showChrome: false,
+        client,
+      });
+      return { root, ...handle };
+    }
+
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+    it('renders the second view (not the connecting state) after the first unmounted with its channel never deregistered', async () => {
+      const client = reusingClient({ removeChannelOk: false });
+      const first = await mountOn(client);
+      first.unmount();
+      const second = await mountOn(client);
+      expect(second.root.textContent).toContain('BODY {"a":1}');
+      expect(second.root.textContent).not.toContain('Connecting');
+    });
+
+    it("keeps the new view on screen when the outgoing view unmounts afterwards on the SAME root — the router's mount-new-then-unmount-old order", async () => {
+      // main.js's audience routes share one bareRoot, and router.js mounts the
+      // new route before unmounting the old one. Clearing the whole root in
+      // unmount() wiped the view that had just been mounted (projector ->
+      // phone left a blank page on production once the channel bug was fixed).
+      const client = reusingClient({ removeChannelOk: true });
+      const root = document.createElement('div');
+      const projector = await mountOn(client, root);
+      const phone = await mountOn(client, root);
+      const phoneContainer = root.querySelector('.viewer-shell');
+
+      projector.unmount();
+
+      // The SAME node the phone view mounted, and nothing else — both views
+      // render identical body text, so text alone can't say which survived.
+      expect(root.children).toHaveLength(1);
+      expect(root.querySelector('.viewer-shell')).toBe(phoneContainer);
+      expect(root.textContent).toContain('BODY {"a":1}');
+      phone.unmount();
+      expect(root.innerHTML).toBe('');
+    });
+
+    it('leaves a splash screen mounted after it untouched when the outgoing view unmounts', async () => {
+      const client = reusingClient({ removeChannelOk: true });
+      const root = document.createElement('div');
+      const projector = await mountOn(client, root);
+      // What main.js's splash route does on mount: clear the shared root and
+      // paint its own DOM (a stand-in node — splashScreen has its own tests).
+      root.innerHTML = '';
+      const splash = document.createElement('div');
+      splash.className = 'splash-content';
+      root.appendChild(splash);
+
+      projector.unmount();
+
+      expect(root.children).toHaveLength(1);
+      expect(root.querySelector('.splash-content')).toBe(splash);
+    });
+
+    it('lets two views live at once, each getting its own live updates', async () => {
+      const client = reusingClient({ removeChannelOk: true });
+      const projector = await mountOn(client);
+      const phone = await mountOn(client);
+      expect(client.registered.size).toBe(2);
+
+      client.state.payload = { a: 2 };
+      for (const chan of client.registered.values()) chan.onChange();
+      await settle();
+
+      expect(projector.root.textContent).toContain('BODY {"a":2}');
+      expect(phone.root.textContent).toContain('BODY {"a":2}');
+    });
+
+    it('keeps a channel that failed to deregister inert — no reads, no writes to its unmounted root', async () => {
+      const client = reusingClient({ removeChannelOk: false });
+      const first = await mountOn(client);
+      const [leaked] = [...client.registered.values()];
+      first.unmount();
+      await settle();
+      const readsBefore = client.state.reads;
+
+      client.state.payload = { a: 3 };
+      leaked.onChange();
+      await settle();
+
+      expect(client.state.reads).toBe(readsBefore);
+      expect(first.root.innerHTML).toBe('');
+    });
+
+    it('does not leave an unhandled rejection when removeChannel rejects on unmount', async () => {
+      const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        const client = reusingClient({ removeChannelOk: true });
+        client.removeChannel = () => Promise.reject(new Error('socket gone'));
+        const { unmount } = await mountOn(client);
+        expect(() => unmount()).not.toThrow();
+        await settle();
+        expect(errSpy).toHaveBeenCalledWith(
+          'viewer-shell: failed to remove the realtime channel',
+          expect.any(Error),
+        );
+      } finally {
+        errSpy.mockRestore();
+      }
+    });
+  });
+
   it('never writes to root again once its own signal is aborted mid-load — the router-navigation-race guard', async () => {
     // Models a real bug found in review (ROADMAP.md's "A real DOM-write
     // race between the router..."): this shell's own INITIAL refresh() is
