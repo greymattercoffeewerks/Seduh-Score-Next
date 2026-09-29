@@ -1102,8 +1102,7 @@ describe('mountViewerShell', () => {
       };
     }
 
-    async function mountOn(client) {
-      const root = document.createElement('div');
+    async function mountOn(client, root = document.createElement('div')) {
       const handle = await mountViewerShell(root, {
         orgId: 'org1',
         renderBody: (container, payload) => {
@@ -1124,6 +1123,23 @@ describe('mountViewerShell', () => {
       const second = await mountOn(client);
       expect(second.root.textContent).toContain('BODY {"a":1}');
       expect(second.root.textContent).not.toContain('Connecting');
+    });
+
+    it("keeps the new view on screen when the outgoing view unmounts afterwards on the SAME root — the router's mount-new-then-unmount-old order", async () => {
+      // main.js's audience routes share one bareRoot, and router.js mounts the
+      // new route before unmounting the old one. Clearing the whole root in
+      // unmount() wiped the view that had just been mounted (projector ->
+      // phone left a blank page on production once the channel bug was fixed).
+      const client = reusingClient({ removeChannelOk: true });
+      const root = document.createElement('div');
+      const projector = await mountOn(client, root);
+      const phone = await mountOn(client, root);
+
+      projector.unmount();
+
+      expect(root.textContent).toContain('BODY {"a":1}');
+      phone.unmount();
+      expect(root.innerHTML).toBe('');
     });
 
     it('lets two views live at once, each getting its own live updates', async () => {

@@ -21,8 +21,21 @@ timeout/error it stays registered, so the next mount got a dead already-subscrib
 - The channel's change callback and status callback both return early when !mounted, so a channel
   that failed to deregister (now leaked for the tab's life, an accepted trade-off) stays inert —
   no wasted live_sessions reads, no renders into a detached root.
+- **A second bug the first one was hiding (found by CI's Playwright e2e on this PR):** the router
+  mounts the NEW screen first and unmounts the outgoing one afterwards, and the audience routes
+  share one root (`bareRoot`). `viewer-shell`'s and `splashScreen`'s `unmount()` did
+  `root.innerHTML = ''`, so with the channel bug fixed the phone view rendered and then the
+  projector's late unmount wiped it — a blank page (3 in 10 runs locally, always in CI's serial
+  order). Before the fix the phone mount threw, the router never reached the old unmount, and the
+  "Connecting…" card survived. Both `unmount()`s now remove only the nodes they added
+  (projector -> splash was the same latent bug).
+- `tests/e2e/organiser-flow.spec.js` used to assert "NOT LIVE" on the phone view, which only ever
+  passed because the phone view was stuck on "Connecting…" (no session read yet); after the earlier
+  test starts a heat, a working phone view correctly shows "Live". It now asserts the view's own
+  status badge (either state) and that it left "Connecting…".
 
-**Files changed:** `src/core/viewer-shell.js`, `src/core/viewer-shell.test.js`.
+**Files changed:** `src/core/viewer-shell.js`, `src/core/viewer-shell.test.js`,
+`src/core/splashScreen.js`, `src/core/splashScreen.test.js`, `tests/e2e/organiser-flow.spec.js`.
 
 **Tests:** New test suite (describe 'switching between audience views in one tab', 4 tests) fake
 models supabase-js's reuse-by-topic and throw-on-on()-after-subscribe behavior: second view

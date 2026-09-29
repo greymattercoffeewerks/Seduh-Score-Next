@@ -155,7 +155,12 @@ export function mountSplashScreen(root, { orgId, client = getSupabase(), signal 
       // own unmount() does exactly this for the same reason; splash's own
       // "no timer, no subscription" comment answered the wrong question —
       // it ruled out leaked async resources, not leaked DOM.
-      root.innerHTML = '';
+      //
+      // Removes only the nodes this screen appended, not the whole root: the
+      // router mounts the NEW screen before unmounting this one, and the
+      // audience routes share one root, so `root.innerHTML = ''` here wiped
+      // whichever screen had just been mounted into it.
+      for (const node of [glowDrift, content, badgeHost, testBannerHost]) node.remove();
     },
   };
 }

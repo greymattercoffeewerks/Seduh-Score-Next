@@ -490,7 +490,12 @@ export async function mountViewerShell(
       mounted = false;
       bodyCleanup?.();
       bodyCleanup = null;
-      root.innerHTML = '';
+      // Removes only this shell's own container, NOT `root.innerHTML = ''`:
+      // the router mounts the NEW screen first and unmounts the outgoing one
+      // afterwards, and the audience routes share one root (main.js's
+      // bareRoot) — clearing the whole root here wiped the screen that had
+      // just been mounted into it (projector -> phone left a blank page).
+      container.remove();
       // removeChannel is async and can reject; unmount() is synchronous, so
       // nothing else would ever handle it.
       Promise.resolve(client.removeChannel(channel)).catch((err) => {
