@@ -73,6 +73,9 @@ export function defaultHasContent(payload) {
   return payload != null && typeof payload === 'object' && Object.keys(payload).length > 0;
 }
 
+// Distinguishes each mount's realtime channel topic — see mountViewerShell.
+let mountSeq = 0;
+
 function holdingCard(icon, title, body) {
   return el('div', { className: 'viewer-holding-card' }, [
     el('div', { className: 'viewer-holding-icon', text: icon, attrs: { 'aria-hidden': 'true' } }),
@@ -436,16 +439,32 @@ export async function mountViewerShell(
   render(); // paints 'connecting'
   mounted = true;
 
+  // A per-mount topic, not just `live_sessions:${orgId}`: supabase-js's
+  // client.channel(topic) returns the EXISTING channel registered under that
+  // topic, and removeChannel() only deregisters it if unsubscribe() answers
+  // 'ok' — on a timeout or error it stays registered. So navigating one
+  // audience view to another in the same tab (projector -> phone -> splash)
+  // could hand the next mount a dead, already-subscribed channel, and its
+  // .on() would throw "cannot add `postgres_changes` callbacks ... after
+  // `subscribe()`", leaving that view on "Connecting…" until a reload
+  // (reproduced on production, 2026-09-29). The trade-off: a channel whose
+  // removal failed now stays registered for the life of the tab rather than
+  // being handed to the next mount — so both callbacks below return early
+  // once unmounted, keeping that leaked channel inert (no wasted reads, no
+  // renders into a detached root).
+  mountSeq += 1;
   const channel = client
-    .channel(`live_sessions:${orgId}`)
+    .channel(`live_sessions:${orgId}:${mountSeq}`)
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'live_sessions', filter: `org_id=eq.${orgId}` },
       () => {
+        if (!mounted) return;
         refresh();
       },
     )
     .subscribe((status) => {
+      if (!mounted) return;
       if (status === 'SUBSCRIBED') {
         // The very first connect is already covered by the explicit
         // `await refresh()` below — only a genuine reconnect (recovering
@@ -472,7 +491,11 @@ export async function mountViewerShell(
       bodyCleanup?.();
       bodyCleanup = null;
       root.innerHTML = '';
-      client.removeChannel(channel);
+      // removeChannel is async and can reject; unmount() is synchronous, so
+      // nothing else would ever handle it.
+      Promise.resolve(client.removeChannel(channel)).catch((err) => {
+        console.error('viewer-shell: failed to remove the realtime channel', err);
+      });
     },
   };
 }

@@ -1,3 +1,63 @@
+## T-HARDEN.viewer-shell-channel-topic: viewer-shell channel no longer reused on view switch (navigating between audience views in one tab works) · 2026-09-29
+
+**Task:** T-HARDEN.viewer-shell-channel-topic (pre-event hardening for the 4 Oct Cup Taster event).
+Found during a signed-in production smoke test on seduhscore.com: navigating between audience
+views in ONE tab (e.g. #/live/projector → #/live/phone) left the second view stuck on 'NOT LIVE
+— Connecting…' until a reload, with console error `cannot add postgres_changes callbacks for
+realtime:live_sessions:<org> after subscribe()`. Reproduced deterministically on a single tab
+switch; normal multi-tab setup unaffected.
+
+**Root cause:** src/core/viewer-shell.js subscribed on topic `live_sessions:${orgId}`. supabase-js
+(realtime-js 2.112.3) client.channel(topic) returns the channel already registered under that
+topic; removeChannel() only tears it down (deregisters) if unsubscribe() answers 'ok'; on
+timeout/error it stays registered, so the next mount got a dead already-subscribed channel and
+.on() threw.
+
+**What shipped:**
+
+- Per-mount channel topic `live_sessions:${orgId}:${mountSeq}` (module-level counter incremented
+  on each mount); each view switch creates a new, guaranteed-unique topic, so channel reuse never
+  happens. unmount() now catches a rejected removeChannel (console.error, no unhandled rejection).
+- The channel's change callback and status callback both return early when !mounted, so a channel
+  that failed to deregister (now leaked for the tab's life, an accepted trade-off) stays inert —
+  no wasted live_sessions reads, no renders into a detached root.
+
+**Files changed:** `src/core/viewer-shell.js`, `src/core/viewer-shell.test.js`.
+
+**Tests:** New test suite (describe 'switching between audience views in one tab', 4 tests) fake
+models supabase-js's reuse-by-topic and throw-on-on()-after-subscribe behavior: second view
+renders its body (not Connecting) after the first unmounted with removal failing; two concurrent
+views each get live updates; a leaked channel is inert; a rejecting removeChannel leaves no
+unhandled rejection (spy restored in finally). Verified by mutation: all fail against the pre-fix
+source; removing the change-callback guard fails the inert test; removing the unique topic fails
+the two-view tests. Full JS suite: 1693 passing (80 files), src lint clean, prettier clean,
+build exit 0.
+
+**Review cycle:** 4 agents.
+**Blocking findings fixed:** code-reviewer: 2 medium (leaked channel's callbacks not guarded;
+status callback missing mounted guard) both fixed. test-auditor: 3 medium (mechanism-pinning
+topic test, no rendered assertion, no live-update-after-switch test) + low (spy restore) all
+addressed. module-boundary-checker PASS. No migration/RLS/UI-markup/scoring/outbox change, so
+schema-guardian, security-reviewer, scoring-auditor, ui-accessibility-reviewer, offline-sync-auditor
+not applicable.
+
+**Known gaps (deferred, not fixed):**
+
+- **unmount() would throw if a stub client's removeChannel threw synchronously.** supabase-js's
+  is async, so unrealistic; lowest-priority edge case.
+- **double unmount() calls removeChannel twice.** Pre-existing (router unmounts once); not
+  introduced by this fix.
+- **splash screen doesn't use viewer-shell.** Splash wasn't in the reproduction; out of scope for
+  this task but worth noting for future hardening.
+- **Not verified against production yet.** Needs deploy (merge to main → Cloudflare Workers) then
+  re-test projector ↔ phone switch in one tab on seduhscore.com to confirm the fix in live
+  environment.
+
+**Next step:** Merge and deploy to production via Cloudflare. Post-deploy, re-test the projector
+↔ phone switching in one tab to confirm the fix in the live environment.
+
+---
+
 ## T-HARDEN.btc-event-delete-fk: BTC event deletion succeeds; cloud database migration pending · 2026-09-27
 
 **Task:** T-HARDEN.btc-event-delete-fk (pre-event hardening for the 4 Oct Cup Taster event).
