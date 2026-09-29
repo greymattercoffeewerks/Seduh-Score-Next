@@ -298,7 +298,7 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     // Sign out used to wrap into three left-aligned rows at 640-1100px.
     await signIn(page);
     await expect(page.locator('form.create-event-form')).toBeVisible();
-    const toggle = page.getByRole('button', { name: 'Menu' });
+    const toggle = page.getByRole('button', { name: 'Menu', exact: true });
 
     for (const width of [360, 731, 1365]) {
       await page.setViewportSize({ width, height: 800 });
@@ -325,15 +325,76 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     const rows = await page.evaluate(() => {
       const top = (sel) => document.querySelector(sel).getBoundingClientRect().top;
       const auth = document.querySelector('.app-shell-auth').getBoundingClientRect();
+      const nav = document.querySelector('.app-shell-nav').getBoundingClientRect();
       return {
         // brand, nav and auth all start on the same row (a wrapped auth
         // cluster would sit a whole row lower)
         authBelowBrand: top('.app-shell-auth') - top('.app-shell-brand'),
+        // Vertically centred against the links: a stray margin-top on the
+        // auth cluster (a later same-specificity rule beat the 1366px
+        // override) sat it 4px low.
+        authOffCentre: Math.abs(auth.top + auth.height / 2 - (nav.top + nav.height / 2)),
         authRight: auth.right,
         innerWidth,
       };
     });
     expect(rows.authBelowBrand).toBeLessThan(20);
+    expect(rows.authOffCentre).toBeLessThan(2);
     expect(rows.authRight).toBeLessThanOrEqual(rows.innerWidth);
+  });
+
+  test('the hamburger menu at tablet widths shows a "Menu" label and opens as a compact row, and keyboard focus survives crossing the 1366px breakpoint', async ({
+    page,
+  }) => {
+    await signIn(page);
+    await expect(page.locator('form.create-event-form')).toBeVisible();
+    const toggle = page.getByRole('button', { name: 'Menu', exact: true });
+    const label = page.locator('.app-shell-nav-toggle-label');
+
+    // Phone: the compact icon-only button. Tablet: a visible "Menu" label.
+    await page.setViewportSize({ width: 360, height: 800 });
+    await expect(toggle).toBeVisible();
+    await expect(label).toBeHidden();
+    await page.setViewportSize({ width: 900, height: 800 });
+    await expect(label).toBeVisible();
+    await expect(label).toHaveText('Menu');
+
+    // The open panel at 900px is a wrapping row (links left, auth right), not
+    // a tall full-width stack of one item per line. Relative to one link's own
+    // height, so it holds across fonts and email lengths: the links sit on one
+    // row (tops within half a link height of each other) and the whole panel
+    // is under three link-heights tall, where a stacked column of the links
+    // plus the auth cluster would be six or more.
+    await toggle.click();
+    const layout = await page.evaluate(() => {
+      const rects = [...document.querySelectorAll('.app-shell-nav a')].map((a) =>
+        a.getBoundingClientRect(),
+      );
+      const tops = rects.map((r) => r.top);
+      return {
+        linkCount: rects.length,
+        linkHeight: rects[0].height,
+        topSpread: Math.max(...tops) - Math.min(...tops),
+        panelHeight: document.querySelector('.app-shell-nav-panel').getBoundingClientRect().height,
+      };
+    });
+    expect(layout.linkCount).toBeGreaterThan(1);
+    expect(layout.topSpread).toBeLessThan(layout.linkHeight / 2);
+    expect(layout.panelHeight).toBeLessThan(layout.linkHeight * 3);
+    await toggle.click();
+
+    // Focus on the toggle when the nav goes inline lands on the first link…
+    await page.setViewportSize({ width: 1365, height: 800 });
+    await toggle.click();
+    await expect(toggle).toBeFocused();
+    await page.setViewportSize({ width: 1366, height: 800 });
+    await expect(toggle).toBeHidden();
+    await expect(page.locator('.app-shell-nav a').first()).toBeFocused();
+
+    // …and focus on a nav link when it collapses returns to the toggle.
+    await page.setViewportSize({ width: 1365, height: 800 });
+    await expect(toggle).toBeVisible();
+    await expect(toggle).toBeFocused();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   });
 });

@@ -1,3 +1,82 @@
+## T-HARDEN.nav-menu-polish: navigation menu refinement at tablet widths (wrapping layout, focus handling, visible label) · 2026-09-29
+
+**Task:** T-HARDEN.nav-menu-polish (pre-event hardening for the 4 Oct Cup Taster event).
+Polished the navigation menu's tablet-width (640–1365px) rendering following up on the
+preceding nav-hamburger-breakpoint task. Closed four deferred items: menu layout (wrapping
+row instead of full-width stack), focus preservation across breakpoint changes, toggle
+label visibility, and router-level screen-switching tests.
+
+**What shipped:**
+
+- Menu layout at 640–1365px: open panel now wraps as a flex row (links left, auth cluster
+  right via margin-left:auto) instead of a tall full-width column. Measured at 900px:
+  panel height reduced from ~250px to ~61px, keeping the sticky header compact.
+- Focus management with matchMedia listener: a `matchMedia('(min-width: 1366px)')` change
+  listener closes the menu when crossing the 1366px threshold. If focus was stranded on a
+  link/Sign out and the menu is collapsing, focus moves to the toggle; if focused on the
+  toggle and menu opens inline, focus moves to the first nav link (fallback: Sign out).
+  Listeners removed on unmount; guarded for jsdom (no matchMedia in tests).
+- Toggle label visibility: the toggle now shows 'Menu' label from 640px up (icon wrapped
+  in `.app-shell-nav-toggle-icon`, label in `.app-shell-nav-toggle-label` with
+  aria-hidden, matching button's aria-label per WCAG 2.5.3 label-in-name). Phone (<640px)
+  stays icon-only. Label inherits color and font from button defaults.
+- Router-level test: new `src/main.audienceRoutes.test.js` drives the real router with real
+  projector/phone/splash screens over the shared bareRoot (outbox mocked). Two tests verify
+  screen switching without stale unmounts: projector→phone→splash→projector and splash→phone
+  →projector, with condition-based waits, one-child assertions, no "Connecting…" cards, and
+  channel cleanup. Mutation-verified to fail for unmount-first order, shared root clears, or
+  missing channel release.
+
+**Bug fixed by code-reviewer:** CSS rule order — `.app-shell-auth:not(:empty){margin-top}`
+sat later in appShell.css than media-block overrides (same specificity, later wins), so
+1366px block's margin-top:0 never applied. Auth cluster sat 4px low in the inline row. Base
+rule moved above media blocks; new e2e assertion (auth vertical centre ±2px of links) fails
+if reintroduced.
+
+**Files changed:** `src/core/appShell.css`, `src/core/appShell.js`, `src/core/appShell.test.js`,
+`tests/e2e/organiser-flow.spec.js`, `src/main.audienceRoutes.test.js`, `src/main.test.js`,
+`src/core/router.test.js`.
+
+**Tests:** appShell.test.js crossing-breakpoint suite: 13 cases (query string matches
+'(min-width: 1366px)', body-dropped focus, no nav links fallback, collapse with Sign out
+focused, no focus stealing, click-away and non-focusable chrome press, tap-on-link closes,
+listener cleanup incl. document listeners; mutation-verified). main.audienceRoutes.test.js:
+two screen-switching paths, projector/phone/splash with condition-based waits. e2e: tablet
+'Menu' label at 900px, compact open row (geometry: link tops within half a link height,
+panel under 3 link heights), focus surviving 1366px both directions, exact button names.
+Suite: 1713 unit tests passing (81 files), e2e 9/9, build exit 0, prettier + src lint clean.
+
+**Review cycle:** 4 agents (ui-accessibility-reviewer, code-reviewer, test-auditor;
+module-boundary-checker if format reuse is planned).
+**Blocking findings fixed:** None. **Non-blocking findings fixed:**
+
+- HIGH (code-reviewer): CSS rule order causing 4px misalignment — moved base rule above media blocks.
+- MEDIUM (ui-accessibility-reviewer): Label colour/font — resolved (label inherits from button).
+- MEDIUM (code-reviewer): Order assertion could pass on -1 — strengthened to require first mount
+  before first unmount.
+- MEDIUM (test-auditor): Query string assertion — tightened to verify exact '(min-width: 1366px)'.
+- MEDIUM (code-reviewer, test-auditor): Condition-based waits could hang — guarded with explicit timeout.
+- MEDIUM (code-reviewer): Simplified onNavLayoutChange to avoid stale closure.
+- MEDIUM (ui-accessibility-reviewer): Stale focus after clicking non-focusable header chrome — handled.
+- MEDIUM (code-reviewer, test-auditor): Stale focus after link tap — accounted for in new tests.
+- MEDIUM (test-auditor): Brittle e2e geometry — refactored to relative assertions.
+- MEDIUM (ui-accessibility-reviewer): Auth cluster alignment when wrapped — fixed with CSS rule order fix.
+- LOW (ui-accessibility-reviewer): Test shell leak — closed.
+
+**Known gaps (deferred, not fixed, not blocking):**
+
+- **Legacy Safari <14 matchMedia().addListener fallback.** addEventListener needs Safari 14+;
+  task covers modern browsers. Acceptable edge case.
+- **Tablet toggle label lacks dark-theme contrast verification.** No dark theme yet to test;
+  will verify when dark theme is built.
+- **1366px value hardcoded in both CSS and JS.** Guarded by unit test assertion (query string
+  match) and e2e at 1365/1366px boundary; refactoring to a shared constant is future work.
+
+**Next step:** Merge and deploy. Closes all four deferred items from preceding nav-hamburger-breakpoint
+task (a–d). Ready for 4 Oct event.
+
+---
+
 ## T-HARDEN.nav-hamburger-breakpoint: organiser header hamburger threshold moved from 640px to 1366px (no more stacking at 731px) · 2026-09-29
 
 **Task:** T-HARDEN.nav-hamburger-breakpoint (pre-event hardening for the 4 Oct Cup Taster event).

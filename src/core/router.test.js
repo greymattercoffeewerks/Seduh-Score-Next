@@ -118,7 +118,7 @@ describe('createRouter', () => {
     expect(location.hash).toBe('');
   });
 
-  it("navigating away calls the outgoing screen's unmount() before mounting the next one, and survives jsdom firing hashchange twice per assignment", async () => {
+  it('navigating away unmounts the outgoing screen only AFTER the next one has mounted, and survives jsdom firing hashchange twice per assignment', async () => {
     // jsdom genuinely dispatches 'hashchange' TWICE for one `location.hash =
     // ...` assignment (confirmed via SessionHistory._fireEvents while
     // debugging this exact test — both dispatches are real, independent
@@ -128,13 +128,18 @@ describe('createRouter', () => {
     // from "the real current screen got wrongly unmounted" — the actual
     // invariant this test cares about — since a single shared mock can't
     // distinguish which of two same-route mounts it was called for.
-    const unmountA = vi.fn();
+    // Order matters, not just counts: routes sharing an outlet (the audience
+    // views' bareRoot) get their DOM wiped by an outgoing unmount() that runs
+    // AFTER the new screen has painted — see main.audienceRoutes.test.js.
+    const order = [];
+    const unmountA = vi.fn(() => order.push('unmount:a'));
     const bUnmounts = [];
     const routes = [
       { pattern: '/a', mount: async () => ({ unmount: unmountA }) },
       {
         pattern: '/b',
         mount: async () => {
+          order.push('mount:b');
           const unmount = vi.fn();
           bUnmounts.push(unmount);
           return { unmount };
@@ -158,6 +163,11 @@ describe('createRouter', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(unmountA).toHaveBeenCalledTimes(1);
+    expect(order).toContain('mount:b');
+    // The FIRST mount of the new screen precedes the FIRST unmount of the old
+    // one (jsdom's double hashchange can run two complete resolves back to
+    // back, so later mounts may legitimately follow the unmount).
+    expect(order.indexOf('unmount:a')).toBeGreaterThan(order.indexOf('mount:b'));
     // '/b' may have been mounted more than once (the jsdom double-fire
     // above) — the real invariant is that the LAST one mounted (the one
     // actually current) was never unmounted; any EARLIER ones are the

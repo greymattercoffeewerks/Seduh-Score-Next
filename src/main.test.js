@@ -547,8 +547,16 @@ describe('mountApp routing', () => {
     expect(link).not.toBeNull();
   });
 
-  it("navigating away calls the outgoing screen's unmount() before mounting the next one, and survives jsdom firing hashchange twice per assignment", async () => {
-    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+  it('navigating away unmounts the outgoing screen only AFTER the next one has mounted (router.js mounts the new screen first), and survives jsdom firing hashchange twice per assignment', async () => {
+    // Recording order, not just call counts: the audience routes share one
+    // outlet, and an outgoing unmount() that clears it runs AFTER the new
+    // screen has painted into it — the order is what made that a bug.
+    const order = [];
+    mountEventsScreen.mockImplementation(async (root) => {
+      order.push('mount:events');
+      root.textContent = 'EVENTS_SCREEN';
+      return { unmount: vi.fn(() => order.push('unmount:events')) };
+    });
     // A fresh spy per mount call — never one shared spy — because jsdom
     // fires 'hashchange' twice per `location.hash` assignment (see
     // core/router.test.js's own identical precedent), so this screen may
@@ -556,8 +564,9 @@ describe('mountApp routing', () => {
     // LAST (truly current) instance's unmount is meaningful to assert on.
     const dashboardUnmounts = [];
     mountEventDashboardScreen.mockImplementation(async (root) => {
+      order.push('mount:dashboard');
       root.textContent = 'DASHBOARD_SCREEN';
-      const unmount = vi.fn();
+      const unmount = vi.fn(() => order.push('unmount:dashboard'));
       dashboardUnmounts.push(unmount);
       return { unmount };
     });
@@ -568,9 +577,16 @@ describe('mountApp routing', () => {
     const currentDashboardUnmount = dashboardUnmounts[dashboardUnmounts.length - 1];
     expect(currentDashboardUnmount).not.toHaveBeenCalled();
 
+    order.length = 0;
     location.hash = '#/events';
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(currentDashboardUnmount).toHaveBeenCalledTimes(1);
+    // The outgoing dashboard's first unmount comes after the first mount of the
+    // screen that replaces it (jsdom's double hashchange can run two complete
+    // resolves back to back, so a later mount may follow the unmount).
+    expect(order).toContain('mount:events');
+    expect(order).toContain('unmount:dashboard');
+    expect(order.indexOf('unmount:dashboard')).toBeGreaterThan(order.indexOf('mount:events'));
   });
 
   it('shows organiser chrome for a normal route, hides it for the projector/phone live routes', async () => {

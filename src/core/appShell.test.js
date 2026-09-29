@@ -397,6 +397,219 @@ describe('mountAppShell', () => {
       expect(panel.querySelector('.app-shell-nav')).not.toBeNull();
       expect(panel.querySelector('.app-shell-auth')).not.toBeNull();
     });
+
+    it("carries a visible 'Menu' label beside the icon whose text matches its aria-label (WCAG 2.5.3 label-in-name), hidden from assistive tech so it isn't announced twice", () => {
+      const root = document.createElement('div');
+      mountAppShell(root, { client: fakeClient({}) });
+      const toggle = root.querySelector('.app-shell-nav-toggle');
+      const label = toggle.querySelector('.app-shell-nav-toggle-label');
+      expect(label.textContent).toBe(toggle.getAttribute('aria-label'));
+      expect(label.getAttribute('aria-hidden')).toBe('true');
+      expect(toggle.querySelectorAll('.app-shell-nav-toggle-bar')).toHaveLength(3);
+    });
+  });
+
+  describe('crossing the inline/hamburger breakpoint', () => {
+    // jsdom has no matchMedia; this stub records the shell's own change
+    // listener (and the query it asked for) so a test can fire it the way a
+    // real resize/rotation would.
+    let listeners;
+    let removed;
+    let queries;
+    let attached;
+    let shells;
+    beforeEach(() => {
+      listeners = [];
+      removed = [];
+      queries = [];
+      attached = [];
+      shells = [];
+      vi.stubGlobal('matchMedia', (query) => {
+        queries.push(query);
+        return {
+          media: query,
+          matches: false,
+          addEventListener: (_type, fn) => listeners.push(fn),
+          removeEventListener: (_type, fn) => removed.push(fn),
+        };
+      });
+    });
+    afterEach(() => {
+      // Unmount every shell so its document-level listeners never outlive the
+      // test that mounted it.
+      for (const shell of shells) shell.unmount();
+      vi.unstubAllGlobals();
+      for (const node of attached) node.remove();
+    });
+
+    async function mountShell({
+      links = [{ label: 'Events', href: '#/events' }],
+      signedIn = false,
+    } = {}) {
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      attached.push(root);
+      const { auth, trigger } = fakeAuthWithTrigger();
+      const shell = mountAppShell(root, { client: { ...fakeClient({}), auth } });
+      shells.push(shell);
+      if (signedIn) trigger({ user: { email: 'organiser@local.test' } });
+      await shell.setNav({ links });
+      return {
+        ...shell,
+        root,
+        toggle: root.querySelector('.app-shell-nav-toggle'),
+        panel: root.querySelector('.app-shell-nav-panel'),
+        link: root.querySelector('.app-shell-link'),
+        signOut: [...root.querySelectorAll('button')].find((b) => b.textContent === 'Sign out'),
+      };
+    }
+    const cross = (matches) => listeners.forEach((fn) => fn({ matches }));
+    const isOpen = (panel) => panel.classList.contains('app-shell-nav-panel-open');
+
+    it('watches the same breakpoint appShell.css uses for the inline row (min-width: 1366px) — if either drifts, this fails', async () => {
+      await mountShell();
+      expect(queries).toEqual(['(min-width: 1366px)']);
+    });
+
+    it('going inline with focus still on the toggle closes the menu and moves focus to the first nav link, not <body>', async () => {
+      const { toggle, panel, link } = await mountShell();
+      toggle.dispatchEvent(new Event('click', { bubbles: true }));
+      toggle.focus();
+
+      cross(true);
+
+      expect(isOpen(panel)).toBe(false);
+      expect(toggle.getAttribute('aria-expanded')).toBe('false');
+      expect(document.activeElement).toBe(link);
+    });
+
+    it('going inline after the browser already dropped focus to <body> (the toggle was hidden) still restores it to the first nav link', async () => {
+      const { toggle, link } = await mountShell();
+      toggle.focus();
+      toggle.blur(); // what the browser's focus fixup leaves behind
+      expect(document.activeElement).toBe(document.body);
+
+      cross(true);
+
+      expect(document.activeElement).toBe(link);
+    });
+
+    it('going inline with no nav links falls back to the auth control', async () => {
+      const { toggle, signOut } = await mountShell({ links: [], signedIn: true });
+      toggle.focus();
+
+      cross(true);
+
+      expect(document.activeElement).toBe(signOut);
+    });
+
+    it('going inline with focus on a link inside the (open) panel leaves focus where it is — it stays visible', async () => {
+      const { toggle, panel, root } = await mountShell({
+        links: [
+          { label: 'Events', href: '#/events' },
+          { label: 'Roster', href: '#/roster' },
+        ],
+      });
+      toggle.dispatchEvent(new Event('click', { bubbles: true }));
+      const second = root.querySelectorAll('.app-shell-link')[1];
+      second.focus();
+
+      cross(true);
+
+      expect(document.activeElement).toBe(second);
+      expect(isOpen(panel)).toBe(false);
+    });
+
+    it('collapsing into the hamburger with focus on a link inside the panel returns focus to the toggle, with the menu closed', async () => {
+      const { toggle, panel, link } = await mountShell();
+      link.focus();
+
+      cross(false);
+
+      expect(isOpen(panel)).toBe(false);
+      expect(document.activeElement).toBe(toggle);
+    });
+
+    it('collapsing with the menu open and focus on the Sign out button returns focus to the toggle, with the menu closed', async () => {
+      const { toggle, panel, signOut } = await mountShell({ signedIn: true });
+      toggle.dispatchEvent(new Event('click', { bubbles: true }));
+      signOut.focus();
+
+      cross(false);
+
+      expect(isOpen(panel)).toBe(false);
+      expect(toggle.getAttribute('aria-expanded')).toBe('false');
+      expect(document.activeElement).toBe(toggle);
+    });
+
+    it('never steals focus from something outside the header', async () => {
+      const { toggle } = await mountShell();
+      const input = document.createElement('input');
+      document.body.appendChild(input);
+      attached.push(input);
+      toggle.focus();
+      input.focus();
+
+      cross(true);
+
+      expect(document.activeElement).toBe(input);
+    });
+
+    it("doesn't restore focus after the user clicked away from the header to <body> — nothing was stranded", async () => {
+      const { toggle } = await mountShell();
+      toggle.focus();
+      toggle.blur();
+      document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+
+      cross(true);
+
+      expect(document.activeElement).toBe(document.body);
+    });
+
+    it("doesn't restore focus after a press on non-focusable header chrome (padding, breadcrumb) dropped it to <body>", async () => {
+      const { toggle, root } = await mountShell();
+      toggle.focus();
+      toggle.blur();
+      root
+        .querySelector('.app-shell-header')
+        .dispatchEvent(new Event('pointerdown', { bubbles: true }));
+
+      cross(true);
+
+      expect(document.activeElement).toBe(document.body);
+    });
+
+    it("doesn't yank focus back after a tap on a nav link closed the menu (the link was hidden with it)", async () => {
+      const { toggle, link } = await mountShell();
+      toggle.dispatchEvent(new Event('click', { bubbles: true }));
+      link.focus();
+      link.dispatchEvent(new Event('click', { bubbles: true })); // closes the menu
+      link.blur(); // the hidden link loses focus
+
+      cross(false);
+
+      expect(document.activeElement).toBe(document.body);
+    });
+
+    it('stops listening for the breakpoint, focus and pointer events after unmount', async () => {
+      const added = [];
+      const removedDoc = [];
+      vi.spyOn(document, 'addEventListener').mockImplementation((type) => added.push(type));
+      vi.spyOn(document, 'removeEventListener').mockImplementation((type) => removedDoc.push(type));
+      try {
+        const { unmount } = await mountShell();
+        shells.pop(); // unmounted here, not again in afterEach
+        expect(listeners).toHaveLength(1);
+        unmount();
+        expect(removed).toEqual(listeners);
+        for (const type of ['focusin', 'pointerdown']) {
+          expect(added).toContain(type);
+          expect(removedDoc).toContain(type);
+        }
+      } finally {
+        vi.restoreAllMocks();
+      }
+    });
   });
 
   it('a second setNav call replaces the previous links rather than appending', async () => {
