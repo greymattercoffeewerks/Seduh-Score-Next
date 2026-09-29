@@ -151,6 +151,8 @@ export function mountAppShell(
   // by default — without a toggle, several nav links plus the auth control
   // used to force the header onto 2-3 wrapped rows before any real screen
   // content appeared.
+  // The header element that last had focus — see the breakpoint handling below.
+  let lastHeaderFocus = null;
   const navToggle = el('button', {
     className: 'app-shell-nav-toggle tap-target',
     attrs: {
@@ -160,10 +162,23 @@ export function mountAppShell(
       'aria-label': 'Menu',
     },
   });
+  const toggleBar = () =>
+    el('span', { className: 'app-shell-nav-toggle-bar', attrs: { 'aria-hidden': 'true' } });
   navToggle.append(
-    el('span', { className: 'app-shell-nav-toggle-bar', attrs: { 'aria-hidden': 'true' } }),
-    el('span', { className: 'app-shell-nav-toggle-bar', attrs: { 'aria-hidden': 'true' } }),
-    el('span', { className: 'app-shell-nav-toggle-bar', attrs: { 'aria-hidden': 'true' } }),
+    el('span', { className: 'app-shell-nav-toggle-icon', attrs: { 'aria-hidden': 'true' } }, [
+      toggleBar(),
+      toggleBar(),
+      toggleBar(),
+    ]),
+    // Visible from 640px up (appShell.css), where an icon-only button is
+    // easy to miss on a tablet-sized screen. Its text matches the button's
+    // aria-label exactly (WCAG 2.5.3 label-in-name); aria-hidden so a screen
+    // reader doesn't announce it twice.
+    el('span', {
+      className: 'app-shell-nav-toggle-label',
+      text: 'Menu',
+      attrs: { 'aria-hidden': 'true' },
+    }),
   );
   // Shared by every "the menu should close now" trigger below — a nav link
   // tap, Sign out, Escape. Kept as one function (found worth factoring in
@@ -175,6 +190,10 @@ export function mountAppShell(
   function closeMenu() {
     navPanel.classList.remove('app-shell-nav-panel-open');
     navToggle.setAttribute('aria-expanded', 'false');
+    // Whatever inside the panel had focus is about to be hidden (a tap on a
+    // link closes the menu): forget it, so a later resize doesn't "restore"
+    // focus the user never lost by resizing.
+    if (lastHeaderFocus && navPanel.contains(lastHeaderFocus)) lastHeaderFocus = null;
   }
   navToggle.addEventListener('click', () => {
     const open = navPanel.classList.toggle('app-shell-nav-panel-open');
@@ -208,6 +227,50 @@ export function mountAppShell(
     closeMenu();
     navToggle.focus();
   });
+  // Keeps keyboard focus from being stranded when the window is resized (or a
+  // tablet rotated) across the inline/hamburger breakpoint with focus on the
+  // control that is about to disappear: the toggle when the nav goes inline,
+  // a link inside the panel when it collapses. The browser drops focus to
+  // <body> and a keyboard user has to Tab in from the top of the page again.
+  // `lastHeaderFocus` remembers the header element that last had focus (cleared
+  // on any pointer press), since by the
+  // time the media query's change event fires the browser may already have
+  // moved focus to <body>. Must match the min-width:1366px block in
+  // appShell.css. matchMedia is absent in jsdom, so this is skipped there
+  // unless a test stubs it.
+  const INLINE_NAV_QUERY = '(min-width: 1366px)';
+  const trackHeaderFocus = (event) => {
+    lastHeaderFocus = header.contains(event.target) ? event.target : null;
+  };
+  // Any pointer press, inside the header or out: a press on a focusable
+  // control re-sets this via the focusin that follows it, while a press on
+  // non-focusable chrome (padding, the breadcrumb) or the page leaves focus on
+  // <body> on purpose — nothing is stranded, so nothing should be restored.
+  const forgetHeaderFocus = () => {
+    lastHeaderFocus = null;
+  };
+  const inlineNavQuery =
+    typeof window.matchMedia === 'function' ? window.matchMedia(INLINE_NAV_QUERY) : null;
+  const onNavLayoutChange = (event) => {
+    // Where focus was: still on the element about to disappear, or — if the
+    // browser already dropped it to <body> — the last header element that had
+    // it. Read before closeMenu() below clears that memory for the panel.
+    const active = document.activeElement;
+    const from = !active || active === document.body ? lastHeaderFocus : active;
+    // Inline (>= 1366px): the toggle is gone and the panel is always shown,
+    // so its open/closed state is moot; collapsing: come back closed.
+    closeMenu();
+    if (event.matches) {
+      if (from === navToggle) (navEl.querySelector('a') ?? authEl.querySelector('button'))?.focus();
+    } else if (from && navPanel.contains(from)) {
+      navToggle.focus();
+    }
+  };
+  if (inlineNavQuery) {
+    document.addEventListener('focusin', trackHeaderFocus);
+    document.addEventListener('pointerdown', forgetHeaderFocus);
+    inlineNavQuery.addEventListener('change', onNavLayoutChange);
+  }
   // §8.4/T3.3's own AC: "three-state sync panel on the organiser device: off
   // / live / not synced. Fail-open never lies about a write that failed."
   // syncState.js's computeSyncState() already implemented that logic (T3.3)
@@ -744,6 +807,11 @@ export function mountAppShell(
     setNav,
     unmount() {
       headerResizeObserver?.disconnect();
+      if (inlineNavQuery) {
+        document.removeEventListener('focusin', trackHeaderFocus);
+        document.removeEventListener('pointerdown', forgetHeaderFocus);
+        inlineNavQuery.removeEventListener('change', onNavLayoutChange);
+      }
       clearInterval(syncIntervalId);
       stopListeningForDrops();
       clearTimeout(dropCheckTimer);

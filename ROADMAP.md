@@ -1286,6 +1286,33 @@ live-verified in browser. Definition of Done met. See CHANGELOG.md's dated entry
 
 ---
 
+## Known open items from pre-event hardening (T-HARDEN.nav-hamburger-breakpoint, 2026-09-29)
+
+_Deferred findings from T-HARDEN.nav-hamburger-breakpoint, now closed by T-HARDEN.nav-menu-polish._
+
+- **CLOSED (2026-09-29, T-HARDEN.nav-menu-polish): Open menu at tablet widths is now a wrapping
+  row instead of a full-width stack.** At 640–1365px, the open panel wraps as a flex row (nav
+  links left, auth cluster right via margin-left:auto). Measured at 900px: panel height reduced
+  from ~250px to ~61px, compact sticky header across tablet widths.
+
+- **CLOSED (2026-09-29, T-HARDEN.nav-menu-polish): Focus preserved when viewport crosses 1366px
+  with menu open.** A matchMedia('(min-width: 1366px)') listener closes the menu and relocates
+  focus: link/Sign out → toggle when collapsing, toggle → first nav link (fallback: Sign out)
+  when expanding inline. Focus no longer drops to body. Verified in real Chromium.
+
+- **CLOSED (2026-09-29, T-HARDEN.nav-menu-polish): Toggle now has visible 'Menu' label from 640px
+  up.** Label spans `.app-shell-nav-toggle-label` (aria-hidden) with icon, matching button's
+  aria-label (WCAG 2.5.3 label-in-name). Phone (<640px) remains icon-only. Inherits color and
+  font from button.
+
+- **CLOSED (2026-09-29, T-HARDEN.nav-menu-polish): Router-level test for screen switching
+  (projector/phone/splash) over shared root now exists.** New `src/main.audienceRoutes.test.js`
+  tests real router mount/unmount order: projector→phone→splash→projector and splash→phone
+  →projector. Verifies one-child, no "Connecting…", channel cleanup, no stale unmounts. Mutation-
+  verified to catch unmount-first order and missing channel release.
+
+---
+
 ## Known open items from pre-event hardening (2026-09-26)
 
 _Deferred findings from T-HARDEN.outbox-transient, flagged and documented but not blocking the 4 Oct
