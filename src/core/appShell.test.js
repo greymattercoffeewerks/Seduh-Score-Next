@@ -238,6 +238,41 @@ describe('mountAppShell', () => {
     expect(root.style.getPropertyValue('--app-shell-header-height')).toBe('');
   });
 
+  it('re-measures --app-shell-header-height whenever the header itself resizes (menu opened, window resized, tablet rotated) — not only on setNav() — and stops observing on unmount', () => {
+    const observers = [];
+    class FakeResizeObserver {
+      constructor(callback) {
+        this.callback = callback;
+        this.observed = [];
+        this.disconnected = false;
+        observers.push(this);
+      }
+      observe(node) {
+        this.observed.push(node);
+      }
+      disconnect() {
+        this.disconnected = true;
+      }
+    }
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    try {
+      const root = document.createElement('div');
+      const { unmount } = mountAppShell(root, { client: fakeClient({}) });
+      const header = root.querySelector('.app-shell-header');
+      expect(observers).toHaveLength(1);
+      expect(observers[0].observed).toEqual([header]);
+
+      header.getBoundingClientRect = () => ({ height: 240 });
+      observers[0].callback();
+      expect(root.style.getPropertyValue('--app-shell-header-height')).toBe('240px');
+
+      unmount();
+      expect(observers[0].disconnected).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   describe('mobile nav toggle', () => {
     it('renders a closed hamburger toggle wired to the nav panel via aria-controls, and the panel starts collapsed', () => {
       const root = document.createElement('div');

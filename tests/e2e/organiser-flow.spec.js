@@ -289,4 +289,51 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Back to events' })).toBeVisible();
   });
+
+  test('the organiser header collapses into the hamburger below 1366px and is one inline row from 1366px up', async ({
+    page,
+  }) => {
+    // media queries can't be evaluated by the jsdom unit tests, so nothing
+    // else guards this cut-over. Signed in, the brand + four links + email +
+    // Sign out used to wrap into three left-aligned rows at 640-1100px.
+    await signIn(page);
+    await expect(page.locator('form.create-event-form')).toBeVisible();
+    const toggle = page.getByRole('button', { name: 'Menu' });
+
+    for (const width of [360, 731, 1365]) {
+      await page.setViewportSize({ width, height: 800 });
+      await expect(toggle).toBeVisible();
+      // Collapsed by default — the nav links stay out of reach until opened.
+      await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      await expect(page.getByRole('link', { name: 'Splash screen' })).toBeHidden();
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+        `no horizontal overflow at ${width}px`,
+      ).toBe(true);
+      await toggle.click();
+      await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+      await expect(page.getByRole('link', { name: 'Splash screen' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
+      await toggle.click();
+      await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    }
+
+    await page.setViewportSize({ width: 1366, height: 800 });
+    await expect(toggle).toBeHidden();
+    await expect(page.getByRole('link', { name: 'Splash screen' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
+    const rows = await page.evaluate(() => {
+      const top = (sel) => document.querySelector(sel).getBoundingClientRect().top;
+      const auth = document.querySelector('.app-shell-auth').getBoundingClientRect();
+      return {
+        // brand, nav and auth all start on the same row (a wrapped auth
+        // cluster would sit a whole row lower)
+        authBelowBrand: top('.app-shell-auth') - top('.app-shell-brand'),
+        authRight: auth.right,
+        innerWidth,
+      };
+    });
+    expect(rows.authBelowBrand).toBeLessThan(20);
+    expect(rows.authRight).toBeLessThanOrEqual(rows.innerWidth);
+  });
 });

@@ -63,12 +63,19 @@
 }
 
 /* Hamburger toggle — mobile-first: visible by default, hidden once the nav
-   fits inline (see the min-width:640px block below), matching this
-   codebase's own established breakpoint (rosterScreen.css/setupScreen.css).
-   Found in production UI/UX feedback: several nav links plus the auth
-   control used to force the header onto 2-3 wrapped rows on a phone
-   viewport before any real screen content appeared, and the last link
-   ("Phone view") got clipped by the viewport edge rather than wrapping. */
+   fits inline (see the min-width:1366px block below). Found in production UI/UX
+   feedback: several nav links plus the auth control used to force the header
+   onto 2-3 wrapped rows on a phone viewport before any real screen content
+   appeared, and the last link ("Phone view") got clipped by the viewport edge
+   rather than wrapping.
+   The cut-over is 1366px, not the 640px the roster/setup screens use for
+   their own layout: signed in, the brand + four links + email + Sign out are
+   ~930px wide before an event-name breadcrumb adds another ~150-220px, so at
+   640-1100px they wrapped into three left-aligned rows (2026-09-29, user-
+   reported in the 731px browser pane). Measured with a 32-character event
+   name and a 54-character email: still one row at 1366px, but wrapped to a
+   second row at 1280px. Tablets and small laptops get the hamburger; 1366px
+   and up (the common laptop width) gets the inline row. */
 .app-shell-nav-toggle {
   display: inline-flex;
   flex-direction: column;
@@ -163,7 +170,7 @@
   text-decoration: none;
 }
 
-@media (min-width: 640px) {
+@media (min-width: 1366px) {
   .app-shell-nav-toggle {
     display: none;
   }
@@ -305,7 +312,8 @@
    and never shifts the screen below it, e.g. the timing screen's Stop
    buttons mid-heat (see appShell.js's syncRow). Measured with the real
    header (nav links + signed-in email): inline, the status grew the header
-   by 8–41px at 640–1280px as well as at phone width.
+   by 8–41px at 640–1280px (before the nav collapsed into the hamburger below
+   1366px) as well as at phone width.
    Two pill lines (2 lines of --text-sm at the body's --leading-normal, plus
    the pill's vertical padding) below 1024px; one above, where the longest
    notice — "123 writes lost, not retried; publishing to the live view
@@ -353,7 +361,7 @@
    when non-empty (renderAuth() below leaves this node childless while
    signed out), so no floating gap shows with nothing to its right/below.
    Top margin at rest (the mobile stack — this sits BELOW the nav links in
-   that layout); the min-width:640px block below switches it to a left
+   that layout); the min-width:1366px block below switches it to a left
    margin once auth sits inline in a row instead. */
 .app-shell-auth:not(:empty) {
   margin-top: var(--space-2);
