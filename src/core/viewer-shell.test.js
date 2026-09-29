@@ -1134,12 +1134,34 @@ describe('mountViewerShell', () => {
       const root = document.createElement('div');
       const projector = await mountOn(client, root);
       const phone = await mountOn(client, root);
+      const phoneContainer = root.querySelector('.viewer-shell');
 
       projector.unmount();
 
+      // The SAME node the phone view mounted, and nothing else — both views
+      // render identical body text, so text alone can't say which survived.
+      expect(root.children).toHaveLength(1);
+      expect(root.querySelector('.viewer-shell')).toBe(phoneContainer);
       expect(root.textContent).toContain('BODY {"a":1}');
       phone.unmount();
       expect(root.innerHTML).toBe('');
+    });
+
+    it('leaves a splash screen mounted after it untouched when the outgoing view unmounts', async () => {
+      const client = reusingClient({ removeChannelOk: true });
+      const root = document.createElement('div');
+      const projector = await mountOn(client, root);
+      // What main.js's splash route does on mount: clear the shared root and
+      // paint its own DOM (a stand-in node — splashScreen has its own tests).
+      root.innerHTML = '';
+      const splash = document.createElement('div');
+      splash.className = 'splash-content';
+      root.appendChild(splash);
+
+      projector.unmount();
+
+      expect(root.children).toHaveLength(1);
+      expect(root.querySelector('.splash-content')).toBe(splash);
     });
 
     it('lets two views live at once, each getting its own live updates', async () => {

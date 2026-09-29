@@ -304,8 +304,51 @@ describe('mountSplashScreen', () => {
 
     splash.unmount();
 
+    // Only the next screen remains — none of the four nodes splash appended.
+    expect(root.children).toHaveLength(1);
     expect(root.querySelector('.next-screen')).toBe(next);
     expect(root.querySelector('.splash-content')).toBeNull();
+  });
+
+  it('unmount() leaves a real viewer-shell screen mounted into the same root afterwards untouched — projector <- splash', async () => {
+    const root = document.createElement('div');
+    const client = fakeClient({ tables: { events: { data: null, error: null } } });
+    const splash = mountSplashScreen(root, { orgId: 'org1', client });
+    await settle();
+
+    // The router mounts the next route before unmounting splash.
+    const { mountViewerShell } = await import('./viewer-shell.js');
+    const shellClient = {
+      from: () => {
+        const builder = {
+          select: () => builder,
+          eq: () => builder,
+          order: () => builder,
+          limit: () => builder,
+          maybeSingle: () => Promise.resolve({ data: null, error: null }),
+        };
+        return builder;
+      },
+      channel: () => {
+        const chan = { on: () => chan, subscribe: () => chan };
+        return chan;
+      },
+      removeChannel: () => Promise.resolve('ok'),
+    };
+    const shell = await mountViewerShell(root, {
+      orgId: 'org1',
+      renderBody: () => {},
+      showChrome: false,
+      client: shellClient,
+    });
+    const shellContainer = root.querySelector('.viewer-shell');
+
+    splash.unmount();
+
+    expect(root.children).toHaveLength(1);
+    expect(root.querySelector('.viewer-shell')).toBe(shellContainer);
+    expect(root.querySelector('.splash-content')).toBeNull();
+    shell.unmount();
   });
 
   it('anchors the glow at a randomized position within the documented range, off the exact edges and off dead-center', () => {

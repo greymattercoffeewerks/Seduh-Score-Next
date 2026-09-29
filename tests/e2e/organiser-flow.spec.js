@@ -267,7 +267,10 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     await expect(page.locator('.app-bare-root .viewer-badge')).toHaveText(/live/i, {
       timeout: 15000,
     });
-    // ...and it must have actually left the initial "Connecting…" card.
+    // ...and it must have actually left the initial "Connecting…" card. Not
+    // redundant with the badge check: the badge renders DURING "Connecting…"
+    // too (as "Not live", since no session has been read yet), so only this
+    // proves the first read completed.
     await expect(page.getByText('Connecting…')).toBeHidden({ timeout: 15000 });
   });
 
