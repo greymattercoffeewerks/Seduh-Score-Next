@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { mountProjectorSurface } from './projectorSurface.js';
 
 // `events` defaults to one row for org1 so viewer-shell.js's own
@@ -100,5 +100,80 @@ describe('mountProjectorSurface', () => {
     const banner = root.querySelector('.is-test-banner');
     expect(banner).not.toBeNull();
     expect(banner.getAttribute('role')).toBe('alert');
+  });
+});
+
+// jsdom has no layout engine, so the heights fitToScreen measures are stubbed:
+// `root` is the screen (clientHeight), `shell` is the content (scrollHeight).
+function sized(el, prop, value) {
+  Object.defineProperty(el, prop, { configurable: true, get: () => value });
+  return el;
+}
+
+describe('mountProjectorSurface — fit lifecycle', () => {
+  // Frames run as microtasks so a scheduled fit lands before the assertion;
+  // every .viewer-shell reports 2160px of content against a 1080px screen.
+  function setUp() {
+    // Runs just after returning, like a real frame — synchronously would run
+    // before the caller stores the frame id and wedge every later fit.
+    vi.stubGlobal('requestAnimationFrame', (cb) => {
+      queueMicrotask(cb);
+      return 1;
+    });
+    vi.stubGlobal('cancelAnimationFrame', () => {});
+    const fonts = new EventTarget();
+    Object.defineProperty(document, 'fonts', { configurable: true, value: fonts });
+    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function () {
+      return this.classList.contains('viewer-shell') ? 2160 : 0;
+    });
+    const root = sized(document.createElement('div'), 'clientHeight', 1080);
+    return { root, fonts };
+  }
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    delete document.fonts;
+  });
+
+  it('fits its own view to the screen once mounted', async () => {
+    const { root } = setUp();
+    await mountProjectorSurface(root, { orgId: 'org1', client: fakeClient([]) });
+    await settle();
+    expect(root.querySelector('.viewer-shell').style.transform).toBe('scale(0.5)');
+  });
+
+  it("never resizes the NEXT screen's view, which can appear on the shared root before this one unmounts", async () => {
+    const { root } = setUp();
+    await mountProjectorSurface(root, { orgId: 'org1', client: fakeClient([]) });
+    await settle();
+    const own = root.querySelector('.viewer-shell');
+    // The router mounts the next audience screen first: it clears the root
+    // and appends its own shell while this projector is still observing.
+    root.innerHTML = '';
+    const next = document.createElement('div');
+    next.className = 'viewer-shell';
+    root.append(next);
+    await settle();
+    expect(own.parentNode).toBeNull();
+    expect(next.style.transform).toBe('');
+  });
+
+  it('stops fitting once unmounted: the next screen on the shared root is never scaled by it', async () => {
+    const { root, fonts } = setUp();
+    const handle = await mountProjectorSurface(root, { orgId: 'org1', client: fakeClient([]) });
+    await settle();
+    handle.unmount();
+
+    // The next screen mounts into the same root; a leftover observer, resize
+    // listener, or font listener would pick this up as "its own" and scale it.
+    const next = document.createElement('div');
+    next.className = 'viewer-shell';
+    root.append(next);
+    window.dispatchEvent(new Event('resize'));
+    fonts.dispatchEvent(new Event('loadingdone'));
+    await settle();
+    expect(next.style.transform).toBe('');
   });
 });

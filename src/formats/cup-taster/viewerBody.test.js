@@ -208,9 +208,12 @@ describe('mountViewerBody — champion hero', () => {
     expect(container.querySelector('.standings-table')).not.toBeNull();
     expect(container.querySelectorAll('tbody tr')).toHaveLength(2);
     // Order: hero first, standings section after — matches "in focus on
-    // screen" (the user's own framing for this feature).
-    const children = [...container.children];
-    expect(children[0]).toBe(hero);
+    // screen" (the user's own framing for this feature). Sections sit inside
+    // the layout-only groups (display: contents off the projector), so the
+    // order that matters is the order across the groups' children.
+    const sections = [...container.children].flatMap((group) => [...group.children]);
+    expect(sections[0]).toBe(hero);
+    expect(hero.parentElement.className).toBe('viewer-body-main');
   });
 });
 
@@ -629,7 +632,14 @@ describe('mountViewerBody — section composition', () => {
       },
       recentHeats: [{ heatNumber: 1, stageKind: 'prelims', results: [] }],
     });
-    const sectionOrder = [...container.children].map((node) =>
+    // Two layout groups, main (standings) then side (heats): display:
+    // contents on the phone, side-by-side columns on the projector.
+    expect([...container.children].map((g) => g.className)).toEqual([
+      'viewer-body-main',
+      'viewer-body-side',
+    ]);
+    const sections = [...container.children].flatMap((group) => [...group.children]);
+    const sectionOrder = sections.map((node) =>
       node.matches('h2, .viewer-active-heat, .viewer-recent-heats, table')
         ? node.className || node.tagName.toLowerCase()
         : null,
