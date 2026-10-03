@@ -187,3 +187,12 @@
   border-color: var(--color-text-secondary);
   color: var(--color-text-secondary);
 }
+
+/* Layout-only groupings (see mountViewerBody). `display: contents` makes them
+   invisible to layout, so the phone surface keeps laying out the sections as
+   flat siblings of .viewer-shell-body; projectorSurface.css overrides this to
+   place the two groups side by side. */
+.viewer-body-main,
+.viewer-body-side {
+  display: contents;
+}

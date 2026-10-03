@@ -368,8 +368,15 @@ function renderChampionHero(name) {
 // not declared/consumed here — the shell's own role="alert" banner already
 // renders is_test unmistakably (D9), so this module doesn't need a second
 // treatment of it.
+//
+// Sections are grouped into a main group (champion, standings) and a side
+// group (active heat, recent heats). Both groups are `display: contents` by
+// default (viewerBody.css), so the phone surface lays them out exactly as flat
+// siblings; the projector lays the two groups out side by side to use a
+// landscape screen's width instead of scrolling (projectorSurface.css).
 export function mountViewerBody(container, payload) {
   const sections = [];
+  const side = [];
   if (payload.champion) {
     sections.push(renderChampionHero(payload.champion));
   }
@@ -395,11 +402,14 @@ export function mountViewerBody(container, payload) {
   let cleanup;
   if (payload.activeHeat) {
     const activeHeat = renderActiveHeat(payload.activeHeat);
-    sections.push(activeHeat.element);
+    side.push(activeHeat.element);
     cleanup = activeHeat.cleanup;
   }
-  if (recent) sections.push(recent);
+  if (recent) side.push(recent);
 
-  container.append(...sections);
+  const groups = [];
+  if (sections.length > 0) groups.push(el('div', { className: 'viewer-body-main' }, sections));
+  if (side.length > 0) groups.push(el('div', { className: 'viewer-body-side' }, side));
+  container.append(...groups);
   return cleanup;
 }
