@@ -13,7 +13,7 @@
 -- role with RLS actually in force throughout, matching 005_confirm_heat.sql/
 -- 007_timing_outbox_rpcs.sql's own established discipline.
 begin;
-select plan(27);
+select plan(36);
 
 -- ============ fixtures ============
 
@@ -33,6 +33,13 @@ insert into events (id, org_id, format, name) values
   ('00000000-0000-0000-0000-0000000000e9', '00000000-0000-0000-0000-000000000020',
    'cup_taster', 'Other Org Event');
 
+-- e2: a SECOND event in the caller's own org, with no stages. It must stay 'draft'
+-- when e1's terminal stage resolves — the only assertion that pins the
+-- `e.id = s.event_id` join (the other-org event is already protected by RLS alone).
+insert into events (id, org_id, format, name) values
+  ('00000000-0000-0000-0000-0000000000e2', '00000000-0000-0000-0000-000000000010',
+   'cup_taster', 'Second Test Org Event');
+
 -- b1: prelims (cutoff 1), ordinal 1 — the stage under resolution.
 -- b2: finals (cutoff null, terminal), ordinal 2 — b1's own next stage, and
 --     later resolved on its own to prove the terminal/champion branch.
@@ -43,7 +50,11 @@ insert into ct_stages (id, event_id, kind, ordinal, set_count, duration_secs, cu
   ('00000000-0000-0000-0000-0000000000b2', '00000000-0000-0000-0000-0000000000e1',
    'finals', 2, 2, 480, null),
   ('00000000-0000-0000-0000-0000000000b9', '00000000-0000-0000-0000-0000000000e9',
-   'prelims', 1, 1, 480, 1);
+   'prelims', 1, 1, 480, 1),
+  -- b8: Other Org's own TERMINAL stage (cutoff null) — the cross-org attempt on the
+  -- conclude branch itself, not just on a cutoff stage that throws earlier.
+  ('00000000-0000-0000-0000-0000000000b8', '00000000-0000-0000-0000-0000000000e9',
+   'finals', 2, 1, 480, null);
 
 insert into event_entries (id, event_id, display_name) values
   ('00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-0000000000e1', 'Cupper One'),
@@ -236,6 +247,12 @@ select is(
 );
 
 select is(
+  (select status from events where id = '00000000-0000-0000-0000-0000000000e1'),
+  'draft',
+  'resolving a non-terminal stage (next stage present) does NOT conclude the event'
+);
+
+select is(
   (select source from ct_stage_entries
      where stage_id = '00000000-0000-0000-0000-0000000000b2'
        and entry_id = '00000000-0000-0000-0000-0000000000a1'),
@@ -327,6 +344,58 @@ select is(
   'ON CONFLICT DO NOTHING protected the insert even under a brand-new operation id'
 );
 
+-- ============ a null next stage at a CUTOFF stage must not conclude the event ============
+-- b1 has cutoff 1. A malformed call with p_next_stage_id null here is not the
+-- terminal case (isTerminal is `cutoff == null`), so the event must stay open.
+
+select lives_ok(
+  $$ select resolve_stage(
+       '00000000-0000-0000-0000-00000000f0ff', '00000000-0000-0000-0000-000000000010',
+       '00000000-0000-0000-0000-0000000000b1', null,
+       '[]'::jsonb, null, '[]'::jsonb, null, '[]'::jsonb, null
+     ) $$,
+  'a null-next call at a cutoff stage runs'
+);
+
+select is(
+  (select status from events where id = '00000000-0000-0000-0000-0000000000e1'),
+  'draft',
+  'a null next stage at a stage WITH a cutoff does not conclude the event'
+);
+
+-- ============ a cross-org terminal stage cannot be used to conclude another org's event ============
+
+select throws_ok(
+  $$ select resolve_stage(
+       gen_random_uuid(), '00000000-0000-0000-0000-000000000020',
+       '00000000-0000-0000-0000-0000000000b8', null,
+       '[]'::jsonb, null, '[]'::jsonb, null, '[]'::jsonb, null
+     ) $$,
+  null,
+  'resolve_stage: stage 00000000-0000-0000-0000-0000000000b8 not found',
+  'a non-member cannot reach the conclude branch via another org''s terminal stage'
+);
+
+-- ============ a terminal stage resolved WITH a next stage must not conclude the event ============
+-- b2 has cutoff null, but p_next_stage_id is non-null (b1, a visible same-org
+-- stage) — pins the outer `p_next_stage_id is null` condition independently of
+-- the `cutoff is null` guard.
+
+select lives_ok(
+  $$ select resolve_stage(
+       '00000000-0000-0000-0000-00000000f0fe', '00000000-0000-0000-0000-000000000010',
+       '00000000-0000-0000-0000-0000000000b2', '00000000-0000-0000-0000-0000000000b1',
+       '[]'::jsonb, null, '[]'::jsonb, null, '[]'::jsonb, null
+     ) $$,
+  'a null-cutoff stage resolved with a next stage runs'
+);
+
+select is(
+  (select status from events where id = '00000000-0000-0000-0000-0000000000e1'),
+  'draft',
+  'a stage with no cutoff but a next stage does not conclude the event'
+);
+
 -- ============ terminal stage: declaring a champion recomputes the coin-toss note ============
 -- b2 is terminal (cutoff null) — a1's own ct_stage_entries row in b2 (just
 -- inserted above) becomes the champion. p_next_stage_id is null, so
@@ -365,6 +434,18 @@ select is(
    not from a separate trusted boolean'
 );
 
+select is(
+  (select status from events where id = '00000000-0000-0000-0000-0000000000e1'),
+  'concluded',
+  'declaring the terminal stage''s champion concludes the event, in the same transaction'
+);
+
+select is(
+  (select status from events where id = '00000000-0000-0000-0000-0000000000e2'),
+  'draft',
+  'a DIFFERENT event in the same org is not concluded — the update is scoped to the stage''s own event'
+);
+
 -- ============ champion_stage_entry_id from the WRONG stage is refused ============
 -- c1 is b1's own row (a1's stage entry in the PRELIMS stage, not finals) —
 -- passing it as the champion while p_stage_id = b2 must fail, the same
@@ -384,6 +465,12 @@ select throws_ok(
 );
 
 reset role;
+
+select is(
+  (select status from events where id = '00000000-0000-0000-0000-0000000000e9'),
+  'draft',
+  'another org''s event is still draft after the refused cross-org terminal attempt above'
+);
 
 select * from finish();
 rollback;
