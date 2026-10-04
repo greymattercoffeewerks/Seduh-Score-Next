@@ -1490,6 +1490,16 @@ Cup Taster event._
   Test" is_test event was deleted via the app's Delete button. People table count: 25 → 22, no
   'Test Cupper' rows remain. Cleanup complete per user decision.
 
+- **T-HARDEN.resolve-stage-concludes-event — closed, deferred items (2026-10-04).** The first live
+  event ran end-to-end (3 complete stages, 8 confirmed heats, 169 results) but `events.status` stayed
+  `'draft'` because nothing ever wrote it. Migration `20261004100000_resolve_stage_concludes_event.sql`
+  makes `resolve_stage`'s terminal branch (null next stage and a null-cutoff stage) set it to
+  `'concluded'`, with a backfill. Deferred: **(1)** `'running'` is never written (nothing reads
+  `events.status` yet); **(2)** re-opening a completed final won't revert `'concluded'`; **(3)** optional
+  hardening so "terminal" also requires no higher-ordinal stage; **(4)** no test for replaying the
+  champion call after conclusion; **(5)** the event's `live_sessions` row stays `active = true` until the
+  organiser deactivates it. See CHANGELOG.md for the full account.
+
 ---
 
 ## Trust and transparency
