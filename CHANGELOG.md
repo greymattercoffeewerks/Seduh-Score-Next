@@ -1,3 +1,36 @@
+## T-HARDEN.resolve-stage-concludes-event: resolving the terminal stage now concludes the event · 2026-10-04
+
+**Task:** T-HARDEN.resolve-stage-concludes-event (pre-event hardening for the 4 Oct Cup Taster event).
+The first live event ran successfully end-to-end: Grey Matter Cup Taster Competition 2026 (Sports Hub, Bandar Seri Begawan, 2026-10-04, `is_test = false`). All three stages (prelims 5 heats cutoff 8, semis 2 heats cutoff 4, finals 1 heat) finished `complete`, all 8 heats `confirmed`, 169 `ct_results`, 226 `processed_operations`, 323 `score_change_log` rows, and the champion (Wilky Derikson Gultom, 3 correct in 235s; the finals' three-way tie on 3 correct was separated by time) was published to `live_sessions`. The one defect found afterwards: `events.status` was still `'draft'`.
+
+**Root cause:** nothing in the app ever wrote `events.status` (`src/core/events.js`'s own comment already said so) — the schema's `draft | running | concluded` lifecycle was never wired to anything. `resolve_stage` itself was not misbehaving; it simply had no step that concludes the event. Harmless to results and the audience view, but any future "past events" list filtering on `status` would have missed this event.
+
+**What shipped:**
+
+- Migration `supabase/migrations/20261004100000_resolve_stage_concludes_event.sql` re-creates `resolve_stage` with one added block: when `p_next_stage_id IS NULL` AND the stage's own `cutoff IS NULL` (the same "terminal" fact `standingsScreen.js`'s `isTerminal` uses), `events.status` is set to `'concluded'` in the same transaction, behind the existing `operation_id` idempotency guard and invoker-rights RLS. The `cutoff` guard means a malformed null-next call at a cutoff stage can never conclude an event whose finals haven't been played.
+- The function body is otherwise identical to `20260906060000` (schema-guardian diffed it); grants, `search_path` pin and the anon revoke are retained.
+- Idempotent backfill in the same migration: any event not yet `'concluded'` that has a completed terminal stage is set to `'concluded'`.
+- The live event's row on the cloud project (`wxzwanprluqmgoagbkpv`) was set to `'concluded'` by a direct UPDATE first (user-requested). The migration was then applied via `apply_migration` and recorded as version `20261004154058` (the file's own version is `20261004100000`). Verified on the cloud: function body contains the new branch, `prosecdef = false`, `search_path` pinned, ACL postgres/authenticated/service_role only. No further push is needed after merge.
+
+**Files changed:** `supabase/migrations/20261004100000_resolve_stage_concludes_event.sql` (new), `supabase/tests/009_resolve_stage.sql` (plan 27 → 36), `CHANGELOG.md`, `ROADMAP.md`, `package.json`/`package-lock.json` (patch bump to 3.0.14).
+
+**Tests:** `009_resolve_stage.sql` now proves the event concludes only at the terminal stage, and does not conclude at a non-terminal resolve, a null-next call at a cutoff stage, or a terminal-cutoff stage resolved *with* a next stage; a second event in the same org and another org's event are untouched; a cross-org terminal stage is refused before the conclude branch. Full pgTAP: 23 files, 618 tests pass; `db reset` from empty applies cleanly (one earlier reset attempt failed once at "Initialising schema", before any migration ran — a transient local Docker problem, the retry was fine).
+
+**Review cycle:** `schema-guardian` PASS (its rollback re-apply was verified in a transaction). `security-reviewer`: no blocking findings. `test-auditor`: the "other org's event untouched" assertion could never fail (RLS alone already protects that row), so nothing pinned the `e.id = s.event_id` join — fixed by adding a second same-org event `e2` that must stay `'draft'`, plus a cross-org terminal stage `b8` asserted with `throws_ok`. Non-blocking findings from the reviews are listed under Known gaps below.
+
+**Known gaps (deferred, not blocking):**
+
+- **`'running'` is still never written.** Nothing reads `events.status` yet; setting it on the first `start_heat` is a separate, optional change.
+- **Re-opening a completed final won't revert `'concluded'`.** The status is one-way.
+- **"Terminal" is `cutoff IS NULL`, not "no higher-ordinal stage exists"** (security-reviewer's optional hardening). Safe today because setup enforces that only the last stage has a null cutoff.
+- **No test that replaying the champion call leaves the event `'concluded'`.** The logic is idempotent by construction (`operation_id` guard plus `status <> 'concluded'`), just not asserted.
+- **The backfill is not covered by pgTAP** (it runs at migration time on an empty database); it was checked by hand against the cloud project.
+- **The event's `live_sessions` row is still `active = true`.** Left to the organiser, since the champion screen may still be on display.
+
+**Next step:** merge PR #144 (`dev`); the cloud database already has the migration.
+
+---
+
 ## T-HARDEN.nav-menu-polish: navigation menu refinement at tablet widths (wrapping layout, focus handling, visible label) · 2026-09-29
 
 **Task:** T-HARDEN.nav-menu-polish (pre-event hardening for the 4 Oct Cup Taster event).
