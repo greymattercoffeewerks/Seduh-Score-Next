@@ -64,3 +64,22 @@ describe('mountLandingScreen — format list', () => {
     );
   });
 });
+
+describe('mountLandingScreen — navigation', () => {
+  beforeEach(() => {
+    vi.stubGlobal('matchMedia', () => ({ matches: true }));
+  });
+
+  it('links to the public Results archive from both the desktop and the mobile nav', () => {
+    const root = document.createElement('div');
+    mountLandingScreen(root);
+
+    for (const container of ['.petrol-nav-links', '.petrol-nav-mobile-links']) {
+      const results = [...root.querySelectorAll(`${container} a`)].filter(
+        (link) => link.textContent === 'Results',
+      );
+      expect(results, container).toHaveLength(1);
+      expect(results[0].getAttribute('href')).toBe('/results/');
+    }
+  });
+});
