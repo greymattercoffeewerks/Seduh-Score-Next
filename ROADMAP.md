@@ -1521,6 +1521,24 @@ Cup Taster event._
 
 ---
 
+## Known open items from T-HARDEN.correct-heat-time (2026-10-06)
+
+_Deferred findings from T-HARDEN.correct-heat-time, flagged and documented, not blocking._
+
+- **Deploy:** push migrations `20261006100000` then `20261006110000` to the cloud project (apply_migration, then list_migrations) before or with the release to `main`; without them every correction call fails permanently.
+- **Modal or bottom-sheet editor** — editor is 314px tall at 360px; pushes later Stop buttons down; ship compact version first, build modal later.
+- **Correction handler copied in three screens** — ~45 lines per screen; extract to shared handler.
+- **Save in flight when another action re-renders** — busy editor not carried over; covered by test on scoring screen only (not timing/manual).
+- **After reconnect flush nothing re-renders** — 'Waiting to sync' row unchanged until next render.
+- **Correction compare-and-set on elapsed only** — ABA scenario (200→150→200 lets stale edit through).
+- **No-raw-elapsed-write lint rule cannot see payload keys** — same gap as `record_heat_time`.
+- **Reason blank-space edge case** — non-breaking or zero-width spaces count as non-blank.
+- **'Waiting to sync' per-device** — IndexedDB outbox is per-device; fails safe through the compare-and-set.
+- **`confirm_heat` org comparison** uses `<>` and gives different messages for 'not found' and 'does not belong' — a weak existence oracle (pre-existing).
+- **Pre-existing: scoring screen 'Cuppers' card overflow at 360px** — very long competitor names; not part of this task.
+
+---
+
 ## Known open items from pre-event hardening (T-HARDEN.report-print-layout, 2026-10-06)
 
 _Deferred findings from T-HARDEN.report-print-layout, flagged and documented, not blocking._
