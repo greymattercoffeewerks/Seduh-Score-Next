@@ -1504,6 +1504,19 @@ Cup Taster event._
 
 ---
 
+## Known open items from pre-event hardening (T-HARDEN.report-print-layout, 2026-10-06)
+
+_Deferred findings from T-HARDEN.report-print-layout, flagged and documented, not blocking._
+
+- **Chart print labels scale down with chart width;** events with many cuppers/rounds get smaller labels, not compensated.
+- **14px print axis labels could overprint for events with very few cuppers.**
+- **Accuracy tiers and chart bars rely on colour plus printed numbers/legend order in black-and-white print.**
+- **`@page` is global, not report-only** — applies to every organiser-print surface, not just the report.
+- **Very long names wrap rather than truncate in print.**
+- **Edge system print dialog 'Print To PDF' output is image-only** (Edge's Save as PDF gives a text PDF); browser/OS behavior, not fixable here.
+
+---
+
 ## Trust and transparency
 
 **T-TRUST.1 (2026-09-24) — Append-only score-change log; applied to the cloud project 2026-09-24.**

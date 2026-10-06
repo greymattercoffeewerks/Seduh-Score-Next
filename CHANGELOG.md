@@ -1,3 +1,35 @@
+## T-HARDEN.report-print-layout: Cup Taster organiser report print layout fixes · 2026-10-06
+
+**Task:** T-HARDEN.report-print-layout (fixes from the first live Cup Taster event, 4 Oct).
+The organiser report's print output exhibited 8 defects: wide tables (Overall, Semi-Finals) ran under card borders with last columns cut/crossed; names wrapped onto 3 lines, ballooning row height; app chrome printed (header bar, footer); legend color swatches and difficulty bars rendered blank; chart value labels overprinted each other; headings orphaned from tables; stray card-border lines down page edges after breaks; Edge's generic page title instead of event name. Root cause: minimal print stylesheet relied on screen-size rules and background printing (which is disabled by default). Locally reproduced the user's 8-page PDF; after fix: 5 pages, tables fit, names one line, swatches/bars print, no stray borders, chrome absent, readable chart labels.
+
+**What shipped:**
+
+- Print stylesheet in `src/formats/cup-taster/reportScreen.css`: `@page { size: A4; margin: 12mm }` (top-level), flat print cards (no border/padding), h2 rules, `break-after:avoid` on headings, `break-inside:avoid` on small stat tables/rows/Overall card, compact table text (8.5pt body/8pt headers/3pt padding), min-width 40mm for name cells, `print-color-adjust:exact` for legend swatches and difficulty bars.
+- Chart value labels wider than a 20px slot (>2 chars at 9px/char) rotate -90° with extra headroom; print axis labels 14px; rotation decision per-chart; fixed slot per cupper across rounds unchanged (existing test pins it).
+- `src/core/appShell.css`: app-shell header and footer hidden in print (format-agnostic, any organiser screen).
+- `src/formats/cup-taster/reportScreen.js`: page title set to "Report — {event name}" (prefixed "TEST — " for `is_test` events) only between beforeprint/afterprint via module-level saved-title state, restored on unmount (guarded for router unmount order).
+- D9 (found in review, fixed): `is_test` banner renders as black bold text in a 3pt black border in print (no background reliance; prints white-on-white before fix).
+
+**Files changed:** `src/formats/cup-taster/reportScreen.css`, `src/core/appShell.css`, `src/formats/cup-taster/reportScreen.js`, `src/formats/cup-taster/reportScreen.test.js`.
+
+**Tests:** Label orientation tests (upright/rotated, pivot, headroom invariant, per-chart decision, 2-vs-3 character boundary, slot stability) and print-title tests (swap/restore, repeated prints, event never loaded, listener removal, unmount mid-print, two listeners, TEST prefix, only-swapper restores). Full suite: 84 files, 1760 tests pass; `eslint` and `prettier` clean.
+
+**Review cycle:** Four agents in parallel. `ui-accessibility-reviewer` BLOCKING (found: `is_test` banner invisible in print white-on-white, print title missing TEST prefix — both fixed). `code-reviewer` (found: unmount restored title unconditionally, renderRoundBarChart contract comment detached, `.map(formatValue)` passed extra args — all fixed). `test-auditor` (found the new tests too weak; added missing headroom/pivot/threshold/per-chart/second-print/never-loaded/leak-on-failure tests). `module-boundary-checker` PASS.
+
+**Known gaps (deferred, not blocking):**
+
+- **Chart print labels scale down with chart width;** not compensated for events with many cuppers/rounds.
+- **14px print axis labels could overprint for events with very few cuppers.**
+- **Accuracy tiers and chart bars rely on colour plus printed numbers/legend order in black-and-white print.**
+- **`@page` is global, not report-only** (applies to every organiser-print surface).
+- **Very long names wrap rather than truncate.**
+- **Edge system print dialog 'Print To PDF' output is image-only.** (Edge's Save as PDF gives a text PDF; browser/OS behavior, not fixable here.)
+
+**Next step:** build sanitised public results sheet (podium vs full standings choice at publish time); user's decision pending on trust-copy wording.
+
+---
+
 ## T-HARDEN.results-nav-link: /results/ linked in public navigation · 2026-10-05
 
 **Task:** T-HARDEN.results-nav-link (pre-event hardening for the 4 Oct Cup Taster event).

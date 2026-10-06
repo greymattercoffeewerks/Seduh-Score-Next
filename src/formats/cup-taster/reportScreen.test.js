@@ -691,6 +691,141 @@ describe('renderRoundBarChart', () => {
   });
 });
 
+describe('renderRoundBarChart — value label orientation', () => {
+  const summaries = [
+    {
+      entryId: 'alex',
+      displayName: 'Alex',
+      rounds: [
+        { stageOrdinal: 1, numCorrect: 3, totalElapsedSecs: 248 },
+        { stageOrdinal: 2, numCorrect: 2, totalElapsedSecs: 355 },
+      ],
+    },
+    {
+      entryId: 'jo',
+      displayName: 'Jo',
+      rounds: [{ stageOrdinal: 1, numCorrect: 1, totalElapsedSecs: 150 }],
+    },
+  ];
+  const stageReports = [
+    { stage: { kind: 'prelims', ordinal: 1 } },
+    { stage: { kind: 'finals', ordinal: 2 } },
+  ];
+  // Geometry the chart is built from (renderRoundBarChart's own constants): half a 16px bar, the
+  // value labels' fixed offsets above their bar, and the per-character width reserved for them.
+  const HALF_BAR = 8;
+  const UPRIGHT_LIFT = 3;
+  const TURNED_LIFT = 4;
+  const TURNED_SHIFT = 5;
+  const CHAR_WIDTH = 9;
+
+  function chart(getValue, formatValue) {
+    return renderRoundBarChart({
+      titleText: 'Chart',
+      ariaSummary: 'Bar chart.',
+      summaries,
+      stageReports,
+      getValue,
+      formatValue,
+    });
+  }
+  const minutesAndSeconds = (value) =>
+    `${Math.floor(value / 60)}:${String(value % 60).padStart(2, '0')}`;
+  const scoreChart = () =>
+    chart(
+      (round) => round.numCorrect,
+      (value) => String(value),
+    );
+  const timeChart = () => chart((round) => round.totalElapsedSecs, minutesAndSeconds);
+  const labelsAndBars = (card) => ({
+    labels: [...card.querySelectorAll('.report-chart-value')],
+    bars: [...card.querySelectorAll('rect[data-entry]')],
+  });
+
+  it('keeps short labels upright and centred just above their own bar — a single digit fits its slot, so nothing is turned', () => {
+    const { labels, bars } = labelsAndBars(scoreChart());
+    expect(labels).toHaveLength(3);
+    labels.forEach((label, index) => {
+      const barX = Number(bars[index].getAttribute('x'));
+      const barY = Number(bars[index].getAttribute('y'));
+      expect(label.hasAttribute('transform')).toBe(false);
+      expect(label.getAttribute('text-anchor')).toBe('middle');
+      expect(Number(label.getAttribute('x'))).toBe(barX + HALF_BAR);
+      expect(Number(label.getAttribute('y'))).toBe(barY - UPRIGHT_LIFT);
+    });
+  });
+
+  it('turns every label in a chart whose labels are wider than a bar slot (e.g. "4:08"), pivoting each on its own start so it climbs its own bar', () => {
+    const { labels, bars } = labelsAndBars(timeChart());
+    expect(labels.map((label) => label.textContent)).toEqual(['4:08', '2:30', '5:55']);
+    labels.forEach((label, index) => {
+      const x = Number(label.getAttribute('x'));
+      const y = Number(label.getAttribute('y'));
+      expect(label.getAttribute('text-anchor')).toBe('start');
+      // The pivot is the label's own anchor point — a different pivot would swing it off its bar.
+      expect(label.getAttribute('transform')).toBe(`rotate(-90 ${x} ${y})`);
+      expect(x).toBe(Number(bars[index].getAttribute('x')) + HALF_BAR + TURNED_SHIFT);
+      expect(y).toBe(Number(bars[index].getAttribute('y')) - TURNED_LIFT);
+    });
+  });
+
+  it('reserves enough headroom for the longest turned label, so even the tallest bar leaves it fully inside the SVG', () => {
+    const card = timeChart();
+    const { labels, bars } = labelsAndBars(card);
+    const longestLabelExtent =
+      Math.max(...labels.map((label) => label.textContent.length)) * CHAR_WIDTH;
+    const tallestBarTop = Math.min(...bars.map((bar) => Number(bar.getAttribute('y'))));
+    // The label runs upward from (bar top - TURNED_LIFT); its far end must not pass the SVG's top.
+    expect(tallestBarTop - TURNED_LIFT - longestLabelExtent).toBeGreaterThanOrEqual(0);
+    // ...and the chart is taller than the upright one by the extra headroom it reserved.
+    const upright = Number(scoreChart().querySelector('svg').getAttribute('height'));
+    const turned = Number(card.querySelector('svg').getAttribute('height'));
+    expect(turned).toBeGreaterThan(upright);
+  });
+
+  it('decides per chart, not per label: one wide label turns the short ones too, so every label in a chart reads the same way', () => {
+    // 150s -> '9' (one character); everything else is a 4-character time.
+    const card = chart(
+      (round) => round.totalElapsedSecs,
+      (value) => (value === 150 ? '9' : minutesAndSeconds(value)),
+    );
+    const { labels } = labelsAndBars(card);
+    expect(labels.map((label) => label.textContent)).toEqual(['4:08', '9', '5:55']);
+    for (const label of labels) {
+      expect(label.getAttribute('transform')).toMatch(/^rotate\(-90 /);
+    }
+  });
+
+  it('turns labels from three characters up and keeps two-character labels upright — the boundary is one bar slot (20px) against 9px per character', () => {
+    const twoChars = chart(
+      (round) => round.numCorrect,
+      (value) => `#${value}`,
+    );
+    for (const label of labelsAndBars(twoChars).labels) {
+      expect(label.hasAttribute('transform')).toBe(false);
+    }
+    const threeChars = chart(
+      (round) => round.numCorrect,
+      (value) => `#${value}0`,
+    );
+    for (const label of labelsAndBars(threeChars).labels) {
+      expect(label.getAttribute('transform')).toMatch(/^rotate\(-90 /);
+    }
+  });
+
+  it('leaves each cupper in the same horizontal slot whichever way the labels run — a cupper is still followed across rounds by position', () => {
+    const x = (card, entry, round) =>
+      card.querySelector(`rect[data-entry="${entry}"][data-round="${round}"]`).getAttribute('x');
+    for (const [entry, round] of [
+      ['alex', 1],
+      ['jo', 1],
+      ['alex', 2],
+    ]) {
+      expect(x(timeChart(), entry, round)).toBe(x(scoreChart(), entry, round));
+    }
+  });
+});
+
 describe('buildReportTables', () => {
   it('builds standings, difficulty, and distribution table specs per stage, formatted the same as the on-screen tables', () => {
     const stageReports = [
@@ -1981,5 +2116,164 @@ describe('mountReportScreen', () => {
     // screen's content, untouched, not this screen's own report.
     expect(root.querySelector('#other-screen-marker')).not.toBeNull();
     expect(root.textContent).not.toContain('not available yet');
+  });
+});
+
+describe('mountReportScreen — print title', () => {
+  // These tests share two pieces of global state — document.title and the module-level title the
+  // screen restores — so every handle they create is drained afterwards; a failing assertion in
+  // one must not leave a swapped title behind to make the next test fail for the wrong reason.
+  const handles = [];
+  afterEach(() => {
+    for (const { afterPrint, unmount } of handles.splice(0)) {
+      afterPrint();
+      unmount();
+    }
+    document.title = 'Seduh Score Next';
+  });
+
+  // Only the incomplete-event path is exercised: printTitle is set as soon as the event loads,
+  // before the completeness check, so it is the same code the complete (printable) report runs.
+  function clientFor(eventsRead) {
+    return fakeClient({
+      tables: {
+        events: eventsRead,
+        ct_stages: {
+          data: [{ id: 's1', event_id: 'ev1', ordinal: 1, cutoff: null, status: 'running' }],
+          error: null,
+        },
+      },
+    });
+  }
+  const incompleteClient = () => clientFor({ data: event, error: null });
+
+  // Mounts a screen and returns the print listeners THIS mount registered on window. Calling those
+  // directly (rather than dispatching a window event) keeps these tests independent of the report
+  // screens other tests in this file mounted and never unmounted, which are still listening.
+  async function mountWithPrintHandlers(client = incompleteClient()) {
+    const added = [];
+    const removed = [];
+    const addSpy = vi.spyOn(window, 'addEventListener').mockImplementation((type, handler) => {
+      added.push([type, handler]);
+    });
+    let screen;
+    try {
+      screen = await mountReportScreen(document.createElement('div'), { eventId: 'ev1', client });
+    } finally {
+      addSpy.mockRestore();
+    }
+    const handlersFor = (type) => added.filter(([t]) => t === type).map(([, handler]) => handler);
+    expect(handlersFor('beforeprint')).toHaveLength(1);
+    expect(handlersFor('afterprint')).toHaveLength(1);
+    const handle = {
+      beforePrint: handlersFor('beforeprint')[0],
+      afterPrint: handlersFor('afterprint')[0],
+      unmount: () => {
+        const spy = vi.spyOn(window, 'removeEventListener').mockImplementation((type, handler) => {
+          removed.push([type, handler]);
+        });
+        try {
+          screen.unmount();
+        } finally {
+          spy.mockRestore();
+        }
+        return removed;
+      },
+    };
+    handles.push(handle);
+    return handle;
+  }
+
+  it('names the printout after the event while printing, then puts the page title back', async () => {
+    document.title = 'Seduh Score Next';
+    const { beforePrint, afterPrint } = await mountWithPrintHandlers();
+
+    beforePrint();
+    expect(document.title).toBe('Report — Autumn Cup Tasters');
+    afterPrint();
+    expect(document.title).toBe('Seduh Score Next');
+  });
+
+  it('works for every print, not just the first — the saved title is cleared after each one', async () => {
+    document.title = 'Seduh Score Next';
+    const { beforePrint, afterPrint } = await mountWithPrintHandlers();
+
+    beforePrint();
+    afterPrint();
+    // The page title changes between prints (another screen, a language switch…): the next print
+    // must restore THAT title, not the one saved last time.
+    document.title = 'Something else';
+    beforePrint();
+    expect(document.title).toBe('Report — Autumn Cup Tasters');
+    afterPrint();
+    expect(document.title).toBe('Something else');
+  });
+
+  it('leaves the title alone if the event never loaded — there is nothing to name the printout after', async () => {
+    document.title = 'Seduh Score Next';
+    const { beforePrint, afterPrint } = await mountWithPrintHandlers(
+      clientFor({ data: null, error: new Error('load failed') }),
+    );
+
+    beforePrint();
+    expect(document.title).toBe('Seduh Score Next');
+    afterPrint();
+    expect(document.title).toBe('Seduh Score Next');
+  });
+
+  it('removes both print listeners on unmount, so a later print of another screen keeps its own title', async () => {
+    const { beforePrint, afterPrint, unmount } = await mountWithPrintHandlers();
+    const removed = unmount();
+    expect(removed).toEqual(
+      expect.arrayContaining([
+        ['beforeprint', beforePrint],
+        ['afterprint', afterPrint],
+      ]),
+    );
+  });
+
+  it('restores the title even if the screen is unmounted mid-print', async () => {
+    document.title = 'Seduh Score Next';
+    const { beforePrint, unmount } = await mountWithPrintHandlers();
+    beforePrint();
+    expect(document.title).toBe('Report — Autumn Cup Tasters');
+    unmount();
+    expect(document.title).toBe('Seduh Score Next');
+  });
+
+  it('does not save an already-swapped title when a second listener also fires — the original is what comes back', async () => {
+    document.title = 'Seduh Score Next';
+    const first = await mountWithPrintHandlers();
+    const second = await mountWithPrintHandlers();
+
+    first.beforePrint();
+    second.beforePrint();
+    first.afterPrint();
+    second.afterPrint();
+    expect(document.title).toBe('Seduh Score Next');
+  });
+
+  it("marks a test event's printout as TEST in its title — the saved PDF is named as test data too", async () => {
+    document.title = 'Seduh Score Next';
+    const { beforePrint, afterPrint } = await mountWithPrintHandlers(
+      clientFor({ data: { ...event, is_test: true }, error: null }),
+    );
+
+    beforePrint();
+    expect(document.title).toBe('TEST — Report — Autumn Cup Tasters');
+    afterPrint();
+    expect(document.title).toBe('Seduh Score Next');
+  });
+
+  it('only the screen that swapped the title restores it on unmount — another report mid-print keeps its printout title', async () => {
+    document.title = 'Seduh Score Next';
+    const printing = await mountWithPrintHandlers();
+    const idle = await mountWithPrintHandlers();
+
+    printing.beforePrint();
+    idle.unmount();
+    expect(document.title).toBe('Report — Autumn Cup Tasters');
+    printing.afterPrint();
+    expect(document.title).toBe('Seduh Score Next');
   });
 });
