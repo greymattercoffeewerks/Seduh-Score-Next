@@ -31,6 +31,17 @@ import {
   describeConfirmError,
 } from './scoring.js';
 import { cupTasterOutboxHandlers } from './outboxHandlers.js';
+import { renderTimingRows } from './timingScreen.js';
+import {
+  attemptCorrection,
+  createPendingRecheck,
+  describeQueuedCorrection,
+  hasPendingWork,
+  isStillQueued,
+  loadPendingWork,
+  resolveCorrection,
+} from './timeCorrection.js';
+import { captureCorrectionDrafts, restoreCorrectionDrafts } from './timeCorrectionEditor.js';
 import { publishLiveSession } from './liveSession.js';
 import { getSupabase } from '../../core/supabaseClient.js';
 import { el } from '../../core/dom.js';
@@ -139,13 +150,27 @@ export function renderScoringRows(
 
 export async function mountScoringScreen(
   root,
-  { eventId, heatId, client = getSupabase(), signal, handlers } = {},
+  { eventId, heatId, client = getSupabase(), signal, handlers, recheckMs = 4000 } = {},
 ) {
   let focusAfterRender = null;
   let pendingError = null;
   let pendingSuccess = null;
   let renderGeneration = 0;
+  // While anything for this heat is still waiting in the outbox (a queued correction or confirm),
+  // nothing else says when it has synced — so look again every few seconds. Quietly: a look that
+  // fails (still offline) just tries again later.
+  const recheck = createPendingRecheck(async () => {
+    try {
+      await render();
+    } catch {
+      recheck.schedule(true);
+    }
+  }, recheckMs);
   let confirmInFlight = false;
+  // An "Edit time" save (see timeCorrection.js), resolved inside the next
+  // render() against fresh state — the same ground-truth pattern as the timing
+  // screens'.
+  let pendingCorrectionCheck = null;
   // Local scoring state lives here — mutated SYNCHRONOUSLY (before any
   // await) by onToggle/onMarkWrong below — not reloaded from IndexedDB on
   // every render(). This is the fix for a real lost-update race found in
@@ -168,17 +193,77 @@ export async function mountScoringScreen(
     else delete feedback.dataset.tone;
   }
 
-  async function renderOrShowError(feedback) {
+  // `restoreButton`, when given, fires only if render() ITSELF then throws — the
+  // same contract timingScreen.js's renderOrShowError has: an "Edit time" Save
+  // that disabled itself must not be left stuck on "Saving…".
+  async function renderOrShowError(feedback, restoreButton) {
     try {
       await render();
     } catch (err) {
+      restoreButton?.();
       setFeedback(feedback, describeError(err), 'error');
       feedback.scrollIntoView?.({ block: 'nearest' });
       feedback.focus();
     }
   }
 
+  // An "Edit time" save: `rawSecs` and `reason` arrive already validated by
+  // the editor, and `done` is its callback (see timeCorrectionEditor.js).
+  // render() reloads the heat, so the Confirm button is always built from the corrected
+  // time and the heat's new updated_at — and a confirm built from a screen loaded BEFORE
+  // the correction (another device) conflicts server-side rather than restoring the old time.
+  async function handleCorrect(data, feedback, entryId, rawSecs, reason, done) {
+    const target = data.hydrated.find((entry) => entry.entry_id === entryId);
+    const outcome = await attemptCorrection(
+      data.heat,
+      target,
+      rawSecs,
+      reason,
+      data.event.org_id,
+      client,
+      { handlers: handlers ?? cupTasterOutboxHandlers(client) },
+    );
+    if (outcome.inputError) {
+      // Shown beside the field; a render would close the editor and lose the reason.
+      done({ error: outcome.inputError });
+      return;
+    }
+    if (outcome.error) {
+      pendingError = describeError(outcome.error);
+      await renderOrShowError(feedback, done);
+      return;
+    }
+    if (await isStillQueued(outcome.check)) {
+      // Saved, but the flush stopped on a transient failure (offline): the reload
+      // below would need the same connection, so say it is queued instead of
+      // trying — and park the Edit button so the same old time is not corrected twice.
+      // The screen may have been rebuilt while the save was in flight: write to the feedback
+      // region that is on screen NOW, not the one this closure was handed.
+      const live = root.querySelector('.screen-feedback') ?? feedback;
+      setFeedback(live, describeQueuedCorrection(target.displayName), 'pending');
+      done({ queued: true });
+      recheck.schedule(true);
+      live.scrollIntoView?.({ block: 'nearest' });
+      live.focus();
+      return;
+    }
+    pendingCorrectionCheck = outcome.check;
+    await renderOrShowError(feedback, () => {
+      // The reload failed, so nothing will resolve this check against fresh state —
+      // drop it rather than let a later, unrelated render report on it.
+      pendingCorrectionCheck = null;
+      done();
+    });
+  }
+
   async function loadState() {
+    // The outbox is read FIRST, before any server read. If a flush from somewhere
+    // else lands between the two reads, the worst case is a row marked "Waiting to
+    // sync" for a correction that has just landed — harmless. The other order could
+    // show the OLD time with Edit offered and no marker. It is also read inside
+    // loadState, i.e. before the render's staleness guards, so no await sits between
+    // those guards and the DOM write.
+    const pending = await loadPendingWork(heatId);
     const event = await findEvent(eventId, client);
     const heat = await findHeatById(heatId, client);
     const sets = await listSetsForStage(heat.stage_id, client);
@@ -198,7 +283,7 @@ export async function mountScoringScreen(
     if (heat.status === 'confirmed') {
       draft = await loadConfirmedResults(heatEntries, client);
     }
-    return { event, heat, sets, hydrated };
+    return { event, heat, sets, hydrated, pending };
   }
 
   async function render() {
@@ -215,6 +300,22 @@ export async function mountScoringScreen(
     // real DOM-write race between the router..." entry.
     if (signal?.aborted) return;
 
+    // An "Edit time" save, resolved against THIS render's freshly loaded state.
+    let correctedEntryId = null;
+    if (pendingCorrectionCheck) {
+      const resolved = resolveCorrection(pendingCorrectionCheck, data.hydrated);
+      pendingCorrectionCheck = null;
+      if (resolved.tone === 'success') {
+        pendingSuccess = resolved.message;
+        correctedEntryId = resolved.entryId;
+      } else {
+        pendingError = resolved.message;
+      }
+    }
+
+    // The editors open right now, carried across the rebuild below — every score
+    // tap re-renders this screen, and an open Edit time form must survive that.
+    const correctionDrafts = captureCorrectionDrafts(root);
     root.innerHTML = '';
 
     const container = el('section', { className: 'screen-container scoring-screen' });
@@ -256,6 +357,13 @@ export async function mountScoringScreen(
           renderScoringRows(data.hydrated, setIds, draft, { interactive: false }),
         ]),
       );
+      container.appendChild(
+        el('div', { className: 'card' }, [
+          el('h2', { text: 'Times' }),
+          el('p', { text: 'Times are locked once a heat is confirmed.' }),
+          renderTimingRows(data.hydrated, { onStop: () => {} }),
+        ]),
+      );
     } else if (data.heat.status !== 'scoring') {
       container.appendChild(
         el('div', { className: 'card' }, [
@@ -290,6 +398,37 @@ export async function mountScoringScreen(
         el('div', { className: 'card' }, [el('h2', { text: 'Cuppers' }), rows]),
       );
 
+      // Times can still be corrected until Confirm — a manual timekeeper's
+      // time may differ from the tapped one. Confirming locks them.
+      container.appendChild(
+        el('div', { className: 'card' }, [
+          el('h2', { text: 'Times' }),
+          el('p', {
+            className: 'time-correction-intro',
+            text: data.pending.confirmQueued
+              ? "Times can't be changed while the confirm is waiting to sync."
+              : 'Check each time against your manual timekeeper before confirming. Confirming the heat locks them.',
+          }),
+          // Only cuppers with a time. A heat reaches scoring only once every cupper has one,
+          // so this drops nothing in practice; without it a row with none would get a
+          // Stop button, which this screen has no business offering.
+          renderTimingRows(
+            data.hydrated.filter((entry) => entry.elapsed_secs != null),
+            {
+              onStop: () => {},
+              // Not while a confirm for this heat is still queued (offline): a correction
+              // queued behind it would be refused once the confirm lands, after promising
+              // to sync.
+              onCorrect: data.pending.confirmQueued
+                ? undefined
+                : (entryId, rawSecs, reason, done) =>
+                    handleCorrect(data, feedback, entryId, rawSecs, reason, done),
+              queuedEntryIds: data.pending.queuedEntryIds,
+            },
+          ),
+        ]),
+      );
+
       const complete = isHeatComplete(entryIds, draft, setIds);
       // D24/§7.4: Confirm unlocks only once every cupper has every set
       // scored. A bare `disabled` attribute alone leaves a screen-reader
@@ -299,12 +438,20 @@ export async function mountScoringScreen(
       // fields, not a new one invented here. Omitted once `complete` is
       // true — nothing left to explain at that point.
       const confirmHintId = 'confirm-heat-hint';
+      // The mirror of withholding Edit while a confirm is queued: a correction still waiting
+      // to sync would land BEFORE a confirm built from this screen, bump the heat's
+      // updated_at, and make that confirm conflict — after the organiser had been told it
+      // went through. Hold Confirm until the outbox has drained the correction.
+      const correctionQueued = data.hydrated.some((entry) =>
+        data.pending.queuedEntryIds.has(entry.id),
+      );
+      const confirmBlocked = !complete || correctionQueued;
       const confirmButton = el('button', {
         className: 'btn btn-primary tap-target',
         text: confirmInFlight ? 'Confirming…' : 'Confirm heat',
         attrs: {
-          ...(complete && !confirmInFlight ? {} : { disabled: 'disabled' }),
-          ...(!complete ? { 'aria-describedby': confirmHintId } : {}),
+          ...(!confirmBlocked && !confirmInFlight ? {} : { disabled: 'disabled' }),
+          ...(confirmBlocked ? { 'aria-describedby': confirmHintId } : {}),
         },
       });
       confirmButton.addEventListener('click', async () => {
@@ -395,11 +542,20 @@ export async function mountScoringScreen(
         confirmInFlight = false;
         await renderOrShowError(feedback);
       });
-      const confirmHint = !complete
+      const confirmHint = confirmBlocked
         ? el('p', {
             id: confirmHintId,
             className: 'form-field-hint',
-            text: 'Confirm unlocks once every cupper has every set scored — a set left blank (—) still needs a tap before this heat can close.',
+            text: [
+              correctionQueued
+                ? 'A time correction is still waiting to sync — Confirm unlocks once it has.'
+                : null,
+              !complete
+                ? 'Confirm unlocks once every cupper has every set scored — a set left blank (—) still needs a tap before this heat can close.'
+                : null,
+            ]
+              .filter(Boolean)
+              .join(' '),
           })
         : null;
       container.appendChild(
@@ -409,8 +565,16 @@ export async function mountScoringScreen(
 
     container.appendChild(feedback);
     root.appendChild(container);
+    // True when an open Edit time form had focus before the rebuild and has it again —
+    // then the feedback region below must not pull it away (the live region still announces).
+    const correctionFocusKept = restoreCorrectionDrafts(root, correctionDrafts, {
+      skipEntryId: correctedEntryId,
+    });
+    recheck.schedule(hasPendingWork(data.pending, data.hydrated));
 
-    if (focusAfterRender) {
+    if (correctionFocusKept) {
+      focusAfterRender = null;
+    } else if (focusAfterRender) {
       const target = root.querySelector(focusAfterRender);
       target?.focus();
       focusAfterRender = null;
@@ -424,6 +588,7 @@ export async function mountScoringScreen(
 
   return {
     unmount() {
+      recheck.cancel();
       renderGeneration++;
     },
   };
