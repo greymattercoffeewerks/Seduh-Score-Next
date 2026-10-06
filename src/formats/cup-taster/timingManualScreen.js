@@ -16,6 +16,14 @@ import { listEntriesByIds } from '../../core/registry.js';
 import { findEvent } from '../../core/events.js';
 import { recordManualTime, parseElapsedInput } from './timingManual.js';
 import { describeTimingConflict } from './timing.js';
+import {
+  attemptCorrection,
+  describeQueuedCorrection,
+  isStillQueued,
+  loadPendingWork,
+  resolveCorrection,
+} from './timeCorrection.js';
+import { captureCorrectionDrafts, restoreCorrectionDrafts } from './timeCorrectionEditor.js';
 import { cupTasterOutboxHandlers } from './outboxHandlers.js';
 import { renderTimingRows, buildScoringLink, renderManualTimeFields } from './timingScreen.js';
 import { getSupabase } from '../../core/supabaseClient.js';
@@ -125,6 +133,9 @@ export async function mountManualTimingScreen(
   // Ground truth over the outbox flush's own bookkeeping — same principle
   // and shape as timingScreen.js's own pendingEntryCheck (see its comment).
   let pendingEntryCheck = null;
+  // An "Edit time" save on the completed view (see timeCorrection.js), resolved
+  // inside the next render() against fresh state, same as pendingEntryCheck.
+  let pendingCorrectionCheck = null;
 
   function setFeedback(feedback, message, tone) {
     feedback.textContent = message ?? '';
@@ -146,7 +157,61 @@ export async function mountManualTimingScreen(
     }
   }
 
+  // An "Edit time" save: `rawSecs` and `reason` arrive already validated by
+  // the editor, and `done` is its callback (see timeCorrectionEditor.js).
+  // The heat is 'scoring' here (the completed view), so this is a correction, not
+  // another manual entry.
+  async function handleCorrect(data, feedback, entryId, rawSecs, reason, done) {
+    const target = data.hydrated.find((entry) => entry.entry_id === entryId);
+    const outcome = await attemptCorrection(
+      data.heat,
+      target,
+      rawSecs,
+      reason,
+      data.event.org_id,
+      client,
+      { handlers: cupTasterOutboxHandlers(client) },
+    );
+    if (outcome.inputError) {
+      // Shown beside the field; a render would close the editor and lose the reason.
+      done({ error: outcome.inputError });
+      return;
+    }
+    if (outcome.error) {
+      pendingError = describeError(outcome.error);
+      await renderOrShowError(feedback, done);
+      return;
+    }
+    if (await isStillQueued(outcome.check)) {
+      // Saved, but the flush stopped on a transient failure (offline): the reload
+      // below would need the same connection, so say it is queued instead of
+      // trying — and park the Edit button so the same old time is not corrected twice.
+      // The screen may have been rebuilt while the save was in flight: write to the feedback
+      // region that is on screen NOW, not the one this closure was handed.
+      const live = root.querySelector('.screen-feedback') ?? feedback;
+      setFeedback(live, describeQueuedCorrection(target.displayName), 'pending');
+      done({ queued: true });
+      live.scrollIntoView?.({ block: 'nearest' });
+      live.focus();
+      return;
+    }
+    pendingCorrectionCheck = outcome.check;
+    await renderOrShowError(feedback, () => {
+      // The reload failed, so nothing will resolve this check against fresh state —
+      // drop it rather than let a later, unrelated render report on it.
+      pendingCorrectionCheck = null;
+      done();
+    });
+  }
+
   async function loadState() {
+    // The outbox is read FIRST, before any server read. If a flush from somewhere
+    // else lands between the two reads, the worst case is a row marked "Waiting to
+    // sync" for a correction that has just landed — harmless. The other order could
+    // show the OLD time with Edit offered and no marker. It is also read inside
+    // loadState, i.e. before the render's staleness guards, so no await sits between
+    // those guards and the DOM write.
+    const pending = await loadPendingWork(heatId);
     const event = await findEvent(eventId, client);
     const heat = await findHeatById(heatId, client);
     const heatEntries = await listHeatEntries(heatId, client);
@@ -155,7 +220,7 @@ export async function mountManualTimingScreen(
       client,
     );
     const hydrated = hydrateEntries(heatEntries, roster);
-    return { event, heat, hydrated };
+    return { event, heat, hydrated, pending };
   }
 
   async function render() {
@@ -192,10 +257,12 @@ export async function mountManualTimingScreen(
       const freshEntry = data.hydrated.find((entry) => entry.id === heatEntryId);
       // Compares against the EXACT value this call attempted to write —
       // matters even more for 'overwrite' than a real tap's 'reject': a
-      // correction can land on an entry that already had SOME non-null
+      // re-save can land on an entry that already had SOME non-null
       // elapsed_secs from an earlier save, so a bare null-check couldn't
-      // distinguish "my correction landed" from "my correction was
-      // rejected and the OLD value is still sitting there" at all.
+      // distinguish "my re-save landed" from "my re-save was rejected and
+      // the OLD value is still sitting there" at all. (Not to be confused
+      // with timeCorrection.js's "Edit time", a different RPC for a time
+      // that has already been stopped.)
       if (freshEntry?.elapsed_secs === expectedElapsedSecs) {
         pendingSuccess = `${displayName ?? 'Cupper'}'s time recorded.`;
         // onSave only exists while this render's own branch is 'pending'
@@ -211,6 +278,19 @@ export async function mountManualTimingScreen(
       }
     }
 
+    // An "Edit time" save, resolved against THIS render's freshly loaded state.
+    let correctedEntryId = null;
+    if (pendingCorrectionCheck) {
+      const resolved = resolveCorrection(pendingCorrectionCheck, data.hydrated);
+      pendingCorrectionCheck = null;
+      if (resolved.tone === 'success') {
+        pendingSuccess = resolved.message;
+        correctedEntryId = resolved.entryId;
+      } else {
+        pendingError = resolved.message;
+      }
+    }
+
     if (checkForCompletionOnNextRender) {
       checkForCompletionOnNextRender = false;
       if (pendingSuccess && data.heat.status !== 'pending') {
@@ -218,6 +298,8 @@ export async function mountManualTimingScreen(
       }
     }
 
+    // The editors open right now, carried across the rebuild below.
+    const correctionDrafts = captureCorrectionDrafts(root);
     root.innerHTML = '';
 
     const container = el('section', { className: 'screen-container timing-screen' });
@@ -295,7 +377,18 @@ export async function mountManualTimingScreen(
             attrs: { tabindex: '-1' },
           }),
           el('p', { text: 'Every cupper has a final time.' }),
-          renderTimingRows(data.hydrated, { onStop: () => {} }),
+          renderTimingRows(data.hydrated, {
+            onStop: () => {},
+            // A confirmed heat's times are locked — and this branch also
+            // renders 'confirmed'. Nor is Edit offered while a confirm for this heat is
+            // still queued: it would be refused once that confirm lands.
+            onCorrect:
+              data.heat.status === 'scoring' && !data.pending.confirmQueued
+                ? (entryId, rawSecs, reason, done) =>
+                    handleCorrect(data, feedback, entryId, rawSecs, reason, done)
+                : undefined,
+            queuedEntryIds: data.pending.queuedEntryIds,
+          }),
           // See timingScreen.js's identical use of the same shared
           // helper — same live-found gap (no forward link out of this
           // screen once timing's done).
@@ -312,13 +405,20 @@ export async function mountManualTimingScreen(
       // branch with an ERROR tone, and `feedback` (tabindex="-1", out of
       // tab order) is the only reachable place a keyboard-only user could
       // find that rejection text.
-      if (feedback.dataset.tone === 'success') {
+      // (Not for a correction: that success leaves focus on the feedback region,
+      // like every other action here, so its message is read out.)
+      if (feedback.dataset.tone === 'success' && !correctedEntryId) {
         completeHeadingFocus = true;
       }
     }
 
     container.appendChild(feedback);
     root.appendChild(container);
+    // True when an open Edit time form had focus before the rebuild and has it again —
+    // then the feedback region below must not pull it away (the live region still announces).
+    const correctionFocusKept = restoreCorrectionDrafts(root, correctionDrafts, {
+      skipEntryId: correctedEntryId,
+    });
 
     // Rebuild-then-refocus (§15.3): a saved row's Save button is replaced by
     // fresh, re-prefilled inputs on every render, so there's no single
@@ -327,7 +427,9 @@ export async function mountManualTimingScreen(
     // still has an explicit target for its one distinct action, starting
     // the heat) — except the one completing transition above, which now has
     // its own explicit target for the same reason timingScreen.js's does.
-    if (completeHeadingFocus) {
+    if (correctionFocusKept) {
+      completeHeadingFocus = false;
+    } else if (completeHeadingFocus) {
       completeHeadingFocus = false;
       root.querySelector('#timing-complete-heading')?.focus();
     } else if (feedback.dataset.tone) {

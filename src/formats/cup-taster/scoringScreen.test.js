@@ -44,6 +44,14 @@ function fakeClient({ tables = {}, rpc } = {}) {
   };
 }
 
+// The Confirm button, found by what it says. Not `.btn-primary`: the Times card
+// above it (and its hidden Edit time panel) carries primary buttons of its own.
+function confirmButtonIn(root) {
+  return [...root.querySelectorAll('button')].find((button) =>
+    ['Confirm heat', 'Confirming…'].includes(button.textContent),
+  );
+}
+
 describe('renderScoringRows', () => {
   const setIds = ['s1', 's2'];
   const entries = [{ entry_id: 'e1', displayName: 'Cupper One', elapsed_secs: 100 }];
@@ -184,7 +192,7 @@ describe('mountScoringScreen', () => {
     });
     await mountScoringScreen(root, { eventId: 'ev1', heatId: 'h1', client });
     expect(root.textContent).toContain('Cupper One');
-    expect(root.querySelector('.btn-primary').disabled).toBe(true);
+    expect(confirmButtonIn(root).disabled).toBe(true);
   });
 
   it('explains WHY Confirm is disabled via a real, visible hint wired with aria-describedby, not the disabled attribute alone (D24)', async () => {
@@ -200,7 +208,7 @@ describe('mountScoringScreen', () => {
     });
     await mountScoringScreen(root, { eventId: 'ev1', heatId: 'h1', client });
 
-    const confirmButton = root.querySelector('.btn-primary');
+    const confirmButton = confirmButtonIn(root);
     const describedById = confirmButton.getAttribute('aria-describedby');
     expect(describedById).toBeTruthy();
     const hint = root.querySelector(`#${describedById}`);
@@ -224,10 +232,10 @@ describe('mountScoringScreen', () => {
 
     root.querySelector('.scoring-toggle').click();
     await vi.waitFor(() => {
-      expect(root.querySelector('.btn-primary').disabled).toBe(false);
+      expect(confirmButtonIn(root).disabled).toBe(false);
     });
 
-    expect(root.querySelector('.btn-primary').getAttribute('aria-describedby')).toBeNull();
+    expect(confirmButtonIn(root).getAttribute('aria-describedby')).toBeNull();
     expect(root.querySelector('#confirm-heat-hint')).toBeNull();
 
     document.body.removeChild(root);
@@ -284,7 +292,7 @@ describe('mountScoringScreen', () => {
     });
 
     expect(document.activeElement.id).toBe('score-e1-s1');
-    expect(root.querySelector('.btn-primary').disabled).toBe(false);
+    expect(confirmButtonIn(root).disabled).toBe(false);
 
     document.body.removeChild(root);
   });
@@ -315,7 +323,7 @@ describe('mountScoringScreen', () => {
     const buttons = root.querySelectorAll('.scoring-toggle');
     expect(buttons[0].dataset.tone).toBe('wrong');
     expect(buttons[1].dataset.tone).toBe('wrong');
-    expect(root.querySelector('.btn-primary').disabled).toBe(false);
+    expect(confirmButtonIn(root).disabled).toBe(false);
     // Regression for a real bug found reviewing this screen alongside
     // standingsScreen.js/reportScreen.js: the tally span this action
     // focuses had no `tabindex`, so `target?.focus()` silently did nothing
@@ -355,10 +363,10 @@ describe('mountScoringScreen', () => {
     // Score the one set before confirming.
     root.querySelector('.scoring-toggle').click();
     await vi.waitFor(() => {
-      expect(root.querySelector('.btn-primary').disabled).toBe(false);
+      expect(confirmButtonIn(root).disabled).toBe(false);
     });
 
-    root.querySelector('.btn-primary').click();
+    confirmButtonIn(root).click();
     await vi.waitFor(() => {
       expect(root.textContent).toContain('Heat confirmed');
     });
@@ -410,10 +418,10 @@ describe('mountScoringScreen', () => {
 
     root.querySelector('.scoring-toggle').click();
     await vi.waitFor(() => {
-      expect(root.querySelector('.btn-primary').disabled).toBe(false);
+      expect(confirmButtonIn(root).disabled).toBe(false);
     });
 
-    root.querySelector('.btn-primary').click();
+    confirmButtonIn(root).click();
     await vi.waitFor(() => {
       expect(root.querySelector('.screen-feedback').dataset.tone).toBe('error');
     });
@@ -485,10 +493,10 @@ describe('mountScoringScreen', () => {
 
     root.querySelector('.scoring-toggle').click();
     await vi.waitFor(() => {
-      expect(root.querySelector('.btn-primary').disabled).toBe(false);
+      expect(confirmButtonIn(root).disabled).toBe(false);
     });
 
-    const confirmButton = root.querySelector('.btn-primary');
+    const confirmButton = confirmButtonIn(root);
     confirmButton.click();
     // A second click on the same, still-live button, before the first
     // click's synchronous disable would matter if it weren't synchronous —
@@ -623,15 +631,15 @@ describe('mountScoringScreen', () => {
 
     root.querySelector('.scoring-toggle').click();
     await vi.waitFor(() => {
-      expect(root.querySelector('.btn-primary').disabled).toBe(false);
+      expect(confirmButtonIn(root).disabled).toBe(false);
     });
 
-    root.querySelector('.btn-primary').click();
+    confirmButtonIn(root).click();
     // The confirm button's own disabling is synchronous (see its own
     // handler comment) — this doesn't yet prove the toggle grid is locked,
     // only that the click landed and confirmInFlight is now true.
     await vi.waitFor(() => {
-      expect(root.querySelector('.btn-primary').disabled).toBe(true);
+      expect(confirmButtonIn(root).disabled).toBe(true);
     });
 
     // The toggle grid itself hasn't re-rendered yet at this point (the
@@ -647,7 +655,7 @@ describe('mountScoringScreen', () => {
 
     resolveRpc();
     await vi.waitFor(() => {
-      expect(root.querySelector('.btn-primary').disabled).toBe(false);
+      expect(confirmButtonIn(root).disabled).toBe(false);
     });
 
     // The in-flight tap wasn't just rendered locked — it actually mutated
@@ -717,10 +725,10 @@ describe('mountScoringScreen', () => {
 
     root.querySelector('.scoring-toggle').click();
     await vi.waitFor(() => {
-      expect(root.querySelector('.btn-primary').disabled).toBe(false);
+      expect(confirmButtonIn(root).disabled).toBe(false);
     });
 
-    root.querySelector('.btn-primary').click();
+    confirmButtonIn(root).click();
     await vi.waitFor(() => {
       expect(root.querySelector('.screen-feedback').dataset.tone).toBe('error');
     });
