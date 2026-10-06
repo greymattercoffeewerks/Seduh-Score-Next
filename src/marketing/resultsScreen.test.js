@@ -261,6 +261,44 @@ describe('mountResultsScreen', () => {
     expect(activeLabels).toEqual(['Results', 'Results']);
   });
 
+  it('links the latest result to its printable results sheet', async () => {
+    const rows = [
+      { event_id: 'ev1', payload: samplePayload(), published_at: '2026-09-14T10:00:00Z' },
+    ];
+    await mountResultsScreen(root, { client: fakeClient({ data: rows, error: null }) });
+    const link = root.querySelector('.results-latest .results-sheet-link');
+    expect(link.getAttribute('href')).toBe('/results/?sheet=ev1');
+    expect(link.textContent).toContain('Results sheet — print or save as PDF');
+    // A screen reader hears which event the link is for.
+    expect(link.querySelector('.sr-only').textContent).toContain(samplePayload().eventName);
+  });
+
+  it('gives every archived event its own sheet link, naming the event, since the link stands apart from it', async () => {
+    const rows = [
+      { event_id: 'ev1', payload: samplePayload(), published_at: '2026-09-14T10:00:00Z' },
+      {
+        event_id: 'ev2',
+        payload: samplePayload({ eventName: 'Earlier Cup' }),
+        published_at: '2026-08-02T10:00:00Z',
+      },
+    ];
+    await mountResultsScreen(root, { client: fakeClient({ data: rows, error: null }) });
+    const links = [...root.querySelectorAll('.results-archive .results-sheet-link')];
+    expect(links.map((link) => [link.getAttribute('href'), link.textContent])).toEqual([
+      ['/results/?sheet=ev2', 'Results sheet — Earlier Cup (print or save as PDF)'],
+    ]);
+  });
+
+  it('encodes the event id in the sheet link', async () => {
+    const rows = [
+      { event_id: 'a b&c', payload: samplePayload(), published_at: '2026-09-14T10:00:00Z' },
+    ];
+    await mountResultsScreen(root, { client: fakeClient({ data: rows, error: null }) });
+    expect(root.querySelector('.results-sheet-link').getAttribute('href')).toBe(
+      '/results/?sheet=a%20b%26c',
+    );
+  });
+
   it('shows an error state, not a crash, when the query fails', async () => {
     const client = fakeClient({ data: null, error: new Error('network error') });
     await mountResultsScreen(root, { client });

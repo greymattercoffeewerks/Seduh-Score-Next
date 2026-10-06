@@ -1144,7 +1144,11 @@ describe('mountReportScreen', () => {
           { data: stages[0], error: null },
           { data: stages[1], error: null },
         ],
-        ct_stage_entries: { data: [{ id: 'se1', stage_id: 's1', entry_id: 'e1' }], error: null },
+        // A complete event: every competitor's last stage has a decided placing.
+        ct_stage_entries: {
+          data: [{ id: 'se1', stage_id: 's1', entry_id: 'e1', final_position: 1 }],
+          error: null,
+        },
         ct_standings: {
           data: [
             {
@@ -1250,6 +1254,483 @@ describe('mountReportScreen', () => {
 
       expect(root.textContent).toContain('published to the public archive');
       expect(root.textContent).toContain('Published to the public results archive.');
+    });
+
+    describe('what to publish', () => {
+      const publishedRow = (payload) => ({
+        event_id: 'ev1',
+        payload,
+        published_at: '2026-10-05T00:00:00Z',
+      });
+      const radios = (root) => [
+        ...root.querySelectorAll('.report-public-results input[name="public-results-scope"]'),
+      ];
+      const radioFor = (root, value) => radios(root).find((input) => input.value === value);
+      const choose = (root, value) => {
+        const input = radioFor(root, value);
+        input.checked = true;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+      const publishedPayload = (client) => {
+        const rpcCall = client.calls.find(([kind]) => kind === 'rpc');
+        return rpcCall[2].p_payload;
+      };
+      const buttonLabelled = (root, label) =>
+        [...root.querySelectorAll('.report-public-results button')].find(
+          (button) => button.textContent === label,
+        );
+      const lookupsMadeAfter = (client, skip) =>
+        client.calls
+          .filter(([kind, table]) => kind === 'in' && table === 'event_entries')
+          .slice(skip)
+          .map(([, , , ids]) => ids);
+
+      // A field of `count` competitors, each with a café of their own, plus a client whose
+      // event_entries lookups honour the ids they are asked for (the shared fake returns the whole
+      // table every time, which would hide a bug in how chunks are combined) and can be held up.
+      function largeField(count, { withdrawn = [], rpc } = {}) {
+        const ids = Array.from({ length: count }, (_, index) => `e${index + 1}`);
+        const entries = ids.map((id) => ({
+          id,
+          display_name: `Cupper ${id}`,
+          cafe: `Cafe ${id}`,
+          withdrawn: withdrawn.includes(id),
+        }));
+        const base = fakeClient({
+          tables: completeEventTables({
+            ct_stage_entries: {
+              data: ids.map((id, index) => ({
+                id: `se-${id}`,
+                stage_id: 's1',
+                entry_id: id,
+                final_position: index + 1,
+              })),
+              error: null,
+            },
+            ct_standings: {
+              data: ids.map((id, index) => ({
+                entry_id: id,
+                stage_id: 's1',
+                correct_count: 1,
+                sets_scored: 1,
+                total_elapsed_secs: 40 + index,
+              })),
+              error: null,
+            },
+            event_entries: { data: entries, error: null },
+          }),
+          rpc,
+        });
+        let hold = null;
+        const client = {
+          calls: base.calls,
+          rpc: base.rpc,
+          holdLookups(promise) {
+            hold = promise;
+          },
+          from(table) {
+            const builder = base.from(table);
+            if (table !== 'event_entries') return builder;
+            let requested = null;
+            const original = builder.in;
+            builder.in = (...args) => {
+              requested = args[1];
+              return original(...args);
+            };
+            builder.then = (resolve, reject) =>
+              Promise.resolve(requested ? hold : null)
+                .then(() => ({
+                  data: requested
+                    ? entries.filter((entry) => requested.includes(entry.id))
+                    : entries,
+                  error: null,
+                }))
+                .then(resolve, reject);
+            return builder;
+          },
+        };
+        return client;
+      }
+      const lookupCount = (client) =>
+        client.calls.filter(([kind, table]) => kind === 'in' && table === 'event_entries').length;
+
+      it('offers podium only by default, and lists both levels as real radio choices, each described by its own explanation', async () => {
+        const root = document.createElement('div');
+        const client = fakeClient({ tables: completeEventTables() });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        await flush();
+
+        expect(radios(root).map((input) => input.value)).toEqual(['podium', 'full']);
+        expect(radioFor(root, 'podium').checked).toBe(true);
+        expect(radioFor(root, 'full').checked).toBe(false);
+        // A radio's name is its label alone; the explanation is its description, so a screen reader
+        // announces "Full standings" and then what that means.
+        const label = root.querySelector('label[for="public-results-scope-full"]');
+        expect(label.textContent).toBe('Full standings');
+        const hint = root.querySelector(
+          `#${radioFor(root, 'full').getAttribute('aria-describedby')}`,
+        );
+        expect(hint.textContent).toContain('Every competitor');
+        expect(root.querySelector('.report-public-results-scope legend').textContent).toBe(
+          'What to publish',
+        );
+        const note = root.querySelector(
+          `#${root.querySelector('.report-public-results-scope').getAttribute('aria-describedby')}`,
+        );
+        expect(note.textContent).toContain(
+          'Phone numbers, emails and set-by-set marks are never published.',
+        );
+        expect(note.textContent).toContain('withdrew');
+        expect(note.textContent).toContain('reload it first');
+      });
+
+      it('publishes the podium only when the default is left alone — no standings go out, and only the podium’s three are looked up', async () => {
+        const root = document.createElement('div');
+        const client = largeField(120, {
+          rpc: { publish_event_results: { data: null, error: null } },
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        await flush();
+        const before = lookupCount(client);
+
+        root.querySelector('.report-public-results button').click();
+        await flush();
+
+        expect(publishedPayload(client)).not.toHaveProperty('standings');
+        expect(lookupsMadeAfter(client, before).map((ids) => ids.length)).toEqual([3]);
+        expect(root.textContent).toContain('(podium only)');
+        expect(root.textContent).toContain(
+          'Published to the public results archive. It shows the podium only.',
+        );
+      });
+
+      it('publishes every competitor’s placing, with café and round, when Full standings is chosen', async () => {
+        const root = document.createElement('div');
+        const client = fakeClient({
+          tables: completeEventTables(),
+          rpc: { publish_event_results: { data: null, error: null } },
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        await flush();
+
+        choose(root, 'full');
+        root.querySelector('.report-public-results button').click();
+        await flush();
+
+        expect(publishedPayload(client).standings).toEqual([
+          {
+            place: 1,
+            name: 'Alex',
+            cafe: 'Kedai Runduk',
+            // This fixture serves the same standings row for every stage, so Alex's last round is
+            // the finals; the round label is that last round's own.
+            round: 'Finals',
+            correct: 1,
+            total: 1,
+            timeSecs: 40,
+          },
+        ]);
+        expect(root.textContent).toContain('(full standings)');
+        expect(root.textContent).toContain('It shows the full standings.');
+      });
+
+      it('looks cafés up in chunks of at most 50 ids and keeps every one — none lost in combining the chunks', async () => {
+        const root = document.createElement('div');
+        const client = largeField(120, {
+          rpc: { publish_event_results: { data: null, error: null } },
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        await flush();
+        choose(root, 'full');
+        const before = lookupCount(client);
+
+        root.querySelector('.report-public-results button').click();
+        await flush();
+
+        expect(lookupsMadeAfter(client, before).map((ids) => ids.length)).toEqual([50, 50, 20]);
+        const { standings } = publishedPayload(client);
+        expect(standings).toHaveLength(120);
+        // One café from each chunk, and the very last one.
+        expect([standings[0], standings[60], standings[119]].map((row) => row.cafe)).toEqual([
+          'Cafe e1',
+          'Cafe e61',
+          'Cafe e120',
+        ]);
+      });
+
+      it('leaves a competitor who withdrew out of the full standings — but never a podium finisher, who stays in both', async () => {
+        const root = document.createElement('div');
+        const client = largeField(4, {
+          withdrawn: ['e4', 'e1'],
+          rpc: { publish_event_results: { data: null, error: null } },
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        await flush();
+        choose(root, 'full');
+
+        root.querySelector('.report-public-results button').click();
+        await flush();
+
+        const payload = publishedPayload(client);
+        // e4 (outside the podium) withdrew and is left out; e1 (the champion) is flagged too but stays.
+        expect(payload.standings.map((row) => row.name)).toEqual([
+          'Cupper e1',
+          'Cupper e2',
+          'Cupper e3',
+        ]);
+        expect(payload.podium.map((row) => row.name)).toContain('Cupper e1');
+        expect(payload.notListed).toBe(1);
+      });
+
+      it('opens an already-published event with the level it was published at selected and named', async () => {
+        const root = document.createElement('div');
+        const client = fakeClient({
+          tables: completeEventTables({
+            public_results: {
+              data: publishedRow({ standings: [{ place: 1, name: 'Alex', round: 'Finals' }] }),
+              error: null,
+            },
+          }),
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        await flush();
+
+        expect(root.textContent).toContain('(full standings)');
+        expect(radioFor(root, 'full').checked).toBe(true);
+        expect(radioFor(root, 'podium').checked).toBe(false);
+      });
+
+      it('treats an empty standings list as a recorded choice of full standings', async () => {
+        const root = document.createElement('div');
+        const client = fakeClient({
+          tables: completeEventTables({
+            public_results: { data: publishedRow({ standings: [] }), error: null },
+          }),
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        await flush();
+
+        expect(root.textContent).toContain('(full standings)');
+        expect(radioFor(root, 'full').checked).toBe(true);
+      });
+
+      it('reads a payload without standings as podium only', async () => {
+        const root = document.createElement('div');
+        const client = fakeClient({
+          tables: completeEventTables({
+            public_results: { data: publishedRow({ podium: [] }), error: null },
+          }),
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        await flush();
+
+        expect(root.textContent).toContain('(podium only)');
+        expect(radioFor(root, 'podium').checked).toBe(true);
+      });
+
+      it('keeps Unpublish as the first button once published, with Update published results after it', async () => {
+        const root = document.createElement('div');
+        const client = fakeClient({
+          tables: completeEventTables({ public_results: { data: publishedRow({}), error: null } }),
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        await flush();
+
+        const buttons = [...root.querySelectorAll('.report-public-results button')];
+        expect(buttons.map((button) => button.textContent)).toEqual([
+          'Unpublish',
+          'Update published results',
+        ]);
+      });
+
+      it('Update published results re-publishes at the newly chosen level and says so', async () => {
+        const root = document.createElement('div');
+        const client = fakeClient({
+          tables: completeEventTables({ public_results: { data: publishedRow({}), error: null } }),
+          rpc: { publish_event_results: { data: null, error: null } },
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        await flush();
+        expect(root.textContent).toContain('(podium only)');
+
+        choose(root, 'full');
+        buttonLabelled(root, 'Update published results').click();
+        await flush();
+
+        expect(publishedPayload(client).standings).toHaveLength(1);
+        expect(root.textContent).toContain(
+          'Updated the published results. They now show the full standings.',
+        );
+        expect(root.textContent).toContain('(full standings)');
+      });
+
+      it('can take a published event back from full standings to the podium — the privacy-retraction path', async () => {
+        const root = document.createElement('div');
+        const client = fakeClient({
+          tables: completeEventTables({
+            public_results: {
+              data: publishedRow({ standings: [{ place: 1, name: 'Alex' }] }),
+              error: null,
+            },
+          }),
+          rpc: { publish_event_results: { data: null, error: null } },
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        await flush();
+        expect(root.textContent).toContain('(full standings)');
+
+        choose(root, 'podium');
+        buttonLabelled(root, 'Update published results').click();
+        await flush();
+
+        expect(publishedPayload(client)).not.toHaveProperty('standings');
+        expect(root.textContent).toContain('(podium only)');
+        expect(root.textContent).toContain(
+          'Updated the published results. They now show the podium only.',
+        );
+      });
+
+      it('says a change is not applied yet until it is, and says nothing when the choice matches what is live', async () => {
+        const root = document.createElement('div');
+        const client = fakeClient({
+          tables: completeEventTables({ public_results: { data: publishedRow({}), error: null } }),
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        await flush();
+        const note = () => root.querySelector('.report-public-results-pending');
+
+        expect(note().textContent).toBe('');
+        choose(root, 'full');
+        expect(note().textContent).toContain('Not applied yet');
+        expect(note().textContent).toContain('Update published results');
+        choose(root, 'podium');
+        expect(note().textContent).toBe('');
+      });
+
+      it('starts again from the podium after Unpublish, so a retraction never leaves the wider choice pre-selected', async () => {
+        const root = document.createElement('div');
+        const client = fakeClient({
+          tables: completeEventTables({
+            public_results: {
+              data: publishedRow({ standings: [{ place: 1, name: 'Alex' }] }),
+              error: null,
+            },
+          }),
+          rpc: {
+            unpublish_event_results: { data: null, error: null },
+            publish_event_results: { data: null, error: null },
+          },
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        await flush();
+        expect(radioFor(root, 'full').checked).toBe(true);
+
+        buttonLabelled(root, 'Unpublish').click();
+        await flush();
+        expect(radioFor(root, 'podium').checked).toBe(true);
+
+        root.querySelector('.report-public-results button').click();
+        await flush();
+        expect(
+          publishedPayload({
+            calls: client.calls.filter(([, name]) => name === 'publish_event_results'),
+          }),
+        ).not.toHaveProperty('standings');
+      });
+
+      it('links to the public results sheet for this event, with its id encoded, only once it is published', async () => {
+        const unpublishedRoot = document.createElement('div');
+        await mountReportScreen(unpublishedRoot, {
+          eventId: 'ev1',
+          client: fakeClient({ tables: completeEventTables() }),
+        });
+        await flush();
+        expect(unpublishedRoot.querySelector('.report-public-results-sheet-link')).toBeNull();
+
+        const root = document.createElement('div');
+        await mountReportScreen(root, {
+          eventId: 'ev1',
+          client: fakeClient({
+            tables: completeEventTables({
+              events: { data: { ...event, id: 'a b&c' }, error: null },
+              public_results: { data: publishedRow({}), error: null },
+            }),
+          }),
+        });
+        await flush();
+        const link = root.querySelector('.report-public-results-sheet-link');
+        expect(link.getAttribute('href')).toBe('/results/?sheet=a%20b%26c');
+        expect(link.getAttribute('target')).toBe('_blank');
+        expect(link.getAttribute('rel')).toBe('noopener');
+        expect(link.textContent).toContain('opens in a new tab');
+      });
+
+      it('disables the choice while a publish is in flight', async () => {
+        const root = document.createElement('div');
+        let release;
+        const client = fakeClient({
+          tables: completeEventTables(),
+          rpc: {
+            publish_event_results: new Promise((resolve) => {
+              release = () => resolve({ data: null, error: null });
+            }),
+          },
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        await flush();
+
+        root.querySelector('.report-public-results button').click();
+        await flush();
+        expect(radios(root).every((input) => input.disabled)).toBe(true);
+
+        release();
+        await flush();
+        expect(radios(root).every((input) => !input.disabled)).toBe(true);
+      });
+
+      it('reports the level that was actually sent, even if the choice is changed while the publish is in flight', async () => {
+        const root = document.createElement('div');
+        let release;
+        const client = fakeClient({
+          tables: completeEventTables(),
+          rpc: {
+            publish_event_results: new Promise((resolve) => {
+              release = () => resolve({ data: null, error: null });
+            }),
+          },
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        await flush();
+
+        root.querySelector('.report-public-results button').click(); // podium, the default
+        await flush();
+        choose(root, 'full'); // a change event that slips in while the request is pending
+        release();
+        await flush();
+
+        expect(publishedPayload(client)).not.toHaveProperty('standings');
+        expect(root.textContent).toContain('(podium only)');
+      });
+
+      it('builds the payload for the level chosen at the click, even if the choice changes while the café lookup is still pending', async () => {
+        const root = document.createElement('div');
+        const client = largeField(120, {
+          rpc: { publish_event_results: { data: null, error: null } },
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        await flush();
+        let release;
+        client.holdLookups(new Promise((resolve) => (release = resolve)));
+
+        root.querySelector('.report-public-results button').click(); // podium, the default
+        await flush(); // the lookup is now in flight
+        choose(root, 'full');
+        release();
+        await flush();
+
+        expect(publishedPayload(client)).not.toHaveProperty('standings');
+        expect(root.textContent).toContain('(podium only)');
+      });
     });
 
     it('clicking Unpublish calls unpublish_event_results and flips back to "not published"', async () => {
