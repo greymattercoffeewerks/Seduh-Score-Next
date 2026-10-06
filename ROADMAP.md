@@ -485,6 +485,23 @@ two consumers of the same shell/data. Verifiers per task, `code-reviewer` always
 
 ---
 
+## Known open items from T-HARDEN.results-sheet (Cup Taster public results sheet)
+
+- **Published figures come from the report as loaded when the page was opened**
+  (hint says reload first; Update does not re-fetch) and a retroactive 'withdrawn' flag
+  changes a published result on the next Update.
+- **Order of tied rows within a tie is not meaningful.**
+- **The sheet downloads every published payload to show one** (fine at current size).
+- **The shared public header's brand link is under 44px tall** (pre-existing).
+- **No test feeds the real `buildResultsPayload` output into `buildResultsSheet`**
+  (payload keys are duplicated as fixtures — the key set is pinned on both sides) and
+  `resultsMain.js`'s `?sheet=` routing has no test.
+- **'/results/' is still noindex and not in the sitemap** (separate decision).
+- **The user still must republish the live event** (currently podium-only) after this
+  ships if they want the sheet to include everyone.
+
+---
+
 ## Known open items from Guess the Bean Phase 4
 
 - **Supabase Realtime unreliability on local dev stack for newly-published tables.**

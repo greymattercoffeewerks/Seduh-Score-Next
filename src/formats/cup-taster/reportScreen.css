@@ -50,6 +50,56 @@
   min-width: 16rem;
 }
 
+/* Publish-scope choice on the Public results card: two radios, each a full tap target with its own
+   one-line explanation, so the organiser can see what each level makes public before choosing. */
+.report-public-results-scope {
+  border: 0;
+  margin: var(--space-4) 0 0 0;
+  padding: 0;
+}
+.report-public-results-scope legend {
+  font-weight: var(--font-weight-semibold);
+  padding: 0;
+  margin-bottom: var(--space-2);
+}
+.report-public-results-option {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  min-height: var(--tap-target-min);
+}
+.report-public-results-option input {
+  flex-shrink: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0.125rem 0 0 0;
+}
+.report-public-results-option-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.report-public-results-option-label {
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+/* The label's own hit area is a 24px line of text; stretching it over the whole row makes the row,
+   radio and hint included, one 44px-tall tap target that selects the radio. */
+.report-public-results-option-label::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+/* Link to the public results sheet: a full-size tap target like every other control on the card. */
+.report-public-results-sheet-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-target-min);
+}
+
 /* Set-difficulty bar-fill — found missing in production feedback ("no
    graphical info in the report"). Track/fill, not a <progress> element:
    this needs to sit inline with its own percentage label in a way

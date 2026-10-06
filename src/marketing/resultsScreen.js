@@ -2,11 +2,10 @@
 // published competition results. Reads real data via
 // core/publicResults.js's listPublishedResults() (anon-safe), populated by
 // an organiser's explicit "Publish to results archive" action
-// (src/formats/cup-taster/reportScreen.js's "Public results" card). Still
-// deliberately NOT linked from the landing page or public header nav, and
-// still `noindex` (results/index.html) — per the plan agreed with the user,
-// wiring that in is a separate, later decision once there's a real event's
-// worth of published content to show, not part of this build.
+// (src/formats/cup-taster/reportScreen.js's "Public results" card). Linked from the public header
+// and the landing nav since 2026-10-05, once a real event was published; still `noindex`
+// (results/index.html). Each event also links to its printable results sheet (resultsSheet.js,
+// /results/?sheet=<event id>).
 import { el, withSrExpansion } from '../core/dom.js';
 import { formatDuration, formatDurationLong } from '../core/duration.js';
 import { revealOnScroll } from '../core/scrollReveal.js';
@@ -48,7 +47,7 @@ const FORMAT_LABELS = {
   btc: 'BTC',
 };
 
-function formatLabel(format) {
+export function formatLabel(format) {
   // `payload` is unvalidated jsonb read back from an anon-readable table
   // (this migration's own comment: "never re-derives or validates the
   // payload's own internal shape") — a row published before `format` was
@@ -66,7 +65,7 @@ function formatLabel(format) {
 // CSS text-transform (.results-latest-meta, .results-table th, etc.), same
 // convention as tourScreen.js/tour.css's own kickers/labels, not baked into
 // the string.
-function formatDate(isoDate) {
+export function formatDate(isoDate) {
   return DATE_FORMAT.format(new Date(`${isoDate}T00:00:00`));
 }
 
@@ -79,7 +78,7 @@ function formatShortDate(isoDate) {
 // header comment, viewerBody.js's precedent) — a competition "score" of
 // "7/8" reads unambiguously, but this project treats that discipline as
 // something every new surface inherits, not something re-litigated per page.
-function scoreCell(correct, total) {
+export function scoreCell(correct, total) {
   return el('span', { className: 'results-score tabular-nums' }, [
     document.createTextNode(`${correct}/${total}`),
     el('span', { className: 'sr-only', text: `${correct} correct out of ${total}` }),
@@ -143,6 +142,28 @@ function podiumRow(entry) {
   ]);
 }
 
+// Every published event has a printable sheet (resultsSheet.js): the podium by default, the full
+// standings when the organiser published them. The sheet is a page of its own, so this is a plain
+// link; "Save as PDF" happens in the print dialog it opens. `withName` is for places where the link
+// stands apart from its event (the archive list), so each one says which event it is for.
+function buildSheetLink(event, { withName = false } = {}) {
+  return el('p', { className: 'results-sheet-link-row' }, [
+    el(
+      'a',
+      {
+        className: 'results-sheet-link',
+        attrs: { href: `/results/?sheet=${encodeURIComponent(event.eventId)}` },
+      },
+      withName
+        ? [document.createTextNode(`Results sheet — ${event.eventName} (print or save as PDF)`)]
+        : [
+            document.createTextNode('Results sheet — print or save as PDF'),
+            el('span', { className: 'sr-only', text: ` for ${event.eventName}` }),
+          ],
+    ),
+  ]);
+}
+
 function buildLatestResult(event, client) {
   const timeSpan = el('span', { className: 'tabular-nums' }, [
     ...withSrExpansion(
@@ -187,6 +208,7 @@ function buildLatestResult(event, client) {
               document.createTextNode(`${formatShortDate(event.publishedAt)} result published`),
             ]),
           ]),
+          buildSheetLink(event),
         ]),
         el('ol', { className: 'results-podium' }, event.podium.map(podiumRow)),
       ]),
@@ -263,7 +285,10 @@ function buildArchive(events, client) {
         { className: 'results-archive-records' },
         events
           .filter((event) => event.podium?.[0])
-          .map((event) => buildScoringRecord(event.eventId, { client, title: event.eventName })),
+          .flatMap((event) => [
+            buildSheetLink(event, { withName: true }),
+            buildScoringRecord(event.eventId, { client, title: event.eventName }),
+          ]),
       ),
     ],
   );

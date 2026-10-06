@@ -51,7 +51,7 @@ import {
   computeEventSummary,
   computeAvgSecsPerSet,
 } from './analytics.js';
-import { buildResultsPayload } from './resultsPublishing.js';
+import { buildResultsPayload, podiumRowsOf } from './resultsPublishing.js';
 
 // Pure. 1 -> '1st', 2 -> '2nd', 3 -> '3rd', 4 -> '4th', 11-13 -> '11th'/
 // '12th'/'13th' (the standard English-ordinal exception), everything else
@@ -1169,6 +1169,11 @@ export async function mountReportScreen(root, { eventId, client = getSupabase(),
     // "not published" afterward rather than getting stuck reflecting
     // whichever state was mid-flight when it errored.
     let published = null;
+    // What the organiser has chosen to publish ('podium' | 'full'), and what is published right now
+    // (null until known, or while unpublished). They differ while the organiser is part-way through
+    // changing their mind; "Update published results" is what makes them agree again.
+    let scope = 'podium';
+    let publishedScope = null;
     let busy = null; // null | 'publishing' | 'unpublishing'
 
     // Matches renderExportActions' own showActionError above — an error
@@ -1184,11 +1189,93 @@ export async function mountReportScreen(root, { eventId, client = getSupabase(),
       }
     }
 
+    function renderScopeChoice() {
+      // Updated in place when a radio changes (no re-render, so focus stays on the radio). Empty while
+      // the choice matches what is live, so a screen reader hears nothing until there is something to say.
+      const pendingNote = el('p', {
+        className: 'stage-meta report-public-results-pending',
+        attrs: { role: 'status' },
+      });
+      function syncPendingNote() {
+        pendingNote.textContent =
+          published && scope !== publishedScope
+            ? 'Not applied yet — press “Update published results” to change what is public.'
+            : '';
+      }
+      const option = (value, label, hint) => {
+        const hintId = `public-results-scope-${value}-hint`;
+        const input = el('input', {
+          attrs: {
+            type: 'radio',
+            name: 'public-results-scope',
+            value,
+            id: `public-results-scope-${value}`,
+            'aria-describedby': hintId,
+            'data-focus-key': `public-results-scope-${value}`,
+          },
+        });
+        input.checked = scope === value;
+        // Truly disabled, not just aria-disabled (setBusyDisabled's advisory-only form): a radio
+        // that still accepts a change mid-publish would let the card claim a level that was not
+        // what went out. Nothing here holds focus while busy (the button that started the work does).
+        input.disabled = busy != null;
+        input.addEventListener('change', () => {
+          scope = value;
+          syncPendingNote();
+        });
+        // The hint sits beside the label, not inside it, so the radio's name is just "Podium only" /
+        // "Full standings" and the explanation is read as its description.
+        return el('div', { className: 'report-public-results-option' }, [
+          input,
+          el('div', { className: 'report-public-results-option-text' }, [
+            el('label', {
+              className: 'report-public-results-option-label',
+              text: label,
+              attrs: { for: input.id },
+            }),
+            el('span', { className: 'stage-meta', id: hintId, text: hint }),
+          ]),
+        ]);
+      };
+      syncPendingNote();
+      return el(
+        'fieldset',
+        {
+          className: 'report-public-results-scope',
+          attrs: { 'aria-describedby': 'public-results-scope-note' },
+        },
+        [
+          el('legend', { text: 'What to publish' }),
+          option(
+            'podium',
+            'Podium only',
+            'The top three — name, café and score — and the winning time.',
+          ),
+          option(
+            'full',
+            'Full standings',
+            'Every competitor’s placing, name and café, and their score and time in the last round they reached, with a printable results sheet.',
+          ),
+          el('p', {
+            className: 'stage-meta',
+            id: 'public-results-scope-note',
+            text:
+              'Phone numbers, emails and set-by-set marks are never published. Competitors who withdrew, ' +
+              'or who have no scores, are left out of the full standings. Figures are those on this page — ' +
+              'reload it first if anything has changed since you opened it.',
+          }),
+          pendingNote,
+        ],
+      );
+    }
+
     function renderBody() {
       if (published == null) {
         return el('p', { text: 'Checking public results status…' });
       }
       if (published) {
+        // Unpublish stays the card's first button, sharing Publish's own focus key, so focus follows
+        // the toggle when the card flips between the two states. "Update" comes after it.
         const unpublishButton = el('button', {
           className: 'btn btn-outline tap-target',
           text: busy === 'unpublishing' ? 'Unpublishing…' : 'Unpublish',
@@ -1196,9 +1283,39 @@ export async function mountReportScreen(root, { eventId, client = getSupabase(),
         });
         setBusyDisabled(unpublishButton, busy != null);
         unpublishButton.addEventListener('click', handleUnpublish);
-        return el('div', { className: 'report-public-results-row' }, [
-          el('p', { text: 'This event’s results are published to the public archive.' }),
-          unpublishButton,
+        const updateButton = el('button', {
+          className: 'btn btn-primary tap-target',
+          text: busy === 'publishing' ? 'Updating…' : 'Update published results',
+          attrs: { type: 'button', 'data-focus-key': 'public-results-update' },
+        });
+        setBusyDisabled(updateButton, busy != null);
+        updateButton.addEventListener('click', handlePublish);
+        const sheetLink = el(
+          'a',
+          {
+            className: 'report-public-results-sheet-link',
+            attrs: {
+              href: `/results/?sheet=${encodeURIComponent(data.event.id)}`,
+              target: '_blank',
+              rel: 'noopener',
+            },
+          },
+          [
+            document.createTextNode('View the public results sheet'),
+            el('span', { className: 'sr-only', text: ' (opens in a new tab)' }),
+          ],
+        );
+        return el('div', {}, [
+          el('div', { className: 'report-public-results-row' }, [
+            el('p', {
+              text: `This event’s results are published to the public archive (${
+                publishedScope === 'full' ? 'full standings' : 'podium only'
+              }).`,
+            }),
+            el('div', { className: 'report-actions' }, [unpublishButton, updateButton]),
+          ]),
+          renderScopeChoice(),
+          el('p', {}, [sheetLink]),
         ]);
       }
       const publishButton = el('button', {
@@ -1208,9 +1325,12 @@ export async function mountReportScreen(root, { eventId, client = getSupabase(),
       });
       setBusyDisabled(publishButton, busy != null);
       publishButton.addEventListener('click', handlePublish);
-      return el('div', { className: 'report-public-results-row' }, [
-        el('p', { text: 'Not published to the public results archive yet.' }),
-        publishButton,
+      return el('div', {}, [
+        el('div', { className: 'report-public-results-row' }, [
+          el('p', { text: 'Not published to the public results archive yet.' }),
+          publishButton,
+        ]),
+        renderScopeChoice(),
       ]);
     }
 
@@ -1229,28 +1349,43 @@ export async function mountReportScreen(root, { eventId, client = getSupabase(),
       });
     }
 
-    // Cafe is only ever fetched for the podium's own top 3 entries — no need
-    // to thread it through analytics.js's whole pipeline (resultsPublishing.js's
-    // own comment has the full reasoning).
-    async function buildPayload() {
+    // Entries come from event_entries rather than analytics.js's pipeline (resultsPublishing.js's own
+    // comment has the full reasoning): their café, and whether they withdrew. Only the podium's three
+    // are looked up for a podium-only publish; a full-standings publish needs every competitor's,
+    // fetched in chunks so a large field never makes one request URL unreasonably long.
+    async function listEntriesInChunks(entryIds) {
+      const entries = [];
+      for (let start = 0; start < entryIds.length; start += 50) {
+        entries.push(...(await listEntriesByIds(entryIds.slice(start, start + 50), client)));
+      }
+      return entries;
+    }
+
+    async function buildPayload(chosenScope) {
       const summary = computeEventSummary(data.stageReports);
-      const podiumEntryIds = summary.slice(0, 3).map((row) => row.entryId);
-      const podiumEntries = await listEntriesByIds(podiumEntryIds, client);
-      const cafeByEntryId = new Map(podiumEntries.map((entry) => [entry.id, entry.cafe ?? null]));
+      const publishedRows = chosenScope === 'full' ? summary : podiumRowsOf(summary);
+      const entries = await listEntriesInChunks(publishedRows.map((row) => row.entryId));
       return buildResultsPayload({
         event: data.event,
         stageReports: data.stageReports,
         summary,
-        cafeByEntryId,
+        cafeByEntryId: new Map(entries.map((entry) => [entry.id, entry.cafe ?? null])),
+        scope: chosenScope,
+        roundLabelByOrdinal: stageRoundLabels(data.stageReports),
+        // A competitor who withdrew is not named in the full standings (the podium is never filtered).
+        omitEntryIds: new Set(entries.filter((entry) => entry.withdrawn === true).map((e) => e.id)),
       });
     }
 
     async function handlePublish() {
       if (busy) return;
+      // The level is read once, here: what is published, and what the card then reports as published,
+      // must be the same thing even if the choice is touched while the request is in flight.
+      const chosenScope = scope;
       busy = 'publishing';
       renderCard();
       try {
-        const payload = await buildPayload();
+        const payload = await buildPayload(chosenScope);
         await publishEventResults(data.event.org_id, data.event.id, payload, client);
         // A discarded-but-still-in-flight publish (this handler's own await
         // still resolving after the router already navigated elsewhere) must
@@ -1260,8 +1395,16 @@ export async function mountReportScreen(root, { eventId, client = getSupabase(),
         // of closing this across every screen). Found missing here in
         // review (code-reviewer).
         if (signal?.aborted) return;
+        const wasPublished = published;
         published = true;
-        setFeedback('Published to the public results archive.', 'success');
+        publishedScope = chosenScope;
+        const levelText = chosenScope === 'full' ? 'the full standings' : 'the podium only';
+        setFeedback(
+          wasPublished
+            ? `Updated the published results. They now show ${levelText}.`
+            : `Published to the public results archive. It shows ${levelText}.`,
+          'success',
+        );
       } catch (err) {
         if (signal?.aborted) return;
         setFeedback(describeError(err), 'error');
@@ -1278,6 +1421,10 @@ export async function mountReportScreen(root, { eventId, client = getSupabase(),
         await unpublishEventResults(data.event.org_id, data.event.id, client);
         if (signal?.aborted) return;
         published = false;
+        publishedScope = null;
+        // Publishing again starts from the podium: a retraction must not leave the wider choice
+        // pre-selected for the next, possibly hasty, Publish click.
+        scope = 'podium';
         setFeedback('Removed from the public results archive.', 'success');
       } catch (err) {
         if (signal?.aborted) return;
@@ -1296,6 +1443,12 @@ export async function mountReportScreen(root, { eventId, client = getSupabase(),
       .then((existing) => {
         if (signal?.aborted) return;
         published = Boolean(existing);
+        if (existing) {
+          // What is published right now is recorded by the payload itself: full standings exist only
+          // when the organiser chose them. The choice starts out matching it.
+          publishedScope = Array.isArray(existing.payload?.standings) ? 'full' : 'podium';
+          scope = publishedScope;
+        }
         renderCard();
       })
       .catch((err) => {
