@@ -643,3 +643,16 @@ describe('drafts and the states that must not be resurrected', () => {
     expect(toggle.getAttribute('aria-disabled')).toBe('true');
   });
 });
+
+describe('restoring focus on the minutes field', () => {
+  it('puts focus back on the minutes input when that is where it was', () => {
+    const first = mount();
+    first.toggle.click(); // focuses the minutes input
+    const drafts = captureCorrectionDrafts(host);
+    expect(drafts[0].focused).toBe('minutes');
+    host.innerHTML = '';
+    const again = mount();
+    expect(restoreCorrectionDrafts(host, drafts)).toBe(true);
+    expect(document.activeElement).toBe(again.minutes);
+  });
+});

@@ -19,7 +19,9 @@ import { startHeat, recordTap, autoMaxRemainingEntries, describeTimingConflict }
 import { recordManualTime, parseElapsedInput, secsToParts } from './timingManual.js';
 import {
   attemptCorrection,
+  createPendingRecheck,
   describeQueuedCorrection,
+  hasPendingWork,
   isStillQueued,
   loadPendingWork,
   resolveCorrection,
@@ -360,7 +362,7 @@ export function buildScoringLink(eventId, heatId) {
 
 export async function mountTimingScreen(
   root,
-  { eventId, heatId, client = getSupabase(), signal } = {},
+  { eventId, heatId, client = getSupabase(), signal, recheckMs = 4000 } = {},
 ) {
   let focusAfterRender = null;
   let pendingError = null;
@@ -371,6 +373,16 @@ export async function mountTimingScreen(
   let urgentAnnounced = false;
   let visibilityHandler = null;
   let renderGeneration = 0;
+  // While anything for this heat is still waiting in the outbox (a queued correction or confirm),
+  // nothing else says when it has synced — so look again every few seconds. Quietly: a look that
+  // fails (still offline) just tries again later.
+  const recheck = createPendingRecheck(async () => {
+    try {
+      await render();
+    } catch {
+      recheck.schedule(true);
+    }
+  }, recheckMs);
   // Set by an action handler right before triggering the next render(),
   // resolved INSIDE that render() against its own freshly-reloaded state —
   // ground truth over the outbox flush's own bookkeeping, same principle
@@ -446,6 +458,7 @@ export async function mountTimingScreen(
       const live = root.querySelector('.screen-feedback') ?? feedback;
       setFeedback(live, describeQueuedCorrection(target.displayName), 'pending');
       done({ queued: true });
+      recheck.schedule(true);
       live.scrollIntoView?.({ block: 'nearest' });
       live.focus();
       return;
@@ -904,6 +917,7 @@ export async function mountTimingScreen(
     const correctionFocusKept = restoreCorrectionDrafts(root, correctionDrafts, {
       skipEntryId: correctedEntryId,
     });
+    recheck.schedule(hasPendingWork(data.pending, data.hydrated));
 
     // Rebuild-then-refocus (§15.3): only past this point does the target
     // element actually exist to focus. When no explicit target was set (the
@@ -928,6 +942,7 @@ export async function mountTimingScreen(
 
   return {
     unmount() {
+      recheck.cancel();
       // A render() already in flight (awaiting loadState()) when unmount()
       // is called would otherwise still pass its own generation check and
       // proceed — rebuilding into a root the caller has already discarded,

@@ -6,7 +6,9 @@ import {
   attemptCorrection,
   correctHeatTime,
   describeCorrectionError,
+  createPendingRecheck,
   describeQueuedCorrection,
+  hasPendingWork,
   isStillQueued,
   loadPendingWork,
   MAX_RAW_SECS,
@@ -613,5 +615,65 @@ describe('correctHeatTime — an absurd figure is the person\u2019s input, not a
       correctHeatTime(heat, stoppedEntry, Infinity, 'Wrong cupper', 'org1', client),
     ).rejects.toMatchObject({ name: 'CorrectionInputError', field: 'time' });
     expect(await countPendingOperations()).toBe(0);
+  });
+});
+
+describe('isStillQueued — matches on THIS operation', () => {
+  it('a correction that already landed is not "queued" just because something else is waiting in the outbox', async () => {
+    await enqueueOperation('record_heat_time', { p_heat_entry_id: 'he2' });
+    await enqueueOperation('correct_heat_time', { p_heat_entry_id: 'he3' });
+    expect(await isStillQueued({ operationId: 'the-one-that-landed', flushResult: {} })).toBe(
+      false,
+    );
+  });
+});
+
+describe('hasPendingWork', () => {
+  const rows = [{ id: 'he1' }, { id: 'he2' }];
+  it('is true for a queued confirm, or a queued correction for one of THIS heat’s entries', () => {
+    expect(hasPendingWork({ confirmQueued: true, queuedEntryIds: new Set() }, rows)).toBe(true);
+    expect(hasPendingWork({ confirmQueued: false, queuedEntryIds: new Set(['he2']) }, rows)).toBe(
+      true,
+    );
+  });
+  it('is false for nothing, or for another heat’s queued correction', () => {
+    expect(hasPendingWork({ confirmQueued: false, queuedEntryIds: new Set() }, rows)).toBe(false);
+    expect(hasPendingWork({ confirmQueued: false, queuedEntryIds: new Set(['other']) }, rows)).toBe(
+      false,
+    );
+  });
+});
+
+describe('createPendingRecheck', () => {
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  it('looks again once after the delay when armed', async () => {
+    const rerender = vi.fn();
+    const recheck = createPendingRecheck(rerender, 20);
+    recheck.schedule(true);
+    expect(rerender).not.toHaveBeenCalled();
+    await wait(60);
+    expect(rerender).toHaveBeenCalledTimes(1);
+    await wait(60);
+    expect(rerender).toHaveBeenCalledTimes(1); // one look per arming, not a loop
+  });
+
+  it('re-arming replaces the pending look; disarming and cancel() stop it', async () => {
+    const rerender = vi.fn();
+    const recheck = createPendingRecheck(rerender, 30);
+    recheck.schedule(true);
+    recheck.schedule(true);
+    await wait(80);
+    expect(rerender).toHaveBeenCalledTimes(1);
+
+    recheck.schedule(true);
+    recheck.schedule(false);
+    await wait(60);
+    expect(rerender).toHaveBeenCalledTimes(1);
+
+    recheck.schedule(true);
+    recheck.cancel();
+    await wait(60);
+    expect(rerender).toHaveBeenCalledTimes(1);
   });
 });

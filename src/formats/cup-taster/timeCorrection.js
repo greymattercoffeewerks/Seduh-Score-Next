@@ -214,6 +214,38 @@ export async function loadPendingWork(heatId) {
   return work;
 }
 
+// True when something for THIS screen's heat is still in the outbox: a confirm for it, or a
+// correction for one of its entries (`hydratedEntries` are the rows the screen rendered).
+export function hasPendingWork(pending, hydratedEntries) {
+  return (
+    pending.confirmQueued || hydratedEntries.some((entry) => pending.queuedEntryIds.has(entry.id))
+  );
+}
+
+// Nothing else tells a screen when a queued correction or confirm has finally synced — the
+// outbox drains in the background — so while any is pending the screen looks again every few
+// seconds (re-rendering from server state and the outbox, which un-parks the row or re-enables
+// Confirm once it has landed). `schedule(true)` arms one look, `schedule(false)` and `cancel()`
+// disarm it; the screen calls schedule at the end of every render and cancel on unmount.
+export function createPendingRecheck(rerender, ms = 4000) {
+  let handle = null;
+  return {
+    schedule(active) {
+      clearTimeout(handle);
+      handle = active
+        ? setTimeout(() => {
+            handle = null;
+            rerender();
+          }, ms)
+        : null;
+    },
+    cancel() {
+      clearTimeout(handle);
+      handle = null;
+    },
+  };
+}
+
 export function describeQueuedCorrection(displayName) {
   return `${displayName ?? 'Cupper'}'s correction is saved on this device and will sync when the connection is back. The time shown stays the old one until then, so don't edit it again.`;
 }

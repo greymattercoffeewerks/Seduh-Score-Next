@@ -34,7 +34,9 @@ import { cupTasterOutboxHandlers } from './outboxHandlers.js';
 import { renderTimingRows } from './timingScreen.js';
 import {
   attemptCorrection,
+  createPendingRecheck,
   describeQueuedCorrection,
+  hasPendingWork,
   isStillQueued,
   loadPendingWork,
   resolveCorrection,
@@ -148,12 +150,22 @@ export function renderScoringRows(
 
 export async function mountScoringScreen(
   root,
-  { eventId, heatId, client = getSupabase(), signal, handlers } = {},
+  { eventId, heatId, client = getSupabase(), signal, handlers, recheckMs = 4000 } = {},
 ) {
   let focusAfterRender = null;
   let pendingError = null;
   let pendingSuccess = null;
   let renderGeneration = 0;
+  // While anything for this heat is still waiting in the outbox (a queued correction or confirm),
+  // nothing else says when it has synced — so look again every few seconds. Quietly: a look that
+  // fails (still offline) just tries again later.
+  const recheck = createPendingRecheck(async () => {
+    try {
+      await render();
+    } catch {
+      recheck.schedule(true);
+    }
+  }, recheckMs);
   let confirmInFlight = false;
   // An "Edit time" save (see timeCorrection.js), resolved inside the next
   // render() against fresh state — the same ground-truth pattern as the timing
@@ -230,6 +242,7 @@ export async function mountScoringScreen(
       const live = root.querySelector('.screen-feedback') ?? feedback;
       setFeedback(live, describeQueuedCorrection(target.displayName), 'pending');
       done({ queued: true });
+      recheck.schedule(true);
       live.scrollIntoView?.({ block: 'nearest' });
       live.focus();
       return;
@@ -557,6 +570,7 @@ export async function mountScoringScreen(
     const correctionFocusKept = restoreCorrectionDrafts(root, correctionDrafts, {
       skipEntryId: correctedEntryId,
     });
+    recheck.schedule(hasPendingWork(data.pending, data.hydrated));
 
     if (correctionFocusKept) {
       focusAfterRender = null;
@@ -574,6 +588,7 @@ export async function mountScoringScreen(
 
   return {
     unmount() {
+      recheck.cancel();
       renderGeneration++;
     },
   };

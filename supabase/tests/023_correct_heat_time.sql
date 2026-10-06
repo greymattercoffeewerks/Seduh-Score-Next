@@ -11,7 +11,7 @@
 -- cannot execute it. Runs under a real `authenticated` role with RLS in force,
 -- same discipline as 007_timing_outbox_rpcs.sql.
 begin;
-select plan(70);
+select plan(75);
 
 -- ============ fixtures ============
 
@@ -91,6 +91,19 @@ alter table ct_heats disable trigger trg_ct_heats_set_updated_at;
 update ct_heats set updated_at = '2026-01-01T00:00:00Z'::timestamptz
   where id in ('00000000-0000-0000-0000-0000000000d1', '00000000-0000-0000-0000-0000000000d2');
 alter table ct_heats enable trigger trg_ct_heats_set_updated_at;
+
+-- Reads the DETAIL a refused call attaches (the client's describeCorrectionError depends on its
+-- JSON keys). A temp function so it can run under the `authenticated` role below.
+create function pg_temp.detail_of(q text) returns text
+language plpgsql as $f$
+declare d text;
+begin
+  execute q;
+  return 'no error';
+exception when others then
+  get stacked diagnostics d = pg_exception_detail;
+  return d;
+end $f$;
 
 set local role authenticated;
 set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000000001';
@@ -591,6 +604,42 @@ select is(
   (select elapsed_secs from ct_heat_entries where id = '00000000-0000-0000-0000-0000000000f8'),
   10,
   'the correction is still what is recorded'
+);
+
+-- ============ what the client reads out of a refusal ============
+
+select is(
+  (pg_temp.detail_of($q$ select correct_heat_time(
+       gen_random_uuid(), '00000000-0000-0000-0000-000000000010',
+       '00000000-0000-0000-0000-0000000000f5', 100, 90, 90, false, 'Missed the stop', now()
+     ) $q$)::jsonb) ->> 'current_status',
+  'confirmed',
+  'a refusal for a confirmed heat carries current_status = confirmed (the client says "locked" from it)'
+);
+select is(
+  (pg_temp.detail_of($q$ select correct_heat_time(
+       gen_random_uuid(), '00000000-0000-0000-0000-000000000010',
+       '00000000-0000-0000-0000-0000000000f1', 200, 150, 150, false, 'Wrong cupper', now()
+     ) $q$)::jsonb) ->> 'current_elapsed_secs',
+  '480',
+  'a stale-time refusal carries current_elapsed_secs (the client names the time that is there now)'
+);
+select is(
+  (pg_temp.detail_of($q$ select correct_heat_time(
+       gen_random_uuid(), '00000000-0000-0000-0000-000000000010',
+       '00000000-0000-0000-0000-0000000000f1', 200, 150, 150, false, 'Wrong cupper', now()
+     ) $q$)::jsonb) ->> 'expected_elapsed_secs',
+  '200',
+  '…and expected_elapsed_secs, the value the caller was shown'
+);
+select ok(
+  (select updated_at from ct_heats where id = '00000000-0000-0000-0000-0000000000d2')
+    > '2026-01-01T00:00:00Z'::timestamptz,
+  'correcting a time in a heat that is still TIMING bumps its updated_at too, not only in scoring'
+);
+select ok(
+  (select array_to_string(proconfig, ',') from pg_proc where proname = 'correct_heat_time') like '%search_path%',
+  'the function pins its search_path'
 );
 
 -- ============ grants and the untouched other org ============

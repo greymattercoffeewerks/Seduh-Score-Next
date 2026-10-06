@@ -18,7 +18,9 @@ import { recordManualTime, parseElapsedInput } from './timingManual.js';
 import { describeTimingConflict } from './timing.js';
 import {
   attemptCorrection,
+  createPendingRecheck,
   describeQueuedCorrection,
+  hasPendingWork,
   isStillQueued,
   loadPendingWork,
   resolveCorrection,
@@ -114,11 +116,21 @@ export function renderManualEntryRows(hydratedEntries, { onSave }) {
 
 export async function mountManualTimingScreen(
   root,
-  { eventId, heatId, client = getSupabase(), signal } = {},
+  { eventId, heatId, client = getSupabase(), signal, recheckMs = 4000 } = {},
 ) {
   let pendingError = null;
   let pendingSuccess = null;
   let renderGeneration = 0;
+  // While anything for this heat is still waiting in the outbox (a queued correction or confirm),
+  // nothing else says when it has synced — so look again every few seconds. Quietly: a look that
+  // fails (still offline) just tries again later.
+  const recheck = createPendingRecheck(async () => {
+    try {
+      await render();
+    } catch {
+      recheck.schedule(true);
+    }
+  }, recheckMs);
   // Captures whether the heat was still 'pending' right before the save
   // currently in flight — checked against the freshly-loaded status in the
   // following render() to detect whether THIS save was the one that
@@ -191,6 +203,7 @@ export async function mountManualTimingScreen(
       const live = root.querySelector('.screen-feedback') ?? feedback;
       setFeedback(live, describeQueuedCorrection(target.displayName), 'pending');
       done({ queued: true });
+      recheck.schedule(true);
       live.scrollIntoView?.({ block: 'nearest' });
       live.focus();
       return;
@@ -419,6 +432,7 @@ export async function mountManualTimingScreen(
     const correctionFocusKept = restoreCorrectionDrafts(root, correctionDrafts, {
       skipEntryId: correctedEntryId,
     });
+    recheck.schedule(hasPendingWork(data.pending, data.hydrated));
 
     // Rebuild-then-refocus (§15.3): a saved row's Save button is replaced by
     // fresh, re-prefilled inputs on every render, so there's no single
@@ -449,6 +463,7 @@ export async function mountManualTimingScreen(
     // generation counter, for the same reason timingScreen.js's unmount()
     // does: an in-flight render must never survive past teardown.
     unmount() {
+      recheck.cancel();
       renderGeneration++;
     },
   };

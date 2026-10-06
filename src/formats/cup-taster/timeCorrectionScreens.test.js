@@ -101,7 +101,6 @@ function buildClient({ heat, entries, sets = [] }) {
         if (processed.has(payload.p_operation_id)) {
           return Promise.resolve({ data: null, error: null });
         }
-        processed.add(payload.p_operation_id);
         const entry = db.ct_heat_entries.find((e) => e.id === payload.p_heat_entry_id);
         if (!['timing', 'scoring'].includes(theHeat().status)) {
           return refusal(
@@ -119,6 +118,7 @@ function buildClient({ heat, entries, sets = [] }) {
           });
         }
         if (payload.p_elapsed_secs === entry.elapsed_secs) return refusal('P0001', 'same time');
+        processed.add(payload.p_operation_id); // only a SUCCESSFUL correction is recorded
         Object.assign(entry, {
           elapsed_secs: payload.p_elapsed_secs,
           elapsed_secs_raw: payload.p_elapsed_secs_raw,
@@ -932,6 +932,10 @@ describe('Confirm waits for a correction that is still queued', () => {
       ).toBe(true),
     );
     expect(confirmBtn().disabled).toBe(true);
+    // …and the row itself comes back parked, from the outbox alone (a fresh mount, no earlier DOM).
+    expect(toggleOf('e1').textContent).toBe('Waiting to sync');
+    expect(toggleOf('e1').getAttribute('aria-disabled')).toBe('true');
+    expect(toggleOf('e2').textContent).toBe('Edit time');
     const hint = root.querySelector(`#${confirmBtn().getAttribute('aria-describedby')}`);
     expect(hint.textContent).toBe(
       'A time correction is still waiting to sync — Confirm unlocks once it has.',
@@ -1005,5 +1009,177 @@ describe('a save that is in flight when another action re-renders the screen', (
     await vi.waitFor(() => expect(feedback().dataset.tone).toBe('pending'));
     expect(feedback().textContent).toContain('saved on this device');
     expect(feedback()).not.toBe(staleFeedback);
+  });
+});
+
+describe('a queued correction is parked from the outbox alone, on every screen', () => {
+  it('timing screen, completed view', async () => {
+    await enqueueOperation('correct_heat_time', { p_heat_entry_id: 'he1' });
+    const client = buildClient({ heat: appHeat('scoring'), entries: [stopped, stopped2] });
+    screen = await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
+    expect(toggleOf('e1').textContent).toBe('Waiting to sync');
+    expect(toggleOf('e2').textContent).toBe('Edit time');
+  });
+
+  it('manual-timing screen, completed view', async () => {
+    await enqueueOperation('correct_heat_time', { p_heat_entry_id: 'he1' });
+    const client = buildClient({ heat: manualHeat('scoring'), entries: [stopped, stopped2] });
+    screen = await mountManualTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
+    expect(toggleOf('e1').textContent).toBe('Waiting to sync');
+    expect(toggleOf('e2').textContent).toBe('Edit time');
+  });
+});
+
+describe('the screen looks again while something is queued, and lets go once it has synced', () => {
+  const drain = () => flushOutbox({ correct_heat_time: () => Promise.resolve() });
+
+  it('scoring: Confirm unlocks and the row returns to Edit time after the queued correction drains', async () => {
+    await enqueueOperation('correct_heat_time', { p_heat_entry_id: 'he1' });
+    const client = buildClient({
+      heat: { id: 'h1', status: 'scoring', duration_secs: 480 },
+      entries: [stopped, stopped2],
+      sets: [{ id: 's1', stage_id: 'st1', position: 1, label: null }],
+    });
+    screen = await mountScoringScreen(root, {
+      eventId: 'ev1',
+      heatId: 'h1',
+      client,
+      recheckMs: 30,
+    });
+    const confirmBtn = () =>
+      [...root.querySelectorAll('button')].find((b) => b.textContent === 'Confirm heat');
+    for (const button of [...root.querySelectorAll('.scoring-toggle')]) {
+      button.click();
+      await vi.waitFor(() => expect(confirmBtn()).toBeTruthy());
+    }
+    // Every set scored, every tap's re-render finished — so the only thing that can still
+    // change the screen after the drain below is the screen looking again on its own.
+    await vi.waitFor(() =>
+      expect(
+        [...root.querySelectorAll('.scoring-toggle')].every((b) => b.dataset.tone === 'correct'),
+      ).toBe(true),
+    );
+    expect(confirmBtn().disabled).toBe(true);
+    expect(toggleOf('e1').textContent).toBe('Waiting to sync');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    await drain(); // the correction reaches the server in the background
+    await vi.waitFor(() => expect(confirmBtn().disabled).toBe(false));
+    expect(toggleOf('e1').textContent).toBe('Edit time');
+  });
+
+  it('timing screen: the parked row returns to Edit time after the queued correction drains', async () => {
+    await enqueueOperation('correct_heat_time', { p_heat_entry_id: 'he1' });
+    const client = buildClient({ heat: appHeat('scoring'), entries: [stopped, stopped2] });
+    screen = await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client, recheckMs: 30 });
+    expect(toggleOf('e1').textContent).toBe('Waiting to sync');
+    await drain();
+    await vi.waitFor(() => expect(toggleOf('e1').textContent).toBe('Edit time'));
+  });
+
+  it('stops looking after unmount', async () => {
+    await enqueueOperation('correct_heat_time', { p_heat_entry_id: 'he1' });
+    const client = buildClient({ heat: appHeat('scoring'), entries: [stopped, stopped2] });
+    const mounted = await mountTimingScreen(root, {
+      eventId: 'ev1',
+      heatId: 'h1',
+      client,
+      recheckMs: 20,
+    });
+    mounted.unmount();
+    root.innerHTML = 'torn down';
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(root.innerHTML).toBe('torn down'); // a look after unmount would have rebuilt it
+  });
+});
+
+describe('the "Corrected —" note', () => {
+  it('is not shown for a hand-entered manual time that was never corrected (manual source, no note)', async () => {
+    const handEntered = { ...stopped, time_source: 'manual', time_note: null };
+    const client = buildClient({ heat: manualHeat('scoring'), entries: [handEntered, stopped2] });
+    screen = await mountManualTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
+    expect(root.querySelector('.timing-row-note')).toBeNull();
+    expect(root.textContent).not.toContain('Corrected —');
+  });
+
+  it('is not shown for a tapped time that happens to carry a note', async () => {
+    const odd = { ...stopped, time_source: 'tapped', time_note: 'stray' };
+    const client = buildClient({ heat: appHeat('scoring'), entries: [odd, stopped2] });
+    screen = await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
+    expect(root.querySelector('.timing-row-note')).toBeNull();
+  });
+});
+
+describe('a failed reload after a landed correction', () => {
+  it('does not re-report that correction on a later, unrelated render', async () => {
+    const client = buildClient({ heat: appHeat('timing'), entries: [stopped, running] });
+    screen = await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
+    client.breakAfterCorrection = true;
+    correct('e1', 'Cupper One', { minutes: '3', seconds: '12', reason: 'Missed the stop' });
+    await vi.waitFor(() => expect(feedback().dataset.tone).toBe('error'));
+
+    // The connection is back; some other action re-renders. The correction DID land — but its
+    // pending check was dropped with the failed reload, so nothing reports on it out of context.
+    client.breakAfterCorrection = false;
+    client.breakReads = false;
+    rowOf('Cupper Two').querySelector('.btn-stop').click();
+    await vi.waitFor(() =>
+      expect(rowOf('Cupper One').querySelector('.timing-row-result').textContent).toBe('3:12'),
+    );
+    expect(feedback().textContent).not.toContain('corrected to');
+  });
+});
+
+describe('the manual-timing screen offline', () => {
+  it('a correction made offline is saved, says so, and parks Edit', async () => {
+    const client = buildClient({ heat: manualHeat('scoring'), entries: [stopped, stopped2] });
+    client.offline = true;
+    screen = await mountManualTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
+    correct('e1', 'Cupper One', { minutes: '3', seconds: '12', reason: 'Missed the stop' });
+    await vi.waitFor(() => expect(feedback().dataset.tone).toBe('pending'));
+    expect(feedback().textContent).toContain('saved on this device');
+    expect(toggleOf('e1').getAttribute('aria-disabled')).toBe('true');
+    expect(await countPendingOperations()).toBe(1);
+  });
+});
+
+describe('looking again, on the manual-timing screen', () => {
+  it('the parked row returns to Edit time after the queued correction drains', async () => {
+    await enqueueOperation('correct_heat_time', { p_heat_entry_id: 'he1' });
+    const client = buildClient({ heat: manualHeat('scoring'), entries: [stopped, stopped2] });
+    screen = await mountManualTimingScreen(root, {
+      eventId: 'ev1',
+      heatId: 'h1',
+      client,
+      recheckMs: 30,
+    });
+    expect(toggleOf('e1').textContent).toBe('Waiting to sync');
+    await flushOutbox({ correct_heat_time: () => Promise.resolve() });
+    await vi.waitFor(() => expect(toggleOf('e1').textContent).toBe('Edit time'));
+  });
+});
+
+describe('a failed reload after a landed correction — scoring screen', () => {
+  it('does not re-report that correction on a later render with nothing else to say', async () => {
+    const client = buildClient({
+      heat: { id: 'h1', status: 'scoring', duration_secs: 480 },
+      entries: [stopped, stopped2],
+      sets: [{ id: 's1', stage_id: 'st1', position: 1, label: null }],
+    });
+    screen = await mountScoringScreen(root, { eventId: 'ev1', heatId: 'h1', client });
+    client.breakAfterCorrection = true;
+    correct('e1', 'Cupper One', { minutes: '3', seconds: '12', reason: 'Missed the stop' });
+    await vi.waitFor(() => expect(feedback().dataset.tone).toBe('error'));
+
+    // Connection back; a score tap re-renders with no message of its own. The correction did land,
+    // but its pending check went with the failed reload — nothing may report on it now.
+    client.breakAfterCorrection = false;
+    client.breakReads = false;
+    root.querySelector('.scoring-toggle').click();
+    await vi.waitFor(() =>
+      expect(root.querySelector('.scoring-toggle').dataset.tone).toBe('correct'),
+    );
+    expect(feedback().textContent).toBe('');
+    expect(feedback().dataset.tone).toBeUndefined();
   });
 });

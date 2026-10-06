@@ -1529,7 +1529,7 @@ _Deferred findings from T-HARDEN.correct-heat-time, flagged and documented, not 
 - **Modal or bottom-sheet editor** — editor is 314px tall at 360px; pushes later Stop buttons down; ship compact version first, build modal later.
 - **Correction handler copied in three screens** — ~45 lines per screen; extract to shared handler.
 - **Save in flight when another action re-renders** — busy editor not carried over; covered by test on scoring screen only (not timing/manual).
-- **After reconnect flush nothing re-renders** — 'Waiting to sync' row unchanged until next render.
+- **Test fidelity** — the stateful fake does not mirror the RPC's reason/duration validation or `confirm_heat`'s completeness check; the failed-reload and in-flight-save cases are covered on the scoring screen only.
 - **Correction compare-and-set on elapsed only** — ABA scenario (200→150→200 lets stale edit through).
 - **No-raw-elapsed-write lint rule cannot see payload keys** — same gap as `record_heat_time`.
 - **Reason blank-space edge case** — non-breaking or zero-width spaces count as non-blank.

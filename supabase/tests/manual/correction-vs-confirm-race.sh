@@ -23,6 +23,8 @@
 # 3. confirm_heat RETRY behind its own first delivery: same, heat confirmed once, one result.
 # 4. record_heat_time 'reject' RETRY (a real tap delivered twice): no self-inflicted CONFLICT.
 # 5. record_heat_time 'overwrite' RETRY (a manual entry delivered twice): no ledger primary-key error.
+# 6. TWO DIFFERENT corrections racing on the same shown time (compare-and-set under concurrency): the
+#    first wins; the second waits, then is refused (P0002), and the first value stands.
 #
 # Needs the Docker container name below (supabase `project_id` = seduh-score-next).
 set -u
@@ -155,6 +157,18 @@ LEDGER=$($P -c "select count(*) from processed_operations where id = '$OP'")
 has_error "$OUT" && noerr=1 || noerr=0
 [ "$FINAL" = "scoring|100|manual|-" ] && [ "$LEDGER" = "1" ] && same=0 || same=1
 verdict "5 record_heat_time 'overwrite' retry behind its own first delivery is a no-op" $((noerr + same + WAITED)) "waited=$WAITED output: $OUT / row: $FINAL / ledger rows: $LEDGER"
+
+# ---------------------------------------------------------------- 6
+setup scoring 200 tapped
+OP1=$(newid); OP2=$(newid)
+FIRST="select correct_heat_time('$OP1', '$ORG', '$HE', 200, 150, 150, false, 'Missed the stop', now());"
+SECOND="select correct_heat_time('$OP2', '$ORG', '$HE', 200, 140, 140, false, 'Wrong cupper', now());"
+race "$FIRST" "$SECOND"
+FINAL=$(row)
+case "$OUT" in *"CONFLICT: heat entry"*"time is now 150 seconds, expected 200 seconds"*) refused=0 ;; *) refused=1 ;; esac
+[ "$FINAL" = "scoring|150|manual|Missed the stop" ] && first_stands=0 || first_stands=1
+verdict "6 two corrections from the same shown time: the second is refused" $((refused + WAITED)) "waited=$WAITED output: $OUT"
+verdict "6 two corrections from the same shown time: the first stands" $first_stands "final row was: $FINAL"
 
 [ "$FAILED" = "0" ] && echo "ALL PASS" || echo "SOMETHING FAILED"
 exit $FAILED
