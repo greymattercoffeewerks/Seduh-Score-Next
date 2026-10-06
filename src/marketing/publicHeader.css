@@ -138,6 +138,12 @@
   padding: var(--space-4) clamp(20px, 4vw, 40px) var(--space-5);
   background: var(--clr-petrol-700);
   border-top: var(--border-hairline) solid rgba(255, 255, 255, 0.1);
+  /* The bar is sticky, so an open panel taller than the viewport (landscape phone, on-screen
+     keyboard) could not be scrolled to: cap it at the space under the ~72px bar and scroll inside. */
+  max-height: calc(100vh - 72px);
+  max-height: calc(100dvh - 72px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .public-header-mobile-panel-open {
   display: flex;
@@ -153,7 +159,8 @@
 .public-header-mobile-links .public-header-action {
   align-self: flex-start;
 }
-@media (min-width: 761px) {
+/* Same threshold as landing.css's nav: five links + the CTA need ~840px beside the wordmark. */
+@media (min-width: 840px) {
   .public-header-desktop {
     display: flex;
   }

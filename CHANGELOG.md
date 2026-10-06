@@ -1,3 +1,30 @@
+## T-HARDEN.results-nav-link: /results/ linked in public navigation · 2026-10-05
+
+**Task:** T-HARDEN.results-nav-link (pre-event hardening for the 4 Oct Cup Taster event).
+Grey Matter Cup Taster Competition 2026 (event id a8fab33b-26d4-45e2-ad62-a745a61ffbc1) was published to the public Results archive on 2026-10-05. The podium (1 Wilky Derikson Gultom/Kreme, 2 Taufiq Manan/PlantFolk, 3 Hazman Husin/Utara Coast; 17 competitors, 3 rounds, 235s winning time) became the first real event in the archive, satisfying the 2026-09-17 plan to link `/results/` once live content existed. Taufiq Manan's café was blank at publish time; it was patched post-publication with a narrowly scoped jsonb_set on the public_results payload (a direct data edit, not a code change).
+
+**What shipped:**
+
+- `/results/` is now linked as "Results" in the shared public header (`src/marketing/publicHeader.js` — used by Tour, Community, trust pages and Results itself; active state when `active === 'results'`) and in the landing page's own desktop and mobile nav (`src/marketing/landingScreen.js`).
+- Desktop nav breakpoint raised from `min-width: 761px` to `840px` in both `src/marketing/publicHeader.css` and `src/marketing/landing.css` — at 761px with five links, brand and first link were 4px apart; 840px gives 45–52px gap, verified at 360px (mobile), 839px (toggle point), and 840px+ (desktop).
+- Mobile panels capped at `calc(100dvh - 72px)` with `overflow-y: auto` + `overscroll-behavior: contain` — without this, the sticky bar plus the 5-link panel could exceed short viewports (e.g. 640x360); both now scroll and 'Start free' remains reachable.
+
+**Files changed:** `src/marketing/publicHeader.js`, `src/marketing/publicHeader.css`, `src/marketing/publicHeader.test.js` (new), `src/marketing/landingScreen.js`, `src/marketing/landing.css`, `src/marketing/landingScreen.test.js`, `src/marketing/resultsScreen.test.js`.
+
+**Tests:** new `src/marketing/publicHeader.test.js` verifies active link state per page (tour/community/results, none for trust pages) and Results link always present with `href=/results/`; `landingScreen.test.js` updated (Results in desktop and mobile nav lists); `resultsScreen.test.js` updated (Results is current page in header, twice because mobile panel is a clone, never another link). Full suite: 84 files, 1746 tests pass; `eslint src/marketing` clean; `prettier` clean on changed files.
+
+**Review cycle:** Four agents in parallel. `code-reviewer` PASS (no defects; finding: deliberately-unlinked docs now outdated, fixed). `test-auditor` PASS (fixed: missing not-null guard on active link, poor failure message). `ui-accessibility-reviewer` PASS (no blocking; medium: short-viewport panel overflow, fixed; low pre-existing: no `<nav>` landmark, color-only active signal, Escape doesn't close public-header menu, desktop links don't flex-wrap at enlarged text near 840px, focus may orphan if viewport grows past 840px with panel open — not fixed). `module-boundary-checker` PASS (no violations). e2e (`playwright`) not run (uncommitted unrelated edits in working tree).
+
+**Known gaps (deferred, not blocking):**
+
+- **`/results/` is still noindex, nofollow and not in sitemap or prerender routes.** A separate decision, left to the user.
+- **Roster has no Edit UI.** Taufiq's blank café was fixed by direct data edit; correcting a name or café in the roster still needs the same.
+- **Five low a11y items from ui-accessibility-reviewer:** no `<nav>` landmark in header, active page signalled by colour only, Escape on toggle doesn't close public-header menu (landing nav does), desktop links don't flex-wrap at enlarged text near 840px, focus may orphan if viewport grows past 840px with panel open.
+
+**Next step:** merge the PR into `dev`.
+
+---
+
 ## T-HARDEN.resolve-stage-concludes-event: resolving the terminal stage now concludes the event · 2026-10-04
 
 **Task:** T-HARDEN.resolve-stage-concludes-event (pre-event hardening for the 4 Oct Cup Taster event).

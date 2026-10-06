@@ -43,6 +43,7 @@ export function buildPublicHeader({ active }) {
     navLink('Formats', '/tour/', active === 'tour'),
     navLink('Pricing', '/#pricing'),
     navLink('Community Tools', '/community/', active === 'community'),
+    navLink('Results', '/results/', active === 'results'),
     navLink('Org login', '/#'),
   ];
   const mobileLinks = links.map((link) => link.cloneNode(true));

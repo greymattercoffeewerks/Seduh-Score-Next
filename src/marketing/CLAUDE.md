@@ -245,7 +245,11 @@ sign-in only; D14's real access control is still a stub), so both land in the co
 went live alongside Cup Taster's, once the app itself routed all 5 of BTC's screens —
 see "BTC goes live" above) both point at the same real authenticated-app destination
 (`/app/#/events`) — an organiser picks the format per event once signed in, not via a
-per-format URL. Wire the rest up as their destinations get built, not before — and don't
+per-format URL. `/results/` is linked from the public header and the homepage nav as of
+2026-10-05 (the 2026-09-17 plan was to link it once a real event was published — Grey Matter
+Cup Taster Competition 2026 was, that day); it is still `noindex`, out of the prerender route
+list and out of `public/sitemap.xml`, which is a separate decision. Wire the rest up as their
+destinations get built, not before — and don't
 add a nav item or copy claiming a capability (an event archive, an org directory,
 anything) that isn't real product scope yet; check `ROADMAP.md` before adding a new
 claim to this page.

@@ -261,7 +261,9 @@ empty and rollback verified live, live-verified against both local and cloud Sup
 Deployed to main via PR #95, migration pushed to cloud project `wxzwanprluqmgoagbkpv`.
 Known open items (not blocking): `/results/` deliberately unlinked/noindexed — nav
 wiring is a separate, later decision once real event content exists; no real Cup Taster
-event published yet.
+event published yet. _Update 2026-10-05: Grey Matter Cup Taster Competition 2026 was
+published and `/results/` is now linked from the nav; it is still `noindex` and not in the
+sitemap/prerender list (separate decision)._
 
 **Guess the Bean Supabase port (2026-09-14+), not tied to a phase task**: New spec, new
 Supabase port. Reverses the 2026-08-23 descope decision; user confirmed the new port spec

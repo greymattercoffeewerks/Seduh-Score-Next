@@ -245,6 +245,22 @@ describe('mountResultsScreen', () => {
     expect(root.querySelector('#latest-title')).toBeNull();
   });
 
+  it('marks Results as the current page in the shared public header, and links to it', async () => {
+    const client = fakeClient({ data: [], error: null });
+    await mountResultsScreen(root, { client });
+    const active = root.querySelector('.public-header-link-active');
+    expect(active).not.toBeNull();
+    expect(active.textContent).toBe('Results');
+    expect(active.getAttribute('href')).toBe('/results/');
+    expect(active.getAttribute('aria-current')).toBe('page');
+    // The mobile panel holds a clone of every desktop link, so "active" appears twice —
+    // but it must be Results both times, never another link.
+    const activeLabels = [...root.querySelectorAll('.public-header-link-active')].map(
+      (link) => link.textContent,
+    );
+    expect(activeLabels).toEqual(['Results', 'Results']);
+  });
+
   it('shows an error state, not a crash, when the query fails', async () => {
     const client = fakeClient({ data: null, error: new Error('network error') });
     await mountResultsScreen(root, { client });
