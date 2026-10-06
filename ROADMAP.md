@@ -261,7 +261,9 @@ empty and rollback verified live, live-verified against both local and cloud Sup
 Deployed to main via PR #95, migration pushed to cloud project `wxzwanprluqmgoagbkpv`.
 Known open items (not blocking): `/results/` deliberately unlinked/noindexed — nav
 wiring is a separate, later decision once real event content exists; no real Cup Taster
-event published yet.
+event published yet. _Update 2026-10-05: Grey Matter Cup Taster Competition 2026 was
+published and `/results/` is now linked from the nav; it is still `noindex` and not in the
+sitemap/prerender list (separate decision)._
 
 **Guess the Bean Supabase port (2026-09-14+), not tied to a phase task**: New spec, new
 Supabase port. Reverses the 2026-08-23 descope decision; user confirmed the new port spec
@@ -480,6 +482,23 @@ two consumers of the same shell/data. Verifiers per task, `code-reviewer` always
 | T5.3 Projector surface                      | ✅ Done — `src/formats/cup-taster/projectorSurface.js`/`.css` (new) — the thin projector-specific composition of `viewer-shell` + `viewerBody`, `showChrome: false`, `data-surface="stage"`; `viewerBody.js` reused completely unedited, per the handoff's own module table. Also extended `viewerBody.js`/`.css` with a live countdown for an active app-mode heat (`core/countdown.js` + `core/duration.js`, mirroring `timingScreen.js`'s own tick pattern) — the concrete answer to the handoff's cross-surface "organiser/projector/phone all agree on remaining time" AC, scoped into the SHARED module so T5.4's already-shipped phone surface gets it too from one change. Required extending `core/viewer-shell.js` (already-shipped T5.2 code) with a `renderBody` cleanup-lifecycle contract so a ticking interval never outlives its DOM node. Found and fixed live, before any review ran: `.viewer-shell-body` was flex-row by default, completely untested since a holding card was always its only child — real multi-section content laid out side-by-side instead of stacked until fixed. Four reviewers in parallel (no migration/RLS/scoring-module change, so `schema-guardian`/`security-reviewer`/`scoring-auditor` didn't apply); `module-boundary-checker` clean. The other three found real issues, most notably a countdown accessibility gap (the ticking digits are correctly `aria-live="off"`, but nothing announced crossing into the urgent window or the heat expiring — fixed with a separate one-shot `aria-live="polite"` node), an `is_test` banner that didn't scale for `data-surface="stage"` (the smallest text on an otherwise room-legible screen), a `NaN:NaN` display bug when `durationSecs` is missing, and two test-quality gaps where the tests proved a call happened but not that it happened in the right order/for the right reason (both re-verified via temporary mutation testing). See CHANGELOG.md for the full account. This task built the shared display logic the handoff's cross-surface Playwright AC needs; the AC's own e2e proof is a separate row below, closed 2026-08-28. |
 | T5.4 Phone summary surface                  | ✅ Done — `src/formats/cup-taster/viewerBody.js`/`.css` (new; the `renderBody` callback T5.2's shell plugs in — standings table, active-heat panel with per-cupper status chips, recent-results list; content shape ported from the legacy v4.x app's own never-shipped-standalone audience view) and `phoneSummary.js` (new; the thin phone-specific composition, `showChrome: true`). Deliberately Cup-Taster-specific, meant to be shared unedited by T5.3's projector. Scoped logic/renderer-only like T5.1/T5.2 — no screen calls `publishSession()` yet. Four reviewers in parallel (no migration/RLS/scoring change, so `schema-guardian`/`security-reviewer`/`scoring-auditor` didn't apply); `module-boundary-checker` clean. The other three found real issues, all fixed — most notably (both directly against this task's own AC) a no-clock heat's heading reading "Timing…" directly above its own "not yet started" message, and the "running" cupper status having no non-color signal at all unlike its two sibling states. Also fixed: two stage-mode CSS gaps (missed selectors, a thin-margin contrast repeat of a pairing this project already rejected once), an undocumented `payload.stage`-optional gap that could've rendered a blank body under live standings, a hand-rolled sort where `core/ranking.js`'s `chainComparators` should have been reused, and two test proof gaps. See CHANGELOG.md for the full account.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | Cross-surface Playwright AC                 | ✅ Done — `tests/e2e/cross-surface-countdown.spec.js` (new): three separate Playwright browser contexts driving the existing demo harnesses directly (organiser's `timingScreen.preview.html`, `projectorSurface.preview.html`, `phoneSummary.preview.html`), starting a real heat, reading back its REAL `started_at`/`duration_secs`, publishing those exact values to the other two contexts, and proving agreement (±2s) at mid-heat, the urgent window, and past expiry — including numerically tying the organiser's own auto-max-at-expiry state back to `core/countdown.js`'s own `isExpired()`. `playwright.config.js` gained a second project targeting the dev server (`vite build` doesn't output the format demo harnesses at all — confirmed directly). Three reviewers in parallel (no UI/migration/RLS/scoring change); `module-boundary-checker` clean. The other two found real issues: a browser-context leak risk on partial creation failure (context creation was outside try/finally), `buildActiveHeatPayload` duplicated verbatim across two harness files (extracted to `demoActiveHeatPayload.js`), and — the most significant — the past-expiry checkpoint proving two disconnected facts ("organiser shows 'Timing complete'" and "viewers freeze at 0:00") rather than tying them to the same zero-crossing event. Also closed a pre-existing gap this task's own DoD depends on: `.github/workflows/ci.yml` never ran Playwright tests at all — added a dedicated CI job. See CHANGELOG.md for the full account. **This was the last open item on Phase 5's own Definition of Done.**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+
+---
+
+## Known open items from T-HARDEN.results-sheet (Cup Taster public results sheet)
+
+- **Published figures come from the report as loaded when the page was opened**
+  (hint says reload first; Update does not re-fetch) and a retroactive 'withdrawn' flag
+  changes a published result on the next Update.
+- **Order of tied rows within a tie is not meaningful.**
+- **The sheet downloads every published payload to show one** (fine at current size).
+- **The shared public header's brand link is under 44px tall** (pre-existing).
+- **No test feeds the real `buildResultsPayload` output into `buildResultsSheet`**
+  (payload keys are duplicated as fixtures — the key set is pinned on both sides) and
+  `resultsMain.js`'s `?sheet=` routing has no test.
+- **'/results/' is still noindex and not in the sitemap** (separate decision).
+- **The user still must republish the live event** (currently podium-only) after this
+  ships if they want the sheet to include everyone.
 
 ---
 
@@ -1489,6 +1508,29 @@ Cup Taster event._
   (fake phones +6738000001-3) were deleted at the user's request on 2026-09-29 after a "Prod Smoke
   Test" is_test event was deleted via the app's Delete button. People table count: 25 → 22, no
   'Test Cupper' rows remain. Cleanup complete per user decision.
+
+- **T-HARDEN.resolve-stage-concludes-event — closed, deferred items (2026-10-04).** The first live
+  event ran end-to-end (3 complete stages, 8 confirmed heats, 169 results) but `events.status` stayed
+  `'draft'` because nothing ever wrote it. Migration `20261004100000_resolve_stage_concludes_event.sql`
+  makes `resolve_stage`'s terminal branch (null next stage and a null-cutoff stage) set it to
+  `'concluded'`, with a backfill. Deferred: **(1)** `'running'` is never written (nothing reads
+  `events.status` yet); **(2)** re-opening a completed final won't revert `'concluded'`; **(3)** optional
+  hardening so "terminal" also requires no higher-ordinal stage; **(4)** no test for replaying the
+  champion call after conclusion; **(5)** the event's `live_sessions` row stays `active = true` until the
+  organiser deactivates it. See CHANGELOG.md for the full account.
+
+---
+
+## Known open items from pre-event hardening (T-HARDEN.report-print-layout, 2026-10-06)
+
+_Deferred findings from T-HARDEN.report-print-layout, flagged and documented, not blocking._
+
+- **Chart print labels scale down with chart width;** events with many cuppers/rounds get smaller labels, not compensated.
+- **14px print axis labels could overprint for events with very few cuppers.**
+- **Accuracy tiers and chart bars rely on colour plus printed numbers/legend order in black-and-white print.**
+- **`@page` is global, not report-only** — applies to every organiser-print surface, not just the report.
+- **Very long names wrap rather than truncate in print.**
+- **Edge system print dialog 'Print To PDF' output is image-only** (Edge's Save as PDF gives a text PDF); browser/OS behavior, not fixable here.
 
 ---
 

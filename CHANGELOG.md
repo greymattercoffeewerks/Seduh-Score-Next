@@ -1,3 +1,133 @@
+## T-HARDEN.results-sheet: Public results sheet with privacy-level choice at publish · 2026-10-06
+
+**Task:** T-HARDEN.results-sheet (feature building on the first live Cup Taster event, 4 Oct).
+User request: a downloadable PDF on the public Results page. No PDF generator exists in the app (PDF = the browser's own Print → Save as PDF, by design), and the organiser Report is auth-gated with analytics and every competitor's per-round data. User chose: a sanitised public results sheet generated from the published data, PODIUM ONLY by default with full standings as an opt-in, privacy wording to be approved by the user before it ships (still pending).
+
+**What shipped:**
+
+- Organiser side (`src/formats/cup-taster/reportScreen.js` + `.css`, `resultsPublishing.js`): the report's 'Public results' card gains a 'What to publish' fieldset — 'Podium only' (default) / 'Full standings' radios with aria-describedby hint that phone numbers, emails and set-by-set marks are never published, withdrawn/no-score competitors are left out of the full standings, and figures are those on the page so reload first. When published: first button stays 'Unpublish', then 'Update published results' (re-publishes at the chosen level; the publish RPC already upserts, NO migration). A role=status 'Not applied yet…' note appears when the radios disagree with what is live; success messages name the level; a 'View the public results sheet' link (new tab). The level is captured once at click (a change mid-publish cannot change what is reported); radios are truly disabled while busy; after Unpublish the choice resets to podium. What is published right now is read from the payload itself (standings present = full). Café lookups are chunked at 50 ids.
+- Payload (`resultsPublishing.js` `buildResultsPayload`): new `scope` ('podium' default; any unrecognised value = podium; only 'full' adds `standings`), `roundLabelByOrdinal`, `omitEntryIds`. `standings` rows built from seven fixed fields only (place, name, cafe, round, correct, total, timeSecs) — never a spread — so contact details/set marks cannot reach it. `place` = the stage resolution's decided placing (finalPosition) for the competitor's last round, null (shown as a dash) if none was recorded — NOT a stage-local rank. The podium is now the top three PLACES (`podiumRowsOf`): everyone who shares third place is on it; podium `rank` now uses the same decided placing as the standings (previously index+1, so a tie for 2nd showed 2,3 vs 2,2 in the table). Full standings omit anyone with no scores and anyone the caller lists as withdrawn — but never a podium finisher; no renumbering; `notListed` records how many were left out (only when >0, full scope only); `competitors` and the podium are unaffected.
+- Public side: new `src/marketing/resultsSheet.js` — `/results/?sheet=<event id>` (same results HTML entry; `resultsMain.js` picks by query string, so no new vite input/sitemap/prerender/smoke change) — reads only the published public_results row, rebuilds every field from known keys with type checks, textContent only. Table: Place, Competitor, Café, Score, Time, Reached (podium: Place, Competitor, Café, Score), caption and scroll-region label name the event; a white 'paper' page with its own ink colours (--sheet-* hex in results.css — a documented exception to tokens), A4 @page, print hides header/footer/toolbar; 'Print / Save as PDF' button (browser print dialog; help text covers iPhone/iPad); notes explain placings and say how many competitors are not listed; page title set to '<event> — Results' so the saved PDF is named for it. Persistent header/footer and a persistent sr-only live region; loading/error/not-available states each have an h1, focus moves to it, error states have a 'Try again' button that keeps focus on the heading; success focuses the sheet's h1. A 'Scroll sideways to see every column →' cue shows only while the table really overflows (measured, updated on resize/fonts). `resultsScreen.js`: each event links to its sheet ('Results sheet — print or save as PDF'; archive links name the event); it now exports `formatLabel`/`formatDate`/`scoreCell` for the sheet.
+- Privacy wording (`src/marketing/trustContent.js` + `design/copy/privacy-page-draft.md` source; PRIVACY_UPDATED → '6 October 2026'): states the organiser chooses the level (default top three; or full standings with the last-round score/time and round reached, withdrawn/no-score competitors left out), that every published event has a printable sheet, that phone numbers/emails/set-by-set marks are never published; 'Exact scores…' item renamed 'Set-by-set marks and the full change log…'; the 'never exact scores' sentence now refers to the score-change record only. `scoringRecord.js` header comment amended. `src/marketing/CLAUDE.md` gained a 'Results sheet (2026-10-06)' section. **Privacy wording needs owner approval before merge.**
+
+**Bugs found while building:**
+
+- Screen-reader-only text inside the sheet's table scroll region (position:absolute) escaped clipping and widened the whole page on a phone (page scrollWidth 495 at 360) — fixed with position:relative on the wrapper.
+- `buildResultsSheet` threw on an invalid eventDate (RangeError) despite the module's 'never crashes' claim — fixed with a date check and tests.
+- The no-derived-storage lint rule flagged `rank:` on the podium; the existing pattern (a named podiumRank value) is kept.
+
+**Files changed:** `src/formats/cup-taster/reportScreen.js`, `src/formats/cup-taster/reportScreen.css`, `src/formats/cup-taster/reportScreen.test.js`, `src/formats/cup-taster/resultsPublishing.js`, `src/formats/cup-taster/resultsPublishing.test.js`, `src/marketing/resultsSheet.js` (new), `src/marketing/resultsSheet.test.js` (new), `src/marketing/resultsMain.js`, `src/marketing/resultsScreen.js`, `src/marketing/resultsScreen.test.js`, `src/marketing/results.css`, `src/marketing/trustContent.js`, `design/copy/privacy-page-draft.md`, `src/marketing/CLAUDE.md`, `src/marketing/scoringRecord.js`.
+
+**Tests:** Real event data printed through Chromium to A4 (full sheet: 17 rows, ties 9,9,11, one page; podium sheet one short page); a hostile/malformed payload renders as plain text with bad rows dropped and no contact fields; 360px: page exactly 360 wide, Place/Name/Café/Score within the first screen, keyboard focus ring on the table is #111 on white (checked with real Tab focus), radio rows are 90px/132px tall and a real touch tap on the far edge selects the radio; mutation-tested: broke the code in ~15 ways and each was caught by the intended test. Full suite: 85 files, 1840 tests pass; eslint and prettier clean. Playwright e2e (tests/e2e/smoke.spec.js) not run (unrelated uncommitted edits in working tree).
+
+**Review cycle:** Five reviewers (the accessibility reviewer twice). `ui-accessibility-reviewer` (round 1: blocking focus ring invisible on white paper, S1–S6 incl. tap targets/live regions/headings/retry/caption names — all fixed; round 2: closed, found radio hit area <44px — fixed with a label ::after overlay, scroll cue wrong for podium — fixed by measuring, heading focus outline — removed, focus during retry — fixed). `code-reviewer` (no leaks found; findings fixed: tie labels disagreed podium vs standings, no-score/withdrawn rows, stale-figures hint, scope sticking after Unpublish, comment placement, Privacy copy accuracy ×2). `test-auditor` (many surviving-mutation gaps — all closed incl. downgrade full→podium, chunk merge with distinct cafés and an id-honouring fake, race inside the café lookup, markup/type safety across the whole sheet, invalid eventDate). `module-boundary-checker` (clean: no marketing↔formats imports, payload contract format-neutral). `scoring-auditor` (no blocking; findings fixed: stage-local fallback no longer published as an overall place, podium cut through a tie, withdrawn podium member, notListed accounting).
+
+**Known gaps (deferred, not blocking):**
+
+- **Published figures come from the report as loaded when the page was opened** (hint says reload first; Update does not re-fetch) and a retroactive 'withdrawn' flag changes a published result on the next Update.
+- **Order of tied rows within a tie is not meaningful.**
+- **The sheet downloads every published payload to show one** (fine at current size).
+- **The shared public header's brand link is under 44px tall** (pre-existing).
+- **No test feeds the real `buildResultsPayload` output into `buildResultsSheet`** (payload keys are duplicated as fixtures — the key set is pinned on both sides) and `resultsMain.js`'s `?sheet=` routing has no test.
+- **'/results/' is still noindex and not in the sitemap** (separate decision).
+- **The user still must republish the live event** (currently podium-only) after this ships if they want the sheet to include everyone.
+
+**Next step:** User approves Privacy wording; merge; then user republishes at the chosen level (cloud DB needs no migration).
+
+---
+
+## T-HARDEN.report-print-layout: Cup Taster organiser report print layout fixes · 2026-10-06
+
+**Task:** T-HARDEN.report-print-layout (fixes from the first live Cup Taster event, 4 Oct).
+The organiser report's print output exhibited 8 defects: wide tables (Overall, Semi-Finals) ran under card borders with last columns cut/crossed; names wrapped onto 3 lines, ballooning row height; app chrome printed (header bar, footer); legend color swatches and difficulty bars rendered blank; chart value labels overprinted each other; headings orphaned from tables; stray card-border lines down page edges after breaks; Edge's generic page title instead of event name. Root cause: minimal print stylesheet relied on screen-size rules and background printing (which is disabled by default). Locally reproduced the user's 8-page PDF; after fix: 5 pages, tables fit, names one line, swatches/bars print, no stray borders, chrome absent, readable chart labels.
+
+**What shipped:**
+
+- Print stylesheet in `src/formats/cup-taster/reportScreen.css`: `@page { size: A4; margin: 12mm }` (top-level), flat print cards (no border/padding), h2 rules, `break-after:avoid` on headings, `break-inside:avoid` on small stat tables/rows/Overall card, compact table text (8.5pt body/8pt headers/3pt padding), min-width 40mm for name cells, `print-color-adjust:exact` for legend swatches and difficulty bars.
+- Chart value labels wider than a 20px slot (>2 chars at 9px/char) rotate -90° with extra headroom; print axis labels 14px; rotation decision per-chart; fixed slot per cupper across rounds unchanged (existing test pins it).
+- `src/core/appShell.css`: app-shell header and footer hidden in print (format-agnostic, any organiser screen).
+- `src/formats/cup-taster/reportScreen.js`: page title set to "Report — {event name}" (prefixed "TEST — " for `is_test` events) only between beforeprint/afterprint via module-level saved-title state, restored on unmount (guarded for router unmount order).
+- D9 (found in review, fixed): `is_test` banner renders as black bold text in a 3pt black border in print (no background reliance; prints white-on-white before fix).
+
+**Files changed:** `src/formats/cup-taster/reportScreen.css`, `src/core/appShell.css`, `src/formats/cup-taster/reportScreen.js`, `src/formats/cup-taster/reportScreen.test.js`.
+
+**Tests:** Label orientation tests (upright/rotated, pivot, headroom invariant, per-chart decision, 2-vs-3 character boundary, slot stability) and print-title tests (swap/restore, repeated prints, event never loaded, listener removal, unmount mid-print, two listeners, TEST prefix, only-swapper restores). Full suite: 84 files, 1760 tests pass; `eslint` and `prettier` clean.
+
+**Review cycle:** Four agents in parallel. `ui-accessibility-reviewer` BLOCKING (found: `is_test` banner invisible in print white-on-white, print title missing TEST prefix — both fixed). `code-reviewer` (found: unmount restored title unconditionally, renderRoundBarChart contract comment detached, `.map(formatValue)` passed extra args — all fixed). `test-auditor` (found the new tests too weak; added missing headroom/pivot/threshold/per-chart/second-print/never-loaded/leak-on-failure tests). `module-boundary-checker` PASS.
+
+**Known gaps (deferred, not blocking):**
+
+- **Chart print labels scale down with chart width;** not compensated for events with many cuppers/rounds.
+- **14px print axis labels could overprint for events with very few cuppers.**
+- **Accuracy tiers and chart bars rely on colour plus printed numbers/legend order in black-and-white print.**
+- **`@page` is global, not report-only** (applies to every organiser-print surface).
+- **Very long names wrap rather than truncate.**
+- **Edge system print dialog 'Print To PDF' output is image-only.** (Edge's Save as PDF gives a text PDF; browser/OS behavior, not fixable here.)
+
+**Next step:** build sanitised public results sheet (podium vs full standings choice at publish time); user's decision pending on trust-copy wording.
+
+---
+
+## T-HARDEN.results-nav-link: /results/ linked in public navigation · 2026-10-05
+
+**Task:** T-HARDEN.results-nav-link (pre-event hardening for the 4 Oct Cup Taster event).
+Grey Matter Cup Taster Competition 2026 (event id a8fab33b-26d4-45e2-ad62-a745a61ffbc1) was published to the public Results archive on 2026-10-05. The podium (1 Wilky Derikson Gultom/Kreme, 2 Taufiq Manan/PlantFolk, 3 Hazman Husin/Utara Coast; 17 competitors, 3 rounds, 235s winning time) became the first real event in the archive, satisfying the 2026-09-17 plan to link `/results/` once live content existed. Taufiq Manan's café was blank at publish time; it was patched post-publication with a narrowly scoped jsonb_set on the public_results payload (a direct data edit, not a code change).
+
+**What shipped:**
+
+- `/results/` is now linked as "Results" in the shared public header (`src/marketing/publicHeader.js` — used by Tour, Community, trust pages and Results itself; active state when `active === 'results'`) and in the landing page's own desktop and mobile nav (`src/marketing/landingScreen.js`).
+- Desktop nav breakpoint raised from `min-width: 761px` to `840px` in both `src/marketing/publicHeader.css` and `src/marketing/landing.css` — at 761px with five links, brand and first link were 4px apart; 840px gives 45–52px gap, verified at 360px (mobile), 839px (toggle point), and 840px+ (desktop).
+- Mobile panels capped at `calc(100dvh - 72px)` with `overflow-y: auto` + `overscroll-behavior: contain` — without this, the sticky bar plus the 5-link panel could exceed short viewports (e.g. 640x360); both now scroll and 'Start free' remains reachable.
+
+**Files changed:** `src/marketing/publicHeader.js`, `src/marketing/publicHeader.css`, `src/marketing/publicHeader.test.js` (new), `src/marketing/landingScreen.js`, `src/marketing/landing.css`, `src/marketing/landingScreen.test.js`, `src/marketing/resultsScreen.test.js`.
+
+**Tests:** new `src/marketing/publicHeader.test.js` verifies active link state per page (tour/community/results, none for trust pages) and Results link always present with `href=/results/`; `landingScreen.test.js` updated (Results in desktop and mobile nav lists); `resultsScreen.test.js` updated (Results is current page in header, twice because mobile panel is a clone, never another link). Full suite: 84 files, 1746 tests pass; `eslint src/marketing` clean; `prettier` clean on changed files.
+
+**Review cycle:** Four agents in parallel. `code-reviewer` PASS (no defects; finding: deliberately-unlinked docs now outdated, fixed). `test-auditor` PASS (fixed: missing not-null guard on active link, poor failure message). `ui-accessibility-reviewer` PASS (no blocking; medium: short-viewport panel overflow, fixed; low pre-existing: no `<nav>` landmark, color-only active signal, Escape doesn't close public-header menu, desktop links don't flex-wrap at enlarged text near 840px, focus may orphan if viewport grows past 840px with panel open — not fixed). `module-boundary-checker` PASS (no violations). e2e (`playwright`) not run (uncommitted unrelated edits in working tree).
+
+**Known gaps (deferred, not blocking):**
+
+- **`/results/` is still noindex, nofollow and not in sitemap or prerender routes.** A separate decision, left to the user.
+- **Roster has no Edit UI.** Taufiq's blank café was fixed by direct data edit; correcting a name or café in the roster still needs the same.
+- **Five low a11y items from ui-accessibility-reviewer:** no `<nav>` landmark in header, active page signalled by colour only, Escape on toggle doesn't close public-header menu (landing nav does), desktop links don't flex-wrap at enlarged text near 840px, focus may orphan if viewport grows past 840px with panel open.
+
+**Next step:** merge the PR into `dev`.
+
+---
+
+## T-HARDEN.resolve-stage-concludes-event: resolving the terminal stage now concludes the event · 2026-10-04
+
+**Task:** T-HARDEN.resolve-stage-concludes-event (pre-event hardening for the 4 Oct Cup Taster event).
+The first live event ran successfully end-to-end: Grey Matter Cup Taster Competition 2026 (Sports Hub, Bandar Seri Begawan, 2026-10-04, `is_test = false`). All three stages (prelims 5 heats cutoff 8, semis 2 heats cutoff 4, finals 1 heat) finished `complete`, all 8 heats `confirmed`, 169 `ct_results`, 226 `processed_operations`, 323 `score_change_log` rows, and the champion (Wilky Derikson Gultom, 3 correct in 235s; the finals' three-way tie on 3 correct was separated by time) was published to `live_sessions`. The one defect found afterwards: `events.status` was still `'draft'`.
+
+**Root cause:** nothing in the app ever wrote `events.status` (`src/core/events.js`'s own comment already said so) — the schema's `draft | running | concluded` lifecycle was never wired to anything. `resolve_stage` itself was not misbehaving; it simply had no step that concludes the event. Harmless to results and the audience view, but any future "past events" list filtering on `status` would have missed this event.
+
+**What shipped:**
+
+- Migration `supabase/migrations/20261004100000_resolve_stage_concludes_event.sql` re-creates `resolve_stage` with one added block: when `p_next_stage_id IS NULL` AND the stage's own `cutoff IS NULL` (the same "terminal" fact `standingsScreen.js`'s `isTerminal` uses), `events.status` is set to `'concluded'` in the same transaction, behind the existing `operation_id` idempotency guard and invoker-rights RLS. The `cutoff` guard means a malformed null-next call at a cutoff stage can never conclude an event whose finals haven't been played.
+- The function body is otherwise identical to `20260906060000` (schema-guardian diffed it); grants, `search_path` pin and the anon revoke are retained.
+- Idempotent backfill in the same migration: any event not yet `'concluded'` that has a completed terminal stage is set to `'concluded'`.
+- The live event's row on the cloud project (`wxzwanprluqmgoagbkpv`) was set to `'concluded'` by a direct UPDATE first (user-requested). The migration was then applied via `apply_migration` and recorded as version `20261004154058` (the file's own version is `20261004100000`). Verified on the cloud: function body contains the new branch, `prosecdef = false`, `search_path` pinned, ACL postgres/authenticated/service_role only. No further push is needed after merge.
+
+**Files changed:** `supabase/migrations/20261004100000_resolve_stage_concludes_event.sql` (new), `supabase/tests/009_resolve_stage.sql` (plan 27 → 36), `CHANGELOG.md`, `ROADMAP.md`, `package.json`/`package-lock.json` (patch bump to 3.0.14).
+
+**Tests:** `009_resolve_stage.sql` now proves the event concludes only at the terminal stage, and does not conclude at a non-terminal resolve, a null-next call at a cutoff stage, or a terminal-cutoff stage resolved _with_ a next stage; a second event in the same org and another org's event are untouched; a cross-org terminal stage is refused before the conclude branch. Full pgTAP: 23 files, 618 tests pass; `db reset` from empty applies cleanly (one earlier reset attempt failed once at "Initialising schema", before any migration ran — a transient local Docker problem, the retry was fine).
+
+**Review cycle:** `schema-guardian` PASS (its rollback re-apply was verified in a transaction). `security-reviewer`: no blocking findings. `test-auditor`: the "other org's event untouched" assertion could never fail (RLS alone already protects that row), so nothing pinned the `e.id = s.event_id` join — fixed by adding a second same-org event `e2` that must stay `'draft'`, plus a cross-org terminal stage `b8` asserted with `throws_ok`. Non-blocking findings from the reviews are listed under Known gaps below.
+
+**Known gaps (deferred, not blocking):**
+
+- **`'running'` is still never written.** Nothing reads `events.status` yet; setting it on the first `start_heat` is a separate, optional change.
+- **Re-opening a completed final won't revert `'concluded'`.** The status is one-way.
+- **"Terminal" is `cutoff IS NULL`, not "no higher-ordinal stage exists"** (security-reviewer's optional hardening). Safe today because setup enforces that only the last stage has a null cutoff.
+- **No test that replaying the champion call leaves the event `'concluded'`.** The logic is idempotent by construction (`operation_id` guard plus `status <> 'concluded'`), just not asserted.
+- **The backfill is not covered by pgTAP** (it runs at migration time on an empty database); it was checked by hand against the cloud project.
+- **The event's `live_sessions` row is still `active = true`.** Left to the organiser, since the champion screen may still be on display.
+
+**Next step:** merge PR #144 (`dev`); the cloud database already has the migration.
+
+---
+
 ## T-HARDEN.nav-menu-polish: navigation menu refinement at tablet widths (wrapping layout, focus handling, visible label) · 2026-09-29
 
 **Task:** T-HARDEN.nav-menu-polish (pre-event hardening for the 4 Oct Cup Taster event).

@@ -691,6 +691,141 @@ describe('renderRoundBarChart', () => {
   });
 });
 
+describe('renderRoundBarChart — value label orientation', () => {
+  const summaries = [
+    {
+      entryId: 'alex',
+      displayName: 'Alex',
+      rounds: [
+        { stageOrdinal: 1, numCorrect: 3, totalElapsedSecs: 248 },
+        { stageOrdinal: 2, numCorrect: 2, totalElapsedSecs: 355 },
+      ],
+    },
+    {
+      entryId: 'jo',
+      displayName: 'Jo',
+      rounds: [{ stageOrdinal: 1, numCorrect: 1, totalElapsedSecs: 150 }],
+    },
+  ];
+  const stageReports = [
+    { stage: { kind: 'prelims', ordinal: 1 } },
+    { stage: { kind: 'finals', ordinal: 2 } },
+  ];
+  // Geometry the chart is built from (renderRoundBarChart's own constants): half a 16px bar, the
+  // value labels' fixed offsets above their bar, and the per-character width reserved for them.
+  const HALF_BAR = 8;
+  const UPRIGHT_LIFT = 3;
+  const TURNED_LIFT = 4;
+  const TURNED_SHIFT = 5;
+  const CHAR_WIDTH = 9;
+
+  function chart(getValue, formatValue) {
+    return renderRoundBarChart({
+      titleText: 'Chart',
+      ariaSummary: 'Bar chart.',
+      summaries,
+      stageReports,
+      getValue,
+      formatValue,
+    });
+  }
+  const minutesAndSeconds = (value) =>
+    `${Math.floor(value / 60)}:${String(value % 60).padStart(2, '0')}`;
+  const scoreChart = () =>
+    chart(
+      (round) => round.numCorrect,
+      (value) => String(value),
+    );
+  const timeChart = () => chart((round) => round.totalElapsedSecs, minutesAndSeconds);
+  const labelsAndBars = (card) => ({
+    labels: [...card.querySelectorAll('.report-chart-value')],
+    bars: [...card.querySelectorAll('rect[data-entry]')],
+  });
+
+  it('keeps short labels upright and centred just above their own bar — a single digit fits its slot, so nothing is turned', () => {
+    const { labels, bars } = labelsAndBars(scoreChart());
+    expect(labels).toHaveLength(3);
+    labels.forEach((label, index) => {
+      const barX = Number(bars[index].getAttribute('x'));
+      const barY = Number(bars[index].getAttribute('y'));
+      expect(label.hasAttribute('transform')).toBe(false);
+      expect(label.getAttribute('text-anchor')).toBe('middle');
+      expect(Number(label.getAttribute('x'))).toBe(barX + HALF_BAR);
+      expect(Number(label.getAttribute('y'))).toBe(barY - UPRIGHT_LIFT);
+    });
+  });
+
+  it('turns every label in a chart whose labels are wider than a bar slot (e.g. "4:08"), pivoting each on its own start so it climbs its own bar', () => {
+    const { labels, bars } = labelsAndBars(timeChart());
+    expect(labels.map((label) => label.textContent)).toEqual(['4:08', '2:30', '5:55']);
+    labels.forEach((label, index) => {
+      const x = Number(label.getAttribute('x'));
+      const y = Number(label.getAttribute('y'));
+      expect(label.getAttribute('text-anchor')).toBe('start');
+      // The pivot is the label's own anchor point — a different pivot would swing it off its bar.
+      expect(label.getAttribute('transform')).toBe(`rotate(-90 ${x} ${y})`);
+      expect(x).toBe(Number(bars[index].getAttribute('x')) + HALF_BAR + TURNED_SHIFT);
+      expect(y).toBe(Number(bars[index].getAttribute('y')) - TURNED_LIFT);
+    });
+  });
+
+  it('reserves enough headroom for the longest turned label, so even the tallest bar leaves it fully inside the SVG', () => {
+    const card = timeChart();
+    const { labels, bars } = labelsAndBars(card);
+    const longestLabelExtent =
+      Math.max(...labels.map((label) => label.textContent.length)) * CHAR_WIDTH;
+    const tallestBarTop = Math.min(...bars.map((bar) => Number(bar.getAttribute('y'))));
+    // The label runs upward from (bar top - TURNED_LIFT); its far end must not pass the SVG's top.
+    expect(tallestBarTop - TURNED_LIFT - longestLabelExtent).toBeGreaterThanOrEqual(0);
+    // ...and the chart is taller than the upright one by the extra headroom it reserved.
+    const upright = Number(scoreChart().querySelector('svg').getAttribute('height'));
+    const turned = Number(card.querySelector('svg').getAttribute('height'));
+    expect(turned).toBeGreaterThan(upright);
+  });
+
+  it('decides per chart, not per label: one wide label turns the short ones too, so every label in a chart reads the same way', () => {
+    // 150s -> '9' (one character); everything else is a 4-character time.
+    const card = chart(
+      (round) => round.totalElapsedSecs,
+      (value) => (value === 150 ? '9' : minutesAndSeconds(value)),
+    );
+    const { labels } = labelsAndBars(card);
+    expect(labels.map((label) => label.textContent)).toEqual(['4:08', '9', '5:55']);
+    for (const label of labels) {
+      expect(label.getAttribute('transform')).toMatch(/^rotate\(-90 /);
+    }
+  });
+
+  it('turns labels from three characters up and keeps two-character labels upright — the boundary is one bar slot (20px) against 9px per character', () => {
+    const twoChars = chart(
+      (round) => round.numCorrect,
+      (value) => `#${value}`,
+    );
+    for (const label of labelsAndBars(twoChars).labels) {
+      expect(label.hasAttribute('transform')).toBe(false);
+    }
+    const threeChars = chart(
+      (round) => round.numCorrect,
+      (value) => `#${value}0`,
+    );
+    for (const label of labelsAndBars(threeChars).labels) {
+      expect(label.getAttribute('transform')).toMatch(/^rotate\(-90 /);
+    }
+  });
+
+  it('leaves each cupper in the same horizontal slot whichever way the labels run — a cupper is still followed across rounds by position', () => {
+    const x = (card, entry, round) =>
+      card.querySelector(`rect[data-entry="${entry}"][data-round="${round}"]`).getAttribute('x');
+    for (const [entry, round] of [
+      ['alex', 1],
+      ['jo', 1],
+      ['alex', 2],
+    ]) {
+      expect(x(timeChart(), entry, round)).toBe(x(scoreChart(), entry, round));
+    }
+  });
+});
+
 describe('buildReportTables', () => {
   it('builds standings, difficulty, and distribution table specs per stage, formatted the same as the on-screen tables', () => {
     const stageReports = [
@@ -1009,7 +1144,11 @@ describe('mountReportScreen', () => {
           { data: stages[0], error: null },
           { data: stages[1], error: null },
         ],
-        ct_stage_entries: { data: [{ id: 'se1', stage_id: 's1', entry_id: 'e1' }], error: null },
+        // A complete event: every competitor's last stage has a decided placing.
+        ct_stage_entries: {
+          data: [{ id: 'se1', stage_id: 's1', entry_id: 'e1', final_position: 1 }],
+          error: null,
+        },
         ct_standings: {
           data: [
             {
@@ -1115,6 +1254,483 @@ describe('mountReportScreen', () => {
 
       expect(root.textContent).toContain('published to the public archive');
       expect(root.textContent).toContain('Published to the public results archive.');
+    });
+
+    describe('what to publish', () => {
+      const publishedRow = (payload) => ({
+        event_id: 'ev1',
+        payload,
+        published_at: '2026-10-05T00:00:00Z',
+      });
+      const radios = (root) => [
+        ...root.querySelectorAll('.report-public-results input[name="public-results-scope"]'),
+      ];
+      const radioFor = (root, value) => radios(root).find((input) => input.value === value);
+      const choose = (root, value) => {
+        const input = radioFor(root, value);
+        input.checked = true;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+      const publishedPayload = (client) => {
+        const rpcCall = client.calls.find(([kind]) => kind === 'rpc');
+        return rpcCall[2].p_payload;
+      };
+      const buttonLabelled = (root, label) =>
+        [...root.querySelectorAll('.report-public-results button')].find(
+          (button) => button.textContent === label,
+        );
+      const lookupsMadeAfter = (client, skip) =>
+        client.calls
+          .filter(([kind, table]) => kind === 'in' && table === 'event_entries')
+          .slice(skip)
+          .map(([, , , ids]) => ids);
+
+      // A field of `count` competitors, each with a café of their own, plus a client whose
+      // event_entries lookups honour the ids they are asked for (the shared fake returns the whole
+      // table every time, which would hide a bug in how chunks are combined) and can be held up.
+      function largeField(count, { withdrawn = [], rpc } = {}) {
+        const ids = Array.from({ length: count }, (_, index) => `e${index + 1}`);
+        const entries = ids.map((id) => ({
+          id,
+          display_name: `Cupper ${id}`,
+          cafe: `Cafe ${id}`,
+          withdrawn: withdrawn.includes(id),
+        }));
+        const base = fakeClient({
+          tables: completeEventTables({
+            ct_stage_entries: {
+              data: ids.map((id, index) => ({
+                id: `se-${id}`,
+                stage_id: 's1',
+                entry_id: id,
+                final_position: index + 1,
+              })),
+              error: null,
+            },
+            ct_standings: {
+              data: ids.map((id, index) => ({
+                entry_id: id,
+                stage_id: 's1',
+                correct_count: 1,
+                sets_scored: 1,
+                total_elapsed_secs: 40 + index,
+              })),
+              error: null,
+            },
+            event_entries: { data: entries, error: null },
+          }),
+          rpc,
+        });
+        let hold = null;
+        const client = {
+          calls: base.calls,
+          rpc: base.rpc,
+          holdLookups(promise) {
+            hold = promise;
+          },
+          from(table) {
+            const builder = base.from(table);
+            if (table !== 'event_entries') return builder;
+            let requested = null;
+            const original = builder.in;
+            builder.in = (...args) => {
+              requested = args[1];
+              return original(...args);
+            };
+            builder.then = (resolve, reject) =>
+              Promise.resolve(requested ? hold : null)
+                .then(() => ({
+                  data: requested
+                    ? entries.filter((entry) => requested.includes(entry.id))
+                    : entries,
+                  error: null,
+                }))
+                .then(resolve, reject);
+            return builder;
+          },
+        };
+        return client;
+      }
+      const lookupCount = (client) =>
+        client.calls.filter(([kind, table]) => kind === 'in' && table === 'event_entries').length;
+
+      it('offers podium only by default, and lists both levels as real radio choices, each described by its own explanation', async () => {
+        const root = document.createElement('div');
+        const client = fakeClient({ tables: completeEventTables() });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        await flush();
+
+        expect(radios(root).map((input) => input.value)).toEqual(['podium', 'full']);
+        expect(radioFor(root, 'podium').checked).toBe(true);
+        expect(radioFor(root, 'full').checked).toBe(false);
+        // A radio's name is its label alone; the explanation is its description, so a screen reader
+        // announces "Full standings" and then what that means.
+        const label = root.querySelector('label[for="public-results-scope-full"]');
+        expect(label.textContent).toBe('Full standings');
+        const hint = root.querySelector(
+          `#${radioFor(root, 'full').getAttribute('aria-describedby')}`,
+        );
+        expect(hint.textContent).toContain('Every competitor');
+        expect(root.querySelector('.report-public-results-scope legend').textContent).toBe(
+          'What to publish',
+        );
+        const note = root.querySelector(
+          `#${root.querySelector('.report-public-results-scope').getAttribute('aria-describedby')}`,
+        );
+        expect(note.textContent).toContain(
+          'Phone numbers, emails and set-by-set marks are never published.',
+        );
+        expect(note.textContent).toContain('withdrew');
+        expect(note.textContent).toContain('reload it first');
+      });
+
+      it('publishes the podium only when the default is left alone — no standings go out, and only the podium’s three are looked up', async () => {
+        const root = document.createElement('div');
+        const client = largeField(120, {
+          rpc: { publish_event_results: { data: null, error: null } },
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        await flush();
+        const before = lookupCount(client);
+
+        root.querySelector('.report-public-results button').click();
+        await flush();
+
+        expect(publishedPayload(client)).not.toHaveProperty('standings');
+        expect(lookupsMadeAfter(client, before).map((ids) => ids.length)).toEqual([3]);
+        expect(root.textContent).toContain('(podium only)');
+        expect(root.textContent).toContain(
+          'Published to the public results archive. It shows the podium only.',
+        );
+      });
+
+      it('publishes every competitor’s placing, with café and round, when Full standings is chosen', async () => {
+        const root = document.createElement('div');
+        const client = fakeClient({
+          tables: completeEventTables(),
+          rpc: { publish_event_results: { data: null, error: null } },
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        await flush();
+
+        choose(root, 'full');
+        root.querySelector('.report-public-results button').click();
+        await flush();
+
+        expect(publishedPayload(client).standings).toEqual([
+          {
+            place: 1,
+            name: 'Alex',
+            cafe: 'Kedai Runduk',
+            // This fixture serves the same standings row for every stage, so Alex's last round is
+            // the finals; the round label is that last round's own.
+            round: 'Finals',
+            correct: 1,
+            total: 1,
+            timeSecs: 40,
+          },
+        ]);
+        expect(root.textContent).toContain('(full standings)');
+        expect(root.textContent).toContain('It shows the full standings.');
+      });
+
+      it('looks cafés up in chunks of at most 50 ids and keeps every one — none lost in combining the chunks', async () => {
+        const root = document.createElement('div');
+        const client = largeField(120, {
+          rpc: { publish_event_results: { data: null, error: null } },
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        await flush();
+        choose(root, 'full');
+        const before = lookupCount(client);
+
+        root.querySelector('.report-public-results button').click();
+        await flush();
+
+        expect(lookupsMadeAfter(client, before).map((ids) => ids.length)).toEqual([50, 50, 20]);
+        const { standings } = publishedPayload(client);
+        expect(standings).toHaveLength(120);
+        // One café from each chunk, and the very last one.
+        expect([standings[0], standings[60], standings[119]].map((row) => row.cafe)).toEqual([
+          'Cafe e1',
+          'Cafe e61',
+          'Cafe e120',
+        ]);
+      });
+
+      it('leaves a competitor who withdrew out of the full standings — but never a podium finisher, who stays in both', async () => {
+        const root = document.createElement('div');
+        const client = largeField(4, {
+          withdrawn: ['e4', 'e1'],
+          rpc: { publish_event_results: { data: null, error: null } },
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        await flush();
+        choose(root, 'full');
+
+        root.querySelector('.report-public-results button').click();
+        await flush();
+
+        const payload = publishedPayload(client);
+        // e4 (outside the podium) withdrew and is left out; e1 (the champion) is flagged too but stays.
+        expect(payload.standings.map((row) => row.name)).toEqual([
+          'Cupper e1',
+          'Cupper e2',
+          'Cupper e3',
+        ]);
+        expect(payload.podium.map((row) => row.name)).toContain('Cupper e1');
+        expect(payload.notListed).toBe(1);
+      });
+
+      it('opens an already-published event with the level it was published at selected and named', async () => {
+        const root = document.createElement('div');
+        const client = fakeClient({
+          tables: completeEventTables({
+            public_results: {
+              data: publishedRow({ standings: [{ place: 1, name: 'Alex', round: 'Finals' }] }),
+              error: null,
+            },
+          }),
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        await flush();
+
+        expect(root.textContent).toContain('(full standings)');
+        expect(radioFor(root, 'full').checked).toBe(true);
+        expect(radioFor(root, 'podium').checked).toBe(false);
+      });
+
+      it('treats an empty standings list as a recorded choice of full standings', async () => {
+        const root = document.createElement('div');
+        const client = fakeClient({
+          tables: completeEventTables({
+            public_results: { data: publishedRow({ standings: [] }), error: null },
+          }),
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        await flush();
+
+        expect(root.textContent).toContain('(full standings)');
+        expect(radioFor(root, 'full').checked).toBe(true);
+      });
+
+      it('reads a payload without standings as podium only', async () => {
+        const root = document.createElement('div');
+        const client = fakeClient({
+          tables: completeEventTables({
+            public_results: { data: publishedRow({ podium: [] }), error: null },
+          }),
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        await flush();
+
+        expect(root.textContent).toContain('(podium only)');
+        expect(radioFor(root, 'podium').checked).toBe(true);
+      });
+
+      it('keeps Unpublish as the first button once published, with Update published results after it', async () => {
+        const root = document.createElement('div');
+        const client = fakeClient({
+          tables: completeEventTables({ public_results: { data: publishedRow({}), error: null } }),
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        await flush();
+
+        const buttons = [...root.querySelectorAll('.report-public-results button')];
+        expect(buttons.map((button) => button.textContent)).toEqual([
+          'Unpublish',
+          'Update published results',
+        ]);
+      });
+
+      it('Update published results re-publishes at the newly chosen level and says so', async () => {
+        const root = document.createElement('div');
+        const client = fakeClient({
+          tables: completeEventTables({ public_results: { data: publishedRow({}), error: null } }),
+          rpc: { publish_event_results: { data: null, error: null } },
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        await flush();
+        expect(root.textContent).toContain('(podium only)');
+
+        choose(root, 'full');
+        buttonLabelled(root, 'Update published results').click();
+        await flush();
+
+        expect(publishedPayload(client).standings).toHaveLength(1);
+        expect(root.textContent).toContain(
+          'Updated the published results. They now show the full standings.',
+        );
+        expect(root.textContent).toContain('(full standings)');
+      });
+
+      it('can take a published event back from full standings to the podium — the privacy-retraction path', async () => {
+        const root = document.createElement('div');
+        const client = fakeClient({
+          tables: completeEventTables({
+            public_results: {
+              data: publishedRow({ standings: [{ place: 1, name: 'Alex' }] }),
+              error: null,
+            },
+          }),
+          rpc: { publish_event_results: { data: null, error: null } },
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        await flush();
+        expect(root.textContent).toContain('(full standings)');
+
+        choose(root, 'podium');
+        buttonLabelled(root, 'Update published results').click();
+        await flush();
+
+        expect(publishedPayload(client)).not.toHaveProperty('standings');
+        expect(root.textContent).toContain('(podium only)');
+        expect(root.textContent).toContain(
+          'Updated the published results. They now show the podium only.',
+        );
+      });
+
+      it('says a change is not applied yet until it is, and says nothing when the choice matches what is live', async () => {
+        const root = document.createElement('div');
+        const client = fakeClient({
+          tables: completeEventTables({ public_results: { data: publishedRow({}), error: null } }),
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        await flush();
+        const note = () => root.querySelector('.report-public-results-pending');
+
+        expect(note().textContent).toBe('');
+        choose(root, 'full');
+        expect(note().textContent).toContain('Not applied yet');
+        expect(note().textContent).toContain('Update published results');
+        choose(root, 'podium');
+        expect(note().textContent).toBe('');
+      });
+
+      it('starts again from the podium after Unpublish, so a retraction never leaves the wider choice pre-selected', async () => {
+        const root = document.createElement('div');
+        const client = fakeClient({
+          tables: completeEventTables({
+            public_results: {
+              data: publishedRow({ standings: [{ place: 1, name: 'Alex' }] }),
+              error: null,
+            },
+          }),
+          rpc: {
+            unpublish_event_results: { data: null, error: null },
+            publish_event_results: { data: null, error: null },
+          },
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        await flush();
+        expect(radioFor(root, 'full').checked).toBe(true);
+
+        buttonLabelled(root, 'Unpublish').click();
+        await flush();
+        expect(radioFor(root, 'podium').checked).toBe(true);
+
+        root.querySelector('.report-public-results button').click();
+        await flush();
+        expect(
+          publishedPayload({
+            calls: client.calls.filter(([, name]) => name === 'publish_event_results'),
+          }),
+        ).not.toHaveProperty('standings');
+      });
+
+      it('links to the public results sheet for this event, with its id encoded, only once it is published', async () => {
+        const unpublishedRoot = document.createElement('div');
+        await mountReportScreen(unpublishedRoot, {
+          eventId: 'ev1',
+          client: fakeClient({ tables: completeEventTables() }),
+        });
+        await flush();
+        expect(unpublishedRoot.querySelector('.report-public-results-sheet-link')).toBeNull();
+
+        const root = document.createElement('div');
+        await mountReportScreen(root, {
+          eventId: 'ev1',
+          client: fakeClient({
+            tables: completeEventTables({
+              events: { data: { ...event, id: 'a b&c' }, error: null },
+              public_results: { data: publishedRow({}), error: null },
+            }),
+          }),
+        });
+        await flush();
+        const link = root.querySelector('.report-public-results-sheet-link');
+        expect(link.getAttribute('href')).toBe('/results/?sheet=a%20b%26c');
+        expect(link.getAttribute('target')).toBe('_blank');
+        expect(link.getAttribute('rel')).toBe('noopener');
+        expect(link.textContent).toContain('opens in a new tab');
+      });
+
+      it('disables the choice while a publish is in flight', async () => {
+        const root = document.createElement('div');
+        let release;
+        const client = fakeClient({
+          tables: completeEventTables(),
+          rpc: {
+            publish_event_results: new Promise((resolve) => {
+              release = () => resolve({ data: null, error: null });
+            }),
+          },
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        await flush();
+
+        root.querySelector('.report-public-results button').click();
+        await flush();
+        expect(radios(root).every((input) => input.disabled)).toBe(true);
+
+        release();
+        await flush();
+        expect(radios(root).every((input) => !input.disabled)).toBe(true);
+      });
+
+      it('reports the level that was actually sent, even if the choice is changed while the publish is in flight', async () => {
+        const root = document.createElement('div');
+        let release;
+        const client = fakeClient({
+          tables: completeEventTables(),
+          rpc: {
+            publish_event_results: new Promise((resolve) => {
+              release = () => resolve({ data: null, error: null });
+            }),
+          },
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        await flush();
+
+        root.querySelector('.report-public-results button').click(); // podium, the default
+        await flush();
+        choose(root, 'full'); // a change event that slips in while the request is pending
+        release();
+        await flush();
+
+        expect(publishedPayload(client)).not.toHaveProperty('standings');
+        expect(root.textContent).toContain('(podium only)');
+      });
+
+      it('builds the payload for the level chosen at the click, even if the choice changes while the café lookup is still pending', async () => {
+        const root = document.createElement('div');
+        const client = largeField(120, {
+          rpc: { publish_event_results: { data: null, error: null } },
+        });
+        await mountReportScreen(root, { eventId: 'ev1', client });
+        await flush();
+        let release;
+        client.holdLookups(new Promise((resolve) => (release = resolve)));
+
+        root.querySelector('.report-public-results button').click(); // podium, the default
+        await flush(); // the lookup is now in flight
+        choose(root, 'full');
+        release();
+        await flush();
+
+        expect(publishedPayload(client)).not.toHaveProperty('standings');
+        expect(root.textContent).toContain('(podium only)');
+      });
     });
 
     it('clicking Unpublish calls unpublish_event_results and flips back to "not published"', async () => {
@@ -1981,5 +2597,164 @@ describe('mountReportScreen', () => {
     // screen's content, untouched, not this screen's own report.
     expect(root.querySelector('#other-screen-marker')).not.toBeNull();
     expect(root.textContent).not.toContain('not available yet');
+  });
+});
+
+describe('mountReportScreen — print title', () => {
+  // These tests share two pieces of global state — document.title and the module-level title the
+  // screen restores — so every handle they create is drained afterwards; a failing assertion in
+  // one must not leave a swapped title behind to make the next test fail for the wrong reason.
+  const handles = [];
+  afterEach(() => {
+    for (const { afterPrint, unmount } of handles.splice(0)) {
+      afterPrint();
+      unmount();
+    }
+    document.title = 'Seduh Score Next';
+  });
+
+  // Only the incomplete-event path is exercised: printTitle is set as soon as the event loads,
+  // before the completeness check, so it is the same code the complete (printable) report runs.
+  function clientFor(eventsRead) {
+    return fakeClient({
+      tables: {
+        events: eventsRead,
+        ct_stages: {
+          data: [{ id: 's1', event_id: 'ev1', ordinal: 1, cutoff: null, status: 'running' }],
+          error: null,
+        },
+      },
+    });
+  }
+  const incompleteClient = () => clientFor({ data: event, error: null });
+
+  // Mounts a screen and returns the print listeners THIS mount registered on window. Calling those
+  // directly (rather than dispatching a window event) keeps these tests independent of the report
+  // screens other tests in this file mounted and never unmounted, which are still listening.
+  async function mountWithPrintHandlers(client = incompleteClient()) {
+    const added = [];
+    const removed = [];
+    const addSpy = vi.spyOn(window, 'addEventListener').mockImplementation((type, handler) => {
+      added.push([type, handler]);
+    });
+    let screen;
+    try {
+      screen = await mountReportScreen(document.createElement('div'), { eventId: 'ev1', client });
+    } finally {
+      addSpy.mockRestore();
+    }
+    const handlersFor = (type) => added.filter(([t]) => t === type).map(([, handler]) => handler);
+    expect(handlersFor('beforeprint')).toHaveLength(1);
+    expect(handlersFor('afterprint')).toHaveLength(1);
+    const handle = {
+      beforePrint: handlersFor('beforeprint')[0],
+      afterPrint: handlersFor('afterprint')[0],
+      unmount: () => {
+        const spy = vi.spyOn(window, 'removeEventListener').mockImplementation((type, handler) => {
+          removed.push([type, handler]);
+        });
+        try {
+          screen.unmount();
+        } finally {
+          spy.mockRestore();
+        }
+        return removed;
+      },
+    };
+    handles.push(handle);
+    return handle;
+  }
+
+  it('names the printout after the event while printing, then puts the page title back', async () => {
+    document.title = 'Seduh Score Next';
+    const { beforePrint, afterPrint } = await mountWithPrintHandlers();
+
+    beforePrint();
+    expect(document.title).toBe('Report — Autumn Cup Tasters');
+    afterPrint();
+    expect(document.title).toBe('Seduh Score Next');
+  });
+
+  it('works for every print, not just the first — the saved title is cleared after each one', async () => {
+    document.title = 'Seduh Score Next';
+    const { beforePrint, afterPrint } = await mountWithPrintHandlers();
+
+    beforePrint();
+    afterPrint();
+    // The page title changes between prints (another screen, a language switch…): the next print
+    // must restore THAT title, not the one saved last time.
+    document.title = 'Something else';
+    beforePrint();
+    expect(document.title).toBe('Report — Autumn Cup Tasters');
+    afterPrint();
+    expect(document.title).toBe('Something else');
+  });
+
+  it('leaves the title alone if the event never loaded — there is nothing to name the printout after', async () => {
+    document.title = 'Seduh Score Next';
+    const { beforePrint, afterPrint } = await mountWithPrintHandlers(
+      clientFor({ data: null, error: new Error('load failed') }),
+    );
+
+    beforePrint();
+    expect(document.title).toBe('Seduh Score Next');
+    afterPrint();
+    expect(document.title).toBe('Seduh Score Next');
+  });
+
+  it('removes both print listeners on unmount, so a later print of another screen keeps its own title', async () => {
+    const { beforePrint, afterPrint, unmount } = await mountWithPrintHandlers();
+    const removed = unmount();
+    expect(removed).toEqual(
+      expect.arrayContaining([
+        ['beforeprint', beforePrint],
+        ['afterprint', afterPrint],
+      ]),
+    );
+  });
+
+  it('restores the title even if the screen is unmounted mid-print', async () => {
+    document.title = 'Seduh Score Next';
+    const { beforePrint, unmount } = await mountWithPrintHandlers();
+    beforePrint();
+    expect(document.title).toBe('Report — Autumn Cup Tasters');
+    unmount();
+    expect(document.title).toBe('Seduh Score Next');
+  });
+
+  it('does not save an already-swapped title when a second listener also fires — the original is what comes back', async () => {
+    document.title = 'Seduh Score Next';
+    const first = await mountWithPrintHandlers();
+    const second = await mountWithPrintHandlers();
+
+    first.beforePrint();
+    second.beforePrint();
+    first.afterPrint();
+    second.afterPrint();
+    expect(document.title).toBe('Seduh Score Next');
+  });
+
+  it("marks a test event's printout as TEST in its title — the saved PDF is named as test data too", async () => {
+    document.title = 'Seduh Score Next';
+    const { beforePrint, afterPrint } = await mountWithPrintHandlers(
+      clientFor({ data: { ...event, is_test: true }, error: null }),
+    );
+
+    beforePrint();
+    expect(document.title).toBe('TEST — Report — Autumn Cup Tasters');
+    afterPrint();
+    expect(document.title).toBe('Seduh Score Next');
+  });
+
+  it('only the screen that swapped the title restores it on unmount — another report mid-print keeps its printout title', async () => {
+    document.title = 'Seduh Score Next';
+    const printing = await mountWithPrintHandlers();
+    const idle = await mountWithPrintHandlers();
+
+    printing.beforePrint();
+    idle.unmount();
+    expect(document.title).toBe('Report — Autumn Cup Tasters');
+    printing.afterPrint();
+    expect(document.title).toBe('Seduh Score Next');
   });
 });
