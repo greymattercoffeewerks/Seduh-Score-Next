@@ -184,6 +184,11 @@
   flex-shrink: 0;
 }
 
+@page {
+  size: A4;
+  margin: 12mm;
+}
+
 @media print {
   /* The export toolbar itself is a screen-only control, not report
      content — printing the "Download CSV"/"Print / Save as PDF" buttons
@@ -204,6 +209,15 @@
   .report-chart-svg {
     max-width: 100%;
     height: auto;
+    overflow: visible;
+  }
+  /* The SVG is scaled down to fit the page width, which shrinks its labels with it (a full-size
+     field of cuppers scales it by about a third); larger label text in the SVG's own units keeps
+     them legible after that. renderRoundBarChart's VALUE_LABEL_CHAR_WIDTH is sized for this 14px —
+     change one and the other's headroom is wrong. */
+  .report-chart-value,
+  .report-chart-axis-label {
+    font-size: 14px;
   }
 
   /* Force the real table layout even if the print surface happens to be
@@ -233,5 +247,73 @@
   .standings-table td,
   .standings-table th {
     display: table-cell;
+  }
+
+  /* ---- Print layout (2026-10-06, from the first live event's printout) ----
+     The screen layout assumes a card, generous padding and an unbounded-width table; on a printed
+     page that put wide tables under the card's right border, wrapped names onto three lines and
+     stretched the report to 8 pages. Print gets a flat document instead: no card chrome, compact
+     tables, names kept on one line, headings kept with what they introduce. */
+  .report-screen .card {
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    background: transparent;
+  }
+  .report-screen h2 {
+    border-bottom: 1.5pt solid var(--color-border-strong);
+    padding-bottom: 2pt;
+    break-after: avoid;
+  }
+  .report-screen h3 {
+    break-after: avoid;
+  }
+  /* Small stat tables (set difficulty, score distribution) stay in one piece under their heading. */
+  .report-screen h3 + table {
+    break-inside: avoid;
+  }
+  .report-screen tr {
+    break-inside: avoid;
+  }
+  /* The overall table is the one a reader wants in one piece. */
+  .report-overall-card {
+    break-inside: avoid;
+  }
+
+  .standings-table {
+    font-size: 8.5pt;
+  }
+  .standings-table th {
+    font-size: 8pt;
+    padding: 3pt 4pt;
+  }
+  .standings-table td {
+    padding: 3pt 4pt;
+  }
+  /* Wide enough that an ordinary name stays on one line; a name longer than that wraps rather than
+     widening the whole table past the page. */
+  .standings-table td[data-label='Cupper'] {
+    min-width: 40mm;
+  }
+
+  /* The TEST DATA banner is white text on a coloured background, and browsers drop backgrounds when
+     printing — it would print white on white, so a test event's printed report would read as a live
+     one. In print it is black bold text in a heavy black border instead, which survives every print
+     setting (D9: test data must be unmistakable on every surface, paper included). */
+  .is-test-banner {
+    background: none;
+    color: #000;
+    border: 3pt solid #000;
+    font-weight: var(--font-weight-bold);
+  }
+
+  /* Browsers drop background colours when printing unless asked not to, which blanked the chart
+     legend swatches (so bar colours couldn't be matched to names) and the set-difficulty bars (leaving
+     only an unexplained gap before each percentage). */
+  .difficulty-bar,
+  .difficulty-bar-fill,
+  .report-chart-legend-swatch {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 }

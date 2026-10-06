@@ -648,6 +648,10 @@ const CHART_SERIES_COLOR_COUNT = 8;
 function chartSeriesColor(index) {
   return `var(--report-chart-color-${(index % CHART_SERIES_COLOR_COUNT) + 1})`;
 }
+// Generous per-character width for a value label in the chart's monospace face — sized for the
+// print stylesheet's larger label font (14px, ~8.4px/char), so rotated labels never outgrow the
+// headroom reserved for them.
+const VALUE_LABEL_CHAR_WIDTH = 9;
 
 // Pure-ish (builds live DOM, but from already-computed data, same as every
 // other render* function on this screen). One grouped bar chart — a round
@@ -723,8 +727,20 @@ export function renderRoundBarChart({
   const groupGap = 24;
   const sidePadding = 12;
   const chartAreaHeight = 140;
-  const valueLabelSpace = 16;
   const axisLabelSpace = 28;
+  // A value label wider than its bar's own slot (a time like "4:09" is ~28px wide against a 20px
+  // slot) used to overprint its neighbours — unreadable on screen and worse once the print layout
+  // shrinks the whole SVG to the page width. Such labels are turned to run up the bar instead, with
+  // headroom reserved for the longest one. Decided per chart, not per label, so every label in a
+  // chart reads the same way. The slot layout itself is untouched: a cupper keeps the same x
+  // position in every round.
+  const labelTexts = cellsByRound
+    .flat()
+    .filter((value) => value != null)
+    .map((value) => formatValue(value));
+  const longestLabel = Math.max(0, ...labelTexts.map((text) => text.length));
+  const rotateValueLabels = longestLabel * VALUE_LABEL_CHAR_WIDTH > barWidth + barGap;
+  const valueLabelSpace = rotateValueLabels ? longestLabel * VALUE_LABEL_CHAR_WIDTH + 8 : 16;
   const svgHeight = valueLabelSpace + chartAreaHeight + axisLabelSpace;
   const groupWidth = summaries.length * barWidth + Math.max(0, summaries.length - 1) * barGap;
   const svgWidth =
@@ -753,12 +769,25 @@ export function renderRoundBarChart({
           'data-round': round.ordinal,
         }),
       );
-      const valueLabel = svgEl('text', {
-        x: barX + barWidth / 2,
-        y: barY - 3,
-        'text-anchor': 'middle',
-        class: 'report-chart-value',
-      });
+      const valueLabel = svgEl(
+        'text',
+        rotateValueLabels
+          ? {
+              // Anchored at the label's start (the bar's top) and turned a quarter-turn, so the text
+              // climbs the bar; the +5 centres the turned glyphs on the bar's own centreline.
+              x: barX + barWidth / 2 + 5,
+              y: barY - 4,
+              'text-anchor': 'start',
+              transform: `rotate(-90 ${barX + barWidth / 2 + 5} ${barY - 4})`,
+              class: 'report-chart-value',
+            }
+          : {
+              x: barX + barWidth / 2,
+              y: barY - 3,
+              'text-anchor': 'middle',
+              class: 'report-chart-value',
+            },
+      );
       valueLabel.textContent = formatValue(value);
       bars.push(valueLabel);
     });
@@ -848,9 +877,37 @@ function renderStageSection(stageReport, roundLabel) {
   ]);
 }
 
+// Printing uses the page title twice — as the browser's own page header and as the default file
+// name for "Save as PDF" — and the app's static title ("Seduh Score Next") says nothing about which
+// report this is. The title is swapped in only for the duration of a print. The page title it will
+// restore is module-level, not per screen: the router mounts the next screen before unmounting the
+// previous one, so two listeners can briefly coexist, and a per-screen copy would let the second
+// "save" the already-swapped title and put the wrong one back.
+let titleBeforePrint = null;
+
 export async function mountReportScreen(root, { eventId, client = getSupabase(), signal } = {}) {
+  let printTitle = null;
+  let swappedTitle = false;
+  function onBeforePrint() {
+    if (!printTitle) return;
+    if (titleBeforePrint == null) {
+      titleBeforePrint = document.title;
+      swappedTitle = true;
+    }
+    document.title = printTitle;
+  }
+  function onAfterPrint() {
+    if (titleBeforePrint == null) return;
+    document.title = titleBeforePrint;
+    titleBeforePrint = null;
+  }
+  window.addEventListener('beforeprint', onBeforePrint);
+  window.addEventListener('afterprint', onAfterPrint);
+
   async function loadState() {
     const event = await findEvent(eventId, client);
+    // Same marking the CSV filename carries: a PDF saved from a test event is named as one.
+    printTitle = `${event.is_test ? 'TEST — ' : ''}Report — ${event.name}`;
     const complete = await isEventComplete(eventId, client);
     if (!complete) return { event, complete };
 
@@ -1309,7 +1366,7 @@ export async function mountReportScreen(root, { eventId, client = getSupabase(),
           }),
         );
         container.appendChild(
-          el('div', { className: 'card report-stage-card' }, [
+          el('div', { className: 'card report-stage-card report-overall-card' }, [
             el('h2', { text: 'Overall — All Rounds' }),
             renderEventSummaryTable(summaries, data.stageReports),
           ]),
@@ -1347,6 +1404,11 @@ export async function mountReportScreen(root, { eventId, client = getSupabase(),
 
   return {
     unmount() {
+      window.removeEventListener('beforeprint', onBeforePrint);
+      window.removeEventListener('afterprint', onAfterPrint);
+      // Only the mount that swapped the title in puts it back: another still-mounted report that is
+      // mid-print owns its own restore.
+      if (swappedTitle) onAfterPrint();
       // No timers, and no listeners beyond the DOM subtree itself (removed
       // wholesale by the caller). The Public results card's own in-flight
       // reads/writes (findPublishedResultForEvent's initial check,
