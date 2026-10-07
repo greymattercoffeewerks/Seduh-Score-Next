@@ -1,0 +1,110 @@
+/* Team screen (T-HARDEN.team-accounts). Reuses .screen-container / .card / .btn / .tap-target /
+   .field-input / .form-field / .screen-feedback from the shared token-only styling; only what this
+   screen itself needs is here. Single column from 360px up, so no breakpoint. */
+
+.team-screen .card {
+  margin-bottom: var(--space-4);
+}
+
+.team-screen .card h2 {
+  margin-bottom: var(--space-3);
+}
+
+.team-list {
+  list-style: none;
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.team-list li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: var(--border-hairline) solid var(--color-border);
+}
+
+.team-member-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  /* Lets a long email wrap inside the row instead of pushing the buttons off a 360px screen. */
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.team-member-email {
+  font-weight: var(--font-weight-semibold);
+}
+
+.team-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* The inline confirm takes the whole row, on its own line beneath the person. */
+.team-confirm {
+  flex: 1 1 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.team-confirm-text {
+  margin: 0;
+}
+
+/* The one-time password: large, monospaced, selectable in one tap, and allowed to wrap rather than
+   overflow at 360px. */
+.team-password {
+  display: block;
+  margin: var(--space-2) 0 var(--space-3);
+  padding: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-xl);
+  letter-spacing: var(--tracking-wide);
+  background: var(--color-surface-sunken);
+  border: var(--border-hairline) solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  user-select: all;
+  overflow-wrap: anywhere;
+}
+
+.team-issued {
+  border: var(--border-strong) solid var(--color-border-strong);
+}
+
+/* A long email (or the password block) wraps inside its box instead of widening the page: found at
+   360px with an ordinary 38-character address in the issued-password heading, the confirm text and
+   the feedback line. */
+.team-screen h1,
+.team-screen h2,
+.team-screen p,
+.team-screen .screen-feedback {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+/* The email box and its button sat touching. */
+.team-add-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.team-add-form h2 {
+  margin-bottom: 0;
+}
+
+/* Focus targets this screen moves focus to: clear of the sticky header. */
+#team-heading,
+#team-issued,
+#team-email {
+  scroll-margin-top: var(--app-shell-header-height, 5rem);
+}

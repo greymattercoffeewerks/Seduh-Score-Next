@@ -6,6 +6,7 @@ import {
   setBusyDisabled,
   withFocusPreservation,
   fitToScreen,
+  passwordToggle,
 } from './dom.js';
 
 describe('el', () => {
@@ -249,5 +250,65 @@ describe('fitToScreen', () => {
     expect(fitToScreen(root, shell)).toBe(0.5);
     expect(fitToScreen(root, shell)).toBe(0.5);
     expect(shell.style.transform).toBe('scale(0.5)');
+  });
+});
+
+describe('passwordToggle', () => {
+  const inputs = () =>
+    [document.createElement('input'), document.createElement('input')].map((i) => {
+      i.type = 'password';
+      return i;
+    });
+
+  it('is a plain button (it must not submit a form) with a polite status line, starting hidden', () => {
+    const [a] = inputs();
+    const [button, status] = passwordToggle([a]);
+    expect(button.type).toBe('button');
+    expect(button.textContent).toBe('Show');
+    expect(button.getAttribute('aria-label')).toBe('Show password');
+    expect(button.hasAttribute('aria-pressed')).toBe(false);
+    expect(status.getAttribute('role')).toBe('status');
+    expect(status.getAttribute('aria-live')).toBe('polite');
+    expect(status.textContent).toBe('');
+    expect(a.type).toBe('password');
+  });
+
+  it('keeps the 44px tap-target class and hides the status line visually, not from the accessibility tree', () => {
+    const [button, status] = passwordToggle(inputs());
+    expect(button.classList.contains('tap-target')).toBe(true);
+    expect(status.classList.contains('sr-only')).toBe(true);
+  });
+
+  it('can start shown', () => {
+    const [a] = inputs();
+    const [button] = passwordToggle([a], { shown: true });
+    expect(a.type).toBe('text');
+    expect(button.textContent).toBe('Hide');
+    expect(button.getAttribute('aria-label')).toBe('Hide password');
+  });
+
+  it('flips every input it is given, in place, announcing each change', () => {
+    const [a, b] = inputs();
+    a.value = 'one';
+    b.value = 'two';
+    const [button, status] = passwordToggle([a, b]);
+    button.click();
+    expect([a.type, b.type]).toEqual(['text', 'text']);
+    expect([a.value, b.value]).toEqual(['one', 'two']);
+    expect(status.textContent).toBe('Password is shown');
+    button.click();
+    expect([a.type, b.type]).toEqual(['password', 'password']);
+    expect(status.textContent).toBe('Password is hidden');
+  });
+
+  it('tells the caller the new state, and works with no callback at all', () => {
+    const [a] = inputs();
+    const calls = [];
+    const [button] = passwordToggle([a], { onToggle: (shown) => calls.push(shown) });
+    button.click();
+    button.click();
+    expect(calls).toEqual([true, false]);
+    const [bare] = passwordToggle([a]);
+    expect(() => bare.click()).not.toThrow();
   });
 });

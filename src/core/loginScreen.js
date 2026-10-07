@@ -17,7 +17,7 @@
 //
 // Lives in core/, not a format directory — auth is format-agnostic.
 import { getSupabase } from './supabaseClient.js';
-import { el, labeledField, setBusyDisabled, withFocusPreservation } from './dom.js';
+import { el, labeledField, passwordToggle, setBusyDisabled, withFocusPreservation } from './dom.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
 
 export function validateCredentials(draft) {
@@ -88,29 +88,9 @@ export function renderLoginForm(
     draft.password = passwordInput.value;
   });
 
-  // A changing label, no aria-pressed: the two together read "Hide password, pressed", which does
-  // not say whether the password is currently visible. The status line is a persistent node (this
-  // flip never re-renders), so the change is announced reliably.
-  let shown = showPassword;
-  const toggleButton = el('button', {
-    className: 'btn btn-outline tap-target login-password-toggle',
-    attrs: { type: 'button' },
-  });
-  const toggleStatus = el('span', {
-    className: 'sr-only',
-    attrs: { role: 'status', 'aria-live': 'polite' },
-  });
-  function paintToggle() {
-    passwordInput.type = shown ? 'text' : 'password';
-    toggleButton.textContent = shown ? 'Hide' : 'Show';
-    toggleButton.setAttribute('aria-label', shown ? 'Hide password' : 'Show password');
-  }
-  paintToggle();
-  toggleButton.addEventListener('click', () => {
-    shown = !shown;
-    paintToggle();
-    toggleStatus.textContent = shown ? 'Password is shown' : 'Password is hidden';
-    onTogglePassword(shown);
+  const [toggleButton, toggleStatus] = passwordToggle([passwordInput], {
+    shown: showPassword,
+    onToggle: onTogglePassword,
   });
 
   const submitButton = el('button', {

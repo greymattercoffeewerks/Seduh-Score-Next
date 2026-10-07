@@ -384,7 +384,7 @@ describe('renderLoginForm — show/hide and iOS-friendly attributes', () => {
   it('hides the password by default, with a Show button', () => {
     const form = renderLoginForm({ email: '', password: 'secret' }, { disabled: false });
     expect(form.querySelector('[data-field="password"]').type).toBe('password');
-    const toggle = form.querySelector('.login-password-toggle');
+    const toggle = form.querySelector('.password-toggle');
     expect(toggle.type).toBe('button'); // it must not submit the form
     expect(toggle.textContent).toBe('Show');
     expect(toggle.getAttribute('aria-label')).toBe('Show password');
@@ -400,7 +400,7 @@ describe('renderLoginForm — show/hide and iOS-friendly attributes', () => {
     const input = form.querySelector('[data-field="password"]');
     expect(input.type).toBe('text');
     expect(input.value).toBe('secret');
-    const toggle = form.querySelector('.login-password-toggle');
+    const toggle = form.querySelector('.password-toggle');
     expect(toggle.textContent).toBe('Hide');
     expect(toggle.getAttribute('aria-label')).toBe('Hide password');
     expect(toggle.hasAttribute('aria-pressed')).toBe(false);
@@ -423,7 +423,7 @@ describe('renderLoginForm — show/hide and iOS-friendly attributes', () => {
       { disabled: false, onTogglePassword },
     );
     const input = form.querySelector('[data-field="password"]');
-    const toggle = form.querySelector('.login-password-toggle');
+    const toggle = form.querySelector('.password-toggle');
     const status = form.querySelector('[role="status"]');
     const nodes = [input, toggle, status];
     input.value = 'typed';
@@ -446,7 +446,7 @@ describe('renderLoginForm — show/hide and iOS-friendly attributes', () => {
     // all survive.
     // (toBe, not toEqual: toEqual compares DOM nodes structurally, so a clone would pass)
     expect(form.querySelector('[data-field="password"]')).toBe(nodes[0]);
-    expect(form.querySelector('.login-password-toggle')).toBe(nodes[1]);
+    expect(form.querySelector('.password-toggle')).toBe(nodes[1]);
     expect(form.querySelector('[role="status"]')).toBe(nodes[2]);
     expect(input.value).toBe('typed');
   });
@@ -457,14 +457,14 @@ describe('mountLoginScreen — hardening', () => {
     const client = scriptedClient(['ok']);
     const { root } = await mountAttached(client);
     typeInto(root, 'password', 'Secret-1');
-    root.querySelector('.login-password-toggle').focus();
-    root.querySelector('.login-password-toggle').click();
+    root.querySelector('.password-toggle').focus();
+    root.querySelector('.password-toggle').click();
     const input = root.querySelector('[data-field="password"]');
     expect(input.type).toBe('text');
     expect(input.value).toBe('Secret-1');
-    expect(document.activeElement).toBe(root.querySelector('.login-password-toggle'));
+    expect(document.activeElement).toBe(root.querySelector('.password-toggle'));
     expect(client.calls).toHaveLength(0);
-    root.querySelector('.login-password-toggle').click();
+    root.querySelector('.password-toggle').click();
     expect(root.querySelector('[data-field="password"]').type).toBe('password');
     expect(root.querySelector('[data-field="password"]').value).toBe('Secret-1');
   });
@@ -473,7 +473,7 @@ describe('mountLoginScreen — hardening', () => {
     const { root } = await mountAttached(scriptedClient([BAD]));
     typeInto(root, 'email', 'a@b.com');
     typeInto(root, 'password', 'wrong');
-    root.querySelector('.login-password-toggle').click();
+    root.querySelector('.password-toggle').click();
     await submit(root);
     expect(root.querySelector('[data-field="password"]').type).toBe('text');
     expect(root.querySelector('[data-field="password"]').value).toBe('wrong');
@@ -597,7 +597,7 @@ describe('mountLoginScreen — show/hide does not redraw the screen', () => {
 
     // iOS fills the email again without an event, then the user taps Show.
     root.querySelector('[data-field="email"]').value = 'other@example.com';
-    root.querySelector('.login-password-toggle').click();
+    root.querySelector('.password-toggle').click();
 
     expect(root.querySelector('[data-field="email"]').value).toBe('other@example.com');
     expect(root.querySelector('.screen-feedback').textContent).toBe(INVALID_CREDENTIALS_MESSAGE);
@@ -608,10 +608,10 @@ describe('mountLoginScreen — show/hide does not redraw the screen', () => {
     const { root } = await mountAttached(client);
     typeInto(root, 'email', 'a@b.com');
     typeInto(root, 'password', 'wrong');
-    root.querySelector('.login-password-toggle').click(); // shown
+    root.querySelector('.password-toggle').click(); // shown
     await submit(root); // the screen is rebuilt twice (busy, then the error)
     expect(root.querySelector('[data-field="password"]').type).toBe('text');
-    expect(root.querySelector('.login-password-toggle').textContent).toBe('Hide');
+    expect(root.querySelector('.password-toggle').textContent).toBe('Hide');
   });
 
   it('retries the password that was submitted, not whatever was typed while the request was in flight', async () => {
@@ -714,11 +714,11 @@ describe('mountLoginScreen — retry and attribute contracts', () => {
     const { root } = await mountAttached(scriptedClient([BAD]));
     typeInto(root, 'email', 'a@b.com');
     typeInto(root, 'password', 'wrong');
-    root.querySelector('.login-password-toggle').click(); // shown
-    root.querySelector('.login-password-toggle').click(); // hidden again
+    root.querySelector('.password-toggle').click(); // shown
+    root.querySelector('.password-toggle').click(); // hidden again
     await submit(root);
     expect(root.querySelector('[data-field="password"]').type).toBe('password');
-    expect(root.querySelector('.login-password-toggle').textContent).toBe('Show');
+    expect(root.querySelector('.password-toggle').textContent).toBe('Show');
   });
 
   it('keeps the attributes iOS Keychain needs to offer the saved login, and requires both fields', () => {

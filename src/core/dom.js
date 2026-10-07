@@ -163,6 +163,39 @@ export function labeledField(labelText, input, extra = []) {
   ]);
 }
 
+// Show/Hide for one or more password inputs (the sign-in screen's one field, the set-password
+// screen's two): returns [button, status] to place beside the field. It flips the inputs in place —
+// nothing is re-rendered, so what was typed, the caret, an autofilled value and any visible error
+// all survive, and the status line is a persistent node, so "Password is shown/hidden" is announced
+// reliably. A changing label with NO aria-pressed: the two together read "Hide password, pressed",
+// which does not say whether the password is currently visible. `onToggle(isShown)` lets the caller
+// remember the choice across its own re-renders; `shown` is the starting state.
+// Styled by `.password-toggle` in loginScreen.css (every stylesheet is loaded globally by app/index.html).
+export function passwordToggle(inputs, { shown = false, onToggle = () => {} } = {}) {
+  let isShown = shown;
+  const button = el('button', {
+    className: 'btn btn-outline tap-target password-toggle',
+    attrs: { type: 'button' },
+  });
+  const status = el('span', {
+    className: 'sr-only',
+    attrs: { role: 'status', 'aria-live': 'polite' },
+  });
+  function paint() {
+    for (const input of inputs) input.type = isShown ? 'text' : 'password';
+    button.textContent = isShown ? 'Hide' : 'Show';
+    button.setAttribute('aria-label', isShown ? 'Hide password' : 'Show password');
+  }
+  paint();
+  button.addEventListener('click', () => {
+    isShown = !isShown;
+    paint();
+    status.textContent = isShown ? 'Password is shown' : 'Password is hidden';
+    onToggle(isShown);
+  });
+  return [button, status];
+}
+
 // Scales `shell` so its natural content height fits `root`'s height. Resets
 // first so it always measures the unscaled layout. The shell is widened by the
 // inverse factor before scaling, so the scaled view still spans the full

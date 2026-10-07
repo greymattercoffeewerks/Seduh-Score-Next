@@ -19,6 +19,9 @@ const mountProjectorSurface = vi.fn();
 const mountPhoneSummary = vi.fn();
 const mountSplashScreen = vi.fn();
 const mountLoginScreen = vi.fn();
+const mountSetPasswordScreen = vi.fn();
+const mountTeamScreen = vi.fn();
+const canManageTeam = vi.fn(() => Promise.resolve(false));
 
 vi.mock('./core/eventsScreen.js', () => ({
   mountEventsScreen: (...args) => mountEventsScreen(...args),
@@ -52,6 +55,15 @@ vi.mock('./formats/cup-taster/projectorSurface.js', () => ({
 }));
 vi.mock('./formats/cup-taster/phoneSummary.js', () => ({
   mountPhoneSummary: (...args) => mountPhoneSummary(...args),
+}));
+vi.mock('./core/setPasswordScreen.js', () => ({
+  mountSetPasswordScreen: (...args) => mountSetPasswordScreen(...args),
+}));
+vi.mock('./core/teamScreen.js', () => ({
+  mountTeamScreen: (...args) => mountTeamScreen(...args),
+}));
+vi.mock('./core/team.js', () => ({
+  canManageTeam: (...args) => canManageTeam(...args),
 }));
 vi.mock('./core/splashScreen.js', () => ({
   mountSplashScreen: (...args) => mountSplashScreen(...args),
@@ -1192,5 +1204,340 @@ describe('sync-on-reconnect', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(root.querySelector('.app-shell-sync').textContent).not.toContain('failed to save');
+  });
+});
+
+// ---- team accounts (owner-managed logins) ----
+describe('team accounts wiring', () => {
+  beforeEach(() => {
+    canManageTeam.mockReset();
+    canManageTeam.mockResolvedValue(false);
+  });
+
+  const signedIn = (extra = {}) => ({ user: { email: 'organiser@test.com', ...extra } });
+
+  // Like the reconnect tests' client: onAuthStateChange really calls its subscribers, so the Team
+  // link's ownership check runs, and setSession() plays a sign-in/out.
+  function reactiveClient(session) {
+    let listeners = [];
+    let current = session;
+    return {
+      setSession(next) {
+        current = next;
+        for (const cb of listeners) cb('SIGNED_IN', next);
+      },
+      auth: {
+        getSession: () => Promise.resolve({ data: { session: current } }),
+        onAuthStateChange: (cb) => {
+          listeners.push(cb);
+          Promise.resolve().then(() => cb('INITIAL_SESSION', current));
+          return {
+            data: {
+              subscription: {
+                unsubscribe: () => {
+                  listeners = listeners.filter((l) => l !== cb);
+                },
+              },
+            },
+          };
+        },
+        signOut: vi.fn(),
+      },
+    };
+  }
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const teamLink = (root) => root.querySelector('.app-shell-link[href="#/team"]');
+
+  it('someone who signed in with a one-time password sees the choose-a-password screen, not the page they asked for', async () => {
+    stubScreen(mountSetPasswordScreen, 'SET_PASSWORD_SCREEN');
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    const client = fakeClient({
+      session: signedIn({ user_metadata: { must_change_password: true } }),
+    });
+    const { root } = await startApp({ client });
+    expect(root.textContent).toContain('SET_PASSWORD_SCREEN');
+    expect(mountEventsScreen).not.toHaveBeenCalled();
+    expect(mountSetPasswordScreen.mock.calls[0][1].client).toBe(client);
+    expect(mountSetPasswordScreen.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('the same gate holds on every console route, not just the first one', async () => {
+    stubScreen(mountSetPasswordScreen, 'SET_PASSWORD_SCREEN');
+    stubScreen(mountRosterScreen, 'ROSTER_SCREEN');
+    location.hash = '#/events/ev1/roster';
+    const client = fakeClient({
+      session: signedIn({ user_metadata: { must_change_password: true } }),
+    });
+    const { root } = await startApp({ client });
+    expect(root.textContent).toContain('SET_PASSWORD_SCREEN');
+    expect(mountRosterScreen).not.toHaveBeenCalled();
+  });
+
+  it('only an exact true triggers it: a cleared or missing flag goes straight through', async () => {
+    for (const metadata of [
+      { must_change_password: false },
+      {},
+      { must_change_password: 'true' },
+      undefined,
+    ]) {
+      vi.clearAllMocks();
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const client = fakeClient({ session: signedIn({ user_metadata: metadata }) });
+      const { root, app } = await startApp({ client });
+      expect(root.textContent).toContain('EVENTS_SCREEN');
+      expect(mountSetPasswordScreen).not.toHaveBeenCalled();
+      await app.unmount();
+      activeApp = null;
+    }
+  });
+
+  it('once the password is chosen, onDone takes them to the screen they originally asked for', async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    let finish;
+    mountSetPasswordScreen.mockImplementation(async (root, { onDone }) => {
+      root.textContent = 'SET_PASSWORD_SCREEN';
+      finish = onDone;
+      return { unmount: vi.fn() };
+    });
+    const client = fakeClient({
+      session: signedIn({ user_metadata: { must_change_password: true } }),
+    });
+    const { root } = await startApp({ client });
+    expect(root.textContent).toContain('SET_PASSWORD_SCREEN');
+
+    client.setSession(signedIn({ user_metadata: { must_change_password: false } }));
+    finish();
+    await settle();
+    await settle();
+    expect(root.textContent).toContain('EVENTS_SCREEN');
+  });
+
+  it('#/team mounts the team screen with the org, the client and a real signal', async () => {
+    stubScreen(mountTeamScreen, 'TEAM_SCREEN');
+    location.hash = '#/team';
+    const client = fakeClient();
+    const { root } = await startApp({ client });
+    expect(root.textContent).toContain('TEAM_SCREEN');
+    const args = mountTeamScreen.mock.calls[0][1];
+    expect(args.orgId).toBe('org1');
+    expect(args.client).toBe(client);
+    expect(args.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('#/team is behind the sign-in gate like every other console route', async () => {
+    stubScreen(mountLoginScreen, 'LOGIN_SCREEN');
+    stubScreen(mountTeamScreen, 'TEAM_SCREEN');
+    location.hash = '#/team';
+    const { root } = await startApp({ client: fakeClient({ session: null }) });
+    expect(root.textContent).toContain('LOGIN_SCREEN');
+    expect(mountTeamScreen).not.toHaveBeenCalled();
+  });
+
+  it('shows a Team link to an owner, once the database says so', async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    canManageTeam.mockResolvedValue(true);
+    const client = reactiveClient(signedIn());
+    const { root } = await startApp({ client });
+    await settle();
+    await settle();
+    expect(teamLink(root)).not.toBeNull();
+    expect(teamLink(root).textContent).toBe('Team');
+    expect(canManageTeam).toHaveBeenCalledWith('org1', client);
+  });
+
+  it('puts the Team link before the audience links, which open in new tabs', async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    canManageTeam.mockResolvedValue(true);
+    const { root } = await startApp({ client: reactiveClient(signedIn()) });
+    await settle();
+    await settle();
+    const labels = [...root.querySelectorAll('.app-shell-link')].map((a) => a.textContent);
+    const team = labels.indexOf('Team');
+    const splash = labels.findIndex((text) => text.startsWith('Splash screen'));
+    expect(team).toBeGreaterThan(-1);
+    expect(splash).toBeGreaterThan(-1);
+    expect(team).toBeLessThan(splash);
+  });
+
+  it('shows no Team link to anyone else — not an organiser, not when the check fails', async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    canManageTeam.mockResolvedValue(false);
+    const first = await startApp({ client: reactiveClient(signedIn()) });
+    await settle();
+    await settle();
+    expect(teamLink(first.root)).toBeNull();
+    await first.app.unmount();
+    activeApp = null;
+
+    canManageTeam.mockRejectedValue(new Error('network'));
+    const second = await startApp({ client: reactiveClient(signedIn()) });
+    await settle();
+    await settle();
+    expect(teamLink(second.root)).toBeNull();
+  });
+
+  it('does not even ask while a one-time password is still to be replaced, and shows no link', async () => {
+    stubScreen(mountSetPasswordScreen, 'SET_PASSWORD_SCREEN');
+    canManageTeam.mockResolvedValue(true);
+    const client = reactiveClient(signedIn({ user_metadata: { must_change_password: true } }));
+    const { root } = await startApp({ client });
+    await settle();
+    await settle();
+    expect(canManageTeam).not.toHaveBeenCalled();
+    expect(teamLink(root)).toBeNull();
+  });
+
+  it('keeps the Team link when a later check fails (a dropped connection at a token refresh), but drops it when the answer is a clear no', async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    canManageTeam.mockResolvedValue(true);
+    const client = reactiveClient(signedIn());
+    const { root } = await startApp({ client });
+    await settle();
+    await settle();
+    expect(teamLink(root)).not.toBeNull();
+
+    canManageTeam.mockResolvedValue(null); // the check itself failed
+    client.setSession(signedIn());
+    await settle();
+    await settle();
+    expect(teamLink(root)).not.toBeNull();
+
+    canManageTeam.mockRejectedValue(new Error('network')); // threw outright
+    client.setSession(signedIn());
+    await settle();
+    await settle();
+    expect(teamLink(root)).not.toBeNull();
+
+    canManageTeam.mockResolvedValue(false); // a clear no
+    client.setSession(signedIn());
+    await settle();
+    await settle();
+    expect(teamLink(root)).toBeNull();
+  });
+
+  it('takes the link away at once on sign-out', async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    stubScreen(mountLoginScreen, 'LOGIN_SCREEN');
+    canManageTeam.mockResolvedValue(true);
+    const client = reactiveClient(signedIn());
+    const { root } = await startApp({ client });
+    await settle();
+    await settle();
+    expect(teamLink(root)).not.toBeNull();
+
+    client.setSession(null);
+    await settle();
+    expect(teamLink(root)).toBeNull();
+  });
+
+  it('a slow answer to an earlier check cannot overrule a later one', async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    let resolveFirst;
+    canManageTeam
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirst = resolve;
+          }),
+      )
+      .mockResolvedValue(false);
+    const client = reactiveClient(signedIn());
+    const { root } = await startApp({ client });
+    await settle(); // first check (INITIAL_SESSION) is now waiting
+    client.setSession(signedIn()); // a second auth event: answer false
+    await settle();
+    await settle();
+    resolveFirst(true); // the stale answer arrives last
+    await settle();
+    await settle();
+    expect(teamLink(root)).toBeNull();
+  });
+});
+
+describe('team accounts wiring — edges the first pass missed', () => {
+  beforeEach(() => {
+    canManageTeam.mockReset();
+    canManageTeam.mockResolvedValue(false);
+  });
+
+  const signedIn = (extra = {}) => ({ user: { email: 'organiser@test.com', ...extra } });
+  function reactiveClient(session) {
+    let listeners = [];
+    let current = session;
+    return {
+      setSession(next) {
+        current = next;
+        for (const cb of listeners) cb('SIGNED_IN', next);
+      },
+      auth: {
+        getSession: () => Promise.resolve({ data: { session: current } }),
+        onAuthStateChange: (cb) => {
+          listeners.push(cb);
+          Promise.resolve().then(() => cb('INITIAL_SESSION', current));
+          return {
+            data: {
+              subscription: {
+                unsubscribe: () => {
+                  listeners = listeners.filter((l) => l !== cb);
+                },
+              },
+            },
+          };
+        },
+        signOut: vi.fn(),
+      },
+    };
+  }
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  it('a flag that is the string "true" is not the one-time-password state for the Team check', async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    canManageTeam.mockResolvedValue(true);
+    const { root } = await startApp({
+      client: reactiveClient(signedIn({ user_metadata: { must_change_password: 'true' } })),
+    });
+    await settle();
+    await settle();
+    expect(canManageTeam).toHaveBeenCalled();
+    expect(root.querySelector('.app-shell-link[href="#/team"]')).not.toBeNull();
+  });
+
+  it('the ownership check is not started from inside the auth callback (supabase-js holds its lock there)', async () => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    canManageTeam.mockResolvedValue(true);
+    const client = reactiveClient(signedIn());
+    await startApp({ client });
+    await settle();
+    await settle();
+    canManageTeam.mockClear();
+    client.setSession(signedIn());
+    expect(canManageTeam).not.toHaveBeenCalled(); // still inside the (synchronous) callback
+    await settle();
+    expect(canManageTeam).toHaveBeenCalledTimes(1);
+  });
+
+  it('the Team link is marked as the current page on #/team', async () => {
+    stubScreen(mountTeamScreen, 'TEAM_SCREEN');
+    canManageTeam.mockResolvedValue(true);
+    location.hash = '#/team';
+    const { root } = await startApp({ client: reactiveClient(signedIn()) });
+    await settle();
+    await settle();
+    expect(root.querySelector('.app-shell-link[href="#/team"]').getAttribute('aria-current')).toBe(
+      'page',
+    );
+  });
+
+  it('marks only Team as the current page on #/team, not Events as well', async () => {
+    stubScreen(mountTeamScreen, 'TEAM_SCREEN');
+    canManageTeam.mockResolvedValue(true);
+    location.hash = '#/team';
+    const { root } = await startApp({ client: reactiveClient(signedIn()) });
+    await settle();
+    await settle();
+    const current = [...root.querySelectorAll('.app-shell-link[aria-current="page"]')].map(
+      (a) => a.textContent,
+    );
+    expect(current).toEqual(['Team']);
   });
 });

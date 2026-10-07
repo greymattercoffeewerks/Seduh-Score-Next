@@ -18,7 +18,7 @@
 
 /* Show/Hide for the password: its own line under the field, as wide as its text (not stretched),
    so the field keeps the full row at 360px. */
-.login-password-toggle {
+.password-toggle {
   align-self: flex-start;
   margin-top: var(--space-2);
 }
