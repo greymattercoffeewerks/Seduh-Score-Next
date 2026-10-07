@@ -1539,6 +1539,17 @@ _Deferred findings from T-HARDEN.correct-heat-time, flagged and documented, not 
 
 ---
 
+## Known open items from T-HARDEN.login-hardening (2026-10-07)
+
+_Deferred findings from T-HARDEN.login-hardening, flagged and documented, not blocking._
+
+- **Check on the real iPad** (Safari, desktop-site mode): Show/Hide with the keyboard up, autofill from iCloud Keychain, and signing in with a password pasted with a trailing space.
+- **Root cause of the 4 Oct failure is unconfirmed**; the auth logs only keep 24h and never record what was typed.
+- **Shared login is still the real problem** — per-person accounts are the team-accounts task (owner-managed, one-time password).
+- **Pre-existing: `setBusyDisabled` only sets `aria-disabled`/`aria-busy`**, so Sign in (and the new toggle) can still be activated while a sign-in is in flight; the `signingIn` guard stops a second request.
+
+---
+
 ## Known open items from T-HARDEN.roster-edit (2026-10-07)
 
 _Deferred findings from T-HARDEN.roster-edit, flagged and documented, not blocking._
