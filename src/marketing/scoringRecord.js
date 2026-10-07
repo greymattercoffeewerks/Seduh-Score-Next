@@ -3,10 +3,12 @@
 // (supabase/migrations/20260924110000_get_scoring_record.sql via core/publicResults.js).
 //
 // Decisions it embodies (2026-09-24): corrections are public; the actor is only ever the role
-// "Organiser"; NO individual scores are shown anywhere — exact raw data is released only on
-// request through the organiser's dispute pack. Everything is built with textContent
-// (core/dom.js `el`), never innerHTML: `reason` is organiser-typed free text and must never
-// be interpreted as markup.
+// "Organiser"; this disclosure shows no individual scores — exact raw data is released only on
+// request through the organiser's dispute pack. (Amended 2026-10-06: an organiser may separately
+// choose to publish full standings, so the printable results sheet can show each competitor's
+// last-round score and time; set-by-set marks and this record's old/new values still never appear
+// on any public page.) Everything is built with textContent (core/dom.js `el`), never innerHTML:
+// `reason` is organiser-typed free text and must never be interpreted as markup.
 //
 // Nothing is fetched until the reader opens the disclosure, and it is fetched once (a failed
 // load offers a retry). Reasons are always attributed ("Reason given by the Organiser") and

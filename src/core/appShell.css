@@ -447,3 +447,12 @@
      token (email addresses have no spaces) still wraps. */
   overflow-wrap: anywhere;
 }
+
+/* The organiser chrome (brand bar, Menu, sync status, version footer) is navigation, not content —
+   printing any organiser screen (the report above all) should give just that screen's own content. */
+@media print {
+  .app-shell-header,
+  .app-shell-footer {
+    display: none;
+  }
+}

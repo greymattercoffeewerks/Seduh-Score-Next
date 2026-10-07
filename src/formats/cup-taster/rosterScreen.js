@@ -14,6 +14,19 @@
 // simply the one place that flag gets set (core/registry.setEntryWithdrawn,
 // new — nothing could set it before this).
 //
+// Edit (live-event finding #4, 2026-10-04): a wrong name used to be unfixable from the app —
+// registering again with the same phone returns the EXISTING person unchanged. Each row now has an
+// Edit button opening an inline form (name, phone, email, cafe, bib); one atomic RPC
+// (core/registry.updateRosterEntry) corrects the person's shared profile AND this event's entry,
+// leaving other events' snapshots alone. Each row also shows the phone and email on file, so the
+// organiser can check them. A phone is required for a cupper with a profile (it is the profile's
+// identity within the org); a walk-up entry with no profile edits name/cafe/bib only. Field lengths
+// are capped (FIELD_LIMITS, matching the RPC) in the registration form too, so a value registration
+// accepted can always be saved again. The open form's
+// text lives in `editing.draft`, mutated synchronously by each field's input handler (the same
+// discipline as the registration `draft`), so a withdraw/register elsewhere that re-renders the
+// whole screen rebuilds the open form from what has been typed rather than wiping it.
+//
 // Rebuild-then-refocus throughout (§15.3): both the registration form and
 // the roster list re-render from a fresh state snapshot on every action.
 // Draft form state (`draft`, closure-level) is mutated SYNCHRONOUSLY by
@@ -27,11 +40,35 @@ import { el, labeledField } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
 import { findEvent } from '../../core/events.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
-import { listEntries, registerEntry, setEntryWithdrawn } from '../../core/registry.js';
+import {
+  listEntries,
+  listPeopleByIds,
+  registerEntry,
+  setEntryWithdrawn,
+  updateRosterEntry,
+} from '../../core/registry.js';
 import { normalizePhone, validatePhoneShape } from '../../core/phone.js';
 
 function blankDraft() {
   return { displayName: '', phone: '', email: '', cafe: '', bib: '' };
+}
+
+// The RPC's caps (migration 20261007100000), enforced in the registration form as well so a value
+// registration accepted can always be saved again by Edit. JS counts UTF-16 units, the RPC code
+// points, so this is never more lenient than the database.
+const FIELD_LIMITS = { displayName: 200, email: 254, cafe: 200, bib: 50 };
+const FIELD_LABELS = { displayName: 'Name', email: 'Email', cafe: 'Cafe', bib: 'Bib' };
+
+function findTooLong(draft) {
+  for (const [key, max] of Object.entries(FIELD_LIMITS)) {
+    if (draft[key].trim().length > max) {
+      return {
+        field: key,
+        message: `${FIELD_LABELS[key]} is too long (${max} characters at most).`,
+      };
+    }
+  }
+  return null;
 }
 
 // Pure. Trims every field; blank optional fields collapse to null rather
@@ -56,13 +93,82 @@ export function buildCupperFromDraft(draft) {
 export function validateDraft(draft) {
   if (!draft.displayName.trim()) return 'Name is required.';
   if (!draft.phone.trim()) return 'Phone is required.';
+  const tooLong = findTooLong(draft);
+  if (tooLong) return tooLong.message;
   return validatePhoneShape(normalizePhone(draft.phone));
+}
+
+// The edit form's starting values: this event's entry for name/cafe/bib, the person's profile for
+// phone/email (an entry with no profile — a walk-up — has none).
+export function initialEditDraft(entry, person) {
+  return {
+    displayName: entry.display_name ?? '',
+    phone: person?.phone ?? '',
+    email: person?.email ?? '',
+    cafe: entry.cafe ?? '',
+    bib: entry.bib ?? '',
+  };
+}
+
+// Pure. `linked` is whether the entry has a profile to carry a phone/email. Returns
+// { field, message } for the first problem, or null.
+export function validateEditDraft(draft, { linked }) {
+  if (!draft.displayName.trim()) return { field: 'displayName', message: 'Name is required.' };
+  if (linked) {
+    if (!draft.phone.trim()) return { field: 'phone', message: 'Phone is required.' };
+    const shape = validatePhoneShape(normalizePhone(draft.phone));
+    if (shape) return { field: 'phone', message: shape };
+  }
+  return findTooLong(draft);
+}
+
+// Pure. What core/registry.updateRosterEntry takes: trimmed, blanks as null, phone normalized.
+export function buildEditFields(draft, { linked }) {
+  return {
+    displayName: draft.displayName.trim(),
+    phone: linked ? normalizePhone(draft.phone) : null,
+    email: linked ? draft.email.trim() || null : null,
+    cafe: draft.cafe.trim() || null,
+    bib: draft.bib.trim() || null,
+  };
+}
+
+// Pure. A phone/email clash arrives as a P0002 whose details name the field and the person who
+// already has it; anything else is described generically. `field` says which input to point at.
+export function describeRosterEditError(err) {
+  if (err?.code === 'P0002') {
+    let detail = null;
+    try {
+      detail = JSON.parse(err.details ?? err.detail ?? 'null');
+    } catch {
+      // Malformed/missing details — fall through to the generic conflict message.
+    }
+    const who = detail?.existing_display_name ?? 'another person';
+    if (detail?.field === 'phone') {
+      return {
+        field: 'phone',
+        message: `That phone number already belongs to ${who}. Check the number.`,
+      };
+    }
+    if (detail?.field === 'email') {
+      return {
+        field: 'email',
+        message: `That email already belongs to ${who}. Check the address.`,
+      };
+    }
+    return {
+      field: null,
+      message:
+        'That phone number or email already belongs to another person. Check them and try again.',
+    };
+  }
+  return { field: null, message: describeError(err) };
 }
 
 export function renderRegistrationForm(draft, { disabled }) {
   const nameInput = el('input', {
     className: 'field-input',
-    attrs: { type: 'text', 'aria-label': 'Name', 'data-field': 'displayName' },
+    attrs: { type: 'text', 'aria-label': 'Name', 'data-field': 'displayName', maxlength: '200' },
   });
   nameInput.value = draft.displayName;
   nameInput.disabled = disabled;
@@ -82,7 +188,12 @@ export function renderRegistrationForm(draft, { disabled }) {
 
   const emailInput = el('input', {
     className: 'field-input',
-    attrs: { type: 'email', 'aria-label': 'Email (optional)', 'data-field': 'email' },
+    attrs: {
+      type: 'email',
+      'aria-label': 'Email (optional)',
+      'data-field': 'email',
+      maxlength: '254',
+    },
   });
   emailInput.value = draft.email;
   emailInput.disabled = disabled;
@@ -92,7 +203,12 @@ export function renderRegistrationForm(draft, { disabled }) {
 
   const cafeInput = el('input', {
     className: 'field-input',
-    attrs: { type: 'text', 'aria-label': 'Cafe (optional)', 'data-field': 'cafe' },
+    attrs: {
+      type: 'text',
+      'aria-label': 'Cafe (optional)',
+      'data-field': 'cafe',
+      maxlength: '200',
+    },
   });
   cafeInput.value = draft.cafe;
   cafeInput.disabled = disabled;
@@ -102,7 +218,7 @@ export function renderRegistrationForm(draft, { disabled }) {
 
   const bibInput = el('input', {
     className: 'field-input',
-    attrs: { type: 'text', 'aria-label': 'Bib (optional)', 'data-field': 'bib' },
+    attrs: { type: 'text', 'aria-label': 'Bib (optional)', 'data-field': 'bib', maxlength: '50' },
   });
   bibInput.value = draft.bib;
   bibInput.disabled = disabled;
@@ -134,14 +250,146 @@ export function renderRegistrationForm(draft, { disabled }) {
   );
 }
 
-export function renderRosterEntries(entries, { onToggleWithdrawn, disabled }) {
+// One row's inline edit form. `editing` is the screen's own state ({ draft, linked, error,
+// errorField }); every field's input handler writes into `editing.draft` synchronously (through
+// onEditInput) so a re-render rebuilds the form from what has been typed. A problem with a field
+// is tied to it (aria-invalid + aria-describedby) and shown in an always-present role=alert line.
+function renderEditForm(entry, editing, { disabled, onEditInput, onSaveEdit, onCancelEdit }) {
+  const errorId = `roster-edit-error-${entry.id}`;
+  const inputs = {};
+
+  function field(key, label, attrs = {}) {
+    const input = el('input', {
+      className: 'field-input',
+      id: `roster-edit-${entry.id}-${key}`,
+      attrs: {
+        type: 'text',
+        'aria-label': label,
+        'data-field': key,
+        ...(FIELD_LIMITS[key] ? { maxlength: String(FIELD_LIMITS[key]) } : {}),
+        ...attrs,
+      },
+    });
+    input.value = editing.draft[key];
+    input.disabled = disabled;
+    if (editing.errorField === key) {
+      input.setAttribute('aria-invalid', 'true');
+      input.setAttribute('aria-describedby', errorId);
+    }
+    inputs[key] = input;
+    return input;
+  }
+
+  const nameInput = field('displayName', `Name for ${entry.display_name}`);
+  const phoneInput = editing.linked
+    ? field('phone', `Phone for ${entry.display_name}`, { type: 'tel' })
+    : null;
+  const emailInput = editing.linked
+    ? field('email', `Email for ${entry.display_name} (optional)`, { type: 'email' })
+    : null;
+  const cafeInput = field('cafe', `Cafe for ${entry.display_name} (optional)`);
+  const bibInput = field('bib', `Bib for ${entry.display_name} (optional)`);
+
+  const errorLine = el('p', {
+    id: errorId,
+    className: 'roster-edit-error',
+    text: editing.error ?? '',
+    attrs: { role: 'alert', tabindex: '-1' },
+  });
+
+  // Typing clears what the last Save complained about — locally, no re-render.
+  for (const [key, input] of Object.entries(inputs)) {
+    input.addEventListener('input', () => {
+      onEditInput(key, input.value);
+      errorLine.textContent = '';
+      for (const other of Object.values(inputs)) {
+        other.removeAttribute('aria-invalid');
+        other.removeAttribute('aria-describedby');
+      }
+    });
+  }
+
+  const saveButton = el('button', {
+    className: 'btn btn-primary tap-target',
+    text: disabled ? 'Saving…' : 'Save',
+    attrs: {
+      type: 'submit',
+      'aria-label': `${disabled ? 'Saving' : 'Save'} changes to ${entry.display_name}`,
+    },
+  });
+  saveButton.disabled = disabled;
+  const cancelButton = el('button', {
+    className: 'btn btn-outline tap-target',
+    text: 'Cancel',
+    attrs: { type: 'button', 'aria-label': `Cancel editing ${entry.display_name}` },
+  });
+  cancelButton.disabled = disabled;
+  cancelButton.addEventListener('click', () => onCancelEdit());
+
+  const form = el(
+    'form',
+    {
+      className: 'roster-edit-form',
+      attrs: { 'aria-label': `Edit ${entry.display_name}`, 'data-entry-id': entry.id },
+    },
+    [
+      el('p', { className: 'roster-edit-title', text: `Editing ${entry.display_name}` }),
+      errorLine,
+      el(
+        'div',
+        { className: 'roster-form-fields' },
+        [
+          labeledField('Name', nameInput),
+          phoneInput ? labeledField('Phone', phoneInput) : null,
+          emailInput ? labeledField('Email', emailInput) : null,
+          labeledField('Cafe', cafeInput),
+          labeledField('Bib', bibInput),
+        ].filter(Boolean),
+      ),
+      editing.linked
+        ? null
+        : el('p', {
+            className: 'stage-meta',
+            text: 'A walk-up entry has no phone or email on file.',
+          }),
+      el('div', { className: 'roster-edit-buttons' }, [saveButton, cancelButton]),
+    ].filter(Boolean),
+  );
+  form.addEventListener('submit', (domEvent) => {
+    domEvent.preventDefault();
+    onSaveEdit(entry);
+  });
+  form.addEventListener('keydown', (domEvent) => {
+    if (domEvent.key === 'Escape' && !disabled) onCancelEdit();
+  });
+  return form;
+}
+
+export function renderRosterEntries(
+  entries,
+  {
+    onToggleWithdrawn,
+    disabled,
+    peopleById = new Map(),
+    editing = null,
+    savedNote = null,
+    onEdit,
+    onEditInput,
+    onSaveEdit,
+    onCancelEdit,
+  },
+) {
   if (entries.length === 0) {
     return el('p', { className: 'stage-meta', text: 'No cuppers registered yet.' });
   }
 
   const sorted = [...entries].sort((a, b) => a.display_name.localeCompare(b.display_name));
   const items = sorted.map((entry) => {
+    const person = peopleById.get(entry.person_id) ?? null;
     const meta = [entry.cafe, entry.bib ? `Bib ${entry.bib}` : null].filter(Boolean).join(' · ');
+    // The phone and email on file, so the organiser can check they were entered correctly.
+    const contact = person ? [person.phone, person.email].filter(Boolean).join(' · ') : '';
+    const editingThisRow = editing?.entryId === entry.id;
 
     const toggleButton = el('button', {
       className: 'btn btn-outline tap-target',
@@ -155,6 +403,28 @@ export function renderRosterEntries(entries, { onToggleWithdrawn, disabled }) {
     toggleButton.disabled = disabled;
     toggleButton.addEventListener('click', () => onToggleWithdrawn(entry));
 
+    // Hidden while its own form is open (the form's Cancel returns focus here). While ANOTHER
+    // row's form is open it is parked, not removed: one edit at a time, and a stray tap must not
+    // silently discard what is typed in the open one.
+    let editButton = null;
+    if (onEdit && !editingThisRow) {
+      editButton = el('button', {
+        className: 'btn btn-outline tap-target',
+        text: 'Edit',
+        attrs: {
+          type: 'button',
+          id: `roster-edit-btn-${entry.id}`,
+          'aria-label': `Edit ${entry.display_name}`,
+          ...(editing ? { 'aria-disabled': 'true' } : {}),
+        },
+      });
+      editButton.disabled = disabled;
+      editButton.addEventListener('click', () => {
+        if (editButton.getAttribute('aria-disabled') === 'true') return;
+        onEdit(entry);
+      });
+    }
+
     return el(
       'li',
       { attrs: { id: `roster-row-${entry.id}`, 'data-withdrawn': String(entry.withdrawn) } },
@@ -165,13 +435,29 @@ export function renderRosterEntries(entries, { onToggleWithdrawn, disabled }) {
           [
             el('span', { text: entry.display_name }),
             meta ? el('span', { className: 'stage-meta', text: meta }) : null,
+            contact ? el('span', { className: 'stage-meta roster-contact', text: contact }) : null,
+            savedNote?.entryId === entry.id
+              ? el('p', {
+                  id: `roster-saved-${entry.id}`,
+                  className: 'roster-saved',
+                  text: savedNote.message,
+                  attrs: { role: 'status', tabindex: '-1' },
+                })
+              : null,
             entry.withdrawn
               ? el('span', { className: 'roster-withdrawn-tag', text: 'Withdrawn' })
               : null,
           ].filter(Boolean),
         ),
-        toggleButton,
-      ],
+        el(
+          'div',
+          { className: 'roster-entry-actions' },
+          [editButton, toggleButton].filter(Boolean),
+        ),
+        editingThisRow
+          ? renderEditForm(entry, editing, { disabled, onEditInput, onSaveEdit, onCancelEdit })
+          : null,
+      ].filter(Boolean),
     );
   });
 
@@ -185,6 +471,13 @@ export function renderRosterEntries(entries, { onToggleWithdrawn, disabled }) {
 export async function mountRosterScreen(root, { eventId, client = getSupabase(), signal } = {}) {
   let event = null;
   let entries = [];
+  // person id -> people row: where each entry's phone and email live.
+  let people = new Map();
+  // The one open edit form: { entryId, linked, draft, error, errorField }.
+  let editing = null;
+  // The confirmation for the last saved edit, shown in that cupper's own row (and focused there) so
+  // it is next to what changed instead of in the feedback line below a long list.
+  let savedNote = null;
   let draft = blankDraft();
   let busy = false;
   let pendingError = null;
@@ -198,7 +491,26 @@ export async function mountRosterScreen(root, { eventId, client = getSupabase(),
       findEvent(eventId, client),
       listEntries(eventId, client),
     ]);
-    return { event: ev, entries: evEntries };
+    const personIds = [...new Set(evEntries.map((entry) => entry.person_id).filter(Boolean))];
+    // Contact details are a convenience on top of the roster: failing to read them must not take
+    // the whole roster (mid-event, a live screen) down to the load-error state.
+    let profiles = [];
+    try {
+      profiles = await listPeopleByIds(personIds, client);
+    } catch {
+      // The roster still renders, without contact lines; Edit explains why it cannot open.
+    }
+    return {
+      event: ev,
+      entries: evEntries,
+      people: new Map(profiles.map((profile) => [profile.id, profile])),
+    };
+  }
+
+  function applyPersisted(persisted) {
+    event = persisted.event;
+    entries = persisted.entries;
+    people = persisted.people;
   }
 
   function setFeedback(feedback, message, tone) {
@@ -272,9 +584,7 @@ export async function mountRosterScreen(root, { eventId, client = getSupabase(),
     loading = true;
     renderLoading();
     try {
-      const persisted = await raceTimeout(loadPersisted(), DEFAULT_LOAD_TIMEOUT_MS);
-      event = persisted.event;
-      entries = persisted.entries;
+      applyPersisted(await raceTimeout(loadPersisted(), DEFAULT_LOAD_TIMEOUT_MS));
       loadFailedMessage = null;
       // Found in review (ui-accessibility-reviewer): without this, a
       // successful Retry silently dropped focus to <body> — see
@@ -338,7 +648,17 @@ export async function mountRosterScreen(root, { eventId, client = getSupabase(),
     container.appendChild(form);
 
     container.appendChild(
-      renderRosterEntries(entries, { onToggleWithdrawn: handleToggleWithdrawn, disabled: busy }),
+      renderRosterEntries(entries, {
+        onToggleWithdrawn: handleToggleWithdrawn,
+        disabled: busy,
+        peopleById: people,
+        editing,
+        savedNote,
+        onEdit: handleEdit,
+        onEditInput: handleEditInput,
+        onSaveEdit: handleSaveEdit,
+        onCancelEdit: handleCancelEdit,
+      }),
     );
 
     container.appendChild(feedback);
@@ -366,6 +686,7 @@ export async function mountRosterScreen(root, { eventId, client = getSupabase(),
   async function handleRegister(domEvent) {
     domEvent.preventDefault();
     if (busy) return;
+    savedNote = null;
 
     const validationMessage = validateDraft(draft);
     if (validationMessage) {
@@ -383,9 +704,7 @@ export async function mountRosterScreen(root, { eventId, client = getSupabase(),
       const cupper = buildCupperFromDraft(draft);
       const result = await registerEntry(event.org_id, eventId, cupper, client);
       try {
-        const persisted = await loadPersisted();
-        event = persisted.event;
-        entries = persisted.entries;
+        applyPersisted(await loadPersisted());
         // result.display_name in both branches — the canonical stored name,
         // never the just-typed draft text, which registerEntry deliberately
         // leaves untouched on a duplicate registration and so can diverge
@@ -413,6 +732,7 @@ export async function mountRosterScreen(root, { eventId, client = getSupabase(),
 
   async function handleToggleWithdrawn(entry) {
     if (busy) return;
+    savedNote = null;
     busy = true;
     render();
 
@@ -424,9 +744,7 @@ export async function mountRosterScreen(root, { eventId, client = getSupabase(),
     try {
       await setEntryWithdrawn(entry.id, !wasWithdrawn, client);
       try {
-        const persisted = await loadPersisted();
-        event = persisted.event;
-        entries = persisted.entries;
+        applyPersisted(await loadPersisted());
         pendingSuccess = `${entry.display_name} ${wasWithdrawn ? 'reinstated' : 'withdrawn'}.`;
       } catch {
         pendingSuccess = 'Saved, but the screen could not refresh — reload to see the roster.';
@@ -435,6 +753,104 @@ export async function mountRosterScreen(root, { eventId, client = getSupabase(),
     } catch (err) {
       pendingError = describeError(err);
       focusAfterRender = `#roster-toggle-${entry.id}`;
+    }
+
+    busy = false;
+    render();
+  }
+
+  function handleEdit(entry) {
+    if (busy || (editing && editing.entryId !== entry.id)) return;
+    const person = people.get(entry.person_id) ?? null;
+    // An entry with a person_id is linked even when its profile did not load: treating it as a
+    // walk-up would hide the phone/email fields and then fail the save with a confusing message.
+    if (entry.person_id && !person) {
+      pendingError =
+        'This cupper\u2019s phone and email could not be loaded, so they cannot be edited right now. Reload and try again.';
+      render();
+      return;
+    }
+    savedNote = null;
+    editing = {
+      entryId: entry.id,
+      linked: Boolean(entry.person_id),
+      draft: initialEditDraft(entry, person),
+      error: null,
+      errorField: null,
+    };
+    focusAfterRender = `#roster-edit-${entry.id}-displayName`;
+    render();
+  }
+
+  // Synchronous, before any await — see the module comment.
+  function handleEditInput(key, value) {
+    if (!editing) return;
+    editing.draft[key] = value;
+    editing.error = null;
+    editing.errorField = null;
+  }
+
+  function handleCancelEdit() {
+    if (busy || !editing) return;
+    const id = editing.entryId;
+    editing = null;
+    focusAfterRender = `#roster-edit-btn-${id}`;
+    render();
+  }
+
+  async function handleSaveEdit(entry) {
+    if (busy || !editing) return;
+
+    const invalid = validateEditDraft(editing.draft, { linked: editing.linked });
+    if (invalid) {
+      editing.error = invalid.message;
+      editing.errorField = invalid.field;
+      focusAfterRender = `#roster-edit-${entry.id}-${invalid.field}`;
+      render();
+      return;
+    }
+
+    savedNote = null;
+    busy = true;
+    render();
+
+    const fields = buildEditFields(editing.draft, { linked: editing.linked });
+    const detailsChanged =
+      fields.displayName !== entry.display_name || fields.cafe !== (entry.cafe ?? null);
+
+    try {
+      await updateRosterEntry(event.org_id, entry.id, fields, client);
+      let refreshed = true;
+      try {
+        applyPersisted(await loadPersisted());
+      } catch {
+        // The write itself succeeded — only the confirmation read failed. Same hedge as the other
+        // handlers here: do not say it failed when it did not.
+        refreshed = false;
+      }
+      if (refreshed) {
+        savedNote = {
+          entryId: entry.id,
+          message: `${fields.displayName} updated.${
+            detailsChanged
+              ? ' The audience view and any published results show the new details the next time they are published.'
+              : ''
+          }`,
+        };
+        focusAfterRender = `#roster-saved-${entry.id}`;
+      } else {
+        // No fresh row to attach a note to: the feedback line carries it (and takes focus).
+        pendingSuccess = 'Saved, but the screen could not refresh — reload to see the roster.';
+      }
+      editing = null;
+    } catch (err) {
+      // Shown inside the form, beside the field it is about, so what was typed is not lost.
+      const { message, field } = describeRosterEditError(err);
+      editing.error = message;
+      editing.errorField = field;
+      focusAfterRender = field
+        ? `#roster-edit-${entry.id}-${field}`
+        : `#roster-edit-error-${entry.id}`;
     }
 
     busy = false;

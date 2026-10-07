@@ -54,6 +54,10 @@ export default [
       'src/formats/cup-taster/standings.test.js',
       'src/formats/cup-taster/standingsScreen.test.js',
       'src/formats/cup-taster/liveSession.test.js',
+      'src/formats/cup-taster/timeCorrection.test.js',
+      'src/formats/cup-taster/timeCorrectionEditor.test.js',
+      'src/formats/cup-taster/timeCorrectionFlush.test.js',
+      'src/formats/cup-taster/timeCorrectionScreens.test.js',
     ],
     rules: {
       'seduh-next/no-raw-elapsed-write': 'off',

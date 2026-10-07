@@ -149,6 +149,7 @@ function buildNav() {
     navLink('Formats', '#formats'),
     navLink('Pricing', '#pricing'),
     navLink('Community Tools', '/community/'),
+    navLink('Results', '/results/'),
     navLink('Org login', '/app/'),
   ]);
   const desktopCta = actionLink('Start free', { primary: true });
@@ -158,6 +159,7 @@ function buildNav() {
     navLink('Formats', '#formats'),
     navLink('Pricing', '#pricing'),
     navLink('Community Tools', '/community/'),
+    navLink('Results', '/results/'),
     navLink('Org login', '/app/'),
     actionLink('Start free', { primary: true }),
   ]);

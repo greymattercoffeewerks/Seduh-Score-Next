@@ -40,6 +40,185 @@ contrast (the letter prefix carries the distinction).
 
 ---
 
+## T-HARDEN.roster-edit: Edit a registered cupper from the roster · 2026-10-07
+
+**Task:** T-HARDEN.roster-edit (live-event finding #4 from the first Cup Taster event, 4 Oct).
+The roster had no Edit: a wrong name could not be fixed from the app (registering again with the same phone returns the existing person unchanged, so withdraw + re-register changed nothing), and the phone and email that were entered were not visible to check.
+
+**What shipped:**
+
+- Database: migration `20261007100000_update_roster_entry.sql` — RPC `update_roster_entry(p_org_id, p_entry_id, p_display_name, p_phone, p_email, p_cafe, p_bib)`. Invoker rights, `search_path` pinned, execute revoked from `public`/`anon`. One atomic call corrects the person's shared profile (name, phone, email, cafe) AND this event's entry (name, cafe, bib); other events' entries for the same person are snapshots and are left alone (handoff §5.1). Phone and email always come from the form; name and cafe reach the profile only when changed from this entry's snapshot (the form is prefilled from the snapshot, so editing an old entry must not revert a profile renamed since). A phone or email already held by another person in the org is a `P0002` whose DETAIL names the field and the other person; a race that only appears at the UPDATE is reported the same way without the name. A walk-up entry (no person) edits name/cafe/bib only and refuses a phone or email. Length caps 200/200/50/254/32. Not found and not-your-org give the same answer.
+- Client: `core/registry.js` gained `listPeopleByIds` (chunked by 100) and `updateRosterEntry`. `rosterScreen.js` shows each cupper's phone and email, and each row has an Edit button opening an inline form (Name, Phone, Email, Cafe, Bib). The open form's text lives in the screen's state, so a withdraw or register elsewhere does not wipe it. Validation and server errors appear in the form beside the field (`aria-invalid`, `aria-describedby`, a live error line above the fields). The saved confirmation appears inside the edited row and takes focus there; it says the audience view and published results show the new name or cafe only after the next publish. Registration and edit share one set of field length limits (`maxlength` plus validation).
+- Failure handling: the contact-details read is non-fatal (the roster still loads, without contact lines, and Edit explains why it cannot open); an entry whose profile did not load is not treated as a walk-up.
+- Tests: pgTAP `supabase/tests/024_update_roster_entry.sql` (54 assertions: org scoping, validation, atomicity, DETAIL contract, caps at and past the limit, stale-snapshot protection, per-org uniqueness); vitest additions in `rosterScreen.test.js` and `registry.test.js`.
+
+**Files changed:** `supabase/migrations/20261007100000_update_roster_entry.sql` (new), `supabase/tests/024_update_roster_entry.sql` (new), `src/core/registry.js`, `src/core/registry.test.js`, `src/formats/cup-taster/rosterScreen.js`, `rosterScreen.css`, `rosterScreen.test.js`, `rosterScreen.preview.html`.
+
+**Bugs found while building (and in review):**
+
+- **Stale snapshot reverted the profile.** The first version wrote name and cafe to both tables unconditionally; editing only the bib of an older entry would have restored the old name and cafe over a newer profile. Fixed by comparing against the entry's snapshot (migration edited before it was pushed anywhere).
+- **Registration accepted values Edit would refuse.** No length limits existed on registration; a long value could be saved once and never edited. Both forms now share the caps.
+- **Misleading "not found" under a concurrent merge.** The person id was read before the entry lock; it is now read under the same `for update`.
+- **A null in the contact lookup would hide every contact line and Edit.** A mixed walk-up and linked roster would send a null id; the read's failure is swallowed by design, so the symptom would be silent. Only real person ids are asked for, and the test fake now rejects a null as PostgREST does.
+- **The saved message was off-screen on a long roster and unreliable for screen readers.** It sat in the feedback line below the whole list; it now lives in the edited row and takes focus there.
+- Smaller: error line moved above the fields, thicker border on an invalid field, Save's accessible name follows "Saving…".
+
+**Review cycle:** One round with six reviewers (code-reviewer, schema-guardian, security-reviewer, ui-accessibility-reviewer, test-auditor, module-boundary-checker); no blocking findings, and every accepted finding was fixed. Mutation checks on the changed client code and on the migration: every behavioural mutant is caught; the two survivors are equivalent (a redundant guard).
+
+**Known gaps (deferred, not blocking):**
+
+- **Last write wins** between two devices editing the same person; no optimistic-concurrency check (documented in the migration).
+- **Phone uniqueness relies on client-side normalisation**, as `registerPerson` already does.
+- **Pre-existing:** a member of two orgs can move a person between orgs through `people_write`; the edit then fails closed with "not found".
+- No audit row for name edits; the `service_role` grant is unused.
+- Setting a name back to an older entry's wording saves that entry but not the profile, and the message still says "updated".
+- The `describeRosterEditError` helper lives in the Cup Taster screen though the RPC is format-agnostic; move to core if another format adds roster edit.
+
+**Deploy:** push migration `20261007100000` to the cloud project (apply_migration, then list_migrations) with or after the release to `main`; without it Save fails for every edit.
+
+---
+
+## T-HARDEN.correct-heat-time: Correct recorded heat times from any signed-in device · 2026-10-06
+
+**Task:** T-HARDEN.correct-heat-time (live-event finding #1 from the first Cup Taster event, 4 Oct).
+A tablet timekeeper missed the beat on Stop; the manual timekeeper's time differed and the app had no way to change the recorded time (record_heat_time refuses a second write, and its 'overwrite' policy was deliberately scoped to a prior manual entry). Now any signed-in device may correct a time by selecting a reason (quick picks: Missed the stop / Manual timekeeper's time / Wrong cupper / Other; 1–120 chars required) from the timing screens (stopped rows) or the scoring screen (new Times card); confirming a heat locks times against further correction.
+
+**What shipped:**
+
+- Database: Migration `20261006100000_correct_heat_time.sql` — new RPC `correct_heat_time` (invoker rights, search_path pinned, idempotent via processed_operations, with a re-check after the heat-row lock). Compare-and-set on the time the screen showed; refused unless the heat is 'timing' or 'scoring'; reason 1–120 characters, stored as `time_note` and passed to the append-only change log through `app.change_reason` (cleared again right after the write); reject-only bounds against the heat — elapsed <= duration, maxed <=> elapsed = duration, raw >= elapsed, and raw = elapsed unless maxed (clampElapsed stays the only cap; nothing is re-clamped). Bumps `ct_heats.updated_at`. Migration `20261006110000_confirm_heat_serialises_with_corrections.sql` — `confirm_heat` now takes `for update` on the heat row first before any rewrites; `record_heat_time`'s 'overwrite' now refuses rows with a time_note (corrected rows) and re-checks the ledger under lock. (Non-obvious finding: `confirm_heat` rewrites every entry's time from the payload its screen loaded and only guarded on `ct_heats.updated_at`. The `updated_at` bump in `correct_heat_time` defends against a confirm that checks after the correction commits, but `confirm_heat` took no lock — so a correction that committed between its check and its writes was still undone. Fixed with the heat-row lock.)
+- Client: `src/formats/cup-taster/timeCorrection.js` (logic layer: CorrectionInputError, attemptCorrection, isStillQueued reads the outbox, loadPendingWork, resolveCorrection, MAX_RAW_SECS = one day); `timeCorrectionEditor.js` (disclosure widget: minutes:seconds input, required reason with quick-pick chips, local validation, aria-invalid wiring, Escape handling, draft capture/restore across re-renders with focus restore and a stale-time guard); wired into `timingScreen.js` and `timingManualScreen.js` (both show a correction disclosure for stopped rows), `scoringScreen.js` (new Times card; Confirm held while a correction is queued, Edit withheld while a confirm is queued); outbox label 'correcting a time'; pending feedback tone. CSS: `timingScreen.css`, `heatsScreen.css`.
+- Tests: pgTAP `supabase/tests/023_correct_heat_time.sql` (75 assertions, including the refusal DETAIL keys the client reads); vitest `timeCorrection.test.js`, `timeCorrectionEditor.test.js`, `timeCorrectionScreens.test.js`, `timeCorrectionFlush.test.js`, `timeCorrectionOutboxUnreadable.test.js`; existing `scoringScreen.test.js`, `timingManualScreen.test.js`, `outboxHandlers.test.js` updated; `eslint.config.js` lists new test files in the `no-raw-elapsed-write` fixture exemption. Manual two-session script `supabase/tests/manual/correction-vs-confirm-race.sh` (6 scenarios, each failing unless the second session really had to wait: correction vs confirm; a retry of `correct_heat_time`, of `confirm_heat`, and of `record_heat_time` ('reject' and 'overwrite') waiting behind its own first delivery; and two different corrections racing on the same shown time). All pass against the current functions. Run against the old `confirm_heat` it fails scenarios 1 and 3 and reproduces the bug; against the old `record_heat_time` it fails scenarios 4 and 5.)
+- Re-check: while a queued correction or confirm for the heat is still in the outbox, the three screens look again every few seconds (`createPendingRecheck`), so a parked row returns to Edit time and Confirm unlocks once it has synced, without the user having to trigger a render.
+
+**Files changed:** `supabase/migrations/20261006100000_correct_heat_time.sql` (new), `supabase/migrations/20261006110000_confirm_heat_serialises_with_corrections.sql` (new), `supabase/tests/023_correct_heat_time.sql` (new), `supabase/tests/manual/correction-vs-confirm-race.sh` (new), `src/formats/cup-taster/timeCorrection.js` (new), `src/formats/cup-taster/timeCorrection.test.js` (new), `src/formats/cup-taster/timeCorrectionEditor.js` (new), `src/formats/cup-taster/timeCorrectionEditor.test.js` (new), `src/formats/cup-taster/timeCorrectionFlush.test.js` (new), `src/formats/cup-taster/timingScreen.js`, `src/formats/cup-taster/timingScreen.css`, `src/formats/cup-taster/timingManualScreen.js`, `src/formats/cup-taster/timingManualScreen.test.js`, `src/formats/cup-taster/scoringScreen.js`, `src/formats/cup-taster/scoringScreen.test.js`, `src/formats/cup-taster/heatsScreen.css`, `src/formats/cup-taster/outboxHandlers.js`, `src/formats/cup-taster/outboxHandlers.test.js`, `src/formats/cup-taster/timing.js`, `eslint.config.js`.
+
+**Bugs found while building (and in review):**
+
+- **Confirm/correct race.** As described above: reproduced with two real database sessions — the confirm waited on nothing, committed after the correction, and the heat ended confirmed with the old tapped time and no conflict. With the lock the confirm waits, then raises "CONFLICT: heat … has been modified since it was read", and the corrected time survives.
+- **A restored editor draft could overwrite another device's correction.** The editor survives screen re-renders (capture/restore), and a draft restored after another device had corrected the time would put the old prefill back; saving it passed the compare-and-set. Now the reason always comes back, but a typed time only comes back if the person actually changed it AND the recorded time is still the one they started from.
+- **The "Waiting to sync" state was DOM-only.** A re-render rebuilt the row from server state, which still holds the old time until the outbox drains, and offered Edit again. It is now derived from the outbox at every render (`loadPendingWork`), and whether a correction is still queued is asked of the outbox (`isStillQueued`), not inferred from the flush result. Edit is withheld while a confirm for the heat is queued, and Confirm is held while a correction is queued.
+- **Scoring screen left Save stuck on "Saving…"** when the screen reload after a correction failed (its `renderOrShowError` did not take the restore callback the timing screens pass).
+- **Two-column reason chips overflowed the editor at 360px.** `1fr` columns floor at their content width; fixed with `minmax(0, 1fr)` and tighter chips.
+- Smaller: a flush that rejects after the correction was persisted is now reported as queued, not "try again"; a runaway minutes value is refused locally (cap of one day); focus returns to the field being typed in after a re-render.
+
+**Review cycle:** Three rounds with eight reviewers (schema-guardian, security-reviewer, scoring-auditor, module-boundary-checker, test-auditor, ui-accessibility-reviewer, code-reviewer, offline-sync-auditor). Round 1: all eight reported. Round 2: seven reported (test-auditor run was stopped after it hung). Round 3: four reported (code-reviewer, offline-sync-auditor, ui-accessibility-reviewer, and security-reviewer delta check); the final test-auditor pass reported after the PR was opened, and its gaps were closed in a follow-up commit (matching on this operation's id in `isStillQueued`; parking derived from the outbox on every screen; negative cases for the "Corrected —" note; the unreadable-outbox fallbacks; a sixth race scenario; the refusal DETAIL keys; the periodic re-check was added because it found that Confirm stayed disabled after a queued correction synced). No review finding was left open as blocking.
+
+**Known gaps (deferred, not blocking):**
+
+- **Modal or bottom-sheet editor** — the current disclosure editor is 314px tall at 360px and pushes later Stop buttons down; user decision 2026-10-06 to ship compact and build a modal/bottom-sheet later.
+- **Correction handler copied in three screens** — ~45 lines each in `timingScreen.js`, `timingManualScreen.js`, `scoringScreen.js`; extract to a shared handler later.
+- **Save in flight when another action re-renders** — the busy editor is not carried over; the queued message goes to the live feedback region (covered by test on scoring screen only, not timing/manual).
+- **Test fidelity** — the stateful fake in `timeCorrectionScreens.test.js` does not mirror the RPC's reason/duration validation or `confirm_heat`'s completeness check, and the failed-reload / in-flight-save cases are covered on the scoring screen only (the timing and manual screens share the mechanism; mutating it there is not caught).
+- **Correction compare-and-set is on the elapsed value only** — ABA scenario (200→150→200 elsewhere lets a stale 200-based edit through).
+- **The no-raw-elapsed-write lint rule cannot see p_elapsed_secs payload keys** — same gap as `record_heat_time`.
+- **Reason made only of non-breaking or zero-width spaces counts as non-blank** — cosmetic edge case.
+- **'Waiting to sync' is per-device** (IndexedDB outbox is per-device); fails safe through the compare-and-set.
+- **`confirm_heat` org comparison uses `<>` and gives distinct 'not found' vs 'does not belong' messages** (pre-existing weak existence oracle).
+- **Pre-existing: scoring screen 'Cuppers' card overflows at 360px with very long competitor names** (not part of this task).
+
+**Deployment note:** Neither migration has been pushed to the cloud project. After merge, push `20261006100000` THEN `20261006110000` with the Supabase MCP `apply_migration` and verify with `list_migrations` — merging only deploys the frontend; without them every correction call fails permanently (as with the 2026-09-05 incident in CLAUDE.md).
+
+**Next step:** push both migrations to the cloud project before, or together with, the release to `main`.
+
+---
+
+## T-HARDEN.results-sheet: Public results sheet with privacy-level choice at publish · 2026-10-06
+
+**Task:** T-HARDEN.results-sheet (feature building on the first live Cup Taster event, 4 Oct).
+User request: a downloadable PDF on the public Results page. No PDF generator exists in the app (PDF = the browser's own Print → Save as PDF, by design), and the organiser Report is auth-gated with analytics and every competitor's per-round data. User chose: a sanitised public results sheet generated from the published data, PODIUM ONLY by default with full standings as an opt-in, privacy wording to be approved by the user before it ships (still pending).
+
+**What shipped:**
+
+- Organiser side (`src/formats/cup-taster/reportScreen.js` + `.css`, `resultsPublishing.js`): the report's 'Public results' card gains a 'What to publish' fieldset — 'Podium only' (default) / 'Full standings' radios with aria-describedby hint that phone numbers, emails and set-by-set marks are never published, withdrawn/no-score competitors are left out of the full standings, and figures are those on the page so reload first. When published: first button stays 'Unpublish', then 'Update published results' (re-publishes at the chosen level; the publish RPC already upserts, NO migration). A role=status 'Not applied yet…' note appears when the radios disagree with what is live; success messages name the level; a 'View the public results sheet' link (new tab). The level is captured once at click (a change mid-publish cannot change what is reported); radios are truly disabled while busy; after Unpublish the choice resets to podium. What is published right now is read from the payload itself (standings present = full). Café lookups are chunked at 50 ids.
+- Payload (`resultsPublishing.js` `buildResultsPayload`): new `scope` ('podium' default; any unrecognised value = podium; only 'full' adds `standings`), `roundLabelByOrdinal`, `omitEntryIds`. `standings` rows built from seven fixed fields only (place, name, cafe, round, correct, total, timeSecs) — never a spread — so contact details/set marks cannot reach it. `place` = the stage resolution's decided placing (finalPosition) for the competitor's last round, null (shown as a dash) if none was recorded — NOT a stage-local rank. The podium is now the top three PLACES (`podiumRowsOf`): everyone who shares third place is on it; podium `rank` now uses the same decided placing as the standings (previously index+1, so a tie for 2nd showed 2,3 vs 2,2 in the table). Full standings omit anyone with no scores and anyone the caller lists as withdrawn — but never a podium finisher; no renumbering; `notListed` records how many were left out (only when >0, full scope only); `competitors` and the podium are unaffected.
+- Public side: new `src/marketing/resultsSheet.js` — `/results/?sheet=<event id>` (same results HTML entry; `resultsMain.js` picks by query string, so no new vite input/sitemap/prerender/smoke change) — reads only the published public_results row, rebuilds every field from known keys with type checks, textContent only. Table: Place, Competitor, Café, Score, Time, Reached (podium: Place, Competitor, Café, Score), caption and scroll-region label name the event; a white 'paper' page with its own ink colours (--sheet-* hex in results.css — a documented exception to tokens), A4 @page, print hides header/footer/toolbar; 'Print / Save as PDF' button (browser print dialog; help text covers iPhone/iPad); notes explain placings and say how many competitors are not listed; page title set to '<event> — Results' so the saved PDF is named for it. Persistent header/footer and a persistent sr-only live region; loading/error/not-available states each have an h1, focus moves to it, error states have a 'Try again' button that keeps focus on the heading; success focuses the sheet's h1. A 'Scroll sideways to see every column →' cue shows only while the table really overflows (measured, updated on resize/fonts). `resultsScreen.js`: each event links to its sheet ('Results sheet — print or save as PDF'; archive links name the event); it now exports `formatLabel`/`formatDate`/`scoreCell` for the sheet.
+- Privacy wording (`src/marketing/trustContent.js` + `design/copy/privacy-page-draft.md` source; PRIVACY_UPDATED → '6 October 2026'): states the organiser chooses the level (default top three; or full standings with the last-round score/time and round reached, withdrawn/no-score competitors left out), that every published event has a printable sheet, that phone numbers/emails/set-by-set marks are never published; 'Exact scores…' item renamed 'Set-by-set marks and the full change log…'; the 'never exact scores' sentence now refers to the score-change record only. `scoringRecord.js` header comment amended. `src/marketing/CLAUDE.md` gained a 'Results sheet (2026-10-06)' section. **Privacy wording needs owner approval before merge.**
+
+**Bugs found while building:**
+
+- Screen-reader-only text inside the sheet's table scroll region (position:absolute) escaped clipping and widened the whole page on a phone (page scrollWidth 495 at 360) — fixed with position:relative on the wrapper.
+- `buildResultsSheet` threw on an invalid eventDate (RangeError) despite the module's 'never crashes' claim — fixed with a date check and tests.
+- The no-derived-storage lint rule flagged `rank:` on the podium; the existing pattern (a named podiumRank value) is kept.
+
+**Files changed:** `src/formats/cup-taster/reportScreen.js`, `src/formats/cup-taster/reportScreen.css`, `src/formats/cup-taster/reportScreen.test.js`, `src/formats/cup-taster/resultsPublishing.js`, `src/formats/cup-taster/resultsPublishing.test.js`, `src/marketing/resultsSheet.js` (new), `src/marketing/resultsSheet.test.js` (new), `src/marketing/resultsMain.js`, `src/marketing/resultsScreen.js`, `src/marketing/resultsScreen.test.js`, `src/marketing/results.css`, `src/marketing/trustContent.js`, `design/copy/privacy-page-draft.md`, `src/marketing/CLAUDE.md`, `src/marketing/scoringRecord.js`.
+
+**Tests:** Real event data printed through Chromium to A4 (full sheet: 17 rows, ties 9,9,11, one page; podium sheet one short page); a hostile/malformed payload renders as plain text with bad rows dropped and no contact fields; 360px: page exactly 360 wide, Place/Name/Café/Score within the first screen, keyboard focus ring on the table is #111 on white (checked with real Tab focus), radio rows are 90px/132px tall and a real touch tap on the far edge selects the radio; mutation-tested: broke the code in ~15 ways and each was caught by the intended test. Full suite: 85 files, 1840 tests pass; eslint and prettier clean. Playwright e2e (tests/e2e/smoke.spec.js) not run (unrelated uncommitted edits in working tree).
+
+**Review cycle:** Five reviewers (the accessibility reviewer twice). `ui-accessibility-reviewer` (round 1: blocking focus ring invisible on white paper, S1–S6 incl. tap targets/live regions/headings/retry/caption names — all fixed; round 2: closed, found radio hit area <44px — fixed with a label ::after overlay, scroll cue wrong for podium — fixed by measuring, heading focus outline — removed, focus during retry — fixed). `code-reviewer` (no leaks found; findings fixed: tie labels disagreed podium vs standings, no-score/withdrawn rows, stale-figures hint, scope sticking after Unpublish, comment placement, Privacy copy accuracy ×2). `test-auditor` (many surviving-mutation gaps — all closed incl. downgrade full→podium, chunk merge with distinct cafés and an id-honouring fake, race inside the café lookup, markup/type safety across the whole sheet, invalid eventDate). `module-boundary-checker` (clean: no marketing↔formats imports, payload contract format-neutral). `scoring-auditor` (no blocking; findings fixed: stage-local fallback no longer published as an overall place, podium cut through a tie, withdrawn podium member, notListed accounting).
+
+**Known gaps (deferred, not blocking):**
+
+- **Published figures come from the report as loaded when the page was opened** (hint says reload first; Update does not re-fetch) and a retroactive 'withdrawn' flag changes a published result on the next Update.
+- **Order of tied rows within a tie is not meaningful.**
+- **The sheet downloads every published payload to show one** (fine at current size).
+- **The shared public header's brand link is under 44px tall** (pre-existing).
+- **No test feeds the real `buildResultsPayload` output into `buildResultsSheet`** (payload keys are duplicated as fixtures — the key set is pinned on both sides) and `resultsMain.js`'s `?sheet=` routing has no test.
+- **'/results/' is still noindex and not in the sitemap** (separate decision).
+- **The user still must republish the live event** (currently podium-only) after this ships if they want the sheet to include everyone.
+
+**Next step:** User approves Privacy wording; merge; then user republishes at the chosen level (cloud DB needs no migration).
+
+---
+
+## T-HARDEN.report-print-layout: Cup Taster organiser report print layout fixes · 2026-10-06
+
+**Task:** T-HARDEN.report-print-layout (fixes from the first live Cup Taster event, 4 Oct).
+The organiser report's print output exhibited 8 defects: wide tables (Overall, Semi-Finals) ran under card borders with last columns cut/crossed; names wrapped onto 3 lines, ballooning row height; app chrome printed (header bar, footer); legend color swatches and difficulty bars rendered blank; chart value labels overprinted each other; headings orphaned from tables; stray card-border lines down page edges after breaks; Edge's generic page title instead of event name. Root cause: minimal print stylesheet relied on screen-size rules and background printing (which is disabled by default). Locally reproduced the user's 8-page PDF; after fix: 5 pages, tables fit, names one line, swatches/bars print, no stray borders, chrome absent, readable chart labels.
+
+**What shipped:**
+
+- Print stylesheet in `src/formats/cup-taster/reportScreen.css`: `@page { size: A4; margin: 12mm }` (top-level), flat print cards (no border/padding), h2 rules, `break-after:avoid` on headings, `break-inside:avoid` on small stat tables/rows/Overall card, compact table text (8.5pt body/8pt headers/3pt padding), min-width 40mm for name cells, `print-color-adjust:exact` for legend swatches and difficulty bars.
+- Chart value labels wider than a 20px slot (>2 chars at 9px/char) rotate -90° with extra headroom; print axis labels 14px; rotation decision per-chart; fixed slot per cupper across rounds unchanged (existing test pins it).
+- `src/core/appShell.css`: app-shell header and footer hidden in print (format-agnostic, any organiser screen).
+- `src/formats/cup-taster/reportScreen.js`: page title set to "Report — {event name}" (prefixed "TEST — " for `is_test` events) only between beforeprint/afterprint via module-level saved-title state, restored on unmount (guarded for router unmount order).
+- D9 (found in review, fixed): `is_test` banner renders as black bold text in a 3pt black border in print (no background reliance; prints white-on-white before fix).
+
+**Files changed:** `src/formats/cup-taster/reportScreen.css`, `src/core/appShell.css`, `src/formats/cup-taster/reportScreen.js`, `src/formats/cup-taster/reportScreen.test.js`.
+
+**Tests:** Label orientation tests (upright/rotated, pivot, headroom invariant, per-chart decision, 2-vs-3 character boundary, slot stability) and print-title tests (swap/restore, repeated prints, event never loaded, listener removal, unmount mid-print, two listeners, TEST prefix, only-swapper restores). Full suite: 84 files, 1760 tests pass; `eslint` and `prettier` clean.
+
+**Review cycle:** Four agents in parallel. `ui-accessibility-reviewer` BLOCKING (found: `is_test` banner invisible in print white-on-white, print title missing TEST prefix — both fixed). `code-reviewer` (found: unmount restored title unconditionally, renderRoundBarChart contract comment detached, `.map(formatValue)` passed extra args — all fixed). `test-auditor` (found the new tests too weak; added missing headroom/pivot/threshold/per-chart/second-print/never-loaded/leak-on-failure tests). `module-boundary-checker` PASS.
+
+**Known gaps (deferred, not blocking):**
+
+- **Chart print labels scale down with chart width;** not compensated for events with many cuppers/rounds.
+- **14px print axis labels could overprint for events with very few cuppers.**
+- **Accuracy tiers and chart bars rely on colour plus printed numbers/legend order in black-and-white print.**
+- **`@page` is global, not report-only** (applies to every organiser-print surface).
+- **Very long names wrap rather than truncate.**
+- **Edge system print dialog 'Print To PDF' output is image-only.** (Edge's Save as PDF gives a text PDF; browser/OS behavior, not fixable here.)
+
+**Next step:** build sanitised public results sheet (podium vs full standings choice at publish time); user's decision pending on trust-copy wording.
+
+---
+
+## T-HARDEN.results-nav-link: /results/ linked in public navigation · 2026-10-05
+
+**Task:** T-HARDEN.results-nav-link (pre-event hardening for the 4 Oct Cup Taster event).
+Grey Matter Cup Taster Competition 2026 (event id a8fab33b-26d4-45e2-ad62-a745a61ffbc1) was published to the public Results archive on 2026-10-05. The podium (1 Wilky Derikson Gultom/Kreme, 2 Taufiq Manan/PlantFolk, 3 Hazman Husin/Utara Coast; 17 competitors, 3 rounds, 235s winning time) became the first real event in the archive, satisfying the 2026-09-17 plan to link `/results/` once live content existed. Taufiq Manan's café was blank at publish time; it was patched post-publication with a narrowly scoped jsonb_set on the public_results payload (a direct data edit, not a code change).
+
+**What shipped:**
+
+- `/results/` is now linked as "Results" in the shared public header (`src/marketing/publicHeader.js` — used by Tour, Community, trust pages and Results itself; active state when `active === 'results'`) and in the landing page's own desktop and mobile nav (`src/marketing/landingScreen.js`).
+- Desktop nav breakpoint raised from `min-width: 761px` to `840px` in both `src/marketing/publicHeader.css` and `src/marketing/landing.css` — at 761px with five links, brand and first link were 4px apart; 840px gives 45–52px gap, verified at 360px (mobile), 839px (toggle point), and 840px+ (desktop).
+- Mobile panels capped at `calc(100dvh - 72px)` with `overflow-y: auto` + `overscroll-behavior: contain` — without this, the sticky bar plus the 5-link panel could exceed short viewports (e.g. 640x360); both now scroll and 'Start free' remains reachable.
+
+**Files changed:** `src/marketing/publicHeader.js`, `src/marketing/publicHeader.css`, `src/marketing/publicHeader.test.js` (new), `src/marketing/landingScreen.js`, `src/marketing/landing.css`, `src/marketing/landingScreen.test.js`, `src/marketing/resultsScreen.test.js`.
+
+**Tests:** new `src/marketing/publicHeader.test.js` verifies active link state per page (tour/community/results, none for trust pages) and Results link always present with `href=/results/`; `landingScreen.test.js` updated (Results in desktop and mobile nav lists); `resultsScreen.test.js` updated (Results is current page in header, twice because mobile panel is a clone, never another link). Full suite: 84 files, 1746 tests pass; `eslint src/marketing` clean; `prettier` clean on changed files.
+
+**Review cycle:** Four agents in parallel. `code-reviewer` PASS (no defects; finding: deliberately-unlinked docs now outdated, fixed). `test-auditor` PASS (fixed: missing not-null guard on active link, poor failure message). `ui-accessibility-reviewer` PASS (no blocking; medium: short-viewport panel overflow, fixed; low pre-existing: no `<nav>` landmark, color-only active signal, Escape doesn't close public-header menu, desktop links don't flex-wrap at enlarged text near 840px, focus may orphan if viewport grows past 840px with panel open — not fixed). `module-boundary-checker` PASS (no violations). e2e (`playwright`) not run (uncommitted unrelated edits in working tree).
+
+**Known gaps (deferred, not blocking):**
+
+- **`/results/` is still noindex, nofollow and not in sitemap or prerender routes.** A separate decision, left to the user.
+- **Roster has no Edit UI.** Taufiq's blank café was fixed by direct data edit; correcting a name or café in the roster still needs the same.
+- **Five low a11y items from ui-accessibility-reviewer:** no `<nav>` landmark in header, active page signalled by colour only, Escape on toggle doesn't close public-header menu (landing nav does), desktop links don't flex-wrap at enlarged text near 840px, focus may orphan if viewport grows past 840px with panel open.
+
+**Next step:** merge the PR into `dev`.
+
+---
+
 ## T-HARDEN.resolve-stage-concludes-event: resolving the terminal stage now concludes the event · 2026-10-04
 
 **Task:** T-HARDEN.resolve-stage-concludes-event (pre-event hardening for the 4 Oct Cup Taster event).
