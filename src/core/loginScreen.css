@@ -15,3 +15,10 @@
   flex-direction: column;
   gap: var(--space-4);
 }
+
+/* Show/Hide for the password: its own line under the field, as wide as its text (not stretched),
+   so the field keeps the full row at 360px. */
+.password-toggle {
+  align-self: flex-start;
+  margin-top: var(--space-2);
+}

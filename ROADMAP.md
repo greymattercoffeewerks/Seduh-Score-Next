@@ -1539,6 +1539,32 @@ _Deferred findings from T-HARDEN.correct-heat-time, flagged and documented, not 
 
 ---
 
+## Known open items from T-HARDEN.team-accounts (2026-10-08)
+
+_Deferred findings from T-HARDEN.team-accounts, flagged and documented, not blocking._
+
+- **Deploy:** migration `20261007120000` to the cloud project, then the `team-accounts` Edge Function (`verify_jwt` true), then release; check `select role, count(*) from org_members group by 1` before pushing.
+- **Re-adding a removed member** is impossible with the same email (account kept → 409). A "restore" path needs a marker only the function can set (e.g. `team_removed_org` in `app_metadata`) and a `team_restore_member` service-role function.
+- **One-time passwords never expire** and the must-change flag is user-editable: add a TTL / server-side check at sign-in if teams grow.
+- **Owner-recovery:** no promote/demote function; an org that loses its only owner needs SQL.
+- **Function hardening:** rate limit / body-size cap; align the server's `minimum_password_length` (6) with the screen's 8; consider proof of email ownership (an emailed confirmation) if/when SMTP exists.
+- **Nav focus:** the Team link arriving asynchronously rebuilds the nav and can drop focus from a link the keyboard user is on.
+- **Check on the real iPad** that the Team screen, the copied one-time password and the choose-a-password screen behave (keyboard, autofill, paste).
+- **A third copy of the Show/Hide logic** does not exist yet; `src/community/guess-the-bean/authScreen.js` has no toggle. If it grows one, use `dom.passwordToggle`.
+
+---
+
+## Known open items from T-HARDEN.login-hardening (2026-10-07)
+
+_Deferred findings from T-HARDEN.login-hardening, flagged and documented, not blocking._
+
+- **Check on the real iPad** (Safari, desktop-site mode): Show/Hide with the keyboard up, autofill from iCloud Keychain, and signing in with a password pasted with a trailing space.
+- **Root cause of the 4 Oct failure is unconfirmed**; the auth logs only keep 24h and never record what was typed.
+- **Shared login is still the real problem** — per-person accounts are the team-accounts task (owner-managed, one-time password).
+- **Pre-existing: `setBusyDisabled` only sets `aria-disabled`/`aria-busy`**, so Sign in (and the new toggle) can still be activated while a sign-in is in flight; the `signingIn` guard stops a second request.
+
+---
+
 ## Known open items from T-HARDEN.roster-edit (2026-10-07)
 
 _Deferred findings from T-HARDEN.roster-edit, flagged and documented, not blocking._

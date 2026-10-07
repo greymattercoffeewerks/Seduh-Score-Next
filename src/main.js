@@ -14,6 +14,9 @@ import { findEvent } from './core/events.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './core/timeout.js';
 import { mountEventsScreen } from './core/eventsScreen.js';
 import { mountLoginScreen } from './core/loginScreen.js';
+import { mountSetPasswordScreen } from './core/setPasswordScreen.js';
+import { mountTeamScreen } from './core/teamScreen.js';
+import { canManageTeam } from './core/team.js';
 import { mountSplashScreen } from './core/splashScreen.js';
 import { mountEventDashboardScreen } from './formats/cup-taster/eventDashboardScreen.js';
 import { mountSetupScreen } from './formats/cup-taster/setupScreen.js';
@@ -119,6 +122,15 @@ function requireAuth(mount, routerRef) {
     }
 
     if (params.signal?.aborted) return undefined;
+    // Signed in with a one-time password (an owner just created or reset this account): nothing else
+    // is reachable until they have chosen their own.
+    if (session?.user?.user_metadata?.must_change_password === true) {
+      return mountSetPasswordScreen(outlet, {
+        client: params.client,
+        onDone: resolveCurrentPath,
+        signal: params.signal,
+      });
+    }
     if (session) return mount(outlet, params);
     return mountLoginScreen(outlet, {
       client: params.client,
@@ -201,6 +213,13 @@ export function buildRoutes({ orgId, bareRoot, routerRef }) {
             formatOptions: FORMAT_OPTIONS,
             signal,
           }),
+        routerRef,
+      ),
+    },
+    {
+      pattern: '/team',
+      mount: requireAuth(
+        (outlet, { client, signal }) => mountTeamScreen(outlet, { orgId, client, signal }),
         routerRef,
       ),
     },
@@ -473,11 +492,45 @@ export function mountApp(root, { client = getSupabase(), orgId = getDefaultOrgId
   function flushIfOwner() {
     if (hasSession && onConsoleRoute) attemptReconnectFlush(client);
   }
+
+  // Whether to offer the Team link: asked of the database (an owner of this org), re-asked on every
+  // auth event, and never assumed — a failed check just leaves the link out. This only decides what
+  // is SHOWN; the database refuses a non-owner whatever the nav says. `lastNav` lets the link appear
+  // (or go) the moment the answer arrives, without waiting for the next navigation.
+  let isTeamOwner = false;
+  let ownerCheckSeq = 0;
+  let lastNav = null;
+  function setTeamOwner(value) {
+    if (value === isTeamOwner) return;
+    isTeamOwner = value;
+    if (lastNav) renderNav(lastNav.route, lastNav.params);
+  }
+  function refreshTeamOwnership(session) {
+    ownerCheckSeq += 1;
+    const seq = ownerCheckSeq;
+    // A person who still has to choose a password sees nothing but that screen.
+    if (!session || session.user?.user_metadata?.must_change_password === true) {
+      setTeamOwner(false);
+      return;
+    }
+    // Deliberately NOT awaited here: this runs inside onAuthStateChange, where supabase-js holds
+    // its auth lock, and an RPC that needs the session would deadlock behind it. A failed check
+    // (null / a rejection) changes nothing — a dropped connection at a token refresh must not make
+    // the Team link vanish — and `seq` drops an answer that a newer auth event has overtaken.
+    Promise.resolve()
+      .then(() => canManageTeam(orgId, client))
+      .catch(() => null)
+      .then((owner) => {
+        if (seq === ownerCheckSeq && owner !== null) setTeamOwner(owner);
+      });
+  }
+
   const {
     data: { subscription: reconnectAuthSubscription },
   } = client.auth.onAuthStateChange((_event, session) => {
     hasSession = Boolean(session);
     flushIfOwner();
+    refreshTeamOwnership(session);
   });
 
   function onOnline() {
@@ -518,7 +571,14 @@ export function mountApp(root, { client = getSupabase(), orgId = getDefaultOrgId
     onConsoleRoute = showChrome;
     if (!wasOnConsoleRoute) flushIfOwner();
     if (!showChrome) return;
-    const links = [{ label: 'Events', href: '#/events', active: !params.eventId }];
+    lastNav = { route, params };
+    renderNav(route, params);
+  }
+
+  function renderNav(route, params) {
+    const links = [
+      { label: 'Events', href: '#/events', active: !params.eventId && route.pattern !== '/team' },
+    ];
     if (params.eventId) {
       // "Overview" — found ambiguous in production feedback (organisers
       // couldn't tell at a glance what it led back to). "Event home" names
@@ -541,6 +601,9 @@ export function mountApp(root, { client = getSupabase(), orgId = getDefaultOrgId
     // labels describing the ROUTE, not user-facing ones describing what an
     // organiser gets when they click. "Projector view"/"Phone view" name
     // the destination the same way "Splash screen" already does.
+    if (isTeamOwner) {
+      links.push({ label: 'Team', href: '#/team', active: route.pattern === '/team' });
+    }
     links.push(
       { label: 'Splash screen', href: '#/live/splash', openInNewTab: true },
       { label: 'Projector view', href: '#/live/projector', openInNewTab: true },
