@@ -10,6 +10,8 @@ import {
   setEntryWithdrawn,
   listEntries,
   listEntriesByIds,
+  listPeopleByIds,
+  updateRosterEntry,
   mergePeople,
 } from './registry.js';
 
@@ -463,5 +465,94 @@ describe('mergePeople', () => {
   it('throws on an RPC error rather than silently succeeding', async () => {
     const client = fakeClient({ rpcResult: { data: null, error: new Error('merge failed') } });
     await expect(mergePeople('org1', 'keptId', 'mergedId', client)).rejects.toThrow('merge failed');
+  });
+});
+
+describe('listPeopleByIds', () => {
+  it('returns the matching people', async () => {
+    const people = [{ id: 'p1', display_name: 'Alice', phone: '+6737000001' }];
+    const client = fakeClient({ tables: { people: { data: people, error: null } } });
+    expect(await listPeopleByIds(['p1'], client)).toEqual(people);
+    expect(client.calls).toContainEqual(['in', 'id', ['p1']]);
+  });
+
+  it('returns an empty array without querying at all when given no ids', async () => {
+    const client = fakeClient({ tables: { people: { data: [], error: null } } });
+    expect(await listPeopleByIds([], client)).toEqual([]);
+    expect(client.calls).toHaveLength(0);
+  });
+
+  it('throws on a query error', async () => {
+    const client = fakeClient({ tables: { people: { data: null, error: new Error('boom') } } });
+    await expect(listPeopleByIds(['p1'], client)).rejects.toThrow('boom');
+  });
+
+  it('asks in chunks of 100 ids, so a large roster never overflows the request URL, and joins the pages', async () => {
+    const ids = Array.from({ length: 250 }, (_, i) => `p${i}`);
+    const client = fakeClient({
+      tables: {
+        people: [
+          { data: [{ id: 'p0' }], error: null },
+          { data: [{ id: 'p100' }], error: null },
+          { data: [{ id: 'p200' }], error: null },
+        ],
+      },
+    });
+    expect(await listPeopleByIds(ids, client)).toEqual([
+      { id: 'p0' },
+      { id: 'p100' },
+      { id: 'p200' },
+    ]);
+    const asked = client.calls.filter((c) => c[0] === 'in').map((c) => c[2]);
+    expect(asked.map((chunk) => chunk.length)).toEqual([100, 100, 50]);
+    expect(asked.flat()).toEqual(ids); // every id asked for exactly once, in order
+  });
+});
+
+describe('updateRosterEntry', () => {
+  const fields = {
+    displayName: 'Alicia Tan',
+    phone: '+6737000009',
+    email: 'alicia@example.com',
+    cafe: 'New Cafe',
+    bib: '7',
+  };
+
+  it('calls the update_roster_entry RPC once, with every field under its parameter name', async () => {
+    const client = fakeClient({ rpcResult: { data: null, error: null } });
+    await updateRosterEntry('org1', 'entry1', fields, client);
+    expect(client.rpc).toHaveBeenCalledTimes(1);
+    expect(client.rpc).toHaveBeenCalledWith('update_roster_entry', {
+      p_org_id: 'org1',
+      p_entry_id: 'entry1',
+      p_display_name: 'Alicia Tan',
+      p_phone: '+6737000009',
+      p_email: 'alicia@example.com',
+      p_cafe: 'New Cafe',
+      p_bib: '7',
+    });
+  });
+
+  it('sends null, not undefined, for a field that is left out — a walk-up entry has no phone or email', async () => {
+    const client = fakeClient({ rpcResult: { data: null, error: null } });
+    await updateRosterEntry('org1', 'entry1', { displayName: 'Walk Up' }, client);
+    expect(client.rpc.mock.calls[0][1]).toEqual({
+      p_org_id: 'org1',
+      p_entry_id: 'entry1',
+      p_display_name: 'Walk Up',
+      p_phone: null,
+      p_email: null,
+      p_cafe: null,
+      p_bib: null,
+    });
+  });
+
+  it('throws the RPC error itself, so a caller can read its code and details', async () => {
+    const error = Object.assign(new Error('CONFLICT'), {
+      code: 'P0002',
+      details: '{"field":"phone"}',
+    });
+    const client = fakeClient({ rpcResult: { data: null, error } });
+    await expect(updateRosterEntry('org1', 'entry1', fields, client)).rejects.toBe(error);
   });
 });

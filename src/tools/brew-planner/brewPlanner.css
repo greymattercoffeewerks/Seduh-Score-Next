@@ -1,0 +1,635 @@
+/*
+ * Brew Planner — standalone free tool. Self-contained styles: like the Timer, this surface
+ * does NOT reuse any format's own classes (see src/tools/CLAUDE.md), only the generic
+ * design tokens. Paper surface (organiser dashboard / phone), Petrol shape language: no
+ * radius, no shadow, borders carry separation.
+ */
+
+body {
+  margin: 0;
+  background: var(--color-canvas);
+  color: var(--color-text);
+}
+
+.bp {
+  --bp-lane-label: 5.5rem;
+  max-width: var(--max-width-content);
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4) var(--space-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  box-sizing: border-box;
+}
+
+.bp-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+.bp-hint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* ---------- header and stepper ---------- */
+
+.bp-header {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.bp-header h1 {
+  margin: 0;
+  font-size: var(--text-2xl);
+}
+
+.bp-brand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-width: var(--tap-target-min);
+  min-height: var(--tap-target-min);
+  color: var(--color-text);
+}
+
+.bp-brand-mark {
+  width: 1.75rem;
+  height: 1.5rem;
+  color: var(--color-accent);
+}
+
+.bp-intro {
+  margin: 0;
+  max-width: 44rem;
+  color: var(--color-text-secondary);
+}
+
+.bp-stepper {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bp-step {
+  width: 100%;
+  min-height: var(--tap-target-min);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-2);
+  border: var(--border-hairline) solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.bp-step-no {
+  flex: none;
+  font-weight: var(--font-weight-bold);
+}
+
+.bp-step-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.bp-step[aria-current='step'] {
+  border: var(--border-strong) solid var(--color-border-strong);
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  font-weight: var(--font-weight-bold);
+}
+
+/* ---------- panels, cards, fields ---------- */
+
+.bp-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border: var(--border-strong) solid var(--color-border-strong);
+  background: var(--color-surface);
+  min-width: 0;
+}
+
+.bp-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  align-items: baseline;
+}
+
+.bp-panel-head h2 {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.bp-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: var(--border-hairline) solid var(--color-border);
+  background: var(--color-canvas);
+}
+
+.bp-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.bp-card-head h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+}
+
+.bp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--space-4);
+}
+
+.bp-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.bp-field-label {
+  font-size: var(--text-2xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide, 0.06em);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.bp-field-hint {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.bp-input {
+  width: 100%;
+  min-height: var(--tap-target-min);
+  padding: 0 var(--space-3);
+  border: var(--border-hairline) solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-base);
+  box-sizing: border-box;
+}
+
+.bp-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.bp-between {
+  justify-content: space-between;
+}
+
+.bp-btn {
+  min-height: var(--tap-target-min);
+  padding: 0 var(--space-4);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+}
+
+.bp-btn-outline {
+  border: var(--border-strong) solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.bp-btn-primary {
+  border: var(--border-hairline) solid var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  clip-path: polygon(
+    var(--cut-sm) 0,
+    100% 0,
+    100% calc(100% - var(--cut-sm)),
+    calc(100% - var(--cut-sm)) 100%,
+    0 100%,
+    0 var(--cut-sm)
+  );
+}
+
+.bp-btn-primary:focus-visible {
+  /* The cut corners would clip the focus ring, so it goes square while focused. */
+  clip-path: none;
+}
+
+.bp-btn-primary:hover {
+  background: var(--color-accent-hover);
+}
+
+.bp-nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.bp-problems {
+  margin: 0;
+  padding: var(--space-3) var(--space-4) var(--space-3) var(--space-6);
+  border: var(--border-strong) solid var(--color-danger);
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+}
+
+/* ---------- pills, tags, chips, tabs ---------- */
+
+.bp-pill {
+  display: inline-block;
+  padding: 0 var(--space-2);
+  font-size: var(--text-2xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.bp-pill-ok {
+  background: var(--color-success);
+  color: var(--color-success-contrast);
+}
+
+.bp-pill-bad {
+  background: var(--color-danger);
+  color: var(--color-danger-contrast);
+}
+
+/* Coffee colours are told apart by lightness and pattern, and every block or tag also
+   carries text, so colour is never the only cue (see design system checklist). */
+.bp-coffee-0 {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+}
+
+.bp-coffee-1 {
+  background: var(--color-text-secondary);
+  color: var(--color-canvas);
+}
+
+.bp-coffee-2 {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--color-accent) 0 6px,
+    var(--color-accent-hover) 6px 9px
+  );
+  color: var(--color-accent-contrast);
+}
+
+.bp-coffee-3 {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--color-text-secondary) 0 6px,
+    var(--color-text) 6px 9px
+  );
+  color: var(--color-canvas);
+}
+
+.bp-tag {
+  display: inline-block;
+  padding: 0 var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+  white-space: nowrap;
+}
+
+.bp-tag-stage {
+  background: var(--color-text);
+  color: var(--color-canvas);
+}
+
+.bp-tag-pour {
+  border: var(--border-hairline) dashed var(--color-text-muted);
+  color: var(--color-text-secondary);
+}
+
+.bp-legend,
+.bp-chips,
+.bp-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.bp-chip,
+.bp-tab {
+  min-height: var(--tap-target-min);
+  padding: 0 var(--space-3);
+  border: var(--border-hairline) solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.bp-chip[aria-pressed='true'],
+.bp-tab[aria-pressed='true'] {
+  background: var(--color-text);
+  color: var(--color-canvas);
+  font-weight: var(--font-weight-bold);
+}
+
+/* ---------- verdict ---------- */
+
+.bp-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--space-4);
+}
+
+.bp-stat {
+  min-width: 0;
+  padding-left: var(--space-3);
+  border-left: var(--border-strong) solid var(--color-border);
+}
+
+.bp-stat-ok {
+  border-left-color: var(--color-success);
+}
+
+.bp-stat-warn {
+  border-left-color: var(--color-warning);
+}
+
+.bp-stat-label {
+  font-size: var(--text-2xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.bp-stat-value {
+  font-size: var(--text-xl);
+  line-height: 1.3;
+}
+
+.bp-beans {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: var(--space-4);
+}
+
+.bp-bean {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.bp-bar {
+  position: relative;
+  height: 0.75rem;
+  border: var(--border-hairline) solid var(--color-border-strong);
+  background: var(--color-surface-sunken);
+}
+
+.bp-bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+}
+
+.bp-bar-marker {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  background: var(--color-text);
+}
+
+/* ---------- tables ---------- */
+
+.bp-table-wrap {
+  overflow-x: auto;
+  /* Edge shadows show that more columns sit off-screen; they fade as the end is reached. */
+  background:
+    linear-gradient(to right, var(--color-surface) 30%, transparent) left center / 2rem 100%
+      no-repeat local,
+    linear-gradient(to left, var(--color-surface) 30%, transparent) right center / 2rem 100%
+      no-repeat local,
+    linear-gradient(to right, var(--color-border-strong), transparent) left center / 0.5rem 100%
+      no-repeat scroll,
+    linear-gradient(to left, var(--color-border-strong), transparent) right center / 0.5rem 100%
+      no-repeat scroll;
+}
+
+@media (min-width: 40rem) {
+  .bp {
+    --bp-lane-label: 8.5rem;
+  }
+}
+
+.bp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.bp-table-wide {
+  min-width: 40rem;
+}
+
+.bp-table th {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: var(--border-strong) solid var(--color-border-strong);
+  font-size: var(--text-2xs);
+  letter-spacing: 0.06em;
+  text-align: left;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.bp-table td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: var(--border-hairline) solid var(--color-border);
+  white-space: nowrap;
+}
+
+.bp-num {
+  text-align: right !important;
+}
+
+.bp-lots {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.bp-over {
+  color: var(--color-warning);
+  font-weight: var(--font-weight-bold);
+}
+
+.bp-check {
+  width: 1.5rem;
+  height: 1.5rem;
+  margin: 0;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+
+/* The 44px target is the label around the tick, not the tiny native glyph. */
+.bp-table td:has(> .bp-tick) {
+  padding: 0;
+}
+
+.bp-tick {
+  display: grid;
+  place-items: center;
+  min-width: var(--tap-target-min);
+  min-height: var(--tap-target-min);
+  cursor: pointer;
+}
+
+.bp-row-done td:not(:first-child) {
+  color: var(--color-text-muted);
+  text-decoration: line-through;
+}
+
+.bp-progress {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+  font-size: var(--text-sm);
+}
+
+.bp-meter {
+  width: 8rem;
+  height: 0.5rem;
+  border: var(--border-hairline) solid var(--color-border-strong);
+  background: var(--color-surface-sunken);
+}
+
+.bp-meter i {
+  display: block;
+  height: 100%;
+  background: var(--color-success);
+}
+
+/* ---------- timeline ---------- */
+
+.bp-scroll {
+  overflow-x: auto;
+  border: var(--border-hairline) solid var(--color-border-strong);
+  background: var(--color-canvas);
+}
+
+.bp-lanes {
+  min-width: 100%;
+}
+
+.bp-lane {
+  display: flex;
+  height: 2.25rem;
+  border-bottom: var(--border-hairline) solid var(--color-border);
+}
+
+.bp-lane:last-child {
+  border-bottom: 0;
+}
+
+.bp-lane-head {
+  height: 1.75rem;
+}
+
+.bp-lane-label {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  flex: 0 0 var(--bp-lane-label);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-3);
+  border-right: var(--border-hairline) solid var(--color-border-strong);
+  background: var(--color-surface);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium);
+  box-sizing: border-box;
+}
+
+.bp-track {
+  position: relative;
+  flex: none;
+}
+
+.bp-tick {
+  position: absolute;
+  top: var(--space-1);
+  transform: translateX(-50%);
+  font-size: var(--text-2xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.bp-block {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: var(--font-weight-bold);
+}
+
+.bp-block-stage {
+  background: var(--color-text);
+  color: var(--color-canvas);
+}
+
+.bp-block-pour {
+  border: var(--border-hairline) dashed var(--color-text-muted);
+  background: transparent;
+}
+
+.bp-block-done {
+  opacity: 0.7;
+}
+
+@media (max-width: 640px) {
+  .bp-panel {
+    padding: var(--space-4);
+  }
+
+  .bp-stepper {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .bp-step {
+    flex-direction: column;
+    justify-content: center;
+    gap: 0;
+    padding: var(--space-1);
+    font-size: var(--text-2xs);
+    text-align: center;
+  }
+}
