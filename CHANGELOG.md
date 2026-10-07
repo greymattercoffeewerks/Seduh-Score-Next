@@ -1,3 +1,48 @@
+## T-HARDEN.team-accounts: Owner-managed logins for team members · 2026-10-08
+
+**Task:** T-HARDEN.team-accounts (live-event finding #2, second half).
+The first Cup Taster event showed that a timekeeper could only sign in on an iPad with the owner's own login (the sign-in screen itself was hardened separately, T-HARDEN.login-hardening). Sharing one login also loses who-did-what (`score_change_log.changed_by` is `auth.uid()`). Each team member now gets their own login, managed by the org's owner in the app.
+
+**What shipped:**
+
+- Database: migration `20261007120000_team_accounts.sql`. `org_members.role` becomes `'owner' | 'organiser'` (CHECK; stray values tidied to `organiser` first), and each org's earliest member is promoted to owner once, only where the org has none. `owner` adds exactly one thing: managing the team; every member still has full write access to the org through RLS, as before. Functions (all `SECURITY DEFINER`, `search_path` pinned): `team_can_manage(org, user?)` (is the caller an owner of the org, and if a user is named, a non-owner member who belongs to no other org), `team_list_members(org)` (owner only; emails come from `auth.users`, which the app cannot read), `team_remove_member(org, user)` (owner only; never an owner, never yourself), `team_add_member(org, user)` (**service role only**; refuses an account older than ten minutes or already in an org). Removal keeps the Auth account (`person_merges.merged_by` and `public_results.published_by` reference it without cascade) but ends all access at once, because every policy asks `app.is_org_member` live.
+- Edge Function `supabase/functions/team-accounts` (`handler.js` holds the logic and is what the tests drive; `index.ts` only wires the real clients; `verify_jwt = true`): `add` creates a confirmed login for an email with a generated one-time password (12 symbols, ~59 bits, unambiguous alphabet, rejection-sampled) flagged `must_change_password`, then attaches it with `team_add_member` (deleting the brand-new account if that fails); `reset` issues a new one-time password for an existing non-owner member. It verifies the caller's token with Auth, asks `team_can_manage` as the caller, and only then builds the service-role client. The password is returned once, never logged, never cached.
+- Screens (all in `core/`, format-agnostic): **Team** (`teamScreen.js`, route `#/team`, owner only): list, add, reset, remove with inline confirms; the one-time password shows once with Copy and Done, and while it is showing every action that could replace it is disabled; every request is timed out, and a timed-out add/reset says it may have gone through. **Choose your password** (`setPasswordScreen.js`): in front of every console route for anyone signed in with a one-time password. A **Team link** in the nav for owners only (asked of the database on every auth event; a failed check keeps what was known). `passwordToggle` (Show/Hide) was extracted into `dom.js` on its second use.
+- Tests: pgTAP `025_team_accounts.sql` (69 assertions: owner/organiser/non-member/anon, cross-org, removal and zero-rows, service-role-only add, freshness boundary, grants); vitest for the handler (57), `team.js`, both screens, `dom.passwordToggle` and the `main.js` wiring; `supabase/tests/manual/team-accounts-e2e.mjs` runs the real function against the local stack by hand (25 checks: add, duplicate email refused, one-time sign-in, non-owner refused, member chooses a password, list, reset, remove, removed member reads nothing).
+
+**Files changed:** `supabase/migrations/20261007120000_team_accounts.sql`, `supabase/tests/025_team_accounts.sql`, `supabase/tests/manual/team-accounts-e2e.mjs`, `supabase/functions/team-accounts/*`, `supabase/seed.sql` (the seed organiser is the owner), `supabase/config.toml`, `src/core/{team,teamScreen,setPasswordScreen}.js` (+ tests, `teamScreen.css`), `src/core/dom.js`, `src/core/loginScreen.*`, `src/main.js`, `app/index.html`.
+
+**Bugs found while building (and in review):**
+
+- **Cross-org takeover.** `team_can_manage` only required the target to be a non-owner member of THIS org, so an owner of one org could have reset the password of someone who also owns another. Latent (one org today), fixed before the migration was pushed: a target in any other org is refused.
+- **A one-time password could be silently lost.** Adding or resetting a second person while the first password was still showing replaced it. Now everything that could replace it is disabled until Done.
+- **Hung requests locked the Team screen.** Only the first load had a timeout. All requests are raced now; a timed-out add/reset says it may have gone through.
+- **Long emails overflowed at 360px** in the password heading, the confirm text and the feedback line.
+- **Focus** landed on "Save password" after signing in with a one-time password (the sign-in form's submit button shared its focus key); the Show/Hide button sat between the two password boxes and read as controlling only the first; the issued password was not announced; a failed Team-link check made the link vanish.
+- Smaller: a removed person stayed listed with live buttons after a failed refresh; both Events and Team were marked as the current page on `#/team`.
+
+**Review cycle:** One round with six reviewers (security-reviewer, schema-guardian, code-reviewer, ui-accessibility-reviewer, test-auditor, module-boundary-checker); no blocking findings, every accepted finding fixed. The security reviewer ran the real function and could not break the owner-only model: no token, the anon key, a garbage JWT, a plain organiser, an owner resetting an owner, a non-member, a community account and another org's id were all refused. Mutation checks: ~190 mutants by the test-auditor; the survivors that were real gaps now have tests, and the remaining ones are equivalent locally (grants that only differ under cloud default privileges).
+
+**Known gaps (deferred, not blocking):**
+
+- **A removed member can never be re-added** with the same email (the account is kept; the function answers 409). Use a different address or have it done in SQL; a "restore" path needs a marker only the function can set.
+- **One-time passwords have no expiry or server-side enforcement.** `must_change_password` is plain user metadata the person can clear themselves, and the owner who issued a password can sign in as that person until they change it. Fine for a few trusted timekeepers; revisit with a TTL if teams grow.
+- **Account squatting / existence oracle:** an owner can create a confirmed account for any address (no proof of ownership), and the 409 reveals that an address already has an account (including Guess the Bean users).
+- No rate limit or body-size cap on the function; the server's minimum password length (6) is below the screen's (8).
+- An org whose only owner's account is deleted has no owner and no way to promote one (no demote/promote function).
+- A Team-link nav rebuild when the owner answer first arrives can drop focus from a nav link the keyboard user was on.
+- The one-off tidy-up and promotion statements in 025 are copies of the migration's (a test cannot re-run a migration); `FOR UPDATE` in `team_remove_member` and the explicit `service_role` revokes are only provable under cloud default privileges / with two sessions.
+- Not verified on a real iPad or in WebKit; no screen-reader run.
+
+**Deploy (order matters; none of it is done by merging):**
+
+1. Check the cloud data first: `select role, count(*) from org_members group by 1;` — the CHECK needs only `owner`/`organiser` (the migration tidies strays, but look).
+2. Push migration `20261007120000` to the cloud project (`apply_migration`, then `list_migrations`); it promotes the existing member to owner.
+3. Deploy the Edge Function `team-accounts` with `verify_jwt` **true** (set it explicitly if deploying through the MCP; `config.toml` only governs local serving).
+4. Then release `dev` → `main`. Without 1-3 the Team link never appears (no owner) or Add fails.
+
+---
+
 ## T-HARDEN.login-hardening: Harden the sign-in screen against the iPad failure · 2026-10-07
 
 **Task:** T-HARDEN.login-hardening (live-event finding #2 from the first Cup Taster event, 4 Oct).
