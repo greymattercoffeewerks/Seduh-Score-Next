@@ -1,905 +1,491 @@
-/*
- * Marketing landing page — Seduh Score Next
- *
- * Deliberately separate from src/ui/tokens/colors.css: that file's
- * paper/stage tokens are scoped to the console's organiser/projector/phone
- * surfaces (contrast-checked against THOSE surfaces' constraints — see
- * DESIGN.md), and mixing this page's own day/night concept into the same
- * variable space would be exactly the "token layer gains format-specific
- * vocabulary" failure CONVENTIONS.md warns against, just one level up (a
- * different PRODUCT surface, not just a different format). This file reuses
- * the same semantic NAMES (--color-canvas, --color-text, etc.) because
- * they're generic slots, not because it shares colors.css's values.
- *
- * As of the 2026-09-11 Cherry rework, this file's VALUES are now the literal
- * same Cherry Day/Cherry Night pairs colors.css uses for its own
- * paper/stage modes — deliberate, not a coincidence to fix later: Cherry is
- * one identity across the whole product, so there's no more reason for the
- * two files to diverge in value the way clay/ember (day) vs. the invented
- * "lantern/brass" scheme (night) used to. The separate file/namespace stays
- * (still never loaded alongside colors.css, still a different product
- * surface per the boundary rule's spirit) — only the "must be independently
- * derived" part of the old reasoning no longer applies.
- *
- * Fonts, spacing/radius and the generic utility classes (.sr-only,
- * .tabular-nums, .tap-target, :focus-visible, .status-live-dot) come from
- * src/ui/tokens/ (fonts.css, typography.css, spacing.css, base.css) — those
- * are genuinely format-and-surface-agnostic, no reason to duplicate them
- * here. index.html links them before this file.
- */
-
-:root {
-  /* Cherry Day — same neutral ramp + accent colors.css uses for paper mode. */
-  --clr-cherry-50: #f5f3e6;
-  --clr-cherry-100: #ece7d2;
-  --clr-cherry-200: #dcd4ae;
-  --clr-cherry-300: #c2b781;
-  --clr-cherry-600: #3d4c28;
-  --clr-cherry-700: #2c391c;
-  --clr-cherry-950: #0c130a;
-  --clr-green-500: #bfe23f;
-  --clr-green-600: #a8c936;
-  --clr-green-700: #33490f;
-  --clr-green-800: #24330a;
-  --clr-gold-700: #8a6a1f;
-  /* The hero always sits on a dark photo scrim regardless of day/night
-     theme (see .landing-hero-content below), so its muted text needs its
-     own fixed light-on-dark shade — not --color-text-muted, which flips to
-     a dark tone in day mode. */
-  --color-hero-muted: #d7d6c4;
-
-  --color-canvas: var(--clr-cherry-100);
-  --color-surface: var(--clr-cherry-50);
-  --color-surface-sunken: var(--clr-cherry-200);
-  --color-border: var(--clr-cherry-300);
-  --color-border-strong: var(--clr-cherry-950);
-  --color-text: var(--clr-cherry-950);
-  --color-text-secondary: var(--clr-cherry-700);
-  --color-text-muted: var(--clr-cherry-600);
-  --color-accent: var(--clr-green-700);
-  --color-accent-hover: var(--clr-green-800);
-  --color-accent-contrast: #ffffff;
-  --color-gold: var(--clr-gold-700);
-  --color-gold-contrast: #ffffff;
-  --color-focus-ring: var(--color-border-strong);
-
-  --bloom-ring-color: rgba(51, 73, 15, 0.22);
-  --steam-particle-color: rgba(51, 73, 15, 0.34);
-  --night-photo-filter: none;
-
-  --cols-hero: 1.1fr 1fr;
-  --cols-4: repeat(4, 1fr);
-  --cols-3: repeat(3, 1fr);
-  --cols-2: repeat(2, 1fr);
-
-  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+@import url('./design-system.css');
+body {
+  margin: 0;
+  background: var(--kinetic-canvas);
+  color: var(--kinetic-ink);
+  font-family: var(--kinetic-body);
 }
-
-/* Cherry Night — same neutral ramp + accent colors.css uses for stage mode.
-   Unlike the old Editorial Nights (which demoted ember to a rare signal and
-   promoted an unrelated "lantern" gold), Cherry's accent is the same green
-   family in both modes — paper mode is the dark leaf-green shade, stage
-   mode is the bright chartreuse shade of one hue, not two different hues
-   swapping roles. That's why .landing-badge-live below no longer needs a
-   per-theme literal override: var(--color-accent) already reads as "the
-   same accent" across both themes here. */
-:root[data-theme='night'] {
-  --clr-cherry-900: #12190b;
-  --clr-cherry-800: #1c2612;
-  --clr-cherry-400: #8f9463;
-  --clr-gold-500: #cfa53b;
-
-  --color-canvas: var(--clr-cherry-950);
-  --color-surface: var(--clr-cherry-900);
-  --color-surface-sunken: var(--clr-cherry-800);
-  --color-border: var(--clr-cherry-700);
-  --color-border-strong: var(--clr-cherry-50);
-  --color-text: var(--clr-cherry-50);
-  --color-text-secondary: var(--clr-cherry-300);
-  --color-text-muted: var(--clr-cherry-400);
-  --color-accent: var(--clr-green-500);
-  --color-accent-hover: var(--clr-green-600);
-  --color-accent-contrast: var(--clr-cherry-950);
-  --color-gold: var(--clr-gold-500);
-  --color-gold-contrast: var(--clr-cherry-950);
-
-  /* Kept dimmer than the day values' opacity would suggest at a glance —
-     found in review (ui-accessibility-reviewer, 2026-09-11): at brighter
-     opacity, a randomly-placed rising particle (buildSteamField() spawns
-     across the hero's full width) drifting behind the hero's light text
-     visibly washed out letterforms and measured well under AA contrast at
-     the moment of overlap — a bright chartreuse particle reads as much
-     "louder" than its opacity number suggests against the dark scrim.
-     Dimmed here so the ambient glow stays visible against the photo
-     without ever competing with the text on top of it. */
-  --bloom-ring-color: rgba(191, 226, 63, 0.15);
-  --steam-particle-color: rgba(191, 226, 63, 0.22);
-  --night-photo-filter: brightness(0.5) contrast(1.12) saturate(0.75);
+.kinetic-page {
+  min-height: 100vh;
+  overflow: hidden;
 }
-
-/* body's own background/color/font/line-height/margin all come from
-   src/ui/tokens/base.css, loaded before this file — this page just needs
-   to supply the --color- and --font- values base.css's rule reads. */
-* {
-  box-sizing: border-box;
+.kinetic-wrap {
+  max-width: 1280px;
+  margin: auto;
+  padding: 18px clamp(12px, 3.4vw, 44px) 0;
 }
-
-a {
-  color: var(--color-accent);
+.kinetic-nav {
+  min-height: 58px;
+  padding: 0 10px 0 22px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  border-radius: var(--kinetic-pill);
+  background: var(--kinetic-paper);
+}
+.kinetic-brand {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-family: var(--kinetic-display);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.06em;
+}
+.kinetic-brand-mark {
+  width: 23px;
+  height: 20px;
+  color: var(--kinetic-coral);
+}
+.kinetic-nav-links,
+.kinetic-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.kinetic-nav-link {
+  padding: 10px 11px;
+  color: inherit;
+  font-size: 13px;
   text-decoration: none;
 }
-a:hover {
-  color: var(--color-accent-hover);
-  text-decoration: underline;
-}
-
-.landing-wrap {
-  max-width: 72rem;
-  margin: 0 auto;
-  padding: 0 var(--space-6);
-}
-
-.landing-eyebrow {
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
-}
-
-h1,
-h2,
-h3 {
-  font-family: var(--font-display);
-  font-weight: var(--font-weight-bold);
-  line-height: var(--leading-tight);
-  margin: 0;
-  letter-spacing: var(--tracking-tight);
-}
-
-.landing-btn {
+.kinetic-action {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: 0.875rem 1.5rem;
-  border-radius: var(--radius-sm);
-  font-family: var(--font-body);
-  font-weight: var(--font-weight-semibold);
-  font-size: var(--text-sm);
-  border: 1px solid transparent;
-  cursor: pointer;
-  min-height: var(--tap-target-min);
-}
-.landing-btn-primary {
-  background: var(--color-accent);
-  color: var(--color-accent-contrast);
-}
-.landing-btn-primary:hover {
-  background: var(--color-accent-hover);
-  color: var(--color-accent-contrast);
+  justify-content: center;
+  min-height: 44px;
+  padding: 11px 17px;
+  border: 1px solid var(--kinetic-ink);
+  border-radius: var(--kinetic-pill);
+  color: inherit;
+  font-size: 14px;
   text-decoration: none;
 }
-.landing-btn-ghost {
-  background: transparent;
-  border-color: var(--color-border-strong);
-  color: var(--color-text);
+.kinetic-action-primary {
+  border-color: var(--kinetic-coral);
+  background: var(--kinetic-coral);
 }
-.landing-btn-ghost:hover {
-  background: var(--color-surface-sunken);
-  color: var(--color-text);
-  text-decoration: none;
+.kinetic-hero {
+  display: grid;
+  grid-template-columns: 1.12fr 0.88fr;
+  gap: 16px;
+  margin-top: 16px;
 }
-
-.landing-mono {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
+.kinetic-copy,
+.kinetic-live,
+.kinetic-format,
+.kinetic-pricing {
+  border-radius: var(--kinetic-surface);
 }
-
-.landing-badge {
-  display: inline-block;
-  font-family: var(--font-mono);
-  font-size: var(--text-3xs);
-  letter-spacing: 0.06em;
+.kinetic-copy {
+  position: relative;
+  min-height: 540px;
+  overflow: hidden;
+  padding: clamp(38px, 5vw, 64px);
+  background: var(--kinetic-paper);
+}
+.kinetic-kicker,
+.kinetic-meta,
+.kinetic-score-meta,
+.kinetic-badge,
+.kinetic-mini-score p,
+.kinetic-tier span {
   text-transform: uppercase;
-  padding: 0.25rem 0.6rem;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border-strong);
+  letter-spacing: 0.09em;
+  font-size: 11px;
 }
-.landing-badge-live {
-  background: var(--color-accent);
-  color: var(--color-accent-contrast);
-  border-color: transparent;
+.kinetic-display,
+.kinetic-live-title,
+.kinetic-format h2,
+.kinetic-pricing h2,
+.kinetic-fact b,
+.kinetic-tier b {
+  font-family: var(--kinetic-display);
+  font-weight: 700;
+  text-transform: uppercase;
 }
-/* Filled, not outlined-with-gold-text: gold as plain text only clears AA by
-   0.03 of a ratio point on the surface this badge happens to sit on (found
-   in review, ui-accessibility-reviewer, 2026-09-11) and would fail outright
-   on --color-canvas — the same "gold is fill-only, paired with
-   --color-gold-contrast" rule src/ui/tokens/DESIGN.md documents for the
-   console applies here too, now that this file's values are deliberately
-   the same Cherry palette. */
-.landing-badge-annual {
-  background: var(--color-gold);
-  color: var(--color-gold-contrast);
-  border-color: transparent;
+.kinetic-display {
+  position: relative;
+  z-index: 1;
+  margin: 26px 0;
+  font-size: clamp(78px, 10vw, 150px);
+  line-height: 0.74;
+  letter-spacing: -0.035em;
 }
-.landing-badge-soon {
-  background: transparent;
-  color: var(--color-text-muted);
-  border-color: var(--color-border);
+.kinetic-display span {
+  color: var(--kinetic-coral);
 }
-.landing-badge-neutral {
-  background: transparent;
-  border-color: var(--color-border);
+.kinetic-sub {
+  position: relative;
+  z-index: 1;
+  max-width: 480px;
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.4;
 }
-.landing-accent-text {
-  color: var(--color-accent);
+.kinetic-actions {
+  position: relative;
+  z-index: 1;
+  margin-top: 28px;
 }
-
-.landing-card {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: var(--space-5);
+.kinetic-note {
+  position: absolute;
+  right: 7%;
+  bottom: 24px;
+  margin: 0;
+  font-family: var(--kinetic-display);
+  font-size: 18px;
+  text-transform: uppercase;
 }
-
-.landing-icon {
-  width: 22px;
-  height: 22px;
-  stroke: var(--color-accent);
-  fill: none;
-  stroke-width: 1.6;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+.kinetic-note b {
+  color: var(--kinetic-indigo);
+  font-size: 34px;
 }
-
-/* Responsive layout — grid shapes are custom properties, redefined at each
-   breakpoint, so inline-set `grid-template-columns: var(--cols-N)` updates
-   without !important overrides (same trick colors.css uses for its own
-   [data-surface] swap). */
+.kinetic-orbit {
+  position: absolute;
+  top: -58px;
+  right: -72px;
+  width: 260px;
+  height: 260px;
+  border-radius: 50%;
+  background: var(--kinetic-citron);
+}
+.kinetic-orbit:after {
+  content: '';
+  position: absolute;
+  inset: 29px;
+  border: 12px dotted var(--kinetic-indigo);
+  border-radius: 50%;
+  animation: kinetic-spin 20s linear infinite;
+}
+.kinetic-live {
+  position: relative;
+  min-height: 540px;
+  overflow: hidden;
+  padding: 31px;
+  background: var(--kinetic-indigo);
+  color: var(--kinetic-paper);
+}
+.kinetic-dots {
+  position: absolute;
+  inset: 0;
+  opacity: 0.8;
+  background-image: radial-gradient(var(--kinetic-coral) 1.35px, transparent 1.9px);
+  background-size: 8px 8px;
+  mix-blend-mode: screen;
+  animation: kinetic-drift 6s linear infinite;
+}
+.kinetic-live > *:not(.kinetic-dots) {
+  position: relative;
+  z-index: 1;
+}
+.kinetic-meta,
+.kinetic-score-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+.kinetic-live-title {
+  margin: 55px 0 32px;
+  font-size: clamp(58px, 5vw, 82px);
+  line-height: 0.76;
+}
+.kinetic-live-title em {
+  color: var(--kinetic-citron);
+  font-style: normal;
+}
+.kinetic-score-card {
+  max-width: 330px;
+  padding: 22px 23px;
+  border-radius: 29px;
+  background: var(--kinetic-paper);
+  color: var(--kinetic-ink);
+  animation: kinetic-float 4.2s ease-in-out infinite;
+}
+.kinetic-score-meta {
+  padding-bottom: 14px;
+  border-bottom: 1px dotted currentColor;
+}
+.kinetic-players {
+  display: grid;
+  grid-template-columns: 1fr 40px 1fr;
+  align-items: end;
+  padding-top: 19px;
+  text-align: center;
+}
+.kinetic-player span {
+  display: block;
+  font-size: 12px;
+}
+.kinetic-player b {
+  display: block;
+  font-family: var(--kinetic-display);
+  font-size: 60px;
+  line-height: 0.72;
+}
+.kinetic-vs {
+  padding-bottom: 8px;
+  color: var(--kinetic-coral);
+  font-size: 11px;
+}
+.kinetic-live-status {
+  position: absolute;
+  bottom: 29px;
+  margin: 0;
+  font-size: 12px;
+}
+.kinetic-live-status i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: var(--kinetic-coral);
+  animation: kinetic-pulse 1.2s ease-out infinite;
+}
+.kinetic-ticker {
+  margin: 16px 0;
+  overflow: hidden;
+  border-radius: 28px;
+  background: var(--kinetic-ink);
+  color: var(--kinetic-paper);
+  white-space: nowrap;
+}
+.kinetic-track {
+  display: inline-flex;
+  gap: 32px;
+  padding: 12px 0;
+  font-family: var(--kinetic-display);
+  font-size: 30px;
+  text-transform: uppercase;
+  animation: kinetic-marquee 16s linear infinite;
+}
+.kinetic-track span::first-letter {
+  color: var(--kinetic-citron);
+}
+.kinetic-format {
+  display: grid;
+  grid-template-columns: 1.03fr 0.97fr;
+  overflow: hidden;
+  margin-bottom: 16px;
+  background: var(--kinetic-coral);
+}
+.kinetic-format-copy {
+  padding: clamp(32px, 4vw, 48px);
+}
+.kinetic-badge {
+  display: inline-block;
+  padding: 6px 10px;
+  border-radius: var(--kinetic-pill);
+  background: var(--kinetic-citron);
+}
+.kinetic-format h2 {
+  margin: 18px 0;
+  font-size: clamp(58px, 6vw, 88px);
+  line-height: 0.76;
+}
+.kinetic-format-copy > p {
+  max-width: 430px;
+  margin: 0;
+  line-height: 1.4;
+}
+.kinetic-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 24px;
+}
+.kinetic-chips span {
+  padding: 9px 12px;
+  border: 1px solid var(--kinetic-ink);
+  border-radius: var(--kinetic-pill);
+  font-size: 12px;
+}
+.kinetic-stage {
+  position: relative;
+  min-height: 320px;
+  overflow: hidden;
+  background: var(--kinetic-coral-deep);
+}
+.kinetic-stage-number {
+  position: absolute;
+  right: -0.08em;
+  bottom: -0.2em;
+  color: var(--kinetic-paper);
+  font-family: var(--kinetic-display);
+  font-size: 250px;
+  line-height: 1;
+  opacity: 0.5;
+}
+.kinetic-mini-score {
+  position: absolute;
+  z-index: 1;
+  right: 8%;
+  bottom: 32px;
+  left: 8%;
+  padding: 20px;
+  border-radius: 24px;
+  background: var(--kinetic-paper);
+}
+.kinetic-mini-score p {
+  margin: 0;
+}
+.kinetic-mini-score b {
+  display: block;
+  padding: 16px 0;
+  font-family: var(--kinetic-display);
+  font-size: 25px;
+  text-transform: uppercase;
+}
+.kinetic-mini-score span {
+  color: var(--kinetic-indigo);
+  font-size: 12px;
+}
+.kinetic-proof {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.kinetic-fact {
+  min-height: 158px;
+  padding: 28px;
+  border-radius: var(--kinetic-surface);
+  background: var(--kinetic-paper);
+}
+.kinetic-fact-accent {
+  background: var(--kinetic-citron);
+}
+.kinetic-fact b {
+  display: block;
+  font-size: 56px;
+  line-height: 0.74;
+}
+.kinetic-fact p {
+  margin: 14px 0 0;
+  font-size: 13px;
+  line-height: 1.25;
+}
+.kinetic-pricing {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 32px;
+  margin-bottom: 24px;
+  padding: clamp(28px, 3vw, 40px);
+  background: var(--kinetic-ink);
+  color: var(--kinetic-paper);
+}
+.kinetic-pricing h2 {
+  margin: 0;
+  font-size: clamp(52px, 5vw, 80px);
+  line-height: 0.78;
+}
+.kinetic-pricing-intro p {
+  max-width: 320px;
+  margin: 16px 0 0;
+  font-size: 14px;
+  line-height: 1.35;
+}
+.kinetic-tiers {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.kinetic-tier {
+  padding-top: 11px;
+  border-top: 1px dotted var(--kinetic-paper);
+  font-size: 12px;
+}
+.kinetic-tier span {
+  color: var(--kinetic-citron);
+}
+.kinetic-tier b {
+  display: block;
+  margin: 7px 0;
+  font-size: 34px;
+  line-height: 0.9;
+}
+.kinetic-tier p {
+  margin: 0;
+  line-height: 1.3;
+}
+.kinetic-footer {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 0 2px 18px;
+  color: var(--kinetic-muted);
+  font-size: 12px;
+}
+@keyframes kinetic-drift {
+  to {
+    background-position: 32px 32px;
+  }
+}
+@keyframes kinetic-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes kinetic-float {
+  50% {
+    transform: translateY(-10px);
+  }
+}
+@keyframes kinetic-pulse {
+  75% {
+    box-shadow: 0 0 0 9px transparent;
+  }
+}
+@keyframes kinetic-marquee {
+  to {
+    transform: translateX(-33%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kinetic-page * {
+    animation: none !important;
+  }
+}
 @media (max-width: 860px) {
-  :root {
-    --cols-hero: 1fr;
-    --cols-3: 1fr;
+  .kinetic-hero,
+  .kinetic-format,
+  .kinetic-pricing {
+    grid-template-columns: 1fr;
+  }
+  .kinetic-live {
+    min-height: 460px;
+  }
+  .kinetic-proof {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .kinetic-stage {
+    min-height: 280px;
   }
 }
 @media (max-width: 620px) {
-  :root {
-    --cols-4: repeat(2, 1fr);
-    --cols-2: 1fr;
+  .kinetic-nav {
+    padding-left: 16px;
   }
-}
-@media (max-width: 480px) {
-  :root {
-    --cols-4: 1fr;
-    --space-5: 1.25rem;
-    --space-6: 1rem;
-    --space-7: 2rem;
-    --space-8: 2.5rem;
-    --space-9: 3.5rem;
-  }
-}
-
-/* ---- Nav ---- */
-.landing-nav {
-  position: sticky;
-  top: 0;
-  background: var(--color-canvas);
-  border-bottom: 1px solid var(--color-border);
-  z-index: 10;
-}
-.landing-nav-row {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 72px;
-}
-.landing-nav-brand {
-  display: flex;
-  align-items: center;
-  gap: 0.625rem;
-}
-.landing-brand-mark-wrap {
-  position: relative;
-  display: inline-flex;
-  width: 26px;
-  height: 22px;
-}
-.landing-brand-mark {
-  position: relative;
-  z-index: 1;
-  width: 26px;
-  height: 22px;
-  color: var(--color-accent);
-}
-.landing-brand-name {
-  font-family: var(--font-display);
-  font-weight: var(--font-weight-bold);
-  font-size: var(--text-md);
-  letter-spacing: var(--tracking-tight);
-}
-.landing-nav-right {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-}
-.landing-nav-panel {
-  display: none;
-  position: absolute;
-  top: 72px;
-  left: 0;
-  right: 0;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-4);
-  background: var(--color-canvas);
-  border-bottom: 1px solid var(--color-border);
-  padding: var(--space-5) var(--space-6);
-}
-.landing-nav-panel-open {
-  display: flex;
-}
-.landing-nav-panel .landing-btn {
-  width: 100%;
-  justify-content: center;
-}
-/* min-height alone (not .tap-target, which also forces min-width — meant
-   for icon-only controls per its own doc comment in base.css) covers a
-   text link that's already wide enough; display:flex centers the text
-   inside the taller box rather than just padding it top/bottom, which
-   found in review, ui-accessibility-reviewer: was under 44px in both the
-   stacked mobile panel and the inline desktop row. */
-.landing-nav-link {
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--tap-target-min);
-  color: var(--color-text-secondary);
-  font-weight: var(--font-weight-semibold);
-  font-size: var(--text-sm);
-}
-.landing-nav-toggle {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 4px;
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-}
-.landing-nav-toggle-bar {
-  width: 18px;
-  height: 2px;
-  border-radius: var(--radius-full);
-  background: var(--color-text);
-  display: block;
-}
-.landing-theme-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-full);
-  cursor: pointer;
-  color: var(--color-text-secondary);
-}
-.landing-theme-toggle:hover {
-  border-color: var(--color-border-strong);
-  color: var(--color-text);
-}
-.landing-theme-toggle svg {
-  width: 18px;
-  height: 18px;
-  stroke: currentColor;
-  fill: none;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-@media (min-width: 640px) {
-  .landing-nav-toggle {
+  .kinetic-nav-link {
     display: none;
   }
-  .landing-nav-panel {
-    display: flex !important;
-    position: static;
-    flex-direction: row;
-    align-items: center;
-    background: transparent;
-    border-bottom: none;
-    padding: 0;
-    gap: var(--space-6);
+  .kinetic-copy {
+    min-height: 485px;
   }
-  .landing-nav-panel .landing-btn {
-    width: auto;
+  .kinetic-display {
+    font-size: clamp(82px, 22vw, 118px);
   }
-}
-
-/* ---- Hero ----
-   Full-bleed photo, dominant on first paint — headline/CTAs/stat-strip
-   overlaid on a dark scrim, same "photo + overlay + centered content"
-   pattern .landing-cta uses at the bottom of the page, so the two big
-   photo moments bookend the page with one visual language. Everything
-   else (problem, formats, proof, pricing) only appears once the visitor
-   scrolls past this. Text inside is always light — the scrim guarantees
-   a dark-enough ground in both day and night, so it doesn't follow
-   --color-text's own theme flip. */
-.landing-hero {
-  position: relative;
-  overflow: hidden;
-  min-height: min(84vh, 720px);
-  display: flex;
-  align-items: flex-end;
-  padding-bottom: var(--space-9);
-}
-/* Slideshow — a small stack of photos crossfading in place, not a
-   carousel: no controls, no indicator dots, ambient rather than
-   navigable. Every layer sits at the same position; only .is-active is
-   visible, and the fade between them is a plain opacity transition rather
-   than anything JS-driven, so it stays smooth even if a swap tick and a
-   paint land close together. */
-.landing-hero-slideshow {
-  position: absolute;
-  inset: 0;
-}
-.landing-hero-photo {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center 55%;
-  filter: brightness(0.55) contrast(1.1) saturate(0.85);
-  opacity: 0;
-}
-.landing-hero-photo.is-active {
-  opacity: 1;
-}
-@media (prefers-reduced-motion: no-preference) {
-  .landing-hero-photo {
-    transition: opacity 1.8s var(--ease-out-expo);
+  .kinetic-note {
+    display: none;
   }
-}
-:root[data-theme='night'] .landing-hero-photo {
-  filter: var(--night-photo-filter);
-}
-.landing-hero-overlay {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    180deg,
-    rgba(12, 19, 10, 0.35) 0%,
-    rgba(12, 19, 10, 0.88) 78%,
-    rgba(12, 19, 10, 0.96) 100%
-  );
-}
-.landing-hero-content {
-  position: relative;
-  z-index: 1;
-  color: var(--clr-cherry-50, #f5f3e6);
-}
-.landing-hero-eyebrow {
-  margin: 0 0 var(--space-4);
-  color: var(--clr-green-500, #bfe23f);
-}
-.landing-hero-headline {
-  font-size: clamp(2rem, 4.4vw + 1.2rem, 3.8rem);
-  color: inherit;
-  max-width: 26ch;
-}
-.landing-hero-headline .landing-accent-text {
-  color: var(--clr-green-500, #bfe23f);
-}
-.landing-hero-sub {
-  font-size: var(--text-md);
-  color: var(--color-hero-muted);
-  max-width: 38rem;
-  margin: var(--space-5) 0 0;
-}
-.landing-hero-ctas {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-4);
-  margin-top: var(--space-6);
-}
-.landing-hero-ctas .landing-btn-primary {
-  background: var(--clr-green-500, #bfe23f);
-  color: var(--clr-cherry-950, #0c130a);
-}
-.landing-hero-ctas .landing-btn-primary:hover {
-  background: var(--clr-green-600, #a8c936);
-  color: var(--clr-cherry-950, #0c130a);
-}
-.landing-hero-ctas .landing-btn-ghost {
-  border-color: var(--color-hero-muted);
-  color: inherit;
-}
-.landing-hero-ctas .landing-btn-ghost:hover {
-  background: rgba(245, 243, 230, 0.1);
-  color: inherit;
-}
-.landing-stat-strip {
-  display: grid;
-  grid-template-columns: var(--cols-4);
-  gap: 1px;
-  background: rgba(245, 243, 230, 0.18);
-  margin-top: var(--space-8);
-  border: 1px solid rgba(245, 243, 230, 0.18);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-}
-.landing-stat-cell {
-  background: rgba(12, 19, 10, 0.55);
-  padding: var(--space-4);
-}
-.landing-stat-num {
-  font-size: var(--text-xl);
-  font-weight: var(--font-weight-bold);
-  color: var(--clr-green-500, #bfe23f);
-}
-.landing-stat-label {
-  font-size: var(--text-2xs);
-  color: var(--color-hero-muted);
-}
-
-/* ---- Ambient motion — bloom + rising particles ---- */
-.landing-bloom {
-  position: absolute;
-  top: 38%;
-  left: 68%;
-  width: 1px;
-  height: 1px;
-  pointer-events: none;
-  z-index: 0;
-}
-.landing-bloom span {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 360px;
-  height: 360px;
-  transform: translate(-50%, -50%);
-  border: 1px solid var(--bloom-ring-color);
-  border-radius: 50%;
-  /* Resting state for prefers-reduced-motion: without this, the ring's only
-     opacity value lives inside @keyframes, so disabling the animation left
-     three static, fully-opaque circles permanently on screen — never the
-     intended always-mid-fade look (found in review,
-     ui-accessibility-reviewer, 2026-09-11). */
-  opacity: 0;
-}
-@media (prefers-reduced-motion: no-preference) {
-  .landing-bloom span {
-    animation: landing-bloom 4.8s ease-out infinite;
+  .kinetic-tiers {
+    grid-template-columns: 1fr;
   }
-  .landing-bloom span:nth-child(1) {
-    animation-delay: 0s;
+  .kinetic-tier {
+    padding-bottom: 8px;
   }
-  .landing-bloom span:nth-child(2) {
-    animation-delay: 1.6s;
-  }
-  .landing-bloom span:nth-child(3) {
-    animation-delay: 3.2s;
-  }
-}
-@keyframes landing-bloom {
-  0% {
-    transform: translate(-50%, -50%) scale(0.4);
-    opacity: 0;
-  }
-  18% {
-    opacity: 0.95;
-  }
-  100% {
-    transform: translate(-50%, -50%) scale(3.4);
-    opacity: 0;
-  }
-}
-
-.landing-steam-field {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-  z-index: 0;
-}
-.landing-steam-p {
-  position: absolute;
-  bottom: -14px;
-  border-radius: 50%;
-  background: var(--steam-particle-color);
-}
-@media (prefers-reduced-motion: no-preference) {
-  .landing-steam-p {
-    animation: landing-rise linear infinite;
-  }
-}
-@keyframes landing-rise {
-  0% {
-    transform: translateY(0) translateX(0);
-    opacity: 0;
-  }
-  12% {
-    opacity: 0.8;
-  }
-  100% {
-    transform: translateY(-108vh) translateX(var(--drift, 22px));
-    opacity: 0;
-  }
-}
-
-@media (max-width: 480px) {
-  .landing-hero {
-    min-height: min(92vh, 620px);
-    align-items: center;
-  }
-}
-
-/* ---- Section shells ---- */
-/* Longhand on purpose, not `padding: var(--space-8) 0` — this class is
-   combined with .landing-wrap on the same element in a couple of places
-   (buildFormats(), buildPricing()), and a shorthand here would overwrite
-   .landing-wrap's left/right padding with 0 outright, since both set the
-   same `padding` property on the same element (found live: format/pricing
-   cards were flush to the viewport edge with no horizontal gutter at all,
-   not just "tighter" spacing). Longhand only ever touches its own sides. */
-.landing-section {
-  padding-top: var(--space-8);
-  padding-bottom: var(--space-8);
-}
-.landing-section-sunken {
-  background: var(--color-surface-sunken);
-  border-top: 1px solid var(--color-border);
-  border-bottom: 1px solid var(--color-border);
-}
-.landing-section-heading {
-  font-size: clamp(1.5rem, 3vw + 1rem, 2.2rem);
-  margin-top: var(--space-3);
-}
-.landing-problem-heading {
-  max-width: 40rem;
-}
-.landing-section-lede {
-  font-size: var(--text-lg);
-  color: var(--color-text-secondary);
-  max-width: 44rem;
-  margin-top: var(--space-4);
-}
-
-/* ---- Problem cards ---- */
-.landing-problem-grid {
-  display: grid;
-  grid-template-columns: var(--cols-4);
-  gap: var(--space-4);
-  margin-top: var(--space-7);
-}
-.landing-card h3 {
-  font-size: var(--text-md);
-  margin-top: var(--space-4);
-}
-.landing-card p {
-  font-size: var(--text-sm);
-  color: var(--color-text-secondary);
-  margin-top: var(--space-2);
-}
-
-/* ---- Format cards ---- */
-.landing-format-grid {
-  display: grid;
-  grid-template-columns: var(--cols-2);
-  gap: var(--space-5);
-  margin-top: var(--space-7);
-}
-.landing-format-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-}
-.landing-format-card h3 {
-  font-size: var(--text-lg);
-}
-.landing-format-card p {
-  font-size: var(--text-base);
-}
-/* Desaturated, not faded — opacity would composite the text colors down
-   against the card background and fail contrast (found in review,
-   ui-accessibility-reviewer: text-secondary dropped to ~2.4:1 at 0.5
-   opacity). grayscale() preserves luminance, so it doesn't touch contrast;
-   "Coming soon" is what actually signals disabled, this is just tone. */
-.landing-format-disabled {
-  filter: grayscale(0.6);
-}
-.landing-format-live {
-  display: block;
-  text-decoration: none;
-  color: inherit;
-  transition: border-color 0.15s ease;
-}
-.landing-format-live:hover {
-  border-color: var(--color-accent);
-  text-decoration: none;
-}
-.landing-format-live-status {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-.landing-format-open {
-  display: inline-block;
-  margin-top: var(--space-4);
-  font-size: var(--text-sm);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-accent);
-}
-
-/* ---- Proof ---- */
-.landing-proof-grid {
-  display: grid;
-  grid-template-columns: var(--cols-2);
-  gap: var(--space-8);
-  align-items: center;
-}
-.landing-proof-card {
-  padding: 0;
-  overflow: hidden;
-}
-.landing-proof-row {
-  padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--color-border);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.landing-proof-row:last-child {
-  border-bottom: none;
-}
-.landing-proof-name {
-  font-weight: var(--font-weight-bold);
-}
-.landing-proof-desc {
-  font-size: var(--text-sm);
-  color: var(--color-text-secondary);
-  margin: 0;
-}
-.landing-proof-next {
-  color: var(--color-text-muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-}
-
-/* ---- Pricing ---- */
-.landing-pricing-grid {
-  display: grid;
-  grid-template-columns: var(--cols-3);
-  gap: var(--space-5);
-  margin-top: var(--space-7);
-}
-.landing-price {
-  font-size: var(--text-2xl);
-  font-weight: var(--font-weight-bold);
-  margin-top: var(--space-4);
-}
-.landing-price-period {
-  font-size: var(--text-2xs);
-  color: var(--color-text-muted);
-}
-.landing-pricing-card-featured {
-  border-color: var(--color-border-strong);
-}
-.landing-pricing-card p {
-  font-size: var(--text-base);
-  color: var(--color-text-secondary);
-  margin-top: var(--space-3);
-}
-.landing-pricing-note {
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-  margin-top: var(--space-5);
-}
-
-/* ---- Final CTA ---- */
-.landing-cta {
-  position: relative;
-  padding: var(--space-9) 0;
-  overflow: hidden;
-}
-:root:not([data-theme='night']) .landing-cta {
-  background: var(--clr-cherry-950);
-  color: var(--clr-cherry-50);
-}
-:root[data-theme='night'] .landing-cta {
-  background: radial-gradient(circle at 50% 30%, var(--clr-cherry-800) 0%, var(--color-canvas) 70%);
-  color: var(--color-text);
-}
-.landing-cta-photo {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  filter: var(--night-photo-filter);
-}
-:root:not([data-theme='night']) .landing-cta-photo {
-  opacity: 0.55;
-  filter: brightness(0.55) contrast(1.1) saturate(0.85);
-}
-:root[data-theme='night'] .landing-cta-photo {
-  opacity: 0.6;
-}
-.landing-cta-overlay {
-  position: absolute;
-  inset: 0;
-}
-:root:not([data-theme='night']) .landing-cta-overlay {
-  background: linear-gradient(180deg, rgba(12, 19, 10, 0.55) 0%, rgba(12, 19, 10, 0.92) 100%);
-}
-:root[data-theme='night'] .landing-cta-overlay {
-  background: linear-gradient(180deg, rgba(12, 19, 10, 0.45) 0%, rgba(12, 19, 10, 0.94) 100%);
-}
-.landing-cta-inner {
-  text-align: center;
-  position: relative;
-}
-.landing-cta-heading {
-  font-size: clamp(1.6rem, 4vw + 1rem, 2.4rem);
-  max-width: 36rem;
-  margin: 0 auto;
-  color: inherit;
-}
-.landing-cta-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-4);
-  justify-content: center;
-  margin-top: var(--space-6);
-}
-.landing-cta-btn-primary {
-  background: var(--clr-green-500);
-  color: var(--clr-cherry-950);
-}
-.landing-cta-btn-ghost {
-  border: 1px solid currentColor;
-  color: inherit;
-}
-
-/* ---- Footer ---- */
-/* Longhand — same reason as .landing-section above: combined with
-   .landing-wrap on the same element, a `padding` shorthand here would
-   zero out .landing-wrap's left/right. */
-.landing-footer {
-  padding-top: var(--space-6);
-  padding-bottom: var(--space-6);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-}
-.landing-footer-text {
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-}
-/* .landing-footer-text is shared with the plain "Built by..." span, which
-   needs no tap target — this modifier is added only to the new Free Timer
-   link, same fix .landing-version-pill already applies two rules below.
-   Found in review (ui-accessibility-reviewer): a plain text-sized link here
-   rendered at ~13px tall, well under the 44px minimum. */
-.landing-footer-link {
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--tap-target-min);
-}
-.landing-footer-right {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-}
-.landing-version-pill {
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--tap-target-min);
-  border-color: var(--color-border);
-  color: var(--color-text-muted);
 }

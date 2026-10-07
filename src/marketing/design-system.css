@@ -1,0 +1,15 @@
+:root {
+  --kinetic-canvas: #dededb;
+  --kinetic-paper: #f8f5ed;
+  --kinetic-ink: #15151a;
+  --kinetic-muted: #555459;
+  --kinetic-coral: #ff5a3c;
+  --kinetic-coral-deep: #db4731;
+  --kinetic-indigo: #4f55e0;
+  --kinetic-citron: #eef289;
+  --kinetic-display:
+    'Bricolage Grotesque', Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
+  --kinetic-body: 'IBM Plex Sans', Arial, sans-serif;
+  --kinetic-surface: 34px;
+  --kinetic-pill: 999px;
+}

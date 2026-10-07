@@ -1,106 +1,222 @@
-/* Events list/create screen (2026-08-29 app-wiring pass). Reuses
-   .screen-container/.card/.btn/.tap-target/.field-input from
-   heatsScreen.css's own established token-only styling — no new
-   one-off colors/spacing/shadows beyond what this file itself needs. */
+/* Events is the organiser's entry point: a high-energy control desk that
+   uses the Kinetic accents without leaking a particular competition format
+   into core. Shared .btn, .field-input and .tap-target behaviour remains
+   intentionally unchanged. */
+
+.events-screen {
+  --events-ink: var(--kinetic-ink);
+  --events-paper: var(--kinetic-paper);
+  --events-coral: var(--kinetic-coral);
+  --events-indigo: var(--kinetic-indigo);
+  --events-citron: var(--kinetic-citron);
+  max-width: 70rem;
+  padding-block: clamp(var(--space-5), 7vw, calc(var(--space-8) * 2));
+}
+
+.events-masthead {
+  position: relative;
+  display: grid;
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
+  padding: clamp(var(--space-5), 5vw, var(--space-8));
+  overflow: hidden;
+  border: 2px solid var(--events-ink);
+  background: var(--events-coral);
+  color: var(--events-ink);
+}
+
+.events-masthead::after {
+  position: absolute;
+  right: clamp(var(--space-3), 5vw, var(--space-7));
+  bottom: calc(var(--space-2) * -1);
+  width: clamp(5rem, 17vw, 10rem);
+  aspect-ratio: 1;
+  border: 2px solid var(--events-ink);
+  border-radius: 50%;
+  background: var(--events-citron);
+  content: '';
+}
+
+.events-eyebrow,
+.events-panel-kicker,
+.events-signal {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+.events-masthead h1 {
+  position: relative;
+  z-index: 1;
+  max-width: 9ch;
+  margin: 0;
+  font-size: clamp(3.5rem, 11vw, 8rem);
+  line-height: 0.83;
+  letter-spacing: -0.075em;
+  text-transform: uppercase;
+}
+
+.events-intro {
+  position: relative;
+  z-index: 1;
+  max-width: 40rem;
+  margin: 0;
+  font-size: clamp(var(--text-lg), 2.4vw, var(--text-2xl));
+  font-weight: var(--font-weight-medium);
+  line-height: var(--leading-tight);
+}
+
+.events-signal {
+  position: relative;
+  z-index: 1;
+  width: fit-content;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--events-ink);
+  background: var(--events-paper);
+}
+
+.events-screen > .screen-feedback:not(:empty) {
+  margin: calc(var(--space-4) * -1) 0 var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  border: 2px solid var(--events-ink);
+  background: var(--events-paper);
+  color: var(--events-ink);
+  font-weight: var(--font-weight-bold);
+}
+
+.events-screen > .screen-feedback[data-tone='error'] {
+  background: var(--color-danger);
+  color: var(--color-danger-contrast);
+}
+
+.events-screen > .screen-feedback[data-tone='success'] {
+  background: var(--events-citron);
+}
+
+.events-panel {
+  margin: 0;
+  border: 2px solid var(--events-ink);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.events-list-panel {
+  background: var(--events-ink);
+  color: var(--events-paper);
+}
+
+.events-create-panel {
+  margin-top: var(--space-5);
+  background: var(--events-paper);
+  color: var(--events-ink);
+}
+
+.events-panel-heading {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-5);
+  border-bottom: 2px solid currentColor;
+}
+
+.events-panel-heading h2 {
+  margin: 0;
+  font-size: clamp(var(--text-2xl), 5vw, var(--text-4xl));
+  line-height: 0.9;
+  letter-spacing: -0.06em;
+  text-transform: uppercase;
+}
 
 .events-list {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
 }
 
-.events-list li {
-  display: flex;
+.events-list-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  padding: var(--space-2) 0;
-  border-bottom: var(--border-hairline) solid var(--color-border);
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid color-mix(in srgb, var(--events-paper) 45%, transparent);
 }
 
-.events-list li:last-child {
-  border-bottom: none;
+.events-list-item:last-child {
+  border-bottom: 0;
 }
 
-/* Found in the app-wiring holistic pass: this link was plain inline text
-   with no sizing of its own (only the surrounding <li> had padding, which
-   isn't part of the <a>'s own clickable box) — well under the 44px tap
-   target floor every other interactive control in this app already gets
-   via .tap-target/.btn/.field-input/.app-shell-link. This is the
-   organiser's own landing page, most likely to be tapped on a phone at
-   360px per this project's own tap-target discipline. */
+.event-card-number {
+  align-self: stretch;
+  display: grid;
+  min-width: 2.6rem;
+  place-items: center;
+  border: 1px solid var(--events-paper);
+  background: var(--events-indigo);
+  color: var(--events-paper);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.event-card-details {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
 .events-list a {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-2);
+  width: fit-content;
   min-height: var(--tap-target-min);
+  color: inherit;
+  font-size: clamp(var(--text-xl), 3vw, var(--text-3xl));
   font-weight: var(--font-weight-bold);
-  /* Found in the Cherry-rework exploration pass (2026-09-11): this was the
-     one link anywhere in the app with no color rule of its own, so it fell
-     through to the browser's UA-default link blue/visited-purple instead
-     of this project's own palette — plain text color, not --color-accent,
-     since this is a navigational row (like every other card link's own
-     convention), not a call-to-action; --color-accent is reserved for
-     primary CTAs and ceremonial highlighting elsewhere in this app
-     (code-reviewer, 2026-09-11 — the first version of this fix used
-     --color-accent on hover/focus, contradicting this same rationale). */
-  color: var(--color-text);
-  /* Reset the UA-default permanent underline so the hover/focus state below
-     means something — matches .app-shell-link's own rest/interaction shape
-     (appShell.css) exactly, rather than inventing a third link-affordance
-     pattern; the row's bold weight + trailing arrow (::after, below) still
-     signal "this is clickable" at rest without needing an underline too. */
+  letter-spacing: -0.045em;
+  line-height: 0.95;
   text-decoration: none;
 }
 
 .events-list a:visited {
-  color: var(--color-text);
+  color: inherit;
+}
+
+.events-list a::after {
+  content: '↗' / '';
+  color: var(--events-citron);
+  font-family: var(--font-mono);
+  font-size: 0.75em;
+  letter-spacing: 0;
 }
 
 .events-list a:hover,
 .events-list a:focus-visible {
+  color: var(--events-citron);
   text-decoration: underline;
+  text-decoration-thickness: 0.08em;
 }
 
-/* A visual affordance for "this row is clickable" (found in production
-   UI/UX feedback: nothing hinted that the event name itself was the only
-   interactive part of the row). A plain CSS arrow, not an icon font/emoji —
-   matches this project's own no-emoji, draw-it-yourself icon convention
-   (see core/dom.js's brandMark()). Text, not a background/border treatment,
-   so it never competes with .events-list li's own hairline row divider. */
-.events-list a::after {
-  /* The `/ ''` alt-text form (found in review, ui-accessibility-reviewer):
-     both Chromium and Firefox now expose generated content in the
-     accessibility tree by default, so a bare `content: '→'` gets announced
-     on every single row — "October Cup, right arrow" — pure noise, since
-     the link's destination is already clear from its own text. The slash
-     form keeps the visible glyph but gives it an empty accessible
-     alternative. */
-  content: '→' / '';
-  color: var(--color-text-muted);
-  font-weight: var(--font-weight-regular);
-}
-
-/* A small per-row indicator, not the full-page .is-test-banner stripe
-   (base.css) — that banner is reserved for when the organiser is actually
-   INSIDE a test event; here they're browsing a list where only some rows
-   may be test data, so a small text badge signals it without being
-   visually overwhelming per row. Still uses --color-test, never a
-   plain/muted color, so it's not mistaken for ordinary metadata. */
-.is-test-indicator {
+.events-list .stage-meta {
+  color: color-mix(in srgb, var(--events-paper) 73%, transparent);
   font-size: var(--text-sm);
-  font-weight: var(--font-weight-bold);
-  color: var(--color-test);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-wide);
 }
 
-/* The two-step "Delete this test event? / Confirm delete / Cancel" inline
-   state — laid out the same way its parent <li> already is (flex, wrap,
-   token gap) so it never depends on being the last child in the row. */
+.is-test-indicator {
+  width: fit-content;
+  padding: 0.1rem var(--space-1);
+  border: 1px solid currentColor;
+  color: var(--color-test);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+.event-card-actions,
 .event-delete-confirm {
   display: flex;
   align-items: center;
@@ -108,24 +224,110 @@
   gap: var(--space-2);
 }
 
-.create-event-form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
+.events-list-panel .btn {
+  border-color: var(--events-paper);
+  color: var(--events-paper);
 }
 
-.checkbox-field {
+.events-list-panel .btn:hover,
+.events-list-panel .btn:focus-visible {
+  background: var(--events-paper);
+  color: var(--events-ink);
+}
+
+.events-empty-state {
+  margin: 0;
+  padding: var(--space-6) var(--space-5);
+  color: color-mix(in srgb, var(--events-paper) 73%, transparent);
+  font-size: var(--text-lg);
+}
+
+.events-create-intro {
+  max-width: 42rem;
+  margin: var(--space-4) var(--space-5) 0;
+  font-size: var(--text-lg);
+  line-height: var(--leading-tight);
+}
+
+.create-event-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  padding: var(--space-5);
+}
+
+.create-event-form > :first-child {
+  grid-column: 1 / -1;
+}
+
+.create-event-form .field-label {
+  color: var(--events-ink);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+.create-event-form .field-input {
+  width: 100%;
+  border: 2px solid var(--events-ink);
+  border-radius: 0;
+  background: transparent;
+  color: var(--events-ink);
+}
+
+.create-event-form .checkbox-field {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  min-height: var(--tap-target-min);
+  font-weight: var(--font-weight-bold);
 }
 
-/* Matches standingsScreen.css's own `.coin-toss-list input[type='checkbox']`
-   precedent — a native unstyled checkbox renders well under the 44px tap
-   target floor. Matters especially here: D9's "unmistakable" bar for
-   is_test means this control has to be easy to deliberately hit, not
-   fat-finger-adjacent. */
 .checkbox-field input[type='checkbox'] {
   width: var(--tap-target-min);
   height: var(--tap-target-min);
+  accent-color: var(--events-indigo);
+}
+
+.create-event-form .btn-primary {
+  justify-self: start;
+  border: 2px solid var(--events-ink);
+  border-radius: 0;
+  background: var(--events-coral);
+  color: var(--events-ink);
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+}
+
+.create-event-form .btn-primary:hover,
+.create-event-form .btn-primary:focus-visible {
+  background: var(--events-indigo);
+  color: var(--events-paper);
+}
+
+@media (max-width: 38rem) {
+  .events-screen {
+    padding-inline: var(--space-3);
+  }
+
+  .events-masthead,
+  .events-panel-heading,
+  .events-list-item,
+  .create-event-form {
+    padding: var(--space-4);
+  }
+
+  .events-list-item {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .event-card-actions {
+    grid-column: 1 / -1;
+  }
+
+  .create-event-form {
+    grid-template-columns: 1fr;
+  }
 }

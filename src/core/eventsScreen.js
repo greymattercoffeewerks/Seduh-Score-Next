@@ -85,22 +85,33 @@ function renderDeleteAction(
 
 export function renderEventsList(events, { deleteStates = {}, deleteHandlers = {} } = {}) {
   if (events.length === 0) {
-    return el('p', { className: 'stage-meta', text: 'No events yet — create one below.' });
+    return el('p', {
+      className: 'events-empty-state',
+      text: 'No events yet — make the first one below.',
+    });
   }
-  const items = events.map((event) => {
+  const items = events.map((event, index) => {
     const link = el('a', {
       text: event.name,
       attrs: { href: `#/events/${event.id}` },
     });
     const meta = [event.event_date, event.venue].filter(Boolean).join(' · ');
-    const children = [link];
-    if (meta) children.push(el('span', { className: 'stage-meta', text: meta }));
+    const eventDetails = [link];
+    if (meta) eventDetails.push(el('span', { className: 'stage-meta', text: meta }));
     if (event.is_test) {
-      children.push(el('span', { className: 'is-test-indicator', text: 'Test data' }));
+      eventDetails.push(el('span', { className: 'is-test-indicator', text: 'Test data' }));
     }
     const deleteAction = renderDeleteAction(event, deleteStates[event.id], deleteHandlers);
-    if (deleteAction) children.push(deleteAction);
-    return el('li', {}, children);
+    const children = [
+      el('span', {
+        className: 'event-card-number font-mono-score',
+        text: String(index + 1).padStart(2, '0'),
+        attrs: { 'aria-hidden': 'true' },
+      }),
+      el('div', { className: 'event-card-details' }, eventDetails),
+    ];
+    if (deleteAction) children.push(el('div', { className: 'event-card-actions' }, [deleteAction]));
+    return el('li', { className: 'events-list-item' }, children);
   });
   return el('ul', { className: 'events-list' }, items);
 }
@@ -207,7 +218,12 @@ export async function mountEventsScreen(
   function renderLoading() {
     root.innerHTML = '';
     const container = el('section', { className: 'screen-container events-screen' });
-    container.appendChild(el('h1', { text: 'Events' }));
+    container.appendChild(
+      el('header', { className: 'events-masthead' }, [
+        el('p', { className: 'events-eyebrow', text: 'Seduh Score / organiser desk' }),
+        el('h1', { text: 'Events' }),
+      ]),
+    );
     const feedback = el('div', {
       className: 'screen-feedback',
       text: 'Loading events…',
@@ -221,7 +237,12 @@ export async function mountEventsScreen(
   function renderLoadError() {
     root.innerHTML = '';
     const container = el('section', { className: 'screen-container events-screen' });
-    container.appendChild(el('h1', { text: 'Events' }));
+    container.appendChild(
+      el('header', { className: 'events-masthead' }, [
+        el('p', { className: 'events-eyebrow', text: 'Seduh Score / organiser desk' }),
+        el('h1', { text: 'Events' }),
+      ]),
+    );
     const feedback = el('div', {
       className: 'screen-feedback',
       text: loadFailedMessage,
@@ -371,7 +392,15 @@ export async function mountEventsScreen(
     root.innerHTML = '';
     const container = el('section', { className: 'screen-container events-screen' });
     container.appendChild(
-      el('h1', { id: 'events-heading', text: 'Events', attrs: { tabindex: '-1' } }),
+      el('header', { className: 'events-masthead' }, [
+        el('p', { className: 'events-eyebrow', text: 'Seduh Score / organiser desk' }),
+        el('h1', { id: 'events-heading', text: 'Events', attrs: { tabindex: '-1' } }),
+        el('p', {
+          className: 'events-intro',
+          text: 'Build the competition, set the room in motion, and keep everyone on the same score.',
+        }),
+        el('p', { className: 'events-signal', text: 'Your competition control desk' }),
+      ]),
     );
 
     const feedback = el('div', {
@@ -396,8 +425,11 @@ export async function mountEventsScreen(
     container.appendChild(feedback);
 
     container.appendChild(
-      el('div', { className: 'card' }, [
-        el('h2', { text: 'Your events' }),
+      el('div', { className: 'card events-panel events-list-panel' }, [
+        el('div', { className: 'events-panel-heading' }, [
+          el('p', { className: 'events-panel-kicker', text: 'The running order' }),
+          el('h2', { text: 'Your events' }),
+        ]),
         renderEventsList(events, {
           deleteStates,
           deleteHandlers: {
@@ -412,7 +444,17 @@ export async function mountEventsScreen(
     const form = renderCreateForm(draft, { disabled: creating });
     form.addEventListener('submit', handleCreate);
     container.appendChild(
-      el('div', { className: 'card' }, [el('h2', { text: 'Create event' }), form]),
+      el('div', { className: 'card events-panel events-create-panel' }, [
+        el('div', { className: 'events-panel-heading' }, [
+          el('p', { className: 'events-panel-kicker', text: 'Start the next one' }),
+          el('h2', { text: 'Create event' }),
+        ]),
+        el('p', {
+          className: 'events-create-intro',
+          text: 'Name it, place it, then shape the competition inside.',
+        }),
+        form,
+      ]),
     );
 
     root.appendChild(container);

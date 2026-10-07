@@ -1,0 +1,14 @@
+/*
+ * Kinetic brand accents. These tokens are opt-in: organiser surfaces can
+ * adopt the wider Seduh Score visual language without changing the shared
+ * paper/stage semantics used by every existing screen.
+ */
+
+:root {
+  --kinetic-ink: #15151a;
+  --kinetic-paper: #f8f5ed;
+  --kinetic-coral: #ff5a3c;
+  --kinetic-indigo: #4f55e0;
+  --kinetic-citron: #eef289;
+  --kinetic-line: #15151a;
+}
