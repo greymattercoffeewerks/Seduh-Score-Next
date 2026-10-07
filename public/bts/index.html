@@ -1363,12 +1363,18 @@
                 <span class="k">Shipped</span
                 ><span class="v"
                   >A run of pre-event reliability work for a venue where the wifi is somebody else's
-                  problem: writes that fail on a bad connection stay queued and retry on a timer
-                  instead of being dropped; a lost-write notice that survives a reload, and a
-                  warning before deleting an event with unsynced writes; every dropped operation
-                  reported to the sync panel; a sync status that no longer grows the sticky header
-                  mid-heat; BTC event deletion fixed; audience views that switch cleanly inside one
-                  tab; and an organiser header that folds into a menu below tablet width.</span
+                  problem. Writes that fail on a bad connection stay queued and retry every fifteen
+                  seconds instead of being dropped, and every request now gives up after thirty
+                  seconds rather than hanging. Failures are sorted into "try again" (timeouts, rate
+                  limits, gateway errors) and "this will never work" (a genuine stale-score
+                  conflict), so one bad write can't block everything behind it — including a stale
+                  publish for a rehearsal event that has since been deleted. Two console tabs take
+                  turns on the queue instead of running the same write twice. When a write is
+                  genuinely lost, every one reaches the sync panel, the notice survives a reload,
+                  and deleting an event with unsynced writes warns first. Around it: a sync status
+                  that no longer grows the sticky header mid-heat; BTC event deletion fixed;
+                  audience views that switch cleanly inside one tab; and an organiser header that
+                  folds into a menu below tablet width.</span
                 >
               </div>
               <div class="log-line felt">
