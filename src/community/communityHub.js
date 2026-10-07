@@ -56,6 +56,18 @@ function widgetInstrument() {
   );
 }
 
+function brewerInstrument() {
+  return icon(
+    [
+      { tag: 'path', d: 'M10 8h28M14 8v6h20V8' },
+      { tag: 'path', d: 'M18 14v6M30 14v6M24 14v6' },
+      { tag: 'path', d: 'M13 24h22l-2 16H15z' },
+      { tag: 'path', d: 'M35 28h4a3 3 0 0 1 0 8h-4' },
+    ],
+    'Batch brewer over a carafe',
+  );
+}
+
 function arrow(text) {
   return el('span', { className: 'community-card-arrow', text: text ?? 'Open tool →' });
 }
@@ -153,6 +165,15 @@ function buildShelf() {
           instrument: widgetInstrument(),
           arrowText: 'Download APK →',
           attrs: { rel: 'noopener' },
+        }),
+        toolCard({
+          number: '04',
+          title: 'Brew Planner',
+          eyebrow: 'For the batch-brew crew backstage',
+          body: 'Answer a few questions about heats, beans and machines, and get a run-sheet, water and Cambro cheat sheet for the day.',
+          href: '/tools/brew-planner/',
+          meta: 'No account needed',
+          instrument: brewerInstrument(),
         }),
       ]),
     ],

@@ -1,3 +1,45 @@
+## T-TOOLS.brew-planner: Brew Planner, a free batch-brew planning tool · 2026-10-07
+
+**Task:** a new standalone community tool at `/tools/brew-planner/` (no auth, no Supabase; same
+family as the Timer, see `src/tools/CLAUDE.md`). A five-step wizard (Heats, Coffees, Machines,
+Timing, Cheat sheet) works out how many batches each heat needs, which machine brews each one
+and when, so every heat's coffee is pooled before its cups are poured. Landed from
+`Handoffs and Specs/brew-planner.patch`, then extended in this task.
+
+**Added on top of the patch:**
+
+- Paper filters: one per batch, shown in total, per stage and per machine (Water, filters and
+  Cambros tab). The planner owns the counts (`plan.filters`, `filtersByStage`,
+  `filtersByMachine`).
+- Cambros for three sizes, 1.5, 2.5 and 4.75 US gal (nominal), counted at 85% fill: how many of
+  each size are needed at once, and how many each pool takes. `containersNeeded()` is the single
+  split rule, tested at the exact-boundary.
+- Sample coffees renamed Coffee A/B/C (no real coffee names in the public example).
+- Review fixes: primary buttons show a square focus ring (the cut corners clipped it); run-sheet
+  tick is a 44px label target; focus survives re-renders for buttons, chips and steps; focus moves
+  to the problem list on a blocked Next; scrollable tables are focusable, labelled regions with
+  edge shadows; small tables no longer force a 640px minimum; cheat-sheet tabs are plain pressed
+  buttons rather than half-built ARIA tabs; coffee letters on tags and timeline blocks; done rows
+  keep a strikethrough without fading; hold over the limit reads "(over)"; narrower timeline
+  lane labels at phone width.
+- Tests: 36 in `src/tools/brew-planner` (up from 16). Pins 76 batches/filters and the per-size
+  Cambro counts, all 12 `validateConfig` rejections, and persistence across a fresh mount.
+
+**Reviews:** `code-reviewer`, `module-boundary-checker` (no violations), `test-auditor`,
+`ui-accessibility-reviewer` (first pass failed on four blocking items, all fixed above). Not
+re-run after the fixes. scoring/security/schema/offline-sync reviewers n/a. Verified:
+brew-planner tests, ESLint and Prettier on the tool, and a 360px check in the dev server. Full
+unit suite (1756 tests) passes; e2e and build were not run for this task.
+
+**Decision (user, 2026-10-07):** `holdLimitMins` stays **advisory**. It drives the "over limit"
+warning only; the scheduler does not enforce it and a plan can exceed it.
+
+**Deferred (non-blocking):** timeline and inputs are not linked to field-level errors; the Cambro
+size table scrolls about 14px at 360px; the timeline's coffee patterns 1 and 3 remain close in
+contrast (the letter prefix carries the distinction).
+
+---
+
 ## T-HARDEN.resolve-stage-concludes-event: resolving the terminal stage now concludes the event · 2026-10-04
 
 **Task:** T-HARDEN.resolve-stage-concludes-event (pre-event hardening for the 4 Oct Cup Taster event).

@@ -33,6 +33,11 @@ export default defineConfig({
         main: fileURLToPath(new URL('./index.html', import.meta.url)),
         app: fileURLToPath(new URL('./app/index.html', import.meta.url)),
         toolsTimer: fileURLToPath(new URL('./tools/timer/index.html', import.meta.url)),
+        // /tools/brew-planner/ (2026-09-29) — the free Brew Planner wizard and cheat sheet, a
+        // second src/tools/ surface with no auth or Supabase.
+        toolsBrewPlanner: fileURLToPath(
+          new URL('./tools/brew-planner/index.html', import.meta.url),
+        ),
         guessTheBean: fileURLToPath(new URL('./guess-the-bean/index.html', import.meta.url)),
         guessTheBeanPlay: fileURLToPath(
           new URL('./guess-the-bean/play/index.html', import.meta.url),
