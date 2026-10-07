@@ -90,6 +90,18 @@
       five public trust pages (About, Contact, Privacy, Terms, Neutrality).
       Claims here follow the knowledge base's own wording: the log is
       append-only and starts 2026-09-24, and no published event exists yet.
+
+      Progress update, 2026-10-07: v3.0.19, still Gadong — no cycle bump. The
+      first live Cup Taster event ran on 2026-10-04 (Grey Matter Cup Taster
+      Competition 2026, Sports Hub, Bandar Seri Begawan, is_test = false),
+      end to end, and is the first real event in the public results archive.
+      Facts for the "first live run" section come from CHANGELOG.md's
+      T-HARDEN.resolve-stage-concludes-event and results-nav-link entries
+      (17 competitors, 3 stages, 8 heats, a final tie separated by time, 323
+      change-log rows); no competitor is named on this page — the published
+      podium lives at /results/, at the organiser's choice. Also recorded
+      here: the pre-event hardening, the fixes and features the event
+      itself prompted, and the Brew Planner community tool.
     -->
     <style>
       @font-face {
@@ -635,6 +647,82 @@
         font-style: italic;
       }
 
+      /* ---------------------------------------------------------------
+         The first live run — the one dated milestone this page is built
+         to mark, so it sits above the version history rather than inside
+         the log. Same flat, hairline-bordered card language as the ledger
+         and bio card; the only emphasis is a heavier accent top rule and
+         the 17 → 8 → 4 → 1 funnel in the display face.
+         --------------------------------------------------------------- */
+      .live-run-card {
+        margin-top: 2rem;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-top: 3px solid var(--color-accent);
+        padding: 2rem;
+      }
+      .live-run-funnel {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        gap: 0.75rem 1.25rem;
+        padding-bottom: 1.75rem;
+        border-bottom: 1px solid var(--color-border);
+        font-family: var(--font-mono);
+        font-size: 0.6875rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+      }
+      .live-run-funnel span {
+        display: inline-flex;
+        flex-direction: column;
+        gap: 0.25rem;
+      }
+      .live-run-funnel b {
+        font-family: var(--font-display);
+        font-size: clamp(2rem, 6vw, 3rem);
+        line-height: 1;
+        font-weight: 700;
+        color: var(--color-accent);
+        letter-spacing: 0;
+      }
+      .live-run-funnel .live-run-arrow {
+        font-family: var(--font-display);
+        font-size: 1.5rem;
+        line-height: 1;
+        color: var(--color-text-muted);
+        padding-bottom: 0.2rem;
+      }
+      .live-run-facts {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1.5rem 2rem;
+        margin: 1.75rem 0 0;
+      }
+      @media (max-width: 720px) {
+        .live-run-facts {
+          grid-template-columns: 1fr;
+        }
+        .live-run-card {
+          padding: 1.5rem 1.25rem;
+        }
+      }
+      .live-run-facts dt {
+        font-family: var(--font-mono);
+        font-size: 0.6875rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--color-accent);
+        margin-bottom: 0.4rem;
+      }
+      .live-run-facts dd {
+        margin: 0;
+        color: var(--color-text-secondary);
+        font-size: 0.9375rem;
+        max-width: 48ch;
+      }
+
       .bio-card {
         display: grid;
         grid-template-columns: auto 1fr;
@@ -790,10 +878,71 @@
           advancement bug the old app never quite trusted itself with.
         </p>
         <p class="lede enter" style="animation-delay: 0.24s">
-          One phase at a time, aimed at the Cup Tasters event on 4 October 2026 — and now with a
-          public shelf for the smaller things a coffee community actually uses between events.
+          One phase at a time — and on 4 October 2026 it ran a real competition, the first live Cup
+          Taster event. Alongside it, a public shelf for the smaller things a coffee community
+          actually uses between events.
         </p>
       </header>
+
+      <section class="live-run">
+        <div class="sec-eyebrow reveal">4 October 2026</div>
+        <h2 class="reveal">The first live run.</h2>
+        <p class="sec-sub reveal">
+          Grey Matter Cup Taster Competition 2026 — Sports Hub, Bandar Seri Begawan. Not a rehearsal
+          and not a demo: a real competition, scored from the first heat to the champion on this
+          platform.
+        </p>
+
+        <div class="live-run-card reveal">
+          <div
+            class="live-run-funnel"
+            role="img"
+            aria-label="17 competitors, narrowed to 8, then 4, then one champion"
+          >
+            <span><b>17</b>competitors</span>
+            <span class="live-run-arrow" aria-hidden="true">→</span>
+            <span><b>8</b>to the semis</span>
+            <span class="live-run-arrow" aria-hidden="true">→</span>
+            <span><b>4</b>to the final</span>
+            <span class="live-run-arrow" aria-hidden="true">→</span>
+            <span><b>1</b>champion</span>
+          </div>
+
+          <dl class="live-run-facts">
+            <div>
+              <dt>How it ran</dt>
+              <dd>
+                Three rounds — five prelim heats, two semi-final heats and a final — eight heats in
+                all, every one confirmed.
+              </dd>
+            </div>
+            <div>
+              <dt>The deciding moment</dt>
+              <dd>
+                The final ended in a three-way tie on correct cups, separated by time — exactly the
+                kind of result the platform's tie handling exists to get right.
+              </dd>
+            </div>
+            <div>
+              <dt>On the record</dt>
+              <dd>
+                323 entries in the append-only change log by the end of the night, and the result
+                published to the public archive at <a href="/results/">/results/</a> — podium first,
+                at the organiser's choice.
+              </dd>
+            </div>
+            <div>
+              <dt>What it taught us</dt>
+              <dd>
+                It wasn't flawless, which is why it's worth writing down: a tablet timekeeper missed
+                the beat on Stop, a misspelt name couldn't be fixed from the roster, the printed
+                report ran off the page, and the event never marked itself concluded. All four are
+                fixed — see the build log below.
+              </dd>
+            </div>
+          </dl>
+        </div>
+      </section>
 
       <section>
         <div class="sec-eyebrow reveal">How we're naming this one</div>
@@ -816,12 +965,12 @@
           </div>
           <div class="ledger-row reveal">
             <span class="ledger-place">Gadong</span>
-            <span class="ledger-version">v3.0.10</span>
+            <span class="ledger-version">v3.0.19</span>
             <span class="ledger-status current"><span class="pulse-dot"></span>Current</span>
             <span class="ledger-note"
-              >BTC (Barista Team Championship) — the second real competition format, live end to end
-              — then a trust pass: an append-only score-change log, a public "how this was scored"
-              record, an organiser dispute pack, and five public trust pages.</span
+              >BTC (Barista Team Championship) — the second real competition format — then a trust
+              pass, hardening for the room, and the first live Cup Taster event on 4 October 2026,
+              plus the fixes it prompted.</span
             >
           </div>
           <div class="ledger-row reveal">
@@ -852,9 +1001,10 @@
 
         <div class="stat-row reveal">
           <span><b>3</b> cycles</span>
-          <span><b>v3.0.10</b> now</span>
+          <span><b>v3.0.19</b> now</span>
           <span><b>2 / 4</b> formats</span>
-          <span><b>2</b> community tools</span>
+          <span><b>1</b> live event</span>
+          <span><b>3</b> community tools</span>
         </div>
       </section>
 
@@ -865,7 +1015,7 @@
           <strong>Kiulap</strong> — seven phases per the project's frozen handoff spec, all shipped.
           Then <strong>Berakas</strong> — a front door nobody had planned for, followed by a public
           shelf for the useful extras. Now <strong>Gadong</strong> — the second real competition
-          format, live.
+          format, and the first live event run on the platform.
         </p>
 
         <div class="log" data-stagger>
@@ -1197,6 +1347,95 @@
                 ><span class="v"
                   >the unglamorous, necessary answer to "what happens when someone questions a
                   result" — and being honest in the copy about what the log does not cover.</span
+                >
+              </div>
+            </div>
+          </div>
+
+          <div class="log-item reveal">
+            <div class="log-phase">Gadong</div>
+            <div>
+              <div class="log-head">
+                <span class="log-name">Hardened for the room</span>
+                <span class="log-ver">v3.0.x</span>
+              </div>
+              <div class="log-line shipped">
+                <span class="k">Shipped</span
+                ><span class="v"
+                  >A run of pre-event reliability work for a venue where the wifi is somebody else's
+                  problem: writes that fail on a bad connection stay queued and retry on a timer
+                  instead of being dropped; a lost-write notice that survives a reload, and a
+                  warning before deleting an event with unsynced writes; every dropped operation
+                  reported to the sync panel; a sync status that no longer grows the sticky header
+                  mid-heat; BTC event deletion fixed; audience views that switch cleanly inside one
+                  tab; and an organiser header that folds into a menu below tablet width.</span
+                >
+              </div>
+              <div class="log-line felt">
+                <span class="k">Felt like</span
+                ><span class="v"
+                  >assuming the wifi will lie, and building so that it can't cost anyone a
+                  score.</span
+                >
+              </div>
+            </div>
+          </div>
+
+          <div class="log-item current reveal">
+            <div class="log-phase">Gadong</div>
+            <div>
+              <div class="log-head">
+                <span class="log-name">Lessons from the first live event</span>
+                <span class="log-ver">v3.0.19</span>
+                <span class="log-now"><span class="pulse-dot"></span>Live now</span>
+              </div>
+              <div class="log-line shipped">
+                <span class="k">Shipped</span
+                ><span class="v"
+                  >What 4 October asked for, built within days: a recorded heat time can be
+                  corrected from any signed-in device, with a required reason, until the heat is
+                  confirmed — and the correction lands in the change log. A registered cupper's
+                  name, café, bib, phone and email can be edited from the roster. The printed report
+                  fits the page. Resolving the final now marks the event concluded, and the
+                  projector view fits the screen instead of scrolling. And a printable public
+                  results sheet — podium only by default, full standings only if the organiser opts
+                  in, never phone numbers, emails or set-by-set marks — with
+                  <code>/results/</code> now linked from the site navigation.</span
+                >
+              </div>
+              <div class="log-line felt">
+                <span class="k">Felt like</span
+                ><span class="v"
+                  >a real competition being the best test suite there is — and the first time a list
+                  of fixes started with "found at the event".</span
+                >
+              </div>
+            </div>
+          </div>
+
+          <div class="log-item current reveal">
+            <div class="log-phase">Community</div>
+            <div>
+              <div class="log-head">
+                <span class="log-name">Brew Planner</span>
+                <span class="log-ver">v3.0.19</span>
+                <span class="log-now"><span class="pulse-dot"></span>Live now</span>
+              </div>
+              <div class="log-line shipped">
+                <span class="k">Shipped</span
+                ><span class="v"
+                  >A third free tool for the Community shelf, at <code>/tools/brew-planner/</code>:
+                  a five-step planner that works out how many batches each heat needs, which machine
+                  brews each one and when, so a heat's coffee is pooled before its cups are poured —
+                  with paper-filter counts and Cambro sizing. No sign-in, no database, same family
+                  as the Competition Timer.</span
+                >
+              </div>
+              <div class="log-line felt">
+                <span class="k">Felt like</span
+                ><span class="v"
+                  >turning the back-room maths of running a real event into something anyone can
+                  pick up.</span
                 >
               </div>
             </div>
