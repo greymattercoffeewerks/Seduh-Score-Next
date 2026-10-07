@@ -123,6 +123,8 @@ the whole app, or the login form itself, stuck forever with no feedback).
 
 `loginScreen` gained a Show/Hide password toggle (in place, no re-render), submit-time reading of the form (iOS autofill), a one-time retry without surrounding whitespace after an `invalid_credentials` rejection, and clearer wrong-password text (T-HARDEN.login-hardening, 2026-10-07) — see CHANGELOG.md for the account and the unconfirmed root cause.
 
+`team`, `teamScreen`, `setPasswordScreen` (T-HARDEN.team-accounts, 2026-10-08) — owner-managed team logins: `team.js` wraps `team_can_manage`/`team_list_members`/`team_remove_member` and the `team-accounts` Edge Function (create/reset a login with a one-time password); `teamScreen.js` is the owner's `#/team` screen; `setPasswordScreen.js` is the gate in front of every console route for anyone signed in with a one-time password (`user_metadata.must_change_password`, enforced in `main.js`'s `requireAuth` — a prompt, not a lock). Authority lives in SQL (migration `20261007120000`), not here. `dom.js` gained `passwordToggle` (Show/Hide, extracted on its second use). `main.js` gained the `/team` route and a Team nav link for owners, asked of the database on every auth event (deliberately not awaited inside `onAuthStateChange`, where supabase-js holds its auth lock). See CHANGELOG.md.
+
 `scrollReveal` (2026-09-13, Petrol marketing rework) — `revealOnScroll(el, opts)`, a
 one-shot `IntersectionObserver` wrapper (adds a class the first time an element scrolls
 into view, disconnects, never reverts). Its first consumer is

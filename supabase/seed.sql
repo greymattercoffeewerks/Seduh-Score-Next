@@ -91,11 +91,13 @@ values (
 )
 on conflict (provider_id, provider) do nothing;
 
+-- The seed organiser is the org's OWNER (may manage the team), as the team-accounts migration makes
+-- a real org's earliest member.
 insert into org_members (org_id, user_id, role)
 values (
   '10c8c375-afe6-41c7-a54e-ffaa15429612',
   'f507f696-7495-40b5-ade7-138dd617807c',
-  'organiser'
+  'owner'
 )
 on conflict (org_id, user_id) do nothing;
 
