@@ -2,6 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   buildCupperFromDraft,
   validateDraft,
+  initialEditDraft,
+  validateEditDraft,
+  buildEditFields,
+  describeRosterEditError,
   renderRegistrationForm,
   renderRosterEntries,
   mountRosterScreen,
@@ -21,7 +25,9 @@ function fakeClient(initialDb, { errorOn } = {}) {
   let idCounter = 0;
 
   function matchesFilters(row, filters) {
-    return filters.every(([col, val]) => row[col] === val);
+    return filters.every(([col, val]) =>
+      Array.isArray(val) ? val.includes(row[col]) : row[col] === val,
+    );
   }
 
   function fails(table, method) {
@@ -41,6 +47,10 @@ function fakeClient(initialDb, { errorOn } = {}) {
       },
       ilike(col, val) {
         filters.push([col, val]);
+        return builder;
+      },
+      in(col, vals) {
+        filters.push([col, vals]);
         return builder;
       },
       insert(payload) {
@@ -93,6 +103,19 @@ function fakeClient(initialDb, { errorOn } = {}) {
         return Promise.resolve({ data: rows[0] ?? null, error: null });
       },
       then(resolve, reject) {
+        // PostgREST casts every element of .in() to the column type: a null is a uuid-cast error.
+        if (filters.some(([, val]) => Array.isArray(val) && val.includes(null))) {
+          return Promise.resolve({
+            data: null,
+            error: new Error('invalid input syntax for type uuid: "null"'),
+          }).then(resolve, reject);
+        }
+        if (fails(table, 'select')) {
+          return Promise.resolve({ data: null, error: new Error('select failed') }).then(
+            resolve,
+            reject,
+          );
+        }
         const rows = (db[table] ?? []).filter((r) => matchesFilters(r, filters));
         return Promise.resolve({ data: rows, error: null }).then(resolve, reject);
       },
@@ -100,7 +123,81 @@ function fakeClient(initialDb, { errorOn } = {}) {
     return builder;
   }
 
-  return { db, from: (table) => makeBuilder(table) };
+  // A faithful stand-in for update_roster_entry (migration 20261007100000): the person's profile AND
+  // this event's entry change together, other events' entries are left alone, phone/email are unique
+  // within the org (a clash is a P0002 whose details name the field and the other person), and a
+  // walk-up entry takes name/cafe/bib only. Every call is recorded in `rpcCalls`.
+  const rpcCalls = [];
+  function rpc(name, args) {
+    rpcCalls.push([name, args]);
+    if (name !== 'update_roster_entry') return Promise.resolve({ data: null, error: null });
+    if (fails('rpc', 'update_roster_entry')) {
+      return Promise.resolve({ data: null, error: new Error('rpc failed') });
+    }
+    const entry = (db.event_entries ?? []).find((row) => row.id === args.p_entry_id);
+    if (!entry) return Promise.resolve({ data: null, error: new Error('entry not found') });
+    const clean = (value) =>
+      typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
+    const person = entry.person_id ? db.people.find((row) => row.id === entry.person_id) : null;
+    const refuse = (message) => Promise.resolve({ data: null, error: new Error(message) });
+    if (!clean(args.p_display_name)) return refuse('update_roster_entry: a name is required');
+    if (person && !clean(args.p_phone))
+      return refuse('update_roster_entry: a phone number is required');
+    if (!person && (clean(args.p_phone) || clean(args.p_email))) {
+      return refuse(
+        'update_roster_entry: this entry has no profile, so a phone or email cannot be set',
+      );
+    }
+    const snapshotName = entry.display_name;
+    const snapshotCafe = entry.cafe ?? null;
+    if (person) {
+      for (const [field, value] of [
+        ['phone', clean(args.p_phone)],
+        ['email', clean(args.p_email)],
+      ]) {
+        const other =
+          value &&
+          db.people.find(
+            (row) =>
+              row.id !== person.id &&
+              row.org_id === person.org_id &&
+              String(row[field] ?? '').toLowerCase() === value.toLowerCase(),
+          );
+        if (other) {
+          return Promise.resolve({
+            data: null,
+            error: Object.assign(new Error(`CONFLICT: ${field}`), {
+              code: 'P0002',
+              details: JSON.stringify({
+                field,
+                existing_person_id: other.id,
+                existing_display_name: other.display_name,
+              }),
+            }),
+          });
+        }
+      }
+      // Name and cafe reach the profile only when changed from THIS entry's snapshot (the form is
+      // prefilled from the snapshot, so an untouched one must not revert a profile renamed since).
+      Object.assign(person, {
+        display_name:
+          clean(args.p_display_name) !== snapshotName
+            ? clean(args.p_display_name)
+            : person.display_name,
+        phone: clean(args.p_phone),
+        email: clean(args.p_email),
+        cafe: clean(args.p_cafe) !== snapshotCafe ? clean(args.p_cafe) : person.cafe,
+      });
+    }
+    Object.assign(entry, {
+      display_name: clean(args.p_display_name),
+      cafe: clean(args.p_cafe),
+      bib: clean(args.p_bib),
+    });
+    return Promise.resolve({ data: null, error: null });
+  }
+
+  return { db, rpcCalls, from: (table) => makeBuilder(table), rpc };
 }
 
 function throwingClient() {
@@ -183,6 +280,8 @@ describe('buildCupperFromDraft', () => {
   });
 });
 
+const BASE_DRAFT = { displayName: '', phone: '', email: '', cafe: '', bib: '' };
+
 describe('validateDraft', () => {
   it('requires a name', () => {
     expect(validateDraft({ displayName: '', phone: '7123456' })).toBe('Name is required.');
@@ -195,14 +294,29 @@ describe('validateDraft', () => {
   });
 
   it('rejects a phone that is too short to be a real number', () => {
-    expect(validateDraft({ displayName: 'A', phone: '+1' })).toBe(
+    expect(validateDraft({ ...BASE_DRAFT, displayName: 'A', phone: '+1' })).toBe(
       'Phone must be a valid international number, starting with your country code — e.g. +673 7123456 for Brunei.',
     );
   });
 
+  it('refuses a value longer than the database accepts, naming the field', () => {
+    const phone = '7123456';
+    const tooLong = (key, length) =>
+      validateDraft({ ...BASE_DRAFT, displayName: 'A', phone, [key]: 'x'.repeat(length) });
+    expect(tooLong('displayName', 201)).toBe('Name is too long (200 characters at most).');
+    expect(tooLong('email', 255)).toBe('Email is too long (254 characters at most).');
+    expect(tooLong('cafe', 201)).toBe('Cafe is too long (200 characters at most).');
+    expect(tooLong('bib', 51)).toBe('Bib is too long (50 characters at most).');
+    // exactly at the cap is fine
+    expect(tooLong('displayName', 200)).toBeNull();
+    expect(tooLong('email', 254)).toBeNull();
+    expect(tooLong('cafe', 200)).toBeNull();
+    expect(tooLong('bib', 50)).toBeNull();
+  });
+
   it('passes a draft with both required fields present and a valid phone shape', () => {
-    expect(validateDraft({ displayName: 'A', phone: '7123456' })).toBeNull();
-    expect(validateDraft({ displayName: 'A', phone: '+6737123456' })).toBeNull();
+    expect(validateDraft({ ...BASE_DRAFT, displayName: 'A', phone: '7123456' })).toBeNull();
+    expect(validateDraft({ ...BASE_DRAFT, displayName: 'A', phone: '+6737123456' })).toBeNull();
   });
 });
 
@@ -705,5 +819,793 @@ describe('mountRosterScreen', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(root.querySelector('form button[type="submit"]').disabled).toBe(false);
+  });
+});
+
+// ===================== Edit (live-event finding #4) =====================
+
+const person = (overrides = {}) => ({
+  id: 'p1',
+  org_id: 'org1',
+  display_name: 'Cupper One',
+  phone: '+6737000001',
+  email: 'one@example.com',
+  cafe: 'Grey Matter',
+  ...overrides,
+});
+
+describe('initialEditDraft', () => {
+  it('takes name/cafe/bib from the event entry and phone/email from the person', () => {
+    expect(initialEditDraft(entry(), person())).toEqual({
+      displayName: 'Cupper One',
+      phone: '+6737000001',
+      email: 'one@example.com',
+      cafe: 'Grey Matter',
+      bib: '7',
+    });
+  });
+
+  it('uses empty strings, never null, for what is missing — and for a walk-up with no person at all', () => {
+    expect(
+      initialEditDraft(entry({ cafe: null, bib: null }), person({ email: null })),
+    ).toMatchObject({
+      email: '',
+      cafe: '',
+      bib: '',
+    });
+    expect(initialEditDraft(entry({ person_id: null }), null)).toMatchObject({
+      phone: '',
+      email: '',
+    });
+  });
+});
+
+describe('validateEditDraft', () => {
+  const draft = { displayName: 'Cupper One', phone: '7000001', email: '', cafe: '', bib: '' };
+
+  it('requires a name', () => {
+    expect(validateEditDraft({ ...draft, displayName: '  ' }, { linked: true })).toEqual({
+      field: 'displayName',
+      message: 'Name is required.',
+    });
+  });
+
+  it('requires a phone, and a well-formed one, for an entry with a profile', () => {
+    expect(validateEditDraft({ ...draft, phone: ' ' }, { linked: true })).toEqual({
+      field: 'phone',
+      message: 'Phone is required.',
+    });
+    expect(validateEditDraft({ ...draft, phone: '12' }, { linked: true })).toMatchObject({
+      field: 'phone',
+    });
+    expect(validateEditDraft(draft, { linked: true })).toBeNull();
+  });
+
+  it('refuses a value longer than the database accepts, naming the field — the same caps as registration', () => {
+    const tooLong = (key, length) =>
+      validateEditDraft({ ...draft, [key]: 'x'.repeat(length) }, { linked: true });
+    expect(tooLong('displayName', 201)).toEqual({
+      field: 'displayName',
+      message: 'Name is too long (200 characters at most).',
+    });
+    expect(tooLong('email', 255)).toMatchObject({ field: 'email' });
+    expect(tooLong('cafe', 201)).toMatchObject({ field: 'cafe' });
+    expect(tooLong('bib', 51)).toMatchObject({ field: 'bib' });
+    expect(tooLong('bib', 50)).toBeNull();
+  });
+
+  it('measures a value after trimming, as the RPC does: 200 characters plus padding is fine', () => {
+    expect(
+      validateEditDraft({ ...draft, displayName: `${'x'.repeat(200)}   ` }, { linked: true }),
+    ).toBeNull();
+  });
+
+  it('does not ask a walk-up entry for a phone it cannot have', () => {
+    expect(validateEditDraft({ ...draft, phone: '' }, { linked: false })).toBeNull();
+  });
+});
+
+describe('buildEditFields — blanks', () => {
+  it('sends a blank cafe or bib as null, not as an empty string', () => {
+    const fields = buildEditFields(
+      { displayName: 'A', phone: '7000001', email: ' ', cafe: '  ', bib: '  ' },
+      { linked: true },
+    );
+    expect(fields.cafe).toBeNull();
+    expect(fields.bib).toBeNull();
+    expect(fields.email).toBeNull();
+  });
+});
+
+describe('buildEditFields', () => {
+  const draft = {
+    displayName: '  Alicia  ',
+    phone: ' 7000009 ',
+    email: '  a@example.com ',
+    cafe: ' ',
+    bib: ' 9 ',
+  };
+
+  it('trims, normalizes the phone to E.164 and turns blanks into null', () => {
+    expect(buildEditFields(draft, { linked: true })).toEqual({
+      displayName: 'Alicia',
+      phone: '+6737000009',
+      email: 'a@example.com',
+      cafe: null,
+      bib: '9',
+    });
+  });
+
+  it('sends no phone or email for a walk-up entry, whatever the draft holds', () => {
+    expect(buildEditFields(draft, { linked: false })).toMatchObject({ phone: null, email: null });
+  });
+});
+
+describe('describeRosterEditError', () => {
+  const conflict = (detail) => ({
+    code: 'P0002',
+    message: 'CONFLICT',
+    details: JSON.stringify(detail),
+  });
+
+  it('names the field and the person who already has a clashing phone number', () => {
+    expect(
+      describeRosterEditError(conflict({ field: 'phone', existing_display_name: 'Bob Lim' })),
+    ).toEqual({
+      field: 'phone',
+      message: 'That phone number already belongs to Bob Lim. Check the number.',
+    });
+  });
+
+  it('…and for an email', () => {
+    expect(
+      describeRosterEditError(conflict({ field: 'email', existing_display_name: 'Bob Lim' })),
+    ).toEqual({
+      field: 'email',
+      message: 'That email already belongs to Bob Lim. Check the address.',
+    });
+  });
+
+  it('says "another person" when the name is not in the details, and points at no field for a race', () => {
+    expect(describeRosterEditError(conflict({ field: 'phone' })).message).toContain(
+      'another person',
+    );
+    expect(describeRosterEditError(conflict({ field: null }))).toMatchObject({ field: null });
+    expect(describeRosterEditError({ code: 'P0002', details: '{not json' }).field).toBeNull();
+  });
+
+  it('describes anything that is not a conflict generically, pointing at no field', () => {
+    const result = describeRosterEditError(new Error('network unreachable'));
+    expect(result.field).toBeNull();
+    expect(result.message).not.toBe('');
+  });
+});
+
+describe('renderRosterEntries — contact details and Edit', () => {
+  const peopleById = new Map([['p1', person()]]);
+
+  it('shows the phone and email on file under the name, so they can be checked', () => {
+    const list = renderRosterEntries([entry()], {
+      onToggleWithdrawn() {},
+      disabled: false,
+      peopleById,
+    });
+    expect(list.querySelector('.roster-contact').textContent).toBe('+6737000001 · one@example.com');
+  });
+
+  it('shows just the phone when there is no email, and nothing for a walk-up with no profile', () => {
+    const noEmail = new Map([['p1', person({ email: null })]]);
+    expect(
+      renderRosterEntries([entry()], {
+        onToggleWithdrawn() {},
+        disabled: false,
+        peopleById: noEmail,
+      }).querySelector('.roster-contact').textContent,
+    ).toBe('+6737000001');
+    expect(
+      renderRosterEntries([entry({ person_id: null })], {
+        onToggleWithdrawn() {},
+        disabled: false,
+        peopleById,
+      }).querySelector('.roster-contact'),
+    ).toBeNull();
+  });
+
+  it('offers an Edit button only when the caller can handle one', () => {
+    const without = renderRosterEntries([entry()], {
+      onToggleWithdrawn() {},
+      disabled: false,
+      peopleById,
+    });
+    expect(without.querySelector('[id^="roster-edit-btn-"]')).toBeNull();
+    const withEdit = renderRosterEntries([entry()], {
+      onToggleWithdrawn() {},
+      disabled: false,
+      peopleById,
+      onEdit() {},
+    });
+    const button = withEdit.querySelector('#roster-edit-btn-e1');
+    expect(button.textContent).toBe('Edit');
+    expect(button.getAttribute('aria-label')).toBe('Edit Cupper One');
+  });
+
+  it('parks the other rows’ Edit buttons while one form is open: aria-disabled, and a click calls nothing', () => {
+    const onEdit = vi.fn();
+    const two = [entry(), entry({ id: 'e2', person_id: 'p2', display_name: 'Cupper Two' })];
+    const list = renderRosterEntries(two, {
+      onToggleWithdrawn() {},
+      disabled: false,
+      peopleById: new Map([['p1', person()]]),
+      editing: {
+        entryId: 'e1',
+        linked: true,
+        draft: initialEditDraft(entry(), person()),
+        error: null,
+        errorField: null,
+      },
+      onEdit,
+      onEditInput() {},
+      onSaveEdit() {},
+      onCancelEdit() {},
+    });
+    const parked = list.querySelector('#roster-edit-btn-e2');
+    expect(parked.getAttribute('aria-disabled')).toBe('true');
+    expect(parked.disabled).toBe(false); // still focusable, still announced
+    parked.click();
+    expect(onEdit).not.toHaveBeenCalled();
+    // The row that IS open has no Edit button of its own — its form is there instead.
+    expect(list.querySelector('#roster-edit-btn-e1')).toBeNull();
+    expect(list.querySelector('form[aria-label="Edit Cupper One"]')).not.toBeNull();
+  });
+
+  it('routes an Edit click to onEdit with the entry, and ignores it while disabled', () => {
+    const onEdit = vi.fn();
+    const list = renderRosterEntries([entry()], {
+      onToggleWithdrawn() {},
+      disabled: false,
+      peopleById,
+      onEdit,
+    });
+    list.querySelector('#roster-edit-btn-e1').click();
+    expect(onEdit).toHaveBeenCalledWith(expect.objectContaining({ id: 'e1' }));
+    const disabledList = renderRosterEntries([entry()], {
+      onToggleWithdrawn() {},
+      disabled: true,
+      peopleById,
+      onEdit,
+    });
+    expect(disabledList.querySelector('#roster-edit-btn-e1').disabled).toBe(true);
+  });
+});
+
+describe('mountRosterScreen — editing a cupper', () => {
+  const eventRow = baseEvent;
+  const twoCuppers = () =>
+    fakeClient({
+      events: [eventRow],
+      people: [
+        person(),
+        person({
+          id: 'p2',
+          display_name: 'Cupper Two',
+          phone: '+6737000002',
+          email: null,
+          cafe: null,
+        }),
+      ],
+      event_entries: [
+        entry(),
+        entry({ id: 'e2', person_id: 'p2', display_name: 'Cupper Two', cafe: null, bib: null }),
+      ],
+    });
+  const walkUp = () =>
+    fakeClient({
+      events: [eventRow],
+      people: [],
+      event_entries: [
+        entry({ id: 'e3', person_id: null, display_name: 'Walk Up', withdrawn: true }),
+      ],
+    });
+
+  async function mount(client) {
+    const root = document.createElement('div');
+    document.body.appendChild(root); // focus() only works on attached nodes
+    const screen = await mountRosterScreen(root, { eventId: 'ev1', client });
+    return { root, screen };
+  }
+
+  const q = (root, selector) => root.querySelector(selector);
+  const field = (root, id, key) => q(root, `#roster-edit-${id}-${key}`);
+  const type = (input, value) => {
+    input.value = value;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  const save = (root) => q(root, '.roster-edit-form button[type="submit"]');
+
+  it('shows each cupper’s phone and email on file in the list', async () => {
+    const { root } = await mount(twoCuppers());
+    const text = (id) => q(root, `#roster-row-${id}`).textContent;
+    expect(text('e1')).toContain('+6737000001 · one@example.com');
+    expect(text('e2')).toContain('+6737000002');
+    expect(text('e2')).not.toContain('·  ·');
+  });
+
+  it('Edit opens a form pre-filled from the entry and the profile, with focus on the name', async () => {
+    const { root } = await mount(twoCuppers());
+    q(root, '#roster-edit-btn-e1').click();
+    expect(field(root, 'e1', 'displayName').value).toBe('Cupper One');
+    expect(field(root, 'e1', 'phone').value).toBe('+6737000001');
+    expect(field(root, 'e1', 'email').value).toBe('one@example.com');
+    expect(field(root, 'e1', 'cafe').value).toBe('Grey Matter');
+    expect(field(root, 'e1', 'bib').value).toBe('7');
+    expect(document.activeElement).toBe(field(root, 'e1', 'displayName'));
+    // The form is named for the cupper, and its own Edit button gives way to it.
+    expect(q(root, 'form[aria-label="Edit Cupper One"]')).not.toBeNull();
+    expect(q(root, '#roster-edit-btn-e1')).toBeNull();
+  });
+
+  it('only one form is open at a time: another row’s Edit is parked and a tap on it opens nothing', async () => {
+    const { root } = await mount(twoCuppers());
+    q(root, '#roster-edit-btn-e1').click();
+    type(field(root, 'e1', 'displayName'), 'Half Typed');
+    const other = q(root, '#roster-edit-btn-e2');
+    expect(other.getAttribute('aria-disabled')).toBe('true');
+    other.click();
+    expect(q(root, 'form[aria-label="Edit Cupper Two"]')).toBeNull();
+    expect(field(root, 'e1', 'displayName').value).toBe('Half Typed');
+  });
+
+  it('Cancel closes the form, discards the draft and returns focus to that row’s Edit button', async () => {
+    const { root } = await mount(twoCuppers());
+    q(root, '#roster-edit-btn-e1').click();
+    type(field(root, 'e1', 'displayName'), 'Changed Mind');
+    q(root, '.roster-edit-form button[type="button"]').click();
+    expect(q(root, '.roster-edit-form')).toBeNull();
+    expect(document.activeElement).toBe(q(root, '#roster-edit-btn-e1'));
+    expect(root.textContent).toContain('Cupper One');
+    q(root, '#roster-edit-btn-e1').click();
+    expect(field(root, 'e1', 'displayName').value).toBe('Cupper One'); // not the discarded text
+  });
+
+  it('Escape closes the form like Cancel', async () => {
+    const { root } = await mount(twoCuppers());
+    q(root, '#roster-edit-btn-e1').click();
+    field(root, 'e1', 'displayName').dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+    );
+    expect(q(root, '.roster-edit-form')).toBeNull();
+    expect(document.activeElement).toBe(q(root, '#roster-edit-btn-e1'));
+  });
+
+  it('a blank name or a bad phone is reported beside the field, with focus there, and nothing is sent', async () => {
+    const client = twoCuppers();
+    const { root } = await mount(client);
+    q(root, '#roster-edit-btn-e1').click();
+
+    type(field(root, 'e1', 'displayName'), '   ');
+    save(root).click();
+    expect(q(root, '.roster-edit-error').textContent).toBe('Name is required.');
+    expect(document.activeElement).toBe(field(root, 'e1', 'displayName'));
+    const nameInput = field(root, 'e1', 'displayName');
+    expect(nameInput.getAttribute('aria-invalid')).toBe('true');
+    expect(nameInput.getAttribute('aria-describedby')).toBe(q(root, '.roster-edit-error').id);
+
+    type(field(root, 'e1', 'displayName'), 'Cupper One');
+    type(field(root, 'e1', 'phone'), '12');
+    save(root).click();
+    expect(q(root, '.roster-edit-error').textContent).toContain('valid international number');
+    expect(document.activeElement).toBe(field(root, 'e1', 'phone'));
+
+    expect(client.rpcCalls).toHaveLength(0);
+  });
+
+  it('typing clears the complaint — the message and the aria attributes — without re-rendering the form', async () => {
+    const { root } = await mount(twoCuppers());
+    q(root, '#roster-edit-btn-e1').click();
+    type(field(root, 'e1', 'displayName'), '');
+    save(root).click();
+    const form = q(root, '.roster-edit-form');
+    type(field(root, 'e1', 'displayName'), 'Cupper One Again');
+    expect(q(root, '.roster-edit-error').textContent).toBe('');
+    expect(field(root, 'e1', 'displayName').hasAttribute('aria-invalid')).toBe(false);
+    expect(q(root, '.roster-edit-form')).toBe(form);
+  });
+
+  it('keeps its error line in the document while empty, as a live region', async () => {
+    const { root } = await mount(twoCuppers());
+    q(root, '#roster-edit-btn-e1').click();
+    const line = q(root, '.roster-edit-error');
+    expect(line.getAttribute('role')).toBe('alert');
+    expect(line.textContent).toBe('');
+  });
+
+  it('saves with one RPC: trimmed values, the phone normalized, blanks as null — then shows the corrected row', async () => {
+    const client = twoCuppers();
+    const { root } = await mount(client);
+    q(root, '#roster-edit-btn-e1').click();
+    type(field(root, 'e1', 'displayName'), '  Alicia Tan ');
+    type(field(root, 'e1', 'phone'), ' 7000009 ');
+    type(field(root, 'e1', 'email'), '');
+    type(field(root, 'e1', 'cafe'), 'New Cafe');
+    type(field(root, 'e1', 'bib'), ' 12 ');
+    save(root).click();
+    await vi.waitFor(() => expect(q(root, '.roster-edit-form')).toBeNull());
+
+    expect(client.rpcCalls).toEqual([
+      [
+        'update_roster_entry',
+        {
+          p_org_id: 'org1',
+          p_entry_id: 'e1',
+          p_display_name: 'Alicia Tan',
+          p_phone: '+6737000009',
+          p_email: null,
+          p_cafe: 'New Cafe',
+          p_bib: '12',
+        },
+      ],
+    ]);
+    const row = q(root, '#roster-row-e1').textContent;
+    expect(row).toContain('Alicia Tan');
+    expect(row).toContain('+6737000009');
+    expect(row).toContain('New Cafe');
+    expect(row).toContain('Bib 12');
+    expect(row).not.toContain('one@example.com'); // the cleared email is gone from the list
+    expect(q(root, '#roster-row-e2').textContent).toContain('Cupper Two'); // untouched
+  });
+
+  it('says the audience view and published results update on the next publish when the name or cafe changed — and focuses the row’s Edit button', async () => {
+    const { root } = await mount(twoCuppers());
+    q(root, '#roster-edit-btn-e1').click();
+    type(field(root, 'e1', 'displayName'), 'Alicia Tan');
+    save(root).click();
+    await vi.waitFor(() => expect(q(root, '#roster-saved-e1')).not.toBeNull());
+    // The confirmation sits in the edited cupper's own row and takes focus there — not in the
+    // feedback line below the list, which on a long roster is off-screen.
+    expect(q(root, '#roster-saved-e1').textContent).toBe(
+      'Alicia Tan updated. The audience view and any published results show the new details the next time they are published.',
+    );
+    expect(q(root, '#roster-row-e1').contains(q(root, '#roster-saved-e1'))).toBe(true);
+    expect(q(root, '#roster-saved-e1').getAttribute('role')).toBe('status');
+    expect(document.activeElement).toBe(q(root, '#roster-saved-e1'));
+  });
+
+  it('does not mention publishing when only the bib changed — nothing public shows a bib', async () => {
+    const { root } = await mount(twoCuppers());
+    q(root, '#roster-edit-btn-e1').click();
+    type(field(root, 'e1', 'bib'), '99');
+    save(root).click();
+    await vi.waitFor(() => expect(q(root, '#roster-saved-e1')).not.toBeNull());
+    expect(q(root, '#roster-saved-e1').textContent).toBe('Cupper One updated.');
+  });
+
+  it('a phone number another cupper already has stays inside the form: names who has it, keeps what was typed, focuses the phone field', async () => {
+    const client = twoCuppers();
+    const { root } = await mount(client);
+    q(root, '#roster-edit-btn-e1').click();
+    type(field(root, 'e1', 'displayName'), 'Alicia Tan');
+    type(field(root, 'e1', 'phone'), '+6737000002'); // Cupper Two's
+    save(root).click();
+    await vi.waitFor(() =>
+      expect(q(root, '.roster-edit-error').textContent).toBe(
+        'That phone number already belongs to Cupper Two. Check the number.',
+      ),
+    );
+    expect(document.activeElement).toBe(field(root, 'e1', 'phone'));
+    expect(field(root, 'e1', 'phone').getAttribute('aria-invalid')).toBe('true');
+    expect(field(root, 'e1', 'displayName').value).toBe('Alicia Tan'); // nothing typed is lost
+    expect(q(root, '#roster-feedback').textContent).toBe(''); // no false success
+    expect(client.db.people.find((p) => p.id === 'p1').display_name).toBe('Cupper One'); // nothing changed
+  });
+
+  it('an email clash is reported the same way, case-insensitively, on the email field', async () => {
+    const client = twoCuppers();
+    client.db.people.find((p) => p.id === 'p2').email = 'Two@Example.com';
+    const { root } = await mount(client);
+    q(root, '#roster-edit-btn-e1').click();
+    type(field(root, 'e1', 'email'), 'two@example.COM');
+    save(root).click();
+    await vi.waitFor(() =>
+      expect(q(root, '.roster-edit-error').textContent).toContain(
+        'That email already belongs to Cupper Two',
+      ),
+    );
+    expect(document.activeElement).toBe(field(root, 'e1', 'email'));
+  });
+
+  it('any other failure is shown in the form too, with the typed values kept and focus on the error', async () => {
+    const client = fakeClient(
+      {
+        events: [eventRow],
+        people: [person()],
+        event_entries: [entry()],
+      },
+      { errorOn: 'rpc.update_roster_entry' },
+    );
+    const { root } = await mount(client);
+    q(root, '#roster-edit-btn-e1').click();
+    type(field(root, 'e1', 'displayName'), 'Alicia Tan');
+    save(root).click();
+    await vi.waitFor(() => expect(q(root, '.roster-edit-error').textContent).not.toBe(''));
+    expect(field(root, 'e1', 'displayName').value).toBe('Alicia Tan');
+    expect(document.activeElement).toBe(q(root, '.roster-edit-error'));
+    expect(save(root).disabled).toBe(false); // can try again
+  });
+
+  it('a walk-up entry with no profile edits name, cafe and bib only — no phone or email fields, and none sent', async () => {
+    const client = walkUp();
+    const { root } = await mount(client);
+    expect(q(root, '#roster-row-e3').querySelector('.roster-contact')).toBeNull();
+    q(root, '#roster-edit-btn-e3').click();
+    expect(field(root, 'e3', 'phone')).toBeNull();
+    expect(field(root, 'e3', 'email')).toBeNull();
+    expect(q(root, '.roster-edit-form').textContent).toContain(
+      'A walk-up entry has no phone or email on file.',
+    );
+    type(field(root, 'e3', 'displayName'), 'Walk-Up Winner');
+    save(root).click();
+    await vi.waitFor(() => expect(q(root, '.roster-edit-form')).toBeNull());
+    expect(client.rpcCalls[0][1]).toMatchObject({
+      p_phone: null,
+      p_email: null,
+      p_display_name: 'Walk-Up Winner',
+    });
+    // Editing never changes whether they are withdrawn.
+    expect(q(root, '#roster-row-e3').dataset.withdrawn).toBe('true');
+  });
+
+  it('what is typed in the open form survives a re-render caused by withdrawing someone else', async () => {
+    const { root } = await mount(twoCuppers());
+    q(root, '#roster-edit-btn-e1').click();
+    type(field(root, 'e1', 'displayName'), 'Still Typing');
+    type(field(root, 'e1', 'phone'), '+6737000042');
+
+    q(root, '#roster-toggle-e2').click();
+    await vi.waitFor(() => expect(q(root, '#roster-feedback').dataset.tone).toBe('success'));
+
+    expect(field(root, 'e1', 'displayName').value).toBe('Still Typing');
+    expect(field(root, 'e1', 'phone').value).toBe('+6737000042');
+    expect(q(root, '#roster-row-e2').dataset.withdrawn).toBe('true'); // the withdraw really happened
+  });
+
+  it('what is typed in the open form survives registering a new cupper', async () => {
+    const { root } = await mount(twoCuppers());
+    q(root, '#roster-edit-btn-e1').click();
+    type(field(root, 'e1', 'displayName'), 'Still Typing');
+    type(q(root, '[aria-label="Name"]'), 'New Person');
+    type(q(root, '[aria-label="Phone"]'), '7000055');
+    q(root, '.roster-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() =>
+      expect(q(root, '#roster-feedback').textContent).toContain('New Person registered'),
+    );
+    expect(field(root, 'e1', 'displayName').value).toBe('Still Typing');
+  });
+
+  it('disables the form while the save is in flight, and shows it is saving', async () => {
+    const client = twoCuppers();
+    let release;
+    let rpcCallCount = 0; // counted HERE, at the wrapper: a second send would otherwise be invisible
+    const originalRpc = client.rpc;
+    client.rpc = (...args) => {
+      rpcCallCount += 1;
+      return new Promise((resolve) => {
+        release = () => resolve(originalRpc(...args));
+      });
+    };
+    const { root } = await mount(client);
+    q(root, '#roster-edit-btn-e1').click();
+    type(field(root, 'e1', 'displayName'), 'Alicia Tan');
+    save(root).click();
+    await vi.waitFor(() => expect(typeof release).toBe('function'));
+    expect(save(root).disabled).toBe(true);
+    expect(save(root).textContent).toBe('Saving…');
+    // The accessible name follows the visible label (WCAG 2.5.3) while it says Saving.
+    expect(save(root).getAttribute('aria-label')).toBe('Saving changes to Cupper One');
+    expect(field(root, 'e1', 'displayName').disabled).toBe(true);
+    // Escape must not close the form while the save is in flight either.
+    q(root, '.roster-edit-form').dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+    );
+    expect(q(root, '.roster-edit-form')).not.toBeNull();
+    // A second submit while busy must not send a second RPC.
+    q(root, '.roster-edit-form').dispatchEvent(
+      new Event('submit', { bubbles: true, cancelable: true }),
+    );
+    release();
+    await vi.waitFor(() => expect(q(root, '.roster-edit-form')).toBeNull());
+    expect(rpcCallCount).toBe(1);
+    expect(client.rpcCalls).toHaveLength(1);
+  });
+
+  it('if the save lands but the refresh fails, it says so rather than reporting a failure', async () => {
+    const client = twoCuppers();
+    const originalRpc = client.rpc;
+    let broken = false;
+    const failingReads = {
+      ...client,
+      rpc: (...args) => {
+        broken = true; // from here on, reads fail
+        return originalRpc(...args);
+      },
+      from: (table) => (broken ? throwingClient().from(table) : client.from(table)),
+    };
+    const { root } = await mount(failingReads);
+    q(root, '#roster-edit-btn-e1').click();
+    type(field(root, 'e1', 'displayName'), 'Alicia Tan');
+    save(root).click();
+    await vi.waitFor(() =>
+      expect(q(root, '#roster-feedback').textContent).toBe(
+        'Saved, but the screen could not refresh — reload to see the roster.',
+      ),
+    );
+    expect(q(root, '#roster-feedback').dataset.tone).toBe('success');
+    expect(client.db.people.find((p) => p.id === 'p1').display_name).toBe('Alicia Tan');
+  });
+  it('stops the browser accepting more than the database will: maxlength on every capped field, in the edit form and the registration form', async () => {
+    const { root } = await mount(twoCuppers());
+    const caps = { displayName: '200', email: '254', cafe: '200', bib: '50' };
+    for (const [key, max] of Object.entries(caps)) {
+      expect(q(root, `.roster-form [data-field="${key}"]`).getAttribute('maxlength')).toBe(max);
+    }
+    q(root, '#roster-edit-btn-e1').click();
+    for (const [key, max] of Object.entries(caps)) {
+      expect(field(root, 'e1', key).getAttribute('maxlength')).toBe(max);
+    }
+  });
+
+  it('says a too-long value is too long, in the form, instead of sending it', async () => {
+    const client = twoCuppers();
+    const { root } = await mount(client);
+    q(root, '#roster-edit-btn-e1').click();
+    type(field(root, 'e1', 'cafe'), 'x'.repeat(201));
+    save(root).click();
+    expect(q(root, '.roster-edit-error').textContent).toBe(
+      'Cafe is too long (200 characters at most).',
+    );
+    expect(document.activeElement).toBe(field(root, 'e1', 'cafe'));
+    expect(client.rpcCalls).toHaveLength(0);
+  });
+
+  it('puts the title and the error line above the fields, so a problem is seen beside where the organiser is looking', async () => {
+    const { root } = await mount(twoCuppers());
+    q(root, '#roster-edit-btn-e1').click();
+    const form = q(root, '.roster-edit-form');
+    const order = [...form.children].map((child) => child.className);
+    expect(order.slice(0, 3)).toEqual([
+      'roster-edit-title',
+      'roster-edit-error',
+      'roster-form-fields',
+    ]);
+    expect(q(root, '.roster-edit-title').textContent).toBe('Editing Cupper One');
+  });
+
+  it('drops the saved confirmation as soon as the organiser does anything else', async () => {
+    const { root } = await mount(twoCuppers());
+    q(root, '#roster-edit-btn-e1').click();
+    type(field(root, 'e1', 'bib'), '99');
+    save(root).click();
+    await vi.waitFor(() => expect(q(root, '#roster-saved-e1')).not.toBeNull());
+    q(root, '#roster-toggle-e2').click();
+    await vi.waitFor(() => expect(q(root, '#roster-feedback').dataset.tone).toBe('success'));
+    expect(q(root, '#roster-saved-e1')).toBeNull();
+  });
+
+  it('drops the saved confirmation when a new cupper is registered', async () => {
+    const { root } = await mount(twoCuppers());
+    q(root, '#roster-edit-btn-e1').click();
+    type(field(root, 'e1', 'bib'), '99');
+    save(root).click();
+    await vi.waitFor(() => expect(q(root, '#roster-saved-e1')).not.toBeNull());
+    type(q(root, '[aria-label="Name"]'), 'New Person');
+    type(q(root, '[aria-label="Phone"]'), '7000055');
+    q(root, '.roster-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() =>
+      expect(q(root, '#roster-feedback').textContent).toContain('New Person registered'),
+    );
+    expect(q(root, '#roster-saved-e1')).toBeNull();
+  });
+
+  it('keeps the roster when the contact details cannot be read: contact lines vanish, and Edit says why it cannot open', async () => {
+    const client = fakeClient(
+      {
+        events: [eventRow],
+        people: [person()],
+        event_entries: [entry()],
+      },
+      { errorOn: 'people.select' },
+    );
+    const { root } = await mount(client);
+    expect(q(root, '#roster-row-e1')).not.toBeNull(); // the roster itself loaded
+    expect(q(root, '.roster-contact')).toBeNull();
+    q(root, '#roster-edit-btn-e1').click();
+    expect(q(root, '.roster-edit-form')).toBeNull();
+    expect(q(root, '#roster-feedback').dataset.tone).toBe('error');
+    expect(q(root, '#roster-feedback').textContent).toContain('could not be loaded');
+    // Withdraw still works: the contact read is a convenience, not a dependency.
+    q(root, '#roster-toggle-e1').click();
+    await vi.waitFor(() => expect(client.db.event_entries[0].withdrawn).toBe(true));
+  });
+  it('only Escape closes the form: other keys leave it open with what was typed', async () => {
+    const { root } = await mount(twoCuppers());
+    q(root, '#roster-edit-btn-e1').click();
+    type(field(root, 'e1', 'displayName'), 'Typed');
+    for (const key of ['a', 'Tab', 'Enter']) {
+      field(root, 'e1', 'displayName').dispatchEvent(
+        new KeyboardEvent('keydown', { key, bubbles: true }),
+      );
+    }
+    expect(q(root, '.roster-edit-form')).not.toBeNull();
+    expect(field(root, 'e1', 'displayName').value).toBe('Typed');
+  });
+
+  it('shows contact details and opens Edit on a roster that mixes a walk-up with a linked cupper', async () => {
+    // The contact read must be asked only for real person ids: a null in the list is a uuid-cast
+    // error in PostgREST, which the screen swallows — every contact line and Edit would vanish.
+    const client = fakeClient({
+      events: [eventRow],
+      people: [person()],
+      event_entries: [
+        entry(),
+        entry({ id: 'e3', person_id: null, display_name: 'Walk Up', cafe: null, bib: null }),
+      ],
+    });
+    const { root } = await mount(client);
+    expect(q(root, '#roster-row-e1 .roster-contact').textContent).toBe(
+      '+6737000001 · one@example.com',
+    );
+    q(root, '#roster-edit-btn-e1').click();
+    expect(field(root, 'e1', 'phone').value).toBe('+6737000001');
+  });
+
+  it('typing in one field clears a complaint about another, and a stale complaint does not come back on a re-render', async () => {
+    const { root } = await mount(twoCuppers());
+    q(root, '#roster-edit-btn-e1').click();
+    type(field(root, 'e1', 'phone'), '12');
+    save(root).click();
+    expect(field(root, 'e1', 'phone').getAttribute('aria-invalid')).toBe('true');
+    type(field(root, 'e1', 'displayName'), 'Cupper One Again');
+    expect(field(root, 'e1', 'phone').hasAttribute('aria-invalid')).toBe(false);
+    expect(field(root, 'e1', 'phone').hasAttribute('aria-describedby')).toBe(false);
+    expect(q(root, '.roster-edit-error').textContent).toBe('');
+    // Withdrawing another cupper re-renders the whole screen: the cleared complaint stays cleared.
+    q(root, '#roster-toggle-e2').click();
+    await vi.waitFor(() => expect(q(root, '#roster-feedback').dataset.tone).toBe('success'));
+    expect(q(root, '.roster-edit-error').textContent).toBe('');
+    expect(field(root, 'e1', 'phone').hasAttribute('aria-invalid')).toBe(false);
+  });
+
+  it('mentions publishing for a cafe-only change, and not for a phone-only change', async () => {
+    const first = await mount(twoCuppers());
+    q(first.root, '#roster-edit-btn-e1').click();
+    type(field(first.root, 'e1', 'cafe'), 'Another Cafe');
+    save(first.root).click();
+    await vi.waitFor(() => expect(q(first.root, '#roster-saved-e1')).not.toBeNull());
+    expect(q(first.root, '#roster-saved-e1').textContent).toContain('audience view');
+
+    const second = await mount(twoCuppers());
+    q(second.root, '#roster-edit-btn-e1').click();
+    type(field(second.root, 'e1', 'phone'), '7000099');
+    save(second.root).click();
+    await vi.waitFor(() => expect(q(second.root, '#roster-saved-e1')).not.toBeNull());
+    expect(q(second.root, '#roster-saved-e1').textContent).toBe('Cupper One updated.');
+  });
+
+  it('editing an older entry whose snapshot is stale leaves the person’s current name and cafe alone', async () => {
+    // The person has been renamed and moved since this entry was created; the form is prefilled
+    // from the entry's snapshot, so fixing only the bib must not send the old values back to the
+    // profile (the RPC compares against the snapshot).
+    const client = fakeClient({
+      events: [eventRow],
+      people: [person({ display_name: 'Renamed One', cafe: 'Newer Cafe' })],
+      event_entries: [entry()],
+    });
+    const { root } = await mount(client);
+    q(root, '#roster-edit-btn-e1').click();
+    expect(field(root, 'e1', 'displayName').value).toBe('Cupper One'); // the snapshot
+    type(field(root, 'e1', 'bib'), '8');
+    save(root).click();
+    await vi.waitFor(() => expect(q(root, '#roster-saved-e1')).not.toBeNull());
+    expect(client.db.event_entries[0].bib).toBe('8');
+    expect(client.db.people[0]).toMatchObject({ display_name: 'Renamed One', cafe: 'Newer Cafe' });
   });
 });
