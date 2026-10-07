@@ -1539,6 +1539,22 @@ _Deferred findings from T-HARDEN.correct-heat-time, flagged and documented, not 
 
 ---
 
+## Known open items from T-HARDEN.roster-edit (2026-10-07)
+
+_Deferred findings from T-HARDEN.roster-edit, flagged and documented, not blocking._
+
+- **Deploy:** push migration `20261007100000` to the cloud project (apply_migration, then list_migrations); without it every roster Save fails.
+- **Last write wins** between two organiser devices — optional `p_expected_updated_at` check against `people.updated_at` if it ever matters.
+- **Phone uniqueness depends on client-side normalisation** (same as `registerPerson`); a format check or normalisation in the RPC would close it.
+- **Pre-existing: `people_write` lets a two-org member move a person to another org** — a trigger on `people.org_id` would close it if multi-org users become real.
+- **No audit row for name edits** after an event is published; dispute pack and results read the entry's name.
+- **`service_role` grant on `update_roster_entry` is unused** — drop for least privilege.
+- **`describeRosterEditError` lives in the Cup Taster screen** — move to core if another format adds roster edit.
+- **Escape and Cancel discard typed text without confirmation**; a tap on a parked Edit gives no feedback (accessibility, low).
+- **Test fidelity** — the stateful fake does not model the org-ownership check or the `unique_violation` race branch (two real sessions would be needed).
+
+---
+
 ## Known open items from pre-event hardening (T-HARDEN.report-print-layout, 2026-10-06)
 
 _Deferred findings from T-HARDEN.report-print-layout, flagged and documented, not blocking._

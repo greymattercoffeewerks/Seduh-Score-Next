@@ -142,6 +142,48 @@ export async function listEntriesByIds(entryIds, client = getSupabase()) {
   return data;
 }
 
+// The shared profiles behind a set of entries (their phone and email live here, not on the
+// per-event entry). Rows are returned as stored — the caller indexes them however it likes.
+const PEOPLE_CHUNK = 100;
+
+export async function listPeopleByIds(personIds, client = getSupabase()) {
+  if (personIds.length === 0) return [];
+  // Chunked so a large roster's ids never overflow the request URL.
+  const chunks = [];
+  for (let i = 0; i < personIds.length; i += PEOPLE_CHUNK) {
+    chunks.push(personIds.slice(i, i + PEOPLE_CHUNK));
+  }
+  const pages = await Promise.all(
+    chunks.map(async (ids) => {
+      const { data, error } = await client.from('people').select('*').in('id', ids);
+      if (error) throw error;
+      return data;
+    }),
+  );
+  return pages.flat();
+}
+
+// Corrects a registered cupper's details (migration 20261007100000). One atomic RPC, not a
+// client-side pair of updates: the person's shared profile (name, phone, email, cafe) AND this
+// event's entry (name, cafe, bib) change together or not at all. Other events' entries for the
+// same person are snapshots and are deliberately left alone (handoff §5.1). `fields` are the
+// raw values — the RPC trims them, turns blanks into null and enforces uniqueness; `phone`
+// must already be normalized (core/phone.js). A walk-up entry with no profile takes
+// `phone: null, email: null`. A phone/email clash comes back as a P0002 error whose details name
+// the field and the person who has it.
+export async function updateRosterEntry(orgId, entryId, fields, client = getSupabase()) {
+  const { error } = await client.rpc('update_roster_entry', {
+    p_org_id: orgId,
+    p_entry_id: entryId,
+    p_display_name: fields.displayName,
+    p_phone: fields.phone ?? null,
+    p_email: fields.email ?? null,
+    p_cafe: fields.cafe ?? null,
+    p_bib: fields.bib ?? null,
+  });
+  if (error) throw error;
+}
+
 // Composes registerPerson + createEntry for the common case: a cupper with a
 // phone number, registered and entered into one event in a single call. A
 // walk-up with no phone yet still calls createEntry directly (D16) — this

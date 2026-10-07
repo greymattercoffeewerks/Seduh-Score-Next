@@ -67,3 +67,73 @@
     align-items: center;
   }
 }
+
+/* Edit (live-event finding #4). The phone and email on file sit under the name so the organiser can
+   check them; wrapping anywhere, as .roster-entry-info already does, keeps a long address inside a
+   360px row. */
+.roster-contact {
+  overflow-wrap: anywhere;
+}
+
+/* Edit + Withdraw side by side, wrapping rather than squeezing the name at 360px. */
+.roster-entry-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* The open form takes the whole row, on its own line beneath the name and buttons. */
+.roster-edit-form {
+  position: relative;
+  flex: 1 1 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.roster-edit-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+/* The problem Save found. Always in the document (a screen reader needs a live region to announce
+   into): clipped to a pixel while empty rather than display: none, and out of the flex flow so it
+   adds no gap. */
+.roster-edit-error {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+}
+
+.roster-edit-error:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Says which row is open for editing: the form otherwise blends into the list (a withdrawn row is
+   tinted too). */
+.roster-edit-title {
+  margin: 0;
+  font-weight: 600;
+}
+
+/* A field the last Save complained about: a thicker, danger-coloured border, so the field is marked
+   by more than colour and is findable without the focus ring (suppressed for pointer input). */
+.roster-edit-form .field-input[aria-invalid='true'] {
+  border-width: 3px;
+  border-color: var(--color-danger);
+}
+
+/* The confirmation for the last saved edit, inside that cupper's row. */
+.roster-saved {
+  margin: 0;
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}

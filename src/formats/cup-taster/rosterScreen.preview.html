@@ -16,8 +16,9 @@
       fake client (below) stands in for the real one. Seeded with two
       cuppers, one already withdrawn. Try: registering a new cupper (name +
       phone required), re-registering the same phone number (shows "already
-      registered" rather than a duplicate), and withdrawing/reinstating an
-      entry.
+      registered" rather than a duplicate), withdrawing/reinstating an
+      entry, and Edit on a row (each row shows the phone/email on file; try
+      giving one cupper the other's phone number to see the conflict message).
     -->
     <p>
       <button id="demo-normal">Mount (normal)</button>
@@ -77,7 +78,9 @@
         let idCounter = 0;
 
         function matchesFilters(row, filters) {
-          return filters.every(([col, val]) => row[col] === val);
+          return filters.every(([col, val]) =>
+            Array.isArray(val) ? val.includes(row[col]) : row[col] === val,
+          );
         }
 
         function makeBuilder(table) {
@@ -93,6 +96,10 @@
             },
             ilike(col, val) {
               filters.push([col, val]);
+              return builder;
+            },
+            in(col, vals) {
+              filters.push([col, vals]);
               return builder;
             },
             insert(payload) {
@@ -143,7 +150,54 @@
           return builder;
         }
 
-        return { from: (table) => makeBuilder(table) };
+        // Stand-in for the update_roster_entry RPC (migration 20261007100000): the person's profile
+        // and this event's entry change together; a phone/email another person has is a P0002
+        // conflict whose details name the field and the person.
+        function rpc(name, args) {
+          if (name !== 'update_roster_entry') return Promise.resolve({ data: null, error: null });
+          const entry = db.event_entries.find((row) => row.id === args.p_entry_id);
+          const clean = (v) => (typeof v === 'string' && v.trim() !== '' ? v.trim() : null);
+          const person = entry?.person_id
+            ? db.people.find((row) => row.id === entry.person_id)
+            : null;
+          if (person) {
+            for (const [field, value] of [
+              ['phone', clean(args.p_phone)],
+              ['email', clean(args.p_email)],
+            ]) {
+              const other =
+                value &&
+                db.people.find(
+                  (row) =>
+                    row.id !== person.id &&
+                    String(row[field] ?? '').toLowerCase() === value.toLowerCase(),
+                );
+              if (other) {
+                return Promise.resolve({
+                  data: null,
+                  error: Object.assign(new Error('CONFLICT'), {
+                    code: 'P0002',
+                    details: JSON.stringify({ field, existing_display_name: other.display_name }),
+                  }),
+                });
+              }
+            }
+            Object.assign(person, {
+              display_name: clean(args.p_display_name),
+              phone: clean(args.p_phone),
+              email: clean(args.p_email),
+              cafe: clean(args.p_cafe),
+            });
+          }
+          Object.assign(entry, {
+            display_name: clean(args.p_display_name),
+            cafe: clean(args.p_cafe),
+            bib: clean(args.p_bib),
+          });
+          return Promise.resolve({ data: null, error: null });
+        }
+
+        return { from: (table) => makeBuilder(table), rpc };
       }
 
       // Demo-only for the timeout/retry follow-up — not part of the shipped
