@@ -32,6 +32,12 @@ const ROUTES = [
     rootMarker: '<main class="timer"',
     marker: 'Seduh Timer',
   },
+  {
+    output: 'tools/brew-planner/index.html',
+    url: 'https://www.seduhscore.com/tools/brew-planner/',
+    rootMarker: '<main class="bp"',
+    marker: 'Seduh Brew Planner',
+  },
   // The trust pages share one entry module and pick their page from #app's data-page.
   ...[
     ['about', 'Scoring for coffee competitions'],

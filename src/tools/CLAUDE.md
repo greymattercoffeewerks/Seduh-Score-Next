@@ -27,6 +27,17 @@ self-contained CSS instead.
 
 ## Tools
 
+- `brew-planner/` (`planner.js` pure engine, `plannerState.js` wizard state + storage,
+  `brewPlannerScreen.js` DOM, `brewPlanner.css`), 2026-09-29 — a five-step wizard (Heats,
+  Coffees, Machines, Timing, Cheat sheet) that turns a batch-brew setup into a run-sheet
+  with tick boxes and machine/heat filters, a timeline, a heats table, and water and Cambro
+  sizing. Ported from a one-off Cup Taster 2026 schedule; `EXAMPLE_CONFIG` reproduces its
+  numbers (76 batches, first brew 12:13 pm, longest hold 44 min) and is pinned by
+  `planner.test.js`. Water per batch is dose × ratio; yield is dose × ratio − 2 × dose.
+  Batches are scheduled backward from each heat's pool-by time. Ticks and inputs persist
+  to `localStorage` (`seduh-brew-planner-v1`). No auth, no Supabase; listed as card 04 on
+  the Community hub.
+
 - `timer/` (`timer.js` pure state/logic, `timerScreen.js` DOM/wiring, `timer.css`),
   2026-09-12 — a standalone, general-purpose countdown timer (duration presets + custom
   duration, optional label) for anything someone is timing, not scoped to cupping.

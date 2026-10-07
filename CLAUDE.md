@@ -196,6 +196,7 @@ app/index.html                  ← console SPA entry (moved out of root 2026-09
 android/guess-the-bean-widget/  ← native Android (Kotlin/Glance) widget, own Gradle build;
                                    not part of the web build. See its own CLAUDE.md.
 tools/timer/index.html          ← standalone Timer tool entry. See src/tools/CLAUDE.md.
+tools/brew-planner/index.html   ← standalone Brew Planner wizard entry. See src/tools/CLAUDE.md.
 community/index.html            ← public hub linking community tools and future resources.
 guess-the-bean/index.html       ← Guess the Bean entry. See
                                    src/community/guess-the-bean/CLAUDE.md.
