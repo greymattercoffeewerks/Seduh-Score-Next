@@ -431,7 +431,15 @@ describe('mountManualTimingScreen', () => {
     const feedback = root.querySelector('.screen-feedback');
     expect(feedback.textContent).toContain("Cupper One's time recorded");
     expect(root.textContent).toContain('Score this heat');
-    expect(root.querySelector('input')).toBeNull();
+    // No manual-ENTRY fields: the heat is done. The only inputs left are the Edit
+    // time correction panels' own (hidden until opened) — a narrower check than "no
+    // input at all", but one that still fails if entry fields come back under any
+    // class name.
+    expect(root.querySelector('.manual-time-fields')).toBeNull();
+    expect(root.querySelector('.manual-time-input')).toBeNull();
+    for (const input of root.querySelectorAll('input')) {
+      expect(input.closest('.time-correction-panel')).not.toBeNull();
+    }
     expect(document.activeElement.id).toBe('timing-complete-heading');
 
     document.body.removeChild(root);
@@ -638,7 +646,15 @@ describe('mountManualTimingScreen', () => {
     });
     await mountManualTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
     expect(root.textContent).toContain('Timing complete');
-    expect(root.querySelector('input')).toBeNull();
+    // No manual-ENTRY fields: the heat is done. The only inputs left are the Edit
+    // time correction panels' own (hidden until opened) — a narrower check than "no
+    // input at all", but one that still fails if entry fields come back under any
+    // class name.
+    expect(root.querySelector('.manual-time-fields')).toBeNull();
+    expect(root.querySelector('.manual-time-input')).toBeNull();
+    for (const input of root.querySelectorAll('input')) {
+      expect(input.closest('.time-correction-panel')).not.toBeNull();
+    }
     expect(root.textContent).toContain('3:20');
     // Live-found gap: the complete view used to have no forward link at
     // all, forcing a detour back through Overview -> Heats to reach

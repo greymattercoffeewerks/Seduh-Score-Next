@@ -55,6 +55,7 @@ export function cupTasterOutboxHandlers(client) {
 export const cupTasterOperationLabels = {
   start_heat: 'starting a heat',
   record_heat_time: 'recording a time',
+  correct_heat_time: 'correcting a time',
   auto_max_heat: 'recording a max time',
   confirm_heat: 'confirming a heat',
   resolve_stage: 'resolving a stage',

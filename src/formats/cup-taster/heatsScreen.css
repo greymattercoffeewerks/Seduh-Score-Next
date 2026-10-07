@@ -305,6 +305,14 @@
   color: var(--color-success);
 }
 
+/* Neutral, not an error: something is saved and still on its way (a correction
+   queued while offline). */
+.screen-feedback[data-tone='pending'] {
+  background: var(--color-surface-sunken);
+  border: var(--border-hairline) solid var(--color-border-strong);
+  color: var(--color-text);
+}
+
 .screen-feedback[data-tone='urgent'] {
   background: var(--color-surface-sunken);
   border: var(--border-hairline) solid var(--color-warning);

@@ -61,6 +61,7 @@ describe('cupTasterOutboxHandlers', () => {
     expect(Object.keys(handlers).sort()).toEqual([
       'auto_max_heat',
       'confirm_heat',
+      'correct_heat_time',
       'publish_live_session',
       'record_heat_time',
       'resolve_stage',

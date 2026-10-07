@@ -15,7 +15,8 @@
 // Through the outbox (T4.3/T4.4 follow-up, migration 20260828150000) — was
 // a direct-write, deliberate, documented gap (see CHANGELOG.md/ROADMAP.md)
 // until now. `start_heat`/`record_heat_time`/`auto_max_heat` are three RPCs
-// mirroring confirm_heat's own idempotent, org-scoped shape; the migration's
+// mirroring confirm_heat's own idempotent, org-scoped shape (a fourth,
+// `correct_heat_time`, joined them 2026-10-06 — see timeCorrection.js); the migration's
 // own header comment has the full design rationale (why RPCs are needed at
 // all, why started_at stays client-timestamp-supplied). The short version:
 // every write here captures its payload (a timestamp, a clamped elapsed
@@ -39,7 +40,7 @@
 // public function here takes an optional `handlers` override (threaded
 // through submitTimingOperation) so a screen can pass
 // formats/cup-taster/outboxHandlers.js's cupTasterOutboxHandlers(client) —
-// the composed map covering timing's own three RPCs plus scoring.js's
+// the composed map covering timing's own RPCs plus scoring.js's
 // confirm_heat and core/publish.js's publish_session — closing the same
 // stall against those operation types too. Omitting `handlers` keeps this
 // module's original, narrower behavior (used by this file's own tests).
@@ -100,6 +101,7 @@ export function timingHandlers(client) {
     start_heat: buildRpcHandler(client, 'start_heat'),
     record_heat_time: buildRpcHandler(client, 'record_heat_time'),
     auto_max_heat: buildRpcHandler(client, 'auto_max_heat'),
+    correct_heat_time: buildRpcHandler(client, 'correct_heat_time'),
   };
 }
 

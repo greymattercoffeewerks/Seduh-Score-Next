@@ -142,6 +142,15 @@
   gap: var(--space-3);
 }
 
+/* Whether the actions (or a plain result) sit on the name's line or wrap
+   beneath it, they stay against the right edge — a stopped row's time + Edit
+   time must not jump between left and right depending on how long the name
+   is. */
+.timing-row > .timing-row-actions,
+.timing-row > .timing-row-result {
+  margin-left: auto;
+}
+
 /* [hidden] alone loses to .btn's own `display: inline-flex` at equal CSS
    specificity (author origin beats the UA stylesheet regardless of source
    order) — the exact bug this project already hit once for
@@ -169,4 +178,143 @@
 
 .manual-time-local-error:empty {
   display: none;
+}
+
+/* "Edit time" on a stopped row (timeCorrectionEditor.js): the toggle sits
+   beside the time (.timing-row-actions), and the panel it reveals takes the
+   row's full width on its own line — .timing-row wraps, so width: 100% is all
+   that is needed. Never shown while hidden: [hidden] alone loses to
+   display: flex here (same reason as .timing-row-actions [hidden] above). */
+.time-correction-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+}
+
+.time-correction-panel[hidden],
+.time-correction-panel [hidden] {
+  display: none;
+}
+
+/* The corrected minutes : seconds pair — same shape as the manual-entry
+   fields, but its own classes so a screen's "is manual entry open?" checks
+   never mistake a hidden correction panel for one. */
+.time-correction-fields {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.time-correction-input {
+  width: 4.5rem;
+  min-height: var(--tap-target-min);
+  text-align: center;
+  flex: 0 0 auto;
+}
+
+.time-correction-separator {
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  flex: 0 0 auto;
+}
+
+/* Two columns, not a stack of four full-width rows: an open editor sits in the
+   middle of a heat that is still running, and every pixel of its height pushes the
+   remaining cuppers' Stop buttons further off-screen. */
+/* minmax(0, 1fr), not a bare 1fr: 1fr floors at the column's min-content width, and the
+   right-hand chips ("Manual timekeeper's time", "Other") then pushed past the editor and
+   the row border at 360px. */
+.time-correction-reasons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.time-correction-reasons legend {
+  grid-column: 1 / -1;
+  padding: 0;
+  margin-bottom: var(--space-2);
+  font-weight: var(--font-weight-bold);
+}
+
+.time-correction-other {
+  grid-column: 1 / -1;
+}
+
+/* The problem Save found, right above the buttons so it is on screen when focus
+   moves to the field. Always in the document: while empty it is clipped to a
+   pixel (not display: none, which a screen reader may not announce into when
+   text arrives) and taken out of the flex flow so it adds no gap. */
+.time-correction-error {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+}
+
+.time-correction-error:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* A whole-row tap target (>= 44px) — the radio itself is small, the label is
+   what a thumb lands on. */
+.time-correction-reason {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap-target-min);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+  line-height: 1.25;
+  overflow-wrap: break-word;
+  border: var(--border-hairline) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.time-correction-reason input {
+  flex: 0 0 auto;
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  accent-color: var(--color-accent);
+}
+
+/* The chosen reason reads as chosen without relying on the small dot alone. */
+.time-correction-reason:has(input:checked) {
+  border-color: var(--color-accent);
+  background: var(--color-surface-sunken);
+  font-weight: var(--font-weight-bold);
+}
+
+.time-correction-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+/* The line above a list of times that can still be corrected (scoring screen). */
+.time-correction-intro {
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* Why a row's time was corrected — on screen as well as in the change log. */
+.timing-row-note {
+  width: 100%;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
 }
