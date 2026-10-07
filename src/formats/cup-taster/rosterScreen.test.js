@@ -235,12 +235,22 @@ describe('renderRegistrationForm', () => {
   });
 
   it('disables every field and the submit button when disabled is true', () => {
+    // aria-disabled/aria-busy, not native disabled — see core/dom.js's
+    // setBusyDisabled: native disabled would drop focus straight to <body>
+    // if any of these fields currently had it.
     const draft = { displayName: '', phone: '', email: '', cafe: '', bib: '' };
     const form = renderRegistrationForm(draft, { disabled: true });
     for (const input of form.querySelectorAll('input')) {
-      expect(input.disabled).toBe(true);
+      expect(input.disabled).toBe(false);
+      expect(input.getAttribute('aria-disabled')).toBe('true');
+      expect(input.getAttribute('aria-busy')).toBe('true');
+      // aria-disabled alone doesn't stop typing, unlike the native disabled
+      // it replaces — readOnly is what actually blocks editing here (found
+      // in review, ui-accessibility-reviewer).
+      expect(input.readOnly).toBe(true);
     }
-    expect(form.querySelector('button[type="submit"]').disabled).toBe(true);
+    expect(form.querySelector('button[type="submit"]').disabled).toBe(false);
+    expect(form.querySelector('button[type="submit"]').getAttribute('aria-disabled')).toBe('true');
     expect(form.querySelector('button[type="submit"]').textContent).toBe('Registering…');
   });
 
@@ -307,10 +317,12 @@ describe('renderRosterEntries', () => {
   });
 
   it('disables every toggle button when disabled is true', () => {
+    // aria-disabled, not native disabled — see core/dom.js's setBusyDisabled.
     const entries = [entry({ id: 'e1' }), entry({ id: 'e2' })];
     const list = renderRosterEntries(entries, { onToggleWithdrawn: () => {}, disabled: true });
     for (const button of list.querySelectorAll('button')) {
-      expect(button.disabled).toBe(true);
+      expect(button.disabled).toBe(false);
+      expect(button.getAttribute('aria-disabled')).toBe('true');
     }
   });
 });
@@ -698,8 +710,17 @@ describe('mountRosterScreen', () => {
 
     root.querySelector('button[aria-label="Withdraw Cupper One"]').click();
 
-    expect(root.querySelector('form button[type="submit"]').disabled).toBe(true);
-    expect(root.querySelector('button[aria-label="Withdraw Cupper One"]').disabled).toBe(true);
+    // aria-disabled/aria-busy, not native disabled — see core/dom.js's
+    // setBusyDisabled: native disabled on the just-clicked toggle would drop
+    // focus to <body> instead of letting withFocusPreservation restore it.
+    expect(root.querySelector('form button[type="submit"]').disabled).toBe(false);
+    expect(root.querySelector('form button[type="submit"]').getAttribute('aria-disabled')).toBe(
+      'true',
+    );
+    expect(root.querySelector('button[aria-label="Withdraw Cupper One"]').disabled).toBe(false);
+    expect(
+      root.querySelector('button[aria-label="Withdraw Cupper One"]').getAttribute('aria-disabled'),
+    ).toBe('true');
 
     await new Promise((resolve) => setTimeout(resolve, 0));
     await new Promise((resolve) => setTimeout(resolve, 0));

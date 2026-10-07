@@ -29,7 +29,9 @@ export default defineConfig({
         app: fileURLToPath(new URL('./app/index.html', import.meta.url)),
         toolsTimer: fileURLToPath(new URL('./tools/timer/index.html', import.meta.url)),
         guessTheBean: fileURLToPath(new URL('./guess-the-bean/index.html', import.meta.url)),
-        guessTheBeanPlay: fileURLToPath(new URL('./guess-the-bean/play/index.html', import.meta.url)),
+        guessTheBeanPlay: fileURLToPath(
+          new URL('./guess-the-bean/play/index.html', import.meta.url),
+        ),
       },
     },
   },

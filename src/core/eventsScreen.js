@@ -14,7 +14,7 @@
 // passes it in), keeping that literal in the one composition-root file
 // already allowed to know about Cup Taster.
 import { getSupabase } from './supabaseClient.js';
-import { el, labeledField } from './dom.js';
+import { el, labeledField, setBusyDisabled, withFocusPreservation } from './dom.js';
 import { describeError } from './errors.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
 import { createEvent, listEventsForOrg, deleteTestEvent } from './events.js';
@@ -114,7 +114,15 @@ export function renderCreateForm(draft, { disabled }) {
     attrs: { type: 'text', 'aria-label': 'Event name', 'data-field': 'name', required: 'required' },
   });
   nameInput.value = draft.name;
-  nameInput.disabled = disabled;
+  setBusyDisabled(nameInput, disabled);
+  // setBusyDisabled only sets aria-disabled/aria-busy — unlike the native
+  // `disabled` it replaces, that alone doesn't stop the field from being
+  // focused and typed into. `readOnly`, not `disabled`: it blocks editing
+  // the same way while (unlike `disabled`) leaving the field focusable, so
+  // it can't reintroduce the very focus-loss bug this task exists to fix
+  // (found in review, ui-accessibility-reviewer — every button in this
+  // rollout got an equivalent re-entry guard, but the text fields didn't).
+  nameInput.readOnly = disabled;
   nameInput.addEventListener('input', () => {
     draft.name = nameInput.value;
   });
@@ -124,7 +132,9 @@ export function renderCreateForm(draft, { disabled }) {
     attrs: { type: 'date', 'aria-label': 'Event date (optional)', 'data-field': 'eventDate' },
   });
   dateInput.value = draft.eventDate;
-  dateInput.disabled = disabled;
+  setBusyDisabled(dateInput, disabled);
+  // See nameInput's own comment above for why readOnly, not disabled.
+  dateInput.readOnly = disabled;
   dateInput.addEventListener('input', () => {
     draft.eventDate = dateInput.value;
   });
@@ -134,7 +144,9 @@ export function renderCreateForm(draft, { disabled }) {
     attrs: { type: 'text', 'aria-label': 'Venue (optional)', 'data-field': 'venue' },
   });
   venueInput.value = draft.venue;
-  venueInput.disabled = disabled;
+  setBusyDisabled(venueInput, disabled);
+  // See nameInput's own comment above for why readOnly, not disabled.
+  venueInput.readOnly = disabled;
   venueInput.addEventListener('input', () => {
     draft.venue = venueInput.value;
   });
@@ -147,8 +159,17 @@ export function renderCreateForm(draft, { disabled }) {
     attrs: { type: 'checkbox', 'data-field': 'isTest' },
   });
   isTestInput.checked = draft.isTest;
-  isTestInput.disabled = disabled;
+  setBusyDisabled(isTestInput, disabled);
   isTestInput.addEventListener('change', () => {
+    // aria-disabled (see core/dom.js's setBusyDisabled) doesn't stop the
+    // browser from flipping a checkbox's own `checked` state before this
+    // handler runs, unlike the native `disabled` it replaces — while busy,
+    // revert the stray flip instead of accepting it, rather than letting a
+    // click during submit silently change what the checkbox shows.
+    if (isTestInput.getAttribute('aria-disabled') === 'true') {
+      isTestInput.checked = draft.isTest;
+      return;
+    }
     draft.isTest = isTestInput.checked;
   });
   const isTestField = el('label', { className: 'checkbox-field' }, [
@@ -159,9 +180,9 @@ export function renderCreateForm(draft, { disabled }) {
   const submitButton = el('button', {
     className: 'btn btn-primary tap-target',
     text: disabled ? 'Creating…' : 'Create event',
-    attrs: { type: 'submit' },
+    attrs: { type: 'submit', 'data-focus-key': 'create-event-submit' },
   });
-  submitButton.disabled = disabled;
+  setBusyDisabled(submitButton, disabled);
 
   return el('form', { className: 'create-event-form' }, [
     labeledField('Event name', nameInput),
@@ -368,62 +389,68 @@ export async function mountEventsScreen(
       return;
     }
 
-    root.innerHTML = '';
-    const container = el('section', { className: 'screen-container events-screen' });
-    container.appendChild(
-      el('h1', { id: 'events-heading', text: 'Events', attrs: { tabindex: '-1' } }),
-    );
+    withFocusPreservation(root, renderInner);
 
-    const feedback = el('div', {
-      className: 'screen-feedback',
-      attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
-    });
-    if (pendingError) {
-      setFeedback(feedback, pendingError, 'error');
-      pendingError = null;
-    } else if (pendingSuccess) {
-      setFeedback(feedback, pendingSuccess, 'success');
-      pendingSuccess = null;
-    }
-    // Appended right after the heading, not after both cards (found in
-    // production UI/UX feedback: a message rendered at the very bottom of
-    // the page, below the create-event form, was easy to miss entirely for
-    // an organiser working near the top — the scrollIntoView call below
-    // compensated for error tone, but jumping the viewport is itself a
-    // jarring way to surface a message someone should just see). `.card`'s
-    // own display: none-when-empty (heatsScreen.css's `.screen-feedback`
-    // rule) means this costs nothing when there's nothing to show.
-    container.appendChild(feedback);
+    function renderInner() {
+      root.innerHTML = '';
+      const container = el('section', { className: 'screen-container events-screen' });
+      container.appendChild(
+        el('h1', { id: 'events-heading', text: 'Events', attrs: { tabindex: '-1' } }),
+      );
 
-    container.appendChild(
-      el('div', { className: 'card' }, [
-        el('h2', { text: 'Your events' }),
-        renderEventsList(events, {
-          deleteStates,
-          deleteHandlers: {
-            onDeleteClick: handleDeleteClick,
-            onConfirmDelete: handleConfirmDelete,
-            onCancelDelete: handleCancelDelete,
-          },
-        }),
-      ]),
-    );
+      const feedback = el('div', {
+        className: 'screen-feedback',
+        attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
+      });
+      if (pendingError) {
+        setFeedback(feedback, pendingError, 'error');
+        pendingError = null;
+      } else if (pendingSuccess) {
+        setFeedback(feedback, pendingSuccess, 'success');
+        pendingSuccess = null;
+      }
+      // Appended right after the heading, not after both cards (found in
+      // production UI/UX feedback: a message rendered at the very bottom of
+      // the page, below the create-event form, was easy to miss entirely for
+      // an organiser working near the top — the scrollIntoView call below
+      // compensated for error tone, but jumping the viewport is itself a
+      // jarring way to surface a message someone should just see). `.card`'s
+      // own display: none-when-empty (heatsScreen.css's `.screen-feedback`
+      // rule) means this costs nothing when there's nothing to show.
+      container.appendChild(feedback);
 
-    const form = renderCreateForm(draft, { disabled: creating });
-    form.addEventListener('submit', handleCreate);
-    container.appendChild(
-      el('div', { className: 'card' }, [el('h2', { text: 'Create event' }), form]),
-    );
+      container.appendChild(
+        el('div', { className: 'card' }, [
+          el('h2', { text: 'Your events' }),
+          renderEventsList(events, {
+            deleteStates,
+            deleteHandlers: {
+              onDeleteClick: handleDeleteClick,
+              onConfirmDelete: handleConfirmDelete,
+              onCancelDelete: handleCancelDelete,
+            },
+          }),
+        ]),
+      );
 
-    root.appendChild(container);
+      const form = renderCreateForm(draft, { disabled: creating });
+      form.addEventListener('submit', handleCreate);
+      container.appendChild(
+        el('div', { className: 'card' }, [el('h2', { text: 'Create event' }), form]),
+      );
 
-    if (focusAfterRender) {
-      const target = root.querySelector(focusAfterRender);
-      target?.focus();
-      focusAfterRender = null;
-    } else if (feedback.dataset.tone === 'error') {
-      feedback.scrollIntoView?.({ block: 'nearest' });
-      feedback.focus();
+      root.appendChild(container);
+
+      if (focusAfterRender) {
+        const target = root.querySelector(focusAfterRender);
+        target?.focus();
+        focusAfterRender = null;
+        return true;
+      } else if (feedback.dataset.tone === 'error') {
+        feedback.scrollIntoView?.({ block: 'nearest' });
+        feedback.focus();
+        return true;
+      }
     }
   }
 

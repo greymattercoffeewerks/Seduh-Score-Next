@@ -3,11 +3,11 @@
 Root non-negotiables apply here too. This is a **third kind of surface**, distinct from
 both existing "outside the core/formats boundary" precedents:
 
-| Directory                    | Auth/Supabase?      | Roster/scoring/advancement? | Fits                       |
-| ----------------------------- | -------------------- | ---------------------------- | --------------------------- |
-| `src/tools/` (e.g. Timer)     | No (`src/tools/CLAUDE.md` explicitly excludes it) | No | standalone utility |
-| `src/formats/<format>/`       | Yes, org-scoped       | Yes                          | a full competition format |
-| `src/community/guess-the-bean/` | **Yes**, but per-user, not org-scoped | **No** | neither of the above |
+| Directory                       | Auth/Supabase?                                    | Roster/scoring/advancement? | Fits                      |
+| ------------------------------- | ------------------------------------------------- | --------------------------- | ------------------------- |
+| `src/tools/` (e.g. Timer)       | No (`src/tools/CLAUDE.md` explicitly excludes it) | No                          | standalone utility        |
+| `src/formats/<format>/`         | Yes, org-scoped                                   | Yes                         | a full competition format |
+| `src/community/guess-the-bean/` | **Yes**, but per-user, not org-scoped             | **No**                      | neither of the above      |
 
 Guess the Bean is a **free Community-tier tool** (per
 `Handoffs and Specs/guess-the-bean-next-port-SPEC.md`) with real auth and a real Supabase
@@ -106,6 +106,7 @@ schema, both closed this phase (new migrations `20260914130000_guess_the_bean_be
 schema-guardian + security-reviewer after real fixes — a TOCTOU gap in
 `reset_guess_session_data`'s creator check, and `bean_count` being mutable post-reveal
 until a trigger locked it):
+
 - `sessions.bean_count` — the real answer, needed for Phase 5's winner-spotlight
   calculation, which Phase 1's schema never carried at all. Required, immutable after
   creation (enforced by a trigger, not just client-side), never exposed via anon's

@@ -752,7 +752,12 @@ describe('mountSetupScreen', () => {
     const savingButton = [...root.querySelectorAll('button')].find(
       (b) => b.textContent === 'Saving…',
     );
-    expect(savingButton?.disabled).toBe(true);
+    // aria-disabled/aria-busy, not native disabled — see core/dom.js's
+    // setBusyDisabled: native disabled would drop focus from the button the
+    // organiser just clicked straight to <body>.
+    expect(savingButton?.disabled).toBe(false);
+    expect(savingButton?.getAttribute('aria-disabled')).toBe('true');
+    expect(savingButton?.getAttribute('aria-busy')).toBe('true');
 
     await flush();
 

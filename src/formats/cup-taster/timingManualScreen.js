@@ -19,7 +19,7 @@ import { describeTimingConflict } from './timing.js';
 import { cupTasterOutboxHandlers } from './outboxHandlers.js';
 import { renderTimingRows, buildScoringLink, renderManualTimeFields } from './timingScreen.js';
 import { getSupabase } from '../../core/supabaseClient.js';
-import { el } from '../../core/dom.js';
+import { el, setBusyDisabled, withFocusPreservation } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
 import { formatDuration } from '../../core/duration.js';
 
@@ -85,10 +85,10 @@ export function renderManualEntryRows(hydratedEntries, { onSave }) {
         // here.
         const { saveButton } = manualFields;
         const originalLabel = saveButton.textContent;
-        saveButton.disabled = true;
+        setBusyDisabled(saveButton, true);
         saveButton.textContent = 'Saving…';
         onSave(entryId, totalSecs, () => {
-          saveButton.disabled = false;
+          setBusyDisabled(saveButton, false);
           saveButton.textContent = originalLabel;
         });
       },
@@ -214,120 +214,126 @@ export async function mountManualTimingScreen(
       }
     }
 
-    root.innerHTML = '';
+    withFocusPreservation(root, renderInner);
 
-    const container = el('section', { className: 'screen-container timing-screen' });
+    function renderInner() {
+      root.innerHTML = '';
 
-    // D9: is_test must render unmistakably on every surface an organiser or
-    // audience member can see.
-    if (data.event.is_test) {
-      container.appendChild(
-        el('div', { className: 'is-test-banner', text: 'Test Data — Not a Live Event' }),
-      );
-    }
+      const container = el('section', { className: 'screen-container timing-screen' });
 
-    container.appendChild(el('h1', { text: `Timing (manual) — Heat ${data.heat.heat_number}` }));
-
-    const feedback = el('div', {
-      className: 'screen-feedback',
-      attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
-    });
-    if (pendingError) {
-      setFeedback(feedback, pendingError, 'error');
-      pendingError = null;
-    } else if (pendingSuccess) {
-      setFeedback(feedback, pendingSuccess, 'success');
-      pendingSuccess = null;
-    }
-
-    if (data.heat.timing_mode !== 'manual') {
-      container.appendChild(
-        el('div', { className: 'card' }, [
-          el('p', {
-            text: `This heat is timing_mode "${data.heat.timing_mode}" — not the manual-timing surface.`,
-          }),
-        ]),
-      );
-    } else if (data.heat.status === 'pending') {
-      const rows = renderManualEntryRows(data.hydrated, {
-        // `totalSecs` arrives already validated — renderManualEntryRows' own
-        // onSave wrapper calls parseElapsedInput itself and only invokes
-        // this handler on success (see its own comment: a validation
-        // failure alone must never trigger a render(), matching
-        // timingScreen.js's identical onSaveManual contract).
-        onSave: async (entryId, totalSecs, restoreButton) => {
-          const savedEntry = data.hydrated.find((entry) => entry.entry_id === entryId);
-          try {
-            const { expectedElapsedSecs, flushResult } = await recordManualTime(
-              data.heat,
-              savedEntry,
-              totalSecs,
-              data.event.org_id,
-              client,
-              { handlers: cupTasterOutboxHandlers(client) },
-            );
-            pendingEntryCheck = {
-              heatEntryId: savedEntry.id,
-              displayName: savedEntry.displayName,
-              expectedElapsedSecs,
-              flushResult,
-            };
-          } catch (err) {
-            pendingError = describeError(err);
-          }
-          await renderOrShowError(feedback, restoreButton);
-        },
-      });
-      container.appendChild(
-        el('div', { className: 'card' }, [el('h2', { text: 'Cuppers' }), rows]),
-      );
-    } else {
-      container.appendChild(
-        el('div', { className: 'card' }, [
-          el('h2', {
-            id: 'timing-complete-heading',
-            text: 'Timing complete',
-            attrs: { tabindex: '-1' },
-          }),
-          el('p', { text: 'Every cupper has a final time.' }),
-          renderTimingRows(data.hydrated, { onStop: () => {} }),
-          // See timingScreen.js's identical use of the same shared
-          // helper — same live-found gap (no forward link out of this
-          // screen once timing's done).
-          buildScoringLink(eventId, heatId),
-        ]),
-      );
-      // Found in review (ui-accessibility-reviewer), same gap as
-      // timingScreen.js's identical fix: `feedback` is appended AFTER this
-      // card, so a keyboard/screen-reader user landing on it after the
-      // completing save would Tab FORWARD, past the "Score this heat" link
-      // that already sits earlier in the DOM. Gated on 'success'
-      // specifically, not any tone — see timingScreen.js's own comment on
-      // its identical guard: a rejected concurrent save also lands on this
-      // branch with an ERROR tone, and `feedback` (tabindex="-1", out of
-      // tab order) is the only reachable place a keyboard-only user could
-      // find that rejection text.
-      if (feedback.dataset.tone === 'success') {
-        completeHeadingFocus = true;
+      // D9: is_test must render unmistakably on every surface an organiser or
+      // audience member can see.
+      if (data.event.is_test) {
+        container.appendChild(
+          el('div', { className: 'is-test-banner', text: 'Test Data — Not a Live Event' }),
+        );
       }
-    }
 
-    container.appendChild(feedback);
-    root.appendChild(container);
+      container.appendChild(el('h1', { text: `Timing (manual) — Heat ${data.heat.heat_number}` }));
 
-    // Rebuild-then-refocus (§15.3): a saved row's Save button is replaced by
-    // fresh, re-prefilled inputs on every render, so there's no single
-    // stable element to return focus to — every action here lands on the
-    // feedback region instead, unlike timingScreen.js's screen (which
-    // still has an explicit target for its one distinct action, starting
-    // the heat) — except the one completing transition above, which now has
-    // its own explicit target for the same reason timingScreen.js's does.
-    if (completeHeadingFocus) {
-      completeHeadingFocus = false;
-      root.querySelector('#timing-complete-heading')?.focus();
-    } else if (feedback.dataset.tone) {
-      feedback.scrollIntoView?.({ block: 'nearest' });
-      feedback.focus();
+      const feedback = el('div', {
+        className: 'screen-feedback',
+        attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
+      });
+      if (pendingError) {
+        setFeedback(feedback, pendingError, 'error');
+        pendingError = null;
+      } else if (pendingSuccess) {
+        setFeedback(feedback, pendingSuccess, 'success');
+        pendingSuccess = null;
+      }
+
+      if (data.heat.timing_mode !== 'manual') {
+        container.appendChild(
+          el('div', { className: 'card' }, [
+            el('p', {
+              text: `This heat is timing_mode "${data.heat.timing_mode}" — not the manual-timing surface.`,
+            }),
+          ]),
+        );
+      } else if (data.heat.status === 'pending') {
+        const rows = renderManualEntryRows(data.hydrated, {
+          // `totalSecs` arrives already validated — renderManualEntryRows' own
+          // onSave wrapper calls parseElapsedInput itself and only invokes
+          // this handler on success (see its own comment: a validation
+          // failure alone must never trigger a render(), matching
+          // timingScreen.js's identical onSaveManual contract).
+          onSave: async (entryId, totalSecs, restoreButton) => {
+            const savedEntry = data.hydrated.find((entry) => entry.entry_id === entryId);
+            try {
+              const { expectedElapsedSecs, flushResult } = await recordManualTime(
+                data.heat,
+                savedEntry,
+                totalSecs,
+                data.event.org_id,
+                client,
+                { handlers: cupTasterOutboxHandlers(client) },
+              );
+              pendingEntryCheck = {
+                heatEntryId: savedEntry.id,
+                displayName: savedEntry.displayName,
+                expectedElapsedSecs,
+                flushResult,
+              };
+            } catch (err) {
+              pendingError = describeError(err);
+            }
+            await renderOrShowError(feedback, restoreButton);
+          },
+        });
+        container.appendChild(
+          el('div', { className: 'card' }, [el('h2', { text: 'Cuppers' }), rows]),
+        );
+      } else {
+        container.appendChild(
+          el('div', { className: 'card' }, [
+            el('h2', {
+              id: 'timing-complete-heading',
+              text: 'Timing complete',
+              attrs: { tabindex: '-1' },
+            }),
+            el('p', { text: 'Every cupper has a final time.' }),
+            renderTimingRows(data.hydrated, { onStop: () => {} }),
+            // See timingScreen.js's identical use of the same shared
+            // helper — same live-found gap (no forward link out of this
+            // screen once timing's done).
+            buildScoringLink(eventId, heatId),
+          ]),
+        );
+        // Found in review (ui-accessibility-reviewer), same gap as
+        // timingScreen.js's identical fix: `feedback` is appended AFTER this
+        // card, so a keyboard/screen-reader user landing on it after the
+        // completing save would Tab FORWARD, past the "Score this heat" link
+        // that already sits earlier in the DOM. Gated on 'success'
+        // specifically, not any tone — see timingScreen.js's own comment on
+        // its identical guard: a rejected concurrent save also lands on this
+        // branch with an ERROR tone, and `feedback` (tabindex="-1", out of
+        // tab order) is the only reachable place a keyboard-only user could
+        // find that rejection text.
+        if (feedback.dataset.tone === 'success') {
+          completeHeadingFocus = true;
+        }
+      }
+
+      container.appendChild(feedback);
+      root.appendChild(container);
+
+      // Rebuild-then-refocus (§15.3): a saved row's Save button is replaced by
+      // fresh, re-prefilled inputs on every render, so there's no single
+      // stable element to return focus to — every action here lands on the
+      // feedback region instead, unlike timingScreen.js's screen (which
+      // still has an explicit target for its one distinct action, starting
+      // the heat) — except the one completing transition above, which now has
+      // its own explicit target for the same reason timingScreen.js's does.
+      if (completeHeadingFocus) {
+        completeHeadingFocus = false;
+        root.querySelector('#timing-complete-heading')?.focus();
+        return true;
+      } else if (feedback.dataset.tone) {
+        feedback.scrollIntoView?.({ block: 'nearest' });
+        feedback.focus();
+        return true;
+      }
     }
   }
 

@@ -11,7 +11,9 @@ describe('validateCreateDraft', () => {
   it('requires a positive integer bean count', () => {
     expect(validateCreateDraft({ name: 'x', beanCount: '' }).beanCount).toMatch(/greater than 0/);
     expect(validateCreateDraft({ name: 'x', beanCount: '0' }).beanCount).toMatch(/greater than 0/);
-    expect(validateCreateDraft({ name: 'x', beanCount: 'abc' }).beanCount).toMatch(/greater than 0/);
+    expect(validateCreateDraft({ name: 'x', beanCount: 'abc' }).beanCount).toMatch(
+      /greater than 0/,
+    );
   });
 
   it('is satisfied by a valid draft', () => {
@@ -37,7 +39,13 @@ function fakeClient({ sessions = [], failOn = null } = {}) {
         ? Promise.resolve({ data: null, error: new Error('could not load sessions') })
         : Promise.resolve({ data: rows, error: null }),
     insert: (row) => {
-      const created = { id: `s${rows.length + 1}`, guess_enabled: true, revealed: false, orientation: 'landscape', ...row };
+      const created = {
+        id: `s${rows.length + 1}`,
+        guess_enabled: true,
+        revealed: false,
+        orientation: 'landscape',
+        ...row,
+      };
       rows = [created, ...rows];
       return {
         select: () => ({ single: () => Promise.resolve({ data: created, error: null }) }),
@@ -48,7 +56,10 @@ function fakeClient({ sessions = [], failOn = null } = {}) {
         select: () => ({
           single: () => {
             if (failOn === 'update') {
-              return Promise.resolve({ data: null, error: new Error('could not save that change') });
+              return Promise.resolve({
+                data: null,
+                error: new Error('could not save that change'),
+              });
             }
             rows = rows.map((r) => (r[col] === val ? { ...r, ...patch } : r));
             return Promise.resolve({ data: rows.find((r) => r[col] === val), error: null });
@@ -81,7 +92,10 @@ function fakeClient({ sessions = [], failOn = null } = {}) {
 }
 
 beforeEach(() => {
-  vi.stubGlobal('confirm', vi.fn(() => true));
+  vi.stubGlobal(
+    'confirm',
+    vi.fn(() => true),
+  );
   if (!global.URL.createObjectURL) global.URL.createObjectURL = vi.fn(() => 'blob:mock');
   if (!global.URL.revokeObjectURL) global.URL.revokeObjectURL = vi.fn();
 });
@@ -186,7 +200,13 @@ describe('mountSetupScreen', () => {
     let resolveUpdate;
     const client = fakeClient({
       sessions: [
-        { id: 's1', name: 'Session One', guess_enabled: true, revealed: false, orientation: 'landscape' },
+        {
+          id: 's1',
+          name: 'Session One',
+          guess_enabled: true,
+          revealed: false,
+          orientation: 'landscape',
+        },
       ],
     });
     const baseFrom = client.from;
@@ -289,7 +309,13 @@ describe('mountSetupScreen', () => {
     await mountSetupScreen(root, {
       client: fakeClient({
         sessions: [
-          { id: 's1', name: 'Session One', guess_enabled: true, revealed: true, orientation: 'landscape' },
+          {
+            id: 's1',
+            name: 'Session One',
+            guess_enabled: true,
+            revealed: true,
+            orientation: 'landscape',
+          },
         ],
       }),
     });
@@ -315,7 +341,9 @@ describe('mountSetupScreen', () => {
     revealButton.click();
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(root.querySelector('.gtb-toast')).toBeNull();
-    expect([...root.querySelectorAll('button')].find((b) => b.textContent === 'Revealed')).not.toBeUndefined();
+    expect(
+      [...root.querySelectorAll('button')].find((b) => b.textContent === 'Revealed'),
+    ).not.toBeUndefined();
   });
 
   it('End Session asks for confirmation, then removes the session and returns to the create view', async () => {
@@ -324,7 +352,13 @@ describe('mountSetupScreen', () => {
     await mountSetupScreen(root, {
       client: fakeClient({
         sessions: [
-          { id: 's1', name: 'Session One', guess_enabled: true, revealed: false, orientation: 'landscape' },
+          {
+            id: 's1',
+            name: 'Session One',
+            guess_enabled: true,
+            revealed: false,
+            orientation: 'landscape',
+          },
         ],
       }),
     });
@@ -332,7 +366,9 @@ describe('mountSetupScreen', () => {
     root.querySelector('.gtb-session-row').click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const endButton = [...root.querySelectorAll('button')].find((b) => b.textContent === 'End session');
+    const endButton = [...root.querySelectorAll('button')].find(
+      (b) => b.textContent === 'End session',
+    );
     endButton.click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -341,13 +377,22 @@ describe('mountSetupScreen', () => {
   });
 
   it('declining the End Session confirmation leaves the session untouched', async () => {
-    vi.stubGlobal('confirm', vi.fn(() => false));
+    vi.stubGlobal(
+      'confirm',
+      vi.fn(() => false),
+    );
     const root = document.createElement('div');
     document.body.appendChild(root);
     await mountSetupScreen(root, {
       client: fakeClient({
         sessions: [
-          { id: 's1', name: 'Session One', guess_enabled: true, revealed: false, orientation: 'landscape' },
+          {
+            id: 's1',
+            name: 'Session One',
+            guess_enabled: true,
+            revealed: false,
+            orientation: 'landscape',
+          },
         ],
       }),
     });
@@ -355,7 +400,9 @@ describe('mountSetupScreen', () => {
     root.querySelector('.gtb-session-row').click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const endButton = [...root.querySelectorAll('button')].find((b) => b.textContent === 'End session');
+    const endButton = [...root.querySelectorAll('button')].find(
+      (b) => b.textContent === 'End session',
+    );
     endButton.click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -365,7 +412,13 @@ describe('mountSetupScreen', () => {
   it('Reset Data calls the RPC and shows a confirmation toast', async () => {
     const client = fakeClient({
       sessions: [
-        { id: 's1', name: 'Session One', guess_enabled: true, revealed: true, orientation: 'landscape' },
+        {
+          id: 's1',
+          name: 'Session One',
+          guess_enabled: true,
+          revealed: true,
+          orientation: 'landscape',
+        },
       ],
     });
     const root = document.createElement('div');
@@ -375,7 +428,9 @@ describe('mountSetupScreen', () => {
     root.querySelector('.gtb-session-row').click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const resetButton = [...root.querySelectorAll('button')].find((b) => b.textContent === 'Reset data');
+    const resetButton = [...root.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Reset data',
+    );
     resetButton.click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -397,7 +452,13 @@ describe('mountSetupScreen', () => {
     let guessesFetchCount = 0;
     const client = fakeClient({
       sessions: [
-        { id: 's1', name: 'Session One', guess_enabled: true, revealed: false, orientation: 'landscape' },
+        {
+          id: 's1',
+          name: 'Session One',
+          guess_enabled: true,
+          revealed: false,
+          orientation: 'landscape',
+        },
       ],
     });
     const baseFrom = client.from;
@@ -443,7 +504,13 @@ describe('mountSetupScreen', () => {
     await mountSetupScreen(root, {
       client: fakeClient({
         sessions: [
-          { id: 's1', name: 'Session One', guess_enabled: true, revealed: false, orientation: 'landscape' },
+          {
+            id: 's1',
+            name: 'Session One',
+            guess_enabled: true,
+            revealed: false,
+            orientation: 'landscape',
+          },
         ],
       }),
     });
@@ -468,7 +535,13 @@ describe('mountSetupScreen', () => {
       const handle = await mountSetupScreen(root, {
         client: fakeClient({
           sessions: [
-            { id: 's1', name: 'Session One', guess_enabled: true, revealed: false, orientation: 'landscape' },
+            {
+              id: 's1',
+              name: 'Session One',
+              guess_enabled: true,
+              revealed: false,
+              orientation: 'landscape',
+            },
           ],
         }),
       });
@@ -513,7 +586,13 @@ describe('mountSetupScreen', () => {
     await mountSetupScreen(root, {
       client: fakeClient({
         sessions: [
-          { id: 's1', name: 'Session One', guess_enabled: true, revealed: false, orientation: 'landscape' },
+          {
+            id: 's1',
+            name: 'Session One',
+            guess_enabled: true,
+            revealed: false,
+            orientation: 'landscape',
+          },
         ],
         failOn: 'update',
       }),
@@ -528,7 +607,9 @@ describe('mountSetupScreen', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(root.querySelector('.gtb-toast').textContent).toMatch(/could not save that change/i);
-    expect(root.querySelector('#gtb-guess-enabled-toggle').getAttribute('aria-disabled')).toBeNull();
+    expect(
+      root.querySelector('#gtb-guess-enabled-toggle').getAttribute('aria-disabled'),
+    ).toBeNull();
   });
 
   it('a failed Reset Data shows an error toast and re-enables the buttons', async () => {
@@ -537,7 +618,13 @@ describe('mountSetupScreen', () => {
     await mountSetupScreen(root, {
       client: fakeClient({
         sessions: [
-          { id: 's1', name: 'Session One', guess_enabled: true, revealed: true, orientation: 'landscape' },
+          {
+            id: 's1',
+            name: 'Session One',
+            guess_enabled: true,
+            revealed: true,
+            orientation: 'landscape',
+          },
         ],
         failOn: 'rpc',
       }),
@@ -546,7 +633,9 @@ describe('mountSetupScreen', () => {
     root.querySelector('.gtb-session-row').click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const resetButton = [...root.querySelectorAll('button')].find((b) => b.textContent === 'Reset data');
+    const resetButton = [...root.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Reset data',
+    );
     resetButton.click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -564,7 +653,13 @@ describe('mountSetupScreen', () => {
     await mountSetupScreen(root, {
       client: fakeClient({
         sessions: [
-          { id: 's1', name: 'Session One', guess_enabled: true, revealed: false, orientation: 'landscape' },
+          {
+            id: 's1',
+            name: 'Session One',
+            guess_enabled: true,
+            revealed: false,
+            orientation: 'landscape',
+          },
         ],
         failOn: 'delete',
       }),
@@ -573,7 +668,9 @@ describe('mountSetupScreen', () => {
     root.querySelector('.gtb-session-row').click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const endButton = [...root.querySelectorAll('button')].find((b) => b.textContent === 'End session');
+    const endButton = [...root.querySelectorAll('button')].find(
+      (b) => b.textContent === 'End session',
+    );
     endButton.click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -586,7 +683,9 @@ describe('mountSetupScreen', () => {
     document.body.appendChild(root);
     const client = fakeClient({ sessions: [] });
     client.from('sessions').insert = () => ({
-      select: () => ({ single: () => Promise.resolve({ data: null, error: new Error('name already taken') }) }),
+      select: () => ({
+        single: () => Promise.resolve({ data: null, error: new Error('name already taken') }),
+      }),
     });
     await mountSetupScreen(root, { client });
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -620,7 +719,13 @@ describe('mountSetupScreen', () => {
     document.body.appendChild(root);
     const client = fakeClient({
       sessions: [
-        { id: 's1', name: 'Session One', guess_enabled: true, revealed: false, orientation: 'landscape' },
+        {
+          id: 's1',
+          name: 'Session One',
+          guess_enabled: true,
+          revealed: false,
+          orientation: 'landscape',
+        },
       ],
     });
     client.from('sessions').delete = () => ({ eq: deleteSpy });
@@ -629,7 +734,9 @@ describe('mountSetupScreen', () => {
     root.querySelector('.gtb-session-row').click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const endButton = [...root.querySelectorAll('button')].find((b) => b.textContent === 'End session');
+    const endButton = [...root.querySelectorAll('button')].find(
+      (b) => b.textContent === 'End session',
+    );
     endButton.click();
     endButton.click();
     await new Promise((resolve) => setTimeout(resolve, 0));

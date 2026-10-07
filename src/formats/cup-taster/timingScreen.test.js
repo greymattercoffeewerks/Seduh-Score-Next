@@ -274,9 +274,32 @@ describe('renderTimingRows', () => {
     const stopButton = rows.querySelector('.btn-stop');
     const manualToggle = rows.querySelector('.btn-manual-toggle');
     stopButton.click();
-    expect(stopButton.disabled).toBe(true);
+    // aria-disabled/aria-busy, not native disabled — see core/dom.js's
+    // setBusyDisabled: native disabled would drop focus from the button the
+    // organiser just tapped straight to <body>.
+    expect(stopButton.disabled).toBe(false);
+    expect(stopButton.getAttribute('aria-disabled')).toBe('true');
+    expect(stopButton.getAttribute('aria-busy')).toBe('true');
     expect(stopButton.textContent).toBe('Stopping…');
-    expect(manualToggle.disabled).toBe(true);
+    expect(manualToggle.disabled).toBe(false);
+    expect(manualToggle.getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('a rapid double-click on Stop calls onStop only once, not twice — proves the aria-disabled re-entry guard, not click suppression, is what protects this now that stopButton is no longer natively disabled (scoring-auditor, found missing after the aria-disabled rollout)', () => {
+    const onStop = vi.fn();
+    const rows = renderTimingRows(
+      [{ entry_id: 'e1', displayName: 'Cupper One', elapsed_secs: null }],
+      { onStop },
+    );
+    const stopButton = rows.querySelector('.btn-stop');
+    // Two clicks with no await in between — stopButton is aria-disabled, not
+    // natively disabled (core/dom.js's setBusyDisabled), so the second click
+    // DOES dispatch; only the `if (stopButton.getAttribute('aria-disabled')
+    // === 'true') return;` guard at the top of the handler stops it firing
+    // twice.
+    stopButton.click();
+    stopButton.click();
+    expect(onStop).toHaveBeenCalledTimes(1);
   });
 
   it('offers a manual-entry fallback alongside Stop for an unstopped entry, hidden by default', () => {
@@ -389,10 +412,13 @@ describe('renderTimingRows', () => {
     saveButton.click();
     expect(saveButton.disabled).toBe(false);
 
-    // Now valid — must disable immediately, synchronously.
+    // Now valid — must disable immediately, synchronously. aria-disabled/
+    // aria-busy, not native disabled — see core/dom.js's setBusyDisabled.
     secondsInput.value = '30';
     saveButton.click();
-    expect(saveButton.disabled).toBe(true);
+    expect(saveButton.disabled).toBe(false);
+    expect(saveButton.getAttribute('aria-disabled')).toBe('true');
+    expect(saveButton.getAttribute('aria-busy')).toBe('true');
     expect(saveButton.textContent).toBe('Saving…');
   });
 
@@ -480,8 +506,11 @@ describe('mountTimingScreen', () => {
 
     // No await in between — the mutation must happen synchronously, before
     // this handler's own first `await`, or this proves nothing about the
-    // actual in-flight window.
-    expect(startButton.disabled).toBe(true);
+    // actual in-flight window. aria-disabled/aria-busy, not native disabled
+    // — see core/dom.js's setBusyDisabled.
+    expect(startButton.disabled).toBe(false);
+    expect(startButton.getAttribute('aria-disabled')).toBe('true');
+    expect(startButton.getAttribute('aria-busy')).toBe('true');
     expect(startButton.textContent).toBe('Starting…');
   });
 

@@ -7,10 +7,7 @@
 // this is just plumbing" shape as core/events.js's own comment.
 import { getSupabase } from '../../core/supabaseClient.js';
 
-export async function createSession(
-  { creatorId, name, beanCount },
-  client = getSupabase(),
-) {
+export async function createSession({ creatorId, name, beanCount }, client = getSupabase()) {
   const { data, error } = await client
     .from('sessions')
     .insert({ creator_id: creatorId, name, bean_count: beanCount })

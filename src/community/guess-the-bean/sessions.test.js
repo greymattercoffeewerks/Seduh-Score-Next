@@ -48,12 +48,16 @@ describe('createSession', () => {
   it('throws the raw error on failure', async () => {
     const client = {
       from: () => ({
-        insert: () => ({ select: () => ({ single: () => Promise.resolve({ data: null, error: new Error('boom') }) }) }),
+        insert: () => ({
+          select: () => ({
+            single: () => Promise.resolve({ data: null, error: new Error('boom') }),
+          }),
+        }),
       }),
     };
-    await expect(createSession({ creatorId: 'u1', name: 'x', beanCount: 1 }, client)).rejects.toThrow(
-      'boom',
-    );
+    await expect(
+      createSession({ creatorId: 'u1', name: 'x', beanCount: 1 }, client),
+    ).rejects.toThrow('boom');
   });
 });
 
@@ -104,7 +108,11 @@ describe('updateSession', () => {
             return {
               eq: (col, val) => {
                 calls.push(['eq', col, val]);
-                return { select: () => ({ single: () => Promise.resolve({ data: { id: val, ...patch }, error: null }) }) };
+                return {
+                  select: () => ({
+                    single: () => Promise.resolve({ data: { id: val, ...patch }, error: null }),
+                  }),
+                };
               },
             };
           },

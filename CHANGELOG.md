@@ -1,3 +1,69 @@
+## Cup Taster focus-preservation accessibility extension · 2026-09-15
+
+**Task ID**: cup-taster-focus-preservation-accessibility-extension (follow-up to task_8aad08ec)
+
+**Context**: task_8aad08ec introduced `setBusyDisabled()` and `withFocusPreservation()` helpers
+to `src/core/dom.js` and applied them to `loginScreen.js`, `guess-the-bean/authScreen.js`,
+and `guess-the-bean/setupScreen.js`. That task discovered identical focus-management gaps
+across Cup Taster's organiser screens but deliberately deferred them as a separate follow-up,
+prioritizing judge-facing, under-time-pressure surfaces.
+
+**Scope gap closed**: Applied the same focus-preservation + aria-disabled pattern to every
+organiser screen in Cup Taster and core/eventsScreen.js — ~43 raw `.disabled = <condition>`
+assignments replaced with `setBusyDisabled(node, <condition>)`, every screen's `render()`
+wrapped in `withFocusPreservation()` via a nested `renderInner()` function.
+
+**Key implementation decisions**:
+
+1. **Native `disabled` only for genuinely structural/permanent unavailability** — a confirmed
+   read-only view, a terminal-stage cutoff field, move-up-at-index-0 (inheriting scoringScreen.js's
+   pre-existing `data-readonly` precedent for that distinction). Everything else (busy states,
+   locked-by-concurrency, in-flight requests) → `setBusyDisabled()` + `aria-disabled` guard.
+
+2. **Text/date/number input fields need `.readOnly = disabled` alongside `setBusyDisabled()`** —
+   aria-disabled doesn't block typing the way native disabled does. Applied to:
+
+- `eventsScreen.js`: nameInput, dateInput, venueInput
+- `rosterScreen.js`: nameInput, phoneInput, emailInput, cafeInput, bibInput
+
+3. **Click handler re-entry guards on every interactive element** — `if (node.getAttribute('aria-disabled') === 'true') return;` — required because aria-disabled doesn't block event dispatch the way native disabled does. Every button, every handler, every state transition path.
+
+4. **Checkbox value-revert guards in change listeners** — checkboxes (like eventsScreen.js's isTestInput) mutate their own `checked` natively before the change listener fires; if busy early-return is hit, snap the value back to prevent UI inconsistency.
+
+5. **Fallback comment for setupScreen.js/heatsScreen.js row renderers** — both reuse the same `data-field` value across every row (e.g. 'kind', 'setCount', 'heatNumber'). If a future render path is added without an explicit focusAfterRender, withFocusPreservation's fallback logic would silently refocus the wrong row. Documented as a deliberate implementation constraint rather than refactored, per ui-accessibility-reviewer's assessment (dead code today, not a blocker).
+
+**Files touched**:
+
+- `src/core/eventsScreen.js` + test — setBusyDisabled on submit/delete buttons; withFocusPreservation on render; .readOnly guards on nameInput/dateInput/venueInput; re-entry guards on all click handlers; checkbox value-revert guard on isTestInput change listener
+- `src/formats/cup-taster/heatsScreen.js` + test — same pattern; documented row-reuse fallback constraint
+- `src/formats/cup-taster/setupScreen.js` + test — same pattern; documented row-reuse fallback constraint
+- `src/formats/cup-taster/rosterScreen.js` + test — same pattern; .readOnly guards on nameInput/phoneInput/emailInput/cafeInput/bibInput
+- `src/formats/cup-taster/scoringScreen.js` + test — split busy state (confirmInFlight, locked) from structural state (!complete, interactive:false); setBusyDisabled + re-entry guards on all scoring-toggle/mark-wrong buttons; re-entry guard on confirmButton; fixed stale test comment claiming jsdom suppresses clicks on disabled buttons (now disproven by the refactor itself — confirmInFlight guard is what's actually being proven)
+- `src/formats/cup-taster/standingsScreen.js` + test — setBusyDisabled + re-entry guard on Advance-to-next-stage button; added call-count regression test to catch double-resolve bugs
+- `src/formats/cup-taster/timingScreen.js` + test — setBusyDisabled + re-entry guard on Stop button; added call-count regression test to catch double-onStop calls
+- `src/formats/cup-taster/timingManualScreen.js` + test — setBusyDisabled + re-entry guard on Save/Delete buttons
+
+**Four reviewers in parallel** (all findings fixed before final review):
+
+- **module-boundary-checker** — clean. Confirmed `core/dom.js` stays import-free and format-agnostic; re-entry guard pattern (one-liner per screen, with differing handler shapes) is reasonable and already established in scoringScreen.js's pre-existing `data-readonly` handling.
+- **code-reviewer** — found 1 real issue: scoringScreen.js was baking transient busy state (confirmInFlight, locked) into a raw declarative `disabled: 'disabled'` attrs object at element-creation time instead of using setBusyDisabled. Fixed by splitting structural (!complete, interactive:false) from busy state and applying setBusyDisabled to the latter, plus matching re-entry guards on those handlers. Re-verified live.
+- **scoring-auditor** — verified via mutation testing (disabling each guard individually, confirming double-writes, restoring) that every re-entry guard is load-bearing and executes synchronously before any first await. Flagged that standingsScreen.js and timingScreen.js had no call-count regression tests proving this — added explicit double-click/concurrent-call tests to both files to catch any future regressions.
+- **ui-accessibility-reviewer** — Round 1 hit a rate-limit failure mid-review and had to be relaunched from scratch. Round 2 found and I fixed 2 real gaps: (1) setText/date/number fields: .readOnly guards missing alongside setBusyDisabled, added to all 8 fields across eventsScreen.js and rosterScreen.js with regression tests. (2) setupScreen.js renderStageRow and heatsScreen.js renderManualAssignmentForm reuse same data-field across rows, risking silent focus-to-wrong-row if future code path added without explicit focusAfterRender — documented with explanatory comments rather than refactored (currently dead code, not blocking per reviewer assessment).
+
+**Test coverage**: 1192 tests pass (57 files). Added:
+
+- eventsScreen.test.js: readOnly guards on text inputs (regression test)
+- rosterScreen.test.js: readOnly guards on text inputs (regression test)
+- standingsScreen.test.js: "Advance to next stage" resolve_stage call-count test (catching double-resolve)
+- timingScreen.test.js: Stop-button onStop call-count test (catching double-onStop)
+- scoringScreen.test.js: fixed stale comment; confirmButton + per-cupper button re-entry tests still passing
+
+Lint clean (`npx eslint src/`).
+
+**Known open item**: none. Every findable focus-management and aria-disabled gap across all organiser surfaces now closed. This completes task_8aad08ec's own deliberate deferred scope.
+
+---
+
 ## Guess the Bean Supabase port — Phase 4: Participant entry flow · 2026-09-15
 
 **Task ID**: guess-the-bean-phase4-participant-entry

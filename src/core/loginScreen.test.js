@@ -35,7 +35,11 @@ describe('renderLoginForm', () => {
     // that. Found in review (ui-accessibility-reviewer).
     const form = renderLoginForm({ email: '', password: '' }, { disabled: true });
     expect(form.querySelector('button[type="submit"]').textContent).toBe('Signing in…');
-    for (const field of ['input[type="email"]', 'input[type="password"]', 'button[type="submit"]']) {
+    for (const field of [
+      'input[type="email"]',
+      'input[type="password"]',
+      'button[type="submit"]',
+    ]) {
       const node = form.querySelector(field);
       expect(node.disabled).toBe(false);
       expect(node.getAttribute('aria-disabled')).toBe('true');

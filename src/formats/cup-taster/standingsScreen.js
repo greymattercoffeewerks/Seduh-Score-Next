@@ -24,7 +24,7 @@
 // together with the final advancement in one atomic write, the same "one
 // atomic action" preference T4.5's Confirm established for this project.
 import { findEvent } from '../../core/events.js';
-import { el, withSrExpansion } from '../../core/dom.js';
+import { el, withSrExpansion, setBusyDisabled, withFocusPreservation } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
 import { getSupabase } from '../../core/supabaseClient.js';
 import { formatDuration, formatDurationLong } from '../../core/duration.js';
@@ -416,177 +416,183 @@ export async function mountStandingsScreen(
     // real DOM-write race between the router..." entry.
     if (signal?.aborted) return;
 
-    root.innerHTML = '';
-    const container = el('section', { className: 'screen-container standings-screen' });
+    withFocusPreservation(root, renderInner);
 
-    if (data.event.is_test) {
+    function renderInner() {
+      root.innerHTML = '';
+      const container = el('section', { className: 'screen-container standings-screen' });
+
+      if (data.event.is_test) {
+        container.appendChild(
+          el('div', { className: 'is-test-banner', text: 'Test Data — Not a Live Event' }),
+        );
+      }
+
       container.appendChild(
-        el('div', { className: 'is-test-banner', text: 'Test Data — Not a Live Event' }),
+        el('h1', {
+          text: `Standings — ${stageKindLabel(data.stage.kind)} (Stage ${data.stage.ordinal})`,
+        }),
       );
-    }
 
-    container.appendChild(
-      el('h1', {
-        text: `Standings — ${stageKindLabel(data.stage.kind)} (Stage ${data.stage.ordinal})`,
-      }),
-    );
-
-    const feedback = el('div', {
-      className: 'screen-feedback',
-      attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
-    });
-    if (pendingError) {
-      setFeedback(feedback, pendingError, 'error');
-      pendingError = null;
-    } else if (pendingSuccess) {
-      setFeedback(feedback, pendingSuccess, 'success');
-      pendingSuccess = null;
-    }
-
-    const state = deriveState(data);
-    // Derived from `stage.cutoff`, not `data.nextStage === null` — the next
-    // stage is deliberately never fetched once this stage is already
-    // `complete` (see loadState), which would otherwise make every closed
-    // cutoff stage misreport itself as terminal here.
-    const isTerminal = data.stage.cutoff == null;
-    const advancingIds = new Set(data.stageLevel.advancing.map(({ item }) => item.stageEntryId));
-    const tiedBorderIds = new Set(
-      data.stageLevel.tiedAtBorder.map(({ item }) => item.stageEntryId),
-    );
-
-    container.appendChild(
-      el('div', { className: 'card' }, [
-        el('h2', { text: 'Standings', attrs: { tabindex: '-1' }, id: 'standings-heading' }),
-        renderStandingsTable(data.ranked, { advancingIds, tiedBorderIds }),
-      ]),
-    );
-
-    if (state.kind === 'complete') {
-      container.appendChild(
-        el('div', { className: 'card' }, [
-          el('p', {
-            text: isTerminal
-              ? 'Champion declared. This stage is closed.'
-              : 'Advanced. This stage is closed.',
-          }),
-        ]),
-      );
-    } else if (state.kind === 'not-ready') {
-      container.appendChild(
-        el('div', { className: 'card' }, [
-          el('p', {
-            text: `Waiting on ${state.pendingHeatCount} more heat${state.pendingHeatCount === 1 ? '' : 's'} to be confirmed before standings are final.`,
-          }),
-        ]),
-      );
-    } else if (state.kind === 'clean') {
-      const button = el('button', {
-        className: 'btn btn-primary tap-target',
-        text: isTerminal ? 'Declare champion' : 'Advance to next stage',
-        attrs: actionInFlight ? { disabled: 'disabled' } : {},
+      const feedback = el('div', {
+        className: 'screen-feedback',
+        attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
       });
-      button.addEventListener('click', async () => {
-        if (actionInFlight) return;
-        // Mutated directly, not left to the next render() — this button's
-        // own `attrs: actionInFlight ? ... : {}` above is only evaluated
-        // while render() BUILDS it, which already happened before this
-        // handler runs; nothing re-renders again until commit() finishes,
-        // so without this the disabling would be enforced (commit()'s own
-        // guard) but never actually visible during the write (ROADMAP.md
-        // gap, closed 2026-09-11).
-        const originalLabel = isTerminal ? 'Declare champion' : 'Advance to next stage';
-        button.disabled = true;
-        button.textContent = isTerminal ? 'Declaring champion…' : 'Advancing…';
-        const succeeded = await commit(data, {});
-        if (succeeded) focusAfterRender = '#standings-heading';
-        await renderOrShowError(feedback, () => {
-          button.disabled = false;
-          button.textContent = originalLabel;
+      if (pendingError) {
+        setFeedback(feedback, pendingError, 'error');
+        pendingError = null;
+      } else if (pendingSuccess) {
+        setFeedback(feedback, pendingSuccess, 'success');
+        pendingSuccess = null;
+      }
+
+      const state = deriveState(data);
+      // Derived from `stage.cutoff`, not `data.nextStage === null` — the next
+      // stage is deliberately never fetched once this stage is already
+      // `complete` (see loadState), which would otherwise make every closed
+      // cutoff stage misreport itself as terminal here.
+      const isTerminal = data.stage.cutoff == null;
+      const advancingIds = new Set(data.stageLevel.advancing.map(({ item }) => item.stageEntryId));
+      const tiedBorderIds = new Set(
+        data.stageLevel.tiedAtBorder.map(({ item }) => item.stageEntryId),
+      );
+
+      container.appendChild(
+        el('div', { className: 'card' }, [
+          el('h2', { text: 'Standings', attrs: { tabindex: '-1' }, id: 'standings-heading' }),
+          renderStandingsTable(data.ranked, { advancingIds, tiedBorderIds }),
+        ]),
+      );
+
+      if (state.kind === 'complete') {
+        container.appendChild(
+          el('div', { className: 'card' }, [
+            el('p', {
+              text: isTerminal
+                ? 'Champion declared. This stage is closed.'
+                : 'Advanced. This stage is closed.',
+            }),
+          ]),
+        );
+      } else if (state.kind === 'not-ready') {
+        container.appendChild(
+          el('div', { className: 'card' }, [
+            el('p', {
+              text: `Waiting on ${state.pendingHeatCount} more heat${state.pendingHeatCount === 1 ? '' : 's'} to be confirmed before standings are final.`,
+            }),
+          ]),
+        );
+      } else if (state.kind === 'clean') {
+        const button = el('button', {
+          className: 'btn btn-primary tap-target',
+          text: isTerminal ? 'Declare champion' : 'Advance to next stage',
         });
-      });
-      container.appendChild(el('div', { className: 'card' }, [button]));
-    } else if (state.kind === 'needs-tiebreak-heat') {
-      const button = el('button', {
-        className: 'btn btn-primary tap-target',
-        text: 'Create tiebreak heat',
-        attrs: actionInFlight ? { disabled: 'disabled' } : {},
-      });
-      button.addEventListener('click', async () => {
-        if (actionInFlight) return;
-        actionInFlight = true;
-        // See the 'clean'-state button's own comment above.
-        button.disabled = true;
-        button.textContent = 'Creating…';
-        try {
-          await createTiebreakHeatForTie(stageId, state.tiedAtBorder, {}, client);
-          focusAfterRender = '#standings-heading';
-        } catch (err) {
-          pendingError = describeError(err);
-        }
-        actionInFlight = false;
-        await renderOrShowError(feedback, () => {
-          button.disabled = false;
-          button.textContent = 'Create tiebreak heat';
+        setBusyDisabled(button, actionInFlight);
+        button.addEventListener('click', async () => {
+          if (actionInFlight) return;
+          // Mutated directly, not left to the next render() — this button's
+          // own setBusyDisabled() call above is only evaluated while render()
+          // BUILDS it, which already happened before this handler runs;
+          // nothing re-renders again until commit() finishes, so without this
+          // the disabling would be enforced (commit()'s own guard) but never
+          // actually visible during the write (ROADMAP.md gap, closed
+          // 2026-09-11).
+          const originalLabel = isTerminal ? 'Declare champion' : 'Advance to next stage';
+          setBusyDisabled(button, true);
+          button.textContent = isTerminal ? 'Declaring champion…' : 'Advancing…';
+          const succeeded = await commit(data, {});
+          if (succeeded) focusAfterRender = '#standings-heading';
+          await renderOrShowError(feedback, () => {
+            setBusyDisabled(button, false);
+            button.textContent = originalLabel;
+          });
         });
-      });
-      container.appendChild(
-        el('div', { className: 'card' }, [
-          el('p', {
-            text: `${state.tiedAtBorder.length} cuppers are tied at the border and need a tiebreak heat.`,
-          }),
-          button,
-        ]),
-      );
-    } else if (state.kind === 'tiebreak-pending') {
-      container.appendChild(
-        el('div', { className: 'card' }, [
-          el('p', {
-            text: `Tiebreak heat ${state.tiebreakHeat.heat_number} is "${state.tiebreakHeat.status}" — run and confirm it via the timing and scoring screens before advancement can be recorded.`,
-          }),
-        ]),
-      );
-    } else if (state.kind === 'tiebreak-resolved') {
-      const button = el('button', {
-        className: 'btn btn-primary tap-target',
-        text: isTerminal ? 'Declare champion' : 'Advance to next stage',
-        attrs: actionInFlight ? { disabled: 'disabled' } : {},
-      });
-      button.addEventListener('click', async () => {
-        if (actionInFlight) return;
-        // See the 'clean'-state button's own comment above.
-        const originalLabel = isTerminal ? 'Declare champion' : 'Advance to next stage';
-        button.disabled = true;
-        button.textContent = isTerminal ? 'Declaring champion…' : 'Advancing…';
-        const succeeded = await commit(data, {
-          tiebreakRanked: state.tiebreakRanked,
-          tiebreakWinners: state.tiebreakWinners,
+        container.appendChild(el('div', { className: 'card' }, [button]));
+      } else if (state.kind === 'needs-tiebreak-heat') {
+        const button = el('button', {
+          className: 'btn btn-primary tap-target',
+          text: 'Create tiebreak heat',
         });
-        if (succeeded) focusAfterRender = '#standings-heading';
-        await renderOrShowError(feedback, () => {
-          button.disabled = false;
-          button.textContent = originalLabel;
+        setBusyDisabled(button, actionInFlight);
+        button.addEventListener('click', async () => {
+          if (actionInFlight) return;
+          actionInFlight = true;
+          // See the 'clean'-state button's own comment above.
+          setBusyDisabled(button, true);
+          button.textContent = 'Creating…';
+          try {
+            await createTiebreakHeatForTie(stageId, state.tiedAtBorder, {}, client);
+            focusAfterRender = '#standings-heading';
+          } catch (err) {
+            pendingError = describeError(err);
+          }
+          actionInFlight = false;
+          await renderOrShowError(feedback, () => {
+            setBusyDisabled(button, false);
+            button.textContent = 'Create tiebreak heat';
+          });
         });
-      });
-      container.appendChild(
-        el('div', { className: 'card' }, [
-          el('p', { text: 'The tiebreak heat resolved the tie.' }),
-          button,
-        ]),
-      );
-    } else if (state.kind === 'needs-coin-toss') {
-      container.appendChild(renderCoinTossCard(state, data, feedback));
-    }
+        container.appendChild(
+          el('div', { className: 'card' }, [
+            el('p', {
+              text: `${state.tiedAtBorder.length} cuppers are tied at the border and need a tiebreak heat.`,
+            }),
+            button,
+          ]),
+        );
+      } else if (state.kind === 'tiebreak-pending') {
+        container.appendChild(
+          el('div', { className: 'card' }, [
+            el('p', {
+              text: `Tiebreak heat ${state.tiebreakHeat.heat_number} is "${state.tiebreakHeat.status}" — run and confirm it via the timing and scoring screens before advancement can be recorded.`,
+            }),
+          ]),
+        );
+      } else if (state.kind === 'tiebreak-resolved') {
+        const button = el('button', {
+          className: 'btn btn-primary tap-target',
+          text: isTerminal ? 'Declare champion' : 'Advance to next stage',
+        });
+        setBusyDisabled(button, actionInFlight);
+        button.addEventListener('click', async () => {
+          if (actionInFlight) return;
+          // See the 'clean'-state button's own comment above.
+          const originalLabel = isTerminal ? 'Declare champion' : 'Advance to next stage';
+          setBusyDisabled(button, true);
+          button.textContent = isTerminal ? 'Declaring champion…' : 'Advancing…';
+          const succeeded = await commit(data, {
+            tiebreakRanked: state.tiebreakRanked,
+            tiebreakWinners: state.tiebreakWinners,
+          });
+          if (succeeded) focusAfterRender = '#standings-heading';
+          await renderOrShowError(feedback, () => {
+            setBusyDisabled(button, false);
+            button.textContent = originalLabel;
+          });
+        });
+        container.appendChild(
+          el('div', { className: 'card' }, [
+            el('p', { text: 'The tiebreak heat resolved the tie.' }),
+            button,
+          ]),
+        );
+      } else if (state.kind === 'needs-coin-toss') {
+        container.appendChild(renderCoinTossCard(state, data, feedback));
+      }
 
-    container.appendChild(feedback);
-    root.appendChild(container);
+      container.appendChild(feedback);
+      root.appendChild(container);
 
-    if (focusAfterRender) {
-      const target = root.querySelector(focusAfterRender);
-      target?.focus();
-      focusAfterRender = null;
-    } else if (feedback.dataset.tone) {
-      feedback.scrollIntoView?.({ block: 'nearest' });
-      feedback.focus();
+      if (focusAfterRender) {
+        const target = root.querySelector(focusAfterRender);
+        target?.focus();
+        focusAfterRender = null;
+        return true;
+      } else if (feedback.dataset.tone) {
+        feedback.scrollIntoView?.({ block: 'nearest' });
+        feedback.focus();
+        return true;
+      }
     }
   }
 
@@ -643,8 +649,8 @@ export async function mountStandingsScreen(
     const submitButton = el('button', {
       className: 'btn btn-primary tap-target',
       text: isTerminal ? 'Record coin toss and declare champion' : 'Record coin toss and advance',
-      attrs: actionInFlight ? { disabled: 'disabled' } : {},
     });
+    setBusyDisabled(submitButton, actionInFlight);
     submitButton.addEventListener('click', async () => {
       if (coinTossWinnerIds.size !== state.slotsRemaining) {
         pendingError = `Select exactly ${state.slotsRemaining} winner${state.slotsRemaining === 1 ? '' : 's'} before recording the coin toss.`;
@@ -658,7 +664,7 @@ export async function mountStandingsScreen(
       }
       if (actionInFlight) return;
       // See the 'clean'-state button's own comment above.
-      submitButton.disabled = true;
+      setBusyDisabled(submitButton, true);
       submitButton.textContent = 'Recording coin toss…';
       const winners = state.stillTied.filter(({ item }) => coinTossWinnerIds.has(item.entry_id));
       const succeeded = await commit(data, {
@@ -677,7 +683,7 @@ export async function mountStandingsScreen(
         focusAfterRender = '#standings-heading';
       }
       await renderOrShowError(feedback, () => {
-        submitButton.disabled = false;
+        setBusyDisabled(submitButton, false);
         submitButton.textContent = isTerminal
           ? 'Record coin toss and declare champion'
           : 'Record coin toss and advance';

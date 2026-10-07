@@ -236,7 +236,11 @@ describe('renderManualEntryRows', () => {
     // Now valid — must disable immediately, synchronously.
     inputs[1].value = '15';
     saveButton.click();
-    expect(saveButton.disabled).toBe(true);
+    // aria-disabled/aria-busy, not native disabled — see core/dom.js's
+    // setBusyDisabled.
+    expect(saveButton.disabled).toBe(false);
+    expect(saveButton.getAttribute('aria-disabled')).toBe('true');
+    expect(saveButton.getAttribute('aria-busy')).toBe('true');
     expect(saveButton.textContent).toBe('Saving…');
   });
 

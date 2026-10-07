@@ -113,6 +113,22 @@ describe('renderCreateForm', () => {
       'Venue (optional)',
     );
   });
+
+  it('marks every text field readOnly, not just aria-disabled, while disabled — aria-disabled alone (core/dom.js setBusyDisabled) does not stop typing, unlike the native disabled it replaces (found in review, ui-accessibility-reviewer)', () => {
+    const form = renderCreateForm(blankDraft(), { disabled: true });
+    const nameInput = form.querySelector('[data-field="name"]');
+    const dateInput = form.querySelector('[data-field="eventDate"]');
+    const venueInput = form.querySelector('[data-field="venue"]');
+    for (const input of [nameInput, dateInput, venueInput]) {
+      expect(input.disabled).toBe(false);
+      expect(input.getAttribute('aria-disabled')).toBe('true');
+      expect(input.readOnly).toBe(true);
+    }
+    // readOnly, unlike disabled, still lets the value change programmatically
+    // — a real browser also blocks direct keyboard typing into a readOnly
+    // field, which jsdom doesn't simulate, so this only proves the attribute
+    // is set, matching the finding's own recommended fix.
+  });
 });
 
 function fakeClient({ events = [], insertResult, rpcResult } = {}) {

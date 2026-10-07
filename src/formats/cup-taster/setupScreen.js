@@ -31,7 +31,7 @@
 // restriction visible before the organiser tries, not to be the only thing
 // enforcing it.
 import { getSupabase } from '../../core/supabaseClient.js';
-import { el, labeledField } from '../../core/dom.js';
+import { el, labeledField, setBusyDisabled, withFocusPreservation } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
 import { findEvent } from '../../core/events.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
@@ -132,6 +132,18 @@ export function renderStageRow(
   const cutoffHintId = `${rowId}-cutoff-hint`;
   const kindHintId = `${rowId}-kind-hint`;
 
+  // Every field below reuses the same `data-field` value ('kind'/'setCount'/
+  // 'durationSecs'/'cutoff') across every row — safe ONLY because every real
+  // write/validation path in this file explicitly sets its own row-scoped
+  // `focusAfterRender` selector (e.g. onKindChange's
+  // `#stage-row-${r.key} select`) before calling render(), so
+  // withFocusPreservation's own data-field fallback (core/dom.js) never
+  // actually runs here (found in review, ui-accessibility-reviewer): a
+  // future render path added without an explicit focusAfterRender would
+  // silently refocus the FIRST row's matching field instead of the one that
+  // was actually focused, rather than failing visibly. Give the field a real
+  // unique `data-focus-key` (e.g. `stage-${row.key}-kind`) if that fallback
+  // is ever relied on.
   const kindSelect = el('select', {
     className: 'field-input',
     attrs: { 'aria-label': `${stageLabel}: kind`, 'data-field': 'kind' },
@@ -234,25 +246,45 @@ export function renderStageRow(
     text: 'Move up',
     attrs: { type: 'button', 'aria-label': `Move ${stageLabel} up` },
   });
-  moveUpButton.disabled = Boolean(disableActions) || index === 0 || Boolean(moveUpUnsafe);
-  moveUpButton.addEventListener('click', () => onMoveUp(row));
+  // Two different reasons a row action can be unavailable, same distinction
+  // scoringScreen.js's own data-readonly split draws: index===0/
+  // moveUpUnsafe/moveDownUnsafe/removeUnsafe are structural — genuinely
+  // nothing to do given the CURRENT plan shape, stay real `disabled`. A
+  // save in flight (`disableActions`) is transient/busy — setBusyDisabled,
+  // so a save click that lands on one of these (unlikely, but Save itself
+  // uses this same helper) doesn't strand focus on <body>.
+  const moveUpStructurallyUnsafe = index === 0 || Boolean(moveUpUnsafe);
+  moveUpButton.disabled = moveUpStructurallyUnsafe;
+  setBusyDisabled(moveUpButton, !moveUpStructurallyUnsafe && Boolean(disableActions));
+  moveUpButton.addEventListener('click', () => {
+    if (moveUpButton.getAttribute('aria-disabled') === 'true') return;
+    onMoveUp(row);
+  });
 
   const moveDownButton = el('button', {
     className: 'btn btn-outline tap-target',
     text: 'Move down',
     attrs: { type: 'button', 'aria-label': `Move ${stageLabel} down` },
   });
-  moveDownButton.disabled =
-    Boolean(disableActions) || index === total - 1 || Boolean(moveDownUnsafe);
-  moveDownButton.addEventListener('click', () => onMoveDown(row));
+  const moveDownStructurallyUnsafe = index === total - 1 || Boolean(moveDownUnsafe);
+  moveDownButton.disabled = moveDownStructurallyUnsafe;
+  setBusyDisabled(moveDownButton, !moveDownStructurallyUnsafe && Boolean(disableActions));
+  moveDownButton.addEventListener('click', () => {
+    if (moveDownButton.getAttribute('aria-disabled') === 'true') return;
+    onMoveDown(row);
+  });
 
   const removeButton = el('button', {
     className: 'btn btn-outline tap-target',
     text: 'Remove',
     attrs: { type: 'button', 'aria-label': `Remove ${stageLabel}` },
   });
-  removeButton.disabled = Boolean(disableActions) || Boolean(removeUnsafe);
-  removeButton.addEventListener('click', () => onRemove(row));
+  removeButton.disabled = Boolean(removeUnsafe);
+  setBusyDisabled(removeButton, !removeUnsafe && Boolean(disableActions));
+  removeButton.addEventListener('click', () => {
+    if (removeButton.getAttribute('aria-disabled') === 'true') return;
+    onRemove(row);
+  });
 
   // tabindex="-1": not in the tab order, but a valid target for
   // moveStage()'s own focus restoration after a reorder rebuilds the whole
@@ -424,92 +456,108 @@ export async function mountSetupScreen(root, { eventId, client = getSupabase(), 
       return;
     }
 
-    root.innerHTML = '';
-    const container = el('section', { className: 'screen-container setup-screen' });
+    withFocusPreservation(root, renderInner);
 
-    if (event?.is_test) {
+    function renderInner() {
+      root.innerHTML = '';
+      const container = el('section', { className: 'screen-container setup-screen' });
+
+      if (event?.is_test) {
+        container.appendChild(
+          el('div', { className: 'is-test-banner', text: 'Test Data — Not a Live Event' }),
+        );
+      }
+
       container.appendChild(
-        el('div', { className: 'is-test-banner', text: 'Test Data — Not a Live Event' }),
+        el('h1', { id: 'stage-plan-heading', text: 'Stage plan', attrs: { tabindex: '-1' } }),
       );
-    }
+      container.appendChild(
+        el('p', {
+          className: 'stage-meta',
+          text: `${draftStages.length} stage${draftStages.length === 1 ? '' : 's'} planned`,
+        }),
+      );
 
-    container.appendChild(
-      el('h1', { id: 'stage-plan-heading', text: 'Stage plan', attrs: { tabindex: '-1' } }),
-    );
-    container.appendChild(
-      el('p', {
-        className: 'stage-meta',
-        text: `${draftStages.length} stage${draftStages.length === 1 ? '' : 's'} planned`,
-      }),
-    );
+      const feedback = el('div', {
+        className: 'screen-feedback',
+        attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
+      });
+      if (pendingError) {
+        setFeedback(feedback, pendingError, 'error');
+        pendingError = null;
+      } else if (pendingSuccess) {
+        setFeedback(feedback, pendingSuccess, 'success');
+        pendingSuccess = null;
+      }
 
-    const feedback = el('div', {
-      className: 'screen-feedback',
-      attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
-    });
-    if (pendingError) {
-      setFeedback(feedback, pendingError, 'error');
-      pendingError = null;
-    } else if (pendingSuccess) {
-      setFeedback(feedback, pendingSuccess, 'success');
-      pendingSuccess = null;
-    }
+      // The highest index carrying a locked stage — removing (or, via move,
+      // shifting the ordinal of) ANY unlocked row before that index would
+      // renumber the locked stage too, which saveStagePlan always refuses.
+      // Disabling the controls that would produce that plan up front, rather
+      // than letting the organiser attempt it and get a save-time error
+      // naming a DIFFERENT stage than the one they touched (found in
+      // review), and giving Move up/down real disabled state instead of a
+      // silent no-op next to a locked neighbor (also found in review).
+      const lastLockedIndex = draftStages.reduce(
+        (max, row, index) => (row.locked ? index : max),
+        -1,
+      );
+      const rows = draftStages.map((row, index) =>
+        renderStageRow(row, index, draftStages.length, {
+          onMoveUp: (r) => moveStage(r, -1),
+          onMoveDown: (r) => moveStage(r, 1),
+          onRemove: (r) => removeStage(r),
+          disableActions: saving,
+          moveUpUnsafe: index > 0 && draftStages[index - 1].locked,
+          moveDownUnsafe: index < draftStages.length - 1 && draftStages[index + 1].locked,
+          removeUnsafe: index < lastLockedIndex,
+          duplicateKind: hasDuplicateKind(draftStages, index),
+          onKindChange: (r) => {
+            focusAfterRender = `#stage-row-${r.key} select`;
+            render();
+          },
+        }),
+      );
+      container.appendChild(el('div', { className: 'stage-rows' }, rows));
 
-    // The highest index carrying a locked stage — removing (or, via move,
-    // shifting the ordinal of) ANY unlocked row before that index would
-    // renumber the locked stage too, which saveStagePlan always refuses.
-    // Disabling the controls that would produce that plan up front, rather
-    // than letting the organiser attempt it and get a save-time error
-    // naming a DIFFERENT stage than the one they touched (found in
-    // review), and giving Move up/down real disabled state instead of a
-    // silent no-op next to a locked neighbor (also found in review).
-    const lastLockedIndex = draftStages.reduce((max, row, index) => (row.locked ? index : max), -1);
-    const rows = draftStages.map((row, index) =>
-      renderStageRow(row, index, draftStages.length, {
-        onMoveUp: (r) => moveStage(r, -1),
-        onMoveDown: (r) => moveStage(r, 1),
-        onRemove: (r) => removeStage(r),
-        disableActions: saving,
-        moveUpUnsafe: index > 0 && draftStages[index - 1].locked,
-        moveDownUnsafe: index < draftStages.length - 1 && draftStages[index + 1].locked,
-        removeUnsafe: index < lastLockedIndex,
-        duplicateKind: hasDuplicateKind(draftStages, index),
-        onKindChange: (r) => {
-          focusAfterRender = `#stage-row-${r.key} select`;
-          render();
-        },
-      }),
-    );
-    container.appendChild(el('div', { className: 'stage-rows' }, rows));
+      const addButton = el('button', {
+        className: 'btn btn-outline tap-target',
+        text: 'Add stage',
+        attrs: { type: 'button', 'data-focus-key': 'add-stage' },
+      });
+      setBusyDisabled(addButton, saving);
+      addButton.addEventListener('click', () => {
+        if (addButton.getAttribute('aria-disabled') === 'true') return;
+        addStage();
+      });
+      container.appendChild(addButton);
 
-    const addButton = el('button', {
-      className: 'btn btn-outline tap-target',
-      text: 'Add stage',
-      attrs: { type: 'button' },
-    });
-    addButton.disabled = saving;
-    addButton.addEventListener('click', addStage);
-    container.appendChild(addButton);
+      const saveButton = el('button', {
+        className: 'btn btn-primary tap-target',
+        text: saving ? 'Saving…' : 'Save stage plan',
+        attrs: { type: 'button', 'data-focus-key': 'save-stage-plan' },
+      });
+      // Structural (nothing to save yet) stays real disabled; a save in
+      // flight is the transient/busy case — setBusyDisabled, so the button
+      // the organiser just clicked keeps focus across the rebuild.
+      saveButton.disabled = draftStages.length === 0;
+      setBusyDisabled(saveButton, !saveButton.disabled && saving);
+      saveButton.addEventListener('click', handleSave);
+      container.appendChild(saveButton);
 
-    const saveButton = el('button', {
-      className: 'btn btn-primary tap-target',
-      text: saving ? 'Saving…' : 'Save stage plan',
-      attrs: { type: 'button' },
-    });
-    saveButton.disabled = saving || draftStages.length === 0;
-    saveButton.addEventListener('click', handleSave);
-    container.appendChild(saveButton);
+      container.appendChild(feedback);
+      root.appendChild(container);
 
-    container.appendChild(feedback);
-    root.appendChild(container);
-
-    if (focusAfterRender) {
-      const target = root.querySelector(focusAfterRender);
-      target?.focus();
-      focusAfterRender = null;
-    } else if (feedback.dataset.tone === 'error') {
-      feedback.scrollIntoView?.({ block: 'nearest' });
-      feedback.focus();
+      if (focusAfterRender) {
+        const target = root.querySelector(focusAfterRender);
+        target?.focus();
+        focusAfterRender = null;
+        return true;
+      } else if (feedback.dataset.tone === 'error') {
+        feedback.scrollIntoView?.({ block: 'nearest' });
+        feedback.focus();
+        return true;
+      }
     }
   }
 

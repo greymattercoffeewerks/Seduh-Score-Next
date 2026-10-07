@@ -18,7 +18,7 @@ import { listEntries } from '../../core/registry.js';
 import { findEvent } from '../../core/events.js';
 import { findStageById, stageKindLabel } from './setup.js';
 import { getSupabase } from '../../core/supabaseClient.js';
-import { el } from '../../core/dom.js';
+import { el, setBusyDisabled, withFocusPreservation } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
 
 export function renderRosterList(hydratedEntries) {
@@ -59,6 +59,15 @@ export function renderManualAssignmentForm(
         }),
       ]);
     }
+    // `data-field` ('heatNumber'/'station' below) repeats across every row
+    // — safe ONLY because every real write path in this file explicitly
+    // sets its own `focusAfterRender` (e.g. '#heats-heading') before calling
+    // render(), so withFocusPreservation's own data-field fallback
+    // (core/dom.js) never actually runs here (found in review,
+    // ui-accessibility-reviewer — same gap setupScreen.js's renderStageRow
+    // has, see its own comment there). A future render path added without
+    // an explicit focusAfterRender would silently refocus the FIRST row's
+    // matching field instead of the one that was actually focused.
     const heatInput = el('input', {
       className: 'field-input',
       attrs: {
@@ -101,8 +110,9 @@ export function renderManualAssignmentForm(
   const submitButton = el('button', {
     className: 'btn btn-primary tap-target',
     text: disabled ? 'Saving…' : 'Save manual heats',
-    attrs: disabled ? { type: 'submit', disabled: 'disabled' } : { type: 'submit' },
+    attrs: { type: 'submit' },
   });
+  setBusyDisabled(submitButton, disabled);
 
   const form = el('form', { className: 'manual-assignment-form' }, [table, submitButton]);
   // Attached directly rather than left for a caller to re-derive via a
@@ -273,273 +283,284 @@ export async function mountHeatGenerationScreen(
     // navigation starts. See ROADMAP.md's "A real DOM-write race between
     // the router..." entry.
     if (signal?.aborted) return;
-    root.innerHTML = '';
 
-    const container = el('section', { className: 'screen-container heats-screen' });
+    withFocusPreservation(root, renderInner);
 
-    // D9: is_test must render unmistakably on every surface an organiser or
-    // audience member can see, not only the audience-facing live surfaces
-    // T5.3/T5.4 own — this is the first real screen in the project, so it's
-    // the first place that discipline actually has to hold.
-    if (data.event.is_test) {
-      container.appendChild(
-        el('div', { className: 'is-test-banner', text: 'Test Data — Not a Live Event' }),
-      );
-    }
+    function renderInner() {
+      root.innerHTML = '';
 
-    container.appendChild(
-      el('h1', { text: `Heat generation — ${stageKindLabel(data.stage.kind)}` }),
-    );
-    container.appendChild(
-      el('p', {
-        className: 'stage-meta',
-        text: `${data.hydrated.length} cupper(s) in this stage`,
-      }),
-    );
+      const container = el('section', { className: 'screen-container heats-screen' });
 
-    const feedback = el('div', {
-      className: 'screen-feedback',
-      attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
-    });
-    if (pendingError) {
-      setFeedback(feedback, pendingError, 'error');
-      pendingError = null;
-    }
-
-    if (data.hydrated.length === 0) {
-      const seedButton = el('button', {
-        className: 'btn btn-primary tap-target',
-        text: actionInFlight ? 'Seeding…' : 'Seed roster into this stage',
-        attrs: actionInFlight ? { disabled: 'disabled' } : {},
-      });
-      seedButton.addEventListener('click', async () => {
-        if (actionInFlight) return;
-        actionInFlight = true;
-        // Mutated directly, not left to the eventual re-render below — this
-        // button's own `attrs: actionInFlight ? ... : {}` is only evaluated
-        // while `render()` is BUILDING it, which already happened before
-        // this handler ever runs; nothing re-renders again until after the
-        // await settles, so without this direct mutation the flag would
-        // silently gate a second click's WORK (still correct) but never
-        // actually show as disabled on screen — the exact "stays clickable
-        // while the write is in flight" gap this task closes.
-        seedButton.disabled = true;
-        seedButton.textContent = 'Seeding…';
-        try {
-          await seedFirstStageEntries(eventId, client);
-          focusAfterRender = '#roster-heading';
-        } catch (err) {
-          pendingError = describeError(err);
-        }
-        actionInFlight = false;
-        // Re-render unconditionally, success or failure: a failed attempt
-        // must never leave a stale view on screen that doesn't reflect what
-        // actually landed in the database (see the random/manual handlers
-        // below for why this matters more than it looks here). The restore
-        // callback only fires if render() ITSELF then throws — see
-        // renderOrShowError's own comment.
-        await renderOrShowError(feedback, () => {
-          seedButton.disabled = false;
-          seedButton.textContent = 'Seed roster into this stage';
-        });
-      });
-      container.appendChild(
-        el('div', { className: 'card' }, [
-          el('p', { text: 'No cuppers are entered into this stage yet.' }),
-          seedButton,
-        ]),
-      );
-    } else {
-      container.appendChild(
-        el('div', { className: 'card' }, [
-          el('h2', { id: 'roster-heading', text: 'Roster', attrs: { tabindex: '-1' } }),
-          renderRosterList(data.hydrated),
-        ]),
-      );
-
-      const placedEntryIds = new Set(
-        data.heats.flatMap(({ entries }) => entries.map((entry) => entry.entry_id)),
-      );
-      const generationComplete =
-        data.heats.length > 0 && data.hydrated.every((entry) => placedEntryIds.has(entry.entry_id));
-
-      // Shared by both the zero-heats and the incomplete-generation branches
-      // below — `existingAssignments` (Map<entryId, {heatNumber, station}>)
-      // is empty in the zero-heats case (nothing placed yet) and non-empty
-      // when resuming a partial failure. generateHeatsManual/
-      // buildHeatPlansFromAssignments are unedited — already idempotent and
-      // conflict-checked (see heats.js's own comments), so resuming is safe
-      // by construction: an already-placed cupper's real assignment is
-      // re-attached here rather than left to the organiser to re-type
-      // (renderManualAssignmentForm shows it as plain text, not an editable
-      // field, so readManualAssignmentForm never returns a value for them at
-      // all), and buildHeatPlansFromAssignments's own "every stage entry
-      // must be assigned exactly once" check still passes.
-      function buildManualForm(existingAssignments) {
-        const manualForm = renderManualAssignmentForm(data.hydrated, {
-          existingAssignments,
-          disabled: actionInFlight,
-        });
-        manualForm.addEventListener('submit', async (event) => {
-          event.preventDefault();
-          if (actionInFlight) return;
-          actionInFlight = true;
-          // See seedButton's own comment above — mutated directly for
-          // immediate visual feedback, since nothing re-renders (and thus
-          // nothing re-evaluates the `disabled` prop above) until after the
-          // await settles.
-          const { submitButton } = manualForm;
-          submitButton.disabled = true;
-          submitButton.textContent = 'Saving…';
-          const assignments = [
-            ...readManualAssignmentForm(manualForm),
-            ...[...existingAssignments].map(([entryId, assignment]) => ({
-              entryId,
-              ...assignment,
-            })),
-          ];
-          try {
-            await generateHeatsManual(stageId, assignments, {}, client);
-            focusAfterRender = '#heats-heading';
-          } catch (err) {
-            pendingError = describeError(err);
-          }
-          actionInFlight = false;
-          await renderOrShowError(feedback, () => {
-            submitButton.disabled = false;
-            submitButton.textContent = 'Save manual heats';
-          });
-        });
-        return manualForm;
+      // D9: is_test must render unmistakably on every surface an organiser or
+      // audience member can see, not only the audience-facing live surfaces
+      // T5.3/T5.4 own — this is the first real screen in the project, so it's
+      // the first place that discipline actually has to hold.
+      if (data.event.is_test) {
+        container.appendChild(
+          el('div', { className: 'is-test-banner', text: 'Test Data — Not a Live Event' }),
+        );
       }
 
-      if (data.heats.length === 0) {
-        const randomButton = el('button', {
+      container.appendChild(
+        el('h1', { text: `Heat generation — ${stageKindLabel(data.stage.kind)}` }),
+      );
+      container.appendChild(
+        el('p', {
+          className: 'stage-meta',
+          text: `${data.hydrated.length} cupper(s) in this stage`,
+        }),
+      );
+
+      const feedback = el('div', {
+        className: 'screen-feedback',
+        attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
+      });
+      if (pendingError) {
+        setFeedback(feedback, pendingError, 'error');
+        pendingError = null;
+      }
+
+      if (data.hydrated.length === 0) {
+        const seedButton = el('button', {
           className: 'btn btn-primary tap-target',
-          text: actionInFlight ? 'Generating…' : 'Generate heats (random)',
-          attrs: actionInFlight ? { disabled: 'disabled' } : {},
+          text: actionInFlight ? 'Seeding…' : 'Seed roster into this stage',
         });
-        randomButton.addEventListener('click', async () => {
-          // The primary guard against the exact double-click corruption risk
-          // this button's own module comment above describes — actionInFlight
-          // closes the window between this click and the re-render that
-          // would otherwise remove/disable the button. Mutated directly too
-          // (see seedButton's own comment above) so the disabling is actually
-          // visible during the await, not just enforced silently.
+        setBusyDisabled(seedButton, actionInFlight);
+        seedButton.addEventListener('click', async () => {
           if (actionInFlight) return;
           actionInFlight = true;
-          randomButton.disabled = true;
-          randomButton.textContent = 'Generating…';
+          // Mutated directly, not left to the eventual re-render below — this
+          // button's own `attrs: actionInFlight ? ... : {}` is only evaluated
+          // while `render()` is BUILDING it, which already happened before
+          // this handler ever runs; nothing re-renders again until after the
+          // await settles, so without this direct mutation the flag would
+          // silently gate a second click's WORK (still correct) but never
+          // actually show as disabled on screen — the exact "stays clickable
+          // while the write is in flight" gap this task closes.
+          setBusyDisabled(seedButton, true);
+          seedButton.textContent = 'Seeding…';
           try {
-            await generateHeatsRandom(stageId, {}, client);
-            focusAfterRender = '#heats-heading';
+            await seedFirstStageEntries(eventId, client);
+            focusAfterRender = '#roster-heading';
           } catch (err) {
-            // Re-render even on failure — critical here specifically:
-            // generateHeatsRandom can fail *after* committing some heats
-            // (createHeats has no batch-level atomicity), and this button
-            // stays visible until a re-render reflects the real DB state. A
-            // second click on a stale "no heats yet" view would reshuffle
-            // the *entire* roster fresh, and ensureHeatEntries only checks
-            // for a station conflict within the SAME heat — a cupper
-            // already committed to heat 1 could silently end up placed in
-            // heat 2 as well on the retry, with nothing to catch it. Moving
-            // to the "incomplete" branch (which offers no generate button,
-            // only the safe manual-resume form below) as soon as the real
-            // failure state is known closes that gap.
             pendingError = describeError(err);
           }
           actionInFlight = false;
+          // Re-render unconditionally, success or failure: a failed attempt
+          // must never leave a stale view on screen that doesn't reflect what
+          // actually landed in the database (see the random/manual handlers
+          // below for why this matters more than it looks here). The restore
+          // callback only fires if render() ITSELF then throws — see
+          // renderOrShowError's own comment.
           await renderOrShowError(feedback, () => {
-            randomButton.disabled = false;
-            randomButton.textContent = 'Generate heats (random)';
+            setBusyDisabled(seedButton, false);
+            seedButton.textContent = 'Seed roster into this stage';
           });
         });
-
-        const manualForm = buildManualForm(new Map());
-
-        container.appendChild(
-          el('div', { className: 'card' }, [el('h2', { text: 'Generate heats' }), randomButton]),
-        );
-        container.appendChild(
-          el('div', { className: 'card' }, [el('h2', { text: 'Or assign manually' }), manualForm]),
-        );
-      } else if (!generationComplete) {
-        // A prior generation attempt failed partway — some heats/entries
-        // exist, but not every stage entry has one. Never show this as
-        // "done" (the render gate below would if it only checked
-        // heats.length > 0). No "try again" (random) action — that path
-        // stays permanently unsafe here, see generateHeatsRandom's own
-        // comment above. The manual form below IS a safe repair path
-        // (2026-08-29 follow-up, closing a known ROADMAP.md gap): each
-        // already-placed cupper's real heat/station is shown as fixed text,
-        // not re-typed, so the organiser only fills in the ones still
-        // missing — buildManualForm re-attaches the already-placed rows
-        // before submitting, so buildHeatPlansFromAssignments' own
-        // completeness check is satisfied without asking for anything that
-        // isn't genuinely new.
-        const hydratedById = new Map(data.hydrated.map((entry) => [entry.entry_id, entry]));
-        const missing = data.hydrated.length - placedEntryIds.size;
-        const existingAssignments = new Map(
-          data.heats.flatMap(({ heat, entries }) =>
-            entries.map((entry) => [
-              entry.entry_id,
-              { heatNumber: heat.heat_number, station: entry.station },
-            ]),
-          ),
-        );
         container.appendChild(
           el('div', { className: 'card' }, [
-            el('h2', { text: 'Heat generation incomplete' }),
-            el('p', {
-              text: `${placedEntryIds.size} of ${data.hydrated.length} cupper(s) were assigned a heat before generation stopped — ${missing} still need one. Assign the rest below to finish, or continue in Studio.`,
-            }),
-          ]),
-        );
-        container.appendChild(renderHeatsList(data.heats, hydratedById, eventId));
-        container.appendChild(
-          el('div', { className: 'card' }, [
-            // Repeats the count from the card above rather than relying on
-            // it — found in review (ui-accessibility-reviewer): the
-            // "Heat generation incomplete" card explaining WHY this form has
-            // fewer inputs than "N cupper(s) in this stage" sits before the
-            // Generated heats list, structurally disconnected from this
-            // form by an intervening card. A screen-reader user navigating
-            // by heading, or a sighted user scanning straight to this card,
-            // had no link back to that context.
-            el('h2', { text: `Finish assigning the rest (${missing} remaining)` }),
-            buildManualForm(existingAssignments),
+            el('p', { text: 'No cuppers are entered into this stage yet.' }),
+            seedButton,
           ]),
         );
       } else {
-        const hydratedById = new Map(data.hydrated.map((entry) => [entry.entry_id, entry]));
-        container.appendChild(renderHeatsList(data.heats, hydratedById, eventId));
+        container.appendChild(
+          el('div', { className: 'card' }, [
+            el('h2', { id: 'roster-heading', text: 'Roster', attrs: { tabindex: '-1' } }),
+            renderRosterList(data.hydrated),
+          ]),
+        );
+
+        const placedEntryIds = new Set(
+          data.heats.flatMap(({ entries }) => entries.map((entry) => entry.entry_id)),
+        );
+        const generationComplete =
+          data.heats.length > 0 &&
+          data.hydrated.every((entry) => placedEntryIds.has(entry.entry_id));
+
+        // Shared by both the zero-heats and the incomplete-generation branches
+        // below — `existingAssignments` (Map<entryId, {heatNumber, station}>)
+        // is empty in the zero-heats case (nothing placed yet) and non-empty
+        // when resuming a partial failure. generateHeatsManual/
+        // buildHeatPlansFromAssignments are unedited — already idempotent and
+        // conflict-checked (see heats.js's own comments), so resuming is safe
+        // by construction: an already-placed cupper's real assignment is
+        // re-attached here rather than left to the organiser to re-type
+        // (renderManualAssignmentForm shows it as plain text, not an editable
+        // field, so readManualAssignmentForm never returns a value for them at
+        // all), and buildHeatPlansFromAssignments's own "every stage entry
+        // must be assigned exactly once" check still passes.
+        function buildManualForm(existingAssignments) {
+          const manualForm = renderManualAssignmentForm(data.hydrated, {
+            existingAssignments,
+            disabled: actionInFlight,
+          });
+          manualForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            if (actionInFlight) return;
+            actionInFlight = true;
+            // See seedButton's own comment above — mutated directly for
+            // immediate visual feedback, since nothing re-renders (and thus
+            // nothing re-evaluates the `disabled` prop above) until after the
+            // await settles.
+            const { submitButton } = manualForm;
+            setBusyDisabled(submitButton, true);
+            submitButton.textContent = 'Saving…';
+            const assignments = [
+              ...readManualAssignmentForm(manualForm),
+              ...[...existingAssignments].map(([entryId, assignment]) => ({
+                entryId,
+                ...assignment,
+              })),
+            ];
+            try {
+              await generateHeatsManual(stageId, assignments, {}, client);
+              focusAfterRender = '#heats-heading';
+            } catch (err) {
+              pendingError = describeError(err);
+            }
+            actionInFlight = false;
+            await renderOrShowError(feedback, () => {
+              setBusyDisabled(submitButton, false);
+              submitButton.textContent = 'Save manual heats';
+            });
+          });
+          return manualForm;
+        }
+
+        if (data.heats.length === 0) {
+          const randomButton = el('button', {
+            className: 'btn btn-primary tap-target',
+            text: actionInFlight ? 'Generating…' : 'Generate heats (random)',
+          });
+          setBusyDisabled(randomButton, actionInFlight);
+          randomButton.addEventListener('click', async () => {
+            // The primary guard against the exact double-click corruption risk
+            // this button's own module comment above describes — actionInFlight
+            // closes the window between this click and the re-render that
+            // would otherwise remove/disable the button. Mutated directly too
+            // (see seedButton's own comment above) so the disabling is actually
+            // visible during the await, not just enforced silently.
+            if (actionInFlight) return;
+            actionInFlight = true;
+            setBusyDisabled(randomButton, true);
+            randomButton.textContent = 'Generating…';
+            try {
+              await generateHeatsRandom(stageId, {}, client);
+              focusAfterRender = '#heats-heading';
+            } catch (err) {
+              // Re-render even on failure — critical here specifically:
+              // generateHeatsRandom can fail *after* committing some heats
+              // (createHeats has no batch-level atomicity), and this button
+              // stays visible until a re-render reflects the real DB state. A
+              // second click on a stale "no heats yet" view would reshuffle
+              // the *entire* roster fresh, and ensureHeatEntries only checks
+              // for a station conflict within the SAME heat — a cupper
+              // already committed to heat 1 could silently end up placed in
+              // heat 2 as well on the retry, with nothing to catch it. Moving
+              // to the "incomplete" branch (which offers no generate button,
+              // only the safe manual-resume form below) as soon as the real
+              // failure state is known closes that gap.
+              pendingError = describeError(err);
+            }
+            actionInFlight = false;
+            await renderOrShowError(feedback, () => {
+              setBusyDisabled(randomButton, false);
+              randomButton.textContent = 'Generate heats (random)';
+            });
+          });
+
+          const manualForm = buildManualForm(new Map());
+
+          container.appendChild(
+            el('div', { className: 'card' }, [el('h2', { text: 'Generate heats' }), randomButton]),
+          );
+          container.appendChild(
+            el('div', { className: 'card' }, [
+              el('h2', { text: 'Or assign manually' }),
+              manualForm,
+            ]),
+          );
+        } else if (!generationComplete) {
+          // A prior generation attempt failed partway — some heats/entries
+          // exist, but not every stage entry has one. Never show this as
+          // "done" (the render gate below would if it only checked
+          // heats.length > 0). No "try again" (random) action — that path
+          // stays permanently unsafe here, see generateHeatsRandom's own
+          // comment above. The manual form below IS a safe repair path
+          // (2026-08-29 follow-up, closing a known ROADMAP.md gap): each
+          // already-placed cupper's real heat/station is shown as fixed text,
+          // not re-typed, so the organiser only fills in the ones still
+          // missing — buildManualForm re-attaches the already-placed rows
+          // before submitting, so buildHeatPlansFromAssignments' own
+          // completeness check is satisfied without asking for anything that
+          // isn't genuinely new.
+          const hydratedById = new Map(data.hydrated.map((entry) => [entry.entry_id, entry]));
+          const missing = data.hydrated.length - placedEntryIds.size;
+          const existingAssignments = new Map(
+            data.heats.flatMap(({ heat, entries }) =>
+              entries.map((entry) => [
+                entry.entry_id,
+                { heatNumber: heat.heat_number, station: entry.station },
+              ]),
+            ),
+          );
+          container.appendChild(
+            el('div', { className: 'card' }, [
+              el('h2', { text: 'Heat generation incomplete' }),
+              el('p', {
+                text: `${placedEntryIds.size} of ${data.hydrated.length} cupper(s) were assigned a heat before generation stopped — ${missing} still need one. Assign the rest below to finish, or continue in Studio.`,
+              }),
+            ]),
+          );
+          container.appendChild(renderHeatsList(data.heats, hydratedById, eventId));
+          container.appendChild(
+            el('div', { className: 'card' }, [
+              // Repeats the count from the card above rather than relying on
+              // it — found in review (ui-accessibility-reviewer): the
+              // "Heat generation incomplete" card explaining WHY this form has
+              // fewer inputs than "N cupper(s) in this stage" sits before the
+              // Generated heats list, structurally disconnected from this
+              // form by an intervening card. A screen-reader user navigating
+              // by heading, or a sighted user scanning straight to this card,
+              // had no link back to that context.
+              el('h2', { text: `Finish assigning the rest (${missing} remaining)` }),
+              buildManualForm(existingAssignments),
+            ]),
+          );
+        } else {
+          const hydratedById = new Map(data.hydrated.map((entry) => [entry.entry_id, entry]));
+          container.appendChild(renderHeatsList(data.heats, hydratedById, eventId));
+        }
       }
-    }
 
-    container.appendChild(feedback);
-    root.appendChild(container);
+      container.appendChild(feedback);
+      root.appendChild(container);
 
-    // Rebuild-then-refocus (§15.3): `container` is fully built and attached
-    // to `root` above — only past this point does the target element
-    // actually exist to focus. Focusing any earlier would target a node
-    // from the previous render, already removed by `root.innerHTML = ''`.
-    if (focusAfterRender) {
-      const target = root.querySelector(focusAfterRender);
-      target?.focus();
-      focusAfterRender = null;
-    } else if (feedback.dataset.tone === 'error') {
-      // Same ordering requirement as above, applied to the error path: the
-      // feedback region only exists in the live DOM once attached, so the
-      // scroll/focus call belongs here, not inside setFeedback (which runs
-      // before attachment, both here and for the pendingError case at the
-      // top of this function). The region is appended last in document
-      // order (after a potentially long roster/manual-assignment table) —
-      // without this, a sighted user not using a screen reader gets no
-      // visual cue that anything happened; the aria-live announcement alone
-      // only reaches assistive tech. scrollIntoView is optional-chained
-      // since jsdom in tests doesn't implement it.
-      feedback.scrollIntoView?.({ block: 'nearest' });
-      feedback.focus();
+      // Rebuild-then-refocus (§15.3): `container` is fully built and attached
+      // to `root` above — only past this point does the target element
+      // actually exist to focus. Focusing any earlier would target a node
+      // from the previous render, already removed by `root.innerHTML = ''`.
+      if (focusAfterRender) {
+        const target = root.querySelector(focusAfterRender);
+        target?.focus();
+        focusAfterRender = null;
+        return true;
+      } else if (feedback.dataset.tone === 'error') {
+        // Same ordering requirement as above, applied to the error path: the
+        // feedback region only exists in the live DOM once attached, so the
+        // scroll/focus call belongs here, not inside setFeedback (which runs
+        // before attachment, both here and for the pendingError case at the
+        // top of this function). The region is appended last in document
+        // order (after a potentially long roster/manual-assignment table) —
+        // without this, a sighted user not using a screen reader gets no
+        // visual cue that anything happened; the aria-live announcement alone
+        // only reaches assistive tech. scrollIntoView is optional-chained
+        // since jsdom in tests doesn't implement it.
+        feedback.scrollIntoView?.({ block: 'nearest' });
+        feedback.focus();
+        return true;
+      }
     }
   }
 

@@ -23,7 +23,7 @@
 // the registration form from whatever the organiser has typed so far,
 // rather than wiping it blank mid-entry.
 import { getSupabase } from '../../core/supabaseClient.js';
-import { el, labeledField } from '../../core/dom.js';
+import { el, labeledField, setBusyDisabled, withFocusPreservation } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
 import { findEvent } from '../../core/events.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
@@ -65,7 +65,15 @@ export function renderRegistrationForm(draft, { disabled }) {
     attrs: { type: 'text', 'aria-label': 'Name', 'data-field': 'displayName' },
   });
   nameInput.value = draft.displayName;
-  nameInput.disabled = disabled;
+  setBusyDisabled(nameInput, disabled);
+  // setBusyDisabled only sets aria-disabled/aria-busy — unlike the native
+  // `disabled` it replaces, that alone doesn't stop the field from being
+  // focused and typed into. `readOnly`, not `disabled`: it blocks editing
+  // the same way while (unlike `disabled`) leaving the field focusable, so
+  // it can't reintroduce the very focus-loss bug this task exists to fix
+  // (found in review, ui-accessibility-reviewer — every button in this
+  // rollout got an equivalent re-entry guard, but the text fields didn't).
+  nameInput.readOnly = disabled;
   nameInput.addEventListener('input', () => {
     draft.displayName = nameInput.value;
   });
@@ -75,7 +83,9 @@ export function renderRegistrationForm(draft, { disabled }) {
     attrs: { type: 'tel', 'aria-label': 'Phone', 'data-field': 'phone' },
   });
   phoneInput.value = draft.phone;
-  phoneInput.disabled = disabled;
+  setBusyDisabled(phoneInput, disabled);
+  // See nameInput's own comment above for why readOnly, not disabled.
+  phoneInput.readOnly = disabled;
   phoneInput.addEventListener('input', () => {
     draft.phone = phoneInput.value;
   });
@@ -85,7 +95,9 @@ export function renderRegistrationForm(draft, { disabled }) {
     attrs: { type: 'email', 'aria-label': 'Email (optional)', 'data-field': 'email' },
   });
   emailInput.value = draft.email;
-  emailInput.disabled = disabled;
+  setBusyDisabled(emailInput, disabled);
+  // See nameInput's own comment above for why readOnly, not disabled.
+  emailInput.readOnly = disabled;
   emailInput.addEventListener('input', () => {
     draft.email = emailInput.value;
   });
@@ -95,7 +107,9 @@ export function renderRegistrationForm(draft, { disabled }) {
     attrs: { type: 'text', 'aria-label': 'Cafe (optional)', 'data-field': 'cafe' },
   });
   cafeInput.value = draft.cafe;
-  cafeInput.disabled = disabled;
+  setBusyDisabled(cafeInput, disabled);
+  // See nameInput's own comment above for why readOnly, not disabled.
+  cafeInput.readOnly = disabled;
   cafeInput.addEventListener('input', () => {
     draft.cafe = cafeInput.value;
   });
@@ -105,7 +119,9 @@ export function renderRegistrationForm(draft, { disabled }) {
     attrs: { type: 'text', 'aria-label': 'Bib (optional)', 'data-field': 'bib' },
   });
   bibInput.value = draft.bib;
-  bibInput.disabled = disabled;
+  setBusyDisabled(bibInput, disabled);
+  // See nameInput's own comment above for why readOnly, not disabled.
+  bibInput.readOnly = disabled;
   bibInput.addEventListener('input', () => {
     draft.bib = bibInput.value;
   });
@@ -113,9 +129,9 @@ export function renderRegistrationForm(draft, { disabled }) {
   const submitButton = el('button', {
     className: 'btn btn-primary tap-target',
     text: disabled ? 'Registering…' : 'Register',
-    attrs: { type: 'submit' },
+    attrs: { type: 'submit', 'data-focus-key': 'roster-submit' },
   });
-  submitButton.disabled = disabled;
+  setBusyDisabled(submitButton, disabled);
 
   return el(
     'form',
@@ -152,7 +168,7 @@ export function renderRosterEntries(entries, { onToggleWithdrawn, disabled }) {
         'aria-label': `${entry.withdrawn ? 'Reinstate' : 'Withdraw'} ${entry.display_name}`,
       },
     });
-    toggleButton.disabled = disabled;
+    setBusyDisabled(toggleButton, disabled);
     toggleButton.addEventListener('click', () => onToggleWithdrawn(entry));
 
     return el(
@@ -301,65 +317,71 @@ export async function mountRosterScreen(root, { eventId, client = getSupabase(),
       return;
     }
 
-    root.innerHTML = '';
-    const container = el('section', { className: 'screen-container roster-screen' });
+    withFocusPreservation(root, renderInner);
 
-    if (event?.is_test) {
+    function renderInner() {
+      root.innerHTML = '';
+      const container = el('section', { className: 'screen-container roster-screen' });
+
+      if (event?.is_test) {
+        container.appendChild(
+          el('div', { className: 'is-test-banner', text: 'Test Data — Not a Live Event' }),
+        );
+      }
+
       container.appendChild(
-        el('div', { className: 'is-test-banner', text: 'Test Data — Not a Live Event' }),
+        el('h1', { id: 'roster-heading', text: 'Roster', attrs: { tabindex: '-1' } }),
       );
-    }
+      container.appendChild(
+        el('p', {
+          className: 'stage-meta',
+          text: `${entries.length} cupper${entries.length === 1 ? '' : 's'} registered`,
+        }),
+      );
 
-    container.appendChild(
-      el('h1', { id: 'roster-heading', text: 'Roster', attrs: { tabindex: '-1' } }),
-    );
-    container.appendChild(
-      el('p', {
-        className: 'stage-meta',
-        text: `${entries.length} cupper${entries.length === 1 ? '' : 's'} registered`,
-      }),
-    );
+      const feedback = el('div', {
+        id: 'roster-feedback',
+        className: 'screen-feedback',
+        attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
+      });
+      if (pendingError) {
+        setFeedback(feedback, pendingError, 'error');
+        pendingError = null;
+      } else if (pendingSuccess) {
+        setFeedback(feedback, pendingSuccess, 'success');
+        pendingSuccess = null;
+      }
 
-    const feedback = el('div', {
-      id: 'roster-feedback',
-      className: 'screen-feedback',
-      attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
-    });
-    if (pendingError) {
-      setFeedback(feedback, pendingError, 'error');
-      pendingError = null;
-    } else if (pendingSuccess) {
-      setFeedback(feedback, pendingSuccess, 'success');
-      pendingSuccess = null;
-    }
+      const form = renderRegistrationForm(draft, { disabled: busy });
+      form.addEventListener('submit', handleRegister);
+      container.appendChild(form);
 
-    const form = renderRegistrationForm(draft, { disabled: busy });
-    form.addEventListener('submit', handleRegister);
-    container.appendChild(form);
+      container.appendChild(
+        renderRosterEntries(entries, { onToggleWithdrawn: handleToggleWithdrawn, disabled: busy }),
+      );
 
-    container.appendChild(
-      renderRosterEntries(entries, { onToggleWithdrawn: handleToggleWithdrawn, disabled: busy }),
-    );
+      container.appendChild(feedback);
+      root.appendChild(container);
 
-    container.appendChild(feedback);
-    root.appendChild(container);
-
-    if (focusAfterRender) {
-      const target = root.querySelector(focusAfterRender);
-      target?.focus();
-      focusAfterRender = null;
-    } else if (feedback.dataset.tone === 'error' || feedback.dataset.tone === 'success') {
-      // A registration/withdrawal message lives only in this live region, on
-      // a node that's destroyed and rebuilt fresh every render (`root.innerHTML
-      // = ''` above) — many screen-reader/browser pairs don't reliably
-      // announce a brand-new node's content the way they announce a mutation
-      // to a persisting one. Moving focus here is what actually guarantees
-      // the outcome gets spoken, for both tones, not just error (found in
-      // review: only the error tone had this before, leaving every
-      // successful registration — the common case on a repeat-many-times
-      // screen like this one — silently unconfirmed for a keyboard/AT user).
-      feedback.scrollIntoView?.({ block: 'nearest' });
-      feedback.focus();
+      if (focusAfterRender) {
+        const target = root.querySelector(focusAfterRender);
+        target?.focus();
+        focusAfterRender = null;
+        return true;
+      } else if (feedback.dataset.tone === 'error' || feedback.dataset.tone === 'success') {
+        // A registration/withdrawal message lives only in this live region, on
+        // a node that's destroyed and rebuilt fresh every render (`root.innerHTML
+        // = ''` above) — many screen-reader/browser pairs don't reliably
+        // announce a brand-new node's content the way they announce a mutation
+        // to a persisting one. Moving focus here is what actually guarantees
+        // the outcome gets spoken, for both tones, not just error (found in
+        // review: only the error tone had this before, leaving every
+        // successful registration — the common case on a repeat-many-times
+        // screen like this one — silently unconfirmed for a keyboard/AT user).
+        feedback.scrollIntoView?.({ block: 'nearest' });
+        feedback.focus();
+        return true;
+      }
     }
   }
 

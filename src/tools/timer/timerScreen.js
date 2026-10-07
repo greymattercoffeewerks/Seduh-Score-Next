@@ -300,10 +300,14 @@ export function mountTimer(root, { storage = window.localStorage, now = Date.now
     brandMarkEl.classList.add('timer-brand-mark');
     brandMarkEl.setAttribute('aria-hidden', 'true');
     container.appendChild(
-      el('a', {
-        className: 'timer-brand-link',
-        attrs: { href: '/', 'aria-label': 'Seduh Score home' },
-      }, [brandMarkEl]),
+      el(
+        'a',
+        {
+          className: 'timer-brand-link',
+          attrs: { href: '/', 'aria-label': 'Seduh Score home' },
+        },
+        [brandMarkEl],
+      ),
     );
 
     // Hidden once running/paused/expired (see .timer[data-mode='focus']

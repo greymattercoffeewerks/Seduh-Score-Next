@@ -244,8 +244,11 @@ describe('mountHeatGenerationScreen', () => {
 
     // No await in between — the mutation must happen synchronously, before
     // this handler's own first `await`, or this proves nothing about the
-    // actual in-flight window.
-    expect(seedButton.disabled).toBe(true);
+    // actual in-flight window. aria-disabled/aria-busy, not native disabled
+    // — see core/dom.js's setBusyDisabled.
+    expect(seedButton.disabled).toBe(false);
+    expect(seedButton.getAttribute('aria-disabled')).toBe('true');
+    expect(seedButton.getAttribute('aria-busy')).toBe('true');
     expect(seedButton.textContent).toBe('Seeding…');
   });
 
@@ -352,8 +355,11 @@ describe('mountHeatGenerationScreen', () => {
     // synchronously, before the click handler's own first `await`, or this
     // proves nothing about the actual in-flight window (a mutation applied
     // only after the write settles would pass a test that awaited first,
-    // exactly the gap this task closes).
-    expect(randomButton.disabled).toBe(true);
+    // exactly the gap this task closes). aria-disabled/aria-busy, not native
+    // disabled — see core/dom.js's setBusyDisabled.
+    expect(randomButton.disabled).toBe(false);
+    expect(randomButton.getAttribute('aria-disabled')).toBe('true');
+    expect(randomButton.getAttribute('aria-busy')).toBe('true');
     expect(randomButton.textContent).toBe('Generating…');
   });
 
@@ -379,7 +385,11 @@ describe('mountHeatGenerationScreen', () => {
     manualForm.dispatchEvent(new Event('submit', { cancelable: true }));
 
     // No await in between — the mutation must happen synchronously.
-    expect(submitButton.disabled).toBe(true);
+    // aria-disabled/aria-busy, not native disabled — see core/dom.js's
+    // setBusyDisabled.
+    expect(submitButton.disabled).toBe(false);
+    expect(submitButton.getAttribute('aria-disabled')).toBe('true');
+    expect(submitButton.getAttribute('aria-busy')).toBe('true');
     expect(submitButton.textContent).toBe('Saving…');
   });
 

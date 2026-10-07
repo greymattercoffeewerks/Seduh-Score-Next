@@ -288,7 +288,9 @@ export async function mountSetupScreen(root, { client = getSupabase(), signal } 
       labeledField(
         'Session name',
         nameInput,
-        state.createErrors.name ? [el('p', { className: 'gtb-field-error', text: state.createErrors.name })] : [],
+        state.createErrors.name
+          ? [el('p', { className: 'gtb-field-error', text: state.createErrors.name })]
+          : [],
       ),
       labeledField(
         'Real bean count',
@@ -388,7 +390,9 @@ export async function mountSetupScreen(root, { client = getSupabase(), signal } 
     });
     guessToggle.checked = session.guess_enabled;
     setBusyDisabled(guessToggle, state.busy);
-    guessToggle.addEventListener('change', () => handleToggle('guess_enabled', guessToggle.checked));
+    guessToggle.addEventListener('change', () =>
+      handleToggle('guess_enabled', guessToggle.checked),
+    );
 
     const orientationSelect = el('select', {
       className: 'gtb-input',

@@ -275,6 +275,65 @@ describe('mountStandingsScreen', () => {
     document.body.removeChild(root);
   });
 
+  it('a rapid double-click on "Advance to next stage" submits only one resolve_stage operation, not two — proves commit()\'s own actionInFlight guard, not native disabled (now aria-disabled), is what protects this (scoring-auditor, found missing after the aria-disabled rollout)', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const stage = {
+      id: 's1',
+      event_id: 'ev1',
+      ordinal: 1,
+      kind: 'prelims',
+      cutoff: 2,
+      status: 'running',
+    };
+    const nextStage = { id: 's2', event_id: 'ev1', ordinal: 2, kind: 'finals', cutoff: null };
+    const standingsRows = [
+      { entry_id: 'e1', stage_id: 's1', correct_count: 5, sets_scored: 6, total_elapsed_secs: 100 },
+      { entry_id: 'e2', stage_id: 's1', correct_count: 4, sets_scored: 6, total_elapsed_secs: 100 },
+      { entry_id: 'e3', stage_id: 's1', correct_count: 1, sets_scored: 6, total_elapsed_secs: 100 },
+    ];
+    const rpcCalls = [];
+    const client = fakeClient({
+      tables: {
+        events: { data: event, error: null },
+        ct_stages: [
+          { data: stage, error: null },
+          { data: nextStage, error: null },
+          { data: { ...stage, status: 'complete' }, error: null },
+        ],
+        ct_stage_entries: { data: stageEntries, error: null },
+        ct_standings: { data: standingsRows, error: null },
+        event_entries: { data: roster, error: null },
+        ct_heats: {
+          data: [{ id: 'h1', stage_id: 's1', kind: 'normal', heat_number: 1, status: 'confirmed' }],
+          error: null,
+        },
+        ct_heat_entries: { data: [], error: null },
+      },
+      rpc: (name, payload) => {
+        rpcCalls.push([name, payload]);
+        return Promise.resolve({ data: null, error: null });
+      },
+    });
+
+    await mountStandingsScreen(root, { eventId: 'ev1', stageId: 's1', client });
+    const button = root.querySelector('.btn-primary');
+
+    // Two clicks with no await in between — the button is aria-disabled,
+    // not natively disabled (core/dom.js's setBusyDisabled), so the second
+    // click DOES dispatch; only commit()'s own synchronous
+    // `if (actionInFlight) return false; actionInFlight = true;` check-and-
+    // set is what has to stop it from firing twice.
+    button.click();
+    button.click();
+
+    await vi.waitFor(() => {
+      expect(root.textContent).toContain('Advanced to the next stage.');
+    });
+    expect(rpcCalls.filter(([name]) => name === 'resolve_stage')).toHaveLength(1);
+    document.body.removeChild(root);
+  });
+
   it('disables "Advance to next stage" and relabels it the instant it is clicked, before the write settles — ROADMAP.md gap, closed 2026-09-11: this button stayed clickable for the whole commit round trip with no visible sign a write was in flight', async () => {
     const root = document.createElement('div');
     document.body.appendChild(root);
@@ -319,8 +378,11 @@ describe('mountStandingsScreen', () => {
 
     // No await in between — the mutation must happen synchronously, before
     // commit()'s own first `await`, or this proves nothing about the actual
-    // in-flight window.
-    expect(button.disabled).toBe(true);
+    // in-flight window. aria-disabled/aria-busy, not native disabled — see
+    // core/dom.js's setBusyDisabled.
+    expect(button.disabled).toBe(false);
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    expect(button.getAttribute('aria-busy')).toBe('true');
     expect(button.textContent).toBe('Advancing…');
 
     document.body.removeChild(root);
@@ -374,8 +436,11 @@ describe('mountStandingsScreen', () => {
     const button = root.querySelector('.btn-primary');
 
     button.click();
+    // aria-disabled, not native disabled — see core/dom.js's setBusyDisabled
+    // — so this has to wait for the restore specifically, not just any
+    // falsy `.disabled` (which is now always false).
     await vi.waitFor(() => {
-      expect(button.disabled).toBe(false);
+      expect(button.getAttribute('aria-disabled')).toBeNull();
     });
 
     expect(button.textContent).toBe('Advance to next stage');
@@ -605,7 +670,11 @@ describe('mountStandingsScreen', () => {
     button.click();
 
     // No await in between — the mutation must happen synchronously.
-    expect(button.disabled).toBe(true);
+    // aria-disabled/aria-busy, not native disabled — see core/dom.js's
+    // setBusyDisabled.
+    expect(button.disabled).toBe(false);
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    expect(button.getAttribute('aria-busy')).toBe('true');
     expect(button.textContent).toBe('Creating…');
 
     document.body.removeChild(root);
@@ -714,7 +783,11 @@ describe('mountStandingsScreen', () => {
     button.click();
 
     // No await in between — the mutation must happen synchronously.
-    expect(button.disabled).toBe(true);
+    // aria-disabled/aria-busy, not native disabled — see core/dom.js's
+    // setBusyDisabled.
+    expect(button.disabled).toBe(false);
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    expect(button.getAttribute('aria-busy')).toBe('true');
     expect(button.textContent).toBe('Advancing…');
 
     document.body.removeChild(root);
@@ -877,8 +950,11 @@ describe('mountStandingsScreen', () => {
     // No await in between — the mutation must happen synchronously, and
     // only because the selection/note validation above already passed (an
     // invalid submission must NOT disable this button — see the two early
-    // `return`s in standingsScreen.js's own handler).
-    expect(submitButton.disabled).toBe(true);
+    // `return`s in standingsScreen.js's own handler). aria-disabled/
+    // aria-busy, not native disabled — see core/dom.js's setBusyDisabled.
+    expect(submitButton.disabled).toBe(false);
+    expect(submitButton.getAttribute('aria-disabled')).toBe('true');
+    expect(submitButton.getAttribute('aria-busy')).toBe('true');
     expect(submitButton.textContent).toBe('Recording coin toss…');
 
     document.body.removeChild(root);

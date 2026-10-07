@@ -129,14 +129,21 @@ describe('renderScoringRows', () => {
       { onToggle, onMarkWrong, interactive: true, locked: true },
     );
     const buttons = rows.querySelectorAll('.scoring-toggle');
-    expect([...buttons].every((button) => button.disabled)).toBe(true);
+    // aria-disabled/aria-busy, not native disabled — see core/dom.js's
+    // setBusyDisabled: `locked` is the transient/busy case (confirmInFlight),
+    // unlike `interactive: false`'s genuinely-permanent real `disabled`.
+    expect([...buttons].every((button) => button.disabled === false)).toBe(true);
+    expect([...buttons].every((button) => button.getAttribute('aria-disabled') === 'true')).toBe(
+      true,
+    );
     // Unlike interactive: false, none of these carry data-readonly — CSS
     // (scoringScreen.css) uses that attribute specifically to distinguish
     // "closed, nothing to do" (full opacity, this is data) from "briefly
     // unavailable" (the normal dimmed .btn:disabled treatment).
     expect([...buttons].every((button) => button.dataset.readonly === undefined)).toBe(true);
     const markWrong = rows.querySelector('.scoring-mark-wrong');
-    expect(markWrong.disabled).toBe(true);
+    expect(markWrong.disabled).toBe(false);
+    expect(markWrong.getAttribute('aria-disabled')).toBe('true');
     buttons[0].click();
     expect(onToggle).not.toHaveBeenCalled();
     markWrong.click();
@@ -491,9 +498,13 @@ describe('mountScoringScreen', () => {
     const confirmButton = root.querySelector('.btn-primary');
     confirmButton.click();
     // A second click on the same, still-live button, before the first
-    // click's synchronous disable would matter if it weren't synchronous —
-    // this proves it actually is: jsdom (like a real browser) never
-    // dispatches a click on an already-disabled button.
+    // click's synchronous `confirmInFlight` guard would matter if it weren't
+    // synchronous — this proves it actually is. Unlike before this task's
+    // own aria-disabled rollout, jsdom (like a real browser) DOES still
+    // dispatch this click: confirmButton is now aria-disabled, not natively
+    // disabled (core/dom.js's setBusyDisabled), so `confirmInFlight`'s own
+    // synchronous check-and-set — not click suppression — is what's actually
+    // being proven here.
     confirmButton.click();
     await vi.waitFor(() => {
       expect(root.textContent).toContain('Heat confirmed');
@@ -630,8 +641,11 @@ describe('mountScoringScreen', () => {
     // The confirm button's own disabling is synchronous (see its own
     // handler comment) — this doesn't yet prove the toggle grid is locked,
     // only that the click landed and confirmInFlight is now true.
+    // aria-disabled/aria-busy, not native disabled — see core/dom.js's
+    // setBusyDisabled.
     await vi.waitFor(() => {
-      expect(root.querySelector('.btn-primary').disabled).toBe(true);
+      expect(root.querySelector('.btn-primary').getAttribute('aria-disabled')).toBe('true');
+      expect(root.querySelector('.btn-primary').getAttribute('aria-busy')).toBe('true');
     });
 
     // The toggle grid itself hasn't re-rendered yet at this point (the
@@ -640,9 +654,11 @@ describe('mountScoringScreen', () => {
     // but the render IT triggers must come back locked, since the confirm
     // is still in flight when that render happens.
     root.querySelector('.scoring-toggle').click();
+    // aria-disabled, not native disabled — see core/dom.js's setBusyDisabled.
     await vi.waitFor(() => {
-      expect(root.querySelector('.scoring-toggle').disabled).toBe(true);
+      expect(root.querySelector('.scoring-toggle').getAttribute('aria-disabled')).toBe('true');
     });
+    expect(root.querySelector('.scoring-toggle').disabled).toBe(false);
     expect(root.querySelector('.scoring-toggle').dataset.readonly).toBeUndefined();
 
     resolveRpc();

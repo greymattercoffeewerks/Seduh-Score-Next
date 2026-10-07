@@ -165,11 +165,9 @@ export function renderEntryForm(draft, { errors, submitting, submitError }) {
       nameInput,
       errors.name ? [fieldError('gtb-name-error', errors.name)] : [],
     ),
-    labeledField(
-      'Phone / WhatsApp',
-      phoneInput,
-      [el('span', { className: 'gtb-field-hint', text: 'so we can reach you if you win' })],
-    ),
+    labeledField('Phone / WhatsApp', phoneInput, [
+      el('span', { className: 'gtb-field-hint', text: 'so we can reach you if you win' }),
+    ]),
     labeledField('Instagram username', instagramInput),
   ];
 
@@ -279,7 +277,10 @@ export async function mountEntryScreen(
       if (view === 'loading') {
         root.appendChild(
           el('div', { className: 'gtb-screen' }, [
-            el('div', { className: 'gtb-spinner', attrs: { role: 'status', 'aria-label': 'Loading' } }),
+            el('div', {
+              className: 'gtb-spinner',
+              attrs: { role: 'status', 'aria-label': 'Loading' },
+            }),
           ]),
         );
         return;
@@ -293,7 +294,11 @@ export async function mountEntryScreen(
       }
       if (view === 'not-found') {
         root.appendChild(
-          statusCard('☕', 'No active session found', 'Ask the friendly humans at the booth for help.'),
+          statusCard(
+            '☕',
+            'No active session found',
+            'Ask the friendly humans at the booth for help.',
+          ),
         );
         focusHeading();
         return true;
@@ -365,7 +370,11 @@ export async function mountEntryScreen(
         root.appendChild(
           el('section', { className: 'gtb-screen gtb-confirm-screen' }, [
             confettiBurst(),
-            el('div', { className: 'gtb-confirm-check', attrs: { 'aria-hidden': 'true' }, text: '✓' }),
+            el('div', {
+              className: 'gtb-confirm-check',
+              attrs: { 'aria-hidden': 'true' },
+              text: '✓',
+            }),
             el('h1', { text: `You're in, ${draft.name}!` }),
             el('p', { className: 'gtb-confirm-label', text: 'Your guess' }),
             el('p', { className: 'gtb-guess-pill', text: String(submittedGuess) }),

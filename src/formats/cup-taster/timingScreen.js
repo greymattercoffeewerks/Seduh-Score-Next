@@ -21,7 +21,7 @@ import { cupTasterOutboxHandlers } from './outboxHandlers.js';
 import { publishLiveSession } from './liveSession.js';
 import { remainingSecs, isExpired } from '../../core/countdown.js';
 import { getSupabase } from '../../core/supabaseClient.js';
-import { el } from '../../core/dom.js';
+import { el, setBusyDisabled, withFocusPreservation } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
 import { formatDuration } from '../../core/duration.js';
 
@@ -72,9 +72,14 @@ export function renderManualTimeFields(entry, { onSave, extraChildren = [], id }
     text: saveLabel,
     attrs: { 'aria-label': `${saveLabel} ${entry.displayName}'s time` },
   });
-  saveButton.addEventListener('click', () =>
-    onSave(entry.entry_id, minutesInput.value, secondsInput.value),
-  );
+  saveButton.addEventListener('click', () => {
+    // aria-disabled (see core/dom.js's setBusyDisabled) doesn't stop the
+    // browser from dispatching this click at all, unlike the native
+    // `disabled` it replaces — a re-entry guard that used to be implicit
+    // now has to be explicit.
+    if (saveButton.getAttribute('aria-disabled') === 'true') return;
+    onSave(entry.entry_id, minutesInput.value, secondsInput.value);
+  });
 
   const fields = el('div', { className: 'manual-time-fields', id }, [
     minutesInput,
@@ -190,10 +195,10 @@ export function renderTimingRows(hydratedEntries, { onStop, onSaveManual }) {
           // (success or failure) is what actually resets this row.
           const { saveButton } = manualFields;
           const originalLabel = saveButton.textContent;
-          saveButton.disabled = true;
+          setBusyDisabled(saveButton, true);
           saveButton.textContent = 'Saving…';
           onSaveManual(entryId, rawSecs, () => {
-            saveButton.disabled = false;
+            setBusyDisabled(saveButton, false);
             saveButton.textContent = originalLabel;
           });
         },
@@ -202,6 +207,10 @@ export function renderTimingRows(hydratedEntries, { onStop, onSaveManual }) {
       manualFields.hidden = true;
 
       manualToggle.addEventListener('click', () => {
+        // Guards the same window stopButton's own click handler below opens
+        // (manualToggle is aria-disabled, not natively disabled, while a tap
+        // for this same row is already in flight).
+        if (manualToggle.getAttribute('aria-disabled') === 'true') return;
         stopButton.hidden = true;
         manualToggle.hidden = true;
         manualToggle.setAttribute('aria-expanded', 'true');
@@ -225,6 +234,7 @@ export function renderTimingRows(hydratedEntries, { onStop, onSaveManual }) {
         manualToggle.focus();
       });
       stopButton.addEventListener('click', () => {
+        if (stopButton.getAttribute('aria-disabled') === 'true') return;
         // Mutated directly — see mountTimingScreen's own startButton comment
         // for why (matches this file's established "no full render() for
         // anything short of a real persisted-state change" philosophy).
@@ -248,18 +258,18 @@ export function renderTimingRows(hydratedEntries, { onStop, onSaveManual }) {
         // SAME row while its own tap is already in flight isn't a real
         // choice; onStop's own caller always re-renders once it settles
         // (success or failure), which is what actually resets this state.
-        stopButton.disabled = true;
+        setBusyDisabled(stopButton, true);
         stopButton.textContent = 'Stopping…';
-        manualToggle.disabled = true;
+        setBusyDisabled(manualToggle, true);
         // Passed through so the caller's own renderOrShowError can restore
         // THIS row specifically if render() itself throws after the write
         // settles (found in review, code-reviewer, 2026-09-11) — this
         // function has no other way to reach back into a row it already
         // returned control of to the caller.
         onStop(entry.entry_id, () => {
-          stopButton.disabled = false;
+          setBusyDisabled(stopButton, false);
           stopButton.textContent = 'Stop';
-          manualToggle.disabled = false;
+          setBusyDisabled(manualToggle, false);
         });
       });
 
@@ -508,248 +518,255 @@ export async function mountTimingScreen(
       }
     }
 
-    root.innerHTML = '';
+    withFocusPreservation(root, renderInner);
 
-    const container = el('section', { className: 'screen-container timing-screen' });
+    function renderInner() {
+      root.innerHTML = '';
 
-    // D9: is_test must render unmistakably on every surface an organiser or
-    // audience member can see — this project's founding failure mode is a
-    // demo heat being indistinguishable from a real one mid-competition.
-    if (data.event.is_test) {
-      container.appendChild(
-        el('div', { className: 'is-test-banner', text: 'Test Data — Not a Live Event' }),
-      );
-    }
+      const container = el('section', { className: 'screen-container timing-screen' });
 
-    container.appendChild(el('h1', { text: `Timing — Heat ${data.heat.heat_number}` }));
+      // D9: is_test must render unmistakably on every surface an organiser or
+      // audience member can see — this project's founding failure mode is a
+      // demo heat being indistinguishable from a real one mid-competition.
+      if (data.event.is_test) {
+        container.appendChild(
+          el('div', { className: 'is-test-banner', text: 'Test Data — Not a Live Event' }),
+        );
+      }
 
-    const feedback = el('div', {
-      className: 'screen-feedback',
-      attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
-    });
-    if (pendingError) {
-      setFeedback(feedback, pendingError, 'error');
-      pendingError = null;
-    } else if (pendingSuccess) {
-      setFeedback(feedback, pendingSuccess, 'success');
-      pendingSuccess = null;
-    }
+      container.appendChild(el('h1', { text: `Timing — Heat ${data.heat.heat_number}` }));
 
-    if (data.heat.timing_mode !== 'app') {
-      container.appendChild(
-        el('div', { className: 'card' }, [
-          el('p', {
-            text: `This heat is timing_mode "${data.heat.timing_mode}" — not the app-timing surface.`,
-          }),
-        ]),
-      );
-    } else if (data.heat.status === 'pending') {
-      const startButton = el('button', {
-        className: 'btn btn-primary tap-target',
-        text: 'Start heat',
+      const feedback = el('div', {
+        className: 'screen-feedback',
+        attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
       });
-      startButton.addEventListener('click', async () => {
-        // Mutated directly rather than via a full render() — matches this
-        // file's own established philosophy (see its top comment) of never
-        // rebuilding the whole subtree for anything short of a real
-        // persisted-state change; a render() here would also be wasteful
-        // since this same handler already calls one below regardless of
-        // outcome. Without this, the button stayed clickable for the whole
-        // round trip with no visible sign a write was already in flight
-        // (ROADMAP.md gap, closed 2026-09-11).
-        startButton.disabled = true;
-        startButton.textContent = 'Starting…';
-        try {
-          const { flushResult } = await startHeat(heatId, data.event.org_id, client, {
-            handlers: cupTasterOutboxHandlers(client),
-          });
-          pendingHeatCheck = { expect: 'timing', flushResult };
-          try {
-            await publishLiveSession(
-              {
-                orgId: data.event.org_id,
-                eventId,
-                stageId: data.heat.stage_id,
-                isTest: data.event.is_test,
-              },
-              client,
-              cupTasterOutboxHandlers(client),
-            );
-          } catch {
-            // Best-effort (§8.2's automatic publish): publishLiveSession
-            // enqueues its own intent before doing any network read, so an
-            // offline/failed attempt here still leaves a real, retryable
-            // entry in the outbox (drained by a later screen action or
-            // main.js's reconnect flush) rather than vanishing — this catch
-            // only guards the enqueue call itself (e.g. IndexedDB unusable),
-            // which doesn't change whether the heat itself started.
-          }
-        } catch (err) {
-          pendingError = describeError(err);
-        }
-        await renderOrShowError(feedback, () => {
-          startButton.disabled = false;
-          startButton.textContent = 'Start heat';
+      if (pendingError) {
+        setFeedback(feedback, pendingError, 'error');
+        pendingError = null;
+      } else if (pendingSuccess) {
+        setFeedback(feedback, pendingSuccess, 'success');
+        pendingSuccess = null;
+      }
+
+      if (data.heat.timing_mode !== 'app') {
+        container.appendChild(
+          el('div', { className: 'card' }, [
+            el('p', {
+              text: `This heat is timing_mode "${data.heat.timing_mode}" — not the app-timing surface.`,
+            }),
+          ]),
+        );
+      } else if (data.heat.status === 'pending') {
+        const startButton = el('button', {
+          className: 'btn btn-primary tap-target',
+          text: 'Start heat',
         });
-      });
-      container.appendChild(
-        el('div', { className: 'card' }, [
-          el('h2', { text: 'Roster' }),
-          renderRosterPreview(data.hydrated),
-        ]),
-      );
-      container.appendChild(el('div', { className: 'card' }, [startButton]));
-    } else if (data.heat.status === 'timing') {
-      container.appendChild(
-        el('h2', {
-          id: 'countdown-heading',
-          text: 'Time remaining',
-          attrs: { tabindex: '-1' },
-        }),
-      );
-      countdownEl = el('div', { className: 'countdown-display' });
-      const startedAtMs = new Date(data.heat.started_at).getTime();
-      const initialRemaining = remainingSecs(startedAtMs, data.heat.duration_secs, Date.now());
-      countdownEl.textContent = formatDuration(initialRemaining);
-      countdownEl.dataset.urgent = initialRemaining <= URGENT_THRESHOLD_SECS ? 'true' : 'false';
-      container.appendChild(countdownEl);
-
-      const rows = renderTimingRows(data.hydrated, {
-        onStop: async (entryId, restoreRow) => {
-          const stoppedEntry = data.hydrated.find((entry) => entry.entry_id === entryId);
+        startButton.addEventListener('click', async () => {
+          if (startButton.getAttribute('aria-disabled') === 'true') return;
+          // Mutated directly rather than via a full render() — matches this
+          // file's own established philosophy (see its top comment) of never
+          // rebuilding the whole subtree for anything short of a real
+          // persisted-state change; a render() here would also be wasteful
+          // since this same handler already calls one below regardless of
+          // outcome. Without this, the button stayed clickable for the whole
+          // round trip with no visible sign a write was already in flight
+          // (ROADMAP.md gap, closed 2026-09-11).
+          setBusyDisabled(startButton, true);
+          startButton.textContent = 'Starting…';
           try {
-            const { expectedElapsedSecs, flushResult } = await recordTap(
-              data.heat,
-              stoppedEntry,
-              data.event.org_id,
-              client,
-              { handlers: cupTasterOutboxHandlers(client) },
-            );
-            pendingEntryCheck = {
-              heatEntryId: stoppedEntry.id,
-              displayName: stoppedEntry.displayName,
-              expectedElapsedSecs,
-              flushResult,
-            };
+            const { flushResult } = await startHeat(heatId, data.event.org_id, client, {
+              handlers: cupTasterOutboxHandlers(client),
+            });
+            pendingHeatCheck = { expect: 'timing', flushResult };
+            try {
+              await publishLiveSession(
+                {
+                  orgId: data.event.org_id,
+                  eventId,
+                  stageId: data.heat.stage_id,
+                  isTest: data.event.is_test,
+                },
+                client,
+                cupTasterOutboxHandlers(client),
+              );
+            } catch {
+              // Best-effort (§8.2's automatic publish): publishLiveSession
+              // enqueues its own intent before doing any network read, so an
+              // offline/failed attempt here still leaves a real, retryable
+              // entry in the outbox (drained by a later screen action or
+              // main.js's reconnect flush) rather than vanishing — this catch
+              // only guards the enqueue call itself (e.g. IndexedDB unusable),
+              // which doesn't change whether the heat itself started.
+            }
           } catch (err) {
             pendingError = describeError(err);
           }
-          await renderOrShowError(feedback, restoreRow);
-        },
-        // The mid-heat device-failure fallback (see this module's own
-        // renderTimingRows comment) — reuses recordManualTime and the
-        // exact same pendingEntryCheck ground-truth machinery recordTap's
-        // own onStop already established above, so success/conflict
-        // messaging behaves identically regardless of which path recorded
-        // the time. `rawSecs` arrives already validated — renderTimingRows'
-        // own onSave wrapper calls parseElapsedInput itself and only
-        // invokes this handler on success, so a bad typo never reaches
-        // this far (see that comment for why: a validation failure alone
-        // must never trigger a render()).
-        onSaveManual: async (entryId, rawSecs, restoreButton) => {
-          const targetEntry = data.hydrated.find((entry) => entry.entry_id === entryId);
-          try {
-            const { expectedElapsedSecs, flushResult } = await recordManualTime(
-              data.heat,
-              targetEntry,
-              rawSecs,
-              data.event.org_id,
-              client,
-              { handlers: cupTasterOutboxHandlers(client) },
-            );
-            pendingEntryCheck = {
-              heatEntryId: targetEntry.id,
-              displayName: targetEntry.displayName,
-              expectedElapsedSecs,
-              flushResult,
-            };
-          } catch (err) {
-            pendingError = describeError(err);
-          }
-          await renderOrShowError(feedback, restoreButton);
-        },
-      });
-      container.appendChild(
-        el('div', { className: 'card' }, [el('h2', { text: 'Cuppers' }), rows]),
-      );
-
-      expiryHandled = false;
-      urgentAnnounced = initialRemaining <= URGENT_THRESHOLD_SECS;
-      tickHandle = setInterval(
-        () => tick(data, startedAtMs, data.heat.duration_secs, feedback),
-        1000,
-      );
-      // A backgrounded/throttled tab may miss scheduled ticks entirely —
-      // force an immediate check on return rather than waiting for the next
-      // 1s tick, so an already-expired heat resolves as soon as the
-      // organiser looks at the screen again. Stays registered for the whole
-      // 'timing' period (not just once) — stopTicking() at the top of the
-      // next render() is what removes it, whether that next render comes
-      // from a tap, expiry, or an error retry.
-      visibilityHandler = () => {
-        if (document.visibilityState === 'visible') {
-          tick(data, startedAtMs, data.heat.duration_secs, feedback);
-        }
-      };
-      document.addEventListener('visibilitychange', visibilityHandler);
-    } else {
-      container.appendChild(
-        el('div', { className: 'card' }, [
+          await renderOrShowError(feedback, () => {
+            setBusyDisabled(startButton, false);
+            startButton.textContent = 'Start heat';
+          });
+        });
+        container.appendChild(
+          el('div', { className: 'card' }, [
+            el('h2', { text: 'Roster' }),
+            renderRosterPreview(data.hydrated),
+          ]),
+        );
+        container.appendChild(el('div', { className: 'card' }, [startButton]));
+      } else if (data.heat.status === 'timing') {
+        container.appendChild(
           el('h2', {
-            id: 'timing-complete-heading',
-            text: 'Timing complete',
+            id: 'countdown-heading',
+            text: 'Time remaining',
             attrs: { tabindex: '-1' },
           }),
-          el('p', { text: 'Every cupper has a final time.' }),
-          renderTimingRows(data.hydrated, { onStop: () => {} }),
-          // Found live: without this, reaching scoring meant leaving this
-          // screen entirely (Overview -> stage -> Heats -> this same heat's
-          // own "Score this heat" link, heatsScreen.js's heatActionLink) —
-          // several avoidable steps right when timing has just finished and
-          // an organiser wants to move straight into scoring.
-          buildScoringLink(eventId, heatId),
-        ]),
-      );
-      // Found in review (ui-accessibility-reviewer): without this, the
-      // render that just completed the heat (last tap, or the auto-max
-      // sweep) fell through to the generic feedback-region fallback below
-      // — but `feedback` is appended to the DOM AFTER this card, so a
-      // keyboard/screen-reader user landing there and pressing Tab moved
-      // FORWARD, past the "Score this heat" link that already sits
-      // earlier in the DOM, not toward it. Gated on 'success' specifically
-      // (not any tone) — found in a second review pass: a concurrent tap
-      // that loses the race to complete this same heat reports an ERROR
-      // tone on this exact branch (pendingEntryCheck's permanentFailure/
-      // not-yet-synced cases), and `feedback` has tabindex="-1" (out of
-      // tab order), so redirecting focus to the heading on an error tone
-      // would leave a keyboard-only user with no way to reach their own
-      // rejection message at all — only the aria-live announcement, which
-      // a sighted keyboard user watching focus position wouldn't get. A
-      // plain navigation straight to an already-complete heat sets no
-      // tone at all, so it's left with no explicit focus move either way,
-      // same as before this fix.
-      if (feedback.dataset.tone === 'success') {
-        focusAfterRender = '#timing-complete-heading';
+        );
+        countdownEl = el('div', { className: 'countdown-display' });
+        const startedAtMs = new Date(data.heat.started_at).getTime();
+        const initialRemaining = remainingSecs(startedAtMs, data.heat.duration_secs, Date.now());
+        countdownEl.textContent = formatDuration(initialRemaining);
+        countdownEl.dataset.urgent = initialRemaining <= URGENT_THRESHOLD_SECS ? 'true' : 'false';
+        container.appendChild(countdownEl);
+
+        const rows = renderTimingRows(data.hydrated, {
+          onStop: async (entryId, restoreRow) => {
+            const stoppedEntry = data.hydrated.find((entry) => entry.entry_id === entryId);
+            try {
+              const { expectedElapsedSecs, flushResult } = await recordTap(
+                data.heat,
+                stoppedEntry,
+                data.event.org_id,
+                client,
+                { handlers: cupTasterOutboxHandlers(client) },
+              );
+              pendingEntryCheck = {
+                heatEntryId: stoppedEntry.id,
+                displayName: stoppedEntry.displayName,
+                expectedElapsedSecs,
+                flushResult,
+              };
+            } catch (err) {
+              pendingError = describeError(err);
+            }
+            await renderOrShowError(feedback, restoreRow);
+          },
+          // The mid-heat device-failure fallback (see this module's own
+          // renderTimingRows comment) — reuses recordManualTime and the
+          // exact same pendingEntryCheck ground-truth machinery recordTap's
+          // own onStop already established above, so success/conflict
+          // messaging behaves identically regardless of which path recorded
+          // the time. `rawSecs` arrives already validated — renderTimingRows'
+          // own onSave wrapper calls parseElapsedInput itself and only
+          // invokes this handler on success, so a bad typo never reaches
+          // this far (see that comment for why: a validation failure alone
+          // must never trigger a render()).
+          onSaveManual: async (entryId, rawSecs, restoreButton) => {
+            const targetEntry = data.hydrated.find((entry) => entry.entry_id === entryId);
+            try {
+              const { expectedElapsedSecs, flushResult } = await recordManualTime(
+                data.heat,
+                targetEntry,
+                rawSecs,
+                data.event.org_id,
+                client,
+                { handlers: cupTasterOutboxHandlers(client) },
+              );
+              pendingEntryCheck = {
+                heatEntryId: targetEntry.id,
+                displayName: targetEntry.displayName,
+                expectedElapsedSecs,
+                flushResult,
+              };
+            } catch (err) {
+              pendingError = describeError(err);
+            }
+            await renderOrShowError(feedback, restoreButton);
+          },
+        });
+        container.appendChild(
+          el('div', { className: 'card' }, [el('h2', { text: 'Cuppers' }), rows]),
+        );
+
+        expiryHandled = false;
+        urgentAnnounced = initialRemaining <= URGENT_THRESHOLD_SECS;
+        tickHandle = setInterval(
+          () => tick(data, startedAtMs, data.heat.duration_secs, feedback),
+          1000,
+        );
+        // A backgrounded/throttled tab may miss scheduled ticks entirely —
+        // force an immediate check on return rather than waiting for the next
+        // 1s tick, so an already-expired heat resolves as soon as the
+        // organiser looks at the screen again. Stays registered for the whole
+        // 'timing' period (not just once) — stopTicking() at the top of the
+        // next render() is what removes it, whether that next render comes
+        // from a tap, expiry, or an error retry.
+        visibilityHandler = () => {
+          if (document.visibilityState === 'visible') {
+            tick(data, startedAtMs, data.heat.duration_secs, feedback);
+          }
+        };
+        document.addEventListener('visibilitychange', visibilityHandler);
+      } else {
+        container.appendChild(
+          el('div', { className: 'card' }, [
+            el('h2', {
+              id: 'timing-complete-heading',
+              text: 'Timing complete',
+              attrs: { tabindex: '-1' },
+            }),
+            el('p', { text: 'Every cupper has a final time.' }),
+            renderTimingRows(data.hydrated, { onStop: () => {} }),
+            // Found live: without this, reaching scoring meant leaving this
+            // screen entirely (Overview -> stage -> Heats -> this same heat's
+            // own "Score this heat" link, heatsScreen.js's heatActionLink) —
+            // several avoidable steps right when timing has just finished and
+            // an organiser wants to move straight into scoring.
+            buildScoringLink(eventId, heatId),
+          ]),
+        );
+        // Found in review (ui-accessibility-reviewer): without this, the
+        // render that just completed the heat (last tap, or the auto-max
+        // sweep) fell through to the generic feedback-region fallback below
+        // — but `feedback` is appended to the DOM AFTER this card, so a
+        // keyboard/screen-reader user landing there and pressing Tab moved
+        // FORWARD, past the "Score this heat" link that already sits
+        // earlier in the DOM, not toward it. Gated on 'success' specifically
+        // (not any tone) — found in a second review pass: a concurrent tap
+        // that loses the race to complete this same heat reports an ERROR
+        // tone on this exact branch (pendingEntryCheck's permanentFailure/
+        // not-yet-synced cases), and `feedback` has tabindex="-1" (out of
+        // tab order), so redirecting focus to the heading on an error tone
+        // would leave a keyboard-only user with no way to reach their own
+        // rejection message at all — only the aria-live announcement, which
+        // a sighted keyboard user watching focus position wouldn't get. A
+        // plain navigation straight to an already-complete heat sets no
+        // tone at all, so it's left with no explicit focus move either way,
+        // same as before this fix.
+        if (feedback.dataset.tone === 'success') {
+          focusAfterRender = '#timing-complete-heading';
+        }
       }
-    }
 
-    container.appendChild(feedback);
-    root.appendChild(container);
+      container.appendChild(feedback);
+      root.appendChild(container);
 
-    // Rebuild-then-refocus (§15.3): only past this point does the target
-    // element actually exist to focus. When no explicit target was set (the
-    // stop/expiry success paths don't set one — there's no single obvious
-    // element to return focus to once a Stop button has been replaced by a
-    // static result), fall back to the feedback region itself: it both
-    // carries the message that just changed and gives a sighted user a
-    // visual anchor, matching heatsScreen.js's established fallback.
-    if (focusAfterRender) {
-      const target = root.querySelector(focusAfterRender);
-      target?.focus();
-      focusAfterRender = null;
-    } else if (feedback.dataset.tone) {
-      feedback.scrollIntoView?.({ block: 'nearest' });
-      feedback.focus();
+      // Rebuild-then-refocus (§15.3): only past this point does the target
+      // element actually exist to focus. When no explicit target was set (the
+      // stop/expiry success paths don't set one — there's no single obvious
+      // element to return focus to once a Stop button has been replaced by a
+      // static result), fall back to the feedback region itself: it both
+      // carries the message that just changed and gives a sighted user a
+      // visual anchor, matching heatsScreen.js's established fallback.
+      if (focusAfterRender) {
+        const target = root.querySelector(focusAfterRender);
+        target?.focus();
+        focusAfterRender = null;
+        return true;
+      } else if (feedback.dataset.tone) {
+        feedback.scrollIntoView?.({ block: 'nearest' });
+        feedback.focus();
+        return true;
+      }
     }
   }
 

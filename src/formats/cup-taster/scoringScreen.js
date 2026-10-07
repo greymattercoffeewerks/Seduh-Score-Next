@@ -33,7 +33,7 @@ import {
 import { cupTasterOutboxHandlers } from './outboxHandlers.js';
 import { publishLiveSession } from './liveSession.js';
 import { getSupabase } from '../../core/supabaseClient.js';
-import { el } from '../../core/dom.js';
+import { el, setBusyDisabled, withFocusPreservation } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
 
 // `interactive: false` renders the read-only confirmed view — real buttons
@@ -104,10 +104,23 @@ export function renderScoringRows(
             value === true ? 'correct' : value === false ? 'wrong' : 'unscored'
           }`,
           ...(interactive ? {} : { disabled: 'disabled', 'data-readonly': 'true' }),
-          ...(locked ? { disabled: 'disabled' } : {}),
         },
       });
-      if (interactive) button.addEventListener('click', () => onToggle(entry.entry_id, setId));
+      // `locked` (confirmInFlight) is the transient/busy case — setBusyDisabled,
+      // not real `disabled`, matching every other in-flight control this task
+      // touches (found in review, code-reviewer: this was still baking
+      // `locked` into a raw `disabled` attr at creation time, unreachable only
+      // by the accident of confirmInFlight always being false by the time
+      // render() runs today — a trap for the next render path added here).
+      // `interactive: false` (the true read-only confirmed view) stays real
+      // `disabled` above — nothing left to do with it, ever.
+      if (interactive) setBusyDisabled(button, locked);
+      if (interactive) {
+        button.addEventListener('click', () => {
+          if (button.getAttribute('aria-disabled') === 'true') return;
+          onToggle(entry.entry_id, setId);
+        });
+      }
       return button;
     });
 
@@ -119,10 +132,17 @@ export function renderScoringRows(
             text: 'Mark remaining wrong',
             attrs: {
               'aria-label': `Mark ${entry.displayName}'s remaining unscored sets wrong`,
-              ...(locked ? { disabled: 'disabled' } : {}),
             },
           });
-    markWrongButton?.addEventListener('click', () => onMarkWrong(entry.entry_id));
+    if (markWrongButton) setBusyDisabled(markWrongButton, locked);
+    markWrongButton?.addEventListener('click', () => {
+      // aria-disabled (see core/dom.js's setBusyDisabled) doesn't block
+      // dispatch the way the native `disabled` it replaces did — same
+      // re-entry guard this task adds everywhere else a busy control used
+      // to rely on native disabled alone.
+      if (markWrongButton.getAttribute('aria-disabled') === 'true') return;
+      onMarkWrong(entry.entry_id);
+    });
 
     return el(
       'li',
@@ -215,194 +235,207 @@ export async function mountScoringScreen(
     // real DOM-write race between the router..." entry.
     if (signal?.aborted) return;
 
-    root.innerHTML = '';
+    withFocusPreservation(root, renderInner);
 
-    const container = el('section', { className: 'screen-container scoring-screen' });
+    function renderInner() {
+      root.innerHTML = '';
 
-    // D9: is_test must render unmistakably on every surface an organiser or
-    // audience member can see.
-    if (data.event.is_test) {
-      container.appendChild(
-        el('div', { className: 'is-test-banner', text: 'Test Data — Not a Live Event' }),
-      );
-    }
+      const container = el('section', { className: 'screen-container scoring-screen' });
 
-    container.appendChild(el('h1', { text: `Scoring — Heat ${data.heat.heat_number}` }));
+      // D9: is_test must render unmistakably on every surface an organiser or
+      // audience member can see.
+      if (data.event.is_test) {
+        container.appendChild(
+          el('div', { className: 'is-test-banner', text: 'Test Data — Not a Live Event' }),
+        );
+      }
 
-    const feedback = el('div', {
-      className: 'screen-feedback',
-      attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
-    });
-    if (pendingError) {
-      setFeedback(feedback, pendingError, 'error');
-      pendingError = null;
-    } else if (pendingSuccess) {
-      setFeedback(feedback, pendingSuccess, 'success');
-      pendingSuccess = null;
-    }
+      container.appendChild(el('h1', { text: `Scoring — Heat ${data.heat.heat_number}` }));
 
-    const setIds = data.sets.map((set) => set.id);
-    const entryIds = data.hydrated.map((entry) => entry.entry_id);
-
-    if (data.heat.status === 'confirmed') {
-      container.appendChild(
-        el('div', { className: 'card' }, [
-          el('h2', {
-            id: 'scoring-confirmed-heading',
-            text: 'Heat confirmed',
-            attrs: { tabindex: '-1' },
-          }),
-          el('p', { text: 'Every cupper has a final score. This heat is closed.' }),
-          renderScoringRows(data.hydrated, setIds, draft, { interactive: false }),
-        ]),
-      );
-    } else if (data.heat.status !== 'scoring') {
-      container.appendChild(
-        el('div', { className: 'card' }, [
-          el('p', {
-            text: `This heat is status "${data.heat.status}" — not ready for scoring yet. Timing must finish first.`,
-          }),
-        ]),
-      );
-    } else {
-      const rows = renderScoringRows(data.hydrated, setIds, draft, {
-        locked: confirmInFlight,
-        onToggle: async (entryId, setId) => {
-          // Synchronous mutation — see the `draft` declaration's own
-          // comment for why this must happen before any `await` below.
-          const current = draft[entryId]?.[setId] ?? null;
-          draft = {
-            ...draft,
-            [entryId]: { ...(draft[entryId] ?? {}), [setId]: toggleScore(current) },
-          };
-          await saveDraft(heatId, draft);
-          focusAfterRender = `#score-${entryId}-${setId}`;
-          await renderOrShowError(feedback);
-        },
-        onMarkWrong: async (entryId) => {
-          draft = { ...draft, [entryId]: markCupperRemainingWrong(draft[entryId] ?? {}, setIds) };
-          await saveDraft(heatId, draft);
-          focusAfterRender = `#tally-${entryId}`;
-          await renderOrShowError(feedback);
-        },
+      const feedback = el('div', {
+        className: 'screen-feedback',
+        attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
       });
-      container.appendChild(
-        el('div', { className: 'card' }, [el('h2', { text: 'Cuppers' }), rows]),
-      );
+      if (pendingError) {
+        setFeedback(feedback, pendingError, 'error');
+        pendingError = null;
+      } else if (pendingSuccess) {
+        setFeedback(feedback, pendingSuccess, 'success');
+        pendingSuccess = null;
+      }
 
-      const complete = isHeatComplete(entryIds, draft, setIds);
-      // D24/§7.4: Confirm unlocks only once every cupper has every set
-      // scored. A bare `disabled` attribute alone leaves a screen-reader
-      // user with no explanation of WHY ("Confirm heat, button, disabled"
-      // and nothing else) — same aria-describedby-plus-always-visible-text
-      // pattern setupScreen.js already established for its own disabled
-      // fields, not a new one invented here. Omitted once `complete` is
-      // true — nothing left to explain at that point.
-      const confirmHintId = 'confirm-heat-hint';
-      const confirmButton = el('button', {
-        className: 'btn btn-primary tap-target',
-        text: confirmInFlight ? 'Confirming…' : 'Confirm heat',
-        attrs: {
-          ...(complete && !confirmInFlight ? {} : { disabled: 'disabled' }),
-          ...(!complete ? { 'aria-describedby': confirmHintId } : {}),
-        },
-      });
-      confirmButton.addEventListener('click', async () => {
-        // Guards against a rapid double-click enqueueing two confirm
-        // operations for this same heat — the second would self-conflict
-        // against the first's own update (a P0002 the first click, not the
-        // organiser, caused) and, without this, both click handlers would
-        // share one ambiguous flush result with no way to tell which
-        // outcome was actually theirs. Disabling synchronously — before
-        // any `await` — closes the window entirely, the same reasoning as
-        // the `draft` mutation above.
-        if (confirmInFlight) return;
-        confirmInFlight = true;
-        confirmButton.disabled = true;
-        try {
-          const entries = buildConfirmEntries(data.hydrated, draft, setIds);
-          const result = await submitConfirmHeat(
-            heatId,
-            data.event.org_id,
-            data.heat.updated_at,
-            entries,
-            client,
-            cupTasterOutboxHandlers(client),
-          );
-          // Ground truth, not the flush's own bookkeeping: the outbox is a
-          // single shared queue, so `result` can reflect an unrelated
-          // operation (an earlier stuck one the outbox auto-cleared this
-          // same pass) rather than this specific confirm attempt — re-read
-          // the heat itself rather than risk telling the organiser their
-          // own successful confirm failed, or the reverse. `.catch(() =>
-          // null)` specifically: if THIS re-fetch fails (e.g. the
-          // connection drops between the RPC ack and this read),
-          // submitConfirmHeat may have already succeeded server-side —
-          // never claim a definite failure from a read that simply didn't
-          // land. The next render's own loadState() re-fetches fresh and
-          // self-corrects to "Heat confirmed" on its own if it did.
-          const freshHeat = await findHeatById(heatId, client).catch(() => null);
-          if (freshHeat === null) {
-            pendingError =
-              'Could not confirm whether this went through — check the heat again in a moment before retrying.';
-          } else if (freshHeat.status === 'confirmed') {
-            await clearDraft(heatId);
-            pendingSuccess = 'Heat confirmed.';
-            try {
-              await publishLiveSession(
-                {
-                  orgId: data.event.org_id,
-                  eventId,
-                  stageId: data.heat.stage_id,
-                  isTest: data.event.is_test,
-                },
-                client,
-                cupTasterOutboxHandlers(client),
-              );
-            } catch {
-              // Best-effort (§8.1/D23's automatic publish): publishLiveSession
-              // enqueues its own intent before doing any network read, so an
-              // offline/failed attempt here still leaves a real, retryable
-              // entry in the outbox (drained by a later screen action or
-              // main.js's reconnect flush) rather than vanishing — this
-              // catch only guards the enqueue call itself (e.g. IndexedDB
-              // unusable), which doesn't change whether the heat itself
-              // confirmed.
+      const setIds = data.sets.map((set) => set.id);
+      const entryIds = data.hydrated.map((entry) => entry.entry_id);
+
+      if (data.heat.status === 'confirmed') {
+        container.appendChild(
+          el('div', { className: 'card' }, [
+            el('h2', {
+              id: 'scoring-confirmed-heading',
+              text: 'Heat confirmed',
+              attrs: { tabindex: '-1' },
+            }),
+            el('p', { text: 'Every cupper has a final score. This heat is closed.' }),
+            renderScoringRows(data.hydrated, setIds, draft, { interactive: false }),
+          ]),
+        );
+      } else if (data.heat.status !== 'scoring') {
+        container.appendChild(
+          el('div', { className: 'card' }, [
+            el('p', {
+              text: `This heat is status "${data.heat.status}" — not ready for scoring yet. Timing must finish first.`,
+            }),
+          ]),
+        );
+      } else {
+        const rows = renderScoringRows(data.hydrated, setIds, draft, {
+          locked: confirmInFlight,
+          onToggle: async (entryId, setId) => {
+            // Synchronous mutation — see the `draft` declaration's own
+            // comment for why this must happen before any `await` below.
+            const current = draft[entryId]?.[setId] ?? null;
+            draft = {
+              ...draft,
+              [entryId]: { ...(draft[entryId] ?? {}), [setId]: toggleScore(current) },
+            };
+            await saveDraft(heatId, draft);
+            focusAfterRender = `#score-${entryId}-${setId}`;
+            await renderOrShowError(feedback);
+          },
+          onMarkWrong: async (entryId) => {
+            draft = { ...draft, [entryId]: markCupperRemainingWrong(draft[entryId] ?? {}, setIds) };
+            await saveDraft(heatId, draft);
+            focusAfterRender = `#tally-${entryId}`;
+            await renderOrShowError(feedback);
+          },
+        });
+        container.appendChild(
+          el('div', { className: 'card' }, [el('h2', { text: 'Cuppers' }), rows]),
+        );
+
+        const complete = isHeatComplete(entryIds, draft, setIds);
+        // D24/§7.4: Confirm unlocks only once every cupper has every set
+        // scored. A bare `disabled` attribute alone leaves a screen-reader
+        // user with no explanation of WHY ("Confirm heat, button, disabled"
+        // and nothing else) — same aria-describedby-plus-always-visible-text
+        // pattern setupScreen.js already established for its own disabled
+        // fields, not a new one invented here. Omitted once `complete` is
+        // true — nothing left to explain at that point.
+        const confirmHintId = 'confirm-heat-hint';
+        const confirmButton = el('button', {
+          className: 'btn btn-primary tap-target',
+          text: confirmInFlight ? 'Confirming…' : 'Confirm heat',
+          attrs: {
+            ...(!complete ? { 'aria-describedby': confirmHintId } : {}),
+          },
+        });
+        // Split like setupScreen.js's saveButton: `!complete` is structural
+        // (nothing to confirm yet) — real `disabled`. `confirmInFlight` is
+        // transient/busy — setBusyDisabled (found in review, code-reviewer:
+        // this was baking confirmInFlight into the same raw `disabled` attr
+        // as `!complete`, unreachable only by the accident of confirmInFlight
+        // always being false by the time render() runs today).
+        confirmButton.disabled = !complete;
+        setBusyDisabled(confirmButton, complete && confirmInFlight);
+        confirmButton.addEventListener('click', async () => {
+          // Guards against a rapid double-click enqueueing two confirm
+          // operations for this same heat — the second would self-conflict
+          // against the first's own update (a P0002 the first click, not the
+          // organiser, caused) and, without this, both click handlers would
+          // share one ambiguous flush result with no way to tell which
+          // outcome was actually theirs. Disabling synchronously — before
+          // any `await` — closes the window entirely, the same reasoning as
+          // the `draft` mutation above.
+          if (confirmInFlight) return;
+          confirmInFlight = true;
+          setBusyDisabled(confirmButton, true);
+          try {
+            const entries = buildConfirmEntries(data.hydrated, draft, setIds);
+            const result = await submitConfirmHeat(
+              heatId,
+              data.event.org_id,
+              data.heat.updated_at,
+              entries,
+              client,
+              cupTasterOutboxHandlers(client),
+            );
+            // Ground truth, not the flush's own bookkeeping: the outbox is a
+            // single shared queue, so `result` can reflect an unrelated
+            // operation (an earlier stuck one the outbox auto-cleared this
+            // same pass) rather than this specific confirm attempt — re-read
+            // the heat itself rather than risk telling the organiser their
+            // own successful confirm failed, or the reverse. `.catch(() =>
+            // null)` specifically: if THIS re-fetch fails (e.g. the
+            // connection drops between the RPC ack and this read),
+            // submitConfirmHeat may have already succeeded server-side —
+            // never claim a definite failure from a read that simply didn't
+            // land. The next render's own loadState() re-fetches fresh and
+            // self-corrects to "Heat confirmed" on its own if it did.
+            const freshHeat = await findHeatById(heatId, client).catch(() => null);
+            if (freshHeat === null) {
+              pendingError =
+                'Could not confirm whether this went through — check the heat again in a moment before retrying.';
+            } else if (freshHeat.status === 'confirmed') {
+              await clearDraft(heatId);
+              pendingSuccess = 'Heat confirmed.';
+              try {
+                await publishLiveSession(
+                  {
+                    orgId: data.event.org_id,
+                    eventId,
+                    stageId: data.heat.stage_id,
+                    isTest: data.event.is_test,
+                  },
+                  client,
+                  cupTasterOutboxHandlers(client),
+                );
+              } catch {
+                // Best-effort (§8.1/D23's automatic publish): publishLiveSession
+                // enqueues its own intent before doing any network read, so an
+                // offline/failed attempt here still leaves a real, retryable
+                // entry in the outbox (drained by a later screen action or
+                // main.js's reconnect flush) rather than vanishing — this
+                // catch only guards the enqueue call itself (e.g. IndexedDB
+                // unusable), which doesn't change whether the heat itself
+                // confirmed.
+              }
+            } else if (result.error) {
+              pendingError = describeConfirmError(result.error) ?? describeError(result.error);
+            } else {
+              pendingError =
+                'This heat has not been confirmed yet — it may still be waiting to sync. Try again in a moment.';
             }
-          } else if (result.error) {
-            pendingError = describeConfirmError(result.error) ?? describeError(result.error);
-          } else {
-            pendingError =
-              'This heat has not been confirmed yet — it may still be waiting to sync. Try again in a moment.';
+          } catch (err) {
+            pendingError = describeConfirmError(err) ?? describeError(err);
           }
-        } catch (err) {
-          pendingError = describeConfirmError(err) ?? describeError(err);
-        }
-        confirmInFlight = false;
-        await renderOrShowError(feedback);
-      });
-      const confirmHint = !complete
-        ? el('p', {
-            id: confirmHintId,
-            className: 'form-field-hint',
-            text: 'Confirm unlocks once every cupper has every set scored — a set left blank (—) still needs a tap before this heat can close.',
-          })
-        : null;
-      container.appendChild(
-        el('div', { className: 'card' }, [confirmButton, confirmHint].filter(Boolean)),
-      );
-    }
+          confirmInFlight = false;
+          await renderOrShowError(feedback);
+        });
+        const confirmHint = !complete
+          ? el('p', {
+              id: confirmHintId,
+              className: 'form-field-hint',
+              text: 'Confirm unlocks once every cupper has every set scored — a set left blank (—) still needs a tap before this heat can close.',
+            })
+          : null;
+        container.appendChild(
+          el('div', { className: 'card' }, [confirmButton, confirmHint].filter(Boolean)),
+        );
+      }
 
-    container.appendChild(feedback);
-    root.appendChild(container);
+      container.appendChild(feedback);
+      root.appendChild(container);
 
-    if (focusAfterRender) {
-      const target = root.querySelector(focusAfterRender);
-      target?.focus();
-      focusAfterRender = null;
-    } else if (feedback.dataset.tone) {
-      feedback.scrollIntoView?.({ block: 'nearest' });
-      feedback.focus();
+      if (focusAfterRender) {
+        const target = root.querySelector(focusAfterRender);
+        target?.focus();
+        focusAfterRender = null;
+        return true;
+      } else if (feedback.dataset.tone) {
+        feedback.scrollIntoView?.({ block: 'nearest' });
+        feedback.focus();
+        return true;
+      }
     }
   }
 
