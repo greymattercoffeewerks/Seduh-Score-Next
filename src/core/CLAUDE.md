@@ -21,6 +21,8 @@ idempotent + race-recovering, `dom` gained `labeledField` (extracted from
 from `formats/cup-taster/setup.js` so `core/registry.js` could reuse the same
 race-recovery shape) — all 2026-08-27, the roster-registration screen's follow-up.
 
+`registry` gained `listPeopleByIds` (chunked by 100) and `updateRosterEntry` (T-HARDEN.roster-edit, 2026-10-07) — the latter calls the format-agnostic `update_roster_entry` RPC (migration `20261007100000`); any format's roster screen can reuse both unedited.
+
 `publish` (T5.1, 2026-08-27) — `publishSession()` enqueues + flushes a `publish_session`
 RPC through `outbox.js` exactly like `scoring.js`'s `submitConfirmHeat`; logic-module
 only, nothing calls it yet — payload shape/call cadence are T5.2+ decisions.

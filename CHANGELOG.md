@@ -1,3 +1,41 @@
+## T-HARDEN.roster-edit: Edit a registered cupper from the roster · 2026-10-07
+
+**Task:** T-HARDEN.roster-edit (live-event finding #4 from the first Cup Taster event, 4 Oct).
+The roster had no Edit: a wrong name could not be fixed from the app (registering again with the same phone returns the existing person unchanged, so withdraw + re-register changed nothing), and the phone and email that were entered were not visible to check.
+
+**What shipped:**
+
+- Database: migration `20261007100000_update_roster_entry.sql` — RPC `update_roster_entry(p_org_id, p_entry_id, p_display_name, p_phone, p_email, p_cafe, p_bib)`. Invoker rights, `search_path` pinned, execute revoked from `public`/`anon`. One atomic call corrects the person's shared profile (name, phone, email, cafe) AND this event's entry (name, cafe, bib); other events' entries for the same person are snapshots and are left alone (handoff §5.1). Phone and email always come from the form; name and cafe reach the profile only when changed from this entry's snapshot (the form is prefilled from the snapshot, so editing an old entry must not revert a profile renamed since). A phone or email already held by another person in the org is a `P0002` whose DETAIL names the field and the other person; a race that only appears at the UPDATE is reported the same way without the name. A walk-up entry (no person) edits name/cafe/bib only and refuses a phone or email. Length caps 200/200/50/254/32. Not found and not-your-org give the same answer.
+- Client: `core/registry.js` gained `listPeopleByIds` (chunked by 100) and `updateRosterEntry`. `rosterScreen.js` shows each cupper's phone and email, and each row has an Edit button opening an inline form (Name, Phone, Email, Cafe, Bib). The open form's text lives in the screen's state, so a withdraw or register elsewhere does not wipe it. Validation and server errors appear in the form beside the field (`aria-invalid`, `aria-describedby`, a live error line above the fields). The saved confirmation appears inside the edited row and takes focus there; it says the audience view and published results show the new name or cafe only after the next publish. Registration and edit share one set of field length limits (`maxlength` plus validation).
+- Failure handling: the contact-details read is non-fatal (the roster still loads, without contact lines, and Edit explains why it cannot open); an entry whose profile did not load is not treated as a walk-up.
+- Tests: pgTAP `supabase/tests/024_update_roster_entry.sql` (54 assertions: org scoping, validation, atomicity, DETAIL contract, caps at and past the limit, stale-snapshot protection, per-org uniqueness); vitest additions in `rosterScreen.test.js` and `registry.test.js`.
+
+**Files changed:** `supabase/migrations/20261007100000_update_roster_entry.sql` (new), `supabase/tests/024_update_roster_entry.sql` (new), `src/core/registry.js`, `src/core/registry.test.js`, `src/formats/cup-taster/rosterScreen.js`, `rosterScreen.css`, `rosterScreen.test.js`, `rosterScreen.preview.html`.
+
+**Bugs found while building (and in review):**
+
+- **Stale snapshot reverted the profile.** The first version wrote name and cafe to both tables unconditionally; editing only the bib of an older entry would have restored the old name and cafe over a newer profile. Fixed by comparing against the entry's snapshot (migration edited before it was pushed anywhere).
+- **Registration accepted values Edit would refuse.** No length limits existed on registration; a long value could be saved once and never edited. Both forms now share the caps.
+- **Misleading "not found" under a concurrent merge.** The person id was read before the entry lock; it is now read under the same `for update`.
+- **A null in the contact lookup would hide every contact line and Edit.** A mixed walk-up and linked roster would send a null id; the read's failure is swallowed by design, so the symptom would be silent. Only real person ids are asked for, and the test fake now rejects a null as PostgREST does.
+- **The saved message was off-screen on a long roster and unreliable for screen readers.** It sat in the feedback line below the whole list; it now lives in the edited row and takes focus there.
+- Smaller: error line moved above the fields, thicker border on an invalid field, Save's accessible name follows "Saving…".
+
+**Review cycle:** One round with six reviewers (code-reviewer, schema-guardian, security-reviewer, ui-accessibility-reviewer, test-auditor, module-boundary-checker); no blocking findings, and every accepted finding was fixed. Mutation checks on the changed client code and on the migration: every behavioural mutant is caught; the two survivors are equivalent (a redundant guard).
+
+**Known gaps (deferred, not blocking):**
+
+- **Last write wins** between two devices editing the same person; no optimistic-concurrency check (documented in the migration).
+- **Phone uniqueness relies on client-side normalisation**, as `registerPerson` already does.
+- **Pre-existing:** a member of two orgs can move a person between orgs through `people_write`; the edit then fails closed with "not found".
+- No audit row for name edits; the `service_role` grant is unused.
+- Setting a name back to an older entry's wording saves that entry but not the profile, and the message still says "updated".
+- The `describeRosterEditError` helper lives in the Cup Taster screen though the RPC is format-agnostic; move to core if another format adds roster edit.
+
+**Deploy:** push migration `20261007100000` to the cloud project (apply_migration, then list_migrations) with or after the release to `main`; without it Save fails for every edit.
+
+---
+
 ## T-HARDEN.correct-heat-time: Correct recorded heat times from any signed-in device · 2026-10-06
 
 **Task:** T-HARDEN.correct-heat-time (live-event finding #1 from the first Cup Taster event, 4 Oct).
