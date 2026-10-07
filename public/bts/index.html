@@ -4,6 +4,9 @@
     <meta charset="utf-8" />
     <title>Behind the Seduh — Seduh Score Next</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script>
+      document.documentElement.classList.add('js');
+    </script>
     <!--
       Migrated from seduhscore.com/bts/ (the legacy Seduh Score site's "Behind
       the Seduh" page) per user request, 2026-09-05, then restyled the same day
@@ -648,6 +651,131 @@
       }
 
       /* ---------------------------------------------------------------
+         Milestones — the build log grouped by major milestone, newest
+         first (matching the ledger above), one open at a time. Collapsing
+         only applies once the head script has marked <html class="js">, so
+         with scripting off every milestone simply reads open. Closed
+         panels use visibility:hidden after the height transition, so their
+         content leaves both the tab order and the accessibility tree.
+         --------------------------------------------------------------- */
+      .milestones {
+        margin-top: 3rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+      .milestone {
+        border: 1px solid var(--color-border);
+        scroll-margin-top: 1rem;
+        transition: border-color 0.3s var(--ease-out-expo);
+      }
+      .milestone.is-open {
+        border-color: var(--color-accent);
+      }
+      .milestone-head {
+        margin: 0;
+        font: inherit;
+      }
+      .milestone-toggle {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        gap: 1rem;
+        width: 100%;
+        padding: 1.25rem 1.5rem;
+        background: var(--color-surface);
+        color: inherit;
+        border: 0;
+        text-align: left;
+        cursor: pointer;
+        font: inherit;
+        transition: background 0.2s var(--ease-out-expo);
+      }
+      .milestone-toggle:hover {
+        background: var(--color-surface-sunken);
+      }
+      .milestone-toggle:focus-visible {
+        outline: 2px solid var(--color-accent);
+        outline-offset: -2px;
+      }
+      .ms-text {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+        min-width: 0;
+      }
+      .ms-meta {
+        font-family: var(--font-mono);
+        font-size: 0.6875rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--color-accent);
+      }
+      .ms-title {
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: clamp(1.15rem, 2.4vw, 1.5rem);
+        line-height: 1.15;
+      }
+      .ms-sum {
+        font-size: 0.875rem;
+        color: var(--color-text-muted);
+      }
+      .ms-chev {
+        width: 0.6rem;
+        height: 0.6rem;
+        margin-right: 0.35rem;
+        border-right: 2px solid var(--color-text-secondary);
+        border-bottom: 2px solid var(--color-text-secondary);
+        transform: rotate(45deg);
+        transition: transform 0.35s var(--ease-out-expo);
+      }
+      .milestone.is-open .ms-chev {
+        transform: rotate(-135deg);
+      }
+      .milestone-inner {
+        padding: 0 1.5rem;
+      }
+      .milestone .log {
+        margin-top: 0;
+        padding-bottom: 0.5rem;
+      }
+      .js .milestone-panel {
+        display: grid;
+        grid-template-rows: 0fr;
+        transition: grid-template-rows 0.45s var(--ease-out-expo);
+      }
+      .js .milestone.is-open .milestone-panel {
+        grid-template-rows: 1fr;
+      }
+      .js .milestone-inner {
+        min-height: 0;
+        overflow: hidden;
+        visibility: hidden;
+        transition: visibility 0s linear 0.45s;
+      }
+      .js .milestone.is-open .milestone-inner {
+        visibility: visible;
+        transition-delay: 0s;
+      }
+      @media (max-width: 620px) {
+        .milestone-toggle {
+          padding: 1rem;
+        }
+        .milestone-inner {
+          padding: 0 1rem;
+        }
+      }
+      @media print {
+        .js .milestone-panel {
+          grid-template-rows: 1fr;
+        }
+        .js .milestone-inner {
+          visibility: visible;
+        }
+      }
+
+      /* ---------------------------------------------------------------
          The first live run — the one dated milestone this page is built
          to mark, so it sits above the version history rather than inside
          the log. Same flat, hairline-bordered card language as the ledger
@@ -846,7 +974,12 @@
         .bio-mark,
         .ledger-row,
         .log-item,
-        .log-item::before {
+        .log-item::before,
+        .milestone,
+        .milestone-toggle,
+        .ms-chev,
+        .js .milestone-panel,
+        .js .milestone-inner {
           transition: none;
         }
         .btn:hover {
@@ -937,7 +1070,7 @@
                 It wasn't flawless, which is why it's worth writing down: a tablet timekeeper missed
                 the beat on Stop, a misspelt name couldn't be fixed from the roster, the printed
                 report ran off the page, and the event never marked itself concluded. All four are
-                fixed — see the build log below.
+                fixed — see <a href="#ms-gadong-live">the build log below</a>.
               </dd>
             </div>
           </dl>
@@ -1015,434 +1148,568 @@
           <strong>Kiulap</strong> — seven phases per the project's frozen handoff spec, all shipped.
           Then <strong>Berakas</strong> — a front door nobody had planned for, followed by a public
           shelf for the useful extras. Now <strong>Gadong</strong> — the second real competition
-          format, and the first live event run on the platform.
+          format, and the first live event run on the platform. Newest first, one open at a time —
+          open a milestone to read it.
         </p>
 
-        <div class="log" data-stagger>
-          <div class="log-item reveal">
-            <div class="log-phase">Phase 0</div>
-            <div>
-              <div class="log-head">
-                <span class="log-name">Foundation</span>
-              </div>
-              <div class="log-line shipped">
-                <span class="k">Shipped</span
-                ><span class="v"
-                  >The scaffold, nine review subagents, four custom ESLint rules, a local Supabase
-                  stack wired into CI, and a protected <code>main</code> branch.</span
-                >
-              </div>
-              <div class="log-line felt">
-                <span class="k">Felt like</span
-                ><span class="v"
-                  >writing down the rules before writing any of the code they'd police.</span
-                >
+        <div class="milestones">
+          <div class="milestone reveal is-open" id="ms-gadong-live">
+            <h3 class="milestone-head">
+              <button
+                type="button"
+                class="milestone-toggle"
+                id="ms-gadong-live-btn"
+                aria-expanded="true"
+                aria-controls="ms-gadong-live-panel"
+              >
+                <span class="ms-text">
+                  <span class="ms-meta"
+                    >Gadong · 4 October 2026 and after · v3.0.19 · 2 entries</span
+                  >
+                  <span class="ms-title">The first live event</span>
+                  <span class="ms-sum">Lessons from the first live event · Brew Planner</span>
+                </span>
+                <span class="ms-chev" aria-hidden="true"></span>
+              </button>
+            </h3>
+            <div
+              class="milestone-panel"
+              id="ms-gadong-live-panel"
+              role="region"
+              aria-labelledby="ms-gadong-live-btn"
+            >
+              <div class="milestone-inner">
+                <div class="log" data-stagger>
+                  <div class="log-item current reveal">
+                    <div class="log-phase">Gadong</div>
+                    <div>
+                      <div class="log-head">
+                        <span class="log-name">Lessons from the first live event</span>
+                        <span class="log-ver">v3.0.19</span>
+                        <span class="log-now"><span class="pulse-dot"></span>Live now</span>
+                      </div>
+                      <div class="log-line shipped">
+                        <span class="k">Shipped</span
+                        ><span class="v"
+                          >What 4 October asked for, built within days: a recorded heat time can be
+                          corrected from any signed-in device, with a required reason, until the
+                          heat is confirmed — and the correction lands in the change log. A
+                          registered cupper's name, café, bib, phone and email can be edited from
+                          the roster. The printed report fits the page. Resolving the final now
+                          marks the event concluded, and the projector view fits the screen instead
+                          of scrolling. And a printable public results sheet — podium only by
+                          default, full standings only if the organiser opts in, never phone
+                          numbers, emails or set-by-set marks — with <code>/results/</code> now
+                          linked from the site navigation.</span
+                        >
+                      </div>
+                      <div class="log-line felt">
+                        <span class="k">Felt like</span
+                        ><span class="v"
+                          >a real competition being the best test suite there is — and the first
+                          time a list of fixes started with "found at the event".</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="log-item current reveal">
+                    <div class="log-phase">Community</div>
+                    <div>
+                      <div class="log-head">
+                        <span class="log-name">Brew Planner</span>
+                        <span class="log-ver">v3.0.19</span>
+                        <span class="log-now"><span class="pulse-dot"></span>Live now</span>
+                      </div>
+                      <div class="log-line shipped">
+                        <span class="k">Shipped</span
+                        ><span class="v"
+                          >A third free tool for the Community shelf, at
+                          <code>/tools/brew-planner/</code>: a five-step planner that works out how
+                          many batches each heat needs, which machine brews each one and when, so a
+                          heat's coffee is pooled before its cups are poured — with paper-filter
+                          counts and Cambro sizing. No sign-in, no database, same family as the
+                          Competition Timer.</span
+                        >
+                      </div>
+                      <div class="log-line felt">
+                        <span class="k">Felt like</span
+                        ><span class="v"
+                          >turning the back-room maths of running a real event into something anyone
+                          can pick up.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
-          <div class="log-item reveal">
-            <div class="log-phase">Phase 1</div>
-            <div>
-              <div class="log-head">
-                <span class="log-name">Schema &amp; security</span>
-              </div>
-              <div class="log-line shipped">
-                <span class="k">Shipped</span
-                ><span class="v"
-                  >Every core and Cup Taster table, row-level security across all thirteen of them,
-                  and a dedicated pgTAP gate proving every write policy carries a real
-                  <code>WITH CHECK</code>.</span
-                >
-              </div>
-              <div class="log-line felt">
-                <span class="k">Felt like</span
-                ><span class="v"
-                  >finding a live cross-org bug in review before it ever reached a real event.</span
-                >
+          <div class="milestone reveal" id="ms-gadong-build">
+            <h3 class="milestone-head">
+              <button
+                type="button"
+                class="milestone-toggle"
+                id="ms-gadong-build-btn"
+                aria-expanded="false"
+                aria-controls="ms-gadong-build-panel"
+              >
+                <span class="ms-text">
+                  <span class="ms-meta">Gadong · v3.0.0 to v3.0.x · 3 entries</span>
+                  <span class="ms-title">The second format, then trust and hardening</span>
+                  <span class="ms-sum">BTC · Trust, on the record · Hardened for the room</span>
+                </span>
+                <span class="ms-chev" aria-hidden="true"></span>
+              </button>
+            </h3>
+            <div
+              class="milestone-panel"
+              id="ms-gadong-build-panel"
+              role="region"
+              aria-labelledby="ms-gadong-build-btn"
+            >
+              <div class="milestone-inner">
+                <div class="log" data-stagger>
+                  <div class="log-item current reveal">
+                    <div class="log-phase">Gadong</div>
+                    <div>
+                      <div class="log-head">
+                        <span class="log-name">BTC — the second format</span>
+                        <span class="log-ver">v3.0.0</span>
+                        <span class="log-now"><span class="pulse-dot"></span>Current cycle</span>
+                      </div>
+                      <div class="log-line shipped">
+                        <span class="k">Shipped</span
+                        ><span class="v"
+                          >BTC (Barista Team Championship) — round-robin preliminaries, automatic
+                          bracket generation and advancement, per-judge scoring with bonuses, and
+                          five full organiser screens (setup, matches, standings, bracket, scoring),
+                          all routed into the console. The public site was updated the same day: no
+                          more "coming soon" — the landing page and Tour both call it live, right
+                          alongside Cup Taster. A real second format is a genuine capability-era
+                          boundary, so the nameplate moved with it — Berakas becomes a shipped
+                          cycle, and this build enters Gadong.</span
+                        >
+                      </div>
+                      <div class="log-line felt">
+                        <span class="k">Felt like</span
+                        ><span class="v"
+                          >the platform's own "realising one format was never going to be enough"
+                          moment, for real this time — and arriving before the format everyone had
+                          actually planned for.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="log-item current reveal">
+                    <div class="log-phase">Gadong</div>
+                    <div>
+                      <div class="log-head">
+                        <span class="log-name">Trust, on the record</span>
+                        <span class="log-ver">v3.0.4</span>
+                        <span class="log-now"><span class="pulse-dot"></span>Live now</span>
+                      </div>
+                      <div class="log-line shipped">
+                        <span class="k">Shipped</span
+                        ><span class="v"
+                          >An append-only score-change log, running since 24 September 2026, so a
+                          questioned result has a history to point to. From it: a public "How this
+                          was scored" disclosure on <code>/results/</code> (the shape of any
+                          corrections — how many, when, by which role, the reason given — never the
+                          raw scores), and an organiser-only dispute pack: the exact record of an
+                          event, with every change and its old and new values, handed over on
+                          request rather than published. Alongside it, a privilege-hardening pass on
+                          the database and five public pages — About, Contact, Privacy, Terms and
+                          Neutrality — for a product that holds competitor data.</span
+                        >
+                      </div>
+                      <div class="log-line felt">
+                        <span class="k">Felt like</span
+                        ><span class="v"
+                          >the unglamorous, necessary answer to "what happens when someone questions
+                          a result" — and being honest in the copy about what the log does not
+                          cover.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="log-item reveal">
+                    <div class="log-phase">Gadong</div>
+                    <div>
+                      <div class="log-head">
+                        <span class="log-name">Hardened for the room</span>
+                        <span class="log-ver">v3.0.x</span>
+                      </div>
+                      <div class="log-line shipped">
+                        <span class="k">Shipped</span
+                        ><span class="v"
+                          >A run of pre-event reliability work for a venue where the wifi is
+                          somebody else's problem. Writes that fail on a bad connection stay queued
+                          and retry every fifteen seconds instead of being dropped, and every
+                          request now gives up after thirty seconds rather than hanging. Failures
+                          are sorted into "try again" (timeouts, rate limits, gateway errors) and
+                          "this will never work" (a genuine stale-score conflict), so one bad write
+                          can't block everything behind it — including a stale publish for a
+                          rehearsal event that has since been deleted. Two console tabs take turns
+                          on the queue instead of running the same write twice. When a write is
+                          genuinely lost, every one reaches the sync panel, the notice survives a
+                          reload, and deleting an event with unsynced writes warns first. Around it:
+                          a sync status that no longer grows the sticky header mid-heat; BTC event
+                          deletion fixed; audience views that switch cleanly inside one tab; and an
+                          organiser header that folds into a menu below tablet width.</span
+                        >
+                      </div>
+                      <div class="log-line felt">
+                        <span class="k">Felt like</span
+                        ><span class="v"
+                          >assuming the wifi will lie, and building so that it can't cost anyone a
+                          score.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
-          <div class="log-item reveal">
-            <div class="log-phase">Phase 2</div>
-            <div>
-              <div class="log-head">
-                <span class="log-name">Core libraries</span>
-              </div>
-              <div class="log-line shipped">
-                <span class="k">Shipped</span
-                ><span class="v"
-                  >Partitioning, ranking, advancement, countdown, time-clamping, and entitlements —
-                  pure logic, fuzz-tested against thousands of combinations before a single screen
-                  existed.</span
-                >
-              </div>
-              <div class="log-line felt">
-                <span class="k">Felt like</span
-                ><span class="v"
-                  >paying down the old app's advancement bug before it could be reborn here.</span
-                >
+          <div class="milestone reveal" id="ms-berakas">
+            <h3 class="milestone-head">
+              <button
+                type="button"
+                class="milestone-toggle"
+                id="ms-berakas-btn"
+                aria-expanded="false"
+                aria-controls="ms-berakas-panel"
+              >
+                <span class="ms-text">
+                  <span class="ms-meta">Berakas · v2.x · 4 entries</span>
+                  <span class="ms-title">The public front door</span>
+                  <span class="ms-sum">Front door · Guess the Bean · Tour · Results archive</span>
+                </span>
+                <span class="ms-chev" aria-hidden="true"></span>
+              </button>
+            </h3>
+            <div
+              class="milestone-panel"
+              id="ms-berakas-panel"
+              role="region"
+              aria-labelledby="ms-berakas-btn"
+            >
+              <div class="milestone-inner">
+                <div class="log" data-stagger>
+                  <div class="log-item reveal">
+                    <div class="log-phase">Berakas</div>
+                    <div>
+                      <div class="log-head">
+                        <span class="log-name">The public front door</span>
+                        <span class="log-ver">v2.0.17</span>
+                      </div>
+                      <div class="log-line shipped">
+                        <span class="k">Shipped</span
+                        ><span class="v"
+                          >The public marketing landing page — out of the original handoff's scope
+                          entirely, shipped because it was needed. The console moved to
+                          <code>/app/</code> to make room for it; the new
+                          <code>/community/</code> shelf now links Competition Timer and Guess the
+                          Bean from the same public front door.</span
+                        >
+                      </div>
+                      <div class="log-line felt">
+                        <span class="k">Felt like</span
+                        ><span class="v"
+                          >the moment this stopped being a private rebuild and got an actual public
+                          front door — then a shelf beside it for the tools people can simply pick
+                          up and use.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="log-item reveal">
+                    <div class="log-phase">Community</div>
+                    <div>
+                      <div class="log-head">
+                        <span class="log-name">Guess the Bean, rebuilt</span>
+                        <span class="log-ver">v2.0.17</span>
+                      </div>
+                      <div class="log-line shipped">
+                        <span class="k">Shipped</span
+                        ><span class="v"
+                          >Guess the Bean moved off the legacy booth page into its own
+                          Supabase-backed flow: magic-link organiser setup, participant entry, a
+                          live stage display and post-reveal winner contact lookup. The Community
+                          shelf gives it a proper public home next to Competition Timer.</span
+                        >
+                      </div>
+                      <div class="log-line felt">
+                        <span class="k">Felt like</span
+                        ><span class="v"
+                          >taking a good little booth game seriously enough to give it the same
+                          reliable foundations as the rest of the product — without making it feel
+                          heavyweight.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="log-item reveal">
+                    <div class="log-phase">Berakas</div>
+                    <div>
+                      <div class="log-head">
+                        <span class="log-name">A real public tour</span>
+                        <span class="log-ver">v2.0.17</span>
+                      </div>
+                      <div class="log-line shipped">
+                        <span class="k">Shipped</span
+                        ><span class="v"
+                          >The legacy tour concept, rebuilt at <code>/tour/</code> — Cup Taster
+                          shown as the one live format, with Throwdown, Liga Seduh and BTC clearly
+                          marked planned rather than pretending to work. Tour, Community and the
+                          landing page now share one header and footer; the organiser wordmark links
+                          home; and canonical URLs, sharing metadata and a sitemap mean the public
+                          site is finally something a search engine — and not just a direct link —
+                          can find.</span
+                        >
+                      </div>
+                      <div class="log-line felt">
+                        <span class="k">Felt like</span
+                        ><span class="v"
+                          >tidying up the front door after enough people had already walked through
+                          it.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="log-item reveal">
+                    <div class="log-phase">Berakas</div>
+                    <div>
+                      <div class="log-head">
+                        <span class="log-name">Results stop being disposable</span>
+                        <span class="log-ver">v2.0.17</span>
+                      </div>
+                      <div class="log-line shipped">
+                        <span class="k">Shipped</span
+                        ><span class="v"
+                          >An organiser-controlled publish/unpublish pipeline for
+                          <code>/results/</code> — the public archive, previously filled with fake
+                          preview data, can now show real, organiser-approved event results. A
+                          report-screen card handles the publish decision; the public page reads
+                          them back anonymously, with no assumption Cup Taster stays the only format
+                          that ever publishes here.</span
+                        >
+                      </div>
+                      <div class="log-line felt">
+                        <span class="k">Felt like</span
+                        ><span class="v"
+                          >the moment a champion's result stopped disappearing the day after the
+                          event.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
-          <div class="log-item reveal">
-            <div class="log-phase">Phase 3</div>
-            <div>
-              <div class="log-head">
-                <span class="log-name">Registry &amp; offline</span>
-              </div>
-              <div class="log-line shipped">
-                <span class="k">Shipped</span
-                ><span class="v"
-                  >Person/entry registration with real dedup, an IndexedDB mirror, and a FIFO outbox
-                  queue with idempotency keys — the spine every later screen writes through.</span
-                >
-              </div>
-              <div class="log-line felt">
-                <span class="k">Felt like</span
-                ><span class="v"
-                  >designing for the wifi at the venue, not the wifi in the office.</span
-                >
-              </div>
-            </div>
-          </div>
+          <div class="milestone reveal" id="ms-kiulap">
+            <h3 class="milestone-head">
+              <button
+                type="button"
+                class="milestone-toggle"
+                id="ms-kiulap-btn"
+                aria-expanded="false"
+                aria-controls="ms-kiulap-panel"
+              >
+                <span class="ms-text">
+                  <span class="ms-meta">Kiulap · v1.x · 7 entries</span>
+                  <span class="ms-title">The first format</span>
+                  <span class="ms-sum">Phases 0–6, foundation to hardening</span>
+                </span>
+                <span class="ms-chev" aria-hidden="true"></span>
+              </button>
+            </h3>
+            <div
+              class="milestone-panel"
+              id="ms-kiulap-panel"
+              role="region"
+              aria-labelledby="ms-kiulap-btn"
+            >
+              <div class="milestone-inner">
+                <div class="log" data-stagger>
+                  <div class="log-item reveal">
+                    <div class="log-phase">Phase 0</div>
+                    <div>
+                      <div class="log-head">
+                        <span class="log-name">Foundation</span>
+                      </div>
+                      <div class="log-line shipped">
+                        <span class="k">Shipped</span
+                        ><span class="v"
+                          >The scaffold, nine review subagents, four custom ESLint rules, a local
+                          Supabase stack wired into CI, and a protected
+                          <code>main</code> branch.</span
+                        >
+                      </div>
+                      <div class="log-line felt">
+                        <span class="k">Felt like</span
+                        ><span class="v"
+                          >writing down the rules before writing any of the code they'd
+                          police.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
 
-          <div class="log-item reveal">
-            <div class="log-phase">Phase 4</div>
-            <div>
-              <div class="log-head">
-                <span class="log-name">Cup Taster</span>
-              </div>
-              <div class="log-line shipped">
-                <span class="k">Shipped</span
-                ><span class="v"
-                  >Stage setup, roster, heat generation, live timing, the three-state scoring
-                  toggle, standings with a real tiebreak flow, a completion report, and export — the
-                  format's full loop.</span
-                >
-              </div>
-              <div class="log-line felt">
-                <span class="k">Felt like</span
-                ><span class="v"
-                  >"correct is a count, never a column" stopping being a rule on paper and becoming
-                  a real constraint.</span
-                >
-              </div>
-            </div>
-          </div>
+                  <div class="log-item reveal">
+                    <div class="log-phase">Phase 1</div>
+                    <div>
+                      <div class="log-head">
+                        <span class="log-name">Schema &amp; security</span>
+                      </div>
+                      <div class="log-line shipped">
+                        <span class="k">Shipped</span
+                        ><span class="v"
+                          >Every core and Cup Taster table, row-level security across all thirteen
+                          of them, and a dedicated pgTAP gate proving every write policy carries a
+                          real <code>WITH CHECK</code>.</span
+                        >
+                      </div>
+                      <div class="log-line felt">
+                        <span class="k">Felt like</span
+                        ><span class="v"
+                          >finding a live cross-org bug in review before it ever reached a real
+                          event.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
 
-          <div class="log-item reveal">
-            <div class="log-phase">Phase 5</div>
-            <div>
-              <div class="log-head">
-                <span class="log-name">Live surfaces</span>
-              </div>
-              <div class="log-line shipped">
-                <span class="k">Shipped</span
-                ><span class="v"
-                  >A publish path, a shared viewer shell over Supabase Realtime, and two real
-                  consumers — projector and phone — proven to agree on the same countdown, to the
-                  second.</span
-                >
-              </div>
-              <div class="log-line felt">
-                <span class="k">Felt like</span
-                ><span class="v"
-                  >the point this stopped being an organiser tool and became something a whole room
-                  could watch at once.</span
-                >
-              </div>
-            </div>
-          </div>
+                  <div class="log-item reveal">
+                    <div class="log-phase">Phase 2</div>
+                    <div>
+                      <div class="log-head">
+                        <span class="log-name">Core libraries</span>
+                      </div>
+                      <div class="log-line shipped">
+                        <span class="k">Shipped</span
+                        ><span class="v"
+                          >Partitioning, ranking, advancement, countdown, time-clamping, and
+                          entitlements — pure logic, fuzz-tested against thousands of combinations
+                          before a single screen existed.</span
+                        >
+                      </div>
+                      <div class="log-line felt">
+                        <span class="k">Felt like</span
+                        ><span class="v"
+                          >paying down the old app's advancement bug before it could be reborn
+                          here.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
 
-          <div class="log-item reveal">
-            <div class="log-phase">Phase 6</div>
-            <div>
-              <div class="log-head">
-                <span class="log-name">Hardening</span>
-              </div>
-              <div class="log-line shipped">
-                <span class="k">Shipped</span
-                ><span class="v"
-                  >Accessibility pass, offline soak testing, and a dry run against the real roster —
-                  local and production both green. The Cup Taster hardening pass closed before the
-                  event, leaving room for the public tools that followed.</span
-                >
-              </div>
-              <div class="log-line felt">
-                <span class="k">Felt like</span
-                ><span class="v"
-                  >the unglamorous work that decides whether October 4th actually goes well — closed
-                  out before the event ever started.</span
-                >
-              </div>
-            </div>
-          </div>
+                  <div class="log-item reveal">
+                    <div class="log-phase">Phase 3</div>
+                    <div>
+                      <div class="log-head">
+                        <span class="log-name">Registry &amp; offline</span>
+                      </div>
+                      <div class="log-line shipped">
+                        <span class="k">Shipped</span
+                        ><span class="v"
+                          >Person/entry registration with real dedup, an IndexedDB mirror, and a
+                          FIFO outbox queue with idempotency keys — the spine every later screen
+                          writes through.</span
+                        >
+                      </div>
+                      <div class="log-line felt">
+                        <span class="k">Felt like</span
+                        ><span class="v"
+                          >designing for the wifi at the venue, not the wifi in the office.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
 
-          <div class="log-item reveal">
-            <div class="log-phase">Berakas</div>
-            <div>
-              <div class="log-head">
-                <span class="log-name">The public front door</span>
-                <span class="log-ver">v2.0.17</span>
-              </div>
-              <div class="log-line shipped">
-                <span class="k">Shipped</span
-                ><span class="v"
-                  >The public marketing landing page — out of the original handoff's scope entirely,
-                  shipped because it was needed. The console moved to <code>/app/</code> to make
-                  room for it; the new <code>/community/</code> shelf now links Competition Timer
-                  and Guess the Bean from the same public front door.</span
-                >
-              </div>
-              <div class="log-line felt">
-                <span class="k">Felt like</span
-                ><span class="v"
-                  >the moment this stopped being a private rebuild and got an actual public front
-                  door — then a shelf beside it for the tools people can simply pick up and
-                  use.</span
-                >
-              </div>
-            </div>
-          </div>
+                  <div class="log-item reveal">
+                    <div class="log-phase">Phase 4</div>
+                    <div>
+                      <div class="log-head">
+                        <span class="log-name">Cup Taster</span>
+                      </div>
+                      <div class="log-line shipped">
+                        <span class="k">Shipped</span
+                        ><span class="v"
+                          >Stage setup, roster, heat generation, live timing, the three-state
+                          scoring toggle, standings with a real tiebreak flow, a completion report,
+                          and export — the format's full loop.</span
+                        >
+                      </div>
+                      <div class="log-line felt">
+                        <span class="k">Felt like</span
+                        ><span class="v"
+                          >"correct is a count, never a column" stopping being a rule on paper and
+                          becoming a real constraint.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
 
-          <div class="log-item reveal">
-            <div class="log-phase">Community</div>
-            <div>
-              <div class="log-head">
-                <span class="log-name">Guess the Bean, rebuilt</span>
-                <span class="log-ver">v2.0.17</span>
-              </div>
-              <div class="log-line shipped">
-                <span class="k">Shipped</span
-                ><span class="v"
-                  >Guess the Bean moved off the legacy booth page into its own Supabase-backed flow:
-                  magic-link organiser setup, participant entry, a live stage display and
-                  post-reveal winner contact lookup. The Community shelf gives it a proper public
-                  home next to Competition Timer.</span
-                >
-              </div>
-              <div class="log-line felt">
-                <span class="k">Felt like</span
-                ><span class="v"
-                  >taking a good little booth game seriously enough to give it the same reliable
-                  foundations as the rest of the product — without making it feel heavyweight.</span
-                >
-              </div>
-            </div>
-          </div>
+                  <div class="log-item reveal">
+                    <div class="log-phase">Phase 5</div>
+                    <div>
+                      <div class="log-head">
+                        <span class="log-name">Live surfaces</span>
+                      </div>
+                      <div class="log-line shipped">
+                        <span class="k">Shipped</span
+                        ><span class="v"
+                          >A publish path, a shared viewer shell over Supabase Realtime, and two
+                          real consumers — projector and phone — proven to agree on the same
+                          countdown, to the second.</span
+                        >
+                      </div>
+                      <div class="log-line felt">
+                        <span class="k">Felt like</span
+                        ><span class="v"
+                          >the point this stopped being an organiser tool and became something a
+                          whole room could watch at once.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
 
-          <div class="log-item reveal">
-            <div class="log-phase">Berakas</div>
-            <div>
-              <div class="log-head">
-                <span class="log-name">A real public tour</span>
-                <span class="log-ver">v2.0.17</span>
-              </div>
-              <div class="log-line shipped">
-                <span class="k">Shipped</span
-                ><span class="v"
-                  >The legacy tour concept, rebuilt at <code>/tour/</code> — Cup Taster shown as the
-                  one live format, with Throwdown, Liga Seduh and BTC clearly marked planned rather
-                  than pretending to work. Tour, Community and the landing page now share one header
-                  and footer; the organiser wordmark links home; and canonical URLs, sharing
-                  metadata and a sitemap mean the public site is finally something a search engine —
-                  and not just a direct link — can find.</span
-                >
-              </div>
-              <div class="log-line felt">
-                <span class="k">Felt like</span
-                ><span class="v"
-                  >tidying up the front door after enough people had already walked through
-                  it.</span
-                >
-              </div>
-            </div>
-          </div>
-
-          <div class="log-item reveal">
-            <div class="log-phase">Berakas</div>
-            <div>
-              <div class="log-head">
-                <span class="log-name">Results stop being disposable</span>
-                <span class="log-ver">v2.0.17</span>
-              </div>
-              <div class="log-line shipped">
-                <span class="k">Shipped</span
-                ><span class="v"
-                  >An organiser-controlled publish/unpublish pipeline for <code>/results/</code> —
-                  the public archive, previously filled with fake preview data, can now show real,
-                  organiser-approved event results. A report-screen card handles the publish
-                  decision; the public page reads them back anonymously, with no assumption Cup
-                  Taster stays the only format that ever publishes here.</span
-                >
-              </div>
-              <div class="log-line felt">
-                <span class="k">Felt like</span
-                ><span class="v"
-                  >the moment a champion's result stopped disappearing the day after the
-                  event.</span
-                >
-              </div>
-            </div>
-          </div>
-
-          <div class="log-item current reveal">
-            <div class="log-phase">Gadong</div>
-            <div>
-              <div class="log-head">
-                <span class="log-name">BTC — the second format</span>
-                <span class="log-ver">v3.0.0</span>
-                <span class="log-now"><span class="pulse-dot"></span>Current cycle</span>
-              </div>
-              <div class="log-line shipped">
-                <span class="k">Shipped</span
-                ><span class="v"
-                  >BTC (Barista Team Championship) — round-robin preliminaries, automatic bracket
-                  generation and advancement, per-judge scoring with bonuses, and five full
-                  organiser screens (setup, matches, standings, bracket, scoring), all routed into
-                  the console. The public site was updated the same day: no more "coming soon" — the
-                  landing page and Tour both call it live, right alongside Cup Taster. A real second
-                  format is a genuine capability-era boundary, so the nameplate moved with it —
-                  Berakas becomes a shipped cycle, and this build enters Gadong.</span
-                >
-              </div>
-              <div class="log-line felt">
-                <span class="k">Felt like</span
-                ><span class="v"
-                  >the platform's own "realising one format was never going to be enough" moment,
-                  for real this time — and arriving before the format everyone had actually planned
-                  for.</span
-                >
-              </div>
-            </div>
-          </div>
-
-          <div class="log-item current reveal">
-            <div class="log-phase">Gadong</div>
-            <div>
-              <div class="log-head">
-                <span class="log-name">Trust, on the record</span>
-                <span class="log-ver">v3.0.4</span>
-                <span class="log-now"><span class="pulse-dot"></span>Live now</span>
-              </div>
-              <div class="log-line shipped">
-                <span class="k">Shipped</span
-                ><span class="v"
-                  >An append-only score-change log, running since 24 September 2026, so a questioned
-                  result has a history to point to. From it: a public "How this was scored"
-                  disclosure on <code>/results/</code> (the shape of any corrections — how many,
-                  when, by which role, the reason given — never the raw scores), and an
-                  organiser-only dispute pack: the exact record of an event, with every change and
-                  its old and new values, handed over on request rather than published. Alongside
-                  it, a privilege-hardening pass on the database and five public pages — About,
-                  Contact, Privacy, Terms and Neutrality — for a product that holds competitor
-                  data.</span
-                >
-              </div>
-              <div class="log-line felt">
-                <span class="k">Felt like</span
-                ><span class="v"
-                  >the unglamorous, necessary answer to "what happens when someone questions a
-                  result" — and being honest in the copy about what the log does not cover.</span
-                >
-              </div>
-            </div>
-          </div>
-
-          <div class="log-item reveal">
-            <div class="log-phase">Gadong</div>
-            <div>
-              <div class="log-head">
-                <span class="log-name">Hardened for the room</span>
-                <span class="log-ver">v3.0.x</span>
-              </div>
-              <div class="log-line shipped">
-                <span class="k">Shipped</span
-                ><span class="v"
-                  >A run of pre-event reliability work for a venue where the wifi is somebody else's
-                  problem. Writes that fail on a bad connection stay queued and retry every fifteen
-                  seconds instead of being dropped, and every request now gives up after thirty
-                  seconds rather than hanging. Failures are sorted into "try again" (timeouts, rate
-                  limits, gateway errors) and "this will never work" (a genuine stale-score
-                  conflict), so one bad write can't block everything behind it — including a stale
-                  publish for a rehearsal event that has since been deleted. Two console tabs take
-                  turns on the queue instead of running the same write twice. When a write is
-                  genuinely lost, every one reaches the sync panel, the notice survives a reload,
-                  and deleting an event with unsynced writes warns first. Around it: a sync status
-                  that no longer grows the sticky header mid-heat; BTC event deletion fixed;
-                  audience views that switch cleanly inside one tab; and an organiser header that
-                  folds into a menu below tablet width.</span
-                >
-              </div>
-              <div class="log-line felt">
-                <span class="k">Felt like</span
-                ><span class="v"
-                  >assuming the wifi will lie, and building so that it can't cost anyone a
-                  score.</span
-                >
-              </div>
-            </div>
-          </div>
-
-          <div class="log-item current reveal">
-            <div class="log-phase">Gadong</div>
-            <div>
-              <div class="log-head">
-                <span class="log-name">Lessons from the first live event</span>
-                <span class="log-ver">v3.0.19</span>
-                <span class="log-now"><span class="pulse-dot"></span>Live now</span>
-              </div>
-              <div class="log-line shipped">
-                <span class="k">Shipped</span
-                ><span class="v"
-                  >What 4 October asked for, built within days: a recorded heat time can be
-                  corrected from any signed-in device, with a required reason, until the heat is
-                  confirmed — and the correction lands in the change log. A registered cupper's
-                  name, café, bib, phone and email can be edited from the roster. The printed report
-                  fits the page. Resolving the final now marks the event concluded, and the
-                  projector view fits the screen instead of scrolling. And a printable public
-                  results sheet — podium only by default, full standings only if the organiser opts
-                  in, never phone numbers, emails or set-by-set marks — with
-                  <code>/results/</code> now linked from the site navigation.</span
-                >
-              </div>
-              <div class="log-line felt">
-                <span class="k">Felt like</span
-                ><span class="v"
-                  >a real competition being the best test suite there is — and the first time a list
-                  of fixes started with "found at the event".</span
-                >
-              </div>
-            </div>
-          </div>
-
-          <div class="log-item current reveal">
-            <div class="log-phase">Community</div>
-            <div>
-              <div class="log-head">
-                <span class="log-name">Brew Planner</span>
-                <span class="log-ver">v3.0.19</span>
-                <span class="log-now"><span class="pulse-dot"></span>Live now</span>
-              </div>
-              <div class="log-line shipped">
-                <span class="k">Shipped</span
-                ><span class="v"
-                  >A third free tool for the Community shelf, at <code>/tools/brew-planner/</code>:
-                  a five-step planner that works out how many batches each heat needs, which machine
-                  brews each one and when, so a heat's coffee is pooled before its cups are poured —
-                  with paper-filter counts and Cambro sizing. No sign-in, no database, same family
-                  as the Competition Timer.</span
-                >
-              </div>
-              <div class="log-line felt">
-                <span class="k">Felt like</span
-                ><span class="v"
-                  >turning the back-room maths of running a real event into something anyone can
-                  pick up.</span
-                >
+                  <div class="log-item reveal">
+                    <div class="log-phase">Phase 6</div>
+                    <div>
+                      <div class="log-head">
+                        <span class="log-name">Hardening</span>
+                      </div>
+                      <div class="log-line shipped">
+                        <span class="k">Shipped</span
+                        ><span class="v"
+                          >Accessibility pass, offline soak testing, and a dry run against the real
+                          roster — local and production both green. The Cup Taster hardening pass
+                          closed before the event, leaving room for the public tools that
+                          followed.</span
+                        >
+                      </div>
+                      <div class="log-line felt">
+                        <span class="k">Felt like</span
+                        ><span class="v"
+                          >the unglamorous work that decides whether October 4th actually goes well
+                          — closed out before the event ever started.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1534,6 +1801,65 @@
         document.querySelectorAll('.reveal').forEach(function (el) {
           io.observe(el);
         });
+      })();
+
+      // Milestone accordion — one open at a time: opening a milestone closes
+      // whichever is open, and clicking the open one closes it (all closed is
+      // a valid state). After the height transition settles, the opened
+      // header is scrolled back into view if the collapse above it moved it
+      // off-screen. A #ms-… link (e.g. from the first-live-run card) opens
+      // that milestone too.
+      (function () {
+        var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        var milestones = [].slice.call(document.querySelectorAll('.milestone'));
+        if (!milestones.length) return;
+
+        function setOpen(m, open) {
+          m.classList.toggle('is-open', open);
+          m.querySelector('.milestone-toggle').setAttribute(
+            'aria-expanded',
+            open ? 'true' : 'false',
+          );
+        }
+        function openOnly(target) {
+          milestones.forEach(function (m) {
+            setOpen(m, m === target);
+          });
+        }
+        function keepInView(m) {
+          var head = m.querySelector('.milestone-toggle');
+          window.setTimeout(
+            function () {
+              var r = head.getBoundingClientRect();
+              if (r.top < 0 || r.top > window.innerHeight * 0.6) {
+                m.scrollIntoView({ block: 'start', behavior: reduce ? 'auto' : 'smooth' });
+              }
+            },
+            reduce ? 0 : 480,
+          );
+        }
+
+        milestones.forEach(function (m) {
+          m.querySelector('.milestone-toggle').addEventListener('click', function () {
+            if (m.classList.contains('is-open')) {
+              setOpen(m, false);
+            } else {
+              openOnly(m);
+              keepInView(m);
+            }
+          });
+        });
+
+        function fromHash() {
+          var id = window.location.hash.slice(1);
+          var m = id && document.getElementById(id);
+          if (m && m.classList.contains('milestone')) {
+            openOnly(m);
+            keepInView(m);
+          }
+        }
+        window.addEventListener('hashchange', fromHash);
+        fromHash();
       })();
 
       // Reading focus for the build log — a thin trigger band pinned to
