@@ -8,6 +8,13 @@
 // a way for an already-provisioned person to actually establish a session
 // without typing signInWithPassword into devtools.
 //
+// Why it is built the way it is (live-event finding #2: a team member could not sign in on an
+// iPad; the auth logs never record what was typed, so the cause is unconfirmed): the fields are read
+// from the form at submit because iOS autofill can fill them without an input event; a password that
+// is rejected AND has leading/trailing space (a chat paste) is retried once without it, but is never
+// trimmed up front, so a password that really contains those spaces still works; Show/Hide flips the
+// field in place, so nothing typed, autofilled or reported is lost by a re-render.
+//
 // Lives in core/, not a format directory — auth is format-agnostic.
 import { getSupabase } from './supabaseClient.js';
 import { el, labeledField, setBusyDisabled, withFocusPreservation } from './dom.js';
@@ -19,12 +26,31 @@ export function validateCredentials(draft) {
   return null;
 }
 
-export function renderLoginForm(draft, { disabled }) {
+export const INVALID_CREDENTIALS_MESSAGE =
+  'That email and password do not match. Check the email, and use the Show/Hide button to read the password back: capital letters count.';
+
+// supabase-js reports a wrong email/password as code 'invalid_credentials' (older versions only
+// carry the message).
+export function isInvalidCredentials(error) {
+  return (
+    error?.code === 'invalid_credentials' || /invalid login credentials/i.test(error?.message ?? '')
+  );
+}
+
+// `onTogglePassword(isShown)` lets the caller remember the choice across its own re-renders; the
+// toggle itself changes the field in place.
+export function renderLoginForm(
+  draft,
+  { disabled, showPassword = false, onTogglePassword = () => {} },
+) {
   const emailInput = el('input', {
     className: 'field-input',
     attrs: {
       type: 'email',
       autocomplete: 'username',
+      autocapitalize: 'none',
+      autocorrect: 'off',
+      spellcheck: 'false',
       'aria-label': 'Email',
       'data-field': 'email',
       required: 'required',
@@ -35,12 +61,19 @@ export function renderLoginForm(draft, { disabled }) {
   emailInput.addEventListener('input', () => {
     draft.email = emailInput.value;
   });
+  // Autofill tends to fire `change` rather than `input`.
+  emailInput.addEventListener('change', () => {
+    draft.email = emailInput.value;
+  });
 
   const passwordInput = el('input', {
     className: 'field-input',
     attrs: {
-      type: 'password',
+      type: showPassword ? 'text' : 'password',
       autocomplete: 'current-password',
+      autocapitalize: 'none',
+      autocorrect: 'off',
+      spellcheck: 'false',
       'aria-label': 'Password',
       'data-field': 'password',
       required: 'required',
@@ -50,6 +83,34 @@ export function renderLoginForm(draft, { disabled }) {
   setBusyDisabled(passwordInput, disabled);
   passwordInput.addEventListener('input', () => {
     draft.password = passwordInput.value;
+  });
+  passwordInput.addEventListener('change', () => {
+    draft.password = passwordInput.value;
+  });
+
+  // A changing label, no aria-pressed: the two together read "Hide password, pressed", which does
+  // not say whether the password is currently visible. The status line is a persistent node (this
+  // flip never re-renders), so the change is announced reliably.
+  let shown = showPassword;
+  const toggleButton = el('button', {
+    className: 'btn btn-outline tap-target login-password-toggle',
+    attrs: { type: 'button' },
+  });
+  const toggleStatus = el('span', {
+    className: 'sr-only',
+    attrs: { role: 'status', 'aria-live': 'polite' },
+  });
+  function paintToggle() {
+    passwordInput.type = shown ? 'text' : 'password';
+    toggleButton.textContent = shown ? 'Hide' : 'Show';
+    toggleButton.setAttribute('aria-label', shown ? 'Hide password' : 'Show password');
+  }
+  paintToggle();
+  toggleButton.addEventListener('click', () => {
+    shown = !shown;
+    paintToggle();
+    toggleStatus.textContent = shown ? 'Password is shown' : 'Password is hidden';
+    onTogglePassword(shown);
   });
 
   const submitButton = el('button', {
@@ -61,7 +122,7 @@ export function renderLoginForm(draft, { disabled }) {
 
   return el('form', { className: 'login-form' }, [
     labeledField('Email', emailInput),
-    labeledField('Password', passwordInput),
+    labeledField('Password', passwordInput, [toggleButton, toggleStatus]),
     submitButton,
   ]);
 }
@@ -70,6 +131,7 @@ export async function mountLoginScreen(root, { client = getSupabase(), onSignedI
   let draft = { email: '', password: '' };
   let signingIn = false;
   let pendingError = null;
+  let showPassword = false;
 
   function setFeedback(feedback, message, tone) {
     feedback.textContent = message ?? '';
@@ -77,8 +139,16 @@ export async function mountLoginScreen(root, { client = getSupabase(), onSignedI
     else delete feedback.dataset.tone;
   }
 
+  // The values as the form shows them right now. `draft` follows input/change events, but iOS
+  // autofill can fill a field without reporting it, so what is submitted is what is displayed.
+  function syncDraftFromForm(form) {
+    draft.email = form.querySelector('[data-field="email"]').value;
+    draft.password = form.querySelector('[data-field="password"]').value;
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
+    syncDraftFromForm(event.currentTarget);
     const validationError = validateCredentials(draft);
     if (validationError) {
       pendingError = validationError;
@@ -89,15 +159,29 @@ export async function mountLoginScreen(root, { client = getSupabase(), onSignedI
     signingIn = true;
     render();
 
+    // Captured now: the field stays editable while the request is in flight, and the retry must
+    // be of what was submitted, not of whatever has been typed since.
+    const email = draft.email.trim();
+    const password = draft.password;
+    const attempt = (pw) =>
+      raceTimeout(client.auth.signInWithPassword({ email, password: pw }), DEFAULT_LOAD_TIMEOUT_MS);
+
     let error;
     try {
-      ({ error } = await raceTimeout(
-        client.auth.signInWithPassword({
-          email: draft.email.trim(),
-          password: draft.password,
-        }),
-        DEFAULT_LOAD_TIMEOUT_MS,
-      ));
+      ({ error } = await attempt(password));
+      // A password copied from a chat often carries a space at either end. Tried exactly as typed
+      // first; only a rejection of that, with surrounding space present, earns one more try (which
+      // spends a second sign-in from the venue's shared per-IP rate budget, so never otherwise).
+      const trimmed = password.trim();
+      if (
+        error &&
+        isInvalidCredentials(error) &&
+        trimmed &&
+        trimmed !== password &&
+        !signal?.aborted
+      ) {
+        ({ error } = await attempt(trimmed));
+      }
     } catch (err) {
       // A thrown exception here is a network/transport failure, not an
       // expected auth rejection (signInWithPassword's own documented
@@ -123,7 +207,7 @@ export async function mountLoginScreen(root, { client = getSupabase(), onSignedI
       // unlike core/errors.js's describeError(), which guards against
       // leaking a raw DB error's internals, this is the API's intended
       // user-facing text.
-      pendingError = error.message;
+      pendingError = isInvalidCredentials(error) ? INVALID_CREDENTIALS_MESSAGE : error.message;
       signingIn = false;
       render();
       return;
@@ -159,7 +243,13 @@ export async function mountLoginScreen(root, { client = getSupabase(), onSignedI
         pendingError = null;
       }
 
-      const form = renderLoginForm(draft, { disabled: signingIn });
+      const form = renderLoginForm(draft, {
+        disabled: signingIn,
+        showPassword,
+        onTogglePassword: (isShown) => {
+          showPassword = isShown;
+        },
+      });
       form.addEventListener('submit', handleSubmit);
 
       container.appendChild(el('div', { className: 'card' }, [form]));

@@ -1,3 +1,29 @@
+## T-HARDEN.login-hardening: Harden the sign-in screen against the iPad failure · 2026-10-07
+
+**Task:** T-HARDEN.login-hardening (live-event finding #2 from the first Cup Taster event, 4 Oct).
+A team member could not sign in on an iPad with the shared organiser login, and the owner reproduced "invalid credentials" there with what they believed was the right password. The cause is **unconfirmed**: the Supabase auth logs record 11 rejected password sign-ins that day (all `invalid_credentials`, from three IPs, Safari-on-Mac user agents consistent with an iPad in desktop-site mode) and no successful one, but never what was typed, and they are only retained for 24 hours. This change closes the usual suspects without needing the cause. It does not fix the underlying shared-login problem; that is the separate team-accounts task.
+
+**What shipped:**
+
+- `src/core/loginScreen.js`: a Show/Hide button on the password, so what was typed or pasted can be read back. It flips the field in place (no re-render), so an autofilled email, the caret and a visible error all survive, and a polite status line says "Password is shown/hidden".
+- The fields are read from the form at submit, plus `change` listeners, because iOS autofill can fill a field without firing an input event and `draft` alone could be stale.
+- A password that is rejected with `invalid_credentials` and has a leading or trailing space (typically pasted from a chat) is retried once without it. It is never trimmed up front, so a password that really contains those spaces still works first time. The retry resubmits the password that was submitted (not what was typed since), goes through the same timeout as the first try, and does not fire once the screen has been left. It spends a second sign-in from the venue's shared per-IP rate budget, only on that path.
+- The wrong-password message names what to check ("Check the email, and use the Show/Hide button to read the password back: capital letters count") instead of the API's bare "Invalid login credentials". Every other auth error is still shown as the API words it.
+- The email and password inputs ask iOS not to capitalise, autocorrect or spell-check. Verified locally against the Supabase auth server: the email is compared case-insensitively, a space or different capital in the password is not.
+- Tests: 42 in `loginScreen.test.js` (was 15), including the retry gate (code only, message only, rate limit, empty/no-space passwords), the in-flight edit, the router abort, the hung retry timing out, and the in-place toggle keeping the same nodes.
+
+**Files changed:** `src/core/loginScreen.js`, `src/core/loginScreen.css`, `src/core/loginScreen.test.js`.
+
+**Review cycle:** Three reviewers (code-reviewer, ui-accessibility-reviewer, test-auditor); no blocking findings. Real defects found and fixed: the first Show/Hide re-rendered the form from stale state, wiping an autofilled email and clearing the error that told the user to press Show; the retry read the password after the first request, so an edit made while it was in flight could have been sent; the retry ignored a navigation abort; the message named a button that might already read Hide; the label and `aria-pressed` together read "Hide password, pressed". Test-auditor's 22 surviving mutants were closed with tests; the mutants that remain are equivalent (a browser strips surrounding space from an email field itself, so an email `trim()` cannot be observed).
+
+**Known gaps (deferred, not blocking):**
+
+- **Not verified on a real iPad or in WebKit.** Only Chromium was available. Check on the iPad: tap Show with the keyboard up and confirm the keyboard and caret behave.
+- **Cause still unknown.** If it recurs, the retry and the Show button will at least make it diagnosable on the spot.
+- No screen-reader run (NVDA/VoiceOver).
+
+---
+
 ## T-TOOLS.brew-planner: Brew Planner, a free batch-brew planning tool · 2026-10-07
 
 **Task:** a new standalone community tool at `/tools/brew-planner/` (no auth, no Supabase; same

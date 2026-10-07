@@ -121,6 +121,8 @@ authenticates. Both `requireAuth`'s `getSession()` call and `loginScreen`'s own
 `DEFAULT_LOAD_TIMEOUT_MS` (found missing in review — without it, a hung connection left
 the whole app, or the login form itself, stuck forever with no feedback).
 
+`loginScreen` gained a Show/Hide password toggle (in place, no re-render), submit-time reading of the form (iOS autofill), a one-time retry without surrounding whitespace after an `invalid_credentials` rejection, and clearer wrong-password text (T-HARDEN.login-hardening, 2026-10-07) — see CHANGELOG.md for the account and the unconfirmed root cause.
+
 `scrollReveal` (2026-09-13, Petrol marketing rework) — `revealOnScroll(el, opts)`, a
 one-shot `IntersectionObserver` wrapper (adds a class the first time an element scrolls
 into view, disconnects, never reverts). Its first consumer is
