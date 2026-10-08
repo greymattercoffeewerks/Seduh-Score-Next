@@ -1539,6 +1539,18 @@ _Deferred findings from T-HARDEN.correct-heat-time, flagged and documented, not 
 
 ---
 
+## Known open items from T-HARDEN.heats-roster-fold (2026-10-08)
+
+_Deferred findings from T-HARDEN.heats-roster-fold, flagged and documented, not blocking._
+
+- **Many-heat events** may still be a long scroll: fold confirmed heats to one line, heat jump chips, and two columns on wide screens were offered and not chosen. Revisit after the next live event.
+- **Sticky header covers a focused link at 200% zoom** — add `scroll-padding-top: var(--app-shell-header-height)` once at the shell level (affects every screen, not just this one).
+- **A "Roster" heading no longer exists once heats exist** (fold-out summary instead); acceptable, revisit if screen-reader users miss it.
+- **200% root font-size makes the heats page ~14px wider than the viewport** (pre-existing; source not isolated).
+- **Check on the real iPad** that the Up next button and the fold-out feel right with touch.
+
+---
+
 ## Known open items from T-HARDEN.team-accounts (2026-10-08)
 
 _Deferred findings from T-HARDEN.team-accounts, flagged and documented, not blocking._

@@ -21,6 +21,30 @@ import { getSupabase } from '../../core/supabaseClient.js';
 import { el } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
 
+// Live-event finding #3 (2026-10-04): the Roster card sat above the heats, so on every visit an
+// organiser scrolled past the whole roster, and then past every finished heat, to reach the one to
+// run. Now: while no heats exist the roster is a plain open card (it is what you are about to
+// generate heats from); once they do, the heats come first, an "Up next" card leads straight to
+// the first heat that is not confirmed, and the roster is a closed fold-out below.
+
+// Pure. Cuppers in a stage, in words ("1 cupper", "12 cuppers").
+function cupperCount(n) {
+  return `${n} cupper${n === 1 ? '' : 's'}`;
+}
+
+// The roster once heats exist: a closed <details> below the heats. The summary row is the tap target
+// and carries an explicit +/- (see heatsScreen.css); the state is exposed natively.
+export function renderRosterFold(hydratedEntries) {
+  return el('details', { className: 'card roster-fold' }, [
+    el('summary', {
+      id: 'roster-summary',
+      className: 'roster-fold-summary tap-target',
+      text: `Roster — ${cupperCount(hydratedEntries.length)}`,
+    }),
+    renderRosterList(hydratedEntries),
+  ]);
+}
+
 export function renderRosterList(hydratedEntries) {
   const items = hydratedEntries.map((entry) =>
     el('li', {}, [
@@ -134,6 +158,74 @@ export function readManualAssignmentForm(form) {
   return [...byEntry.values()];
 }
 
+// Where a not-yet-confirmed heat's next step lives: Scoring once the heat is `scoring`, Timing
+// before that.
+function heatHref(eventId, heat) {
+  return `#/events/${eventId}/heats/${heat.id}/${heat.status === 'scoring' ? 'scoring' : 'timing'}`;
+}
+
+// A heat's name wherever it is shown. Tiebreak heats number from 1 again, so without the suffix a
+// stage with a tiebreak shows two different "Heat 1"s.
+function heatName(heat) {
+  return `Heat ${heat.heat_number}${heat.kind === 'tiebreak' ? ' (tiebreak)' : ''}`;
+}
+
+// Pure. The heat to go to next: the first one that is not confirmed yet. Regular heats come in
+// order, then tiebreak heats (their numbering restarts at 1, so heat_number alone would interleave
+// them). null when every heat is confirmed.
+export function findUpNextHeat(heatsWithEntries) {
+  const open = heatsWithEntries.filter(({ heat }) => heat.status !== 'confirmed');
+  open.sort(
+    (a, b) =>
+      Number(a.heat.kind === 'tiebreak') - Number(b.heat.kind === 'tiebreak') ||
+      a.heat.heat_number - b.heat.heat_number,
+  );
+  return open[0] ?? null;
+}
+
+// The "Up next" card at the top of a fully generated stage: the first heat still to do, with one
+// big button into it; or, when everything is confirmed, a link on to the standings.
+export function renderUpNext(heatsWithEntries, eventId, stageId) {
+  const next = findUpNextHeat(heatsWithEntries);
+  const total = heatsWithEntries.length;
+  const confirmed = heatsWithEntries.filter(({ heat }) => heat.status === 'confirmed').length;
+  const progress = `${confirmed} of ${total} heat${total === 1 ? '' : 's'} confirmed`;
+  const heading = el('h2', { id: 'up-next-heading', text: 'Up next', attrs: { tabindex: '-1' } });
+
+  if (!next) {
+    return el('div', { className: 'card up-next' }, [
+      heading,
+      el('p', {
+        text: `All ${total} heat${total === 1 ? ' is' : 's are'} confirmed.`,
+      }),
+      el('a', {
+        className: 'btn btn-primary tap-target',
+        text: 'View standings',
+        attrs: { href: `#/events/${eventId}/stages/${stageId}/standings` },
+      }),
+    ]);
+  }
+
+  const { heat, entries } = next;
+  const name = heatName(heat);
+  const scoring = heat.status === 'scoring';
+  const state = scoring
+    ? 'is waiting to be scored'
+    : heat.status === 'timing'
+      ? 'is being timed'
+      : 'is next to be timed';
+  const label = `${scoring ? 'Score' : 'Time'} ${name}`;
+  return el('div', { className: 'card up-next' }, [
+    heading,
+    el('p', { text: `${name} ${state} · ${cupperCount(entries.length)} · ${progress}` }),
+    el('a', {
+      className: 'btn btn-primary tap-target',
+      text: label,
+      attrs: { href: heatHref(eventId, heat) },
+    }),
+  ]);
+}
+
 // `eventId`, when given, adds a next-action link per heat (Timing while
 // `pending`/`timing`, Scoring while `scoring`) — the only way to actually
 // reach a heat's own timing/scoring screen once it exists (2026-08-29
@@ -154,7 +246,7 @@ function heatActionLink(eventId, heat) {
     className: 'btn btn-outline tap-target',
     text: label,
     attrs: {
-      href: `#/events/${eventId}/heats/${heat.id}/${toScoring ? 'scoring' : 'timing'}`,
+      href: heatHref(eventId, heat),
       // Found in this pass (holistic accessibility review): this list
       // repeats the SAME visible link text ("Time this heat"/"Score this
       // heat") once per heat card, with nothing distinguishing them from
@@ -167,7 +259,7 @@ function heatActionLink(eventId, heat) {
       // carry a per-row aria-label) — this was the one holdout. The label
       // CONTAINS the visible text verbatim (WCAG 2.5.3 Label in Name), not
       // just a differently-worded description.
-      'aria-label': `${label} — Heat ${heat.heat_number}`,
+      'aria-label': `${label} — ${heatName(heat)}`,
     },
   });
 }
@@ -185,7 +277,7 @@ export function renderHeatsList(heatsWithEntries, hydratedById, eventId) {
       'div',
       { className: 'card heat-card' },
       [
-        el('h3', { text: `Heat ${heat.heat_number}` }),
+        el('h3', { text: heatName(heat) }),
         el('ul', { className: 'heat-entries-list' }, items),
         actionLink,
       ].filter(Boolean),
@@ -196,6 +288,11 @@ export function renderHeatsList(heatsWithEntries, hydratedById, eventId) {
     ...cards,
   ]);
 }
+
+// Where focus goes once heats have been generated: the Up next card when it exists (it leads to the
+// next step), else the heats heading (generation stopped short — there is no Up next). A selector
+// list resolves to the first match in document order.
+export const FIRST_HEATS_TARGET = '#up-next-heading, #heats-heading';
 
 export async function mountHeatGenerationScreen(
   root,
@@ -293,7 +390,7 @@ export async function mountHeatGenerationScreen(
     container.appendChild(
       el('p', {
         className: 'stage-meta',
-        text: `${data.hydrated.length} cupper(s) in this stage`,
+        text: `${cupperCount(data.hydrated.length)} in this stage`,
       }),
     );
 
@@ -350,18 +447,24 @@ export async function mountHeatGenerationScreen(
         ]),
       );
     } else {
-      container.appendChild(
-        el('div', { className: 'card' }, [
-          el('h2', { id: 'roster-heading', text: 'Roster', attrs: { tabindex: '-1' } }),
-          renderRosterList(data.hydrated),
-        ]),
-      );
+      const heatsExist = data.heats.length > 0;
+      // Before any heats exist the roster is the thing you are about to generate heats from, so it
+      // stays an open card up top (and "Seed roster" refocuses its heading). Once heats exist it
+      // moves to a closed fold-out below them — see renderRosterFold.
+      if (!heatsExist) {
+        container.appendChild(
+          el('div', { className: 'card' }, [
+            el('h2', { id: 'roster-heading', text: 'Roster', attrs: { tabindex: '-1' } }),
+            renderRosterList(data.hydrated),
+          ]),
+        );
+      }
 
       const placedEntryIds = new Set(
         data.heats.flatMap(({ entries }) => entries.map((entry) => entry.entry_id)),
       );
       const generationComplete =
-        data.heats.length > 0 && data.hydrated.every((entry) => placedEntryIds.has(entry.entry_id));
+        heatsExist && data.hydrated.every((entry) => placedEntryIds.has(entry.entry_id));
 
       // Shared by both the zero-heats and the incomplete-generation branches
       // below — `existingAssignments` (Map<entryId, {heatNumber, station}>)
@@ -400,7 +503,7 @@ export async function mountHeatGenerationScreen(
           ];
           try {
             await generateHeatsManual(stageId, assignments, {}, client);
-            focusAfterRender = '#heats-heading';
+            focusAfterRender = FIRST_HEATS_TARGET;
           } catch (err) {
             pendingError = describeError(err);
           }
@@ -413,7 +516,7 @@ export async function mountHeatGenerationScreen(
         return manualForm;
       }
 
-      if (data.heats.length === 0) {
+      if (!heatsExist) {
         const randomButton = el('button', {
           className: 'btn btn-primary tap-target',
           text: actionInFlight ? 'Generating…' : 'Generate heats (random)',
@@ -432,7 +535,7 @@ export async function mountHeatGenerationScreen(
           randomButton.textContent = 'Generating…';
           try {
             await generateHeatsRandom(stageId, {}, client);
-            focusAfterRender = '#heats-heading';
+            focusAfterRender = FIRST_HEATS_TARGET;
           } catch (err) {
             // Re-render even on failure — critical here specifically:
             // generateHeatsRandom can fail *after* committing some heats
@@ -491,7 +594,7 @@ export async function mountHeatGenerationScreen(
           el('div', { className: 'card' }, [
             el('h2', { text: 'Heat generation incomplete' }),
             el('p', {
-              text: `${placedEntryIds.size} of ${data.hydrated.length} cupper(s) were assigned a heat before generation stopped — ${missing} still need one. Assign the rest below to finish, or continue in Studio.`,
+              text: `${placedEntryIds.size} of ${cupperCount(data.hydrated.length)} were assigned a heat before generation stopped — ${missing} still need one. Assign the rest below to finish, or continue in Studio.`,
             }),
           ]),
         );
@@ -501,7 +604,7 @@ export async function mountHeatGenerationScreen(
             // Repeats the count from the card above rather than relying on
             // it — found in review (ui-accessibility-reviewer): the
             // "Heat generation incomplete" card explaining WHY this form has
-            // fewer inputs than "N cupper(s) in this stage" sits before the
+            // fewer inputs than "N cuppers in this stage" sits before the
             // Generated heats list, structurally disconnected from this
             // form by an intervening card. A screen-reader user navigating
             // by heading, or a sighted user scanning straight to this card,
@@ -512,8 +615,11 @@ export async function mountHeatGenerationScreen(
         );
       } else {
         const hydratedById = new Map(data.hydrated.map((entry) => [entry.entry_id, entry]));
+        container.appendChild(renderUpNext(data.heats, eventId, stageId));
         container.appendChild(renderHeatsList(data.heats, hydratedById, eventId));
       }
+
+      if (heatsExist) container.appendChild(renderRosterFold(data.hydrated));
     }
 
     container.appendChild(feedback);
