@@ -1539,6 +1539,18 @@ _Deferred findings from T-HARDEN.correct-heat-time, flagged and documented, not 
 
 ---
 
+## Known open items from T-HARDEN.team-restore (2026-10-08)
+
+_Deferred findings from T-HARDEN.team-restore, flagged and documented, not blocking._
+
+- **Pre-migration removals:** people removed before the migration are not listed and cannot be restored; insert a `team_removed_members` row by hand for any that matter (which org, who removed them).
+- **Marker expiry:** markers never expire; add a TTL if teams grow (also the one-time password's own missing expiry, from T-HARDEN.team-accounts).
+- **Sessions:** restoring (like Reset password) does not revoke the person's existing sessions.
+- **No Retry** on the removed list's "could not be loaded" text (the page must be reloaded).
+- The two-session race on the restore's row lock cannot be proven in pgTAP (single session); it is covered by the advisory lock and by reasoning.
+
+---
+
 ## Known open items from T-HARDEN.header-sync-chip (2026-10-08)
 
 _Deferred findings from T-HARDEN.header-sync-chip, flagged and documented, not blocking. This supersedes the two 2026-09-27 items about the reserved header row below (the row is gone)._

@@ -10,6 +10,15 @@
   margin-bottom: var(--space-3);
 }
 
+/* The people removed earlier, under the team: same rows as the team list, just set apart. */
+.team-removed {
+  margin-top: var(--space-6);
+}
+
+.team-removed h2 {
+  margin-bottom: var(--space-2);
+}
+
 .team-list {
   list-style: none;
   margin: 0 0 var(--space-4);

@@ -3,9 +3,12 @@
 //
 // What it does: lists the team; adds a person (an account is created and a ONE-TIME password is
 // shown to the owner once, to pass on); resets a member's password (a new one-time password);
-// removes a member (their access ends at once — every policy asks membership live). Owners cannot be
-// removed or reset, and nobody removes themselves; the database enforces that, the screen only
-// doesn't offer it.
+// removes a member (their access ends at once — every policy asks membership live); lists the people
+// removed earlier, under the team, and restores one (their login was kept, so they come back with a
+// new one-time password; adding the same email again is refused, which is why this exists). Owners
+// cannot be removed or reset, and nobody removes themselves; the database enforces that, the screen
+// only doesn't offer it. The removed list is a courtesy: if it cannot load (e.g. the database is a
+// step behind this page) the team itself still works and the section says so.
 //
 // The one-time password exists only in this screen's closure while it is on screen: never stored,
 // never logged, dropped on Done and on unmount. While it is showing, everything else that could
@@ -22,9 +25,11 @@ import { el, labeledField } from './dom.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
 import {
   listTeamMembers,
+  listRemovedTeamMembers,
   addTeamMember,
   resetTeamMemberPassword,
   removeTeamMember,
+  restoreTeamMember,
   describeTeamError,
 } from './team.js';
 
@@ -51,9 +56,21 @@ export function describeMemberStatus(member) {
   })}`;
 }
 
+// Pure. One line about when a person was removed.
+export function describeRemoved(person) {
+  if (!person.removedAt) return 'Removed from the team';
+  const when = new Date(person.removedAt);
+  if (Number.isNaN(when.getTime())) return 'Removed from the team';
+  return `Removed ${when.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })}`;
+}
+
 // A request that timed out may still have reached the server: say so rather than "it failed".
 const NO_ANSWER_MESSAGE =
-  'No answer from the server. It may or may not have gone through — check the list below, and use Reset password if someone needs a new one-time password.';
+  'No answer from the server. It may or may not have gone through — check the team and removed lists above, and use Reset password if someone needs a new one-time password.';
 
 function roleLabel(role) {
   return role === 'owner' ? 'Owner' : 'Team member';
@@ -61,20 +78,40 @@ function roleLabel(role) {
 
 export async function mountTeamScreen(root, { orgId, client = getSupabase(), signal } = {}) {
   let members = [];
+  let removed = [];
+  let removedLoaded = false; // has the removed list loaded at least once?
+  let removedLoadFailed = false; // ...and, if not, did it fail?
   let notOwner = false;
   let loadFailedMessage = null;
   let loading = false;
   let busy = false;
   let draft = { email: '' };
-  let confirming = null; // { userId, action: 'remove' | 'reset' }
-  // The password on screen right now, if any: { kind: 'add' | 'reset', email, password, note }.
+  let confirming = null; // { userId, action: 'remove' | 'reset' | 'restore' }
+  // The password on screen right now, if any: { kind: 'add' | 'reset' | 'restore', email, password, note }.
   let issued = null;
   let pendingError = null;
   let pendingSuccess = null;
+  // What is being done right now ("Restoring x…"), shown in the status line so a request that takes
+  // a while is seen and announced, wherever on the page the button that started it was.
+  let working = null;
   let focusAfterRender = null;
 
   async function loadMembers() {
-    members = await listTeamMembers(orgId, client);
+    // The team must load; the removed list is best-effort (it never blocks the screen).
+    const [team, removedPeople] = await Promise.all([
+      listTeamMembers(orgId, client),
+      listRemovedTeamMembers(orgId, client).catch(() => null),
+    ]);
+    members = team;
+    if (removedPeople !== null) {
+      removed = removedPeople;
+      removedLoaded = true;
+      removedLoadFailed = false;
+    } else if (!removedLoaded) {
+      removedLoadFailed = true;
+    }
+    // (A refresh that fails after the list has loaded once keeps the last list rather than replacing
+    // it with an error: the person's next action re-reads it anyway.)
   }
 
   function renderLoading() {
@@ -149,9 +186,44 @@ export async function mountTeamScreen(root, { orgId, client = getSupabase(), sig
     }
   }
 
+  // One inline confirm: the question, then Confirm / Cancel; Escape backs out, as it does everywhere
+  // else in the console. Shared by every row that asks before it acts.
+  function confirmBox(target, { text, confirmText, confirmLabel, onConfirm }) {
+    const textId = `team-confirm-text-${target.userId}`;
+    const box = el(
+      'div',
+      { className: 'team-confirm', attrs: { role: 'group', 'aria-labelledby': textId } },
+      [
+        el('p', { id: textId, className: 'team-confirm-text', text }),
+        el('div', { className: 'team-actions' }, [
+          actionButton(
+            `team-confirm-${target.userId}`,
+            confirmText,
+            confirmLabel,
+            onConfirm,
+            'btn btn-primary tap-target',
+            textId,
+          ),
+          actionButton(
+            `team-cancel-${target.userId}`,
+            'Cancel',
+            `Cancel for ${target.email}`,
+            () => handleCancelConfirm(target),
+            'btn btn-outline tap-target',
+            textId,
+          ),
+        ]),
+      ],
+    );
+    box.addEventListener('keydown', (domEvent) => {
+      if (domEvent.key === 'Escape') handleCancelConfirm(target);
+    });
+    return box;
+  }
+
   function memberRow(member) {
     const isOwner = member.role === 'owner';
-    const confirmingThis = confirming?.userId === member.userId;
+    const action = confirming?.userId === member.userId ? confirming.action : null;
 
     const info = el('div', { className: 'team-member-info' }, [
       el('span', { className: 'team-member-email', text: member.email }),
@@ -163,45 +235,24 @@ export async function mountTeamScreen(root, { orgId, client = getSupabase(), sig
 
     const children = [info];
     if (!isOwner) {
-      if (confirmingThis) {
-        const isRemove = confirming.action === 'remove';
-        const textId = `team-confirm-text-${member.userId}`;
-        const confirmBox = el(
-          'div',
-          { className: 'team-confirm', attrs: { role: 'group', 'aria-labelledby': textId } },
-          [
-            el('p', {
-              id: textId,
-              className: 'team-confirm-text',
-              text: isRemove
-                ? `Remove ${member.email}? They lose access straight away.`
-                : `Reset the password for ${member.email}? Their current password stops working.`,
-            }),
-            el('div', { className: 'team-actions' }, [
-              actionButton(
-                `team-confirm-${member.userId}`,
-                isRemove ? 'Remove' : 'Reset password',
-                `${isRemove ? 'Confirm remove' : 'Confirm reset password for'} ${member.email}`,
-                () => (isRemove ? handleRemove(member) : handleReset(member)),
-                'btn btn-primary tap-target',
-                textId,
-              ),
-              actionButton(
-                `team-cancel-${member.userId}`,
-                'Cancel',
-                `Cancel for ${member.email}`,
-                () => handleCancelConfirm(member),
-                'btn btn-outline tap-target',
-                textId,
-              ),
-            ]),
-          ],
+      if (action === 'remove') {
+        children.push(
+          confirmBox(member, {
+            text: `Remove ${member.email}? They lose access straight away.`,
+            confirmText: 'Remove',
+            confirmLabel: `Confirm remove ${member.email}`,
+            onConfirm: () => handleRemove(member),
+          }),
         );
-        // Escape backs out of a confirmation, as it does everywhere else in the console.
-        confirmBox.addEventListener('keydown', (domEvent) => {
-          if (domEvent.key === 'Escape') handleCancelConfirm(member);
-        });
-        children.push(confirmBox);
+      } else if (action === 'reset') {
+        children.push(
+          confirmBox(member, {
+            text: `Reset the password for ${member.email}? Their current password stops working.`,
+            confirmText: 'Reset password',
+            confirmLabel: `Confirm reset password for ${member.email}`,
+            onConfirm: () => handleReset(member),
+          }),
+        );
       } else {
         children.push(
           el('div', { className: 'team-actions' }, [
@@ -252,7 +303,9 @@ export async function mountTeamScreen(root, { orgId, client = getSupabase(), sig
     const heading =
       issued.kind === 'add'
         ? `Account created for ${issued.email}`
-        : `New one-time password for ${issued.email}`;
+        : issued.kind === 'restore'
+          ? `${issued.email} is back on the team — new one-time password`
+          : `New one-time password for ${issued.email}`;
     const copyStatus = el('span', {
       id: 'team-copy-status',
       className: 'stage-meta',
@@ -312,6 +365,76 @@ export async function mountTeamScreen(root, { orgId, client = getSupabase(), sig
         copyStatus,
       ].filter(Boolean),
     );
+  }
+
+  function removedRow(person) {
+    const confirmingThis = confirming?.userId === person.userId && confirming.action === 'restore';
+    const children = [
+      el('div', { className: 'team-member-info' }, [
+        el('span', { className: 'team-member-email', text: person.email }),
+        el('span', { className: 'stage-meta', text: describeRemoved(person) }),
+      ]),
+    ];
+    if (confirmingThis) {
+      children.push(
+        confirmBox(person, {
+          text: `Restore ${person.email}? They get access to your events again, with a new one-time password. Their old password stops working.`,
+          confirmText: 'Restore',
+          confirmLabel: `Confirm restore ${person.email}`,
+          onConfirm: () => handleRestore(person),
+        }),
+      );
+    } else {
+      children.push(
+        el('div', { className: 'team-actions' }, [
+          actionButton(
+            `team-restore-btn-${person.userId}`,
+            'Restore',
+            `Restore ${person.email}`,
+            () => handleAskConfirm(person, 'restore'),
+          ),
+        ]),
+      );
+    }
+    return el('li', { attrs: { id: `team-removed-row-${person.userId}` } }, children);
+  }
+
+  function removedSection() {
+    const children = [el('h2', { id: 'team-removed-heading', text: 'Removed members' })];
+    if (!removedLoadFailed) {
+      children.push(
+        el('p', {
+          className: 'stage-meta',
+          text: 'People you removed keep their login but can see nothing. Restore puts one back on the team with a new one-time password.',
+        }),
+      );
+    }
+    if (removedLoadFailed) {
+      children.push(
+        el('p', {
+          id: 'team-removed-failed',
+          className: 'stage-meta',
+          text: 'The list of removed members could not be loaded. Reload the page to try again.',
+        }),
+      );
+    } else if (removed.length === 0) {
+      children.push(
+        el('p', {
+          id: 'team-removed-empty',
+          className: 'stage-meta',
+          text: 'No one has been removed.',
+        }),
+      );
+    } else {
+      children.push(
+        el(
+          'ul',
+          { className: 'team-list', attrs: { 'aria-labelledby': 'team-removed-heading' } },
+          removed.map(removedRow),
+        ),
+      );
+    }
+    return el('section', { className: 'team-removed' }, children);
   }
 
   function addForm() {
@@ -374,7 +497,9 @@ export async function mountTeamScreen(root, { orgId, client = getSupabase(), sig
       className: 'screen-feedback',
       attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
     });
-    if (pendingError) {
+    if (working) {
+      feedback.textContent = working;
+    } else if (pendingError) {
       feedback.textContent = pendingError;
       feedback.dataset.tone = 'error';
       pendingError = null;
@@ -402,12 +527,18 @@ export async function mountTeamScreen(root, { orgId, client = getSupabase(), sig
         }),
       );
     }
+    // Right under the team and the form they act on, ahead of the removed list.
     container.appendChild(feedback);
+    container.appendChild(removedSection());
     root.appendChild(container);
 
     if (focusAfterRender) {
       root.querySelector(focusAfterRender)?.focus();
       focusAfterRender = null;
+    } else if (working) {
+      // The button that started the request has just been re-rendered away; keep focus on the status
+      // line, which announces it, rather than letting it fall to the page.
+      feedback.focus();
     } else if (feedback.dataset.tone) {
       feedback.scrollIntoView?.({ block: 'nearest' });
       feedback.focus();
@@ -427,8 +558,9 @@ export async function mountTeamScreen(root, { orgId, client = getSupabase(), sig
 
     busy = true;
     confirming = null;
-    render();
     const email = draft.email.trim();
+    working = `Adding ${email}…`;
+    render();
     try {
       const created = await raceTimeout(
         addTeamMember(orgId, email, client),
@@ -444,27 +576,30 @@ export async function mountTeamScreen(root, { orgId, client = getSupabase(), sig
       if (err?.timedOut) await reloadAfterChange();
     }
     busy = false;
+    working = null;
     render();
   }
 
-  function handleAskConfirm(member, action) {
+  function handleAskConfirm(target, action) {
     if (busy || issued) return;
-    confirming = { userId: member.userId, action };
-    focusAfterRender = `#team-cancel-${member.userId}`;
+    confirming = { userId: target.userId, action };
+    focusAfterRender = `#team-cancel-${target.userId}`;
     render();
   }
 
-  function handleCancelConfirm(member) {
+  function handleCancelConfirm(target) {
     if (busy) return;
     const action = confirming?.action;
     confirming = null;
-    focusAfterRender = `#team-${action === 'remove' ? 'remove' : 'reset'}-btn-${member.userId}`;
+    // The action's own name is in its button's id: team-reset-btn-, team-remove-btn-, team-restore-btn-.
+    focusAfterRender = `#team-${action}-btn-${target.userId}`;
     render();
   }
 
   async function handleReset(member) {
     if (busy || issued) return;
     busy = true;
+    working = `Resetting the password for ${member.email}…`;
     render();
     try {
       const reset = await raceTimeout(
@@ -482,12 +617,43 @@ export async function mountTeamScreen(root, { orgId, client = getSupabase(), sig
       if (err?.timedOut) await reloadAfterChange();
     }
     busy = false;
+    working = null;
+    render();
+  }
+
+  async function handleRestore(person) {
+    if (busy || issued) return;
+    busy = true;
+    working = `Restoring ${person.email}…`;
+    render();
+    try {
+      const restored = await raceTimeout(
+        restoreTeamMember(orgId, person.userId, client),
+        DEFAULT_LOAD_TIMEOUT_MS,
+      );
+      issued = { kind: 'restore', email: person.email, password: restored.password };
+      confirming = null;
+      // On the team now, whether or not the refresh below works: never keep offering Restore.
+      removed = removed.filter((other) => other.userId !== person.userId);
+      const refreshed = await reloadAfterChange();
+      if (!refreshed) issued.note = 'Restored, but the list could not refresh — reload to see it.';
+      focusAfterRender = '#team-issued';
+    } catch (err) {
+      confirming = null;
+      pendingError = err?.timedOut ? NO_ANSWER_MESSAGE : describeTeamError(err);
+      // Whatever went wrong, the server's state is the truth: a refusal usually means the person is
+      // no longer restorable (or already restored), and the row must not keep offering Restore.
+      await reloadAfterChange();
+    }
+    busy = false;
+    working = null;
     render();
   }
 
   async function handleRemove(member) {
     if (busy || issued) return;
     busy = true;
+    working = `Removing ${member.email}…`;
     render();
     try {
       await raceTimeout(removeTeamMember(orgId, member.userId, client), DEFAULT_LOAD_TIMEOUT_MS);
@@ -504,6 +670,7 @@ export async function mountTeamScreen(root, { orgId, client = getSupabase(), sig
       if (err?.timedOut) await reloadAfterChange();
     }
     busy = false;
+    working = null;
     render();
   }
 
