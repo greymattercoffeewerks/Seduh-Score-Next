@@ -1273,19 +1273,19 @@ live-verified in browser. Definition of Done met. See CHANGELOG.md's dated entry
   CHANGELOG.md for the full account.
 - **processed_operations.id is a global primary key (op-id poisoning across orgs).** Suggest schema
   change to `(org_id, id)`.
-- **app.org_id_for_btc_match is anon-executable.** Should require `authenticated` role.
+- **app.org_id_for_btc_match is anon-executable.** Should require `authenticated` role. — CLOSED 2026-10-09 (`20260922120000_btc_small_cleanups.sql`: revoked from `public` and `anon`, granted to `authenticated` and `service_role`).
 - **btc_matches_write is FOR ALL: a member can set status=confirmed directly, bypassing the RPC,**
   letting any member confirm a match without the full validation the RPC provides.
 - **btc_match_judges can be edited after confirmation** and nothing outside the RPC caps them at 3,
   enabling race conditions between scoring and judge removal.
 - **Unindexed foreign keys:** btc_cup_votes.team_id/judge_id, btc_match_bonuses.fastest_team_id,
-  btc_bracket_slots.team1_id/team2_id (performance risk).
+  btc_bracket_slots.team1_id/team2_id (performance risk). — CLOSED 2026-10-09: `btc_cup_votes.team_id/judge_id` were dropped by `20260922100000` (per-cup token shape); the other three are indexed by `20260922120000`.
 - **btc_cup_totals still counts out-of-range cup votes** (match totals and standings are filtered,
-  but the view itself is inconsistent).
+  but the view itself is inconsistent). — CLOSED 2026-10-09 (`20260922120000`: the view filters `cup_number <= btc_cups_for_round`).
 - **btc_bracket_slots.event_id can still be moved; freeze it with forbid_btc_event_change** in the
   bracket step (feeder links must not be trusted blindly).
 - **Nine older trigger functions keep PUBLIC/anon EXECUTE** (check_btc_cup_vote_participants,
-  check_btc_match_bonus_teams, and 7 pre-BTC ones): unreachable, consistency cleanup only.
+  check_btc_match_bonus_teams, and 7 pre-BTC ones): unreachable, consistency cleanup only. — CLOSED 2026-10-09: `check_btc_cup_vote_participants` was dropped by `20260922100000`; the other eight were revoked from `public` and `anon` by `20260922120000`.
 - **Scoring screen load needs the network** (no offline reload capability).
 - **Four screens routed in app-wiring pass (2026-09-23) — CLOSED.** All 5 BTC screens
   (setup/matches/standings/bracket/scoring) now have routes in `main.js`; `allOutboxHandlers` is
@@ -1299,7 +1299,7 @@ live-verified in browser. Definition of Done met. See CHANGELOG.md's dated entry
 - **No pgTAP fixture pins btc_standings.wins for a token winner who is not the fastest team** (both
   paths valid but only one tested).
 - **Bracket step must decide knockout winners on bonus-inclusive totals, leave total ties unresolved,
-  and guard editing a confirmed match whose winner already advanced.** Deferred to bracket step.
+  and guard editing a confirmed match whose winner already advanced.** Deferred to bracket step. — CLOSED 2026-10-09 (T-HARDEN.btc-bracket-podium): winners on bonus-inclusive totals and the advanced-match guard by `20260922132000`; the tie and stale-seat gap by `20261009100000`, pushed to the cloud project 2026-10-09 and verified there.
 - **Standings completeness rests on exactly 3 judges per match;** nothing outside the RPC caps
   btc_match_judges at 3 (see btc_match_judges editable gap above).
 
@@ -1767,3 +1767,16 @@ _Result-recorded and rank-impact screens shipped; these were flagged and documen
 - **Every moment pre-empts a held page** mid-read, and the idle loop restarts from its first page afterwards — accepted for news; a "resume the page" option is possible.
 - **No screen-reader announcement** for the moments (a TV surface; the phone view carries recent results as text). A polite `sr-only` line per moment is the option if parity is wanted.
 - **Rank rows beyond eight** are summarised as "+N more"; a very long tie at the edge of the top five is not listed in full.
+
+---
+
+## Known open items from T-HARDEN.btc-bracket-podium (2026-10-09)
+
+_The BTC podium card and the knockout re-confirm-as-tie fix shipped; these were flagged and documented, not blocking._
+
+- **A tied knockout match has no resolution path (gap 1).** The organiser cannot break it; the bracket just stops advancing, and the bracket screen has no tied-match state on its slot cards. Needs a product decision on the tie rule: re-score, a sudden-death cup, or a recorded organiser override.
+- **No parity test between the SQL advancement and the JS podium comparator.** One fixture should run through both `confirm_btc_match`'s advancement and `derivePodium`, so the podium and the bracket cannot disagree about a winner.
+- **The semifinal-tie refusal wording for the "loser" branch is untested.** Reaching it needs a final or third-place match to exist, which needs sf1 seeded.
+- **No podium on a live surface yet.** `derivePodium` is ready for T-BTC.3 and is meant to be reused unedited; that surface must carry its own `is_test` treatment (D9).
+- **A missing team in the roster shows "Unknown team" as a decided name** (`podium.js`'s `nameOf` fallback). If that can happen, it should be a visible "missing" state, not a name.
+- **BTC dispute-pack button is still missing.**

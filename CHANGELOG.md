@@ -1,3 +1,52 @@
+## T-HARDEN.btc-bracket-podium: A BTC podium, and a knockout re-confirmed as a tie no longer leaves its old winner in the bracket · 2026-10-09
+
+**Task:** T-HARDEN.btc-bracket-podium. Not a handoff §14 task: BTC is out-of-handoff (see ROADMAP's BTC section). Branch `feat/btc-bracket-podium`.
+
+**Status: closed.** Migration `20261009100000_btc_confirm_match_tie_clears_downstream.sql` was pushed to the cloud project (`wxzwanprluqmgoagbkpv`) on 2026-10-09 with `apply_migration` (recorded there as `20261008233131`, as with the earlier migrations) and verified: `list_migrations` lists it, one `confirm_btc_match` overload carries the tie message, the missing-score guard and the skip-no-op update, it is still security invoker with `search_path` pinned empty, and execute is granted to `authenticated` and `service_role` only. The cloud project held no bracket slots, so no live bracket was touched.
+
+**What shipped:**
+
+- **A knockout re-confirmed as a tie** (`supabase/migrations/20261009100000_btc_confirm_match_tie_clears_downstream.sql`: CREATE OR REPLACE `confirm_btc_match`, same signature). Bug: `20260922132000`'s advancement did nothing on a tie, so an organiser who corrected a recorded win into a tie left the previous winner (and, for a semifinal, the previous loser in third place) in the next round's seat, where the bracket still showed a result the scores no longer supported. Now the downstream loop always runs, with a NULL target on a tie:
+  - downstream match does not exist yet: the seat is cleared;
+  - downstream match exists and holds the team: the whole confirm is refused ("this match is now tied, but its winner has already advanced to a match in progress…"), because that match has judges and scores keyed to the team and emptying the seat would corrupt it;
+  - seat already empty: not written, so no `updated_at` bump.
+  - A missing score row raises instead of reading as a tie.
+- **`src/formats/btc/podium.js`** (new): `derivePodium` (pure) gives Champion = final winner, 1st runner-up = final loser, 3rd place = third-place winner, from the CONFIRMED, bonus-inclusive totals in `btc_match_scores` (the view the bracket advances from). States: decided / tied / pending. A tied final makes both its places tied; third place is derived independently; an unconfirmed match is pending (its view row reads 0–0, which would look like a tie). Totals are coerced with `Number`; no third-place slot gives two places; inputs are not mutated. `fetchPodiumScores` (six columns) and `podiumMatchIds` are its one query. **Nothing is stored.**
+- **Podium card on `bracketScreen.js`:** a `<dl>` (place → team) above the rounds once the final slot exists. "Not decided yet" / "Tied — not decided" are in italic regular weight, so a placeholder never reads as a team name. Long names wrap, including on the bracket slot cards. The podium read is deliberately not degraded on failure: a failed read fails the load, and Retry covers it.
+- **Preview page** `bracketScreen.preview.html`: "final played" and "final tied" buttons and `?podium=decided|tied`.
+
+**Decisions and reasoning:**
+
+- A tie clears seats only while the downstream match does not exist. Once it does, the confirm is refused, using the same guard a decisive change already used. Clearing silently would orphan a match keyed to the team; the organiser removes the downstream match first.
+- A tie never defaults to a winner (the same rule as `confirm_btc_match`'s own tie branch). A knockout tie advances nobody, and has no resolution path yet (see ROADMAP).
+- The podium is derived, not stored. A stored podium would go stale on the next re-confirm, which is exactly the bug above.
+- The podium read fails loudly rather than degrading. A stale or partial podium beside a live bracket is the worse failure.
+- No CONVENTIONS.md change: the pure-derive / fetch / ids shape is BTC-specific and is recorded in `src/formats/btc/CLAUDE.md`.
+
+**Tests:** pgTAP `016_btc_bracket.sql` plan 39 → 52: win → tie clears the seat; tie → win refills it; a semifinal tie clears both the final and third-place seats and refills them; refused once the downstream match exists (exact message); atomicity asserted on the vote SUM (the old count assertion was vacuous). Mutation-verified: the old function fails the target assertions, and a `coalesce` mutant on the team2 seat fails the semifinal ones. JS: `podium.test.js` (new, ~19 tests) and podium-card tests in `bracketScreen.test.js`. Suites at close, as reported by the session that ran them (not re-run by kb-sync): pgTAP 903, JS 2738, ESLint clean.
+
+**Review cycle:** six reviewers, zero blocking in the final state.
+
+- **schema-guardian:** rollback comment missing `service_role`; header claim; semifinal-tie test gap; null-totals guard suggestion. All fixed.
+- **security-reviewer:** clean. No oracle and no new privilege (still `security invoker`, grants unchanged); the null-totals note was fixed.
+- **scoring-auditor:** blocking for sign-off only because clearing of the third-place seat and `feeder_slot_2` was unproven by tests. Fixed with semifinal-tie assertions; added tests for a tied third place, the third-place status gate, input immutability and `Number` coercion.
+- **test-auditor:** 10 JS mutations, all caught after the fixes. Fixed the semifinal-loser-seat gap and the vacuous count assertion.
+- **code-reviewer:** seven comment and wording items fixed (duplicate raise collapsed, stale doc comment, unused export, select columns narrowed, runner-up "Tied — no winner" changed to "Tied — not decided").
+- **ui-accessibility-reviewer:** static review, no blocking. Fixed overflow, placeholder styling and `dl` semantics (the `dl` replaced the `ul`/`aria-label` pattern the slot lists use). Checked at 360px in a real browser: no overflow, and a long unbroken name wraps.
+
+**Not covered:**
+
+- No test yet compares the SQL advancement with `derivePodium` on one fixture (ROADMAP).
+- No new negative test for the podium read (a non-member reads zero rows of `btc_match_scores`). The read goes through the existing `security_invoker` view, and no policy changed.
+
+**Files touched:** `supabase/migrations/20261009100000_btc_confirm_match_tie_clears_downstream.sql` (new), `supabase/tests/016_btc_bracket.sql`, `src/formats/btc/podium.js` (new), `podium.test.js` (new), `bracketScreen.js` / `.css` / `.test.js` / `.preview.html`, `src/formats/btc/CLAUDE.md`, `ROADMAP.md`, `CHANGELOG.md`, `package.json`, `package-lock.json` (`npm version patch` also updated the lock's version fields, which had been stuck at 3.0.17; kept because it is the documented command).
+
+**Closed in ROADMAP** (checked against the migrations, not the notes): from "Known open items from BTC Phase T-BTC.2 scoring": `app.org_id_for_btc_match` anon-executable and the older trigger functions' PUBLIC/anon EXECUTE (`20260922120000`; `check_btc_cup_vote_participants` was dropped by `20260922100000`); unindexed foreign keys (`btc_cup_votes.team_id/judge_id` dropped by `20260922100000`, the other three indexed by `20260922120000`); `btc_cup_totals` counting out-of-range votes (`20260922120000`); the bracket item (winners on bonus-inclusive totals and the advanced-match guard by `20260922132000`; tie and stale seat by `20261009100000`).
+
+**Follow-up:** the open items for this task are in ROADMAP's "Known open items from T-HARDEN.btc-bracket-podium (2026-10-09)".
+
+---
+
 ## T-HARDEN.projector-moments: "Result recorded" and "Rank impact" on the venue display · 2026-10-09
 
 **Task:** T-HARDEN.projector-moments (the second half of live-event finding #5: the research's "Result recorded" 4–6s and "Rank impact" 6–8s screens, deferred from the projector redesign). User requirement carried over: the parts must be usable by other formats' projectors.

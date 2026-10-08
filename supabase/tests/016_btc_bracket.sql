@@ -3,7 +3,7 @@
 -- integrated flow (generate the tree, create a match from a filled slot, confirm it
 -- and watch the next slot fill), not three independent concerns.
 begin;
-select plan(39);
+select plan(52);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-000000000001', 'member@test.seduh-next'),
@@ -240,6 +240,32 @@ select lives_ok(
   're-confirming qf1 with the same outcome succeeds'
 );
 
+-- A RE-confirm that turns a recorded win into a tie must take the old winner back out of
+-- the next round (sf1's own match does not exist yet, so the seat can simply be cleared).
+-- Before 20261009100000 the tie branch did nothing, leaving qf1's old winner in sf1.
+select lives_ok(
+  $$ select confirm_btc_match('00000000-0000-0000-0000-00000000005d', '00000000-0000-0000-0000-000000000010',
+       (select match_id from btc_bracket_slots where slot_label = 'qf1' and event_id = '00000000-0000-0000-0000-0000000000e1'),
+       (select updated_at from btc_matches where id = (select match_id from btc_bracket_slots where slot_label = 'qf1' and event_id = '00000000-0000-0000-0000-0000000000e1')),
+       (select jsonb_agg(jsonb_build_object('cup_number', c, 'team1_tokens', case when c <= 10 then 3 else 0 end)) from generate_series(1, 20) c),
+       null, false, false, null, null) $$,
+  're-confirming qf1 as a tie succeeds'
+);
+select is((select team1_id from btc_bracket_slots where slot_label = 'sf1' and event_id = '00000000-0000-0000-0000-0000000000e1'), null,
+          'a win corrected into a tie clears the old winner from sf1 (no stale advancement)');
+
+-- And correcting it back to a win puts the winner in again.
+select lives_ok(
+  $$ select confirm_btc_match('00000000-0000-0000-0000-00000000005e', '00000000-0000-0000-0000-000000000010',
+       (select match_id from btc_bracket_slots where slot_label = 'qf1' and event_id = '00000000-0000-0000-0000-0000000000e1'),
+       (select updated_at from btc_matches where id = (select match_id from btc_bracket_slots where slot_label = 'qf1' and event_id = '00000000-0000-0000-0000-0000000000e1')),
+       (select jsonb_agg(jsonb_build_object('cup_number', c, 'team1_tokens', 3)) from generate_series(1, 20) c),
+       '00000000-0000-0000-0000-0000000000bf', false, false, null, null) $$,
+  're-confirming qf1 as a win again succeeds'
+);
+select is((select team1_id from btc_bracket_slots where slot_label = 'sf1' and event_id = '00000000-0000-0000-0000-0000000000e1'), '00000000-0000-0000-0000-0000000000bf'::uuid,
+          'and the corrected winner advances into sf1 again');
+
 -- Create and confirm sf2 (fully seeded now), sending its winner to the final and its
 -- loser to third-place.
 select create_btc_bracket_match('00000000-0000-0000-0000-000000000010',
@@ -258,6 +284,34 @@ select is((select team2_id from btc_bracket_slots where slot_label = 'final' and
 select is((select team2_id from btc_bracket_slots where slot_label = 'third_place' and event_id = '00000000-0000-0000-0000-0000000000e1'),
           '00000000-0000-0000-0000-0000000000b1'::uuid, 'sf2''s LOSER advances into third-place, not the final');
 
+-- A SEMIFINAL tie empties BOTH seats it feeds: the final (winner) and third place (loser).
+-- sf2 is feeder_slot_2 of each, so this is also the only coverage of the team2_id branch.
+-- Neither the final's nor third place's own match exists yet, so the seats can be cleared.
+select lives_ok(
+  $$ select confirm_btc_match('00000000-0000-0000-0000-000000000060', '00000000-0000-0000-0000-000000000010',
+       (select match_id from btc_bracket_slots where slot_label = 'sf2' and event_id = '00000000-0000-0000-0000-0000000000e1'),
+       (select updated_at from btc_matches where id = (select match_id from btc_bracket_slots where slot_label = 'sf2' and event_id = '00000000-0000-0000-0000-0000000000e1')),
+       (select jsonb_agg(jsonb_build_object('cup_number', c, 'team1_tokens', case when c <= 10 then 3 else 0 end)) from generate_series(1, 20) c),
+       null, false, false, null, null) $$,
+  're-confirming sf2 as a tie succeeds'
+);
+select is((select team2_id from btc_bracket_slots where slot_label = 'final' and event_id = '00000000-0000-0000-0000-0000000000e1'), null,
+          'a semifinal corrected into a tie clears the old winner from the final');
+select is((select team2_id from btc_bracket_slots where slot_label = 'third_place' and event_id = '00000000-0000-0000-0000-0000000000e1'), null,
+          'and clears the old loser from third place too (no stale loser left behind)');
+select lives_ok(
+  $$ select confirm_btc_match('00000000-0000-0000-0000-000000000061', '00000000-0000-0000-0000-000000000010',
+       (select match_id from btc_bracket_slots where slot_label = 'sf2' and event_id = '00000000-0000-0000-0000-0000000000e1'),
+       (select updated_at from btc_matches where id = (select match_id from btc_bracket_slots where slot_label = 'sf2' and event_id = '00000000-0000-0000-0000-0000000000e1')),
+       (select jsonb_agg(jsonb_build_object('cup_number', c, 'team1_tokens', 3)) from generate_series(1, 20) c),
+       '00000000-0000-0000-0000-0000000000b2', true, true, null, null) $$,
+  're-confirming sf2 as a win again succeeds'
+);
+select is((select team2_id from btc_bracket_slots where slot_label = 'final' and event_id = '00000000-0000-0000-0000-0000000000e1'), '00000000-0000-0000-0000-0000000000b2'::uuid,
+          'and the corrected winner advances into the final again');
+select is((select team2_id from btc_bracket_slots where slot_label = 'third_place' and event_id = '00000000-0000-0000-0000-0000000000e1'), '00000000-0000-0000-0000-0000000000b1'::uuid,
+          'and the corrected loser lands in third place again');
+
 -- Now that sf2's own match exists, re-confirming qf3 with a DIFFERENT winner must be
 -- refused — closing the ROADMAP.md gap: "editing a confirmed match whose winner
 -- already advanced." qf3's win no longer belongs to team1 alone (it's flipped to a
@@ -274,8 +328,24 @@ select throws_ok(
 );
 select is((select team1_id from btc_bracket_slots where slot_label = 'sf2' and event_id = '00000000-0000-0000-0000-0000000000e1'),
           '00000000-0000-0000-0000-0000000000b2'::uuid, 'the refused re-confirm left sf2''s team unchanged');
-select is((select count(*)::int from btc_cup_votes where match_id = (select match_id from btc_bracket_slots where slot_label = 'qf3' and event_id = '00000000-0000-0000-0000-0000000000e1')),
-          20, 'and left qf3''s own votes untouched — the refused confirm rolled back atomically');
+select is((select sum(team1_tokens)::int from btc_cup_votes where match_id = (select match_id from btc_bracket_slots where slot_label = 'qf3' and event_id = '00000000-0000-0000-0000-0000000000e1')),
+          60, 'and left qf3''s own votes untouched (sum, not count: the refused payload also had 20 rows) — rolled back atomically');
+
+-- The same win -> tie correction is REFUSED once the downstream match exists: sf2's match
+-- already has judges and scores keyed to qf3's winner, so emptying that seat would corrupt it.
+select throws_ok(
+  $$ select confirm_btc_match('00000000-0000-0000-0000-00000000005f', '00000000-0000-0000-0000-000000000010',
+       (select match_id from btc_bracket_slots where slot_label = 'qf3' and event_id = '00000000-0000-0000-0000-0000000000e1'),
+       (select updated_at from btc_matches where id = (select match_id from btc_bracket_slots where slot_label = 'qf3' and event_id = '00000000-0000-0000-0000-0000000000e1')),
+       (select jsonb_agg(jsonb_build_object('cup_number', c, 'team1_tokens', case when c <= 10 then 3 else 0 end)) from generate_series(1, 20) c),
+       null, false, false, null, null) $$,
+  'P0001', 'confirm_btc_match: this match is now tied, but its winner has already advanced to a match in progress — that downstream match must be removed before this result can change',
+  'a win corrected into a tie is refused once the downstream match already exists'
+);
+select is((select team1_id from btc_bracket_slots where slot_label = 'sf2' and event_id = '00000000-0000-0000-0000-0000000000e1'),
+          '00000000-0000-0000-0000-0000000000b2'::uuid, 'the refused tie correction left sf2''s team unchanged');
+select is((select sum(team1_tokens)::int from btc_cup_votes where match_id = (select match_id from btc_bracket_slots where slot_label = 'qf3' and event_id = '00000000-0000-0000-0000-0000000000e1')),
+          60, 'and the refused tie correction rolled back qf3''s votes atomically (stored 60, refused tie payload sums to 30)');
 
 -- sf1's own match still cannot be created — qf2's tie left sf1's team2 position
 -- unresolved, so sf1 is not fully seeded yet.
