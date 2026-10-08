@@ -137,6 +137,8 @@ animation in this codebase.
 
 `brandLockup` (T-HARDEN.brand-lockup, 2026-10-08) in `dom.js` — the mark and the wordmark as ONE shared lockup, styled only in `src/ui/tokens/brand.css` (display face, bold, wide-tracked; the mark stands on the wordmark baseline; em sizing via `--brand-lockup-size`). The console header (`appShell`), the phone/projector chrome (`viewer-shell`), the public header and the landing nav all build it; a surface wraps it (home link, `<h1>`) and sets the size, never restyles it. Before this the console set the wordmark in Hanken Grotesk and the public pages in Chakra Petch, with the mark hanging 1-4px low on both. See CHANGELOG.md.
 
+The sync status in the header (T-HARDEN.header-sync-chip, 2026-10-08) is a short **one-line chip** (`.app-shell-sync-chip`: "Synced", "Not synced (3)", "Sync failing (3)", "2 writes lost"), so the sticky header's height never depends on the status; it used to be a reserved full-width row that kept the header two rows tall. The full sentence is the persistent `role=status` node (`.app-shell-sync`), clipped away until a problem chip (a button) is tapped, then an overlay panel that takes no layout space. Keep chip labels short and single-line, never let a status variant change what sets the chip's height, and never put the chip or the panel back in flow — `appShell.test.js` guards the stylesheet. Pending vs stuck must differ in words, not just colour. See CHANGELOG.md.
+
 **Wordmark home link (2026-09-16)** — the header mark and name are now one root-relative
 `/` link with the accessible name “Seduh Score home.” The organiser app is served from
 `/app/`, so this keeps an explicit exit route available even at sign-in; do not split the
