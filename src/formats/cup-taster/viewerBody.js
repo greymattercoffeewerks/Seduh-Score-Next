@@ -34,7 +34,7 @@
 //     timingMode: 'app'|'manual', startedAt: <ISO string>|null, durationSecs,
 //     cuppers: [{ displayName, station, totalElapsedSecs, maxed }],
 //   },
-//   recentHeats: [{ heatNumber, stageKind, results: [{ displayName, numCorrect, totalElapsedSecs }] }],
+//   recentHeats: [{ heatNumber, kind, stageKind, results: [{ displayName, numCorrect, totalElapsedSecs, maxed }] }],   (`kind` and `maxed` additive)
 //   champion: null | string,
 // }
 //
@@ -66,6 +66,7 @@ import { chainComparators } from '../../core/ranking.js';
 import { renderCountdown } from '../../core/countdownDisplay.js';
 import { formatDuration, formatDurationLong } from '../../core/duration.js';
 import { stageKindLabel } from './setup.js';
+import { formatHeatName } from './heats.js';
 
 // The `hasContent` predicate viewer-shell.js's inversion-of-control
 // contract calls for — whether THIS payload counts as real content is a
@@ -251,8 +252,18 @@ function renderActiveHeat(activeHeat) {
 // chain — matches the module-boundary rule this project enforces
 // (formats/* must not reimplement a core/ primitive).
 const byMostCorrect = (a, b) => b.numCorrect - a.numCorrect;
-const byFastestTime = (a, b) => (a.totalElapsedSecs ?? Infinity) - (b.totalElapsedSecs ?? Infinity);
-const compareRecentHeatResults = chainComparators(byMostCorrect, byFastestTime);
+// By nullness first, not by `?? Infinity` arithmetic: two untimed rows would be Infinity - Infinity = NaN, which
+// is "not a tie" to a comparator and to rank() (the same trap standings.js documents on its own comparator).
+const byFastestTime = (a, b) => {
+  const aTime = a.totalElapsedSecs;
+  const bTime = b.totalElapsedSecs;
+  if (aTime == null && bTime == null) return 0;
+  if (aTime == null) return 1;
+  if (bTime == null) return -1;
+  return aTime - bTime;
+};
+// Exported so the venue display orders a heat's results by the same rule the phone does.
+export const compareRecentHeatResults = chainComparators(byMostCorrect, byFastestTime);
 
 function renderRecentHeat(heat) {
   const sorted = [...heat.results].sort(compareRecentHeatResults);
@@ -262,7 +273,7 @@ function renderRecentHeat(heat) {
   return el('div', { className: 'viewer-recent-heat' }, [
     el('p', {
       className: 'stage-meta',
-      text: `${stageKindLabel(heat.stageKind)} · Heat ${heat.heatNumber}`,
+      text: `${stageKindLabel(heat.stageKind)} · ${formatHeatName(heat.heatNumber, heat.kind)}`,
     }),
     el('ul', { className: 'viewer-recent-heat-list' }, rows),
   ]);

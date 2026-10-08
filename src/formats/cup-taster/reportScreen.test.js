@@ -3,7 +3,6 @@ import * as exportModule from '../../core/export.js';
 import { formatDuration } from '../../core/duration.js';
 import { DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
 import {
-  ordinalLabel,
   describeOutcome,
   buildReportTables,
   toCsvSafeDuration,
@@ -58,26 +57,6 @@ function fakeClient({ tables = {}, rpc: rpcResults = {} } = {}) {
     },
   };
 }
-
-describe('ordinalLabel', () => {
-  it.each([
-    [1, '1st'],
-    [2, '2nd'],
-    [3, '3rd'],
-    [4, '4th'],
-    [10, '10th'],
-    [11, '11th'],
-    [12, '12th'],
-    [13, '13th'],
-    [21, '21st'],
-    [22, '22nd'],
-    [23, '23rd'],
-    [111, '111th'],
-    [113, '113th'],
-  ])('labels %i as %s', (n, expected) => {
-    expect(ordinalLabel(n)).toBe(expected);
-  });
-});
 
 describe('describeOutcome', () => {
   it('says "Advanced" for an entry with no final position — their result continues in the next stage', () => {

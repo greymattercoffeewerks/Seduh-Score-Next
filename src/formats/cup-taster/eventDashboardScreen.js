@@ -13,7 +13,7 @@ import { findEvent } from '../../core/events.js';
 import { findActiveLiveEventId } from '../../core/publish.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
 import { listStagesForEvent, stageHasHeats, stageKindLabel } from './setup.js';
-import { ordinalLabel } from './reportScreen.js';
+import { ordinalLabel } from '../../core/ordinal.js';
 
 // live_sessions enforces at most one active row per org (a partial unique
 // index — see supabase/migrations/20260821220000_live_sessions_table.sql),

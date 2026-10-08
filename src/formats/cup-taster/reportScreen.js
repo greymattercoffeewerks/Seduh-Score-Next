@@ -52,24 +52,7 @@ import {
   computeAvgSecsPerSet,
 } from './analytics.js';
 import { buildResultsPayload, podiumRowsOf } from './resultsPublishing.js';
-
-// Pure. 1 -> '1st', 2 -> '2nd', 3 -> '3rd', 4 -> '4th', 11-13 -> '11th'/
-// '12th'/'13th' (the standard English-ordinal exception), everything else
-// keys off the last digit.
-export function ordinalLabel(n) {
-  const remainder100 = n % 100;
-  if (remainder100 >= 11 && remainder100 <= 13) return `${n}th`;
-  switch (n % 10) {
-    case 1:
-      return `${n}st`;
-    case 2:
-      return `${n}nd`;
-    case 3:
-      return `${n}rd`;
-    default:
-      return `${n}th`;
-  }
-}
+import { ordinalLabel } from '../../core/ordinal.js';
 
 // `source` describes how an entry ARRIVED at this stage (T4.6's own
 // advancement provenance — set when the PREVIOUS stage resolved); only

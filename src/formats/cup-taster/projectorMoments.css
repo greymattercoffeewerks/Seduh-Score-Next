@@ -1,0 +1,29 @@
+/*
+ * Cup Taster's venue-display moments (projectorMoments.js): "Result recorded" (a heat's results, placed) and
+ * "Rank impact" (what that did to the top of the table). Drawn inside core/stageDisplay.css's frame, reusing
+ * projectorScreens.css's cards, title and kicker and core/stageMoments.css's movement rows and rise-in;
+ * token-only and sized in --stage-fit like every screen. Bounded by design (a heat of six stations, at most
+ * eight rows of table), so nothing overflows.
+ */
+
+/* The headline of the rank screen: at most two lines, so eight rows still fit under it. */
+.projector-move-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  margin: 0 0 calc(3 * var(--stage-fit));
+  font-size: max(1.5rem, calc(8.2 * var(--stage-fit)));
+}
+
+/* ---------- results ----------
+   A heat of five or six takes the compact three-column layout (projectorScreens.css), which is sized for the
+   heat clock; a result screen has no clock, so its place, tally and time stay readable from across the room. */
+.projector-many .projector-results .projector-station-name {
+  font-size: max(1.2rem, calc(4.4 * var(--stage-fit)));
+}
+
+.projector-many .projector-results .projector-station-note,
+.projector-many .projector-results .projector-station-label {
+  font-size: max(1rem, calc(3.4 * var(--stage-fit)));
+}
