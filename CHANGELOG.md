@@ -1,3 +1,29 @@
+## T-HARDEN.brand-lockup: One shared logo + wordmark lockup · 2026-10-08
+
+**Task:** T-HARDEN.brand-lockup (user-reported, 2026-10-08: "the alignment of the logo to the word mark is slightly off in all pages", and "the typeface in the main landing page and events page is different").
+Both reports had one cause. The mark and the wordmark were built separately on every surface, each with its own copy of the rules, so they had drifted: the console header set "Seduh Score" in **Hanken Grotesk 21px** (the body face), the public/landing pages and the Behind the Seduh page in **Chakra Petch 17px** with wide tracking (the display face), and on every one the mark's ink hung **1-4px below** the letters (measured on rendered pixels at 6x: +0.9px in the console, +1.7px on the public pages, with the mark's ink 18-36% taller than the letters).
+
+**What shipped (user decision: the wordmark is Chakra Petch bold everywhere):**
+
+- `brandLockup({ name, markClass, nameClass })` in `src/core/dom.js` builds the lockup (a decorative mark + the wordmark text, plain inline spans, name never hidden from assistive tech); `src/ui/tokens/brand.css` (imported by `tokens/index.css`, so every page has it) is the **only** place it is styled: display face, bold, wide-tracked; the mark **stands on the wordmark's baseline** (flex baseline alignment + a 0.029em shift so the arches' ink ends exactly on it) with its dot rising just above the tops of the d and h; everything in `em`, sized per surface with one custom property `--brand-lockup-size` (console 1.125rem, public/landing 1.0625rem, phone/projector chrome 1rem). Measured afterwards on every surface at several sizes: arches within about half a pixel of the baseline (before: 1-4px low).
+- Used by the console header (`appShell`), the phone/projector chrome (`viewer-shell`), the public/marketing header (`publicHeader`, which covers the Tour, Community, Results, About, Contact, Privacy, Terms, Neutrality pages) and the landing page nav (which also builds the Behind the Seduh nav). The per-page mark/name rules were deleted. The home links keep a 44px tap target (`min-height: var(--tap-target-min)`): the lockup itself is only ~22px tall, and the tighter line height had shrunk the old links to 22-25px.
+- Not covered, deliberately (written in `brand.css`): the splash screen's stacked mark-above-wordmark and the tools that show the mark alone (timer, brew planner).
+- Tests: `src/marketing/brandLockup.test.js` (13: the stylesheet is the one place the lockup is styled — each selector declared once, values pinned including the mark's 56:48 ratio — no surface stylesheet may restyle it in any selector shape, and each of the four surfaces builds exactly one lockup with its hook classes) and 5 in `dom.test.js`. Mutation check: 22 mutants (late and media-query overrides, hand-built marks, wrong font/alignment/ratio, a commented-out import, dropped hook classes) all caught.
+
+**Files changed:** `src/ui/tokens/brand.css` (new), `src/ui/tokens/index.css`, `src/core/dom.js`, `src/core/appShell.js` / `.css`, `src/core/viewer-shell.js` / `.css`, `src/marketing/publicHeader.js` / `.css`, `src/marketing/landingScreen.js`, `src/marketing/landing.css`, tests.
+
+**Review cycle:** Four reviewers (code-reviewer, ui-accessibility-reviewer at 360px first, test-auditor, module-boundary-checker); no blocking findings. Fixed: the home links' tap target, dead CSS left in the viewer chrome, a stale `margin: 0`, a "at least one lockup" assertion on the landing page, a test that guarded only the exact selectors it named (replaced by a block-walking guard), the test living under `core/` while importing `marketing/`.
+
+**Known gaps (deferred, not blocking):**
+
+- **Safari / iOS not verified.** The baseline alignment relies on the flex baseline of a replaced element (the mark's svg), which Chrome and Firefox synthesise per the spec; WebKit has historically differed. Only Chromium was available. A sub-pixel drift would be the failure mode. Check the console header on the iPad.
+- At **200% text size** the public/landing header grows ~56px (the lockup is now in em/rem, so it scales with text like the rest of the page; it used to be a fixed 17px); the console header is unchanged at 100% and slightly shorter at 200%.
+- The wordmark is a little lighter in the console (Chakra Petch 18px against Hanken 21px) and 13px narrower; a design call, easy to change via `--brand-lockup-size`.
+- The splash's stacked lockup and the mark-only tool headers are separate implementations; fold them in if a stacked variant is ever wanted.
+- Other typeface differences between the landing and Events pages (beyond the wordmark) were not found: both load the same three families; ask the user for a screenshot if something else still looks different.
+
+---
+
 ## T-HARDEN.heats-roster-fold: Heats first, an "Up next" shortcut, the roster folded away · 2026-10-08
 
 **Task:** T-HARDEN.heats-roster-fold (live-event finding #3 from the first Cup Taster event, 4 Oct).

@@ -135,6 +135,8 @@ is held to. Skips attaching an observer entirely under `prefers-reduced-motion: 
 transition under the matching `no-preference` query, same discipline as every other
 animation in this codebase.
 
+`brandLockup` (T-HARDEN.brand-lockup, 2026-10-08) in `dom.js` — the mark and the wordmark as ONE shared lockup, styled only in `src/ui/tokens/brand.css` (display face, bold, wide-tracked; the mark stands on the wordmark baseline; em sizing via `--brand-lockup-size`). The console header (`appShell`), the phone/projector chrome (`viewer-shell`), the public header and the landing nav all build it; a surface wraps it (home link, `<h1>`) and sets the size, never restyles it. Before this the console set the wordmark in Hanken Grotesk and the public pages in Chakra Petch, with the mark hanging 1-4px low on both. See CHANGELOG.md.
+
 **Wordmark home link (2026-09-16)** — the header mark and name are now one root-relative
 `/` link with the accessible name “Seduh Score home.” The organiser app is served from
 `/app/`, so this keeps an explicit exit route available even at sign-in; do not split the
