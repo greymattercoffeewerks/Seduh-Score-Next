@@ -186,6 +186,15 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     // A generous timeout — the panel starts empty ("off") until its
     // mount-time refreshSync() resolves against real IndexedDB.
     await expect(syncPanel).toHaveText('Synced', { timeout: 10000 });
+    // The status is a one-line chip in the header, so the sticky header must be the same height
+    // in every status — a taller header mid-heat shifts the Stop buttons under a judge's finger.
+    const headerHeight = () =>
+      page.locator('.app-shell-header').evaluate((el) => el.getBoundingClientRect().height);
+    const syncedHeaderHeight = await headerHeight();
+    // ...and that height is one row (brand, event name, status and nav on a single line), not the
+    // two rows the old full-width status row made it.
+    expect(syncedHeaderHeight).toBeLessThan(80);
+    await expect(page.getByText('Synced', { exact: true }).first()).toBeVisible();
 
     await page.context().setOffline(true);
     await startButton.click();
@@ -219,6 +228,26 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     await expect(syncPanel).toHaveText('Not synced — starting a heat failed (2 pending)', {
       timeout: 10000,
     });
+    // The visible chip is the short form, the header has not moved, and tapping the chip opens
+    // the full sentence as an overlay (still no change to the header's height).
+    // ("Sync failing", not "Not synced": start_heat has a failed attempt on record, so it is stuck.)
+    const chip = page.getByRole('button', { name: 'Sync failing (2)' });
+    await expect(chip).toBeVisible();
+    expect(await headerHeight()).toBe(syncedHeaderHeight);
+    // Opening the panel must not move what is underneath the header — the Start/Stop buttons.
+    const startBefore = await startButton.boundingBox();
+    await chip.click();
+    await expect(chip).toHaveAttribute('aria-expanded', 'true');
+    expect(await syncPanel.evaluate((el) => el.getBoundingClientRect().width)).toBeGreaterThan(200);
+    expect(await headerHeight()).toBe(syncedHeaderHeight);
+    expect(await startButton.boundingBox()).toEqual(startBefore);
+    await page.keyboard.press('Escape');
+    await expect(chip).toHaveAttribute('aria-expanded', 'false');
+    await expect(chip).toBeFocused();
+    // The same on a phone, where the header used to wrap onto three rows.
+    await page.setViewportSize({ width: 360, height: 800 });
+    const phoneStuckHeight = await headerHeight();
+    expect(phoneStuckHeight).toBeLessThan(140);
 
     // The actual reconnect — a real browser-level network condition change,
     // not a synthetic 'online' Event dispatch, so this also proves Chromium
@@ -230,6 +259,10 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     // Timeout comfortably covers appShell.js's own 3s poll interval plus
     // the retried RPC's real round trip against the local Supabase stack.
     await expect(syncPanel).toHaveText('Synced', { timeout: 15000 });
+    await expect(page.locator('button.app-shell-sync-chip')).toBeHidden();
+    expect(await headerHeight()).toBe(phoneStuckHeight);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    expect(await headerHeight()).toBe(syncedHeaderHeight);
 
     // Reload and confirm the heat genuinely transitioned server-side, not
     // just that the panel LOOKS synced — the queued start_heat operation

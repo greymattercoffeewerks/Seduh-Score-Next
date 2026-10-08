@@ -59,7 +59,7 @@
 // this a ticking body would leak one orphaned interval per unrelated
 // refresh, each still mutating its own now-detached DOM node forever.
 import { getSupabase } from './supabaseClient.js';
-import { el, brandMark } from './dom.js';
+import { el, brandLockup } from './dom.js';
 import { findLatestEventForOrg } from './events.js';
 import { raceTimeout } from './timeout.js';
 
@@ -175,10 +175,11 @@ export function renderChrome(session, connectionLost = false) {
   // audience-facing identity band) was text-only, no mark.
   return el('div', { className: 'viewer-chrome' }, [
     el('h1', { className: 'viewer-chrome-name' }, [
-      el('span', { className: 'viewer-chrome-mark', attrs: { 'aria-hidden': 'true' } }, [
-        brandMark(),
-      ]),
-      el('span', { className: 'viewer-chrome-name-text', text: APP_NAME }),
+      brandLockup({
+        name: APP_NAME,
+        markClass: 'viewer-chrome-mark',
+        nameClass: 'viewer-chrome-name-text',
+      }),
     ]),
     statusBadge,
   ]);

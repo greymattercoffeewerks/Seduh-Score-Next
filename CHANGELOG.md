@@ -1,3 +1,58 @@
+## T-HARDEN.header-sync-chip: The sync status moves into a one-line chip, so the header stays one line · 2026-10-08
+
+**Task:** T-HARDEN.header-sync-chip (user-reported, 2026-10-08, with a screenshot of the event dashboard: "move that Synced notification to a different place so that the header doesn't expand into 2 or more lines").
+The status had its own full-width header row, on purpose: a "N writes lost…" notice that wrapped to two lines used to grow the sticky header mid-heat and shift the Stop buttons under a judge's finger (ui-accessibility-reviewer, 2026-09-27), so the row was reserved at the size of the tallest notice. The price was a permanent second row (110px at 1366px with an event open, 187px on a 360px phone).
+
+**What shipped:**
+
+- The status is a **short, single-line chip** in the header's own row: "Synced" (quiet, muted, with the green dot), "Not synced (3)" (warning pill), "Sync failing (3)" (a stuck operation, danger pill), "2 writes lost" (danger pill), "Sync failing" (the immediate marker while a drop is being held). Header height with an event open: **69px from 640px up** (was 110-131px), **110px at 360px** (was 187px: the event name moved onto a row of its own under the brand, next to the chip, and the Menu button no longer wraps), the **same in every status** at 320-1440px and at 130% text, measured in a real browser.
+- The chip being one line of one fixed height is what keeps the old guarantee. The long sentence ("1 write lost — not saved and not retried", "...; publishing to the live view failed") is the **live region itself** (the persistent `role=status` node, mutated in place as before), clipped away until a problem chip is tapped, then shown as a panel under the header that **overlays the page and takes no layout space** — opening it, or a status changing, can't move the timing screen's Stop buttons (e2e asserts the Start button's box is unchanged). Screen readers still hear the full sentence the moment it changes; the "Synced" chip is a decorative duplicate (aria-hidden).
+- A problem chip is a button (`aria-expanded`, `aria-controls`); Escape, a press outside, tabbing away, or the status returning to "Synced" closes the panel, and when the chip disappears focus moves to the Menu button (or the brand link on the inline nav) rather than being lost. Escape pressed in some other field closes the panel but leaves that field's focus alone.
+- Pending and stuck chips differ in **words** ("Not synced (3)" vs "Sync failing (3)"), not only in warning/danger colour (the two fills are 1.5:1 apart in luminance); an invisible border keeps the chip's shape in forced-colors mode.
+- The breadcrumb truncates with an ellipsis instead of wrapping (the full name is the page heading), so a long event name can't grow the header. The row holding the event name and the chip exists only while it has something in it.
+- Nothing about the sync state machine changed (`syncState`, the drop listener, the holding state, the lost-write count); only how it is shown.
+
+**Files changed:** `src/core/appShell.js`, `src/core/appShell.css`, `src/core/appShell.test.js` (the old 'reserved status row' tests became 'header status chip (no header shift)': markup, states, detail panel behaviour, and a whole-stylesheet guard that only known rules may set layout-changing properties on the chip, the live region and the context row), `tests/e2e/organiser-flow.spec.js` (the real offline test now also asserts the chip, the header height across Synced / Not synced / panel open / Synced again at 1440px and 360px, and that the Start button doesn't move).
+
+**Review cycle:** Five reviewers (ui-accessibility-reviewer at 360px first, offline-sync-auditor, test-auditor, code-reviewer, module-boundary-checker); no blocking findings. Fixed: pending/stuck distinguishable by colour alone (now wording), forced-colors shape, Escape taking focus from other fields, panel left open after tabbing away, a focus test that a stale chip could satisfy, CSS tests that a late override under another selector slipped past (now a whole-stylesheet scan), a redundant wrapper element and marker class, stale comments about the reserved row. Mutation check: 14 mutants (late overrides, dropped border/min-height/nowrap, focus handling, wording, context-row logic, listeners) all killed.
+
+**Known gaps (deferred, not blocking):**
+
+- At **200% text-size scaling at tablet width** (768px) the header grows ~112px when a long chip such as "123 writes lost" appears (the row overflows and the chip wraps). Needs text scaling only (browser zoom narrows the viewport instead), on a tablet. Phones are unaffected (the chip has its own row there).
+- On a phone, going from the events list (no status) into an event adds the event-name row once (~41px); never mid-heat.
+- At 360px the Tab order is brand, chip, Menu while the chip is visually on the second row; the panel is anchored to the header's bottom edge, so with the nav menu also open it can sit a long way from its chip.
+- The event name is truncated at 1366px even with room to spare (the breadcrumb shares leftover space with the chip).
+- The Menu button's three bars vanish in forced-colors mode (they are background fills) — separate, pre-existing.
+- `tests/e2e` "keyboard focus survives crossing the 1366px breakpoint" is flaky (fails on the first run after other activity, passes on re-run) — seen on the unchanged code too.
+
+---
+
+## T-HARDEN.brand-lockup: One shared logo + wordmark lockup · 2026-10-08
+
+**Task:** T-HARDEN.brand-lockup (user-reported, 2026-10-08: "the alignment of the logo to the word mark is slightly off in all pages", and "the typeface in the main landing page and events page is different").
+Both reports had one cause. The mark and the wordmark were built separately on every surface, each with its own copy of the rules, so they had drifted: the console header set "Seduh Score" in **Hanken Grotesk 21px** (the body face), the public/landing pages and the Behind the Seduh page in **Chakra Petch 17px** with wide tracking (the display face), and on every one the mark's ink hung **1-4px below** the letters (measured on rendered pixels at 6x: +0.9px in the console, +1.7px on the public pages, with the mark's ink 18-36% taller than the letters).
+
+**What shipped (user decision: the wordmark is Chakra Petch bold everywhere):**
+
+- `brandLockup({ name, markClass, nameClass })` in `src/core/dom.js` builds the lockup (a decorative mark + the wordmark text, plain inline spans, name never hidden from assistive tech); `src/ui/tokens/brand.css` (imported by `tokens/index.css`, so every page has it) is the **only** place it is styled: display face, bold, wide-tracked; the mark **stands on the wordmark's baseline** (flex baseline alignment + a 0.029em shift so the arches' ink ends exactly on it) with its dot rising just above the tops of the d and h; everything in `em`, sized per surface with one custom property `--brand-lockup-size` (console 1.125rem, public/landing 1.0625rem, phone/projector chrome 1rem). Measured afterwards on every surface at several sizes: arches within about half a pixel of the baseline (before: 1-4px low).
+- Used by the console header (`appShell`), the phone/projector chrome (`viewer-shell`), the public/marketing header (`publicHeader`, which covers the Tour, Community, Results, About, Contact, Privacy, Terms, Neutrality pages) and the landing page nav (which also builds the Behind the Seduh nav). The per-page mark/name rules were deleted. The home links keep a 44px tap target (`min-height: var(--tap-target-min)`): the lockup itself is only ~22px tall, and the tighter line height had shrunk the old links to 22-25px.
+- Not covered, deliberately (written in `brand.css`): the splash screen's stacked mark-above-wordmark and the tools that show the mark alone (timer, brew planner).
+- Tests: `src/marketing/brandLockup.test.js` (13: the stylesheet is the one place the lockup is styled — each selector declared once, values pinned including the mark's 56:48 ratio — no surface stylesheet may restyle it in any selector shape, and each of the four surfaces builds exactly one lockup with its hook classes) and 5 in `dom.test.js`. Mutation check: 22 mutants (late and media-query overrides, hand-built marks, wrong font/alignment/ratio, a commented-out import, dropped hook classes) all caught.
+
+**Files changed:** `src/ui/tokens/brand.css` (new), `src/ui/tokens/index.css`, `src/core/dom.js`, `src/core/appShell.js` / `.css`, `src/core/viewer-shell.js` / `.css`, `src/marketing/publicHeader.js` / `.css`, `src/marketing/landingScreen.js`, `src/marketing/landing.css`, tests.
+
+**Review cycle:** Four reviewers (code-reviewer, ui-accessibility-reviewer at 360px first, test-auditor, module-boundary-checker); no blocking findings. Fixed: the home links' tap target, dead CSS left in the viewer chrome, a stale `margin: 0`, a "at least one lockup" assertion on the landing page, a test that guarded only the exact selectors it named (replaced by a block-walking guard), the test living under `core/` while importing `marketing/`.
+
+**Known gaps (deferred, not blocking):**
+
+- **Safari / iOS not verified.** The baseline alignment relies on the flex baseline of a replaced element (the mark's svg), which Chrome and Firefox synthesise per the spec; WebKit has historically differed. Only Chromium was available. A sub-pixel drift would be the failure mode. Check the console header on the iPad.
+- At **200% text size** the public/landing header grows ~56px (the lockup is now in em/rem, so it scales with text like the rest of the page; it used to be a fixed 17px); the console header is unchanged at 100% and slightly shorter at 200%.
+- The wordmark is a little lighter in the console (Chakra Petch 18px against Hanken 21px) and 13px narrower; a design call, easy to change via `--brand-lockup-size`.
+- The splash's stacked lockup and the mark-only tool headers are separate implementations; fold them in if a stacked variant is ever wanted.
+- Other typeface differences between the landing and Events pages (beyond the wordmark) were not found: both load the same three families; ask the user for a screenshot if something else still looks different.
+
+---
+
 ## T-HARDEN.heats-roster-fold: Heats first, an "Up next" shortcut, the roster folded away · 2026-10-08
 
 **Task:** T-HARDEN.heats-roster-fold (live-event finding #3 from the first Cup Taster event, 4 Oct).

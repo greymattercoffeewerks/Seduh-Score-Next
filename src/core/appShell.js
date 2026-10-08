@@ -20,7 +20,7 @@
 // `renderBody` callbacks already use — appShell owns the chrome MECHANICS
 // (a persistent header, a nav slot, an outlet); the composition root owns
 // what the nav actually SAYS.
-import { el, brandMark } from './dom.js';
+import { el, brandLockup } from './dom.js';
 import { findEvent } from './events.js';
 import { getSupabase } from './supabaseClient.js';
 import { isFlushInProgress, listPendingOperations, onOperationDropped } from './outbox.js';
@@ -105,13 +105,13 @@ export function mountAppShell(
   // viewer-shell.js's own renderChrome() identity name, which IS a real
   // <h1> deliberately, because there's no separate routed screen heading
   // competing with it on that audience-facing surface.
-  // Found missing entirely in a live production check — this whole shell
-  // rendered a text-only wordmark, no mark/logo anywhere. Ported from the
-  // legacy Seduh-Score repo (see brandMark()'s own comment in dom.js).
-  const markEl = el('span', { className: 'app-shell-mark', attrs: { 'aria-hidden': 'true' } }, [
-    brandMark(),
-  ]);
-  const nameEl = el('p', { className: 'app-shell-name', text: appName });
+  // The mark and the wordmark are the shared brand lockup (core/dom.js brandLockup(), styled only in
+  // src/ui/tokens/brand.css) — this shell just sizes it and wraps it in the home link below.
+  const lockupEl = brandLockup({
+    name: appName,
+    markClass: 'app-shell-mark',
+    nameClass: 'app-shell-name',
+  });
   // The organiser shell lives at /app/, but it is part of the public site,
   // not a closed destination. Keep the full wordmark as one link back to
   // the root landing page so there is always an obvious route out of an
@@ -122,7 +122,7 @@ export function mountAppShell(
       className: 'app-shell-brand',
       attrs: { href: '/', 'aria-label': `${appName} home` },
     },
-    [markEl, nameEl],
+    [lockupEl],
   );
   const breadcrumbEl = el('span', { className: 'app-shell-breadcrumb' });
   const navEl = el('nav', {
@@ -138,7 +138,7 @@ export function mountAppShell(
   // already collapsed into the hamburger — exactly the "vertical space"
   // problem the screenshot showed. Rolling it into the SAME collapsible
   // panel as the nav closes that gap: collapsed by default on mobile
-  // (one row: mark, name, hamburger), and revealed together with the nav
+  // (the brand and the hamburger), and revealed together with the nav
   // links once the menu opens. `navPanel` itself is never recreated (only
   // navEl's own children, on every setNav()) — same persistent-node
   // reasoning the toggle below already relied on for `navEl`.
@@ -284,21 +284,40 @@ export function mountAppShell(
   // refreshSync() call specifically to avoid that trap.
   const syncEl = el('span', {
     className: 'app-shell-sync',
-    attrs: { role: 'status', 'aria-live': 'polite' },
+    attrs: { role: 'status', 'aria-live': 'polite', id: 'app-shell-sync-detail' },
   });
-  // The status gets its own full-width header row, sized for the tallest
-  // notice (see .app-shell-sync-row in appShell.css) and present whenever
-  // there's anything to report — so "Synced" turning into a two-line
-  // "N writes lost…" pill never grows the sticky header mid-heat and pushes
-  // the Stop buttons out from under a judge's finger
-  // (ui-accessibility-reviewer, 2026-09-27).
-  const syncRow = el('div', { className: 'app-shell-sync-row' }, [syncEl]);
+  // What a sighted user sees in the header: one short, one-line chip, so the
+  // header never grows when the notice changes. A plain "Synced" chip is
+  // decorative (the live region above already says it); a problem state is a
+  // button that opens the full sentence (the live region itself, shown as a
+  // panel under the header that overlays the page instead of pushing it).
+  // Persistent nodes, mutated in place (see renderSync) — never rebuilt.
+  const syncChipStatic = el('span', {
+    className: 'app-shell-sync-chip app-shell-sync-chip-live',
+    attrs: { 'aria-hidden': 'true', hidden: '' },
+  });
+  const syncChipButton = el('button', {
+    className: 'app-shell-sync-chip',
+    attrs: {
+      type: 'button',
+      hidden: '',
+      'aria-expanded': 'false',
+      'aria-controls': 'app-shell-sync-detail',
+    },
+  });
+  // The event name and the sync chip: one extra row under the brand on a phone,
+  // dissolved into the header's own row from 640px up (see appShell.css).
+  const contextEl = el('div', { className: 'app-shell-context app-shell-context-empty' }, [
+    breadcrumbEl,
+    syncChipStatic,
+    syncChipButton,
+    syncEl,
+  ]);
   const header = el('header', { className: 'app-shell-header' }, [
     brandEl,
-    breadcrumbEl,
+    contextEl,
     navToggle,
     navPanel,
-    syncRow,
   ]);
   const outlet = el('main', { className: 'app-shell-outlet' });
   // Quick, glance-based verification for bug reports (2026-09-05) — mirrors
@@ -518,34 +537,108 @@ export function mountAppShell(
       dropCheckTimer = setTimeout(announceDropsWhenFlushEnds, dropCheckMs);
     }
   });
+  // The header chip and the detail panel (see the markup above). The chip is
+  // always one short line, so the sticky header's height never depends on the
+  // notice; the long sentence lives in the live region, which is clipped away
+  // until a problem chip is tapped and then overlays the page under the header.
+  let detailOpen = false;
+  function onDetailPointerDown(event) {
+    if (syncChipButton.contains(event.target) || syncEl.contains(event.target)) return;
+    setDetailOpen(false);
+  }
+  function onDetailKeyDown(event) {
+    if (event.key !== 'Escape') return;
+    // Only take focus back when it was on the chip or had already dropped to <body>: an Escape
+    // pressed in a time or score field must leave that field where it is.
+    const { activeElement } = document;
+    const refocus =
+      !activeElement || activeElement === document.body || activeElement === syncChipButton;
+    setDetailOpen(false);
+    if (refocus) syncChipButton.focus();
+  }
+  // Tabbing away from the chip closes the panel too — a keyboard user shouldn't be left with it
+  // overlaying the page until they find Escape.
+  function onChipFocusOut(event) {
+    const next = event.relatedTarget;
+    if (next && next !== syncChipButton) setDetailOpen(false);
+  }
+  function setDetailOpen(open) {
+    if (open === detailOpen) return;
+    detailOpen = open;
+    syncEl.classList.toggle('app-shell-sync-open', open);
+    syncChipButton.setAttribute('aria-expanded', String(open));
+    const toggleListener = open ? 'addEventListener' : 'removeEventListener';
+    document[toggleListener]('pointerdown', onDetailPointerDown);
+    document[toggleListener]('keydown', onDetailKeyDown);
+  }
+  syncChipButton.addEventListener('click', () => setDetailOpen(!detailOpen));
+  syncChipButton.addEventListener('focusout', onChipFocusOut);
+  // The event-name row only exists while it has something in it (a phone shows
+  // it under the brand; from 640px up it is dissolved into the header row).
+  function updateContextRow() {
+    contextEl.classList.toggle(
+      'app-shell-context-empty',
+      breadcrumbEl.textContent === '' && syncChipStatic.hidden && syncChipButton.hidden,
+    );
+  }
+  // kind: null (nothing to report), 'live' (a quiet "Synced"), or 'pending' /
+  // 'stuck' (a button that opens the detail). Called after renderSync has reset
+  // syncEl's classes, so the open class is re-applied here.
+  function setChip(kind, label) {
+    const isButton = kind === 'pending' || kind === 'stuck';
+    if (!isButton) {
+      // Focus must not be lost to <body> when the chip it is on goes away.
+      if (document.activeElement === syncChipButton) {
+        const target = getComputedStyle(navToggle).display === 'none' ? brandEl : navToggle;
+        target.focus();
+      }
+      setDetailOpen(false);
+    }
+    syncChipStatic.hidden = kind !== 'live';
+    syncChipButton.hidden = !isButton;
+    if (kind === 'live') {
+      syncChipStatic.replaceChildren(
+        el('span', { className: 'status-live-dot' }),
+        el('span', { text: label }),
+      );
+    }
+    if (isButton) {
+      syncChipButton.className = `app-shell-sync-chip app-shell-sync-chip-${kind}`;
+      syncChipButton.textContent = label;
+      syncEl.classList.toggle('app-shell-sync-open', detailOpen);
+    }
+    updateContextRow();
+  }
   // Rendered once when a drop lands while the panel reads "Synced"/"off" —
   // see the drop listener above. No count: the dropped operation is already
   // gone from the queue, and the real count follows when the pass ends.
   function showNotSyncedWhileHolding() {
-    syncRow.classList.add('app-shell-sync-row-active');
     syncEl.className = 'app-shell-sync app-shell-sync-stuck';
     syncEl.textContent = 'Not synced';
+    setChip('stuck', 'Sync failing');
     lastSyncKey = 'holding';
     lastSyncStatus = 'holding';
     syncHeaderHeightVar();
   }
   function renderSync(state) {
-    // Row reserved exactly while there's something to show — 'off' (no
-    // event context, nothing pending or lost) takes no space. Not keyed on
+    // The chip shows exactly while there's something to show — 'off' (no
+    // event context, nothing pending or lost) shows nothing. Not keyed on
     // the event context: a loss on the events list must show too. Only
     // navigation, or a write queued, lost or drained off an event screen,
     // moves it in or out — never a write on the timing/scoring screens,
     // which always have an event context and so are never 'off'.
-    syncRow.classList.toggle('app-shell-sync-row-active', state.status !== 'off');
     syncEl.innerHTML = '';
     syncEl.className = 'app-shell-sync';
-    if (state.status === 'off') return; // nothing to report — no context yet, not a warning
+    if (state.status === 'off') {
+      setChip(null); // nothing to report — no context yet, not a warning
+      return;
+    }
     if (state.status === 'live') {
-      syncEl.classList.add('app-shell-sync-live');
       syncEl.append(
         el('span', { className: 'status-live-dot', attrs: { 'aria-hidden': 'true' } }),
         el('span', { text: 'Synced' }),
       );
+      setChip('live', 'Synced');
       return;
     }
     // 'not synced' — a stuckOperation (attempts > 0) is the one case that
@@ -572,22 +665,25 @@ export function mountAppShell(
       syncEl.classList.add('app-shell-sync-stuck');
       const lost = lostWriteCount > 1 ? `${lostWriteCount} writes` : '1 write';
       // Shorter when a stuck operation is named alongside, so the longest
-      // combination stays within the status row's reserved two lines at
-      // 360px, including at 130% text size or with a fallback font
+      // combination stays within the detail panel's three lines at 360px,
+      // including at 130% text size or with a fallback font
       // (ui-accessibility-reviewer, 2026-09-27).
       const stuckLabel = state.stuckOperation && operationLabels[state.stuckOperation.type];
       syncEl.textContent = state.stuckOperation
         ? `${lost} lost, not retried; ${stuckLabel ? `${stuckLabel} failed` : 'retrying failed'}`
         : `${lost} lost — not saved and not retried`;
+      setChip('stuck', `${lost} lost`);
     } else if (state.stuckOperation) {
       syncEl.classList.add('app-shell-sync-stuck');
       const label = operationLabels[state.stuckOperation.type];
       syncEl.textContent = label
         ? `Not synced — ${label} failed (${state.pendingCount} pending)`
         : `Not synced — retrying failed (${state.pendingCount} pending)`;
+      setChip('stuck', `Sync failing (${state.pendingCount})`);
     } else {
       syncEl.classList.add('app-shell-sync-pending');
       syncEl.textContent = `Not synced (${state.pendingCount} pending)`;
+      setChip('pending', `Not synced (${state.pendingCount})`);
     }
   }
 
@@ -632,9 +728,9 @@ export function mountAppShell(
     lastSyncStatus = state.status;
     lastRenderedLostCount = state.lastFlushError ? lostWriteCount : 0;
     renderSync(state);
-    // The status row's reserved height absorbs text changes, but the row
-    // appearing or disappearing ('off' <-> anything else) and extreme text
-    // sizes still change the header's height — keep the sticky-header offset
+    // The one-line chip means a changed status never changes the header's
+    // height, but the context row appearing or disappearing ('off' <->
+    // anything else) and extreme text sizes still do — keep the sticky-header offset
     // that scroll-margin-top relies on in step, or focused content can land
     // behind the header (ui-accessibility-reviewer, 2026-09-26).
     syncHeaderHeightVar();
@@ -776,6 +872,7 @@ export function mountAppShell(
     if (!eventId) {
       cachedEventId = null;
       breadcrumbEl.textContent = '';
+      updateContextRow();
       refreshSync(); // don't wait up to SYNC_POLL_MS for "enabled" to catch up
       return;
     }
@@ -798,6 +895,7 @@ export function mountAppShell(
       if (cachedEventId !== eventId) return;
       breadcrumbEl.textContent = '';
     }
+    updateContextRow();
   }
 
   refreshSync(); // first paint — don't wait for the first SYNC_POLL_MS tick
@@ -813,6 +911,7 @@ export function mountAppShell(
         inlineNavQuery.removeEventListener('change', onNavLayoutChange);
       }
       clearInterval(syncIntervalId);
+      setDetailOpen(false);
       stopListeningForDrops();
       clearTimeout(dropCheckTimer);
       authSubscription.unsubscribe();

@@ -93,6 +93,11 @@ system already guarantees.
   `brandMark()`, same as every console screen (`textContent`-only, no `innerHTML` —
   see `dom.js`'s own header comment for why). Its own header comment has the fuller
   identity-history account and the two real fixes made porting the handoff in.
+- `src/ui/tokens/brand.css` + `core/dom.js`'s `brandLockup()` — the logo mark and the
+  "Seduh Score" wordmark as one shared lockup (display face, bold, wide-tracked; the mark stands
+  on the baseline). `landingScreen.js` (the nav, which the Behind the Seduh page also builds) and
+  `publicHeader.js` use it and only set `--brand-lockup-size`; never restyle the lockup in
+  `landing.css` or `publicHeader.css` (`src/marketing/brandLockup.test.js` fails if you do).
 - `landing.css` — page-specific layout only (nav, hero, ticker, problem/formats/proof/
   pricing/cta bands, footer). No `:root` token block of its own — every color/font/
   space value is `var(--color-*)`/`var(--font-*)`/`var(--space-*)` from the shared

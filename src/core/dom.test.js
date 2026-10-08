@@ -7,6 +7,7 @@ import {
   withFocusPreservation,
   fitToScreen,
   passwordToggle,
+  brandLockup,
 } from './dom.js';
 
 describe('el', () => {
@@ -310,5 +311,43 @@ describe('passwordToggle', () => {
     expect(calls).toEqual([true, false]);
     const [bare] = passwordToggle([a]);
     expect(() => bare.click()).not.toThrow();
+  });
+});
+
+describe('brandLockup', () => {
+  it('is one unit: a decorative mark and the wordmark text, in that order', () => {
+    const lockup = brandLockup();
+    expect(lockup.className).toBe('brand-lockup');
+    const [mark, name] = lockup.children;
+    expect(mark.className).toBe('brand-lockup-mark');
+    expect(mark.getAttribute('aria-hidden')).toBe('true');
+    expect(mark.querySelector('svg')).not.toBeNull();
+    expect(name.className).toBe('brand-lockup-name');
+    expect(name.textContent).toBe('Seduh Score');
+    expect(lockup.children).toHaveLength(2);
+  });
+
+  it('takes a different name, and extra hook classes for the caller, without losing the shared ones', () => {
+    const lockup = brandLockup({ name: 'Custom', markClass: 'my-mark', nameClass: 'my-name' });
+    expect(lockup.querySelector('.brand-lockup-mark.my-mark')).not.toBeNull();
+    expect(lockup.querySelector('.brand-lockup-name.my-name').textContent).toBe('Custom');
+  });
+
+  it('builds a fresh lockup each time', () => {
+    expect(brandLockup()).not.toBe(brandLockup());
+  });
+
+  it('is plain inline spans (it sits inside links and headings) and never hides the name from assistive tech', () => {
+    const lockup = brandLockup();
+    const [mark, name] = lockup.children;
+    expect([lockup, mark, name].map((node) => node.tagName)).toEqual(['SPAN', 'SPAN', 'SPAN']);
+    expect(lockup.hasAttribute('aria-hidden')).toBe(false);
+    expect(name.hasAttribute('aria-hidden')).toBe(false);
+  });
+
+  it('puts the name in text, never markup', () => {
+    const lockup = brandLockup({ name: '<b>x</b>' });
+    expect(lockup.querySelector('b')).toBeNull();
+    expect(lockup.querySelector('.brand-lockup-name').textContent).toBe('<b>x</b>');
   });
 });

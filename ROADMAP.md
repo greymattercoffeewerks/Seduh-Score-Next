@@ -1419,7 +1419,7 @@ Cup Taster event._
 
 - **CLOSED (2026-09-27, branch `fix/sync-panel-360-no-shift`): At 360px the sticky header no longer grows when the lost-write notice appears.** The sync status now sits in its own full-width header row at every width, with min-height reserved for the tallest notice (two lines below 1024px, one above). Measured with the real header and worst-case text: header constant at 320/360/640/800/1024/1280px across all status states; Stop buttons never shift. See CHANGELOG.md for full account. Flagged by: `ui-accessibility-reviewer`.
 
-- **At 200% text/zoom the reserved header still takes ~55–73% of a phone viewport.** Not a WCAG 1.4.4 failure (no content is lost), but a real usability problem for a low-vision judge. Fix: un-stick the sync row or cap with max-height below a viewport-height threshold. Flagged by: `ui-accessibility-reviewer`.
+- _(Superseded 2026-10-08: the reserved row is gone, see T-HARDEN.header-sync-chip.)_ **At 200% text/zoom the reserved header still takes ~55–73% of a phone viewport.** Not a WCAG 1.4.4 failure (no content is lost), but a real usability problem for a low-vision judge. Fix: un-stick the sync row or cap with max-height below a viewport-height threshold. Flagged by: `ui-accessibility-reviewer`.
 
 - **Residual 3-line wraps at 320px with 130% text and Verdana.** The shortened wording still wraps to 3 lines at 320px with 130% text, and with Verdana at 130%. Primary target (360px, Hanken self-hosted) holds at 2 lines. Flagged by: `ui-accessibility-reviewer`.
 
@@ -1427,7 +1427,7 @@ Cup Taster event._
 
 - **No automated browser height check.** A dev-harness page (mountAppShell + fake client + status drivers) and a Playwright spec asserting constant header height at 320/360/1024px would pin the measurement against accidental drift. Flagged by: `test-auditor`.
 
-- **Header is always ~29px (phones) / up to ~50px taller on event screens from the start.** "Synced" sits centred in the reserved row. Accepted as the price of zero shift mid-heat. Flagged by: `ui-accessibility-reviewer`.
+- _(Superseded 2026-10-08: the reserved row is gone, see T-HARDEN.header-sync-chip.)_ **Header is always ~29px (phones) / up to ~50px taller on event screens from the start.** "Synced" sits centred in the reserved row. Accepted as the price of zero shift mid-heat. Flagged by: `ui-accessibility-reviewer`.
 
 - **Lost and stuck wording is inconsistent.** The same loss is worded two ways: "1 write lost — not saved and not retried" alone vs "1 write lost, not retried; …" with a stuck op. Unify on the short form (touches many test expectations; re-measure). Flagged by: `ui-accessibility-reviewer`.
 
@@ -1536,6 +1536,31 @@ _Deferred findings from T-HARDEN.correct-heat-time, flagged and documented, not 
 - **'Waiting to sync' per-device** — IndexedDB outbox is per-device; fails safe through the compare-and-set.
 - **`confirm_heat` org comparison** uses `<>` and gives different messages for 'not found' and 'does not belong' — a weak existence oracle (pre-existing).
 - **Pre-existing: scoring screen 'Cuppers' card overflow at 360px** — very long competitor names; not part of this task.
+
+---
+
+## Known open items from T-HARDEN.header-sync-chip (2026-10-08)
+
+_Deferred findings from T-HARDEN.header-sync-chip, flagged and documented, not blocking. This supersedes the two 2026-09-27 items about the reserved header row below (the row is gone)._
+
+- **200% text-size scaling at tablet width (768px):** the header grows ~112px when a long chip ("123 writes lost") appears and wraps. Consider shortening the chip or letting the event name give way earlier.
+- **Chip and panel placement:** at 360px the Tab order is brand, chip, Menu while the chip sits visually on the second row; the open panel is anchored to the header's bottom edge, so with the nav menu open it can sit far from its chip (consider closing the menu when the chip opens).
+- **Event name truncation at 1366px** happens even with room to spare (the breadcrumb shares the leftover with the chip).
+- **Forced-colors mode:** the Menu button's three bars (background fills) vanish.
+- **Flaky e2e:** "keyboard focus survives crossing the 1366px breakpoint" fails on the first run after other activity and passes on re-run (also on the unchanged code); find the timing.
+- The brand-lockup item "check the header lockup on the real iPad / Safari" is **done** (user confirmed, 2026-10-08).
+
+---
+
+## Known open items from T-HARDEN.brand-lockup (2026-10-08)
+
+_Deferred findings from T-HARDEN.brand-lockup, flagged and documented, not blocking._
+
+- **Check the lockup on the real iPad / Safari:** the mark's baseline alignment is verified in Chromium only (WebKit's flex baseline for a replaced element has differed historically). Console header, public header, phone chrome.
+- **200% text size:** the public/landing header grows ~56px because the lockup now scales with text size; decide whether to cap it.
+- **Splash screen** still builds its stacked mark-above-wordmark by hand (`splash-mark`, `splash-wordmark`), and the timer / brew-planner headers show the mark alone: fold into `brand.css` if a stacked or mark-only variant is wanted.
+- **Optical weight:** the console wordmark is lighter than before (18px Chakra Petch vs 21px Hanken); adjust `--brand-lockup-size` on `.app-shell-brand` if it feels small.
+- **Phone chrome at 320px / 200% text (pre-existing):** the wordmark shrinks to a single letter beside the "NOT LIVE" badge; let the badge shrink or wrap.
 
 ---
 
