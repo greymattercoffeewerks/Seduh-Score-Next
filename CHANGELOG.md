@@ -2,7 +2,7 @@
 
 **Task:** T-HARDEN.btc-bracket-podium. Not a handoff §14 task: BTC is out-of-handoff (see ROADMAP's BTC section). Branch `feat/btc-bracket-podium`.
 
-**Status: not final.** Outstanding Definition-of-Done item: migration `20261009100000_btc_confirm_match_tie_clears_downstream.sql` is **not yet pushed** to the cloud project (`wxzwanprluqmgoagbkpv`). Push it with `apply_migration`, then check `list_migrations`, before treating this entry as closed.
+**Status: closed.** Migration `20261009100000_btc_confirm_match_tie_clears_downstream.sql` was pushed to the cloud project (`wxzwanprluqmgoagbkpv`) on 2026-10-09 with `apply_migration` (recorded there as `20261008233131`, as with the earlier migrations) and verified: `list_migrations` lists it, one `confirm_btc_match` overload carries the tie message, the missing-score guard and the skip-no-op update, it is still security invoker with `search_path` pinned empty, and execute is granted to `authenticated` and `service_role` only. The cloud project held no bracket slots, so no live bracket was touched.
 
 **What shipped:**
 

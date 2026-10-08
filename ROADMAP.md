@@ -1299,7 +1299,7 @@ live-verified in browser. Definition of Done met. See CHANGELOG.md's dated entry
 - **No pgTAP fixture pins btc_standings.wins for a token winner who is not the fastest team** (both
   paths valid but only one tested).
 - **Bracket step must decide knockout winners on bonus-inclusive totals, leave total ties unresolved,
-  and guard editing a confirmed match whose winner already advanced.** Deferred to bracket step. — CLOSED 2026-10-09 (T-HARDEN.btc-bracket-podium): winners on bonus-inclusive totals and the advanced-match guard by `20260922132000`; the tie and stale-seat gap by `20261009100000`, which was not yet pushed to the cloud project when this was written.
+  and guard editing a confirmed match whose winner already advanced.** Deferred to bracket step. — CLOSED 2026-10-09 (T-HARDEN.btc-bracket-podium): winners on bonus-inclusive totals and the advanced-match guard by `20260922132000`; the tie and stale-seat gap by `20261009100000`, pushed to the cloud project 2026-10-09 and verified there.
 - **Standings completeness rests on exactly 3 judges per match;** nothing outside the RPC caps
   btc_match_judges at 3 (see btc_match_judges editable gap above).
 
