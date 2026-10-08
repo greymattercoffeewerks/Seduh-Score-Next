@@ -1,5 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
-import { validateTeamEmail, describeMemberStatus, mountTeamScreen } from './teamScreen.js';
+import {
+  validateTeamEmail,
+  describeMemberStatus,
+  describeRemoved,
+  mountTeamScreen,
+} from './teamScreen.js';
 import { TeamError } from './team.js';
 
 const ORG = 'org-1';
@@ -69,7 +74,10 @@ function fakeTeamClient(
   initial = [member(OWNER, 'owner@example.com', 'owner'), member(KIM, 'kim@example.com')],
   opts = {},
 ) {
-  const state = { rows: initial.map((row) => ({ ...row })) };
+  const state = {
+    rows: initial.map((row) => ({ ...row })),
+    removed: (opts.removed ?? []).map((row) => ({ ...row })),
+  };
   const calls = { rpc: [], invoke: [] };
   const errorFor = (response) => (typeof response === 'function' ? response() : response);
   return {
@@ -87,9 +95,21 @@ function fakeTeamClient(
         }
         return { data: state.rows.map((row) => ({ ...row })), error: null };
       }
+      if (name === 'team_list_removed_members') {
+        if (opts.removedListError) return { data: null, error: opts.removedListError };
+        return { data: state.removed.map((row) => ({ ...row })), error: null };
+      }
       if (name === 'team_remove_member') {
         if (opts.removeError) return { data: null, error: opts.removeError };
+        const gone = state.rows.find((row) => row.user_id === args.p_user_id);
         state.rows = state.rows.filter((row) => row.user_id !== args.p_user_id);
+        if (gone) {
+          state.removed.unshift({
+            user_id: gone.user_id,
+            email: gone.email,
+            removed_at: '2026-10-08T03:00:00Z',
+          });
+        }
         return { data: null, error: null };
       }
       return { data: null, error: { message: 'unexpected rpc' } };
@@ -109,6 +129,19 @@ function fakeTeamClient(
             data: { userId: 'u-new', email: body.email.toLowerCase(), password: 'k7mx-p3qa-9wdn' },
             error: null,
           };
+        }
+        if (body.action === 'restore') {
+          const back = state.removed.find((row) => row.user_id === body.userId);
+          state.removed = state.removed.filter((row) => row.user_id !== body.userId);
+          if (back) {
+            state.rows.push(
+              member(back.user_id, back.email, 'organiser', {
+                last_sign_in_at: null,
+                must_change_password: true,
+              }),
+            );
+          }
+          return { data: { userId: body.userId, password: 'rest-ored-pass' }, error: null };
         }
         return { data: { userId: body.userId, password: 'aaaa-bbbb-cccc' }, error: null };
       },
@@ -419,7 +452,7 @@ describe('mountTeamScreen — reset and remove', () => {
     ]);
     expect(feedback(root).textContent).toBe('kim@example.com was removed from the team.');
     expect(feedback(root).dataset.tone).toBe('success');
-    expect(root.querySelectorAll('.team-list li')).toHaveLength(1);
+    expect(root.querySelectorAll('ul[aria-label="Team members"] li')).toHaveLength(1);
   });
 
   it('shows the reason when the database refuses a removal, and leaves the list as it was', async () => {
@@ -449,14 +482,407 @@ describe('mountTeamScreen — reset and remove', () => {
   });
 });
 
+describe('describeRemoved', () => {
+  it('gives the date a person was removed', () => {
+    expect(describeRemoved({ removedAt: '2026-10-07T12:00:00Z' })).toBe('Removed 7 Oct 2026');
+  });
+
+  it('copes with an unreadable date', () => {
+    expect(describeRemoved({ removedAt: 'nonsense' })).toBe('Removed from the team');
+    expect(describeRemoved({ removedAt: null })).toBe('Removed from the team');
+  });
+});
+
+// A person the owner removed earlier: their login was kept, so adding the same email again is refused
+// (409) — this list and Restore are the only way back.
+describe('mountTeamScreen — removed members', () => {
+  const MAY = 'u-may';
+  const removedMay = {
+    user_id: MAY,
+    email: 'may@example.com',
+    removed_at: '2026-10-07T12:00:00Z',
+  };
+  const clientWithMay = (opts = {}) =>
+    fakeTeamClient(undefined, { removed: [removedMay], ...opts });
+  const askRestore = (root, id = MAY) => q(root, `#team-restore-btn-${id}`).click();
+  const confirmRestore = (root, id = MAY) => q(root, `#team-confirm-${id}`).click();
+
+  it('asks the database for this org’s removed members, alongside the team', async () => {
+    const client = clientWithMay();
+    await mount(client);
+    expect(client.calls.rpc).toContainEqual(['team_list_removed_members', { p_org_id: ORG }]);
+    expect(client.calls.rpc).toContainEqual(['team_list_members', { p_org_id: ORG }]);
+  });
+
+  it('lists them under the team, with when they were removed and a Restore button each', async () => {
+    const { root } = await mount(clientWithMay());
+    const heading = q(root, '#team-removed-heading');
+    expect(heading.textContent).toBe('Removed members');
+    const teamList = q(root, 'ul[aria-label="Team members"]');
+    // under the team, not above it
+    expect(
+      teamList.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    const rows = [...root.querySelectorAll('.team-removed .team-list li')];
+    expect(rows).toHaveLength(1);
+    expect(rows[0].textContent).toContain('may@example.com');
+    expect(rows[0].textContent).toContain('Removed 7 Oct 2026');
+    expect(q(root, `#team-restore-btn-${MAY}`).getAttribute('aria-label')).toBe(
+      'Restore may@example.com',
+    );
+    // the removed list is labelled by its heading, and is not mixed into the team's own list
+    expect(q(root, '.team-removed ul').getAttribute('aria-labelledby')).toBe(
+      'team-removed-heading',
+    );
+    expect(teamList.textContent).not.toContain('may@example.com');
+  });
+
+  it('says so when no one has been removed', async () => {
+    const { root } = await mount(fakeTeamClient());
+    expect(q(root, '#team-removed-empty').textContent).toBe('No one has been removed.');
+    expect(q(root, '.team-removed ul')).toBeNull();
+  });
+
+  it('removing a member puts them on the removed list, with Restore offered at once', async () => {
+    const client = fakeTeamClient();
+    const { root } = await mount(client);
+    q(root, `#team-remove-btn-${KIM}`).click();
+    q(root, `#team-confirm-${KIM}`).click();
+    await until(() => expect(q(root, `#team-restore-btn-${KIM}`)).not.toBeNull());
+    expect(q(root, `#team-row-${KIM}`)).toBeNull();
+    expect(q(root, `#team-removed-row-${KIM}`).textContent).toContain('kim@example.com');
+    expect(q(root, '#team-removed-empty')).toBeNull();
+  });
+
+  it('asks for a confirmation first, naming the person and what changes — and does nothing yet', async () => {
+    const client = clientWithMay();
+    const { root } = await mount(client);
+    askRestore(root);
+    const text = q(root, `#team-confirm-text-${MAY}`).textContent;
+    expect(text).toContain('Restore may@example.com?');
+    expect(text).toContain('new one-time password');
+    expect(text).toContain('old password stops working');
+    expect(q(root, `#team-confirm-${MAY}`).getAttribute('aria-label')).toBe(
+      'Confirm restore may@example.com',
+    );
+    expect(client.calls.invoke).toEqual([]);
+    expect(document.activeElement).toBe(q(root, `#team-cancel-${MAY}`));
+  });
+
+  it('Cancel (and Escape) back out and return focus to the Restore button', async () => {
+    const client = clientWithMay();
+    const { root } = await mount(client);
+    askRestore(root);
+    q(root, `#team-cancel-${MAY}`).click();
+    expect(q(root, `#team-confirm-${MAY}`)).toBeNull();
+    expect(document.activeElement).toBe(q(root, `#team-restore-btn-${MAY}`));
+
+    askRestore(root);
+    q(root, `#team-confirm-${MAY}`).dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+    );
+    expect(q(root, `#team-confirm-${MAY}`)).toBeNull();
+    expect(document.activeElement).toBe(q(root, `#team-restore-btn-${MAY}`));
+    expect(client.calls.invoke).toEqual([]);
+  });
+
+  it('restoring calls the Edge Function for that person, shows the new one-time password once, and moves them back to the team', async () => {
+    const client = clientWithMay();
+    const { root } = await mount(client);
+    askRestore(root);
+    confirmRestore(root);
+    await until(() => expect(q(root, '#team-issued')).not.toBeNull());
+
+    expect(client.calls.invoke).toEqual([
+      ['team-accounts', { action: 'restore', orgId: ORG, userId: MAY }],
+    ]);
+    expect(q(root, '#team-issued-heading').textContent).toBe(
+      'may@example.com is back on the team — new one-time password',
+    );
+    expect(q(root, '#team-password').textContent).toBe('rest-ored-pass');
+    // on the team, off the removed list, and the password panel has focus
+    expect(q(root, `#team-row-${MAY}`).textContent).toContain('may@example.com');
+    expect(q(root, `#team-removed-row-${MAY}`)).toBeNull();
+    expect(q(root, '#team-removed-empty')).not.toBeNull();
+    expect(document.activeElement).toBe(q(root, '#team-issued'));
+  });
+
+  it('while the one-time password is showing, no other Restore (or Remove, or Reset) can be started', async () => {
+    const other = {
+      user_id: 'u-ned',
+      email: 'ned@example.com',
+      removed_at: '2026-10-06T12:00:00Z',
+    };
+    const client = fakeTeamClient(undefined, { removed: [removedMay, other] });
+    const { root } = await mount(client);
+    askRestore(root);
+    confirmRestore(root);
+    await until(() => expect(q(root, '#team-issued')).not.toBeNull());
+    expect(q(root, '#team-restore-btn-u-ned').disabled).toBe(true);
+    expect(q(root, `#team-remove-btn-${MAY}`).disabled).toBe(true);
+    q(root, '#team-issued-done').click();
+    expect(q(root, '#team-restore-btn-u-ned').disabled).toBe(false);
+  });
+
+  it('while a restore is in flight, nothing else can be started', async () => {
+    const client = clientWithMay();
+    let release;
+    const realInvoke = client.functions.invoke;
+    client.functions.invoke = (name, args) =>
+      new Promise((resolve) => {
+        release = () => resolve(realInvoke(name, args));
+      });
+    const { root } = await mount(client);
+    askRestore(root);
+    confirmRestore(root);
+    await until(() => expect(q(root, `#team-remove-btn-${KIM}`).disabled).toBe(true));
+    expect(q(root, `#team-restore-btn-${MAY}`)).toBeNull(); // the confirm is closed while working
+    release();
+    await until(() => expect(q(root, '#team-issued')).not.toBeNull());
+  });
+
+  it('a refused restore shows the function’s own message, closes the confirm, and keeps the person on the list', async () => {
+    const client = clientWithMay({
+      invokeError: {
+        context: {
+          status: 403,
+          json: async () => ({ error: 'That person cannot be restored.' }),
+        },
+      },
+    });
+    const { root } = await mount(client);
+    askRestore(root);
+    confirmRestore(root);
+    await until(() => expect(feedback(root).textContent).toBe('That person cannot be restored.'));
+    expect(feedback(root).dataset.tone).toBe('error');
+    expect(q(root, '#team-issued')).toBeNull();
+    expect(q(root, `#team-confirm-${MAY}`)).toBeNull();
+    expect(q(root, `#team-restore-btn-${MAY}`)).not.toBeNull();
+  });
+
+  it('a restore that gets no answer says it may or may not have gone through, and re-reads the lists', async () => {
+    vi.useFakeTimers();
+    try {
+      const client = clientWithMay();
+      client.functions.invoke = () => new Promise(() => {});
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      const mounting = mountTeamScreen(root, { orgId: ORG, client });
+      await vi.advanceTimersByTimeAsync(0);
+      await mounting;
+      askRestore(root);
+      confirmRestore(root);
+      const listCallsBefore = client.calls.rpc.length;
+      await vi.advanceTimersByTimeAsync(10001);
+      expect(feedback(root).textContent).toMatch(/may or may not have gone through/);
+      expect(client.calls.rpc.length).toBeGreaterThan(listCallsBefore);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('says so when the lists could not refresh after a restore that worked, and still never offers Restore for them again', async () => {
+    const client = clientWithMay();
+    const realRpc = client.rpc;
+    let restored = false;
+    const realInvoke = client.functions.invoke;
+    client.functions.invoke = async (name, args) => {
+      restored = true;
+      return realInvoke(name, args);
+    };
+    client.rpc = async (name, args) =>
+      restored && name === 'team_list_members'
+        ? { data: null, error: { code: 'XX000', message: 'boom' } }
+        : realRpc(name, args);
+    const { root } = await mount(client);
+    askRestore(root);
+    confirmRestore(root);
+    await until(() => expect(q(root, '#team-issued')).not.toBeNull());
+    expect(q(root, '#team-issued-note').textContent).toContain('Restored, but the list could not');
+    expect(q(root, `#team-restore-btn-${MAY}`)).toBeNull();
+  });
+
+  it('never blocks the team when only the removed list fails: the team and the add form still work, and the section says it could not load', async () => {
+    const client = clientWithMay({ removedListError: { code: '42883', message: 'no function' } });
+    const { root } = await mount(client);
+    expect(root.textContent).toContain('kim@example.com');
+    expect(q(root, '.team-add-form')).not.toBeNull();
+    expect(q(root, '#team-removed-failed').textContent).toContain('could not be loaded');
+    expect(q(root, '#team-removed-empty')).toBeNull(); // not "no one has been removed": we don't know
+    expect(root.textContent).not.toContain('may@example.com');
+  });
+
+  it('shows what is being done while a restore is in flight, announced in the status line that holds focus, and clears it after', async () => {
+    const client = clientWithMay();
+    let release;
+    const realInvoke = client.functions.invoke;
+    client.functions.invoke = (name, args) =>
+      new Promise((resolve) => {
+        release = () => resolve(realInvoke(name, args));
+      });
+    const { root } = await mount(client);
+    askRestore(root);
+    confirmRestore(root);
+    await until(() => expect(feedback(root).textContent).toBe('Restoring may@example.com…'));
+    expect(feedback(root).getAttribute('role')).toBe('status');
+    expect(feedback(root).dataset.tone).toBeUndefined();
+    expect(document.activeElement).toBe(feedback(root));
+    release();
+    await until(() => expect(q(root, '#team-issued')).not.toBeNull());
+    expect(feedback(root).textContent).toBe('');
+  });
+
+  it('says what is being done for a remove, a reset and an add too', async () => {
+    const stall = (client, target, method) => {
+      const real = client[target][method];
+      let release;
+      client[target][method] = (...args) =>
+        new Promise((resolve) => {
+          release = () => resolve(real.apply(client[target], args));
+        });
+      return () => release();
+    };
+    // remove
+    let client = fakeTeamClient();
+    let releaseNow;
+    let view = await mount(client);
+    const realRpc = client.rpc;
+    let releaseRemove;
+    client.rpc = (name, args) =>
+      name === 'team_remove_member'
+        ? new Promise((resolve) => {
+            releaseRemove = () => resolve(realRpc(name, args));
+          })
+        : realRpc(name, args);
+    q(view.root, `#team-remove-btn-${KIM}`).click();
+    q(view.root, `#team-confirm-${KIM}`).click();
+    await until(() => expect(feedback(view.root).textContent).toBe('Removing kim@example.com…'));
+    releaseRemove();
+    await until(() =>
+      expect(feedback(view.root).textContent).toBe('kim@example.com was removed from the team.'),
+    );
+    // reset
+    client = fakeTeamClient();
+    releaseNow = stall(client, 'functions', 'invoke');
+    view = await mount(client);
+    q(view.root, `#team-reset-btn-${KIM}`).click();
+    q(view.root, `#team-confirm-${KIM}`).click();
+    await until(() =>
+      expect(feedback(view.root).textContent).toBe('Resetting the password for kim@example.com…'),
+    );
+    releaseNow();
+    await until(() => expect(q(view.root, '#team-issued')).not.toBeNull());
+    // add
+    client = fakeTeamClient();
+    releaseNow = stall(client, 'functions', 'invoke');
+    view = await mount(client);
+    type(q(view.root, '#team-email'), 'lee@example.com');
+    submitAdd(view.root);
+    await until(() => expect(feedback(view.root).textContent).toBe('Adding lee@example.com…'));
+    releaseNow();
+    await until(() => expect(q(view.root, '#team-issued')).not.toBeNull());
+  });
+
+  it('puts the status line right under the team, above the removed list, so messages stay near what caused them', async () => {
+    const { root } = await mount(clientWithMay());
+    const heading = q(root, '#team-removed-heading');
+    expect(
+      feedback(root).compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      q(root, 'ul[aria-label="Team members"]').compareDocumentPosition(feedback(root)) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('after a refused restore, re-reads both lists: a person who is no longer restorable stops being offered', async () => {
+    const client = clientWithMay({
+      invokeError: {
+        context: { status: 403, json: async () => ({ error: 'That person cannot be restored.' }) },
+      },
+    });
+    const { root } = await mount(client);
+    askRestore(root);
+    // meanwhile, on the server, they joined another org and dropped off the list
+    client.state.removed = [];
+    confirmRestore(root);
+    await until(() => expect(feedback(root).textContent).toBe('That person cannot be restored.'));
+    expect(q(root, `#team-restore-btn-${MAY}`)).toBeNull();
+    expect(q(root, '#team-removed-empty')).not.toBeNull();
+  });
+
+  it('keeps the last removed list when only a later refresh of it fails, instead of replacing it with an error', async () => {
+    const client = clientWithMay();
+    const { root } = await mount(client);
+    client.state.removed = [];
+    const realRpc = client.rpc;
+    client.rpc = async (name, args) =>
+      name === 'team_list_removed_members'
+        ? { data: null, error: { code: 'XX000', message: 'boom' } }
+        : realRpc(name, args);
+    q(root, `#team-remove-btn-${KIM}`).click();
+    q(root, `#team-confirm-${KIM}`).click();
+    await until(() =>
+      expect(feedback(root).textContent).toBe('kim@example.com was removed from the team.'),
+    );
+    expect(q(root, '#team-removed-failed')).toBeNull();
+    expect(q(root, `#team-removed-row-${MAY}`)).not.toBeNull();
+  });
+
+  it('while the removed list cannot load, the section drops its explanation and says only that it could not load', async () => {
+    const { root } = await mount(
+      clientWithMay({ removedListError: { code: '42883', message: 'no function' } }),
+    );
+    const section = q(root, '.team-removed');
+    expect(section.textContent).not.toContain('Restore puts one back');
+    expect(section.textContent).toContain('could not be loaded');
+    const healthy = await mount(clientWithMay());
+    expect(q(healthy.root, '.team-removed').textContent).toContain('Restore puts one back');
+  });
+
+  it('a second press on a stale Confirm button (a double click lands on the old element) is ignored, in flight and after the password is showing', async () => {
+    const client = clientWithMay();
+    let started = 0;
+    let release;
+    const realInvoke = client.functions.invoke;
+    client.functions.invoke = (name, args) => {
+      started += 1;
+      return new Promise((resolve) => {
+        release = () => resolve(realInvoke(name, args));
+      });
+    };
+    const { root } = await mount(client);
+    askRestore(root);
+    const confirm = q(root, `#team-confirm-${MAY}`);
+    confirm.click();
+    await until(() => expect(started).toBe(1)); // the request is out
+    confirm.click(); // the same, now detached, button — in flight
+    expect(started).toBe(1);
+    release();
+    await until(() => expect(q(root, '#team-issued')).not.toBeNull());
+    confirm.click(); // and again with the one-time password on screen
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(started).toBe(1);
+  });
+
+  it('a non-owner still sees only the refusal — the removed section is not shown (the database refuses that request too)', async () => {
+    const client = fakeTeamClient([], { listError: { code: '42501', message: 'x' } });
+    const { root } = await mount(client);
+    expect(root.textContent).toContain('Only the owner can manage the team.');
+    expect(q(root, '.team-removed')).toBeNull();
+    expect(root.textContent).not.toContain('Removed members');
+  });
+});
+
 describe('mountTeamScreen — lifecycle', () => {
   it('never writes to the page once its own signal is aborted', async () => {
     const controller = new AbortController();
-    let release;
+    const releases = [];
     const client = {
+      // The team and the removed list are asked for together: every pending call is released.
       rpc: () =>
         new Promise((resolve) => {
-          release = () => resolve({ data: [], error: null });
+          releases.push(() => resolve({ data: [], error: null }));
         }),
     };
     const root = document.createElement('div');
@@ -465,7 +891,8 @@ describe('mountTeamScreen — lifecycle', () => {
     await settle();
     const before = root.innerHTML;
     controller.abort();
-    release();
+    expect(releases).toHaveLength(2); // the team and the removed list, asked for together
+    for (const release of releases) release();
     await mounting;
     expect(root.innerHTML).toBe(before);
   });

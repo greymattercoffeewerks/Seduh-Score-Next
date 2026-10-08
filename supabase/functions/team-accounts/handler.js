@@ -11,6 +11,10 @@
 // Contract (POST, JSON body, caller's session JWT in Authorization):
 //   { action: 'add',   orgId, email }    -> 201 { userId, email, password }
 //   { action: 'reset', orgId, userId }   -> 200 { userId, password }
+//   { action: 'restore', orgId, userId } -> 200 { userId, password }
+// `restore` puts back someone the owner removed earlier (their login was kept): only an account the
+// database holds a "removed from THIS org" marker for can be restored, never an arbitrary existing
+// account (migration 20261008120000_team_restore_members.sql).
 // `password` is a one-time password, returned exactly once, never logged and never stored by us; the
 // account is flagged must_change_password so the person has to choose their own at first sign-in.
 // Errors are { error: <message for the owner> } with 400 / 401 / 403 / 405 / 409 / 500.
@@ -87,7 +91,9 @@ export async function handleRequest(request, deps) {
   const body = await readBody(request);
   if (!body) return json(400, { error: 'The request was not understood.' });
   const { action, orgId } = body;
-  if (action !== 'add' && action !== 'reset') return json(400, { error: 'Unknown action.' });
+  if (action !== 'add' && action !== 'reset' && action !== 'restore') {
+    return json(400, { error: 'Unknown action.' });
+  }
   if (typeof orgId !== 'string' || !UUID_RE.test(orgId)) {
     return json(400, { error: 'The request was not understood.' });
   }
@@ -111,16 +117,50 @@ export async function handleRequest(request, deps) {
   const { data: caller, error: callerError } = await userClient.auth.getUser(credentials.token);
   if (callerError || !caller?.user) return json(401, { error: 'Sign in again.' });
 
-  // May they: the database decides (owner of THIS org; for a reset, the target is a non-owner member).
-  const { data: allowed, error: allowedError } = await userClient.rpc('team_can_manage', {
-    p_org_id: orgId,
-    p_user_id: userId,
-  });
+  // May they: the database decides (owner of THIS org; for a reset, the target is a non-owner member;
+  // for a restore, the target was removed from this org and belongs to none now).
+  const { data: allowed, error: allowedError } = await userClient.rpc(
+    action === 'restore' ? 'team_can_restore' : 'team_can_manage',
+    { p_org_id: orgId, p_user_id: userId },
+  );
   if (allowedError) return json(500, { error: 'Something went wrong. Try again.' });
-  if (allowed !== true) return json(403, { error: 'Only the owner can manage the team.' });
+  if (allowed !== true) {
+    return json(403, {
+      error:
+        action === 'restore'
+          ? 'That person cannot be restored. Only the owner can, and only for someone removed from this team.'
+          : 'Only the owner can manage the team.',
+    });
+  }
 
   const admin = deps.createAdminClient();
   const password = generatePassword(deps.randomBytes);
+
+  if (action === 'restore') {
+    // The membership first: team_restore_member is the one atomic, locked authority (it re-checks the
+    // marker and that the person is in no org, per person), so Auth is only ever asked to change the
+    // password of an account that was JUST restored — never of one that stopped being restorable
+    // between the caller's check above and now (it joined an org, was restored by a double click),
+    // and a second concurrent restore fails here without overwriting the first one's password.
+    const { error: restoreError } = await admin.rpc('team_restore_member', {
+      p_org_id: orgId,
+      p_user_id: userId,
+    });
+    if (restoreError) return json(500, { error: 'Could not restore that person. Try again.' });
+    const { error: passwordError } = await admin.auth.admin.updateUserById(userId, {
+      password,
+      user_metadata: { must_change_password: true },
+    });
+    if (passwordError) {
+      // They ARE back on the team (with the password they last chose), so say so: the owner's fix is
+      // the Reset password button on their row, not another Restore.
+      return json(500, {
+        error:
+          'They are back on the team, but a new one-time password could not be set. Use Reset password for them.',
+      });
+    }
+    return json(200, { userId, password });
+  }
 
   if (action === 'reset') {
     const { error } = await admin.auth.admin.updateUserById(userId, {

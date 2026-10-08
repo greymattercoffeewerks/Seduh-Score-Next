@@ -3,9 +3,11 @@ import {
   TeamError,
   canManageTeam,
   listTeamMembers,
+  listRemovedTeamMembers,
   removeTeamMember,
   addTeamMember,
   resetTeamMemberPassword,
+  restoreTeamMember,
   describeTeamError,
 } from './team.js';
 
@@ -124,6 +126,84 @@ describe('removeTeamMember', () => {
     const { client } = rpcClient({ data: null, error: { code: '42501', message: 'x' } });
     await expect(removeTeamMember(ORG, 'u2', client)).rejects.toMatchObject({
       message: 'Only the owner can manage the team.',
+    });
+  });
+});
+
+describe('listRemovedTeamMembers', () => {
+  it('asks the database for this org’s removed members and maps the rows for the screen, in the order given', async () => {
+    const { rpc, client } = rpcClient({
+      data: [
+        { user_id: 'u3', email: 'may@example.com', removed_at: '2026-10-07T12:00:00Z' },
+        { user_id: 'u4', email: 'ned@example.com', removed_at: '2026-10-06T12:00:00Z' },
+      ],
+      error: null,
+    });
+    expect(await listRemovedTeamMembers(ORG, client)).toEqual([
+      { userId: 'u3', email: 'may@example.com', removedAt: '2026-10-07T12:00:00Z' },
+      { userId: 'u4', email: 'ned@example.com', removedAt: '2026-10-06T12:00:00Z' },
+    ]);
+    expect(rpc).toHaveBeenCalledWith('team_list_removed_members', { p_org_id: ORG });
+  });
+
+  it('returns an empty list for no rows', async () => {
+    expect(
+      await listRemovedTeamMembers(ORG, rpcClient({ data: null, error: null }).client),
+    ).toEqual([]);
+  });
+
+  it('turns a permission refusal (42501) into the "only the owner" message', async () => {
+    const { client } = rpcClient({ data: null, error: { code: '42501', message: 'raw' } });
+    await expect(listRemovedTeamMembers(ORG, client)).rejects.toMatchObject({
+      message: 'Only the owner can manage the team.',
+      status: 403,
+    });
+  });
+
+  it('does not repeat any other database message', async () => {
+    const { client } = rpcClient({
+      data: null,
+      error: { code: 'XX000', message: 'internal secret' },
+    });
+    const error = await listRemovedTeamMembers(ORG, client).catch((e) => e);
+    expect(error).toBeInstanceOf(TeamError);
+    expect(error.message).toBe('Something went wrong. Try again.');
+  });
+});
+
+describe('restoreTeamMember', () => {
+  it('sends the restore action with the org and the person, and returns the new one-time password', async () => {
+    const client = functionsClient(async () => ({
+      data: { userId: 'u3', password: 'k7mx-p3qa-9wdn' },
+      error: null,
+    }));
+    expect(await restoreTeamMember(ORG, 'u3', client)).toEqual({ password: 'k7mx-p3qa-9wdn' });
+    expect(client.functions.invoke).toHaveBeenCalledWith('team-accounts', {
+      body: { action: 'restore', orgId: ORG, userId: 'u3' },
+    });
+  });
+
+  it('shows the owner the function’s own message when it refuses', async () => {
+    const client = functionsClient(async () => ({
+      data: null,
+      error: {
+        context: new Response(JSON.stringify({ error: 'That person cannot be restored.' }), {
+          status: 403,
+        }),
+      },
+    }));
+    await expect(restoreTeamMember(ORG, 'u3', client)).rejects.toMatchObject({
+      message: 'That person cannot be restored.',
+      status: 403,
+    });
+  });
+
+  it('says it could not reach the server when there was no answer', async () => {
+    const client = functionsClient(async () => {
+      throw new Error('network');
+    });
+    await expect(restoreTeamMember(ORG, 'u3', client)).rejects.toMatchObject({
+      message: 'Could not reach the server — check your connection and try again.',
     });
   });
 });

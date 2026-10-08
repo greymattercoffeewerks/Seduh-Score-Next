@@ -3,8 +3,8 @@
 //
 // Who may do what is decided by the database, not here: every call below is refused for anyone but
 // the org's owner, and these wrappers only carry the answer back. Creating a login and resetting a
-// password go through the Edge Function (only the Auth admin API can); listing, removing and asking
-// "may I" are plain RPCs.
+// password, or putting back someone removed earlier, go through the Edge Function (only the Auth admin
+// API can); listing, removing and asking "may I" are plain RPCs.
 import { getSupabase } from './supabaseClient.js';
 
 // An error with a message the owner can be shown as it is.
@@ -57,6 +57,18 @@ export async function listTeamMembers(orgId, client = getSupabase()) {
   }));
 }
 
+// The people the owner removed, newest first, as the screen uses them. Only accounts the database
+// holds a "removed from this org" marker for can ever appear here or be restored.
+export async function listRemovedTeamMembers(orgId, client = getSupabase()) {
+  const { data, error } = await client.rpc('team_list_removed_members', { p_org_id: orgId });
+  if (error) throw rpcFailure(error);
+  return (data ?? []).map((row) => ({
+    userId: row.user_id,
+    email: row.email,
+    removedAt: row.removed_at,
+  }));
+}
+
 export async function removeTeamMember(orgId, userId, client = getSupabase()) {
   const { error } = await client.rpc('team_remove_member', { p_org_id: orgId, p_user_id: userId });
   if (error) throw rpcFailure(error);
@@ -99,9 +111,16 @@ export async function addTeamMember(orgId, email, client = getSupabase()) {
   return { email: data.email, password: data.password };
 }
 
-// A new one-time password for an existing member. Resolves { userId, password }.
+// A new one-time password for an existing member. Resolves { password }.
 export async function resetTeamMemberPassword(orgId, userId, client = getSupabase()) {
   const data = await callTeamFunction(client, { action: 'reset', orgId, userId });
+  return { password: data.password };
+}
+
+// Puts a removed member back on the team with a new one-time password (their old one stops working).
+// Resolves { password }: shown to the owner once, to pass on.
+export async function restoreTeamMember(orgId, userId, client = getSupabase()) {
+  const data = await callTeamFunction(client, { action: 'restore', orgId, userId });
   return { password: data.password };
 }
 

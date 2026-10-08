@@ -1,3 +1,28 @@
+## T-HARDEN.team-restore: A list of removed members, and a way to restore them · 2026-10-08
+
+**Task:** T-HARDEN.team-restore (user-reported, 2026-10-08, right after team accounts went live: "add a list under the team, and remove feature").
+Removing a team member keeps their login (`person_merges.merged_by` and `public_results.published_by` reference `auth.users` without cascade, so an account that ever merged or published cannot be deleted), so adding the same email again always answered **409 "That email already has an account"**: a member removed by mistake, or a test member added with the owner's own address, could never come back.
+
+**What shipped:**
+
+- **A "Removed members" section on the Team screen**, under the team and the add form: each person removed earlier with the date, and a **Restore** button that asks first (the same inline confirm Remove and Reset use) and then shows the one-time password panel ("x is back on the team — new one-time password"), exactly as an add or a reset does. Their old password stops working; they choose their own when they sign in.
+- **The database remembers who was removed, from which org** (migration `20261008120000_team_restore_members.sql`): a marker table `team_removed_members`, closed to the API roles (RLS on, no policy, no grants), written **only** by `team_remove_member` after its owner checks, so an owner cannot create a marker for an arbitrary account. `team_list_removed_members` (owner only), `team_can_restore` (owner-side check) and `team_restore_member` (**service role only**) re-attach a person only if a marker exists for **that org** and they are in **no org**, as an organiser (never an owner), and consume the marker. An account without a marker — a Guess the Bean community user, say — can never be attached this way.
+- A marker only counts while it is the person's **latest word** (found in security review): joining _any_ org clears every marker the person has (a trigger on `org_members`, so manual SQL is covered too), and where someone was removed from two orgs only the most recent removal can be restored. Without both, an owner could restore, and reset the password of, a login that had since become another org's. Restores are serialised per person (advisory lock).
+- The Edge Function `team-accounts` gained a `restore` action: the caller is checked with `team_can_restore` as themselves first; then the **membership is restored first** (the locked, atomic authority) and only then is the one-time password set, so Auth is never asked to change the password of an account that was not just restored, and a double click can't overwrite the first request's password. If the password step fails after the person is back, the message says so and points at Reset password.
+- The screen: the removed list loads alongside the team but **never blocks it** (a page deployed ahead of the cloud migration still shows the team; the section says it could not load); a status line now says what is being done ("Restoring x…") and holds focus while a request is out; the status line sits under the team, not under the removed list; any failed restore re-reads both lists; the inline confirm is one shared helper for Remove, Reset and Restore.
+
+**Files changed:** `supabase/migrations/20261008120000_team_restore_members.sql` (new), `supabase/tests/026_team_restore.sql` (new, 74 assertions), `supabase/functions/team-accounts/handler.js` + `handler.test.js`, `src/core/team.js` + `team.test.js`, `src/core/teamScreen.js` / `.css` / `.test.js`.
+
+**Review cycle:** Six reviewers (schema-guardian incl. running the rollback in a transaction, security-reviewer, ui-accessibility-reviewer at 360px first, code-reviewer, test-auditor, module-boundary-checker); no blocking findings, one security MEDIUM (stale marker) fixed. Fixed: stale marker after joining and leaving another org, restore ordering, a two-owner restore race, no feedback while a restore is in flight, the status line sitting below the removed list, a stale Restore offer after a refused restore, duplicated confirm markup and a confirm keyed only by person, assertions that could pass for the wrong reason, a pgTAP file that depended on an empty table. Mutation checks: 14 + 14 SQL mutants (12 of the second 14 killed; the other 2 are equivalent — an explicit delete the trigger already does, and a revoke that changes nothing) and the screen/handler mutants all killed. Run for real against the local stack: add, remove, list, restore, sign in with the new password, old password dead, refusals for a never-removed account, the owner and the person themselves.
+
+**Not covered (accepted, written in the migration):**
+
+- **People removed before this migration have no marker** (the membership row they were removed from is gone and nothing else records which org it was), so they do not appear and cannot be restored. A marker is inserted by hand for such a person (e.g. the test member already removed on 2026-10-08).
+- Markers have no expiry; restoring resets the account's password (the same power Reset password already gives the owner over a member); the password change does not sign out sessions the person already has.
+- A removed email still cannot be _added_ again (409) — Restore is the way back.
+
+---
+
 ## T-HARDEN.header-sync-chip: The sync status moves into a one-line chip, so the header stays one line · 2026-10-08
 
 **Task:** T-HARDEN.header-sync-chip (user-reported, 2026-10-08, with a screenshot of the event dashboard: "move that Synced notification to a different place so that the header doesn't expand into 2 or more lines").
