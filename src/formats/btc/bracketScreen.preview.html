@@ -20,13 +20,15 @@
     <p>
       <button id="demo-pre-bracket">Mount (before bracket generated)</button>
       <button id="demo-post-bracket">Mount (bracket already generated)</button>
+      <button id="demo-podium">Mount (final played — podium)</button>
+      <button id="demo-podium-tied">Mount (final tied — podium)</button>
       <button id="demo-failed">Mount (load fails)</button>
     </p>
     <div id="app"></div>
     <script type="module">
       import { mountBracketScreen } from './bracketScreen.js';
 
-      function createDemoClient({ preGenerated = false } = {}) {
+      function createDemoClient({ preGenerated = false, podium = null } = {}) {
         const db = {
           events: [{ id: 'ev1', org_id: 'org1', name: 'BTC Demo Event', is_test: true }],
           btc_teams: Array.from({ length: 8 }, (_, i) => ({
@@ -117,6 +119,41 @@
             : [],
           btc_matches: [],
         };
+        if (podium) {
+          // Final and third-place matches already created and confirmed. Team 2 has a long
+          // unbroken name on purpose, to check wrapping at 360px.
+          db.btc_teams[1].name = 'Equipo-Super-Cafetero-Internacional-Barista-Team';
+          const slot = (label) => db.btc_bracket_slots.find((x) => x.slot_label === label);
+          Object.assign(slot('final'), { team1_id: 't1', team2_id: 't2', match_id: 'm-final' });
+          Object.assign(slot('third_place'), {
+            team1_id: 't3',
+            team2_id: 't4',
+            match_id: 'm-third',
+          });
+          db.btc_matches = [
+            { id: 'm-final', status: 'confirmed' },
+            { id: 'm-third', status: 'confirmed' },
+          ];
+          const finalTotals = podium === 'tied' ? [50, 50] : [48, 61];
+          db.btc_match_scores = [
+            {
+              match_id: 'm-final',
+              status: 'confirmed',
+              team1_id: 't1',
+              team2_id: 't2',
+              team1_total: finalTotals[0],
+              team2_total: finalTotals[1],
+            },
+            {
+              match_id: 'm-third',
+              status: 'confirmed',
+              team1_id: 't3',
+              team2_id: 't4',
+              team1_total: 52,
+              team2_total: 33,
+            },
+          ];
+        }
         let idCounter = 0;
 
         function matchesFilters(row, filters, inFilters) {
@@ -244,10 +281,25 @@
         .getElementById('demo-post-bracket')
         .addEventListener('click', () => mount(createDemoClient({ preGenerated: true })));
       document
+        .getElementById('demo-podium')
+        .addEventListener('click', () =>
+          mount(createDemoClient({ preGenerated: true, podium: 'decided' })),
+        );
+      document
+        .getElementById('demo-podium-tied')
+        .addEventListener('click', () =>
+          mount(createDemoClient({ preGenerated: true, podium: 'tied' })),
+        );
+      document
         .getElementById('demo-failed')
         .addEventListener('click', () => mount(failingClient()));
 
-      mount(createDemoClient());
+      const startPodium = new URLSearchParams(location.search).get('podium');
+      mount(
+        startPodium
+          ? createDemoClient({ preGenerated: true, podium: startPodium })
+          : createDemoClient(),
+      );
     </script>
   </body>
 </html>
