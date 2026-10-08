@@ -334,3 +334,68 @@
   letter-spacing: var(--tracking-wide);
   color: var(--color-success);
 }
+
+/* Finding #3: once heats exist the roster is a closed fold-out below them. The whole summary row is
+   the tap target (not just the text). display:flex removes the native disclosure marker, so an
+   explicit +/- is drawn (the same pattern as the results page); it is decorative, the open/closed
+   state is exposed natively. Horizontal padding keeps the keyboard focus ring off the text. */
+.roster-fold {
+  margin-top: var(--space-4);
+}
+
+.roster-fold-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-inline: var(--space-2);
+  cursor: pointer;
+  font-weight: var(--font-weight-semibold);
+  /* A long roster title may wrap rather than push the marker off a 360px row. */
+  overflow-wrap: anywhere;
+}
+
+.roster-fold-summary::before {
+  content: '+';
+  flex: none;
+  width: 1ch;
+  font-family: var(--font-mono);
+  color: var(--color-accent);
+}
+
+.roster-fold[open] > .roster-fold-summary::before {
+  content: '\2212';
+}
+
+.roster-fold-summary::-webkit-details-marker {
+  display: none;
+}
+
+.roster-fold[open] > .roster-fold-summary {
+  margin-bottom: var(--space-3);
+}
+
+/* "Up next": one prominent card, one big button. Its children stack with the same shared gap the
+   heat cards use. */
+.up-next {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.up-next h2,
+.up-next p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.up-next .btn {
+  align-self: flex-start;
+}
+
+/* A long unbroken name (a realistic registration entry) wraps inside its heat card instead of
+   spilling past the card edge. */
+.heat-entries-list li span:not(.station-badge) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
