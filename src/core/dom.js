@@ -217,24 +217,3 @@ export function passwordToggle(inputs, { shown = false, onToggle = () => {} } = 
   });
   return [button, status];
 }
-
-// Scales `shell` so its natural content height fits `root`'s height. Resets
-// first so it always measures the unscaled layout. The shell is widened by the
-// inverse factor before scaling, so the scaled view still spans the full
-// screen width rather than shrinking into a narrow column. Widening can only
-// reduce wrapping (never add height), so the computed factor stays sufficient.
-// Format-agnostic: any full-screen surface that must never scroll (a projector)
-// can use it; Cup Taster's projectorSurface.js is the first caller.
-export function fitToScreen(root, shell) {
-  shell.style.transform = '';
-  shell.style.transformOrigin = '';
-  shell.style.width = '';
-  const available = root.clientHeight;
-  const needed = shell.scrollHeight;
-  if (!available || needed <= available) return 1;
-  const scale = available / needed;
-  shell.style.transformOrigin = 'top left';
-  shell.style.width = `${100 / scale}%`;
-  shell.style.transform = `scale(${scale})`;
-  return scale;
-}

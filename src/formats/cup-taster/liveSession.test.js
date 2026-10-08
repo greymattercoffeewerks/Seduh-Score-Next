@@ -123,6 +123,7 @@ function baseTables() {
       { data: heat2Entries, error: null },
     ],
     ct_results: { data: heat1Results, error: null },
+    events: { data: { id: 'ev1', name: 'Cup 2026' }, error: null },
   };
 }
 
@@ -156,6 +157,7 @@ describe('buildLiveSessionPayload', () => {
 
     expect(payload.activeHeat).toEqual({
       heatNumber: 2,
+      kind: 'normal',
       stageKind: 'prelims',
       status: 'timing',
       timingMode: 'app',
@@ -480,6 +482,182 @@ describe('buildLiveSessionPayload', () => {
       });
       const payload = await buildLiveSessionPayload('s1', client);
       expect(payload.champion).toBeNull();
+    });
+  });
+  describe("the venue display's extras (additive to the phone's contract)", () => {
+    const pendingHeat = (n, overrides = {}) => ({
+      id: `h${n}`,
+      stage_id: 's1',
+      heat_number: n,
+      kind: 'normal',
+      status: 'pending',
+      timing_mode: 'app',
+      started_at: null,
+      duration_secs: 480,
+      ...overrides,
+    });
+
+    it("carries the event's name, read from the stage's own event", async () => {
+      const client = fakeClient({
+        tables: { ...baseTables(), events: { data: { id: 'ev1', name: 'Cup 2026' }, error: null } },
+      });
+      const payload = await buildLiveSessionPayload('s1', client);
+      expect(payload.eventName).toBe('Cup 2026');
+      expect(client.calls).toContainEqual(['eq', 'events', 'id', 'ev1']);
+    });
+
+    it('has no name when the event no longer exists (the one read failure it tolerates)', async () => {
+      const client = fakeClient({
+        tables: {
+          ...baseTables(),
+          events: { data: null, error: { code: 'PGRST116', message: 'no rows' } },
+        },
+      });
+      const payload = await buildLiveSessionPayload('s1', client);
+      expect(payload.eventName).toBeNull();
+      expect(payload.standings).toHaveLength(2);
+    });
+
+    it('does NOT publish without the name when the read fails for any other reason: a transient failure rethrows so the publish retries instead of overwriting a good stored name', async () => {
+      const client = fakeClient({
+        tables: {
+          ...baseTables(),
+          events: { data: null, error: { code: '', message: 'network down' } },
+        },
+      });
+      await expect(buildLiveSessionPayload('s1', client)).rejects.toMatchObject({ code: '' });
+    });
+
+    it('has no name when the event has none', async () => {
+      const client = fakeClient({
+        tables: { ...baseTables(), events: { data: { id: 'ev1', name: null }, error: null } },
+      });
+      expect((await buildLiveSessionPayload('s1', client)).eventName).toBeNull();
+    });
+
+    it('names the next heat: the lowest-numbered one still waiting, with its cuppers and stations', async () => {
+      const client = fakeClient({
+        tables: {
+          ...baseTables(),
+          ct_heats: {
+            data: [pendingHeat(5), pendingHeat(4), { ...heats[0] }],
+            error: null,
+          },
+          ct_heat_entries: [
+            {
+              data: [
+                {
+                  id: 'he5',
+                  heat_id: 'h5',
+                  entry_id: 'b',
+                  station: 'B',
+                  elapsed_secs: null,
+                  maxed: false,
+                },
+              ],
+              error: null,
+            },
+            {
+              data: [
+                {
+                  id: 'he4',
+                  heat_id: 'h4',
+                  entry_id: 'a',
+                  station: 'A',
+                  elapsed_secs: null,
+                  maxed: false,
+                },
+              ],
+              error: null,
+            },
+            { data: heat1Entries, error: null },
+          ],
+        },
+      });
+      const payload = await buildLiveSessionPayload('s1', client);
+      expect(payload.upNext).toEqual({
+        heatNumber: 4,
+        kind: 'normal',
+        cuppers: [{ displayName: 'Alex', station: 'A' }],
+      });
+    });
+
+    it('names a regular heat before a tiebreak heat even when the tiebreak has the lower number (the organiser’s Up next does the same)', async () => {
+      const entry = (id, heatId, entryId, station) => ({
+        id,
+        heat_id: heatId,
+        entry_id: entryId,
+        station,
+        elapsed_secs: null,
+        maxed: false,
+      });
+      const client = fakeClient({
+        tables: {
+          ...baseTables(),
+          ct_heats: {
+            data: [pendingHeat(1, { kind: 'tiebreak' }), pendingHeat(3)],
+            error: null,
+          },
+          ct_heat_entries: [
+            { data: [entry('he-t1', 'h1', 'b', 'B')], error: null },
+            { data: [entry('he-3', 'h3', 'a', 'A')], error: null },
+          ],
+        },
+      });
+      const { upNext } = await buildLiveSessionPayload('s1', client);
+      expect(upNext).toMatchObject({ heatNumber: 3, kind: 'normal' });
+    });
+
+    it('carries the heat kind so a display can tell a tiebreak Heat 1 from a regular one', async () => {
+      const client = fakeClient({
+        tables: {
+          ...baseTables(),
+          ct_heats: { data: [pendingHeat(1, { kind: 'tiebreak' })], error: null },
+          ct_heat_entries: {
+            data: [
+              {
+                id: 'he-t1',
+                heat_id: 'h1',
+                entry_id: 'a',
+                station: 'A',
+                elapsed_secs: null,
+                maxed: false,
+              },
+            ],
+            error: null,
+          },
+        },
+      });
+      expect((await buildLiveSessionPayload('s1', client)).upNext).toMatchObject({
+        heatNumber: 1,
+        kind: 'tiebreak',
+      });
+    });
+
+    it('a waiting heat with nobody in it is not up next', async () => {
+      const client = fakeClient({
+        tables: {
+          ...baseTables(),
+          ct_heats: { data: [pendingHeat(4)], error: null },
+          ct_heat_entries: { data: [], error: null },
+        },
+      });
+      expect((await buildLiveSessionPayload('s1', client)).upNext).toBeNull();
+    });
+
+    it('has no next heat when none is waiting (all done, or one running and nothing queued behind it)', async () => {
+      const client = fakeClient({ tables: baseTables() });
+      expect((await buildLiveSessionPayload('s1', client)).upNext).toBeNull();
+    });
+
+    it('does not treat a heat that is running or confirmed as next', async () => {
+      const client = fakeClient({
+        tables: {
+          ...baseTables(),
+          ct_heats: { data: [{ ...heats[0] }, { ...heats[1] }], error: null },
+        },
+      });
+      expect((await buildLiveSessionPayload('s1', client)).upNext).toBeNull();
     });
   });
 });
@@ -822,6 +1000,63 @@ describe('publish_live_session read-chain failures', () => {
       publishLiveSessionHandlers(client).publish_live_session(intent),
     ).rejects.toMatchObject({
       permanent: false,
+    });
+  });
+
+  // The venue display's event name is read last in the chain. It must retry like every other read: publishing
+  // without it would replace a good stored name with none (publish_session overwrites the whole payload).
+  describe('the event-name read at the end of the chain', () => {
+    function failingEventRead(error) {
+      const rpcCalls = [];
+      const client = fakeClient({
+        tables: { ...baseTables(), events: { data: null, error } },
+        rpc: (...args) => {
+          rpcCalls.push(args);
+          return Promise.resolve({ data: null, error: null });
+        },
+      });
+      return { client, rpcCalls };
+    }
+
+    it('a transient failure keeps the publish queued and publishes nothing (so no good name is overwritten)', async () => {
+      const { client, rpcCalls } = failingEventRead({
+        message: 'TypeError: Failed to fetch',
+        code: '',
+      });
+      await expect(
+        publishLiveSessionHandlers(client).publish_live_session({ ...intent, isTest: false }),
+      ).rejects.toMatchObject({ permanent: false });
+      expect(rpcCalls).toEqual([]);
+    });
+
+    it('a permanent failure is reported and dropped, like every other read', async () => {
+      const { client, rpcCalls } = failingEventRead({
+        message: 'invalid input syntax for type uuid',
+        code: '22P02',
+      });
+      await expect(
+        publishLiveSessionHandlers(client).publish_live_session({ ...intent, isTest: false }),
+      ).rejects.toMatchObject({ permanent: true });
+      expect(rpcCalls).toEqual([]);
+    });
+
+    it('an event that is gone still publishes, just without a name', async () => {
+      const { client, rpcCalls } = failingEventRead({ code: 'PGRST116', message: 'no rows' });
+      await publishLiveSessionHandlers(client).publish_live_session({ ...intent, isTest: false });
+      expect(rpcCalls).toHaveLength(1);
+      expect(rpcCalls[0][1].p_payload.eventName).toBeNull();
+    });
+
+    it('a bug in our own code while reading it is not hidden: it is reported as permanent', async () => {
+      const client = fakeClient({ tables: baseTables() });
+      const realFrom = client.from;
+      client.from = (table) => {
+        if (table === 'events') throw new TypeError('our own bug');
+        return realFrom(table);
+      };
+      await expect(
+        publishLiveSessionHandlers(client).publish_live_session({ ...intent, isTest: false }),
+      ).rejects.toMatchObject({ permanent: true, message: 'our own bug' });
     });
   });
 

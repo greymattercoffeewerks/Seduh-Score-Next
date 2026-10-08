@@ -65,9 +65,10 @@
 // automatically once main.js's existing reconnect-triggered flush succeeds
 // — no new reconnect wiring needed, since that flush already passes
 // cupTasterOutboxHandlers(client), which now includes this operation type.
-import { listHeatsForStage, hydrateEntries } from './heats.js';
+import { listHeatsForStage, hydrateEntries, byRunningOrder } from './heats.js';
 import { fetchStandingsForStage, resolveAdvancement, tieStatusFor } from './standings.js';
 import { listEntriesByIds } from '../../core/registry.js';
+import { findEvent } from '../../core/events.js';
 import {
   enqueueOperation,
   flushOutbox,
@@ -129,6 +130,8 @@ async function fetchHeatResults(hydratedEntries, client) {
 function toActiveHeat(stage, heat, hydratedEntries) {
   return {
     heatNumber: heat.heat_number,
+    // 'normal' | 'tiebreak': tiebreak heats number from 1 again, so a display needs this to tell two "Heat 1"s apart.
+    kind: heat.kind,
     stageKind: stage.kind,
     status: heat.status,
     timingMode: heat.timing_mode,
@@ -186,6 +189,27 @@ export async function buildLiveSessionPayload(stageId, client = getSupabase()) {
     activeHeat = toActiveHeat(stage, running.heat, hydrated);
   }
 
+  // The next heat to run: the lowest-numbered one still waiting, so the venue display can say who is up
+  // next between heats (additive to the payload — the phone view ignores it).
+  const waiting = heatsWithEntries
+    .filter(({ heat }) => heat.status === 'pending')
+    .sort((a, b) => byRunningOrder(a.heat, b.heat))[0];
+  let upNext = null;
+  if (waiting) {
+    const hydrated = await hydrateHeatEntries(waiting.entries, client);
+    // A heat with nobody in it is not "up next": the display would announce a heat with no cuppers.
+    if (hydrated.length > 0) {
+      upNext = {
+        heatNumber: waiting.heat.heat_number,
+        kind: waiting.heat.kind,
+        cuppers: hydrated.map((entry) => ({
+          displayName: entry.displayName,
+          station: entry.station,
+        })),
+      };
+    }
+  }
+
   const confirmed = heatsWithEntries
     .filter(({ heat }) => heat.status === 'confirmed')
     .sort((a, b) => b.heat.heat_number - a.heat.heat_number)
@@ -221,10 +245,24 @@ export async function buildLiveSessionPayload(stageId, client = getSupabase()) {
       ? (ranked.find(({ item }) => item.finalPosition === 1)?.item.displayName ?? null)
       : null;
 
+  // The event's name, for the venue display's band. Read like every other read in this chain: a transient
+  // failure rethrows, so buildPayloadOrClassify queues the publish for retry — publishing WITHOUT the name
+  // instead would overwrite a good stored name (publish_session replaces the whole payload and its
+  // snapshot_at guard only orders publishes), and the band would lose it until the next heat. Only "that
+  // event no longer exists" is tolerated, as no name.
+  let eventName = null;
+  try {
+    eventName = (await findEvent(stage.event_id, client))?.name ?? null;
+  } catch (error) {
+    if (error?.code !== ROW_NOT_FOUND) throw error;
+  }
+
   return {
+    eventName,
     stage: { kind: stage.kind, ordinal: stage.ordinal, setCount: stage.set_count },
     standings,
     activeHeat,
+    upNext,
     recentHeats,
     champion,
   };

@@ -21,6 +21,23 @@ const HEAT_TARGET = 4;
 const HEAT_MIN = 2;
 const MAX_INSERT_ATTEMPTS = 3;
 
+// A heat's name wherever it is shown (the organiser's heats page, the venue display). Tiebreak heats number
+// from 1 again, so without the suffix a stage with a tiebreak shows two different "Heat 1"s.
+export function formatHeatName(heatNumber, kind) {
+  return `Heat ${heatNumber}${kind === 'tiebreak' ? ' (tiebreak)' : ''}`;
+}
+
+// Comparator for heat ROWS in the order they run: regular heats in order, then tiebreak heats (their
+// numbering restarts at 1, so heat_number alone would interleave them). The organiser's "Up next" (the first
+// heat not yet confirmed, including one being timed) and the venue display's "up next" (the first heat still
+// WAITING, after whichever is running) pick from different sets on purpose, but order by this, so a tiebreak
+// numbered 1 can never jump ahead of a regular heat in either.
+export function byRunningOrder(a, b) {
+  return (
+    Number(a.kind === 'tiebreak') - Number(b.kind === 'tiebreak') || a.heat_number - b.heat_number
+  );
+}
+
 export async function listStageEntries(stageId, client = getSupabase()) {
   const { data, error } = await client.from('ct_stage_entries').select('*').eq('stage_id', stageId);
   if (error) throw error;

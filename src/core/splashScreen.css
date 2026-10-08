@@ -1,7 +1,7 @@
 /*
  * Splash / promo screen (not tied to a phase task, 2026-08-31). Built on
  * src/ui/tokens (colors/typography/spacing/base) — assumes index.css is
- * already loaded, same as viewer-shell.css/projectorSurface.css. Full-bleed,
+ * already loaded, same as viewer-shell.css/stageSurface.css. Full-bleed,
  * stage-mode only (data-surface="stage" is set by splashScreen.js itself, on
  * its own root — same split of responsibility viewer-shell.css's own module
  * comment already establishes: which token mode applies is the caller's

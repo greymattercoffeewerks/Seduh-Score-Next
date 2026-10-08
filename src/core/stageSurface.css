@@ -1,0 +1,45 @@
+/*
+ * A full-screen audience surface (core/stageSurface.js): exactly one screen tall, never scrolling. The look of
+ * what is on it is core/stageDisplay.css (band, footer, ring) and the format's own stylesheet; colours and
+ * type come from the [data-surface="stage"] tokens. Scoped to .stage-surface (added by mountStageSurface), not
+ * a bare [data-surface="stage"], so these rules cannot reach another element that carries that attribute.
+ *
+ * --stage-unit is 1% of the screen's height (dvh where the browser has it, because an iPad's toolbar changes
+ * the height the page really has and vh would size the type for a taller screen than exists). Every size in a
+ * stage display comes from it (or from the area-fitted --stage-fit, see stageDisplay.css), so the layout
+ * scales to any screen and is bounded by design rather than shrunk to fit. The shell's own holding cards
+ * ("Waiting for the organiser", "Connection lost") read it too (viewer-shell.css) — they are what the room
+ * sees when the feed is down.
+ */
+.stage-surface {
+  --stage-unit: 1vh;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+@supports (height: 1dvh) {
+  .stage-surface {
+    --stage-unit: 1dvh;
+  }
+}
+
+/* The shell's column stretches to the screen, and its body takes whatever the test-data banner leaves —
+   the bounded chain the stage display's size container needs. */
+.stage-surface .viewer-shell {
+  height: 100%;
+  min-height: 0;
+}
+
+.stage-surface .viewer-shell-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.stage-surface .viewer-holding-card {
+  align-self: center;
+  margin: auto;
+  max-width: 70vw;
+}
