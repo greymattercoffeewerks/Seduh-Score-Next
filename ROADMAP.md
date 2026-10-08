@@ -1543,7 +1543,7 @@ _Deferred findings from T-HARDEN.correct-heat-time, flagged and documented, not 
 
 _Deferred findings from T-HARDEN.projector-redesign, flagged and documented, not blocking._
 
-- **Result reveal + rank-change screens** (Codex research, "Result recorded" 4-6s and "Rank impact" 6-8s): need a queue of snapshots and a diff against the previous standings held in memory (no events reach the projector, only snapshots; nothing to diff on first load).
+- ~~Result reveal + rank-change screens~~ — built 2026-10-09 (T-HARDEN.projector-moments, below).
 - **Podium after a top tie:** omitted unless places 1-3 are each held by exactly one cupper; carrying `finalPosition` on the standings rows would allow "2nd" after a tiebreak (scoring-auditor: small, additive, rare).
 - **Real-venue check:** look at the display on the real projector from the back of the room, and on the iPad (`dvh` with the toolbar showing); tune type sizes if needed (one `--stage-unit`/`--stage-fit` per file).
 - **Pre-existing, found by the boundary review:** `formats/cup-taster/timingScreen.js` still runs its own countdown tick, urgent threshold and one-shot announcements instead of `core/countdownDisplay.js` (the math is shared via `core/countdown.js`); `timing.js` re-derives elapsed seconds the same way. Unify when next touching the organiser timing screen.
@@ -1751,3 +1751,19 @@ schema/RLS/scoring/offline-sync change, so `schema-guardian`/`security-reviewer`
 `scoring-auditor`/`offline-sync-auditor` don't apply. See CHANGELOG.md's "Versioning
 system: nameplate + semver footer" entry for the full account. **Definition of Done
 met.**
+
+---
+
+## Known open items from T-HARDEN.projector-moments (2026-10-09)
+
+_Result-recorded and rank-impact screens shipped; these were flagged and documented, not blocking._
+
+- **Real TV check of the moments:** the projector's ordinary screens were checked on the game-day 55-inch TV; the result and rank screens have not been seen there yet.
+- **Moments lost to a running heat:** a snapshot that already shows a running heat is not mined for moments (`core/momentPlayer.js` header). If the confirm of heat N and the start of heat N+1 reach the projector as one snapshot, the room gets no result screen for N. Revisit by detecting on urgent snapshots too and holding the queue until the urgent screen ends, if it is seen on a real event.
+- **Out-of-order confirmations:** the venue payload's `recentHeats` is the three newest confirmed heats in running order; a heat confirmed below those is not announced.
+- **"Played" before "confirmed":** `ct_standings` carries a time from the moment a timer stops, so with two heats in flight a stopped-but-unconfirmed cupper already counts as ranked and can show as "New" early. Needs a confirmed-based signal in the payload.
+- **Phone "Recent results" does not say "Max time"** for a timed-out entry (the payload now carries `maxed`; the venue result screen uses it).
+- **Extract the rest of the venue vocabulary when a second format's projector is built** (the project's second-use rule): `kicker`, `bigTitle`, the station/result card and the standings table in `projectorScreens.js`/`.css` are Cup Taster's today (`projector-*` classes); the idle screen's ring wiring duplicates `mountFooterRing`.
+- **Every moment pre-empts a held page** mid-read, and the idle loop restarts from its first page afterwards — accepted for news; a "resume the page" option is possible.
+- **No screen-reader announcement** for the moments (a TV surface; the phone view carries recent results as text). A polite `sr-only` line per moment is the option if parity is wanted.
+- **Rank rows beyond eight** are summarised as "+N more"; a very long tie at the edge of the top five is not listed in full.
