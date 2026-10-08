@@ -1,0 +1,268 @@
+/*
+ * Cup Taster's venue-display screens (projectorScreens.js): the heat on stage, being scored, the idle loop
+ * (up next + standings pages) and the champion. Drawn inside core/stageDisplay.css's frame (band, main,
+ * footer); token-only, so data-surface="stage" repaints it. Everything is sized in vh/vw so the layout
+ * scales to whatever screen the room has — see stageDisplay.css for why — and every screen is bounded by
+ * design (four-to-six station cards, eight standings rows a page), so nothing overflows.
+ *
+ * Meaning is carried by words, never by colour alone: a cupper's state is written on the card, a tie or an
+ * advancing place is written in the row.
+ */
+
+.projector-kicker {
+  margin: 0 0 calc(0.81 * var(--stage-fit));
+  color: var(--color-accent);
+  font-size: max(0.875rem, calc(3.53 * var(--stage-fit)));
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.projector-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: max(1.75rem, calc(10.89 * var(--stage-fit)));
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.projector-support {
+  margin: calc(2.72 * var(--stage-fit)) 0 0;
+  color: var(--color-text-secondary);
+  font-size: max(1rem, calc(4.64 * var(--stage-fit)));
+}
+
+/* ---------- the heat on stage ---------- */
+
+.projector-heat-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 3vw;
+  margin-bottom: calc(5.45 * var(--stage-fit));
+}
+
+.projector-clock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex: none;
+}
+
+.projector-clock-label {
+  /* Air under the label: the urgent countdown draws its outline outward from the digits. */
+  margin-bottom: calc(2.94 * var(--stage-fit));
+  color: var(--color-text-secondary);
+  font-size: max(0.875rem, calc(3.53 * var(--stage-fit)));
+}
+
+/* The shared countdown element (core/countdownDisplay.js) at projector size; the urgent outline and colour
+   stay viewerBody.css's. Out-specifies that file's own stage rule whatever order the sheets load in. */
+.projector-surface .projector-clock .viewer-countdown {
+  padding: 0;
+  font-size: max(3rem, calc(29.96 * var(--stage-fit)));
+  line-height: 1;
+}
+
+.projector-stations {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(20vw, 1fr));
+  gap: calc(2.72 * var(--stage-fit)) 1.6vw;
+}
+
+/* A title with station cards under it (the "up next" page) needs air between them. */
+.projector-title + .projector-stations {
+  margin-top: calc(5.45 * var(--stage-fit));
+}
+
+.projector-station {
+  display: flex;
+  flex-direction: column;
+  gap: calc(1.09 * var(--stage-fit));
+  padding: calc(3 * var(--stage-fit)) 1.4vw;
+  background: var(--color-surface);
+  border: var(--border-hairline) solid var(--color-border);
+  min-width: 0;
+}
+
+.projector-station-label {
+  color: var(--color-accent);
+  font-size: max(0.875rem, calc(3.53 * var(--stage-fit)));
+  font-weight: var(--font-weight-bold);
+}
+
+.projector-station-name {
+  /* Two lines at most: five or six stations of long names must not push a screen past its height. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: max(1.25rem, calc(6.26 * var(--stage-fit)));
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.15;
+  overflow-wrap: break-word;
+}
+
+.projector-station-note {
+  color: var(--color-text-secondary);
+  font-size: max(1rem, calc(4.36 * var(--stage-fit)));
+  font-variant-numeric: tabular-nums;
+}
+
+.projector-station[data-status='done'] .projector-station-note,
+.projector-station[data-status='maxed'] .projector-station-note {
+  color: var(--color-text);
+  font-weight: var(--font-weight-bold);
+}
+
+/* ---------- standings pages ---------- */
+
+.projector-standings-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 3vw;
+  margin-bottom: calc(2.72 * var(--stage-fit));
+}
+
+/* The page heading is smaller than a one-message screen's title: eight rows share the screen with it. */
+.projector-standings-head .projector-title {
+  font-size: max(1.5rem, calc(7.36 * var(--stage-fit)));
+}
+
+.projector-range {
+  color: var(--color-text-secondary);
+  font-size: max(1rem, calc(4.08 * var(--stage-fit)));
+  white-space: nowrap;
+}
+
+.projector-standings {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: max(1.1rem, calc(5.17 * var(--stage-fit)));
+  font-variant-numeric: tabular-nums;
+}
+
+.projector-standing-row td {
+  padding: calc(1.09 * var(--stage-fit)) 1vw;
+  border-bottom: var(--border-hairline) solid var(--color-border);
+}
+
+.projector-standing-pos {
+  width: 7vw;
+  color: var(--color-accent);
+  font-weight: var(--font-weight-bold);
+}
+
+.projector-standing-name {
+  max-width: 0; /* lets the name cell shrink and truncate instead of widening the table */
+  font-weight: var(--font-weight-semibold);
+}
+
+/* The name is cut with an ellipsis; the "(tied)" / "(advancing)" words beside it never are. */
+.projector-name-row {
+  display: flex;
+  min-width: 0;
+}
+
+.projector-name-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.projector-name-suffix {
+  flex: none;
+  white-space: pre;
+}
+
+.projector-standing-score,
+.projector-standing-time {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.projector-standing-score {
+  width: 12vw;
+}
+
+.projector-standing-time {
+  width: 14vw;
+}
+
+/* ---------- champion ---------- */
+
+.projector-champion-label {
+  align-self: center;
+  margin: 0 0 calc(2.72 * var(--stage-fit));
+  padding: calc(0.81 * var(--stage-fit)) 2.4vw;
+  background: var(--color-gold);
+  color: var(--color-gold-contrast);
+  font-size: max(1rem, calc(4.64 * var(--stage-fit)));
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.projector-champion-name {
+  margin: 0;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: max(2rem, calc(17.7 * var(--stage-fit)));
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.projector-champion-score {
+  margin: calc(3.4 * var(--stage-fit)) 0 0;
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: max(1.25rem, calc(8.17 * var(--stage-fit)));
+  font-variant-numeric: tabular-nums;
+}
+
+.projector-podium {
+  margin: calc(5.45 * var(--stage-fit)) 0 0;
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: max(1rem, calc(4.89 * var(--stage-fit)));
+}
+
+/* ---------- five or six stations ----------
+   A heat of more than four (a manual assignment, a big tiebreak) takes a compact layout: three columns,
+   a smaller clock and smaller cards, so two rows of two-line names still fit under the title and the
+   clock on any screen — nothing on a surface nobody can scroll may be cropped. */
+.projector-many .projector-heat-head {
+  margin-bottom: calc(2.2 * var(--stage-fit));
+}
+
+.projector-many .projector-title {
+  font-size: max(1.5rem, calc(5.6 * var(--stage-fit)));
+}
+
+.projector-surface .projector-many .projector-clock .viewer-countdown {
+  font-size: max(2.5rem, calc(13 * var(--stage-fit)));
+}
+
+.projector-many .projector-stations {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: calc(1.6 * var(--stage-fit)) 1.4vw;
+}
+
+.projector-many .projector-station {
+  padding: calc(1.5 * var(--stage-fit)) 1.2vw;
+  gap: calc(0.5 * var(--stage-fit));
+}
+
+.projector-many .projector-station-name {
+  font-size: max(1.1rem, calc(3.4 * var(--stage-fit)));
+}
+
+.projector-many .projector-station-note,
+.projector-many .projector-station-label {
+  font-size: max(0.9rem, calc(2.4 * var(--stage-fit)));
+}

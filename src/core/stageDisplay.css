@@ -1,0 +1,204 @@
+/*
+ * Venue display frame (core/stageDisplay.js, stageBand.js, progressRing.js) — the permanent band, the screen
+ * area and the footer of a surface nobody can scroll. Format-agnostic: a format's screens fill the slots and
+ * add their own stylesheet beside them. Token-only, so data-surface="stage" repaints it.
+ *
+ * What a format must know to use it (none of it is enforced, so it is written here):
+ *   - Sizes. The band and footer are sized from --stage-unit (1% of the screen's height; core/stageSurface.css
+ *     defines it, dvh where available). A SCREEN'S CONTENT inside .stage-main must instead use --stage-fit:
+ *     .stage-main is a size container and --stage-fit is 1cqh, 1% of the height the area really has, so a
+ *     test-data banner, a 4:3 screen or a tall footer shrinks the content instead of cropping it. --stage-fit
+ *     resolves only for descendants of .stage-main; used elsewhere it silently falls back to viewport units.
+ *     Design the worst case to fit (a full list, the longest plausible names) at roughly 80cqh of content:
+ *     scaling alone cannot rescue content that is simply too tall. Never px or fixed rem; max(<rem>, ...) sets
+ *     a floor so a small preview stays legible and nothing caps the type on a large screen.
+ *   - A bounded height. .stage-main is size-contained: it needs a definite height from its ancestors (a bounded
+ *     flex column down from the viewport, which core/stageSurface.css provides) or it collapses to its padding
+ *     and the screen is invisible, with no error.
+ *   - Stylesheets. An HTML entry that mounts a stage display must link stageDisplay.css and stageSurface.css
+ *     (and countdownDisplay.css if a screen shows a countdown); the format links its own beside them.
+ * ("Stage" in these names is the venue stage, the screen on show, not a competition's stage.)
+ */
+
+/* One unit of screen height. dvh where the browser has it (an iPad's toolbar changes the height the page
+   really has; vh would size the type for a taller screen than exists and push the footer off), vh where not. */
+.stage-display {
+  --stage-unit: 1vh;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  color: var(--color-text);
+}
+
+@supports (height: 1dvh) {
+  .stage-display {
+    --stage-unit: 1dvh;
+  }
+}
+
+.stage-band-host {
+  flex: none;
+}
+
+.stage-band {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2vw;
+  padding: calc(1.6 * var(--stage-unit)) 2.5vw;
+  border-bottom: var(--border-hairline) solid var(--color-border);
+  font-size: max(1rem, calc(3 * var(--stage-unit)));
+}
+
+.stage-band-left {
+  display: flex;
+  align-items: center;
+  gap: 2vw;
+  min-width: 0;
+}
+
+.stage-band-brand {
+  --brand-lockup-size: 1.35em;
+  flex: none;
+  color: var(--color-text);
+}
+
+/* Truncates, never wraps: a long event name must not grow the band or push the stage label off screen. */
+.stage-band-event {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.stage-band-right {
+  display: flex;
+  align-items: center;
+  gap: 1.5vw;
+  flex: none;
+}
+
+.stage-band-section {
+  background: var(--color-surface-sunken);
+  padding: 0.2em 0.8em;
+  font-weight: var(--font-weight-bold);
+}
+
+.stage-band-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  color: var(--color-danger);
+  font-weight: var(--font-weight-bold);
+}
+
+.stage-band-live-dot {
+  width: 0.6em;
+  height: 0.6em;
+  background: currentColor;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .stage-band-live-dot {
+    animation: stage-live-blink 2s ease-in-out infinite;
+  }
+}
+
+@keyframes stage-live-blink {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.stage-screen-host {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.stage-screen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.stage-main {
+  /* A size container, so a screen's content is sized from the room it ACTUALLY has (--stage-fit, 1% of this
+     area's height) rather than from the whole screen: a test-data banner, a 4:3 screen or a long footer
+     then shrinks the content instead of cropping it. Band and footer keep --stage-unit. */
+  container-type: size;
+  --stage-fit: 1cqh;
+  flex: 1;
+  min-height: 0;
+  padding: calc(3 * var(--stage-unit)) 4vw;
+  display: flex;
+  flex-direction: column;
+  /* `safe`: centred while the content fits, top-aligned once it does not, so an overfull screen loses its
+     bottom edge and not the title and the clock at the top. */
+  justify-content: safe center;
+  overflow: hidden;
+}
+
+.stage-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 3vw;
+  min-height: calc(10 * var(--stage-unit));
+  padding: calc(1.4 * var(--stage-unit)) 4vw;
+  border-top: var(--border-hairline) solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: max(1rem, calc(3.2 * var(--stage-unit)));
+}
+
+.stage-footer-start {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stage-footer-end {
+  display: flex;
+  align-items: center;
+  gap: 1.4vw;
+  flex: none;
+}
+
+/* The page-change ring: the arc fills while a page is held, the number is the seconds left. */
+.stage-ring {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: calc(7.5 * var(--stage-unit));
+  height: calc(7.5 * var(--stage-unit));
+  flex: none;
+}
+
+.stage-ring-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.stage-ring-track {
+  stroke: var(--color-border);
+}
+
+.stage-ring-arc {
+  stroke: var(--color-accent);
+}
+
+.stage-ring-count {
+  position: relative;
+  font-size: calc(3 * var(--stage-unit));
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}

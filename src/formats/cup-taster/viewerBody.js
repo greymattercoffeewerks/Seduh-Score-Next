@@ -4,8 +4,10 @@
 // a `live_sessions` row has real content — a standings table for the
 // current stage, an active-heat panel (status + per-cupper chips + a live
 // countdown for a running app-timed heat), and a short list of recently
-// completed heats. Shared by both T5.3 (projector) and T5.4 (phone) — T5.3
-// reuses this module unedited, per handoff. Ported from the shape v4.x's
+// completed heats. The PHONE view's body (T5.4); the projector used to reuse it unedited and
+// has had its own body (projectorBody.js, built on core/stageDisplay.js) since 2026-10-08, which
+// still reads the helpers exported below (cupperStatus, showsCountdown, isNoClockHeat) so both
+// apply the same rules. Ported from the shape v4.x's
 // own `rAudienceLbHTML`/`rAudienceHeatHTML` established (that app's Cup
 // Taster audience view was only ever an operator-device overlay, never a
 // standalone live surface — the content SHAPE carries over, nothing about
@@ -24,8 +26,11 @@
 //   stage: null | { kind: 'prelims'|'semis'|'finals', ordinal, setCount },
 //   standings: [{ position, displayName, numCorrect, totalElapsedSecs,
 //                 tieStatus: null | 'tied' | 'advancing' }],
+//   eventName: null | string,      (additive; the venue display's band)
+//   upNext: null | { heatNumber, kind, cuppers: [{ displayName, station }] },   (additive; the next
+//                                    heat still waiting, for the venue display)
 //   activeHeat: null | {
-//     heatNumber, stageKind, status: 'timing'|'scoring',
+//     heatNumber, kind: 'normal'|'tiebreak', stageKind, status: 'timing'|'scoring',
 //     timingMode: 'app'|'manual', startedAt: <ISO string>|null, durationSecs,
 //     cuppers: [{ displayName, station, totalElapsedSecs, maxed }],
 //   },
@@ -58,7 +63,7 @@
 // `ct_heat_entries.elapsed_secs`, never a second write path for one.
 import { el, withSrExpansion } from '../../core/dom.js';
 import { chainComparators } from '../../core/ranking.js';
-import { remainingSecs, isExpired } from '../../core/countdown.js';
+import { renderCountdown } from '../../core/countdownDisplay.js';
 import { formatDuration, formatDurationLong } from '../../core/duration.js';
 import { stageKindLabel } from './setup.js';
 
@@ -166,7 +171,8 @@ function renderStandingsTable(stage, standings) {
 // totalElapsedSecs is set to the duration cap (a real number, not null; see
 // core/timeclamp.js's clampElapsed()), so checking `done` first would
 // misreport every maxed cupper as done.
-function cupperStatus(cupper) {
+// Exported for the projector's heat screen, which shows the same three states in its own layout.
+export function cupperStatus(cupper) {
   if (cupper.maxed) return 'maxed';
   if (cupper.totalElapsedSecs != null) return 'done';
   return 'running';
@@ -203,77 +209,14 @@ export function isNoClockHeat(activeHeat) {
 // review: without this check, remainingSecs/isExpired both silently produce
 // NaN, which live-renders as "NaN:NaN") falls back to no countdown at all
 // rather than a broken one.
-function showsCountdown(activeHeat) {
+// Exported so the projector's heat screen applies the identical rule.
+export function showsCountdown(activeHeat) {
   return (
     activeHeat.timingMode === 'app' &&
     activeHeat.status === 'timing' &&
     Boolean(activeHeat.startedAt) &&
     activeHeat.durationSecs != null
   );
-}
-
-const URGENT_THRESHOLD_SECS = 10;
-
-// Mirrors timingScreen.js's own tick pattern (core/countdown.js's
-// organiser/projector/phone-agnostic remainingSecs/isExpired, +1s interval,
-// dataset.urgent at the same 10s threshold) — the AC this exists for is
-// literally "prove all three surfaces agree on remaining time," so the
-// display logic has to be the exact same math, not a re-derived
-// approximation. `aria-live="off"` is set explicitly on the ticking digits:
-// unlike timingScreen.js (which keeps its countdown outside any aria-live
-// region entirely), this content mounts inside viewer-shell.js's own
-// role="status"/aria-live="polite" body — without this, a screen reader
-// would get a fresh announcement every single second. That silences the
-// per-tick noise correctly, but (found in review) also silences the one
-// thing a non-visual user genuinely needs to know: crossing into the
-// urgent window, and the heat actually timing out — timingScreen.js's own
-// screen solves this with a one-shot announcement through a real feedback
-// region; `announcementEl` is the read-only-viewer equivalent, sr-only and
-// left OUT of aria-live="off" so the shell's own ancestor polite region
-// picks up its (rare, one-shot) text changes.
-function renderCountdown(activeHeat) {
-  const countdownEl = el('div', {
-    className: 'font-mono-score viewer-countdown',
-    attrs: { 'aria-live': 'off' },
-  });
-  // Explicit aria-live="polite", not relying purely on inheriting the
-  // shell's own ancestor live region — defensive (this element's
-  // announcements matter regardless of whether it always stays nested
-  // exactly where it is today) and gives the property something concrete
-  // to assert on.
-  const announcementEl = el('span', {
-    className: 'sr-only',
-    attrs: { 'aria-live': 'polite' },
-  });
-  const startedAtMs = new Date(activeHeat.startedAt).getTime();
-  const durationSecs = activeHeat.durationSecs;
-  let urgentAnnounced = false;
-  let expiredAnnounced = false;
-
-  function paint() {
-    const remaining = remainingSecs(startedAtMs, durationSecs, Date.now());
-    countdownEl.textContent = formatDuration(remaining);
-    const urgent = remaining <= URGENT_THRESHOLD_SECS;
-    countdownEl.dataset.urgent = urgent ? 'true' : 'false';
-    const expired = isExpired(startedAtMs, durationSecs, Date.now());
-    if (expired && !expiredAnnounced) {
-      expiredAnnounced = true;
-      announcementEl.textContent = 'Time is up.';
-    } else if (urgent && !expired && !urgentAnnounced) {
-      urgentAnnounced = true;
-      announcementEl.textContent = 'Less than 10 seconds remaining.';
-    }
-    return expired;
-  }
-
-  const elements = [countdownEl, announcementEl];
-  if (paint()) {
-    return { elements, cleanup: () => {} };
-  }
-  const intervalId = setInterval(() => {
-    if (paint()) clearInterval(intervalId);
-  }, 1000);
-  return { elements, cleanup: () => clearInterval(intervalId) };
 }
 
 function renderActiveHeat(activeHeat) {
@@ -360,7 +303,7 @@ function renderChampionHero(name) {
 
 // The renderBody callback viewer-shell.js's mountViewerShell calls once
 // hasViewableContent(payload) is true. Pure DOM construction plus, when an
-// active heat has a live countdown running, a single setInterval — the
+// active heat has a live countdown running (core/countdownDisplay.js's setInterval) — the
 // optional return value is viewer-shell.js's own cleanup-lifecycle contract
 // (T5.3's own addition to it): called before the next re-render and again
 // on unmount, so a ticking interval never outlives the DOM node it mutates.
@@ -370,10 +313,8 @@ function renderChampionHero(name) {
 // treatment of it.
 //
 // Sections are grouped into a main group (champion, standings) and a side
-// group (active heat, recent heats). Both groups are `display: contents` by
-// default (viewerBody.css), so the phone surface lays them out exactly as flat
-// siblings; the projector lays the two groups out side by side to use a
-// landscape screen's width instead of scrolling (projectorSurface.css).
+// group (active heat, recent heats). Both groups are `display: contents`
+// (viewerBody.css), so the sections lay out as flat siblings.
 export function mountViewerBody(container, payload) {
   const sections = [];
   const side = [];
