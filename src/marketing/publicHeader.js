@@ -1,7 +1,7 @@
 // Shared public-site header for standalone marketing surfaces. It intentionally
 // stays independent of the landing screen so Tour and Community can share the
 // same familiar sticky navigation without importing a whole page.
-import { brandMark, el, svgEl } from '../core/dom.js';
+import { brandLockup, el, svgEl } from '../core/dom.js';
 
 function menuIcon(close = false) {
   const lines = close
@@ -35,10 +35,6 @@ function navLink(text, href, active = false) {
 }
 
 export function buildPublicHeader({ active }) {
-  const mark = brandMark();
-  mark.classList.add('public-header-brand-mark');
-  mark.setAttribute('aria-hidden', 'true');
-
   const links = [
     navLink('Formats', '/tour/', active === 'tour'),
     navLink('Pricing', '/#pricing'),
@@ -98,7 +94,7 @@ export function buildPublicHeader({ active }) {
           className: 'public-header-brand',
           attrs: { href: '/', 'aria-label': 'Seduh Score home' },
         },
-        [mark, el('span', { text: 'Seduh Score' })],
+        [brandLockup()],
       ),
       el('span', { className: 'public-header-live' }, [
         el('span', { className: 'public-header-live-dot', attrs: { 'aria-hidden': 'true' } }),

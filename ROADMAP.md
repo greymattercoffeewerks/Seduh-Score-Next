@@ -1539,6 +1539,18 @@ _Deferred findings from T-HARDEN.correct-heat-time, flagged and documented, not 
 
 ---
 
+## Known open items from T-HARDEN.brand-lockup (2026-10-08)
+
+_Deferred findings from T-HARDEN.brand-lockup, flagged and documented, not blocking._
+
+- **Check the lockup on the real iPad / Safari:** the mark's baseline alignment is verified in Chromium only (WebKit's flex baseline for a replaced element has differed historically). Console header, public header, phone chrome.
+- **200% text size:** the public/landing header grows ~56px because the lockup now scales with text size; decide whether to cap it.
+- **Splash screen** still builds its stacked mark-above-wordmark by hand (`splash-mark`, `splash-wordmark`), and the timer / brew-planner headers show the mark alone: fold into `brand.css` if a stacked or mark-only variant is wanted.
+- **Optical weight:** the console wordmark is lighter than before (18px Chakra Petch vs 21px Hanken); adjust `--brand-lockup-size` on `.app-shell-brand` if it feels small.
+- **Phone chrome at 320px / 200% text (pre-existing):** the wordmark shrinks to a single letter beside the "NOT LIVE" badge; let the badge shrink or wrap.
+
+---
+
 ## Known open items from T-HARDEN.heats-roster-fold (2026-10-08)
 
 _Deferred findings from T-HARDEN.heats-roster-fold, flagged and documented, not blocking._

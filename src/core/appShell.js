@@ -20,7 +20,7 @@
 // `renderBody` callbacks already use — appShell owns the chrome MECHANICS
 // (a persistent header, a nav slot, an outlet); the composition root owns
 // what the nav actually SAYS.
-import { el, brandMark } from './dom.js';
+import { el, brandLockup } from './dom.js';
 import { findEvent } from './events.js';
 import { getSupabase } from './supabaseClient.js';
 import { isFlushInProgress, listPendingOperations, onOperationDropped } from './outbox.js';
@@ -105,13 +105,13 @@ export function mountAppShell(
   // viewer-shell.js's own renderChrome() identity name, which IS a real
   // <h1> deliberately, because there's no separate routed screen heading
   // competing with it on that audience-facing surface.
-  // Found missing entirely in a live production check — this whole shell
-  // rendered a text-only wordmark, no mark/logo anywhere. Ported from the
-  // legacy Seduh-Score repo (see brandMark()'s own comment in dom.js).
-  const markEl = el('span', { className: 'app-shell-mark', attrs: { 'aria-hidden': 'true' } }, [
-    brandMark(),
-  ]);
-  const nameEl = el('p', { className: 'app-shell-name', text: appName });
+  // The mark and the wordmark are the shared brand lockup (core/dom.js brandLockup(), styled only in
+  // src/ui/tokens/brand.css) — this shell just sizes it and wraps it in the home link below.
+  const lockupEl = brandLockup({
+    name: appName,
+    markClass: 'app-shell-mark',
+    nameClass: 'app-shell-name',
+  });
   // The organiser shell lives at /app/, but it is part of the public site,
   // not a closed destination. Keep the full wordmark as one link back to
   // the root landing page so there is always an obvious route out of an
@@ -122,7 +122,7 @@ export function mountAppShell(
       className: 'app-shell-brand',
       attrs: { href: '/', 'aria-label': `${appName} home` },
     },
-    [markEl, nameEl],
+    [lockupEl],
   );
   const breadcrumbEl = el('span', { className: 'app-shell-breadcrumb' });
   const navEl = el('nav', {

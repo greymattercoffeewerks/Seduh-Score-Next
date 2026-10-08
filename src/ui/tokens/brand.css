@@ -1,0 +1,57 @@
+/*
+ * The Seduh Score lockup: the mark and the wordmark, as ONE unit.
+ *
+ * Every surface that shows both (the console header, the public/marketing header, the landing page,
+ * the phone/projector chrome) builds it with `brandLockup()` in core/dom.js and gets its look from
+ * here, so the wordmark's typeface and the mark's alignment to it cannot drift apart per page again
+ * (they had: the console header set the wordmark in Hanken Grotesk 21px, the public pages in Chakra
+ * Petch 17px, and the mark hung 1-4px below the letters on both). Fix lockups here, never with a
+ * one-off override on a page — see CONVENTIONS.md "Local patches are an anti-pattern".
+ *
+ * Not covered here, deliberately: the splash screen's STACKED mark-above-wordmark (hero scale, its own
+ * layout in splashScreen.css) and the tools that show the mark alone (timer, brew planner).
+ *
+ * Everything is in `em`, so a surface sizes the lockup with ONE custom property
+ * (`--brand-lockup-size`) and the proportions follow:
+ *   - the wordmark is the display face, bold, wide-tracked (the identity's wordmark);
+ *   - the mark SITS ON THE WORDMARK'S BASELINE: its arches stand on the same line as the letters and
+ *     its dot rises just above the tops of the d and h, so the two read as one line of type instead of
+ *     the mark floating or hanging. The mark's viewBox is 56x48 and its ink fills 42/48 of the height,
+ *     ending 1.5/48 above the box bottom — the translate below puts the arches' bottom edge exactly on
+ *     the baseline. The ink is about 1.15x the height of the letters (0.81em vs 0.706em): a deliberate
+ *     step up, not an accident of two sizes. Measured on rendered pixels (CHANGELOG, T-HARDEN.brand-lockup).
+ */
+.brand-lockup {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.6em;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--brand-lockup-size, 1.0625rem);
+  line-height: 1.25;
+  letter-spacing: var(--tracking-wide);
+  color: inherit;
+  white-space: nowrap;
+}
+
+.brand-lockup-mark {
+  display: inline-flex;
+  flex: none;
+  width: 1.08em;
+  height: 0.926em;
+  color: var(--color-accent);
+  /* flex baseline alignment puts the BOX bottom on the baseline; the ink ends 1.5/48 of the box
+     height (0.029em) above that, so move it down by exactly that. */
+  transform: translateY(0.029em);
+}
+
+.brand-lockup-mark svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.brand-lockup-name {
+  min-width: 0;
+}

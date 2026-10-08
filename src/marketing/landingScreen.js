@@ -33,10 +33,10 @@
 //     console's projector view uses) rather than a hand-picked light-on-dark
 //     hex — see landing.css for exactly where and why.
 //
-// Built with core/dom.js's el()/svgEl()/brandMark(), same as every console
+// Built with core/dom.js's el()/svgEl()/brandLockup(), same as every console
 // screen (textContent-only, no innerHTML — see dom.js's own header comment
 // for why).
-import { el, svgEl, brandMark } from '../core/dom.js';
+import { el, svgEl, brandLockup } from '../core/dom.js';
 import { revealOnScroll } from '../core/scrollReveal.js';
 import { buildPublicFooter } from './publicFooter.js';
 
@@ -126,14 +126,7 @@ function actionLink(text, { primary = false, outline = false, href = '/app/#/eve
 // codebase's existing nav-toggle precedent (previous identity's own
 // `.kinetic-nav-panel-open` pattern).
 function buildNav() {
-  const mark = brandMark();
-  mark.classList.add('petrol-brand-mark');
-  mark.setAttribute('aria-hidden', 'true');
-
-  const brand = el('div', { className: 'petrol-brand' }, [
-    mark,
-    el('span', { text: 'Seduh Score' }),
-  ]);
+  const brand = el('div', { className: 'petrol-brand' }, [brandLockup()]);
 
   const live = el('span', { className: 'petrol-live-indicator' }, [
     liveDot(),

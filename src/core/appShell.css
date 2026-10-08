@@ -24,37 +24,21 @@
   z-index: 10;
 }
 
-.app-shell-mark {
-  display: inline-flex;
-  align-items: center;
-  color: var(--color-accent);
-  width: 1.5rem;
-  height: 1.5rem;
-  flex-shrink: 0;
-}
-
-.app-shell-mark svg {
-  width: 100%;
-  height: 100%;
-}
-
+/* The lockup itself (typeface, mark, alignment) is src/ui/tokens/brand.css; this only sizes it for
+   the console header and makes the whole thing the home link. */
 .app-shell-brand {
+  --brand-lockup-size: 1.125rem;
   display: inline-flex;
   align-items: center;
-  gap: var(--space-3);
+  /* The lockup is only ~22px tall; the link keeps the 44px tap target (the header row is already that
+     tall because of the menu toggle, so this changes nothing visible). */
+  min-height: var(--tap-target-min);
   color: inherit;
   text-decoration: none;
 }
 
-.app-shell-brand:hover .app-shell-name {
+.app-shell-brand:hover .brand-lockup-name {
   color: var(--color-accent);
-}
-
-.app-shell-name {
-  font-size: var(--text-lg);
-  font-weight: var(--font-weight-bold);
-  margin: 0;
-  white-space: nowrap;
 }
 
 .app-shell-breadcrumb {
