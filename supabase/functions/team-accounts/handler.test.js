@@ -22,6 +22,7 @@ function makeDeps(opts = {}) {
     updateUserById: [],
     deleteUser: [],
     adminRpc: [],
+    order: [],
   };
   const userClient = {
     auth: {
@@ -47,6 +48,7 @@ function makeDeps(opts = {}) {
         },
         updateUserById: async (id, args) => {
           calls.updateUserById.push([id, args]);
+          calls.order.push('updateUserById');
           return { data: {}, error: opts.updateError ?? null };
         },
         deleteUser: async (id) => {
@@ -57,7 +59,9 @@ function makeDeps(opts = {}) {
     },
     rpc: async (name, args) => {
       calls.adminRpc.push([name, args]);
-      return { data: null, error: opts.addMemberError ?? null };
+      calls.order.push(name);
+      const failure = name === 'team_restore_member' ? opts.restoreError : opts.addMemberError;
+      return { data: null, error: failure ?? null };
     },
   };
   return {
@@ -164,6 +168,8 @@ describe('handleRequest — shape of the request', () => {
     ],
     ['a non-string email', { action: 'add', orgId: ORG, email: 42 }],
     ['no user id on reset', { action: 'reset', orgId: ORG }],
+    ['no user id on restore', { action: 'restore', orgId: ORG }],
+    ['a user id that is not a uuid on restore', { action: 'restore', orgId: ORG, userId: 'nope' }],
     ['a user id that is not a uuid', { action: 'reset', orgId: ORG, userId: 'nope' }],
   ])(
     'rejects %s with a 400, before asking the database or Auth anything',
@@ -360,6 +366,113 @@ describe('handleRequest — reset', () => {
     expect(response.status).toBe(403);
     expect(calls.updateUserById).toHaveLength(0);
     expect(calls.adminCreated).toBe(0);
+  });
+});
+
+describe('handleRequest — restore', () => {
+  const body = { action: 'restore', orgId: ORG, userId: MEMBER };
+
+  it('asks the database whether THIS owner may restore THIS person — not the reset question', async () => {
+    const { deps, calls } = makeDeps();
+    await handleRequest(post(body), deps);
+    expect(calls.userRpc).toEqual([['team_can_restore', { p_org_id: ORG, p_user_id: MEMBER }]]);
+  });
+
+  it('sets a new one-time password, flags the account to change it, puts the membership back, and returns the password once', async () => {
+    const { deps, calls } = makeDeps();
+    const response = await handleRequest(post(body), deps);
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.userId).toBe(MEMBER);
+    expect(payload.password).toMatch(PASSWORD_SHAPE);
+    expect(calls.updateUserById).toEqual([
+      [MEMBER, { password: payload.password, user_metadata: { must_change_password: true } }],
+    ]);
+    expect(calls.adminRpc).toEqual([['team_restore_member', { p_org_id: ORG, p_user_id: MEMBER }]]);
+  });
+
+  it('puts the membership back BEFORE it changes any password, so Auth is only asked about an account that was just restored', async () => {
+    const { deps, calls } = makeDeps();
+    await handleRequest(post(body), deps);
+    expect(calls.order).toEqual(['team_restore_member', 'updateUserById']);
+  });
+
+  it('is never cached', async () => {
+    const { deps } = makeDeps();
+    expect((await handleRequest(post(body), deps)).headers.get('Cache-Control')).toBe('no-store');
+  });
+
+  it('creates and deletes no account', async () => {
+    const { deps, calls } = makeDeps();
+    await handleRequest(post(body), deps);
+    expect(calls.createUser).toHaveLength(0);
+    expect(calls.deleteUser).toHaveLength(0);
+  });
+
+  it('403s a restore the database refuses (not the owner, never removed from this org, in an org now) before touching Auth, saying what the owner can fix', async () => {
+    const { deps, calls } = makeDeps({ allowed: false });
+    const response = await handleRequest(post(body), deps);
+    expect(response.status).toBe(403);
+    expect((await response.json()).error).toMatch(/cannot be restored/);
+    expect(calls.updateUserById).toHaveLength(0);
+    expect(calls.adminRpc).toHaveLength(0);
+    expect(calls.adminCreated).toBe(0);
+  });
+
+  it('treats anything but an exact true from the owner check as a refusal', async () => {
+    for (const allowed of ['true', 1, 0, '']) {
+      const { deps, calls } = makeDeps({ allowed });
+      expect((await handleRequest(post(body), deps)).status).toBe(403);
+      expect(calls.updateUserById).toHaveLength(0);
+    }
+  });
+
+  it('500s, without leaking the database’s words, when the owner check itself fails — Auth untouched', async () => {
+    const { deps, calls } = makeDeps({ rpcError: true });
+    const response = await handleRequest(post(body), deps);
+    expect(response.status).toBe(500);
+    expect(JSON.stringify(await response.json())).not.toMatch(/secret detail/);
+    expect(calls.updateUserById).toHaveLength(0);
+    expect(calls.adminCreated).toBe(0);
+  });
+
+  it('401s a token Auth does not accept, before asking the database or building the admin client', async () => {
+    const { deps, calls } = makeDeps({ getUserError: true });
+    expect((await handleRequest(post(body), deps)).status).toBe(401);
+    expect(calls.userRpc).toHaveLength(0);
+    expect(calls.adminCreated).toBe(0);
+  });
+
+  it('a failed password update, after the person is back on the team, says so and points at Reset password, without repeating Auth’s words', async () => {
+    const { deps, calls } = makeDeps({ updateError: { message: 'leaky internal text' } });
+    const response = await handleRequest(post(body), deps);
+    expect(response.status).toBe(500);
+    const payload = await response.json();
+    expect(payload.error).toMatch(/back on the team/);
+    expect(payload.error).toMatch(/Reset password/);
+    expect(JSON.stringify(payload)).not.toMatch(/leaky/);
+    expect(payload.password).toBeUndefined();
+    expect(calls.adminRpc).toHaveLength(1); // the membership was restored
+  });
+
+  it('a failed restore (the database re-check refused it) never touches the account’s password, returns none, and deletes nothing — the person stays removed and can be restored again', async () => {
+    const { deps, calls } = makeDeps({ restoreError: { message: 'leaky constraint detail' } });
+    const response = await handleRequest(post(body), deps);
+    expect(response.status).toBe(500);
+    const payload = await response.json();
+    expect(JSON.stringify(payload)).not.toMatch(/leaky/);
+    expect(payload.password).toBeUndefined();
+    expect(calls.updateUserById).toHaveLength(0);
+    expect(calls.deleteUser).toHaveLength(0);
+  });
+
+  it('add and reset still ask their own question, not the restore one', async () => {
+    const add = makeDeps();
+    await handleRequest(post({ action: 'add', orgId: ORG, email: 'a@b.com' }), add.deps);
+    expect(add.calls.userRpc.map(([name]) => name)).toEqual(['team_can_manage']);
+    const reset = makeDeps();
+    await handleRequest(post({ action: 'reset', orgId: ORG, userId: MEMBER }), reset.deps);
+    expect(reset.calls.userRpc.map(([name]) => name)).toEqual(['team_can_manage']);
   });
 });
 
