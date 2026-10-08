@@ -17,21 +17,15 @@
   margin: 0 auto;
   padding: 14px clamp(20px, 4vw, 40px);
 }
+/* The lockup's look is src/ui/tokens/brand.css; this is only the home link around it. */
 .public-header-brand {
+  --brand-lockup-size: 1.0625rem;
   display: flex;
   align-items: center;
-  gap: 10px;
+  /* 44px tap target around a ~21px lockup; the header row is already that tall (menu toggle). */
+  min-height: var(--tap-target-min);
   color: inherit;
-  font-family: var(--font-display);
-  font-size: 17px;
-  font-weight: var(--font-weight-bold);
-  letter-spacing: var(--tracking-wide);
   text-decoration: none;
-}
-.public-header-brand-mark {
-  width: 22px;
-  height: 22px;
-  color: var(--color-accent);
 }
 .public-header-live,
 .public-header-secondary,

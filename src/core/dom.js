@@ -75,6 +75,28 @@ export function brandMark() {
   return svg;
 }
 
+// The mark and the wordmark as one lockup (styled by src/ui/tokens/brand.css — the ONE place its
+// typeface, size ratio and optical alignment live). Callers wrap it in whatever the surface needs (a
+// home link, an <h1>) and may add their own hook classes via markClass / nameClass; they set the size
+// with `--brand-lockup-size` and must not restyle the lockup itself. The mark is decorative
+// (aria-hidden): the wordmark text beside it carries the name.
+export function brandLockup({ name = 'Seduh Score', markClass = '', nameClass = '' } = {}) {
+  return el('span', { className: 'brand-lockup' }, [
+    el(
+      'span',
+      {
+        className: `brand-lockup-mark${markClass ? ` ${markClass}` : ''}`,
+        attrs: { 'aria-hidden': 'true' },
+      },
+      [brandMark()],
+    ),
+    el('span', {
+      className: `brand-lockup-name${nameClass ? ` ${nameClass}` : ''}`,
+      text: name,
+    }),
+  ]);
+}
+
 // Marks a control as busy/unavailable via `aria-disabled`/`aria-busy`
 // instead of the native `disabled` attribute. Native `disabled` removes an
 // element from the focus order the instant it's set — if that element

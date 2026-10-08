@@ -130,19 +130,11 @@ a {
   max-width: 1360px;
   margin: 0 auto;
 }
+/* The lockup's look is src/ui/tokens/brand.css. */
 .petrol-brand {
+  --brand-lockup-size: 1.0625rem;
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 17px;
-  letter-spacing: var(--tracking-wide);
-}
-.petrol-brand-mark {
-  width: 22px;
-  height: 22px;
-  color: var(--color-accent);
 }
 .petrol-live-indicator {
   display: flex;
