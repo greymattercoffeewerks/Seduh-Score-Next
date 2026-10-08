@@ -1539,6 +1539,22 @@ _Deferred findings from T-HARDEN.correct-heat-time, flagged and documented, not 
 
 ---
 
+## Known open items from T-HARDEN.projector-redesign (2026-10-08)
+
+_Deferred findings from T-HARDEN.projector-redesign, flagged and documented, not blocking._
+
+- **Result reveal + rank-change screens** (Codex research, "Result recorded" 4-6s and "Rank impact" 6-8s): need a queue of snapshots and a diff against the previous standings held in memory (no events reach the projector, only snapshots; nothing to diff on first load).
+- **Podium after a top tie:** omitted unless places 1-3 are each held by exactly one cupper; carrying `finalPosition` on the standings rows would allow "2nd" after a tiebreak (scoring-auditor: small, additive, rare).
+- **Real-venue check:** look at the display on the real projector from the back of the room, and on the iPad (`dvh` with the toolbar showing); tune type sizes if needed (one `--stage-unit`/`--stage-fit` per file).
+- **Pre-existing, found by the boundary review:** `formats/cup-taster/timingScreen.js` still runs its own countdown tick, urgent threshold and one-shot announcements instead of `core/countdownDisplay.js` (the math is shared via `core/countdown.js`); `timing.js` re-derives elapsed seconds the same way. Unify when next touching the organiser timing screen.
+- `projectorScreens.js` reads `cupperStatus`/`showsCountdown`/`isNoClockHeat` from the PHONE's `viewerBody.js` (intra-format, fine); they belong in a small format rules module. The idle loop's page assembly and "skip a republish with nothing changed" signature would be copied by a second format (a core primitive candidate).
+- `core/stageBody.js`/`stageDisplay.js` take no `countdownDisplay` hooks; `countdownDisplay.js` uses a real `setInterval`/`Date.now` (not injectable like the ring and director).
+- **Hold/pause for the organiser**, sponsor interstitials, an "ambient" idle variant: not built (the user chose fully automatic).
+- The held "being scored" card keeps its footer from the payload that started it for up to 8 seconds (cosmetic).
+- The idle loop restarts at page 1 whenever the standings change; pages are not balanced (a last page can hold one row).
+
+---
+
 ## Known open items from T-HARDEN.team-restore (2026-10-08)
 
 _Deferred findings from T-HARDEN.team-restore, flagged and documented, not blocking._

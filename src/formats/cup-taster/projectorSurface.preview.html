@@ -6,81 +6,72 @@
     <title>Projector surface — preview</title>
     <link rel="stylesheet" href="/src/ui/tokens/index.css" />
     <link rel="stylesheet" href="/src/core/viewer-shell.css" />
+    <link rel="stylesheet" href="/src/core/stageDisplay.css" />
+    <link rel="stylesheet" href="/src/core/stageSurface.css" />
+    <link rel="stylesheet" href="/src/core/countdownDisplay.css" />
     <link rel="stylesheet" href="/src/formats/cup-taster/heatsScreen.css" />
     <link rel="stylesheet" href="/src/formats/cup-taster/standingsScreen.css" />
     <link rel="stylesheet" href="/src/formats/cup-taster/viewerBody.css" />
-    <link rel="stylesheet" href="/src/formats/cup-taster/projectorSurface.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/projectorScreens.css" />
     <style>
-      /* Demo-harness-only layout — not part of the shipped module graph. */
+      /* Demo-harness-only layout — not part of the shipped module graph. The real surface fills the screen
+         and every size in it is in vh/vw, so the harness gives it the whole browser window (resize the
+         window to try a 1080p, 720p or 4:3 screen) and floats its buttons over the bottom edge. */
+      body {
+        margin: 0;
+      }
       .demo-controls {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 50;
         display: flex;
         flex-wrap: wrap;
-        gap: 8px;
-        padding: 16px;
-        border-bottom: 2px solid var(--color-border-strong);
-        background: var(--color-surface);
+        gap: 6px;
+        padding: 8px 12px;
+        background: rgba(0, 0, 0, 0.85);
+        font-family: var(--font-body);
       }
       .demo-controls button {
-        min-height: 44px;
-        padding: 8px 14px;
-        border-radius: var(--radius-sm);
-        border: 1px solid var(--color-border-strong);
-        background: var(--color-surface);
-        color: var(--color-text);
+        min-height: 36px;
+        padding: 4px 10px;
+        border: 1px solid #8fa7a9;
+        background: #16393a;
+        color: #f2f7f6;
         font-family: var(--font-body);
+        font-size: 13px;
         cursor: pointer;
       }
-      /* A projector/TV is always ~16:9 — this box is demo-only, so the
-         harness can show that framing without needing real fullscreen.
-         The real module (projectorSurface.js/.css) imposes no aspect-ratio
-         of its own, matching the handoff's own "no scale-to-fit stage"
-         guidance — it just fills whatever container it's given. */
-      .demo-stage {
-        max-width: 960px;
-        aspect-ratio: 16 / 9;
-        margin: 16px;
-        border: 2px solid var(--color-border-strong);
-        border-radius: var(--radius-md);
-        /* auto, not hidden — real deployment has no fixed-height box at
-           all (just min-height: 100vh, see projectorSurface.css), so taller
-           content simply extends the real page; this demo box's aspect
-           ratio is only a visual "this is a 16:9 screen" cue and shouldn't
-           clip content the real surface would never clip. */
-        overflow: auto;
-      }
       #projector-frame {
-        min-height: 100%;
+        height: 100vh;
       }
     </style>
   </head>
   <body>
     <!--
-      Demo-only harness for the T5.3 projector surface — not part of the
-      shipped module graph, same role as every other *.preview.html file.
-      Mounts the REAL mountProjectorSurface() (viewer-shell + viewerBody,
-      showChrome: false, data-surface="stage") against a fake live_sessions
-      source — same content viewerBody.js already renders for T5.4's phone
-      surface, unedited, per the handoff's own "T5.3 reuses this module
-      unedited" plan. The one thing genuinely new here is the live countdown
-      (also viewerBody.js, added alongside this task) — its own button below
-      drives a real ticking clock, the concrete proof for the handoff's
-      cross-surface "organiser/projector/phone all agree on remaining time"
-      AC.
+      Demo-only harness for the projector surface — not part of the shipped module graph, same role as every
+      other *.preview.html file. Mounts the REAL mountProjectorSurface() (viewer-shell + the projector body,
+      showChrome: false, data-surface="stage") against a fake live_sessions source, with a button per screen:
+      the heat on stage (live countdown), the urgent countdown, a hand-timed heat, being scored, the idle
+      loop (an "up next" page and 17 cuppers in pages of 8, with the page-change ring), the champion, and the
+      TEST-event banner. Resize the window to try other screen shapes.
     -->
     <div class="demo-controls">
-      <button id="btn-standings-only">Standings only</button>
-      <button id="btn-active-heat">+ Active heat, live countdown (app mode)</button>
-      <button id="btn-urgent">+ Active heat, countdown &lt;10s (urgent)</button>
-      <button id="btn-manual-no-clock">Manual heat, not started (no-clock)</button>
-      <button id="btn-recent">+ Recent results</button>
-      <button id="btn-test-event">Publish as TEST event</button>
+      <button id="btn-idle">Idle loop (up next + 17 cuppers)</button>
+      <button id="btn-standings-only">Standings only (4 cuppers)</button>
+      <button id="btn-active-heat">Heat on stage (live countdown)</button>
+      <button id="btn-urgent">Heat, under 10s (urgent)</button>
+      <button id="btn-six">Heat, 6 stations, long names</button>
+      <button id="btn-manual-no-clock">Heat timed by hand</button>
+      <button id="btn-scoring">Being scored</button>
+      <button id="btn-champion">Champion</button>
+      <button id="btn-test-event">As TEST event</button>
       <button id="btn-end">End session</button>
       <button id="btn-disconnect">Simulate disconnect</button>
       <button id="btn-reconnect">Reconnect</button>
     </div>
-    <div class="demo-stage">
-      <div id="projector-frame"></div>
-    </div>
+    <div id="projector-frame"></div>
 
     <script type="module">
       import { mountProjectorSurface } from './projectorSurface.js';
@@ -168,6 +159,33 @@
       const client = createDemoClient();
       mountProjectorSurface(document.getElementById('projector-frame'), { orgId: ORG_ID, client });
 
+      const EVENT_NAME = 'Grey Matter Cup Taster Competition 2026';
+      const NAMES = [
+        'Wilky Derikson Gultom',
+        'Taufiq Manan',
+        'Hazman Husin',
+        'Hadziq Hr',
+        'Ayu Pratiwi',
+        'Bima Santoso',
+        'Dian Kusuma',
+        'Fajar Wibowo',
+        'Gita Lestari',
+        'Hendra Wijaya',
+        'Indah Permata',
+        'Joko Susilo',
+        'Kartika Sari',
+        'Lukman Hakim',
+        'Maya Anggraini',
+        'Naufal Rahman',
+        'Oka Pradana',
+      ];
+      const standings17 = NAMES.map((displayName, i) => ({
+        position: i < 2 ? 1 : i + 1,
+        displayName,
+        numCorrect: Math.max(0, 3 - Math.floor(i / 3)),
+        totalElapsedSecs: i < 15 ? 235 + i * 14 : null,
+        tieStatus: i < 2 ? 'tied' : null,
+      }));
       const standings = [
         {
           position: 1,
@@ -186,33 +204,37 @@
         { position: 3, displayName: 'Sam Okafor', numCorrect: 3, totalElapsedSecs: 300 },
         { position: 4, displayName: 'Priya Nair', numCorrect: 1, totalElapsedSecs: null },
       ];
-      const recentHeats = [
-        {
-          heatNumber: 1,
-          stageKind: 'prelims',
-          results: [
-            { displayName: 'Alex Rivera', numCorrect: 5, totalElapsedSecs: 210 },
-            { displayName: 'Sam Okafor', numCorrect: 3, totalElapsedSecs: 300 },
-          ],
-        },
-      ];
+      const upNext = {
+        heatNumber: 4,
+        stageKind: 'prelims',
+        cuppers: [
+          { displayName: 'Ayu Pratiwi', station: 'A' },
+          { displayName: 'Bima Santoso', station: 'B' },
+          { displayName: 'Dian Kusuma', station: 'C' },
+          { displayName: 'Fajar Wibowo', station: 'D' },
+        ],
+      };
+      const base = { eventName: EVENT_NAME, stage: { kind: 'prelims', setCount: 5 } };
 
-      document.getElementById('btn-standings-only').addEventListener('click', () => {
-        client._publish({
-          payload: { stage: { kind: 'prelims', setCount: 5 }, standings },
-        });
+      document.getElementById('btn-idle').addEventListener('click', () => {
+        client._publish({ payload: { ...base, standings: standings17, upNext } });
       });
-
+      document.getElementById('btn-standings-only').addEventListener('click', () => {
+        client._publish({ payload: { ...base, standings } });
+      });
       document.getElementById('btn-active-heat').addEventListener('click', () => {
         client._publish({
-          payload: buildActiveHeatPayload(new Date().toISOString(), 480, standings),
+          payload: {
+            ...buildActiveHeatPayload(new Date().toISOString(), 480, standings17),
+            eventName: EVENT_NAME,
+            upNext,
+          },
         });
       });
-
       document.getElementById('btn-urgent').addEventListener('click', () => {
         client._publish({
           payload: {
-            stage: { kind: 'prelims', setCount: 5 },
+            ...base,
             standings,
             activeHeat: {
               heatNumber: 2,
@@ -228,11 +250,41 @@
           },
         });
       });
-
+      document.getElementById('btn-six').addEventListener('click', () => {
+        const longNames = [
+          'Muhammad Alexander Wilkinson-Gultom Santoso',
+          'Taufiq',
+          'Hazmanhusinbinabdulrahmanalhaj',
+          'Dr. Siti Nurhaliza binti Mohd Yusoff',
+          'Ayu',
+          'Bima Santoso Prakoso',
+        ];
+        client._publish({
+          payload: {
+            ...base,
+            standings,
+            activeHeat: {
+              heatNumber: 5,
+              kind: 'tiebreak',
+              stageKind: 'prelims',
+              status: 'timing',
+              timingMode: 'app',
+              startedAt: new Date().toISOString(),
+              durationSecs: 480,
+              cuppers: longNames.map((displayName, i) => ({
+                displayName,
+                station: String.fromCharCode(65 + i),
+                totalElapsedSecs: i === 1 ? 190 : null,
+                maxed: false,
+              })),
+            },
+          },
+        });
+      });
       document.getElementById('btn-manual-no-clock').addEventListener('click', () => {
         client._publish({
           payload: {
-            stage: { kind: 'prelims', setCount: 5 },
+            ...base,
             standings,
             activeHeat: {
               heatNumber: 3,
@@ -249,17 +301,50 @@
           },
         });
       });
-
-      document.getElementById('btn-recent').addEventListener('click', () => {
+      document.getElementById('btn-scoring').addEventListener('click', () => {
         client._publish({
-          payload: { stage: { kind: 'prelims', setCount: 5 }, standings, recentHeats },
+          payload: {
+            ...base,
+            standings: standings17,
+            upNext,
+            activeHeat: {
+              heatNumber: 3,
+              stageKind: 'prelims',
+              status: 'scoring',
+              timingMode: 'app',
+              startedAt: new Date(Date.now() - 500000).toISOString(),
+              durationSecs: 480,
+              cuppers: [
+                { displayName: 'Jordan Lee', station: 'A', totalElapsedSecs: 400, maxed: false },
+              ],
+            },
+          },
+        });
+      });
+      document.getElementById('btn-champion').addEventListener('click', () => {
+        client._publish({
+          payload: {
+            eventName: EVENT_NAME,
+            stage: { kind: 'finals', setCount: 7 },
+            standings: [
+              {
+                position: 1,
+                displayName: 'Wilky Derikson Gultom',
+                numCorrect: 3,
+                totalElapsedSecs: 235,
+              },
+              { position: 2, displayName: 'Taufiq Manan', numCorrect: 3, totalElapsedSecs: 289 },
+              { position: 3, displayName: 'Hazman Husin', numCorrect: 3, totalElapsedSecs: 376 },
+            ],
+            champion: 'Wilky Derikson Gultom',
+          },
         });
       });
 
       document.getElementById('btn-test-event').addEventListener('click', () => {
         client._publish({
           isTest: true,
-          payload: { stage: { kind: 'prelims', setCount: 5 }, standings },
+          payload: { ...base, standings },
         });
       });
 

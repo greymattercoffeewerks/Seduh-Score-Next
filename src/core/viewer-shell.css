@@ -200,13 +200,13 @@
    size one step down, so a genuinely small stage-mode viewport degrades to
    something still legible rather than jumping straight to phone sizing. */
 [data-surface='stage'] .viewer-holding-icon {
-  font-size: clamp(var(--text-4xl), 12vw, var(--text-6xl));
+  font-size: max(var(--text-4xl), calc(10 * var(--stage-unit, 1vh)));
 }
 
 [data-surface='stage'] .viewer-holding-title {
-  font-size: clamp(var(--text-xl), 5vw, var(--text-3xl));
+  font-size: max(var(--text-xl), calc(6 * var(--stage-unit, 1vh)));
 }
 
 [data-surface='stage'] .viewer-holding-body {
-  font-size: clamp(var(--text-sm), 2vw, var(--text-base));
+  font-size: max(var(--text-sm), calc(3.4 * var(--stage-unit, 1vh)));
 }

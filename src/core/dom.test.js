@@ -5,7 +5,6 @@ import {
   brandMark,
   setBusyDisabled,
   withFocusPreservation,
-  fitToScreen,
   passwordToggle,
   brandLockup,
 } from './dom.js';
@@ -201,56 +200,6 @@ describe('brandMark', () => {
 
   it('returns a fresh node on each call, not a shared/cached one — three simultaneous consumers must not fight over one DOM node', () => {
     expect(brandMark()).not.toBe(brandMark());
-  });
-});
-
-// jsdom has no layout engine, so the heights fitToScreen measures are stubbed:
-// `root` is the screen (clientHeight), `shell` is the content (scrollHeight).
-function sized(node, prop, value) {
-  Object.defineProperty(node, prop, { configurable: true, get: () => value });
-  return node;
-}
-
-describe('fitToScreen', () => {
-  it('scales content taller than the screen down to fit exactly, widening it so the scaled view still spans the full width', () => {
-    const root = sized(document.createElement('div'), 'clientHeight', 1080);
-    const shell = sized(document.createElement('div'), 'scrollHeight', 1350);
-    const scale = fitToScreen(root, shell);
-    expect(scale).toBe(0.8);
-    expect(shell.style.transform).toBe('scale(0.8)');
-    expect(shell.style.transformOrigin).toBe('top left');
-    expect(shell.style.width).toBe('125%');
-  });
-
-  it('never scales content that already fits — and clears an earlier scale once the content fits again', () => {
-    const root = sized(document.createElement('div'), 'clientHeight', 1080);
-    const shell = sized(document.createElement('div'), 'scrollHeight', 1350);
-    fitToScreen(root, shell);
-    sized(shell, 'scrollHeight', 900); // e.g. semis: 8 cuppers instead of 17
-    expect(fitToScreen(root, shell)).toBe(1);
-    expect(shell.style.transform).toBe('');
-    expect(shell.style.width).toBe('');
-  });
-
-  it('leaves the view untouched when the screen reports no height (not yet laid out), rather than scaling it to nothing', () => {
-    const root = sized(document.createElement('div'), 'clientHeight', 0);
-    const shell = sized(document.createElement('div'), 'scrollHeight', 1350);
-    expect(fitToScreen(root, shell)).toBe(1);
-    expect(shell.style.transform).toBe('');
-  });
-
-  it('measures the UNscaled content: the previous scale is cleared before measuring, so repeated fits never compound', () => {
-    const root = sized(document.createElement('div'), 'clientHeight', 1000);
-    const shell = document.createElement('div');
-    // Report the natural height only when unscaled; a compounding bug would
-    // measure while still scaled and drift on every refit (each countdown tick).
-    Object.defineProperty(shell, 'scrollHeight', {
-      configurable: true,
-      get: () => (shell.style.transform ? 1 : 2000),
-    });
-    expect(fitToScreen(root, shell)).toBe(0.5);
-    expect(fitToScreen(root, shell)).toBe(0.5);
-    expect(shell.style.transform).toBe('scale(0.5)');
   });
 });
 

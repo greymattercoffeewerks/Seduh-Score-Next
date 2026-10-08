@@ -51,8 +51,8 @@
 // no-interaction "watch and wait" surface with no action to hang that on,
 // so the live region itself has to be the whole mechanism.
 //
-// `renderBody` may optionally return a cleanup function (T5.3/T5.4's own
-// viewerBody.js does, for its live countdown's setInterval) — this module
+// `renderBody` may optionally return a cleanup function (a body with a ticking
+// countdown does, to stop its setInterval) — this module
 // calls it before every subsequent `body.replaceChildren()` and again on
 // `unmount()`. `body` is rebuilt on every re-render (any postgres_changes
 // event for this org, not just ones affecting the active heat), so without

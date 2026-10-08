@@ -135,8 +135,11 @@ mirroring `timingScreen.js`'s own tick pattern; reuses `core/ranking.js`'s
 `chainComparators` for the recent-heats sort rather than hand-rolling one;
 `mountViewerBody` returns an optional cleanup function per `viewer-shell.js`'s own
 contract. `projectorSurface` (T5.3) — the thin projector-specific composition,
-`showChrome: false`, `data-surface="stage"` set on the caller's own root; reuses
-`viewerBody.js` completely unedited, per the handoff's own module table.
+`showChrome: false`, `data-surface="stage"` set on the caller's own root; first reused
+`viewerBody.js` unedited per the handoff's module table, and since 2026-10-08 has its own
+body (see the projector redesign entry below).
+
+`projectorScreens`, `projectorBody`, rewritten `projectorSurface` (T-HARDEN.projector-redesign, 2026-10-08, live-event finding #5) — the venue display is no longer the phone's `viewerBody` scaled to fit: `projectorScreens.js` is `selectProjectorScreen(payload)` (champion > heat timing > scoring > idle loop > none, from the payload alone) and the five screens (heat on stage with the shared countdown and a card per cupper, being scored, the idle loop of an up-next page and the standings in pages of 8 with a page-change ring, champion), built on `core/stageDisplay` and friends (see src/core/CLAUDE.md); `projectorBody.js` is a one-call binding to `core/stageBody.js`; `projectorSurface.js` is a one-call mount of it on `core/stageSurface` (its CSS moved to core). `viewerBody.js` is now only the PHONE's body (it still exports `cupperStatus`, `showsCountdown`, `isNoClockHeat`, `hasViewableContent`, which the projector reads so both apply the same rules) and its stage-mode CSS and the `projectorSurface.css` two-column layout are gone. `liveSession.js`'s payload gained `eventName`, `upNext` and `kind` on the heats (additive); `heats.js` gained `formatHeatName` and `byRunningOrder`, shared by the organiser's `heatsScreen` Up next and the payload so the two surfaces always name the same next heat (regular heats before tiebreaks). See CHANGELOG.md.
 
 `demoActiveHeatPayload` (2026-08-28, closing the handoff's cross-surface Playwright AC)
 — `buildActiveHeatPayload()`, extracted from `phoneSummary.preview.html`/

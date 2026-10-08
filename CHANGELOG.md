@@ -1,3 +1,33 @@
+## T-HARDEN.projector-redesign: A venue display built from reusable parts · 2026-10-08
+
+**Task:** T-HARDEN.projector-redesign (live-event finding #5 from 2026-10-04; user feedback: the projector had **too much at once** and **not enough event feel**; research brief from Codex, decisions: heat screen + paged standings + champion first, fully automatic, the building blocks reusable by other formats).
+The projector mounted the phone's dense page (`viewerBody`) and, when 17 cuppers measured 1,837px on a 1080p screen, scaled the whole view down until it fitted (`fitToScreen`): small type, everything at once, no sense of the event.
+
+**What shipped:**
+
+- **One screen per moment**, in a permanent band (Seduh Score lockup, the **event name**, the stage, a Live marker) with a footer, all sized from the screen so nothing needs scaling or scrolling:
+  - **Heat on stage**: the heat (a tiebreak heat is named "Heat 1 (tiebreak)", since tiebreaks number from 1 again), a very large countdown (the same `.viewer-countdown` element and math as the phone and organiser, so the cross-surface check still holds), and a card per cupper by station with their state in words ("Timing", "Finished 3:10", "Max time"). A heat timed by hand says "Timed by hand", never a zeroed clock. More than four stations take a compact three-column layout.
+  - **Being scored**: "Time is up / Heat N is being scored", held at least 8 seconds so the next update can't flash it past.
+  - **Idle loop**: an "Up next: Heat N starts soon" page (who is on which station), then the standings in **pages of 8**, each held 10 seconds with an **animated ring** counting down to the change and a page counter ("Standings · page 2 of 3 · Up next: Heat 4"). A tie is never split across a page when it fits on one; ties and advancing places are written in the row.
+  - **Champion**: full screen, held (replaced sooner only by a running heat), with their score and, when unambiguous, 2nd and 3rd.
+- **Reusable core, no Cup Taster in it** (new modules, each tested): `core/stageSurface.js` + `.css` mounts a display as a full-screen audience surface (the dark `stage` mode, a chrome-less viewer shell, teardown — what a second format's projector would otherwise copy); `core/stageDisplay.js` (+ `stageBody.js`, `stageBand.js`, `stageDisplay.css`) the frame; `core/screenDirector.js` decides _when_ to change screen (holds a screen for its minimum dwell, urgent screens cut in, the newest wish wins, never remounts the same screen, reports what is actually on show); `core/pageRotator.js` (`paginate`, `pageRange`, the rotator); `core/progressRing.js` (wall-clock driven, so re-attaching it never lies; stepped under reduced motion); `core/countdownDisplay.js` + `.css` (the countdown, moved out of `viewerBody`, with its urgent outline now in core so a second format cannot lose it). A BTC projector is its own selector, band and screens on these pieces; nothing in core is edited.
+- **Cup Taster side**: `projectorScreens.js` (which payload wants which screen, and what each says), `projectorBody.js` (a one-call binding), `projectorSurface.js` (now a one-call mount on `core/stageSurface`; its stylesheet moved to core), `projectorScreens.css`. The phone view is untouched. `core/dom.js`'s `fitToScreen` and its two-column projector CSS are removed.
+- **Published payload**, additive (the phone ignores it): `eventName`, `upNext` ({ heatNumber, kind, cuppers }), and `kind` on `activeHeat`. The event name is read like every other read in the chain: a transient failure queues the publish for retry instead of publishing without it (which would overwrite a stored name, and the `snapshot_at` guard only orders publishes); only "event gone" gives no name. `upNext` is the lowest-ordered pending heat by the same `byRunningOrder` the organiser's "Up next" uses (regular heats before tiebreaks), and heat naming is one shared `formatHeatName`.
+- **Fits whatever room is left**: the screen area is a size container, so content is sized from the height it actually has (a test-data banner, a 4:3 screen, a long footer shrink it rather than crop it). Measured with zero overflow at 1920×1080, 1280×720, 1024×768 and 2560×1440, including six stations with 40-character names and the test banner.
+- Preview page `projectorSurface.preview.html` now fills the window with a button per screen, including six stations with long names, the up-next/standings loop, the champion and the TEST banner.
+
+**Review cycle:** Eight reviewers (module-boundary-checker twice, ui-accessibility-reviewer, code-reviewer, offline-sync-auditor, scoring-auditor, test-auditor). Fixed: the champion screen printed "null" with no podium; the event name was swallowed on any error (publishing without it overwrote a stored name); countdown styles lived in a format's stylesheet; heat screen clipped with five or six stations (and at 4:3); the band could run ahead of a held screen; the heat screen rebuilt its countdown on every republish; the tie words could be truncated; pending-heat ordering differed from the organiser's; stale text and dead CSS left from the old projector.
+
+**Not covered / next (also in ROADMAP):**
+
+- **Result reveal and rank-change screens** (the research's "Result recorded" and "Rank impact") are not built: they need a snapshot queue and a diff against the previous standings.
+- No hold/pause control for the organiser (user chose fully automatic).
+- Sponsor/branding interstitials.
+- Podium is left out after a top tie (positions are ranked by tally; carrying `finalPosition` in the payload would allow it).
+- Real projector/iPad check owed (dvh handling on iPad Safari, distance legibility).
+
+---
+
 ## T-HARDEN.team-restore: A list of removed members, and a way to restore them · 2026-10-08
 
 **Task:** T-HARDEN.team-restore (user-reported, 2026-10-08, right after team accounts went live: "add a list under the team, and remove feature").

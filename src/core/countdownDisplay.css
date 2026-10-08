@@ -1,0 +1,37 @@
+/*
+ * The live countdown element (core/countdownDisplay.js) — its digits, its urgent cue and its stage sizing.
+ * Lives with the module, not with any format's stylesheet: the urgent outline is what keeps "under 10 seconds"
+ * from being colour alone, so every surface that renders a countdown (the phone view, a venue display, a
+ * future format's) must get it, and a format that forgets to load some other format's CSS must not lose it.
+ * Token-only; data-surface="stage" repaints it. A surface that wants its own size overrides the font-size
+ * with a more specific selector, in its own stylesheet.
+ */
+
+/* .font-mono-score (base.css) supplies the mono/tabular-nums digit
+   treatment — same convention timingScreen.css's own .countdown-display
+   uses, since this is the exact same "digits mustn't reflow width as they
+   tick down" requirement, just on a read-only surface instead of the
+   organiser's own. */
+.viewer-countdown {
+  font-size: var(--text-3xl);
+  text-align: center;
+  padding: var(--space-3) 0;
+}
+
+/* The organiser's own countdown has the identical cue. Color
+   alone here would be even less reliable than on the organiser's own
+   screen: this surface is read from across a room (projector) or glanced
+   at occasionally (phone), so a color-blind audience member has no other
+   context cue to notice the shift by. `outline`, not `border`, so the ring
+   never changes this element's own box size. */
+.viewer-countdown[data-urgent='true'] {
+  color: var(--color-danger);
+  font-weight: var(--font-weight-bold);
+  outline: var(--border-strong) solid var(--color-danger);
+  outline-offset: var(--space-3);
+}
+
+[data-surface='stage'] .viewer-countdown {
+  font-size: clamp(var(--text-4xl), 10vw, var(--text-6xl));
+  padding: var(--space-4) 0;
+}

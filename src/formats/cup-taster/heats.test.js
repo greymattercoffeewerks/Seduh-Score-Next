@@ -9,6 +9,8 @@ import {
   generateHeatsManual,
   listHeatsForStage,
   generateTiebreakHeat,
+  formatHeatName,
+  byRunningOrder,
 } from './heats.js';
 
 // Same shape as setup.test.js's fixture — queries consumed strictly in call
@@ -59,6 +61,38 @@ function fakeClient({ tables = {} } = {}) {
 // unlike random:()=>0 (verified: that reverses a 2-element array, since
 // j=floor(0*(i+1))=0 swaps every element to the front).
 const identityRandom = () => 0.999;
+
+describe('formatHeatName', () => {
+  it('is "Heat N" for a regular heat, and says so for a tiebreak (which numbers from 1 again)', () => {
+    expect(formatHeatName(3, 'normal')).toBe('Heat 3');
+    expect(formatHeatName(3, undefined)).toBe('Heat 3');
+    expect(formatHeatName(1, 'tiebreak')).toBe('Heat 1 (tiebreak)');
+  });
+});
+
+describe('byRunningOrder', () => {
+  const heat = (heat_number, kind = 'normal') => ({ heat_number, kind });
+
+  it('orders regular heats by number, then tiebreak heats by number', () => {
+    const rows = [heat(1, 'tiebreak'), heat(3), heat(2, 'tiebreak'), heat(1), heat(2)];
+    expect([...rows].sort(byRunningOrder)).toEqual([
+      heat(1),
+      heat(2),
+      heat(3),
+      heat(1, 'tiebreak'),
+      heat(2, 'tiebreak'),
+    ]);
+  });
+
+  it('never lets a tiebreak numbered 1 jump ahead of a regular heat numbered 5', () => {
+    expect(byRunningOrder(heat(1, 'tiebreak'), heat(5))).toBeGreaterThan(0);
+    expect(byRunningOrder(heat(5), heat(1, 'tiebreak'))).toBeLessThan(0);
+  });
+
+  it('treats equal heats as equal', () => {
+    expect(byRunningOrder(heat(2), heat(2))).toBe(0);
+  });
+});
 
 describe('listStageEntries', () => {
   it('returns every stage entry', async () => {

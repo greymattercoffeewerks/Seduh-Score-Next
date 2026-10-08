@@ -45,44 +45,10 @@
   overflow-wrap: anywhere;
 }
 
-[data-surface='stage'] .viewer-champion-label {
-  font-size: clamp(var(--text-base), 2vw, var(--text-lg));
-  padding: var(--space-2) var(--space-5);
-}
-
-[data-surface='stage'] .viewer-champion-name {
-  font-size: clamp(var(--text-4xl), 8vw, var(--text-6xl));
-}
-
 .viewer-active-heat h3 {
   font-family: var(--font-display);
   font-size: var(--text-lg);
   margin: 0 0 var(--space-2) 0;
-}
-
-/* .font-mono-score (base.css) supplies the mono/tabular-nums digit
-   treatment — same convention timingScreen.css's own .countdown-display
-   uses, since this is the exact same "digits mustn't reflow width as they
-   tick down" requirement, just on a read-only surface instead of the
-   organiser's own. */
-.viewer-countdown {
-  font-size: var(--text-3xl);
-  text-align: center;
-  padding: var(--space-3) 0;
-}
-
-/* Matches timingScreen.css's own identical fix (ROADMAP.md gap, closed
-   2026-09-11) — see that rule's own comment for the full account. Color
-   alone here would be even less reliable than on the organiser's own
-   screen: this surface is read from across a room (projector) or glanced
-   at occasionally (phone), so a color-blind audience member has no other
-   context cue to notice the shift by. `outline`, not `border`, so the ring
-   never changes this element's own box size. */
-.viewer-countdown[data-urgent='true'] {
-  color: var(--color-danger);
-  font-weight: var(--font-weight-bold);
-  outline: var(--border-strong) solid var(--color-danger);
-  outline-offset: var(--space-3);
 }
 
 .viewer-heat-chips {
@@ -143,55 +109,10 @@
   font-size: var(--text-sm);
 }
 
-/* Stage-mode text scales up across the board, matching viewer-shell.css's
-   own [data-surface="stage"] holding-card sizing — read from across a room.
-   clamp()-bounded like that holding-card sizing (found in review there
-   first, before the handoff's own §8.3 confirmed T5.3 needs no scale-to-fit
-   canvas wrapper at all — "Cup Taster's payload is a standings table, so the
-   projector is far simpler... no tree renderer, no scale-to-fit stage" —
-   kept anyway since it's a free, harmless step-down guard on a genuinely
-   small stage-mode viewport, the same insurance viewer-shell.css already
-   applies to itself). */
-[data-surface='stage'] .standings-table th,
-[data-surface='stage'] .standings-table td {
-  font-size: clamp(var(--text-base), 2.5vw, var(--text-xl));
-  padding: var(--space-3);
-}
-
-[data-surface='stage'] .viewer-active-heat h3,
-[data-surface='stage'] .viewer-recent-heats h3 {
-  font-size: clamp(var(--text-lg), 4vw, var(--text-3xl));
-}
-
-[data-surface='stage'] .viewer-countdown {
-  font-size: clamp(var(--text-4xl), 10vw, var(--text-6xl));
-  padding: var(--space-4) 0;
-}
-
-[data-surface='stage'] .viewer-heat-chip {
-  font-size: clamp(var(--text-sm), 2vw, var(--text-lg));
-  padding: var(--space-2) var(--space-4);
-}
-
-[data-surface='stage'] .stage-meta,
-[data-surface='stage'] .viewer-recent-heat-list {
-  font-size: clamp(var(--text-sm), 2vw, var(--text-lg));
-}
-
-/* Maxed uses --color-text-muted in paper mode (~5.4:1, comfortably safe);
-   that same token measures ~4.67:1 in stage mode against
-   --color-surface-sunken — thin enough that this project's own precedent
-   (viewer-shell.css) already rejected an equivalent pairing elsewhere, so
-   stage mode gets the stronger --color-text-secondary token instead. */
-[data-surface='stage'] .viewer-heat-chip[data-status='maxed'] {
-  border-color: var(--color-text-secondary);
-  color: var(--color-text-secondary);
-}
-
 /* Layout-only groupings (see mountViewerBody). `display: contents` makes them
-   invisible to layout, so the phone surface keeps laying out the sections as
-   flat siblings of .viewer-shell-body; projectorSurface.css overrides this to
-   place the two groups side by side. */
+   invisible to layout, so the sections lay out as flat siblings of
+   .viewer-shell-body. (The projector used to place the two groups side by side;
+   it now has its own body, formats/cup-taster/projectorBody.js.) */
 .viewer-body-main,
 .viewer-body-side {
   display: contents;

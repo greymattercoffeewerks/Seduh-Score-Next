@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { mountProjectorSurface } from './projectorSurface.js';
 
 // `events` defaults to one row for org1 so viewer-shell.js's own
@@ -46,7 +46,7 @@ function fakeClient(initialRows = [], { events = [{ id: 'ev1', org_id: 'org1' }]
 }
 
 describe('mountProjectorSurface', () => {
-  it('mounts a chrome-LESS viewer-shell wired to viewerBody, with data-surface="stage" on the root', async () => {
+  it('mounts a chrome-LESS viewer-shell wired to the projector body, with data-surface="stage" on the root', async () => {
     const root = document.createElement('div');
     await mountProjectorSurface(root, { orgId: 'org1', client: fakeClient([]) });
     // showChrome: false — the projector's own defining choice, opposite of
@@ -73,8 +73,110 @@ describe('mountProjectorSurface', () => {
       },
     ]);
     await mountProjectorSurface(root, { orgId: 'org1', client });
-    expect(root.querySelector('.standings-table')).not.toBeNull();
+    // The projector's own idle screen, not the phone's dense body.
+    expect(root.querySelector('.projector-standings')).not.toBeNull();
+    expect(root.querySelector('.standings-table')).toBeNull();
     expect(root.textContent).toContain('Alex');
+  });
+
+  it('draws its own permanent band with the event name and the stage, and a heat screen with the shared countdown element', async () => {
+    const root = document.createElement('div');
+    const client = fakeClient([
+      {
+        id: 's1',
+        org_id: 'org1',
+        event_id: 'ev1',
+        format: 'cup_taster',
+        active: true,
+        is_test: false,
+        payload: {
+          eventName: 'Grey Matter Cup Taster Competition 2026',
+          stage: { kind: 'prelims', setCount: 5 },
+          standings: [{ position: 1, displayName: 'Alex', numCorrect: 5, totalElapsedSecs: 200 }],
+          activeHeat: {
+            heatNumber: 3,
+            stageKind: 'prelims',
+            status: 'timing',
+            timingMode: 'app',
+            startedAt: new Date().toISOString(),
+            durationSecs: 480,
+            cuppers: [
+              { displayName: 'Jordan', station: 'A', totalElapsedSecs: null, maxed: false },
+            ],
+          },
+        },
+      },
+    ]);
+    const handle = await mountProjectorSurface(root, { orgId: 'org1', client });
+    expect(root.querySelector('.stage-band-event').textContent).toBe(
+      'Grey Matter Cup Taster Competition 2026',
+    );
+    expect(root.querySelector('.stage-band-section').textContent).toBe('Preliminary');
+    expect(root.querySelector('.projector-title').textContent).toBe('Heat 3');
+    // The element tests/e2e/cross-surface-countdown.spec.js reads on every surface.
+    expect(root.querySelector('.viewer-countdown')).not.toBeNull();
+    handle.unmount();
+  });
+
+  it('never scales or scrolls its view: the whole-view shrink-to-fit is gone', async () => {
+    const root = document.createElement('div');
+    const client = fakeClient([
+      {
+        id: 's1',
+        org_id: 'org1',
+        event_id: 'ev1',
+        format: 'cup_taster',
+        active: true,
+        is_test: false,
+        payload: {
+          stage: { kind: 'prelims', setCount: 5 },
+          standings: Array.from({ length: 17 }, (_, i) => ({
+            position: i + 1,
+            displayName: `Cupper ${i + 1}`,
+            numCorrect: 1,
+            totalElapsedSecs: 200 + i,
+          })),
+        },
+      },
+    ]);
+    const handle = await mountProjectorSurface(root, { orgId: 'org1', client });
+    expect(root.querySelector('.viewer-shell').style.transform).toBe('');
+    // 17 cuppers are shown as a page of eight, not a 17-row table.
+    expect(root.querySelectorAll('.projector-standing-row')).toHaveLength(8);
+    handle.unmount();
+  });
+
+  it('stops everything when unmounted: no timer survives to touch the next screen on the shared root', async () => {
+    vi.useFakeTimers();
+    try {
+      const root = document.createElement('div');
+      const client = fakeClient([
+        {
+          id: 's1',
+          org_id: 'org1',
+          event_id: 'ev1',
+          format: 'cup_taster',
+          active: true,
+          is_test: false,
+          payload: {
+            stage: { kind: 'prelims', setCount: 5 },
+            standings: Array.from({ length: 17 }, (_, i) => ({
+              position: i + 1,
+              displayName: `Cupper ${i + 1}`,
+              numCorrect: 1,
+              totalElapsedSecs: 200 + i,
+            })),
+          },
+        },
+      ]);
+      const handle = await mountProjectorSurface(root, { orgId: 'org1', client });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(vi.getTimerCount()).toBeGreaterThan(0); // the page loop and the ring are running
+      handle.unmount();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('falls back to the shell\'s own "waiting for the organiser" holding state when nothing is published', async () => {
@@ -100,80 +202,5 @@ describe('mountProjectorSurface', () => {
     const banner = root.querySelector('.is-test-banner');
     expect(banner).not.toBeNull();
     expect(banner.getAttribute('role')).toBe('alert');
-  });
-});
-
-// jsdom has no layout engine, so the heights fitToScreen measures are stubbed:
-// `root` is the screen (clientHeight), `shell` is the content (scrollHeight).
-function sized(el, prop, value) {
-  Object.defineProperty(el, prop, { configurable: true, get: () => value });
-  return el;
-}
-
-describe('mountProjectorSurface — fit lifecycle', () => {
-  // Frames run as microtasks so a scheduled fit lands before the assertion;
-  // every .viewer-shell reports 2160px of content against a 1080px screen.
-  function setUp() {
-    // Runs just after returning, like a real frame — synchronously would run
-    // before the caller stores the frame id and wedge every later fit.
-    vi.stubGlobal('requestAnimationFrame', (cb) => {
-      queueMicrotask(cb);
-      return 1;
-    });
-    vi.stubGlobal('cancelAnimationFrame', () => {});
-    const fonts = new EventTarget();
-    Object.defineProperty(document, 'fonts', { configurable: true, value: fonts });
-    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function () {
-      return this.classList.contains('viewer-shell') ? 2160 : 0;
-    });
-    const root = sized(document.createElement('div'), 'clientHeight', 1080);
-    return { root, fonts };
-  }
-  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-    vi.unstubAllGlobals();
-    delete document.fonts;
-  });
-
-  it('fits its own view to the screen once mounted', async () => {
-    const { root } = setUp();
-    await mountProjectorSurface(root, { orgId: 'org1', client: fakeClient([]) });
-    await settle();
-    expect(root.querySelector('.viewer-shell').style.transform).toBe('scale(0.5)');
-  });
-
-  it("never resizes the NEXT screen's view, which can appear on the shared root before this one unmounts", async () => {
-    const { root } = setUp();
-    await mountProjectorSurface(root, { orgId: 'org1', client: fakeClient([]) });
-    await settle();
-    const own = root.querySelector('.viewer-shell');
-    // The router mounts the next audience screen first: it clears the root
-    // and appends its own shell while this projector is still observing.
-    root.innerHTML = '';
-    const next = document.createElement('div');
-    next.className = 'viewer-shell';
-    root.append(next);
-    await settle();
-    expect(own.parentNode).toBeNull();
-    expect(next.style.transform).toBe('');
-  });
-
-  it('stops fitting once unmounted: the next screen on the shared root is never scaled by it', async () => {
-    const { root, fonts } = setUp();
-    const handle = await mountProjectorSurface(root, { orgId: 'org1', client: fakeClient([]) });
-    await settle();
-    handle.unmount();
-
-    // The next screen mounts into the same root; a leftover observer, resize
-    // listener, or font listener would pick this up as "its own" and scale it.
-    const next = document.createElement('div');
-    next.className = 'viewer-shell';
-    root.append(next);
-    window.dispatchEvent(new Event('resize'));
-    fonts.dispatchEvent(new Event('loadingdone'));
-    await settle();
-    expect(next.style.transform).toBe('');
   });
 });

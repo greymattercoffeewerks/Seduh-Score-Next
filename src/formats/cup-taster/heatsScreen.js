@@ -13,6 +13,8 @@ import {
   generateHeatsRandom,
   generateHeatsManual,
   listHeatsForStage,
+  formatHeatName,
+  byRunningOrder,
 } from './heats.js';
 import { listEntries } from '../../core/registry.js';
 import { findEvent } from '../../core/events.js';
@@ -164,10 +166,8 @@ function heatHref(eventId, heat) {
   return `#/events/${eventId}/heats/${heat.id}/${heat.status === 'scoring' ? 'scoring' : 'timing'}`;
 }
 
-// A heat's name wherever it is shown. Tiebreak heats number from 1 again, so without the suffix a
-// stage with a tiebreak shows two different "Heat 1"s.
 function heatName(heat) {
-  return `Heat ${heat.heat_number}${heat.kind === 'tiebreak' ? ' (tiebreak)' : ''}`;
+  return formatHeatName(heat.heat_number, heat.kind);
 }
 
 // Pure. The heat to go to next: the first one that is not confirmed yet. Regular heats come in
@@ -175,11 +175,7 @@ function heatName(heat) {
 // them). null when every heat is confirmed.
 export function findUpNextHeat(heatsWithEntries) {
   const open = heatsWithEntries.filter(({ heat }) => heat.status !== 'confirmed');
-  open.sort(
-    (a, b) =>
-      Number(a.heat.kind === 'tiebreak') - Number(b.heat.kind === 'tiebreak') ||
-      a.heat.heat_number - b.heat.heat_number,
-  );
+  open.sort((a, b) => byRunningOrder(a.heat, b.heat));
   return open[0] ?? null;
 }
 
