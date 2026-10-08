@@ -45,11 +45,11 @@ export function projectorBand(payload) {
 
 // ---------- small shared pieces ----------
 
-function kicker(text) {
+export function kicker(text) {
   return el('p', { className: 'projector-kicker', text });
 }
 
-function bigTitle(text) {
+export function bigTitle(text) {
   return el('h2', { className: 'projector-title', text });
 }
 
@@ -76,7 +76,7 @@ function stationCard(cupper) {
   );
 }
 
-function upNextLine(payload) {
+export function upNextLine(payload) {
   return payload?.upNext
     ? `Up next: ${formatHeatName(payload.upNext.heatNumber, payload.upNext.kind)}`
     : '';

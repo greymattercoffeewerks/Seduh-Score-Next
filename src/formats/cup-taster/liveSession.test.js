@@ -169,8 +169,9 @@ describe('buildLiveSessionPayload', () => {
     expect(payload.recentHeats).toEqual([
       {
         heatNumber: 1,
+        kind: 'normal',
         stageKind: 'prelims',
-        results: [{ displayName: 'Alex', numCorrect: 2, totalElapsedSecs: 200 }],
+        results: [{ displayName: 'Alex', numCorrect: 2, totalElapsedSecs: 200, maxed: false }],
       },
     ]);
   });
@@ -351,6 +352,90 @@ describe('buildLiveSessionPayload', () => {
     expect(payload.recentHeats[0].results[0].numCorrect).toBe(4);
     expect(payload.recentHeats[1].results[0].numCorrect).toBe(3);
     expect(payload.recentHeats[2].results[0].numCorrect).toBe(2);
+  });
+
+  it('a confirmed tiebreak heat reaches recentHeats, newest first, however many regular heats there are', async () => {
+    const confirmed = (id, n, kind) => ({
+      id,
+      stage_id: 's1',
+      heat_number: n,
+      kind,
+      status: 'confirmed',
+      timing_mode: 'app',
+      started_at: '2026-09-04T10:00:00.000Z',
+      duration_secs: 480,
+    });
+    const entriesFor = (id) => [
+      { id: `he-${id}`, heat_id: id, entry_id: 'a', station: 'A', elapsed_secs: 100, maxed: false },
+    ];
+    // Tiebreak heats number from 1 again but run after every regular heat.
+    const heats = [
+      confirmed('h1', 1, 'normal'),
+      confirmed('h2', 2, 'normal'),
+      confirmed('h3', 3, 'normal'),
+      confirmed('h4', 4, 'normal'),
+      confirmed('t1', 1, 'tiebreak'),
+    ];
+    const client = fakeClient({
+      tables: {
+        ...baseTables(),
+        ct_heats: { data: heats, error: null },
+        ct_heat_entries: heats.map((heat) => ({ data: entriesFor(heat.id), error: null })),
+        ct_results: [{ data: [], error: null }],
+      },
+    });
+    const payload = await buildLiveSessionPayload('s1', client);
+    expect(payload.recentHeats.map((h) => [h.heatNumber, h.kind])).toEqual([
+      [1, 'tiebreak'],
+      [4, 'normal'],
+      [3, 'normal'],
+    ]);
+  });
+
+  it('marks a result that timed out, so a display can say "Max time" rather than show the cap as a time', async () => {
+    const heat = {
+      id: 'h1',
+      stage_id: 's1',
+      heat_number: 1,
+      kind: 'normal',
+      status: 'confirmed',
+      timing_mode: 'app',
+      started_at: '2026-09-04T10:00:00.000Z',
+      duration_secs: 480,
+    };
+    const client = fakeClient({
+      tables: {
+        ...baseTables(),
+        ct_heats: { data: [heat], error: null },
+        ct_heat_entries: {
+          data: [
+            {
+              id: 'he-a',
+              heat_id: 'h1',
+              entry_id: 'a',
+              station: 'A',
+              elapsed_secs: 480,
+              maxed: true,
+            },
+            {
+              id: 'he-b',
+              heat_id: 'h1',
+              entry_id: 'b',
+              station: 'B',
+              elapsed_secs: 300,
+              maxed: false,
+            },
+          ],
+          error: null,
+        },
+        ct_results: { data: [], error: null },
+      },
+    });
+    const { recentHeats } = await buildLiveSessionPayload('s1', client);
+    expect(recentHeats[0].results.map((r) => [r.displayName, r.maxed])).toEqual([
+      ['Alex', true],
+      ['Bailey', false],
+    ]);
   });
 
   it('has no activeHeat and an empty recentHeats when nothing has started or confirmed yet', async () => {

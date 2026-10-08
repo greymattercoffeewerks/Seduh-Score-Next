@@ -3,12 +3,14 @@
 // (one display kept across payloads, re-attached to the shell's body each time) is core/stageBody.js.
 import { createStageBody } from '../../core/stageBody.js';
 import { selectProjectorScreen, projectorBand, hasProjectorContent } from './projectorScreens.js';
+import { detectProjectorMoments } from './projectorMoments.js';
 
 export function createProjectorBody(options = {}) {
   return createStageBody({
     selectScreen: selectProjectorScreen,
     bandFor: projectorBand,
     hasContent: hasProjectorContent,
+    detectMoments: detectProjectorMoments,
     ...options,
   });
 }

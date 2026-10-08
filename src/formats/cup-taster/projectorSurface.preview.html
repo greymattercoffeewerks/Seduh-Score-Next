@@ -8,11 +8,13 @@
     <link rel="stylesheet" href="/src/core/viewer-shell.css" />
     <link rel="stylesheet" href="/src/core/stageDisplay.css" />
     <link rel="stylesheet" href="/src/core/stageSurface.css" />
+    <link rel="stylesheet" href="/src/core/stageMoments.css" />
     <link rel="stylesheet" href="/src/core/countdownDisplay.css" />
     <link rel="stylesheet" href="/src/formats/cup-taster/heatsScreen.css" />
     <link rel="stylesheet" href="/src/formats/cup-taster/standingsScreen.css" />
     <link rel="stylesheet" href="/src/formats/cup-taster/viewerBody.css" />
     <link rel="stylesheet" href="/src/formats/cup-taster/projectorScreens.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/projectorMoments.css" />
     <style>
       /* Demo-harness-only layout — not part of the shipped module graph. The real surface fills the screen
          and every size in it is in vh/vw, so the harness gives it the whole browser window (resize the
@@ -65,6 +67,8 @@
       <button id="btn-six">Heat, 6 stations, long names</button>
       <button id="btn-manual-no-clock">Heat timed by hand</button>
       <button id="btn-scoring">Being scored</button>
+      <button id="btn-moments">Heat confirmed (result + rank impact)</button>
+      <button id="btn-moments-six">Heat confirmed (6 cuppers, long names, ties)</button>
       <button id="btn-champion">Champion</button>
       <button id="btn-test-event">As TEST event</button>
       <button id="btn-end">End session</button>
@@ -319,6 +323,77 @@
               ],
             },
           },
+        });
+      });
+      // The two "moments": publishes the table as it stood, then — as a later snapshot, the way the organiser's
+      // confirm does — the same stage with a new confirmed heat and a moved table.
+      function publishConfirmedHeat({ heatResults, after }) {
+        client._publish({ payload: { ...base, standings: standings17, upNext } });
+        setTimeout(() => {
+          client._publish({
+            payload: {
+              ...base,
+              standings: after,
+              upNext,
+              recentHeats: [
+                { heatNumber: 3, kind: 'normal', stageKind: 'prelims', results: heatResults },
+              ],
+            },
+          });
+        }, 400);
+      }
+      const rowFor = (position, displayName, numCorrect, totalElapsedSecs, extra = {}) => ({
+        position,
+        displayName,
+        numCorrect,
+        totalElapsedSecs,
+        tieStatus: null,
+        ...extra,
+      });
+      document.getElementById('btn-moments').addEventListener('click', () => {
+        const heatResults = [
+          { displayName: 'Ayu Pratiwi', numCorrect: 5, totalElapsedSecs: 221 },
+          { displayName: 'Bima Santoso', numCorrect: 4, totalElapsedSecs: 240 },
+          { displayName: 'Dian Kusuma', numCorrect: 5, totalElapsedSecs: 205 },
+          { displayName: 'Fajar Wibowo', numCorrect: 2, totalElapsedSecs: 300 },
+        ];
+        publishConfirmedHeat({
+          heatResults,
+          after: [
+            rowFor(1, 'Dian Kusuma', 5, 205),
+            rowFor(2, 'Ayu Pratiwi', 5, 221),
+            ...standings17.slice(0, 3).map((r, i) => ({ ...r, position: 3 + i })),
+            rowFor(6, 'Bima Santoso', 4, 240),
+          ],
+        });
+      });
+      document.getElementById('btn-moments-six').addEventListener('click', () => {
+        const longNames = [
+          'Muhammad Alexander Wilkinson-Gultom Santoso',
+          'Taufiq',
+          'Hazmanhusinbinabdulrahmanalhaj',
+          'Dr. Siti Nurhaliza binti Mohd Yusoff',
+          'Ayu',
+          'Bima Santoso Prakoso',
+        ];
+        const heatResults = longNames.map((displayName, i) => ({
+          displayName,
+          numCorrect: i < 2 ? 5 : 3,
+          totalElapsedSecs: i < 2 ? 200 : 250 + i,
+        }));
+        publishConfirmedHeat({
+          heatResults,
+          after: [
+            rowFor(1, longNames[0], 5, 200),
+            rowFor(1, longNames[1], 5, 200),
+            rowFor(3, longNames[2], 3, 252),
+            rowFor(4, longNames[3], 3, 253),
+            rowFor(5, longNames[4], 3, 254),
+            rowFor(5, longNames[5], 3, 254),
+            rowFor(5, 'Zed Tied Fifth One', 3, 254),
+            rowFor(5, 'Zed Tied Fifth Two', 3, 254),
+            rowFor(5, 'Zed Tied Fifth Three', 3, 254),
+          ],
         });
       });
       document.getElementById('btn-champion').addEventListener('click', () => {

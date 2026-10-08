@@ -1,3 +1,33 @@
+## T-HARDEN.projector-moments: "Result recorded" and "Rank impact" on the venue display · 2026-10-09
+
+**Task:** T-HARDEN.projector-moments (the second half of live-event finding #5: the research's "Result recorded" 4–6s and "Rank impact" 6–8s screens, deferred from the projector redesign). User requirement carried over: the parts must be usable by other formats' projectors.
+
+The projector is sent snapshots of the live state, never events, so "a result was just recorded" has to be found by comparing each snapshot with the one before it.
+
+**What shipped:**
+
+- **When a heat is confirmed the room sees two short screens, then the ordinary loop again:**
+  - **Result recorded** (6 seconds): the heat's name and each cupper in their place — "1st", "Joint 2nd" — with their tally and time ("5 of 7 correct · 3:25"; "Max time" for an entry that timed out), a rise-in of the cards, and the page-change ring in the footer.
+  - **Rank impact** (8 seconds): a headline ("Dian takes the lead", "Ayu stays in front", "Ayu and Cleo share the lead"), then the top five places, each with a word: **New** (first result), **Up 2**, **Down 1** or **Holds**, "(tied)" beside a shared place, and "+N more" when a long tie is cut off. Only shown when the result changed something in those rows.
+- **Safe by construction:** a projector opened or reloaded mid-event shows nothing for its first snapshot; a running heat always cuts in and drops what is queued; at most the newest four moments wait; nothing is shown across two different stages, or when two ranked cuppers share a name (a move could be pinned on the wrong one); a cupper who has not raced is never reported as having moved; a tiebreak heat's result is announced but gets no rank screen (the standings ignore tiebreak outcomes, so the table would contradict what the room was just shown); a moment that cannot be drawn, or a payload the detector chokes on, is skipped and logged and the display carries on rather than going blank.
+- **Reusable core, no Cup Taster in it** (each tested): `core/momentPlayer.js` (plays moments found by a caller's `detectMoments(previous, next)` — the queue, the holds, the baseline and urgent rules above), `core/rankMovement.js` (`rankMovement` — who moved how many places between two ranked lists, null when keys are ambiguous — and `sharedPositions`), `core/rankMovementRows.js` + `core/stageMoments.css` (the New/Up/Down/Holds rows and the one-time rise-in), `core/stageReveal.js` (turns the animation off after its last item so a re-attach of the display never replays it), `core/ordinal.js` (moved out of `reportScreen`), `mountFooterRing` in `core/stageDisplay.js`, and an optional `detectMoments` hook on `createStageDisplay`/`createStageBody`. A second format's projector passes its own detector and screens.
+- **Cup Taster side:** `projectorMoments.js` (+ `.css`): `detectProjectorMoments(previous, next)` and the two screens; `projectorBody.js` passes it in.
+- **Published payload, additive** (the phone ignores both): `kind` and `maxed` on `recentHeats`. The three "recent" heats are now the newest in the order heats RUN, not by heat number: a tiebreak heat numbers from 1 again, so by number it never reached the window in a stage with three or more regular heats. The phone's "Recent results" now names a tiebreak heat as one.
+- Preview page gained two buttons: a heat confirmed (four cuppers) and a heat confirmed with six long-named cuppers and ties.
+
+**Review cycle:** Five reviewers (code-reviewer, module-boundary-checker, ui-accessibility-reviewer, scoring-auditor, test-auditor). Fixed: a moment that threw while mounting left the projector blank until the next heat started (and a throwing detector blanked a payload); the rise-in would have replayed on every live payload (the display is re-attached each time) — now off after it finishes, checked in a browser; the tiebreak heat never entered `recentHeats`, and a tiebreak plus a regular heat in one comparison could say "A and B share the lead" right after showing B won; a maxed entry read as the capped time; a tied cupper cut from the rank list without a word; long co-leader names could push the last row off the screen; an empty-results heat showed an empty grid; duplicate names among cuppers who had not raced switched the rank screen off; the compact layout made the result text the smallest on screen; the generic rows, ordinal and ring wiring were in the Cup Taster folder. Mutation-tested (about 110 mutants, all killed bar three redundant guards); screens measured with zero overflow at 1920×1080, 1280×720, 1024×768 and 2560×1440.
+
+**Decisions and limits (also in ROADMAP):**
+
+- A snapshot that already shows a running heat is not mined for moments: if a heat is confirmed in the same publish as the next heat's start (or the confirm publish is delayed behind it), the room does not get a result screen for it. It is in the standings.
+- A heat confirmed out of order below the three newest is not announced.
+- "Played" is "the standings show a time or a correct answer"; a time is written when a timer stops, before the heat is confirmed, so with two heats in flight a stopped-but-unconfirmed cupper counts as ranked.
+- Moments pre-empt a held page, and the idle loop starts again from its first page afterwards.
+- No screen-reader announcement for moments (a TV surface; the phone view carries the results as text).
+- Real TV check of the moments owed.
+
+---
+
 ## T-HARDEN.projector-redesign: A venue display built from reusable parts · 2026-10-08
 
 **Task:** T-HARDEN.projector-redesign (live-event finding #5 from 2026-10-04; user feedback: the projector had **too much at once** and **not enough event feel**; research brief from Codex, decisions: heat screen + paged standings + champion first, fully automatic, the building blocks reusable by other formats).
