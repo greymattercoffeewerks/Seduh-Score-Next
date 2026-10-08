@@ -13,6 +13,35 @@
   gap: var(--space-5);
 }
 
+.btc-podium-list {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.btc-podium-place {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.btc-podium-team {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+  /* A long single-token team name must wrap inside the card at 360px. */
+  overflow-wrap: anywhere;
+}
+
+/* A placeholder must not read as a team name: lighter weight, italic and the body size,
+   so it differs by more than colour. */
+.btc-podium-place:not([data-state='decided']) .btc-podium-team {
+  font-size: var(--text-base);
+  font-weight: 400;
+  font-style: italic;
+}
+
 .btc-bracket-round h2 {
   margin: 0 0 var(--space-3) 0;
 }
@@ -33,6 +62,7 @@
   padding: var(--space-3);
   border: var(--border-hairline) solid var(--color-border);
   border-radius: var(--radius-sm);
+  overflow-wrap: anywhere;
 }
 
 .btc-bracket-create-form {

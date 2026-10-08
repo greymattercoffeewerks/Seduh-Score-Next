@@ -539,6 +539,125 @@ describe('mountBracketScreen', () => {
     expect(headings).toEqual(['Quarterfinals', 'Final', 'Third Place']);
   });
 
+  describe('podium card', () => {
+    function podiumDb({ finalScore, thirdScore } = {}) {
+      const db = baseDb();
+      db.btc_teams.push(
+        { id: 't3', event_id: 'ev1', name: 'Gamma' },
+        { id: 't4', event_id: 'ev1', name: 'Delta' },
+      );
+      db.btc_bracket_slots = [
+        {
+          id: 's-final',
+          event_id: 'ev1',
+          round: 'final',
+          slot_label: 'final',
+          team1_id: 't1',
+          team2_id: 't2',
+          match_id: 'm-final',
+        },
+        {
+          id: 's-third',
+          event_id: 'ev1',
+          round: 'third_place',
+          slot_label: 'third_place',
+          team1_id: 't3',
+          team2_id: 't4',
+          match_id: 'm-third',
+        },
+      ];
+      db.btc_matches = [
+        { id: 'm-final', status: finalScore ? 'confirmed' : 'pending' },
+        { id: 'm-third', status: thirdScore ? 'confirmed' : 'pending' },
+      ];
+      db.btc_match_scores = [
+        finalScore && {
+          match_id: 'm-final',
+          status: 'confirmed',
+          team1_id: 't1',
+          team2_id: 't2',
+          ...finalScore,
+        },
+        thirdScore && {
+          match_id: 'm-third',
+          status: 'confirmed',
+          team1_id: 't3',
+          team2_id: 't4',
+          ...thirdScore,
+        },
+      ].filter(Boolean);
+      return db;
+    }
+    const places = () =>
+      [...root.querySelectorAll('.btc-podium-place')].map((li) => li.textContent);
+
+    it('names Champion, runner-up and 3rd from the confirmed final and third-place matches', async () => {
+      const client = fakeClient(
+        podiumDb({
+          finalScore: { team1_total: 40, team2_total: 55 },
+          thirdScore: { team1_total: 61, team2_total: 30 },
+        }),
+      );
+      await mountBracketScreen(root, { eventId: 'ev1', client });
+
+      // team2 won the final, so the winner is read from the totals, not from slot order.
+      expect(places()).toEqual(['ChampionBeta', '1st runner-upAlpha', '3rd placeGamma']);
+    });
+
+    it('says "Not decided yet" for every place before anything is confirmed', async () => {
+      const client = fakeClient(podiumDb());
+      await mountBracketScreen(root, { eventId: 'ev1', client });
+
+      expect(places()).toEqual([
+        'ChampionNot decided yet',
+        '1st runner-upNot decided yet',
+        '3rd placeNot decided yet',
+      ]);
+    });
+
+    it('says a tied final has no winner rather than naming one', async () => {
+      const client = fakeClient(podiumDb({ finalScore: { team1_total: 50, team2_total: 50 } }));
+      await mountBracketScreen(root, { eventId: 'ev1', client });
+
+      expect(places().slice(0, 2)).toEqual([
+        'ChampionTied — not decided',
+        '1st runner-upTied — not decided',
+      ]);
+    });
+
+    it('shows a tied third-place match as tied while the final is decided', async () => {
+      const client = fakeClient(
+        podiumDb({
+          finalScore: { team1_total: 40, team2_total: 55 },
+          thirdScore: { team1_total: 30, team2_total: 30 },
+        }),
+      );
+      await mountBracketScreen(root, { eventId: 'ev1', client });
+
+      expect(places()).toEqual([
+        'ChampionBeta',
+        '1st runner-upAlpha',
+        '3rd placeTied — not decided',
+      ]);
+    });
+
+    it('pairs each place name with its team as a term and description', async () => {
+      const client = fakeClient(podiumDb({ finalScore: { team1_total: 40, team2_total: 55 } }));
+      await mountBracketScreen(root, { eventId: 'ev1', client });
+
+      const first = root.querySelector('.btc-podium-place');
+      expect(first.querySelector('dt').textContent).toBe('Champion');
+      expect(first.querySelector('dd').textContent).toBe('Beta');
+      expect(first.dataset.state).toBe('decided');
+    });
+
+    it('is not shown before a bracket has been generated', async () => {
+      const client = fakeClient(baseDb());
+      await mountBracketScreen(root, { eventId: 'ev1', client });
+      expect(root.querySelector('.btc-podium')).toBeNull();
+    });
+  });
+
   it('shows the is-test banner for a test event', async () => {
     const client = fakeClient(baseDb());
     await mountBracketScreen(root, { eventId: 'ev1', client });

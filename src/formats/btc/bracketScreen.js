@@ -23,6 +23,7 @@ import {
   createBracketMatch,
   fetchBracket,
 } from './bracket.js';
+import { derivePodium, fetchPodiumScores, podiumMatchIds } from './podium.js';
 
 // btc_matches.status is pending | scoring | confirmed (supabase/migrations/
 // 20260918090000_btc_tables.sql) — pending and scoring must stay distinct here: a
@@ -43,6 +44,11 @@ export async function mountBracketScreen(root, { eventId, client = getSupabase()
     teams: [],
     judges: [],
     entries: [], // [{slot, match}], sorted into bracket display order
+    // btc_match_scores rows for the final and third-place matches (podium only). Only a
+    // CONFIRM changes these, and confirming happens on the scoring screen, so this screen
+    // remounts (and reloads them) before they can differ — hence no refresh after
+    // generate/create-match, which cannot produce a confirmed result.
+    scores: [],
     generating: false,
     creatingSlotId: null,
     lastClosedSlotId: null,
@@ -78,7 +84,11 @@ export async function mountBracketScreen(root, { eventId, client = getSupabase()
       listJudges(eventId, client),
       fetchBracket(eventId, client),
     ]);
-    return { event, teams, judges, entries };
+    // Needs the match ids, so it cannot join the Promise.all above. Deliberately NOT
+    // degraded on failure: a podium that silently showed "Not decided yet" because its read
+    // failed would be a lie, so a failed read fails the load and Retry covers it.
+    const scores = await fetchPodiumScores(podiumMatchIds(entries), client);
+    return { event, teams, judges, entries, scores };
   }
 
   async function attemptLoad() {
@@ -90,6 +100,7 @@ export async function mountBracketScreen(root, { eventId, client = getSupabase()
       state.teams = persisted.teams;
       state.judges = persisted.judges;
       state.entries = persisted.entries;
+      state.scores = persisted.scores;
       state.loadFailedMessage = null;
       state.pendingFocus = 'heading';
     } catch (err) {
@@ -324,6 +335,38 @@ export async function mountBracketScreen(root, { eventId, client = getSupabase()
     return el('div', { className: 'btc-bracket-rounds' }, sections);
   }
 
+  // Champion / runner-up / 3rd, derived from the final and third-place matches' confirmed
+  // totals (podium.js). Meaning is carried by the text, never by colour alone: a tied or
+  // not-yet-played place says so in words.
+  function renderPodium() {
+    const podium = derivePodium({
+      entries: state.entries,
+      scores: state.scores,
+      teams: state.teams,
+    });
+    if (podium.places.length === 0) return null;
+    const placeText = (place) => {
+      if (place.state === 'decided') return place.teamName;
+      if (place.state === 'tied') return 'Tied — not decided';
+      return 'Not decided yet';
+    };
+    // A description list: each place's name (dt) is paired with its team (dd), so a screen
+    // reader announces "Champion: Beta" rather than two unrelated chunks.
+    return el('div', { className: 'card btc-podium' }, [
+      el('h2', { text: 'Podium' }),
+      el(
+        'dl',
+        { className: 'btc-podium-list' },
+        podium.places.map((place) =>
+          el('div', { className: 'btc-podium-place', attrs: { 'data-state': place.state } }, [
+            el('dt', { className: 'stage-meta', text: place.label }),
+            el('dd', { className: 'btc-podium-team', text: placeText(place) }),
+          ]),
+        ),
+      ),
+    ]);
+  }
+
   function renderGenerateCard() {
     const generateButton = el('button', {
       className: 'btn btn-primary tap-target',
@@ -406,6 +449,8 @@ export async function mountBracketScreen(root, { eventId, client = getSupabase()
       if (state.entries.length === 0) {
         container.appendChild(renderGenerateCard());
       } else {
+        const podiumCard = renderPodium();
+        if (podiumCard) container.appendChild(podiumCard);
         container.appendChild(renderBracket());
       }
 
