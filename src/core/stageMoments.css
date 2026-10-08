@@ -1,0 +1,114 @@
+/*
+ * Parts shared by every venue display's "what just happened" screens (core/momentPlayer.js): the rows of a
+ * rank-movement list (core/rankMovementRows.js) and the one-time rise-in of a list's items
+ * (core/stageReveal.js). Token-only and sized in --stage-fit like every stage screen, so any format's projector
+ * gets the same look and scales to whatever screen the room has.
+ *
+ * Meaning is carried by words: "Up 2", "Down 1", "New", "Holds" and "(tied)" are written out, the colour only
+ * adds emphasis.
+ */
+
+/* ---------- rank movement rows ---------- */
+
+.stage-moves {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: max(1.1rem, calc(5.17 * var(--stage-fit)));
+  font-variant-numeric: tabular-nums;
+  /* Tight, so eight rows and a two-line headline still fit the screen. */
+  line-height: 1.15;
+}
+
+.stage-move {
+  display: grid;
+  grid-template-columns: 7vw minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 1vw;
+  padding: calc(1.09 * var(--stage-fit)) 1vw;
+  border-bottom: var(--border-hairline) solid var(--color-border);
+}
+
+.stage-move-pos {
+  color: var(--color-accent);
+  font-weight: var(--font-weight-bold);
+}
+
+/* The name is cut with an ellipsis; the "(tied)" beside it never is. */
+.stage-move-name {
+  display: flex;
+  min-width: 0;
+  font-weight: var(--font-weight-semibold);
+}
+
+.stage-move-name-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stage-move-name-suffix {
+  flex: none;
+  white-space: pre;
+}
+
+.stage-move-change {
+  text-align: right;
+  white-space: nowrap;
+  color: var(--color-text-secondary);
+}
+
+.stage-move[data-change='up'] .stage-move-change,
+.stage-move[data-change='entered'] .stage-move-change {
+  color: var(--color-accent);
+  font-weight: var(--font-weight-bold);
+}
+
+/* A list that was cut short says how many rows it left out. */
+.stage-move-more {
+  padding: calc(1.09 * var(--stage-fit)) 1vw;
+  color: var(--color-text-secondary);
+  font-size: max(1rem, calc(4.08 * var(--stage-fit)));
+}
+
+/* ---------- the rise-in ----------
+   Items rise in one after another, first place first. Only when motion is welcome; otherwise they are simply
+   there. core/stageReveal.js removes the .stage-reveal class when the last item has finished. */
+@media (prefers-reduced-motion: no-preference) {
+  .stage-reveal .stage-reveal-item {
+    animation: stage-rise 0.5s ease-out both;
+  }
+
+  .stage-reveal .stage-reveal-item:nth-child(2) {
+    animation-delay: 0.12s;
+  }
+
+  .stage-reveal .stage-reveal-item:nth-child(3) {
+    animation-delay: 0.24s;
+  }
+
+  .stage-reveal .stage-reveal-item:nth-child(4) {
+    animation-delay: 0.36s;
+  }
+
+  .stage-reveal .stage-reveal-item:nth-child(5) {
+    animation-delay: 0.48s;
+  }
+
+  .stage-reveal .stage-reveal-item:nth-child(n + 6) {
+    animation-delay: 0.6s;
+  }
+}
+
+@keyframes stage-rise {
+  from {
+    opacity: 0;
+    transform: translateY(2vh);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

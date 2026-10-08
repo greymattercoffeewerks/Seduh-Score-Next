@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { createProjectorBody } from './projectorBody.js';
 import { PAGE_DWELL_MS } from './projectorScreens.js';
+import { RESULT_HOLD_MS, RANK_HOLD_MS } from './projectorMoments.js';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -117,6 +118,144 @@ describe('createProjectorBody', () => {
     shellRender(body, projector, payload()); // idle wanted, scoring held for its 8s minimum
     expect(setTimer).toHaveBeenCalledWith(expect.any(Function), 5_000);
     projector.destroy();
+  });
+
+  describe('result and rank moments, through the real player and director', () => {
+    const rows = (names) =>
+      names.map((displayName, i) => ({
+        position: i + 1,
+        displayName,
+        numCorrect: 5,
+        totalElapsedSecs: 200 + i,
+        tieStatus: null,
+      }));
+    const confirmed = (heatNumber, name) => ({
+      heatNumber,
+      kind: 'normal',
+      stageKind: 'prelims',
+      results: [{ displayName: name, numCorrect: 6, totalElapsedSecs: 190 }],
+    });
+    const before = () => payload({ standings: rows(['Ayu', 'Bima']), recentHeats: [] });
+    const after = () =>
+      payload({
+        standings: rows(['Cleo', 'Ayu', 'Bima']),
+        recentHeats: [confirmed(3, 'Cleo')],
+      });
+    const kicker = (body) => body.querySelector('.projector-kicker')?.textContent ?? null;
+
+    it('shows the result, then the rank impact, then the loop again, each for its hold time', () => {
+      vi.useFakeTimers();
+      const projector = createProjectorBody();
+      const body = document.createElement('div');
+      shellRender(body, projector, before());
+      expect(body.querySelector('.projector-standings')).not.toBeNull();
+      shellRender(body, projector, after());
+      expect(kicker(body)).toBe('Result recorded');
+      vi.advanceTimersByTime(RESULT_HOLD_MS);
+      expect(kicker(body)).toBe('Rank impact');
+      vi.advanceTimersByTime(RANK_HOLD_MS);
+      expect(body.querySelector('.projector-standings')).not.toBeNull();
+      expect(body.querySelector('.projector-standing-name').textContent).toContain('Cleo');
+      projector.destroy();
+    });
+
+    it('holds the result for 6 seconds and the rank impact for 8, the real times', () => {
+      vi.useFakeTimers();
+      const projector = createProjectorBody();
+      const body = document.createElement('div');
+      shellRender(body, projector, before());
+      shellRender(body, projector, after());
+      vi.advanceTimersByTime(5_999);
+      expect(kicker(body)).toBe('Result recorded');
+      vi.advanceTimersByTime(1);
+      expect(kicker(body)).toBe('Rank impact');
+      vi.advanceTimersByTime(7_999);
+      expect(kicker(body)).toBe('Rank impact');
+      vi.advanceTimersByTime(1);
+      expect(body.querySelector('.projector-standings')).not.toBeNull();
+      projector.destroy();
+    });
+
+    it('a display opened after the result was recorded does not replay it', () => {
+      vi.useFakeTimers();
+      const projector = createProjectorBody();
+      const body = document.createElement('div');
+      shellRender(body, projector, after());
+      expect(body.querySelector('.projector-standings')).not.toBeNull();
+      projector.destroy();
+    });
+
+    it('the shell re-rendering the same payload mid-moment does not restart or repeat it', () => {
+      vi.useFakeTimers();
+      const projector = createProjectorBody();
+      const body = document.createElement('div');
+      shellRender(body, projector, before());
+      shellRender(body, projector, after());
+      vi.advanceTimersByTime(2_000);
+      shellRender(body, projector, after());
+      vi.advanceTimersByTime(RESULT_HOLD_MS - 2_000);
+      expect(kicker(body)).toBe('Rank impact');
+      projector.destroy();
+    });
+
+    it('a heat starting cuts the moment short and the rest is not replayed', () => {
+      vi.useFakeTimers();
+      const projector = createProjectorBody();
+      const body = document.createElement('div');
+      shellRender(body, projector, before());
+      shellRender(body, projector, after());
+      vi.advanceTimersByTime(1_000);
+      shellRender(body, projector, { ...after(), activeHeat: scoringHeat(), upNext: null });
+      // "being scored" is not urgent, so the moment is not cut by it...
+      expect(kicker(body)).toBe('Result recorded');
+      shellRender(body, projector, {
+        ...after(),
+        activeHeat: { ...scoringHeat(), status: 'timing' },
+      });
+      expect(body.querySelector('.viewer-countdown')).not.toBeNull();
+      vi.advanceTimersByTime(RESULT_HOLD_MS + RANK_HOLD_MS);
+      expect(body.querySelector('.viewer-countdown')).not.toBeNull();
+      expect(kicker(body)).not.toBe('Rank impact');
+      projector.destroy();
+    });
+
+    it('a payload whose recent heat is malformed costs the moment only: the ordinary screen still shows', () => {
+      vi.useFakeTimers();
+      const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const projector = createProjectorBody();
+      const body = document.createElement('div');
+      shellRender(body, projector, before());
+      // a result with no name: the screen cannot be drawn for it
+      shellRender(
+        body,
+        projector,
+        payload({
+          standings: rows(['Ayu', 'Bima']),
+          recentHeats: [
+            {
+              heatNumber: 3,
+              kind: 'normal',
+              stageKind: 'prelims',
+              results: [null],
+            },
+          ],
+        }),
+      );
+      expect(body.querySelector('.projector-standings')).not.toBeNull();
+      expect(errors).toHaveBeenCalled();
+      errors.mockRestore();
+      projector.destroy();
+    });
+
+    it('destroy() ends a moment’s timers', () => {
+      vi.useFakeTimers();
+      const projector = createProjectorBody();
+      const body = document.createElement('div');
+      shellRender(body, projector, before());
+      shellRender(body, projector, after());
+      projector.destroy();
+      expect(vi.getTimerCount()).toBe(0);
+    });
   });
 
   describe('the real hold times, through the real director', () => {

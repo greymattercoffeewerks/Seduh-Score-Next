@@ -12,6 +12,8 @@
 // (what is next) and an end side (a page counter and the ring). Screens put their content in those slots.
 import { el } from './dom.js';
 import { createScreenDirector } from './screenDirector.js';
+import { createMomentPlayer } from './momentPlayer.js';
+import { createProgressRing } from './progressRing.js';
 import { renderStageBand } from './stageBand.js';
 
 // Returns { el, main, footerStart, footerEnd }. Screens mount their own frame into the director's host.
@@ -26,7 +28,25 @@ export function renderScreenFrame() {
   return { el: frame, main, footerStart, footerEnd };
 }
 
-export function createStageDisplay({ selectScreen, bandFor, ...directorOptions }) {
+// Puts a page-change ring in a screen's footer, counting down `durationMs` from now: the room's cue that this
+// screen is about to give way. Returns the ring; the screen calls its `destroy()` when it is torn down.
+export function mountFooterRing(frame, durationMs) {
+  const ring = createProgressRing();
+  frame.footerEnd.replaceChildren(ring.el);
+  ring.run({ durationMs, startedAt: Date.now() });
+  return ring;
+}
+
+// `detectMoments(previous, next)` (optional) turns a change between two snapshots into short "what just
+// happened" screens played before the ordinary one — see core/momentPlayer.js. Without it the display only ever
+// shows what `selectScreen` asks for. `maxQueuedMoments` caps how many wait their turn.
+export function createStageDisplay({
+  selectScreen,
+  bandFor,
+  detectMoments,
+  maxQueuedMoments,
+  ...directorOptions
+}) {
   const bandHost = el('div', { className: 'stage-band-host' });
   // Not a live region: the shell's body is polite, and without this a republish or a page change would read the
   // whole screen aloud again. (A countdown's one-shot announcements are live regions of their own, and the
@@ -56,13 +76,26 @@ export function createStageDisplay({ selectScreen, bandFor, ...directorOptions }
     },
   });
 
+  const player = detectMoments
+    ? createMomentPlayer({
+        director,
+        selectScreen,
+        detectMoments,
+        maxQueued: maxQueuedMoments,
+        setTimer: directorOptions.setTimer,
+        clearTimer: directorOptions.clearTimer,
+      })
+    : null;
+
   return {
     el: root,
     update(payload) {
-      director.show(selectScreen(payload), payload);
+      if (player) player.update(payload);
+      else director.show(selectScreen(payload), payload);
     },
     currentKey: () => director.currentKey(),
     destroy() {
+      player?.destroy();
       director.destroy();
     },
   };

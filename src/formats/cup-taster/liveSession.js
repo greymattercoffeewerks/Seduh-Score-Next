@@ -124,6 +124,8 @@ async function fetchHeatResults(hydratedEntries, client) {
     displayName: entry.displayName,
     numCorrect: correctByHeatEntryId.get(entry.id) ?? 0,
     totalElapsedSecs: entry.elapsed_secs,
+    // Additive: a venue display words a timed-out entry "Max time" (D22), not as the capped figure.
+    maxed: Boolean(entry.maxed),
   }));
 }
 
@@ -212,13 +214,23 @@ export async function buildLiveSessionPayload(stageId, client = getSupabase()) {
 
   const confirmed = heatsWithEntries
     .filter(({ heat }) => heat.status === 'confirmed')
-    .sort((a, b) => b.heat.heat_number - a.heat.heat_number)
+    // Newest first in the order heats RUN: a tiebreak heat numbers from 1 again but runs after every regular
+    // heat, so sorting by number alone would keep it out of the window (and out of the venue display's
+    // "result recorded") whenever the stage has three or more regular heats.
+    .sort((a, b) => byRunningOrder(b.heat, a.heat))
     .slice(0, RECENT_HEATS_LIMIT);
   const recentHeats = [];
   for (const { heat, entries } of confirmed) {
     const hydrated = await hydrateHeatEntries(entries, client);
     const results = await fetchHeatResults(hydrated, client);
-    recentHeats.push({ heatNumber: heat.heat_number, stageKind: stage.kind, results });
+    // `kind` (additive): tiebreak heats number from 1 again, so the venue display needs it to tell a new result
+    // from an old one by heat (core/momentPlayer.js compares snapshots).
+    recentHeats.push({
+      heatNumber: heat.heat_number,
+      kind: heat.kind,
+      stageKind: stage.kind,
+      results,
+    });
   }
 
   // The tournament's own champion — not a per-stage winner — is exactly
