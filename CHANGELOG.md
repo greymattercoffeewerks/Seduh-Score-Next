@@ -1,3 +1,39 @@
+## T-HARDEN.heats-roster-fold: Heats first, an "Up next" shortcut, the roster folded away · 2026-10-08
+
+**Task:** T-HARDEN.heats-roster-fold (live-event finding #3 from the first Cup Taster event, 4 Oct).
+On the stage heats page the Roster card sat above the heats, so on every visit an organiser scrolled past the whole roster, and then past every finished heat, to reach the one to run. The roster was already loaded into the generated heats, so it was only ever in the way.
+
+**What shipped (`src/formats/cup-taster/heatsScreen.js` / `.css`, user-chosen scope: roster collapsed + an Up next shortcut):**
+
+- **Once every cupper has a heat:** an **Up next** card first (`renderUpNext`), then the heats list, then the roster as a closed `<details>` fold-out ("Roster — 20 cuppers", `renderRosterFold`) at the bottom. Up next names the first heat that is not confirmed ("Heat 4 is waiting to be scored · 4 cuppers · 3 of 6 heats confirmed") with one primary button into it ("Score Heat 4" / "Time Heat 4", Scoring once a heat is `scoring`, Timing before). When every heat is confirmed it says so and links to the stage's standings. `findUpNextHeat` is pure and exported: regular heats in order, then tiebreak heats (their numbering restarts at 1), `null` when nothing is left; it does not mutate its input.
+- **Before any heats exist** the roster stays an open card at the top (it is what heats are generated from), so "Seed roster into this stage" still refocuses its heading. **While generation is incomplete** there is no Up next (finishing the assignment comes first) and the roster fold sits below the "Finish assigning" form.
+- A tiebreak heat is named "Heat N (tiebreak)" everywhere (card heading, the per-heat link's accessible name, the Up next button): its numbering restarts at 1, so before this a stage with a tiebreak showed two different "Heat 1"s.
+- After heats are generated, focus goes to the Up next card (the first thing that says what to do now), falling back to the heats heading when generation stopped short (`FIRST_HEATS_TARGET`).
+- The fold-out's summary draws an explicit +/− (the summary is a flex row, which removes the native marker; same pattern as the results page), is a 44px tap target and has padding so the focus ring clears the text. Long unbroken cupper names now wrap inside their heat card.
+- "N cupper(s)" is now "N cuppers"/"1 cupper" on this screen.
+- Tests: 65 in `heatsScreen.test.js` (was 35), including page-order checks for the zero-heats / incomplete / complete / all-confirmed states, a multi-heat mount, tiebreak ordering and naming, the counts in the Up next sentence, and the focus target. No database change.
+
+**Files changed:** `src/formats/cup-taster/heatsScreen.js`, `heatsScreen.css`, `heatsScreen.test.js`.
+
+**Bugs found while building (and in review):**
+
+- The roster fold-out first shipped with no visible open/close marker (the flex summary hides it), so the roster would have looked like a bare line of bold text and nothing would have said it could be opened. Drawn explicitly now.
+- After generating heats, focus went to the heats heading, which now sits below the Up next card: a sighted user landed with the card scrolled off the top. Now it lands on Up next.
+- The Up next button said "(tiebreak)" while the list did not: fixed by one shared heat name.
+- Smaller: a redundant `aria-label` on the Up next link, "All heats are confirmed (2 of 2 heats confirmed)" saying it twice, displaced doc comments.
+
+**Review cycle:** One round with four reviewers (code-reviewer, ui-accessibility-reviewer at 360px first, test-auditor, module-boundary-checker); no blocking findings beyond the two a11y items above, all fixed. Mutation checks on the changed code and the audited survivors: every behavioural mutant is caught.
+
+**Known gaps (deferred, not blocking):**
+
+- The fold-out re-closes on any re-render (e.g. a failed manual submit in the incomplete state); acceptable, nothing on this screen re-renders in normal use once heats exist.
+- A heading-navigating screen-reader user no longer finds a "Roster" heading once heats exist (it is a `<details>` summary).
+- At 200% text zoom a keyboard user can land on the Up next link while it is behind the sticky header (pre-existing: no `scroll-padding-top` on the page; better fixed once in the shell than here).
+- Pre-existing: at 200% root font-size the page is slightly wider than the viewport (374px at 360px); the source was not isolated.
+- Confirmed heats still render as tall cards. Folding them away, jump chips and a two-column layout on wide screens were offered and not chosen; revisit if a many-heat event is still a long scroll.
+
+---
+
 ## T-HARDEN.team-accounts: Owner-managed logins for team members · 2026-10-08
 
 **Task:** T-HARDEN.team-accounts (live-event finding #2, second half).

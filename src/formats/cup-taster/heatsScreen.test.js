@@ -1,9 +1,14 @@
 import { describe, it, expect, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 import {
   renderRosterList,
   renderManualAssignmentForm,
   readManualAssignmentForm,
   renderHeatsList,
+  renderRosterFold,
+  renderUpNext,
+  findUpNextHeat,
+  FIRST_HEATS_TARGET,
   mountHeatGenerationScreen,
 } from './heatsScreen.js';
 
@@ -433,7 +438,7 @@ describe('mountHeatGenerationScreen', () => {
     });
     await mountHeatGenerationScreen(root, { eventId: 'ev1', stageId: 's1', client });
     expect(root.textContent).toContain('Heat generation incomplete');
-    expect(root.textContent).toContain('1 of 2 cupper(s)');
+    expect(root.textContent).toContain('1 of 2 cuppers');
     // The partial result is still shown, not hidden — the organiser needs to
     // see what already exists.
     expect(root.textContent).toContain('Heat 1');
@@ -480,7 +485,7 @@ describe('mountHeatGenerationScreen', () => {
     });
     await mountHeatGenerationScreen(root, { eventId: 'ev1', stageId: 's1', client });
     expect(root.textContent).toContain('Heat generation incomplete');
-    expect(root.textContent).toContain('1 of 2 cupper(s)');
+    expect(root.textContent).toContain('1 of 2 cuppers');
   });
 
   it('keeps the is-test banner visible through the "generating" and "incomplete" states, not only the empty-roster state', async () => {
@@ -586,7 +591,7 @@ describe('mountHeatGenerationScreen', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(root.textContent).toContain('Heat generation incomplete');
-    expect(root.textContent).toContain('0 of 2 cupper(s)');
+    expect(root.textContent).toContain('0 of 2 cuppers');
     expect(root.textContent).not.toContain('Generate heats (random)');
     const feedback = root.querySelector('.screen-feedback');
     expect(feedback.dataset.tone).toBe('error');
@@ -630,7 +635,7 @@ describe('mountHeatGenerationScreen', () => {
     });
     await mountHeatGenerationScreen(root, { eventId: 'ev1', stageId: 's1', client });
 
-    expect(root.textContent).toContain('1 of 2 cupper(s)');
+    expect(root.textContent).toContain('1 of 2 cuppers');
 
     const manualForm = root.querySelector('form.manual-assignment-form');
     expect(manualForm).not.toBeNull();
@@ -996,5 +1001,470 @@ describe('mountHeatGenerationScreen', () => {
     // screen's content, untouched, not this screen's own heats UI.
     expect(root.querySelector('#other-screen-marker')).not.toBeNull();
     expect(root.textContent).not.toContain('Heat generation');
+  });
+});
+
+// ---- finding #3: heats first, an Up next card, the roster folded away ----
+
+const heat = (number, status, extra = {}, entryCount = 1) => ({
+  heat: { id: `h${number}`, heat_number: number, status, kind: 'normal', ...extra },
+  entries: Array.from({ length: entryCount }, (_, i) => ({
+    entry_id: `e${number}-${i}`,
+    station: String.fromCharCode(65 + i),
+  })),
+});
+
+describe('findUpNextHeat', () => {
+  it('is the first heat that is not confirmed yet, in heat order whatever order they arrive in', () => {
+    const list = [heat(3, 'pending'), heat(1, 'confirmed'), heat(2, 'scoring')];
+    expect(findUpNextHeat(list).heat.id).toBe('h2');
+  });
+
+  it('counts a heat that is being timed or scored as still to do', () => {
+    expect(findUpNextHeat([heat(1, 'timing'), heat(2, 'pending')]).heat.id).toBe('h1');
+    expect(findUpNextHeat([heat(1, 'scoring'), heat(2, 'pending')]).heat.id).toBe('h1');
+  });
+
+  it('puts tiebreak heats after the regular ones, even though their numbering restarts at 1', () => {
+    const list = [heat(1, 'pending', { id: 't1', kind: 'tiebreak' }), heat(2, 'pending')];
+    expect(findUpNextHeat(list).heat.id).toBe('h2');
+    const onlyTiebreakLeft = [
+      heat(1, 'confirmed'),
+      heat(1, 'pending', { id: 't1', kind: 'tiebreak' }),
+    ];
+    expect(findUpNextHeat(onlyTiebreakLeft).heat.id).toBe('t1');
+  });
+
+  it('is null when every heat is confirmed, and for no heats at all', () => {
+    expect(findUpNextHeat([heat(1, 'confirmed'), heat(2, 'confirmed')])).toBeNull();
+    expect(findUpNextHeat([])).toBeNull();
+  });
+
+  it('does not reorder the caller list', () => {
+    const list = [heat(2, 'pending'), heat(1, 'pending')];
+    findUpNextHeat(list);
+    expect(list.map(({ heat: h }) => h.heat_number)).toEqual([2, 1]);
+  });
+});
+
+describe('renderUpNext', () => {
+  it('leads with a heading that is a focus target', () => {
+    const card = renderUpNext([heat(1, 'pending')], 'ev1', 's1');
+    const h = card.querySelector('h2');
+    expect(h.id).toBe('up-next-heading');
+    expect(h.textContent).toBe('Up next');
+    expect(h.getAttribute('tabindex')).toBe('-1');
+  });
+
+  it('a heat still to be timed: says so, with progress, and one button into its Timing screen', () => {
+    const card = renderUpNext(
+      [heat(1, 'confirmed'), heat(2, 'pending'), heat(3, 'pending')],
+      'ev1',
+      's1',
+    );
+    expect(card.querySelector('p').textContent).toBe(
+      'Heat 2 is next to be timed · 1 cupper · 1 of 3 heats confirmed',
+    );
+    const link = card.querySelector('a');
+    expect(link.textContent).toBe('Time Heat 2');
+    // the visible text is already the name: no redundant aria-label, and it reads differently from
+    // the per-heat 'Time this heat — Heat N' links further down the page
+    expect(link.hasAttribute('aria-label')).toBe(false);
+    expect(link.getAttribute('href')).toBe('#/events/ev1/heats/h2/timing');
+    expect(link.classList.contains('btn-primary')).toBe(true);
+    expect(link.classList.contains('tap-target')).toBe(true);
+  });
+
+  it('a heat being timed goes back to its Timing screen', () => {
+    const card = renderUpNext([heat(1, 'timing')], 'ev1', 's1');
+    expect(card.querySelector('p').textContent).toBe(
+      'Heat 1 is being timed · 1 cupper · 0 of 1 heat confirmed',
+    );
+    expect(card.querySelector('a').getAttribute('href')).toBe('#/events/ev1/heats/h1/timing');
+  });
+
+  it('a heat waiting to be scored goes to its Scoring screen', () => {
+    const card = renderUpNext([heat(1, 'confirmed'), heat(2, 'scoring')], 'ev1', 's1');
+    expect(card.querySelector('p').textContent).toBe(
+      'Heat 2 is waiting to be scored · 1 cupper · 1 of 2 heats confirmed',
+    );
+    expect(card.querySelector('a').textContent).toBe('Score Heat 2');
+    expect(card.querySelector('a').getAttribute('href')).toBe('#/events/ev1/heats/h2/scoring');
+  });
+
+  it('names a tiebreak heat as one', () => {
+    const card = renderUpNext([heat(1, 'pending', { kind: 'tiebreak' })], 'ev1', 's1');
+    expect(card.querySelector('a').textContent).toBe('Time Heat 1 (tiebreak)');
+  });
+
+  it('says 1 heat, not 1 heats', () => {
+    const card = renderUpNext([heat(1, 'pending')], 'ev1', 's1');
+    expect(card.querySelector('p').textContent).toMatch(/0 of 1 heat confirmed/);
+  });
+
+  it('when every heat is confirmed, says so and offers the standings instead', () => {
+    const card = renderUpNext([heat(1, 'confirmed'), heat(2, 'confirmed')], 'ev1', 's1');
+    expect(card.querySelector('p').textContent).toBe('All 2 heats are confirmed.');
+    const link = card.querySelector('a');
+    expect(link.textContent).toBe('View standings');
+    expect(link.getAttribute('href')).toBe('#/events/ev1/stages/s1/standings');
+  });
+});
+
+describe('renderRosterFold', () => {
+  const entries = [
+    { entry_id: 'e1', displayName: 'Cupper One', cafe: 'Cafe A' },
+    { entry_id: 'e2', displayName: 'Cupper Two', cafe: null },
+  ];
+
+  it('is a closed <details> whose summary says how many cuppers, with the list inside', () => {
+    const fold = renderRosterFold(entries);
+    expect(fold.tagName).toBe('DETAILS');
+    expect(fold.open).toBe(false);
+    expect(fold.querySelector('summary').textContent).toBe('Roster — 2 cuppers');
+    expect(fold.querySelectorAll('.roster-list li')).toHaveLength(2);
+  });
+
+  it('says 1 cupper, not 1 cuppers', () => {
+    expect(renderRosterFold([entries[0]]).querySelector('summary').textContent).toBe(
+      'Roster — 1 cupper',
+    );
+  });
+
+  it('keeps the summary a 44px tap target', () => {
+    expect(
+      renderRosterFold(entries).querySelector('summary').classList.contains('tap-target'),
+    ).toBe(true);
+  });
+});
+
+describe('mountHeatGenerationScreen — where things sit on the page', () => {
+  function mountWith({ stageEntries, roster, heats, heatEntries }) {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const client = fakeClient({
+      tables: {
+        events: { data: nonTestEvent, error: null },
+        ct_stages: { data: stage, error: null },
+        ct_stage_entries: { data: stageEntries, error: null },
+        event_entries: { data: roster, error: null },
+        ct_heats: { data: heats, error: null },
+        ct_heat_entries: { data: heatEntries, error: null },
+      },
+    });
+    return mountHeatGenerationScreen(root, { eventId: 'ev1', stageId: 's1', client }).then(
+      () => root,
+    );
+  }
+  const names = [
+    { id: 'e1', event_id: 'ev1', display_name: 'Cupper One', withdrawn: false },
+    { id: 'e2', event_id: 'ev1', display_name: 'Cupper Two', withdrawn: false },
+  ];
+  const stageEntries = [
+    { id: 'se1', stage_id: 's1', entry_id: 'e1' },
+    { id: 'se2', stage_id: 's1', entry_id: 'e2' },
+  ];
+  // Document order of the page's headings and fold-out summaries.
+  const order = (root) => [...root.querySelectorAll('h1, h2, h3, summary')];
+  const position = (root, selector) => order(root).findIndex((node) => node.matches(selector));
+
+  it('once every cupper has a heat: Up next, then the heats, then the roster fold-out (closed) — never the roster first', async () => {
+    const root = await mountWith({
+      stageEntries,
+      roster: names,
+      heats: [{ id: 'h1', stage_id: 's1', heat_number: 1, status: 'pending', kind: 'normal' }],
+      heatEntries: [
+        { heat_id: 'h1', entry_id: 'e1', station: 'A' },
+        { heat_id: 'h1', entry_id: 'e2', station: 'B' },
+      ],
+    });
+    const up = position(root, '#up-next-heading');
+    const heats = position(root, '#heats-heading');
+    const fold = position(root, '#roster-summary');
+    expect(up).toBeGreaterThan(-1);
+    expect(heats).toBeGreaterThan(up);
+    expect(fold).toBeGreaterThan(heats);
+    expect(root.querySelector('details.roster-fold').open).toBe(false);
+    expect(root.querySelector('#roster-summary').textContent).toBe('Roster — 2 cuppers');
+    expect(root.textContent).toContain('2 cuppers in this stage');
+    expect(root.querySelector('#roster-heading')).toBeNull(); // the open Roster card is gone
+    expect(root.querySelector('.up-next a').getAttribute('href')).toBe(
+      '#/events/ev1/heats/h1/timing',
+    );
+  });
+
+  it('before any heats exist, the roster stays an open card at the top, with no Up next and no fold-out', async () => {
+    const root = await mountWith({ stageEntries, roster: names, heats: [], heatEntries: [] });
+    expect(root.querySelector('#roster-heading').textContent).toBe('Roster');
+    expect(root.querySelector('details.roster-fold')).toBeNull();
+    expect(root.querySelector('#up-next-heading')).toBeNull();
+    const generate = order(root).findIndex((node) => node.textContent === 'Generate heats');
+    expect(position(root, '#roster-heading')).toBeLessThan(generate);
+  });
+
+  it('while generation is incomplete there is no Up next (finish assigning first), and the roster is folded below the form', async () => {
+    const root = await mountWith({
+      stageEntries,
+      roster: names,
+      heats: [{ id: 'h1', stage_id: 's1', heat_number: 1, status: 'pending', kind: 'normal' }],
+      heatEntries: [{ heat_id: 'h1', entry_id: 'e1', station: 'A' }],
+    });
+    expect(root.textContent).toContain('Heat generation incomplete');
+    expect(root.querySelector('#up-next-heading')).toBeNull();
+    const form = order(root).findIndex((node) => node.textContent.startsWith('Finish assigning'));
+    expect(form).toBeGreaterThan(-1);
+    expect(position(root, '#roster-summary')).toBeGreaterThan(form);
+    expect(root.querySelector('details.roster-fold').open).toBe(false);
+  });
+
+  it('when every heat is confirmed, Up next offers the standings', async () => {
+    const root = await mountWith({
+      stageEntries: [stageEntries[0]],
+      roster: [names[0]],
+      heats: [{ id: 'h1', stage_id: 's1', heat_number: 1, status: 'confirmed', kind: 'normal' }],
+      heatEntries: [{ heat_id: 'h1', entry_id: 'e1', station: 'A' }],
+    });
+    expect(root.querySelector('.up-next').textContent).toContain('All 1 heat is confirmed.');
+    expect(root.querySelector('.up-next a').getAttribute('href')).toBe(
+      '#/events/ev1/stages/s1/standings',
+    );
+  });
+});
+
+describe('heat names — a tiebreak heat is never just "Heat 1"', () => {
+  const mixed = [heat(1, 'confirmed'), heat(1, 'pending', { id: 'tb1', kind: 'tiebreak' })];
+
+  it('the heat card heading, its action link label and the Up next button all say tiebreak', () => {
+    const list = renderHeatsList(mixed, new Map(), 'ev1');
+    const cards = [...list.querySelectorAll('.heat-card')];
+    expect(cards.map((card) => card.querySelector('h3').textContent)).toEqual([
+      'Heat 1',
+      'Heat 1 (tiebreak)',
+    ]);
+    expect(cards[1].querySelector('a').getAttribute('aria-label')).toBe(
+      'Time this heat — Heat 1 (tiebreak)',
+    );
+    const up = renderUpNext(mixed, 'ev1', 's1');
+    expect(up.querySelector('a').textContent).toBe('Time Heat 1 (tiebreak)');
+  });
+
+  it('a regular heat is just "Heat N" (a heat with no kind recorded counts as regular)', () => {
+    const list = renderHeatsList(
+      [{ heat: { id: 'x', heat_number: 7, status: 'pending' }, entries: [] }],
+      new Map(),
+      'ev1',
+    );
+    expect(list.querySelector('h3').textContent).toBe('Heat 7');
+  });
+});
+
+describe('the roster fold-out marker', () => {
+  it('draws an explicit +/- (the native marker is hidden by the summary being a flex row)', () => {
+    const css = readFileSync('src/formats/cup-taster/heatsScreen.css', 'utf8');
+    expect(css).toMatch(/\.roster-fold-summary::before\s*\{[^}]*content:\s*'\+'/);
+    expect(css).toMatch(
+      /\.roster-fold\[open\]\s*>\s*\.roster-fold-summary::before\s*\{[^}]*content:\s*'\\2212'/,
+    );
+    expect(css).toMatch(/\.roster-fold-summary::-webkit-details-marker\s*\{[^}]*display:\s*none/);
+  });
+});
+
+describe('mountHeatGenerationScreen — focus after generating heats', () => {
+  it('lands on the Up next card, the first thing that says what to do now, not on the heats heading below it', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root); // focus() only works on attached nodes
+    const stageEntries = [
+      { id: 'se1', stage_id: 's1', entry_id: 'e1' },
+      { id: 'se2', stage_id: 's1', entry_id: 'e2' },
+    ];
+    const roster = [
+      { id: 'e1', event_id: 'ev1', display_name: 'Cupper One', withdrawn: false },
+      { id: 'e2', event_id: 'ev1', display_name: 'Cupper Two', withdrawn: false },
+    ];
+    const createdHeat = {
+      id: 'h1',
+      stage_id: 's1',
+      heat_number: 1,
+      duration_secs: 480,
+      timing_mode: 'app',
+    };
+    const placedEntry = { id: 'he1', heat_id: 'h1', entry_id: 'e1', station: 'A' };
+    const bothPlaced = [placedEntry, { id: 'he2', heat_id: 'h1', entry_id: 'e2', station: 'B' }];
+    const client = fakeClient({
+      tables: {
+        events: { data: nonTestEvent, error: null },
+        ct_stages: { data: stage, error: null },
+        ct_stage_entries: { data: stageEntries, error: null },
+        event_entries: { data: roster, error: null },
+        ct_heats: [
+          { data: [createdHeat], error: null },
+          { data: createdHeat, error: null },
+          { data: [createdHeat], error: null },
+        ],
+        ct_heat_entries: [
+          { data: [placedEntry], error: null },
+          { data: [placedEntry], error: null },
+          { data: [bothPlaced[1]], error: null },
+          { data: bothPlaced, error: null },
+          { data: bothPlaced, error: null },
+        ],
+      },
+    });
+    await mountHeatGenerationScreen(root, { eventId: 'ev1', stageId: 's1', client });
+    const heatInput = root.querySelector('input[aria-label="Cupper Two: heat number"]');
+    const stationInput = root.querySelector('input[aria-label="Cupper Two: station"]');
+    heatInput.value = '1';
+    stationInput.value = 'B';
+    heatInput.dispatchEvent(new Event('input', { bubbles: true }));
+    stationInput.dispatchEvent(new Event('input', { bubbles: true }));
+    root
+      .querySelector('form.manual-assignment-form')
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(root.querySelector('#up-next-heading')).not.toBeNull();
+    expect(document.activeElement).toBe(root.querySelector('#up-next-heading'));
+  });
+});
+
+describe('renderUpNext — counts', () => {
+  it('only confirmed heats count as done: a heat being timed or scored does not', () => {
+    const card = renderUpNext(
+      [heat(1, 'confirmed'), heat(2, 'timing'), heat(3, 'scoring'), heat(4, 'pending')],
+      'ev1',
+      's1',
+    );
+    expect(card.querySelector('p').textContent).toBe(
+      'Heat 2 is being timed · 1 cupper · 1 of 4 heats confirmed',
+    );
+  });
+
+  it('counts the cuppers in the heat it points at, singular and plural', () => {
+    const three = renderUpNext([heat(1, 'pending', {}, 3)], 'ev1', 's1');
+    expect(three.querySelector('p').textContent).toBe(
+      'Heat 1 is next to be timed · 3 cuppers · 0 of 1 heat confirmed',
+    );
+    const one = renderUpNext([heat(1, 'pending', {}, 1)], 'ev1', 's1');
+    expect(one.querySelector('p').textContent).toContain('· 1 cupper ·');
+    const none = renderUpNext([heat(1, 'pending', {}, 0)], 'ev1', 's1');
+    expect(none.querySelector('p').textContent).toContain('· 0 cuppers ·');
+  });
+
+  it('counts tiebreak heats in the progress, like any other heat', () => {
+    const card = renderUpNext(
+      [heat(1, 'confirmed'), heat(1, 'pending', { id: 'tb1', kind: 'tiebreak' })],
+      'ev1',
+      's1',
+    );
+    expect(card.querySelector('p').textContent).toBe(
+      'Heat 1 (tiebreak) is next to be timed · 1 cupper · 1 of 2 heats confirmed',
+    );
+  });
+
+  it('the all-confirmed standings link is a primary 44px button, like the Time / Score link', () => {
+    const link = renderUpNext([heat(1, 'confirmed')], 'ev1', 's1').querySelector('a');
+    expect(link.classList.contains('btn-primary')).toBe(true);
+    expect(link.classList.contains('tap-target')).toBe(true);
+  });
+});
+
+describe('mountHeatGenerationScreen — several heats', () => {
+  it('hands the WHOLE heat list to Up next: heat 1 is done, so it leads to heat 2 (scoring), with the right counts', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const client = fakeClient({
+      tables: {
+        events: { data: nonTestEvent, error: null },
+        ct_stages: { data: stage, error: null },
+        ct_stage_entries: {
+          data: [
+            { id: 'se1', stage_id: 's1', entry_id: 'e1' },
+            { id: 'se2', stage_id: 's1', entry_id: 'e2' },
+            { id: 'se3', stage_id: 's1', entry_id: 'e3' },
+          ],
+          error: null,
+        },
+        event_entries: {
+          data: ['e1', 'e2', 'e3'].map((id, i) => ({
+            id,
+            event_id: 'ev1',
+            display_name: `Cupper ${i + 1}`,
+            withdrawn: false,
+          })),
+          error: null,
+        },
+        ct_heats: {
+          data: [
+            { id: 'h1', stage_id: 's1', heat_number: 1, status: 'confirmed', kind: 'normal' },
+            { id: 'h2', stage_id: 's1', heat_number: 2, status: 'scoring', kind: 'normal' },
+          ],
+          error: null,
+        },
+        // one answer per heat, in heat order (the fake serves its queue call by call)
+        ct_heat_entries: [
+          { data: [{ heat_id: 'h1', entry_id: 'e1', station: 'A' }], error: null },
+          {
+            data: [
+              { heat_id: 'h2', entry_id: 'e2', station: 'A' },
+              { heat_id: 'h2', entry_id: 'e3', station: 'B' },
+            ],
+            error: null,
+          },
+        ],
+      },
+    });
+    await mountHeatGenerationScreen(root, { eventId: 'ev1', stageId: 's1', client });
+    const up = root.querySelector('.up-next');
+    expect(up.querySelector('p').textContent).toBe(
+      'Heat 2 is waiting to be scored · 2 cuppers · 1 of 2 heats confirmed',
+    );
+    expect(up.querySelector('a').textContent).toBe('Score Heat 2');
+    expect(up.querySelector('a').getAttribute('href')).toBe('#/events/ev1/heats/h2/scoring');
+    expect(root.querySelectorAll('.heat-card')).toHaveLength(2);
+  });
+
+  it('while generation is incomplete there is no open Roster card — exactly one roster fold-out, closed', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const client = fakeClient({
+      tables: {
+        events: { data: nonTestEvent, error: null },
+        ct_stages: { data: stage, error: null },
+        ct_stage_entries: {
+          data: [
+            { id: 'se1', stage_id: 's1', entry_id: 'e1' },
+            { id: 'se2', stage_id: 's1', entry_id: 'e2' },
+          ],
+          error: null,
+        },
+        event_entries: {
+          data: [
+            { id: 'e1', event_id: 'ev1', display_name: 'Cupper One', withdrawn: false },
+            { id: 'e2', event_id: 'ev1', display_name: 'Cupper Two', withdrawn: false },
+          ],
+          error: null,
+        },
+        ct_heats: {
+          data: [{ id: 'h1', stage_id: 's1', heat_number: 1, status: 'pending', kind: 'normal' }],
+          error: null,
+        },
+        ct_heat_entries: { data: [{ heat_id: 'h1', entry_id: 'e1', station: 'A' }], error: null },
+      },
+    });
+    await mountHeatGenerationScreen(root, { eventId: 'ev1', stageId: 's1', client });
+    expect(root.textContent).toContain('Heat generation incomplete');
+    expect(root.querySelector('#roster-heading')).toBeNull();
+    expect(root.querySelectorAll('details.roster-fold')).toHaveLength(1);
+    expect(root.querySelector('details.roster-fold').open).toBe(false);
+  });
+});
+
+describe('FIRST_HEATS_TARGET', () => {
+  it('is the Up next heading when there is one, and the heats heading when generation stopped short', () => {
+    const page = document.createElement('div');
+    page.innerHTML = '<h2 id="up-next-heading"></h2><h2 id="heats-heading"></h2>';
+    expect(page.querySelector(FIRST_HEATS_TARGET).id).toBe('up-next-heading');
+    page.querySelector('#up-next-heading').remove();
+    expect(page.querySelector(FIRST_HEATS_TARGET).id).toBe('heats-heading');
   });
 });
