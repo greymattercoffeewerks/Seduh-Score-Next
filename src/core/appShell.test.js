@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import { mountAppShell } from './appShell.js';
 import { _clearAllForTests, outboxPut } from './db.js';
 import { enqueueOperation, flushOutbox } from './outbox.js';
@@ -910,7 +910,7 @@ describe('mountAppShell — sync panel', () => {
     await flush(() => {
       expect(syncEl.textContent).toBe('Synced');
     });
-    expect(syncEl.classList.contains('app-shell-sync-live')).toBe(true);
+    expect(root.querySelector('span.app-shell-sync-chip').hidden).toBe(false);
     expect(syncEl.querySelector('.status-live-dot')).not.toBeNull();
   });
 
@@ -938,6 +938,11 @@ describe('mountAppShell — sync panel', () => {
     });
     expect(syncEl.classList.contains('app-shell-sync-stuck')).toBe(true);
     expect(syncEl.classList.contains('app-shell-sync-pending')).toBe(false);
+    // The chip says so in words, not only in the danger colour: an ordinary in-flight write is
+    // "Not synced (1)", a stuck one "Sync failing (1)" (colour alone can't be relied on).
+    const chip = root.querySelector('button.app-shell-sync-chip');
+    expect(chip.textContent).toBe('Sync failing (1)');
+    expect(chip.classList.contains('app-shell-sync-chip-stuck')).toBe(true);
   });
 
   it('names the stuck operation type when the caller supplies operationLabels — ROADMAP.md gap: an organiser could not tell a stuck publish apart from a stuck heat-start', async () => {
@@ -1306,7 +1311,7 @@ describe('mountAppShell — sync panel', () => {
       await flush(() => {
         expect(syncEl.textContent).toBe('Not synced');
       });
-      expect(syncEl.classList.contains('app-shell-sync-live')).toBe(false);
+      expect(root.querySelector('span.app-shell-sync-chip').hidden).toBe(true);
     } finally {
       release();
       await running;
@@ -1719,30 +1724,41 @@ describe('mountAppShell — sync panel', () => {
     }
   });
 
-  // ui-accessibility-reviewer, 2026-09-27: at 360px the status wrapped onto
-  // its own header row and grew from "Synced" to a two-line pill mid-heat,
-  // shifting the Stop buttons under a judge's finger (and, with the real nav
-  // and email, at 640–1280px too). The row is now reserved (min-height in
-  // appShell.css) whenever there's anything to report — jsdom does no
-  // layout, so these pin when the row is reserved and the CSS rules behind
-  // it; the heights were measured in a real browser at
-  // 320/360/640/800/1024/1280px.
-  describe('reserved status row (no header shift)', () => {
-    const row = (root) => root.querySelector('.app-shell-sync-row');
+  // The sync status is a one-line chip in the header, so the sticky header is
+  // the same height in every status (2026-10-08, user-reported: the old
+  // full-width "Synced" row kept the header two rows tall). That row had been
+  // added on purpose (ui-accessibility-reviewer, 2026-09-27): a status that
+  // wrapped to two lines grew the header mid-heat and shifted the Stop
+  // buttons under a judge's finger. The chip keeps that guarantee by being
+  // short and single-line in every state; the long sentence is the live
+  // region, clipped away until a problem chip is tapped, then overlaid under
+  // the header instead of pushed into it. jsdom does no layout, so these pin
+  // the markup and the CSS rules behind the guarantee; the heights were
+  // measured in a real browser at 320/360/640/768/1024/1366/1440px in the live,
+  // stuck and open states.
+  describe('header status chip (no header shift)', () => {
+    const button = (root) => root.querySelector('button.app-shell-sync-chip');
+    const staticChip = (root) => root.querySelector('span.app-shell-sync-chip');
+    const context = (root) => root.querySelector('.app-shell-context');
 
-    it('wraps the status in the row, and leaves it unreserved while there is nothing to report', async () => {
+    it('puts the status next to the event name inside the header, and shows nothing while there is nothing to report', async () => {
       const root = document.createElement('div');
       mountTracked(root, { client: fakeClient({}) }); // no event context: 'off'
       await tick(30);
-      expect(row(root).contains(root.querySelector('.app-shell-sync'))).toBe(true);
-      // A direct child of the (flex-wrap) header — that's what lets
-      // flex-basis: 100% give it its own line.
-      expect(row(root).parentElement).toBe(root.querySelector('.app-shell-header'));
+      const header = root.querySelector('.app-shell-header');
+      expect(button(root).parentElement).toBe(context(root));
+      expect(staticChip(root).parentElement).toBe(context(root));
+      expect(root.querySelector('.app-shell-sync').parentElement).toBe(context(root));
+      expect(context(root).parentElement).toBe(header);
+      expect(context(root).contains(root.querySelector('.app-shell-breadcrumb'))).toBe(true);
       expect(root.querySelector('.app-shell-sync').textContent).toBe('');
-      expect(row(root).classList.contains('app-shell-sync-row-active')).toBe(false);
+      expect(button(root).hidden).toBe(true);
+      expect(staticChip(root).hidden).toBe(true);
+      // Nothing to put in the row, so it takes no space of its own.
+      expect(context(root).classList.contains('app-shell-context-empty')).toBe(true);
     });
 
-    it('reserves the row on an event screen and keeps it through every status change', async () => {
+    it('shows each status as ONE short chip, and the live region keeps the full sentence', async () => {
       const root = document.createElement('div');
       const { setNav } = mountTracked(root, {
         client: fakeClient({}),
@@ -1751,13 +1767,14 @@ describe('mountAppShell — sync panel', () => {
       });
       await setNav({ eventId: 'ev1', links: [] });
       const syncEl = root.querySelector('.app-shell-sync');
-      const states = [];
-      // Reserved exactly while the status has something to show.
+      const seen = [];
       const record = () =>
-        states.push([
-          syncEl.textContent,
-          row(root).classList.contains('app-shell-sync-row-active') === (syncEl.textContent !== ''),
-        ]);
+        seen.push({
+          chip: button(root).hidden ? staticChip(root).textContent : button(root).textContent,
+          buttonShown: !button(root).hidden,
+          staticShown: !staticChip(root).hidden,
+          full: syncEl.textContent,
+        });
       await flush(() => expect(syncEl.textContent).toBe('Synced'));
       record();
       await enqueueOperation('confirm_heat', { heatId: 'h1' });
@@ -1773,14 +1790,281 @@ describe('mountAppShell — sync panel', () => {
       );
       record();
 
-      expect(states.every(([, reserved]) => reserved)).toBe(true);
+      expect(seen).toEqual([
+        { chip: 'Synced', buttonShown: false, staticShown: true, full: 'Synced' },
+        {
+          chip: 'Not synced (1)',
+          buttonShown: true,
+          staticShown: false,
+          full: 'Not synced (1 pending)',
+        },
+        {
+          chip: '1 write lost',
+          buttonShown: true,
+          staticShown: false,
+          full: '1 write lost — not saved and not retried',
+        },
+      ]);
+      expect(button(root).classList.contains('app-shell-sync-chip-stuck')).toBe(true);
     });
 
-    it('reserves the row for the immediate "Not synced" when a drop lands on an empty panel', async () => {
+    it('never rebuilds the live region or the chips: the same nodes are mutated through every status', async () => {
+      const root = document.createElement('div');
+      const { setNav } = mountTracked(root, { client: fakeClient({}), syncPollMs: 20 });
+      await setNav({ eventId: 'ev1', links: [] });
+      const nodes = [root.querySelector('.app-shell-sync'), button(root), staticChip(root)];
+      await flush(() => expect(nodes[0].textContent).toBe('Synced'));
+      await enqueueOperation('confirm_heat', { heatId: 'h1' });
+      await flush(() => expect(nodes[0].textContent).toBe('Not synced (1 pending)'));
+      expect(root.querySelector('.app-shell-sync')).toBe(nodes[0]);
+      expect(button(root)).toBe(nodes[1]);
+      expect(staticChip(root)).toBe(nodes[2]);
+      for (const [i, node] of nodes.entries()) {
+        expect(root.contains(node), `node ${i}`).toBe(true);
+      }
+      expect(nodes[0].getAttribute('role')).toBe('status');
+      expect(nodes[0].getAttribute('aria-live')).toBe('polite');
+    });
+
+    it('hides the decorative "Synced" chip from assistive tech (the live region already says it) and never shows it next to a problem', async () => {
+      const root = document.createElement('div');
+      const { setNav } = mountTracked(root, { client: fakeClient({}), syncPollMs: 20 });
+      await setNav({ eventId: 'ev1', links: [] });
+      await flush(() => expect(staticChip(root).hidden).toBe(false));
+      expect(staticChip(root).getAttribute('aria-hidden')).toBe('true');
+      expect(staticChip(root).querySelector('.status-live-dot')).not.toBeNull();
+      await enqueueOperation('confirm_heat', { heatId: 'h1' });
+      await flush(() => expect(staticChip(root).hidden).toBe(true));
+      expect(button(root).hidden).toBe(false);
+    });
+
+    it('is closed to start with: the button names the detail it controls and says it is collapsed', async () => {
+      const root = document.createElement('div');
+      const { setNav } = mountTracked(root, { client: fakeClient({}), syncPollMs: 20 });
+      await setNav({ eventId: 'ev1', links: [] });
+      await enqueueOperation('confirm_heat', { heatId: 'h1' });
+      await flush(() => expect(button(root).hidden).toBe(false));
+      expect(button(root).getAttribute('type')).toBe('button');
+      expect(button(root).getAttribute('aria-expanded')).toBe('false');
+      const controlled = root.querySelector(`#${button(root).getAttribute('aria-controls')}`);
+      expect(controlled).toBe(root.querySelector('.app-shell-sync'));
+      expect(controlled.classList.contains('app-shell-sync-open')).toBe(false);
+    });
+
+    describe('the detail panel', () => {
+      async function mountWithPending() {
+        const root = document.createElement('div');
+        document.body.append(root);
+        const shell = mountTracked(root, { client: fakeClient({}), syncPollMs: 20 });
+        const { setNav } = shell;
+        await setNav({ eventId: 'ev1', links: [] });
+        await enqueueOperation('confirm_heat', { heatId: 'h1' });
+        await flush(() => expect(button(root).hidden).toBe(false));
+        return { root, setNav, shell };
+      }
+      afterEach(() => {
+        document.body.innerHTML = '';
+      });
+
+      it('opens on a tap and shows the full sentence, in the live region itself', async () => {
+        const { root } = await mountWithPending();
+        button(root).click();
+        expect(button(root).getAttribute('aria-expanded')).toBe('true');
+        const panel = root.querySelector('.app-shell-sync');
+        expect(panel.classList.contains('app-shell-sync-open')).toBe(true);
+        expect(panel.textContent).toBe('Not synced (1 pending)');
+        expect(panel.getAttribute('role')).toBe('status');
+        button(root).click();
+        expect(button(root).getAttribute('aria-expanded')).toBe('false');
+        expect(panel.classList.contains('app-shell-sync-open')).toBe(false);
+      });
+
+      it('stays open (and keeps its own class) while the status text changes underneath it', async () => {
+        const { root } = await mountWithPending();
+        button(root).click();
+        await enqueueOperation('confirm_heat', { heatId: 'h2' });
+        await flush(() =>
+          expect(root.querySelector('.app-shell-sync').textContent).toBe('Not synced (2 pending)'),
+        );
+        expect(
+          root.querySelector('.app-shell-sync').classList.contains('app-shell-sync-open'),
+        ).toBe(true);
+        expect(button(root).getAttribute('aria-expanded')).toBe('true');
+      });
+
+      it('closes on Escape and puts focus back on the chip', async () => {
+        const { root } = await mountWithPending();
+        button(root).click();
+        document.body.focus();
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        expect(button(root).getAttribute('aria-expanded')).toBe('false');
+        expect(document.activeElement).toBe(button(root));
+      });
+
+      it('ignores other keys', async () => {
+        const { root } = await mountWithPending();
+        button(root).click();
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
+        expect(button(root).getAttribute('aria-expanded')).toBe('true');
+      });
+
+      it('closes on a press anywhere outside it, but not on the chip or the panel itself', async () => {
+        const { root } = await mountWithPending();
+        const press = (target) =>
+          target.dispatchEvent(new Event('pointerdown', { bubbles: true, cancelable: true }));
+        button(root).click();
+        press(root.querySelector('.app-shell-sync'));
+        press(button(root));
+        expect(button(root).getAttribute('aria-expanded')).toBe('true');
+        press(document.body);
+        expect(button(root).getAttribute('aria-expanded')).toBe('false');
+        expect(
+          root.querySelector('.app-shell-sync').classList.contains('app-shell-sync-open'),
+        ).toBe(false);
+      });
+
+      it('closes when the status goes back to Synced, and moves focus off the chip that disappears', async () => {
+        const { root } = await mountWithPending();
+        button(root).focus();
+        button(root).click();
+        await flushOutbox({ confirm_heat: async () => ({ ok: true }) });
+        await flush(() => expect(root.querySelector('.app-shell-sync').textContent).toBe('Synced'));
+        expect(button(root).hidden).toBe(true);
+        expect(button(root).getAttribute('aria-expanded')).toBe('false');
+        expect(
+          root.querySelector('.app-shell-sync').classList.contains('app-shell-sync-open'),
+        ).toBe(false);
+        // jsdom does no layout, so a hidden button keeps focus unless the shell moves it: it
+        // must land on the Menu toggle (the toggle is displayed here), not stay on the chip.
+        expect(document.activeElement).not.toBe(button(root));
+        expect(document.activeElement).toBe(root.querySelector('.app-shell-nav-toggle'));
+      });
+
+      it('an Escape pressed elsewhere (a time or score field) closes the panel but leaves focus where it is', async () => {
+        const { root } = await mountWithPending();
+        const field = document.createElement('input');
+        document.body.append(field);
+        button(root).click();
+        field.focus();
+        field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        expect(button(root).getAttribute('aria-expanded')).toBe('false');
+        expect(document.activeElement).toBe(field);
+      });
+
+      it('closes when keyboard focus moves on from the chip, but not when it stays on it', async () => {
+        const { root } = await mountWithPending();
+        button(root).focus();
+        button(root).click();
+        button(root).dispatchEvent(
+          new FocusEvent('focusout', { bubbles: true, relatedTarget: null }),
+        );
+        expect(button(root).getAttribute('aria-expanded')).toBe('true');
+        button(root).dispatchEvent(
+          new FocusEvent('focusout', { bubbles: true, relatedTarget: button(root) }),
+        );
+        expect(button(root).getAttribute('aria-expanded')).toBe('true');
+        button(root).dispatchEvent(
+          new FocusEvent('focusout', {
+            bubbles: true,
+            relatedTarget: root.querySelector('.app-shell-nav-toggle'),
+          }),
+        );
+        expect(button(root).getAttribute('aria-expanded')).toBe('false');
+      });
+
+      it('once closed, neither Escape nor a press outside does anything', async () => {
+        const { root } = await mountWithPending();
+        const focus = vi.spyOn(button(root), 'focus');
+        button(root).click();
+        button(root).click(); // closed again
+        focus.mockClear();
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+        expect(focus).not.toHaveBeenCalled();
+        expect(button(root).getAttribute('aria-expanded')).toBe('false');
+      });
+
+      it('closes when the status goes back to Synced even if the chip never had focus', async () => {
+        const { root } = await mountWithPending();
+        button(root).click(); // a mouse/touch press: opens it, focus stays elsewhere
+        expect(button(root).getAttribute('aria-expanded')).toBe('true');
+        await flushOutbox({ confirm_heat: async () => ({ ok: true }) });
+        await flush(() => expect(root.querySelector('.app-shell-sync').textContent).toBe('Synced'));
+        expect(button(root).getAttribute('aria-expanded')).toBe('false');
+        expect(
+          root.querySelector('.app-shell-sync').classList.contains('app-shell-sync-open'),
+        ).toBe(false);
+      });
+
+      it('stops listening to the document once closed and after unmount', async () => {
+        const add = vi.spyOn(document, 'addEventListener');
+        const remove = vi.spyOn(document, 'removeEventListener');
+        try {
+          const { root, shell } = await mountWithPending();
+          const count = (spy, type) => spy.mock.calls.filter(([t]) => t === type).length;
+          const baseAdd = [count(add, 'pointerdown'), count(add, 'keydown')];
+          button(root).click();
+          expect(count(add, 'pointerdown')).toBe(baseAdd[0] + 1);
+          expect(count(add, 'keydown')).toBe(baseAdd[1] + 1);
+          button(root).click();
+          expect(count(remove, 'keydown')).toBeGreaterThanOrEqual(1);
+          const removedBefore = count(remove, 'pointerdown');
+          button(root).click(); // open again, then leave it open
+          shell.unmount();
+          expect(count(remove, 'pointerdown')).toBe(removedBefore + 1);
+        } finally {
+          add.mockRestore();
+          remove.mockRestore();
+        }
+      });
+    });
+
+    describe('the event-name row', () => {
+      it('exists while there is an event name, and while there is a status to show', async () => {
+        const root = document.createElement('div');
+        const { setNav } = mountTracked(root, {
+          client: fakeClient({ ev1: { id: 'ev1', name: 'October Cup' } }),
+          syncPollMs: 20,
+        });
+        await tick(30);
+        expect(context(root).classList.contains('app-shell-context-empty')).toBe(true);
+        await setNav({ eventId: 'ev1', links: [] });
+        await flush(() =>
+          expect(root.querySelector('.app-shell-breadcrumb').textContent).toBe('October Cup'),
+        );
+        expect(context(root).classList.contains('app-shell-context-empty')).toBe(false);
+        await setNav({ eventId: null, links: [] });
+        await flush(() =>
+          expect(context(root).classList.contains('app-shell-context-empty')).toBe(true),
+        );
+      });
+
+      it('keeps the row for a status with no event name (a write lost on the events list)', async () => {
+        const root = document.createElement('div');
+        mountTracked(root, { client: fakeClient({}), syncPollMs: 60000, dropCheckMs: 10 });
+        await tick(30);
+        expect(context(root).classList.contains('app-shell-context-empty')).toBe(true);
+        await enqueueOperation('doomed_op', {});
+        await flushOutbox({
+          doomed_op: async () => {
+            throw permanentError('stale conflict');
+          },
+        });
+        await flush(() =>
+          expect(root.querySelector('.app-shell-sync').textContent).toBe(
+            '1 write lost — not saved and not retried',
+          ),
+        );
+        expect(context(root).classList.contains('app-shell-context-empty')).toBe(false);
+        expect(button(root).textContent).toBe('1 write lost');
+      });
+    });
+
+    it('shows the immediate "Not synced" chip when a drop lands on an empty panel', async () => {
       const root = document.createElement('div');
       mountTracked(root, { client: fakeClient({}), syncPollMs: 60000, dropCheckMs: 10 });
       await tick(30);
-      expect(row(root).classList.contains('app-shell-sync-row-active')).toBe(false);
+      expect(context(root).classList.contains('app-shell-context-empty')).toBe(true);
       await enqueueOperation('doomed_op', {});
       await enqueueOperation('slow_op', {});
       let release;
@@ -1797,57 +2081,166 @@ describe('mountAppShell — sync panel', () => {
         await flush(() =>
           expect(root.querySelector('.app-shell-sync').textContent).toBe('Not synced'),
         );
-        expect(row(root).classList.contains('app-shell-sync-row-active')).toBe(true);
+        expect(context(root).classList.contains('app-shell-context-empty')).toBe(false);
+        expect(button(root).hidden).toBe(false);
+        // Worded apart from the pending chip's "Not synced (N)": the two differ in text, not only colour.
+        expect(button(root).textContent).toBe('Sync failing');
+        expect(button(root).classList.contains('app-shell-sync-chip-stuck')).toBe(true);
       } finally {
         release();
         await running;
       }
       // test-auditor, 2026-09-27: the announced notice, still with no event
-      // context, must keep the row — keyed on the event context instead, a
-      // loss on the events list would sit in an unreserved row.
+      // context, must stay up — keyed on the event context instead, a loss on
+      // the events list would vanish.
       await flush(() =>
         expect(root.querySelector('.app-shell-sync').textContent).toBe(
           '1 write lost — not saved and not retried',
         ),
       );
-      expect(row(root).classList.contains('app-shell-sync-row-active')).toBe(true);
+      expect(context(root).classList.contains('app-shell-context-empty')).toBe(false);
+      expect(button(root).textContent).toBe('1 write lost');
     });
 
-    // jsdom does no layout; this pins the CSS half against accidental
-    // deletion, from the source text (same approach as countdown.test.js).
-    it('keeps the row rules in appShell.css: contents while empty, a reserved min-height while active', async () => {
-      const fs = await import('node:fs');
-      const path = await import('node:path');
-      const { fileURLToPath } = await import('node:url');
-      const dir = path.dirname(fileURLToPath(import.meta.url));
-      const css = fs.readFileSync(path.join(dir, 'appShell.css'), 'utf8');
-      const rule = (selector) => {
-        const start = css.indexOf(`\n${selector} {`);
-        return start === -1 ? '' : css.slice(start, css.indexOf('}', start));
-      };
-      expect(rule('.app-shell-sync-row')).toMatch(/display:\s*contents/);
-      expect(rule('.app-shell-sync-row-active')).toMatch(/display:\s*flex/);
-      expect(rule('.app-shell-sync-row-active')).toMatch(/flex-basis:\s*100%/);
-      expect(rule('.app-shell-sync-row-active')).toMatch(
-        /min-height:\s*calc\(2 \* var\(--leading-normal\) \* var\(--text-sm\) \+ 2 \* var\(--space-1\)\)/,
-      );
-      // One line at 1024px+, where the longest notice fits on a line.
-      expect(css).toMatch(
-        /@media \(min-width: 1024px\)\s*\{\s*\.app-shell-sync-row-active\s*\{[^}]*min-height:\s*calc\(var\(--leading-normal\) \* var\(--text-sm\) \+ 2 \* var\(--space-1\)\)/,
-      );
-    });
-
-    it('releases the row when navigation leaves the event and nothing is pending or lost', async () => {
+    it('releases the chip when navigation leaves the event and nothing is pending or lost', async () => {
       const root = document.createElement('div');
       const { setNav } = mountTracked(root, { client: fakeClient({}) });
       await setNav({ eventId: 'ev1', links: [] });
-      await flush(() =>
-        expect(row(root).classList.contains('app-shell-sync-row-active')).toBe(true),
-      );
+      await flush(() => expect(staticChip(root).hidden).toBe(false));
       await setNav({ eventId: null, links: [] });
-      await flush(() =>
-        expect(row(root).classList.contains('app-shell-sync-row-active')).toBe(false),
-      );
+      await flush(() => expect(staticChip(root).hidden).toBe(true));
+      expect(button(root).hidden).toBe(true);
+      expect(context(root).classList.contains('app-shell-context-empty')).toBe(true);
+    });
+
+    // jsdom does no layout; this pins the CSS half of the guarantee against
+    // accidental deletion, from the source text (same approach as
+    // countdown.test.js). Walks the whole stylesheet block by block, so a late
+    // override or a media-query copy can't slip past a check of one rule.
+    describe('appShell.css', () => {
+      let css;
+      let blocks;
+      beforeAll(async () => {
+        const fs = await import('node:fs');
+        const path = await import('node:path');
+        const { fileURLToPath } = await import('node:url');
+        const dir = path.dirname(fileURLToPath(import.meta.url));
+        css = fs
+          .readFileSync(path.join(dir, 'appShell.css'), 'utf8')
+          .replace(/\/\*[\s\S]*?\*\//g, '');
+        blocks = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, selector, body]) => ({
+          selector: selector.trim().replace(/\s+/g, ' '),
+          body,
+        }));
+      });
+      const decls = (selectorRe) =>
+        blocks
+          .filter((b) => selectorRe.test(b.selector))
+          .map((b) => b.body)
+          .join(';');
+
+      it('makes every chip one line of one fixed height, whatever the status', () => {
+        const base = blocks.filter((b) => b.selector === '.app-shell-sync-chip');
+        expect(base).toHaveLength(1);
+        expect(base[0].body).toMatch(/white-space:\s*nowrap/);
+        expect(base[0].body).toMatch(/min-height:\s*var\(--app-shell-chip-height\)/);
+        expect(base[0].body).toMatch(/line-height:\s*var\(--leading-normal\)/);
+        // The invisible border (drawn in forced-colors mode) is paid for out of the padding, so the
+        // chip is still exactly one line of text plus the pill padding tall.
+        expect(base[0].body).toMatch(/border:\s*var\(--border-hairline\) solid transparent/);
+        expect(base[0].body).toMatch(
+          /padding:\s*calc\(var\(--space-1\) - var\(--border-hairline\)\) 0/,
+        );
+        expect(base[0].body).toMatch(/font-size:\s*var\(--text-sm\)/);
+        // A status variant may recolour, pad sideways and embolden; it must not change what
+        // sets the chip's height.
+        const variants = decls(/\.app-shell-sync-chip-(pending|stuck|live)/);
+        expect(variants).not.toMatch(/(font-size|line-height|min-height|height|white-space)\s*:/);
+        // And the chip's height is exactly one line of text plus the pill padding.
+        expect(css).toMatch(
+          /--app-shell-chip-height:\s*calc\(var\(--leading-normal\) \* var\(--text-sm\) \+ 2 \* var\(--space-1\)\)/,
+        );
+        // A hidden chip must really hide (display: inline-flex would override [hidden]).
+        expect(css).toMatch(/\.app-shell-sync-chip\[hidden\]\s*\{\s*display:\s*none/);
+      });
+
+      // The checks above look at the rules by name; a late override under ANOTHER selector (a
+      // longer one, an extra class) would beat them without touching them. So: every block that
+      // mentions the sync chip, the live region or the context row, and sets a property that can
+      // change the header's height or take the chip out of its line, must be one we know about.
+      it('lets only the known rules set layout-changing properties on the sync chip, live region and context row', () => {
+        const LAYOUT =
+          /(?:^|;)\s*(position|display|flex|flex-basis|flex-grow|flex-shrink|white-space|order|float|width|height|min-height|max-height|inset|top|right|bottom|left|margin)\s*:/g;
+        const found = blocks
+          .filter((b) => /app-shell-(sync|context)/.test(b.selector))
+          .map((b) => {
+            const props = [...b.body.matchAll(LAYOUT)].map((m) => m[1]);
+            return props.length
+              ? `${b.selector} => ${[...new Set(props)].sort().join(', ')}`
+              : null;
+          })
+          .filter(Boolean)
+          .sort();
+        expect(found).toEqual(
+          [
+            '.app-shell-context => display, flex, min-height, order',
+            '.app-shell-context => display',
+            '.app-shell-context-empty => display',
+            '.app-shell-sync => height, margin, position, white-space, width',
+            '.app-shell-sync-chip => display, flex, min-height, position, white-space',
+            '.app-shell-sync-chip[hidden] => display',
+            '.app-shell-sync-chip-pending::after, .app-shell-sync-chip-stuck::after => inset, position',
+            '.app-shell-sync.app-shell-sync-open => height, left, margin, right, top, white-space, width',
+            '.app-shell-sync.app-shell-sync-open => left, width',
+          ].sort(),
+        );
+        // The old reserved full-width row (the header's permanent second line) must not come back.
+        expect(css).not.toMatch(/app-shell-sync-row/);
+      });
+
+      it('clips the live region away until opened, and opens it as an overlay that takes no layout space', () => {
+        const base = blocks.filter((b) => b.selector === '.app-shell-sync');
+        expect(base).toHaveLength(1);
+        for (const d of [
+          /position:\s*absolute/,
+          /width:\s*1px/,
+          /height:\s*1px/,
+          /overflow:\s*hidden/,
+          /clip:\s*rect\(0,\s*0,\s*0,\s*0\)/,
+          /white-space:\s*nowrap/,
+          /padding:\s*0/,
+          /border:\s*0/,
+        ]) {
+          expect(base[0].body).toMatch(d);
+        }
+        const open = decls(/^\.app-shell-sync\.app-shell-sync-open$/);
+        expect(open).toMatch(/top:\s*100%/);
+        // Stays absolute (inherited from the base rule): never position: static/relative/sticky.
+        expect(open).not.toMatch(/position\s*:/);
+        expect(open).toMatch(/background:\s*var\(--color-surface\)/);
+        expect(open).toMatch(/white-space:\s*normal/);
+      });
+
+      it('lays the event-name row out as its own phone row, and dissolves it from 640px up', () => {
+        const phone = blocks.filter((b) => b.selector === '.app-shell-context');
+        expect(phone.length).toBeGreaterThanOrEqual(2); // the base rule and the 640px one
+        expect(phone[0].body).toMatch(/display:\s*flex/);
+        expect(phone[0].body).toMatch(/flex:\s*1 1 100%/);
+        expect(phone[0].body).toMatch(/min-height:\s*var\(--app-shell-chip-height\)/);
+        expect(css).toMatch(
+          /@media \(min-width: 640px\)\s*\{\s*\.app-shell-context\s*\{\s*display:\s*contents/,
+        );
+        expect(decls(/^\.app-shell-context-empty$/)).toMatch(/display:\s*contents/);
+      });
+
+      it('truncates the event name instead of wrapping it, so a long name can never grow the header', () => {
+        const crumb = decls(/^\.app-shell-breadcrumb$/);
+        expect(crumb).toMatch(/white-space:\s*nowrap/);
+        expect(crumb).toMatch(/text-overflow:\s*ellipsis/);
+        expect(crumb).toMatch(/overflow:\s*hidden/);
+        expect(crumb).toMatch(/min-width:\s*0/);
+        expect(crumb).toMatch(/flex:\s*1 1 0/);
+      });
     });
   });
 
