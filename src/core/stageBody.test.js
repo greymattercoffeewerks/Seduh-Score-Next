@@ -96,3 +96,56 @@ describe('createStageBody', () => {
     stage.destroy();
   });
 });
+
+describe('createStageBody: release and destroy', () => {
+  it('builds its display on first use, not at construction', () => {
+    const { stage, log } = setUp();
+    expect(log).toEqual([]);
+    shellRender(document.createElement('div'), stage, { n: 1 });
+    expect(log).toEqual(['mount']);
+    stage.destroy();
+  });
+
+  it('release() ends the display, and the next payload builds a new one (it is not final)', () => {
+    const { stage, log } = setUp();
+    const body = document.createElement('div');
+    shellRender(body, stage, { n: 1 });
+    stage.release();
+    expect(log).toEqual(['mount', 'destroy']);
+    shellRender(body, stage, { n: 2 });
+    expect(log).toEqual(['mount', 'destroy', 'mount']);
+    expect(body.querySelector('.stage-main').textContent).toBe('n:2');
+    stage.destroy();
+  });
+
+  it('release() before anything was shown, or twice, does nothing', () => {
+    const { stage, log } = setUp();
+    expect(() => stage.release()).not.toThrow();
+    shellRender(document.createElement('div'), stage, { n: 1 });
+    stage.release();
+    stage.release();
+    expect(log.filter((entry) => entry === 'destroy')).toHaveLength(1);
+  });
+
+  it('destroy() is final: a late payload builds nothing', () => {
+    const { stage, log } = setUp();
+    shellRender(document.createElement('div'), stage, { n: 1 });
+    stage.destroy();
+    const body = document.createElement('div');
+    shellRender(body, stage, { n: 2 });
+    expect(body.querySelector('.stage-display')).toBeNull();
+    expect(log).toEqual(['mount', 'destroy']);
+  });
+
+  it('a released display keeps no memory: its next screen is mounted fresh', () => {
+    const { stage, log } = setUp();
+    const body = document.createElement('div');
+    shellRender(body, stage, { n: 1 });
+    shellRender(body, stage, { n: 2 }); // same display: updated in place, not remounted
+    expect(log.filter((entry) => entry === 'mount')).toHaveLength(1);
+    stage.release();
+    shellRender(body, stage, { n: 3 });
+    expect(log.filter((entry) => entry === 'mount')).toHaveLength(2);
+    stage.destroy();
+  });
+});

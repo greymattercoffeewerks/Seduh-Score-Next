@@ -120,6 +120,102 @@ describe('createFormatBody', () => {
     expect(bodies.a[0].destroy).toHaveBeenCalledTimes(1);
   });
 
+  describe("one body per event's session", () => {
+    it('builds a new body, and destroys the old, when the live row moves to another event in the SAME format', () => {
+      const { formatBody, bodies } = setup();
+      formatBody.hasContent(ok, { format: 'a', eventId: 'ev1' });
+      expect(formatBody.hasContent(ok, { format: 'a', eventId: 'ev2' })).toBe(true);
+      expect(bodies.a).toHaveLength(2);
+      expect(bodies.a[0].destroy).toHaveBeenCalledTimes(1);
+      expect(bodies.a[1].destroy).not.toHaveBeenCalled();
+    });
+
+    it('keeps the body while the same event keeps publishing', () => {
+      const { formatBody, bodies } = setup();
+      formatBody.hasContent(ok, { format: 'a', eventId: 'ev1' });
+      formatBody.renderBody(div(), ok, { format: 'a', eventId: 'ev1' });
+      formatBody.hasContent(ok, { format: 'a', eventId: 'ev1' });
+      expect(bodies.a).toHaveLength(1);
+      expect(bodies.a[0].destroy).not.toHaveBeenCalled();
+    });
+
+    it('the renderBody path follows a change of event too', () => {
+      const { formatBody, bodies } = setup();
+      formatBody.renderBody(div(), ok, { format: 'a', eventId: 'ev1' });
+      formatBody.renderBody(div(), ok, { format: 'a', eventId: 'ev2' });
+      expect(bodies.a).toHaveLength(2);
+      expect(bodies.a[0].destroy).toHaveBeenCalledTimes(1);
+      expect(bodies.a[1].renderBody).toHaveBeenCalledTimes(1);
+    });
+
+    it('without an event id the body is keyed on the format alone, as before', () => {
+      const { formatBody, bodies } = setup();
+      formatBody.hasContent(ok, { format: 'a' });
+      formatBody.hasContent(ok, { format: 'a' });
+      expect(bodies.a).toHaveLength(1);
+    });
+  });
+
+  it('release() destroys the live body once, and a body for the same format is then built fresh (it is not final)', () => {
+    const { formatBody, bodies } = setup();
+    formatBody.hasContent(ok, { format: 'a' });
+    formatBody.release();
+    expect(bodies.a[0].destroy).toHaveBeenCalledTimes(1);
+    formatBody.release();
+    expect(bodies.a[0].destroy).toHaveBeenCalledTimes(1);
+    expect(formatBody.hasContent(ok, { format: 'a' })).toBe(true);
+    expect(bodies.a).toHaveLength(2);
+    expect(bodies.a[1].destroy).not.toHaveBeenCalled();
+  });
+
+  it('release() with nothing built is a no-op, and destroy() afterwards does not destroy a released body twice', () => {
+    const { formatBody, bodies } = setup();
+    expect(() => formatBody.release()).not.toThrow();
+    formatBody.hasContent(ok, { format: 'a' });
+    formatBody.release();
+    formatBody.destroy();
+    expect(bodies.a[0].destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it('a body whose destroy() throws is still released: logged, and the next session builds a new one', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const bad = fakeBody('bad');
+    bad.destroy.mockImplementation(() => {
+      throw new Error('boom');
+    });
+    let built = 0;
+    const formatBody = createFormatBody({
+      bad: () => {
+        built += 1;
+        return built === 1 ? bad : fakeBody('second');
+      },
+    });
+    formatBody.hasContent(ok, { format: 'bad' });
+    expect(() => formatBody.release()).not.toThrow();
+    expect(formatBody.hasContent(ok, { format: 'bad' })).toBe(true);
+    expect(built).toBe(2);
+    expect(error).toHaveBeenCalledTimes(1);
+  });
+
+  it('a late release() cannot undo destroy(): nothing is built afterwards', () => {
+    const { formatBody, bodies } = setup();
+    formatBody.hasContent(ok, { format: 'a' });
+    formatBody.destroy();
+    formatBody.release();
+    expect(formatBody.hasContent(ok, { format: 'a' })).toBe(false);
+    expect(formatBody.renderBody(div(), ok, { format: 'a' })).toBeUndefined();
+    expect(bodies.a).toHaveLength(1);
+  });
+
+  it('after release(), renderBody builds a fresh body too, not only hasContent', () => {
+    const { formatBody, bodies } = setup();
+    formatBody.hasContent(ok, { format: 'a' });
+    formatBody.release();
+    formatBody.renderBody(div(), ok, { format: 'a' });
+    expect(bodies.a).toHaveLength(2);
+    expect(bodies.a[1].renderBody).toHaveBeenCalledTimes(1);
+  });
+
   it('is final after destroy(): a late call builds nothing, so no display is left running behind an unmounted surface', () => {
     const { formatBody, bodies } = setup();
     formatBody.hasContent(ok, { format: 'a' });

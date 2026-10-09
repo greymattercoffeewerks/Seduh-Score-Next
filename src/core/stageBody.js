@@ -4,19 +4,37 @@
 //
 // viewer-shell clears its body and calls renderBody again on EVERY live payload, so a display built inside
 // renderBody would be torn down and rebuilt on each one (a page loop restarting, a ring resetting, a countdown
-// flickering). Instead ONE stage display is created per body and re-attached to the fresh body each time; its
+// flickering). Instead ONE stage display is kept per body and re-attached to the fresh body each time; its
 // screens and timers keep running across payloads, and only a real change in what the payload wants changes
-// the screen (core/screenDirector.js). `destroy()` ends its timers when the surface unmounts.
+// the screen (core/screenDirector.js). The display is built on first use.
+//
+// `release()` ends the display (its timers stop, and with it its memory of the last snapshot); the next
+// payload builds a new one. The surface calls it when the live session goes away, so a body used on its own
+// (not through core/formatBody.js) honours that too. `destroy()` is final: it ends the display for good, when
+// the surface unmounts.
 import { createStageDisplay } from './stageDisplay.js';
 
 export function createStageBody({ selectScreen, bandFor, hasContent, ...displayOptions }) {
-  const display = createStageDisplay({ selectScreen, bandFor, ...displayOptions });
+  let display = null;
+  let destroyed = false;
+
+  function release() {
+    display?.destroy();
+    display = null;
+  }
+
   return {
     renderBody(body, payload) {
+      if (destroyed) return;
+      display ??= createStageDisplay({ selectScreen, bandFor, ...displayOptions });
       display.update(payload);
       body.appendChild(display.el);
     },
     hasContent,
-    destroy: () => display.destroy(),
+    release,
+    destroy() {
+      destroyed = true;
+      release();
+    },
   };
 }

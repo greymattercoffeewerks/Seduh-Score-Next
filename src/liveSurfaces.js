@@ -28,7 +28,8 @@ export function mountProjector(root, { orgId, client, signal, bodies = PROJECTOR
   });
 }
 
-// Mirrors mountStageSurface: the format body is destroyed when the mount fails and when the surface unmounts.
+// Mirrors mountStageSurface: the format body is destroyed when the mount fails and when the surface unmounts,
+// and released when the live session goes away.
 // (Cup Taster's phone body returns its cleanup from renderBody, which the shell calls, but a body may have a
 // destroy() of its own.)
 export async function mountPhone(root, { orgId, client, signal, bodies = PHONE_BODIES } = {}) {
@@ -39,6 +40,7 @@ export async function mountPhone(root, { orgId, client, signal, bodies = PHONE_B
       orgId,
       renderBody: body.renderBody,
       hasContent: body.hasContent,
+      onNoContent: () => body.release(),
       showChrome: true,
       client,
       signal,

@@ -1,3 +1,25 @@
+## T-BTC.display-lifecycle: a venue display belongs to one event's session (stage 3b of the BTC live surfaces) · 2026-10-09
+
+**Task:** T-BTC.display-lifecycle. Not a handoff §14 task: BTC is out-of-handoff. Closes the open item recorded under T-BTC.live-routing ("a body outlives its session row"), before the BTC projector's own display joins Cup Taster's. Branch `feat/btc-display-lifecycle`.
+
+**Status: in review, not merged.** No migration.
+
+**The problem:** a display remembers the last snapshot so it can tell what just happened (a result recorded, a place gained). Nothing tied that memory to one event, so:
+
+- when no session was active (the organiser ended it) the shell painted its holding card but the format's display kept its page loop, ring and moment timers running behind it; and
+- worse, when the organiser moved from one event to the next the display carried on: `publish_session` swaps the live row in one transaction, the shell never shows a holding state, and the new event's first payload was compared with the old event's last, so a moment could be announced (or missed) for results that belonged to another event.
+
+**What changed:**
+
+- **`core/viewer-shell.js`**: `hasContent` and `renderBody` are now also told the live row's `eventId`; a new optional `onNoContent(phase)` is called each time the shell paints "no live session" (`noEvent`, `notStarted`), idempotently, and a callback that throws is logged, never allowed to leave a refresh half-done. Not for `connecting`, not for a lost connection (a blip must not forget where the display was) and not for `pending` (a row with nothing to show yet: the same event may fill in; a different event shows in its `eventId`).
+- **`core/formatBody.js`**: the live body is keyed on format AND event id, so moving to another event (even in the same format, with no gap) destroys the old body and builds a fresh one; `release()` destroys it when the session goes away and is not final (`destroy()` is).
+- **`core/stageBody.js`**: builds its display on first use and gains `release()` (the display ends; the next payload builds a new one) so a stage body used without the dispatcher honours the same contract; `destroy()` is final.
+- **`core/stageSurface.js`** and **`liveSurfaces.js`** (phone) wire `onNoContent` to `body.release`.
+
+**Verified:** unit tests at each layer; end to end through `mountProjector` (timers stop when the session ends and restart for the next; a lost connection keeps the very same display and carries on after it; a pending blip within one event keeps it); and the property that matters, with the real Cup Taster projector: after a gap, or a direct move to another event, a new event's first payload shows no "Result recorded" moment, while the same event publishing a new result does (the control). Mutation testing: 19 mutants over the shell, `formatBody`, `stageBody` and the surfaces, all caught. Reviewed by code-reviewer (found the direct-swap gap), test-auditor and module-boundary-checker.
+
+**Flagged, not changed:** every refresh while a row is `pending` builds a body (inside `hasContent`) that is kept, not rebuilt; a format's display keeps running, unseen, through a lost connection (as before, by design).
+
 ## T-BTC.venue-vocabulary: the shared venue-display vocabulary moves to core (stage 3a of the BTC live surfaces) · 2026-10-09
 
 **Task:** T-BTC.venue-vocabulary. Not a handoff §14 task: BTC is out-of-handoff. The first half of stage 3 (the projector): the second-use extraction ROADMAP has been owing since the projector redesign, so BTC's screens can be built on core without importing Cup Taster's stylesheet. A pure refactor: Cup Taster's projector looks and behaves exactly as before. Branch `feat/btc-projector`.
