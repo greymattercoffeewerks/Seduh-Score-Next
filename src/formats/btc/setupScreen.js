@@ -14,6 +14,17 @@ import { findEvent } from '../../core/events.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
 import { listTeams, createTeam, removeTeam } from './teams.js';
 import { listJudges, createJudge, removeJudge } from './judges.js';
+import {
+  DEMO_TEAM_COUNT,
+  DEMO_JUDGE_COUNT,
+  DEMO_MATCH_COUNT,
+  DEMO_LOAD_TIMEOUT_MS,
+  DEMO_TIMEOUT_MESSAGE,
+  DEMO_REFRESH_FAILED_MESSAGE,
+  loadDemo,
+  describeDemoError,
+  describeDemoLoaded,
+} from './demo.js';
 
 export function validateRosterName(name, label) {
   if (!name.trim()) return `${label} name is required.`;
@@ -33,6 +44,12 @@ export async function mountSetupScreen(root, { eventId, client = getSupabase(), 
     judgeError: null,
     busy: false,
     toastMessage: null,
+    // The demo card's own result, kept inside the card and NOT auto-dismissed (the shared toast
+    // vanishes after 1.5 s, far too fast to read a result that replaced a whole roster):
+    // null | { tone: 'busy' | 'success' | 'error', message }. Cleared when the next roster action
+    // makes it out of date (showToast) or the next load starts.
+    demoStatus: null,
+    demoBusyScored: null,
     // null | 'heading' | 'toast' — consumed once by render() below. Separate
     // from withFocusPreservation's own restore-by-selector mechanism: that
     // one only ever re-focuses a control that ALREADY had focus before this
@@ -54,6 +71,7 @@ export async function mountSetupScreen(root, { eventId, client = getSupabase(), 
   // toast and applies pendingFocus, not a second, earlier one this
   // function used to trigger itself).
   function showToast(message) {
+    state.demoStatus = null;
     state.toastMessage = message;
     state.pendingFocus = 'toast';
     clearTimeout(toastTimer);
@@ -182,6 +200,122 @@ export async function mountSetupScreen(root, { eventId, client = getSupabase(), 
     }
     state.busy = false;
     render();
+  }
+
+  // Test events only (the card is not offered otherwise, and the database refuses a real event
+  // regardless). Replaces EVERYTHING on the event, so it asks first when there is anything to lose:
+  // the roster is the test, because a match cannot exist without teams.
+  async function handleLoadDemo(scored) {
+    if (state.busy) return;
+    const hasData = state.teams.length > 0 || state.judges.length > 0;
+    if (
+      hasData &&
+      !window.confirm(
+        scored
+          ? `Replace everything on this test event with the full demo (${DEMO_TEAM_COUNT} teams, ${DEMO_JUDGE_COUNT} judges and ${DEMO_MATCH_COUNT} scored matches)? Its current teams, judges, matches, scores and bracket will be erased.`
+          : `Replace everything on this test event with the demo roster only (${DEMO_TEAM_COUNT} teams and ${DEMO_JUDGE_COUNT} judges, no matches)? Its current teams, judges, matches, scores and bracket will be erased.`,
+      )
+    ) {
+      return;
+    }
+    state.busy = true;
+    state.demoBusyScored = scored;
+    state.demoStatus = { tone: 'busy', message: 'Loading demo…' };
+    render();
+    let loaded;
+    try {
+      loaded = await raceTimeout(
+        loadDemo(state.event.org_id, eventId, { scored }, client),
+        DEMO_LOAD_TIMEOUT_MS,
+      );
+    } catch (err) {
+      state.demoStatus = {
+        tone: 'error',
+        message: err.timedOut ? DEMO_TIMEOUT_MESSAGE : describeDemoError(err),
+      };
+      state.busy = false;
+      render();
+      return;
+    }
+    // The demo IS loaded from here on. If re-reading the roster fails, the roster on screen is the
+    // OLD one (rows that no longer exist), so do not keep showing it: fall back to the screen's own
+    // load-error view, which says the demo loaded and offers Retry.
+    try {
+      const persisted = await raceTimeout(loadPersisted(), DEFAULT_LOAD_TIMEOUT_MS);
+      state.teams = persisted.teams;
+      state.judges = persisted.judges;
+      state.demoStatus = { tone: 'success', message: describeDemoLoaded(loaded) };
+    } catch {
+      state.demoStatus = null;
+      state.loadFailedMessage = DEMO_REFRESH_FAILED_MESSAGE;
+    }
+    state.busy = false;
+    render();
+  }
+
+  function renderDemoCard() {
+    const loadButton = el('button', {
+      className: 'btn btn-primary tap-target',
+      text: state.busy && state.demoBusyScored === true ? 'Loading…' : 'Load demo',
+      attrs: {
+        type: 'button',
+        'data-focus-key': 'demo-load',
+        'aria-describedby': 'btc-demo-intro btc-demo-warning',
+      },
+    });
+    setBusyDisabled(loadButton, state.busy);
+    loadButton.addEventListener('click', () => handleLoadDemo(true));
+
+    const rosterButton = el('button', {
+      className: 'btn btn-outline tap-target',
+      text: state.busy && state.demoBusyScored === false ? 'Loading…' : 'Load roster only',
+      attrs: {
+        type: 'button',
+        'data-focus-key': 'demo-roster-only',
+        'aria-describedby': 'btc-demo-intro btc-demo-warning',
+      },
+    });
+    setBusyDisabled(rosterButton, state.busy);
+    rosterButton.addEventListener('click', () => handleLoadDemo(false));
+
+    // The outcome lives HERE, in the card, and stays until the next action. The status region is
+    // always present (empty when idle) so a screen reader announces text put into it; a failure is
+    // a separate role="alert" node because an inserted alert is announced reliably.
+    const status = state.demoStatus;
+    const statusNode = el('p', {
+      className: 'stage-meta btc-demo-status',
+      text: status && status.tone !== 'error' ? status.message : '',
+      attrs: { role: 'status', 'aria-live': 'polite' },
+    });
+    const errorNode =
+      status?.tone === 'error'
+        ? el('p', {
+            className: 'btc-field-error btc-demo-error',
+            text: status.message,
+            attrs: { role: 'alert' },
+          })
+        : null;
+
+    return el(
+      'section',
+      { className: 'card btc-demo-card', attrs: { 'aria-labelledby': 'btc-demo-heading' } },
+      [
+        el('h2', { text: 'Demo data', attrs: { id: 'btc-demo-heading' } }),
+        el('p', {
+          id: 'btc-demo-intro',
+          className: 'stage-meta',
+          text: `Load a ready-made field instead of typing it. "Load demo" gives ${DEMO_TEAM_COUNT} teams, ${DEMO_JUDGE_COUNT} judges and all ${DEMO_MATCH_COUNT} preliminary matches already scored, so you can go straight to Generate bracket; the results are the same every time. "Load roster only" gives the ${DEMO_TEAM_COUNT} teams and ${DEMO_JUDGE_COUNT} judges with no matches, to score everything yourself.`,
+        }),
+        el('p', {
+          id: 'btc-demo-warning',
+          className: 'stage-meta btc-demo-warning',
+          text: 'Both options replace everything on this test event: its teams, judges, matches, scores and bracket. Loading again starts over.',
+        }),
+        el('div', { className: 'btc-demo-actions' }, [loadButton, rosterButton]),
+        statusNode,
+        errorNode,
+      ].filter(Boolean),
+    );
   }
 
   function renderRosterSection({
@@ -348,6 +482,8 @@ export async function mountSetupScreen(root, { eventId, client = getSupabase(), 
       }
 
       container.appendChild(el('h1', { text: 'BTC Setup', attrs: { tabindex: '-1' } }));
+
+      if (state.event?.is_test) container.appendChild(renderDemoCard());
 
       container.appendChild(
         renderRosterSection({

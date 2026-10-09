@@ -1789,8 +1789,22 @@ _The knockout tie-break shipped (organiser records the winner and a reason); the
 
 - **`btc_matches_write` is `FOR ALL`, so any member can write the tie-break columns directly.** The CHECK is the only guard. A winner pre-set on a not-yet-confirmed match would decide a tie once that match is confirmed level. Every direct write is logged with reason NULL. Same pre-existing gap as match status and bracket slots; closing it means splitting the write policy, which is a schema/RLS change needing its own `security-reviewer` pass.
 - **A direct write to `btc_cup_votes` after a tie-break is recorded** leaves the seat following the stale decision, while the podium and the card follow the totals.
-- **No two-session test of `record_btc_tiebreak`'s row lock.** Removing `FOR UPDATE` survives the single-session pgTAP suite; it needs a concurrent test.
+- **No test of `record_btc_tiebreak`'s row lock.** Removing `FOR UPDATE` survives the pgTAP suite. The `pgrowlocks` technique `028` now uses (assert the row is held `FOR UPDATE` after the call, in one session; not `xmax`, which foreign-key checks also set) would prove it without a second session.
 - **Recorded tie-break reasons appear on the PUBLIC results page** via `get_scoring_record` (anon-callable). The form warns organisers; every consumer must render the reason as plain text.
 - **The helper's downstream refusal still reads "confirm_btc_match: …"** even when raised from `record_btc_tiebreak` (pinned by `016` and `027`). The client keys on the hint, not the message. Cosmetic; changing the text means updating both suites.
 - **The JS reason validator is slightly stricter than the SQL CHECK** (it trims NBSP, and it measures length in UTF-16 units). That is the safe direction: the client refuses something the database would accept, never the reverse.
 - **The tie-break is organiser-screen only.** No projector, phone or results surface shows it yet (T-BTC.3). That surface needs its own `is_test` treatment (D9).
+
+---
+
+## Known open items from T-BTC.demo-data (2026-10-09)
+
+_The BTC demo-data loader shipped (roster plus scored preliminaries, 8 teams, test events only); these were flagged and documented, not blocking._
+
+- **The `is_test` guard on `load_btc_demo` is an accident-prevention rail, not an authorisation boundary.** Any org member can flip `events.is_test` (every flip is logged) or write the BTC tables directly. That is the permission model every BTC RPC shares; closing it is a cross-cutting RLS and role decision, not a fix to this function.
+- **The event lock's queueing is not shown by a test.** `028` asserts the lock itself (the event row is held `FOR UPDATE` until the transaction ends, via `pgrowlocks`, which works in one session), but two overlapping loads actually queueing, and `is_test` being unable to flip mid-call, would need two concurrent sessions.
+- **Loading wipes matches, so offline writes queued for them will be dropped later.** Any queued `confirm_btc_match` operation, or a stale local scoring draft on another device, fails as a dropped write after a reload. Not handled: it only matters if a roster is reloaded while a device still holds unsent scoring writes. Needs `offline-sync-auditor` review if the loader is ever used on a live event.
+- **The in-card status region is rebuilt on each render**, because the whole screen re-renders. A screen reader may not announce success or busy reliably. Failures use `role="alert"`, which is reliable. This is the same shared pattern as the other BTC screens.
+- **If the event is the ACTIVE live session, a load does not republish.** The audience payload stays stale until the next publish.
+- **Any member can wipe the event via the card**, with no role check. Same as the other BTC RPCs; see the first item above.
+- **Only 8 teams.** The 24-team scale is not covered by the demo.
