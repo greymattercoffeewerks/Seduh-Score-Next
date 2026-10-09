@@ -1,0 +1,145 @@
+/*
+ * BTC's phone view (viewerBody.js): one scrolling column of cards in the paper theme, 360px first. Built on
+ * shared.css's .card, .stage-meta and .btn (linked alongside this file); nothing here redefines them.
+ * Token-only. Meaning is carried by words, never by colour alone (a tie says "(tied)", an outcome says who
+ * went through); gold is a FILL (the champion label, with its contrast colour), never a text colour.
+ */
+
+.btc-phone {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.btc-phone h2 {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+}
+
+/* A heading that carries its own context: the kicker above the title, both inside the one heading. */
+.btc-phone-kicker {
+  display: block;
+  margin-bottom: var(--space-1);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-secondary);
+}
+
+.btc-phone .btc-phone-round {
+  margin: var(--space-4) 0 var(--space-1);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+/* ---------- champion ---------- */
+.btc-phone-champion {
+  text-align: center;
+}
+
+.btc-phone .btc-phone-champion-title {
+  margin: 0;
+  font-size: inherit;
+}
+
+.btc-phone-champion-label {
+  display: inline-block;
+  margin: 0 0 var(--space-2);
+  padding: var(--space-1) var(--space-4);
+  background: var(--color-gold);
+  color: var(--color-gold-contrast);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.btc-phone-champion-name {
+  display: block;
+  font-family: var(--font-display);
+  font-size: var(--text-3xl);
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.btc-phone-podium {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+}
+
+.btc-phone-podium dt {
+  color: var(--color-text-secondary);
+}
+
+.btc-phone-podium dd {
+  margin: 0;
+  font-weight: var(--font-weight-bold);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- standings ---------- */
+.btc-phone-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: var(--space-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.btc-phone-table th,
+.btc-phone-table td {
+  padding: var(--space-2) var(--space-2) var(--space-2) 0;
+  border-bottom: var(--border-hairline) solid var(--color-border);
+  text-align: left;
+  font-weight: var(--font-weight-regular);
+}
+
+.btc-phone-table thead th {
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+/* "7 wins" must not break across two lines at 320px. */
+.btc-phone-table td {
+  white-space: nowrap;
+}
+
+.btc-phone-table tbody th {
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- results and bracket ---------- */
+.btc-phone-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.btc-phone-list li {
+  padding: var(--space-2) 0;
+  border-bottom: var(--border-hairline) solid var(--color-border);
+}
+
+.btc-phone-list li:last-child {
+  border-bottom: 0;
+}
+
+.btc-phone-list .btc-phone-line {
+  display: block;
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.btc-phone-list .stage-meta {
+  margin-top: var(--space-1);
+}

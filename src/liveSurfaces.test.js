@@ -578,13 +578,58 @@ describe('BTC on the live surfaces', () => {
     handle.unmount();
   });
 
-  it('a btc session still has no phone view yet: the not-published card, not another format’s body', async () => {
+  it('shows BTC’s own phone view for a btc session, with the identity chrome and no stage surface', async () => {
     const root = document.createElement('div');
-    await mountPhone(root, {
+    const handle = await mountPhone(root, {
       orgId: 'org1',
-      client: fakeClient(btcRow(preliminaryPayload())),
+      client: fakeClient(btcRow(preliminaryPayload({ playedCount: 12 }))),
+    });
+    expect(root.getAttribute('data-surface')).toBeNull();
+    expect(root.querySelector('.viewer-chrome')).not.toBeNull();
+    expect(root.querySelector('.btc-phone')).not.toBeNull();
+    expect(root.textContent).toContain('Pour Decisions vs Steam Team');
+    expect(root.querySelector('.standings-table')).toBeNull(); // not Cup Taster's phone body
+    handle.unmount();
+  });
+
+  it('keeps the phone’s "show all" choice through a live update of the same event', async () => {
+    const root = document.createElement('div');
+    document.body.append(root);
+    const client = fakeClient(btcRow(preliminaryPayload({ playedCount: 12 })));
+    const handle = await mountPhone(root, { orgId: 'org1', client });
+    root.querySelector('[data-btc-toggle]').focus();
+    root.querySelector('[data-btc-toggle]').click();
+    expect(root.querySelectorAll('.btc-phone-table tbody tr:not([hidden])')).toHaveLength(8);
+    client.setRow(btcRow(preliminaryPayload({ playedCount: 13 })));
+    await vi.waitFor(() => expect(root.textContent).toContain('13 of 28 matches played'));
+    expect(root.querySelectorAll('.btc-phone-table tbody tr:not([hidden])')).toHaveLength(8);
+    expect(document.activeElement.getAttribute('data-btc-toggle')).toBe('standings');
+    handle.unmount();
+    root.remove();
+  });
+
+  it('a new btc event starts the phone view with the top five again', async () => {
+    const root = document.createElement('div');
+    const client = fakeClient(btcRow(preliminaryPayload({ playedCount: 12 })));
+    const handle = await mountPhone(root, { orgId: 'org1', client });
+    root.querySelector('[data-btc-toggle]').click();
+    expect(root.querySelectorAll('.btc-phone-table tbody tr:not([hidden])')).toHaveLength(8);
+    client.setRow(btcRow(preliminaryPayload({ playedCount: 12 }), { event_id: 'ev2' }));
+    await vi.waitFor(() =>
+      expect(root.querySelectorAll('.btc-phone-table tbody tr:not([hidden])')).toHaveLength(5),
+    );
+    handle.unmount();
+  });
+
+  it('a btc event that has not started shows the shell’s holding card on the phone too', async () => {
+    const root = document.createElement('div');
+    const handle = await mountPhone(root, {
+      orgId: 'org1',
+      client: fakeClient(btcRow({ eventName: 'E', phase: 'setup', standings: [] })),
     });
     expect(root.textContent).toContain('Event not published yet');
+    expect(root.querySelector('.btc-phone')).toBeNull();
+    handle.unmount();
   });
 
   it('moving straight from one btc event to another starts from a clean baseline: nothing is announced', async () => {

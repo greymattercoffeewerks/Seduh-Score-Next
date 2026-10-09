@@ -74,6 +74,15 @@
    space on the projector for every non-test event. Phone mode (the
    default/paper) keeps the existing flush-edge look, matching every
    organiser-surface consumer of .is-test-banner. */
+/* A long phone page scrolls, and a TEST banner that scrolls away leaves nothing on screen saying the data is
+   not real (D9). Keep it at the top while there is one: `:not(:empty)`, so a real event (no banner) reserves
+   nothing. The projector does not scroll, so this changes nothing there. */
+.viewer-banner-host:not(:empty) {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
 [data-surface='stage'] .viewer-banner-host:not(:empty) {
   padding: var(--space-5) var(--space-5) 0;
 }

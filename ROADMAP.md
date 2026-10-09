@@ -1818,6 +1818,18 @@ _The audience surfaces now serve whichever format is live; no BTC screen exists 
 - **`mountStageSurface`'s `surfaceClass` option has no production caller.** Keep it as a hook or remove it when the BTC projector lands.
 - **BTC payload fields are decided but unbuilt:** recent results ordered by confirmation time (Cup Taster had a bug here), bracket slots with winners and tie-break flags, podium via `derivePodium`, and `is_test` on every publish.
 
+## Known open items from T-BTC.phone-view (2026-10-10)
+
+_BTC's phone view is built; this lists what it does not do._
+
+- **The shell's body is a polite live region that is rebuilt on every update**, so a screen reader may read a long BTC page again after each confirm (updates arrive a few an hour; Cup Taster's phone has the same behaviour). The cheap fix needs a real NVDA/VoiceOver check, because nested `aria-live="off"` support varies: keep one persistent wrapper, mutate it with `aria-live="off"`, and announce only a short summary line (the newest `outcomeLine`, "Champion: X"); or let the shell stop being a live region for a format that brings its own announcer (a core change).
+- **The champion block on the phone is its own markup** (`btc-phone-champion*`), not `core/stageVocabulary.js`'s `renderChampion` (styled for the dark TV) or Cup Taster's `viewer-champion-*` (its own phone body). Two phones and a projector now draw a champion; extract if a third format needs one.
+- **Round names are written three ways**: the projector's bracket columns ("Quarterfinals"), its slot labels ("Final", "Third place") and the phone's headings, while `roundLabel` from the payload says "Quarter-final". Pick one vocabulary in `words.js` when the round names are next touched.
+- **"Seed" is still not published** (see ROADMAP's T-BTC.projector-screens item); the phone says nothing about seeds either.
+- **The en dash in "47 – 20"** is read inconsistently by screen readers ("47 to 20" or a visually hidden "to" would be safer).
+- **The phone has no results page link and no way to follow one team** (a "my team" filter is the obvious next thing a competitor asks for); it is the room's companion, not a team tracker.
+- **`.card`, `.stage-meta` and `.btn` come from `btc/shared.css`**, which `app/index.html` loads after Cup Taster's copies, so BTC's win globally (the known debt in `src/formats/btc/CLAUDE.md`); `viewerBody.css` depends on `shared.css` being linked before it.
+
 ## Known open items from T-BTC.projector-screens (2026-10-09)
 
 _The BTC projector is built (stage 3c); the phone view (stage 4) is not._
