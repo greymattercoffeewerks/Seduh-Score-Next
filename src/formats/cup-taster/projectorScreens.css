@@ -58,7 +58,7 @@
 
 /* The shared countdown element (core/countdownDisplay.js) at projector size; the urgent outline and colour
    stay viewerBody.css's. Out-specifies that file's own stage rule whatever order the sheets load in. */
-.projector-surface .projector-clock .viewer-countdown {
+[data-surface='stage'] .projector-clock .viewer-countdown {
   padding: 0;
   font-size: max(3rem, calc(29.96 * var(--stage-fit)));
   line-height: 1;
@@ -244,7 +244,7 @@
   font-size: max(1.5rem, calc(5.6 * var(--stage-fit)));
 }
 
-.projector-surface .projector-many .projector-clock .viewer-countdown {
+[data-surface='stage'] .projector-many .projector-clock .viewer-countdown {
   font-size: max(2.5rem, calc(13 * var(--stage-fit)));
 }
 

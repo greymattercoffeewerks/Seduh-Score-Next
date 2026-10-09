@@ -50,11 +50,11 @@ vi.mock('./formats/cup-taster/timingRouteScreen.js', () => ({
 vi.mock('./formats/cup-taster/scoringScreen.js', () => ({
   mountScoringScreen: (...args) => mountScoringScreen(...args),
 }));
-vi.mock('./formats/cup-taster/projectorSurface.js', () => ({
-  mountProjectorSurface: (...args) => mountProjectorSurface(...args),
-}));
-vi.mock('./formats/cup-taster/phoneSummary.js', () => ({
-  mountPhoneSummary: (...args) => mountPhoneSummary(...args),
+// The two audience routes mount through liveSurfaces.js (it picks the live format's body); the stubs keep
+// their original names so every assertion below still reads as "the projector / phone screen was mounted".
+vi.mock('./liveSurfaces.js', () => ({
+  mountProjector: (...args) => mountProjectorSurface(...args),
+  mountPhone: (...args) => mountPhoneSummary(...args),
 }));
 vi.mock('./core/setPasswordScreen.js', () => ({
   mountSetPasswordScreen: (...args) => mountSetPasswordScreen(...args),
@@ -488,9 +488,9 @@ describe('mountApp routing', () => {
 
   it("resets a stale class/data-surface attribute on bareRoot BEFORE mounting the next of the three /live/* routes — regression coverage for the cross-screen residue bug (module-boundary-checker flagged the original per-screen cleanup as a real §6 violation: core/splashScreen.js hardcoding the format-specific 'projector-surface' class name; centralized here in main.js instead)", async () => {
     stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
-    // Mirror what the REAL projectorSurface.js applies to its own root, so
-    // this test proves the reset happens on the shared outlet itself, not
-    // on some other node.
+    // Mirror the residue a real projector mount leaves on its root (the stage
+    // surface's data-surface plus a format class), so this test proves the
+    // reset happens on the shared outlet itself, not on some other node.
     mountProjectorSurface.mockImplementation(async (root) => {
       root.classList.add('projector-surface');
       root.setAttribute('data-surface', 'stage');

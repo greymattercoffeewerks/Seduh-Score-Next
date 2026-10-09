@@ -26,8 +26,7 @@ import { mountHeatGenerationScreen } from './formats/cup-taster/heatsScreen.js';
 import { mountStandingsScreen } from './formats/cup-taster/standingsScreen.js';
 import { mountTimingRouteScreen } from './formats/cup-taster/timingRouteScreen.js';
 import { mountScoringScreen } from './formats/cup-taster/scoringScreen.js';
-import { mountProjectorSurface } from './formats/cup-taster/projectorSurface.js';
-import { mountPhoneSummary } from './formats/cup-taster/phoneSummary.js';
+import { mountProjector, mountPhone } from './liveSurfaces.js';
 import { mountBtcEventDashboardScreen } from './formats/btc/eventDashboardScreen.js';
 import { mountSetupScreen as mountBtcSetupScreen } from './formats/btc/setupScreen.js';
 import { mountMatchesScreen as mountBtcMatchesScreen } from './formats/btc/matchesScreen.js';
@@ -375,7 +374,7 @@ export function buildRoutes({ orgId, bareRoot, routerRef }) {
       outlet: bareRoot,
       mount: (outlet, { client, signal }) => {
         resetBareSurface(outlet);
-        return mountProjectorSurface(outlet, { orgId, client, signal });
+        return mountProjector(outlet, { orgId, client, signal });
       },
     },
     {
@@ -384,7 +383,7 @@ export function buildRoutes({ orgId, bareRoot, routerRef }) {
       outlet: bareRoot,
       mount: (outlet, { client, signal }) => {
         resetBareSurface(outlet);
-        return mountPhoneSummary(outlet, { orgId, client, signal });
+        return mountPhone(outlet, { orgId, client, signal });
       },
     },
     {

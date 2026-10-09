@@ -1,3 +1,29 @@
+## T-BTC.live-routing: The projector and phone surfaces serve whichever format is live (stage 1 of the BTC live surfaces) · 2026-10-09
+
+**Task:** T-BTC.live-routing. Not a handoff §14 task: BTC is out-of-handoff. Stage 1 of four (routing, publishing, projector, phone); no BTC screen is built yet.
+
+**Status: in review, not merged.** No migration, nothing to push to the cloud project.
+
+**Why:** `/live/projector` and `/live/phone` were wired to Cup Taster's bodies alone, so a BTC session would have been fed Cup Taster's screens. The surfaces now pick the body from the live row's own `format`.
+
+**What shipped:**
+
+- **`core/viewer-shell.js`**: tells `hasContent(payload, { format })` and `renderBody(body, payload, { isTest, format })` the live row's `format`. Additive; every existing predicate and body ignores it.
+- **`core/formatBody.js`** (new, format-agnostic): `createFormatBody({ [format]: () => body })`. Builds a format's body lazily, keeps one alive, destroys the previous when the format changes, and treats an unregistered format as having no content (the shell shows "Event not published yet", never another format's screens). A factory or `destroy()` that throws is logged and does not wedge the shell; `destroy()` is final.
+- **`src/liveSurfaces.js`** (new, beside `main.js`): `mountProjector` and `mountPhone`, registering Cup Taster's projector body and phone body. Stages 3 and 4 add the BTC entries here. `main.js`'s two audience routes call it.
+- **Removed:** `formats/cup-taster/projectorSurface.js` and `phoneSummary.js` (and their tests) were a parallel copy of this wiring; the preview harnesses and their tests now use `mountProjector`/`mountPhone`. The behaviours those tests pinned (band and countdown, no scaling, timer teardown, `is_test`, holding states) moved to `liveSurfaces.test.js`.
+- **The `projector-surface` root class is gone**, so no format-named class is applied to a shared root. `projectorScreens.css` sizes its countdown under `[data-surface='stage']`.
+
+**Verified:** full unit suite (2839 tests) and lint clean; mutation testing of `formatBody`, `liveSurfaces` and the shell's pass-through (all caught; one redundant guard removed rather than tested); the Cup Taster projector preview still sizes its countdown (137px, no padding) under the new selector. The only live row on the cloud project has `format = 'cup_taster'`, so Cup Taster's real surfaces select their bodies as before.
+
+**Reviews:** module-boundary-checker (no new §6 violation; asked for the wrappers to be rewired and removed, the root class scoped away, `liveSurfaces.js` documented), test-auditor (a surviving mutant, `renderBody` and error paths untested, unmount/format-change timer teardown and `is_test` lost with the old tests; all closed), code-reviewer (no Cup Taster regression; `destroy()` must be final, `mountPhone` must destroy its body; both fixed).
+
+**Flagged, not changed:**
+
+- When the live row goes away (`session` becomes null) the shell skips `hasContent`, so a format's body (and its display timers) stays alive until the format changes or the surface unmounts. This predates the change, but BTC's projector will inherit it; see ROADMAP.
+- `core/stageSurface.js`'s `surfaceClass` option has no production caller now.
+- `core/entitlements.js` still names `cup_taster_*` keys (a D14 stub with no call sites).
+
 ## T-BTC.demo-data: A BTC test event can be loaded with a demo roster and scored preliminaries, ready for the bracket · 2026-10-09
 
 **Task:** T-BTC.demo-data. Not a handoff §14 task: BTC is out-of-handoff (see ROADMAP's BTC section). Branch `feat/btc-demo-data`.

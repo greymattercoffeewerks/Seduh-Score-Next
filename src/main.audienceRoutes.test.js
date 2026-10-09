@@ -136,13 +136,13 @@ describe('switching between the real audience routes in one tab', () => {
     await vi.waitFor(() => holdingShown(bareRoot));
     expect(bareRoot.children).toHaveLength(1);
     expect(shell(bareRoot)).not.toBeNull();
-    expect(bareRoot.classList.contains('projector-surface')).toBe(true);
+    expect(bareRoot.getAttribute('data-surface')).toBe('stage');
 
     await go('#/live/phone');
     await vi.waitFor(() => holdingShown(bareRoot));
     expect(bareRoot.children).toHaveLength(1);
     expect(shell(bareRoot)).not.toBeNull();
-    expect(bareRoot.classList.contains('projector-surface')).toBe(false);
+    expect(bareRoot.getAttribute('data-surface')).toBeNull();
     // The first switch's symptom: stuck on the initial holding card.
     expect(bareRoot.textContent).not.toContain('Connecting…');
     // The outgoing view's channel was released, not just abandoned.
@@ -158,7 +158,7 @@ describe('switching between the real audience routes in one tab', () => {
     expect(shell(bareRoot)).not.toBeNull();
     expect(bareRoot.querySelector('.splash-content')).toBeNull();
     expect(bareRoot.children).toHaveLength(1);
-    expect(bareRoot.classList.contains('projector-surface')).toBe(true);
+    expect(bareRoot.getAttribute('data-surface')).toBe('stage');
     expect(bareRoot.textContent).not.toContain('Connecting…');
   });
 
@@ -175,7 +175,7 @@ describe('switching between the real audience routes in one tab', () => {
     await go('#/live/projector');
     await vi.waitFor(() => holdingShown(bareRoot));
     expect(bareRoot.children).toHaveLength(1);
-    expect(bareRoot.classList.contains('projector-surface')).toBe(true);
+    expect(bareRoot.getAttribute('data-surface')).toBe('stage');
     expect(bareRoot.textContent).not.toContain('Connecting…');
   });
 });

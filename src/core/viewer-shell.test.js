@@ -486,7 +486,21 @@ describe('mountViewerShell', () => {
     const [container, payload, meta] = renderBody.mock.calls[0];
     expect(container.className).toBe('viewer-shell-body');
     expect(payload).toEqual({ standings: [{ name: 'A' }] });
-    expect(meta).toEqual({ isTest: false });
+    expect(meta).toEqual({ isTest: false, format: 'cup_taster' });
+  });
+
+  it('tells hasContent and renderBody which format the live row is, so one surface can serve any format', async () => {
+    const hasContent = vi.fn(() => true);
+    const renderBody = vi.fn();
+    await mountViewerShell(document.createElement('div'), {
+      orgId: 'org1',
+      renderBody,
+      hasContent,
+      showChrome: false,
+      client: fakeClient([session({ format: 'btc', payload: { standings: [] } })]),
+    });
+    expect(hasContent).toHaveBeenCalledWith({ standings: [] }, { format: 'btc' });
+    expect(renderBody.mock.calls[0][2]).toEqual({ isTest: false, format: 'btc' });
   });
 
   it('renders the is_test banner (as role="alert") once a session with is_test=true is loaded', async () => {

@@ -43,8 +43,8 @@
     <!--
       Demo-only harness for the T5.4 phone summary surface — not part of the
       shipped module graph, same role as every other *.preview.html file.
-      Mounts the REAL mountPhoneSummary() (viewer-shell + viewerBody, wired
-      together exactly as phoneSummary.js composes them) against a fake
+      Mounts the REAL mountPhone() (src/liveSurfaces.js, the same mount
+      /live/phone uses: viewer-shell + viewerBody) against a fake
       live_sessions source, so — unlike viewer-shell.preview.html's own
       stub renderBody — this harness demonstrates real Cup Taster content:
       a standings table, an active-heat panel with running/done/maxed
@@ -70,7 +70,7 @@
     <div id="phone-frame" class="demo-surface"></div>
 
     <script type="module">
-      import { mountPhoneSummary } from './phoneSummary.js';
+      import { mountPhone } from '../../liveSurfaces.js';
       import { buildActiveHeatPayload } from './demoActiveHeatPayload.js';
 
       const ORG_ID = 'org1';
@@ -153,7 +153,7 @@
       }
 
       const client = createDemoClient();
-      mountPhoneSummary(document.getElementById('phone-frame'), { orgId: ORG_ID, client });
+      mountPhone(document.getElementById('phone-frame'), { orgId: ORG_ID, client });
 
       const standings = [
         {
