@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { mountProjector, mountPhone } from './liveSurfaces.js';
+import { preliminaryPayload } from './formats/btc/demoLivePayload.js';
 
 // A client whose live_sessions row can be swapped and whose realtime callback can be fired, so a format
 // change on a mounted surface can be driven. `events` defaults to one row so the shell's noEvent/notStarted
@@ -529,5 +530,83 @@ describe('mountPhone', () => {
     const handle = await mountPhone(root, { orgId: 'org1', client: fakeClient(cupTasterSession) });
     expect(() => handle.unmount()).not.toThrow();
     expect(root.querySelector('.viewer-shell')).toBeNull();
+  });
+});
+
+describe('BTC on the live surfaces', () => {
+  const btcRow = (payload, extra = {}) => ({
+    ...cupTasterSession,
+    id: 's-btc',
+    format: 'btc',
+    payload,
+    ...extra,
+  });
+
+  it('shows BTC’s own projector for a btc session, on the stage surface, never Cup Taster’s screens', async () => {
+    const root = document.createElement('div');
+    const handle = await mountProjector(root, {
+      orgId: 'org1',
+      client: fakeClient(btcRow(preliminaryPayload({ playedCount: 12 }))),
+    });
+    expect(root.getAttribute('data-surface')).toBe('stage');
+    expect(root.querySelector('.stage-band-event').textContent).toBe('BTC demo rehearsal');
+    expect(root.querySelector('.stage-band-section').textContent).toBe('Preliminary round');
+    expect(root.querySelector('.stage-kicker').textContent).toMatch(/^Up next/);
+    expect(root.textContent).toContain('Pour Decisions');
+    expect(root.querySelector('.viewer-chrome')).toBeNull();
+    handle.unmount();
+  });
+
+  it('shows a holding state for a btc event that has not started, rather than an empty stage', async () => {
+    const root = document.createElement('div');
+    const handle = await mountProjector(root, {
+      orgId: 'org1',
+      client: fakeClient(btcRow({ eventName: 'E', phase: 'setup', standings: [] })),
+    });
+    expect(root.querySelector('.stage-display')).toBeNull();
+    expect(root.textContent).toContain('Event not published yet');
+    handle.unmount();
+  });
+
+  it('announces a newly confirmed match on a mounted btc projector, and not for the snapshot it opened on', async () => {
+    const root = document.createElement('div');
+    const client = fakeClient(btcRow(preliminaryPayload({ playedCount: 12 })));
+    const handle = await mountProjector(root, { orgId: 'org1', client });
+    expect(root.textContent).not.toContain('Result recorded');
+    client.setRow(btcRow(preliminaryPayload({ playedCount: 13 })));
+    await vi.waitFor(() => expect(root.textContent).toContain('Result recorded · Preliminary'));
+    handle.unmount();
+  });
+
+  it('a btc session still has no phone view yet: the not-published card, not another format’s body', async () => {
+    const root = document.createElement('div');
+    await mountPhone(root, {
+      orgId: 'org1',
+      client: fakeClient(btcRow(preliminaryPayload())),
+    });
+    expect(root.textContent).toContain('Event not published yet');
+  });
+
+  it('moving straight from one btc event to another starts from a clean baseline: nothing is announced', async () => {
+    const root = document.createElement('div');
+    const client = fakeClient(btcRow(preliminaryPayload({ playedCount: 12 })));
+    const handle = await mountProjector(root, { orgId: 'org1', client });
+    client.setRow(btcRow(preliminaryPayload({ playedCount: 13 }), { event_id: 'ev2' }));
+    await vi.waitFor(() => expect(root.querySelector('.stage-display')).not.toBeNull());
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(root.textContent).not.toContain('Result recorded');
+    handle.unmount();
+  });
+
+  it('moving from a Cup Taster event to a btc one swaps bodies, and the btc one starts from a clean baseline', async () => {
+    const root = document.createElement('div');
+    const client = fakeClient(cupTasterSession);
+    const handle = await mountProjector(root, { orgId: 'org1', client });
+    client.setRow(btcRow(preliminaryPayload({ playedCount: 13 }), { event_id: 'ev2' }));
+    await vi.waitFor(() => expect(root.querySelector('.btc-stage-vs')).not.toBeNull());
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(root.textContent).not.toContain('Result recorded');
+    expect(root.textContent).not.toContain('Alex');
+    handle.unmount();
   });
 });
