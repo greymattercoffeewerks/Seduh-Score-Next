@@ -1,3 +1,64 @@
+## T-BTC.demo-data: A BTC test event can be loaded with a demo roster and scored preliminaries, ready for the bracket · 2026-10-09
+
+**Task:** T-BTC.demo-data. Not a handoff §14 task: BTC is out-of-handoff (see ROADMAP's BTC section). Branch `feat/btc-demo-data`.
+
+**Status: not final.** Migration `20261009120000_btc_load_demo.sql` is NOT yet pushed to the cloud project (`wxzwanprluqmgoagbkpv`). This entry stays "not final" until the PR is merged, the migration is pushed with `apply_migration`, and `list_migrations` shows it.
+
+**Why:** rehearsing or presenting a BTC event meant retyping every team and judge, then scoring 28 round-robin matches by hand just to reach the bracket.
+
+**Decision (user, 2026-10-09):** demo depth is a roster plus scored preliminaries, ready for the bracket. 8 teams. The 24-team scale is not covered.
+
+**What shipped:**
+
+- **Migration `20261009120000_btc_load_demo.sql`** (forward-only, rollback block): `load_btc_demo(p_org_id, p_event_id, p_scored default true)`.
+  - SECURITY INVOKER, `search_path` pinned empty, granted to `authenticated` and `service_role`, revoked from PUBLIC and anon.
+  - Refuses unless the event is a BTC test event (hints `demo_event_not_found`, `demo_not_btc`, `demo_not_test`). The org check and RLS-filtered select match the other BTC RPCs, so a non-member or other-org member gets the same "event not found".
+  - Locks the event row (`for update`): `is_test` cannot flip mid-call, and two overlapping loads queue.
+  - In one transaction: wipes the event's slots, matches, judges and teams (children first), then inserts 8 teams, 5 judges and, when scored (NULL counts as scored), all 28 round-robin preliminary matches. Each is confirmed, with 3 judges (rotating), 15 cups each and one fastest-team bonus.
+  - Results are deterministic, so a rehearsal repeats exactly: fixed arithmetic on team position (a 0.14-token strength gap per place), a per-match "form on the day" offset, and a per-cup wobble `(c*c+3c) mod 7`. Standings: Bean Scene 248 points at the top, Steam Team 105 last, eight distinct totals, 3 upsets in 28 matches, margins vary. The bracket generates straight after (seeds 1v8, 4v5, 3v6, 2v7).
+  - Rows are written directly, not via `confirm_btc_match`: demo data on a test event, no ledger. Test events are not change-logged (D9).
+- **`src/formats/btc/demo.js`** (new): `loadDemo`, `describeDemoError` (keyed on hints, never wording), `describeDemoLoaded`, and the `DEMO_*` constants. `DEMO_LOAD_TIMEOUT_MS` is 20 s. The counts mirror the SQL's derived counts; both files say to change both.
+- **`setupScreen.js` / `.css`**: a "Demo data" card, shown on test events only, with "Load demo" and "Load roster only". One paragraph is tied to both buttons by `aria-describedby` and says both replace everything (teams, judges, matches, scores, bracket). `window.confirm` names the mode and is skipped when the roster is empty. The result is shown inside the card and persists (not the 1.5 s toast). A failure is a `role="alert"`. A timeout says the load "may or may not have loaded, reload to check" and unlocks the screen. If the roster re-read fails after a successful load, the screen drops the stale roster for its existing retry view. Showing a toast clears any old demo result when the roster is changed by hand.
+
+**Decisions and reasoning:**
+
+- **Deterministic, not random.** A rehearsal has to repeat exactly, or the organiser cannot practise the bracket against a known outcome.
+- **Both modes replace everything.** Loading wipes teams, judges, matches, scores and the bracket. The card says so in words, and the confirm names the mode, so nobody loses a live roster by misreading a button.
+- **The `is_test` check is an accident-prevention rail, not an authorisation boundary.** security-reviewer's correction: any org member can flip `events.is_test` (every flip is logged) or write the BTC tables directly. That is the permission model every BTC RPC shares. The migration header was reworded to say so.
+- **The result stays on screen.** A 1.5 s toast could not be read, and a failed refresh left a stale roster with the message gone.
+- **Errors are keyed on hints, not message wording**, as in the knockout tie-break.
+
+**A bug in the formula, caught twice.** The first version's per-cup term was `c*5`, a multiple of the modulus 5, so every cup in a match scored the same. The second used `c*3 mod 5`, which repeats in blocks of 5 over 15 cups, so every margin was a multiple of 3. schema-guardian caught the repeating pattern. pgTAP now asserts that margins vary, that all four cup scores occur, and that there are 1–6 upsets.
+
+**Tests:** pgTAP `028_btc_load_demo.sql` (new, plan 61): counts; every pairing once; 3 distinct judges per match; determinism across loads; no points ties; strongest team top, weakest last; upsets 1–6; margin and cup variety; bracket generates after load; reload replaces (still 8 teams, not 16); reload removes the bracket, the knockout match and a recorded tie-break; a second test event in the same org and another org's test event are untouched; NULL `p_scored`; roster-only mode; refusals by hint (a real event keeps its team, match and judge; other format; unknown event; forged org; other-org member; no-org user); anon cannot execute; nothing written to the change log. JS: `demo.test.js` (new) and a "demo data" block in `setupScreen.test.js` (17 tests).
+
+**Verified end to end in the real app** against the local database (seed login, localhost): created a BTC test event, loaded the demo, standings matched the formula exactly, generated the bracket, and reloaded over the bracket, which cleared it. At 360px the card fits, buttons are 44px, no overflow, the result is still shown after 4 s, no toast, and focus stays on the pressed button.
+
+**Mutation-verified:** 9 SQL and 9 JS mutants by the session, all caught (one SQL mutant errors on a foreign key rather than failing an assertion, which counts as caught). Then `test-auditor` ran a further round of mutants across the SQL function and the screen and found 7 SQL and 10 JS survivors, 5 of them blocking test gaps; every one was closed with a test and re-mutated until killed (see Review cycle).
+
+**Suites at close** (full run, local DB reset from empty): pgTAP 1040 assertions across 29 files; JS 2814 tests across 114 files; ESLint and Prettier clean.
+
+**Review cycle:**
+
+- **schema-guardian:** 0 blocking. Rollback and reapply verified live. Delete order verified against every FK, including the tie-break RESTRICT key. Caught the repeating cup pattern (above).
+- **security-reviewer:** 0 blocking. No oracle, no anon execute, change-log behaviour correct. Found a narrow race on the `is_test` check, fixed with `for update`. Said the header overclaimed; reworded (above).
+- **code-reviewer:** 0 blocking. 8 non-blocking, all fixed: constants defined in two places, naming drift ("empty roster" / "Reset to demo roster only"), a vacuous comment, a stale roster after a failed refresh, and a toast too short to read.
+- **ui-accessibility-reviewer:** 2 blocking, both fixed. The load had no timeout or failure state, so the screen could stay busy forever. The result was a 1.5 s toast, so it could not be read, and a failed refresh left a stale roster with the message gone. Non-blocking, all fixed: the shared label and confirm wording, focus kept on the button, failures as `role="alert"`.
+- **test-auditor:** 5 blocking test gaps, all closed. The screen was not proven usable after a failed refresh and Retry (a stuck-busy or stuck-"Loading…" regression would have passed); a HUNG roster refresh and the exact 20 s timeout were untested; the wipe's scoping was proven for teams only (a second test event now has teams, a judge, a match and a bracket slot, all asserted intact); the reply's team/judge counts and the roster-only `matches: 0` were never asserted though the screen prints them as fact. Non-blocking, also closed: the event row lock IS provable in one session (with `pgrowlocks`; the earlier note saying otherwise was wrong), judge rotation reaching all 5 judges, the fastest bonus spread over all 8 teams, a golden fingerprint of the standings so a formula change is deliberate, confirm-first for teams-only and judges-only rosters, judges re-read after a load, both buttons inert while busy, and the success message coming from the SERVER's counts, not a hard-coded string.
+- **module-boundary-checker** was not run as its own agent: the change adds nothing under `src/core/`, `code-reviewer` checked the boundary by grep (nothing in `src/core` imports `btc`; no core primitive reimplemented, no format branching leaked into core), and the project's rule is satisfied by that check.
+
+**Not covered** (ROADMAP "Known open items from T-BTC.demo-data (2026-10-09)"): the `is_test` rail and its direct-write exposure; the event lock's queueing of two overlapping loads is not shown (a two-session test would; the lock itself is asserted with `pgrowlocks`); loading wipes matches that queued offline writes may still target; a live event's audience payload is not republished by a load; any member can wipe via the card; only 8 teams.
+
+**Files touched:** `supabase/migrations/20261009120000_btc_load_demo.sql` (new), `supabase/tests/028_btc_load_demo.sql` (new), `src/formats/btc/demo.js` (new), `demo.test.js` (new), `setupScreen.js` / `.css` / `.test.js`, `src/formats/btc/CLAUDE.md`, `ROADMAP.md`, `CHANGELOG.md`, `package.json` (3.0.29 → 3.0.30). `package-lock.json` was deliberately not touched (its version fields already read 3.0.17 before this task).
+
+**Follow-up:**
+
+- Merge, push `20261009120000` to the cloud project with `apply_migration`, check `list_migrations`, then mark this entry final.
+- The open items are in ROADMAP's new section.
+- `CONVENTIONS.md` was not touched; no new convention was named at close.
+
+---
+
 ## T-BTC.knockout-tiebreak: A level knockout match is decided by the organiser, who records the winner and a reason · 2026-10-09
 
 **Task:** T-BTC.knockout-tiebreak. Not a handoff §14 task: BTC is out-of-handoff (see ROADMAP's BTC section). Branch `feat/btc-knockout-tiebreak`. Closes gap 1 of ROADMAP's "Known open items from T-HARDEN.btc-bracket-podium".
