@@ -3,6 +3,7 @@ import {
   TIEBREAK_REASON_MAX,
   recordedWinnerId,
   tieState,
+  winnerOfScore,
   validateTiebreak,
   recordTiebreak,
   tiebreakRefusal,
@@ -17,6 +18,53 @@ const score = (team1_total, team2_total, status = 'confirmed') => ({
   team2_id: 'b',
   team1_total,
   team2_total,
+});
+
+describe('winnerOfScore', () => {
+  it('is the side with the higher bonus-inclusive total, whichever side that is', () => {
+    expect(winnerOfScore(confirmed(), score(25, 18))).toBe('a');
+    expect(winnerOfScore(confirmed(), score(18, 25))).toBe('b');
+  });
+
+  it('compares totals as numbers when they arrive as strings (25 beats 9)', () => {
+    expect(winnerOfScore(confirmed(), score('25', '9'))).toBe('a');
+    expect(winnerOfScore(confirmed(), score('9', '25'))).toBe('b');
+  });
+
+  it('needs only the confirmed score row for a decisive result (no match row)', () => {
+    expect(winnerOfScore(null, score(25, 18))).toBe('a');
+    expect(winnerOfScore(undefined, score(18, 25))).toBe('b');
+  });
+
+  it('is null when the score row is missing or not confirmed, even if the totals differ', () => {
+    expect(winnerOfScore(confirmed(), null)).toBeNull();
+    expect(winnerOfScore(confirmed(), score(25, 18, 'scoring'))).toBeNull();
+    expect(winnerOfScore(confirmed(), score(25, 18, 'pending'))).toBeNull();
+  });
+
+  it('on a level match is the winner the organiser recorded, and null while undecided', () => {
+    expect(winnerOfScore(confirmed(), score(30, 30))).toBeNull();
+    expect(winnerOfScore(confirmed({ tiebreak_winner_team_id: 'b' }), score(30, 30))).toBe('b');
+    expect(winnerOfScore(confirmed({ tiebreak_winner_team_id: 'a' }), score(30, 30))).toBe('a');
+  });
+
+  it('ignores a recorded winner on a match that is not level, and one that is not a participant', () => {
+    expect(winnerOfScore(confirmed({ tiebreak_winner_team_id: 'b' }), score(25, 18))).toBe('a');
+    expect(winnerOfScore(confirmed({ tiebreak_winner_team_id: 'zzz' }), score(30, 30))).toBeNull();
+  });
+
+  it('does not honour a recorded winner while the MATCH is not confirmed', () => {
+    expect(
+      winnerOfScore({ id: 'm1', status: 'scoring', tiebreak_winner_team_id: 'a' }, score(30, 30)),
+    ).toBeNull();
+  });
+
+  it('never defaults a winner when a total is missing or not a number', () => {
+    expect(winnerOfScore(confirmed(), score(undefined, 18))).toBeNull();
+    expect(winnerOfScore(confirmed(), score(25, undefined))).toBeNull();
+    expect(winnerOfScore(confirmed(), score('x', 'y'))).toBeNull();
+    expect(winnerOfScore(confirmed(), score(null, 18))).toBe('b'); // null is 0: a real, finite total
+  });
 });
 
 describe('tieState', () => {

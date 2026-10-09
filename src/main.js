@@ -304,7 +304,12 @@ export function buildRoutes({ orgId, bareRoot, routerRef }) {
       pattern: '/events/:eventId/btc/setup',
       mount: requireAuth(
         (outlet, { eventId, client, signal }) =>
-          mountBtcSetupScreen(outlet, { eventId, client, signal }),
+          mountBtcSetupScreen(outlet, {
+            eventId,
+            client,
+            signal,
+            handlers: allOutboxHandlers(client),
+          }),
         routerRef,
       ),
     },
@@ -312,7 +317,12 @@ export function buildRoutes({ orgId, bareRoot, routerRef }) {
       pattern: '/events/:eventId/btc/matches',
       mount: requireAuth(
         (outlet, { eventId, client, signal }) =>
-          mountBtcMatchesScreen(outlet, { eventId, client, signal }),
+          mountBtcMatchesScreen(outlet, {
+            eventId,
+            client,
+            signal,
+            handlers: allOutboxHandlers(client),
+          }),
         routerRef,
       ),
     },
@@ -328,7 +338,12 @@ export function buildRoutes({ orgId, bareRoot, routerRef }) {
       pattern: '/events/:eventId/btc/bracket',
       mount: requireAuth(
         (outlet, { eventId, client, signal }) =>
-          mountBtcBracketScreen(outlet, { eventId, client, signal }),
+          mountBtcBracketScreen(outlet, {
+            eventId,
+            client,
+            signal,
+            handlers: allOutboxHandlers(client),
+          }),
         routerRef,
       ),
     },

@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mountBracketScreen } from './bracketScreen.js';
+import { publishBtcLive } from './liveSession.js';
+
+vi.mock('./liveSession.js', () => ({ publishBtcLive: vi.fn(async () => {}) }));
 
 // Flushes both microtasks and a macrotask boundary — more reliable than a fixed count
 // of bare `await Promise.resolve()` ticks against the fake client's own `.then()`-based
@@ -133,6 +136,7 @@ describe('mountBracketScreen', () => {
   let root;
 
   beforeEach(() => {
+    publishBtcLive.mockClear();
     root = document.createElement('div');
     document.body.appendChild(root);
   });
@@ -152,7 +156,8 @@ describe('mountBracketScreen', () => {
 
   it('generates the bracket and shows the seeded slots', async () => {
     const client = fakeClient(baseDb());
-    await mountBracketScreen(root, { eventId: 'ev1', client });
+    const handlers = { composed: true };
+    await mountBracketScreen(root, { eventId: 'ev1', client, handlers });
 
     root
       .querySelector('button[data-focus-key="generate-bracket"]')
@@ -164,6 +169,16 @@ describe('mountBracketScreen', () => {
     expect(client.rpcCalls).toEqual([
       ['generate_btc_bracket', { p_org_id: 'org1', p_event_id: 'ev1' }],
     ]);
+    // A schedule edit: it refreshes the audience display only if this event is already live, and flushes with
+    // the caller's composed outbox map.
+    expect(publishBtcLive).toHaveBeenCalledTimes(1);
+    expect(publishBtcLive).toHaveBeenCalledWith(
+      {
+        event: expect.objectContaining({ id: 'ev1', org_id: 'org1', is_test: true }),
+        takeOver: false,
+      },
+      handlers,
+    );
   });
 
   it('shows a describeError message via toast when generation is rejected (e.g. an unresolved seeding tie)', async () => {
@@ -181,6 +196,7 @@ describe('mountBracketScreen', () => {
 
     expect(root.textContent).toContain('Something went wrong saving that — try again.');
     expect(root.querySelector('button[data-focus-key="generate-bracket"]')).not.toBeNull();
+    expect(publishBtcLive).not.toHaveBeenCalled();
   });
 
   it('shows "Create match" for a fully-seeded slot with no match yet', async () => {
@@ -348,6 +364,11 @@ describe('mountBracketScreen', () => {
         { p_org_id: 'org1', p_slot_id: 's-qf1', p_judge_ids: ['j1', 'j2', 'j3'] },
       ],
     ]);
+    expect(publishBtcLive).toHaveBeenCalledTimes(1);
+    expect(publishBtcLive.mock.calls[0][0]).toEqual({
+      event: expect.objectContaining({ id: 'ev1', org_id: 'org1', is_test: true }),
+      takeOver: false,
+    });
   });
 
   it('shows a running "X of 3 selected" count and rejects a 4th judge', async () => {
@@ -502,6 +523,54 @@ describe('mountBracketScreen', () => {
     expect(root.querySelector('form')).toBeNull();
     expect(root.querySelector('button[data-focus-key="create-slot-s-qf1"]')).not.toBeNull();
     expect(client.rpcCalls).toHaveLength(0);
+  });
+
+  it('still publishes when the bracket was generated but the re-read fails (the bracket exists)', async () => {
+    const client = fakeClient(baseDb());
+    await mountBracketScreen(root, { eventId: 'ev1', client });
+    const realFrom = client.from;
+    const realRpc = client.rpc;
+    let generated = false;
+    client.rpc = (...args) =>
+      realRpc(...args).then((result) => {
+        generated = true;
+        return result;
+      });
+    client.from = (table) => {
+      if (generated) throw new Error('network down');
+      return realFrom(table);
+    };
+    root
+      .querySelector('button[data-focus-key="generate-bracket"]')
+      .dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+    expect(publishBtcLive).toHaveBeenCalledTimes(1);
+    expect(publishBtcLive.mock.calls[0][0].takeOver).toBe(false);
+  });
+
+  it('never waits on the publish: generating the bracket finishes even if it never settles', async () => {
+    publishBtcLive.mockImplementationOnce(() => new Promise(() => {}));
+    const client = fakeClient(baseDb());
+    await mountBracketScreen(root, { eventId: 'ev1', client });
+    root
+      .querySelector('button[data-focus-key="generate-bracket"]')
+      .dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+    expect(root.textContent).toContain('Bracket generated.');
+    expect(root.textContent).toContain('Alpha vs Beta');
+  });
+
+  it('a refused publish is logged, not thrown: the bracket is still generated', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    publishBtcLive.mockRejectedValueOnce(new TypeError('no handler map'));
+    const client = fakeClient(baseDb());
+    await mountBracketScreen(root, { eventId: 'ev1', client });
+    root
+      .querySelector('button[data-focus-key="generate-bracket"]')
+      .dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+    expect(root.textContent).toContain('Bracket generated.');
+    expect(error).toHaveBeenCalledWith('btc: live-view publish was refused', expect.any(TypeError));
   });
 
   it('moves focus to the heading once the initial load succeeds', async () => {
@@ -869,6 +938,12 @@ describe('mountBracketScreen', () => {
           },
         ],
       ]);
+      // A decision is news the room should see: it takes the display over, unlike a schedule edit.
+      expect(publishBtcLive).toHaveBeenCalledTimes(1);
+      expect(publishBtcLive.mock.calls[0][0]).toEqual({
+        event: expect.objectContaining({ id: 'ev1', org_id: 'org1', is_test: true }),
+        takeOver: true,
+      });
       expect(root.querySelector('.btc-tiebreak-form')).toBeNull();
       expect(root.textContent).toContain('Beta goes through.');
       expect(note()).toBe('Level at 30 each. Tie-break: Beta goes through. Reason: Casting vote');
@@ -955,6 +1030,8 @@ describe('mountBracketScreen', () => {
         'Coin toss',
       );
       expect(root.querySelector('input[type="radio"][value="t1"]').checked).toBe(true);
+      // Nothing was saved, so nothing is published.
+      expect(publishBtcLive).not.toHaveBeenCalled();
     });
 
     it('a refusal that means the screen is stale refreshes it, closes the form and says why in the toast', async () => {
@@ -974,6 +1051,9 @@ describe('mountBracketScreen', () => {
       expect(root.querySelector('.btc-tiebreak-form')).toBeNull();
       expect(root.textContent).toMatch(/no longer tied/i);
       expect(root.querySelector('.btc-tiebreak')).toBeNull();
+
+      // Nothing was saved, so nothing is published.
+      expect(publishBtcLive).not.toHaveBeenCalled();
     });
 
     it('a stale-screen refusal still works, with its toast and a closed form, if the refresh itself fails', async () => {
@@ -1004,6 +1084,9 @@ describe('mountBracketScreen', () => {
       // and the screen is not left inert: the form can be opened again
       client.from = realFrom;
       expect(openButton().getAttribute('aria-disabled')).not.toBe('true');
+
+      // Nothing was saved, so nothing is published.
+      expect(publishBtcLive).not.toHaveBeenCalled();
     });
 
     it('after a refused save the form is usable again: Record can be pressed a second time', async () => {
@@ -1024,6 +1107,9 @@ describe('mountBracketScreen', () => {
       submit();
       await flush();
       expect(client.rpcCalls).toHaveLength(2);
+
+      // Nothing was saved, so nothing is published.
+      expect(publishBtcLive).not.toHaveBeenCalled();
     });
 
     it('pressing Enter twice while saving sends ONE request, and the button says it is saving', async () => {
@@ -1165,6 +1251,23 @@ describe('mountBracketScreen', () => {
 
       expect(root.textContent).toMatch(/Beta goes through — saved, but the page could not refresh/);
       expect(root.querySelector('[role="alert"]')).toBeNull();
+
+      // The decision IS saved, so the room is told even though this page could not refresh.
+      expect(publishBtcLive).toHaveBeenCalledTimes(1);
+      expect(publishBtcLive.mock.calls[0][0].takeOver).toBe(true);
+    });
+
+    it('never waits on the publish: recording a decision finishes even if it never settles', async () => {
+      publishBtcLive.mockImplementationOnce(() => new Promise(() => {}));
+      const client = fakeClient(tieDb());
+      await mountBracketScreen(root, { eventId: 'ev1', client });
+      click(openButton());
+      choose('t2');
+      typeReason('Casting vote');
+      submit();
+      await flush();
+      expect(root.textContent).toContain('Beta goes through.');
+      expect(root.querySelector('.btc-tiebreak-form')).toBeNull();
     });
 
     it('puts a champion decided by tie-break on the podium and says how it was decided', async () => {

@@ -437,6 +437,48 @@ describe('submitConfirmMatch', () => {
     expect(flushOutbox.mock.calls[0][0]).toEqual(confirmHandlers({ rpc: true }));
   });
 
+  it('runs afterEnqueue once the confirm is queued and BEFORE the flush (so a follow-up queues behind it)', async () => {
+    const order = [];
+    enqueueOperation.mockImplementationOnce(async () => order.push('enqueue'));
+    flushOutbox.mockImplementationOnce(async () => {
+      order.push('flush');
+      return {};
+    });
+    await submitConfirmMatch(match, 'org1', 't', params(), {}, {}, 'op-1', async () => {
+      order.push('afterEnqueue');
+    });
+    expect(order).toEqual(['enqueue', 'afterEnqueue', 'flush']);
+  });
+
+  it('flushes the confirm anyway, and logs, when afterEnqueue fails', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const afterEnqueue = vi.fn().mockRejectedValue(new Error('storage unavailable'));
+    const submitted = await submitConfirmMatch(
+      match,
+      'org1',
+      't',
+      params(),
+      {},
+      {},
+      'op-1',
+      afterEnqueue,
+    );
+    expect(flushOutbox).toHaveBeenCalledTimes(1);
+    expect(submitted.operationId).toBe('op-1');
+    expect(error).toHaveBeenCalled();
+    error.mockRestore();
+  });
+
+  it('does not run afterEnqueue when the confirm itself could not be queued, and does not flush', async () => {
+    const afterEnqueue = vi.fn();
+    enqueueOperation.mockRejectedValueOnce(new Error('storage unavailable'));
+    await expect(
+      submitConfirmMatch(match, 'org1', 't', params(), {}, {}, 'op-1', afterEnqueue),
+    ).rejects.toThrow('storage unavailable');
+    expect(afterEnqueue).not.toHaveBeenCalled();
+    expect(flushOutbox).not.toHaveBeenCalled();
+  });
+
   it('enqueues BEFORE it flushes, so the operation survives a crash mid-flush', async () => {
     const order = [];
     enqueueOperation.mockImplementationOnce(async () => order.push('enqueue'));

@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mountMatchesScreen } from './matchesScreen.js';
+import { publishBtcLive } from './liveSession.js';
+import { _clearAllForTests } from '../../core/db.js';
+
+vi.mock('./liveSession.js', () => ({ publishBtcLive: vi.fn(async () => {}) }));
 
 // Table-based fake client (setupScreen.test.js's own shape) extended with
 // .rpc() for create_btc_match.
@@ -93,6 +97,7 @@ describe('mountMatchesScreen', () => {
   let root;
 
   beforeEach(() => {
+    publishBtcLive.mockClear();
     root = document.createElement('div');
     document.body.appendChild(root);
   });
@@ -133,7 +138,8 @@ describe('mountMatchesScreen', () => {
 
   it('creates a match and shows it in the list with a confirmation toast', async () => {
     const client = fakeClient(baseDb());
-    await mountMatchesScreen(root, { eventId: 'ev1', client });
+    const handlers = { composed: true };
+    await mountMatchesScreen(root, { eventId: 'ev1', client, handlers });
 
     root.querySelector('select[data-field="team1Id"]').value = 't1';
     root.querySelector('select[data-field="team1Id"]').dispatchEvent(new Event('change'));
@@ -155,6 +161,16 @@ describe('mountMatchesScreen', () => {
     expect(root.textContent).toContain('Alpha vs Beta created.');
     expect(client.rpcCalls).toHaveLength(1);
     expect(client.rpcCalls[0][1].p_judge_ids).toEqual(['j1', 'j2', 'j3']);
+    // A schedule edit (it changes "up next"): refreshes the display only if this event is already live,
+    // flushing with the caller's composed outbox map.
+    expect(publishBtcLive).toHaveBeenCalledTimes(1);
+    expect(publishBtcLive).toHaveBeenCalledWith(
+      {
+        event: expect.objectContaining({ id: 'ev1', org_id: 'org1', is_test: true }),
+        takeOver: false,
+      },
+      handlers,
+    );
   });
 
   it('shows a validation error and never calls the RPC when fewer than 3 judges are checked', async () => {
@@ -199,6 +215,7 @@ describe('mountMatchesScreen', () => {
 
     expect(root.textContent).toContain('Something went wrong saving that — try again.');
     expect(root.textContent).toContain('No preliminary matches created yet.');
+    expect(publishBtcLive).not.toHaveBeenCalled();
   });
 
   it('moves focus to the heading once the initial load succeeds', async () => {
@@ -297,6 +314,89 @@ describe('mountMatchesScreen', () => {
 
     expect(root.querySelector('button[aria-label="Remove Alpha vs Beta"]')).toBeNull();
     expect(root.textContent).toContain('Alpha vs Beta removed.');
+    expect(publishBtcLive).toHaveBeenCalledTimes(1);
+    expect(publishBtcLive.mock.calls[0][0]).toEqual({
+      event: expect.objectContaining({ id: 'ev1', org_id: 'org1', is_test: true }),
+      takeOver: false,
+    });
+  });
+
+  it('never waits on the publish: creating or removing a match finishes even if it never settles', async () => {
+    publishBtcLive.mockImplementationOnce(() => new Promise(() => {}));
+    const client = fakeClient(baseDb());
+    await mountMatchesScreen(root, { eventId: 'ev1', client });
+    root.querySelector('select[data-field="team1Id"]').value = 't1';
+    root.querySelector('select[data-field="team1Id"]').dispatchEvent(new Event('change'));
+    root.querySelector('select[data-field="team2Id"]').value = 't2';
+    root.querySelector('select[data-field="team2Id"]').dispatchEvent(new Event('change'));
+    for (const checkbox of root.querySelectorAll('.btc-judge-checkbox-label input')) {
+      checkbox.checked = true;
+      checkbox.dispatchEvent(new Event('change'));
+    }
+    root
+      .querySelector('form')
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(root.textContent).toContain('Alpha vs Beta created.');
+  });
+
+  it('a refused publish is logged, not thrown: the match is still removed', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    publishBtcLive.mockRejectedValueOnce(new TypeError('no handler map'));
+    const db = baseDb();
+    db.btc_matches = [
+      { id: 'm1', event_id: 'ev1', round: 'preliminary', team1_id: 't1', team2_id: 't2' },
+    ];
+    db.btc_match_judges = [
+      { match_id: 'm1', judge_id: 'j1' },
+      { match_id: 'm1', judge_id: 'j2' },
+      { match_id: 'm1', judge_id: 'j3' },
+    ];
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await mountMatchesScreen(root, { eventId: 'ev1', client: fakeClient(db) });
+    root
+      .querySelector('button[aria-label="Remove Alpha vs Beta"]')
+      .dispatchEvent(new Event('click', { bubbles: true }));
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(root.textContent).toContain('Alpha vs Beta removed.');
+    expect(error).toHaveBeenCalledWith('btc: live-view publish was refused', expect.any(TypeError));
+  });
+
+  it("hands a real event's flag to the real publish: a schedule edit queues a conditional intent for this event", async () => {
+    const actual = await vi.importActual('./liveSession.js');
+    publishBtcLive.mockImplementationOnce(actual.publishBtcLive);
+    await _clearAllForTests();
+    const db = baseDb();
+    db.events[0].is_test = false;
+    const intents = [];
+    const handlers = { publish_btc_live_session: async (intent) => void intents.push(intent) };
+    const client = fakeClient(db);
+    await mountMatchesScreen(root, { eventId: 'ev1', client, handlers });
+    root.querySelector('select[data-field="team1Id"]').value = 't1';
+    root.querySelector('select[data-field="team1Id"]').dispatchEvent(new Event('change'));
+    root.querySelector('select[data-field="team2Id"]').value = 't2';
+    root.querySelector('select[data-field="team2Id"]').dispatchEvent(new Event('change'));
+    for (const checkbox of root.querySelectorAll('.btc-judge-checkbox-label input')) {
+      checkbox.checked = true;
+      checkbox.dispatchEvent(new Event('change'));
+    }
+    root
+      .querySelector('form')
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(intents).toHaveLength(1));
+    expect(intents[0]).toEqual({
+      orgId: 'org1',
+      eventId: 'ev1',
+      format: 'btc',
+      isTest: false,
+      onlyIfLive: true,
+    });
+    await _clearAllForTests();
   });
 
   it('does nothing when the confirmation dialog is declined', async () => {
@@ -320,4 +420,6 @@ describe('mountMatchesScreen', () => {
 
     expect(root.querySelector('button[aria-label="Remove Alpha vs Beta"]')).not.toBeNull();
   });
+
+  expect(publishBtcLive).not.toHaveBeenCalled();
 });

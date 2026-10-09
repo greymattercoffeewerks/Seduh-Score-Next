@@ -159,17 +159,15 @@ const TRANSIENT_SQLSTATES = new Set([
 ]);
 
 // For a caller that has an error CODE but no HTTP status — a read helper
-// that throws postgrest-js's error object as-is (formats/cup-taster/
-// liveSession.js's payload read chain). Same list isTransientFailure uses.
+// that throws postgrest-js's error object as-is (core/publishIntent.js's
+// payload read chain). Same list isTransientFailure uses.
 export function isTransientErrorCode(code) {
   return TRANSIENT_SQLSTATES.has(code);
 }
 
-// Exported, not module-private — found in review (code-reviewer,
-// 2026-09-12): liveSession.js's own publishLiveSessionHandlers can't reuse
-// buildRpcHandler directly (see that module's own comment on why), so it
-// needs this shared rather than re-derived a second time.
-export function isTransientFailure({ status, code }) {
+// Module-private: buildRpcHandler below is the one caller (the publish-from-an-intent handler in
+// core/publishIntent.js reuses buildRpcHandler for its RPC, so the mapping is not re-derived anywhere).
+function isTransientFailure({ status, code }) {
   if (!status || isAuthStatus(status)) return true;
   // A gateway can send a JSON body whose `code` isn't a SQLSTATE string —
   // fall through to the status rule rather than guessing from it.
