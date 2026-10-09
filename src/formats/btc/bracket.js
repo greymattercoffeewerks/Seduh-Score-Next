@@ -70,7 +70,7 @@ export async function fetchBracket(eventId, client = getSupabase()) {
   if (matchIds.length > 0) {
     const { data: matches, error: matchesError } = await client
       .from('btc_matches')
-      .select('id, status')
+      .select('id, status, tiebreak_winner_team_id, tiebreak_reason')
       .in('id', matchIds);
     if (matchesError) throw matchesError;
     matchesById = new Map(matches.map((m) => [m.id, m]));
@@ -87,4 +87,25 @@ export async function fetchBracket(eventId, client = getSupabase()) {
       if (roundDiff !== 0) return roundDiff;
       return a.slot.slot_label.localeCompare(b.slot.slot_label);
     });
+}
+
+// Every bracket slot's match id that exists. The screen reads scores for ALL of them in one
+// query: the podium needs the final's and third place's, and the tie state of every slot card
+// needs its own — one read feeds both, so they can never disagree.
+export function bracketMatchIds(entries) {
+  return entries.map(({ slot }) => slot.match_id).filter(Boolean);
+}
+
+// Only what the podium and the tie state read — btc_match_scores is a wide view. Empty input
+// skips the query: a bracket with no matches yet has nothing to read.
+const SCORE_COLUMNS = 'match_id, status, team1_id, team2_id, team1_total, team2_total';
+
+export async function fetchBracketScores(matchIds, client = getSupabase()) {
+  if (matchIds.length === 0) return [];
+  const { data, error } = await client
+    .from('btc_match_scores')
+    .select(SCORE_COLUMNS)
+    .in('match_id', matchIds);
+  if (error) throw error;
+  return data;
 }

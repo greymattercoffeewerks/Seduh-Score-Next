@@ -1,3 +1,65 @@
+## T-BTC.knockout-tiebreak: A level knockout match is decided by the organiser, who records the winner and a reason · 2026-10-09
+
+**Task:** T-BTC.knockout-tiebreak. Not a handoff §14 task: BTC is out-of-handoff (see ROADMAP's BTC section). Branch `feat/btc-knockout-tiebreak`. Closes gap 1 of ROADMAP's "Known open items from T-HARDEN.btc-bracket-podium".
+
+**Status: closed.** Migration `20261009110000_btc_knockout_tiebreak.sql` was pushed to the cloud project (`wxzwanprluqmgoagbkpv`) on 2026-10-09 with `apply_migration` (recorded there as `20261009015603`, as with the earlier migrations) and verified there: `list_migrations` lists it; the two `btc_matches` columns, the `btc_matches_tiebreak_shape` check and the partial index exist; there is exactly one `confirm_btc_match`, and it calls `app.advance_btc_bracket`; `app.log_score_change` lists the new columns; `record_btc_tiebreak` and `app.advance_btc_bracket` are security invoker with `search_path` pinned empty, executable by `authenticated` and `service_role` only (no `anon`, no public). The cloud project held no `btc_matches` rows, so no live data was affected. Not verifiable by SQL: whether the project's API "Exposed schemas" setting includes `app` (a dashboard setting; the helper runs under the caller's own rights and 027 proves an outsider cannot move a seat through it, so it is harmless either way, but it should not be exposed).
+
+**Decision (user, 2026-10-09):** when a knockout match ends level on bonus-inclusive totals, the ORGANISER records which team goes through, plus a reason. The app does not score a tie-break cup; the event's own rules decide how the tie is broken at the venue. Any signed-in organiser may record it (no roles exist).
+
+**What shipped:**
+
+- **Migration `20261009110000_btc_knockout_tiebreak.sql`** (forward-only, rollback block):
+  - `btc_matches.tiebreak_winner_team_id` (FK to `btc_teams`, restrict) and `tiebreak_reason`, under a `btc_matches_tiebreak_shape` CHECK: both null or both set; winner is one of the two teams; round is not `preliminary`; reason is 1–120 characters once trimmed of space, tab, CR and LF. Partial index on the winner.
+  - `app.log_score_change` also logs both columns, so the change log carries them (column-coverage guard `018` updated).
+  - `app.advance_btc_bracket(match)` is now the ONE place advancement is derived, lifted out of `confirm_btc_match` (which now `perform`s it). Nothing happens for an unconfirmed match. Decisive totals decide. On a level match the recorded winner decides. Level with no recorded winner advances nobody: seats are cleared, or the confirm is refused if the downstream match exists. A decisive re-confirm clears a stale tie-break; a still-level re-confirm keeps it. Refusals carry a machine-readable hint.
+  - `record_btc_tiebreak(org, match, winner, reason)`: SECURITY INVOKER; knockout rounds only; the match must be confirmed AND level; winner must be one of the two teams; reason required (1–120). Sets `app.change_reason` for the transaction, so the change log and dispute pack carry the reason, and resets it. Changing the winner after the downstream match exists is refused (hint `bracket_advanced`) and rolls back. Re-recording the same decision rewrites no row.
+  - Hints: `bracket_advanced`, `tiebreak_not_tied`, `tiebreak_unconfirmed`, `tiebreak_match_not_found`.
+  - Both new functions revoked from PUBLIC and anon; granted to `authenticated` and `service_role`.
+- **`src/formats/btc/tiebreak.js`** (new): `recordedWinnerId(match, score)` is the one shared rule for "a recorded winner counts", used by both the slot card and the podium. Also `tieState`, `validateTiebreak` (returns `{field, message}` so the error sits on the control it concerns), `recordTiebreak`, and `tiebreakRefusal`/`describeTiebreakError`, which key on the hint, never on message wording.
+- **`src/formats/btc/bracket.js`**: `fetchBracket` carries the tie-break columns. New `bracketMatchIds` and `fetchBracketScores`: one scores read feeds both the podium and every slot's tie state. `fetchPodiumScores`/`podiumMatchIds` were removed from `podium.js`.
+- **`src/formats/btc/podium.js`**: a recorded tie-break decides a level final or third place, flagged `viaTiebreak` and shown as "Decided by tie-break". `derivePodium`'s signature is unchanged.
+- **`bracketScreen.js` / `.css`**: a confirmed level match shows "Tied at 30 each. Nobody advances until you record which team goes through." with a Record tie-break button. The form is a `fieldset`/`legend` naming the match, radios for the two teams, and a required Reason (max 120) with a note that the reason may be shown on the public results page. Once recorded it reads "Level at 30 each. Tie-break: X goes through. Reason: …" with Change tie-break. Errors sit above the controls, tied to the control they concern. Controls are inert and the winner/reason are captured before the await while saving. Success focuses the slot's button. A save that worked but whose refresh failed says so. A refusal that means the screen is stale refreshes it and toasts.
+- **`matchesScreen.css`**: legend colour `--color-text-muted` → `--color-text-secondary` (dark theme was 4.16:1; AA needs 4.5). Also fixes the create-match legend.
+- **`bracketScreen.preview.html`**: `?tie=1` and a "quarterfinal tied" button.
+
+**Decisions and reasoning:**
+
+- **The organiser records; the app does not score.** A scored tie-break cup would invent a rule the event does not define. Recording the outcome keeps the totals honest: a tied match stays visibly tied.
+- **The recorded winner is a separate fact and never written into the totals.** A decisive re-confirm clears it, so a stale decision cannot outlive the result it was made against.
+- **One advancement function and one client rule.** Before this, advancement lived inside `confirm_btc_match` and the podium had its own read. Now the seat, the card and the podium all derive from the same function and the same rule, so they cannot disagree.
+- **A winner change is refused, not silently cleared, once the downstream match exists.** Same guard a decisive change uses. Clearing would orphan judges and scores keyed to the team.
+- **Errors are keyed on hints, not message wording.** Message text is for people and changes; the hint is the contract (code-reviewer finding).
+- **The reason is public.** It appears on the public results page via `get_scoring_record`. The form warns the organiser. Any consumer (the public results page) must render it as plain text; that is an open item in ROADMAP.
+
+**Tests:** pgTAP `027_btc_tiebreak.sql` (new, plan 76): refusals and their hints (via a `pg_temp.hint_of` helper); record, change, no-op re-record, 120-character boundary, reason-only change; `change_reason` not leaking past the transaction; decisive re-confirm clears a stale tie-break and a tie re-confirm keeps it; downstream-exists refusal for a changed winner and for a decisive result corrected into a tie, on both the team1 and team2 seat; semifinal winner → final, loser → third place, in BOTH orientations; the helper ignores an unconfirmed match and runs under the caller's rights; CHECK vs direct writes, including tab and newline reasons; other-org and no-org callers get the identical "match not found"; anon cannot execute. `018` updated for the logged columns. JS: `tiebreak.test.js` (new); `podium.test.js`, `bracket.test.js`, `bracketScreen.test.js` extended. Totals at close, from a full run with the local database reset from empty: pgTAP 979 assertions across 28 files; JS 2788 tests across 113 files; ESLint and Prettier clean.
+
+**Mutation-verified:** 82 mutants from `test-auditor`, plus about 15 from the session. Every surviving mutant was closed with a test: reload-after-save (proven by making the fake return row COPIES), stuck-busy paths, double submit, two tied slots, the 120 boundary, the ctid-based no-op, the helper's security-definer mode, and the null-seat guard on both seats.
+
+**Review cycle:** six reviewers, zero blocking findings in the final state.
+
+- **schema-guardian:** PASS. Rollback and reapply verified live in a transaction. Found that the CHECK used `btrim()` (spaces only) while the RPC trimmed the full set; fixed. The "no-op" claim was false (the row was still written); fixed by skipping the UPDATE.
+- **security-reviewer:** clean. No oracle; no anon or PUBLIC execute; `change_reason` cannot leak. Noted that reasons become public via `get_scoring_record` (see Decisions).
+- **scoring-auditor:** no blocking; 8 non-blocking (helper status guard, one shared participant rule, orientation taken from the match, no-op re-record, failed-refetch message). All fixed.
+- **code-reviewer:** no blocking. Brittle error-message matching replaced by hints; unused declarations removed; a detached comment and a shared draft reset fixed.
+- **ui-accessibility-reviewer:** 2 blocking, both fixed: controls stayed operable while saving, so the toast could name the wrong team or hide a failed save; and legend contrast of 4.16:1 in dark theme. 7 non-blocking, all fixed. Checked at 360px in a real browser: a 48-character unbroken team name wraps with no overflow, a validation error takes focus, and recording works.
+- **test-auditor:** 2 blocking test gaps, both fixed: reload-after-save was proven only by a fake that returned live rows; stuck-busy paths were untested. Non-blocking items also fixed.
+- **module-boundary-checker** was not run as its own agent: the change adds nothing under `src/core/`, `code-reviewer` checked the boundary by grep (nothing in `src/core` imports `btc`; no core primitive reimplemented), and the project's rule is satisfied by that check.
+
+**Not covered (ROADMAP "Known open items from T-BTC.knockout-tiebreak (2026-10-09)"):** `btc_matches_write` is `FOR ALL` (direct writes to the tie-break columns are only CHECK-guarded); no two-session test of `record_btc_tiebreak`'s row lock; no projector or results surface shows the tie-break yet (T-BTC.3).
+
+**Non-member read:** the tie-break columns sit on `btc_matches`, whose RLS policy is unchanged. The existing non-member test in `012_btc_tables.sql` (line 105, zero rows) covers the table, and 027 does not add a column-specific one.
+
+**Files touched:** `supabase/migrations/20261009110000_btc_knockout_tiebreak.sql` (new), `supabase/tests/027_btc_tiebreak.sql` (new), `supabase/tests/018_score_log_column_coverage.sql`, `src/formats/btc/tiebreak.js` (new), `tiebreak.test.js` (new), `bracket.js`, `bracket.test.js`, `podium.js`, `podium.test.js`, `bracketScreen.js` / `.css` / `.test.js` / `.preview.html`, `matchesScreen.css`, `src/formats/btc/CLAUDE.md`, `ROADMAP.md`, `CHANGELOG.md`, `package.json` (3.0.28 → 3.0.29). `package-lock.json` was deliberately not touched; its version fields already read 3.0.17 before this task and were left as they were.
+
+**Closed in ROADMAP:** "A tied knockout match has no resolution path (gap 1)" from "Known open items from T-HARDEN.btc-bracket-podium". The CLOSED note says the cloud push is pending.
+
+**Follow-up:**
+
+- `CONVENTIONS.md` was not touched. Candidate for backfill: "key RPC error handling on a machine-readable hint, never on message wording" (the client keys on the hint, and the SQL pins it in 016/027).
+- The open items are in ROADMAP's new section.
+
+---
+
 ## T-HARDEN.btc-bracket-podium: A BTC podium, and a knockout re-confirmed as a tie no longer leaves its old winner in the bracket · 2026-10-09
 
 **Task:** T-HARDEN.btc-bracket-podium. Not a handoff §14 task: BTC is out-of-handoff (see ROADMAP's BTC section). Branch `feat/btc-bracket-podium`.
