@@ -30,10 +30,15 @@ export function renderScreenFrame() {
 
 // Puts a page-change ring in a screen's footer, counting down `durationMs` from now: the room's cue that this
 // screen is about to give way. Returns the ring; the screen calls its `destroy()` when it is torn down.
-export function mountFooterRing(frame, durationMs) {
-  const ring = createProgressRing();
+// A caller that owns a long-lived ring (core/stagePageLoop.js reuses one across pages) passes it, and the
+// instant the hold began, so the ring is drawn the same way everywhere.
+export function mountFooterRing(
+  frame,
+  durationMs,
+  { ring = createProgressRing(), startedAt = Date.now() } = {},
+) {
   frame.footerEnd.replaceChildren(ring.el);
-  ring.run({ durationMs, startedAt: Date.now() });
+  ring.run({ durationMs, startedAt });
   return ring;
 }
 

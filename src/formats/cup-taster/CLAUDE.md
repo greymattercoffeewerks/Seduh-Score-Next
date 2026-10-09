@@ -147,6 +147,8 @@ body (see the projector redesign entry below).
 
 `liveSession.js`'s publish machinery (the `publish_live_session` handler's read-failure classification, snapshot ordering and RPC error mapping, and `publishLiveSession`'s enqueue-then-flush) moved to `core/publishIntent.js` (T-BTC.live-publish, 2026-10-09) when BTC needed the same thing; only this format's own payload (`buildLiveSessionPayload`) stays here (the "test event gone is a no-op" rule moved to core too). Behaviour is unchanged (the 48 tests in `liveSession.test.js` pass untouched).
 
+Since T-BTC.venue-vocabulary (2026-10-09) `projectorScreens.js` builds its standings pages, champion block, "being scored" support line and idle loop from `core/stageVocabulary.js` and `core/stagePageLoop.js` (classes `stage-*`). `projectorScreens.css` keeps the heat, station, clock, up-next and compact many-station rules (and the `.stage-title` refinements for them); the score and time columns' widths are set through the column spec in `projectorScreens.js`. `kicker`/`bigTitle` are no longer exported here (the line above that says so is history); `projectorMoments.js` uses `stageKicker`/`stageTitle`. Rendered output is the same apart from the class names, the value cells' shared class and their inline widths. The tie words (" (tied)", " (advancing)"), the station cards, the podium line and the heat and up-next screens stay here: their meaning is Cup Taster's, and BTC's screens differ.
+
 `demoActiveHeatPayload` (2026-08-28, closing the handoff's cross-surface Playwright AC)
 — `buildActiveHeatPayload()`, extracted from `phoneSummary.preview.html`/
 `projectorSurface.preview.html`'s near-identical inline demo builders on its 2nd verbatim

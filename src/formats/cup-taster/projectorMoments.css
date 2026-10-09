@@ -1,7 +1,8 @@
 /*
  * Cup Taster's venue-display moments (projectorMoments.js): "Result recorded" (a heat's results, placed) and
  * "Rank impact" (what that did to the top of the table). Drawn inside core/stageDisplay.css's frame, reusing
- * projectorScreens.css's cards, title and kicker and core/stageMoments.css's movement rows and rise-in;
+ * projectorScreens.css's station cards, core/stageVocabulary.css's title and kicker and
+ * core/stageMoments.css's movement rows and rise-in;
  * token-only and sized in --stage-fit like every screen. Bounded by design (a heat of six stations, at most
  * eight rows of table), so nothing overflows.
  */
