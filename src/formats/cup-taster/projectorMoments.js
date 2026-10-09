@@ -24,7 +24,8 @@ import { renderScreenFrame, mountFooterRing } from '../../core/stageDisplay.js';
 import { revealOnMount } from '../../core/stageReveal.js';
 import { renderMovementRows } from '../../core/rankMovementRows.js';
 import { rank } from '../../core/ranking.js';
-import { rankMovement, sharedPositions } from '../../core/rankMovement.js';
+import { sharedPositions } from '../../core/rankMovement.js';
+import { rankImpactRows, leadMovement } from '../../core/rankImpact.js';
 import { ordinalLabel } from '../../core/ordinal.js';
 import { formatDuration } from '../../core/duration.js';
 import { formatHeatName, byRunningOrder } from './heats.js';
@@ -35,13 +36,6 @@ import { upNextLine, MAX_ROOMY_STATIONS } from './projectorScreens.js';
 // Long enough to read a heat's results, short enough that the room is not waiting on the screen.
 export const RESULT_HOLD_MS = 6_000;
 export const RANK_HOLD_MS = 8_000;
-// The rank screen is about the top of the table: places up to this one, ties included, capped by the maximum.
-const RANK_TOP_PLACE = 5;
-const RANK_MAX_ROWS = 8;
-// Two co-leaders' names together longer than this are not strung into one headline (it would not fit the
-// screen): the headline says how many share the lead instead.
-const HEADLINE_NAMES_MAX_CHARS = 40;
-
 // ---------- reading two snapshots ----------
 
 const heatKey = (heat) => `${heat.stageKind}|${heat.kind ?? 'normal'}|${heat.heatNumber}`;
@@ -55,43 +49,35 @@ const inRunningOrder = (a, b) =>
   );
 
 function headlineFor(previous, next) {
-  const leadersOf = (standings) =>
-    (standings ?? []).filter((row) => row.position === 1 && hasPlayed(row));
-  const leaders = leadersOf(next.standings);
-  if (leaders.length === 0) return null;
-  if (leaders.length === 1) {
-    const [leader] = leaders;
-    const before = leadersOf(previous.standings);
-    const stays = before.length === 1 && before[0].displayName === leader.displayName;
-    return stays ? `${leader.displayName} stays in front` : `${leader.displayName} takes the lead`;
+  const lead = leadMovement(previous.standings, next.standings, {
+    keyOf: (row) => row.displayName,
+    positionOf: (row) => row.position,
+    labelOf: (row) => row.displayName,
+    isRanked: hasPlayed,
+  });
+  if (!lead) return null;
+  if (lead.kind === 'sole') {
+    return lead.unchanged ? `${lead.label} stays in front` : `${lead.label} takes the lead`;
   }
-  const names = leaders.map((row) => row.displayName);
-  return leaders.length === 2 && names.join('').length <= HEADLINE_NAMES_MAX_CHARS
-    ? `${names[0]} and ${names[1]} share the lead`
-    : `${leaders.length} cuppers share the lead`;
+  // Two co-leaders are named when both fit one line, otherwise only counted (a long headline would not fit).
+  return lead.namedTogether
+    ? `${lead.labels[0]} and ${lead.labels[1]} share the lead`
+    : `${lead.count} cuppers share the lead`;
 }
 
 function rankImpact(previous, next, afterHeat) {
-  const standings = next.standings ?? [];
-  const movement = rankMovement(previous.standings, standings, {
+  const impact = rankImpactRows(previous.standings, next.standings, {
     keyOf: (row) => row.displayName,
     positionOf: (row) => row.position,
+    labelOf: (row) => row.displayName,
     isRanked: hasPlayed,
   });
-  if (!movement) return null;
+  if (!impact) return null;
   const headline = headlineFor(previous, next);
-  const ranked = standings.filter(hasPlayed);
-  const shared = sharedPositions(ranked, (row) => row.position);
-  const top = ranked.filter((row) => row.position <= RANK_TOP_PLACE);
-  const rows = top.slice(0, RANK_MAX_ROWS).map((row) => ({
-    position: row.position,
-    displayName: row.displayName,
-    tied: shared.has(row.position),
-    ...movement.get(row.displayName),
-  }));
+  const rows = impact.rows.map((row) => ({ ...row, displayName: row.label }));
   // A heat that did not touch the top of the table has nothing to say about it.
-  if (!headline || !rows.some((row) => row.change !== 'same')) return null;
-  return { headline, afterHeat, rows, more: top.length - rows.length };
+  if (!headline || !impact.moved) return null;
+  return { headline, afterHeat, rows, more: impact.more };
 }
 
 // previous, next: two live payloads. Returns the moments for core/momentPlayer.js: [{ screen, payload }].
@@ -176,7 +162,7 @@ const rankMoment = {
     host.append(frame.el);
     frame.main.replaceChildren(
       stageKicker('Rank impact'),
-      el('h2', { className: 'stage-title projector-move-title', text: headline }),
+      el('h2', { className: 'stage-title stage-move-title', text: headline }),
       revealOnMount(
         renderMovementRows(
           rows.map((row) => ({ ...row, label: row.displayName })),

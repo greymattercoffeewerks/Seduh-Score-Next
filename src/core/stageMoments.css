@@ -112,3 +112,14 @@
     transform: none;
   }
 }
+
+/* The headline of a rank-impact screen: at most two lines, so eight movement rows still fit under it. Two
+   classes, so it beats .stage-title (stageVocabulary.css) whatever order the sheets load in. */
+.stage-title.stage-move-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  margin: 0 0 calc(3 * var(--stage-fit));
+  font-size: max(1.5rem, calc(8.2 * var(--stage-fit)));
+}
