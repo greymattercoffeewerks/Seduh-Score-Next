@@ -1,0 +1,221 @@
+/*
+ * BTC's venue-display screens (projectorScreens.js, projectorMoments.js): a two-sided match card (up next and
+ * result), the knockout bracket and the pieces that sit on them. The shared vocabulary (kicker, title, standings
+ * page, champion block) is core/stageVocabulary.css; the frame is core/stageDisplay.css. Token-only, so
+ * data-surface="stage" repaints it, and every size comes from --stage-fit (1% of the screen AREA's height, see
+ * stageDisplay.css) or a vw width, so the layout scales to whatever screen the room has. Every screen is
+ * bounded by design (two sides, at most four quarterfinal slots, and a slot's words sit in its rows, never under
+ * them, so what a slot says never changes its height), so nothing overflows.
+ *
+ * Meaning is carried by words, never by colour alone: the side that goes through says so in its label, a tie
+ * decided by the organiser says so in a chip, and a bracket slot says "Through" or "Level" beside the team. Gold is a FILL (a chip with its contrast colour), never a text
+ * colour (DESIGN.md).
+ */
+
+/* ---------- up next and result: two sides ---------- */
+.btc-stage-vs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: 2vw;
+  margin-top: calc(3 * var(--stage-fit));
+}
+
+.btc-stage-vs-mark {
+  align-self: center;
+  color: var(--color-text-secondary);
+  font-family: var(--font-display);
+  font-size: max(1.25rem, calc(6 * var(--stage-fit)));
+  letter-spacing: 0.06em;
+}
+
+.btc-stage-side {
+  display: flex;
+  flex-direction: column;
+  gap: calc(1.4 * var(--stage-fit));
+  padding: calc(3 * var(--stage-fit)) 1.6vw;
+  background: var(--color-surface);
+  border: var(--border-hairline) solid var(--color-border);
+  min-width: 0;
+}
+
+/* The side that goes through wears the heavy outline, and says so in words. */
+.btc-stage-side[data-winner='true'] {
+  border: var(--border-strong) solid var(--color-accent);
+}
+
+.btc-stage-side-label {
+  color: var(--color-accent);
+  font-size: max(0.875rem, calc(3.2 * var(--stage-fit)));
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.btc-stage-side[data-winner='false'] .btc-stage-side-label,
+.btc-stage-side:not([data-winner]) .btc-stage-side-label {
+  color: var(--color-text-secondary);
+}
+
+.btc-stage-side-name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: max(1.5rem, calc(8 * var(--stage-fit)));
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.btc-stage-side[data-winner='false'] .btc-stage-side-name {
+  color: var(--color-text-secondary);
+}
+
+.btc-stage-points {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: max(2.5rem, calc(19 * var(--stage-fit)));
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.btc-stage-side[data-winner='false'] .btc-stage-points {
+  color: var(--color-text-secondary);
+}
+
+.btc-stage-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(1 * var(--stage-fit)) 0.8vw;
+}
+
+.btc-stage-chip {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  padding: calc(0.5 * var(--stage-fit)) 0.9vw;
+  border: var(--border-hairline) solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: max(0.875rem, calc(3.2 * var(--stage-fit)));
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* The organiser's tie-break decision: a gold fill with its contrast colour, never gold text. */
+.btc-stage-chip[data-kind='tiebreak'] {
+  background: var(--color-gold);
+  border-color: var(--color-gold);
+  color: var(--color-gold-contrast);
+}
+
+.btc-stage-judges,
+.btc-stage-note {
+  margin: calc(4 * var(--stage-fit)) 0 0;
+  color: var(--color-text-secondary);
+  font-size: max(1rem, calc(4 * var(--stage-fit)));
+}
+
+/* ---------- bracket ---------- */
+.btc-stage-bracket {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2.2vw;
+  height: 100%;
+  margin-top: calc(2 * var(--stage-fit));
+}
+
+.btc-stage-round {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  gap: calc(1.4 * var(--stage-fit));
+  min-height: 0;
+}
+
+.btc-stage-round-head {
+  color: var(--color-text-secondary);
+  font-size: max(0.875rem, calc(3.3 * var(--stage-fit)));
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.btc-stage-slot {
+  background: var(--color-surface);
+  border: var(--border-hairline) solid var(--color-border);
+  font-size: max(0.95rem, calc(4.2 * var(--stage-fit)));
+  font-variant-numeric: tabular-nums;
+}
+
+.btc-stage-slot[data-played='true'] {
+  border-color: var(--color-border-strong);
+}
+
+.btc-stage-slot-label {
+  display: block;
+  padding: calc(0.6 * var(--stage-fit)) 1vw 0;
+  color: var(--color-accent);
+  font-size: max(0.8rem, calc(3 * var(--stage-fit)));
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.btc-stage-slot-team {
+  display: flex;
+  justify-content: space-between;
+  gap: 1vw;
+  padding: calc(0.9 * var(--stage-fit)) 1vw;
+  color: var(--color-text-secondary);
+}
+
+.btc-stage-slot-team + .btc-stage-slot-team {
+  border-top: var(--border-hairline) solid var(--color-border);
+}
+
+/* The team that went through is written in full strength and bold; the other is dimmer, and the total says
+   the rest. */
+.btc-stage-slot-team[data-winner='true'] {
+  color: var(--color-text);
+  font-weight: var(--font-weight-bold);
+}
+
+/* A seat still to be filled: dimmer than a team, but readable (the muted text colour is below AA at this size). */
+.btc-stage-slot-team[data-tbd='true'] {
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+
+.btc-stage-slot-team > span:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.btc-stage-slot-team > span:last-child {
+  flex: none;
+}
+
+/* What the slot says about a team, in words, in its row: who went through ("Through", "Champion", "Third"), a
+   match that is level, or that the organiser decided it (a gold fill with its contrast colour, as on the result
+   screen, never gold text). */
+.btc-stage-slot-mark {
+  flex: none;
+  align-self: center;
+  color: var(--color-accent);
+  font-size: max(0.75rem, calc(2.8 * var(--stage-fit)));
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.btc-stage-slot-mark[data-kind='level'] {
+  color: var(--color-text-secondary);
+}
+
+.btc-stage-slot-mark[data-kind='tiebreak'] {
+  padding: calc(0.2 * var(--stage-fit)) 0.6vw;
+  background: var(--color-gold);
+  color: var(--color-gold-contrast);
+}

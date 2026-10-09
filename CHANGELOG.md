@@ -1,3 +1,26 @@
+## T-BTC.projector-screens: the BTC venue display (stage 3c of the BTC live surfaces) · 2026-10-09
+
+**Task:** T-BTC.projector-screens. Not a handoff §14 task: BTC is out-of-handoff. The third part of stage 3: BTC's own projector screens, built on the vocabulary (3a) and display lifecycle (3b) already merged. The phone view (stage 4) is next.
+
+**Status: in review, not merged.** No migration. The phone still shows "Event not published yet" for a BTC session.
+
+**What it shows** (`src/formats/btc/projectorScreens.js`, `projectorMoments.js`, `projectorBody.js`, registered for `btc` in `src/liveSurfaces.js`):
+
+- **Idle loop** (10 s a page, a ring counting down): up next (round, both teams, judges; in the knockout "1st meets 8th" with each team's place in the table), the bracket once there is one, then the standings in pages of eight with a tie kept together. The standings footer says "top 8 qualify" and, when teams that have played share the place at the cut-off, "tie for 8th" (the bracket refuses to generate until that is settled).
+- **Result recorded** (8 s) after a confirm: both totals, what each is made of (tokens, +5, +2 fastest, +2 signature beverage), who won in words (Winner/Lost, Goes through/Out, a semifinal's loser "Plays for third place", Champion/Runner-up, Third place/Fourth place) and a gold tie-break chip with the organiser's typed reason. A level knockout says it is level and what the organiser is deciding (who goes through / takes the title / takes third place); a level preliminary just says level.
+- **Rank impact** (8 s), preliminary results only: a headline (a new leader, new co-leaders, the biggest climb, a newcomer) over the top five places with Up/Down/New/Holds. Several results arriving together say "after N new results" instead of naming one match.
+- **Bracket page**: each slot says, in its rows (never under them, so a slot's height never depends on what it says), "Through", "Champion"/"Third", "Through · tie-break" (gold fill) or "Level" on both teams; the kicker counts level slots awaiting the organiser.
+- **Champion**: once the final is decided (60 s minimum; only news pre-empts it): name, final score ("decided by tie-break" when it was), the decided podium places.
+- A result is announced again when its `confirmedAt` moves (re-scored, or a tie-break recorded: `record_btc_tiebreak` bumps `updated_at`). Nothing is announced on the snapshot a display opens on, or across events.
+
+**Core (second use, so extracted):** `core/rankImpact.js` (`rankImpactRows`, `leadMovement`, `topMover`) holds the rank-impact rows, the lead and co-leader facts and the biggest-mover choice; Cup Taster is migrated onto it (its headlines and rows are unchanged). `.stage-title.stage-move-title` (the two-line headline clamp) moved from Cup Taster's CSS to `core/stageMoments.css`.
+
+**Verified:** the real assembler's output drives every screen (`demoLivePayload.js`, demo-only, imported by tests and `projectorSurface.preview.html` only). The preview harness was walked through every screen in a real browser at 16:9, 720p and 4:3 with 51-character names (no overflow, except an extreme champion name at 4:3; a realistic 31-character name fits) and with bracket slots all tie-broken or level. Cup Taster's rank screen computes to the same style as before. 3196 tests; lint and Prettier clean.
+
+**Reviews (all five found something):** module-boundary-checker (no import violations; the lead and climber headline logic and the rank guard were copied from Cup Taster, so extracted as above), code-reviewer, scoring-auditor, ui-accessibility-reviewer, test-auditor (150 hand mutants, 11 survivors; each now killed by an assertion). Fixed from them: a level preliminary was told the organiser would decide it; a semifinal's loser read "Out"; "1 tokens"; "top 8 go through" over an open tie; a rank screen after several results named one match; "Seed N" used the standings place (now "3rd in the table", see ROADMAP); bracket winners and level slots had no words; the tie-break note grew a slot until four of them overflowed the page; a long unbroken tie-break reason escaped its chip; "To be decided" was below AA contrast; small type at 720p; a climb into a shared place now says "joint".
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-BTC.projector-screens".
+
 ## T-BTC.display-lifecycle: a venue display belongs to one event's session (stage 3b of the BTC live surfaces) · 2026-10-09
 
 **Task:** T-BTC.display-lifecycle. Not a handoff §14 task: BTC is out-of-handoff. Closes the open item recorded under T-BTC.live-routing ("a body outlives its session row"), before the BTC projector's own display joins Cup Taster's. Branch `feat/btc-display-lifecycle`.

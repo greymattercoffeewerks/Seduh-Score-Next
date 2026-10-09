@@ -9,10 +9,12 @@ import { mountStageSurface } from './core/stageSurface.js';
 import { mountViewerShell } from './core/viewer-shell.js';
 import { createFormatBody } from './core/formatBody.js';
 import { createProjectorBody } from './formats/cup-taster/projectorBody.js';
+import { createBtcProjectorBody } from './formats/btc/projectorBody.js';
 import { mountViewerBody, hasViewableContent } from './formats/cup-taster/viewerBody.js';
 
 export const PROJECTOR_BODIES = {
   cup_taster: () => createProjectorBody(),
+  btc: () => createBtcProjectorBody(),
 };
 
 export const PHONE_BODIES = {

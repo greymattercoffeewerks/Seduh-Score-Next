@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BTC projector surface — preview</title>
+    <link rel="stylesheet" href="/src/ui/tokens/index.css" />
+    <link rel="stylesheet" href="/src/core/viewer-shell.css" />
+    <link rel="stylesheet" href="/src/core/stageDisplay.css" />
+    <link rel="stylesheet" href="/src/core/stageSurface.css" />
+    <link rel="stylesheet" href="/src/core/stageMoments.css" />
+    <link rel="stylesheet" href="/src/core/stageVocabulary.css" />
+    <link rel="stylesheet" href="/src/formats/btc/projectorScreens.css" />
+    <style>
+      /* Demo-harness-only layout — not part of the shipped module graph. The real surface fills the screen
+         and every size in it is in --stage-fit/vw, so the harness gives it the whole browser window (resize
+         the window to try a 1080p, 720p or 4:3 screen) and floats its buttons over the bottom edge. */
+      body {
+        margin: 0;
+      }
+      .demo-controls {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 50;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 8px 12px;
+        background: rgba(0, 0, 0, 0.85);
+        font-family: var(--font-body);
+      }
+      .demo-controls button {
+        min-height: 36px;
+        padding: 4px 10px;
+        border: 1px solid #8fa7a9;
+        background: #16393a;
+        color: #f2f7f6;
+        font-family: var(--font-body);
+        font-size: 13px;
+        cursor: pointer;
+      }
+      #projector-frame {
+        height: 100vh;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      Demo-only harness for the BTC venue display — not part of the shipped module graph, same role as every
+      other *.preview.html file. Mounts the REAL mountProjector() (src/liveSurfaces.js, the same mount
+      /live/projector uses) against a fake live_sessions source whose rows are payloads built by the REAL
+      assembler (demoLivePayload.js), so each screen is shown on exactly the shape production publishes. A
+      button per screen; "Result + ..." buttons publish the table as it stood and then, a moment later, the next
+      snapshot, the way a confirm does. Resize the window to try other screen shapes.
+    -->
+    <div class="demo-controls">
+      <button id="btn-upnext">Preliminary (12 of 28)</button>
+      <button id="btn-fresh">Preliminary (none played)</button>
+      <button id="btn-long">Standings, 12 teams (pages)</button>
+      <button id="btn-result">Result recorded</button>
+      <button id="btn-rank">Result + rank impact</button>
+      <button id="btn-knockout">Knockout, quarterfinals</button>
+      <button id="btn-bracket">Knockout, 2 of 4 quarters played</button>
+      <button id="btn-semi">Knockout, semifinals up next</button>
+      <button id="btn-ko-result">Knockout result</button>
+      <button id="btn-level">Level, undecided</button>
+      <button id="btn-tiebreak">Tie-break decided</button>
+      <button id="btn-final-result">Final result</button>
+      <button id="btn-third">Final decided, third place to play</button>
+      <button id="btn-champion">Champion</button>
+      <button id="btn-setup">Setup (nothing yet)</button>
+      <button id="btn-test-event">As TEST event</button>
+      <button id="btn-end">End session</button>
+    </div>
+    <div id="projector-frame"></div>
+
+    <script type="module">
+      import { mountProjector } from '../../liveSurfaces.js';
+      import { preliminaryPayload, knockoutPayload } from './demoLivePayload.js';
+      import { detectBtcMoments } from './projectorMoments.js';
+
+      const ORG_ID = 'org1';
+      const EVENT_ID = 'ev1';
+
+      function createDemoClient() {
+        const db = { live_sessions: [], events: [{ id: EVENT_ID, org_id: ORG_ID }] };
+        const changeHandlers = [];
+        let idCounter = 0;
+        const builderFor = (table) => {
+          const filters = [];
+          const builder = {
+            select: () => builder,
+            eq(col, val) {
+              filters.push([col, val]);
+              return builder;
+            },
+            order: () => builder,
+            limit: () => builder,
+            maybeSingle() {
+              const rows = db[table].filter((r) => filters.every(([c, v]) => r[c] === v));
+              return Promise.resolve({ data: rows[0] ?? null, error: null });
+            },
+          };
+          return builder;
+        };
+        const channelObj = {
+          on(_event, _filter, handler) {
+            changeHandlers.push(handler);
+            return channelObj;
+          },
+          subscribe(cb) {
+            Promise.resolve().then(() => cb('SUBSCRIBED'));
+            return channelObj;
+          },
+        };
+        return {
+          from: builderFor,
+          channel: () => channelObj,
+          removeChannel: () => {},
+          _publish({ isTest = false, payload }) {
+            let row = db.live_sessions.find((r) => r.event_id === EVENT_ID);
+            if (!row) {
+              idCounter += 1;
+              row = { id: `ls-${idCounter}`, org_id: ORG_ID, event_id: EVENT_ID };
+              db.live_sessions.push(row);
+            }
+            Object.assign(row, { format: 'btc', active: true, is_test: isTest, payload });
+            for (const h of changeHandlers) h();
+          },
+          _end() {
+            for (const row of db.live_sessions) row.active = false;
+            for (const h of changeHandlers) h();
+          },
+        };
+      }
+
+      const client = createDemoClient();
+      mountProjector(document.getElementById('projector-frame'), { orgId: ORG_ID, client });
+
+      let isTest = false;
+      let last = null;
+      const publish = (payload) => {
+        last = payload;
+        client._publish({ isTest, payload });
+      };
+      // Publish the "before" snapshot, then the "after" a moment later: the display announces the change.
+      const publishThen = (before, after) => {
+        publishFresh(before);
+        setTimeout(() => publish(after), 1500);
+      };
+      // A static screen: the session ends for a moment first, so the display starts from a clean baseline and
+      // does not announce the difference from whatever the last button showed.
+      function publishFresh(payload) {
+        client._end();
+        setTimeout(() => publish(payload), 120);
+      }
+      const on = (id, handler) => document.getElementById(id).addEventListener('click', handler);
+
+      const QUARTERS = {
+        qf1: { tokensA: 40, fastest: 0 },
+        qf2: { tokensA: 24, signature: [true, false] },
+        qf3: { tokensA: 30, tiebreak: { winner: 5, reason: 'Sudden-death cup' } },
+        qf4: { tokensA: 36, fastest: 1, signature: [false, true] },
+      };
+      const THROUGH_SEMIS = { ...QUARTERS, sf1: { tokensA: 34 }, sf2: { tokensA: 26, fastest: 4 } };
+
+      on('btn-upnext', () => publishFresh(preliminaryPayload({ playedCount: 12 })));
+      on('btn-fresh', () => publishFresh(preliminaryPayload({ playedCount: 0 })));
+      on('btn-long', () => {
+        const base = preliminaryPayload({ playedCount: 28 });
+        const extra = ['Cold Brew Club', 'Flat White Fan', 'Mocha Mob', 'Pour Over Pals'];
+        const standings = [
+          ...base.standings,
+          ...extra.map((teamName, i) => ({
+            position: 9 + i,
+            teamName,
+            played: 7,
+            wins: 0,
+            points: 60 - i * 4,
+          })),
+        ];
+        publishFresh({ ...base, upNext: null, thenNext: null, standings });
+      });
+      on('btn-result', () =>
+        publishThen(
+          preliminaryPayload({ playedCount: 12 }),
+          preliminaryPayload({ playedCount: 13 }),
+        ),
+      );
+      on('btn-rank', () => {
+        // The first match in the round robin whose result moves the top of the table.
+        for (let n = 1; n <= 28; n += 1) {
+          const before = preliminaryPayload({ playedCount: n - 1 });
+          const after = preliminaryPayload({ playedCount: n });
+          if (detectBtcMoments(before, after).some((m) => m.screen.key === 'rank') && n > 5) {
+            publishThen(before, after);
+            return;
+          }
+        }
+        console.warn('no match in the demo round robin changes the table');
+      });
+      on('btn-knockout', () => publishFresh(knockoutPayload()));
+      on('btn-bracket', () =>
+        publishFresh(knockoutPayload({ results: { qf1: QUARTERS.qf1, qf2: QUARTERS.qf2 } })),
+      );
+      on('btn-semi', () => publishFresh(knockoutPayload({ results: QUARTERS })));
+      on('btn-ko-result', () =>
+        publishThen(
+          knockoutPayload({ results: { qf1: QUARTERS.qf1 } }),
+          knockoutPayload({ results: { qf1: QUARTERS.qf1, qf2: QUARTERS.qf2 } }),
+        ),
+      );
+      on('btn-level', () =>
+        publishThen(
+          knockoutPayload({ results: { qf1: QUARTERS.qf1 } }),
+          knockoutPayload({ results: { qf1: QUARTERS.qf1, qf3: { tokensA: 30 } } }),
+        ),
+      );
+      on('btn-tiebreak', () =>
+        publishThen(
+          knockoutPayload({ results: { qf1: QUARTERS.qf1, qf3: { tokensA: 30 } } }),
+          knockoutPayload({ results: { qf1: QUARTERS.qf1, qf3: QUARTERS.qf3 } }),
+        ),
+      );
+      on('btn-final-result', () =>
+        publishThen(
+          knockoutPayload({ results: THROUGH_SEMIS }),
+          knockoutPayload({ results: { ...THROUGH_SEMIS, final: { tokensA: 33, fastest: 0 } } }),
+        ),
+      );
+      on('btn-third', () =>
+        publishFresh(knockoutPayload({ results: { ...THROUGH_SEMIS, final: { tokensA: 33 } } })),
+      );
+      on('btn-champion', () =>
+        publishFresh(
+          knockoutPayload({
+            results: {
+              ...THROUGH_SEMIS,
+              final: { tokensA: 33, fastest: 0 },
+              third: { tokensA: 33 },
+            },
+          }),
+        ),
+      );
+      on('btn-setup', () =>
+        publish({ ...preliminaryPayload({ playedCount: 0 }), phase: 'setup', upNext: null }),
+      );
+      on('btn-test-event', () => {
+        isTest = !isTest;
+        if (last) publish(last);
+      });
+      on('btn-end', () => client._end());
+
+      // For poking at in the console (and for checking fit with unusually long names).
+      window.__demo = { publish, publishFresh, publishThen };
+
+      publish(preliminaryPayload({ playedCount: 12 }));
+    </script>
+  </body>
+</html>

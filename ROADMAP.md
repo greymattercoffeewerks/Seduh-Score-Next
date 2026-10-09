@@ -1818,6 +1818,20 @@ _The audience surfaces now serve whichever format is live; no BTC screen exists 
 - **`mountStageSurface`'s `surfaceClass` option has no production caller.** Keep it as a hook or remove it when the BTC projector lands.
 - **BTC payload fields are decided but unbuilt:** recent results ordered by confirmation time (Cup Taster had a bug here), bracket slots with winners and tie-break flags, podium via `derivePodium`, and `is_test` on every publish.
 
+## Known open items from T-BTC.projector-screens (2026-10-09)
+
+_The BTC projector is built (stage 3c); the phone view (stage 4) is not._
+
+- **"Seed" is not published.** `liveSession.js`'s match cards carry the standings place, and `generate_btc_bracket` seeds by `row_number()` with a team-id tie-break, so teams tied on a place get distinct seeds the payload does not carry. The projector therefore says "3rd in the table", never "seed 3". Adding `seed_1`/`seed_2` from `btc_bracket_slots` to the knockout `matchCard` would let it say seed (a small additive payload change; the stage 2 test that pins the exact field set must change with it).
+- **A queued stale moment can still play.** `core/momentPlayer.js` does not supersede an unplayed moment for the same match: a decisive result queued behind another moment and then re-scored to level shows the old card before the new one (bounded by the 8 s hold and the four-moment cap).
+- **The champion screen can outlive a retraction for up to 60 s** if the final disappears with no new result (a match deleted, the bracket regenerated); a re-scored final is covered, because its result moment is urgent.
+- **A very long champion name overflows at 4:3** (a 51-character name; 31 characters fit). `core/stageVocabulary.css`'s `.stage-champion-name` has no clamp and is shared with Cup Taster.
+- **Replaying a demo load on a live display announces old results as new** (it recreates every match with new ids): up to three result moments and a rank moment against the old standings. Test events only.
+- **Cup Taster and BTC still duplicate three small things**: the "what is new since the last snapshot" step of the detectors (the `seen` set, the fresh filter, the oldest-first sort), the result and rank moment mount boilerplate (frame, footer ring, destroy), and the idle loop's "same content, do not restart" signature guard. Extract when a third format needs them or one of them changes; the second-use rule was applied to the rank-impact logic, which carried the most behaviour.
+- **`demoLivePayload.js` reimplements the +5/+2 formula and the standings aggregation** to build fixtures (demo and tests only; it runs through the real assembler). If `scoring.js` or the views change, derive the totals from `scoring.js` or pin them with a test.
+- **Cup Taster's rank screen still renames `label` to `displayName` and back** (a cosmetic round trip); pass `impact.rows` through when its fixtures are next touched. Its headline does not say "joint" for a shared place, BTC's does.
+- **The BTC phone view (stage 4) is not started.** ROADMAP's item "BTC payload fields are decided but unbuilt" is closed for the projector only.
+
 ## Known open items from T-BTC.live-publish (2026-10-09)
 
 _BTC now publishes its live payload automatically; no BTC audience screen exists yet (stages 3 and 4). Most of these are shared with Cup Taster and predate this work; they are listed because BTC makes them more likely._
