@@ -77,13 +77,13 @@ const heatPayload = {
 };
 
 // A body that records its life, for the lifecycle tests (Cup Taster's phone body has nothing to release).
-function recordingBodies({ failRender = false } = {}) {
+function recordingBodies({ failRender = false, hasContent = () => true } = {}) {
   const log = { built: 0, destroyed: 0 };
   const bodies = {
     cup_taster: () => {
       log.built += 1;
       return {
-        hasContent: () => true,
+        hasContent,
         renderBody: (container) => {
           if (failRender) throw new Error('render failed');
           container.append('RECORDED');
@@ -216,6 +216,174 @@ describe('mountProjector', () => {
     }
   });
 
+  it('stops the display when the live session ends, and starts the next one clean', async () => {
+    vi.useFakeTimers();
+    try {
+      const root = document.createElement('div');
+      const payload = { stage: { kind: 'prelims', setCount: 5 }, standings: standings17 };
+      const client = fakeClient(withPayload(payload));
+      const handle = await mountProjector(root, { orgId: 'org1', client });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(vi.getTimerCount()).toBeGreaterThan(0); // the page loop and its ring
+
+      client.setRow(null); // the session ends
+      await vi.advanceTimersByTimeAsync(0);
+      expect(root.textContent).toContain('Waiting for the organiser');
+      expect(vi.getTimerCount()).toBe(0); // nothing keeps running behind the holding card
+
+      client.setRow(withPayload(payload)); // the next session
+      await vi.advanceTimersByTimeAsync(0);
+      expect(root.querySelector('.stage-standings')).not.toBeNull();
+      expect(vi.getTimerCount()).toBeGreaterThan(0);
+      handle.unmount();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('builds a new display for the next session, so it has no memory of the last one', async () => {
+    const { log, bodies } = recordingBodies();
+    const client = fakeClient(cupTasterSession);
+    await mountProjector(document.createElement('div'), { orgId: 'org1', client, bodies });
+    expect(log).toEqual({ built: 1, destroyed: 0 });
+    client.setRow(null);
+    await vi.waitFor(() => expect(log.destroyed).toBe(1));
+    client.setRow(cupTasterSession);
+    await vi.waitFor(() => expect(log.built).toBe(2));
+    expect(log.destroyed).toBe(1);
+  });
+
+  it('keeps the display through a lost connection (the same session is still there), and carries on after it', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { log, bodies } = recordingBodies();
+      const root = document.createElement('div');
+      const client = fakeClient(cupTasterSession);
+      await mountProjector(root, { orgId: 'org1', client, bodies });
+      const realFrom = client.from;
+      // a refresh that fails reads as a lost connection, not as the session ending
+      client.from = (table) => {
+        const builder = realFrom(table);
+        if (table !== 'live_sessions') return builder;
+        return {
+          ...builder,
+          select: () => ({
+            eq: () => ({
+              eq: () => ({
+                maybeSingle: () => Promise.resolve({ data: null, error: new Error('offline') }),
+              }),
+            }),
+          }),
+        };
+      };
+      client.setRow(cupTasterSession);
+      await vi.waitFor(() => expect(root.textContent).toContain('Connection lost'));
+      expect(error).toHaveBeenCalledWith(
+        expect.stringContaining('failed to read live_sessions'),
+        expect.any(Error),
+      );
+      expect(log).toEqual({ built: 1, destroyed: 0 });
+
+      client.from = realFrom;
+      client.setRow(cupTasterSession);
+      await vi.waitFor(() => expect(root.textContent).toContain('RECORDED'));
+      expect(log).toEqual({ built: 1, destroyed: 0 }); // the very same display, not a rebuilt one
+    } finally {
+      error.mockRestore();
+    }
+  });
+
+  it('moving straight from one event to another builds a new display (no gap, so no holding state): the old one is destroyed', async () => {
+    const { log, bodies } = recordingBodies();
+    const client = fakeClient(cupTasterSession);
+    await mountProjector(document.createElement('div'), { orgId: 'org1', client, bodies });
+    client.setRow({ ...cupTasterSession, event_id: 'ev2' });
+    await vi.waitFor(() => expect(log).toEqual({ built: 2, destroyed: 1 }));
+  });
+
+  it('keeps the display while the same event keeps publishing', async () => {
+    const { log, bodies } = recordingBodies();
+    const client = fakeClient(cupTasterSession);
+    await mountProjector(document.createElement('div'), { orgId: 'org1', client, bodies });
+    client.setRow({ ...cupTasterSession });
+    client.setRow({ ...cupTasterSession });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(log).toEqual({ built: 1, destroyed: 0 });
+  });
+
+  it('keeps the display through a moment in which one event has nothing to show (pending), then shows it again', async () => {
+    const { log, bodies } = recordingBodies({ hasContent: (payload) => payload?.ok === true });
+    const root = document.createElement('div');
+    const client = fakeClient({ ...cupTasterSession, payload: { ok: true } });
+    await mountProjector(root, { orgId: 'org1', client, bodies });
+    client.setRow({ ...cupTasterSession, payload: {} });
+    await vi.waitFor(() => expect(root.textContent).toContain('Event not published yet'));
+    client.setRow({ ...cupTasterSession, payload: { ok: true } });
+    await vi.waitFor(() => expect(root.textContent).toContain('RECORDED'));
+    expect(log).toEqual({ built: 1, destroyed: 0 });
+  });
+
+  describe('a new session never inherits the last one’s idea of "what just happened"', () => {
+    const stage = { kind: 'prelims', ordinal: 1, setCount: 7 };
+    const standingRow = (position, displayName) => ({
+      position,
+      displayName,
+      numCorrect: 4,
+      totalElapsedSecs: 200 + position,
+      tieStatus: null,
+    });
+    const standings = [standingRow(1, 'Ayu'), standingRow(2, 'Bima'), standingRow(3, 'Citra')];
+    const before = { eventName: 'E', stage, standings, recentHeats: [] };
+    const after = {
+      ...before,
+      recentHeats: [
+        {
+          heatNumber: 1,
+          kind: 'normal',
+          stageKind: 'prelims',
+          results: [{ displayName: 'Ayu', numCorrect: 5, totalElapsedSecs: 190 }],
+        },
+      ],
+    };
+    const row = (eventId, payload) => ({ ...cupTasterSession, event_id: eventId, payload });
+    const showsResultMoment = (root) => root.textContent.includes('Result recorded');
+
+    it('control: the SAME event publishing a new result does announce it', async () => {
+      const root = document.createElement('div');
+      const client = fakeClient(row('ev1', before));
+      const handle = await mountProjector(root, { orgId: 'org1', client });
+      expect(showsResultMoment(root)).toBe(false);
+      client.setRow(row('ev1', after));
+      await vi.waitFor(() => expect(showsResultMoment(root)).toBe(true));
+      handle.unmount();
+    });
+
+    it('a new event after a gap starts from a clean baseline: no moment is invented from the old snapshot', async () => {
+      const root = document.createElement('div');
+      const client = fakeClient(row('ev1', before));
+      const handle = await mountProjector(root, { orgId: 'org1', client });
+      client.setRow(null);
+      await vi.waitFor(() => expect(root.textContent).toContain('Waiting for the organiser'));
+      client.setRow(row('ev2', after));
+      await vi.waitFor(() => expect(root.querySelector('.stage-display')).not.toBeNull());
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(showsResultMoment(root)).toBe(false);
+      handle.unmount();
+    });
+
+    it('moving straight to another event (no gap at all) also starts from a clean baseline', async () => {
+      const root = document.createElement('div');
+      const client = fakeClient(row('ev1', before));
+      const handle = await mountProjector(root, { orgId: 'org1', client });
+      client.setRow(row('ev2', after));
+      await vi.waitFor(() => expect(root.querySelector('.stage-display')).not.toBeNull());
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(showsResultMoment(root)).toBe(false);
+      handle.unmount();
+    });
+  });
+
   it('destroys the format body when the surface unmounts and when the mount fails', async () => {
     const mounted = recordingBodies();
     const handle = await mountProjector(document.createElement('div'), {
@@ -314,6 +482,17 @@ describe('mountPhone', () => {
 
     client.setRow(cupTasterSession);
     await vi.waitFor(() => expect(root.querySelector('.standings-table')).not.toBeNull());
+  });
+
+  it('releases the format body when the live session ends, and builds a new one for the next', async () => {
+    const { log, bodies } = recordingBodies();
+    const client = fakeClient(cupTasterSession);
+    await mountPhone(document.createElement('div'), { orgId: 'org1', client, bodies });
+    expect(log).toEqual({ built: 1, destroyed: 0 });
+    client.setRow(null);
+    await vi.waitFor(() => expect(log.destroyed).toBe(1));
+    client.setRow(cupTasterSession);
+    await vi.waitFor(() => expect(log.built).toBe(2));
   });
 
   it('destroys the format body when the surface unmounts and gives each mount its own', async () => {
