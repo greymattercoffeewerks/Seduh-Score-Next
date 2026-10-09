@@ -1,3 +1,137 @@
+## T-BTC.phone-view: the BTC phone view (stage 4 of the BTC live surfaces) · 2026-10-10
+
+**Task:** T-BTC.phone-view. Not a handoff §14 task: BTC is out-of-handoff. The last stage of the BTC live surfaces: `/live/phone` for a BTC session now shows BTC's own view instead of "Event not published yet". No migration.
+
+**Status: in review, not merged.**
+
+**What it shows** (`src/formats/btc/viewerBody.js`, `viewerBody.css`, registered for `btc` in `src/liveSurfaces.js`): one scrolling column of cards in the paper theme, 360px first. The champion (with the final score and the decided podium places) once the final is decided; where the event is up to; what is up next (judges, and what follows); the standings, top five with "Show all N teams"; the bracket by round, each match saying what it decided (who went through, a level match waiting for the organiser, the organiser's typed tie-break reason as text); the latest results. With a bracket, the bracket comes before the preliminary table. Everything is read from the payload (nothing about winners, ties or the podium is recomputed).
+
+- **The toggle works in place.** `core/viewer-shell.js` rebuilds the body on every live update, and its body is a polite live region, so the choice ("show all") lives in the body's closure (one body per event, `core/formatBody.js`), the rows past the top five are in the page `hidden` until asked for, and a tap shows or hides them without rebuilding the column (a rebuild would have a screen reader read the whole page again). Keyboard focus on the toggle is carried across the shell's rebuild through the cleanup the shell calls just before it clears (the only moment the old toggle is still in the page), and is dropped, not saved for later, when the shell paints a holding card instead.
+- **`words.js`** (new) holds what both BTC audience surfaces say: the band, "has something to show", the up-next, judges, then and progress lines, the standings heading, "(tied)", the decided podium places, the tie-break text, the outcome of a result and of a bracket slot, the final score line, "top 8 qualify". The projector now uses it too (its behaviour is unchanged; its 500+ tests pass untouched apart from where the imports moved), so the two surfaces can never word the same fact differently. `hasBtcPublicContent` is the one payload predicate the projector's screen selector and the phone's shell predicate both ask.
+- **`core/viewer-shell.css`**: the TEST banner is now sticky at the top of the screen while it is showing (`.viewer-banner-host:not(:empty)`). A long phone page scrolls (the BTC champion page is about 2400px at 360px), and a banner that scrolled away left nothing on screen saying the data is not real (D9). A real event has no banner, so nothing is reserved; the projector does not scroll. Cup Taster's phone gets it too. A stylesheet guard pins it.
+
+**Verified:** `viewerBody.preview.html` (a button per state, built from the real assembler's output through the real `mountPhone`) in a real browser at 360px: every state, the in-place toggle with focus kept, the "show all" choice surviving a same-event live update and resetting for a new event, the sticky TEST banner after scrolling, no horizontal overflow. 3263 tests; lint and Prettier clean.
+
+**Reviews (all four found something):** module-boundary-checker (no import violations; the "shared words" claim was not yet true for several phrases, now moved into `words.js`; the phone no longer depends on the projector module), code-reviewer, ui-accessibility-reviewer (a toggle tap re-announced the whole page, its label changed while `aria-expanded` doubled it, the TEST banner scrolled away, headings lost their context, "7 wins" wrapped at 320px, the table had no accessible name), test-auditor (91 hand mutants; the survivors are killed by new assertions). Also fixed from them: a stale toggle that stayed after the table shrank, an empty status card, a bracket with no `rounds` throwing in `renderBody`, a played slot with no totals reading "A – B", and a stale focus flag surviving a holding card.
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-BTC.phone-view".
+
+## T-BTC.projector-screens: the BTC venue display (stage 3c of the BTC live surfaces) · 2026-10-09
+
+**Task:** T-BTC.projector-screens. Not a handoff §14 task: BTC is out-of-handoff. The third part of stage 3: BTC's own projector screens, built on the vocabulary (3a) and display lifecycle (3b) already merged. The phone view (stage 4) is next.
+
+**Status: in review, not merged.** No migration. The phone still shows "Event not published yet" for a BTC session.
+
+**What it shows** (`src/formats/btc/projectorScreens.js`, `projectorMoments.js`, `projectorBody.js`, registered for `btc` in `src/liveSurfaces.js`):
+
+- **Idle loop** (10 s a page, a ring counting down): up next (round, both teams, judges; in the knockout "1st meets 8th" with each team's place in the table), the bracket once there is one, then the standings in pages of eight with a tie kept together. The standings footer says "top 8 qualify" and, when teams that have played share the place at the cut-off, "tie for 8th" (the bracket refuses to generate until that is settled).
+- **Result recorded** (8 s) after a confirm: both totals, what each is made of (tokens, +5, +2 fastest, +2 signature beverage), who won in words (Winner/Lost, Goes through/Out, a semifinal's loser "Plays for third place", Champion/Runner-up, Third place/Fourth place) and a gold tie-break chip with the organiser's typed reason. A level knockout says it is level and what the organiser is deciding (who goes through / takes the title / takes third place); a level preliminary just says level.
+- **Rank impact** (8 s), preliminary results only: a headline (a new leader, new co-leaders, the biggest climb, a newcomer) over the top five places with Up/Down/New/Holds. Several results arriving together say "after N new results" instead of naming one match.
+- **Bracket page**: each slot says, in its rows (never under them, so a slot's height never depends on what it says), "Through", "Champion"/"Third", "Through · tie-break" (gold fill) or "Level" on both teams; the kicker counts level slots awaiting the organiser.
+- **Champion**: once the final is decided (60 s minimum; only news pre-empts it): name, final score ("decided by tie-break" when it was), the decided podium places.
+- A result is announced again when its `confirmedAt` moves (re-scored, or a tie-break recorded: `record_btc_tiebreak` bumps `updated_at`). Nothing is announced on the snapshot a display opens on, or across events.
+
+**Core (second use, so extracted):** `core/rankImpact.js` (`rankImpactRows`, `leadMovement`, `topMover`) holds the rank-impact rows, the lead and co-leader facts and the biggest-mover choice; Cup Taster is migrated onto it (its headlines and rows are unchanged). `.stage-title.stage-move-title` (the two-line headline clamp) moved from Cup Taster's CSS to `core/stageMoments.css`.
+
+**Verified:** the real assembler's output drives every screen (`demoLivePayload.js`, demo-only, imported by tests and `projectorSurface.preview.html` only). The preview harness was walked through every screen in a real browser at 16:9, 720p and 4:3 with 51-character names (no overflow, except an extreme champion name at 4:3; a realistic 31-character name fits) and with bracket slots all tie-broken or level. Cup Taster's rank screen computes to the same style as before. 3196 tests; lint and Prettier clean.
+
+**Reviews (all five found something):** module-boundary-checker (no import violations; the lead and climber headline logic and the rank guard were copied from Cup Taster, so extracted as above), code-reviewer, scoring-auditor, ui-accessibility-reviewer, test-auditor (150 hand mutants, 11 survivors; each now killed by an assertion). Fixed from them: a level preliminary was told the organiser would decide it; a semifinal's loser read "Out"; "1 tokens"; "top 8 go through" over an open tie; a rank screen after several results named one match; "Seed N" used the standings place (now "3rd in the table", see ROADMAP); bracket winners and level slots had no words; the tie-break note grew a slot until four of them overflowed the page; a long unbroken tie-break reason escaped its chip; "To be decided" was below AA contrast; small type at 720p; a climb into a shared place now says "joint".
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-BTC.projector-screens".
+
+## T-BTC.display-lifecycle: a venue display belongs to one event's session (stage 3b of the BTC live surfaces) · 2026-10-09
+
+**Task:** T-BTC.display-lifecycle. Not a handoff §14 task: BTC is out-of-handoff. Closes the open item recorded under T-BTC.live-routing ("a body outlives its session row"), before the BTC projector's own display joins Cup Taster's. Branch `feat/btc-display-lifecycle`.
+
+**Status: in review, not merged.** No migration.
+
+**The problem:** a display remembers the last snapshot so it can tell what just happened (a result recorded, a place gained). Nothing tied that memory to one event, so:
+
+- when no session was active (the organiser ended it) the shell painted its holding card but the format's display kept its page loop, ring and moment timers running behind it; and
+- worse, when the organiser moved from one event to the next the display carried on: `publish_session` swaps the live row in one transaction, the shell never shows a holding state, and the new event's first payload was compared with the old event's last, so a moment could be announced (or missed) for results that belonged to another event.
+
+**What changed:**
+
+- **`core/viewer-shell.js`**: `hasContent` and `renderBody` are now also told the live row's `eventId`; a new optional `onNoContent(phase)` is called each time the shell paints "no live session" (`noEvent`, `notStarted`), idempotently, and a callback that throws is logged, never allowed to leave a refresh half-done. Not for `connecting`, not for a lost connection (a blip must not forget where the display was) and not for `pending` (a row with nothing to show yet: the same event may fill in; a different event shows in its `eventId`).
+- **`core/formatBody.js`**: the live body is keyed on format AND event id, so moving to another event (even in the same format, with no gap) destroys the old body and builds a fresh one; `release()` destroys it when the session goes away and is not final (`destroy()` is).
+- **`core/stageBody.js`**: builds its display on first use and gains `release()` (the display ends; the next payload builds a new one) so a stage body used without the dispatcher honours the same contract; `destroy()` is final.
+- **`core/stageSurface.js`** and **`liveSurfaces.js`** (phone) wire `onNoContent` to `body.release`.
+
+**Verified:** unit tests at each layer; end to end through `mountProjector` (timers stop when the session ends and restart for the next; a lost connection keeps the very same display and carries on after it; a pending blip within one event keeps it); and the property that matters, with the real Cup Taster projector: after a gap, or a direct move to another event, a new event's first payload shows no "Result recorded" moment, while the same event publishing a new result does (the control). Mutation testing: 19 mutants over the shell, `formatBody`, `stageBody` and the surfaces, all caught. Reviewed by code-reviewer (found the direct-swap gap), test-auditor and module-boundary-checker.
+
+**Flagged, not changed:** every refresh while a row is `pending` builds a body (inside `hasContent`) that is kept, not rebuilt; a format's display keeps running, unseen, through a lost connection (as before, by design).
+
+## T-BTC.venue-vocabulary: the shared venue-display vocabulary moves to core (stage 3a of the BTC live surfaces) · 2026-10-09
+
+**Task:** T-BTC.venue-vocabulary. Not a handoff §14 task: BTC is out-of-handoff. The first half of stage 3 (the projector): the second-use extraction ROADMAP has been owing since the projector redesign, so BTC's screens can be built on core without importing Cup Taster's stylesheet. A pure refactor: Cup Taster's projector looks and behaves exactly as before. Branch `feat/btc-projector`.
+
+**Status: in review, not merged.** No migration.
+
+**What moved (Cup Taster -> `src/core/`):**
+
+- **`stageVocabulary.js` + `.css`**: `stageKicker`, `stageTitle`, `stageSupport`, the standings page (`renderStandingsHead`, `standingsRangeText`, `renderStandingsTable`: ranked rows with the name cut by an ellipsis and a tie or advancing suffix that never is, plus value columns whose width and hook the format sets) and `renderChampion` (label, name, optional score and podium lines).
+- **`stagePageLoop.js`**: the idle loop (pages, a footer label per page, a ring counting down to the change), which Cup Taster's idle screen had inline.
+- Class names renamed `projector-*` -> `stage-*` for what moved; the CSS rules are unchanged, except that the two value columns' widths (12vw, 14vw) are now set on the cell by the format through the column spec. What is Cup Taster's stays in `formats/cup-taster/` (the heat screen, the station cards, the "up next" page, the podium line, the score and time columns).
+- `app/index.html` and the projector preview link the new stylesheet; the old rules are gone from `projectorScreens.css`.
+
+**Verified (this is a refactor, so the proof is "nothing changed"):**
+
+- **Markup:** a throwaway test rendered 19 Cup Taster screens (heat with 3, 6 and hand-timed stations, being scored, every page of the idle loop, three champion cases, both moment screens) before and after. After applying the class-rename map, and allowing for the value cells' new shared class and inline width, the HTML is identical on all 19.
+- **Layout:** the projector preview was loaded at 1920×1080 on the old code (a second dev server on the previous commit) and the new, with 11 scenarios: 297 element groups (position, size, font, weight, colour, padding, border, alignment, letter and line spacing) match exactly.
+- Mutation testing of `stageVocabulary`, `stagePageLoop` and the Cup Taster wiring; the existing Cup Taster tests changed only in their class selectors.
+
+**One small fix rode along (found by a new test):** a payload that names no stage showed its standings page heading as "standings" in lower case; it now reads "Standings".
+
+**Still open for the BTC projector:** a format's display keeps running when the live row goes away (ROADMAP, T-BTC.live-routing), then the BTC screens themselves.
+
+## T-BTC.live-publish: BTC publishes its live payload automatically (stage 2 of the BTC live surfaces) · 2026-10-09
+
+**Task:** T-BTC.live-publish. Not a handoff §14 task: BTC is out-of-handoff. Stage 2 of four (routing, publishing, projector, phone). No BTC screen is drawn yet, so a BTC session still shows "Event not published yet" on the audience surfaces; this stage makes the data exist and keeps it current. Branch `feat/btc-live-publish`.
+
+**Status: in review, not merged.** No migration, nothing to push to the cloud project: it reuses the existing `publish_session` RPC and its `p_snapshot_at` ordering guard.
+
+**Why:** the projector, phone and results surfaces read one `live_sessions` row per org. Without an automatic publish an organiser running a BTC event would see "Waiting for the organiser" the whole time, the failure Cup Taster's `liveSession.js` already closed.
+
+**What shipped:**
+
+- **`core/publishIntent.js`** (new, format-agnostic), extracted from Cup Taster's `liveSession.js` on its second use: `publishIntentHandler(client, buildPayload)`, `enqueuePublishIntent` and `submitPublishIntent`. The intent is queued FIRST (so an offline device still queues it), the payload is built at flush time from fresh state, a snapshot clock taken before the reads orders publishes (`p_snapshot_at`), a failed read is classified (retry a network drop or an expired session, drop a bug or a missing row), the RPC goes through `buildRpcHandler`, and a deleted TEST event is a no-op while a real event's missing row is reported. Cup Taster now uses it and its `liveSession` tests pass unchanged.
+- **`formats/btc/liveSession.js`** (new): `assembleBtcLivePayload` is pure (rows in, payload out) and reuses `winnerOfScore` (new in `tiebreak.js`, now also the podium's rule), `recordedWinnerId`, `derivePodium` and the SQL views' totals, so the audience cannot disagree with the organiser about a winner. `buildBtcLivePayload` reads the event's rows; `publishBtcLive({ event, takeOver }, handlers)` and `enqueueBtcLive` are the triggers.
+- **Payload:** `eventName`, `phase` (setup / preliminary / knockout / complete), `progress` (preliminary played / total), `standings` (every team, ranked), `upNext` and `thenNext` (the next two unconfirmed matches in play order: preliminary, quarterfinal, semifinal, third place, final; judges named, each team's standings place), `recentResults` (the three newest confirmed matches with tokens, the +5 win, +2 fastest and +2 signature bonuses, the winner, whether it was level and any recorded tie-break with its reason), `bracket` (rounds of slots, TBD as null, totals looked up by team) and `podium`. A result's bonus breakdown is shown only when it adds up to the view's total. Order is deterministic: timestamps compare as instants and ties fall back to the id (demo data inserts every match in one statement).
+- **Triggers.** A match confirmed, a tie-break recorded and demo data loaded **take the display over**, as any activity does in Cup Taster. A match created or removed, the bracket generated, a bracket match created and a team added or removed are schedule edits: they republish **only if this event is already the live one**, decided at flush time, so preparing a BTC event never takes the projector from another event. The confirm's publish is queued RIGHT behind the confirm and BEFORE the flush (`submitConfirmMatch`'s new `afterEnqueue`), so it exists even if the scorer leaves the screen; one flush then sends both.
+- `main.js` passes the composed handler map to the setup, matches and bracket routes (as it already did for scoring); `publishBtcLive` requires it (a BTC-only fallback would stop the shared queue at another format's operation). `btcOutboxHandlers` registers the new operation and the sync panel names it ("updating the live display").
+
+**Decisions (user, 2026-10-09, defaults):** "up next" is derived from match order, with no new organiser action; the typed tie-break reason is shown; judge names are shown.
+
+**Reviews (six, in parallel):** security-reviewer (PASS: no cross-org takeover or leak, proven with a rolled-back pgTAP run; findings below), offline-sync-auditor (FAIL on one item: the confirm's publish was queued only after the flush, so a scorer leaving the screen lost it; fixed), module-boundary-checker (the boundary holds; reuse `buildRpcHandler`, move the test-event no-op into core, one winner rule, no BTC-only handler fallback, stale docs; all done), scoring-auditor (rules match the SQL; deterministic ordering, breakdown guard, numeric coercion, bracket totals by team, finite guard; all done), code-reviewer (no Cup Taster regression; bracket generate published after the re-read, comment placement, dead defaults, stale docs; done), test-auditor (about 45 extra mutants; survivors closed with new tests). Mutation testing of every file touched.
+
+**Flagged, not changed (see ROADMAP):** the client-supplied `is_test` and snapshot clock, a test event taking the display from a real one, Cup Taster's timing and standings flushes still using Cup Taster's handlers only, a publish at the head of the queue blocking a later confirm, no coalescing of queued publishes, recency by `updated_at`, no "show this event" control, and that everything in the payload is public.
+
+## T-BTC.live-routing: The projector and phone surfaces serve whichever format is live (stage 1 of the BTC live surfaces) · 2026-10-09
+
+**Task:** T-BTC.live-routing. Not a handoff §14 task: BTC is out-of-handoff. Stage 1 of four (routing, publishing, projector, phone); no BTC screen is built yet.
+
+**Status: in review, not merged.** No migration, nothing to push to the cloud project.
+
+**Why:** `/live/projector` and `/live/phone` were wired to Cup Taster's bodies alone, so a BTC session would have been fed Cup Taster's screens. The surfaces now pick the body from the live row's own `format`.
+
+**What shipped:**
+
+- **`core/viewer-shell.js`**: tells `hasContent(payload, { format })` and `renderBody(body, payload, { isTest, format })` the live row's `format`. Additive; every existing predicate and body ignores it.
+- **`core/formatBody.js`** (new, format-agnostic): `createFormatBody({ [format]: () => body })`. Builds a format's body lazily, keeps one alive, destroys the previous when the format changes, and treats an unregistered format as having no content (the shell shows "Event not published yet", never another format's screens). A factory or `destroy()` that throws is logged and does not wedge the shell; `destroy()` is final.
+- **`src/liveSurfaces.js`** (new, beside `main.js`): `mountProjector` and `mountPhone`, registering Cup Taster's projector body and phone body. Stages 3 and 4 add the BTC entries here. `main.js`'s two audience routes call it.
+- **Removed:** `formats/cup-taster/projectorSurface.js` and `phoneSummary.js` (and their tests) were a parallel copy of this wiring; the preview harnesses and their tests now use `mountProjector`/`mountPhone`. The behaviours those tests pinned (band and countdown, no scaling, timer teardown, `is_test`, holding states) moved to `liveSurfaces.test.js`.
+- **The `projector-surface` root class is gone**, so no format-named class is applied to a shared root. `projectorScreens.css` sizes its countdown under `[data-surface='stage']`.
+
+**Verified:** full unit suite (2839 tests) and lint clean; mutation testing of `formatBody`, `liveSurfaces` and the shell's pass-through (all caught; one redundant guard removed rather than tested); the Cup Taster projector preview still sizes its countdown (137px, no padding) under the new selector. The only live row on the cloud project has `format = 'cup_taster'`, so Cup Taster's real surfaces select their bodies as before.
+
+**Reviews:** module-boundary-checker (no new §6 violation; asked for the wrappers to be rewired and removed, the root class scoped away, `liveSurfaces.js` documented), test-auditor (a surviving mutant, `renderBody` and error paths untested, unmount/format-change timer teardown and `is_test` lost with the old tests; all closed), code-reviewer (no Cup Taster regression; `destroy()` must be final, `mountPhone` must destroy its body; both fixed).
+
+**Flagged, not changed:**
+
+- When the live row goes away (`session` becomes null) the shell skips `hasContent`, so a format's body (and its display timers) stays alive until the format changes or the surface unmounts. This predates the change, but BTC's projector will inherit it; see ROADMAP.
+- `core/stageSurface.js`'s `surfaceClass` option has no production caller now.
+- `core/entitlements.js` still names `cup_taster_*` keys (a D14 stub with no call sites).
+
 ## T-BTC.demo-data: A BTC test event can be loaded with a demo roster and scored preliminaries, ready for the bracket · 2026-10-09
 
 **Task:** T-BTC.demo-data. Not a handoff §14 task: BTC is out-of-handoff (see ROADMAP's BTC section). Branch `feat/btc-demo-data`.

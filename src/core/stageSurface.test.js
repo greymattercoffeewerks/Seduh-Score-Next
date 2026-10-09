@@ -6,6 +6,7 @@ import { renderScreenFrame } from './stageDisplay.js';
 // A fake live source, as the viewer shell's own tests use: one org, an event row, no realtime traffic.
 function fakeClient(rows = []) {
   const db = { live_sessions: [...rows], events: [{ id: 'ev1', org_id: 'org1' }] };
+  let onChange = () => {};
   function builder(table) {
     const filters = [];
     const b = {
@@ -24,9 +25,15 @@ function fakeClient(rows = []) {
     return b;
   }
   return {
+    // Replaces the live rows and fires the realtime callback, so a surface can be driven live -> gone.
+    setRows(next) {
+      db.live_sessions = [...next];
+      onChange();
+    },
     from: (table) => builder(table),
     channel: () => ({
-      on() {
+      on(_type, _filter, cb) {
+        onChange = cb;
         return this;
       },
       subscribe(cb) {
@@ -161,6 +168,49 @@ describe('mountStageSurface', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('releases the body when the live session goes away, once, and not while it is live or merely pending', async () => {
+    const release = vi.fn();
+    const body = makeBody();
+    body.release = release;
+    const client = fakeClient([session({ label: 'now' })]);
+    await mountStageSurface(document.createElement('div'), { body, orgId: 'org1', client });
+    expect(release).not.toHaveBeenCalled();
+
+    client.setRows([session({})]); // a row with nothing to show: pending, not gone
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(release).not.toHaveBeenCalled();
+
+    client.setRows([]); // the session ends
+    await vi.waitFor(() => expect(release).toHaveBeenCalledTimes(1));
+  });
+
+  it('releases only the body of the surface whose session ended', async () => {
+    const live = { body: makeBody(), release: vi.fn() };
+    live.body.release = live.release;
+    const ended = { body: makeBody(), release: vi.fn() };
+    ended.body.release = ended.release;
+    await mountStageSurface(document.createElement('div'), {
+      body: live.body,
+      orgId: 'org1',
+      client: fakeClient([session({ label: 'now' })]),
+    });
+    await mountStageSurface(document.createElement('div'), {
+      body: ended.body,
+      orgId: 'org1',
+      client: fakeClient([]),
+    });
+    expect(live.release).not.toHaveBeenCalled();
+    expect(ended.release).toHaveBeenCalled();
+  });
+
+  it('copes with a body that has no release (a single-format body)', async () => {
+    const root = document.createElement('div');
+    await expect(
+      mountStageSurface(root, { body: makeBody(), orgId: 'org1', client: fakeClient([]) }),
+    ).resolves.toBeDefined();
+    expect(root.textContent).toContain('Waiting for the organiser');
   });
 
   it('destroys the body, and rethrows, when the shell cannot mount', async () => {

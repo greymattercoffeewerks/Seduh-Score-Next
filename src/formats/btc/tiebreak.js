@@ -25,6 +25,20 @@ export function recordedWinnerId(match, score) {
   return winner === score.team1_id || winner === score.team2_id ? winner : null;
 }
 
+// The ONE winner rule for a confirmed score row: the higher bonus-inclusive total, or, when the totals are level,
+// the team the organiser recorded (recordedWinnerId). null when level with no decision, when the score row is
+// not confirmed, or when a total is not a finite number (a malformed row never defaults a winner). The podium
+// and the live payload both read it, so they cannot disagree about who won. A decisive result needs only the
+// confirmed score row; a recorded winner also needs the confirmed match (recordedWinnerId).
+export function winnerOfScore(match, score) {
+  if (!score || score.status !== 'confirmed') return null;
+  const team1Total = Number(score.team1_total);
+  const team2Total = Number(score.team2_total);
+  if (!Number.isFinite(team1Total) || !Number.isFinite(team2Total)) return null;
+  if (team1Total !== team2Total) return team1Total > team2Total ? score.team1_id : score.team2_id;
+  return recordedWinnerId(match, score);
+}
+
 // 'tied'    — confirmed, totals level, no usable winner recorded: the organiser must decide.
 // 'decided' — confirmed, totals level, a winner has been recorded.
 // null      — not a tie (unplayed, unconfirmed, or a decisive result).

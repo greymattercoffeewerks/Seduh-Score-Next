@@ -40,6 +40,13 @@
 // inversion-of-control shape `core/outbox.js` already uses for its handler
 // map — this module owns the state machine and every holding card; the
 // caller owns only the yes/no question of whether its own payload is ready.
+// Both `hasContent(payload, { format, eventId })` and `renderBody(body, payload, { isTest, format, eventId })`
+// are told the live row's own `format` and `eventId`, so one surface can serve whichever format is live and
+// start afresh when the organiser moves to another event (core/formatBody.js); a caller serving one format
+// ignores them.
+// `onNoContent(phase)` (optional) is called each time the shell paints a holding state that means "no live
+// session any more" (noEvent, notStarted), so a caller can release what it built for the session that ended;
+// it may be called repeatedly while that state lasts, so it must be idempotent.
 //
 // The DOM is built ONCE at mount and mutated in place on every render, not
 // torn down and rebuilt via innerHTML — found in review: a screen reader
@@ -221,6 +228,7 @@ export async function mountViewerShell(
     orgId,
     renderBody,
     hasContent = defaultHasContent,
+    onNoContent,
     showChrome,
     client = getSupabase(),
     signal,
@@ -351,15 +359,35 @@ export async function mountViewerShell(
       // Not `?? null`: `bodyCleanup?.()` below already tolerates `undefined`
       // exactly like `null` (found in review — the normalization was
       // provably redundant, no test could distinguish the two).
-      bodyCleanup = renderBody(body, session.payload, { isTest: session.is_test === true });
+      bodyCleanup = renderBody(body, session.payload, {
+        isTest: session.is_test === true,
+        format: session.format,
+        eventId: session.event_id,
+      });
     } else {
       body.appendChild(renderHoldingState(phase));
+      // The live session is gone (no event, none active): whatever the caller built for it is now unseen and
+      // must stop (a display's timers, its idea of "the last snapshot"). Not for 'connecting' (nothing built
+      // yet), not for a lost connection (the same session is still there; a blip must not forget where the
+      // display was) and not for 'pending' (a row that has nothing to show yet: the same session may well
+      // fill in, and if it is a different event the caller sees its `eventId` change). A callback that throws
+      // is logged, never allowed to leave a refresh half-done.
+      if (phase === 'noEvent' || phase === 'notStarted') {
+        try {
+          onNoContent?.(phase);
+        } catch (err) {
+          console.error('viewer-shell: onNoContent failed', err);
+        }
+      }
     }
   }
 
   function computePhase() {
     if (!session) return hasEvent ? 'notStarted' : 'noEvent';
-    return hasContent(session.payload) ? 'live' : 'pending';
+    // `format` is the row's own, so one surface can serve whichever format is live (core/formatBody.js).
+    return hasContent(session.payload, { format: session.format, eventId: session.event_id })
+      ? 'live'
+      : 'pending';
   }
 
   async function refresh() {

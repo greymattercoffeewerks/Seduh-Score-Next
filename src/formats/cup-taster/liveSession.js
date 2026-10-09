@@ -65,16 +65,14 @@
 // automatically once main.js's existing reconnect-triggered flush succeeds
 // — no new reconnect wiring needed, since that flush already passes
 // cupTasterOutboxHandlers(client), which now includes this operation type.
+//
+// That machinery (enqueue the intent, build at flush time, snapshot ordering, read-failure classification)
+// now lives in core/publishIntent.js, shared with BTC; this file keeps only Cup Taster's own payload.
 import { listHeatsForStage, hydrateEntries, byRunningOrder } from './heats.js';
 import { fetchStandingsForStage, resolveAdvancement, tieStatusFor } from './standings.js';
 import { listEntriesByIds } from '../../core/registry.js';
 import { findEvent } from '../../core/events.js';
-import {
-  enqueueOperation,
-  flushOutbox,
-  isTransientErrorCode,
-  isTransientFailure,
-} from '../../core/outbox.js';
+import { publishIntentHandler, submitPublishIntent } from '../../core/publishIntent.js';
 import { getSupabase } from '../../core/supabaseClient.js';
 import { ROW_NOT_FOUND } from '../../core/errors.js';
 
@@ -258,8 +256,8 @@ export async function buildLiveSessionPayload(stageId, client = getSupabase()) {
       : null;
 
   // The event's name, for the venue display's band. Read like every other read in this chain: a transient
-  // failure rethrows, so buildPayloadOrClassify queues the publish for retry — publishing WITHOUT the name
-  // instead would overwrite a good stored name (publish_session replaces the whole payload and its
+  // failure rethrows, so the shared handler (core/publishIntent.js) classifies it and queues the publish for
+  // retry — publishing WITHOUT the name instead would overwrite a good stored name (publish_session replaces the whole payload and its
   // snapshot_at guard only orders publishes), and the band would lose it until the next heat. Only "that
   // event no longer exists" is tolerated, as no name.
   let eventName = null;
@@ -280,124 +278,16 @@ export async function buildLiveSessionPayload(stageId, client = getSupabase()) {
   };
 }
 
-// The `publish_live_session` outbox handler — unlike core/outbox.js's
-// generic buildRpcHandler (payload IS the RPC call, fixed at enqueue time),
-// this handler's stored payload is only the small INTENT
-// (orgId/eventId/stageId/isTest); the real, current-as-of-right-now
-// `live_sessions` payload is built here, at actual flush time, by calling
-// buildLiveSessionPayload fresh — see this module's own top comment for why.
-// Mirrors buildRpcHandler's own error-to-permanent mapping: a network drop,
-// a 401, a timeout/rate-limit/gateway 5xx or a transient SQLSTATE means
-// retry later; any other server answer is a genuine rejection that won't
-// succeed on retry. See outbox.js's own isTransientFailure for the full
-// account. It's reused here rather than re-derived — found in review
-// (code-reviewer, 2026-09-12): the first version of the 401 fix updated
-// buildRpcHandler but missed this second, hand-rolled mapping entirely.
-// This handler can't reuse buildRpcHandler directly — the stored payload
-// here isn't the RPC payload yet when the handler is invoked.
-//
-// The READ chain before the RPC needs the same treatment (2026-09-27, found
-// in review: offline-sync-auditor). Every read helper it calls throws
-// postgrest-js's own error object unclassified, and an error with no
-// `.permanent` stays at the head of the FIFO queue — retried forever, with
-// no manual discard, blocking every write queued behind it. The realistic
-// trigger: a rehearsal event's publish is still queued on the organiser's
-// device when that test event is deleted, so findStageById's `.single()`
-// finds no row (PGRST116) on every attempt, on event day.
-//
-// - A TEST event's stage gone (PGRST116): nothing left to publish. The
-//   operation completes as a no-op — not a "lost write": nothing the
-//   organiser did was lost, the thing it described no longer exists. Only
-//   for `isTest` intents: delete_test_event is the only delete path and it
-//   refuses a real event, so PGRST116 on a real event means a different
-//   account or an RLS problem — permanent and reported, never skipped
-//   silently (offline-sync-auditor, 2026-09-27).
-// - Network drop / timeout (code ''), a gateway body with no code, an
-//   expired JWT or a transient SQLSTATE: retryable, stays queued.
-// - Permission denied (42501): retryable here. An authenticated organiser
-//   can't hit it on these tables; it's what an ANONYMOUS read gets once a
-//   failed token refresh drops the session. The RPC path keeps that same
-//   case queued as a 401, but these read helpers throw away the status, so
-//   without this a publish at the head of the queue was dropped while the
-//   writes around it waited for the session to come back.
-// - Anything else — e.g. a malformed id, or a plain Error from a bug while
-//   building the payload: permanent. A publish is always rebuilt from
-//   fresh state, so the next one repairs whatever this one would have said.
-//   postgrest-js never throws Error instances from these reads (it returns
-//   plain objects carrying a `code`, '' for a network drop), so an Error
-//   with no `code` at all is our own code, not the network. Checking for
-//   the missing `code` too keeps a future postgrest-js that returns real
-//   PostgrestError instances (which do carry one) on the network path.
-const INSUFFICIENT_PRIVILEGE = '42501';
-
-function isTransientReadFailure(error) {
-  // The code's VALUE, not the key's presence: a helper that re-wraps an
-  // error the way buildRpcHandler does (`err.code = error.code`) can carry
-  // `code: undefined`, and must not be mistaken for a network failure.
-  if (error instanceof Error && error.code == null) return false;
-  const code = error?.code;
-  if (typeof code !== 'string' || code === '') return true;
-  return code === INSUFFICIENT_PRIVILEGE || isTransientErrorCode(code);
-}
-
-async function buildPayloadOrClassify(stageId, isTest, client) {
-  try {
-    return await buildLiveSessionPayload(stageId, client);
-  } catch (error) {
-    if (error?.code === ROW_NOT_FOUND && isTest === true) return null;
-    // `cause` keeps the original stack — the permanent branch exists mostly
-    // to catch a bug in our own payload building, which needs it to debug.
-    const err = new Error(error?.message ?? String(error), { cause: error });
-    err.code = error?.code;
-    err.details = error?.details;
-    err.permanent = !isTransientReadFailure(error);
-    throw err;
-  }
-}
-
+// The `publish_live_session` outbox handler. The stored payload is only the small INTENT
+// (orgId/eventId/stageId/isTest); the real, current-as-of-right-now `live_sessions` payload is built at actual
+// flush time by buildLiveSessionPayload, through core/publishIntent.js (see its comment for the ordering key,
+// the read-failure classification, the "test event deleted is a no-op" rule and the RPC error mapping, shared
+// with BTC).
 export function publishLiveSessionHandlers(client) {
   return {
-    publish_live_session: async ({ orgId, eventId, stageId, format, isTest }) => {
-      // Captured BEFORE the read chain below, not after — this is the
-      // ordering key publish_session's own snapshot_at guard uses to reject
-      // a stale publish that commits LATER than a fresher one (ROADMAP.md's
-      // "No ordering guard on live_sessions's upsert" gap, closed
-      // 2026-09-12 — see that migration's own comment for the full
-      // account). Using the START of the read, not its end, is the
-      // conservative choice: if this read and a second, later-triggered
-      // publish's own read overlap, this one's snapshot is treated as the
-      // older of the two even if buildLiveSessionPayload's own multi-query
-      // chain happens to finish second — matching the real-world causal
-      // order (whichever heat action happened first) rather than whichever
-      // read chain happened to run faster. Wall-clock (`Date.now()`), not a
-      // monotonic clock — two nearly-simultaneous publishes from two
-      // different signed-in devices/browser tabs for the same org (nothing
-      // today prevents that) could theoretically race with a clock-drifted
-      // ordering. The migration's own snapshot_at guard is the actual
-      // backstop against a REGRESSION either way (a stale publish is a
-      // silent no-op, never an error, never a corrupted intermediate
-      // state) — this timestamp only decides WHICH of two real publishes
-      // wins, not whether the result stays internally consistent.
-      const snapshotAt = new Date().toISOString();
-      const payload = await buildPayloadOrClassify(stageId, isTest, client);
-      if (payload === null) return; // stage/event gone — see above
-      const { error, status } = await client.rpc('publish_session', {
-        p_operation_id: crypto.randomUUID(),
-        p_org_id: orgId,
-        p_event_id: eventId,
-        p_format: format,
-        p_is_test: isTest,
-        p_payload: payload,
-        p_snapshot_at: snapshotAt,
-      });
-      if (error) {
-        const err = new Error(error.message);
-        err.code = error.code;
-        err.details = error.details;
-        err.permanent = !isTransientFailure({ status, code: error.code });
-        throw err;
-      }
-    },
+    publish_live_session: publishIntentHandler(client, ({ stageId }) =>
+      buildLiveSessionPayload(stageId, client),
+    ),
   };
 }
 
@@ -408,8 +298,8 @@ export function publishLiveSessionHandlers(client) {
 // operation stays queued exactly like any other tracked write, and drains on
 // the next flush (another screen action, or main.js's existing
 // reconnect-triggered flush). A missing stage completes as a no-op and a
-// non-transient read failure is dropped — see the read-chain note on
-// publishLiveSessionHandlers.
+// non-transient read failure is dropped — see the read-chain note in
+// core/publishIntent.js.
 // `isTest` is threaded straight through from the caller's already-loaded
 // event (D9 propagation), never re-derived here.
 //
@@ -427,15 +317,9 @@ export async function publishLiveSession(
   client = getSupabase(),
   handlers,
 ) {
-  if (typeof isTest !== 'boolean') {
-    throw new TypeError('publishLiveSession: isTest must be explicitly true or false');
-  }
-  await enqueueOperation('publish_live_session', {
-    orgId,
-    eventId,
-    stageId,
-    format: 'cup_taster',
-    isTest,
-  });
-  return flushOutbox(handlers ?? publishLiveSessionHandlers(client));
+  return submitPublishIntent(
+    'publish_live_session',
+    { orgId, eventId, stageId, format: 'cup_taster', isTest },
+    handlers ?? publishLiveSessionHandlers(client),
+  );
 }

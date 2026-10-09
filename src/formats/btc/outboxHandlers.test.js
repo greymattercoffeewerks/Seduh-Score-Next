@@ -21,8 +21,43 @@ function fakeRpcClient({ error = null } = {}) {
 describe('btcOutboxHandlers', () => {
   it('registers exactly the BTC operation types, each a real callable handler', () => {
     const handlers = btcOutboxHandlers(fakeRpcClient());
-    expect(Object.keys(handlers)).toEqual(['confirm_btc_match']);
+    expect(Object.keys(handlers).sort()).toEqual(['confirm_btc_match', 'publish_btc_live_session']);
     for (const handler of Object.values(handlers)) expect(typeof handler).toBe('function');
+  });
+
+  it('maps publish_btc_live_session to the live-display publish (it builds the payload and calls publish_session)', async () => {
+    const calls = [];
+    const builder = (table) => {
+      const b = {
+        select: () => b,
+        eq: () => b,
+        in: () => b,
+        order: () => b,
+        single: () => Promise.resolve({ data: { id: 'ev1', name: 'Event' }, error: null }),
+        maybeSingle: () => Promise.resolve({ data: null, error: null }),
+        then: (resolve, reject) =>
+          Promise.resolve({ data: [], error: null, table }).then(resolve, reject),
+      };
+      return b;
+    };
+    const client = {
+      from: builder,
+      rpc: (name, args) => {
+        calls.push([name, args]);
+        return Promise.resolve({ data: null, error: null });
+      },
+    };
+    await btcOutboxHandlers(client).publish_btc_live_session({
+      orgId: 'org1',
+      eventId: 'ev1',
+      format: 'btc',
+      isTest: true,
+      onlyIfLive: false,
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0][0]).toBe('publish_session');
+    expect(calls[0][1]).toMatchObject({ p_format: 'btc', p_event_id: 'ev1', p_is_test: true });
+    expect(calls[0][1].p_payload.phase).toBe('setup');
   });
 
   it('has a label for every registered operation type, and no label without a handler', () => {

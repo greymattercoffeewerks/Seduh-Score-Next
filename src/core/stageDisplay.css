@@ -16,7 +16,9 @@
  *     flex column down from the viewport, which core/stageSurface.css provides) or it collapses to its padding
  *     and the screen is invisible, with no error.
  *   - Stylesheets. An HTML entry that mounts a stage display must link stageDisplay.css and stageSurface.css
- *     (and countdownDisplay.css if a screen shows a countdown); the format links its own beside them.
+ *     (stageVocabulary.css if a screen uses the shared kicker, title, standings page or champion block;
+ *     stageMoments.css for moment screens; countdownDisplay.css if a screen shows a countdown); the format
+ *     links its own AFTER them (a format rule may refine a shared one).
  * ("Stage" in these names is the venue stage, the screen on show, not a competition's stage.)
  */
 

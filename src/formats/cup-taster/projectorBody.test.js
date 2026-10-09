@@ -45,7 +45,7 @@ describe('createProjectorBody', () => {
     shellRender(body, projector, payload());
     expect(body.querySelector('.stage-display')).not.toBeNull();
     expect(body.querySelector('.stage-band-event').textContent).toBe('Cup 2026');
-    expect(body.querySelectorAll('.projector-standing-row')).toHaveLength(8);
+    expect(body.querySelectorAll('.stage-standing-row')).toHaveLength(8);
     projector.destroy();
   });
 
@@ -56,11 +56,11 @@ describe('createProjectorBody', () => {
     shellRender(body, projector, payload());
     const first = body.querySelector('.stage-display');
     vi.advanceTimersByTime(PAGE_DWELL_MS);
-    expect(body.querySelector('.projector-range').textContent).toBe('9 to 16 of 17');
+    expect(body.querySelector('.stage-range').textContent).toBe('9 to 16 of 17');
     // an identical republish: the shell clears the body and renders again
     shellRender(body, projector, payload());
     expect(body.querySelector('.stage-display')).toBe(first);
-    expect(body.querySelector('.projector-range').textContent).toBe('9 to 16 of 17');
+    expect(body.querySelector('.stage-range').textContent).toBe('9 to 16 of 17');
     projector.destroy();
   });
 
@@ -69,7 +69,7 @@ describe('createProjectorBody', () => {
     const projector = createProjectorBody();
     const body = document.createElement('div');
     shellRender(body, projector, payload());
-    expect(body.querySelector('.projector-standings')).not.toBeNull();
+    expect(body.querySelector('.stage-standings')).not.toBeNull();
     shellRender(
       body,
       projector,
@@ -85,8 +85,8 @@ describe('createProjectorBody', () => {
         },
       }),
     );
-    expect(body.querySelector('.projector-standings')).toBeNull();
-    expect(body.querySelector('.projector-title').textContent).toBe('Heat 1');
+    expect(body.querySelector('.stage-standings')).toBeNull();
+    expect(body.querySelector('.stage-title').textContent).toBe('Heat 1');
     projector.destroy();
   });
 
@@ -141,21 +141,21 @@ describe('createProjectorBody', () => {
         standings: rows(['Cleo', 'Ayu', 'Bima']),
         recentHeats: [confirmed(3, 'Cleo')],
       });
-    const kicker = (body) => body.querySelector('.projector-kicker')?.textContent ?? null;
+    const kicker = (body) => body.querySelector('.stage-kicker')?.textContent ?? null;
 
     it('shows the result, then the rank impact, then the loop again, each for its hold time', () => {
       vi.useFakeTimers();
       const projector = createProjectorBody();
       const body = document.createElement('div');
       shellRender(body, projector, before());
-      expect(body.querySelector('.projector-standings')).not.toBeNull();
+      expect(body.querySelector('.stage-standings')).not.toBeNull();
       shellRender(body, projector, after());
       expect(kicker(body)).toBe('Result recorded');
       vi.advanceTimersByTime(RESULT_HOLD_MS);
       expect(kicker(body)).toBe('Rank impact');
       vi.advanceTimersByTime(RANK_HOLD_MS);
-      expect(body.querySelector('.projector-standings')).not.toBeNull();
-      expect(body.querySelector('.projector-standing-name').textContent).toContain('Cleo');
+      expect(body.querySelector('.stage-standings')).not.toBeNull();
+      expect(body.querySelector('.stage-standing-name').textContent).toContain('Cleo');
       projector.destroy();
     });
 
@@ -172,7 +172,7 @@ describe('createProjectorBody', () => {
       vi.advanceTimersByTime(7_999);
       expect(kicker(body)).toBe('Rank impact');
       vi.advanceTimersByTime(1);
-      expect(body.querySelector('.projector-standings')).not.toBeNull();
+      expect(body.querySelector('.stage-standings')).not.toBeNull();
       projector.destroy();
     });
 
@@ -181,7 +181,7 @@ describe('createProjectorBody', () => {
       const projector = createProjectorBody();
       const body = document.createElement('div');
       shellRender(body, projector, after());
-      expect(body.querySelector('.projector-standings')).not.toBeNull();
+      expect(body.querySelector('.stage-standings')).not.toBeNull();
       projector.destroy();
     });
 
@@ -241,7 +241,7 @@ describe('createProjectorBody', () => {
           ],
         }),
       );
-      expect(body.querySelector('.projector-standings')).not.toBeNull();
+      expect(body.querySelector('.stage-standings')).not.toBeNull();
       expect(errors).toHaveBeenCalled();
       errors.mockRestore();
       projector.destroy();
@@ -269,9 +269,9 @@ describe('createProjectorBody', () => {
       cuppers: [{ displayName: 'Wilky', station: 'A', totalElapsedSecs: null, maxed: false }],
     });
     const shows = (body) => ({
-      scoring: body.querySelector('.projector-title')?.textContent?.includes('being scored'),
-      standings: body.querySelector('.projector-standings') !== null,
-      champion: body.querySelector('.projector-champion-name') !== null,
+      scoring: body.querySelector('.stage-title')?.textContent?.includes('being scored'),
+      standings: body.querySelector('.stage-standings') !== null,
+      champion: body.querySelector('.stage-champion-name') !== null,
       heat: body.querySelector('.viewer-countdown') !== null,
     });
 

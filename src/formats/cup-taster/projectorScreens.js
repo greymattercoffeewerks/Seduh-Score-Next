@@ -15,8 +15,17 @@ import { el, withSrExpansion } from '../../core/dom.js';
 import { renderScreenFrame } from '../../core/stageDisplay.js';
 import { renderCountdown } from '../../core/countdownDisplay.js';
 import { formatDuration, formatDurationLong } from '../../core/duration.js';
-import { paginate, pageRange, createPageRotator } from '../../core/pageRotator.js';
-import { createProgressRing } from '../../core/progressRing.js';
+import { paginate, pageRange } from '../../core/pageRotator.js';
+import { createStagePageLoop } from '../../core/stagePageLoop.js';
+import {
+  stageKicker,
+  stageTitle,
+  stageSupport,
+  renderStandingsHead,
+  standingsRangeText,
+  renderStandingsTable,
+  renderChampion,
+} from '../../core/stageVocabulary.js';
 import { stageKindLabel } from './setup.js';
 import { formatHeatName } from './heats.js';
 import { isNoClockHeat, showsCountdown, cupperStatus } from './viewerBody.js';
@@ -25,6 +34,8 @@ import { isNoClockHeat, showsCountdown, cupperStatus } from './viewerBody.js';
 export const STANDINGS_PAGE_SIZE = 8;
 // Long enough to find your name and read the row, short enough that the loop is not a wait.
 export const PAGE_DWELL_MS = 10_000;
+// The two value columns of a standings page (score, then time) and their widths.
+const STANDINGS_COLUMNS = [{ width: '12vw' }, { width: '14vw' }];
 // More stations than this in one heat take the compact three-column layout (projectorScreens.css), so two rows
 // of cards still fit under the title and the clock on any screen.
 export const MAX_ROOMY_STATIONS = 4;
@@ -44,14 +55,6 @@ export function projectorBand(payload) {
 }
 
 // ---------- small shared pieces ----------
-
-export function kicker(text) {
-  return el('p', { className: 'projector-kicker', text });
-}
-
-export function bigTitle(text) {
-  return el('h2', { className: 'projector-title', text });
-}
 
 function standingLine(row, stage) {
   if (!row) return null;
@@ -111,8 +114,8 @@ const heatScreen = {
       const heat = next.activeHeat;
       const head = el('div', { className: 'projector-heat-head' }, [
         el('div', {}, [
-          kicker('On stage now'),
-          bigTitle(formatHeatName(heat.heatNumber, heat.kind)),
+          stageKicker('On stage now'),
+          stageTitle(formatHeatName(heat.heatNumber, heat.kind)),
         ]),
       ]);
       if (showsCountdown(heat)) {
@@ -171,14 +174,11 @@ const scoringScreen = {
     host.append(frame.el);
     function paint(next) {
       frame.main.replaceChildren(
-        kicker('Time is up'),
-        bigTitle(
+        stageKicker('Time is up'),
+        stageTitle(
           `${formatHeatName(next.activeHeat.heatNumber, next.activeHeat.kind)} is being scored`,
         ),
-        el('p', {
-          className: 'projector-support',
-          text: 'Results appear here as soon as the judges confirm.',
-        }),
+        stageSupport('Results appear here as soon as the judges confirm.'),
       );
       frame.footerStart.textContent = upNextLine(next);
       frame.footerEnd.textContent = 'Standings update after scoring';
@@ -190,8 +190,8 @@ const scoringScreen = {
 
 function renderNextPage(upNext) {
   return [
-    kicker('Up next'),
-    bigTitle(`${formatHeatName(upNext.heatNumber, upNext.kind)} starts soon`),
+    stageKicker('Up next'),
+    stageTitle(`${formatHeatName(upNext.heatNumber, upNext.kind)} starts soon`),
     el(
       'ul',
       { className: 'projector-stations' },
@@ -201,54 +201,30 @@ function renderNextPage(upNext) {
 }
 
 function renderStandingsPage(stage, page, range, pageCount) {
-  const rows = page.map((row) => {
-    // Words, never colour alone: a tie or an advancing place says so in the row itself. The suffix is its own
-    // element so a long name is cut with an ellipsis and the suffix is never the part that goes.
-    const suffix =
-      row.tieStatus === 'tied' ? ' (tied)' : row.tieStatus === 'advancing' ? ' (advancing)' : '';
-    return el('tr', { className: 'projector-standing-row' }, [
-      el('td', { className: 'projector-standing-pos', text: String(row.position) }),
-      el('td', { className: 'projector-standing-name' }, [
-        el(
-          'div',
-          { className: 'projector-name-row' },
-          [
-            el('span', { className: 'projector-name-text', text: row.displayName }),
-            suffix ? el('span', { className: 'projector-name-suffix', text: suffix }) : null,
-          ].filter(Boolean),
-        ),
-      ]),
-      el('td', {
-        className: 'projector-standing-score',
-        text:
-          stage?.setCount != null ? `${row.numCorrect}/${stage.setCount}` : String(row.numCorrect),
-      }),
-      el(
-        'td',
-        { className: 'projector-standing-time' },
-        row.totalElapsedSecs == null
-          ? [document.createTextNode('—')]
-          : withSrExpansion(
-              formatDuration(row.totalElapsedSecs),
-              formatDurationLong(row.totalElapsedSecs),
-            ),
-      ),
-    ]);
-  });
+  // Words, never colour alone: a tie or an advancing place says so in the row itself. The suffix is its own
+  // element (core/stageVocabulary.js) so a long name is cut with an ellipsis and the suffix is never the part
+  // that goes.
+  const rows = page.map((row) => ({
+    position: row.position,
+    name: row.displayName,
+    suffix:
+      row.tieStatus === 'tied' ? ' (tied)' : row.tieStatus === 'advancing' ? ' (advancing)' : '',
+    cells: [
+      stage?.setCount != null ? `${row.numCorrect}/${stage.setCount}` : String(row.numCorrect),
+      row.totalElapsedSecs == null
+        ? [document.createTextNode('—')]
+        : withSrExpansion(
+            formatDuration(row.totalElapsedSecs),
+            formatDurationLong(row.totalElapsedSecs),
+          ),
+    ],
+  }));
   return [
-    el('div', { className: 'projector-standings-head' }, [
-      bigTitle(`${stage ? stageKindLabel(stage.kind) : ''} standings`.trim()),
-      el('span', {
-        className: 'projector-range',
-        text:
-          pageCount === 1
-            ? `${range.total} cuppers`
-            : range.first === range.last
-              ? `${range.first} of ${range.total}`
-              : `${range.first} to ${range.last} of ${range.total}`,
-      }),
-    ]),
-    el('table', { className: 'projector-standings' }, [el('tbody', {}, rows)]),
+    renderStandingsHead(
+      stage ? `${stageKindLabel(stage.kind)} standings` : 'Standings',
+      standingsRangeText(range, pageCount, 'cuppers'),
+    ),
+    renderStandingsTable(rows, STANDINGS_COLUMNS),
   ];
 }
 
@@ -261,12 +237,10 @@ const idleScreen = {
   mount(host, payload) {
     const frame = renderScreenFrame();
     host.append(frame.el);
-    const ring = createProgressRing();
-    let rotator = null;
+    const loop = createStagePageLoop(frame, { dwellMs: PAGE_DWELL_MS });
     let signature = null;
 
     function build(next) {
-      rotator?.stop();
       const standings = next.standings ?? [];
       const standingPages = paginate(standings, STANDINGS_PAGE_SIZE, {
         groupOf: (row) => row.position,
@@ -291,30 +265,17 @@ const idleScreen = {
               : 'Standings',
         }),
       );
-      rotator = createPageRotator({
-        pageCount: pages.length,
-        dwellMs: PAGE_DWELL_MS,
-        onPage(index, { dwellMs, startedAt }) {
+      loop.show(pages, {
+        onPage(page) {
           frame.main.classList.toggle(
             'projector-many',
-            pages[index].kind === 'next' && next.upNext.cuppers.length > MAX_ROOMY_STATIONS,
+            page.kind === 'next' && next.upNext.cuppers.length > MAX_ROOMY_STATIONS,
           );
-          frame.main.replaceChildren(...pages[index].render());
-          // The page's own label, plus who is next while the "up next" page itself is not the one showing.
-          frame.footerStart.textContent =
-            next.upNext && pages[index].kind !== 'next'
-              ? `${pages[index].label} · ${upNextLine(next)}`
-              : pages[index].label;
-          if (pages.length > 1) {
-            frame.footerEnd.replaceChildren(ring.el);
-            ring.run({ durationMs: dwellMs, startedAt });
-          } else {
-            ring.stop();
-            frame.footerEnd.replaceChildren();
-          }
         },
+        // The page's own label, plus who is next while the "up next" page itself is not the one showing.
+        footerFor: (page) =>
+          next.upNext && page.kind !== 'next' ? `${page.label} · ${upNextLine(next)}` : page.label,
       });
-      rotator.start();
     }
 
     function update(next) {
@@ -334,8 +295,7 @@ const idleScreen = {
     return {
       update,
       destroy() {
-        rotator?.stop();
-        ring.destroy();
+        loop.destroy();
       },
     };
   },
@@ -372,17 +332,13 @@ const championScreen = {
       const standings = next.standings ?? [];
       // The champion's own row, by name — never a stand-in: with no match the score line is simply left out.
       const row = standings.find((r) => r.displayName === next.champion);
-      const children = [
-        el('p', { className: 'projector-champion-label', text: 'Champion' }),
-        el('h2', { className: 'projector-champion-name', text: next.champion }),
-        row
-          ? el('p', { className: 'projector-champion-score', text: standingLine(row, next.stage) })
-          : null,
-        podiumLine(standings, next.champion)
-          ? el('p', { className: 'projector-podium', text: podiumLine(standings, next.champion) })
-          : null,
-      ];
-      frame.main.replaceChildren(...children.filter(Boolean));
+      frame.main.replaceChildren(
+        ...renderChampion({
+          name: next.champion,
+          scoreLine: row ? standingLine(row, next.stage) : null,
+          podiumLine: podiumLine(standings, next.champion),
+        }),
+      );
       frame.footerStart.textContent = `${next.stage ? stageKindLabel(next.stage.kind) : 'Final'} complete`;
       frame.footerEnd.textContent = 'Final standings stay on screen';
     }

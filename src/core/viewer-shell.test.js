@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeAll } from 'vitest';
 import {
   defaultHasContent,
   renderHoldingState,
@@ -486,7 +486,21 @@ describe('mountViewerShell', () => {
     const [container, payload, meta] = renderBody.mock.calls[0];
     expect(container.className).toBe('viewer-shell-body');
     expect(payload).toEqual({ standings: [{ name: 'A' }] });
-    expect(meta).toEqual({ isTest: false });
+    expect(meta).toEqual({ isTest: false, format: 'cup_taster', eventId: 'ev1' });
+  });
+
+  it('tells hasContent and renderBody which format the live row is, so one surface can serve any format', async () => {
+    const hasContent = vi.fn(() => true);
+    const renderBody = vi.fn();
+    await mountViewerShell(document.createElement('div'), {
+      orgId: 'org1',
+      renderBody,
+      hasContent,
+      showChrome: false,
+      client: fakeClient([session({ format: 'btc', payload: { standings: [] } })]),
+    });
+    expect(hasContent).toHaveBeenCalledWith({ standings: [] }, { format: 'btc', eventId: 'ev1' });
+    expect(renderBody.mock.calls[0][2]).toEqual({ isTest: false, format: 'btc', eventId: 'ev1' });
   });
 
   it('renders the is_test banner (as role="alert") once a session with is_test=true is loaded', async () => {
@@ -1300,5 +1314,171 @@ describe('mountViewerShell', () => {
     client._triggerChange();
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(root.textContent).toBe('untouched');
+  });
+});
+
+describe('mountViewerShell: onNoContent', () => {
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const mount = (client, onNoContent, extra = {}) =>
+    mountViewerShell(document.createElement('div'), {
+      orgId: 'org1',
+      renderBody: vi.fn(),
+      onNoContent,
+      showChrome: false,
+      client,
+      ...extra,
+    });
+
+  it('is told "noEvent" when the org has no event at all', async () => {
+    const onNoContent = vi.fn();
+    await mount(fakeClient([], { events: [] }), onNoContent);
+    expect(onNoContent).toHaveBeenCalledWith('noEvent');
+  });
+
+  it('is told "notStarted" when there is an event but no active session', async () => {
+    const onNoContent = vi.fn();
+    await mount(fakeClient([]), onNoContent);
+    expect(onNoContent).toHaveBeenCalledWith('notStarted');
+  });
+
+  it('is NOT called for "pending": a row with nothing to show yet may fill in, and a different event shows in the eventId', async () => {
+    const onNoContent = vi.fn();
+    await mount(fakeClient([session({ payload: {} })]), onNoContent);
+    expect(onNoContent).not.toHaveBeenCalled();
+  });
+
+  it('is not called when a live session turns pending and live again (one session, a blip in its content)', async () => {
+    const onNoContent = vi.fn();
+    const client = fakeClient([session({ payload: { standings: [1] } })]);
+    await mount(client, onNoContent);
+    client.db.live_sessions[0].payload = {};
+    client._triggerChange();
+    await settle();
+    client.db.live_sessions[0].payload = { standings: [1] };
+    client._triggerChange();
+    await settle();
+    expect(onNoContent).not.toHaveBeenCalled();
+  });
+
+  it('is not called while the session has live content', async () => {
+    const onNoContent = vi.fn();
+    await mount(fakeClient([session({ payload: { standings: [1] } })]), onNoContent);
+    expect(onNoContent).not.toHaveBeenCalled();
+  });
+
+  it('is not called while still connecting (nothing has been built yet)', async () => {
+    const onNoContent = vi.fn();
+    const client = fakeClient([session({ payload: { standings: [1] } })], { readDelayMs: 20 });
+    const mounting = mount(client, onNoContent);
+    expect(onNoContent).not.toHaveBeenCalled();
+    await mounting;
+    expect(onNoContent).not.toHaveBeenCalled();
+  });
+
+  it('is called when a live session goes away, so what was built for it can be released', async () => {
+    const onNoContent = vi.fn();
+    const client = fakeClient([session({ payload: { standings: [1] } })]);
+    await mount(client, onNoContent);
+    expect(onNoContent).not.toHaveBeenCalled();
+    client.db.live_sessions.length = 0;
+    client._triggerChange();
+    await settle();
+    expect(onNoContent).toHaveBeenCalledWith('notStarted');
+  });
+
+  it('is not called for a lost connection: the same session is still there and a blip must not forget it', async () => {
+    const onNoContent = vi.fn();
+    const client = fakeClient([session({ payload: { standings: [1] } })]);
+    await mount(client, onNoContent);
+    client._triggerStatus('CHANNEL_ERROR');
+    await settle();
+    expect(onNoContent).not.toHaveBeenCalled();
+  });
+
+  it('is called on every render while the session stays gone (it must be idempotent)', async () => {
+    const onNoContent = vi.fn();
+    const client = fakeClient([]);
+    await mount(client, onNoContent);
+    expect(onNoContent).toHaveBeenCalledTimes(1);
+    client._triggerChange();
+    await settle();
+    client._triggerChange();
+    await settle();
+    expect(onNoContent).toHaveBeenCalledTimes(3);
+  });
+
+  it('is called once the connection is back when the session ended during the outage', async () => {
+    const onNoContent = vi.fn();
+    const client = fakeClient([session({ payload: { standings: [1] } })]);
+    await mount(client, onNoContent);
+    client._triggerStatus('CHANNEL_ERROR');
+    await settle();
+    expect(onNoContent).not.toHaveBeenCalled();
+    client.db.live_sessions.length = 0;
+    client._triggerStatus('SUBSCRIBED');
+    await settle();
+    expect(onNoContent).toHaveBeenCalledWith('notStarted');
+  });
+
+  it('a callback that throws is logged and does not break the shell or its refresh', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const root = document.createElement('div');
+    const client = fakeClient([]);
+    await expect(
+      mountViewerShell(root, {
+        orgId: 'org1',
+        renderBody: vi.fn(),
+        onNoContent: () => {
+          throw new Error('release failed');
+        },
+        showChrome: false,
+        client,
+      }),
+    ).resolves.toBeDefined();
+    expect(root.textContent).toContain('Waiting for the organiser');
+    expect(error).toHaveBeenCalledWith('viewer-shell: onNoContent failed', expect.any(Error));
+    error.mockRestore();
+  });
+
+  it('is optional: a shell mounted without it still shows the holding state', async () => {
+    const root = document.createElement('div');
+    await mountViewerShell(root, {
+      orgId: 'org1',
+      renderBody: vi.fn(),
+      showChrome: false,
+      client: fakeClient([]),
+    });
+    expect(root.textContent).toContain('Waiting for the organiser');
+  });
+});
+
+// jsdom does no layout; this pins the CSS half of D9's "unmistakable on a long phone page" from the source text.
+describe('viewer-shell.css: the TEST banner stays in view while a long page scrolls', () => {
+  let blocks;
+  beforeAll(async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const dir = path.dirname(fileURLToPath(import.meta.url));
+    const css = fs
+      .readFileSync(path.join(dir, 'viewer-shell.css'), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '');
+    blocks = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, selector, body]) => ({
+      selector: selector.trim().replace(/\s+/g, ' '),
+      body,
+    }));
+  });
+
+  it('makes the banner host sticky at the top, only while it has a banner in it', () => {
+    const rule = blocks.filter((b) => b.selector === '.viewer-banner-host:not(:empty)');
+    expect(rule).toHaveLength(1);
+    expect(rule[0].body).toMatch(/position:\s*sticky/);
+    expect(rule[0].body).toMatch(/top:\s*0/);
+    expect(rule[0].body).toMatch(/z-index:\s*\d+/);
+  });
+
+  it('does not reserve anything for a real event (the host is only styled while it is not empty)', () => {
+    const bare = blocks.filter((b) => b.selector === '.viewer-banner-host');
+    expect(bare.every((b) => !/position:\s*sticky|padding/.test(b.body))).toBe(true);
   });
 });

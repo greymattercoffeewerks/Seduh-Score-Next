@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="/src/core/stageDisplay.css" />
     <link rel="stylesheet" href="/src/core/stageSurface.css" />
     <link rel="stylesheet" href="/src/core/stageMoments.css" />
+    <link rel="stylesheet" href="/src/core/stageVocabulary.css" />
     <link rel="stylesheet" href="/src/core/countdownDisplay.css" />
     <link rel="stylesheet" href="/src/formats/cup-taster/heatsScreen.css" />
     <link rel="stylesheet" href="/src/formats/cup-taster/standingsScreen.css" />
@@ -53,8 +54,8 @@
   <body>
     <!--
       Demo-only harness for the projector surface — not part of the shipped module graph, same role as every
-      other *.preview.html file. Mounts the REAL mountProjectorSurface() (viewer-shell + the projector body,
-      showChrome: false, data-surface="stage") against a fake live_sessions source, with a button per screen:
+      other *.preview.html file. Mounts the REAL mountProjector() (src/liveSurfaces.js, the same mount /live/projector uses: viewer-shell + the
+      projector body, showChrome: false, data-surface="stage") against a fake live_sessions source, with a button per screen:
       the heat on stage (live countdown), the urgent countdown, a hand-timed heat, being scored, the idle
       loop (an "up next" page and 17 cuppers in pages of 8, with the page-change ring), the champion, and the
       TEST-event banner. Resize the window to try other screen shapes.
@@ -78,7 +79,7 @@
     <div id="projector-frame"></div>
 
     <script type="module">
-      import { mountProjectorSurface } from './projectorSurface.js';
+      import { mountProjector } from '../../liveSurfaces.js';
       import { buildActiveHeatPayload } from './demoActiveHeatPayload.js';
 
       const ORG_ID = 'org1';
@@ -161,7 +162,7 @@
       }
 
       const client = createDemoClient();
-      mountProjectorSurface(document.getElementById('projector-frame'), { orgId: ORG_ID, client });
+      mountProjector(document.getElementById('projector-frame'), { orgId: ORG_ID, client });
 
       const EVENT_NAME = 'Grey Matter Cup Taster Competition 2026';
       const NAMES = [

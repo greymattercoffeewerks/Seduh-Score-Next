@@ -282,8 +282,8 @@ describe('result screen', () => {
       result('Ayu', 6, 230),
       result('Cleo', 5, 190),
     ]);
-    expect(text(host, '.projector-kicker')).toBe('Result recorded');
-    expect(text(host, '.projector-title')).toBe('Heat 3');
+    expect(text(host, '.stage-kicker')).toBe('Result recorded');
+    expect(text(host, '.stage-title')).toBe('Heat 3');
     expect(all(host, '.projector-station-name')).toEqual(['Ayu', 'Cleo', 'Bima']);
     expect(all(host, '.projector-station-label')).toEqual(['1st', '2nd', '3rd']);
     expect(all(host, '.projector-station-note')).toEqual([
@@ -333,7 +333,7 @@ describe('result screen', () => {
       snapshot(),
       snapshot({ recentHeats: [heat(1, [result('Ayu', 5, 200)], { kind: 'tiebreak' })] }),
     );
-    expect(text(mountMoment(moments[0]).host, '.projector-title')).toBe('Heat 1 (tiebreak)');
+    expect(text(mountMoment(moments[0]).host, '.stage-title')).toBe('Heat 1 (tiebreak)');
   });
 
   it('takes the compact layout for more than four cuppers, like the heat screen', () => {
@@ -391,8 +391,8 @@ describe('rank-impact screen', () => {
         (r) => r,
       ),
     );
-    expect(text(host, '.projector-kicker')).toBe('Rank impact');
-    expect(text(host, '.projector-title')).toBe('Cleo takes the lead');
+    expect(text(host, '.stage-kicker')).toBe('Rank impact');
+    expect(text(host, '.stage-title')).toBe('Cleo takes the lead');
     expect(all(host, '.stage-move-pos')).toEqual(['1', '2', '3', '4']);
     expect(all(host, '.stage-move-name-text')).toEqual(['Cleo', 'Dara', 'Ayu', 'Bima']);
     expect(all(host, '.stage-move-change')).toEqual(['New', 'Up 1', 'Down 2', 'Down 2']);
@@ -437,7 +437,7 @@ describe('rank-impact screen', () => {
   it('renders names as text, never as markup', () => {
     const { host } = rankScreen(previous, [standing(1, '<b>Cleo</b>'), standing(2, 'Ayu')]);
     expect(host.querySelector('b')).toBeNull();
-    expect(text(host, '.projector-title')).toBe('<b>Cleo</b> takes the lead');
+    expect(text(host, '.stage-title')).toBe('<b>Cleo</b> takes the lead');
   });
 });
 
