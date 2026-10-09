@@ -23,7 +23,8 @@ import { renderMovementRows } from '../../core/rankMovementRows.js';
 import { rankImpactRows, leadMovement, topMover } from '../../core/rankImpact.js';
 import { ordinalLabel } from '../../core/ordinal.js';
 import { stageKicker } from '../../core/stageVocabulary.js';
-import { renderSide, renderVs, matchLine } from './projectorScreens.js';
+import { renderSide, renderVs } from './projectorScreens.js';
+import { matchLine, outcomeLine, tiebreakText } from './words.js';
 
 // Long enough to read the points and what they were made of, short enough that the room is not waiting.
 export const RESULT_HOLD_MS = 8_000;
@@ -128,7 +129,7 @@ function chipsFor(team, result) {
   if (team.bonuses?.fastest) chips.push({ text: '+2 fastest' });
   if (team.bonuses?.signature) chips.push({ text: '+2 signature beverage' });
   if (team.winner && result.tiebreak) {
-    chips.push({ text: `Tie-break: ${result.tiebreak.reason}`, kind: 'tiebreak' });
+    chips.push({ text: tiebreakText(result.tiebreak), kind: 'tiebreak' });
   }
   return chips;
 }
@@ -143,25 +144,6 @@ const LEVEL_NOTES = {
 function levelNote(result) {
   if (result.round === 'preliminary') return null;
   return LEVEL_NOTES[result.round] ?? 'The organiser decides who goes through.';
-}
-
-function footerForResult(result) {
-  const winner = result.teams.find((team) => team.winner);
-  if (!winner) {
-    return result.round === 'preliminary'
-      ? 'Level on points'
-      : 'Level on points: waiting for the organiser’s decision';
-  }
-  switch (result.round) {
-    case 'preliminary':
-      return `${winner.name} win`;
-    case 'final':
-      return `${winner.name} are the champions`;
-    case 'third_place':
-      return `${winner.name} take third place`;
-    default:
-      return `${winner.name} go through`;
-  }
 }
 
 const resultMoment = {
@@ -188,7 +170,7 @@ const resultMoment = {
     );
     const note = result.level && !anyWinner ? levelNote(result) : null;
     if (note) frame.main.append(el('p', { className: 'btc-stage-note', text: note }));
-    frame.footerStart.textContent = footerForResult(result);
+    frame.footerStart.textContent = outcomeLine(result);
     frame.footerEnd.textContent = '';
     const ring = mountFooterRing(frame, RESULT_HOLD_MS);
     return { destroy: () => ring.destroy() };

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeAll } from 'vitest';
 import {
   defaultHasContent,
   renderHoldingState,
@@ -1449,5 +1449,36 @@ describe('mountViewerShell: onNoContent', () => {
       client: fakeClient([]),
     });
     expect(root.textContent).toContain('Waiting for the organiser');
+  });
+});
+
+// jsdom does no layout; this pins the CSS half of D9's "unmistakable on a long phone page" from the source text.
+describe('viewer-shell.css: the TEST banner stays in view while a long page scrolls', () => {
+  let blocks;
+  beforeAll(async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const dir = path.dirname(fileURLToPath(import.meta.url));
+    const css = fs
+      .readFileSync(path.join(dir, 'viewer-shell.css'), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '');
+    blocks = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, selector, body]) => ({
+      selector: selector.trim().replace(/\s+/g, ' '),
+      body,
+    }));
+  });
+
+  it('makes the banner host sticky at the top, only while it has a banner in it', () => {
+    const rule = blocks.filter((b) => b.selector === '.viewer-banner-host:not(:empty)');
+    expect(rule).toHaveLength(1);
+    expect(rule[0].body).toMatch(/position:\s*sticky/);
+    expect(rule[0].body).toMatch(/top:\s*0/);
+    expect(rule[0].body).toMatch(/z-index:\s*\d+/);
+  });
+
+  it('does not reserve anything for a real event (the host is only styled while it is not empty)', () => {
+    const bare = blocks.filter((b) => b.selector === '.viewer-banner-host');
+    expect(bare.every((b) => !/position:\s*sticky|padding/.test(b.body))).toBe(true);
   });
 });

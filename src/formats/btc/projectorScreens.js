@@ -18,6 +18,22 @@ import { createStagePageLoop } from '../../core/stagePageLoop.js';
 import { sharedPositions } from '../../core/rankMovement.js';
 import { ordinalLabel } from '../../core/ordinal.js';
 import {
+  hasBtcPublicContent,
+  upNextKicker,
+  judgesLine,
+  thenLine,
+  matchesPlayedLine,
+  standingsHeading,
+  tiedSuffix,
+  TO_BE_DECIDED,
+  decidedPodiumPlaces,
+  matchLine,
+  winsText,
+  qualifyingNote,
+  finalScoreLine,
+  podiumPlace as placeOf,
+} from './words.js';
+import {
   stageKicker,
   stageTitle,
   renderStandingsHead,
@@ -30,31 +46,12 @@ import {
 export const STANDINGS_PAGE_SIZE = 8;
 // Long enough to find your team and read the row, short enough that the loop is not a wait.
 export const PAGE_DWELL_MS = 10_000;
-// The preliminary round's top eight reach the quarterfinals (generate_btc_bracket seeds eight, and refuses to
-// until a tie across the cut-off is settled, so the standings say "qualify", never "go through", while it is open).
-export const KNOCKOUT_PLACES = 8;
 // The champion stays up; only news (a moment) replaces it sooner than this.
 const CHAMPION_MIN_DWELL_MS = 60_000;
 
 // ---------- what the band says ----------
 
-const SECTION_LABELS = {
-  preliminary: 'Preliminary round',
-  knockout: 'Knockout',
-  complete: 'Final result',
-};
-
-export function btcBand(payload) {
-  return {
-    eventName: payload?.eventName ?? null,
-    sectionLabel: SECTION_LABELS[payload?.phase] ?? null,
-    live: true,
-  };
-}
-
 // ---------- small shared pieces (also used by the moments) ----------
-
-export const matchLine = (match) => `${match.teams[0].name} vs ${match.teams[1].name}`;
 
 // One side of a match card: a label (in words: "3rd in the table", "Goes through"), the team's name, and for a result its
 // points and the chips that explain them. `winner` is true, false, or null when there is no winner to show
@@ -109,30 +106,16 @@ function renderUpNextPage(match) {
       ? `${ordinalLabel(a.place)} meets ${ordinalLabel(b.place)}`
       : match.roundLabel;
   return [
-    stageKicker(`Up next · ${match.roundLabel}`),
+    stageKicker(upNextKicker(match.roundLabel)),
     stageTitle(title),
     renderVs(
       renderSide({ label: placeOf(a), name: a.name }),
       renderSide({ label: placeOf(b), name: b.name }),
     ),
-    match.judges?.length
-      ? el('p', { className: 'btc-stage-judges', text: `Judges: ${match.judges.join(' · ')}` })
+    judgesLine(match.judges)
+      ? el('p', { className: 'btc-stage-judges', text: judgesLine(match.judges) })
       : null,
   ].filter(Boolean);
-}
-
-// "top 8 qualify", or what is still undecided when teams with results share the place at the cut-off.
-function qualifyingNote(standings) {
-  const last = standings[KNOCKOUT_PLACES - 1];
-  const after = standings[KNOCKOUT_PLACES];
-  if (last && after && last.position === after.position && last.played > 0 && after.played > 0) {
-    return `top ${KNOCKOUT_PLACES} qualify · tie for ${ordinalLabel(last.position)}`;
-  }
-  return `top ${KNOCKOUT_PLACES} qualify`;
-}
-
-function winsText(wins) {
-  return `${wins} ${wins === 1 ? 'win' : 'wins'}`;
 }
 
 function renderStandingsPage(payload, page, range, pageCount) {
@@ -142,17 +125,15 @@ function renderStandingsPage(payload, page, range, pageCount) {
     name: row.teamName,
     // Words, never colour alone. A team that has not played yet is level with every other such team, which
     // is not news, so only a tie among teams with results is written in the row.
-    suffix: row.played > 0 && shared.has(row.position) ? ' (tied)' : '',
+    suffix: tiedSuffix(row, shared),
     cells: [winsText(row.wins), `${row.points} pts`],
   }));
   const preliminary = payload.phase === 'preliminary';
   const progress = payload.progress;
   return [
-    preliminary && progress?.total > 0
-      ? stageKicker(`${progress.played} of ${progress.total} matches played`)
-      : null,
+    preliminary && progress?.total > 0 ? stageKicker(matchesPlayedLine(progress)) : null,
     renderStandingsHead(
-      preliminary ? 'Standings' : 'Preliminary standings',
+      standingsHeading(payload.phase),
       standingsRangeText(range, pageCount, 'teams'),
     ),
     renderStandingsTable(rows, [{ width: '12vw' }, { width: '14vw' }]),
@@ -204,7 +185,7 @@ function renderSlot(slot, round, label) {
             },
           },
           [
-            el('span', { text: team.name ?? 'To be decided' }),
+            el('span', { text: team.name ?? TO_BE_DECIDED }),
             mark
               ? el('span', {
                   className: 'btc-stage-slot-mark',
@@ -272,9 +253,7 @@ const idleScreen = {
           kind: 'next',
           render: () => renderUpNextPage(next.upNext),
           label: 'Up next',
-          footer: next.thenNext
-            ? `Then: ${next.thenNext.roundLabel} · ${matchLine(next.thenNext)}`
-            : 'Up next',
+          footer: next.thenNext ? thenLine(next.thenNext) : 'Up next',
         });
       }
       if (next.bracket) {
@@ -337,26 +316,9 @@ const idleScreen = {
 
 // ---------- the champion ----------
 
-const placeOf = (payload, key) => payload.podium?.places?.find((place) => place.key === key);
-
-// "Final 52 – 44", from the final's slot in the bracket (the champion's total first), plus how it was decided
-// when the organiser had to. null when the totals are not there.
-function finalScoreLine(payload) {
-  const slot = payload.bracket?.rounds
-    ?.find((round) => round.round === 'final')
-    ?.slots?.find((candidate) => candidate.status === 'confirmed');
-  if (!slot || slot.teams.some((team) => team.total === null)) return null;
-  const ordered = [...slot.teams].sort((a, b) => Number(b.winner) - Number(a.winner));
-  const line = `Final ${ordered[0].total} – ${ordered[1].total}`;
-  return placeOf(payload, 'champion')?.viaTiebreak ? `${line}, decided by tie-break` : line;
-}
-
 // "1st runner-up X   ·   3rd place Y": only the places that are decided, never a guess.
 function podiumLine(payload) {
-  const parts = ['runnerUp', 'third']
-    .map((key) => placeOf(payload, key))
-    .filter((place) => place?.state === 'decided')
-    .map((place) => `${place.label} ${place.teamName}`);
+  const parts = decidedPodiumPlaces(payload).map((place) => `${place.label} ${place.teamName}`);
   return parts.length ? parts.join('   ·   ') : null;
 }
 
@@ -396,9 +358,7 @@ const championScreen = {
 export function selectBtcScreen(payload) {
   if (!payload) return null;
   if (placeOf(payload, 'champion')?.state === 'decided') return championScreen;
-  if (payload.phase === 'setup') return null;
-  if (payload.upNext || payload.bracket || payload.standings?.length > 0) return idleScreen;
-  return null;
+  return hasBtcPublicContent(payload) ? idleScreen : null;
 }
 
 // The shell's hasContent predicate for this display: exactly "is there a screen for this payload", so the two

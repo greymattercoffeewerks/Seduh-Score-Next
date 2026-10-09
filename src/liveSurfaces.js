@@ -10,6 +10,7 @@ import { mountViewerShell } from './core/viewer-shell.js';
 import { createFormatBody } from './core/formatBody.js';
 import { createProjectorBody } from './formats/cup-taster/projectorBody.js';
 import { createBtcProjectorBody } from './formats/btc/projectorBody.js';
+import { createBtcViewerBody } from './formats/btc/viewerBody.js';
 import { mountViewerBody, hasViewableContent } from './formats/cup-taster/viewerBody.js';
 
 export const PROJECTOR_BODIES = {
@@ -19,6 +20,7 @@ export const PROJECTOR_BODIES = {
 
 export const PHONE_BODIES = {
   cup_taster: () => ({ renderBody: mountViewerBody, hasContent: hasViewableContent }),
+  btc: () => createBtcViewerBody(),
 };
 
 export function mountProjector(root, { orgId, client, signal, bodies = PROJECTOR_BODIES } = {}) {

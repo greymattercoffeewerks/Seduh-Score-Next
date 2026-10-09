@@ -3,7 +3,8 @@
 // projectorMoments.js, and the machinery (one display kept across payloads, re-attached to the shell's body
 // each time; released when the session ends) is core/stageBody.js.
 import { createStageBody } from '../../core/stageBody.js';
-import { selectBtcScreen, btcBand, hasBtcProjectorContent } from './projectorScreens.js';
+import { selectBtcScreen, hasBtcProjectorContent } from './projectorScreens.js';
+import { btcBand } from './words.js';
 import { detectBtcMoments } from './projectorMoments.js';
 
 export function createBtcProjectorBody(options = {}) {

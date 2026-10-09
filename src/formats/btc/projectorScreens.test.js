@@ -1,15 +1,13 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
-  btcBand,
   selectBtcScreen,
   hasBtcProjectorContent,
-  matchLine,
   renderSide,
   renderVs,
   STANDINGS_PAGE_SIZE,
   PAGE_DWELL_MS,
-  KNOCKOUT_PLACES,
 } from './projectorScreens.js';
+import { btcBand, matchLine, KNOCKOUT_PLACES } from './words.js';
 import { preliminaryPayload, knockoutPayload } from './demoLivePayload.js';
 
 afterEach(() => {
