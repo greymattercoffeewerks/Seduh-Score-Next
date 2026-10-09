@@ -22,6 +22,10 @@ let flushOutcome = 'success';
 let failSingle = false;
 let failLedger = false;
 let beforeQueueRead = null; // a hook that lets a test act "between" the screen's reads
+// What a real flush reports for each operation it drops: its id and the error that dropped it.
+function droppedAll(error) {
+  return queue.map((op) => ({ operationId: op.payload.p_operation_id, error }));
+}
 function applyQueuedOps() {
   for (const { payload } of queue) {
     db.btc_matches[0] = {
@@ -45,31 +49,62 @@ vi.mock('../../core/outbox.js', () => ({
     if (flushOutcome === 'success') {
       // Like the real RPC: a confirm built on an old match version is refused (P0002).
       if (queue.some((op) => op.payload.p_expected_updated_at !== db.btc_matches[0].updated_at)) {
+        const dropped = droppedAll({ code: 'P0002' });
         queue = [];
-        return { processed: 0, stopped: false, permanentFailure: true, error: { code: 'P0002' } };
+        return {
+          processed: 0,
+          stopped: false,
+          permanentFailure: true,
+          error: { code: 'P0002' },
+          dropped,
+        };
       }
       applyQueuedOps();
       return { processed: 1, stopped: false, permanentFailure: false };
     }
     if (flushOutcome === 'conflict') {
+      const dropped = droppedAll({ code: 'P0002' });
       queue = []; // a permanent rejection is dropped from the queue
-      return { processed: 0, stopped: false, permanentFailure: true, error: { code: 'P0002' } };
-    }
-    if (flushOutcome === 'invalid') {
-      queue = [];
       return {
         processed: 0,
         stopped: false,
         permanentFailure: true,
-        error: { code: 'P0001', message: 'confirm_btc_match: 3 of 15 cups are missing a score' },
+        error: { code: 'P0002' },
+        dropped,
+      };
+    }
+    if (flushOutcome === 'invalid' || flushOutcome === 'invalid-then-publish-fails') {
+      const confirmError = {
+        code: 'P0001',
+        message: 'confirm_btc_match: 3 of 15 cups are missing a score',
+      };
+      const dropped = droppedAll(confirmError);
+      queue = [];
+      return {
+        processed: 0,
+        stopped: flushOutcome === 'invalid-then-publish-fails',
+        permanentFailure: true,
+        // the flush ENDS on the display publish's own failure when it fails behind a refused confirm
+        error:
+          flushOutcome === 'invalid-then-publish-fails'
+            ? { code: '', message: 'Failed to fetch' }
+            : confirmError,
+        dropped,
       };
     }
     return { processed: 0, stopped: true, permanentFailure: false }; // offline: stays queued
   }),
   buildRpcHandler: () => async () => {},
+  droppedErrorFor: (flushResult, operationId) =>
+    flushResult?.dropped?.find((drop) => drop.operationId === operationId)?.error ?? null,
 }));
 
+// The live-display intent is covered in liveSession.test.js; here it is a spy, so these tests' fake outbox
+// sees only the confirm.
+vi.mock('./liveSession.js', () => ({ enqueueBtcLive: vi.fn(async () => {}) }));
+
 const { mountScoringScreen } = await import('./scoringScreen.js');
+const { enqueueBtcLive } = await import('./liveSession.js');
 const { DEFAULT_LOAD_TIMEOUT_MS } = await import('../../core/timeout.js');
 
 function fakeClient({ hang = false } = {}) {
@@ -153,6 +188,7 @@ describe('mountScoringScreen', () => {
   let root;
 
   beforeEach(() => {
+    enqueueBtcLive.mockClear();
     cache.clear();
     cacheSetFails = false;
     cacheClearFails = false;
@@ -393,6 +429,107 @@ describe('mountScoringScreen', () => {
     expect(queue).toHaveLength(1);
   });
 
+  describe('the live display', () => {
+    const EVENT = expect.objectContaining({ id: 'ev1', org_id: 'org1', is_test: true });
+
+    const handlers = { composed: true };
+
+    it('is queued RIGHT behind the confirm and BEFORE the flush, taking the display over', async () => {
+      const { enqueueOperation, flushOutbox } = await import('../../core/outbox.js');
+      await mount({ handlers });
+      await fillAll();
+      enqueueOperation.mockClear();
+      flushOutbox.mockClear();
+      confirmButton().click();
+      await flush();
+      expect(feedback().textContent).toBe('Match confirmed.');
+      expect(enqueueBtcLive).toHaveBeenCalledTimes(1);
+      expect(enqueueBtcLive).toHaveBeenCalledWith({ event: EVENT, takeOver: true });
+      const confirmQueued = enqueueOperation.mock.invocationCallOrder[0];
+      const displayQueued = enqueueBtcLive.mock.invocationCallOrder[0];
+      const firstFlush = flushOutbox.mock.invocationCallOrder[0];
+      expect(confirmQueued).toBeLessThan(displayQueued);
+      expect(displayQueued).toBeLessThan(firstFlush);
+    });
+
+    it('is queued even when the confirm has to wait to sync (offline)', async () => {
+      await mount({ handlers });
+      await fillAll();
+      flushOutcome = 'offline';
+      confirmButton().click();
+      await flush();
+      expect(enqueueBtcLive).toHaveBeenCalledTimes(1);
+      expect(enqueueBtcLive.mock.calls[0][0]).toEqual({ event: EVENT, takeOver: true });
+    });
+
+    it('is still queued if the scorer leaves the screen right after pressing Confirm', async () => {
+      const controller = new AbortController();
+      await mount({ signal: controller.signal, handlers });
+      await fillAll();
+      confirmButton().click();
+      controller.abort();
+      await flush();
+      expect(enqueueBtcLive).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+      ['a version conflict', 'conflict'],
+      ['a rejected confirm', 'invalid'],
+    ])(
+      'is queued before the outcome is known, so a refused confirm (%s) just republishes the true state',
+      async (_label, outcome) => {
+        await mount({ handlers });
+        await fillAll();
+        flushOutcome = outcome;
+        confirmButton().click();
+        await flush();
+        expect(enqueueBtcLive).toHaveBeenCalledTimes(1);
+      },
+    );
+
+    it('is not queued when nothing could be submitted', async () => {
+      await mount({ handlers });
+      await fillAll();
+      cacheSetFails = true;
+      confirmButton().click();
+      await flush();
+      expect(enqueueBtcLive).not.toHaveBeenCalled();
+    });
+
+    it('is not queued when the screen has no composed outbox map (a flush could not run it)', async () => {
+      await mount();
+      await fillAll();
+      confirmButton().click();
+      await flush();
+      expect(feedback().textContent).toBe('Match confirmed.');
+      expect(enqueueBtcLive).not.toHaveBeenCalled();
+    });
+
+    it('a refused confirm shows ITS error even when the publish behind it fails and ends the flush', async () => {
+      await mount({ handlers });
+      await fillAll();
+      flushOutcome = 'invalid-then-publish-fails';
+      confirmButton().click();
+      await flush();
+      expect(feedback().textContent).toMatch(/3 of 15 cups are missing a score|missing a score/i);
+      expect(feedback().dataset.tone).toBe('error');
+    });
+
+    it('a failure to queue it is logged and never stops the confirm', async () => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      enqueueBtcLive.mockRejectedValueOnce(new Error('storage unavailable'));
+      await mount({ handlers });
+      await fillAll();
+      confirmButton().click();
+      await flush();
+      expect(feedback().textContent).toBe('Match confirmed.');
+      expect(error).toHaveBeenCalledWith(
+        'btc scoringScreen: could not queue the live-display publish',
+        expect.any(Error),
+      );
+    });
+  });
+
   it('still recognises success when the server double mutates the fetched row in place', async () => {
     // Regression for a bug found in a real browser: a fake that hands back live
     // references and mutates them produced a contradictory success/failure display.
@@ -489,7 +626,7 @@ describe('mountScoringScreen', () => {
   describe('a confirmation that is still waiting to sync', () => {
     async function submitOffline() {
       flushOutcome = 'offline';
-      await mount();
+      await mount({ handlers: { composed: true } });
       await fillAll();
       confirmButton().click();
       await flush();
@@ -549,6 +686,8 @@ describe('mountScoringScreen', () => {
       expect(byText('Check sync status').hidden).toBe(true);
       expect(cache.get('btc-scoring-draft:m1')).toBeNull();
       expect(confirmButton().textContent).toBe('Re-confirm match');
+      // queued once, behind the confirm, when it was submitted; resolving it later adds nothing
+      expect(enqueueBtcLive).toHaveBeenCalledTimes(1);
     });
 
     it('Check sync status while still offline stays locked and says so', async () => {
@@ -569,6 +708,15 @@ describe('mountScoringScreen', () => {
       await flush();
       expect(notice().textContent).toMatch(/changed elsewhere/);
       expect(byText('Discard my edits and reload').hidden).toBe(false);
+    });
+
+    it("Check sync status shows the confirm's OWN refusal even when the publish behind it fails and ends the flush", async () => {
+      await submitOffline();
+      flushOutcome = 'invalid-then-publish-fails';
+      byText('Check sync status').click();
+      await flush();
+      expect(feedback().textContent).toMatch(/missing a score/i);
+      expect(feedback().dataset.tone).toBe('error');
     });
 
     it('a reload while it is still queued comes back locked, not editable', async () => {

@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mountSetupScreen, validateRosterName } from './setupScreen.js';
+import { publishBtcLive } from './liveSession.js';
+
+vi.mock('./liveSession.js', () => ({ publishBtcLive: vi.fn(async () => {}) }));
 
 // Table-based in-memory fake client, mirroring rosterScreen.test.js's own
 // (this screen composes findEvent + listTeams + listJudges + createTeam/
@@ -131,6 +134,7 @@ describe('mountSetupScreen', () => {
   let root;
 
   beforeEach(() => {
+    publishBtcLive.mockClear();
     root = document.createElement('div');
     document.body.appendChild(root);
   });
@@ -215,7 +219,8 @@ describe('mountSetupScreen', () => {
     it('loads the scored demo and replaces the roster on screen', async () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true);
       const client = fakeClient(baseDb());
-      await mountSetupScreen(root, { eventId: 'ev1', client });
+      const handlers = { composed: true };
+      await mountSetupScreen(root, { eventId: 'ev1', client, handlers });
       click(loadButton());
       await flush();
 
@@ -228,6 +233,16 @@ describe('mountSetupScreen', () => {
       // judges too, not only teams
       expect(root.textContent).not.toContain('Jordan');
       expect(root.textContent).toContain('Judge 1');
+      // Loading wipes and rebuilds the event, so the audience display is refreshed, and a rehearsal on the
+      // projector takes it over (as a test heat does for Cup Taster).
+      expect(publishBtcLive).toHaveBeenCalledTimes(1);
+      expect(publishBtcLive).toHaveBeenCalledWith(
+        {
+          event: expect.objectContaining({ id: 'ev1', org_id: 'org1', is_test: true }),
+          takeOver: true,
+        },
+        handlers,
+      );
     });
 
     it("prints the SERVER's numbers, not a hard-coded message", async () => {
@@ -307,6 +322,32 @@ describe('mountSetupScreen', () => {
       expect(client.rpcCalls).toHaveLength(1);
     });
 
+    it('never waits on the publish: the demo result still shows if it never settles', async () => {
+      publishBtcLive.mockImplementationOnce(() => new Promise(() => {}));
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      const client = fakeClient(baseDb());
+      await mountSetupScreen(root, { eventId: 'ev1', client });
+      click(loadButton());
+      await flush();
+      expect(status()).toMatch(/demo/i);
+      expect(root.textContent).toContain('Bean Scene');
+    });
+
+    it('a refused publish is logged, not thrown: the demo still loads', async () => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      publishBtcLive.mockRejectedValueOnce(new TypeError('no handler map'));
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      const client = fakeClient(baseDb());
+      await mountSetupScreen(root, { eventId: 'ev1', client });
+      click(loadButton());
+      await flush();
+      expect(root.textContent).toContain('Bean Scene');
+      expect(error).toHaveBeenCalledWith(
+        'btc: live-view publish was refused',
+        expect.any(TypeError),
+      );
+    });
+
     it('explains a refusal in an alert inside the card and leaves the roster alone', async () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true);
       const client = fakeClient(baseDb(), {
@@ -320,6 +361,8 @@ describe('mountSetupScreen', () => {
       expect(root.textContent).toContain('Alpha');
       // and the screen is usable again
       expect(loadButton().getAttribute('aria-disabled')).not.toBe('true');
+      // Nothing was loaded, so nothing is published.
+      expect(publishBtcLive).not.toHaveBeenCalled();
     });
 
     it('shows a visible, announced "Loading demo…" while it works, and says which button is busy', async () => {
@@ -415,6 +458,8 @@ describe('mountSetupScreen', () => {
       expect(root.textContent).toContain(
         'The demo loaded, but this page could not refresh. Retry to see it.',
       );
+      // The demo IS loaded, so the display is refreshed even though this page could not re-read it.
+      expect(publishBtcLive).toHaveBeenCalledTimes(1);
       // the old rows no longer exist on the server and must not stay on screen with Remove buttons
       expect(root.textContent).not.toContain('Alpha');
       const retry = [...root.querySelectorAll('button')].find((b) => b.textContent === 'Retry');
@@ -504,6 +549,10 @@ describe('mountSetupScreen', () => {
 
     expect(root.textContent).toContain('Gamma');
     expect(root.textContent).toContain('Gamma added.');
+
+    // Standings list every registered team: a roster change is a schedule edit for the room.
+    expect(publishBtcLive).toHaveBeenCalledTimes(1);
+    expect(publishBtcLive.mock.calls[0][0].takeOver).toBe(false);
   });
 
   it('shows a validation error and does not call the client when the team name is blank', async () => {
@@ -516,6 +565,8 @@ describe('mountSetupScreen', () => {
     await Promise.resolve();
 
     expect(root.textContent).toContain('Team name is required.');
+
+    expect(publishBtcLive).not.toHaveBeenCalled();
   });
 
   it('removes a team', async () => {
@@ -530,6 +581,9 @@ describe('mountSetupScreen', () => {
 
     expect(root.querySelector('button[aria-label="Remove Alpha"]')).toBeNull();
     expect(root.textContent).toContain('Alpha removed.');
+
+    expect(publishBtcLive).toHaveBeenCalledTimes(1);
+    expect(publishBtcLive.mock.calls[0][0].takeOver).toBe(false);
   });
 
   it('shows a describeError message, not a raw one, when removing a team fails (still referenced by a match)', async () => {
@@ -546,6 +600,8 @@ describe('mountSetupScreen', () => {
     // not have optimistically dropped it.
     expect(root.textContent).toContain('Alpha');
     expect(root.textContent).toContain('Something went wrong saving that — try again.');
+
+    expect(publishBtcLive).not.toHaveBeenCalled();
   });
 
   it('adds a judge and shows it in the list', async () => {

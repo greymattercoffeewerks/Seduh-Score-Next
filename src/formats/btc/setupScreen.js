@@ -11,6 +11,7 @@ import { getSupabase } from '../../core/supabaseClient.js';
 import { el, labeledField, setBusyDisabled, withFocusPreservation } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
 import { findEvent } from '../../core/events.js';
+import { publishBtcLive } from './liveSession.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
 import { listTeams, createTeam, removeTeam } from './teams.js';
 import { listJudges, createJudge, removeJudge } from './judges.js';
@@ -31,7 +32,10 @@ export function validateRosterName(name, label) {
   return null;
 }
 
-export async function mountSetupScreen(root, { eventId, client = getSupabase(), signal } = {}) {
+export async function mountSetupScreen(
+  root,
+  { eventId, client = getSupabase(), signal, handlers } = {},
+) {
   let state = {
     loading: true,
     loadFailedMessage: null,
@@ -61,6 +65,15 @@ export async function mountSetupScreen(root, { eventId, client = getSupabase(), 
     pendingFocus: null,
   };
   let toastTimer;
+
+  // The audience display follows every change the room should see (liveSession.js). Best-effort: a failed or
+  // offline publish stays queued and changes nothing about the action that triggered it. A programming error
+  // (no handler map, an event without is_test) rejects, so it is logged here rather than left unhandled.
+  function requestLivePublish(takeOver) {
+    publishBtcLive({ event: state.event, takeOver }, handlers).catch((error) => {
+      console.error('btc: live-view publish was refused', error);
+    });
+  }
 
   // Deliberately does NOT call render() itself — every call site already
   // ends with its own trailing `state.busy = false; render();`, and a
@@ -138,6 +151,8 @@ export async function mountSetupScreen(root, { eventId, client = getSupabase(), 
         ? state.teams
         : [...state.teams, team].sort((a, b) => a.name.localeCompare(b.name));
       state.teamDraft = '';
+      // Standings list every registered team, so a roster change is visible to the room.
+      requestLivePublish(false);
       showToast(`${team.name} added.`);
     } catch (err) {
       state.teamError = describeError(err);
@@ -153,6 +168,7 @@ export async function mountSetupScreen(root, { eventId, client = getSupabase(), 
     try {
       await removeTeam(team.id, client);
       state.teams = state.teams.filter((t) => t.id !== team.id);
+      requestLivePublish(false);
       showToast(`${team.name} removed.`);
     } catch (err) {
       showToast(describeError(err));
@@ -237,9 +253,11 @@ export async function mountSetupScreen(root, { eventId, client = getSupabase(), 
       render();
       return;
     }
-    // The demo IS loaded from here on. If re-reading the roster fails, the roster on screen is the
+    // The demo IS loaded from here on: refresh the display (a rehearsal on the projector takes it over, as a
+    // test heat does for Cup Taster). If re-reading the roster fails, the roster on screen is the
     // OLD one (rows that no longer exist), so do not keep showing it: fall back to the screen's own
     // load-error view, which says the demo loaded and offers Retry.
+    requestLivePublish(true);
     try {
       const persisted = await raceTimeout(loadPersisted(), DEFAULT_LOAD_TIMEOUT_MS);
       state.teams = persisted.teams;

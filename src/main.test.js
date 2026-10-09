@@ -316,6 +316,12 @@ describe('mountApp routing', () => {
       expect.anything(),
       expect.objectContaining({ eventId: 'ev1' }),
     );
+    // These screens publish to the live display (liveSession.js), so they flush with every format's
+    // handlers, never BTC's alone: a queued Cup Taster operation ahead of the publish must not stop it.
+    expect(mountBtcSetupScreen.mock.calls[0][1].handlers).toEqual({
+      ...cupTasterOutboxHandlers(),
+      ...btcOutboxHandlers(),
+    });
   });
 
   it('#/events/:eventId/btc/matches routes to the BTC matches screen with the right param', async () => {
@@ -329,6 +335,12 @@ describe('mountApp routing', () => {
       expect.anything(),
       expect.objectContaining({ eventId: 'ev1' }),
     );
+    // These screens publish to the live display (liveSession.js), so they flush with every format's
+    // handlers, never BTC's alone: a queued Cup Taster operation ahead of the publish must not stop it.
+    expect(mountBtcMatchesScreen.mock.calls[0][1].handlers).toEqual({
+      ...cupTasterOutboxHandlers(),
+      ...btcOutboxHandlers(),
+    });
   });
 
   it('#/events/:eventId/btc/standings routes to the BTC standings screen with the right param', async () => {
@@ -355,6 +367,12 @@ describe('mountApp routing', () => {
       expect.anything(),
       expect.objectContaining({ eventId: 'ev1' }),
     );
+    // These screens publish to the live display (liveSession.js), so they flush with every format's
+    // handlers, never BTC's alone: a queued Cup Taster operation ahead of the publish must not stop it.
+    expect(mountBtcBracketScreen.mock.calls[0][1].handlers).toEqual({
+      ...cupTasterOutboxHandlers(),
+      ...btcOutboxHandlers(),
+    });
   });
 
   it('#/events/:eventId/btc/matches/:matchId/scoring routes to the BTC scoring screen with the right param and allOutboxHandlers, not the BTC-only handler map', async () => {

@@ -12,6 +12,7 @@ import { getSupabase } from '../../core/supabaseClient.js';
 import { el, labeledField, setBusyDisabled, withFocusPreservation } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
 import { findEvent } from '../../core/events.js';
+import { publishBtcLive } from './liveSession.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
 import { listTeams } from './teams.js';
 import { listJudges } from './judges.js';
@@ -46,7 +47,10 @@ function matchStatusLabel(match) {
   return 'Match scheduled — not yet scored';
 }
 
-export async function mountBracketScreen(root, { eventId, client = getSupabase(), signal } = {}) {
+export async function mountBracketScreen(
+  root,
+  { eventId, client = getSupabase(), signal, handlers } = {},
+) {
   let state = {
     loading: true,
     loadFailedMessage: null,
@@ -132,12 +136,23 @@ export async function mountBracketScreen(root, { eventId, client = getSupabase()
     render();
   }
 
+  // The audience display follows every change the room should see (liveSession.js). Best-effort: a failed or
+  // offline publish stays queued and changes nothing about the action that triggered it. A programming error
+  // (no handler map, an event without is_test) rejects, so it is logged here rather than left unhandled.
+  function requestLivePublish(takeOver) {
+    publishBtcLive({ event: state.event, takeOver }, handlers).catch((error) => {
+      console.error('btc: live-view publish was refused', error);
+    });
+  }
+
   async function handleGenerateBracket() {
     if (state.generating) return;
     state.generating = true;
     render();
     try {
       await generateBracket(state.event.org_id, eventId, client);
+      // The bracket exists from here on, whether or not the re-read below succeeds.
+      requestLivePublish(false);
       state.entries = await fetchBracket(eventId, client);
       showToast('Bracket generated.');
     } catch (err) {
@@ -206,6 +221,7 @@ export async function mountBracketScreen(root, { eventId, client = getSupabase()
             }
           : e,
       );
+      requestLivePublish(false);
       const label = `${teamName(entry.slot.team1_id)} vs ${teamName(entry.slot.team2_id)}`;
       state.creatingSlotId = null;
       state.draftJudgeIds = [];
@@ -295,7 +311,9 @@ export async function mountBracketScreen(root, { eventId, client = getSupabase()
       render();
       return;
     }
-    // The decision IS saved from here on. Seats and the match row changed, so re-read both rather
+    // The decision IS saved from here on: tell the room (it is news, so this takes the display over).
+    requestLivePublish(true);
+    // Seats and the match row changed, so re-read both rather
     // than patching locally; if that read fails, say the save worked rather than that it failed.
     let refreshed = true;
     try {
@@ -436,7 +454,7 @@ export async function mountBracketScreen(root, { eventId, client = getSupabase()
         el('p', {
           id: hintId,
           className: 'stage-meta btc-tiebreak-hint',
-          text: "This reason may be shown on the public results page. Keep it factual: no personal details, and don't repeat scores.",
+          text: "This reason may be shown on the public results page and the live display. Keep it factual: no personal details, and don't repeat scores.",
         }),
         el('div', { className: 'btc-bracket-form-actions' }, [submitButton, cancelButton]),
       ].filter(Boolean),

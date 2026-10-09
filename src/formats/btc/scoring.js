@@ -241,6 +241,11 @@ export function confirmHandlers(client) {
 // work out what became of this exact operation. Returns the operation id and the flush
 // result; the flush result must NOT be treated as proof THIS confirm landed (the outbox is
 // one shared FIFO queue): use wasOperationProcessed for that.
+//
+// `afterEnqueue`, when given, runs once the confirm is durably queued and BEFORE the flush. The scoring screen
+// uses it to queue the live-display publish right behind the confirm: FIFO keeps it after the confirm, one
+// flush sends both, and it exists even if the scorer leaves the screen or the tab dies before the flush
+// returns. A failure in it is logged and never stops the confirm being flushed.
 export async function submitConfirmMatch(
   match,
   orgId,
@@ -249,6 +254,7 @@ export async function submitConfirmMatch(
   client = getSupabase(),
   handlers,
   operationId = crypto.randomUUID(),
+  afterEnqueue,
 ) {
   await enqueueOperation('confirm_btc_match', {
     p_operation_id: operationId,
@@ -257,6 +263,11 @@ export async function submitConfirmMatch(
     p_expected_updated_at: expectedUpdatedAt,
     ...params,
   });
+  try {
+    await afterEnqueue?.();
+  } catch (error) {
+    console.error('btc scoring: the after-enqueue step failed; flushing the confirm anyway', error);
+  }
   const result = await flushOutbox(handlers ?? confirmHandlers(client));
   return { operationId, result };
 }

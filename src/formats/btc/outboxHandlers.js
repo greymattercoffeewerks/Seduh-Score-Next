@@ -10,9 +10,10 @@
 // operation types. main.js is the one file allowed to know both formats, and merges
 // this map with Cup Taster's.
 import { confirmHandlers } from './scoring.js';
+import { publishBtcLiveSessionHandlers } from './liveSession.js';
 
 export function btcOutboxHandlers(client) {
-  return { ...confirmHandlers(client) };
+  return { ...confirmHandlers(client), ...publishBtcLiveSessionHandlers(client) };
 }
 
 // Kept as a plain object rather than derived from the handler map's keys: a key set
@@ -21,4 +22,5 @@ export function btcOutboxHandlers(client) {
 // key sets agree instead.
 export const btcOperationLabels = {
   confirm_btc_match: 'confirming a match',
+  publish_btc_live_session: 'updating the live display',
 };

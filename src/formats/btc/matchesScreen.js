@@ -16,6 +16,7 @@ import { getSupabase } from '../../core/supabaseClient.js';
 import { el, labeledField, setBusyDisabled, withFocusPreservation } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
 import { findEvent } from '../../core/events.js';
+import { publishBtcLive } from './liveSession.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
 import { listTeams } from './teams.js';
 import { listJudges } from './judges.js';
@@ -27,7 +28,10 @@ function blankDraft() {
   return { team1Id: '', team2Id: '', judgeIds: [] };
 }
 
-export async function mountMatchesScreen(root, { eventId, client = getSupabase(), signal } = {}) {
+export async function mountMatchesScreen(
+  root,
+  { eventId, client = getSupabase(), signal, handlers } = {},
+) {
   let state = {
     loading: true,
     loadFailedMessage: null,
@@ -48,6 +52,15 @@ export async function mountMatchesScreen(root, { eventId, client = getSupabase()
   }
   function judgeName(id) {
     return state.judges.find((j) => j.id === id)?.name ?? 'Unknown judge';
+  }
+
+  // The audience display follows every change the room should see (liveSession.js). Best-effort: a failed or
+  // offline publish stays queued and changes nothing about the action that triggered it. A programming error
+  // (no handler map, an event without is_test) rejects, so it is logged here rather than left unhandled.
+  function requestLivePublish(takeOver) {
+    publishBtcLive({ event: state.event, takeOver }, handlers).catch((error) => {
+      console.error('btc: live-view publish was refused', error);
+    });
   }
 
   function showToast(message) {
@@ -124,6 +137,7 @@ export async function mountMatchesScreen(root, { eventId, client = getSupabase()
     try {
       const match = await createMatch(eventId, { round: ROUND, ...state.draft }, client);
       state.matches = [...state.matches, { match, judgeIds: state.draft.judgeIds }];
+      requestLivePublish(false);
       const t1 = teamName(state.draft.team1Id);
       const t2 = teamName(state.draft.team2Id);
       state.draft = blankDraft();
@@ -154,6 +168,7 @@ export async function mountMatchesScreen(root, { eventId, client = getSupabase()
     try {
       await removeMatch(match.id, client);
       state.matches = state.matches.filter((m) => m.match.id !== match.id);
+      requestLivePublish(false);
       showToast(`${teamName(match.team1_id)} vs ${teamName(match.team2_id)} removed.`);
     } catch (err) {
       // Toast, not an inline formError like handleCreateMatch's own catch —

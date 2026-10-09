@@ -1,3 +1,8 @@
+// SUPERSEDED for live payloads (T-BTC.live-publish, 2026-10-09): both formats now publish through
+// core/publishIntent.js (enqueue a small intent, build the payload at flush time). `publishSession` and
+// `publishHandlers` below have no production caller; they remain for the handoff's T5.1 contract and tests.
+// `findActiveLiveEventId` is still live.
+//
 // Publish, format-agnostic (handoff §6, §14 T5.1). The write path a
 // format's own screens will eventually call to push a `live_sessions` row —
 // what the projector (T5.3) and phone (T5.4) surfaces both read. Only the

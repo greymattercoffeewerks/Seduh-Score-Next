@@ -22,6 +22,8 @@ import { getSupabase } from '../../core/supabaseClient.js';
 import { el, setBusyDisabled, withFocusPreservation } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
 import { findEvent } from '../../core/events.js';
+import { droppedErrorFor } from '../../core/outbox.js';
+import { enqueueBtcLive } from './liveSession.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
 import { listTeams } from './teams.js';
 import { listJudges } from './judges.js';
@@ -331,6 +333,22 @@ export async function mountScoringScreen(
     return { outcome: 'dropped', error: conflict ? { code: 'P0002' } : flushError };
   }
 
+  // The audience display follows every confirm (liveSession.js). Its intent is queued RIGHT BEHIND the confirm,
+  // before the flush (submitConfirmMatch's afterEnqueue), so it is durable even if the scorer leaves this
+  // screen or the tab dies before the flush returns, and the one flush then sends the confirm and the publish.
+  // A failure to queue it is logged and never stops the confirm. If the confirm is later refused the publish
+  // still runs and simply republishes the true state.
+  // Only when the composed outbox map was given (main.js always does): a flush without it could not run the
+  // publish and would leave it stuck at the head of the shared queue.
+  async function enqueueLivePublish(event) {
+    if (!handlers) return;
+    try {
+      await enqueueBtcLive({ event, takeOver: true });
+    } catch (error) {
+      console.error('btc scoringScreen: could not queue the live-display publish', error);
+    }
+  }
+
   async function finishConfirmed() {
     const fresh = await findMatchById(matchId, client).catch(() => null);
     try {
@@ -442,8 +460,11 @@ export async function mountScoringScreen(
         client,
         handlers,
         operationId,
+        () => enqueueLivePublish(event),
       );
-      flushError = result?.error ?? null;
+      // THIS confirm's own refusal, not whichever error the flush happened to end on: the display publish
+      // queued behind it can fail or be dropped after the confirm was refused.
+      flushError = droppedErrorFor(result, operationId) ?? result?.error ?? null;
     } catch (err) {
       flushError = err;
     }
@@ -466,7 +487,7 @@ export async function mountScoringScreen(
     let flushError = null;
     try {
       const result = await flushPending(client, handlers);
-      flushError = result?.error ?? null;
+      flushError = droppedErrorFor(result, operationId) ?? result?.error ?? null;
     } catch (err) {
       flushError = err;
     }

@@ -9,7 +9,7 @@
 // never disagree about who won. Pure `derivePodium` is the part a live surface (T-BTC.3)
 // reuses unedited; bracket.js's fetchBracketScores is the one query it needs.
 
-import { recordedWinnerId } from './tiebreak.js';
+import { winnerOfScore } from './tiebreak.js';
 
 const PODIUM_PLACES = [
   { key: 'champion', label: 'Champion' },
@@ -29,30 +29,16 @@ function outcomeOf(entry, scoresByMatchId) {
   if (!matchId) return { state: 'pending' };
   const score = scoresByMatchId.get(matchId);
   if (!score || score.status !== 'confirmed') return { state: 'pending' };
-  // PostgREST returns bigint sums as numbers today; coerce so a string response could
-  // never compare lexicographically.
-  const team1Total = Number(score.team1_total);
-  const team2Total = Number(score.team2_total);
-  if (team1Total === team2Total) {
-    // The one shared rule (tiebreak.js): a recorded winner counts only on a confirmed, level
-    // match and only if it is one of the two teams — so the podium and the slot card agree.
-    const decidedBy = recordedWinnerId(entry.match, score);
-    if (decidedBy) {
-      return {
-        state: 'decided',
-        viaTiebreak: true,
-        winnerId: decidedBy,
-        loserId: decidedBy === score.team1_id ? score.team2_id : score.team1_id,
-      };
-    }
-    return { state: 'tied' };
-  }
-  const team1Won = team1Total > team2Total;
+  // The one winner rule (tiebreak.js): the higher bonus-inclusive total, or, when level, the winner the
+  // organiser recorded. PostgREST returns bigint sums as numbers today; the rule coerces so a string
+  // response could never compare lexicographically.
+  const winnerId = winnerOfScore(entry.match, score);
+  if (winnerId === null) return { state: 'tied' };
   return {
     state: 'decided',
-    viaTiebreak: false,
-    winnerId: team1Won ? score.team1_id : score.team2_id,
-    loserId: team1Won ? score.team2_id : score.team1_id,
+    viaTiebreak: Number(score.team1_total) === Number(score.team2_total),
+    winnerId,
+    loserId: winnerId === score.team1_id ? score.team2_id : score.team1_id,
   };
 }
 
