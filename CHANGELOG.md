@@ -2,7 +2,7 @@
 
 **Task:** T-BTC.demo-data. Not a handoff §14 task: BTC is out-of-handoff (see ROADMAP's BTC section). Branch `feat/btc-demo-data`.
 
-**Status: not final.** Migration `20261009120000_btc_load_demo.sql` is NOT yet pushed to the cloud project (`wxzwanprluqmgoagbkpv`). This entry stays "not final" until the PR is merged, the migration is pushed with `apply_migration`, and `list_migrations` shows it.
+**Status: closed.** Migration `20261009120000_btc_load_demo.sql` was pushed to the cloud project (`wxzwanprluqmgoagbkpv`) on 2026-10-09 with `apply_migration` (recorded there as `20261009040337`, as with the earlier migrations) and verified there: `list_migrations` lists it; there is exactly one `load_btc_demo(p_org_id uuid, p_event_id uuid, p_scored boolean)`; it is security invoker with `search_path` set, carries the event row lock (`for update`), all three refusal hints, the NULL-means-scored default and the final score formula; and execute is granted to `authenticated` and `service_role` only (no `anon`, no public). It was not run against the cloud project (that would wipe a test event); the cloud project's behaviour is the same function body that 028 exercises locally.
 
 **Why:** rehearsing or presenting a BTC event meant retyping every team and judge, then scoring 28 round-robin matches by hand just to reach the bracket.
 
@@ -53,7 +53,6 @@
 
 **Follow-up:**
 
-- Merge, push `20261009120000` to the cloud project with `apply_migration`, check `list_migrations`, then mark this entry final.
 - The open items are in ROADMAP's new section.
 - `CONVENTIONS.md` was not touched; no new convention was named at close.
 
