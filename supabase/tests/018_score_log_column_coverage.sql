@@ -65,6 +65,7 @@ insert into _buckets values
   ('btc_matches', 'round', 'logged'), ('btc_matches', 'team1_id', 'logged'),
   ('btc_matches', 'team2_id', 'logged'), ('btc_matches', 'status', 'logged'),
   ('btc_matches', 'team1_time_note', 'logged'), ('btc_matches', 'team2_time_note', 'logged'),
+  ('btc_matches', 'tiebreak_winner_team_id', 'logged'), ('btc_matches', 'tiebreak_reason', 'logged'),
   ('btc_matches', 'created_at', 'metadata'), ('btc_matches', 'updated_at', 'metadata'),
   -- btc_bracket_slots (seeds/feeders are static, written once at bracket generation)
   ('btc_bracket_slots', 'id', 'immutable'), ('btc_bracket_slots', 'event_id', 'immutable'),
