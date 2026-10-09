@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { derivePodium, fetchPodiumScores, podiumMatchIds } from './podium.js';
+import { derivePodium } from './podium.js';
 
 const teams = [
   { id: 'a', name: 'Alpha' },
@@ -8,7 +8,10 @@ const teams = [
   { id: 'd', name: 'Delta' },
 ];
 
-const slot = (round, match_id) => ({ slot: { round, match_id }, match: null });
+const slot = (round, match_id, match = null) => ({
+  slot: { round, match_id },
+  match: match && { status: 'confirmed', ...match },
+});
 const score = (match_id, team1_id, team2_id, team1_total, team2_total, status = 'confirmed') => ({
   match_id,
   status,
@@ -157,52 +160,60 @@ describe('derivePodium', () => {
   });
 });
 
-describe('podiumMatchIds', () => {
-  it('picks only the final and third-place matches that exist', () => {
-    expect(
-      podiumMatchIds([
-        slot('quarterfinal', 'mq'),
-        slot('semifinal', 'ms'),
-        slot('final', 'mf'),
-        slot('third_place', null),
-      ]),
-    ).toEqual(['mf']);
-  });
-});
-
-describe('fetchPodiumScores', () => {
-  it('does not query at all when there are no match ids', async () => {
-    const client = {
-      from() {
-        throw new Error('should not query');
-      },
-    };
-    await expect(fetchPodiumScores([], client)).resolves.toEqual([]);
+describe('derivePodium with a recorded tie-break', () => {
+  it("lets the organiser's recorded winner decide a level final, and says so", () => {
+    const result = derivePodium({
+      entries: [slot('final', 'mf', { tiebreak_winner_team_id: 'b' })],
+      scores: [score('mf', 'a', 'b', 50, 50)],
+      teams,
+    });
+    expect(result.places.map((p) => [p.key, p.state, p.teamName, p.viaTiebreak])).toEqual([
+      ['champion', 'decided', 'Beta', true],
+      ['runnerUp', 'decided', 'Alpha', true],
+    ]);
+    expect(result.complete).toBe(true);
   });
 
-  it('asks btc_match_scores for exactly those matches and surfaces a query error', async () => {
-    let asked;
-    const ok = {
-      from(table) {
-        asked = { table };
-        return {
-          select: () => ({
-            in: (col, ids) => {
-              asked = { ...asked, col, ids };
-              return Promise.resolve({ data: [{ match_id: 'mf' }], error: null });
-            },
-          }),
-        };
-      },
-    };
-    await expect(fetchPodiumScores(['mf'], ok)).resolves.toEqual([{ match_id: 'mf' }]);
-    expect(asked).toEqual({ table: 'btc_match_scores', col: 'match_id', ids: ['mf'] });
+  it('works whichever side the recorded winner sits on, and for third place', () => {
+    const result = derivePodium({
+      entries: [
+        slot('final', 'mf', { tiebreak_winner_team_id: 'a' }),
+        slot('third_place', 'mt', { tiebreak_winner_team_id: 'd' }),
+      ],
+      scores: [score('mf', 'a', 'b', 50, 50), score('mt', 'c', 'd', 20, 20)],
+      teams,
+    });
+    expect(result.places.map((p) => [p.key, p.teamName])).toEqual([
+      ['champion', 'Alpha'],
+      ['runnerUp', 'Beta'],
+      ['third', 'Delta'],
+    ]);
+  });
 
-    const failing = {
-      from: () => ({
-        select: () => ({ in: () => Promise.resolve({ data: null, error: new Error('boom') }) }),
-      }),
-    };
-    await expect(fetchPodiumScores(['mf'], failing)).rejects.toThrow('boom');
+  it('ignores a recorded winner when the totals are decisive (a stale decision never overrides the score)', () => {
+    const result = derivePodium({
+      entries: [slot('final', 'mf', { tiebreak_winner_team_id: 'b' })],
+      scores: [score('mf', 'a', 'b', 60, 40)],
+      teams,
+    });
+    expect(result.places[0]).toMatchObject({ teamName: 'Alpha', viaTiebreak: false });
+  });
+
+  it('does not trust a recorded winner who is not one of the two teams: the match stays tied', () => {
+    const result = derivePodium({
+      entries: [slot('final', 'mf', { tiebreak_winner_team_id: 'zzz' })],
+      scores: [score('mf', 'a', 'b', 50, 50)],
+      teams,
+    });
+    expect(result.places.map((p) => p.state)).toEqual(['tied', 'tied']);
+  });
+
+  it('marks a place decided by the totals as not decided by a tie-break', () => {
+    const result = derivePodium({
+      entries: [slot('final', 'mf')],
+      scores: [score('mf', 'a', 'b', 60, 40)],
+      teams,
+    });
+    expect(result.places.every((p) => p.viaTiebreak === false)).toBe(true);
   });
 });

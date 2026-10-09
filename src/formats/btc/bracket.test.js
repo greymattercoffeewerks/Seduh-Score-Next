@@ -4,6 +4,8 @@ import {
   generateBracket,
   createBracketMatch,
   fetchBracket,
+  bracketMatchIds,
+  fetchBracketScores,
   BRACKET_ROUND_ORDER,
   BRACKET_ROUND_LABELS,
 } from './bracket.js';
@@ -224,5 +226,105 @@ describe('fetchBracket', () => {
 describe('BRACKET_ROUND_ORDER / BRACKET_ROUND_LABELS', () => {
   it('has a label for every round in the order list, and only those', () => {
     expect(Object.keys(BRACKET_ROUND_LABELS).sort()).toEqual([...BRACKET_ROUND_ORDER].sort());
+  });
+});
+
+describe('bracketMatchIds', () => {
+  it('lists every slot match that exists, in order, and skips empty slots', () => {
+    expect(
+      bracketMatchIds([
+        { slot: { match_id: 'm1' } },
+        { slot: { match_id: null } },
+        { slot: { match_id: 'm3' } },
+      ]),
+    ).toEqual(['m1', 'm3']);
+  });
+});
+
+describe('fetchBracketScores', () => {
+  it('does not query at all when there are no match ids', async () => {
+    const client = {
+      from() {
+        throw new Error('should not query');
+      },
+    };
+    await expect(fetchBracketScores([], client)).resolves.toEqual([]);
+  });
+
+  it('asks btc_match_scores for exactly those matches and only the columns it needs, and surfaces a query error', async () => {
+    let asked;
+    const ok = {
+      from(table) {
+        asked = { table };
+        return {
+          select: (columns) => {
+            asked = { ...asked, columns };
+            return {
+              in: (col, ids) => {
+                asked = { ...asked, col, ids };
+                return Promise.resolve({ data: [{ match_id: 'mf' }], error: null });
+              },
+            };
+          },
+        };
+      },
+    };
+    await expect(fetchBracketScores(['mf'], ok)).resolves.toEqual([{ match_id: 'mf' }]);
+    expect(asked).toEqual({
+      table: 'btc_match_scores',
+      columns: 'match_id, status, team1_id, team2_id, team1_total, team2_total',
+      col: 'match_id',
+      ids: ['mf'],
+    });
+
+    const failing = {
+      from: () => ({
+        select: () => ({ in: () => Promise.resolve({ data: null, error: new Error('boom') }) }),
+      }),
+    };
+    await expect(fetchBracketScores(['mf'], failing)).rejects.toThrow('boom');
+  });
+});
+
+describe('fetchBracket carries the recorded tie-break', () => {
+  it('asks for the tie-break columns of each slot match', async () => {
+    let selected;
+    const client = {
+      from(table) {
+        if (table === 'btc_bracket_slots') {
+          return {
+            select: () => ({
+              eq: () =>
+                Promise.resolve({
+                  data: [{ id: 's1', round: 'final', slot_label: 'final', match_id: 'm1' }],
+                  error: null,
+                }),
+            }),
+          };
+        }
+        return {
+          select: (columns) => {
+            selected = columns;
+            return {
+              in: () =>
+                Promise.resolve({
+                  data: [
+                    {
+                      id: 'm1',
+                      status: 'confirmed',
+                      tiebreak_winner_team_id: 't1',
+                      tiebreak_reason: 'x',
+                    },
+                  ],
+                  error: null,
+                }),
+            };
+          },
+        };
+      },
+    };
+    const [entry] = await fetchBracket('ev1', client);
+    expect(selected).toBe('id, status, tiebreak_winner_team_id, tiebreak_reason');
+    expect(entry.match).toMatchObject({ tiebreak_winner_team_id: 't1', tiebreak_reason: 'x' });
   });
 });

@@ -9,7 +9,7 @@
 // matchesScreen.js's own header for the fuller account of where that shape came from
 // across setupScreen.js's three review rounds).
 import { getSupabase } from '../../core/supabaseClient.js';
-import { el, setBusyDisabled, withFocusPreservation } from '../../core/dom.js';
+import { el, labeledField, setBusyDisabled, withFocusPreservation } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
 import { findEvent } from '../../core/events.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
@@ -22,8 +22,18 @@ import {
   generateBracket,
   createBracketMatch,
   fetchBracket,
+  bracketMatchIds,
+  fetchBracketScores,
 } from './bracket.js';
-import { derivePodium, fetchPodiumScores, podiumMatchIds } from './podium.js';
+import { derivePodium } from './podium.js';
+import {
+  TIEBREAK_REASON_MAX,
+  tieState,
+  validateTiebreak,
+  recordTiebreak,
+  tiebreakRefusal,
+  describeTiebreakError,
+} from './tiebreak.js';
 
 // btc_matches.status is pending | scoring | confirmed (supabase/migrations/
 // 20260918090000_btc_tables.sql) — pending and scoring must stay distinct here: a
@@ -44,10 +54,11 @@ export async function mountBracketScreen(root, { eventId, client = getSupabase()
     teams: [],
     judges: [],
     entries: [], // [{slot, match}], sorted into bracket display order
-    // btc_match_scores rows for the final and third-place matches (podium only). Only a
-    // CONFIRM changes these, and confirming happens on the scoring screen, so this screen
-    // remounts (and reloads them) before they can differ — hence no refresh after
-    // generate/create-match, which cannot produce a confirmed result.
+    // btc_match_scores rows for every bracket match (the podium and each slot's tie state
+    // read these). Only a CONFIRM changes them, and confirming happens on the scoring screen,
+    // so this screen remounts (and reloads them) before they can differ — hence no refresh
+    // after generate/create-match, which cannot produce a confirmed result. Recording a
+    // tie-break does move seats and the match row, so that handler reloads both.
     scores: [],
     generating: false,
     creatingSlotId: null,
@@ -56,8 +67,17 @@ export async function mountBracketScreen(root, { eventId, client = getSupabase()
     formError: null,
     busy: false,
     toastMessage: null,
-    // null | 'heading' | 'toast' | 'create-form' | 'create-button' — see
-    // setupScreen.js's own comment on this pendingFocus shape.
+    // The tie-break form (one slot at a time, like the create-match form). tiebreakError is
+    // { field: 'winner' | 'reason' | 'form', message } so the message can be tied to the control
+    // it is about.
+    tiebreakSlotId: null,
+    lastClosedTiebreakSlotId: null,
+    draftTiebreakWinner: null,
+    draftTiebreakReason: '',
+    tiebreakError: null,
+    // null | 'heading' | 'toast' | 'create-form' | 'create-button' | 'tiebreak-form' |
+    // 'tiebreak-error' | 'tiebreak-button' — see setupScreen.js's own comment on this
+    // pendingFocus shape.
     pendingFocus: null,
   };
   let toastTimer;
@@ -87,7 +107,7 @@ export async function mountBracketScreen(root, { eventId, client = getSupabase()
     // Needs the match ids, so it cannot join the Promise.all above. Deliberately NOT
     // degraded on failure: a podium that silently showed "Not decided yet" because its read
     // failed would be a lie, so a failed read fails the load and Retry covers it.
-    const scores = await fetchPodiumScores(podiumMatchIds(entries), client);
+    const scores = await fetchBracketScores(bracketMatchIds(entries), client);
     return { event, teams, judges, entries, scores };
   }
 
@@ -197,6 +217,266 @@ export async function mountBracketScreen(root, { eventId, client = getSupabase()
     render();
   }
 
+  function resetTiebreakDraft() {
+    state.lastClosedTiebreakSlotId = state.tiebreakSlotId;
+    state.tiebreakSlotId = null;
+    state.draftTiebreakWinner = null;
+    state.draftTiebreakReason = '';
+    state.tiebreakError = null;
+  }
+
+  // While a save is in flight every tie-break control is inert: the handlers below all stop on
+  // state.busy, because setBusyDisabled only marks controls aria-disabled and they would still fire.
+  function openTiebreakForm(entry) {
+    if (state.busy) return;
+    state.tiebreakSlotId = entry.slot.id;
+    // Changing an existing decision starts from it.
+    state.draftTiebreakWinner = entry.match?.tiebreak_winner_team_id ?? null;
+    state.draftTiebreakReason = entry.match?.tiebreak_reason ?? '';
+    state.tiebreakError = null;
+    state.pendingFocus = 'tiebreak-form';
+    render();
+  }
+
+  function closeTiebreakForm() {
+    if (state.busy) return;
+    resetTiebreakDraft();
+    state.pendingFocus = 'tiebreak-button';
+    render();
+  }
+
+  async function reloadBracket() {
+    const entries = await fetchBracket(eventId, client);
+    state.scores = await fetchBracketScores(bracketMatchIds(entries), client);
+    state.entries = entries;
+  }
+
+  async function handleRecordTiebreak(domEvent, entry) {
+    domEvent.preventDefault();
+    if (state.busy) return;
+    const { slot, match } = entry;
+    // Everything the save needs is captured NOW. Nothing below reads the draft after an await,
+    // so what the person sees confirmed is exactly what was sent.
+    const winnerTeamId = state.draftTiebreakWinner;
+    const reason = state.draftTiebreakReason;
+    const invalid = validateTiebreak({
+      winnerTeamId,
+      reason,
+      teamIds: [slot.team1_id, slot.team2_id],
+    });
+    if (invalid) {
+      state.tiebreakError = invalid;
+      state.pendingFocus = 'tiebreak-error';
+      render();
+      return;
+    }
+    state.busy = true;
+    state.tiebreakError = null;
+    render();
+    try {
+      await recordTiebreak(state.event.org_id, match.id, winnerTeamId, reason, client);
+    } catch (err) {
+      const refusal = tiebreakRefusal(err);
+      if (refusal?.reload) {
+        // The screen is out of date (the match may no longer be tied, so this form may no longer
+        // exist): refresh it, close the form and say why in the toast, which is always rendered.
+        try {
+          await reloadBracket();
+        } catch {
+          // The refusal text already tells the person what happened; the next action reloads.
+        }
+        resetTiebreakDraft();
+        showToast(refusal.message);
+      } else {
+        state.tiebreakError = { field: 'form', message: describeTiebreakError(err) };
+        state.pendingFocus = 'tiebreak-error';
+      }
+      state.busy = false;
+      render();
+      return;
+    }
+    // The decision IS saved from here on. Seats and the match row changed, so re-read both rather
+    // than patching locally; if that read fails, say the save worked rather than that it failed.
+    let refreshed = true;
+    try {
+      await reloadBracket();
+    } catch {
+      refreshed = false;
+    }
+    resetTiebreakDraft();
+    showToast(
+      refreshed
+        ? `${teamName(winnerTeamId)} goes through.`
+        : `${teamName(winnerTeamId)} goes through — saved, but the page could not refresh. Reload to see the bracket.`,
+    );
+    // Focus the slot's button and let the live-region toast speak: a focused toast would be
+    // removed by its own timer and drop focus to the page.
+    state.pendingFocus = 'tiebreak-button';
+    state.busy = false;
+    render();
+  }
+
+  function renderTiebreakForm(entry) {
+    const { slot } = entry;
+    const error = state.tiebreakError;
+    const errorId = `btc-tiebreak-error-${slot.id}`;
+    const hintId = `btc-tiebreak-hint-${slot.id}`;
+    const radioName = `tiebreak-winner-${slot.id}`;
+    const matchName = `${teamName(slot.team1_id)} vs ${teamName(slot.team2_id)}`;
+
+    const options = [slot.team1_id, slot.team2_id].map((teamId) => {
+      const radio = el('input', {
+        attrs: {
+          type: 'radio',
+          name: radioName,
+          value: teamId,
+          'data-field': `tiebreak-winner-${slot.id}-${teamId}`,
+        },
+      });
+      radio.checked = state.draftTiebreakWinner === teamId;
+      setBusyDisabled(radio, state.busy);
+      // No re-render: the browser already shows the choice, and a re-render here would only
+      // risk moving focus. Ignored while saving so the confirmed team cannot change under it.
+      radio.addEventListener('change', () => {
+        if (state.busy) {
+          // The browser has already moved the selection; rebuild the group from state.
+          render();
+          return;
+        }
+        state.draftTiebreakWinner = teamId;
+      });
+      return el('label', { className: 'btc-judge-checkbox-label' }, [
+        radio,
+        el('span', { text: teamName(teamId) }),
+      ]);
+    });
+
+    const describedBy = [error?.field === 'reason' ? errorId : null, hintId]
+      .filter(Boolean)
+      .join(' ');
+    const reasonInput = el('input', {
+      className: 'field-input',
+      attrs: {
+        type: 'text',
+        maxlength: String(TIEBREAK_REASON_MAX),
+        'aria-label': 'Reason for the tie-break (required)',
+        placeholder: "e.g. head judge's casting vote",
+        'data-field': `tiebreak-reason-${slot.id}`,
+        autocomplete: 'off',
+        'aria-describedby': describedBy,
+        ...(error?.field === 'reason' ? { 'aria-invalid': 'true' } : {}),
+      },
+    });
+    reasonInput.value = state.draftTiebreakReason;
+    setBusyDisabled(reasonInput, state.busy);
+    reasonInput.addEventListener('input', () => {
+      if (state.busy) {
+        reasonInput.value = state.draftTiebreakReason;
+        return;
+      }
+      state.draftTiebreakReason = reasonInput.value;
+    });
+
+    const submitButton = el('button', {
+      className: 'btn btn-primary tap-target',
+      text: state.busy ? 'Saving…' : 'Record tie-break',
+      attrs: {
+        type: 'submit',
+        'data-focus-key': `tiebreak-submit-${slot.id}`,
+        ...(error?.field === 'form' ? { 'aria-describedby': errorId } : {}),
+      },
+    });
+    setBusyDisabled(submitButton, state.busy);
+
+    const cancelButton = el('button', {
+      className: 'btn btn-outline tap-target',
+      text: 'Cancel',
+      attrs: { type: 'button', 'data-focus-key': `tiebreak-cancel-${slot.id}` },
+    });
+    setBusyDisabled(cancelButton, state.busy);
+    cancelButton.addEventListener('click', () => closeTiebreakForm());
+
+    // The message comes first, before the controls it may be about, so it is read (and focused)
+    // before the person has to find the problem. It is tied to the control it concerns.
+    const errorNode = error
+      ? el('p', {
+          id: errorId,
+          className: 'btc-field-error',
+          text: error.message,
+          attrs: { role: 'alert', tabindex: '-1', 'data-focus-key': `tiebreak-error-${slot.id}` },
+        })
+      : null;
+
+    const fieldset = el(
+      'fieldset',
+      {
+        className: 'btc-judge-fieldset',
+        attrs: {
+          ...(error?.field === 'winner'
+            ? { 'aria-describedby': errorId, 'aria-invalid': 'true' }
+            : {}),
+        },
+      },
+      [
+        el('legend', {
+          text: `Which team goes through — ${matchName}? (required)`,
+          attrs: { tabindex: '-1', 'data-focus-key': `tiebreak-form-heading-${slot.id}` },
+        }),
+        el('div', { className: 'btc-judge-checkboxes' }, options),
+      ],
+    );
+
+    const form = el(
+      'form',
+      { className: 'btc-bracket-create-form btc-tiebreak-form' },
+      [
+        errorNode,
+        fieldset,
+        labeledField('Reason (required)', reasonInput),
+        el('p', {
+          id: hintId,
+          className: 'stage-meta btc-tiebreak-hint',
+          text: "This reason may be shown on the public results page. Keep it factual: no personal details, and don't repeat scores.",
+        }),
+        el('div', { className: 'btc-bracket-form-actions' }, [submitButton, cancelButton]),
+      ].filter(Boolean),
+    );
+    form.addEventListener('submit', (domEvent) => handleRecordTiebreak(domEvent, entry));
+    return form;
+  }
+
+  // A confirmed knockout match that is level on totals: say so in words (always, including while
+  // the form is open, so the organiser can still see the result they are deciding), show any
+  // recorded decision with its reason, and offer the one action that resolves it.
+  function renderTiebreak(entry, tie, score) {
+    const { slot, match } = entry;
+    // Plain words, no dashes: "30–30" is read as "30 30" by some screen readers.
+    const each = `${score.team1_total} each`;
+    const note =
+      tie === 'decided'
+        ? `Level at ${each}. Tie-break: ${teamName(match.tiebreak_winner_team_id)} goes through. Reason: ${match.tiebreak_reason}`
+        : `Tied at ${each}. Nobody advances until you record which team goes through.`;
+    const children = [el('p', { className: 'stage-meta btc-tiebreak-note', text: note })];
+
+    if (state.tiebreakSlotId === slot.id) {
+      children.push(renderTiebreakForm(entry));
+    } else {
+      const button = el('button', {
+        className: tie === 'decided' ? 'btn btn-outline tap-target' : 'btn btn-primary tap-target',
+        text: tie === 'decided' ? 'Change tie-break' : 'Record tie-break',
+        attrs: {
+          type: 'button',
+          'aria-label': `${tie === 'decided' ? 'Change' : 'Record'} tie-break for ${teamName(slot.team1_id)} vs ${teamName(slot.team2_id)}`,
+          'data-focus-key': `tiebreak-open-${slot.id}`,
+        },
+      });
+      setBusyDisabled(button, state.busy || state.generating);
+      button.addEventListener('click', () => openTiebreakForm(entry));
+      children.push(button);
+    }
+    return el('div', { className: 'btc-tiebreak', attrs: { 'data-tie': tie } }, children);
+  }
+
   function renderSlotCard(entry) {
     const { slot, match } = entry;
     const teamsLine = el('span', {
@@ -218,6 +498,9 @@ export async function mountBracketScreen(root, { eventId, client = getSupabase()
           },
         }),
       );
+      const score = state.scores.find((row) => row.match_id === match.id);
+      const tie = tieState(match, score);
+      if (tie) children.push(renderTiebreak(entry, tie, score));
     } else if (slot.team1_id && slot.team2_id) {
       if (state.creatingSlotId === slot.id) {
         children.push(renderCreateForm(entry));
@@ -360,7 +643,19 @@ export async function mountBracketScreen(root, { eventId, client = getSupabase()
         podium.places.map((place) =>
           el('div', { className: 'btc-podium-place', attrs: { 'data-state': place.state } }, [
             el('dt', { className: 'stage-meta', text: place.label }),
-            el('dd', { className: 'btc-podium-team', text: placeText(place) }),
+            el(
+              'dd',
+              { className: 'btc-podium-team' },
+              [
+                el('span', { text: placeText(place) }),
+                place.viaTiebreak
+                  ? el('span', {
+                      className: 'stage-meta btc-podium-note',
+                      text: 'Decided by tie-break',
+                    })
+                  : null,
+              ].filter(Boolean),
+            ),
           ]),
         ),
       ),
@@ -486,6 +781,33 @@ export async function mountBracketScreen(root, { eventId, client = getSupabase()
         );
         if (formHeading) {
           formHeading.focus();
+          return true;
+        }
+      } else if (state.pendingFocus === 'tiebreak-form') {
+        state.pendingFocus = null;
+        const heading = container.querySelector(
+          `[data-focus-key="tiebreak-form-heading-${state.tiebreakSlotId}"]`,
+        );
+        if (heading) {
+          heading.focus();
+          return true;
+        }
+      } else if (state.pendingFocus === 'tiebreak-error') {
+        state.pendingFocus = null;
+        const errorNode = container.querySelector(
+          `[data-focus-key="tiebreak-error-${state.tiebreakSlotId}"]`,
+        );
+        if (errorNode) {
+          errorNode.focus();
+          return true;
+        }
+      } else if (state.pendingFocus === 'tiebreak-button') {
+        state.pendingFocus = null;
+        const openButton = container.querySelector(
+          `[data-focus-key="tiebreak-open-${state.lastClosedTiebreakSlotId}"]`,
+        );
+        if (openButton) {
+          openButton.focus();
           return true;
         }
       } else if (state.pendingFocus === 'create-button') {

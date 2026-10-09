@@ -22,13 +22,14 @@
       <button id="demo-post-bracket">Mount (bracket already generated)</button>
       <button id="demo-podium">Mount (final played — podium)</button>
       <button id="demo-podium-tied">Mount (final tied — podium)</button>
+      <button id="demo-tie">Mount (quarterfinal tied — tie-break)</button>
       <button id="demo-failed">Mount (load fails)</button>
     </p>
     <div id="app"></div>
     <script type="module">
       import { mountBracketScreen } from './bracketScreen.js';
 
-      function createDemoClient({ preGenerated = false, podium = null } = {}) {
+      function createDemoClient({ preGenerated = false, podium = null, tie = false } = {}) {
         const db = {
           events: [{ id: 'ev1', org_id: 'org1', name: 'BTC Demo Event', is_test: true }],
           btc_teams: Array.from({ length: 8 }, (_, i) => ({
@@ -119,6 +120,25 @@
             : [],
           btc_matches: [],
         };
+        if (tie) {
+          // qf1 confirmed and level at 30-30, with a long unbroken team name to check wrapping.
+          db.btc_teams[0].name = 'Equipo-Super-Cafetero-Internacional-Barista-Team';
+          Object.assign(
+            db.btc_bracket_slots.find((x) => x.slot_label === 'qf1'),
+            { match_id: 'm-qf1' },
+          );
+          db.btc_matches = [{ id: 'm-qf1', status: 'confirmed' }];
+          db.btc_match_scores = [
+            {
+              match_id: 'm-qf1',
+              status: 'confirmed',
+              team1_id: 't1',
+              team2_id: 't8',
+              team1_total: 30,
+              team2_total: 30,
+            },
+          ];
+        }
         if (podium) {
           // Final and third-place matches already created and confirmed. Team 2 has a long
           // unbroken name on purpose, to check wrapping at 360px.
@@ -239,6 +259,14 @@
               }
               return Promise.resolve({ data: db.btc_bracket_slots, error: null });
             }
+            if (name === 'record_btc_tiebreak') {
+              const match = db.btc_matches.find((m) => m.id === args.p_match_id);
+              Object.assign(match, {
+                tiebreak_winner_team_id: args.p_winner_team_id,
+                tiebreak_reason: args.p_reason,
+              });
+              return Promise.resolve({ data: null, error: null });
+            }
             if (name === 'create_btc_bracket_match') {
               const slot = db.btc_bracket_slots.find((s) => s.id === args.p_slot_id);
               if (slot.match_id) {
@@ -291,14 +319,22 @@
           mount(createDemoClient({ preGenerated: true, podium: 'tied' })),
         );
       document
+        .getElementById('demo-tie')
+        .addEventListener('click', () =>
+          mount(createDemoClient({ preGenerated: true, tie: true })),
+        );
+      document
         .getElementById('demo-failed')
         .addEventListener('click', () => mount(failingClient()));
 
-      const startPodium = new URLSearchParams(location.search).get('podium');
+      const params = new URLSearchParams(location.search);
+      const startPodium = params.get('podium');
       mount(
-        startPodium
-          ? createDemoClient({ preGenerated: true, podium: startPodium })
-          : createDemoClient(),
+        params.get('tie')
+          ? createDemoClient({ preGenerated: true, tie: true })
+          : startPodium
+            ? createDemoClient({ preGenerated: true, podium: startPodium })
+            : createDemoClient(),
       );
     </script>
   </body>

@@ -28,7 +28,8 @@
 
 .btc-judge-fieldset legend {
   font-size: var(--text-2xs);
-  color: var(--color-text-muted);
+  /* text-secondary, not text-muted: muted on the dark card surface is 4.16:1, under AA. */
+  color: var(--color-text-secondary);
   text-transform: uppercase;
   letter-spacing: var(--tracking-wide);
   padding: 0 var(--space-1);

@@ -1774,9 +1774,23 @@ _Result-recorded and rank-impact screens shipped; these were flagged and documen
 
 _The BTC podium card and the knockout re-confirm-as-tie fix shipped; these were flagged and documented, not blocking._
 
-- **A tied knockout match has no resolution path (gap 1).** The organiser cannot break it; the bracket just stops advancing, and the bracket screen has no tied-match state on its slot cards. Needs a product decision on the tie rule: re-score, a sudden-death cup, or a recorded organiser override.
+- **A tied knockout match has no resolution path (gap 1). CLOSED 2026-10-09 by T-BTC.knockout-tiebreak** (cloud push of `20261009110000` pending; see CHANGELOG.md). The product decision: the organiser records which team goes through, plus a reason; the app does not score a tie-break cup. The bracket screen's tied-match state exists now: a level confirmed match reads "Tied … Nobody advances until you record which team goes through", and the recorded winner decides the seat and the podium.
 - **No parity test between the SQL advancement and the JS podium comparator.** One fixture should run through both `confirm_btc_match`'s advancement and `derivePodium`, so the podium and the bracket cannot disagree about a winner.
 - **The semifinal-tie refusal wording for the "loser" branch is untested.** Reaching it needs a final or third-place match to exist, which needs sf1 seeded.
 - **No podium on a live surface yet.** `derivePodium` is ready for T-BTC.3 and is meant to be reused unedited; that surface must carry its own `is_test` treatment (D9).
 - **A missing team in the roster shows "Unknown team" as a decided name** (`podium.js`'s `nameOf` fallback). If that can happen, it should be a visible "missing" state, not a name.
 - **BTC dispute-pack button is still missing.**
+
+---
+
+## Known open items from T-BTC.knockout-tiebreak (2026-10-09)
+
+_The knockout tie-break shipped (organiser records the winner and a reason); these were flagged and documented, not blocking._
+
+- **`btc_matches_write` is `FOR ALL`, so any member can write the tie-break columns directly.** The CHECK is the only guard. A winner pre-set on a not-yet-confirmed match would decide a tie once that match is confirmed level. Every direct write is logged with reason NULL. Same pre-existing gap as match status and bracket slots; closing it means splitting the write policy, which is a schema/RLS change needing its own `security-reviewer` pass.
+- **A direct write to `btc_cup_votes` after a tie-break is recorded** leaves the seat following the stale decision, while the podium and the card follow the totals.
+- **No two-session test of `record_btc_tiebreak`'s row lock.** Removing `FOR UPDATE` survives the single-session pgTAP suite; it needs a concurrent test.
+- **Recorded tie-break reasons appear on the PUBLIC results page** via `get_scoring_record` (anon-callable). The form warns organisers; every consumer must render the reason as plain text.
+- **The helper's downstream refusal still reads "confirm_btc_match: …"** even when raised from `record_btc_tiebreak` (pinned by `016` and `027`). The client keys on the hint, not the message. Cosmetic; changing the text means updating both suites.
+- **The JS reason validator is slightly stricter than the SQL CHECK** (it trims NBSP, and it measures length in UTF-16 units). That is the safe direction: the client refuses something the database would accept, never the reverse.
+- **The tie-break is organiser-screen only.** No projector, phone or results surface shows it yet (T-BTC.3). That surface needs its own `is_test` treatment (D9).
