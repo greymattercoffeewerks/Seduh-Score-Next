@@ -2,7 +2,7 @@
 
 **Task:** T-BTC.knockout-tiebreak. Not a handoff §14 task: BTC is out-of-handoff (see ROADMAP's BTC section). Branch `feat/btc-knockout-tiebreak`. Closes gap 1 of ROADMAP's "Known open items from T-HARDEN.btc-bracket-podium".
 
-**Status: not final.** Migration `20261009110000_btc_knockout_tiebreak.sql` is NOT yet pushed to the cloud project (`wxzwanprluqmgoagbkpv`). This entry stays "not final" until it is pushed with `apply_migration` and `list_migrations` shows it. Changes were uncommitted at close; the orchestrating session commits.
+**Status: closed.** Migration `20261009110000_btc_knockout_tiebreak.sql` was pushed to the cloud project (`wxzwanprluqmgoagbkpv`) on 2026-10-09 with `apply_migration` (recorded there as `20261009015603`, as with the earlier migrations) and verified there: `list_migrations` lists it; the two `btc_matches` columns, the `btc_matches_tiebreak_shape` check and the partial index exist; there is exactly one `confirm_btc_match`, and it calls `app.advance_btc_bracket`; `app.log_score_change` lists the new columns; `record_btc_tiebreak` and `app.advance_btc_bracket` are security invoker with `search_path` pinned empty, executable by `authenticated` and `service_role` only (no `anon`, no public). The cloud project held no `btc_matches` rows, so no live data was affected. Not verifiable by SQL: whether the project's API "Exposed schemas" setting includes `app` (a dashboard setting; the helper runs under the caller's own rights and 027 proves an outsider cannot move a seat through it, so it is harmless either way, but it should not be exposed).
 
 **Decision (user, 2026-10-09):** when a knockout match ends level on bonus-inclusive totals, the ORGANISER records which team goes through, plus a reason. The app does not score a tie-break cup; the event's own rules decide how the tie is broken at the venue. Any signed-in organiser may record it (no roles exist).
 
@@ -55,7 +55,6 @@
 
 **Follow-up:**
 
-- Push `20261009110000` to the cloud project with `apply_migration`, check `list_migrations`, then mark this entry final.
 - `CONVENTIONS.md` was not touched. Candidate for backfill: "key RPC error handling on a machine-readable hint, never on message wording" (the client keys on the hint, and the SQL pins it in 016/027).
 - The open items are in ROADMAP's new section.
 
