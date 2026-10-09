@@ -29,7 +29,8 @@ import { ordinalLabel } from '../../core/ordinal.js';
 import { formatDuration } from '../../core/duration.js';
 import { formatHeatName, byRunningOrder } from './heats.js';
 import { compareRecentHeatResults } from './viewerBody.js';
-import { kicker, bigTitle, upNextLine, MAX_ROOMY_STATIONS } from './projectorScreens.js';
+import { stageKicker, stageTitle } from '../../core/stageVocabulary.js';
+import { upNextLine, MAX_ROOMY_STATIONS } from './projectorScreens.js';
 
 // Long enough to read a heat's results, short enough that the room is not waiting on the screen.
 export const RESULT_HOLD_MS = 6_000;
@@ -156,8 +157,8 @@ const resultMoment = {
     );
     frame.main.classList.toggle('projector-many', cards.length > MAX_ROOMY_STATIONS);
     frame.main.replaceChildren(
-      kicker('Result recorded'),
-      bigTitle(formatHeatName(heat.heatNumber, heat.kind)),
+      stageKicker('Result recorded'),
+      stageTitle(formatHeatName(heat.heatNumber, heat.kind)),
       revealOnMount(el('ul', { className: 'projector-stations projector-results' }, cards)),
     );
     frame.footerStart.textContent = upNextLine(payload);
@@ -174,8 +175,8 @@ const rankMoment = {
     const frame = renderScreenFrame();
     host.append(frame.el);
     frame.main.replaceChildren(
-      kicker('Rank impact'),
-      el('h2', { className: 'projector-title projector-move-title', text: headline }),
+      stageKicker('Rank impact'),
+      el('h2', { className: 'stage-title projector-move-title', text: headline }),
       revealOnMount(
         renderMovementRows(
           rows.map((row) => ({ ...row, label: row.displayName })),

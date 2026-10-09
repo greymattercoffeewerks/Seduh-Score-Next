@@ -1,3 +1,26 @@
+## T-BTC.venue-vocabulary: the shared venue-display vocabulary moves to core (stage 3a of the BTC live surfaces) · 2026-10-09
+
+**Task:** T-BTC.venue-vocabulary. Not a handoff §14 task: BTC is out-of-handoff. The first half of stage 3 (the projector): the second-use extraction ROADMAP has been owing since the projector redesign, so BTC's screens can be built on core without importing Cup Taster's stylesheet. A pure refactor: Cup Taster's projector looks and behaves exactly as before. Branch `feat/btc-projector`.
+
+**Status: in review, not merged.** No migration.
+
+**What moved (Cup Taster -> `src/core/`):**
+
+- **`stageVocabulary.js` + `.css`**: `stageKicker`, `stageTitle`, `stageSupport`, the standings page (`renderStandingsHead`, `standingsRangeText`, `renderStandingsTable`: ranked rows with the name cut by an ellipsis and a tie or advancing suffix that never is, plus value columns whose width and hook the format sets) and `renderChampion` (label, name, optional score and podium lines).
+- **`stagePageLoop.js`**: the idle loop (pages, a footer label per page, a ring counting down to the change), which Cup Taster's idle screen had inline.
+- Class names renamed `projector-*` -> `stage-*` for what moved; the CSS rules are unchanged, except that the two value columns' widths (12vw, 14vw) are now set on the cell by the format through the column spec. What is Cup Taster's stays in `formats/cup-taster/` (the heat screen, the station cards, the "up next" page, the podium line, the score and time columns).
+- `app/index.html` and the projector preview link the new stylesheet; the old rules are gone from `projectorScreens.css`.
+
+**Verified (this is a refactor, so the proof is "nothing changed"):**
+
+- **Markup:** a throwaway test rendered 19 Cup Taster screens (heat with 3, 6 and hand-timed stations, being scored, every page of the idle loop, three champion cases, both moment screens) before and after. After applying the class-rename map, and allowing for the value cells' new shared class and inline width, the HTML is identical on all 19.
+- **Layout:** the projector preview was loaded at 1920×1080 on the old code (a second dev server on the previous commit) and the new, with 11 scenarios: 297 element groups (position, size, font, weight, colour, padding, border, alignment, letter and line spacing) match exactly.
+- Mutation testing of `stageVocabulary`, `stagePageLoop` and the Cup Taster wiring; the existing Cup Taster tests changed only in their class selectors.
+
+**One small fix rode along (found by a new test):** a payload that names no stage showed its standings page heading as "standings" in lower case; it now reads "Standings".
+
+**Still open for the BTC projector:** a format's display keeps running when the live row goes away (ROADMAP, T-BTC.live-routing), then the BTC screens themselves.
+
 ## T-BTC.live-publish: BTC publishes its live payload automatically (stage 2 of the BTC live surfaces) · 2026-10-09
 
 **Task:** T-BTC.live-publish. Not a handoff §14 task: BTC is out-of-handoff. Stage 2 of four (routing, publishing, projector, phone). No BTC screen is drawn yet, so a BTC session still shows "Event not published yet" on the audience surfaces; this stage makes the data exist and keeps it current. Branch `feat/btc-live-publish`.

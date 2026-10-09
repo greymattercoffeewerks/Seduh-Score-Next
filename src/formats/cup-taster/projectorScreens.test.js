@@ -170,7 +170,7 @@ describe('heat screen', () => {
   it('shows the heat number, the shared live countdown, and each cupper on a station card', () => {
     vi.useFakeTimers();
     const { host, handle } = mountFor({ activeHeat: heat(), standings: standingsOf(3), stage });
-    expect(text(host, '.projector-title')).toBe('Heat 3');
+    expect(text(host, '.stage-title')).toBe('Heat 3');
     expect(host.querySelector('.viewer-countdown')).not.toBeNull();
     expect(text(host, '.projector-clock-label')).toBe('Time remaining');
     const cards = [...host.querySelectorAll('.projector-station')];
@@ -304,7 +304,7 @@ describe('tiebreak heats are named as such (they number from 1 again)', () => {
     vi.useFakeTimers();
     const tiebreak = heat({ heatNumber: 1, kind: 'tiebreak' });
     const running = mountFor({ activeHeat: tiebreak, standings: standingsOf(3), stage });
-    expect(text(running.host, '.projector-title')).toBe('Heat 1 (tiebreak)');
+    expect(text(running.host, '.stage-title')).toBe('Heat 1 (tiebreak)');
     running.handle.destroy();
 
     const scoring = mountFor({
@@ -312,14 +312,14 @@ describe('tiebreak heats are named as such (they number from 1 again)', () => {
       standings: [],
       stage,
     });
-    expect(text(scoring.host, '.projector-title')).toBe('Heat 1 (tiebreak) is being scored');
+    expect(text(scoring.host, '.stage-title')).toBe('Heat 1 (tiebreak) is being scored');
 
     const idle = mountFor({
       standings: standingsOf(3),
       upNext: { ...upNext, heatNumber: 1, kind: 'tiebreak' },
       stage,
     });
-    expect(text(idle.host, '.projector-title')).toBe('Heat 1 (tiebreak) starts soon');
+    expect(text(idle.host, '.stage-title')).toBe('Heat 1 (tiebreak) starts soon');
     idle.handle.destroy();
 
     const footer = mountFor({
@@ -339,7 +339,7 @@ describe('tiebreak heats are named as such (they number from 1 again)', () => {
       standings: [],
       stage,
     });
-    expect(text(host, '.projector-title')).toBe('Heat 3');
+    expect(text(host, '.stage-title')).toBe('Heat 3');
     handle.destroy();
   });
 });
@@ -403,11 +403,9 @@ describe('scoring screen', () => {
       upNext,
       stage,
     });
-    expect(text(host, '.projector-kicker')).toBe('Time is up');
-    expect(text(host, '.projector-title')).toBe('Heat 3 is being scored');
-    expect(text(host, '.projector-support')).toBe(
-      'Results appear here as soon as the judges confirm.',
-    );
+    expect(text(host, '.stage-kicker')).toBe('Time is up');
+    expect(text(host, '.stage-title')).toBe('Heat 3 is being scored');
+    expect(text(host, '.stage-support')).toBe('Results appear here as soon as the judges confirm.');
     expect(text(host, '.stage-footer-start')).toBe('Up next: Heat 4');
   });
 
@@ -415,18 +413,18 @@ describe('scoring screen', () => {
     const payload = { activeHeat: heat({ status: 'scoring' }), standings: [], stage };
     const { host, handle } = mountFor(payload);
     handle.update({ ...payload, activeHeat: heat({ status: 'scoring', heatNumber: 5 }) });
-    expect(text(host, '.projector-title')).toBe('Heat 5 is being scored');
+    expect(text(host, '.stage-title')).toBe('Heat 5 is being scored');
   });
 });
 
 describe('idle screen', () => {
-  const rowsOf = (host) => [...host.querySelectorAll('.projector-standing-row')];
+  const rowsOf = (host) => [...host.querySelectorAll('.stage-standing-row')];
 
   it('shows the up-next page first, listing the heat and who is on which station', () => {
     vi.useFakeTimers();
     const { host, handle } = mountFor({ standings: standingsOf(17), upNext, stage });
-    expect(text(host, '.projector-kicker')).toBe('Up next');
-    expect(text(host, '.projector-title')).toBe('Heat 4 starts soon');
+    expect(text(host, '.stage-kicker')).toBe('Up next');
+    expect(text(host, '.stage-title')).toBe('Heat 4 starts soon');
     expect([...host.querySelectorAll('.projector-station-name')].map((n) => n.textContent)).toEqual(
       ['Ayu', 'Bima'],
     );
@@ -438,15 +436,15 @@ describe('idle screen', () => {
     const { host, handle } = mountFor({ standings: standingsOf(17), upNext, stage });
     vi.advanceTimersByTime(PAGE_DWELL_MS);
     expect(rowsOf(host)).toHaveLength(STANDINGS_PAGE_SIZE);
-    expect(text(host, '.projector-title')).toBe('Preliminary standings');
-    expect(text(host, '.projector-range')).toBe('1 to 8 of 17');
+    expect(text(host, '.stage-title')).toBe('Preliminary standings');
+    expect(text(host, '.stage-range')).toBe('1 to 8 of 17');
     vi.advanceTimersByTime(PAGE_DWELL_MS);
-    expect(text(host, '.projector-range')).toBe('9 to 16 of 17');
+    expect(text(host, '.stage-range')).toBe('9 to 16 of 17');
     vi.advanceTimersByTime(PAGE_DWELL_MS);
     expect(rowsOf(host)).toHaveLength(1);
-    expect(text(host, '.projector-range')).toBe('17 of 17'); // a one-row page says so plainly
+    expect(text(host, '.stage-range')).toBe('17 of 17'); // a one-row page says so plainly
     vi.advanceTimersByTime(PAGE_DWELL_MS);
-    expect(text(host, '.projector-title')).toBe('Heat 4 starts soon'); // back round to the start
+    expect(text(host, '.stage-title')).toBe('Heat 4 starts soon'); // back round to the start
     handle.destroy();
   });
 
@@ -455,9 +453,7 @@ describe('idle screen', () => {
     const { host, handle } = mountFor({ standings: standingsOf(17), stage });
     const seen = [];
     for (let page = 0; page < 3; page += 1) {
-      seen.push(
-        ...rowsOf(host).map((r) => r.querySelector('.projector-standing-name').textContent),
-      );
+      seen.push(...rowsOf(host).map((r) => r.querySelector('.stage-standing-name').textContent));
       vi.advanceTimersByTime(PAGE_DWELL_MS);
     }
     expect(seen).toEqual(standingsOf(17).map((r) => r.displayName));
@@ -490,7 +486,7 @@ describe('idle screen', () => {
     vi.useFakeTimers();
     const { host, handle } = mountFor({ standings: standingsOf(5), stage });
     expect(rowsOf(host)).toHaveLength(5);
-    expect(text(host, '.projector-range')).toBe('5 cuppers');
+    expect(text(host, '.stage-range')).toBe('5 cuppers');
     expect(host.querySelector('.stage-ring')).toBeNull();
     expect(text(host, '.stage-footer-start')).toBe('Standings');
     expect(vi.getTimerCount()).toBe(0);
@@ -506,9 +502,12 @@ describe('idle screen', () => {
       row(4, 'Priya'),
     ];
     const { host, handle } = mountFor({ standings, stage });
-    expect(
-      rowsOf(host).map((r) => r.querySelector('.projector-standing-name').textContent),
-    ).toEqual(['Alex (advancing)', 'Jordan (tied)', 'Sam (tied)', 'Priya']);
+    expect(rowsOf(host).map((r) => r.querySelector('.stage-standing-name').textContent)).toEqual([
+      'Alex (advancing)',
+      'Jordan (tied)',
+      'Sam (tied)',
+      'Priya',
+    ]);
     handle.destroy();
   });
 
@@ -519,9 +518,9 @@ describe('idle screen', () => {
       stage,
     });
     const first = rowsOf(host)[0];
-    expect(text(first, '.projector-name-text')).toBe('A very long name indeed');
-    expect(text(first, '.projector-name-suffix')).toBe(' (tied)');
-    expect(rowsOf(host)[1].querySelector('.projector-name-suffix')).toBeNull();
+    expect(text(first, '.stage-name-text')).toBe('A very long name indeed');
+    expect(text(first, '.stage-name-suffix')).toBe(' (tied)');
+    expect(rowsOf(host)[1].querySelector('.stage-name-suffix')).toBeNull();
     handle.destroy();
   });
 
@@ -537,9 +536,20 @@ describe('idle screen', () => {
     const { host, handle } = mountFor({ standings, stage });
     expect(rowsOf(host)).toHaveLength(6);
     vi.advanceTimersByTime(PAGE_DWELL_MS);
-    expect(
-      rowsOf(host).map((r) => r.querySelector('.projector-standing-name').textContent),
-    ).toEqual(['Tied A', 'Tied B', 'Tied C', 'Last']);
+    expect(rowsOf(host).map((r) => r.querySelector('.stage-standing-name').textContent)).toEqual([
+      'Tied A',
+      'Tied B',
+      'Tied C',
+      'Last',
+    ]);
+    handle.destroy();
+  });
+
+  it('gives the score and time columns their widths, so the name column takes the rest', () => {
+    vi.useFakeTimers();
+    const { host, handle } = mountFor({ standings: [row(1, 'Alex')], stage });
+    const cells = [...rowsOf(host)[0].querySelectorAll('.stage-standing-cell')];
+    expect(cells.map((cell) => cell.style.width)).toEqual(['12vw', '14vw']);
     handle.destroy();
   });
 
@@ -550,7 +560,9 @@ describe('idle screen', () => {
       row(2, 'Bo', { totalElapsedSecs: null }),
     ];
     const { host, handle } = mountFor({ standings, stage });
-    const times = rowsOf(host).map((r) => r.querySelector('.projector-standing-time').textContent);
+    const times = rowsOf(host).map(
+      (r) => r.querySelectorAll('.stage-standing-cell')[1].textContent,
+    );
     expect(times[0]).toContain('3:15');
     expect(times[0]).toMatch(/3 minutes/);
     expect(times[1]).toBe('—');
@@ -562,9 +574,9 @@ describe('idle screen', () => {
     const payload = { standings: standingsOf(17), upNext, stage };
     const { host, handle } = mountFor(payload);
     vi.advanceTimersByTime(PAGE_DWELL_MS);
-    expect(text(host, '.projector-range')).toBe('1 to 8 of 17');
+    expect(text(host, '.stage-range')).toBe('1 to 8 of 17');
     handle.update({ ...payload, standings: [...payload.standings] });
-    expect(text(host, '.projector-range')).toBe('1 to 8 of 17');
+    expect(text(host, '.stage-range')).toBe('1 to 8 of 17');
     handle.destroy();
   });
 
@@ -574,21 +586,100 @@ describe('idle screen', () => {
     const { host, handle } = mountFor(payload);
     vi.advanceTimersByTime(PAGE_DWELL_MS);
     handle.update({ ...payload, standings: standingsOf(12) });
-    expect(text(host, '.projector-range')).toBe('1 to 8 of 12');
+    expect(text(host, '.stage-range')).toBe('1 to 8 of 12');
     expect(vi.getTimerCount()).toBe(2); // one page timer and one ring tick — nothing doubled, nothing lost
     handle.destroy();
   });
 
-  it('repaints when only the up-next heat changes, or only the stage does', () => {
+  it('repaints when only the up-next heat changes', () => {
     vi.useFakeTimers();
     const payload = { standings: standingsOf(3), upNext, stage };
     const { host, handle } = mountFor(payload);
     handle.update({ ...payload, upNext: { ...upNext, heatNumber: 5 } });
-    expect(text(host, '.projector-title')).toBe('Heat 5 starts soon');
-    handle.update({ standings: standingsOf(3), stage: { ...stage, kind: 'finals' } });
+    expect(text(host, '.stage-title')).toBe('Heat 5 starts soon');
+    handle.destroy();
+  });
+
+  it('repaints when only the stage changes (nothing else in the payload does)', () => {
+    vi.useFakeTimers();
+    const standings = standingsOf(3);
+    const { host, handle } = mountFor({ standings, stage });
+    expect(text(host, '.stage-title')).toBe('Preliminary standings');
+    handle.update({ standings, stage: { ...stage, kind: 'finals' } });
+    expect(text(host, '.stage-title')).toBe('Finals standings');
+    handle.destroy();
+  });
+
+  it('writes the standings score as correct/total, or just the count when the stage has no set count, and the positions as ranked', () => {
+    vi.useFakeTimers();
+    const standings = [row(1, 'A'), row(2, 'B'), row(2, 'C'), row(4, 'D')];
+    const withCount = mountFor({ standings, stage });
+    const cell = (host, i) =>
+      rowsOf(host).map((r) => r.querySelectorAll('.stage-standing-cell')[0 + i].textContent);
+    expect(cell(withCount.host, 0)).toEqual(['3/7', '3/7', '3/7', '3/7']);
+    expect(
+      rowsOf(withCount.host).map((r) => r.querySelector('.stage-standing-pos').textContent),
+    ).toEqual(['1', '2', '2', '4']);
+    withCount.handle.destroy();
+    const noCount = mountFor({ standings, stage: { kind: 'prelims', ordinal: 1 } });
+    expect(cell(noCount.host, 0)).toEqual(['3', '3', '3', '3']);
+    noCount.handle.destroy();
+  });
+
+  it('labels every page in the footer, with who is next, and the count of pages', () => {
+    vi.useFakeTimers();
+    const { host, handle } = mountFor({ standings: standingsOf(17), upNext, stage });
+    const footers = [];
+    for (let page = 0; page < 4; page += 1) {
+      footers.push(text(host, '.stage-footer-start'));
+      vi.advanceTimersByTime(PAGE_DWELL_MS);
+    }
+    expect(footers).toEqual([
+      'Up next',
+      'Standings · page 1 of 3 · Up next: Heat 4',
+      'Standings · page 2 of 3 · Up next: Heat 4',
+      'Standings · page 3 of 3 · Up next: Heat 4',
+    ]);
+    handle.destroy();
+  });
+
+  it('says "page 2 of 2" for two pages (12 rows), and follows a change of the up-next heat in the footer', () => {
+    vi.useFakeTimers();
+    const payload = { standings: standingsOf(12), upNext, stage };
+    const { host, handle } = mountFor(payload);
+    vi.advanceTimersByTime(PAGE_DWELL_MS * 2);
+    expect(text(host, '.stage-footer-start')).toBe('Standings · page 2 of 2 · Up next: Heat 4');
+    handle.update({ ...payload, upNext: { ...upNext, heatNumber: 5 } });
     vi.advanceTimersByTime(PAGE_DWELL_MS);
-    handle.update({ standings: standingsOf(3), stage: { ...stage, kind: 'finals' } });
-    expect(text(host, '.projector-title')).toBe('Finals standings');
+    expect(text(host, '.stage-footer-start')).toBe('Standings · page 1 of 2 · Up next: Heat 5');
+    handle.destroy();
+  });
+
+  it('uses the compact layout only for an up-next page of MORE than four stations', () => {
+    vi.useFakeTimers();
+    const upNextOf = (n) => ({
+      ...upNext,
+      cuppers: Array.from({ length: n }, (_, i) => ({
+        displayName: `Cupper ${i + 1}`,
+        station: String.fromCharCode(65 + i),
+      })),
+    });
+    const classOf = (n) => {
+      const { host, handle } = mountFor({ standings: standingsOf(3), upNext: upNextOf(n), stage });
+      const compact = host.querySelector('.stage-main').classList.contains('projector-many');
+      handle.destroy();
+      return compact;
+    };
+    expect(classOf(2)).toBe(false);
+    expect(classOf(4)).toBe(false);
+    expect(classOf(5)).toBe(true);
+    expect(classOf(6)).toBe(true);
+  });
+
+  it('calls the standings page "Standings" when the payload names no stage', () => {
+    vi.useFakeTimers();
+    const { host, handle } = mountFor({ standings: standingsOf(3) });
+    expect(text(host, '.stage-title')).toBe('Standings');
     handle.destroy();
   });
 
@@ -603,7 +694,7 @@ describe('idle screen', () => {
   it('copes with an up-next heat and no standings at all', () => {
     vi.useFakeTimers();
     const { host, handle } = mountFor({ upNext, standings: [], stage });
-    expect(text(host, '.projector-title')).toBe('Heat 4 starts soon');
+    expect(text(host, '.stage-title')).toBe('Heat 4 starts soon');
     expect(host.querySelector('.stage-ring')).toBeNull();
     expect(vi.getTimerCount()).toBe(0);
     handle.destroy();
@@ -620,12 +711,21 @@ describe('champion screen', () => {
 
   it('shows the champion full screen with their score and time, and the podium', () => {
     const { host } = mountFor({ champion: 'Wilky Derikson Gultom', standings, stage: finals });
-    expect(text(host, '.projector-champion-label')).toBe('Champion');
-    expect(text(host, '.projector-champion-name')).toBe('Wilky Derikson Gultom');
-    expect(text(host, '.projector-champion-score')).toBe('3/7 · 3:55');
-    expect(text(host, '.projector-podium')).toBe('2nd Taufiq Manan   ·   3rd Hazman Husin');
+    expect(text(host, '.stage-champion-label')).toBe('Champion');
+    expect(text(host, '.stage-champion-name')).toBe('Wilky Derikson Gultom');
+    expect(text(host, '.stage-champion-score')).toBe('3/7 · 3:55');
+    expect(text(host, '.stage-podium')).toBe('2nd Taufiq Manan   ·   3rd Hazman Husin');
     expect(text(host, '.stage-footer-start')).toBe('Finals complete');
     expect(text(host, '.stage-footer-end')).toBe('Final standings stay on screen');
+  });
+
+  it('says the stage is "Final" complete when the payload names none, and a dash for a champion with no time', () => {
+    const { host } = mountFor({
+      champion: 'Ann',
+      standings: [row(1, 'Ann', { totalElapsedSecs: null })],
+    });
+    expect(text(host, '.stage-footer-start')).toBe('Final complete');
+    expect(text(host, '.stage-champion-score')).toBe('3 · —');
   });
 
   it('shows no podium when two cuppers share 1st and the champion is the FIRST listed of them (a tie guard of its own, not just the name check)', () => {
@@ -634,8 +734,8 @@ describe('champion screen', () => {
       standings: [row(1, 'Alex'), row(1, 'Bailey'), row(3, 'Casey')],
       stage: finals,
     });
-    expect(text(host, '.projector-champion-name')).toBe('Alex');
-    expect(host.querySelector('.projector-podium')).toBeNull();
+    expect(text(host, '.stage-champion-name')).toBe('Alex');
+    expect(host.querySelector('.stage-podium')).toBeNull();
     expect(host.textContent).not.toContain('Casey');
   });
 
@@ -648,7 +748,7 @@ describe('champion screen', () => {
     ]) {
       const { host } = mountFor(payload);
       expect(host.textContent).not.toMatch(/null|undefined/);
-      expect(text(host, '.projector-champion-name')).toBe('Ann');
+      expect(text(host, '.stage-champion-name')).toBe('Ann');
     }
   });
 
@@ -658,7 +758,7 @@ describe('champion screen', () => {
       standings: [row(1, 'Someone else', { numCorrect: 7 })],
       stage: finals,
     });
-    expect(host.querySelector('.projector-champion-score')).toBeNull();
+    expect(host.querySelector('.stage-champion-score')).toBeNull();
   });
 
   it('shows no podium after a tiebreak, when two cuppers both read 1st and the places could be wrong', () => {
@@ -667,7 +767,7 @@ describe('champion screen', () => {
       standings: [row(1, 'Alex'), row(1, 'Bailey'), row(3, 'Casey')],
       stage: finals,
     });
-    expect(host.querySelector('.projector-podium')).toBeNull();
+    expect(host.querySelector('.stage-podium')).toBeNull();
   });
 
   it('takes the score line from the champion’s OWN row even when another row sorts first with a different tally', () => {
@@ -679,7 +779,7 @@ describe('champion screen', () => {
       ],
       stage: finals,
     });
-    expect(text(host, '.projector-champion-score')).toBe('4/7 · 3:21');
+    expect(text(host, '.stage-champion-score')).toBe('4/7 · 3:21');
   });
 
   it('with two cuppers of the same name, shows the tally of the champion at 1st, not the lower one', () => {
@@ -692,7 +792,7 @@ describe('champion screen', () => {
       ],
       stage: finals,
     });
-    expect(text(host, '.projector-champion-score')).toBe('6/7 · 2:30');
+    expect(text(host, '.stage-champion-score')).toBe('6/7 · 2:30');
   });
 
   it('after a tie for 2nd there is no 2nd and no 3rd: the cupper at position 4 is never called 3rd', () => {
@@ -701,7 +801,7 @@ describe('champion screen', () => {
       standings: [row(1, 'Ann'), row(2, 'Bo'), row(2, 'Cy'), row(4, 'Di')],
       stage: finals,
     });
-    expect(host.querySelector('.projector-podium')).toBeNull();
+    expect(host.querySelector('.stage-podium')).toBeNull();
     expect(host.textContent).not.toContain('3rd');
     expect(host.textContent).not.toContain('Di');
   });
@@ -712,7 +812,7 @@ describe('champion screen', () => {
       standings: [row(1, 'Alex'), row(2, 'Bailey'), row(3, 'Casey')],
       stage: finals,
     });
-    expect(host.querySelector('.projector-podium')).toBeNull();
+    expect(host.querySelector('.stage-podium')).toBeNull();
   });
 
   it('names a place only if exactly one cupper holds it: a champion with a unique 2nd but a tied 3rd shows just the 2nd', () => {
@@ -721,13 +821,13 @@ describe('champion screen', () => {
       standings: [row(1, 'Ann'), row(2, 'Bo'), row(3, 'Cy'), row(3, 'Di')],
       stage: finals,
     });
-    expect(text(host, '.projector-podium')).toBe('2nd Bo');
+    expect(text(host, '.stage-podium')).toBe('2nd Bo');
   });
 
   it('updates in place', () => {
     const payload = { champion: 'Wilky Derikson Gultom', standings, stage: finals };
     const { host, handle } = mountFor(payload);
     handle.update({ ...payload, champion: 'Taufiq Manan' });
-    expect(text(host, '.projector-champion-name')).toBe('Taufiq Manan');
+    expect(text(host, '.stage-champion-name')).toBe('Taufiq Manan');
   });
 });

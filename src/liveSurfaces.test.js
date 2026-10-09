@@ -101,7 +101,7 @@ describe('mountProjector', () => {
   it("shows Cup Taster's projector for a cup_taster session, on the dark chrome-less stage surface", async () => {
     const root = document.createElement('div');
     await mountProjector(root, { orgId: 'org1', client: fakeClient(cupTasterSession) });
-    expect(root.querySelector('.projector-standings')).not.toBeNull();
+    expect(root.querySelector('.stage-standings')).not.toBeNull();
     expect(root.querySelector('.standings-table')).toBeNull(); // not the phone's dense body
     expect(root.textContent).toContain('Alex');
     expect(root.getAttribute('data-surface')).toBe('stage');
@@ -118,7 +118,7 @@ describe('mountProjector', () => {
       'Grey Matter Cup Taster Competition 2026',
     );
     expect(root.querySelector('.stage-band-section').textContent).toBe('Preliminary');
-    expect(root.querySelector('.projector-title').textContent).toBe('Heat 3');
+    expect(root.querySelector('.stage-title').textContent).toBe('Heat 3');
     // The element tests/e2e/cross-surface-countdown.spec.js reads on every surface.
     expect(root.querySelector('.viewer-countdown')).not.toBeNull();
     handle.unmount();
@@ -133,7 +133,7 @@ describe('mountProjector', () => {
       ),
     });
     expect(root.querySelector('.viewer-shell').style.transform).toBe('');
-    expect(root.querySelectorAll('.projector-standing-row')).toHaveLength(8);
+    expect(root.querySelectorAll('.stage-standing-row')).toHaveLength(8);
     handle.unmount();
   });
 
@@ -141,7 +141,7 @@ describe('mountProjector', () => {
     const root = document.createElement('div');
     await mountProjector(root, { orgId: 'org1', client: fakeClient(unknownFormatSession) });
     expect(root.textContent).toContain('Event not published yet');
-    expect(root.querySelector('.projector-standings')).toBeNull();
+    expect(root.querySelector('.stage-standings')).toBeNull();
     expect(root.textContent).not.toContain('Alex');
   });
 
@@ -166,14 +166,14 @@ describe('mountProjector', () => {
     const root = document.createElement('div');
     const client = fakeClient(cupTasterSession);
     await mountProjector(root, { orgId: 'org1', client });
-    expect(root.querySelector('.projector-standings')).not.toBeNull();
+    expect(root.querySelector('.stage-standings')).not.toBeNull();
 
     client.setRow(unknownFormatSession);
     await vi.waitFor(() => expect(root.textContent).toContain('Event not published yet'));
-    expect(root.querySelector('.projector-standings')).toBeNull();
+    expect(root.querySelector('.stage-standings')).toBeNull();
 
     client.setRow(cupTasterSession);
-    await vi.waitFor(() => expect(root.querySelector('.projector-standings')).not.toBeNull());
+    await vi.waitFor(() => expect(root.querySelector('.stage-standings')).not.toBeNull());
     expect(root.textContent).toContain('Alex');
   });
 
@@ -277,7 +277,7 @@ describe('mountPhone', () => {
     expect(root.querySelectorAll('[data-surface]')).toHaveLength(0);
     expect(root.querySelector('.standings-table')).not.toBeNull();
     expect(root.textContent).toContain('Alex');
-    expect(root.querySelector('.projector-standings')).toBeNull();
+    expect(root.querySelector('.stage-standings')).toBeNull();
   });
 
   it('shows the not-published card for a format with no phone body', async () => {

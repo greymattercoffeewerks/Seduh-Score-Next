@@ -1,0 +1,139 @@
+/*
+ * The shared venue-display vocabulary (stageVocabulary.js), drawn inside stageDisplay.css's frame: a kicker over
+ * a big title, a standings page and the champion block. Moved here from Cup Taster's projectorScreens.css when
+ * BTC became the second format to need it, class names renamed projector-* -> stage-*, rules unchanged.
+ * Token-only, so data-surface="stage" repaints it, and sized from --stage-fit (1% of the screen AREA's height)
+ * so it scales to whatever screen the room has: see stageDisplay.css for why. A format keeps every page
+ * bounded (Cup Taster: eight standings rows a page), so nothing overflows.
+ *
+ * Meaning is carried by words, never by colour alone: a tie or an advancing place is written in the row.
+ */
+
+.stage-kicker {
+  margin: 0 0 calc(0.81 * var(--stage-fit));
+  color: var(--color-accent);
+  font-size: max(0.875rem, calc(3.53 * var(--stage-fit)));
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.stage-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: max(1.75rem, calc(10.89 * var(--stage-fit)));
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.stage-support {
+  margin: calc(2.72 * var(--stage-fit)) 0 0;
+  color: var(--color-text-secondary);
+  font-size: max(1rem, calc(4.64 * var(--stage-fit)));
+}
+
+/* ---------- standings pages ---------- */
+
+.stage-standings-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 3vw;
+  margin-bottom: calc(2.72 * var(--stage-fit));
+}
+
+/* The page heading is smaller than a one-message screen's title: eight rows share the screen with it. */
+.stage-standings-head .stage-title {
+  font-size: max(1.5rem, calc(7.36 * var(--stage-fit)));
+}
+
+.stage-range {
+  color: var(--color-text-secondary);
+  font-size: max(1rem, calc(4.08 * var(--stage-fit)));
+  white-space: nowrap;
+}
+
+.stage-standings {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: max(1.1rem, calc(5.17 * var(--stage-fit)));
+  font-variant-numeric: tabular-nums;
+}
+
+.stage-standing-row td {
+  padding: calc(1.09 * var(--stage-fit)) 1vw;
+  border-bottom: var(--border-hairline) solid var(--color-border);
+}
+
+.stage-standing-pos {
+  width: 7vw;
+  color: var(--color-accent);
+  font-weight: var(--font-weight-bold);
+}
+
+.stage-standing-name {
+  max-width: 0; /* lets the name cell shrink and truncate instead of widening the table */
+  font-weight: var(--font-weight-semibold);
+}
+
+/* The name is cut with an ellipsis; the "(tied)" / "(advancing)" words beside it never are. */
+.stage-name-row {
+  display: flex;
+  min-width: 0;
+}
+
+.stage-name-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stage-name-suffix {
+  flex: none;
+  white-space: pre;
+}
+
+/* A value column: right-aligned, never wrapped. Its width is set by the format (renderStandingsTable). */
+.stage-standing-cell {
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* ---------- champion ---------- */
+
+.stage-champion-label {
+  align-self: center;
+  margin: 0 0 calc(2.72 * var(--stage-fit));
+  padding: calc(0.81 * var(--stage-fit)) 2.4vw;
+  background: var(--color-gold);
+  color: var(--color-gold-contrast);
+  font-size: max(1rem, calc(4.64 * var(--stage-fit)));
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.stage-champion-name {
+  margin: 0;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: max(2rem, calc(17.7 * var(--stage-fit)));
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.stage-champion-score {
+  margin: calc(3.4 * var(--stage-fit)) 0 0;
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: max(1.25rem, calc(8.17 * var(--stage-fit)));
+  font-variant-numeric: tabular-nums;
+}
+
+.stage-podium {
+  margin: calc(5.45 * var(--stage-fit)) 0 0;
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: max(1rem, calc(4.89 * var(--stage-fit)));
+}
