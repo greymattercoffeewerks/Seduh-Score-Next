@@ -124,6 +124,8 @@ creation.
 whole event being complete; no partial-data report. `reportScreen.js` also gained T4.8's
 export actions (CSV download + print).
 
+**Since T-BTC.live-routing (2026-10-09) `projectorSurface.js` and `phoneSummary.js` are gone**: `/live/projector` and `/live/phone` mount through `src/liveSurfaces.js`, which registers this format's `createProjectorBody` and `viewerBody` for the `cup_taster` row and leaves other formats their own entries. The behaviours their tests pinned (band and countdown, no scaling, timer teardown on unmount, `is_test`, holding states) moved to `src/liveSurfaces.test.js`, and the preview harnesses mount `mountProjector`/`mountPhone`. The root `projector-surface` class is also gone; `projectorScreens.css` sizes its countdown under `[data-surface='stage']`.
+
 `viewerBody`, `phoneSummary` (T5.4) — the shared `renderBody` `core/viewer-shell.js`
 mounts once real content exists: standings table, active-heat panel with per-cupper
 status chips, recent-results list; content shape ported from the legacy v4.x app's own

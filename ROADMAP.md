@@ -1808,3 +1808,12 @@ _The BTC demo-data loader shipped (roster plus scored preliminaries, 8 teams, te
 - **If the event is the ACTIVE live session, a load does not republish.** The audience payload stays stale until the next publish.
 - **Any member can wipe the event via the card**, with no role check. Same as the other BTC RPCs; see the first item above.
 - **Only 8 teams.** The 24-team scale is not covered by the demo.
+
+## Known open items from T-BTC.live-routing (2026-10-09)
+
+_The audience surfaces now serve whichever format is live; no BTC screen exists yet. Stages 2 to 4 (publishing, projector, phone) are next._
+
+- **A body outlives its session row.** When no session is active (`session` null) `viewer-shell`'s `computePhase` skips `hasContent`, so `formatBody` never reselects and the last format's display (page loop, ring, moment timers) keeps running behind the holding card until the format changes or the surface unmounts. Predates this change (Cup Taster had it); fix before BTC's projector body ships, e.g. a shell signal when the row goes away.
+- **The second-use extraction is still owed before BTC's projector** (see "Known open items from T-HARDEN.projector-moments"): the shared venue vocabulary (`kicker`, `bigTitle`, the standings table, champion classes) moves into `core` with Cup Taster migrated and regression-tested, so BTC never imports Cup Taster's stylesheet.
+- **`mountStageSurface`'s `surfaceClass` option has no production caller.** Keep it as a hook or remove it when the BTC projector lands.
+- **BTC payload fields are decided but unbuilt:** recent results ordered by confirmation time (Cup Taster had a bug here), bracket slots with winners and tie-break flags, podium via `derivePodium`, and `is_test` on every publish.

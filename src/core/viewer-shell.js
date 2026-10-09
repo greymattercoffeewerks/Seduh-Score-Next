@@ -40,6 +40,9 @@
 // inversion-of-control shape `core/outbox.js` already uses for its handler
 // map — this module owns the state machine and every holding card; the
 // caller owns only the yes/no question of whether its own payload is ready.
+// Both `hasContent(payload, { format })` and `renderBody(body, payload, { isTest, format })`
+// are told the live row's own `format`, so one surface can serve whichever
+// format is live (core/formatBody.js); a caller serving one format ignores it.
 //
 // The DOM is built ONCE at mount and mutated in place on every render, not
 // torn down and rebuilt via innerHTML — found in review: a screen reader
@@ -351,7 +354,10 @@ export async function mountViewerShell(
       // Not `?? null`: `bodyCleanup?.()` below already tolerates `undefined`
       // exactly like `null` (found in review — the normalization was
       // provably redundant, no test could distinguish the two).
-      bodyCleanup = renderBody(body, session.payload, { isTest: session.is_test === true });
+      bodyCleanup = renderBody(body, session.payload, {
+        isTest: session.is_test === true,
+        format: session.format,
+      });
     } else {
       body.appendChild(renderHoldingState(phase));
     }
@@ -359,7 +365,8 @@ export async function mountViewerShell(
 
   function computePhase() {
     if (!session) return hasEvent ? 'notStarted' : 'noEvent';
-    return hasContent(session.payload) ? 'live' : 'pending';
+    // `format` is the row's own, so one surface can serve whichever format is live (core/formatBody.js).
+    return hasContent(session.payload, { format: session.format }) ? 'live' : 'pending';
   }
 
   async function refresh() {

@@ -201,7 +201,7 @@ community/index.html            ← public hub linking community tools and futur
 guess-the-bean/index.html       ← Guess the Bean entry. See
                                    src/community/guess-the-bean/CLAUDE.md.
 src/
-  core/                         ← shared, format-agnostic modules + main.js wiring.
+  core/                         ← shared, format-agnostic modules.
                                    See src/core/CLAUDE.md.
   marketing/                    ← public landing + Tour pages (no auth, no router).
                                    Outside the handoff's original scope —
@@ -223,6 +223,8 @@ src/
     tokens/                     ← design tokens (plain CSS custom properties) — the
                                    console's own paper/stage system; src/marketing/ does
                                    NOT use this file's color tokens (see its own CLAUDE.md).
+  liveSurfaces.js               ← composition file beside main.js: registers each
+                                   format's projector and phone body (core/formatBody.js).
   main.js                       ← composition root; conventions live in
                                    src/core/CLAUDE.md alongside the rest of the wiring.
 public/
