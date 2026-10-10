@@ -2,7 +2,7 @@
 -- now shares with it), and the btc_matches tie-break columns. See
 -- 20261009110000_btc_knockout_tiebreak.sql for the reasoning.
 begin;
-select plan(76);
+select plan(78);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-000000000001', 'member@test.seduh-next'),
@@ -190,6 +190,49 @@ select is((select ctid::text from btc_matches where id = (select match_id from b
           current_setting('test.qf2_row'), 'and rewrites no row at all (same physical row version: no updated_at bump, no log row)');
 select is((select team2_id from btc_bracket_slots where slot_label = 'sf1' and event_id = '00000000-0000-0000-0000-0000000000e1'),
           (select team2_id from btc_matches where id = (select match_id from btc_bracket_slots where slot_label = 'qf2' and event_id = '00000000-0000-0000-0000-0000000000e1')), 'and leaves the seat where it was');
+
+-- ---------- the tie-break locks its match row ----------
+reset role;
+create extension if not exists pgrowlocks;
+insert into btc_matches (id, event_id, round, team1_id, team2_id, status,
+                         tiebreak_winner_team_id, tiebreak_reason)
+values ('00000000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-0000000000e1',
+        'quarterfinal', '00000000-0000-0000-0000-0000000000b1',
+        '00000000-0000-0000-0000-0000000000b2', 'confirmed',
+        '00000000-0000-0000-0000-0000000000b1', 'Lock proof');
+insert into btc_cup_votes (match_id, cup_number, team1_tokens)
+select '00000000-0000-0000-0000-0000000000f1', c,
+       case when c <= 10 then 3 else 0 end
+from generate_series(1, 20) c;
+select set_config('test.lock_match_row',
+                  (select ctid::text from btc_matches where id = '00000000-0000-0000-0000-0000000000f1'),
+                  false);
+select ok(
+  not exists (
+    select 1
+    from pgrowlocks('public.btc_matches') r
+    where r.locked_row = current_setting('test.lock_match_row')::tid
+      and 'For Update' = any (r.modes)
+  ),
+  'the tie-break fixture match is not held FOR UPDATE before the call'
+);
+set local role authenticated;
+set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000000001';
+select record_btc_tiebreak('00000000-0000-0000-0000-000000000010',
+                           '00000000-0000-0000-0000-0000000000f1',
+                           '00000000-0000-0000-0000-0000000000b1', 'Lock proof');
+reset role;
+select ok(
+  exists (
+    select 1
+    from pgrowlocks('public.btc_matches') r
+    where r.locked_row = current_setting('test.lock_match_row')::tid
+      and 'For Update' = any (r.modes)
+  ),
+  'record_btc_tiebreak holds its fixture match FOR UPDATE until the transaction ends'
+);
+set local role authenticated;
+set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000000001';
 
 -- ---------- a re-confirm and the recorded tie-break ----------
 select confirm_btc_match('00000000-0000-0000-0000-000000000103', '00000000-0000-0000-0000-000000000010', (select match_id from btc_bracket_slots where slot_label = 'qf2' and event_id = '00000000-0000-0000-0000-0000000000e1'), (select updated_at from btc_matches where id = (select match_id from btc_bracket_slots where slot_label = 'qf2' and event_id = '00000000-0000-0000-0000-0000000000e1')), (select jsonb_agg(jsonb_build_object('cup_number', c, 'team1_tokens', 3)) from generate_series(1, 20) c), null, false, false, null, null);
