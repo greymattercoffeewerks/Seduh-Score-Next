@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BTC live surface — one frame (mockup)</title>
+    <link rel="stylesheet" href="/src/ui/tokens/index.css" />
+    <link rel="stylesheet" href="/src/core/viewer-shell.css" />
+    <link rel="stylesheet" href="/src/core/stageSurface.css" />
+    <link rel="stylesheet" href="/src/core/stageDisplay.css" />
+    <link rel="stylesheet" href="/src/core/stageMoments.css" />
+    <link rel="stylesheet" href="/src/core/stageVocabulary.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/heatsScreen.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/standingsScreen.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/viewerBody.css" />
+    <link rel="stylesheet" href="/src/formats/cup-taster/projectorScreens.css" />
+    <link rel="stylesheet" href="./btc-mock.css" />
+  </head>
+  <body>
+    <!--
+      MOCKUP ONLY — not part of the shipped module graph. One frame of the planned BTC audience surfaces, built
+      from the REAL pieces: the design tokens, core/stageBand.js (the real band) and core/stageDisplay.js's
+      frame, Cup Taster's real projector/phone stylesheets, plus ./btc-mock.css (the BTC-only prototype
+      rules). Pick the frame with ?screen=. It is loaded inside an iframe by btc-live-surfaces.html so the
+      stage's vh/vw sizing sees a true 16:9 viewport, exactly as on the venue screen.
+    -->
+    <div id="app"></div>
+    <script type="module">
+      import { el, brandLockup } from '/src/core/dom.js';
+      import { renderStageBand } from '/src/core/stageBand.js';
+      import { renderScreenFrame } from '/src/core/stageDisplay.js';
+
+      const screen = new URLSearchParams(location.search).get('screen') ?? 'standings';
+      const app = document.getElementById('app');
+      const t = (text) => document.createTextNode(text);
+      const kicker = (text) => el('p', { className: 'stage-kicker', text });
+      const title = (text) => el('h2', { className: 'stage-title', text });
+
+      // ---------- projector (stage mode) ----------
+      function stage({ section, build, footerStart, footerEnd, testBanner = true }) {
+        app.dataset.mode = 'stage';
+        const frame = renderScreenFrame();
+        build(frame.main);
+        frame.footerStart.append(t(footerStart ?? ''));
+        frame.footerEnd.append(t(footerEnd ?? ''));
+        const band = renderStageBand({ eventName: 'BTC demo rehearsal', sectionLabel: section, live: true });
+        const display = el('div', { className: 'stage-display' }, [
+          el('div', { className: 'stage-band-host' }, [band]),
+          el('div', { className: 'stage-screen-host' }, [frame.el]),
+        ]);
+        const shellKids = [];
+        if (testBanner)
+          shellKids.push(el('div', { className: 'is-test-banner', text: 'Test Data — Not a Live Event' }));
+        shellKids.push(el('div', { className: 'viewer-shell-body' }, [display]));
+        const root = el(
+          'div',
+          { className: 'stage-surface', attrs: { 'data-surface': 'stage' } },
+          [el('div', { className: 'viewer-shell' }, shellKids)],
+        );
+        document.body.dataset.surface = 'stage';
+        app.replaceChildren(root);
+      }
+
+      const side = ({ label, name, winner, points, chips = [] }) =>
+        el('div', { className: 'btc-side', attrs: winner == null ? {} : { 'data-winner': String(winner) } }, [
+          el('span', { className: 'btc-side-label', text: label }),
+          el('p', { className: 'btc-side-name', text: name }),
+          points == null ? null : el('p', { className: 'btc-points', text: String(points) }),
+          chips.length
+            ? el(
+                'div',
+                { className: 'btc-chips' },
+                chips.map((c) =>
+                  el('span', { className: 'btc-chip', text: c.text, attrs: c.kind ? { 'data-kind': c.kind } : {} }),
+                ),
+              )
+            : null,
+        ].filter(Boolean));
+
+      const screens = {
+        standings: () =>
+          stage({
+            section: 'Preliminary round',
+            footerStart: 'Top 8 go through to the quarterfinals',
+            footerEnd: 'Page 1 of 1',
+            build(main) {
+              main.append(
+                kicker('28 of 28 matches played'),
+                el('div', { className: 'stage-standings-head' }, [
+                  title('Standings'),
+                  el('span', { className: 'stage-range', text: 'Places 1–8' }),
+                ]),
+                el('table', { className: 'stage-standings' }, [
+                  el(
+                    'tbody',
+                    {},
+                    [
+                      ['Bean Scene', 6, 248],
+                      ['Pour Decisions', 6, 235],
+                      ['Crema Crew', 5, 216],
+                      ['Drip Society', 5, 208],
+                      ['Grind House', 3, 169],
+                      ['Roast Republic', 2, 161],
+                      ['Latte Lab', 1, 114],
+                      ['Steam Team', 0, 105],
+                    ].map(([name, wins, pts], i) =>
+                      el('tr', { className: 'stage-standing-row' }, [
+                        el('td', { className: 'stage-standing-pos', text: String(i + 1) }),
+                        el('td', { className: 'stage-standing-name' }, [
+                          el('span', { className: 'stage-name-row' }, [
+                            el('span', { className: 'stage-name-text', text: name }),
+                          ]),
+                        ]),
+                        el('td', { className: 'stage-standing-cell', attrs: { style: 'width: 12vw' }, text: `${wins} wins` }),
+                        el('td', { className: 'stage-standing-cell', attrs: { style: 'width: 14vw' }, text: `${pts} pts` }),
+                      ]),
+                    ),
+                  ),
+                ]),
+              );
+            },
+          }),
+
+        upnext: () =>
+          stage({
+            section: 'Quarterfinals',
+            footerStart: 'Then: Quarterfinal 2 · Drip Society vs Grind House',
+            footerEnd: '20 cups',
+            build(main) {
+              main.append(
+                kicker('Up next · Quarterfinal 1'),
+                title('Seed 1 meets seed 8'),
+                el('div', { className: 'btc-vs' }, [
+                  side({ label: 'Seed 1', name: 'Bean Scene' }),
+                  el('span', { className: 'btc-vs-mark', text: 'VS' }),
+                  side({ label: 'Seed 8', name: 'Steam Team' }),
+                ]),
+                el('p', { className: 'btc-judges', text: 'Judges: Judge 1 · Judge 3 · Judge 4' }),
+              );
+            },
+          }),
+
+        result: () =>
+          stage({
+            section: 'Quarterfinals',
+            footerStart: 'Bean Scene go through to Semifinal 1',
+            footerEnd: 'Result',
+            build(main) {
+              main.append(
+                kicker('Result recorded · Quarterfinal 1'),
+                el('div', { className: 'btc-vs' }, [
+                  side({
+                    label: 'Goes through',
+                    name: 'Bean Scene',
+                    winner: true,
+                    points: 48,
+                    chips: [{ text: '41 tokens' }, { text: '+5 won the match' }, { text: '+2 fastest' }],
+                  }),
+                  el('span', { className: 'btc-vs-mark', text: 'VS' }),
+                  side({ label: 'Out', name: 'Steam Team', winner: false, points: 19, chips: [{ text: '19 tokens' }] }),
+                ]),
+              );
+            },
+          }),
+
+        // The shared rank-movement rows (core/rankMovementRows.js + stageMoments.css), unedited: what Cup Taster's
+        // "Rank impact" moment uses. Words carry the meaning ("Up 2", "Holds"); colour only adds emphasis.
+        rankimpact: () =>
+          stage({
+            section: 'Preliminary round',
+            footerStart: 'After match 23 of 28',
+            footerEnd: '8 s',
+            build(main) {
+              const move = (pos, name, change, kind) =>
+                el('li', { className: 'stage-move', attrs: { 'data-change': kind } }, [
+                  el('span', { className: 'stage-move-pos', text: String(pos) }),
+                  el('span', { className: 'stage-move-name' }, [el('span', { className: 'stage-move-name-text', text: name })]),
+                  el('span', { className: 'stage-move-change', text: change }),
+                ]);
+              main.append(
+                kicker('Rank impact · Latte Lab vs Roast Republic'),
+                title('Grind House climb to 4th'),
+                el('ul', { className: 'stage-moves', attrs: { style: 'margin-top: 1.5vh' } }, [
+                  move(1, 'Bean Scene', 'Holds', 'same'),
+                  move(2, 'Pour Decisions', 'Holds', 'same'),
+                  move(3, 'Crema Crew', 'Holds', 'same'),
+                  move(4, 'Grind House', 'Up 1', 'up'),
+                  move(5, 'Drip Society', 'Down 1', 'down'),
+                ]),
+              );
+            },
+          }),
+
+        tiebreak: () =>
+          stage({
+            section: 'Quarterfinals',
+            footerStart: 'Roast Republic go through to Semifinal 2',
+            footerEnd: 'Result',
+            build(main) {
+              main.append(
+                kicker('Result recorded · Quarterfinal 3 · level on points'),
+                el('div', { className: 'btc-vs' }, [
+                  side({ label: 'Out', name: 'Crema Crew', winner: false, points: 30, chips: [{ text: '30 tokens' }] }),
+                  el('span', { className: 'btc-vs-mark', text: 'VS' }),
+                  side({
+                    label: 'Goes through',
+                    name: 'Roast Republic',
+                    winner: true,
+                    points: 30,
+                    chips: [{ text: '30 tokens' }, { text: 'Tie-break: sudden-death cup', kind: 'tiebreak' }],
+                  }),
+                ]),
+              );
+            },
+          }),
+
+        bracket: () => {
+          const slot = (a, b, { played = false, winner = null, note = null } = {}) =>
+            el('div', { className: 'btc-slot', attrs: { 'data-played': String(played) } }, [
+              ...[a, b].map((team, i) =>
+                el(
+                  'div',
+                  {
+                    className: 'btc-slot-team',
+                    attrs: {
+                      'data-winner': String(winner === i),
+                      ...(team.name == null ? { 'data-tbd': 'true' } : {}),
+                    },
+                  },
+                  [el('span', { text: team.name ?? 'To be decided' }), el('span', { text: team.pts == null ? '' : String(team.pts) })],
+                ),
+              ),
+              note ? el('div', { className: 'btc-slot-note', text: note }) : null,
+            ].filter(Boolean));
+          const round = (head, slots) =>
+            el('div', { className: 'btc-round' }, [el('span', { className: 'btc-round-head', text: head }), ...slots]);
+          return stage({
+            section: 'Knockout',
+            footerStart: 'Winners are outlined as results come in',
+            footerEnd: '3 of 8 played',
+            build(main) {
+              main.append(
+                kicker('Bracket'),
+                el('div', { className: 'btc-bracket' }, [
+                  round('Quarterfinals', [
+                    slot({ name: 'Bean Scene', pts: 48 }, { name: 'Steam Team', pts: 19 }, { played: true, winner: 0 }),
+                    slot({ name: 'Drip Society', pts: 31 }, { name: 'Grind House', pts: 38 }, { played: true, winner: 1 }),
+                    slot({ name: 'Crema Crew', pts: 30 }, { name: 'Roast Republic', pts: 30 }, { played: true, winner: 1, note: 'Tie-break' }),
+                    slot({ name: 'Pour Decisions' }, { name: 'Latte Lab' }),
+                  ]),
+                  round('Semifinals', [
+                    slot({ name: 'Bean Scene' }, { name: 'Grind House' }),
+                    slot({ name: 'Roast Republic' }, { name: null }),
+                  ]),
+                  round('Final and third place', [
+                    slot({ name: null }, { name: null }),
+                    slot({ name: null }, { name: null }),
+                  ]),
+                ]),
+              );
+            },
+          });
+        },
+
+        champion: () =>
+          stage({
+            section: 'Final result',
+            footerStart: 'Congratulations to all eight teams',
+            footerEnd: '',
+            build(main) {
+              main.style.alignItems = 'center';
+              main.style.justifyContent = 'center';
+              main.append(
+                el('p', { className: 'stage-champion-label', text: 'Champion' }),
+                el('p', { className: 'stage-champion-name', text: 'Bean Scene' }),
+                el('p', { className: 'stage-champion-score', text: 'Final 52 – 44' }),
+                el('p', {
+                  className: 'stage-podium',
+                  text: '1st runner-up: Pour Decisions  ·  3rd place: Crema Crew',
+                }),
+              );
+            },
+          }),
+      };
+
+      // ---------- phone (paper mode) ----------
+      function phone(build, { section }) {
+        const chrome = el('div', { className: 'viewer-chrome' }, [
+          el('h1', { className: 'viewer-chrome-name' }, [
+            brandLockup({ name: 'Seduh Score', markClass: 'viewer-chrome-mark', nameClass: 'viewer-chrome-name-text' }),
+          ]),
+          el('span', { className: 'viewer-badge viewer-badge-live' }, [
+            el('span', { className: 'status-live-dot', attrs: { 'aria-hidden': 'true' } }),
+            el('span', { text: 'Live' }),
+          ]),
+        ]);
+        const main = el('div', { className: 'viewer-body-main' });
+        build(main);
+        const root = el('div', { className: 'viewer-shell btc-phone' }, [
+          chrome,
+          el('div', { className: 'is-test-banner', text: 'Test Data — Not a Live Event' }),
+          el('div', { className: 'viewer-shell-body' }, [main]),
+        ]);
+        app.replaceChildren(root);
+      }
+      const card = (children) => el('section', { className: 'card' }, children);
+      const line = (left, right, { win = false } = {}) =>
+        el('div', { className: 'btc-phone-line' }, [
+          el('span', { className: win ? 'btc-phone-win' : '', text: left }),
+          el('span', { className: 'stage-meta', text: right }),
+        ]);
+      const meta = (text) => el('p', { className: 'stage-meta', text });
+
+      screens['phone-prelim'] = () =>
+        phone(
+          (main) => {
+            main.append(
+              card([meta('BTC demo rehearsal'), el('h2', { text: 'Preliminary round' }), meta('22 of 28 matches played')]),
+              card([meta('Up next · Match 23 of 28'), el('h2', { text: 'Latte Lab vs Roast Republic' }), meta('Judges 2 · 4 · 5')]),
+              card([
+                el('h2', { text: 'Standings' }),
+                line('1  Bean Scene', '201 pts', { win: true }),
+                line('2  Pour Decisions', '190 pts'),
+                line('3  Crema Crew', '171 pts'),
+                line('4  Drip Society', '165 pts'),
+                line('5  Grind House', '137 pts'),
+                el('button', { className: 'btn btn-outline tap-target', text: 'Show all 8 teams', attrs: { type: 'button' } }),
+                meta('Top 8 go through to the quarterfinals.'),
+              ]),
+              card([
+                el('h2', { text: 'Recent results' }),
+                line('Crema Crew 34 – 21 Latte Lab', 'Match 22'),
+                line('Grind House 19 – 36 Pour Decisions', 'Match 21'),
+                line('Bean Scene 41 – 20 Steam Team', 'Match 20'),
+              ]),
+            );
+          },
+          { section: 'Preliminary round' },
+        );
+
+      screens['phone-knockout'] = () =>
+        phone(
+          (main) => {
+            main.append(
+              card([meta('BTC demo rehearsal'), el('h2', { text: 'Semifinals' }), meta('5 of 8 knockout matches played')]),
+              card([meta('Up next'), el('h2', { text: 'Semifinal 2' }), meta('Roast Republic vs Pour Decisions · Judges 1 · 2 · 3')]),
+              card([
+                el('h2', { text: 'Bracket' }),
+                meta('Quarterfinals'),
+                line('Bean Scene 48 – 19 Steam Team', ''),
+                line('Drip Society 31 – 38 Grind House', ''),
+                el('div', { className: 'btc-phone-line' }, [
+                  el('span', {}, [t('Crema Crew 30 – 30 Roast Republic'), el('span', { className: 'btc-phone-tag', text: 'Tie-break' })]),
+                ]),
+                line('Pour Decisions 44 – 27 Latte Lab', ''),
+                meta('Semifinals'),
+                line('Bean Scene vs Grind House', 'next'),
+                line('Roast Republic vs Pour Decisions', 'next'),
+              ]),
+              card([
+                el('h2', { text: 'Tie-break, Quarterfinal 3' }),
+                meta('Level at 30 each. Roast Republic go through: sudden-death cup.'),
+              ]),
+            );
+          },
+          { section: 'Knockout' },
+        );
+
+      screens['phone-champion'] = () =>
+        phone(
+          (main) => {
+            main.append(
+              el('section', { className: 'viewer-champion-hero' }, [
+                el('p', { className: 'viewer-champion-label', text: 'Champion' }),
+                el('p', { className: 'viewer-champion-name', text: 'Bean Scene' }),
+                meta('Final 52 – 44'),
+              ]),
+              card([
+                el('h2', { text: 'Podium' }),
+                line('Champion', 'Bean Scene', { win: true }),
+                line('1st runner-up', 'Pour Decisions'),
+                line('3rd place', 'Crema Crew'),
+              ]),
+              card([el('h2', { text: 'Final results' }), line('Final', 'Bean Scene 52 – 44 Pour Decisions'), line('Third place', 'Crema Crew 40 – 35 Grind House')]),
+            );
+          },
+          { section: 'Final result' },
+        );
+
+      (screens[screen] ?? screens.standings)();
+    </script>
+  </body>
+</html>

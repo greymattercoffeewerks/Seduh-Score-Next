@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BTC live surfaces — planned screens (mockup)</title>
+    <link rel="stylesheet" href="/src/ui/tokens/index.css" />
+    <style>
+      /* Gallery chrome only, in the paper theme and the real tokens. The frames below are the real thing. */
+      body { padding: var(--space-6) var(--space-5); max-width: 1180px; margin: 0 auto; }
+      h1 { font-family: var(--font-display); margin: 0 0 var(--space-2); font-size: var(--text-2xl); }
+      h2 { font-family: var(--font-display); margin: var(--space-7) 0 var(--space-3); font-size: var(--text-xl); }
+      h3 { font-family: var(--font-display); margin: 0 0 var(--space-2); font-size: var(--text-md); }
+      p, li { max-width: 62ch; }
+      .lede { color: var(--color-text-secondary); }
+      .note { border: var(--border-strong) solid var(--color-border-strong); padding: var(--space-3) var(--space-4); margin: var(--space-4) 0; }
+      .row { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: var(--space-5); align-items: start; margin-bottom: var(--space-6); }
+      .tv { width: 100%; aspect-ratio: 16 / 9; border: var(--border-strong) solid var(--color-border-strong); display: block; background: var(--clr-petrol-950); }
+      .phones { display: grid; grid-template-columns: repeat(3, 360px); gap: var(--space-5); overflow-x: auto; padding-bottom: var(--space-3); }
+      .ph { width: 360px; height: 720px; border: var(--border-strong) solid var(--color-border-strong); display: block; }
+      dl { margin: 0; font-size: var(--text-sm); }
+      dt { font-weight: var(--font-weight-bold); letter-spacing: 0.05em; text-transform: uppercase; font-size: var(--text-xs); color: var(--color-text-secondary); margin-top: var(--space-2); }
+      dd { margin: 0; }
+      .tag { display: inline-block; padding: 0 var(--space-2); border: var(--border-hairline) solid var(--color-border-strong); font-size: var(--text-xs); font-weight: var(--font-weight-bold); letter-spacing: 0.05em; text-transform: uppercase; }
+      @media (max-width: 860px) { .row { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <h1>BTC live surfaces: planned screens</h1>
+    <p class="lede">
+      Static mockups, not built. Each frame below is the real design system: the real token files, the real
+      venue-display band and frame, and Cup Taster's real projector and phone stylesheets, plus a small
+      mockup-only stylesheet for the BTC-specific parts (<code>design/mockups/btc-mock.css</code>). Each projector
+      frame is a live 16:9 page, so it scales exactly as it will on the room's screen. Demo data throughout.
+    </p>
+    <div class="note">
+      <strong>Reading the notes.</strong> <span class="tag">Reused</span> means an existing class or module, unedited.
+      <span class="tag">New</span> means BTC-only work. The rounded first drafts from the conversation are the
+      comparison; these are the faithful version.
+    </div>
+
+    <h2>Projector (the venue screen)</h2>
+
+    <div class="row">
+      <iframe class="tv" src="btc-live-surface-frame.html?screen=standings" title="Standings screen"></iframe>
+      <div><h3>1. Standings</h3><dl>
+        <dt>Shows</dt><dd>Place, team, wins, points. Eight rows a page, so 24 teams is three pages with the change ring.</dd>
+        <dt>When</dt><dd>The idle loop between matches.</dd>
+        <dt>Data</dt><dd>The existing standings (the same ranking the organiser sees).</dd>
+        <dt>Built from</dt><dd><span class="tag">Reused</span> table classes, paging, ring, band. <span class="tag">New</span> column set.</dd></dl></div>
+    </div>
+
+    <div class="row">
+      <iframe class="tv" src="btc-live-surface-frame.html?screen=upnext" title="Up next screen"></iframe>
+      <div><h3>2. Up next</h3><dl>
+        <dt>Shows</dt><dd>The next match, both teams, their seeds, the judges; what follows in the footer.</dd>
+        <dt>When</dt><dd>The idle loop, and straight after a result moment.</dd>
+        <dt>Data</dt><dd>Derived from match order. No new organiser action (open decision 1).</dd>
+        <dt>Built from</dt><dd><span class="tag">New</span> two-sided card on the shared screen frame.</dd></dl></div>
+    </div>
+
+    <div class="row">
+      <iframe class="tv" src="btc-live-surface-frame.html?screen=result" title="Result screen"></iframe>
+      <div><h3>3. Result recorded</h3><dl>
+        <dt>Shows</dt><dd>Points per side, the breakdown (tokens, +5 for winning, +2 fastest), who goes through. The winner wears the heavy outline and says so in words.</dd>
+        <dt>When</dt><dd>A short moment (about 6 s) after a match is confirmed, then back to the loop.</dd>
+        <dt>Built from</dt><dd><span class="tag">Reused</span> the moment player. <span class="tag">New</span> the screen.</dd></dl></div>
+    </div>
+
+    <div class="row">
+      <iframe class="tv" src="btc-live-surface-frame.html?screen=rankimpact" title="Rank impact screen"></iframe>
+      <div><h3>3b. Rank impact (added after checking the shared work)</h3><dl>
+        <dt>Shows</dt><dd>A headline and the top places, each with a word: Up 1, Down 1, Holds, New. Colour only adds emphasis.</dd>
+        <dt>When</dt><dd>A moment (about 8 s) after a PRELIMINARY match is confirmed, because that is when the table moves. Not used in the knockout.</dd>
+        <dt>Built from</dt><dd><span class="tag">Reused</span> entirely: the rank-movement logic and rows, the rise-in reveal, the moment player. This frame uses the shared stylesheet unedited.</dd></dl></div>
+    </div>
+
+    <div class="row">
+      <iframe class="tv" src="btc-live-surface-frame.html?screen=tiebreak" title="Tie-break result screen"></iframe>
+      <div><h3>4. A level match, decided</h3><dl>
+        <dt>Shows</dt><dd>Equal points, and the organiser's decision as a gold pill. Never hidden.</dd>
+        <dt>Open</dt><dd>Whether the reason text ("sudden-death cup") appears here or only "Decided by tie-break" (open decision 2). The reason is typed by the organiser.</dd>
+        <dt>Built from</dt><dd>Same as screen 3. Gold stays a fill, per the design rules.</dd></dl></div>
+    </div>
+
+    <div class="row">
+      <iframe class="tv" src="btc-live-surface-frame.html?screen=bracket" title="Bracket screen"></iframe>
+      <div><h3>5. Bracket</h3><dl>
+        <dt>Shows</dt><dd>Quarterfinals, semifinals, and final with third place. Winners bold, played slots outlined, undecided slots say so.</dd>
+        <dt>When</dt><dd>The idle loop once the bracket exists.</dd>
+        <dt>Data</dt><dd>The same bracket data and winner rule as the organiser screen and the podium.</dd>
+        <dt>Built from</dt><dd><span class="tag">New</span>. The biggest new screen.</dd></dl></div>
+    </div>
+
+    <div class="row">
+      <iframe class="tv" src="btc-live-surface-frame.html?screen=champion" title="Champion screen"></iframe>
+      <div><h3>6. Champion and podium</h3><dl>
+        <dt>Shows</dt><dd>Champion, final score, runner-up and third place.</dd>
+        <dt>When</dt><dd>Once the final and third place are decided. Stays up.</dd>
+        <dt>Built from</dt><dd><span class="tag">Reused</span> Cup Taster's champion classes unedited; only the wording is BTC's.</dd></dl></div>
+    </div>
+
+    <h2>Phone (scrolls, 360px first)</h2>
+    <p class="lede">Same data, one scrolling column in the paper theme. It is also the accessible companion to the projector.</p>
+    <div class="phones">
+      <iframe class="ph" src="btc-live-surface-frame.html?screen=phone-prelim" title="Phone, preliminary round"></iframe>
+      <iframe class="ph" src="btc-live-surface-frame.html?screen=phone-knockout" title="Phone, knockout"></iframe>
+      <iframe class="ph" src="btc-live-surface-frame.html?screen=phone-champion" title="Phone, champion"></iframe>
+    </div>
+
+    <h2>Open decisions (my defaults in brackets)</h2>
+    <ol>
+      <li>Up next: derive it from match order (yes) or add a "put on stage" button.</li>
+      <li>Tie-break reason on screens: show the typed text (yes) or only "Decided by tie-break".</li>
+      <li>Judges: show their names (yes) or "Judge 1, 3, 4".</li>
+      <li>Standings: pages of 8 with the ring on the projector, top 5 with "show all" on the phone (yes).</li>
+    </ol>
+  </body>
+</html>
