@@ -26,23 +26,12 @@ import {
   listPendingOperations,
 } from '../../core/outbox.js';
 import { getSupabase } from '../../core/supabaseClient.js';
+export { roundLabel } from './roundNames.js';
 
 // A match must still carry exactly 3 assigned judges before it can be confirmed —
 // an on-the-record fact about who scored the match, not a per-vote attribution.
 export const JUDGES_PER_MATCH = 3;
 export const TOKENS_PER_CUP = 3;
-
-const ROUND_LABELS = {
-  preliminary: 'Preliminary',
-  quarterfinal: 'Quarter-final',
-  semifinal: 'Semi-final',
-  final: 'Final',
-  third_place: 'Third place',
-};
-
-export function roundLabel(round) {
-  return ROUND_LABELS[round] ?? round;
-}
 
 // Mirrors app.btc_cups_for_round in SQL (server-side truth): 15 preliminary cups,
 // 20 in every knockout round including third place.

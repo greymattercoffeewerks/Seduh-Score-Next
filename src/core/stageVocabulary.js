@@ -86,7 +86,11 @@ export function renderChampion({ label = 'Champion', name, scoreLine = null, pod
       text: name,
       attrs: longName ? { 'data-long-name': 'true' } : undefined,
     }),
-    scoreLine ? el('p', { className: 'stage-champion-score', text: scoreLine }) : null,
+    scoreLine
+      ? typeof scoreLine === 'string'
+        ? el('p', { className: 'stage-champion-score', text: scoreLine })
+        : el('p', { className: 'stage-champion-score' }, [scoreLine])
+      : null,
     podiumLine ? el('p', { className: 'stage-podium', text: podiumLine }) : null,
   ].filter(Boolean);
 }

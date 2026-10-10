@@ -164,7 +164,7 @@ describe('mountBracketScreen', () => {
       .dispatchEvent(new Event('click', { bubbles: true }));
     await flush();
 
-    expect(root.textContent).toContain('Quarterfinals');
+    expect(root.textContent).toContain('Quarter-finals');
     expect(root.textContent).toContain('Alpha vs Beta');
     expect(client.rpcCalls).toEqual([
       ['generate_btc_bracket', { p_org_id: 'org1', p_event_id: 'ev1' }],
@@ -626,7 +626,7 @@ describe('mountBracketScreen', () => {
     await mountBracketScreen(root, { eventId: 'ev1', client });
 
     const headings = [...root.querySelectorAll('.btc-bracket-round h2')].map((h) => h.textContent);
-    expect(headings).toEqual(['Quarterfinals', 'Final', 'Third Place']);
+    expect(headings).toEqual(['Quarter-finals', 'Final', 'Third place']);
   });
 
   describe('podium card', () => {
