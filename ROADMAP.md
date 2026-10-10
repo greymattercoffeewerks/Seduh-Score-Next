@@ -1897,13 +1897,13 @@ handoff §4's "one organiser, one org"; locks D-T1…D-T8). Why: `MULTI-TENANCY-
 pillars A and B. Not in scope: gating/entitlements (D14 stays a stub), admin console, self-serve
 signup, Seduh ID. Rule: no two-org user exists in the cloud project until B1, B2 and B6 are pushed.
 
-| Phase | Tasks                                                                                                                                             | Status                                                 |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| A     | A1 spec lock · A2 tenancy inventory                                                                                                               | Done                                                   |
-| B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | In progress (B1, B2, B5 done and in the cloud project) |
-| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | Not started                                            |
-| D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | Not started                                            |
-| E     | E1 negative matrix · E2 console Playwright · E3 security/perf · E4 docs · E5 rollout · E6 close-out                                               | Not started                                            |
+| Phase | Tasks                                                                                                                                             | Status                                                                                              |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| A     | A1 spec lock · A2 tenancy inventory                                                                                                               | Done                                                                                                |
+| B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | In progress (B1, B2, B5 done and in the cloud project; B6 built and reviewed, not yet in the cloud) |
+| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | Not started                                                                                         |
+| D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | Not started                                                                                         |
+| E     | E1 negative matrix · E2 console Playwright · E3 security/perf · E4 docs · E5 rollout · E6 close-out                                               | Not started                                                                                         |
 
 Each D task is re-confirmed with the product owner before it starts (2026-10-10).
 
