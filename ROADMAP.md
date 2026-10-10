@@ -1897,13 +1897,13 @@ handoff §4's "one organiser, one org"; locks D-T1…D-T8). Why: `MULTI-TENANCY-
 pillars A and B. Not in scope: gating/entitlements (D14 stays a stub), admin console, self-serve
 signup, Seduh ID. Rule: no two-org user exists in the cloud project until B1, B2 and B6 are pushed.
 
-| Phase | Tasks                                                                                                                                             | Status                                                 |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| A     | A1 spec lock · A2 tenancy inventory                                                                                                               | Done                                                   |
-| B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | In progress (B1, B2, B5 done and in the cloud project) |
-| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | Not started                                            |
-| D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | Not started                                            |
-| E     | E1 negative matrix · E2 console Playwright · E3 security/perf · E4 docs · E5 rollout · E6 close-out                                               | Not started                                            |
+| Phase | Tasks                                                                                                                                             | Status                                                                                              |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| A     | A1 spec lock · A2 tenancy inventory                                                                                                               | Done                                                                                                |
+| B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | In progress (B1, B2, B5 done and in the cloud project; B6 built and reviewed, not yet in the cloud) |
+| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | Not started                                                                                         |
+| D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | Not started                                                                                         |
+| E     | E1 negative matrix · E2 console Playwright · E3 security/perf · E4 docs · E5 rollout · E6 close-out                                               | Not started                                                                                         |
 
 Each D task is re-confirmed with the product owner before it starts (2026-10-10).
 
@@ -1921,3 +1921,16 @@ _Three migrations (`20261011100000_tenancy_org_id_immutable`, `20261011110000_te
 - **The last-owner guard has no two-session test.** pgTAP runs in one uncommitted transaction, so the org-row lock and the owner-row lock are pinned by source only. Security-reviewer ran the concurrent cases by hand: READ COMMITTED holds; REPEATABLE READ is covered by the owner-row lock. A demotion racing an org deletion can deadlock (Postgres aborts one); accepted.
 - **`confirm_heat` still compares `p_org_id <> resolver`** (the NULL trap). No exploitable path was found (it aborts on the missing row), but it joins B6's audit list.
 - **`people.global_person_id` is writable by any member** to any uuid. It is the reserved Seduh ID hook, deferred with that phase.
+
+---
+
+## Known open items from T-TEN.B6 (2026-10-11)
+
+_Two migrations (`20261011130000_tenancy_resolver_disclosure`, `20261011140000_tenancy_rpc_null_org_guard`; apply together, in order). Reviewed by schema-guardian, security-reviewer (blocked once, then signed off on a delta review) and test-auditor. **Not pushed to the cloud project until the product owner says so.** After it is pushed, B1, B2 and B6 are all in the cloud and the "no two-org user" rule can be lifted._
+
+- **Other BEFORE ROW validation triggers still answer before row-level security** (the oracle class B6 closed for the org-match triggers): `check_btc_match_teams_event`, `check_btc_match_judge_event`, `check_btc_bracket_slot_event`, `check_btc_match_bonus_teams`, `check_person_merge_kept_org`, `check_ct_results_set_stage`. A signed-in non-member can tell, from the error, whether two ids they name are related. Pre-existing, not introduced by B6. Same fix pattern (gate on membership of the row's org first, raise the standard 42501). `check_ct_results_set_stage` also compares with `<>` against possibly-NULL subselects, so a missing parent passes the trigger (the foreign key still catches it).
+- **Anonymous reads still expose which org owns every event.** `events.org_id`, `live_sessions` and `public_results` are anon-readable (`events_read_public`, `live_sessions_read`, `public_results_read_public`), so "anon learns nothing about org ownership" cannot be signed off until B7/D6 narrow them. This is B7/D6's job, not B6's.
+- **The gated event resolver is about 15x slower in-database for an existing event than a missing one**, for a non-member (microseconds, because the membership lookup only runs when a row is found). Buried in network jitter, so not usable over HTTP; noted so nobody relies on it as a guarantee.
+- **Policy scans cost more per row.** `app.is_org_member(app.org_id_for_x(...))` now does a second membership lookup inside the resolver. Measured on 4000 rows as 1.7x to 2.7x for a whole-table policy scan (plan shape unchanged; inlining the membership check was not faster). Fine at current event sizes; E3 should re-measure with realistic data, and a full-table scan on a busy night is the thing to watch.
+- **A missing parent id now fails the org-match triggers with P0001** ("must match the owning org…", "person_id must belong to…") where the foreign key used to report 23503. The client treats both as permanent failures, so nothing breaks; the message is just less precise.
+- **The gate depends on the session role.** The org-match triggers refuse a caller as a non-member when `auth.uid()` is set or the session role is `authenticated` / `anon`; a session with neither (postgres, seeds, migrations) is checked strictly instead. If a new writer ever needs to run as a different role, it will take the strict path.

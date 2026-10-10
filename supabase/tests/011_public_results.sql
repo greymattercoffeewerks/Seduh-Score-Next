@@ -3,8 +3,9 @@
 -- bypassing the two RPCs is rejected by trg_public_results_org_check for both
 -- ways it could go wrong (wrong-org event_id, and the caller's own test event); a
 -- wrong-org/nonexistent event gets the same indistinguishable "not found" message
--- (mirrors 008_delete_test_event.sql's own precedent); a non-member is rejected by
--- RLS even when the RPC's own org check is satisfied; publishing a real event
+-- (mirrors 008_delete_test_event.sql's own precedent); a non-member is refused by the RPC's own org
+-- check even when they pass the event's true org id (T-TEN.B6; the RLS policies behind it are
+-- proven directly in 034_resolver_disclosure.sql); publishing a real event
 -- works and republishing upserts in place; a real event's genuine publish/unpublish
 -- round-trip is visible to anon exactly when expected.
 begin;
@@ -82,19 +83,22 @@ select throws_ok(
   'a nonexistent event is rejected with the same message as a wrong-org one'
 );
 
--- ============ publish_event_results: a non-member is rejected by RLS ============
--- Passes org 020 as BOTH the true owning org of event e9 AND p_org_id, so the
--- function's own ownership check passes — this isolates RLS as the actual gate.
--- The INSERT ... SELECT ... FROM events source is hidden entirely by events_read's
--- own USING clause for a non-member, so this call succeeds (0 rows), not a thrown
--- 42501 — same "INSERT vs DELETE" distinction 008_delete_test_event.sql's own
--- comment makes, confirmed here to hold for an INSERT ... SELECT source too.
+-- ============ publish_event_results: a non-member is refused ============
+-- Passes org 020 as BOTH the true owning org of event e9 AND p_org_id. Since T-TEN.B6 the
+-- function's own ownership check refuses it (the resolver answers NULL to a non-member), the same
+-- as a wrong org id. Before B6 the check passed and events_read's USING clause hid the INSERT's
+-- source row, so the call succeeded with 0 rows; that silent success is gone.
 
-select lives_ok(
+-- T-TEN.B6: org_id_for_* now answers NULL for a non-member, so a non-member who passes the TRUE
+-- org id is refused by the function's own check, exactly like one who passes a wrong org id. This
+-- case used to reach RLS (and silently match zero rows); it no longer gets that far.
+select throws_ok(
   $$ select publish_event_results(
        '00000000-0000-0000-0000-000000000020', '00000000-0000-0000-0000-0000000000e9', '{}'::jsonb
      ) $$,
-  'the call itself does not error — events_read''s own RLS hides the source row from a non-member'
+  'P0001',
+  'publish_event_results: event 00000000-0000-0000-0000-0000000000e9 not found',
+  'a non-member passing the owning org id is refused as not found (same as a wrong org id)'
 );
 
 reset role;
@@ -174,25 +178,30 @@ select is(
   'the payload was overwritten, not merged or duplicated'
 );
 
--- ============ unpublish_event_results: a non-member is rejected by RLS ============
--- Same "call succeeds, but RLS matches zero rows" shape as
--- 008_delete_test_event.sql's own non-member DELETE case.
+-- ============ unpublish_event_results: a non-member is refused ============
+-- Since T-TEN.B6 refused by the function's own check exactly like a wrong org id (it used to
+-- succeed with RLS matching zero rows, the shape 008_delete_test_event.sql used to show).
 
 set local role authenticated;
 set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000000002';
 
-select lives_ok(
+-- T-TEN.B6: org_id_for_* now answers NULL for a non-member, so a non-member who passes the TRUE
+-- org id is refused by the function's own check, exactly like one who passes a wrong org id. This
+-- case used to reach RLS (and silently match zero rows); it no longer gets that far.
+select throws_ok(
   $$ select unpublish_event_results(
        '00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-0000000000e1'
      ) $$,
-  'the call itself does not error — public_results_org''s own USING clause hides the row from a non-member'
+  'P0001',
+  'unpublish_event_results: event 00000000-0000-0000-0000-0000000000e1 not found',
+  'a non-member passing the owning org id is refused as not found (same as a wrong org id)'
 );
 
 reset role;
 select is(
   (select count(*)::int from public_results where event_id = '00000000-0000-0000-0000-0000000000e1'),
   1,
-  'the row was NOT actually removed — a non-member''s unpublish matched zero rows under RLS'
+  'the row was NOT actually removed — the call was refused by the function''s own check'
 );
 
 -- ============ unpublish_event_results: the real organiser can remove their own published row ============

@@ -83,11 +83,16 @@ select throws_ok(
   'a non-member passing their own org id is rejected'
 );
 
-select lives_ok(
+-- T-TEN.B6: org_id_for_* now answers NULL for a non-member, so a non-member who passes the TRUE
+-- org id is refused by the function's own check, exactly like one who passes a wrong org id. This
+-- case used to reach RLS (and silently match zero rows); it no longer gets that far.
+select throws_ok(
   $$ select delete_test_event(
        '00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-0000000000e1'
      ) $$,
-  'a non-member passing the owning org id: the call returns, but RLS matches zero rows'
+  'P0001',
+  'delete_test_event: event 00000000-0000-0000-0000-0000000000e1 not found',
+  'a non-member passing the owning org id is refused as not found (same as a wrong org id)'
 );
 
 select lives_ok(

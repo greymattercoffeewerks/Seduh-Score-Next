@@ -76,22 +76,21 @@ select is(
 );
 
 -- ============ a non-member is rejected even with the event's own correct org id ============
--- Unlike the wrong-org case above (a mismatched org_id/event_id pair, caught
--- by the function's own explicit check), this passes org 020 as BOTH the
--- true owning org of event e9 AND p_org_id — so the function's own ownership
--- check passes, and it's live_sessions_write's RLS WITH CHECK that must
--- reject the actual INSERT, since the caller (a member of org 010 only) is
--- not a member of org 020. Proves the RLS backstop actually fires, not just
--- the function's own application-level guard.
-
+-- This passes org 020 as BOTH the true owning org of event e9 AND p_org_id. Since T-TEN.B6 the
+-- function's own ownership check refuses it (org_id_for_event answers NULL to a non-member, so
+-- the true org id no longer gets further than a wrong one). Before B6 it passed that check and
+-- live_sessions_write's RLS WITH CHECK was what refused the INSERT; row-level security is still
+-- the second line of defence but is no longer what this assertion exercises: the policies are
+-- proven directly in 034_resolver_disclosure.sql ("the row-level-security policies still refuse on
+-- their own": non-member DELETEs, and INSERTs with the org-match triggers switched off).
 select throws_ok(
   $$ select publish_session(
        gen_random_uuid(), '00000000-0000-0000-0000-000000000020',
        '00000000-0000-0000-0000-0000000000e9', 'cup_taster', false, '{}'::jsonb
      ) $$,
-  '42501',
-  null,
-  'a non-member is rejected by RLS even when org_id correctly matches the event''s own org'
+  'P0001',
+  'publish_session: event 00000000-0000-0000-0000-0000000000e9 not found',
+  'a non-member passing the event''s TRUE org id is refused as not found (same as a wrong org id)'
 );
 
 select is(
