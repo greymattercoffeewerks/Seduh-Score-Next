@@ -545,3 +545,36 @@ describe('partial payloads and the bracket card', () => {
     expect(recent.querySelector('b')).toBeNull();
   });
 });
+
+describe('up next in the knockout', () => {
+  it('says who meets whom by seed, under the match', () => {
+    const { container } = mounted(knockoutPayload());
+    const upNext = container.querySelectorAll('.card')[1];
+    expect(all(upNext, 'p')[0]).toBe('Seed 1 meets seed 8');
+  });
+
+  it('without seeds (published before they existed) says where each team stands in the table', () => {
+    const payload = knockoutPayload();
+    payload.upNext.teams = payload.upNext.teams.map((team) => ({ ...team, seed: null }));
+    const { container } = mounted(payload);
+    const upNext = container.querySelectorAll('.card')[1];
+    expect(all(upNext, 'p')[0]).toBe('1st meets 8th');
+    expect(upNext.textContent).not.toMatch(/seed/i);
+  });
+
+  it('says nothing of seeds in the preliminary round, where a place is only so far', () => {
+    const { container } = mounted(preliminaryPayload({ playedCount: 12 }));
+    expect(container.querySelectorAll('.card')[1].textContent).not.toMatch(/seed|meets/i);
+  });
+
+  it('says nothing when neither a seed nor a place is known', () => {
+    const payload = knockoutPayload();
+    payload.upNext.teams = payload.upNext.teams.map((team) => ({
+      ...team,
+      seed: null,
+      place: null,
+    }));
+    const { container } = mounted(payload);
+    expect(container.querySelectorAll('.card')[1].textContent).not.toMatch(/meets/);
+  });
+});

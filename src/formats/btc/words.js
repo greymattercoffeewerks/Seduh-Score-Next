@@ -132,3 +132,29 @@ export const decidedPodiumPlaces = (payload) =>
 export const tiebreakText = (tiebreak) => `Tie-break: ${tiebreak.reason}`;
 export const withTiebreak = (phrase, tiebreak) =>
   tiebreak ? `${phrase} · ${tiebreakText(tiebreak)}` : phrase;
+
+// ---------- who a knockout team is ----------
+
+// A knockout match's two teams are introduced by their seeds, the ones the bracket gave them (the payload's
+// `seed`), when BOTH have one: never one seed beside one table place. Otherwise (a payload from before seeds
+// were published, or a team the bracket never seeded) by where each stands in the table (`place`): tied teams
+// share a place, so a place is never called a seed. The preliminary round has no knockout tags (a place there is
+// only "so far"). Returns [tagA, tagB]; a tag is null when nothing is known about that team.
+export function knockoutTags(match) {
+  if (match.round === 'preliminary') return [null, null];
+  const [a, b] = match.teams;
+  if (a.seed && b.seed) return [`Seed ${a.seed}`, `Seed ${b.seed}`];
+  return match.teams.map((team) =>
+    team.place ? `${ordinalLabel(team.place)} in the table` : null,
+  );
+}
+
+// "Seed 1 meets seed 8" ("1st meets 8th" without seeds); null for the preliminary round and when either team has
+// neither a seed nor a place.
+export function knockoutMeeting(match) {
+  if (match.round === 'preliminary') return null;
+  const [a, b] = match.teams;
+  if (a.seed && b.seed) return `Seed ${a.seed} meets seed ${b.seed}`;
+  if (a.place && b.place) return `${ordinalLabel(a.place)} meets ${ordinalLabel(b.place)}`;
+  return null;
+}

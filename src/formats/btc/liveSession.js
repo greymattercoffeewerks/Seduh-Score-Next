@@ -107,7 +107,20 @@ function resultCard(match, score, totalsRow, nameOf) {
   };
 }
 
-function matchCard(match, judgeNamesByMatch, placeByTeam, nameOf) {
+// A team's seed is the one generate_btc_bracket gave it in the quarterfinals (btc_bracket_slots.seed_1/seed_2),
+// which it keeps through the later rounds. It is NOT the standings place: teams tied on a place get distinct
+// seeds. Null before a bracket exists (and for a team the bracket never seeded).
+function seedsByTeam(entries) {
+  const seeds = new Map();
+  for (const { slot } of entries) {
+    if (slot.round !== 'quarterfinal') continue;
+    if (slot.team1_id && slot.seed_1 != null) seeds.set(slot.team1_id, num(slot.seed_1));
+    if (slot.team2_id && slot.seed_2 != null) seeds.set(slot.team2_id, num(slot.seed_2));
+  }
+  return seeds;
+}
+
+function matchCard(match, judgeNamesByMatch, placeByTeam, seedByTeam, nameOf) {
   return {
     matchId: match.id,
     round: match.round,
@@ -116,6 +129,7 @@ function matchCard(match, judgeNamesByMatch, placeByTeam, nameOf) {
     teams: [match.team1_id, match.team2_id].map((id) => ({
       name: nameOf(id),
       place: placeByTeam.get(id) ?? null,
+      seed: seedByTeam.get(id) ?? null,
     })),
     judges: judgeNamesByMatch.get(match.id) ?? [],
   };
@@ -189,6 +203,7 @@ export function assembleBtcLivePayload({
   const scoresByMatchId = new Map(scores.map((s) => [s.match_id, s]));
   const totalsByMatchId = new Map(totals.map((t) => [t.match_id, t]));
   const placeByTeam = new Map(standings.map(({ item, position }) => [item.teamId, position]));
+  const seedByTeam = seedsByTeam(bracketEntries);
 
   const ordered = [...matches].sort(byPlayOrder);
   const prelim = ordered.filter((m) => m.round === 'preliminary');
@@ -221,8 +236,12 @@ export function assembleBtcLivePayload({
       wins: num(item.wins),
       points: num(item.totalPoints),
     })),
-    upNext: upcoming[0] ? matchCard(upcoming[0], judgeNamesByMatch, placeByTeam, nameOf) : null,
-    thenNext: upcoming[1] ? matchCard(upcoming[1], judgeNamesByMatch, placeByTeam, nameOf) : null,
+    upNext: upcoming[0]
+      ? matchCard(upcoming[0], judgeNamesByMatch, placeByTeam, seedByTeam, nameOf)
+      : null,
+    thenNext: upcoming[1]
+      ? matchCard(upcoming[1], judgeNamesByMatch, placeByTeam, seedByTeam, nameOf)
+      : null,
     recentResults: confirmed
       .slice(0, RECENT_RESULTS_LIMIT)
       .map((m) => resultCard(m, scoresByMatchId.get(m.id), totalsByMatchId.get(m.id), nameOf)),

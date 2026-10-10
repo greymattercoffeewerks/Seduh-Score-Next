@@ -170,7 +170,7 @@ export function preliminaryPayload({ playedCount = 12 } = {}) {
 // The knockout. Seeds 1v8, 4v5, 3v6 and 2v7 meet in the quarterfinals; `results` maps a slot to what happened
 // (tokens for the first team, who was fastest, whether the organiser decided a tie). Slots not in `results`
 // are created but not played, or not yet seated.
-export const KNOCKOUT_SEEDS = {
+export const KNOCKOUT_SEATS = {
   qf1: [0, 7],
   qf2: [3, 4],
   qf3: [2, 5],
@@ -186,7 +186,7 @@ export function knockoutPayload({ results = {} } = {}) {
   const matches = [...preliminaryMatches];
   let n = 100;
   const seatOf = (slot, side) => {
-    if (slot in KNOCKOUT_SEEDS) return KNOCKOUT_SEEDS[slot][side];
+    if (slot in KNOCKOUT_SEATS) return KNOCKOUT_SEATS[slot][side];
     return null;
   };
   const build = (slot, round, a, b) => {
@@ -225,6 +225,9 @@ export function knockoutPayload({ results = {} } = {}) {
         event_id: 'ev1',
         round,
         slot_label: slot,
+        // generate_btc_bracket writes 1-based seeds on the quarterfinal slots only
+        seed_1: slot in KNOCKOUT_SEATS ? KNOCKOUT_SEATS[slot][0] + 1 : null,
+        seed_2: slot in KNOCKOUT_SEATS ? KNOCKOUT_SEATS[slot][1] + 1 : null,
         team1_id: a === null ? null : teamId(a),
         team2_id: b === null ? null : teamId(b),
         match_id: matchRow ? slot : null,
