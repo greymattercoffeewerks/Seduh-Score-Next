@@ -648,8 +648,8 @@ describe('assembleBtcLivePayload', () => {
         scores: [score('mq1', { round: 'quarterfinal', team1_total: 25, team2_total: 18 })],
       });
       expect(payload.bracket.rounds.map((r) => [r.round, r.label])).toEqual([
-        ['quarterfinal', 'Quarterfinals'],
-        ['semifinal', 'Semifinals'],
+        ['quarterfinal', 'Quarter-finals'],
+        ['semifinal', 'Semi-finals'],
       ]);
       const [qf, sf] = payload.bracket.rounds;
       expect(qf.slots.map((s) => s.label)).toEqual(['qf2', 'qf1']);

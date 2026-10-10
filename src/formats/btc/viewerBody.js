@@ -30,20 +30,16 @@ import {
   withTiebreak,
   slotOutcome,
   finalScoreLine,
+  scoreLine,
+  renderScoreLine,
   decidedPodiumPlaces,
   TO_BE_DECIDED,
   podiumPlace as placeOf,
 } from './words.js';
+import { roundHeading } from './roundNames.js';
 
 // The places shown before "Show all": ties at the last of them are kept together.
 export const PHONE_TOP_PLACES = 5;
-
-const ROUND_HEADINGS = {
-  quarterfinal: 'Quarterfinals',
-  semifinal: 'Semifinals',
-  final: 'Final',
-  third_place: 'Third place',
-};
 
 const STANDINGS_HEADING_ID = 'btc-phone-standings-heading';
 
@@ -79,7 +75,7 @@ function renderChampion(payload) {
           document.createTextNode(' '),
           el('span', { className: 'btc-phone-champion-name', text: champion.teamName }),
         ]),
-        score ? meta(score) : null,
+        score ? el('p', { className: 'stage-meta' }, [renderScoreLine(score)]) : null,
       ].filter(Boolean),
     ),
     decided.length
@@ -204,7 +200,7 @@ function renderBracket(bracket) {
   return card([
     heading('Bracket'),
     ...rounds.flatMap((round) => [
-      el('h3', { className: 'btc-phone-round', text: ROUND_HEADINGS[round.round] ?? round.label }),
+      el('h3', { className: 'btc-phone-round', text: roundHeading(round.round) }),
       el(
         'ul',
         { className: 'btc-phone-list' },
@@ -212,17 +208,22 @@ function renderBracket(bracket) {
           const [a, b] = slot.teams;
           const nameOf = (team) => team.name ?? TO_BE_DECIDED;
           const scored = slot.status === 'confirmed' && a.total != null && b.total != null;
+          const score = scored
+            ? scoreLine({
+                prefix: `${nameOf(a)} `,
+                first: a.total,
+                second: b.total,
+                suffix: ` ${nameOf(b)}`,
+              })
+            : null;
           const outcome = slotOutcome(slot, round.round);
           return el(
             'li',
             {},
             [
-              el('span', {
-                className: 'btc-phone-line',
-                text: scored
-                  ? `${nameOf(a)} ${a.total} – ${b.total} ${nameOf(b)}`
-                  : `${nameOf(a)} vs ${nameOf(b)}`,
-              }),
+              score
+                ? el('span', { className: 'btc-phone-line' }, [renderScoreLine(score)])
+                : el('span', { className: 'btc-phone-line', text: `${nameOf(a)} vs ${nameOf(b)}` }),
               outcome ? meta(outcome) : null,
               slot.status === 'confirmed'
                 ? null
@@ -247,11 +248,14 @@ function renderRecent(results) {
       { className: 'btc-phone-list' },
       results.map((result) => {
         const [a, b] = result.teams;
+        const score = scoreLine({
+          prefix: `${a.name} `,
+          first: a.total,
+          second: b.total,
+          suffix: ` ${b.name}`,
+        });
         return el('li', {}, [
-          el('span', {
-            className: 'btc-phone-line',
-            text: `${a.name} ${a.total} – ${b.total} ${b.name}`,
-          }),
+          el('span', { className: 'btc-phone-line' }, [renderScoreLine(score)]),
           meta(`${result.roundLabel} · ${withTiebreak(outcomeLine(result), result.tiebreak)}`),
         ]);
       }),

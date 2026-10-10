@@ -32,6 +32,7 @@ import {
   winsText,
   qualifyingNote,
   finalScoreLine,
+  renderScoreLine,
   podiumPlace as placeOf,
 } from './words.js';
 import {
@@ -42,6 +43,7 @@ import {
   renderStandingsTable,
   renderChampion,
 } from '../../core/stageVocabulary.js';
+import { roundHeading, roundLabel } from './roundNames.js';
 
 // Eight rows of standings are readable from the back of a 1080p room; more is a table nobody can read.
 export const STANDINGS_PAGE_SIZE = 8;
@@ -131,12 +133,17 @@ function renderStandingsPage(payload, page, range, pageCount) {
   ].filter(Boolean);
 }
 
-const BRACKET_COLUMNS = [
-  { head: 'Quarterfinals', rounds: ['quarterfinal'] },
-  { head: 'Semifinals', rounds: ['semifinal'] },
-  { head: 'Final and third place', rounds: ['final', 'third_place'] },
+export const BRACKET_COLUMNS = [
+  { head: roundHeading('quarterfinal'), rounds: ['quarterfinal'] },
+  { head: roundHeading('semifinal'), rounds: ['semifinal'] },
+  {
+    head: `${roundLabel('final')} and ${roundLabel('third_place').toLowerCase()}`,
+    rounds: ['final', 'third_place'],
+  },
 ];
-const SLOT_LABELS = { final: 'Final', third_place: 'Third place' };
+const SLOT_LABELS = Object.fromEntries(
+  ['final', 'third_place'].map((round) => [round, roundLabel(round)]),
+);
 // What the team that won a slot is written as, in words (the weight and outline only add emphasis).
 const WINNER_MARKS = { final: 'Champion', third_place: 'Third' };
 
@@ -322,10 +329,11 @@ const championScreen = {
     host.append(frame.el);
     function paint(next) {
       const champion = placeOf(next, 'champion');
+      const score = finalScoreLine(next);
       frame.main.replaceChildren(
         ...renderChampion({
           name: champion?.teamName ?? '',
-          scoreLine: finalScoreLine(next),
+          scoreLine: score ? renderScoreLine(score) : null,
           podiumLine: podiumLine(next),
         }),
       );
