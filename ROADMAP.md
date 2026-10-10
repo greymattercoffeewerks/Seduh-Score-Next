@@ -1897,12 +1897,27 @@ handoff §4's "one organiser, one org"; locks D-T1…D-T8). Why: `MULTI-TENANCY-
 pillars A and B. Not in scope: gating/entitlements (D14 stays a stub), admin console, self-serve
 signup, Seduh ID. Rule: no two-org user exists in the cloud project until B1, B2 and B6 are pushed.
 
-| Phase | Tasks                                                                                                                                             | Status      |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| A     | A1 spec lock · A2 tenancy inventory                                                                                                               | Done        |
-| B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | Not started |
-| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | Not started |
-| D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | Not started |
-| E     | E1 negative matrix · E2 console Playwright · E3 security/perf · E4 docs · E5 rollout · E6 close-out                                               | Not started |
+| Phase | Tasks                                                                                                                                             | Status                                                                    |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| A     | A1 spec lock · A2 tenancy inventory                                                                                                               | Done                                                                      |
+| B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | In progress (B1, B2, B5 built and reviewed; not yet in the cloud project) |
+| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | Not started                                                               |
+| D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | Not started                                                               |
+| E     | E1 negative matrix · E2 console Playwright · E3 security/perf · E4 docs · E5 rollout · E6 close-out                                               | Not started                                                               |
 
 Each D task is re-confirmed with the product owner before it starts (2026-10-10).
+
+---
+
+## Known open items from T-TEN.B1/B2/B5 (2026-10-11)
+
+_Three migrations (`20261011100000_tenancy_org_id_immutable`, `20261011110000_tenancy_cross_org_references`, `20261011120000_tenancy_last_owner`) reviewed by schema-guardian, security-reviewer and test-auditor (no blocking findings; every non-blocking one fixed except the items below). **Not pushed to the cloud project until the product owner says so.**_
+
+- **`btc_matches_write` is still `FOR ALL`.** Any member can write status and tie-break columns directly (within one org, not a cross-org gap). Splitting the policy is an RLS redesign that needs its own `security-reviewer` pass. Deliberately not in B2.
+- **`person_merges.merged_id` has no foreign key or org check.** A bare uuid kept for the audit trail; nothing reads another org's person through it.
+- **`org_set_role` writes no audit row.** Role changes are service-role only and invisible after the fact. Consider logging them when an admin console exists.
+- **`service_role` still holds `TRUNCATE` on the other tenant tables.** B5 revoked it only for `org_members` and `orgs` (a TRUNCATE skips every row trigger, including the last-owner guard). Revoking it everywhere is a wider privilege change.
+- **The org_id guard (`033`) sees only tables with an `org_id` column.** A tenant table scoped purely through `event_id` / `stage_id` / `heat_id` (as `ct_sets` was) is not caught by it, so a new such table can again be re-pointed unnoticed. A second guard over parent-column freezes is the follow-up.
+- **The last-owner guard has no two-session test.** pgTAP runs in one uncommitted transaction, so the org-row lock and the owner-row lock are pinned by source only. Security-reviewer ran the concurrent cases by hand: READ COMMITTED holds; REPEATABLE READ is covered by the owner-row lock. A demotion racing an org deletion can deadlock (Postgres aborts one); accepted.
+- **`confirm_heat` still compares `p_org_id <> resolver`** (the NULL trap). No exploitable path was found (it aborts on the missing row), but it joins B6's audit list.
+- **`people.global_person_id` is writable by any member** to any uuid. It is the reserved Seduh ID hook, deferred with that phase.

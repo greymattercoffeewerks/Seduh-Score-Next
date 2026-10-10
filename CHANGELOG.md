@@ -1,3 +1,24 @@
+## T-TEN.B1/B2/B5: multi-org integrity (immutable org_id, no cross-org references, last owner) · 2026-10-11
+
+**Task:** T-TEN.B1 + B2 + B5 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (PR 2). Three migrations; **local only until the product owner says to push them to the cloud project** (merging deploys only the frontend).
+
+**Status: in review, not merged.**
+
+**Why:** a user in two orgs makes `app.is_org_member` true on both, so row-level security alone no longer keeps data in its org. A2's inventory found the gaps; this closes them in the database, for every writer.
+
+**What changed:**
+
+- **B1 `20261011100000_tenancy_org_id_immutable`:** `org_id` can no longer be changed on `people`, `person_merges`, `processed_operations`, `team_removed_members`, `org_members` (and its `user_id`), `live_sessions` and `public_results` (both also freeze `event_id`). Reuses the existing `app.forbid_parent_change`; the two payload-carrying tables use `before update of org_id, event_id` so the hot upsert path never fires it (about 17.7 ms against 0.2 ms on a 250 KB payload).
+- **B2 `20261011110000_tenancy_cross_org_references`:** a stage cannot be given a roster entry from another event or org, nor a heat (insert-time checks on `ct_stage_entries` and `ct_heat_entries`, raising the standard 42501 so a non-member learns nothing). `ct_sets.stage_id` (the table had no trigger), `event_entries.event_id` (the person check ran only when a person was set) and `btc_match_judges.(match_id, judge_id)` are frozen.
+- **B5 `20261011120000_tenancy_last_owner`:** the last owner of an org cannot be deleted or demoted by any writer, including deleting their auth account; deleting the org itself and removing one of two owners still work. Locks the org row (`for no key update`) and the other owner rows (`for update`, so a REPEATABLE READ session fails instead of passing on a stale snapshot). New service-role-only `org_set_role(org, user, role)` to promote or demote an existing member. `TRUNCATE` on `org_members` and `orgs` is revoked from `service_role` (it skips row triggers).
+- Existing behaviour kept: the three new same-event checks fire on INSERT only, so the original "is immutable" errors that `017_score_change_log.sql` pins are unchanged.
+
+**Verified:** 93 new pgTAP assertions (`030`–`033`); the whole suite, 1241, passes on a database rebuilt from empty; every migration's rollback block was run locally, leaves nothing behind and restores the revoked privilege, and each new test file fails without its migration. `033` is a guard that fails if any public table with an `org_id` column lacks the freeze (mutation-tested for a missing, wrong-column, column-listed, `WHEN`, `AFTER` and disabled trigger).
+
+**Reviews (all found something; fixed except as listed in ROADMAP):** schema-guardian, security-reviewer, test-auditor, each run as a general-purpose agent following the project's own `.claude/agents/*.md` definition (the named agents were not registered in that session). Found and fixed: `btc_match_judges` re-pointable across orgs; race in the last-owner guard at stricter isolation levels; TRUNCATE bypass; a stage-existence oracle in the new check errors; a heavy trigger on the payload tables; and several tests that passed for the wrong reason.
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-TEN.B1/B2/B5".
+
 ## T-TEN.A2: tenancy inventory · 2026-10-10
 
 **Task:** T-TEN.A2 (second task of `Handoffs and Specs/TENANCY-WORK-PLAN.md`). Read-only research: no code, no migration. The inventory itself is `Handoffs and Specs/TENANCY-INVENTORY.md` (that folder is gitignored).
