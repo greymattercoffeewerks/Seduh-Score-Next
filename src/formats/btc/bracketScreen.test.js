@@ -1257,6 +1257,54 @@ describe('mountBracketScreen', () => {
       expect(publishBtcLive.mock.calls[0][0].takeOver).toBe(true);
     });
 
+    it('keeps the saved-but-unreadable note, then Reload clears it with fresh data', async () => {
+      vi.useFakeTimers();
+      try {
+        const client = fakeClient(tieDb());
+        await mountBracketScreen(root, { eventId: 'ev1', client });
+        const refreshNote = root.querySelector('.btc-bracket-refresh-note');
+        expect(refreshNote.hidden).toBe(true);
+        expect(root.contains(refreshNote)).toBe(true);
+        click(openButton());
+        choose('t2');
+        typeReason('Casting vote');
+
+        const realFrom = client.from;
+        let rpcDone = false;
+        const realRpc = client.rpc;
+        client.rpc = (...args) =>
+          realRpc(...args).then((result) => {
+            rpcDone = true;
+            return result;
+          });
+        client.from = (table) => {
+          if (rpcDone) throw new Error('network down');
+          return realFrom(table);
+        };
+        submit();
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(root.querySelector('.btc-bracket-refresh-note')).toBe(refreshNote);
+        expect(refreshNote.hidden).toBe(false);
+        expect(refreshNote.textContent).toContain('saved, but the page could not refresh');
+        expect(root.querySelector('.screen-feedback')).toBeNull();
+
+        // The old toast minimum was 1.5 seconds; this note must outlive it.
+        await vi.advanceTimersByTimeAsync(2000);
+        expect(refreshNote.hidden).toBe(false);
+
+        client.from = realFrom;
+        click(root.querySelector('[data-focus-key="bracket-refresh-reload"]'));
+        expect(refreshNote.querySelector('button').getAttribute('aria-busy')).toBe('true');
+        expect(refreshNote.querySelector('button').getAttribute('aria-disabled')).toBe('true');
+        await vi.advanceTimersByTimeAsync(0);
+        expect(refreshNote.hidden).toBe(true);
+        expect(note()).toBe('Level at 30 each. Tie-break: Beta goes through. Reason: Casting vote');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('never waits on the publish: recording a decision finishes even if it never settles', async () => {
       publishBtcLive.mockImplementationOnce(() => new Promise(() => {}));
       const client = fakeClient(tieDb());
@@ -1319,7 +1367,7 @@ describe('mountBracketScreen', () => {
     const client = { from: () => ({ from: () => {} }) };
     await mountBracketScreen(root, { eventId: 'ev1', client });
 
-    expect(root.querySelector('button')?.textContent).toBe('Retry');
+    expect(root.querySelector('button:not([hidden])')?.textContent).toBe('Retry');
     expect(document.activeElement).not.toBeNull();
   });
 });

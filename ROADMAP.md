@@ -62,15 +62,16 @@ about original design intent.
 
 ## Current state
 
-| Phase                          | Status  | What it covers                                                                                |
-| ------------------------------ | ------- | --------------------------------------------------------------------------------------------- |
-| Phase 0 — Foundation           | ✅ Done | Scaffold, Claude Code tooling, Supabase local stack + CI, doc seed                            |
-| Phase 1 — Schema and security  | ✅ Done | Core tables, Cup Taster tables, RLS, `WITH CHECK` gate                                        |
-| Phase 2 — Core libraries       | ✅ Done | `partition`, `ranking`, `advancement`, `countdown`, `timeclamp`, `entitlements`               |
-| Phase 3 — Registry and offline | ✅ Done | `registry`, IndexedDB mirror + outbox, sync state panel                                       |
-| Phase 4 — Cup Taster           | ✅ Done | Setup, heat generation, timing (app + manual), scoring, standings/advancement, report, export |
-| Phase 5 — Live surfaces        | ✅ Done | `publish`, `viewer-shell`, projector, phone summary, automatic publishing on heat actions     |
-| Phase 6 — Hardening            | ✅ Done | Accessibility pass, offline soak, dry run (local + production)                                |
+| Phase                          | Status         | What it covers                                                                                                        |
+| ------------------------------ | -------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Phase 0 — Foundation           | ✅ Done        | Scaffold, Claude Code tooling, Supabase local stack + CI, doc seed                                                    |
+| Phase 1 — Schema and security  | ✅ Done        | Core tables, Cup Taster tables, RLS, `WITH CHECK` gate                                                                |
+| Phase 2 — Core libraries       | ✅ Done        | `partition`, `ranking`, `advancement`, `countdown`, `timeclamp`, `entitlements`                                       |
+| Phase 3 — Registry and offline | ✅ Done        | `registry`, IndexedDB mirror + outbox, sync state panel                                                               |
+| Phase 4 — Cup Taster           | ✅ Done        | Setup, heat generation, timing (app + manual), scoring, standings/advancement, report, export                         |
+| Phase 5 — Live surfaces        | ✅ Done        | `publish`, `viewer-shell`, projector, phone summary, automatic publishing on heat actions                             |
+| Phase 6 — Hardening            | ✅ Done        | Accessibility pass, offline soak, dry run (local + production)                                                        |
+| Tenancy core (A+B)             | 🚧 In progress | Multi-org hardening, `my_orgs()`, org context + switcher, slug-addressed audience surfaces — see "Tenancy core" below |
 
 **Deadline: 4 October 2026, Cup Tasters event.**
 
@@ -1144,14 +1145,17 @@ See `android/guess-the-bean-widget/CLAUDE.md`.
 
 ---
 
-## BTC (Barista Team Championship) — Out-of-handoff format, prioritized for November 2026 regional event
+## BTC (Barista Team Championship) — Out-of-handoff format, prioritized for the November 2026 pitch
 
 Not in the original handoff (§1.2, March decision to leave Throwdown/Liga/BTC in maintenance
 mode on live Seduh Score). User decision reversal (2026-09-18): prioritized ahead of
-Throwdown for a 4–8 team regional championship in early November. Schema and security work
+Throwdown for an early-November 2026 pitch presentation on using BTC for next year's
+4–8 team regional competition. **Correction (2026-10-10):** the November date is that pitch,
+not a live event; earlier wording here called it a regional championship in early November.
+Schema and security work
 is Phase T-BTC.1 (done); Phases T-BTC.2–5 (setup/matches/scoring/standings/bracket UI, live
 surfaces, export/timer, hardening) tracked in a Claude Docs plan artifact and deferred to
-November event prep schedule.
+the pitch prep schedule.
 
 ### Phase T-BTC.1 — Schema and security · Done
 
@@ -1279,7 +1283,9 @@ live-verified in browser. Definition of Done met. See CHANGELOG.md's dated entry
 - **btc_cup_totals still counts out-of-range cup votes** (match totals and standings are filtered,
   but the view itself is inconsistent). — CLOSED 2026-10-09 (`20260922120000`: the view filters `cup_number <= btc_cups_for_round`).
 - **btc_bracket_slots.event_id can still be moved; freeze it with forbid_btc_event_change** in the
-  bracket step (feeder links must not be trusted blindly).
+  bracket step (feeder links must not be trusted blindly). — CLOSED (found 2026-10-10 by T-TEN.A2):
+  `trg_btc_bracket_slots_parent_immutable` freezes `event_id` (with `id`, `round`, `slot_label`), and
+  `trg_btc_bracket_slots_check_event` requires every team, match and feeder slot to be in the slot's event.
 - **Nine older trigger functions keep PUBLIC/anon EXECUTE** (check_btc_cup_vote_participants,
   check_btc_match_bonus_teams, and 7 pre-BTC ones): unreachable, consistency cleanup only. — CLOSED 2026-10-09: `check_btc_cup_vote_participants` was dropped by `20260922100000`; the other eight were revoked from `public` and `anon` by `20260922120000`.
 - **Scoring screen load needs the network** (no offline reload capability).
@@ -1824,7 +1830,7 @@ _The organiser can now order level teams; this lists what that does not do._
 - **The seeding order is not shown on the live displays or in the payload**, by design: its reason is for the event's own record, not the room.
 - **Core extractions the boundary review named, not done here** (each also means editing Cup Taster or the other BTC tie-break code): (1) the tie-group / border-tie detection is `core/advancement.js`'s `tiedAtBorder` and the seeding groups re-derive it; (2) a reason validator (trim, non-empty, max 120) now exists in four places (`tiebreak.js`, `seeding.js`, Cup Taster's `timeCorrection.js`, and the SQL); (3) the hint-to-message `REFUSALS` table pattern is in `tiebreak.js`, `demo.js` and `seeding.js` (`core/errors.js` could own a `describeRefusal(table, err)`); (4) the move-up/move-down reorder is in Cup Taster's `setupScreen.js` too (it uses `disabled` at the ends; BTC uses `aria-disabled` so focus is kept).
 - **`.field-input` borders are below 3:1 against the surface** (2.47:1 light, 1.25:1 dark, `shared.css`), so the reason field's boundary fails WCAG 1.4.11; project-wide (every BTC field), so not changed here.
-- **The "saved but could not refresh" toast disappears after 1.5 s**, as the knockout tie-break's does; a persistent inline note would be better for an actionable instruction.
+- **The "saved but could not refresh" toast disappears after 1.5 s.** **CLOSED (T-BTC.refresh-note, 2026-10-10):** the bracket screen now keeps one attached, inline `role="status"` note with a Reload button until a successful screen-data load clears it. Original note: the transient toast made the actionable reload instruction disappear too quickly after either a seeding-order or knockout tie-break save.
 - **`service_role` can no longer run `generate_btc_bracket` or the new RPC** (their membership test reads `auth.uid()`); the grants to it are inert. No caller uses it.
 - **Toasts are fresh `role="status"` nodes inserted with their text** (the app's existing pattern); whether a screen reader announces them reliably is unverified (no real NVDA/VoiceOver run). The seeding card's own messages also go through its persistent live region, which stays attached, but "Order saved." and the post-save focus move to the button are the only confirmation.
 - **A blocked Generate button is dimmed by the shared `.btn[aria-disabled]` rule (opacity 0.6)**, about 3.1:1 in the paper theme for the one control the card is explaining. Inactive controls are exempt from WCAG contrast, but a lighter treatment would be kinder.
@@ -1881,3 +1887,37 @@ _BTC now publishes its live payload automatically; no BTC audience screen exists
 - **The BTC `*.preview.html` harnesses mount their screens without the composed handler map**, so a confirm there queues no display publish and the setup, matches and bracket screens log "live-view publish was refused" after an action. Dev harnesses only; production always passes `allOutboxHandlers`.
 - **`submitConfirmMatch` and `flushPending` still fall back to BTC's own handler map** when none is passed (production always passes the composed one). A caller that relied on the fallback could leave a display publish stuck at the head of the shared queue; the scoring screen therefore queues the publish only when it was given the map.
 - **Closed by this task:** the demo-data item "if the event is the ACTIVE live session, a load does not republish" (a load now republishes and takes the display over).
+
+---
+
+## Tenancy core — multi-org (A+B), started 2026-10-10
+
+Plan: `Handoffs and Specs/TENANCY-WORK-PLAN.md`. Spec: `HANDOFF-CORRECTION-002.md` (supersedes
+handoff §4's "one organiser, one org"; locks D-T1…D-T8). Why: `MULTI-TENANCY-AND-SEDUHID-SCOPING.md`
+pillars A and B. Not in scope: gating/entitlements (D14 stays a stub), admin console, self-serve
+signup, Seduh ID. Rule: no two-org user exists in the cloud project until B1, B2 and B6 are pushed.
+
+| Phase | Tasks                                                                                                                                             | Status                                                                    |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| A     | A1 spec lock · A2 tenancy inventory                                                                                                               | Done                                                                      |
+| B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | In progress (B1, B2, B5 built and reviewed; not yet in the cloud project) |
+| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | Not started                                                               |
+| D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | Not started                                                               |
+| E     | E1 negative matrix · E2 console Playwright · E3 security/perf · E4 docs · E5 rollout · E6 close-out                                               | Not started                                                               |
+
+Each D task is re-confirmed with the product owner before it starts (2026-10-10).
+
+---
+
+## Known open items from T-TEN.B1/B2/B5 (2026-10-11)
+
+_Three migrations (`20261011100000_tenancy_org_id_immutable`, `20261011110000_tenancy_cross_org_references`, `20261011120000_tenancy_last_owner`) reviewed by schema-guardian, security-reviewer and test-auditor (no blocking findings; every non-blocking one fixed except the items below). **Not pushed to the cloud project until the product owner says so.**_
+
+- **`btc_matches_write` is still `FOR ALL`.** Any member can write status and tie-break columns directly (within one org, not a cross-org gap). Splitting the policy is an RLS redesign that needs its own `security-reviewer` pass. Deliberately not in B2.
+- **`person_merges.merged_id` has no foreign key or org check.** A bare uuid kept for the audit trail; nothing reads another org's person through it.
+- **`org_set_role` writes no audit row.** Role changes are service-role only and invisible after the fact. Consider logging them when an admin console exists.
+- **`service_role` still holds `TRUNCATE` on the other tenant tables.** B5 revoked it only for `org_members` and `orgs` (a TRUNCATE skips every row trigger, including the last-owner guard). Revoking it everywhere is a wider privilege change.
+- **The org_id guard (`033`) sees only tables with an `org_id` column.** A tenant table scoped purely through `event_id` / `stage_id` / `heat_id` (as `ct_sets` was) is not caught by it, so a new such table can again be re-pointed unnoticed. A second guard over parent-column freezes is the follow-up.
+- **The last-owner guard has no two-session test.** pgTAP runs in one uncommitted transaction, so the org-row lock and the owner-row lock are pinned by source only. Security-reviewer ran the concurrent cases by hand: READ COMMITTED holds; REPEATABLE READ is covered by the owner-row lock. A demotion racing an org deletion can deadlock (Postgres aborts one); accepted.
+- **`confirm_heat` still compares `p_org_id <> resolver`** (the NULL trap). No exploitable path was found (it aborts on the missing row), but it joins B6's audit list.
+- **`people.global_person_id` is writable by any member** to any uuid. It is the reserved Seduh ID hook, deferred with that phase.

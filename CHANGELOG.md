@@ -1,4 +1,41 @@
-## T-HARDEN.champion-name-clamp: long champion names stay inside the venue display · 2026-10-10
+## T-TEN.B1/B2/B5: multi-org integrity (immutable org_id, no cross-org references, last owner) · 2026-10-11
+
+**Task:** T-TEN.B1 + B2 + B5 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (PR 2). Three migrations; **local only until the product owner says to push them to the cloud project** (merging deploys only the frontend).
+
+**Status: in review, not merged.**
+
+**Why:** a user in two orgs makes `app.is_org_member` true on both, so row-level security alone no longer keeps data in its org. A2's inventory found the gaps; this closes them in the database, for every writer.
+
+**What changed:**
+
+- **B1 `20261011100000_tenancy_org_id_immutable`:** `org_id` can no longer be changed on `people`, `person_merges`, `processed_operations`, `team_removed_members`, `org_members` (and its `user_id`), `live_sessions` and `public_results` (both also freeze `event_id`). Reuses the existing `app.forbid_parent_change`; the two payload-carrying tables use `before update of org_id, event_id` so the hot upsert path never fires it (about 17.7 ms against 0.2 ms on a 250 KB payload).
+- **B2 `20261011110000_tenancy_cross_org_references`:** a stage cannot be given a roster entry from another event or org, nor a heat (insert-time checks on `ct_stage_entries` and `ct_heat_entries`, raising the standard 42501 so a non-member learns nothing). `ct_sets.stage_id` (the table had no trigger), `event_entries.event_id` (the person check ran only when a person was set) and `btc_match_judges.(match_id, judge_id)` are frozen.
+- **B5 `20261011120000_tenancy_last_owner`:** the last owner of an org cannot be deleted or demoted by any writer, including deleting their auth account; deleting the org itself and removing one of two owners still work. Locks the org row (`for no key update`) and the other owner rows (`for update`, so a REPEATABLE READ session fails instead of passing on a stale snapshot). New service-role-only `org_set_role(org, user, role)` to promote or demote an existing member. `TRUNCATE` on `org_members` and `orgs` is revoked from `service_role` (it skips row triggers).
+- Existing behaviour kept: the three new same-event checks fire on INSERT only, so the original "is immutable" errors that `017_score_change_log.sql` pins are unchanged.
+
+**Verified:** 94 new pgTAP assertions (`030`–`033`); the whole suite, 1242, passes on a database rebuilt from empty; every migration's rollback block was run locally, leaves nothing behind and restores the revoked privilege, and each new test file fails without its migration. `033` is a guard that fails if any public table with an `org_id` column lacks the freeze (mutation-tested for a missing, wrong-column, column-listed, `WHEN`, `AFTER` and disabled trigger).
+
+**Reviews (all found something; fixed except as listed in ROADMAP):** schema-guardian, security-reviewer, test-auditor, each run as a general-purpose agent following the project's own `.claude/agents/*.md` definition (the named agents were not registered in that session). Found and fixed: `btc_match_judges` re-pointable across orgs; race in the last-owner guard at stricter isolation levels; TRUNCATE bypass; a stage-existence oracle in the new check errors; a heavy trigger on the payload tables; and several tests that passed for the wrong reason.
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-TEN.B1/B2/B5".
+
+## T-TEN.A2: tenancy inventory · 2026-10-10
+
+**Task:** T-TEN.A2 (second task of `Handoffs and Specs/TENANCY-WORK-PLAN.md`). Read-only research: no code, no migration. The inventory itself is `Handoffs and Specs/TENANCY-INVENTORY.md` (that folder is gitignored).
+
+**Status: in review, not merged.**
+
+**What it found** (read-only queries on the cloud project plus `git grep` at `origin/dev`): the plan's B1/B2/B6/B7/C6/D4 scope all moved. `app.forbid_parent_change` already freezes `events.org_id` and most anchor columns, so B1 reuses it and only needs to cover `people`, `person_merges`, `processed_operations`, `team_removed_members`, `org_members`, `live_sessions` and `public_results`. Two edges are not enforced at all (`ct_stage_entries(stage_id, entry_id)`, `ct_heat_entries(heat_id, entry_id)`) and `ct_sets` has no trigger, so a two-org member could re-point it. A third trigger (`check_event_entry_person_org`) has the NULL-comparison trap B6 is meant to fix. `public_results.published_by` is anon-readable. The outbox record carries no user or org field, though nearly every payload holds the org id. No audience QR code exists, so D4 is small. All six views are `security_invoker`, so they leak nothing.
+
+**Tracked-file change:** ROADMAP's BTC item "`btc_bracket_slots.event_id` can still be moved" is marked CLOSED (the column is frozen); the Tenancy table shows phase A done.
+
+**Task:** T-TEN.A1 (first task of `Handoffs and Specs/TENANCY-WORK-PLAN.md`). Docs only: no code, no migration.
+
+**Status: in review, not merged.**
+
+**What changed:** `HANDOFF-CORRECTION-002.md` supersedes handoff §4's "one organiser, one org" and locks D-T1…D-T8 at the plan's defaults (invite-only provisioning, slug-qualified audience URLs with a legacy shim, anon-read narrowing, global results archive, roles unchanged, managed team accounts, client-side active org, immutable slugs). D14 (entitlements stub) is explicitly unchanged. The scoping doc's "do not start before 4 October" line is lifted, §6.4 records the invite-only decision and §8 marks phasing steps 1–2 in progress. ROADMAP gains a "Tenancy core" phase row and section. `state.json` is reset from the stale `T-HARDEN.correct-heat-time` content (its migrations are in the cloud project; the cloud list matches local through `btc_seeding_tiebreak`, re-checked today).
+
+**Written back into the work plan:** BTC resolver `app.org_id_for_btc_match` and the BTC RPCs added to B6; the two open BTC gaps in ROADMAP (`btc_bracket_slots.event_id` movable, `btc_matches_write` `FOR ALL`) folded into B2; BTC displays named in D4/D5; next free pgTAP number is 030 (029 is the highest); BTC is a pitch demo, not a live event, so it imposes no cloud-push freeze. Phase D tasks are re-confirmed with the product owner before each starts. ROADMAP's BTC section heading and intro no longer call the November date a live regional championship; it is a pitch about next year's competition.
 
 **Task:** T-HARDEN.champion-name-clamp. Closes ROADMAP's 4:3 champion-name overflow note. No migration.
 
@@ -9318,3 +9355,11 @@ IPv6 loopback first on this Windows machine, so Playwright's readiness check aga
 `server.host`/`preview.host` pinned to `127.0.0.1` in `vite.config.js` fixes it.
 
 Verifier: self-verified (same bootstrapping-order note as T0.2).
+
+## T-BTC.refresh-note: keep saved-but-unreadable bracket changes actionable · 2026-10-10
+
+**Task:** T-BTC.refresh-note. Closes the persistent-refresh note in ROADMAP's T-BTC.seeding-tiebreak open items. No migration.
+
+**What changed:** The BTC bracket screen now keeps a single, attached inline `role="status"` note above its cards when a successful seeding-order or knockout tie-break save cannot refresh its data. The note includes a tap-target Reload button, stays visible until a successful read, and replaces rather than duplicates the old transient toast.
+
+**Verified:** BTC bracket and seeding tests cover both failed follow-up reads, node identity across rerenders, the note surviving beyond 1.5 seconds, busy Reload state, fresh-data reload and happy paths.
