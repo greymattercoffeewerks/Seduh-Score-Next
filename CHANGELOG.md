@@ -1,3 +1,12 @@
+## T-HARDEN.champion-name-clamp: long champion names stay inside the venue display · 2026-10-10
+
+**Task:** T-HARDEN.champion-name-clamp. Closes ROADMAP's 4:3 champion-name overflow note. No migration.
+
+**What changed:** The shared champion renderer marks only names over 31 characters. `stageVocabulary.css`
+keeps the existing type scale for ordinary names and steps marked names down using `--stage-fit`, balances
+their wrapping, and keeps them within the stage area. The name remains text content, never markup; no
+truncation is applied (the 60-character fit is fully visible).
+
 ## T-BTC.seeding-tiebreak: the organiser orders teams that are level in the standings · 2026-10-10
 
 **Task:** T-BTC.seeding-tiebreak. Closes ROADMAP's "No seeding-tie-break UI yet" (T-BTC.2). Needs a migration: **`20261010100000_btc_seeding_tiebreak.sql` is local only until the user says to push it to the cloud project.**
