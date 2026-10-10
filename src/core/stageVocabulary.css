@@ -123,6 +123,14 @@
   overflow-wrap: anywhere;
 }
 
+/* A normal champion name keeps the original type scale. Long free-text names step down before they can crowd
+   out the result and podium lines on a 4:3 display; balancing uses the available stage area, not the viewport. */
+.stage-champion-name[data-long-name] {
+  max-inline-size: 100%;
+  font-size: max(2rem, calc(10.5 * var(--stage-fit)));
+  text-wrap: balance;
+}
+
 .stage-champion-score {
   margin: calc(3.4 * var(--stage-fit)) 0 0;
   text-align: center;
