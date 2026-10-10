@@ -23,20 +23,52 @@
       <button id="demo-podium">Mount (final played — podium)</button>
       <button id="demo-podium-tied">Mount (final tied — podium)</button>
       <button id="demo-tie">Mount (quarterfinal tied — tie-break)</button>
+      <button id="demo-seeding">Mount (teams level — order them)</button>
       <button id="demo-failed">Mount (load fails)</button>
     </p>
     <div id="app"></div>
     <script type="module">
       import { mountBracketScreen } from './bracketScreen.js';
 
-      function createDemoClient({ preGenerated = false, podium = null, tie = false } = {}) {
+      function createDemoClient({
+        preGenerated = false,
+        podium = null,
+        tie = false,
+        seeding = false,
+      } = {}) {
         const db = {
           events: [{ id: 'ev1', org_id: 'org1', name: 'BTC Demo Event', is_test: true }],
-          btc_teams: Array.from({ length: 8 }, (_, i) => ({
+          btc_teams: Array.from({ length: seeding ? 9 : 8 }, (_, i) => ({
             id: `t${i + 1}`,
             event_id: 'ev1',
             name: `Team ${i + 1}`,
           })),
+          // The database's seed order (btc_seeding_order). With `seeding`: T2/T3 level inside the top eight and
+          // T8/T9 level across the cut-off, none ordered yet; recording an order resolves the group.
+          btc_seeding_order: seeding
+            ? [
+                [1, 't1', 90, 3, 1],
+                [2, 't2', 60, 2, 2],
+                [3, 't3', 60, 2, 2],
+                [4, 't4', 55, 2, 1],
+                [5, 't5', 50, 1, 1],
+                [6, 't6', 45, 1, 1],
+                [7, 't7', 40, 1, 1],
+                [8, 't8', 35, 1, 2],
+                [9, 't9', 35, 1, 2],
+              ].map(([seed, team_id, total_points, wins, tied_count]) => ({
+                event_id: 'ev1',
+                team_id,
+                seed,
+                played: 3,
+                wins,
+                total_points,
+                tied_count,
+                tiebreak_rank: null,
+                reason: null,
+                group_resolved: tied_count === 1,
+              }))
+            : [],
           btc_judges: [
             { id: 'j1', event_id: 'ev1', name: 'Alex Rivera' },
             { id: 'j2', event_id: 'ev1', name: 'Jordan Lee' },
@@ -259,6 +291,19 @@
               }
               return Promise.resolve({ data: db.btc_bracket_slots, error: null });
             }
+            if (name === 'record_btc_seeding_tiebreak') {
+              const rows = args.p_team_ids.map((id) =>
+                db.btc_seeding_order.find((r) => r.team_id === id),
+              );
+              const seats = rows.map((r) => r.seed).sort((a, b) => a - b);
+              rows.forEach((r, i) => {
+                r.tiebreak_rank = i + 1;
+                r.reason = args.p_reason;
+                r.group_resolved = true;
+                r.seed = seats[i];
+              });
+              return Promise.resolve({ data: null, error: null });
+            }
             if (name === 'record_btc_tiebreak') {
               const match = db.btc_matches.find((m) => m.id === args.p_match_id);
               Object.assign(match, {
@@ -324,17 +369,22 @@
           mount(createDemoClient({ preGenerated: true, tie: true })),
         );
       document
+        .getElementById('demo-seeding')
+        .addEventListener('click', () => mount(createDemoClient({ seeding: true })));
+      document
         .getElementById('demo-failed')
         .addEventListener('click', () => mount(failingClient()));
 
       const params = new URLSearchParams(location.search);
       const startPodium = params.get('podium');
       mount(
-        params.get('tie')
-          ? createDemoClient({ preGenerated: true, tie: true })
-          : startPodium
-            ? createDemoClient({ preGenerated: true, podium: startPodium })
-            : createDemoClient(),
+        params.get('seeding')
+          ? createDemoClient({ seeding: true })
+          : params.get('tie')
+            ? createDemoClient({ preGenerated: true, tie: true })
+            : startPodium
+              ? createDemoClient({ preGenerated: true, podium: startPodium })
+              : createDemoClient(),
       );
     </script>
   </body>
