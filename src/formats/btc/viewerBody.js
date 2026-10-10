@@ -19,6 +19,7 @@ import {
   matchLine,
   matchesPlayedLine,
   upNextKicker,
+  knockoutMeeting,
   judgesLine,
   thenLine,
   standingsHeading,
@@ -122,9 +123,11 @@ function renderStatus(payload) {
 
 function renderUpNext(upNext, thenNext) {
   const judges = judgesLine(upNext.judges);
+  const meeting = knockoutMeeting(upNext);
   return card(
     [
       titledHeading(upNextKicker(upNext.roundLabel), matchLine(upNext)),
+      meeting ? meta(meeting) : null,
       judges ? meta(judges) : null,
       thenNext ? meta(thenLine(thenNext)) : null,
     ].filter(Boolean),

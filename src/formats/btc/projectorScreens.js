@@ -16,10 +16,11 @@ import { renderScreenFrame } from '../../core/stageDisplay.js';
 import { paginate, pageRange } from '../../core/pageRotator.js';
 import { createStagePageLoop } from '../../core/stagePageLoop.js';
 import { sharedPositions } from '../../core/rankMovement.js';
-import { ordinalLabel } from '../../core/ordinal.js';
 import {
   hasBtcPublicContent,
   upNextKicker,
+  knockoutTags,
+  knockoutMeeting,
   judgesLine,
   thenLine,
   matchesPlayedLine,
@@ -96,22 +97,12 @@ export function renderVs(left, right) {
 
 function renderUpNextPage(match) {
   const [a, b] = match.teams;
-  const knockout = match.round !== 'preliminary';
-  // In the knockout a team's standings place says who it is, in the table's own words. It is not called a seed:
-  // the bracket breaks a tie between teams with one place into distinct seeds, which this payload does not carry.
-  const placeOf = (team) =>
-    knockout && team.place ? `${ordinalLabel(team.place)} in the table` : null;
-  const title =
-    knockout && a.place && b.place
-      ? `${ordinalLabel(a.place)} meets ${ordinalLabel(b.place)}`
-      : match.roundLabel;
+  const [tagA, tagB] = knockoutTags(match);
+  const title = knockoutMeeting(match) || match.roundLabel;
   return [
     stageKicker(upNextKicker(match.roundLabel)),
     stageTitle(title),
-    renderVs(
-      renderSide({ label: placeOf(a), name: a.name }),
-      renderSide({ label: placeOf(b), name: b.name }),
-    ),
+    renderVs(renderSide({ label: tagA, name: a.name }), renderSide({ label: tagB, name: b.name })),
     judgesLine(match.judges)
       ? el('p', { className: 'btc-stage-judges', text: judgesLine(match.judges) })
       : null,

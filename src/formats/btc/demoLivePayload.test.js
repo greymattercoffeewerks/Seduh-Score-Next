@@ -51,6 +51,32 @@ describe('demoLivePayload: the fixtures the preview page and the screen tests st
     ]);
   });
 
+  it('seeds the quarterfinal teams as generate_btc_bracket does, and carries the seeds to the match cards', () => {
+    const payload = knockoutPayload();
+    expect(payload.upNext.teams.map((team) => [team.name, team.seed])).toEqual([
+      ['Bean Scene', 1],
+      ['Steam Team', 8],
+    ]);
+    expect(payload.thenNext.teams.map((team) => team.seed)).toEqual([4, 5]);
+  });
+
+  it('a semifinalist keeps its quarterfinal seed, and later-round slots carry none of their own', () => {
+    const payload = knockoutPayload({
+      results: {
+        qf1: { tokensA: 40 },
+        qf2: { tokensA: 40 },
+        qf3: { tokensA: 40 },
+        qf4: { tokensA: 40 },
+      },
+    });
+    // qf1 (seeds 1 v 8) and qf2 (4 v 5) are won by the first team of each: seeds 1 and 4 meet in sf1
+    expect(payload.upNext.round).toBe('semifinal');
+    expect(payload.upNext.teams.map((team) => [team.name, team.seed])).toEqual([
+      ['Bean Scene', 1],
+      ['Drip Society', 4],
+    ]);
+  });
+
   it('carries a winner forward and leaves the seat after a level quarterfinal open until a tie-break is recorded', () => {
     const level = knockoutPayload({ results: { qf1: { tokensA: 30 } } });
     expect(level.bracket.rounds[1].slots[0].teams[0].name).toBeNull();

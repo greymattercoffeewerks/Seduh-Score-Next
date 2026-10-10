@@ -1,3 +1,13 @@
+## T-BTC.payload-seeds: bracket seeds in the live payload · 2026-10-10
+
+**Task:** T-BTC.payload-seeds. Closes the open item recorded under T-BTC.projector-screens and T-BTC.phone-view ("Seed is not published"). No migration, no Edge Function change.
+
+**Status: in review, not merged.**
+
+**What changed:** `assembleBtcLivePayload`'s match cards (`upNext`, `thenNext`) gain `seed` on each team: the seed `generate_btc_bracket` gave it (`btc_bracket_slots.seed_1`/`seed_2`, read by `fetchBracket`'s existing `select('*')`), kept through the later rounds (a semifinalist is still "seed 4"), null before a bracket exists or for a team the bracket never seeded. The standings `place` stays (tied teams share a place, and the bracket gives them distinct seeds, in a team-id order, which is why a place cannot stand in for a seed). The projector's up-next screen says "Seed 1 meets seed 8" with a "Seed 1" label on each side; the phone's up-next card says it under the match. A payload without seeds (published before this) falls back to "1st meets 8th" / "1st in the table" and never says "seed". The wording is `words.js`'s `knockoutTags` (both teams by seed, or both by table place: never one of each, and none in the preliminary round) and `knockoutMeeting`; the projector uses both, the phone the meeting line. The public-field pin test lists `seed`; the demo fixture's quarterfinal slots carry the seeds the RPC writes.
+
+**Verified:** unit tests (a tied place with distinct seeds, a semifinalist keeping its seed, string seeds from the database, null cases, the match after next); the preview harnesses show it. 3276 tests; lint and Prettier clean.
+
 ## T-BTC.phone-view: the BTC phone view (stage 4 of the BTC live surfaces) · 2026-10-10
 
 **Task:** T-BTC.phone-view. Not a handoff §14 task: BTC is out-of-handoff. The last stage of the BTC live surfaces: `/live/phone` for a BTC session now shows BTC's own view instead of "Event not published yet". No migration.

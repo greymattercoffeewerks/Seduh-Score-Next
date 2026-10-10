@@ -176,13 +176,44 @@ describe('idle loop: the pages', () => {
     handle.destroy();
   });
 
-  it('calls a knockout match by where each team stands in the table (not a seed: tied teams share a place)', () => {
+  it('calls a knockout match by the seeds the bracket gave its teams', () => {
     vi.useFakeTimers();
     const payload = knockoutPayload();
     const [a, b] = payload.upNext.teams;
     const { host, handle } = mountFor(payload);
     expect(text(host, '.stage-kicker')).toBe(`Up next · ${payload.upNext.roundLabel}`);
-    expect([a.place, b.place]).toEqual([1, 8]);
+    expect([a.seed, b.seed]).toEqual([1, 8]);
+    expect(text(host, '.stage-title')).toBe('Seed 1 meets seed 8');
+    expect(all(host, '.btc-stage-side-label')).toEqual(['Seed 1', 'Seed 8']);
+    handle.destroy();
+  });
+
+  it('a seed is not the table place: two teams tied on a place are called by their own seeds', () => {
+    vi.useFakeTimers();
+    const payload = {
+      phase: 'knockout',
+      upNext: {
+        matchId: 'm',
+        round: 'quarterfinal',
+        roundLabel: 'Quarter-final',
+        teams: [
+          { name: 'A', place: 2, seed: 2 },
+          { name: 'B', place: 2, seed: 3 },
+        ],
+        judges: [],
+      },
+    };
+    const { host, handle } = mountFor(payload);
+    expect(text(host, '.stage-title')).toBe('Seed 2 meets seed 3');
+    expect(all(host, '.btc-stage-side-label')).toEqual(['Seed 2', 'Seed 3']);
+    handle.destroy();
+  });
+
+  it('without seeds (a payload from before they were published) it says where each team stands in the table, never "seed"', () => {
+    vi.useFakeTimers();
+    const payload = knockoutPayload();
+    payload.upNext.teams = payload.upNext.teams.map((team) => ({ ...team, seed: null }));
+    const { host, handle } = mountFor(payload);
     expect(text(host, '.stage-title')).toBe('1st meets 8th');
     expect(all(host, '.btc-stage-side-label')).toEqual(['1st in the table', '8th in the table']);
     expect(host.textContent).not.toMatch(/seed/i);
