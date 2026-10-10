@@ -1,4 +1,12 @@
-## T-HARDEN.champion-name-clamp: long champion names stay inside the venue display · 2026-10-10
+## T-TEN.A1: tenancy spec lock · 2026-10-10
+
+**Task:** T-TEN.A1 (first task of `Handoffs and Specs/TENANCY-WORK-PLAN.md`). Docs only: no code, no migration.
+
+**Status: in review, not merged.**
+
+**What changed:** `HANDOFF-CORRECTION-002.md` supersedes handoff §4's "one organiser, one org" and locks D-T1…D-T8 at the plan's defaults (invite-only provisioning, slug-qualified audience URLs with a legacy shim, anon-read narrowing, global results archive, roles unchanged, managed team accounts, client-side active org, immutable slugs). D14 (entitlements stub) is explicitly unchanged. The scoping doc's "do not start before 4 October" line is lifted, §6.4 records the invite-only decision and §8 marks phasing steps 1–2 in progress. ROADMAP gains a "Tenancy core" phase row and section. `state.json` is reset from the stale `T-HARDEN.correct-heat-time` content (its migrations are in the cloud project; the cloud list matches local through `btc_seeding_tiebreak`, re-checked today).
+
+**Written back into the work plan:** BTC resolver `app.org_id_for_btc_match` and the BTC RPCs added to B6; the two open BTC gaps in ROADMAP (`btc_bracket_slots.event_id` movable, `btc_matches_write` `FOR ALL`) folded into B2; BTC displays named in D4/D5; next free pgTAP number is 030 (029 is the highest); BTC is a pitch demo, not a live event, so it imposes no cloud-push freeze. Phase D tasks are re-confirmed with the product owner before each starts. ROADMAP's BTC section heading and intro no longer call the November date a live regional championship; it is a pitch about next year's competition.
 
 **Task:** T-HARDEN.champion-name-clamp. Closes ROADMAP's 4:3 champion-name overflow note. No migration.
 

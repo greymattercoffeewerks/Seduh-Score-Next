@@ -62,15 +62,16 @@ about original design intent.
 
 ## Current state
 
-| Phase                          | Status  | What it covers                                                                                |
-| ------------------------------ | ------- | --------------------------------------------------------------------------------------------- |
-| Phase 0 — Foundation           | ✅ Done | Scaffold, Claude Code tooling, Supabase local stack + CI, doc seed                            |
-| Phase 1 — Schema and security  | ✅ Done | Core tables, Cup Taster tables, RLS, `WITH CHECK` gate                                        |
-| Phase 2 — Core libraries       | ✅ Done | `partition`, `ranking`, `advancement`, `countdown`, `timeclamp`, `entitlements`               |
-| Phase 3 — Registry and offline | ✅ Done | `registry`, IndexedDB mirror + outbox, sync state panel                                       |
-| Phase 4 — Cup Taster           | ✅ Done | Setup, heat generation, timing (app + manual), scoring, standings/advancement, report, export |
-| Phase 5 — Live surfaces        | ✅ Done | `publish`, `viewer-shell`, projector, phone summary, automatic publishing on heat actions     |
-| Phase 6 — Hardening            | ✅ Done | Accessibility pass, offline soak, dry run (local + production)                                |
+| Phase                          | Status         | What it covers                                                                                                        |
+| ------------------------------ | -------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Phase 0 — Foundation           | ✅ Done        | Scaffold, Claude Code tooling, Supabase local stack + CI, doc seed                                                    |
+| Phase 1 — Schema and security  | ✅ Done        | Core tables, Cup Taster tables, RLS, `WITH CHECK` gate                                                                |
+| Phase 2 — Core libraries       | ✅ Done        | `partition`, `ranking`, `advancement`, `countdown`, `timeclamp`, `entitlements`                                       |
+| Phase 3 — Registry and offline | ✅ Done        | `registry`, IndexedDB mirror + outbox, sync state panel                                                               |
+| Phase 4 — Cup Taster           | ✅ Done        | Setup, heat generation, timing (app + manual), scoring, standings/advancement, report, export                         |
+| Phase 5 — Live surfaces        | ✅ Done        | `publish`, `viewer-shell`, projector, phone summary, automatic publishing on heat actions                             |
+| Phase 6 — Hardening            | ✅ Done        | Accessibility pass, offline soak, dry run (local + production)                                                        |
+| Tenancy core (A+B)             | 🚧 In progress | Multi-org hardening, `my_orgs()`, org context + switcher, slug-addressed audience surfaces — see "Tenancy core" below |
 
 **Deadline: 4 October 2026, Cup Tasters event.**
 
@@ -1144,14 +1145,17 @@ See `android/guess-the-bean-widget/CLAUDE.md`.
 
 ---
 
-## BTC (Barista Team Championship) — Out-of-handoff format, prioritized for November 2026 regional event
+## BTC (Barista Team Championship) — Out-of-handoff format, prioritized for the November 2026 pitch
 
 Not in the original handoff (§1.2, March decision to leave Throwdown/Liga/BTC in maintenance
 mode on live Seduh Score). User decision reversal (2026-09-18): prioritized ahead of
-Throwdown for a 4–8 team regional championship in early November. Schema and security work
+Throwdown for an early-November 2026 pitch presentation on using BTC for next year's
+4–8 team regional competition. **Correction (2026-10-10):** the November date is that pitch,
+not a live event; earlier wording here called it a regional championship in early November.
+Schema and security work
 is Phase T-BTC.1 (done); Phases T-BTC.2–5 (setup/matches/scoring/standings/bracket UI, live
 surfaces, export/timer, hardening) tracked in a Claude Docs plan artifact and deferred to
-November event prep schedule.
+the pitch prep schedule.
 
 ### Phase T-BTC.1 — Schema and security · Done
 
@@ -1881,3 +1885,22 @@ _BTC now publishes its live payload automatically; no BTC audience screen exists
 - **The BTC `*.preview.html` harnesses mount their screens without the composed handler map**, so a confirm there queues no display publish and the setup, matches and bracket screens log "live-view publish was refused" after an action. Dev harnesses only; production always passes `allOutboxHandlers`.
 - **`submitConfirmMatch` and `flushPending` still fall back to BTC's own handler map** when none is passed (production always passes the composed one). A caller that relied on the fallback could leave a display publish stuck at the head of the shared queue; the scoring screen therefore queues the publish only when it was given the map.
 - **Closed by this task:** the demo-data item "if the event is the ACTIVE live session, a load does not republish" (a load now republishes and takes the display over).
+
+---
+
+## Tenancy core — multi-org (A+B), started 2026-10-10
+
+Plan: `Handoffs and Specs/TENANCY-WORK-PLAN.md`. Spec: `HANDOFF-CORRECTION-002.md` (supersedes
+handoff §4's "one organiser, one org"; locks D-T1…D-T8). Why: `MULTI-TENANCY-AND-SEDUHID-SCOPING.md`
+pillars A and B. Not in scope: gating/entitlements (D14 stays a stub), admin console, self-serve
+signup, Seduh ID. Rule: no two-org user exists in the cloud project until B1, B2 and B6 are pushed.
+
+| Phase | Tasks                                                                                                                                             | Status      |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| A     | A1 spec lock · A2 tenancy inventory                                                                                                               | In progress |
+| B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | Not started |
+| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | Not started |
+| D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | Not started |
+| E     | E1 negative matrix · E2 console Playwright · E3 security/perf · E4 docs · E5 rollout · E6 close-out                                               | Not started |
+
+Each D task is re-confirmed with the product owner before it starts (2026-10-10).
