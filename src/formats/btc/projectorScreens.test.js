@@ -605,8 +605,8 @@ describe('idle loop: the bracket page', () => {
   it('has a column for each stage, the final and third place sharing the last, each slot labelled there', () => {
     const { host, handle } = bracketHost(knockoutPayload());
     expect(all(host, '.btc-stage-round-head')).toEqual([
-      'Quarterfinals',
-      'Semifinals',
+      'Quarter-finals',
+      'Semi-finals',
       'Final and third place',
     ]);
     expect(
@@ -760,6 +760,8 @@ describe('champion screen', () => {
     const match = /^Final (\d+) – (\d+)$/.exec(score);
     expect(match).not.toBeNull();
     expect(Number(match[1])).toBeGreaterThan(Number(match[2]));
+    const spoken = host.querySelector('.stage-champion-score .btc-score-line');
+    expect(spoken.getAttribute('aria-label')).toBe(`Final ${match[1]} to ${match[2]}`);
     const podium = text(host, '.stage-podium');
     expect(podium).toContain(`1st runner-up ${payload.podium.places[1].teamName}`);
     expect(podium).toContain(`3rd place ${payload.podium.places[2].teamName}`);
