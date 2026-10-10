@@ -23,9 +23,9 @@ race-recovery shape) — all 2026-08-27, the roster-registration screen's follow
 
 `registry` gained `listPeopleByIds` (chunked by 100) and `updateRosterEntry` (T-HARDEN.roster-edit, 2026-10-07) — the latter calls the format-agnostic `update_roster_entry` RPC (migration `20261007100000`); any format's roster screen can reuse both unedited.
 
-`publish` (T5.1, 2026-08-27) — `publishSession()` enqueues + flushes a `publish_session`
-RPC through `outbox.js` exactly like `scoring.js`'s `submitConfirmHeat`; logic-module
-only, nothing calls it yet — payload shape/call cadence are T5.2+ decisions.
+`publish` (T5.1, 2026-08-27) — originally held the generic `publish_session` write
+path; its superseded write helpers were removed on 2026-10-11 once both formats used
+`publishIntent.js`. It now keeps only the format-agnostic active-session lookup.
 
 `viewer-shell` (T5.2, 2026-08-28) — `mountViewerShell()` watches `live_sessions` per-org
 via Supabase Realtime, the project's first realtime usage; renders every holding state
@@ -50,13 +50,10 @@ heading-hierarchy follow-up — a visually-hidden equivalent `<h1>` covers
 `showChrome:false` (the projector), which has no chrome band to host a visible one in;
 both reference one `APP_NAME` constant.
 
-`outbox` gained `buildRpcHandler(client, type)` and `publish` gained
-`publishHandlers(client)`, 2026-08-29 follow-up — closing the cross-module handler-map
-composition gap surfaced by the T4.3/T4.4 outbox-wiring review. `buildRpcHandler` is pure
-RPC-wrapping mechanics (dedups 3 near-identical blocks formerly hand-rolled in
-`timing.js`/`scoring.js`/`publish.js`), format-agnostic by design, so it lives here
-rather than in a format; `publish.js` stays here too — `publish_session` carries its own
-`p_format` parameter, genuinely format-agnostic — see
+`outbox` gained `buildRpcHandler(client, type)`, 2026-08-29, closing the cross-module
+handler-map composition gap surfaced by the T4.3/T4.4 outbox-wiring review. It is pure
+RPC-wrapping mechanics (deduplicating near-identical blocks formerly hand-rolled in
+write modules), format-agnostic by design, so it lives here rather than in a format; see
 [src/formats/cup-taster/CLAUDE.md](../formats/cup-taster/CLAUDE.md)'s `outboxHandlers.js`
 entry for the actual composition point.
 
@@ -145,7 +142,7 @@ The sync status in the header (T-HARDEN.header-sync-chip, 2026-10-08) is a short
 
 `formatBody` (T-BTC.live-routing, 2026-10-09) — `createFormatBody({ [format]: () => body })`: one audience surface for whichever format the active `live_sessions` row has. `viewer-shell.js` now tells `hasContent(payload, { format })` and `renderBody(container, payload, { isTest, format })` the row's `format`; `formatBody` builds that format's body lazily, keeps ONE alive, destroys the previous one when the format changes (so a display's timers never run behind another format's screens), and treats a format with no body as having no content (the shell shows "Event not published yet", never another format's screens fed this payload). A factory or `destroy()` that throws is logged, not allowed to wedge the shell; `destroy()` is final (a late realtime event after a failed mount builds nothing). Format slugs are matched with `Object.hasOwn`, so `toString`/`constructor` are not formats. It never names a format; `src/liveSurfaces.js` (outside core, beside `main.js`) is the composition file that registers each format's projector and phone body. `stageSurface.js`'s `surfaceClass` is now unused by production (no format-named class on the shared root).
 
-`publishIntent` (T-BTC.live-publish, 2026-10-09) — `publishIntentHandler(client, buildPayload)`, `enqueuePublishIntent(type, intent)` and `submitPublishIntent(type, intent, handlers)`: the publish-from-an-intent machinery extracted from Cup Taster's `liveSession.js` when BTC became its second user, and now the way every live payload is published (`publishSession`/`publishHandlers` in `publish.js` are superseded and have no production caller; `findActiveLiveEventId` is still used). A format enqueues a small intent (`{ orgId, eventId, format, isTest, ...}`) FIRST, so an offline device still queues it; the format's own `buildPayload(intent)` runs at flush time from fresh state (return `null` for "nothing left to publish"); a snapshot clock taken before the reads is sent as `p_snapshot_at` (publish_session's staleness guard); a failed read is classified (a network drop, an expired session (42501) or a transient SQLSTATE is retried; a missing row, a malformed id or a bug is permanent); a deleted TEST event (PGRST116 on an `isTest` intent) is a no-op while a real event's is reported; the RPC goes through `buildRpcHandler`, with a fresh operation id per attempt. `isTest` is required and boolean (D9). A caller that needs the intent durable before a flush it does not control uses `enqueuePublishIntent` alone. It never names a format.
+`publishIntent` (T-BTC.live-publish, 2026-10-09) — `publishIntentHandler(client, buildPayload)`, `enqueuePublishIntent(type, intent)` and `submitPublishIntent(type, intent, handlers)`: the publish-from-an-intent machinery extracted from Cup Taster's `liveSession.js` when BTC became its second user, and now the way every live payload is published. The original direct-payload write helpers were removed from `publish.js` on 2026-10-11; its active-session lookup remains. A format enqueues a small intent (`{ orgId, eventId, format, isTest, ...}`) FIRST, so an offline device still queues it; the format's own `buildPayload(intent)` runs at flush time from fresh state (return `null` for "nothing left to publish"); a snapshot clock taken before the reads is sent as `p_snapshot_at` (publish_session's staleness guard); a failed read is classified (a network drop, an expired session (42501) or a transient SQLSTATE is retried; a missing row, a malformed id or a bug is permanent); a deleted TEST event (PGRST116 on an `isTest` intent) is a no-op while a real event's is reported; the RPC goes through `buildRpcHandler`, with a fresh operation id per attempt. `isTest` is required and boolean (D9). A caller that needs the intent durable before a flush it does not control uses `enqueuePublishIntent` alone. It never names a format.
 
 `stageVocabulary`, `stagePageLoop` (T-BTC.venue-vocabulary, 2026-10-09) — the rest of a venue display's shared vocabulary, extracted from Cup Taster's projector screens when BTC became the second format to need it (a pure refactor, verified markup-for-markup and layout-for-layout): `stageVocabulary.js` (+ `.css`, classes `stage-*`) is `stageKicker`, `stageTitle`, `stageSupport`, the standings page (`renderStandingsHead`, `standingsRangeText`, `renderStandingsTable` taking rows of `{ position, name, suffix, cells }` and columns of `{ className, width }`) and `renderChampion`; `stagePageLoop.js` is `createStagePageLoop(frame, { dwellMs })`, whose `show(pages, { footerFor, onPage })` paints a page's content, its footer label and the ring, rotates by `core/pageRotator.js` (drawing the ring through `mountFooterRing`) and restarts from the first page when shown new ones. All their text is set as text, never markup (a cell may be a node array), a value column's width is set on the cell by the format, `show([])` empties the frame, and neither names a format. Link `stageVocabulary.css` before a format's own screen CSS (a format rule may refine a shared one).
 

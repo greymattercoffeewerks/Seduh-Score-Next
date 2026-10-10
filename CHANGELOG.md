@@ -9388,3 +9388,10 @@ Verifier: self-verified (same bootstrapping-order note as T0.2).
 **What changed:** The BTC bracket screen now keeps a single, attached inline `role="status"` note above its cards when a successful seeding-order or knockout tie-break save cannot refresh its data. The note includes a tap-target Reload button, stays visible until a successful read, and replaces rather than duplicates the old transient toast.
 
 **Verified:** BTC bracket and seeding tests cover both failed follow-up reads, node identity across rerenders, the note surviving beyond 1.5 seconds, busy Reload state, fresh-data reload and happy paths.
+
+## T-HARDEN.remove-publish-superseded · 2026-10-11
+
+Removed the unused direct-payload publish helpers from `src/core/publish.js`; both live
+formats already publish through `publishIntent.js`. The file now only exposes the shared
+active-session lookup, which gained direct regression coverage. Updated the affected
+history and implementation comments, and marked the matching ROADMAP item closed.
