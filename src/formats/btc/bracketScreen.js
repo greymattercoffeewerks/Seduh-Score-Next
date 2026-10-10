@@ -84,6 +84,10 @@ export async function mountBracketScreen(
     formError: null,
     busy: false,
     toastMessage: null,
+    // A successful write followed by a failed re-read needs an instruction the organiser can act on,
+    // not a short-lived toast. The node below stays attached for this screen's whole life so its text
+    // change is announced reliably.
+    refreshNoteMessage: null,
     // The tie-break form (one slot at a time, like the create-match form). tiebreakError is
     // { field: 'winner' | 'reason' | 'form', message } so the message can be tied to the control
     // it is about.
@@ -115,11 +119,36 @@ export async function mountBracketScreen(
     className: 'sr-only',
     attrs: { role: 'status', 'aria-live': 'polite' },
   });
-  root.appendChild(announcer);
+  const refreshNoteMessage = el('span', { className: 'btc-bracket-refresh-note-message' });
+  const refreshButton = el('button', {
+    className: 'btn btn-outline tap-target',
+    text: 'Reload',
+    attrs: { type: 'button', 'data-focus-key': 'bracket-refresh-reload' },
+  });
+  const refreshNote = el(
+    'div',
+    {
+      className: 'btc-bracket-refresh-note',
+      attrs: { role: 'status', 'aria-live': 'polite' },
+    },
+    [refreshNoteMessage, refreshButton],
+  );
+  refreshButton.addEventListener('click', () => {
+    if (!state.loading) attemptLoad();
+  });
+  root.append(announcer, refreshNote);
 
   function teamName(id) {
     if (!id) return 'TBD';
     return state.teams.find((t) => t.id === id)?.name ?? 'Unknown team';
+  }
+
+  function setRefreshNote(message) {
+    state.refreshNoteMessage = message;
+  }
+
+  function clearRefreshNote() {
+    state.refreshNoteMessage = null;
   }
 
   // `focus: false` leaves keyboard focus where it is (a message about a control the person is still on: it is
@@ -158,6 +187,7 @@ export async function mountBracketScreen(
       state.seedingReadFailed = true;
       return;
     }
+    clearRefreshNote();
     state.seedingRows = read.rows;
     state.seedingReadFailed = false;
     if (state.seedingGroupKey) {
@@ -216,6 +246,7 @@ export async function mountBracketScreen(
       state.seedingRows = persisted.seeding.rows ?? [];
       state.seedingReadFailed = persisted.seeding.failed;
       state.loadFailedMessage = null;
+      clearRefreshNote();
       state.pendingFocus = 'heading';
     } catch (err) {
       state.loadFailedMessage = err.timedOut
@@ -475,14 +506,16 @@ export async function mountBracketScreen(
     resetSeedingDraft();
     const allOrdered =
       !read.failed && blockingGroups(seedingTieGroups(state.seedingRows)).length === 0;
-    showToast(
-      read.failed
-        ? 'Order saved, but the page could not refresh. Reload to see the standings.'
-        : hadBlocking && allOrdered
+    if (read.failed) {
+      setRefreshNote('Order saved, but the page could not refresh. Reload to see the standings.');
+    } else {
+      showToast(
+        hadBlocking && allOrdered
           ? 'Order saved. Every team level across the cut-off is ordered: you can generate the bracket.'
           : 'Order saved.',
-    );
-    state.pendingFocus = 'seeding-button';
+      );
+      state.pendingFocus = 'seeding-button';
+    }
     state.busy = false;
     render();
   }
@@ -537,6 +570,7 @@ export async function mountBracketScreen(
     const entries = await fetchBracket(eventId, client);
     state.scores = await fetchBracketScores(bracketMatchIds(entries), client);
     state.entries = entries;
+    clearRefreshNote();
   }
 
   async function handleRecordTiebreak(domEvent, entry) {
@@ -594,11 +628,12 @@ export async function mountBracketScreen(
       refreshed = false;
     }
     resetTiebreakDraft();
-    showToast(
-      refreshed
-        ? `${teamName(winnerTeamId)} goes through.`
-        : `${teamName(winnerTeamId)} goes through — saved, but the page could not refresh. Reload to see the bracket.`,
-    );
+    if (refreshed) showToast(`${teamName(winnerTeamId)} goes through.`);
+    else {
+      setRefreshNote(
+        `${teamName(winnerTeamId)} goes through \u2014 saved, but the page could not refresh. Reload to see the bracket.`,
+      );
+    }
     // Focus the slot's button and let the live-region toast speak: a focused toast would be
     // removed by its own timer and drop focus to the page.
     state.pendingFocus = 'tiebreak-button';
@@ -1029,9 +1064,15 @@ export async function mountBracketScreen(
   function render() {
     if (signal?.aborted) return;
     withFocusPreservation(root, () => {
-      // Everything but the live region, which stays attached (a node that is removed and put back would reach
-      // a screen reader with its text already in it).
-      for (const node of [...root.childNodes]) if (node !== announcer) node.remove();
+      // The screen-reader announcer and actionable refresh note stay attached. A node removed and put back
+      // with its text already set is not reliably announced.
+      for (const node of [...root.childNodes]) {
+        if (node !== announcer && node !== refreshNote) node.remove();
+      }
+      refreshNoteMessage.textContent = state.refreshNoteMessage ?? '';
+      refreshNote.hidden = !state.refreshNoteMessage;
+      refreshButton.hidden = !state.refreshNoteMessage;
+      setBusyDisabled(refreshButton, state.loading);
 
       if (state.loading) {
         renderLoading();
@@ -1179,6 +1220,10 @@ export async function mountBracketScreen(
   return {
     unmount() {
       clearTimeout(toastTimer);
+      clearRefreshNote();
+      refreshNoteMessage.textContent = '';
+      refreshNote.hidden = true;
+      refreshButton.hidden = true;
     },
   };
 }

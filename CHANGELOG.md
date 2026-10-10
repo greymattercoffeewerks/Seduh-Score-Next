@@ -9318,3 +9318,11 @@ IPv6 loopback first on this Windows machine, so Playwright's readiness check aga
 `server.host`/`preview.host` pinned to `127.0.0.1` in `vite.config.js` fixes it.
 
 Verifier: self-verified (same bootstrapping-order note as T0.2).
+
+## T-BTC.refresh-note: keep saved-but-unreadable bracket changes actionable · 2026-10-10
+
+**Task:** T-BTC.refresh-note. Closes the persistent-refresh note in ROADMAP's T-BTC.seeding-tiebreak open items. No migration.
+
+**What changed:** The BTC bracket screen now keeps a single, attached inline `role="status"` note above its cards when a successful seeding-order or knockout tie-break save cannot refresh its data. The note includes a tap-target Reload button, stays visible until a successful read, and replaces rather than duplicates the old transient toast.
+
+**Verified:** BTC bracket and seeding tests cover both failed follow-up reads, node identity across rerenders, the note surviving beyond 1.5 seconds, busy Reload state, fresh-data reload and happy paths.
