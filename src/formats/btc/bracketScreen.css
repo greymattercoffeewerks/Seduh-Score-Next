@@ -13,6 +13,32 @@
   gap: var(--space-5);
 }
 
+/* A saved change whose follow-up read failed needs to stay visible until the organiser reloads. The
+   status node itself is created once by bracketScreen.js and remains mounted so its changed text is announced. */
+.btc-bracket-refresh-note {
+  max-width: var(--max-width-content);
+  margin: var(--space-5) auto 0;
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  border: var(--border-hairline) solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-sunken);
+}
+
+.btc-bracket-refresh-note-message {
+  flex: 1 1 14rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.btc-bracket-refresh-note .btn {
+  flex: 0 0 auto;
+}
+
 .btc-podium-list {
   margin: 0;
   display: flex;

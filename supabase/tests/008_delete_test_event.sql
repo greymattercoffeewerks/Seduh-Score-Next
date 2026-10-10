@@ -78,20 +78,23 @@ select throws_ok(
   'a nonexistent event is rejected with the same message as a wrong-org one — no information leak either way'
 );
 
--- ============ a non-member is rejected by RLS even with the event's own correct org id ============
--- Unlike the wrong-org case above (caught by this function's own check),
--- this passes org 020 as BOTH the true owning org of event e9 AND p_org_id —
--- so the function's own ownership check passes. Unlike publish_session's
--- own equivalent test (an INSERT whose WITH CHECK failure genuinely THROWS
--- 42501), a DELETE whose rows are hidden by RLS's own USING clause just
--- matches zero rows and returns normally — the row surviving is the actual
--- proof RLS backstopped this, not a thrown error.
+-- ============ a non-member is refused even with the event's own correct org id ============
+-- This passes org 020 as BOTH the true owning org of event e9 AND p_org_id. Since T-TEN.B6 the
+-- function's own check refuses it exactly like a wrong org id (the resolver answers NULL to a
+-- non-member). Before B6 it passed that check and RLS's USING clause matched zero rows on the
+-- DELETE, returning normally; that silent success is gone. The row surviving below is still the
+-- end-to-end proof nothing was deleted.
 
-select lives_ok(
+-- T-TEN.B6: org_id_for_* now answers NULL for a non-member, so a non-member who passes the TRUE
+-- org id is refused by the function's own check, exactly like one who passes a wrong org id. This
+-- case used to reach RLS (and silently match zero rows); it no longer gets that far.
+select throws_ok(
   $$ select delete_test_event(
        '00000000-0000-0000-0000-000000000020', '00000000-0000-0000-0000-0000000000e9'
      ) $$,
-  'the call itself does not error — RLS silently matches zero rows on DELETE, unlike INSERT'
+  'P0001',
+  'delete_test_event: event 00000000-0000-0000-0000-0000000000e9 not found',
+  'a non-member passing the owning org id is refused as not found (same as a wrong org id)'
 );
 
 -- Checked as postgres — same reasoning as above (a non-member's own session
@@ -100,7 +103,7 @@ reset role;
 select is(
   (select count(*)::int from events where id = '00000000-0000-0000-0000-0000000000e9'),
   1,
-  'the event was NOT actually deleted — a non-member''s DELETE matched zero rows under RLS'
+  'the event was NOT actually deleted — the call was refused by the function''s own check'
 );
 set local role authenticated;
 set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000000001';
