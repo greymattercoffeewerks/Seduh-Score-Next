@@ -373,8 +373,8 @@ set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000000006';
 
 select throws_ok(
   $$ select generate_btc_bracket('00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-0000000000e1') $$,
-  'P0001', 'generate_btc_bracket: at least 8 teams with a confirmed preliminary result are required',
-  'a real member of a DIFFERENT org, using the event''s own real org_id, is rejected (RLS hides btc_standings)'
+  'P0001', 'generate_btc_bracket: event not found',
+  'a real member of a DIFFERENT org, using the event''s own real org_id, is rejected as not found (membership is checked first, so the refusal says nothing about the event; it used to leak through RLS as "at least 8 teams")'
 );
 
 select throws_ok(
