@@ -290,11 +290,17 @@ claim to this page.
 ## Assets
 
 `public/marketing/` holds this page's own photos. `hero-tablet.jpg`,
-`hero-projector.jpg`, `petrol-hero-cupping-bowls.jpg`, `hero-bracket.jpg` (the hero
-slideshow) and `cta-pour.jpg` (the CTA band) came with the design handoff and are
-explicitly flagged there as placeholder/reference-quality photography — confirm with
-whoever owns the handoff whether these are final or need reshoots before this page is
-treated as done. `hero-cupping-bowls.jpg` (no `petrol-` prefix) is the real, pre-existing
+`hero-projector.jpg`, `hero-bracket.jpg` (the hero slideshow) and `cta-pour.jpg` (the CTA
+band) came with the design handoff and are explicitly flagged there as
+placeholder/reference-quality photography — confirm with whoever owns the handoff whether
+these are final or need reshoots before this page is treated as done.
+`hero-event-floor.jpg` and `hero-event-cupper.jpg` (2026-10-10) replaced the handoff's
+placeholder `petrol-hero-cupping-bowls.jpg` in the slideshow: real photos from the Grey Matter
+Cup Taster Competition 2026, supplied by the owner. They stay `aria-hidden` (scenery, not
+claimed as a specific event) and `HERO_PHOTOS` gives each a `position` (CSS `object-position`)
+so the wide banner crop keeps the subject — the portrait one is only 870px wide, so it softens
+a little on a large desktop. Real people are identifiable in them, so check the Privacy page's
+photo wording if more event photos go on public pages. `hero-cupping-bowls.jpg` (no `petrol-` prefix) is the real, pre-existing
 event photo from Kinetic's own proof section (Girls Got Drip Vol. 0) — kept under its
 original filename and reused for the proof section here specifically because it's
 genuine, unlike the handoff's own placeholder photo of the same subject.
