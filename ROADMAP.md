@@ -1283,7 +1283,9 @@ live-verified in browser. Definition of Done met. See CHANGELOG.md's dated entry
 - **btc_cup_totals still counts out-of-range cup votes** (match totals and standings are filtered,
   but the view itself is inconsistent). — CLOSED 2026-10-09 (`20260922120000`: the view filters `cup_number <= btc_cups_for_round`).
 - **btc_bracket_slots.event_id can still be moved; freeze it with forbid_btc_event_change** in the
-  bracket step (feeder links must not be trusted blindly).
+  bracket step (feeder links must not be trusted blindly). — CLOSED (found 2026-10-10 by T-TEN.A2):
+  `trg_btc_bracket_slots_parent_immutable` freezes `event_id` (with `id`, `round`, `slot_label`), and
+  `trg_btc_bracket_slots_check_event` requires every team, match and feeder slot to be in the slot's event.
 - **Nine older trigger functions keep PUBLIC/anon EXECUTE** (check_btc_cup_vote_participants,
   check_btc_match_bonus_teams, and 7 pre-BTC ones): unreachable, consistency cleanup only. — CLOSED 2026-10-09: `check_btc_cup_vote_participants` was dropped by `20260922100000`; the other eight were revoked from `public` and `anon` by `20260922120000`.
 - **Scoring screen load needs the network** (no offline reload capability).
@@ -1897,7 +1899,7 @@ signup, Seduh ID. Rule: no two-org user exists in the cloud project until B1, B2
 
 | Phase | Tasks                                                                                                                                             | Status      |
 | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| A     | A1 spec lock · A2 tenancy inventory                                                                                                               | In progress |
+| A     | A1 spec lock · A2 tenancy inventory                                                                                                               | Done        |
 | B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | Not started |
 | C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | Not started |
 | D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | Not started |

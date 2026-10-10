@@ -1,4 +1,12 @@
-## T-TEN.A1: tenancy spec lock · 2026-10-10
+## T-TEN.A2: tenancy inventory · 2026-10-10
+
+**Task:** T-TEN.A2 (second task of `Handoffs and Specs/TENANCY-WORK-PLAN.md`). Read-only research: no code, no migration. The inventory itself is `Handoffs and Specs/TENANCY-INVENTORY.md` (that folder is gitignored).
+
+**Status: in review, not merged.**
+
+**What it found** (read-only queries on the cloud project plus `git grep` at `origin/dev`): the plan's B1/B2/B6/B7/C6/D4 scope all moved. `app.forbid_parent_change` already freezes `events.org_id` and most anchor columns, so B1 reuses it and only needs to cover `people`, `person_merges`, `processed_operations`, `team_removed_members`, `org_members`, `live_sessions` and `public_results`. Two edges are not enforced at all (`ct_stage_entries(stage_id, entry_id)`, `ct_heat_entries(heat_id, entry_id)`) and `ct_sets` has no trigger, so a two-org member could re-point it. A third trigger (`check_event_entry_person_org`) has the NULL-comparison trap B6 is meant to fix. `public_results.published_by` is anon-readable. The outbox record carries no user or org field, though nearly every payload holds the org id. No audience QR code exists, so D4 is small. All six views are `security_invoker`, so they leak nothing.
+
+**Tracked-file change:** ROADMAP's BTC item "`btc_bracket_slots.event_id` can still be moved" is marked CLOSED (the column is frozen); the Tenancy table shows phase A done.
 
 **Task:** T-TEN.A1 (first task of `Handoffs and Specs/TENANCY-WORK-PLAN.md`). Docs only: no code, no migration.
 
