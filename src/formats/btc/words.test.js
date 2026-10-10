@@ -21,6 +21,8 @@ import {
   decidedPodiumPlaces,
   tiebreakText,
   withTiebreak,
+  knockoutTags,
+  knockoutMeeting,
 } from './words.js';
 import { knockoutPayload } from './demoLivePayload.js';
 
@@ -262,5 +264,61 @@ describe('phrases both surfaces use', () => {
     expect(tiebreakText({ reason: 'Coin' })).toBe('Tie-break: Coin');
     expect(withTiebreak('A go through', { reason: 'Coin' })).toBe('A go through · Tie-break: Coin');
     expect(withTiebreak('A go through', null)).toBe('A go through');
+  });
+});
+
+describe('who a knockout team is', () => {
+  const m = (a, b, round = 'quarterfinal') => ({ round, teams: [a, b] });
+
+  it('introduces both teams by seed when both have one, even when places are shared', () => {
+    expect(knockoutTags(m({ seed: 2, place: 2 }, { seed: 3, place: 2 }))).toEqual([
+      'Seed 2',
+      'Seed 3',
+    ]);
+  });
+
+  it('falls back to the table place for both when seeds are missing, never mixing a seed with a place', () => {
+    expect(knockoutTags(m({ seed: null, place: 2 }, { seed: null, place: 11 }))).toEqual([
+      '2nd in the table',
+      '11th in the table',
+    ]);
+    expect(knockoutTags(m({ seed: 2, place: 2 }, { seed: null, place: 8 }))).toEqual([
+      '2nd in the table',
+      '8th in the table',
+    ]);
+    expect(knockoutTags(m({ seed: null, place: null }, { seed: 4, place: 4 }))).toEqual([
+      null,
+      '4th in the table',
+    ]);
+  });
+
+  it('has no tags in the preliminary round, where a place is only so far', () => {
+    expect(knockoutTags(m({ seed: 1, place: 1 }, { seed: 2, place: 2 }, 'preliminary'))).toEqual([
+      null,
+      null,
+    ]);
+    expect(
+      knockoutMeeting(m({ seed: 1, place: 1 }, { seed: 2, place: 2 }, 'preliminary')),
+    ).toBeNull();
+  });
+
+  it('a meeting is "Seed 1 meets seed 8", or by place without seeds, or nothing', () => {
+    expect(knockoutMeeting(m({ seed: 1, place: 1 }, { seed: 8, place: 8 }))).toBe(
+      'Seed 1 meets seed 8',
+    );
+    expect(knockoutMeeting(m({ seed: 2, place: 2 }, { seed: 3, place: 2 }))).toBe(
+      'Seed 2 meets seed 3',
+    );
+    expect(knockoutMeeting(m({ seed: null, place: 1 }, { seed: null, place: 8 }))).toBe(
+      '1st meets 8th',
+    );
+    // one side has a seed and the other does not: the places are the common ground
+    expect(knockoutMeeting(m({ seed: 1, place: 1 }, { seed: null, place: 8 }))).toBe(
+      '1st meets 8th',
+    );
+    // either side with nothing known: no meeting
+    expect(knockoutMeeting(m({ seed: null, place: null }, { seed: 4, place: 4 }))).toBeNull();
+    expect(knockoutMeeting(m({ seed: null, place: 1 }, { seed: null, place: null }))).toBeNull();
+    expect(knockoutMeeting(m({ seed: 1, place: 1 }, { seed: null, place: null }))).toBeNull();
   });
 });

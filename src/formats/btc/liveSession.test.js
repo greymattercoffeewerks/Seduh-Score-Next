@@ -65,11 +65,13 @@ const standing = (teamId, teamName, position, played, wins, totalPoints) => ({
   position,
 });
 
-const slot = (round, label, team1, team2, matchId) => ({
+const slot = (round, label, team1, team2, matchId, seeds = [null, null]) => ({
   id: `s-${label}`,
   event_id: 'ev1',
   round,
   slot_label: label,
+  seed_1: seeds[0],
+  seed_2: seeds[1],
   team1_id: team1,
   team2_id: team2,
   match_id: matchId,
@@ -198,8 +200,8 @@ describe('assembleBtcLivePayload', () => {
         roundLabel: 'Preliminary',
         status: 'scoring',
         teams: [
-          { name: 'Beta', place: 2 },
-          { name: 'Alpha', place: 1 },
+          { name: 'Beta', place: 2, seed: null },
+          { name: 'Alpha', place: 1, seed: null },
         ],
         judges: ['Jo', 'Kim', 'Lee'],
       });
@@ -268,8 +270,103 @@ describe('assembleBtcLivePayload', () => {
         matchJudges: [{ match_id: 'm1', judge_id: 'gone' }],
         standings,
       });
-      expect(payload.upNext.teams[0]).toEqual({ name: 'Unknown team', place: null });
+      expect(payload.upNext.teams[0]).toEqual({ name: 'Unknown team', place: null, seed: null });
       expect(payload.upNext.judges).toEqual(['Unknown judge']);
+    });
+  });
+
+  describe('seeds', () => {
+    // generate_btc_bracket gives teams tied on a place distinct seeds (a team-id tie-break), so the standings
+    // place is not the seed: t1 and t2 are both 2nd here, and the bracket seeded them 2 and 3.
+    const tied = [
+      standing('t1', 'Alpha', 2, 3, 1, 40),
+      standing('t2', 'Beta', 2, 3, 1, 40),
+      standing('t3', 'Gamma', 1, 3, 3, 90),
+      standing('t4', 'Delta', 4, 3, 0, 10),
+    ];
+    const qf = (id, over = {}) => match(id, { round: 'quarterfinal', status: 'pending', ...over });
+
+    it('gives a knockout match each team’s seed from the bracket, which differs from the shared place', () => {
+      const m = qf('mq1', { team1_id: 't1', team2_id: 't2' });
+      const payload = assemble({
+        matches: [m],
+        standings: tied,
+        bracketEntries: [entry(slot('quarterfinal', 'qf1', 't1', 't2', 'mq1', [2, 3]), m)],
+      });
+      expect(payload.upNext.teams).toEqual([
+        { name: 'Alpha', place: 2, seed: 2 },
+        { name: 'Beta', place: 2, seed: 3 },
+      ]);
+    });
+
+    it('a team keeps its quarterfinal seed in the semifinal, which carries no seeds of its own', () => {
+      const sf = qf('ms1', { round: 'semifinal', team1_id: 't3', team2_id: 't1' });
+      const payload = assemble({
+        matches: [sf],
+        standings: tied,
+        bracketEntries: [
+          entry(slot('quarterfinal', 'qf1', 't3', 't4', 'mq1', [1, 8])),
+          entry(slot('quarterfinal', 'qf2', 't1', 't2', 'mq2', [2, 3])),
+          entry(slot('semifinal', 'sf1', 't3', 't1', 'ms1'), sf),
+        ],
+      });
+      expect(payload.upNext.teams.map((t) => t.seed)).toEqual([1, 2]);
+    });
+
+    it('is null for a team the bracket did not seed, and before any bracket exists', () => {
+      const m = qf('mq1', { team1_id: 't1', team2_id: 't2' });
+      const noBracket = assemble({ matches: [m], standings: tied });
+      expect(noBracket.upNext.teams.map((t) => t.seed)).toEqual([null, null]);
+      const oneSeeded = assemble({
+        matches: [m],
+        standings: tied,
+        bracketEntries: [entry(slot('quarterfinal', 'qf1', 't1', null, 'mq1', [2, null]), m)],
+      });
+      expect(oneSeeded.upNext.teams.map((t) => t.seed)).toEqual([2, null]);
+    });
+
+    it('takes seeds from the quarterfinal slots only: a later slot carrying one cannot override it', () => {
+      const sf = qf('ms1', { round: 'semifinal', team1_id: 't3', team2_id: 't1' });
+      const payload = assemble({
+        matches: [sf],
+        standings: tied,
+        bracketEntries: [
+          entry(slot('quarterfinal', 'qf1', 't3', 't4', 'mq1', [1, 8])),
+          entry(slot('semifinal', 'sf1', 't3', 't1', 'ms1', [7, 7]), sf),
+        ],
+      });
+      expect(payload.upNext.teams.map((t) => [t.name, t.seed])).toEqual([
+        ['Gamma', 1],
+        ['Alpha', null],
+      ]);
+    });
+
+    it('reads a seed the database returns as text (numeric columns can) as a number', () => {
+      const m = qf('mq1', { team1_id: 't1', team2_id: 't2' });
+      const payload = assemble({
+        matches: [m],
+        standings: tied,
+        bracketEntries: [entry(slot('quarterfinal', 'qf1', 't1', 't2', 'mq1', ['2', '3']), m)],
+      });
+      expect(payload.upNext.teams.map((t) => t.seed)).toEqual([2, 3]);
+    });
+
+    it('puts the seed on the match after next as well', () => {
+      const m1 = qf('mq1', { team1_id: 't3', team2_id: 't4' });
+      const m2 = qf('mq2', {
+        team1_id: 't1',
+        team2_id: 't2',
+        created_at: '2026-10-01T10:05:00.000Z',
+      });
+      const payload = assemble({
+        matches: [m1, m2],
+        standings: tied,
+        bracketEntries: [
+          entry(slot('quarterfinal', 'qf1', 't3', 't4', 'mq1', [1, 8]), m1),
+          entry(slot('quarterfinal', 'qf2', 't1', 't2', 'mq2', [2, 3]), m2),
+        ],
+      });
+      expect(payload.thenNext.teams.map((t) => t.seed)).toEqual([2, 3]);
     });
   });
 
@@ -808,7 +905,7 @@ describe('what the payload makes public', () => {
       'status',
       'teams',
     ]);
-    expect(keys(payload.upNext.teams[0])).toEqual(['name', 'place']);
+    expect(keys(payload.upNext.teams[0])).toEqual(['name', 'place', 'seed']);
     expect(keys(payload.recentResults[0])).toEqual(
       ['confirmedAt', 'level', 'matchId', 'round', 'roundLabel', 'teams', 'tiebreak'].sort(),
     );
