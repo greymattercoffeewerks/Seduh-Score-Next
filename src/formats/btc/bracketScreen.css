@@ -119,3 +119,68 @@
     flex: 1 1 280px;
   }
 }
+
+/* ---------- teams level in the standings (seedingCard.js) ---------- */
+.btc-seeding-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.btc-seeding-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: var(--border-hairline) solid var(--color-border);
+}
+
+.btc-seeding-group h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+}
+
+.btc-seeding-order {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.btc-seeding-order li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.btc-seeding-seed {
+  flex: none;
+  min-width: 4.5em;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.btc-seeding-team {
+  flex: 1 1 8em;
+  min-width: 0;
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.btc-seeding-moves {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* The move buttons are real buttons, at least tap-target high; at the ends they are marked inert with
+   aria-disabled (so focus is never lost), which the shared .btn rule styles. */
+.btc-seeding-move {
+  min-height: var(--tap-target-min, 44px);
+  padding: var(--space-2) var(--space-3);
+}

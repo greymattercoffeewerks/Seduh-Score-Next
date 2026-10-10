@@ -181,7 +181,7 @@ describe('mountBracketScreen', () => {
     );
   });
 
-  it('shows a describeError message via toast when generation is rejected (e.g. an unresolved seeding tie)', async () => {
+  it('shows the cut-off message when generation is refused for teams level across the 8th and 9th places', async () => {
     const client = fakeClient(baseDb(), {
       generateError: { code: 'P0001', message: 'teams are tied for the 8th qualifying spot' },
     });
@@ -190,11 +190,11 @@ describe('mountBracketScreen', () => {
     root
       .querySelector('button[data-focus-key="generate-bracket"]')
       .dispatchEvent(new Event('click', { bubbles: true }));
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
+    await flush();
 
-    expect(root.textContent).toContain('Something went wrong saving that — try again.');
+    // the screen knows this refusal (teams level across the cut-off), so it says what to do about it
+    expect(root.textContent).toContain('Teams are level across the 8th and 9th places.');
+    expect(root.textContent).not.toContain('Something went wrong saving that');
     expect(root.querySelector('button[data-focus-key="generate-bracket"]')).not.toBeNull();
     expect(publishBtcLive).not.toHaveBeenCalled();
   });
