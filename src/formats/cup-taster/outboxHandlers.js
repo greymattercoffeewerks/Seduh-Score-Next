@@ -1,8 +1,8 @@
 // The one shared outbox handler map for Cup Taster (2026-08-29 follow-up,
 // closing a known ROADMAP.md gap). `core/outbox.js`'s `flushOutbox()`
 // registers handlers per call, not globally — each write module
-// (timing.js, scoring.js, core/publish.js) already exports its OWN narrow
-// map (timingHandlers/confirmHandlers/publishHandlers) for its own writes,
+// (timing.js, scoring.js and liveSession.js) already exports its OWN narrow
+// map for its own writes,
 // but a flush triggered with only one module's map can't process an
 // operation type queued by a DIFFERENT module: the exact scenario this
 // project's primary offline workflow hits (a heat timed AND scored fully
@@ -13,7 +13,7 @@
 // before confirm_heat is ever attempted).
 //
 // This file is the composition point, deliberately NOT inside any of
-// timing.js/scoring.js/core/publish.js themselves — each of those already
+// timing.js/scoring.js/liveSession.js themselves — each of those already
 // takes an optional `handlers` override on its own write function precisely
 // so it doesn't need to import this file back (importing this file INTO
 // timing.js, which this file itself imports FROM, would be a circular
