@@ -1,8 +1,8 @@
 ## T-TEN.B1/B2/B5: multi-org integrity (immutable org_id, no cross-org references, last owner) · 2026-10-11
 
-**Task:** T-TEN.B1 + B2 + B5 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (PR 2). Three migrations; **local only until the product owner says to push them to the cloud project** (merging deploys only the frontend).
+**Task:** T-TEN.B1 + B2 + B5 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (PR 2). Three migrations, **pushed to the cloud project 2026-10-11 (cloud versions `20261010164114`, `20261010164146`, `20261010164214`) and verified there** (triggers enabled, functions pinned and not executable by API roles, TRUNCATE revoked, a rolled-back probe refused demoting the only owner). Still true: no two-org user may exist in the cloud project until B6 is also pushed.
 
-**Status: in review, not merged.**
+**Status: merged (PR #200) and live in the cloud project.**
 
 **Why:** a user in two orgs makes `app.is_org_member` true on both, so row-level security alone no longer keeps data in its org. A2's inventory found the gaps; this closes them in the database, for every writer.
 

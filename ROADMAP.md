@@ -1897,13 +1897,13 @@ handoff §4's "one organiser, one org"; locks D-T1…D-T8). Why: `MULTI-TENANCY-
 pillars A and B. Not in scope: gating/entitlements (D14 stays a stub), admin console, self-serve
 signup, Seduh ID. Rule: no two-org user exists in the cloud project until B1, B2 and B6 are pushed.
 
-| Phase | Tasks                                                                                                                                             | Status                                                                    |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| A     | A1 spec lock · A2 tenancy inventory                                                                                                               | Done                                                                      |
-| B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | In progress (B1, B2, B5 built and reviewed; not yet in the cloud project) |
-| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | Not started                                                               |
-| D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | Not started                                                               |
-| E     | E1 negative matrix · E2 console Playwright · E3 security/perf · E4 docs · E5 rollout · E6 close-out                                               | Not started                                                               |
+| Phase | Tasks                                                                                                                                             | Status                                                 |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| A     | A1 spec lock · A2 tenancy inventory                                                                                                               | Done                                                   |
+| B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | In progress (B1, B2, B5 done and in the cloud project) |
+| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | Not started                                            |
+| D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | Not started                                            |
+| E     | E1 negative matrix · E2 console Playwright · E3 security/perf · E4 docs · E5 rollout · E6 close-out                                               | Not started                                            |
 
 Each D task is re-confirmed with the product owner before it starts (2026-10-10).
 
@@ -1911,7 +1911,7 @@ Each D task is re-confirmed with the product owner before it starts (2026-10-10)
 
 ## Known open items from T-TEN.B1/B2/B5 (2026-10-11)
 
-_Three migrations (`20261011100000_tenancy_org_id_immutable`, `20261011110000_tenancy_cross_org_references`, `20261011120000_tenancy_last_owner`) reviewed by schema-guardian, security-reviewer and test-auditor (no blocking findings; every non-blocking one fixed except the items below). **Not pushed to the cloud project until the product owner says so.**_
+_Three migrations (`20261011100000_tenancy_org_id_immutable`, `20261011110000_tenancy_cross_org_references`, `20261011120000_tenancy_last_owner`) reviewed by schema-guardian, security-reviewer and test-auditor (no blocking findings; every non-blocking one fixed except the items below). **Pushed to the cloud project 2026-10-11 and verified there** (cloud versions `20261010164114`, `20261010164146`, `20261010164214`, applied in order): all triggers enabled, the new functions `SECURITY DEFINER` with `search_path` pinned and no API-role execute, `service_role` TRUNCATE on `org_members` and `orgs` revoked, and a rolled-back live probe confirmed the last owner cannot be demoted. **Still true: no two-org user may exist there until B6 is also pushed.**_
 
 - **`btc_matches_write` is still `FOR ALL`.** Any member can write status and tie-break columns directly (within one org, not a cross-org gap). Splitting the policy is an RLS redesign that needs its own `security-reviewer` pass. Deliberately not in B2.
 - **`person_merges.merged_id` has no foreign key or org check.** A bare uuid kept for the audit trail; nothing reads another org's person through it.
