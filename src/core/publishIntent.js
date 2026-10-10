@@ -3,7 +3,7 @@
 // ({ orgId, eventId, format, isTest, ...whatever the format needs to rebuild its payload }) and the payload
 // itself is built here, at actual FLUSH time, from fresh state, by the format's own `buildPayload(intent)`.
 //
-// Why not core/publish.js's publishSession(): its contract assumes the caller already HAS the payload before
+// Why not enqueue a complete payload directly? Its contract assumes the caller already HAS the payload before
 // enqueueing. A live payload is assembled from many sequential reads, and awaiting those first meant an
 // offline device never reached enqueueOperation(): the very first read threw, nothing was persisted, and the
 // publish was silently dropped (found in review, offline-sync-auditor) — the one outcome the offline model

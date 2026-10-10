@@ -1,7 +1,7 @@
 // Live-session payload assembly + automatic publish triggers (handoff §8.1,
 // §8.2, D7, D23). core/publish.js built the write mechanism (T5.1) and
 // core/viewer-shell.js + viewerBody.js built the read side (T5.2-T5.4), but
-// nothing ever called publishSession() from a real screen — an organiser
+// the earlier direct-payload path had no real screen caller — an organiser
 // running a live event saw "Waiting for the organiser" the whole time,
 // because publishing was a step nobody remembered to add, exactly the
 // failure the legacy Throwdown app already had (user-reported, 2026-09-04).
@@ -44,8 +44,8 @@
 // characteristic the organiser's own screen already has, not a new one
 // introduced here.
 //
-// Deliberately does NOT reuse core/publish.js's publishSession() —
-// found in review (offline-sync-auditor): that function's contract assumes
+// Deliberately does NOT enqueue a complete payload directly — found in review
+// (offline-sync-auditor): that contract assumes
 // the caller already HAS its payload before enqueueing (true for every
 // other outbox write in this app — start_heat/confirm_heat build their RPC
 // payload from data the calling screen already loaded), but this module's

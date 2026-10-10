@@ -1,8 +1,8 @@
 ## T-TEN.B6: the org-id disclosure is closed · 2026-10-11
 
-**Task:** T-TEN.B6 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (PR 3). Two migrations, `20261011130000_tenancy_resolver_disclosure` and `20261011140000_tenancy_rpc_null_org_guard`, **to be applied together and in that order; not pushed to the cloud project until the product owner says so.**
+**Task:** T-TEN.B6 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (PR 3). Two migrations, `20261011130000_tenancy_resolver_disclosure` and `20261011140000_tenancy_rpc_null_org_guard`, **pushed to the cloud project 2026-10-11 (cloud versions `20261010213446` and `20261010213533`, applied in order) and verified there**: all 13 resolver, internal-resolver and trigger bodies and all 18 RPC bodies hash identically to the tested local copies; the internal resolvers are executable by no API role; the RPCs are still SECURITY INVOKER with `search_path` pinned; and a live probe on the cloud, built to roll back, showed a stranger who is a member of nothing gets the same refusal from `delete_test_event`, `publish_session` and `publish_event_results` for the true org id, a wrong one and NULL, and for a real versus a missing event, while a direct write naming the real org gets the standard row-level-security refusal and the real owner still resolves their own org. The second migration was applied to the cloud as a short block that rewrites each function's own current definition with the one guard added (the repo file carries the full bodies and the rollback); the result is identical by hash.
 
-**Status: in review, not merged.**
+**Status: merged (PR #202) and live in the cloud project.**
 
 **Why:** the five resolvers `app.org_id_for_event / _stage / _heat / _heat_entry / _btc_match` were SECURITY DEFINER lookups with no membership check, executable by every signed-in user, so any account could ask which org owns any event, stage, heat or match; and `delete_test_event` answered "wrong org id" differently from "right org id, not a member". With many orgs and accounts in several of them, that is a cross-tenant oracle.
 
@@ -9388,3 +9388,10 @@ Verifier: self-verified (same bootstrapping-order note as T0.2).
 **What changed:** The BTC bracket screen now keeps a single, attached inline `role="status"` note above its cards when a successful seeding-order or knockout tie-break save cannot refresh its data. The note includes a tap-target Reload button, stays visible until a successful read, and replaces rather than duplicates the old transient toast.
 
 **Verified:** BTC bracket and seeding tests cover both failed follow-up reads, node identity across rerenders, the note surviving beyond 1.5 seconds, busy Reload state, fresh-data reload and happy paths.
+
+## T-HARDEN.remove-publish-superseded · 2026-10-11
+
+Removed the unused direct-payload publish helpers from `src/core/publish.js`; both live
+formats already publish through `publishIntent.js`. The file now only exposes the shared
+active-session lookup, which gained direct regression coverage. Updated the affected
+history and implementation comments, and marked the matching ROADMAP item closed.
