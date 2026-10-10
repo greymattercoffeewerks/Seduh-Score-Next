@@ -11,7 +11,7 @@
 -- Fixtures: org A (events A1, A2), org B (event B1); user_a (A only), user_b (B only),
 -- user_ab (both).
 begin;
-select plan(30);
+select plan(31);
 
 -- ============ fixtures (as postgres, bypasses RLS) ============
 
@@ -246,14 +246,28 @@ select throws_ok(
   '23001', 'team_removed_members.org_id is immutable',
   'a removed-member marker cannot be moved to another org'
 );
+-- The service role must be refused too, but WHICH refusal depends on its table grants (a
+-- local stack may grant it no UPDATE on memberships: 42501; CI's does, so it reaches the
+-- freeze: 23001). Either is a refusal; anything else, including success, fails the test.
 set local role service_role;
-select throws_ok(
-  $$ update org_members set org_id = '00000000-0000-0000-0000-0000000000b0'
-      where org_id = '00000000-0000-0000-0000-0000000000a0' $$,
-  '42501', null,
-  'the service role holds no UPDATE on memberships at all, so it cannot move one either'
+select lives_ok(
+  $$ do $b$
+     begin
+       update org_members set org_id = '00000000-0000-0000-0000-0000000000b0'
+        where org_id = '00000000-0000-0000-0000-0000000000a0';
+       raise exception 'the service role moved a membership to another org' using errcode = 'XX000';
+     exception when sqlstate '42501' or sqlstate '23001' then
+       null;
+     end $b$ $$,
+  'the service role cannot move a membership to another org either (refused by grant or by the freeze)'
 );
 reset role;
+select is(
+  (select count(*)::int from org_members
+    where org_id = '00000000-0000-0000-0000-0000000000a0' and user_id = '00000000-0000-0000-0000-000000000003'),
+  1,
+  'and the membership is still in org A'
+);
 
 select * from finish();
 rollback;
