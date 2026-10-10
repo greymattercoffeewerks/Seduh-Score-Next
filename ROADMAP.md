@@ -1248,11 +1248,7 @@ live-verified in browser. Definition of Done met. See CHANGELOG.md's dated entry
 
 ## Known open items from BTC Phase T-BTC.2 (2026-09-23)
 
-- **No seeding-tie-break UI yet.** When an unresolved tie exists at the 8th/9th qualifying
-  boundary, `generate_btc_bracket` refuses to proceed; organiser must resolve the tie
-  outside the app. A future seeding tie-break UI would let the organiser decide from within
-  the app itself. (Pre-existing gap; same issue noted during T-BTC.2 sub-step 4 standings
-  review.)
+- **No seeding-tie-break UI yet.** **CLOSED (T-BTC.seeding-tiebreak, 2026-10-10):** the organiser orders teams that are level in the standings from the bracket screen. Original note: when an unresolved tie exists at the 8th/9th qualifying boundary, `generate_btc_bracket` refuses to proceed; the organiser had to resolve it outside the app.
 
 ---
 
@@ -1817,6 +1813,26 @@ _The audience surfaces now serve whichever format is live; no BTC screen exists 
 - **The second-use extraction is still owed before BTC's projector** (see "Known open items from T-HARDEN.projector-moments"): the shared venue vocabulary (`kicker`, `bigTitle`, the standings table, champion classes) moves into `core` with Cup Taster migrated and regression-tested, so BTC never imports Cup Taster's stylesheet. **CLOSED (T-BTC.venue-vocabulary, 2026-10-09).**
 - **`mountStageSurface`'s `surfaceClass` option has no production caller.** Keep it as a hook or remove it when the BTC projector lands.
 - **BTC payload fields are decided but unbuilt:** recent results ordered by confirmation time (Cup Taster had a bug here), bracket slots with winners and tie-break flags, podium via `derivePodium`, and `is_test` on every publish.
+
+## Known open items from T-BTC.seeding-tiebreak (2026-10-10)
+
+_The organiser can now order level teams; this lists what that does not do._
+
+- **A recorded order is not in `score_change_log` or the dispute pack.** The table keeps who recorded the current decision and when (not forgeable: column-level privileges), but a re-record REPLACES it, so earlier decisions are lost. Who qualified and who plays whom is still logged through the bracket slots generation writes. Real logging means: add the table to the log's valid-table check, a `case` arm in `app.log_score_change` (its `row_id` comes from `team_id`, the table has no `id`), the trigger, the immutable/metadata buckets in `018_score_log_column_coverage.sql`, and what `get_dispute_pack`/`get_scoring_record` read.
+- **A decision revives** when the same teams are level on the same numbers again (a result moves and moves back): intended (it is still the organiser's recorded order), and its reason is pre-filled when the group is opened again. If that is not wanted, a `recorded_at` check against the last result change would end it.
+- **The projector still says "tie for 8th" after the tie is ordered** (the standings' shared position is a fact; the payload does not say the organiser settled it). It disappears when the bracket is generated.
+- **The seeding order is not shown on the live displays or in the payload**, by design: its reason is for the event's own record, not the room.
+- **Core extractions the boundary review named, not done here** (each also means editing Cup Taster or the other BTC tie-break code): (1) the tie-group / border-tie detection is `core/advancement.js`'s `tiedAtBorder` and the seeding groups re-derive it; (2) a reason validator (trim, non-empty, max 120) now exists in four places (`tiebreak.js`, `seeding.js`, Cup Taster's `timeCorrection.js`, and the SQL); (3) the hint-to-message `REFUSALS` table pattern is in `tiebreak.js`, `demo.js` and `seeding.js` (`core/errors.js` could own a `describeRefusal(table, err)`); (4) the move-up/move-down reorder is in Cup Taster's `setupScreen.js` too (it uses `disabled` at the ends; BTC uses `aria-disabled` so focus is kept).
+- **`.field-input` borders are below 3:1 against the surface** (2.47:1 light, 1.25:1 dark, `shared.css`), so the reason field's boundary fails WCAG 1.4.11; project-wide (every BTC field), so not changed here.
+- **The "saved but could not refresh" toast disappears after 1.5 s**, as the knockout tie-break's does; a persistent inline note would be better for an actionable instruction.
+- **`service_role` can no longer run `generate_btc_bracket` or the new RPC** (their membership test reads `auth.uid()`); the grants to it are inert. No caller uses it.
+- **Toasts are fresh `role="status"` nodes inserted with their text** (the app's existing pattern); whether a screen reader announces them reliably is unverified (no real NVDA/VoiceOver run). The seeding card's own messages also go through its persistent live region, which stays attached, but "Order saved." and the post-save focus move to the button are the only confirmation.
+- **A blocked Generate button is dimmed by the shared `.btn[aria-disabled]` rule (opacity 0.6)**, about 3.1:1 in the paper theme for the one control the card is explaining. Inactive controls are exempt from WCAG contrast, but a lighter treatment would be kinder.
+- **Direct member writes to `btc_seeding_tiebreaks` are not serialised with `generate_btc_bracket`** (the policy cannot take the lock): a member racing themselves could commit a decision just after generation. Needs two actions in the same instant, affects only their own event, and a member can already delete slots.
+- **Provisional lists are tall at 320 and 360px** ("Seed N (provisional)" and the team name take two rows each).
+- **The form's error is both `role="alert"` and focused**, and the form and its list share the group's name: some screen readers will read them twice (the same pattern as the knockout tie-break form).
+- **`btc_seeding_order` is a view over `btc_standings`**: a future migration that drops `btc_standings` without CASCADE will fail (earlier ones did).
+- **The cloud project does not have the migration yet.** Merging the PR only ships the front end; the card hides itself (view not found) until `20261010100000` is pushed with `apply_migration`, and until then a tie across the cut-off still blocks generation exactly as before.
 
 ## Known open items from T-BTC.phone-view (2026-10-10)
 
