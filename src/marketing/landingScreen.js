@@ -227,8 +227,9 @@ function buildNav() {
   ]);
 }
 
-// Four rotating full-bleed photos, crossfading on a timer — purely
-// atmospheric (no caption claims a specific real event), so alt text stays
+// Five rotating full-bleed photos, crossfading on a timer — purely
+// atmospheric (no caption claims a specific real event; two of them are
+// real Cup Taster event photos, used as scenery), so alt text stays
 // empty and the whole strip is aria-hidden; the headline/body copy right
 // next to it carries the actual message. Auto-advance is skipped entirely
 // under prefers-reduced-motion (the dots still work, for a visitor who
@@ -237,18 +238,22 @@ function buildNav() {
 const HERO_PHOTOS = [
   { src: '/marketing/hero-tablet.jpg', alt: '' },
   { src: '/marketing/hero-projector.jpg', alt: '' },
-  { src: '/marketing/petrol-hero-cupping-bowls.jpg', alt: '' },
+  { src: '/marketing/hero-event-floor.jpg', alt: '', position: '50% 65%' },
+  { src: '/marketing/hero-event-cupper.jpg', alt: '', position: '50% 40%' },
   { src: '/marketing/hero-bracket.jpg', alt: '' },
 ];
 const HERO_INTERVAL_MS = 4200;
 
 function buildHeroPhotos() {
-  const frames = HERO_PHOTOS.map(({ src, alt }, i) =>
-    el('img', {
+  const frames = HERO_PHOTOS.map(({ src, alt, position }, i) => {
+    const frame = el('img', {
       className: `petrol-hero-photo${i === 0 ? ' petrol-hero-photo-active' : ''}`,
       attrs: { src, alt, loading: i === 0 ? 'eager' : 'lazy' },
-    }),
-  );
+    });
+    // The crop's focal point — the wide banner box cuts a 4:3 / portrait photo to a band.
+    if (position) frame.style.objectPosition = position;
+    return frame;
+  });
   const dots = HERO_PHOTOS.map((_, i) =>
     el('button', {
       className: `petrol-hero-dot${i === 0 ? ' petrol-hero-dot-active' : ''}`,
