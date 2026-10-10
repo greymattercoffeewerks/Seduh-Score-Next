@@ -385,6 +385,9 @@ describe('the seeding ties card on the bracket screen', () => {
       },
     });
     await mount(client);
+    const refreshNote = root.querySelector('.btc-bracket-refresh-note');
+    expect(refreshNote.hidden).toBe(true);
+    expect(root.contains(refreshNote)).toBe(true);
     openButtonOf(group(1)).click();
     const input = root.querySelector('.btc-seeding-form input[type="text"]');
     input.value = 'x';
@@ -406,9 +409,17 @@ describe('the seeding ties card on the bracket screen', () => {
       .querySelector('.btc-seeding-form')
       .dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
     await flush();
-    expect(root.querySelector('.screen-feedback').textContent).toMatch(
-      /Order saved, but the page could not refresh/,
+    expect(root.querySelector('.btc-bracket-refresh-note')).toBe(refreshNote);
+    expect(refreshNote.hidden).toBe(false);
+    expect(refreshNote.textContent).toContain(
+      'Order saved, but the page could not refresh. Reload to see the standings.',
     );
+    expect(root.querySelector('.screen-feedback')).toBeNull();
+
+    byKey('bracket-refresh-reload').click();
+    await flush();
+    expect(refreshNote.hidden).toBe(true);
+    expect(group(1).textContent).toContain('Ordered: x');
   });
 
   it('still loads the screen, quietly, when the view does not exist yet (its migration not applied)', async () => {
@@ -1120,7 +1131,7 @@ describe('the seeding ties card on the bracket screen', () => {
     client.control.failOrderRead = new Error('offline');
     submitForm();
     await flush();
-    expect(root.querySelector('.screen-feedback').textContent).toBe(
+    expect(root.querySelector('.btc-bracket-refresh-note-message').textContent).toBe(
       'Order saved, but the page could not refresh. Reload to see the standings.',
     );
     expect(card().textContent).toContain(
