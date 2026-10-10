@@ -1,3 +1,28 @@
+## T-TEN.B6: the org-id disclosure is closed · 2026-10-11
+
+**Task:** T-TEN.B6 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (PR 3). Two migrations, `20261011130000_tenancy_resolver_disclosure` and `20261011140000_tenancy_rpc_null_org_guard`, **to be applied together and in that order; not pushed to the cloud project until the product owner says so.**
+
+**Status: in review, not merged.**
+
+**Why:** the five resolvers `app.org_id_for_event / _stage / _heat / _heat_entry / _btc_match` were SECURITY DEFINER lookups with no membership check, executable by every signed-in user, so any account could ask which org owns any event, stage, heat or match; and `delete_test_event` answered "wrong org id" differently from "right org id, not a member". With many orgs and accounts in several of them, that is a cross-tenant oracle.
+
+**What changed:**
+
+- **Public resolvers answer NULL to a non-member.** Same names and grants (row-level-security policies run as the caller and need EXECUTE); a member, including a two-org member, sees exactly what they saw before. Every policy reads `is_org_member(resolver(...))`, so NULL means "no access".
+- **Five new `app.org_id_for_*_internal` functions** with the old ungated bodies, executable by no API role (anon, authenticated and service_role all revoked).
+- **The NULL trap closed.** A check written `new.org_id <> resolver(...)` is NULL, not true, when the resolver answers NULL, so it silently passes. `check_live_session_org`, `check_public_results_org` and `check_event_entry_person_org` now use the internal resolver and `is distinct from`; `confirm_heat`, the one RPC still using `<>`, now uses `is distinct from`.
+- **The triggers no longer act as an ownership oracle** (found by the first security review, blocking). They run BEFORE row-level security as SECURITY DEFINER and used to answer a non-member differently depending on whether the org they named owned the event. A caller (a signed-in user, or any session running as an API role even with no user id) who is not a member now gets the standard 42501 first, identical for every id; a writer with neither (postgres, seeds, migrations) keeps the strict org-match check.
+- **A NULL org id no longer slips past the RPC guards** (found by both reviews, blocking). Once the resolver answers NULL, `NULL is distinct from NULL` is false, so `publish_session(NULL, …)` answered a non-member differently for an existing event than a missing one, and three RPCs silently succeeded. The second migration adds `p_org_id is null or` to the org check of all 18 RPCs that carry one (19 checks; `resolve_stage` has two). The bodies are the live definitions with that one change, and the rollback block restores the exact previous bodies.
+- **A non-member who passes the true org id, a wrong one or NULL now gets the same refusal** from `delete_test_event`, the publish RPCs, `start_heat`, `confirm_heat`, the BTC RPCs and `update_roster_entry`.
+
+**Verified:** 99 new pgTAP assertions (`034`); the whole suite, 1341, passes on a database rebuilt from empty; both rollback blocks run locally and restore the previous definitions (internal resolvers gone, event resolver ungated, no NULL guards, triggers ungated); mutation-tested (removing the NULL guard fails the NULL cases, removing the trigger gate fails the direct-write cases, putting the old `<>` back fails the trap cases); the security reviewer ran 1620 live probes (18 RPCs x 6 callers x 5 org values x 3 object sets) with zero successes for any non-legitimate combination and one answer per (RPC, caller) pair.
+
+**Existing tests changed:** six assertions in `005`, `006`, `008`, `011` and `022` pinned the old leak (a non-member passing the true org id got a silent no-op or an RLS error); they now assert the uniform refusal, and their comments say why.
+
+**Reviews:** schema-guardian, security-reviewer (BLOCKED on first pass, signed off on the delta review), test-auditor (three blocking test gaps, all closed: a two-org member naming the wrong one of their own orgs, the row-level-security policies proven directly once the triggers and guards fire first, and a missing parent id in strict mode; plus a structural check that all 18 RPCs carry the NULL guard). Each was run as a general-purpose agent following the project's `.claude/agents/*.md` definition, and the auditor's own mutations are now caught by the suite.
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-TEN.B6".
+
 ## T-TEN.B1/B2/B5: multi-org integrity (immutable org_id, no cross-org references, last owner) · 2026-10-11
 
 **Task:** T-TEN.B1 + B2 + B5 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (PR 2). Three migrations, **pushed to the cloud project 2026-10-11 (cloud versions `20261010164114`, `20261010164146`, `20261010164214`) and verified there** (triggers enabled, functions pinned and not executable by API roles, TRUNCATE revoked, a rolled-back probe refused demoting the only owner). Still true: no two-org user may exist in the cloud project until B6 is also pushed.

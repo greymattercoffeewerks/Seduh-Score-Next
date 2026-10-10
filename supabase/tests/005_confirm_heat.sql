@@ -55,10 +55,10 @@ insert into ct_heat_entries (id, heat_id, entry_id, station) values
 set local role authenticated;
 set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000000001';
 
--- ============ a wrong-org caller writes nothing (RLS actually blocks it) ============
--- The organiser above is a member of Test Org only. Confirming Other Org's
--- heat must fail — and fail because RLS filters the writes to zero rows
--- (confirm_heat's own `not found` check), not because of anything client-side.
+-- ============ a wrong-org caller writes nothing ============
+-- The organiser above is a member of Test Org only. Confirming Other Org's heat must fail, and
+-- fail in the database (confirm_heat's own org check, which since T-TEN.B6 refuses a non-member
+-- whatever org id they pass), not because of anything client-side.
 
 select throws_ok(
   $$ select confirm_heat(
@@ -68,9 +68,9 @@ select throws_ok(
           "results":[{"set_id":"00000000-0000-0000-0000-0000000000c9","correct":true}]}]'::jsonb
      ) $$,
   null,
-  'confirm_heat: heat 00000000-0000-0000-0000-0000000000d9 not found',
-  'a caller who is not a member of the heat''s org sees it as not found —
-   RLS on ct_heats itself filters it out before any write is attempted'
+  'confirm_heat: heat 00000000-0000-0000-0000-0000000000d9 does not belong to org 00000000-0000-0000-0000-000000000020',
+  'a caller who is not a member of the heat''s org is refused with the SAME message as one who passes a wrong
+   org id (T-TEN.B6: the resolver no longer reveals the heat''s org, and the check no longer passes on NULL)'
 );
 
 select is(
