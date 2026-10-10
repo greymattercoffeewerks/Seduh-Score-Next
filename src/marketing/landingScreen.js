@@ -590,7 +590,7 @@ function pricingSection() {
       ),
       pricingColumn(
         'Annual',
-        'BND $100',
+        'BND $350',
         'per year',
         'Every format, priced for organisers running events all year. ' +
           'Persistent history across seasons.',
