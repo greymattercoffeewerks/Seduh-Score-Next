@@ -235,6 +235,13 @@ describe('renderChampion', () => {
       'stage-champion-score',
     ]);
   });
+
+  it('marks only names beyond the normal 31-character limit for the shared fit step-down', () => {
+    const [, atLimit] = renderChampion({ name: 'A'.repeat(31) });
+    const [, overLimit] = renderChampion({ name: 'A'.repeat(32) });
+    expect(atLimit.hasAttribute('data-long-name')).toBe(false);
+    expect(overLimit.getAttribute('data-long-name')).toBe('true');
+  });
 });
 
 describe('what the stylesheet must keep doing (jsdom cannot lay it out, so these pin the rules)', () => {
@@ -273,6 +280,12 @@ describe('what the stylesheet must keep doing (jsdom cannot lay it out, so these
   it('sizes from --stage-fit and never from vh, so a banner or odd aspect cannot crop a screen', () => {
     expect(css).toMatch(/--stage-fit/);
     expect(css).not.toMatch(/\d(dvh|vh|cqh)/);
+  });
+
+  it('steps down only the long-name marker, while the ordinary champion rule keeps its original size', () => {
+    expect(rule('.stage-champion-name')).toMatch(/font-size/);
+    expect(rule('.stage-champion-name[data-long-name]')).toMatch(/font-size/);
+    expect(rule('.stage-champion-name[data-long-name]')).toMatch(/text-wrap:\s*balance/);
   });
 
   it('is linked by the app, before the format stylesheets that refine it', () => {

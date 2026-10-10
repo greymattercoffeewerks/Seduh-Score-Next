@@ -1,3 +1,12 @@
+## T-HARDEN.champion-name-clamp: long champion names stay inside the venue display · 2026-10-10
+
+**Task:** T-HARDEN.champion-name-clamp. Closes ROADMAP's 4:3 champion-name overflow note. No migration.
+
+**What changed:** The shared champion renderer marks only names over 31 characters. `stageVocabulary.css`
+keeps the existing type scale for ordinary names and steps marked names down using `--stage-fit`, balances
+their wrapping, and keeps them within the stage area. The name remains text content, never markup; no
+truncation is applied (the 60-character fit is fully visible).
+
 ## T-BTC.wording: BTC round names and accessible scores · 2026-10-10
 
 **Task:** T-BTC.wording. Closes the round-name and score-reading items from T-BTC.phone-view. No migration.

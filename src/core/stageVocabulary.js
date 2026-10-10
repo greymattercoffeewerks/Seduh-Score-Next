@@ -75,11 +75,17 @@ export function renderStandingsTable(rows, columns = []) {
 }
 
 // The decided event: the champion's name large and centred under a "Champion" label, an optional score line
-// and an optional podium line. Returns the nodes for a frame's main area.
+// and an optional podium line. Names over 31 characters carry a presentation hook so the shared stylesheet can
+// step only them down; ordinary names retain the original type size. Returns the nodes for a frame's main area.
 export function renderChampion({ label = 'Champion', name, scoreLine = null, podiumLine = null }) {
+  const longName = String(name).length > 31;
   return [
     el('p', { className: 'stage-champion-label', text: label }),
-    el('h2', { className: 'stage-champion-name', text: name }),
+    el('h2', {
+      className: 'stage-champion-name',
+      text: name,
+      attrs: longName ? { 'data-long-name': 'true' } : undefined,
+    }),
     scoreLine
       ? typeof scoreLine === 'string'
         ? el('p', { className: 'stage-champion-score', text: scoreLine })
