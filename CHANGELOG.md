@@ -1,3 +1,11 @@
+## T-BTC.wording: BTC round names and accessible scores · 2026-10-10
+
+**Task:** T-BTC.wording. Closes the round-name and score-reading items from T-BTC.phone-view. No migration.
+
+**What changed:** `roundNames.js` is the one source for BTC singular payload/slot labels and plural bracket headings. The organiser bracket, projector and phone now agree on “Quarter-final” / “Quarter-finals” and “Semi-final” / “Semi-finals”. Audience score lines keep the visible en dash but expose an explicit “to” accessible name, including the projector champion score and the phone champion, bracket and recent-result cards; their text content remains the visible score.
+
+**Verified:** targeted BTC surface tests (267 assertions), including the shared round-name contract and visible/spoken score forms.
+
 ## T-BTC.seeding-tiebreak: the organiser orders teams that are level in the standings · 2026-10-10
 
 **Task:** T-BTC.seeding-tiebreak. Closes ROADMAP's "No seeding-tie-break UI yet" (T-BTC.2). Needs a migration: **`20261010100000_btc_seeding_tiebreak.sql` is local only until the user says to push it to the cloud project.**

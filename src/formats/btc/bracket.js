@@ -10,17 +10,15 @@
 // writes, unlike confirm_btc_match). This module calls them directly via client.rpc(),
 // the same shape matches.js's createMatch already uses for create_btc_match.
 import { getSupabase } from '../../core/supabaseClient.js';
+import { roundHeading } from './roundNames.js';
 
 // Display order only — btc_bracket_slots.round has no natural sort order of its own
 // (alphabetically "final" sorts before "quarterfinal", which is wrong for a bracket).
 export const BRACKET_ROUND_ORDER = ['quarterfinal', 'semifinal', 'final', 'third_place'];
 
-export const BRACKET_ROUND_LABELS = {
-  quarterfinal: 'Quarterfinals',
-  semifinal: 'Semifinals',
-  final: 'Final',
-  third_place: 'Third Place',
-};
+export const BRACKET_ROUND_LABELS = Object.fromEntries(
+  BRACKET_ROUND_ORDER.map((round) => [round, roundHeading(round)]),
+);
 
 export async function generateBracket(orgId, eventId, client = getSupabase()) {
   const { error } = await client.rpc('generate_btc_bracket', {

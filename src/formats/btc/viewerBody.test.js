@@ -366,13 +366,16 @@ describe('results and the bracket', () => {
   it('lists the bracket by round, with what each match decided', () => {
     const { container } = mounted(knockoutPayload({ results: { qf1: { tokensA: 40 } } }));
     expect(all(container, '.btc-phone-round')).toEqual([
-      'Quarterfinals',
-      'Semifinals',
+      'Quarter-finals',
+      'Semi-finals',
       'Final',
       'Third place',
     ]);
     const lines = all(container, '.card:nth-of-type(3) .btc-phone-line');
     expect(lines[0]).toMatch(/^Bean Scene \d+ – \d+ Steam Team$/);
+    expect(
+      container.querySelector('.card:nth-of-type(3) .btc-score-line').getAttribute('aria-label'),
+    ).toMatch(/^Bean Scene \d+ to \d+ Steam Team$/);
     expect(lines[1]).toBe('Drip Society vs Grind House');
     const metas = all(container, '.card:nth-of-type(3) li .stage-meta');
     expect(metas[0]).toBe('Bean Scene go through');
@@ -390,8 +393,13 @@ describe('the champion', () => {
     const { container } = mounted(payload);
     expect(text(container, '.btc-phone-champion-label')).toBe('Champion');
     expect(text(container, '.btc-phone-champion-name')).toBe(payload.podium.places[0].teamName);
-    expect(text(container, '.btc-phone-champion .stage-meta')).toBe(finalScoreLine(payload));
+    expect(text(container, '.btc-phone-champion .stage-meta')).toBe(
+      finalScoreLine(payload).visible,
+    );
     expect(text(container, '.btc-phone-champion .stage-meta')).toMatch(/^Final \d+ – \d+$/);
+    expect(
+      container.querySelector('.btc-phone-champion .btc-score-line').getAttribute('aria-label'),
+    ).toMatch(/^Final \d+ to \d+$/);
     // the heading carries both words, so heading navigation says who the champion is
     expect(text(container, '.btc-phone-champion h2')).toBe(
       `Champion ${payload.podium.places[0].teamName}`,
@@ -487,7 +495,7 @@ describe('partial payloads and the bracket card', () => {
       ),
     };
     const { container } = mounted({ ...payload, bracket });
-    expect(all(container, '.btc-phone-round')).toEqual(['Quarterfinals', 'Semifinals', 'Final']);
+    expect(all(container, '.btc-phone-round')).toEqual(['Quarter-finals', 'Semi-finals', 'Final']);
   });
 
   it('says exactly what each bracket slot is waiting for', () => {

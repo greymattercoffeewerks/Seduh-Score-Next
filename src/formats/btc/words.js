@@ -3,6 +3,7 @@
 // (formats/btc/liveSession.js); nothing here recomputes who won: a team's `winner` flag, a match's `level` and
 // `tiebreak` and a standings row's `position` are the payload's own.
 import { ordinalLabel } from '../../core/ordinal.js';
+import { el } from '../../core/dom.js';
 
 // The preliminary round's top eight reach the quarterfinals (generate_btc_bracket seeds eight, and refuses to
 // until a tie across the cut-off is settled, so the surfaces say "qualify", never "go through", while it is open).
@@ -66,6 +67,24 @@ export function slotOutcome(slot, round) {
 export const podiumPlace = (payload, key) =>
   payload.podium?.places?.find((place) => place.key === key);
 
+export function scoreLine({ prefix = '', first, second, suffix = '' }) {
+  return {
+    visible: `${prefix}${first} – ${second}${suffix}`,
+    spoken: `${prefix}${first} to ${second}${suffix}`,
+  };
+}
+
+// The visual dash is not reliably spoken. `role="img"` gives this labelled, atomic
+// text alternative a role that accepts an accessible name, while textContent remains
+// exactly the visible score for code and assertions that read it.
+export function renderScoreLine(score) {
+  return el('span', {
+    className: 'btc-score-line',
+    text: score.visible,
+    attrs: { role: 'img', 'aria-label': score.spoken },
+  });
+}
+
 // "Final 52 – 44", from the final's slot in the bracket (the champion's total first), plus how it was decided
 // when the organiser had to. null when the totals are not there.
 export function finalScoreLine(payload) {
@@ -74,8 +93,8 @@ export function finalScoreLine(payload) {
     ?.slots?.find((candidate) => candidate.status === 'confirmed');
   if (!slot || slot.teams.some((team) => team.total === null)) return null;
   const ordered = [...slot.teams].sort((a, b) => Number(b.winner) - Number(a.winner));
-  const line = `Final ${ordered[0].total} – ${ordered[1].total}`;
-  return podiumPlace(payload, 'champion')?.viaTiebreak ? `${line}, decided by tie-break` : line;
+  const suffix = podiumPlace(payload, 'champion')?.viaTiebreak ? ', decided by tie-break' : '';
+  return scoreLine({ prefix: 'Final ', first: ordered[0].total, second: ordered[1].total, suffix });
 }
 
 // ---------- the band, and what counts as something to show ----------

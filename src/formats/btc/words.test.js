@@ -10,6 +10,8 @@ import {
   slotOutcome,
   podiumPlace,
   finalScoreLine,
+  scoreLine,
+  renderScoreLine,
   btcBand,
   hasBtcPublicContent,
   upNextKicker,
@@ -167,11 +169,12 @@ describe('podiumPlace and finalScoreLine', () => {
   it('writes the final with the winner’s total first, whichever seat won', () => {
     const a = finalScoreLine(knockoutPayload({ results }));
     const b = finalScoreLine(knockoutPayload({ results: { ...results, final: { tokensA: 12 } } }));
-    expect(a).toMatch(/^Final \d+ – \d+$/);
-    const [hi, lo] = a.match(/\d+/g).map(Number);
+    expect(a.visible).toMatch(/^Final \d+ – \d+$/);
+    expect(a.spoken).toMatch(/^Final \d+ to \d+$/);
+    const [hi, lo] = a.visible.match(/\d+/g).map(Number);
     expect(hi).toBeGreaterThan(lo);
     // the second team wins on tokens: its total still comes first
-    const [hi2, lo2] = b.match(/\d+/g).map(Number);
+    const [hi2, lo2] = b.visible.match(/\d+/g).map(Number);
     expect(hi2).toBeGreaterThan(lo2);
   });
 
@@ -186,7 +189,10 @@ describe('podiumPlace and finalScoreLine', () => {
     const payload = knockoutPayload({
       results: { ...results, final: { tokensA: 30, tiebreak: { winner: 0, reason: 'Coin' } } },
     });
-    expect(finalScoreLine(payload)).toBe('Final 30 – 30, decided by tie-break');
+    expect(finalScoreLine(payload)).toEqual({
+      visible: 'Final 30 – 30, decided by tie-break',
+      spoken: 'Final 30 to 30, decided by tie-break',
+    });
   });
 
   it('is null without a confirmed final or without both totals', () => {
@@ -195,6 +201,21 @@ describe('podiumPlace and finalScoreLine', () => {
     const payload = knockoutPayload({ results });
     payload.bracket.rounds.find((r) => r.round === 'final').slots[0].teams[1].total = null;
     expect(finalScoreLine(payload)).toBeNull();
+  });
+});
+
+describe('scoreLine', () => {
+  it('keeps the visible dash while exposing “to” as the accessible name', () => {
+    const score = scoreLine({
+      prefix: 'Bean Scene ',
+      first: 47,
+      second: 20,
+      suffix: ' Steam Team',
+    });
+    const rendered = renderScoreLine(score);
+    expect(rendered.textContent).toBe('Bean Scene 47 – 20 Steam Team');
+    expect(rendered.getAttribute('aria-label')).toBe('Bean Scene 47 to 20 Steam Team');
+    expect(rendered.getAttribute('role')).toBe('img');
   });
 });
 
