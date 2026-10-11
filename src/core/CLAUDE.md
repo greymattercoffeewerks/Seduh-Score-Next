@@ -188,3 +188,12 @@ organiser's own Cup Taster operation). `eventsScreen.js` gained optional `format
 (renders `<select>` in create form only when `>1` option; every pre-existing call omitting it
 renders byte-identical to before; all tests pass unmodified). See CHANGELOG.md's "BTC
 app-wiring pass" entry for full review account.
+
+`orgContext` and `noOrgScreen` (T-TEN.C1, 2026-10-11) — `createOrgContext()` holds which orgs the signed-in
+person belongs to (from the `my_orgs()` RPC) and which one the console acts in; `noOrgScreen` is the "this
+account isn't part of an organisation" screen. Format-agnostic: no role vocabulary, no format knowledge. Built
+as a factory, not a singleton, with an injected client and storage. Two rules worth knowing before editing:
+only an empty list or the database's `22P02` means "no organisation" (any other failure keeps the last known
+answer), and `refresh()` and every subscriber call are deferred a tick so a call from `onAuthStateChange`
+cannot deadlock behind the auth lock. Not wired into `main.js` until T-TEN.C2; see ROADMAP.md's "Known open
+items from T-TEN.C1" for what C2 must do.

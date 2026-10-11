@@ -1901,7 +1901,7 @@ signup, Seduh ID. Rule (lifted 2026-10-11, now that B1, B2 and B6 are in the clo
 | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
 | A     | A1 spec lock · A2 tenancy inventory                                                                                                               | Done                                            |
 | B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | Done (B1 to B7 merged and in the cloud project) |
-| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | Not started                                     |
+| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | In progress (C1 built, in review)               |
 | D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | Not started                                     |
 | E     | E1 negative matrix · E2 console Playwright · E3 security/perf · E4 docs · E5 rollout · E6 close-out                                               | Not started                                     |
 
@@ -1983,3 +1983,22 @@ _One migration, `20261011170000_tenancy_anon_expand` (`public_org_by_slug`, `pub
 - **`public_event_summary` still shows rehearsal events** (with `is_test`), like the table read it replaces; the audience surfaces mark them (D9).
 - **`public_results` now has column-level anon grants.** A column added later is invisible to anon until granted, which is the point, but a client that selects `*` as anon fails (`42501`) by design.
 - **D2 has two follow-ups:** `findLatestEventForOrg` must call `.rpc('public_event_summary', { p_org_id }).maybeSingle()` (the function returns a set of at most one row), and the `.from('events')` mock in `src/core/events.test.js` must change.
+
+---
+
+## Known open items from T-TEN.C1 (2026-10-11)
+
+_Client only: `src/core/orgContext.js` and `src/core/noOrgScreen.js` (plus `noOrgScreen.css`). **Nothing calls them yet**; C2 wires them in. No migration._
+
+- **C2 must wire it this way.**
+  - Call `refresh(session)` from the existing `onAuthStateChange` handler (it defers its own database read, so the auth-lock rule holds) and use `retry()` for the Retry button after an error.
+  - `no_org` mounts `mountNoOrgScreen`. Its `onSignedOut` must do what the header's Sign out does (set the hash and dispatch a synthetic `hashchange`, or signing out from `#/events` leaves the old screen up), and C2 must not rely on that callback alone: if the sign-out event makes the router abort the screen first, the callback is skipped.
+  - `error` needs the existing `renderRetryableError` shape.
+  - Call `destroy()` on unmount.
+- **Refines the B3 note.** The B3 item said to treat a 400 from `my_orgs` as "no organisation". Review showed a bare 400 can also come from a proxy or CDN and would lock an organiser out, so only the database's `22P02` means that; any other 400 is an ordinary failure (keeps the last answer).
+- **Three copies of "must choose a password first"** now exist (`main.js` twice, `orgContext.js`). Export one predicate from `setPasswordScreen.js` and use it in all three when `main.js` is edited in C2.
+- **Two copies of sign-out** now exist (`appShell.js`, `noOrgScreen.js`); the header one has no timeout and shows no failure message. Share one helper when C2 touches the shell, and decide how to avoid two buttons named "Sign out" on the no-org screen (the header's nav links also stay visible there).
+- **Two tabs can act in different orgs.** A switch in one tab is not seen by another until it reloads or refreshes. Every write is still checked by the database against the org it names; C6's outbox should key on `getActiveOrgIdFor(<session user>)`.
+- **The remembered choice stays on the device** after sign-out (an org id per user id under `seduh.activeOrg.<userId>`; ids only, no names or tokens). Shared iPads keep one entry per account that signed in there.
+- **The screen has never been rendered in a browser.** The accessibility review was by reading code and CSS; check it at 360px (full-width button, no sideways scroll for a long email, focus ring, VoiceOver/TalkBack) when C2 mounts it.
+- **The copy says "ask its owner to add you".** True for a removed organiser; a Guess the Bean account would ignore it. Revisit with product wording if those accounts ever land here often.
