@@ -1934,3 +1934,19 @@ _Two migrations (`20261011130000_tenancy_resolver_disclosure`, `20261011140000_t
 - **Policy scans cost more per row.** `app.is_org_member(app.org_id_for_x(...))` now does a second membership lookup inside the resolver. Measured on 4000 rows as 1.7x to 2.7x for a whole-table policy scan (plan shape unchanged; inlining the membership check was not faster). Fine at current event sizes; E3 should re-measure with realistic data, and a full-table scan on a busy night is the thing to watch.
 - **A missing parent id now fails the org-match triggers with P0001** ("must match the owning org…", "person_id must belong to…") where the foreign key used to report 23503. The client treats both as permanent failures, so nothing breaks; the message is just less precise.
 - **The gate depends on the session role.** The org-match triggers refuse a caller as a non-member when `auth.uid()` is set or the session role is `authenticated` / `anon`; a session with neither (postgres, seeds, migrations) is checked strictly instead. If a new writer ever needs to run as a different role, it will take the strict path.
+
+---
+
+## Known open items from T-TEN.B3 (2026-10-11)
+
+_One migration, `20261011150000_tenancy_my_orgs` (`my_orgs()` plus the `org_members(user_id)` index). Reviewed by schema-guardian (no blocking), security-reviewer (signed off; 12 SQL probes and 13 real API requests through PostgREST found no way to see another user's membership) and test-auditor. **Not pushed to the cloud project until the product owner says so.**_
+
+- **Notes for C1 (`core/orgContext.js`).**
+  - Call `my_orgs` with POST (supabase-js `.rpc('my_orgs')`, the default), not GET (`{ get: true }`). The function is STABLE so PostgREST allows GET, but the response varies by Authorization while PostgREST's `Vary` header does not, and shared iPads with several accounts are exactly the case where a cached per-user GET would be wrong.
+  - A token whose `sub` is empty or not a UUID makes `my_orgs()` fail with 22P02 (HTTP 400) instead of returning zero rows, the same as every RLS policy that calls `auth.uid()`. GoTrue never issues such a token, but C1 should treat a 400 from `my_orgs` as "no organisation context", not crash.
+  - It returns `org_id, name, slug, role`. There is no member list and no user id in it.
+- **Expect Supabase linter warning 0029** ("signed-in users can execute a SECURITY DEFINER function") for `my_orgs`. Intended: the function must read `org_members` and `orgs` on the caller's behalf, scoped by `auth.uid()`. Eight other public definer RPCs already carry the same warning. Acknowledge it in the E3 advisor run.
+- **`SECURITY INVOKER` would also work today** (the `org_members_read` and `orgs_read` policies pass for the caller's own rows) and would keep row-level security as a second guard. DEFINER was kept because the plan asks for it and so the console does not depend on how `org_members_read` is written later; revisit if the advisor warning matters.
+- **The index is scale-readiness only.** At one org and one member the planner keeps scanning; measured on 3000 orgs, 12000 memberships it is used and goes from 0.69 ms to 0.15 ms. It also helps the `where user_id = ...` lookups in the team functions and the cascade from `auth.users`.
+- **Row estimate.** A set-returning SQL function is estimated at 1000 rows by default; add `rows 5` only if a later query joins on `my_orgs()`.
+- **Last-owner accounts cannot be deleted** until a successor is promoted (B5, intended); account deletion must go through the org first.
