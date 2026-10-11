@@ -5,9 +5,10 @@
 // order and records it. It never ranks anyone itself.
 import { getSupabase } from '../../core/supabaseClient.js';
 import { describeError } from '../../core/errors.js';
+import { checkReason, REASON_MAX } from '../../core/reason.js';
 import { KNOCKOUT_PLACES } from './words.js';
 
-export const SEEDING_REASON_MAX = 120;
+export const SEEDING_REASON_MAX = REASON_MAX;
 
 // PostgREST says a relation it cannot find is PGRST205 (not in its schema cache); Postgres itself says 42P01.
 // The seed order's migration may not be applied yet where this front end is (the 2026-09-05 incident): that one
@@ -87,14 +88,14 @@ export function validateSeedingOrder({ orderedTeamIds, groupTeamIds, reason }) {
   if (!sameTeams) {
     return { field: 'form', message: 'The order must list every team in the group once.' };
   }
-  const trimmed = reason.trim();
-  if (trimmed === '') {
+  const checked = checkReason(reason);
+  if (!checked.ok && checked.kind === 'empty') {
     return { field: 'reason', message: 'Give a reason, so the decision can be explained later.' };
   }
-  if (trimmed.length > SEEDING_REASON_MAX) {
+  if (!checked.ok) {
     return {
       field: 'reason',
-      message: `Keep the reason to ${SEEDING_REASON_MAX} characters or fewer.`,
+      message: `Keep the reason to ${checked.max} characters or fewer.`,
     };
   }
   return null;

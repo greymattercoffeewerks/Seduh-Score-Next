@@ -7,9 +7,10 @@
 // winner is a separate fact that only decides who advances (and who is on the podium).
 import { getSupabase } from '../../core/supabaseClient.js';
 import { describeError } from '../../core/errors.js';
+import { checkReason, REASON_MAX } from '../../core/reason.js';
 
 // Mirrors btc_matches_tiebreak_shape / record_btc_tiebreak: 1–120 characters once trimmed.
-export const TIEBREAK_REASON_MAX = 120;
+export const TIEBREAK_REASON_MAX = REASON_MAX;
 
 // The one rule for "the organiser's recorded winner counts": the match and its score row are
 // both confirmed, the totals are level (PostgREST returns bigint sums as numbers today;
@@ -55,14 +56,14 @@ export function validateTiebreak({ winnerTeamId, reason, teamIds }) {
   if (!winnerTeamId || !teamIds.includes(winnerTeamId)) {
     return { field: 'winner', message: 'Choose which team goes through.' };
   }
-  const trimmed = reason.trim();
-  if (trimmed === '') {
+  const checked = checkReason(reason);
+  if (!checked.ok && checked.kind === 'empty') {
     return { field: 'reason', message: 'Give a reason, so the decision can be explained later.' };
   }
-  if (trimmed.length > TIEBREAK_REASON_MAX) {
+  if (!checked.ok) {
     return {
       field: 'reason',
-      message: `Keep the reason to ${TIEBREAK_REASON_MAX} characters or fewer.`,
+      message: `Keep the reason to ${checked.max} characters or fewer.`,
     };
   }
   return null;
