@@ -1,8 +1,8 @@
 ## T-TEN.B7: anonymous surfaces, expand step · 2026-10-11
 
-**Task:** T-TEN.B7 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (PR 6; the last database task of phase B). One migration, `20261011170000_tenancy_anon_expand`; **not pushed to the cloud project until the product owner says so.**
+**Task:** T-TEN.B7 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (PR 6; the last database task of phase B). One migration, `20261011170000_tenancy_anon_expand`; **pushed to the cloud project 2026-10-11 (cloud version `20261011075747`) and verified there**: all four functions (the two new ones, the stamp trigger function and `publish_event_results`) hash identically to the tested local copies with identical ACLs (anon and authenticated can execute the two new functions only; the trigger function is executable by no API role), the stamp trigger sorts after the two existing ones, anon's `SELECT` on `public_results` is the five-column list with no table-level grant, and a rolled-back live probe forged another name onto the existing published row and got the real org stamped back, found the org by its slug (in capitals) and its event summary, and had a non-object write refused (`22023`). The one existing published row has no stamp yet (it gets one the next time it is written). Applied as the full executable section of the file (the header comment stays in the repo only).
 
-**Status: in review, not merged.**
+**Status: merged (PR #210).**
 
 **Why:** the audience screens and the public results archive are anonymous, and anon can read `events`, `live_sessions` and `public_results` for every org. With many orgs that has to narrow (decision D-T3), but venue displays that are already open run cached JavaScript that still reads those tables, so it is done in two steps: this migration only ADDS the narrow, slug-addressed doors (expand); the client switches to them (D1/D2); a later, gated migration (D6, no live event) closes the old doors (contract).
 

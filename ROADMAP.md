@@ -1897,13 +1897,13 @@ handoff §4's "one organiser, one org"; locks D-T1…D-T8). Why: `MULTI-TENANCY-
 pillars A and B. Not in scope: gating/entitlements (D14 stays a stub), admin console, self-serve
 signup, Seduh ID. Rule (lifted 2026-10-11, now that B1, B2 and B6 are in the cloud): a two-org user is created only through the service-role provisioning path (B4).
 
-| Phase | Tasks                                                                                                                                             | Status                                                                    |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| A     | A1 spec lock · A2 tenancy inventory                                                                                                               | Done                                                                      |
-| B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | In progress (B1 to B6 done and in the cloud project; B7 built, in review) |
-| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | Not started                                                               |
-| D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | Not started                                                               |
-| E     | E1 negative matrix · E2 console Playwright · E3 security/perf · E4 docs · E5 rollout · E6 close-out                                               | Not started                                                               |
+| Phase | Tasks                                                                                                                                             | Status                                          |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| A     | A1 spec lock · A2 tenancy inventory                                                                                                               | Done                                            |
+| B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | Done (B1 to B7 merged and in the cloud project) |
+| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | Not started                                     |
+| D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | Not started                                     |
+| E     | E1 negative matrix · E2 console Playwright · E3 security/perf · E4 docs · E5 rollout · E6 close-out                                               | Not started                                     |
 
 Each D task is re-confirmed with the product owner before it starts (2026-10-10).
 
@@ -1970,7 +1970,7 @@ _One migration, `20261011160000_tenancy_provisioning` (`create_org`, `org_add_ex
 
 ## Known open items from T-TEN.B7 (2026-10-11)
 
-_One migration, `20261011170000_tenancy_anon_expand` (`public_org_by_slug`, `public_event_summary`, the org-stamp trigger on `public_results`, the `published_by` tightening). **Not pushed to the cloud project until the product owner says so.**_
+_One migration, `20261011170000_tenancy_anon_expand` (`public_org_by_slug`, `public_event_summary`, the org-stamp trigger on `public_results`, the `published_by` tightening). Pushed to the cloud project 2026-10-11 (cloud version `20261011075747`)._
 
 - **DECISION (product owner, 2026-10-11): an event's name, date and test flag are public as soon as the event exists (Option 1).** `public_event_summary(org_id)` returns an org's newest event to anyone who knows the org id (a random uuid that is itself readable from the published results and the shipped code), whether or not the event is published or announced, rehearsals included. This is strictly narrower than today (anyone can read every org's events with no id), and the splash screen needs the pre-event name. **Do not put confidential details in an event name before announcing it.** Revisit with an "announced" switch on events if organisers ever need secrecy before an announcement; the alternatives were showing an event only once the org has a live session or a published result (loses the pre-event splash name) or that switch.
 - **The old anonymous doors are still open** until D6: `events_read_public` (anon reads every org's events, including `org_id`), `live_sessions_read` (every org's live rows, active or not, and the Realtime publication that follows from it) and the audience surfaces' direct `events` read. B7 only adds the narrow doors; D1/D2 switch the client onto them and D6 closes the old ones, after a deploy, with no live event and the venue displays reloaded.
