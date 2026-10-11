@@ -1,3 +1,27 @@
+## T-TEN.C3: the organisation in the header, and the switcher · 2026-10-11
+
+**Task:** T-TEN.C3 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase C, the client). Client only: no migration, nothing to push to the cloud project.
+
+**Status: in review, not merged.**
+
+**Why:** someone who administers two organisations must always be able to tell which one the console is acting in, and switch between them. C2 made the console follow the active organisation but gave the person no way to see or change it.
+
+**What changed:**
+
+- **The organisation slot** (`src/core/appShell.js`, `appShell.css`): the active organisation's name is always in the header's main row, between the brand and the Menu button. One organisation: a plain label (a screen reader hears "Organisation: …"). Two or more: a native `<select>` named "Organisation", described as "Choosing another organisation switches to it straight away" (WCAG 3.2.2). Two organisations with the same name are told apart by their slug (`core/orgLabel.js`, also used in the announcement). The slot never sits in the collapsing menu, so it is always visible and the 1366px focus relocation does not apply to it.
+- **It cannot change the header.** Measured in a real browser at 360, 639, 640, 900, 1365 and 1366px, on the events list and an event, with the menu closed and open, with a long email and a pending sync chip: the header height and the sync chip's position are identical with and without the slot, nothing scrolls sideways, and the slot is at least 100px wide. The slot gets twice the free width of the event name beside it (the page heading repeats the event name). The empty event-name element no longer takes a share of the width on the events list (it had squeezed the slot to a few letters on a phone). Below 1366px the full name is on its own wrapping line at the top of the Menu; every name also has a tooltip for a pointer user.
+- **Switching:** choosing another organisation asks `switchOrg` (C2). The select is marked busy (`aria-disabled`, so focus is not lost) while it is decided, gives up after the shared timeout, and a second choice meanwhile is ignored. **A refusal** (unsynced changes on this device, the outbox cannot be read, not your organisation) puts the select back, keeps focus on it, and says why in a panel under the header that overlays the page (the same recipe as the sync detail, so the header never grows). It clears on Escape, on leaving the control, on a tap anywhere, or on the next choice, and it closes the sync detail if that is open.
+- **Announcements** in one persistent polite live region: "Now working in <name>. Showing Events." after a deliberate switch; "Your organisation changed. Now working in <name>. Showing Events." (or "Your account or organisation changed…" when a different person arrived) for a change nobody asked for. Nothing is said on first load, for a role-only change, on an audience route, or when the person is left in no organisation (the "no organisation" screen takes focus itself). A quiet announcement is never cleared by focus moving; only a refusal is.
+- **Where focus goes (a deliberate change from the plan):** after a successful switch the console re-mounts and the new screen takes focus (its loading region, then its heading) like after any navigation, so focus does NOT stay on the select; the live region carries the news. After a refusal nothing re-mounts and focus stays on the select.
+
+**Verified:** 3641 unit tests pass, including the shell's slot (rendering, choosing, refusals, announcements that survive blur, a hung switch recovering) and the wiring. Six real-browser tests in `tests/e2e/organiser-flow.spec.js` against the local Supabase stack pass, and the announcement and refusal tests each passed five repeats (an earlier version of the announcement test passed only by luck: a blur handler wiped the announcement about 2ms after it was written; found by the accessibility review and the test audit). Every deliberate break of the new shell and wiring code was caught by a test that names it.
+
+**Reviews:** ui-accessibility-reviewer (BLOCKED once on the announcement being erased; the other findings fixed), code-reviewer, test-auditor (found the squeezed slot on the events list, the flaky announcement test, the missing refusal and state coverage), module-boundary-checker (no violations). Each was run as a general-purpose agent following the project's `.claude/agents/*.md` definition.
+
+**Also fixed (found by the browser tests, not caused by the slot):** pressing the Menu button while it already had focus cleared the header's memory of where focus was, so crossing the 1366px breakpoint could drop a keyboard user to the top of the page (and made the existing hamburger focus test fail about half the time). A press on the control that already has focus now keeps it.
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-TEN.C3".
+
 ## T-TEN.C2: the console takes its organisation from the database · 2026-10-11
 
 **Task:** T-TEN.C2 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase C, the client). Client only: no migration, nothing to push to the cloud project.

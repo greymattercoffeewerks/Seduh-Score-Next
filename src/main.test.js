@@ -147,6 +147,7 @@ vi.mock('./core/inputModality.js', () => ({
 }));
 
 const { mountApp } = await import('./main.js');
+const { DEFAULT_LOAD_TIMEOUT_MS } = await import('./core/timeout.js');
 
 // What the database says the signed-in person belongs to (my_orgs()). One org by default, so every test
 // written before the organisation came from the database keeps meaning what it did.
@@ -2464,6 +2465,348 @@ describe('organisation context wiring (T-TEN.C2)', () => {
       await settle();
       await settle();
       expect(teamLink(root)).toBeNull();
+    });
+  });
+
+  describe('the organisation in the header (T-TEN.C3)', () => {
+    const slotOf = (root) => root.querySelector('.app-shell-org');
+    const selectOf = (root) => root.querySelector('.app-shell-org-select');
+    const noticeOf = (root) => root.querySelector('#app-shell-org-notice');
+    const choose = (root, orgId) => {
+      const select = selectOf(root);
+      select.focus();
+      select.value = orgId;
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+
+    it('names the organisation the person is working in, as a plain label when there is one', async () => {
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const { root } = await startApp({ client: orgClient() });
+      expect(slotOf(root).hidden).toBe(false);
+      expect(slotOf(root).textContent).toBe('Organisation: Org One');
+      expect(selectOf(root)).toBeNull();
+    });
+
+    it('offers a choice when there are several, on the active one', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      localStorage.setItem('seduh.activeOrg.user-1', 'org2');
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const { root } = await startApp({ client: orgClient() });
+      expect([...selectOf(root).options].map((o) => o.value)).toEqual(['org1', 'org2']);
+      expect(selectOf(root).value).toBe('org2');
+    });
+
+    it('shows nothing for an account in no organisation', async () => {
+      myOrgs.mockResolvedValue(answer());
+      const { root } = await startApp({ client: orgClient() });
+      expect(slotOf(root).hidden).toBe(true);
+    });
+
+    it('says nothing on a plain first load', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const { root } = await startApp({ client: orgClient() });
+      await settle();
+      expect(noticeOf(root).textContent).toBe('');
+    });
+
+    it('choosing another organisation switches and announces it', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const { root } = await startApp({ client: orgClient() });
+      choose(root, 'org2');
+      await vi.waitFor(() => expect(eventsOrgIds().at(-1)).toBe('org2'));
+      await vi.waitFor(() =>
+        expect(noticeOf(root).textContent).toBe('Now working in Org Two. Showing Events.'),
+      );
+      expect(selectOf(root).value).toBe('org2');
+      // (Where focus goes after a switch is the new screen's own rule; tests/e2e covers it with real screens.)
+      // The announcement is heard, not shown as a panel.
+      expect(noticeOf(root).classList.contains('app-shell-org-notice-open')).toBe(false);
+    });
+
+    it('a refused switch puts the control back and shows why, without moving anything', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const { root, app } = await startApp({ client: orgClient() });
+      listPendingOperations.mockResolvedValue([{ id: 'op1' }, { id: 'op2' }]);
+      choose(root, 'org2');
+      await vi.waitFor(() =>
+        expect(noticeOf(root).textContent).toBe(
+          '2 changes on this device have not synced yet. Wait for them to sync before switching organisation.',
+        ),
+      );
+      expect(noticeOf(root).classList.contains('app-shell-org-notice-open')).toBe(true);
+      expect(selectOf(root).value).toBe('org1');
+      expect(app.orgContext.getActiveOrgId()).toBe('org1');
+      expect(document.activeElement).toBe(selectOf(root));
+      await settle();
+      expect(eventsOrgIds()).toEqual(['org1']);
+    });
+
+    it('a switch that works after an earlier refusal clears the refusal and announces the switch', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const { root } = await startApp({ client: orgClient() });
+      listPendingOperations.mockResolvedValue([{ id: 'op1' }]);
+      choose(root, 'org2');
+      await vi.waitFor(() =>
+        expect(noticeOf(root).classList.contains('app-shell-org-notice-open')).toBe(true),
+      );
+      listPendingOperations.mockResolvedValue([]);
+      choose(root, 'org2');
+      await vi.waitFor(() =>
+        expect(noticeOf(root).textContent).toBe('Now working in Org Two. Showing Events.'),
+      );
+      expect(noticeOf(root).classList.contains('app-shell-org-notice-open')).toBe(false);
+    });
+
+    it('a change nobody asked for is announced as such', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      localStorage.setItem('seduh.activeOrg.user-1', 'org2');
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const client = orgClient();
+      const { root } = await startApp({ client });
+      myOrgs.mockResolvedValue(answer(ORG_ONE));
+      client.setSession(signedIn());
+      await vi.waitFor(() =>
+        expect(noticeOf(root).textContent).toBe(
+          'Your organisation changed. Now working in Org One. Showing Events.',
+        ),
+      );
+    });
+
+    it('a change nobody asked for is not mistaken for an earlier deliberate choice', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const client = orgClient();
+      const { root } = await startApp({ client });
+      choose(root, 'org2');
+      await vi.waitFor(() =>
+        expect(noticeOf(root).textContent).toBe('Now working in Org Two. Showing Events.'),
+      );
+      myOrgs.mockResolvedValue(answer(ORG_ONE));
+      client.setSession(signedIn());
+      await vi.waitFor(() =>
+        expect(noticeOf(root).textContent).toBe(
+          'Your organisation changed. Now working in Org One. Showing Events.',
+        ),
+      );
+    });
+
+    it('losing every organisation announces nothing here (the screen that replaces the console takes focus)', async () => {
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const client = orgClient();
+      const { root } = await startApp({ client });
+      myOrgs.mockResolvedValue(answer());
+      client.setSession(signedIn());
+      await vi.waitFor(() => expect(root.textContent).toContain(NO_ORG_HEADING));
+      expect(noticeOf(root).textContent).toBe('');
+      expect(slotOf(root).hidden).toBe(true);
+    });
+
+    it('is filled at mount when the organisations are already known (a context handed in ready)', async () => {
+      const { createOrgContext } = await import('./core/orgContext.js');
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const client = orgClient();
+      const orgContext = createOrgContext({ client, storage: null });
+      await orgContext.refresh(signedIn());
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      const app = mountApp(root, { client, orgContext, legacyAudienceOrgId: 'org1' });
+      activeApp = app;
+      try {
+        // Before any change has been announced to the app, the control is already there.
+        expect(selectOf(root)?.value).toBe('org1');
+        await app.ready;
+      } finally {
+        orgContext.destroy();
+      }
+    });
+
+    it('an earlier deliberate choice is not mistaken for a later change nobody asked for', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const client = orgClient();
+      const { root } = await startApp({ client });
+      choose(root, 'org2');
+      await vi.waitFor(() =>
+        expect(noticeOf(root).textContent).toBe('Now working in Org Two. Showing Events.'),
+      );
+      // Org Two goes away, then comes back as the only one: the move back to it is nobody's choice.
+      myOrgs.mockResolvedValue(answer(ORG_ONE));
+      client.setSession(signedIn());
+      await vi.waitFor(() =>
+        expect(noticeOf(root).textContent).toBe(
+          'Your organisation changed. Now working in Org One. Showing Events.',
+        ),
+      );
+      myOrgs.mockResolvedValue(answer(ORG_TWO));
+      client.setSession(signedIn());
+      await vi.waitFor(() =>
+        expect(noticeOf(root).textContent).toBe(
+          'Your organisation changed. Now working in Org Two. Showing Events.',
+        ),
+      );
+    });
+
+    it('a choice that was refused is not remembered as one', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const client = orgClient();
+      const { root, app } = await startApp({ client });
+      expect(await app.switchOrg('org9')).toMatchObject({ ok: false, reason: 'unknown_org' });
+      // Both organisations go away and org9 arrives: nobody chose that.
+      myOrgs.mockResolvedValue(
+        answer({ org_id: 'org9', name: 'Org Nine', slug: 'org-nine', role: 'owner' }),
+      );
+      client.setSession(signedIn());
+      await vi.waitFor(() =>
+        expect(noticeOf(root).textContent).toBe(
+          'Your organisation changed. Now working in Org Nine. Showing Events.',
+        ),
+      );
+    });
+
+    it('a header that fails to render never stops the screen swap (the old organisation must not stay on show)', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const { root, app } = await startApp({ client: orgClient() });
+      expect(eventsOrgIds()).toEqual(['org1']);
+      // From now on, drawing the organisation slot throws (it sets the select's tooltip every time).
+      const replaceSpy = vi
+        .spyOn(HTMLElement.prototype, 'title', 'set')
+        .mockImplementation(function () {
+          if (this.classList?.contains('app-shell-org-select'))
+            throw new Error('slot render failed');
+        });
+      try {
+        app.orgContext.setActiveOrg('org2');
+        await vi.waitFor(() => expect(eventsOrgIds().at(-1)).toBe('org2'));
+        expect(errorSpy).toHaveBeenCalledWith(
+          'main: the organisation slot failed to render',
+          expect.any(Error),
+        );
+        expect(root.textContent).toContain('EVENTS_SCREEN');
+      } finally {
+        replaceSpy.mockRestore();
+        errorSpy.mockRestore();
+      }
+    });
+
+    it('a role change inside the same organisation is silent', async () => {
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const client = orgClient();
+      const { root } = await startApp({ client });
+      myOrgs.mockResolvedValue(answer({ ...ORG_ONE, role: 'organiser' }));
+      client.setSession(signedIn());
+      // The refresh really happened (and the role really changed) before nothing was announced.
+      await vi.waitFor(() => expect(myOrgs).toHaveBeenCalledTimes(2));
+      await settle();
+      await settle();
+      expect(noticeOf(root).textContent).toBe('');
+    });
+
+    it('a new organisation appearing at a refresh shows up in the list, without announcing anything', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const client = orgClient();
+      const { root } = await startApp({ client });
+      myOrgs.mockResolvedValue(
+        answer(ORG_ONE, ORG_TWO, {
+          org_id: 'org3',
+          name: 'Org Three',
+          slug: 'org-three',
+          role: 'owner',
+        }),
+      );
+      client.setSession(signedIn());
+      await vi.waitFor(() => expect(selectOf(root).options).toHaveLength(3));
+      expect(selectOf(root).value).toBe('org1');
+      expect(noticeOf(root).textContent).toBe('');
+    });
+
+    it('never announces anything while the person is on an audience route', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      stubScreen(mountSplashScreen, 'SPLASH');
+      const { root, app } = await startApp({ client: orgClient(), legacyAudienceOrgId: 'org1' });
+      location.hash = '#/live/splash';
+      await settle();
+      await settle();
+      expect(app.orgContext.setActiveOrg('org2')).toBe(true);
+      await settle();
+      await settle();
+      expect(app.orgContext.getActiveOrgId()).toBe('org2');
+      expect(noticeOf(root).textContent).toBe('');
+    });
+
+    it('the announcement survives the new screen taking focus (the select blurs moments after it is written)', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      // A screen like the real ones: its loading state focuses its own status region on mount.
+      mountEventsScreen.mockImplementation(async (outlet) => {
+        outlet.innerHTML = '';
+        const status = document.createElement('div');
+        status.setAttribute('tabindex', '-1');
+        status.textContent = 'Loading…';
+        outlet.appendChild(status);
+        status.focus();
+        return { unmount: vi.fn() };
+      });
+      const { root } = await startApp({ client: orgClient() });
+      await settle();
+      choose(root, 'org2');
+      await vi.waitFor(() =>
+        expect(noticeOf(root).textContent).toBe('Now working in Org Two. Showing Events.'),
+      );
+      // The select lost focus to the new screen; the announcement is still there afterwards.
+      await vi.waitFor(() => expect(document.activeElement).not.toBe(selectOf(root)));
+      await settle();
+      await settle();
+      expect(noticeOf(root).textContent).toBe('Now working in Org Two. Showing Events.');
+    });
+
+    it('names a deliberate switch by the same label the list uses, so same-named organisations sound different', async () => {
+      const twin = { org_id: 'org2', name: 'Org One', slug: 'org-one-nz', role: 'owner' };
+      myOrgs.mockResolvedValue(answer(ORG_ONE, twin));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const { root } = await startApp({ client: orgClient() });
+      choose(root, 'org2');
+      await vi.waitFor(() =>
+        expect(noticeOf(root).textContent).toBe(
+          'Now working in Org One (org-one-nz). Showing Events.',
+        ),
+      );
+    });
+
+    it('says "account or organisation" when it was a different person who arrived', async () => {
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const client = orgClient(signedIn('user-1'));
+      const { root } = await startApp({ client });
+      client.setSession(signedIn('user-2'));
+      await vi.waitFor(() =>
+        expect(noticeOf(root).textContent).toBe(
+          'Your account or organisation changed. Now working in Org One. Showing Events.',
+        ),
+      );
+    });
+
+    it('a switch whose outbox check never answers is refused after the shared timeout, not left hanging', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const { app } = await startApp({ client: orgClient() });
+      vi.useFakeTimers();
+      try {
+        listPendingOperations.mockReturnValue(new Promise(() => {}));
+        const pending = app.switchOrg('org2');
+        await vi.advanceTimersByTimeAsync(DEFAULT_LOAD_TIMEOUT_MS + 1);
+        expect(await pending).toMatchObject({ ok: false, reason: 'unknown' });
+        expect(app.orgContext.getActiveOrgId()).toBe('org1');
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });

@@ -216,3 +216,18 @@ T-TEN.C2 (2026-10-11) — the wiring, and what it added to core:
   `orgContext.js`. The header's Sign out reports its failure in a polite status line. `viewer-shell.css` gained
   `.out-of-date-link`, the audience "out of date" card's wrapper.
 - See ROADMAP.md's "Known open items from T-TEN.C2" for what C3, C6 and C7 pick up.
+
+T-TEN.C3 (2026-10-11) — the organisation in the header. `appShell` gained an organisation slot in the
+header's main row (between the brand and the Menu button; never inside the collapsing panel) and two methods,
+`setOrganisation({ orgs, activeOrgId, onSelect })` and `announceOrganisation(text)`. The shell stays
+format-agnostic and never decides what a switch means: it is handed the list and a callback that resolves to
+`{ ok, message }`, and renders a plain label for one organisation or ONE persistent native select for several
+(replacing it would drop a keyboard user's focus; its options are only rebuilt when the list really changed). A
+refusal and a quiet announcement share one persistent live region (`#app-shell-org-notice`): a refusal opens as an
+overlay under the header (the same recipe as the sync detail, so the header never grows) and is cleared by
+Escape, leaving the control, a tap anywhere, or the next choice; an announcement is NEVER cleared by focus
+moving, because a successful switch re-mounts the console and the new screen takes focus within milliseconds
+(clearing on blur wiped it about 2ms after it was written). `orgLabel.js` names an organisation for places a
+person must tell two apart (slug added when a name is shared). `main.js` keeps the slot in step in its org-context
+subscriber and announces a deliberate switch ("Now working in …") differently from a change nobody asked for. See
+ROADMAP.md's "Known open items from T-TEN.C3".
