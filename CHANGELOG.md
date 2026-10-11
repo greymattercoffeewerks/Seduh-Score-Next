@@ -1,8 +1,33 @@
-## T-TEN.B3: `my_orgs()` · 2026-10-11
+## T-TEN.B4: org provisioning · 2026-10-11
 
-**Task:** T-TEN.B3 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (PR 4). One migration, `20261011150000_tenancy_my_orgs`; **not pushed to the cloud project until the product owner says so.**
+**Task:** T-TEN.B4 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (PR 5). One migration, `20261011160000_tenancy_provisioning`; **not pushed to the cloud project until the product owner says so.**
 
 **Status: in review, not merged.**
+
+**Why:** with several orgs on one database, creating one has to be a single validated atomic operation, and giving an existing account a second membership has to be a deliberate service-role act (decisions D-T1 invite-only, D-T6 multi-org only through a service-role path, D-T8 slugs immutable).
+
+**What changed:**
+
+- **`create_org(name, slug, owner_user_id)`** returns the new org's id; one transaction creates the org and makes the given account its owner. The name is trimmed, 1 to 80 characters, with no control or bidi-override characters and not invisible-only. The slug is trimmed, validated as ASCII letters/digits with single hyphens BEFORE lower-casing (so look-alikes such as the Kelvin sign are refused whatever the database locale), 3 to 40 characters, folded to lower case, not one of 34 reserved words (the root pages and paths the repository serves, console and audience words, and a few generic ones), and not taken (compared case-insensitively). The owner must be an existing, active account (not deleted, banned or anonymous). Every refusal has a stable `hint` (`org_name_invalid`, `org_slug_invalid`, `org_slug_reserved`, `org_slug_taken`, `org_owner_not_found`); nothing is left behind on any refusal.
+- **`org_add_existing_member(org, user, role)`** is the only way to give an account a second membership; refuses a duplicate, a bad role, a missing org or an ineligible account, with hints `member_exists`, `member_role_invalid`, `org_not_found`, `member_user_not_found`. Adding someone clears a stale removal marker (the existing trigger).
+- **Both functions are executable by the service role only** (revoked from public, anon and authenticated), `SECURITY DEFINER`, `search_path` pinned.
+- **`orgs.slug` is immutable** once set (`trg_orgs_slug_immutable`), because slugs appear in printed and QR audience links; writing the same value back is allowed.
+- **`orgs_slug_format`** CHECK constraint so the slug format is a hard rule for every writer (the reserved list stays in the function so it can grow).
+- **The unique-violation and foreign-key handlers** only relabel their own constraints (`orgs_slug_key`, `org_members_pkey`, the two foreign keys) and re-raise anything else unchanged.
+- **Unchanged on purpose:** `team_add_member` still refuses an account that already belongs to an org, and `team_can_manage` still refuses a target who belongs to another org; pgTAP 036 pins both.
+- **Runbook** for provisioning an org added to the Repo section of `CLAUDE.md`, with the operator rule never to attach a Team-managed account to a second org.
+
+**Verified:** 163 new pgTAP assertions (`036`) pinning message AND hint; the whole suite, 1528, passes on a database rebuilt from empty; the rollback block removes the functions, trigger and constraint; mutation-tested (reserved list, slug pattern, case folding, the pre-validation Kelvin guard, control-character check, owner / org / account existence, eligibility, role check, the CHECK constraint, the immutability trigger, a changed hint, authenticated granted execute: each fails a specific assertion). The security review made live probes for every API role through PostgREST (anon 401, authenticated 403, service role reaches the body), simulated cloud-style default grants, shadowed tables and operators through `pg_temp`, and fuzzed every code point from 128 to U+2FFFF through the slug expressions.
+
+**Reviews:** schema-guardian (no blocking; reserved list missed `assets`, `bts` and `marketing`, handlers too broad, hints untested, inconsistent error codes: all fixed), security-reviewer (signed off on the boundary; case-sensitive duplicate check, ineligible accounts, input hygiene, PostgREST status codes: fixed or recorded), test-auditor (about 190 hand mutations; two blocking test gaps closed: the table CHECK was only half proven and the second-org owner role was never read back; also fixed a real migration defect, a 401-character name got the slug hint, plus trimming of tabs and newlines, one test row per invisible or bidi code point, a unique-violation pass-through test, near-miss roles, the stored lengths of the boundary names and a positive control for `team_can_manage`), each run as a general-purpose agent following the project's `.claude/agents/*.md` definition.
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-TEN.B4".
+
+## T-TEN.B3: `my_orgs()` · 2026-10-11
+
+**Task:** T-TEN.B3 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (PR 4). One migration, `20261011150000_tenancy_my_orgs`; **pushed to the cloud project 2026-10-11 (cloud version `20261011030525`) and verified there** (function and index settings, plus a rolled-back live probe: a stranger and a session with no user id get zero rows, the real owner exactly their own org, anon and the service role are refused).
+
+**Status: merged (PR #207) and live in the cloud project.**
 
 **Why:** the console is about to let one account belong to several orgs (phase C needs an org switcher) and must know which orgs the signed-in account is in, and as what. Reading `org_members` is not the answer: `org_members_read` lets a member read every member row of their org (that is how the Team screen lists the team), so "my orgs" must not be derived from it.
 
