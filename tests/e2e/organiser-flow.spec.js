@@ -430,4 +430,189 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     await expect(toggle).toBeFocused();
     await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   });
+
+  // T-TEN.C3: which organisation the console is working in, in the header. The seeded login belongs to one
+  // organisation; the second is added by answering my_orgs() in the browser, which is all the client sees.
+  // Everything else (the sign-in, the event, RLS) is real.
+  const SEEDED_ORG = '10c8c375-afe6-41c7-a54e-ffaa15429612';
+  async function answerMyOrgs(page, extra) {
+    const orgs = [
+      { org_id: SEEDED_ORG, name: 'Local Dev Org', slug: 'local-dev-org', role: 'owner' },
+      ...extra,
+    ];
+    await page.route('**/rest/v1/rpc/my_orgs', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(orgs) }),
+    );
+  }
+  const SECOND_ORG = {
+    org_id: '10c8c375-afe6-41c7-a54e-ffaa15429699',
+    name: 'Greymatter Coffee Werks Roasters and Cafe Limited',
+    slug: 'greymatter-coffee-werks',
+    role: 'organiser',
+  };
+
+  // The header with and without the organisation slot (display:none on the slot is the "without": the
+  // slot adds no height, moves no chip, adds no sideways scroll). The slot's own readability is checked
+  // separately: a slot squeezed to a few letters would pass the comparison and still fail its job.
+  async function measureHeader(page) {
+    return page.evaluate(() => {
+      const header = document.querySelector('.app-shell-header').getBoundingClientRect();
+      const chip = [...document.querySelectorAll('.app-shell-sync-chip')].find(
+        (node) => node.getBoundingClientRect().width > 0,
+      );
+      const chipBox = chip?.getBoundingClientRect();
+      const slot = document.querySelector('.app-shell-org').getBoundingClientRect();
+      return {
+        header: Math.round(header.height),
+        chip: chipBox ? [Math.round(chipBox.left), Math.round(chipBox.top)] : null,
+        slotWidth: Math.round(slot.width),
+        overflow: document.documentElement.scrollWidth - window.innerWidth,
+      };
+    });
+  }
+  async function expectSlotChangesNothing(page, where, { minSlotWidth = 100 } = {}) {
+    const withSlot = await measureHeader(page);
+    await page.locator('.app-shell-org').evaluate((node) => (node.style.display = 'none'));
+    const withoutSlot = await measureHeader(page);
+    await page.locator('.app-shell-org').evaluate((node) => node.style.removeProperty('display'));
+    expect(withSlot.header, `header height ${where}`).toBe(withoutSlot.header);
+    expect(withSlot.chip, `sync chip position ${where}`).toEqual(withoutSlot.chip);
+    expect(withSlot.overflow, `sideways scroll ${where}`).toBeLessThanOrEqual(0);
+    if (minSlotWidth) {
+      expect(withSlot.slotWidth, `organisation slot width ${where}`).toBeGreaterThanOrEqual(
+        minSlotWidth,
+      );
+    }
+  }
+
+  const PAGES = [
+    ['the events list', '#/events'],
+    ['an event', '#/events/7c2b6a2a-2f3a-4b6e-9b0a-2e6b4a1c9d01'],
+  ];
+  const WIDTHS = [360, 639, 640, 900, 1365, 1366];
+
+  for (const [label, extra] of [
+    ['one organisation', []],
+    ['two organisations (a long name)', [SECOND_ORG]],
+  ]) {
+    test(`the organisation name in the header never changes its height or moves the sync chip, and stays readable — ${label}`, async ({
+      page,
+    }) => {
+      await answerMyOrgs(page, extra);
+      await signIn(page);
+      for (const [pageLabel, hash] of PAGES) {
+        await page.goto(`/app/${hash}`);
+        await expect(page.locator('.app-shell-org')).toBeVisible();
+        if (hash !== '#/events') {
+          await expect(page.locator('.app-shell-breadcrumb')).toHaveText('Jakarta Cup Tasters #09');
+          await expect(page.locator('.app-shell-sync-chip-live')).toBeVisible();
+        }
+        for (const width of WIDTHS) {
+          await page.setViewportSize({ width, height: 800 });
+          await expectSlotChangesNothing(page, `on ${pageLabel} at ${width}px`);
+          // Below the inline-nav breakpoint the menu opens as a panel: the slot sits outside it, and
+          // the header's own row must not change when it opens either.
+          const toggle = page.locator('.app-shell-nav-toggle');
+          if (await toggle.isVisible()) {
+            await toggle.click();
+            await expectSlotChangesNothing(page, `on ${pageLabel} at ${width}px, menu open`);
+            // The full name is readable in the menu, on its own wrapping line.
+            await expect(page.locator('.app-shell-org-full')).toContainText('Organisation:');
+            await toggle.click();
+          }
+        }
+      }
+    });
+  }
+
+  test('a long email, a pending sync chip and a long organisation name still leave the header as it was', async ({
+    page,
+  }) => {
+    await answerMyOrgs(page, [SECOND_ORG]);
+    await signIn(page);
+    await page.goto('/app/#/events/7c2b6a2a-2f3a-4b6e-9b0a-2e6b4a1c9d01');
+    await expect(page.locator('.app-shell-sync-chip-live')).toBeVisible();
+    // A real unsynced change makes the chip a "Not synced" pill.
+    await page.evaluate(async () => {
+      const outbox = await import('/src/core/outbox.js');
+      await outbox.enqueueOperation('layout_probe', {});
+    });
+    await expect(
+      page.locator('.app-shell-sync-chip-pending, .app-shell-sync-chip-stuck'),
+    ).toBeVisible({
+      timeout: 8000,
+    });
+    await page.locator('.app-shell-auth-email').evaluate((node) => {
+      node.textContent = 'a.very.long.organiser.address.for.testing@example-roastery.com';
+    });
+    for (const width of WIDTHS) {
+      await page.setViewportSize({ width, height: 800 });
+      // The slot may be squeezed hard by a 61-character email on a laptop; layout is what is asserted.
+      await expectSlotChangesNothing(page, `with a long email and a pending chip at ${width}px`, {
+        minSlotWidth: 0,
+      });
+    }
+  });
+
+  test('with two organisations the header offers a select: choosing the other switches, announces it (and the announcement stays), and moves focus to the new screen', async ({
+    page,
+  }) => {
+    await answerMyOrgs(page, [SECOND_ORG]);
+    await signIn(page);
+    await page.goto('/app/#/events/7c2b6a2a-2f3a-4b6e-9b0a-2e6b4a1c9d01');
+    const select = page.getByRole('combobox', { name: 'Organisation' });
+    await expect(select).toBeVisible();
+    // The first by name is active, and the select is described before use.
+    await expect(select).toHaveValue(SECOND_ORG.org_id);
+    await expect(select).toHaveAccessibleDescription(
+      'Choosing another organisation switches to it straight away.',
+    );
+    // Let the screen finish loading (it moves focus into itself) BEFORE the person uses the control,
+    // as a person would: a switch made while the first screen is still loading hides the focus move.
+    await expect(page.locator('.app-shell-outlet h1').first()).toBeFocused();
+
+    await select.focus();
+    await select.selectOption(SEEDED_ORG);
+    const notice = page.locator('#app-shell-org-notice');
+    await expect(notice).toHaveText('Now working in Local Dev Org. Showing Events.');
+    expect(new URL(page.url()).hash).toBe('#/events');
+    await expect(select).toHaveValue(SEEDED_ORG);
+    // The console re-mounted, so the new screen takes focus (the select blurs): the announcement must
+    // survive that, or a screen reader never speaks it.
+    await expect(page.locator('.app-shell-outlet h1').first()).toBeFocused();
+    await page.waitForTimeout(600);
+    await expect(notice).toHaveText('Now working in Local Dev Org. Showing Events.');
+    // Heard, not shown: no panel opens under the header.
+    await expect(page.locator('.app-shell-org-notice-open')).toHaveCount(0);
+  });
+
+  test('a refused switch (an unsynced change on this device) shows why under the header, keeps focus on the select, and a tap dismisses it', async ({
+    page,
+  }) => {
+    await answerMyOrgs(page, [SECOND_ORG]);
+    await signIn(page);
+    await page.goto('/app/#/events/7c2b6a2a-2f3a-4b6e-9b0a-2e6b4a1c9d01');
+    const select = page.getByRole('combobox', { name: 'Organisation' });
+    await expect(select).toHaveValue(SECOND_ORG.org_id);
+    await expect(page.locator('.app-shell-outlet h1').first()).toBeFocused();
+    await page.evaluate(async () => {
+      const outbox = await import('/src/core/outbox.js');
+      await outbox.enqueueOperation('refusal_probe', {});
+    });
+    const headerBefore = await measureHeader(page);
+
+    await select.focus();
+    await select.selectOption(SEEDED_ORG);
+    const panel = page.locator('.app-shell-org-notice-open');
+    await expect(panel).toBeVisible();
+    await expect(panel).toContainText('not synced yet');
+    await expect(select).toHaveValue(SECOND_ORG.org_id);
+    await expect(select).toBeFocused();
+    expect(new URL(page.url()).hash).toContain('#/events/7c2b6a2a');
+    // It overlays: the header is exactly as tall as before.
+    expect((await measureHeader(page)).header).toBe(headerBefore.header);
+
+    await page.mouse.click(5, 400);
+    await expect(page.locator('.app-shell-org-notice-open')).toHaveCount(0);
+  });
 });
