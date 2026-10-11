@@ -96,9 +96,11 @@ unsubscribes in the shell's own `unmount()`. Its breadcrumb fetch (`setNav` ->
 gate, is what actually protects that read (found in security review; documented with a
 comment at the call site rather than restructured).
 
-`config` (same pass) — `getDefaultOrgId()` reads `VITE_DEFAULT_ORG_ID`, throwing loudly
-if unset; the explicit, trivially-swappable placeholder for "which org" until real
-per-session org derivation exists — no auth is being added now (D-scoped with the user).
+`config` (same pass) — originally `getDefaultOrgId()`, which read `VITE_DEFAULT_ORG_ID` and threw if
+unset. Since T-TEN.C2 (2026-10-11) the organiser console takes its organisation from the signed-in person's
+memberships (`orgContext`), and `config` only offers `getLegacyAudienceOrgId()`: the one organisation the
+anonymous `/live/*` routes still show until T-TEN.D1. It never throws; unset means those routes show an
+"out of date" card and the app still boots.
 
 `eventsScreen` (same pass) — events list/create; lives in `core/`, not
 `formats/cup-taster/`, since `core/events.js` already treats `format` as caller-supplied
@@ -120,7 +122,7 @@ the whole app, or the login form itself, stuck forever with no feedback).
 
 `loginScreen` gained a Show/Hide password toggle (in place, no re-render), submit-time reading of the form (iOS autofill), a one-time retry without surrounding whitespace after an `invalid_credentials` rejection, and clearer wrong-password text (T-HARDEN.login-hardening, 2026-10-07) — see CHANGELOG.md for the account and the unconfirmed root cause.
 
-`team`, `teamScreen`, `setPasswordScreen` (T-HARDEN.team-accounts, 2026-10-08) — owner-managed team logins: `team.js` wraps `team_can_manage`/`team_list_members`/`team_remove_member` and the `team-accounts` Edge Function (create/reset a login with a one-time password); T-HARDEN.team-restore (same day) added `listRemovedTeamMembers`/`restoreTeamMember` (`team_list_removed_members` and the Edge Function's `restore` action; the database keeps a marker per org of who its owner removed, written only by `team_remove_member`, and only a person with a marker for that org and in no org can be restored) and the Team screen's "Removed members" section; `teamScreen.js` is the owner's `#/team` screen; `setPasswordScreen.js` is the gate in front of every console route for anyone signed in with a one-time password (`user_metadata.must_change_password`, enforced in `main.js`'s `requireAuth` — a prompt, not a lock). Authority lives in SQL (migration `20261007120000`), not here. `dom.js` gained `passwordToggle` (Show/Hide, extracted on its second use). `main.js` gained the `/team` route and a Team nav link for owners, asked of the database on every auth event (deliberately not awaited inside `onAuthStateChange`, where supabase-js holds its auth lock). See CHANGELOG.md.
+`team`, `teamScreen`, `setPasswordScreen` (T-HARDEN.team-accounts, 2026-10-08) — owner-managed team logins: `team.js` wraps `team_can_manage`/`team_list_members`/`team_remove_member` and the `team-accounts` Edge Function (create/reset a login with a one-time password); T-HARDEN.team-restore (same day) added `listRemovedTeamMembers`/`restoreTeamMember` (`team_list_removed_members` and the Edge Function's `restore` action; the database keeps a marker per org of who its owner removed, written only by `team_remove_member`, and only a person with a marker for that org and in no org can be restored) and the Team screen's "Removed members" section; `teamScreen.js` is the owner's `#/team` screen; `setPasswordScreen.js` is the gate in front of every console route for anyone signed in with a one-time password (`user_metadata.must_change_password`, checked by `sessionGate.js`'s `mustChangePassword` and enforced in `main.js`'s `requireAuth` — a prompt, not a lock). Authority lives in SQL (migration `20261007120000`), not here. `dom.js` gained `passwordToggle` (Show/Hide, extracted on its second use). `main.js` gained the `/team` route and a Team nav link for owners, asked of the database on every auth event (deliberately not awaited inside `onAuthStateChange`, where supabase-js holds its auth lock). See CHANGELOG.md.
 
 `scrollReveal` (2026-09-13, Petrol marketing rework) — `revealOnScroll(el, opts)`, a
 one-shot `IntersectionObserver` wrapper (adds a class the first time an element scrolls
@@ -195,5 +197,22 @@ account isn't part of an organisation" screen. Format-agnostic: no role vocabula
 as a factory, not a singleton, with an injected client and storage. Two rules worth knowing before editing:
 only an empty list or the database's `22P02` means "no organisation" (any other failure keeps the last known
 answer), and `refresh()` and every subscriber call are deferred a tick so a call from `onAuthStateChange`
-cannot deadlock behind the auth lock. Not wired into `main.js` until T-TEN.C2; see ROADMAP.md's "Known open
-items from T-TEN.C1" for what C2 must do.
+cannot deadlock behind the auth lock. Wired into `main.js` by T-TEN.C2 (below).
+
+T-TEN.C2 (2026-10-11) — the wiring, and what it added to core:
+
+- `main.js`'s `requireAuth` now resolves the organisation (`resolveOrg`: settled answers cost nothing, an
+  answer in flight is waited for, a missing or failed one is asked again) before any console route mounts,
+  shows the no-organisation screen or a Retry card instead of the console when there is no organisation or
+  no answer, and hands each route its `orgId` at mount. An org-context subscriber replaces the console
+  (`#/events`, history entry replaced) whenever the person or organisation it was mounted for is no longer in
+  force. `mountApp` returns `switchOrg(orgId)` (refused while this device has unsynced operations) and
+  `orgContext`. Operations queued on the device are not flushed for a signed-in person who belongs to no
+  organisation.
+- `orgContext` gained `whenSettled()`, `retry()` and a remembered org list per user (`seduh.orgs.<userId>`,
+  used as a `stale` stand-in only when the first question of a visit fails and nothing is known).
+- `sessionGate.js` (`mustChangePassword(session)`), `signOut.js` (`signOutWithTimeout`) and `navigation.js`
+  (`goToHash`, `replaceHash`) are the one home of what used to be copied across `main.js`, `appShell.js` and
+  `orgContext.js`. The header's Sign out reports its failure in a polite status line. `viewer-shell.css` gained
+  `.out-of-date-link`, the audience "out of date" card's wrapper.
+- See ROADMAP.md's "Known open items from T-TEN.C2" for what C3, C6 and C7 pick up.

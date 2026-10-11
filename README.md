@@ -50,7 +50,7 @@ tests. Cloudflare Workers with Static Assets deploys automatically on every merg
 
 ```bash
 npm install
-cp .env.example .env   # fill in VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, VITE_DEFAULT_ORG_ID
+cp .env.example .env   # fill in VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY (VITE_DEFAULT_ORG_ID is optional)
 npm run dev
 ```
 

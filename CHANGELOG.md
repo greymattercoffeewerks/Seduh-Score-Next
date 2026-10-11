@@ -1,3 +1,31 @@
+## T-TEN.C2: the console takes its organisation from the database · 2026-10-11
+
+**Task:** T-TEN.C2 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase C, the client). Client only: no migration, nothing to push to the cloud project.
+
+**Status: in review, not merged.**
+
+**Why:** until now the console worked in whichever organisation was baked into the build (`VITE_DEFAULT_ORG_ID`). It now asks the database which organisations the signed-in person belongs to (C1's `orgContext`) and works in the active one.
+
+**What changed:**
+
+- **`src/main.js`:**
+  - **Organisation comes from the person.** `requireAuth` waits for the organisation answer before any console route mounts, and hands the screen its `orgId` at mount (`/events`, `/team` and the event hub). Ordinary navigation costs no request once the answer is known.
+  - **Account in no organisation:** it gets the "This account isn't part of an organisation" screen (C1), on every console route, never an empty Events list.
+  - **Failed or slow load:** a status message ("Loading your organisation…") replaces the blank page while the answer is on its way. A failed first load shows a Retry card whose button shows "Retrying…" and ignores a second click. Plain navigation, and coming back online, also ask again.
+  - **Boots with `VITE_DEFAULT_ORG_ID` unset.** The variable now only names the organisation the anonymous audience routes (`/live/*`) show, until T-TEN.D1. Unset, those three routes show a "This link is out of date" card in the audience surfaces' own holding-card look (stage look on the projector and splash, paper look on a phone), and the organiser's own nav leaves out the three audience links. CI's smoke build now deliberately omits the variable, so a real browser proves the boot.
+  - **Switching organisation:** `switchOrg(orgId)` is refused, with a message to show, while this device holds changes that have not synced (and when it cannot tell). When the organisation in force changes by any route (a switch, a membership that fell away, another account signing in or out in a second tab, an expired session), the console is sent back to `#/events`: the router aborts the old screen's in-flight loads through its signal, so nothing from the old organisation lands in the new one's list. The history entry is replaced, so Back cannot return to the old organisation's URL. Nothing here ever moves anyone off an audience route.
+  - **Team link follows the active organisation:** asked per organisation, cleared the moment the organisation changes, and a late answer for the previous organisation is ignored.
+  - **Queued changes are never replayed under the login of someone who belongs to no organisation** (they were left by somebody else on a shared device; the database would refuse them as permanent failures and the outbox would drop them). Everyone else's flushing is untouched.
+- **`src/core/orgContext.js`:** also remembers the last answer per user on the device (`seduh.orgs.<userId>`) and, when the first question of a visit fails and nothing is known, uses it as a stand-in marked `stale`, so a reload on flaky venue wifi does not lock an organiser out of a heat in progress. The next real answer replaces it; an answer of "no organisation" erases it. New `whenSettled()` and `retry()`.
+- **Shared helpers (from the C1 reviews):** `core/sessionGate.js` (one "must choose a password first" check, replacing three copies), `core/signOut.js` (one sign-out with the shared timeout, used by the header and the no-organisation screen), `core/navigation.js` (`goToHash`, `replaceHash`: the router re-resolves exactly once). The header's Sign out now says why when it fails or times out (a polite status line) instead of doing nothing.
+- **Config:** `getDefaultOrgId()` (threw when unset) is replaced by `getLegacyAudienceOrgId()` (never throws). `.env.example`, `README.md` and `ci.yml` updated.
+
+**Verified:** 3575 unit tests pass, including `main.test.js` with 0 / 1 / 2 organisations, a switch that shows only the new organisation's events, and a slow-resolving screen whose late result never lands in the new organisation (the plan's acceptance criteria). The real organiser flow passes against the local Supabase stack (the hamburger focus test is flaky under parallel load on this machine and passes alone). Every deliberate break of `main.js`'s new behaviour was caught by a test that names it.
+
+**Reviews:** module-boundary-checker (boundary holds; duplicated hash navigation and a hard-coded route fixed, docs updated), code-reviewer (no blockers; the stale-screen-after-another-account case, error retry, unmount safety fixed), test-auditor (about 60 mutations on copies; eight gaps filled), offline-sync-auditor (outbox untouched and safe; the no-organisation flush skip and the reload-on-flaky-wifi lock-out fixed, the rest recorded for C6), ui-accessibility-reviewer (audience card styling, dead nav links, Retry feedback, loading state, Back button fixed; the announcement of an organisation change is C3's). Each was run as a general-purpose agent following the project's `.claude/agents/*.md` definition.
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-TEN.C2".
+
 ## T-TEN.C1: the org context and the "no organisation" screen · 2026-10-11
 
 **Task:** T-TEN.C1 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase C, the client). Client only: no migration, nothing to push to the cloud project. **Nothing calls the new code yet**: wiring it into `main.js` is C2, so the app behaves exactly as before.

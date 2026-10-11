@@ -505,6 +505,19 @@
   overflow-wrap: anywhere;
 }
 
+/* Why Sign out did not work (a dropped connection, a timeout). Empty until then, and an empty status
+   region takes no room. Same type size as the email beside it; the danger colour carries the tone and
+   the words carry the meaning. */
+.app-shell-auth-status {
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.app-shell-auth-status:empty {
+  display: none;
+}
+
 /* The organiser chrome (brand bar, Menu, sync status, version footer) is navigation, not content —
    printing any organiser screen (the report above all) should give just that screen's own content. */
 @media print {
