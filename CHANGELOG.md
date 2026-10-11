@@ -1,3 +1,29 @@
+## T-TEN.C1: the org context and the "no organisation" screen · 2026-10-11
+
+**Task:** T-TEN.C1 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase C, the client). Client only: no migration, nothing to push to the cloud project. **Nothing calls the new code yet**: wiring it into `main.js` is C2, so the app behaves exactly as before.
+
+**Status: in review, not merged.**
+
+**Why:** the console still decides "which org" from a build-time variable (`VITE_DEFAULT_ORG_ID`). With several orgs, the console has to ask the database which orgs the signed-in person belongs to (B3's `my_orgs()`), remember which one they are working in, and cope with the person belonging to none.
+
+**What changed:**
+
+- **`src/core/orgContext.js`** (new, format-agnostic): `createOrgContext({ client, storage, timeoutMs })` returns one context per mounted app, with `refresh(session)`, `retry()`, `getState()`, `getOrgs()`, `getActiveOrgId()`, `getActiveOrg()`, `getActiveOrgIdFor(userId)`, `setActiveOrg(id)`, `subscribe(fn)` and `destroy()`. It asks `my_orgs` with a plain rpc (a POST, never a cacheable GET).
+  - **Which org is active:** the only one; else the one this user used last (kept per user under `seduh.activeOrg.<userId>`); else the first by name. A remembered org the user has left falls back to another one and is forgotten, never an error. An explicit pick, even of the org that is already active, is remembered.
+  - **Zero orgs is a state of its own** (`no_org`), not an error and not an empty list: Guess the Bean accounts share the same logins.
+  - **Failures never lock an organiser out.** Only an empty list or the database's `22P02` (a token with no usable user id) mean "no organisation". Offline, a timeout, a 401, a gateway's 400 or a page that is not JSON are failures: the last known answer is kept, and an error is reported only when nothing is known yet.
+  - **Another account's orgs are never reused.** When the signed-in user changes (or someone signs out), the previous list is dropped at once, before the new answer arrives, and a late answer for the earlier user is discarded. `getActiveOrgIdFor(userId)` gives writers (the outbox, C6) an org only for the user it was resolved for.
+  - **Overlapping auth events:** the newest answer wins, but an older good answer that arrives first is still used, so a newer refresh that fails does not throw it away.
+  - **Safe to call from `onAuthStateChange`:** `refresh()` never reads the database synchronously, and subscribers are called from a microtask, so even a subscriber that starts an RPC cannot deadlock behind supabase-js's auth lock.
+  - Timeouts follow `raceTimeout` / `DEFAULT_LOAD_TIMEOUT_MS`; storage that is missing, blocked or full is tolerated.
+- **`src/core/noOrgScreen.js` and `noOrgScreen.css`** (new): "This account isn't part of an organisation", with a Sign out button (busy label "Signing out…", a clear message and a ready button when sign-out fails or times out, focus on the heading on arrival). The stylesheet only wraps a long email at 360px and clears paragraph margins; it is linked from `app/index.html`.
+
+**Verified:** 94 unit tests for the context and 21 for the screen, covering every case the plan names (0 / 1 / 2 orgs, a stale stored id, a removed membership, unavailable storage, a slow or failed load, a race between two auth events) and more. Each claim was mutation-tested: every deliberate break of the code was caught by a test that names it.
+
+**Reviews:** module-boundary-checker (no violations), code-reviewer (no critical bugs; three Medium findings fixed: subscribers ran inside the auth callback, a malformed answer and any HTTP 400 could wipe a known org list), test-auditor (five High gaps fixed: the real default storage path, 401/403/5xx handling, role/name/slug changes, ordering, row defaults), ui-accessibility-reviewer (two Medium findings fixed: focus on the heading, copy that contradicted itself). Each was run as a general-purpose agent following the project's `.claude/agents/*.md` definition.
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-TEN.C1".
+
 ## T-TEN.B7: anonymous surfaces, expand step · 2026-10-11
 
 **Task:** T-TEN.B7 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (PR 6; the last database task of phase B). One migration, `20261011170000_tenancy_anon_expand`; **pushed to the cloud project 2026-10-11 (cloud version `20261011075747`) and verified there**: all four functions (the two new ones, the stamp trigger function and `publish_event_results`) hash identically to the tested local copies with identical ACLs (anon and authenticated can execute the two new functions only; the trigger function is executable by no API role), the stamp trigger sorts after the two existing ones, anon's `SELECT` on `public_results` is the five-column list with no table-level grant, and a rolled-back live probe forged another name onto the existing published row and got the real org stamped back, found the org by its slug (in capitals) and its event summary, and had a non-object write refused (`22023`). The one existing published row has no stamp yet (it gets one the next time it is written). Applied as the full executable section of the file (the header comment stays in the repo only).
