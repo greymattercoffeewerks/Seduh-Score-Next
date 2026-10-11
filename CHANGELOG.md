@@ -1,3 +1,25 @@
+## T-TEN.C4: the Team link and screen follow the active organisation · 2026-10-12
+
+**Task:** T-TEN.C4 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase C, the client). Client only: no migration, nothing to push to the cloud project.
+
+**Status: in review, not merged.**
+
+**Why:** someone who owns one organisation and is only an organiser in another must never be unsure whose team they are looking at, or lose a one-time password because they switched organisation. The Team _link_ already followed the active organisation (T-TEN.C2); the screen itself did not say whose team it was.
+
+**What changed:**
+
+- **The Team screen names the organisation** (`src/core/teamScreen.js`, `src/main.js`): the heading reads "Team for <name>" in all four states (loading, not the owner, load failed, loaded) and stays plain "Team" with no name; the opening text now says these are managed accounts that belong only to this organisation and cannot be added to another one from this screen (decision D-T6). The name is the organisation's label (`core/orgLabel.js`: the slug is added when two of the person's organisations share a name) and comes from the same snapshot as the organisation's id, so a screen can never show one organisation's name over another's data.
+- **A switch cannot destroy a one-time password.** The Team screen is replaced when the organisation changes, and a password on it is "shown once and cannot be looked up again". The screen now reports (`onLeaveGuard`) whenever leaving it would lose something: a password on show, or an add/reset/restore request still being sent (whose password has not been shown yet). While that is so, `switchOrg` is refused with "The Team screen has a one-time password showing, or a change still being saved. Finish that first (press Done), then switch organisation." The refusal shows under the header like the unsynced-changes one. It clears on Done, on leaving the screen, and when any other screen mounts.
+- **Organisation names are cleaned** before they are put in a sentence (`orgLabel.js`): surrounding space is trimmed (a name of only spaces counts as no name) and invisible text-direction controls are removed (an unclosed right-to-left override scrambled the rest of the intro paragraph). This also covers the header, the list and the announcement.
+
+**Already in place from C2, verified here:** the Team link is re-asked for the active organisation on every auth event and every organisation change, a failed check changes nothing, a late answer for the previous organisation is ignored (the `seq` guard), and the link of the previous organisation is gone at once on a switch; tests cover an owner in A who is only an organiser in B.
+
+**Verified:** 3674 unit tests pass, including the guard (a password on show, a request in flight, released on Done and on unmount, once per change), the name from the same snapshot, Team in one organisation then the other, and the cleaning of names. A real-browser test against the local Supabase stack clicks the real Team link as the owner, checks the heading and text, switches away while on the Team screen (it is replaced and the link goes), opens the other organisation's Team screen by hand (named, refused for a non-owner, no sideways scroll at 360px) and switches back. Every deliberate break of the new code was caught by a test that names it.
+
+**Reviews:** ui-accessibility-reviewer (no blockers; found the text-direction problem, checked the heading and a long name at 360px in a real browser), code-reviewer (no blockers for the link logic; found the name/id snapshot mix and the lost-password trap), test-auditor (the first browser test did not prove "follows a switch"; rewritten). Each was run as a general-purpose agent following the project's `.claude/agents/*.md` definition.
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-TEN.C4".
+
 ## T-TEN.C3: the organisation in the header, and the switcher · 2026-10-11
 
 **Task:** T-TEN.C3 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase C, the client). Client only: no migration, nothing to push to the cloud project.

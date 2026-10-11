@@ -231,3 +231,12 @@ moving, because a successful switch re-mounts the console and the new screen tak
 person must tell two apart (slug added when a name is shared). `main.js` keeps the slot in step in its org-context
 subscriber and announces a deliberate switch ("Now working in …") differently from a change nobody asked for. See
 ROADMAP.md's "Known open items from T-TEN.C3".
+
+T-TEN.C4 (2026-10-12) — the Team screen follows the active organisation. `mountTeamScreen` gained `orgName` (the
+heading is `teamHeading(orgName)`, "Team for <name>"; the opening text `teamIntro(orgName)` says these are managed
+accounts that belong only to this organisation, decision D-T6) and `onLeaveGuard(active)`, told whenever leaving the
+screen would lose a one-time password (on show, or its request still in flight); `main.js` refuses `switchOrg`
+while it is on (reason `team_open`) and resets it whenever any console screen mounts. `main.js` takes the name from
+the SAME snapshot that supplied the id, never from live state. `orgLabel` now trims names and removes invisible
+text-direction controls (an unclosed right-to-left override scrambles a sentence the name sits in). The Team link's
+own re-ask per organisation is T-TEN.C2's. See ROADMAP.md's "Known open items from T-TEN.C4".
