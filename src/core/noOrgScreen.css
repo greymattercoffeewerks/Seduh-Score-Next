@@ -1,0 +1,11 @@
+/* "This account isn't part of an organisation" (noOrgScreen.js). Reuses .screen-container, .btn and
+   .screen-feedback from the existing token-only styling; this adds only what a bare paragraph lacks. */
+
+/* margin: 0 because .screen-container is a flex column with its own gap (a browser's default
+   paragraph margins would double it); overflow-wrap so a long email address, which has no break
+   opportunity, wraps instead of scrolling the page sideways at 360px (the same fix the header's
+   email already carries in appShell.css). */
+.no-org-message {
+  margin: 0;
+  overflow-wrap: anywhere;
+}

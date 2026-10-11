@@ -148,6 +148,16 @@ vi.mock('./core/inputModality.js', () => ({
 
 const { mountApp } = await import('./main.js');
 
+// What the database says the signed-in person belongs to (my_orgs()). One org by default, so every test
+// written before the organisation came from the database keeps meaning what it did.
+const ORG_ONE = { org_id: 'org1', name: 'Org One', slug: 'org-one', role: 'owner' };
+const ORG_TWO = { org_id: 'org2', name: 'Org Two', slug: 'org-two', role: 'organiser' };
+const myOrgs = vi.fn(() => Promise.resolve({ data: [ORG_ONE], error: null }));
+function fakeRpc(name) {
+  if (name === 'my_orgs') return myOrgs();
+  return Promise.resolve({ data: null, error: { code: 'unexpected rpc: ' + name } });
+}
+
 function stubScreen(mockFn, marker) {
   mockFn.mockImplementation(async (root) => {
     root.textContent = marker;
@@ -162,12 +172,13 @@ function stubScreen(mockFn, marker) {
 // transition, without needing a second mountApp() call. Authenticated by
 // default (a real session object) so every routing test written before
 // the auth gate existed keeps testing routing, not auth, unchanged.
-function fakeClient({ session = { user: { email: 'organiser@test.com' } } } = {}) {
+function fakeClient({ session = { user: { id: 'user-1', email: 'organiser@test.com' } } } = {}) {
   let currentSession = session;
   return {
     setSession(next) {
       currentSession = next;
     },
+    rpc: fakeRpc,
     auth: {
       getSession: () => Promise.resolve({ data: { session: currentSession } }),
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe: vi.fn() } } }),
@@ -180,7 +191,7 @@ let activeApp = null;
 async function startApp(overrides = {}) {
   const root = document.createElement('div');
   document.body.appendChild(root);
-  const app = mountApp(root, { client: fakeClient(), orgId: 'org1', ...overrides });
+  const app = mountApp(root, { client: fakeClient(), legacyAudienceOrgId: 'org1', ...overrides });
   await app.ready;
   activeApp = app;
   return { root, app };
@@ -712,7 +723,9 @@ describe('the temporary auth gate (requireAuth)', () => {
           resolveGetSession = () => resolve({ data: { session: null } });
         });
       }
-      return Promise.resolve({ data: { session: { user: { email: 'organiser@test.com' } } } });
+      return Promise.resolve({
+        data: { session: { user: { id: 'user-1', email: 'organiser@test.com' } } },
+      });
     };
     stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
     stubScreen(mountEventDashboardScreen, 'DASHBOARD_SCREEN');
@@ -723,7 +736,7 @@ describe('the temporary auth gate (requireAuth)', () => {
     // cleanup still tears it down.
     const root = document.createElement('div');
     document.body.appendChild(root);
-    const app = mountApp(root, { client, orgId: 'org1' });
+    const app = mountApp(root, { client, legacyAudienceOrgId: 'org1' });
     activeApp = app;
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(resolveGetSession).toBeDefined();
@@ -756,7 +769,7 @@ describe('the temporary auth gate (requireAuth)', () => {
     const { root } = await startApp({ client });
     expect(root.textContent).toContain('LOGIN_SCREEN');
 
-    client.setSession({ user: { email: 'organiser@test.com' } });
+    client.setSession({ user: { id: 'user-1', email: 'organiser@test.com' } });
     capturedOnSignedIn();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -784,6 +797,7 @@ describe('sync-on-reconnect', () => {
         currentSession = next;
         for (const cb of listeners) cb('SIGNED_IN', next);
       },
+      rpc: fakeRpc,
       auth: {
         getSession: () => Promise.resolve({ data: { session: currentSession } }),
         onAuthStateChange: (cb) => {
@@ -806,7 +820,9 @@ describe('sync-on-reconnect', () => {
 
   it('attempts a flush once it learns a session already exists at mount — a tab reopened after being offline, not just a live reconnect', async () => {
     stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
-    const client = fakeReactiveClient({ session: { user: { email: 'organiser@test.com' } } });
+    const client = fakeReactiveClient({
+      session: { user: { id: 'user-1', email: 'organiser@test.com' } },
+    });
     await startApp({ client });
     await new Promise((resolve) => setTimeout(resolve, 0)); // let the async INITIAL_SESSION callback fire
 
@@ -831,12 +847,14 @@ describe('sync-on-reconnect', () => {
   // the first route. These pin each ordering to exactly one flush.
   it('flushes exactly once at load when the session is known before the first route resolves', async () => {
     stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
-    const client = fakeReactiveClient({ session: { user: { email: 'organiser@test.com' } } });
+    const client = fakeReactiveClient({
+      session: { user: { id: 'user-1', email: 'organiser@test.com' } },
+    });
     // Fire INITIAL_SESSION synchronously, so hasSession is already true
     // while onConsoleRoute is still false — updateChrome() must flush.
     const subscribe = client.auth.onAuthStateChange;
     client.auth.onAuthStateChange = (cb) => {
-      cb('INITIAL_SESSION', { user: { email: 'organiser@test.com' } });
+      cb('INITIAL_SESSION', { user: { id: 'user-1', email: 'organiser@test.com' } });
       return subscribe(() => {});
     };
     await startApp({ client });
@@ -851,7 +869,9 @@ describe('sync-on-reconnect', () => {
     stubScreen(mountProjectorSurface, 'PROJECTOR_SCREEN');
     location.hash = '#/live/projector';
     await settleHashDispatch();
-    const client = fakeReactiveClient({ session: { user: { email: 'organiser@test.com' } } });
+    const client = fakeReactiveClient({
+      session: { user: { id: 'user-1', email: 'organiser@test.com' } },
+    });
     await startApp({ client });
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(flushOutbox).not.toHaveBeenCalled();
@@ -867,7 +887,9 @@ describe('sync-on-reconnect', () => {
 
   it("attempts a flush when the browser fires 'online', given a known session", async () => {
     stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
-    const client = fakeReactiveClient({ session: { user: { email: 'organiser@test.com' } } });
+    const client = fakeReactiveClient({
+      session: { user: { id: 'user-1', email: 'organiser@test.com' } },
+    });
     await startApp({ client });
     await new Promise((resolve) => setTimeout(resolve, 0));
     flushOutbox.mockClear();
@@ -895,14 +917,16 @@ describe('sync-on-reconnect', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(flushOutbox).not.toHaveBeenCalled();
 
-    client.setSession({ user: { email: 'organiser@test.com' } });
+    client.setSession({ user: { id: 'user-1', email: 'organiser@test.com' } });
 
     expect(flushOutbox).toHaveBeenCalledTimes(1);
   });
 
   it("stops listening for 'online' after unmount", async () => {
     stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
-    const client = fakeReactiveClient({ session: { user: { email: 'organiser@test.com' } } });
+    const client = fakeReactiveClient({
+      session: { user: { id: 'user-1', email: 'organiser@test.com' } },
+    });
     const { app } = await startApp({ client });
     await new Promise((resolve) => setTimeout(resolve, 0));
     await app.unmount();
@@ -936,7 +960,9 @@ describe('sync-on-reconnect', () => {
 
     it('retries a flush every 15s while the queue still holds an operation', async () => {
       stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
-      const client = fakeReactiveClient({ session: { user: { email: 'organiser@test.com' } } });
+      const client = fakeReactiveClient({
+        session: { user: { id: 'user-1', email: 'organiser@test.com' } },
+      });
       await startApp({ client });
       await settle();
       flushOutbox.mockClear();
@@ -959,7 +985,9 @@ describe('sync-on-reconnect', () => {
 
     it('makes no flush request while the queue is empty', async () => {
       stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
-      const client = fakeReactiveClient({ session: { user: { email: 'organiser@test.com' } } });
+      const client = fakeReactiveClient({
+        session: { user: { id: 'user-1', email: 'organiser@test.com' } },
+      });
       await startApp({ client });
       await settle();
       flushOutbox.mockClear();
@@ -990,7 +1018,7 @@ describe('sync-on-reconnect', () => {
       await settle();
       listPendingOperations.mockResolvedValue([{ id: 'op-1', attempts: 1 }]);
 
-      client.setSession({ user: { email: 'organiser@test.com' } });
+      client.setSession({ user: { id: 'user-1', email: 'organiser@test.com' } });
       await settle();
       flushOutbox.mockClear(); // the sign-in itself flushes once — not what this test is about
 
@@ -1002,7 +1030,9 @@ describe('sync-on-reconnect', () => {
 
     it('logs and skips the tick when the queue itself cannot be read, without flushing', async () => {
       stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
-      const client = fakeReactiveClient({ session: { user: { email: 'organiser@test.com' } } });
+      const client = fakeReactiveClient({
+        session: { user: { id: 'user-1', email: 'organiser@test.com' } },
+      });
       await startApp({ client });
       await settle();
       flushOutbox.mockClear();
@@ -1028,7 +1058,9 @@ describe('sync-on-reconnect', () => {
 
     it('skips the tick while the device is offline — the online listener covers coming back', async () => {
       stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
-      const client = fakeReactiveClient({ session: { user: { email: 'organiser@test.com' } } });
+      const client = fakeReactiveClient({
+        session: { user: { id: 'user-1', email: 'organiser@test.com' } },
+      });
       await startApp({ client });
       await settle();
       flushOutbox.mockClear();
@@ -1054,7 +1086,9 @@ describe('sync-on-reconnect', () => {
       stubScreen(mountProjectorSurface, 'PROJECTOR_SCREEN');
       location.hash = '#/live/projector';
       await settleHashDispatch();
-      const client = fakeReactiveClient({ session: { user: { email: 'organiser@test.com' } } });
+      const client = fakeReactiveClient({
+        session: { user: { id: 'user-1', email: 'organiser@test.com' } },
+      });
       await startApp({ client });
       await settle();
       listPendingOperations.mockResolvedValue([{ id: 'op-1', attempts: 1 }]);
@@ -1068,7 +1102,9 @@ describe('sync-on-reconnect', () => {
 
     it('stops retrying after unmount', async () => {
       stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
-      const client = fakeReactiveClient({ session: { user: { email: 'organiser@test.com' } } });
+      const client = fakeReactiveClient({
+        session: { user: { id: 'user-1', email: 'organiser@test.com' } },
+      });
       const { app } = await startApp({ client });
       await settle();
       await app.unmount();
@@ -1125,7 +1161,9 @@ describe('sync-on-reconnect', () => {
         permanentError: new Error('stale conflict'),
       };
     });
-    const client = fakeReactiveClient({ session: { user: { email: 'organiser@test.com' } } });
+    const client = fakeReactiveClient({
+      session: { user: { id: 'user-1', email: 'organiser@test.com' } },
+    });
     const { root } = await startApp({ client });
 
     expect(flushOutbox).toHaveBeenCalled();
@@ -1155,7 +1193,9 @@ describe('sync-on-reconnect', () => {
         permanentError: new Error('stale conflict'),
       };
     });
-    const client = fakeReactiveClient({ session: { user: { email: 'organiser@test.com' } } });
+    const client = fakeReactiveClient({
+      session: { user: { id: 'user-1', email: 'organiser@test.com' } },
+    });
     const { root } = await startApp({ client });
     await vi.waitFor(
       () => expect(root.querySelector('.app-shell-sync').textContent).toContain('lost'),
@@ -1188,7 +1228,9 @@ describe('sync-on-reconnect', () => {
         permanentError: new Error('stale conflict'),
       };
     });
-    const client = fakeReactiveClient({ session: { user: { email: 'organiser@test.com' } } });
+    const client = fakeReactiveClient({
+      session: { user: { id: 'user-1', email: 'organiser@test.com' } },
+    });
     const { root } = await startApp({ client });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -1217,7 +1259,9 @@ describe('sync-on-reconnect', () => {
 
   it('a clean (non-permanent-failure) reconnect flush leaves the sync panel reporting normally, not stuck on a stale error', async () => {
     stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
-    const client = fakeReactiveClient({ session: { user: { email: 'organiser@test.com' } } });
+    const client = fakeReactiveClient({
+      session: { user: { id: 'user-1', email: 'organiser@test.com' } },
+    });
     const { root } = await startApp({ client });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -1232,7 +1276,9 @@ describe('team accounts wiring', () => {
     canManageTeam.mockResolvedValue(false);
   });
 
-  const signedIn = (extra = {}) => ({ user: { email: 'organiser@test.com', ...extra } });
+  const signedIn = (extra = {}) => ({
+    user: { id: 'user-1', email: 'organiser@test.com', ...extra },
+  });
 
   // Like the reconnect tests' client: onAuthStateChange really calls its subscribers, so the Team
   // link's ownership check runs, and setSession() plays a sign-in/out.
@@ -1244,6 +1290,7 @@ describe('team accounts wiring', () => {
         current = next;
         for (const cb of listeners) cb('SIGNED_IN', next);
       },
+      rpc: fakeRpc,
       auth: {
         getSession: () => Promise.resolve({ data: { session: current } }),
         onAuthStateChange: (cb) => {
@@ -1478,7 +1525,9 @@ describe('team accounts wiring — edges the first pass missed', () => {
     canManageTeam.mockResolvedValue(false);
   });
 
-  const signedIn = (extra = {}) => ({ user: { email: 'organiser@test.com', ...extra } });
+  const signedIn = (extra = {}) => ({
+    user: { id: 'user-1', email: 'organiser@test.com', ...extra },
+  });
   function reactiveClient(session) {
     let listeners = [];
     let current = session;
@@ -1487,6 +1536,7 @@ describe('team accounts wiring — edges the first pass missed', () => {
         current = next;
         for (const cb of listeners) cb('SIGNED_IN', next);
       },
+      rpc: fakeRpc,
       auth: {
         getSession: () => Promise.resolve({ data: { session: current } }),
         onAuthStateChange: (cb) => {
@@ -1557,5 +1607,863 @@ describe('team accounts wiring — edges the first pass missed', () => {
       (a) => a.textContent,
     );
     expect(current).toEqual(['Team']);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// T-TEN.C2: the console's organisation comes from the signed-in person's memberships, not from a
+// build-time variable. Everything above passes with ONE org (the default); these are the 0 / 2-org
+// cases, the switch, and the guarantee that the app boots with the old variable unset.
+// ---------------------------------------------------------------------------------------------
+describe('organisation context wiring (T-TEN.C2)', () => {
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const NO_ORG_HEADING = "This account isn't part of an organisation";
+  const signedIn = (id = 'user-1', extra = {}) => ({
+    user: { id, email: `${id}@test.com`, ...extra },
+  });
+  const teamLink = (root) => root.querySelector('.app-shell-link[href="#/team"]');
+
+  // onAuthStateChange really calls its subscribers (an INITIAL_SESSION a tick after subscribing, like
+  // supabase-js), and setSession() plays a sign-in / sign-out. signOut() clears the session the way
+  // supabase-js does. `autoFire: false` leaves the events to the test (client.fire(event, session)).
+  function orgClient(session = signedIn(), { autoFire = true } = {}) {
+    let listeners = [];
+    let current = session;
+    const fire = (event, next) => {
+      for (const cb of listeners) cb(event, next);
+    };
+    return {
+      fire,
+      // The session ends somewhere else (another tab, an expired refresh token).
+      signOutElsewhere() {
+        current = null;
+        fire('SIGNED_OUT', null);
+      },
+      setSession(next) {
+        current = next;
+        fire('SIGNED_IN', next);
+      },
+      rpc: fakeRpc,
+      auth: {
+        getSession: () => Promise.resolve({ data: { session: current } }),
+        onAuthStateChange: (cb) => {
+          listeners.push(cb);
+          if (autoFire) Promise.resolve().then(() => cb('INITIAL_SESSION', current));
+          return {
+            data: {
+              subscription: {
+                unsubscribe: () => {
+                  listeners = listeners.filter((l) => l !== cb);
+                },
+              },
+            },
+          };
+        },
+        signOut: vi.fn(async () => {
+          current = null;
+          fire('SIGNED_OUT', null);
+          return { error: null };
+        }),
+      },
+    };
+  }
+  const answer = (...orgs) => ({ data: orgs, error: null });
+  const eventsOrgIds = () => mountEventsScreen.mock.calls.map((call) => call[1].orgId);
+
+  beforeEach(() => {
+    localStorage.clear();
+    myOrgs.mockReset();
+    myOrgs.mockResolvedValue(answer(ORG_ONE));
+    canManageTeam.mockReset();
+    canManageTeam.mockResolvedValue(false);
+    listPendingOperations.mockReset();
+    listPendingOperations.mockResolvedValue([]);
+  });
+  afterEach(() => {
+    localStorage.clear();
+    vi.unstubAllEnvs();
+    // Mock implementations survive vi.clearAllMocks(): no test here may inherit another's screen.
+    mountEventsScreen.mockReset();
+  });
+
+  describe('which screen a signed-in person gets', () => {
+    it('with one org: the console, in that org, after asking the database once', async () => {
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const { root } = await startApp({ client: orgClient() });
+      expect(root.textContent).toContain('EVENTS_SCREEN');
+      expect(eventsOrgIds()).toEqual(['org1']);
+      expect(myOrgs).toHaveBeenCalledTimes(1);
+    });
+
+    it('with two orgs and nothing remembered: the first by name', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_TWO, ORG_ONE));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      await startApp({ client: orgClient() });
+      expect(eventsOrgIds()).toEqual(['org1']);
+    });
+
+    it('with two orgs: the one this user used last', async () => {
+      localStorage.setItem('seduh.activeOrg.user-1', 'org2');
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      await startApp({ client: orgClient() });
+      expect(eventsOrgIds()).toEqual(['org2']);
+    });
+
+    it('with no orgs: the "not part of an organisation" screen, never the events screen', async () => {
+      myOrgs.mockResolvedValue(answer());
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const { root } = await startApp({ client: orgClient() });
+      expect(root.textContent).toContain(NO_ORG_HEADING);
+      // The screen itself names the account (the shell header prints it too, so look inside the outlet).
+      expect(root.querySelector('section.screen-container').textContent).toContain(
+        'user-1@test.com',
+      );
+      expect(mountEventsScreen).not.toHaveBeenCalled();
+    });
+
+    it('with no orgs, a deep link to an event shows the same screen, not the event', async () => {
+      myOrgs.mockResolvedValue(answer());
+      stubScreen(mountEventDashboardScreen, 'DASHBOARD_SCREEN');
+      location.hash = '#/events/ev1';
+      const { root } = await startApp({ client: orgClient() });
+      expect(root.textContent).toContain(NO_ORG_HEADING);
+      expect(mountEventDashboardScreen).not.toHaveBeenCalled();
+    });
+
+    it('the no-organisation screen signs out and returns to the sign-in screen', async () => {
+      myOrgs.mockResolvedValue(answer());
+      stubScreen(mountLoginScreen, 'LOGIN_SCREEN');
+      const client = orgClient();
+      const { root } = await startApp({ client });
+      root.querySelector('section.screen-container button').click();
+      await vi.waitFor(() => expect(client.auth.signOut).toHaveBeenCalled());
+      await vi.waitFor(() => expect(root.textContent).toContain('LOGIN_SCREEN'));
+    });
+
+    it('a failed first load shows a Retry card, and Retry recovers without a reload', async () => {
+      myOrgs.mockResolvedValueOnce({ data: null, error: { code: '503', message: 'down' } });
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const { root } = await startApp({ client: orgClient() });
+      expect(root.textContent).toContain('Could not load your organisation');
+      expect(mountEventsScreen).not.toHaveBeenCalled();
+
+      const retry = [...root.querySelectorAll('button')].find((b) => b.textContent === 'Retry');
+      retry.click();
+      await vi.waitFor(() => expect(root.textContent).toContain('EVENTS_SCREEN'));
+      expect(eventsOrgIds()).toEqual(['org1']);
+      expect(myOrgs).toHaveBeenCalledTimes(2);
+    });
+
+    it('a console route waits for an answer still on its way, and then mounts once', async () => {
+      let answerNow;
+      myOrgs.mockReturnValue(new Promise((resolve) => (answerNow = resolve)));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      const app = mountApp(root, { client: orgClient(), legacyAudienceOrgId: 'org1' });
+      activeApp = app;
+      await settle();
+      await settle();
+      expect(mountEventsScreen).not.toHaveBeenCalled();
+      answerNow(answer(ORG_ONE));
+      await app.ready;
+      expect(eventsOrgIds()).toEqual(['org1']);
+    });
+
+    it('a person who must choose a password is not asked about organisations at all', async () => {
+      stubScreen(mountSetPasswordScreen, 'SET_PASSWORD_SCREEN');
+      const client = orgClient(
+        signedIn('user-1', { user_metadata: { must_change_password: true } }),
+      );
+      const { root } = await startApp({ client });
+      expect(root.textContent).toContain('SET_PASSWORD_SCREEN');
+      expect(myOrgs).not.toHaveBeenCalled();
+    });
+
+    it('passes the active org to the event hub and the Team screen too', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      localStorage.setItem('seduh.activeOrg.user-1', 'org2');
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      stubScreen(mountEventDashboardScreen, 'DASHBOARD_SCREEN');
+      stubScreen(mountTeamScreen, 'TEAM_SCREEN');
+      await startApp({ client: orgClient() });
+      location.hash = '#/events/ev1';
+      await settle();
+      location.hash = '#/team';
+      await settle();
+      await settle();
+      expect(mountEventDashboardScreen.mock.calls[0][1].orgId).toBe('org2');
+      expect(mountTeamScreen.mock.calls[0][1].orgId).toBe('org2');
+    });
+  });
+
+  describe('booting without the old build-time organisation', () => {
+    it('mounts with VITE_DEFAULT_ORG_ID unset: the console works, nothing throws', async () => {
+      vi.stubEnv('VITE_DEFAULT_ORG_ID', '');
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      // No legacyAudienceOrgId option: the default is read from the (empty) environment.
+      const app = mountApp(root, { client: orgClient() });
+      activeApp = app;
+      await app.ready;
+      expect(root.textContent).toContain('EVENTS_SCREEN');
+      expect(eventsOrgIds()).toEqual(['org1']);
+    });
+
+    it('the three audience routes then show an "out-of-date link" card instead of crashing', async () => {
+      for (const route of ['projector', 'phone', 'splash']) {
+        location.hash = `#/live/${route}`;
+        const { root } = await startApp({ client: orgClient(), legacyAudienceOrgId: null });
+        expect(root.textContent).toContain('This link is out of date');
+        await activeApp.unmount();
+        activeApp = null;
+        root.remove();
+      }
+      expect(mountProjectorSurface).not.toHaveBeenCalled();
+      expect(mountPhoneSummary).not.toHaveBeenCalled();
+      expect(mountSplashScreen).not.toHaveBeenCalled();
+    });
+
+    it("the audience routes use the legacy organisation, never the signed-in person's active one", async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      localStorage.setItem('seduh.activeOrg.user-1', 'org2');
+      const routes = [
+        ['projector', mountProjectorSurface],
+        ['phone', mountPhoneSummary],
+        ['splash', mountSplashScreen],
+      ];
+      for (const [route, screen] of routes) {
+        stubScreen(screen, route.toUpperCase());
+        location.hash = `#/live/${route}`;
+        await startApp({ client: orgClient(), legacyAudienceOrgId: 'legacy-org' });
+        expect(screen.mock.calls[0][1].orgId).toBe('legacy-org');
+        await activeApp.unmount();
+        activeApp = null;
+      }
+    });
+
+    it('the out-of-date card uses the stage look on the projector and splash, the paper look on a phone', async () => {
+      const expectations = [
+        ['projector', 'stage'],
+        ['splash', 'stage'],
+        ['phone', null],
+      ];
+      for (const [route, surface] of expectations) {
+        location.hash = `#/live/${route}`;
+        const { root } = await startApp({ client: orgClient(), legacyAudienceOrgId: null });
+        const bare = root.querySelector('.app-bare-root');
+        expect(bare.getAttribute('data-surface')).toBe(surface);
+        expect(
+          bare.querySelector('.out-of-date-link .viewer-holding-card h1.viewer-holding-title'),
+        ).not.toBeNull();
+        await activeApp.unmount();
+        activeApp = null;
+      }
+    });
+
+    it("the organiser's own nav leaves out the three audience links while there is nothing for them to open", async () => {
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      // Links that open in a new tab carry a hidden "(opens in a new tab)" suffix: compare the names.
+      const labels = (root) =>
+        [...root.querySelectorAll('.app-shell-link')].map((link) =>
+          link.textContent.replace(/\s*\(.*\)$/, ''),
+        );
+      const without = await startApp({ client: orgClient(), legacyAudienceOrgId: null });
+      expect(labels(without.root)).toEqual(['Events']);
+      await activeApp.unmount();
+      activeApp = null;
+
+      const withLegacy = await startApp({ client: orgClient(), legacyAudienceOrgId: 'org1' });
+      expect(labels(withLegacy.root)).toEqual([
+        'Events',
+        'Splash screen',
+        'Projector view',
+        'Phone view',
+      ]);
+    });
+  });
+
+  describe('switching organisation', () => {
+    async function startTwoOrgs() {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      return startApp({ client: orgClient() });
+    }
+
+    it('shows the other org on the events screen', async () => {
+      const { app } = await startTwoOrgs();
+      expect(eventsOrgIds()).toEqual(['org1']);
+      expect(await app.switchOrg('org2')).toEqual({ ok: true });
+      await vi.waitFor(() => expect(eventsOrgIds().at(-1)).toBe('org2'));
+      // Everything mounted from the switch on is the new org's (jsdom may resolve a hash change twice).
+      expect(new Set(eventsOrgIds().slice(1))).toEqual(new Set(['org2']));
+      expect(localStorage.getItem('seduh.activeOrg.user-1')).toBe('org2');
+    });
+
+    it('from deep inside an event, goes back to the events list of the new org', async () => {
+      stubScreen(mountSetupScreen, 'SETUP_SCREEN');
+      location.hash = '#/events/ev1/setup';
+      const { app, root } = await startTwoOrgs();
+      expect(root.textContent).toContain('SETUP_SCREEN');
+      await app.switchOrg('org2');
+      await vi.waitFor(() => expect(location.hash).toBe('#/events'));
+      await vi.waitFor(() => expect(eventsOrgIds().at(-1)).toBe('org2'));
+      expect(new Set(eventsOrgIds())).toEqual(new Set(['org2']));
+    });
+
+    it('a screen still loading for the old org is aborted, and nothing it fetched lands in the new org', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      let finishOldLoad;
+      mountEventsScreen.mockImplementation(async (outlet, { orgId, signal }) => {
+        if (orgId === 'org1') await new Promise((resolve) => (finishOldLoad = resolve));
+        // The same guard every real screen has: a navigation that started after this one wins.
+        if (signal.aborted) return undefined;
+        outlet.textContent = `EVENTS_OF_${orgId}`;
+        return { unmount: vi.fn() };
+      });
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      const app = mountApp(root, { client: orgClient(), legacyAudienceOrgId: 'org1' });
+      activeApp = app;
+      await vi.waitFor(() => expect(mountEventsScreen).toHaveBeenCalledTimes(1));
+
+      expect(await app.switchOrg('org2')).toEqual({ ok: true });
+      await vi.waitFor(() => expect(root.textContent).toContain('EVENTS_OF_org2'));
+      expect(mountEventsScreen.mock.calls[0][1].signal.aborted).toBe(true);
+
+      finishOldLoad();
+      await settle();
+      await settle();
+      expect(root.textContent).toContain('EVENTS_OF_org2');
+      expect(root.textContent).not.toContain('EVENTS_OF_org1');
+    });
+
+    it('is refused while changes made on this device have not synced, with a message to show', async () => {
+      const { app } = await startTwoOrgs();
+      listPendingOperations.mockResolvedValue([{ id: 'op1' }]);
+      const result = await app.switchOrg('org2');
+      expect(result).toEqual({
+        ok: false,
+        reason: 'unsynced',
+        count: 1,
+        message:
+          '1 change on this device has not synced yet. Wait for it to sync before switching organisation.',
+      });
+      expect(app.orgContext.getActiveOrgId()).toBe('org1');
+      await settle();
+      expect(eventsOrgIds()).toEqual(['org1']);
+    });
+
+    it('says "changes … have" for several', async () => {
+      const { app } = await startTwoOrgs();
+      listPendingOperations.mockResolvedValue([{ id: 'a' }, { id: 'b' }, { id: 'c' }]);
+      const result = await app.switchOrg('org2');
+      expect(result.count).toBe(3);
+      expect(result.message).toBe(
+        '3 changes on this device have not synced yet. Wait for them to sync before switching organisation.',
+      );
+    });
+
+    it('is refused when it cannot tell whether anything is unsynced', async () => {
+      const { app } = await startTwoOrgs();
+      listPendingOperations.mockRejectedValue(new Error('IndexedDB blocked'));
+      const result = await app.switchOrg('org2');
+      expect(result).toMatchObject({ ok: false, reason: 'unknown' });
+      expect(app.orgContext.getActiveOrgId()).toBe('org1');
+    });
+
+    it('is refused for an org this account does not belong to', async () => {
+      const { app } = await startTwoOrgs();
+      const result = await app.switchOrg('org-not-mine');
+      expect(result).toMatchObject({ ok: false, reason: 'unknown_org' });
+      expect(app.orgContext.getActiveOrgId()).toBe('org1');
+    });
+
+    it('switching to the org already active does nothing, and does not even look at the outbox', async () => {
+      const { app } = await startTwoOrgs();
+      listPendingOperations.mockClear();
+      expect(await app.switchOrg('org1')).toEqual({ ok: true });
+      expect(listPendingOperations).not.toHaveBeenCalled();
+      await settle();
+      expect(eventsOrgIds()).toEqual(['org1']);
+    });
+  });
+
+  describe('an organisation that changes underneath the console', () => {
+    it('a membership that disappears at a later refresh moves the console to the other org', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      localStorage.setItem('seduh.activeOrg.user-1', 'org2');
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const client = orgClient();
+      await startApp({ client });
+      expect(eventsOrgIds()).toEqual(['org2']);
+
+      myOrgs.mockResolvedValue(answer(ORG_ONE));
+      client.setSession(signedIn());
+      await vi.waitFor(() => expect(eventsOrgIds().at(-1)).toBe('org1'));
+      expect(new Set(eventsOrgIds())).toEqual(new Set(['org2', 'org1']));
+    });
+
+    it('losing the last membership replaces the console with the "not part of an organisation" screen', async () => {
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const client = orgClient();
+      const { root } = await startApp({ client });
+      expect(root.textContent).toContain('EVENTS_SCREEN');
+
+      myOrgs.mockResolvedValue(answer());
+      client.setSession(signedIn());
+      await vi.waitFor(() => expect(root.textContent).toContain(NO_ORG_HEADING));
+    });
+
+    it('a role change inside the same org does not move anyone', async () => {
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const client = orgClient();
+      await startApp({ client });
+      myOrgs.mockResolvedValue(answer({ ...ORG_ONE, role: 'organiser' }));
+      client.setSession(signedIn());
+      await settle();
+      await settle();
+      expect(eventsOrgIds()).toEqual(['org1']);
+    });
+
+    it("a different person signing in never sees the previous person's org", async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const client = orgClient(signedIn('user-1'));
+      const { app } = await startApp({ client });
+      await app.switchOrg('org2');
+      await vi.waitFor(() => expect(eventsOrgIds().at(-1)).toBe('org2'));
+
+      // user-2 belongs only to org1
+      myOrgs.mockResolvedValue(answer(ORG_ONE));
+      client.setSession(signedIn('user-2'));
+      await vi.waitFor(() => expect(app.orgContext.getState().userId).toBe('user-2'));
+      await vi.waitFor(() => expect(app.orgContext.getState().status).toBe('ready'));
+      expect(app.orgContext.getActiveOrgId()).toBe('org1');
+      // And the screen follows: the console built for user-1 in org2 is replaced, not left standing.
+      await vi.waitFor(() => expect(eventsOrgIds().at(-1)).toBe('org1'));
+    });
+  });
+
+  describe('the Team link follows the active org', () => {
+    it('is offered only while the org the person owns is the active one', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      canManageTeam.mockImplementation((orgId) => Promise.resolve(orgId === 'org1'));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const { root, app } = await startApp({ client: orgClient() });
+      await vi.waitFor(() => expect(teamLink(root)).not.toBeNull());
+      expect(canManageTeam).toHaveBeenCalledWith('org1', expect.anything());
+
+      await app.switchOrg('org2');
+      await vi.waitFor(() => expect(teamLink(root)).toBeNull());
+      expect(canManageTeam).toHaveBeenCalledWith('org2', expect.anything());
+
+      await app.switchOrg('org1');
+      await vi.waitFor(() => expect(teamLink(root)).not.toBeNull());
+    });
+
+    it('the link of the previous org is gone at once on a switch, before the new answer arrives', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      let answerOrg2;
+      canManageTeam.mockImplementation((orgId) =>
+        orgId === 'org1' ? Promise.resolve(true) : new Promise((resolve) => (answerOrg2 = resolve)),
+      );
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const { root, app } = await startApp({ client: orgClient() });
+      await vi.waitFor(() => expect(teamLink(root)).not.toBeNull());
+
+      await app.switchOrg('org2');
+      await vi.waitFor(() => expect(teamLink(root)).toBeNull());
+      answerOrg2(true);
+      await vi.waitFor(() => expect(teamLink(root)).not.toBeNull());
+    });
+
+    it("a check that fails after a switch leaves the link out, never the other org's answer", async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      canManageTeam.mockImplementation((orgId) =>
+        orgId === 'org1' ? Promise.resolve(true) : Promise.resolve(null),
+      );
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const { root, app } = await startApp({ client: orgClient() });
+      await vi.waitFor(() => expect(teamLink(root)).not.toBeNull());
+      await app.switchOrg('org2');
+      await settle();
+      await settle();
+      expect(teamLink(root)).toBeNull();
+    });
+
+    it('is not offered to an account in no organisation', async () => {
+      myOrgs.mockResolvedValue(answer());
+      canManageTeam.mockResolvedValue(true);
+      const { root } = await startApp({ client: orgClient() });
+      await settle();
+      expect(canManageTeam).not.toHaveBeenCalled();
+      expect(teamLink(root)).toBeNull();
+    });
+  });
+
+  describe('the org context a mounted app owns', () => {
+    it('an app that made its own context ends it on unmount: nothing is asked or announced afterwards', async () => {
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const { app } = await startApp({ client: orgClient() });
+      const context = app.orgContext;
+      const listener = vi.fn();
+      context.subscribe(listener);
+      await app.unmount();
+      activeApp = null;
+      myOrgs.mockClear();
+      await context.refresh(signedIn());
+      expect(myOrgs).not.toHaveBeenCalled();
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it('a context handed in belongs to the caller: unmount leaves it working', async () => {
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const { createOrgContext } = await import('./core/orgContext.js');
+      const client = orgClient();
+      const orgContext = createOrgContext({ client, storage: null });
+      const { app } = await startApp({ client, orgContext });
+      expect(app.orgContext).toBe(orgContext);
+      await app.unmount();
+      activeApp = null;
+      myOrgs.mockClear();
+      await orgContext.refresh(signedIn());
+      expect(myOrgs).toHaveBeenCalledTimes(1);
+      orgContext.destroy();
+    });
+  });
+
+  describe('the console follows who and which org is in force (a second tab, an expired session)', () => {
+    it('another account signing in on this browser replaces the console, not just the context', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      localStorage.setItem('seduh.activeOrg.user-1', 'org2');
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const client = orgClient(signedIn('user-1'));
+      await startApp({ client });
+      expect(eventsOrgIds()).toEqual(['org2']);
+
+      client.setSession(signedIn('user-2'));
+      await vi.waitFor(() => expect(eventsOrgIds().at(-1)).toBe('org1'));
+    });
+
+    it('another account with no organisation gets the "not part of an organisation" screen', async () => {
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const client = orgClient(signedIn('user-1'));
+      const { root } = await startApp({ client });
+      myOrgs.mockResolvedValue(answer());
+      client.setSession(signedIn('user-2'));
+      await vi.waitFor(() => expect(root.textContent).toContain(NO_ORG_HEADING));
+    });
+
+    it('a sign-out the router never saw (another tab, an expired session) shows the sign-in screen', async () => {
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      stubScreen(mountLoginScreen, 'LOGIN_SCREEN');
+      const client = orgClient();
+      const { root } = await startApp({ client });
+      expect(root.textContent).toContain('EVENTS_SCREEN');
+      client.signOutElsewhere();
+      await vi.waitFor(() => expect(root.textContent).toContain('LOGIN_SCREEN'));
+    });
+
+    it('a change that nobody chose does not add a history entry (Back must not return to the old org)', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      localStorage.setItem('seduh.activeOrg.user-1', 'org2');
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      stubScreen(mountSetupScreen, 'SETUP_SCREEN');
+      location.hash = '#/events/ev1/setup';
+      const client = orgClient();
+      await startApp({ client });
+      await settle();
+      const before = history.length;
+      myOrgs.mockResolvedValue(answer(ORG_ONE));
+      client.setSession(signedIn());
+      await vi.waitFor(() => expect(location.hash).toBe('#/events'));
+      expect(history.length).toBe(before);
+    });
+
+    it('never moves anyone off an audience route, even after they were using the console', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      stubScreen(mountSplashScreen, 'SPLASH');
+      const { app } = await startApp({ client: orgClient(), legacyAudienceOrgId: 'org1' });
+      location.hash = '#/live/splash';
+      await settle();
+      await settle();
+      expect(location.hash).toBe('#/live/splash');
+      app.orgContext.setActiveOrg('org2');
+      await settle();
+      await settle();
+      expect(location.hash).toBe('#/live/splash');
+    });
+
+    it('does nothing at all once the app is unmounted, even for a context it was handed', async () => {
+      const { createOrgContext } = await import('./core/orgContext.js');
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const client = orgClient();
+      const orgContext = createOrgContext({ client, storage: null });
+      const { app } = await startApp({ client, orgContext });
+      await app.unmount();
+      activeApp = null;
+      location.hash = '#/events/ev1/setup';
+      await settle();
+      canManageTeam.mockClear();
+      orgContext.setActiveOrg('org2');
+      await settle();
+      await settle();
+      expect(location.hash).toBe('#/events/ev1/setup');
+      expect(canManageTeam).not.toHaveBeenCalled();
+      orgContext.destroy();
+    });
+
+    it('a Retry clicked after the app was unmounted mounts nothing', async () => {
+      const { createOrgContext } = await import('./core/orgContext.js');
+      myOrgs.mockResolvedValue({ data: null, error: { code: '503' } });
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const client = orgClient();
+      // A context the app does not own, so it is still alive and able to answer after the unmount.
+      const orgContext = createOrgContext({ client, storage: null });
+      const { root, app } = await startApp({ client, orgContext });
+      const retry = [...root.querySelectorAll('button')].find((b) => b.textContent === 'Retry');
+      await app.unmount();
+      activeApp = null;
+      myOrgs.mockResolvedValue(answer(ORG_ONE));
+      retry.click();
+      await settle();
+      await settle();
+      expect(mountEventsScreen).not.toHaveBeenCalled();
+      orgContext.destroy();
+    });
+  });
+
+  describe('waiting for the organisation question', () => {
+    it('shows a status message instead of a blank page while the answer is on its way', async () => {
+      let answerNow;
+      myOrgs.mockReturnValue(new Promise((resolve) => (answerNow = resolve)));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      const app = mountApp(root, { client: orgClient(), legacyAudienceOrgId: 'org1' });
+      activeApp = app;
+      await vi.waitFor(() =>
+        expect(root.querySelector('section.screen-container [role="status"]')?.textContent).toBe(
+          'Loading your organisation…',
+        ),
+      );
+      answerNow(answer(ORG_ONE));
+      await app.ready;
+      expect(root.textContent).toContain('EVENTS_SCREEN');
+      expect(root.textContent).not.toContain('Loading your organisation');
+    });
+
+    it('a navigation that finds a newer question in flight waits for that one, not the first', async () => {
+      const client = orgClient(signedIn(), { autoFire: false });
+      let failFirst;
+      let answerSecond;
+      myOrgs
+        .mockReturnValueOnce(new Promise((_resolve, reject) => (failFirst = reject)))
+        .mockReturnValueOnce(new Promise((resolve) => (answerSecond = resolve)));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      const app = mountApp(root, { client, legacyAudienceOrgId: 'org1' });
+      activeApp = app;
+      await vi.waitFor(() => expect(myOrgs).toHaveBeenCalledTimes(1));
+
+      client.fire('TOKEN_REFRESHED', signedIn()); // a newer question starts
+      await vi.waitFor(() => expect(myOrgs).toHaveBeenCalledTimes(2));
+      failFirst(new Error('network'));
+      await settle();
+      await settle();
+      expect(root.textContent).not.toContain('Could not load your organisation');
+
+      answerSecond(answer(ORG_ONE));
+      await app.ready;
+      expect(root.textContent).toContain('EVENTS_SCREEN');
+    });
+
+    it('a navigation superseded while the question is open paints nothing', async () => {
+      let answerNow;
+      myOrgs.mockReturnValue(new Promise((resolve) => (answerNow = resolve)));
+      stubScreen(mountSplashScreen, 'SPLASH');
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      const app = mountApp(root, { client: orgClient(), legacyAudienceOrgId: 'org1' });
+      activeApp = app;
+      await vi.waitFor(() => expect(myOrgs).toHaveBeenCalledTimes(1));
+      location.hash = '#/live/splash';
+      await settle();
+      await settle();
+
+      answerNow(answer()); // no organisation: would paint the "not part of an organisation" screen
+      await settle();
+      await settle();
+      expect(root.querySelector('.app-shell-root').textContent).not.toContain(NO_ORG_HEADING);
+    });
+
+    it('a sign-out that lands while waiting leads to the sign-in screen, not an organisation error', async () => {
+      let answerNow;
+      myOrgs.mockReturnValue(new Promise((resolve) => (answerNow = resolve)));
+      stubLogin();
+      const client = orgClient();
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      const app = mountApp(root, { client, legacyAudienceOrgId: 'org1' });
+      activeApp = app;
+      await vi.waitFor(() => expect(myOrgs).toHaveBeenCalledTimes(1));
+      client.signOutElsewhere();
+      answerNow(answer(ORG_ONE));
+      await vi.waitFor(() => expect(root.textContent).toContain('LOGIN_SCREEN'));
+      expect(root.textContent).not.toContain('Could not load your organisation');
+    });
+
+    function stubLogin() {
+      stubScreen(mountLoginScreen, 'LOGIN_SCREEN');
+    }
+
+    it('plain navigation after a failed first load asks again (not only the Retry button)', async () => {
+      myOrgs.mockResolvedValueOnce({ data: null, error: { code: '503' } });
+      stubScreen(mountTeamScreen, 'TEAM_SCREEN');
+      const { root } = await startApp({ client: orgClient() });
+      expect(root.textContent).toContain('Could not load your organisation');
+      location.hash = '#/team';
+      await vi.waitFor(() => expect(root.textContent).toContain('TEAM_SCREEN'));
+      expect(myOrgs).toHaveBeenCalledTimes(2);
+    });
+
+    it('once settled as "no organisation", further navigation asks nothing more', async () => {
+      myOrgs.mockResolvedValue(answer());
+      stubScreen(mountTeamScreen, 'TEAM_SCREEN');
+      stubScreen(mountEventDashboardScreen, 'DASHBOARD_SCREEN');
+      await startApp({ client: orgClient() });
+      location.hash = '#/team';
+      await settle();
+      location.hash = '#/events/ev1';
+      await settle();
+      await settle();
+      expect(myOrgs).toHaveBeenCalledTimes(1);
+    });
+
+    it('the Retry button shows it is working and ignores a second click', async () => {
+      myOrgs.mockResolvedValueOnce({ data: null, error: { code: '503' } });
+      let answerNow;
+      myOrgs.mockReturnValueOnce(new Promise((resolve) => (answerNow = resolve)));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const client = orgClient();
+      const getSession = vi.spyOn(client.auth, 'getSession');
+      const { root } = await startApp({ client });
+      const sessionChecksBefore = getSession.mock.calls.length;
+      const retry = [...root.querySelectorAll('button')].find((b) => b.textContent === 'Retry');
+      retry.click();
+      retry.click();
+      expect(retry.textContent).toBe('Retrying…');
+      expect(retry.getAttribute('aria-disabled')).toBe('true');
+      await settle();
+      expect(myOrgs).toHaveBeenCalledTimes(2);
+      // One click, one re-resolve of the route (each re-resolve checks the session once).
+      expect(getSession.mock.calls.length - sessionChecksBefore).toBe(1);
+      answerNow(answer(ORG_ONE));
+      await vi.waitFor(() => expect(root.textContent).toContain('EVENTS_SCREEN'));
+      expect(myOrgs).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('a flaky connection', () => {
+    const rememberOrgOne = () =>
+      localStorage.setItem('seduh.orgs.user-1', JSON.stringify([ORG_ONE]));
+
+    it('a reload with no answer for the organisation question boots from the remembered list', async () => {
+      rememberOrgOne();
+      myOrgs.mockResolvedValue({ data: null, error: { code: '503' } });
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const { root, app } = await startApp({ client: orgClient() });
+      expect(root.textContent).toContain('EVENTS_SCREEN');
+      expect(eventsOrgIds()).toEqual(['org1']);
+      expect(app.orgContext.getState().stale).toBe(true);
+    });
+
+    it('coming back online re-asks, and replaces the stand-in with the real answer', async () => {
+      rememberOrgOne();
+      myOrgs.mockResolvedValueOnce({ data: null, error: { code: '503' } });
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const { app } = await startApp({ client: orgClient() });
+      expect(app.orgContext.getState().stale).toBe(true);
+      window.dispatchEvent(new Event('online'));
+      await vi.waitFor(() => expect(app.orgContext.getState().stale).toBe(false));
+      expect(myOrgs).toHaveBeenCalledTimes(2);
+    });
+
+    it('coming back online replaces the "could not load" card with the console', async () => {
+      myOrgs.mockResolvedValueOnce({ data: null, error: { code: '503' } });
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const { root } = await startApp({ client: orgClient() });
+      expect(root.textContent).toContain('Could not load your organisation');
+      window.dispatchEvent(new Event('online'));
+      await vi.waitFor(() => expect(root.textContent).toContain('EVENTS_SCREEN'));
+    });
+
+    it('coming back online with nothing wrong does not ask again', async () => {
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      await startApp({ client: orgClient() });
+      window.dispatchEvent(new Event('online'));
+      await settle();
+      expect(myOrgs).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('operations queued on this device', () => {
+    it('are not replayed under the login of someone who belongs to no organisation', async () => {
+      myOrgs.mockResolvedValue(answer());
+      await startApp({ client: orgClient() });
+      await settle();
+      flushOutbox.mockClear();
+      window.dispatchEvent(new Event('online'));
+      await settle();
+      expect(flushOutbox).not.toHaveBeenCalled();
+    });
+
+    it('are still replayed for someone who does (and the flush is what the same event triggers)', async () => {
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      await startApp({ client: orgClient() });
+      await settle();
+      flushOutbox.mockClear();
+      window.dispatchEvent(new Event('online'));
+      await settle();
+      expect(flushOutbox).toHaveBeenCalled();
+    });
+
+    it('are still replayed while the organisation answer is missing or an error (only "none" is definite)', async () => {
+      myOrgs.mockResolvedValue({ data: null, error: { code: '503' } });
+      await startApp({ client: orgClient() });
+      await settle();
+      flushOutbox.mockClear();
+      window.dispatchEvent(new Event('online'));
+      await settle();
+      expect(flushOutbox).toHaveBeenCalled();
+    });
+  });
+
+  describe('the Team link across a switch', () => {
+    it('an answer for the previous org that arrives late is ignored', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      let answerOrg1;
+      canManageTeam.mockImplementation((orgId) =>
+        orgId === 'org1'
+          ? new Promise((resolve) => (answerOrg1 = resolve))
+          : Promise.resolve(false),
+      );
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const { root, app } = await startApp({ client: orgClient() });
+      await vi.waitFor(() => expect(answerOrg1).toBeDefined());
+      await app.switchOrg('org2');
+      await settle();
+      await settle();
+      answerOrg1(true);
+      await settle();
+      await settle();
+      expect(teamLink(root)).toBeNull();
+    });
   });
 });

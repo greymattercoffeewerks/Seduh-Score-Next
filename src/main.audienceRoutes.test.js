@@ -116,7 +116,7 @@ async function startOn(hash) {
   // bookmark would — no organiser screen ever mounts.
   location.hash = hash;
   const client = fakeClient();
-  activeApp = mountApp(root, { client, orgId: 'org1' });
+  activeApp = mountApp(root, { client, legacyAudienceOrgId: 'org1' });
   await activeApp.ready;
   return { client, bareRoot: root.querySelector('.app-bare-root') };
 }

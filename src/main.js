@@ -6,9 +6,12 @@
 // or is itself the format module being wired (formats/cup-taster/*).
 import { createRouter } from './core/router.js';
 import { mountAppShell } from './core/appShell.js';
-import { getDefaultOrgId } from './core/config.js';
+import { getLegacyAudienceOrgId } from './core/config.js';
+import { createOrgContext, ORG_STATUS } from './core/orgContext.js';
+import { mustChangePassword } from './core/sessionGate.js';
+import { goToHash, replaceHash } from './core/navigation.js';
 import { getSupabase } from './core/supabaseClient.js';
-import { el } from './core/dom.js';
+import { el, setBusyDisabled } from './core/dom.js';
 import { describeError } from './core/errors.js';
 import { findEvent } from './core/events.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './core/timeout.js';
@@ -16,6 +19,7 @@ import { mountEventsScreen } from './core/eventsScreen.js';
 import { mountLoginScreen } from './core/loginScreen.js';
 import { mountSetPasswordScreen } from './core/setPasswordScreen.js';
 import { mountTeamScreen } from './core/teamScreen.js';
+import { mountNoOrgScreen } from './core/noOrgScreen.js';
 import { canManageTeam } from './core/team.js';
 import { mountSplashScreen } from './core/splashScreen.js';
 import { mountEventDashboardScreen } from './formats/cup-taster/eventDashboardScreen.js';
@@ -75,7 +79,13 @@ function renderRetryableError(outlet, message, retry) {
     text: 'Retry',
     attrs: { type: 'button' },
   });
-  retryButton.addEventListener('click', retry);
+  retryButton.addEventListener('click', () => {
+    // A retry can take as long as the load timeout; say so, and ignore a second click meanwhile.
+    if (retryButton.getAttribute('aria-disabled') === 'true') return;
+    setBusyDisabled(retryButton, true);
+    retryButton.textContent = 'Retrying…';
+    retry();
+  });
   container.appendChild(retryButton);
   outlet.appendChild(container);
   feedback.scrollIntoView?.({ block: 'nearest' });
@@ -85,6 +95,47 @@ function renderRetryableError(outlet, message, retry) {
 
 const TIMEOUT_MESSAGE =
   'This is taking longer than expected — check your connection and try Retry.';
+const ORG_LOAD_ERROR_MESSAGE =
+  'Could not load your organisation — check your connection and try again.';
+const ORG_LOADING_MESSAGE = 'Loading your organisation…';
+
+// The holding state for a wait with no screen to show yet (the same role=status pattern as the retry
+// card, without the error tone): a cold load on slow wifi would otherwise be a blank page for up to the
+// load timeout.
+function renderLoadingStatus(outlet, message) {
+  outlet.innerHTML = '';
+  const container = el('section', { className: 'screen-container' });
+  const status = el('div', {
+    className: 'screen-feedback',
+    text: message,
+    attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
+  });
+  container.appendChild(status);
+  outlet.appendChild(container);
+  status.focus();
+}
+
+const settledFor = (state, userId) =>
+  state.userId === userId &&
+  (state.status === ORG_STATUS.READY || state.status === ORG_STATUS.NO_ORG);
+const loadingFor = (state, userId) =>
+  state.userId === userId && state.status === ORG_STATUS.LOADING;
+
+// The organisation question, answered for this session's user: waits for a question already in flight,
+// asks one if none has been asked for this user (or the last one failed), and otherwise answers at once
+// from what is already known, so ordinary navigation costs no request. Always resolves with the state:
+// the caller decides what an unfinished answer (an error, or one still loading) looks like. A navigation
+// that was superseded while waiting (`signal` aborted) starts no new question.
+async function resolveOrg(orgContext, session, signal) {
+  const userId = session.user?.id;
+  const known = orgContext.getState();
+  if (settledFor(known, userId)) return known;
+  if (loadingFor(known, userId)) await orgContext.whenSettled();
+  else if (!signal?.aborted) await orgContext.refresh(session);
+  // An auth event may have started a newer question while this one was in flight: wait for that too.
+  if (loadingFor(orgContext.getState(), userId)) await orgContext.whenSettled();
+  return orgContext.getState();
+}
 
 // Temporary auth gate (2026-08-30) — deliberately confined to this file,
 // not core/router.js, since router.js is meant to be reused unedited by a
@@ -94,7 +145,7 @@ const TIMEOUT_MESSAGE =
 // it's still null at buildRoutes() call time (createRouter() needs the
 // routes this function returns), but by the time either can actually fire,
 // mountApp has already set it.
-function requireAuth(mount, routerRef) {
+function requireAuth(mount, { routerRef, orgContext, onConsoleMounted }) {
   return async (outlet, params) => {
     // '/events' fallback matches router.start()'s own fallbackPath below —
     // found in testing: an empty hash (the common case for reaching the
@@ -103,7 +154,8 @@ function requireAuth(mount, routerRef) {
     // re-resolving the bare empty string landed on the not-found screen
     // instead of Events.
     function resolveCurrentPath() {
-      routerRef.current.resolve(location.hash.replace(/^#/, '') || '/events');
+      // null once the app is unmounted: a late Retry or sign-in must not mount into a dead outlet.
+      routerRef.current?.resolve(location.hash.replace(/^#/, '') || '/events');
     }
 
     let session;
@@ -123,19 +175,66 @@ function requireAuth(mount, routerRef) {
     if (params.signal?.aborted) return undefined;
     // Signed in with a one-time password (an owner just created or reset this account): nothing else
     // is reachable until they have chosen their own.
-    if (session?.user?.user_metadata?.must_change_password === true) {
+    if (mustChangePassword(session)) {
       return mountSetPasswordScreen(outlet, {
         client: params.client,
         onDone: resolveCurrentPath,
         signal: params.signal,
       });
     }
-    if (session) return mount(outlet, params);
-    return mountLoginScreen(outlet, {
-      client: params.client,
-      onSignedIn: resolveCurrentPath,
-      signal: params.signal,
-    });
+    if (!session) {
+      return mountLoginScreen(outlet, {
+        client: params.client,
+        onSignedIn: resolveCurrentPath,
+        signal: params.signal,
+      });
+    }
+
+    // Signed in: which organisation is this person working in? Every console route is organisation-
+    // scoped, so none mounts until that is known (see core/orgContext.js).
+    if (!settledFor(orgContext.getState(), session.user?.id)) {
+      renderLoadingStatus(outlet, ORG_LOADING_MESSAGE);
+    }
+    const org = await resolveOrg(orgContext, session, params.signal);
+    if (params.signal?.aborted) return undefined;
+    if (org.status === ORG_STATUS.IDLE) {
+      // A sign-out landed while we waited (another tab, or an expired refresh token). Ask the auth
+      // client again rather than reporting an organisation error to someone who is now signed out.
+      let latest = null;
+      try {
+        latest = (await raceTimeout(params.client.auth.getSession(), DEFAULT_LOAD_TIMEOUT_MS)).data
+          .session;
+      } catch {
+        // Treated as still signed in: the retry card below is the honest answer.
+      }
+      if (params.signal?.aborted) return undefined;
+      if (!latest) {
+        return mountLoginScreen(outlet, {
+          client: params.client,
+          onSignedIn: resolveCurrentPath,
+          signal: params.signal,
+        });
+      }
+    }
+    if (org.status === ORG_STATUS.NO_ORG) {
+      // Not an error: an account in no organisation (made for a different product, or someone removed
+      // from theirs). Never an empty Events list.
+      return mountNoOrgScreen(outlet, {
+        client: params.client,
+        email: session.user?.email ?? null,
+        onSignedOut: () => goToHash('#/events'),
+        signal: params.signal,
+      });
+    }
+    if (org.status !== ORG_STATUS.READY) {
+      // resolveOrg asks again from an error, so Retry is just "resolve this route again".
+      return renderRetryableError(outlet, ORG_LOAD_ERROR_MESSAGE, resolveCurrentPath);
+    }
+    // The organisation the console works in is handed to the screen at mount, from the person's own
+    // memberships; a change of person or organisation re-mounts the console (mountApp) rather than
+    // mutating a screen in place. Remember who and which org this screen was built for.
+    onConsoleMounted(`${org.userId}:${org.activeOrgId}`);
+    return mount(outlet, { ...params, orgId: org.activeOrgId });
   };
 }
 
@@ -171,6 +270,29 @@ function mountEventHomeScreen(outlet, { eventId, orgId, client, signal }) {
   return attempt();
 }
 
+// The audience routes (/live/*) still show one organisation, named at build time (T-TEN.D1 replaces that
+// with slug-qualified links). When it is not configured, say so plainly instead of failing: an unset
+// build variable must never take the whole app down. Shown with the audience surfaces' own holding-card
+// look (viewer-shell.css): large, centred, dark stage tokens on a projector or the splash screen, the
+// ordinary paper look on a phone. Its unmount does nothing, like the not-found screen's: the router
+// mounts the next screen first, and the three routes share one root.
+function mountOutOfDateLinkScreen(root, { stage }) {
+  root.innerHTML = '';
+  if (stage) root.setAttribute('data-surface', 'stage');
+  root.appendChild(
+    el('div', { className: 'out-of-date-link' }, [
+      el('div', { className: 'viewer-holding-card' }, [
+        el('h1', { className: 'viewer-holding-title', text: 'This link is out of date' }),
+        el('p', {
+          className: 'viewer-holding-body',
+          text: 'Ask whoever shared it with you for a new one.',
+        }),
+      ]),
+    ]),
+  );
+  return { unmount() {} };
+}
+
 function mountNotFoundScreen(root) {
   root.innerHTML = '';
   root.appendChild(
@@ -199,12 +321,19 @@ function resetBareSurface(outlet) {
   outlet.removeAttribute('data-surface');
 }
 
-export function buildRoutes({ orgId, bareRoot, routerRef }) {
+export function buildRoutes({
+  legacyAudienceOrgId,
+  orgContext,
+  bareRoot,
+  routerRef,
+  onConsoleMounted,
+}) {
+  const auth = { routerRef, orgContext, onConsoleMounted };
   return [
     {
       pattern: '/events',
       mount: requireAuth(
-        (outlet, { client, signal }) =>
+        (outlet, { client, signal, orgId }) =>
           mountEventsScreen(outlet, {
             orgId,
             client,
@@ -212,22 +341,22 @@ export function buildRoutes({ orgId, bareRoot, routerRef }) {
             formatOptions: FORMAT_OPTIONS,
             signal,
           }),
-        routerRef,
+        auth,
       ),
     },
     {
       pattern: '/team',
       mount: requireAuth(
-        (outlet, { client, signal }) => mountTeamScreen(outlet, { orgId, client, signal }),
-        routerRef,
+        (outlet, { client, signal, orgId }) => mountTeamScreen(outlet, { orgId, client, signal }),
+        auth,
       ),
     },
     {
       pattern: '/events/:eventId',
       mount: requireAuth(
-        (outlet, { eventId, client, signal }) =>
+        (outlet, { eventId, client, signal, orgId }) =>
           mountEventHomeScreen(outlet, { eventId, orgId, client, signal }),
-        routerRef,
+        auth,
       ),
     },
     {
@@ -235,7 +364,7 @@ export function buildRoutes({ orgId, bareRoot, routerRef }) {
       mount: requireAuth(
         (outlet, { eventId, client, signal }) =>
           mountSetupScreen(outlet, { eventId, client, signal }),
-        routerRef,
+        auth,
       ),
     },
     {
@@ -243,7 +372,7 @@ export function buildRoutes({ orgId, bareRoot, routerRef }) {
       mount: requireAuth(
         (outlet, { eventId, client, signal }) =>
           mountRosterScreen(outlet, { eventId, client, signal }),
-        routerRef,
+        auth,
       ),
     },
     {
@@ -251,7 +380,7 @@ export function buildRoutes({ orgId, bareRoot, routerRef }) {
       mount: requireAuth(
         (outlet, { eventId, client, signal }) =>
           mountReportScreen(outlet, { eventId, client, signal }),
-        routerRef,
+        auth,
       ),
     },
     {
@@ -259,7 +388,7 @@ export function buildRoutes({ orgId, bareRoot, routerRef }) {
       mount: requireAuth(
         (outlet, { eventId, stageId, client, signal }) =>
           mountHeatGenerationScreen(outlet, { eventId, stageId, client, signal }),
-        routerRef,
+        auth,
       ),
     },
     {
@@ -267,7 +396,7 @@ export function buildRoutes({ orgId, bareRoot, routerRef }) {
       mount: requireAuth(
         (outlet, { eventId, stageId, client, signal }) =>
           mountStandingsScreen(outlet, { eventId, stageId, client, signal }),
-        routerRef,
+        auth,
       ),
     },
     {
@@ -275,7 +404,7 @@ export function buildRoutes({ orgId, bareRoot, routerRef }) {
       mount: requireAuth(
         (outlet, { eventId, heatId, client, signal }) =>
           mountTimingRouteScreen(outlet, { eventId, heatId, client, signal }),
-        routerRef,
+        auth,
       ),
     },
     {
@@ -297,7 +426,7 @@ export function buildRoutes({ orgId, bareRoot, routerRef }) {
             signal,
             handlers: allOutboxHandlers(client),
           }),
-        routerRef,
+        auth,
       ),
     },
     {
@@ -310,7 +439,7 @@ export function buildRoutes({ orgId, bareRoot, routerRef }) {
             signal,
             handlers: allOutboxHandlers(client),
           }),
-        routerRef,
+        auth,
       ),
     },
     {
@@ -323,7 +452,7 @@ export function buildRoutes({ orgId, bareRoot, routerRef }) {
             signal,
             handlers: allOutboxHandlers(client),
           }),
-        routerRef,
+        auth,
       ),
     },
     {
@@ -331,7 +460,7 @@ export function buildRoutes({ orgId, bareRoot, routerRef }) {
       mount: requireAuth(
         (outlet, { eventId, client, signal }) =>
           mountBtcStandingsScreen(outlet, { eventId, client, signal }),
-        routerRef,
+        auth,
       ),
     },
     {
@@ -344,7 +473,7 @@ export function buildRoutes({ orgId, bareRoot, routerRef }) {
             signal,
             handlers: allOutboxHandlers(client),
           }),
-        routerRef,
+        auth,
       ),
     },
     {
@@ -369,7 +498,7 @@ export function buildRoutes({ orgId, bareRoot, routerRef }) {
             signal,
             handlers: allOutboxHandlers(client),
           }),
-        routerRef,
+        auth,
       ),
     },
     {
@@ -389,7 +518,8 @@ export function buildRoutes({ orgId, bareRoot, routerRef }) {
       outlet: bareRoot,
       mount: (outlet, { client, signal }) => {
         resetBareSurface(outlet);
-        return mountProjector(outlet, { orgId, client, signal });
+        if (!legacyAudienceOrgId) return mountOutOfDateLinkScreen(outlet, { stage: true });
+        return mountProjector(outlet, { orgId: legacyAudienceOrgId, client, signal });
       },
     },
     {
@@ -398,7 +528,8 @@ export function buildRoutes({ orgId, bareRoot, routerRef }) {
       outlet: bareRoot,
       mount: (outlet, { client, signal }) => {
         resetBareSurface(outlet);
-        return mountPhone(outlet, { orgId, client, signal });
+        if (!legacyAudienceOrgId) return mountOutOfDateLinkScreen(outlet, { stage: false });
+        return mountPhone(outlet, { orgId: legacyAudienceOrgId, client, signal });
       },
     },
     {
@@ -410,7 +541,8 @@ export function buildRoutes({ orgId, bareRoot, routerRef }) {
       outlet: bareRoot,
       mount: (outlet, { client, signal }) => {
         resetBareSurface(outlet);
-        return mountSplashScreen(outlet, { orgId, client, signal });
+        if (!legacyAudienceOrgId) return mountOutOfDateLinkScreen(outlet, { stage: true });
+        return mountSplashScreen(outlet, { orgId: legacyAudienceOrgId, client, signal });
       },
     },
   ];
@@ -447,8 +579,26 @@ function attemptReconnectFlush(client) {
 
 const PENDING_RETRY_MS = 15000;
 
-export function mountApp(root, { client = getSupabase(), orgId = getDefaultOrgId() } = {}) {
+function unsyncedSwitchMessage(count) {
+  const noun = count === 1 ? 'change on this device has' : 'changes on this device have';
+  return `${count} ${noun} not synced yet. Wait for ${count === 1 ? 'it' : 'them'} to sync before switching organisation.`;
+}
+const SWITCH_CHECK_FAILED_MESSAGE =
+  'Could not check whether everything on this device has synced, so the organisation was not switched. Try again.';
+const SWITCH_UNKNOWN_ORG_MESSAGE = 'That organisation is not available to this account.';
+
+// `orgContext` is created here unless a caller (a test, a future second shell) passes its own.
+// `legacyAudienceOrgId` is the one organisation the anonymous audience routes still show until T-TEN.D1.
+export function mountApp(
+  root,
+  {
+    client = getSupabase(),
+    orgContext: injectedOrgContext,
+    legacyAudienceOrgId = getLegacyAudienceOrgId(),
+  } = {},
+) {
   root.innerHTML = '';
+  const orgContext = injectedOrgContext ?? createOrgContext({ client });
 
   const stopTrackingInputModality = trackInputModality();
 
@@ -504,16 +654,28 @@ export function mountApp(root, { client = getSupabase(), orgId = getDefaultOrgId
   let hasSession = false;
   let onConsoleRoute = false;
   function flushIfOwner() {
-    if (hasSession && onConsoleRoute) attemptReconnectFlush(client);
+    if (!hasSession || !onConsoleRoute) return;
+    // Someone in no organisation cannot have written anything here, so whatever is queued on this
+    // device was left by somebody else (the org state is always the signed-in person's own: it is
+    // refreshed on every auth event): replaying it under this person's login would be refused by the
+    // database as a permanent failure, and the outbox would drop it. Keep it for its owner (until
+    // T-TEN.C6 tags operations, this is the only definite "not yours" signal there is).
+    const orgState = orgContext.getState();
+    if (orgState.status === ORG_STATUS.NO_ORG) return;
+    attemptReconnectFlush(client);
   }
 
-  // Whether to offer the Team link: asked of the database (an owner of this org), re-asked on every
-  // auth event, and never assumed — a failed check just leaves the link out. This only decides what
-  // is SHOWN; the database refuses a non-owner whatever the nav says. `lastNav` lets the link appear
-  // (or go) the moment the answer arrives, without waiting for the next navigation.
+  // Whether to offer the Team link: asked of the database (an owner of the ACTIVE org), re-asked on
+  // every auth event and every change of organisation, and never assumed — a failed check just leaves
+  // the link out. This only decides what is SHOWN; the database refuses a non-owner whatever the nav
+  // says. `lastNav` lets the link appear (or go) the moment the answer arrives, without waiting for
+  // the next navigation.
   let isTeamOwner = false;
+  // The org the current answer is about: an answer about one org must never linger under another.
+  let teamOwnerOrgId = null;
   let ownerCheckSeq = 0;
   let lastNav = null;
+  let currentSession = null;
   function setTeamOwner(value) {
     if (value === isTeamOwner) return;
     isTeamOwner = value;
@@ -523,19 +685,29 @@ export function mountApp(root, { client = getSupabase(), orgId = getDefaultOrgId
     ownerCheckSeq += 1;
     const seq = ownerCheckSeq;
     // A person who still has to choose a password sees nothing but that screen.
-    if (!session || session.user?.user_metadata?.must_change_password === true) {
+    if (!session || mustChangePassword(session)) {
       setTeamOwner(false);
       return;
     }
+    // No organisation to ask about yet (still loading, or in none): nothing to offer. The next change
+    // of the org context asks again.
+    const activeOrgId = orgContext.getActiveOrgIdFor(session.user?.id);
+    if (!activeOrgId) {
+      setTeamOwner(false);
+      return;
+    }
+    if (teamOwnerOrgId !== activeOrgId) setTeamOwner(false);
     // Deliberately NOT awaited here: this runs inside onAuthStateChange, where supabase-js holds
     // its auth lock, and an RPC that needs the session would deadlock behind it. A failed check
     // (null / a rejection) changes nothing — a dropped connection at a token refresh must not make
     // the Team link vanish — and `seq` drops an answer that a newer auth event has overtaken.
     Promise.resolve()
-      .then(() => canManageTeam(orgId, client))
+      .then(() => canManageTeam(activeOrgId, client))
       .catch(() => null)
       .then((owner) => {
-        if (seq === ownerCheckSeq && owner !== null) setTeamOwner(owner);
+        if (seq !== ownerCheckSeq || owner === null) return;
+        teamOwnerOrgId = activeOrgId;
+        setTeamOwner(owner);
       });
   }
 
@@ -543,12 +715,22 @@ export function mountApp(root, { client = getSupabase(), orgId = getDefaultOrgId
     data: { subscription: reconnectAuthSubscription },
   } = client.auth.onAuthStateChange((_event, session) => {
     hasSession = Boolean(session);
+    currentSession = session;
+    // Not awaited, and it reads the database only a tick later (see orgContext.js): safe here.
+    orgContext.refresh(session);
     flushIfOwner();
     refreshTeamOwnership(session);
   });
 
   function onOnline() {
     flushIfOwner();
+    // Coming back online after a failed or stand-in organisation answer: ask again, and if the console
+    // was showing the error card, show the real screen.
+    const orgState = orgContext.getState();
+    if (!currentSession || (orgState.status !== ORG_STATUS.ERROR && !orgState.stale)) return;
+    orgContext.retry().then(() => {
+      if (orgState.status === ORG_STATUS.ERROR) routerRef.current?.resolve(currentRoutePath());
+    });
   }
   window.addEventListener('online', onOnline);
 
@@ -575,7 +757,38 @@ export function mountApp(root, { client = getSupabase(), orgId = getDefaultOrgId
   // but requireAuth()'s onSignedIn only reads routerRef.current lazily,
   // once a real sign-in actually happens, by which point it's set.
   const routerRef = { current: null };
-  const routes = buildRoutes({ orgId, bareRoot, routerRef });
+  const currentRoutePath = () => location.hash.replace(/^#/, '') || '/events';
+  // Who and which org the console screen on show was built for (null: none yet, or already replaced).
+  let mountedKey = null;
+  const routes = buildRoutes({
+    legacyAudienceOrgId,
+    orgContext,
+    bareRoot,
+    routerRef,
+    onConsoleMounted: (key) => {
+      mountedKey = key;
+    },
+  });
+
+  // When the person or the organisation the console was built for is no longer the one in force (a
+  // switch, a membership that fell away, another account signing in or out in a second tab), the screen
+  // on show must go: show the front door again, replacing the history entry so Back cannot return to a
+  // URL that belongs to the old state. The router aborts the screen's in-flight loads through its own
+  // signal, so nothing from the old organisation lands in the new one's list. Compared against the key
+  // the screen was MOUNTED with, so it fires once, whatever path the context took to get there. The
+  // Team link is re-asked at the same moment.
+  const unsubscribeOrgContext = orgContext.subscribe((state) => {
+    refreshTeamOwnership(currentSession);
+    if (!onConsoleRoute || mountedKey === null) return;
+    const key = state.status === ORG_STATUS.READY ? `${state.userId}:${state.activeOrgId}` : null;
+    const gone =
+      key === null
+        ? state.status === ORG_STATUS.IDLE || state.status === ORG_STATUS.NO_ORG
+        : key !== mountedKey;
+    if (!gone) return;
+    mountedKey = null;
+    replaceHash('#/events');
+  });
 
   function updateChrome(route, params) {
     const showChrome = route.chrome !== false;
@@ -618,11 +831,15 @@ export function mountApp(root, { client = getSupabase(), orgId = getDefaultOrgId
     if (isTeamOwner) {
       links.push({ label: 'Team', href: '#/team', active: route.pattern === '/team' });
     }
-    links.push(
-      { label: 'Splash screen', href: '#/live/splash', openInNewTab: true },
-      { label: 'Projector view', href: '#/live/projector', openInNewTab: true },
-      { label: 'Phone view', href: '#/live/phone', openInNewTab: true },
-    );
+    // Without the legacy audience organisation these links would only open the "out of date" card, so
+    // they are left out until T-TEN.D4 makes them slug-qualified.
+    if (legacyAudienceOrgId) {
+      links.push(
+        { label: 'Splash screen', href: '#/live/splash', openInNewTab: true },
+        { label: 'Projector view', href: '#/live/projector', openInNewTab: true },
+        { label: 'Phone view', href: '#/live/phone', openInNewTab: true },
+      );
+    }
     shell.setNav({ eventId: params.eventId ?? null, links });
   }
 
@@ -636,8 +853,36 @@ export function mountApp(root, { client = getSupabase(), orgId = getDefaultOrgId
 
   const started = router.start(shell.outlet, { fallbackPath: '/events' });
 
+  // Switch the organisation the console works in. Refused, with a message to show, while this device
+  // still holds changes that have not synced: they were made in the current organisation, and until
+  // the outbox records which organisation each belongs to (T-TEN.C6) the only safe rule is "none
+  // pending". The screen change itself follows from the org context's own notification above.
+  async function switchOrg(orgId) {
+    if (orgId === orgContext.getActiveOrgId()) return { ok: true };
+    let pending;
+    try {
+      pending = await listPendingOperations();
+    } catch {
+      return { ok: false, reason: 'unknown', message: SWITCH_CHECK_FAILED_MESSAGE };
+    }
+    if (pending.length > 0) {
+      return {
+        ok: false,
+        reason: 'unsynced',
+        count: pending.length,
+        message: unsyncedSwitchMessage(pending.length),
+      };
+    }
+    if (!orgContext.setActiveOrg(orgId)) {
+      return { ok: false, reason: 'unknown_org', message: SWITCH_UNKNOWN_ORG_MESSAGE };
+    }
+    return { ok: true };
+  }
+
   return {
     ready: started,
+    orgContext,
+    switchOrg,
     async unmount() {
       // router.stop() first — the currently-mounted SCREEN's own
       // unmount() may need to do more than DOM cleanup (e.g. clear a
@@ -648,6 +893,11 @@ export function mountApp(root, { client = getSupabase(), orgId = getDefaultOrgId
       // holding real DOM state, breaking the same
       // "every mount has a real unmount" contract this same PR closed a
       // gap in for heatsScreen.js.
+      // Nothing may start a navigation from here on: no org-change reaction, no late Retry or sign-in.
+      unsubscribeOrgContext();
+      routerRef.current = null;
+      // Only a context made here is this app's to end; an injected one belongs to its caller.
+      if (!injectedOrgContext) orgContext.destroy();
       await router.stop();
       shell.unmount();
       window.removeEventListener('online', onOnline);

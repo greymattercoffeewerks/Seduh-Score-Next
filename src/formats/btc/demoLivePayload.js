@@ -7,6 +7,13 @@
 // results favour the lower-numbered teams, with a few upsets; the knockout is whatever `knockout` says.
 import { rank, chainComparators } from '../../core/ranking.js';
 import { assembleBtcLivePayload } from './liveSession.js';
+import {
+  blankDraft,
+  computeScores,
+  cupsForRound,
+  TOKENS_PER_CUP,
+  withCupTokens,
+} from './scoring.js';
 
 export const DEMO_TEAM_NAMES = [
   'Bean Scene',
@@ -24,23 +31,33 @@ export const demoTeams = DEMO_TEAM_NAMES.map((name, i) => ({ id: `t${i + 1}`, na
 const demoJudges = DEMO_JUDGE_NAMES.map((name, i) => ({ id: `j${i + 1}`, name }));
 export const teamId = (index) => `t${index + 1}`;
 
-const CUPS = { preliminary: 15 };
-const cupsFor = (round) => CUPS[round] ?? 20;
 const minutes = (n) => new Date(Date.UTC(2026, 9, 9, 10, n)).toISOString();
 
-// A match with its scores, as the database views would return them: `fastest` and the signature flags are the
-// only bonuses besides the +5 for strictly more tokens, exactly btc_match_scores' formula.
+// Builds the same cup votes the scorer would have entered. The fixture only needs a
+// deterministic token total, so it fills each cup in order; computeScores remains the
+// one authority for turning those votes and bonuses into match totals.
+function draftForMatch(round, tokensA, fastest, signature, teams) {
+  let remaining = tokensA;
+  let draft = blankDraft();
+  for (let cup = 1; cup <= cupsForRound(round); cup += 1) {
+    const team1Tokens = Math.min(TOKENS_PER_CUP, remaining);
+    draft = withCupTokens(draft, cup, team1Tokens);
+    remaining -= team1Tokens;
+  }
+  return {
+    ...draft,
+    fastest: fastest === teams[0] ? 'team1' : fastest === teams[1] ? 'team2' : null,
+    signature: { team1: Boolean(signature[0]), team2: Boolean(signature[1]) },
+  };
+}
+
+// A match with its scores, as the database views would return them. `draft` is kept
+// on the demo-only fixture record for the invariant test; the real assembler never
+// receives it.
 function playedMatch({ id, round, a, b, tokensA, fastest = null, signature = [false, false], n }) {
-  const total = cupsFor(round) * 3;
-  const tokens = [tokensA, total - tokensA];
   const teams = [teamId(a), teamId(b)];
-  const totals = [0, 1].map(
-    (i) =>
-      tokens[i] +
-      (tokens[i] > tokens[1 - i] ? 5 : 0) +
-      (fastest === teams[i] ? 2 : 0) +
-      (round !== 'preliminary' && signature[i] ? 2 : 0),
-  );
+  const draft = draftForMatch(round, tokensA, fastest, signature, teams);
+  const scores = computeScores(draft, round);
   return {
     match: {
       id,
@@ -60,10 +77,10 @@ function playedMatch({ id, round, a, b, tokensA, fastest = null, signature = [fa
       round,
       team1_id: teams[0],
       team2_id: teams[1],
-      team1_tokens: tokens[0],
-      team2_tokens: tokens[1],
-      team1_total: totals[0],
-      team2_total: totals[1],
+      team1_tokens: scores.team1Tokens,
+      team2_tokens: scores.team2Tokens,
+      team1_total: scores.team1Total,
+      team2_total: scores.team2Total,
     },
     totalsRow: {
       match_id: id,
@@ -71,6 +88,7 @@ function playedMatch({ id, round, a, b, tokensA, fastest = null, signature = [fa
       team1_signature_beverage: Boolean(signature[0]),
       team2_signature_beverage: Boolean(signature[1]),
     },
+    draft,
   };
 }
 
@@ -153,18 +171,24 @@ function assemble({ matches, standings, bracketEntries = [], judgesByMatch = {} 
 // The preliminary round with the first `playedCount` of the 28 matches confirmed and the rest created and
 // waiting. The next two unplayed matches are up next and then next, judged by judges 1 to 3.
 export function preliminaryPayload({ playedCount = 12 } = {}) {
+  const matches = preliminaryFixtureMatches({ playedCount });
   const plan = roundRobin();
-  const matches = plan.map((p, i) =>
-    i < playedCount
-      ? playedMatch({ id: p.id, round: 'preliminary', ...p })
-      : pendingMatch({ id: p.id, round: 'preliminary', a: p.a, b: p.b, n: p.n }),
-  );
   const judgesByMatch = Object.fromEntries(plan.map((p) => [p.id, ['j1', 'j2', 'j3']]));
   return assemble({
     matches,
     standings: standingsOf(matches.filter((m) => m.score)),
     judgesByMatch,
   });
+}
+
+// Exported only from this demo/test module so its tests can recompute every score
+// from the exact cup votes that feed the assembler.
+export function preliminaryFixtureMatches({ playedCount = 28 } = {}) {
+  return roundRobin().map((p, i) =>
+    i < playedCount
+      ? playedMatch({ id: p.id, round: 'preliminary', ...p })
+      : pendingMatch({ id: p.id, round: 'preliminary', a: p.a, b: p.b, n: p.n }),
+  );
 }
 
 // The knockout. Seeds 1v8, 4v5, 3v6 and 2v7 meet in the quarterfinals; `results` maps a slot to what happened
@@ -177,7 +201,7 @@ export const KNOCKOUT_SEATS = {
   qf4: [1, 6],
 };
 
-export function knockoutPayload({ results = {} } = {}) {
+function knockoutFixture({ results = {} } = {}) {
   const plan = roundRobin();
   const preliminaryMatches = plan.map((p) => playedMatch({ id: p.id, round: 'preliminary', ...p }));
   const standings = standingsOf(preliminaryMatches);
@@ -262,12 +286,20 @@ export function knockoutPayload({ results = {} } = {}) {
   build('final', 'final', winnerOf('sf1'), winnerOf('sf2'));
   build('third', 'third_place', loserOf('sf1'), loserOf('sf2'));
 
-  return assemble({
+  return {
     matches,
     standings,
     bracketEntries: entries,
     judgesByMatch: Object.fromEntries(
       matches.filter((m) => !m.score).map((m) => [m.match.id, ['j1', 'j3', 'j4']]),
     ),
-  });
+  };
+}
+
+export function knockoutFixtureMatches(options) {
+  return knockoutFixture(options).matches;
+}
+
+export function knockoutPayload(options) {
+  return assemble(knockoutFixture(options));
 }

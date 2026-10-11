@@ -1862,7 +1862,7 @@ _The BTC projector is built (stage 3c); the phone view (stage 4) is not._
 - **A very long champion name overflows at 4:3.** **CLOSED (T-HARDEN.champion-name-clamp, 2026-10-10):** names over 31 characters now receive the shared long-name fit step-down, which uses `--stage-fit` and balanced wrapping; names of 31 characters or fewer keep the original type size. A 60-character name stays fully visible; names are not truncated.
 - **Replaying a demo load on a live display announces old results as new** (it recreates every match with new ids): up to three result moments and a rank moment against the old standings. Test events only.
 - **Cup Taster and BTC still duplicate three small things**: the "what is new since the last snapshot" step of the detectors (the `seen` set, the fresh filter, the oldest-first sort), the result and rank moment mount boilerplate (frame, footer ring, destroy), and the idle loop's "same content, do not restart" signature guard. Extract when a third format needs them or one of them changes; the second-use rule was applied to the rank-impact logic, which carried the most behaviour.
-- **`demoLivePayload.js` reimplements the +5/+2 formula and the standings aggregation** to build fixtures (demo and tests only; it runs through the real assembler). If `scoring.js` or the views change, derive the totals from `scoring.js` or pin them with a test.
+- **`demoLivePayload.js` reimplements the +5/+2 formula and the standings aggregation** to build fixtures (demo and tests only; it runs through the real assembler). **CLOSED (T-BTC.demo-payload-derive, 2026-10-11):** each fixture now supplies cup votes to `scoring.js`'s `computeScores`; an invariant test recomputes every confirmed demo match and independently ranks the pinned preliminary standings.
 - **Cup Taster's rank screen still renames `label` to `displayName` and back** (a cosmetic round trip); pass `impact.rows` through when its fixtures are next touched. Its headline does not say "joint" for a shared place, BTC's does.
 - **The BTC phone view (stage 4) is not started.** ROADMAP's item "BTC payload fields are decided but unbuilt" is closed for the projector only.
 
@@ -1897,13 +1897,13 @@ handoff §4's "one organiser, one org"; locks D-T1…D-T8). Why: `MULTI-TENANCY-
 pillars A and B. Not in scope: gating/entitlements (D14 stays a stub), admin console, self-serve
 signup, Seduh ID. Rule (lifted 2026-10-11, now that B1, B2 and B6 are in the cloud): a two-org user is created only through the service-role provisioning path (B4).
 
-| Phase | Tasks                                                                                                                                             | Status                                                                       |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| A     | A1 spec lock · A2 tenancy inventory                                                                                                               | Done                                                                         |
-| B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | In progress (B1, B2, B5, B6 done and in the cloud project; B3, B4, B7 to do) |
-| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | Not started                                                                  |
-| D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | Not started                                                                  |
-| E     | E1 negative matrix · E2 console Playwright · E3 security/perf · E4 docs · E5 rollout · E6 close-out                                               | Not started                                                                  |
+| Phase | Tasks                                                                                                                                             | Status                                          |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| A     | A1 spec lock · A2 tenancy inventory                                                                                                               | Done                                            |
+| B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | Done (B1 to B7 merged and in the cloud project) |
+| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | In progress (C1 merged, C2 built, in review)    |
+| D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | Not started                                     |
+| E     | E1 negative matrix · E2 console Playwright · E3 security/perf · E4 docs · E5 rollout · E6 close-out                                               | Not started                                     |
 
 Each D task is re-confirmed with the product owner before it starts (2026-10-10).
 
@@ -1939,7 +1939,7 @@ _Two migrations (`20261011130000_tenancy_resolver_disclosure`, `20261011140000_t
 
 ## Known open items from T-TEN.B3 (2026-10-11)
 
-_One migration, `20261011150000_tenancy_my_orgs` (`my_orgs()` plus the `org_members(user_id)` index). Reviewed by schema-guardian (no blocking), security-reviewer (signed off; 12 SQL probes and 13 real API requests through PostgREST found no way to see another user's membership) and test-auditor. **Not pushed to the cloud project until the product owner says so.**_
+_One migration, `20261011150000_tenancy_my_orgs` (`my_orgs()` plus the `org_members(user_id)` index). Reviewed by schema-guardian (no blocking), security-reviewer (signed off; 12 SQL probes and 13 real API requests through PostgREST found no way to see another user's membership) and test-auditor. **Pushed to the cloud project 2026-10-11 (cloud version `20261011030525`) and verified there:** function `SECURITY DEFINER`, `STABLE`, `search_path` pinned, no arguments, executable by authenticated only; the index is a plain btree on `user_id`; and a rolled-back live probe showed a stranger and a session with no user id get zero rows, the real owner exactly their own org and role, and anon and the service role are refused._
 
 - **Notes for C1 (`core/orgContext.js`).**
   - Call `my_orgs` with POST (supabase-js `.rpc('my_orgs')`, the default), not GET (`{ get: true }`). The function is STABLE so PostgREST allows GET, but the response varies by Authorization while PostgREST's `Vary` header does not, and shared iPads with several accounts are exactly the case where a cached per-user GET would be wrong.
@@ -1950,3 +1950,79 @@ _One migration, `20261011150000_tenancy_my_orgs` (`my_orgs()` plus the `org_memb
 - **The index is scale-readiness only.** At one org and one member the planner keeps scanning; measured on 3000 orgs, 12000 memberships it is used and goes from 0.69 ms to 0.15 ms. It also helps the `where user_id = ...` lookups in the team functions and the cascade from `auth.users`.
 - **Row estimate.** A set-returning SQL function is estimated at 1000 rows by default; add `rows 5` only if a later query joins on `my_orgs()`.
 - **Last-owner accounts cannot be deleted** until a successor is promoted (B5, intended); account deletion must go through the org first.
+
+---
+
+## Known open items from T-TEN.B4 (2026-10-11)
+
+_One migration, `20261011160000_tenancy_provisioning` (`create_org`, `org_add_existing_member`, `orgs_slug_format`, `trg_orgs_slug_immutable`). Reviewed by schema-guardian (no blocking; 8 non-blocking findings, all fixed or recorded here), security-reviewer (signed off on the boundary; 5 non-blocking, fixed or recorded) and test-auditor. **Pushed to the cloud project 2026-10-11 (cloud version `20261011051012`) and verified there** (function bodies hash-identical to the tested copies, service-role-only grants, the CHECK constraint and the trigger present, a rolled-back live probe of every refusal). Cloud pre-check done 2026-10-11: the one existing slug (`grey-matter-coffee-werks`) satisfies the new CHECK and `auth.users` has the `deleted_at`, `is_anonymous` and `banned_until` columns the eligibility rule reads._
+
+- **Deleting an org frees its slug for reuse**, which defeats the "slugs are permanent because they are in printed links" rationale (D-T8). Only `postgres` can delete an org today. If org deletion ever becomes a real operation, keep a tombstone of retired slugs and refuse them in `create_org`.
+- **No audit trail for operator actions.** `create_org`, `org_add_existing_member` and `org_set_role` write no audit row. Consider `raise log` or an `org_events` table when an admin console exists.
+- **Attaching a Team-managed account to a second org** lets the first org's owner (who knows its one-time password) sign in there. Nothing in the schema marks an account as "managed", so this is an operator rule (in the CLAUDE.md runbook), not a database guarantee.
+- **Reserved words only protect new orgs.** Slugs are permanent, so the reserved list can grow but cannot un-create an org already named `help` or `status`. If slug routes ever move from `#/live/:orgSlug` to the site root or a subdomain, revisit the list.
+- **A name check is a hygiene check, not a spell check.** It refuses control characters, bidi overrides and invisible-only names; it does not refuse look-alike letters in a display name (only in the slug, which is ASCII-only before folding).
+- **A rare race is mapped, not tested:** an owner or org deleted between the existence check and the insert surfaces as the same `*_not_found` hint through a foreign-key handler. pgTAP runs in one session so cannot interleave it.
+- **PostgREST status codes.** "Not found" and "invalid" refusals use SQLSTATE 22023 (HTTP 400); a conflict is 23505. (P0002 would have been a 500.)
+- **Both functions are service-role only**, so there is no way to provision from the app by design (D-T1); an admin console phase will need its own, separately reviewed path.
+
+---
+
+## Known open items from T-TEN.B7 (2026-10-11)
+
+_One migration, `20261011170000_tenancy_anon_expand` (`public_org_by_slug`, `public_event_summary`, the org-stamp trigger on `public_results`, the `published_by` tightening). Pushed to the cloud project 2026-10-11 (cloud version `20261011075747`)._
+
+- **DECISION (product owner, 2026-10-11): an event's name, date and test flag are public as soon as the event exists (Option 1).** `public_event_summary(org_id)` returns an org's newest event to anyone who knows the org id (a random uuid that is itself readable from the published results and the shipped code), whether or not the event is published or announced, rehearsals included. This is strictly narrower than today (anyone can read every org's events with no id), and the splash screen needs the pre-event name. **Do not put confidential details in an event name before announcing it.** Revisit with an "announced" switch on events if organisers ever need secrecy before an announcement; the alternatives were showing an event only once the org has a live session or a published result (loses the pre-event splash name) or that switch.
+- **The old anonymous doors are still open** until D6: `events_read_public` (anon reads every org's events, including `org_id`), `live_sessions_read` (every org's live rows, active or not, and the Realtime publication that follows from it) and the audience surfaces' direct `events` read. B7 only adds the narrow doors; D1/D2 switch the client onto them and D6 closes the old ones, after a deploy, with no live event and the venue displays reloaded.
+- **Slug probing is possible by design.** `public_org_by_slug` answers "does this slug exist, and what is its id and name" to anyone; that is what a printed audience link needs and is no more than trying the URL. Slugs are low-entropy, so they can be dictionary-guessed. There is no rate limit on it: add one at the edge before many orgs exist, and never put anything sensitive behind a slug alone.
+- **Earlier published rows have no `org_name` / `org_slug`**, and stamped names go stale: `orgs.name` can change (only the slug is frozen), and a row keeps the name from its last write until it is republished. A refresh trigger on `orgs` was rejected because it would rewrite published rows and could fail (and so block an org rename) if a published event were later flagged as a test. D3's results screens must tolerate the absence and the staleness.
+- **The new payload keys are snake_case (`org_name`, `org_slug`) while the existing ones are camelCase** (`eventName`, `eventDate`); the plan fixes these names, so D3 should read them exactly as written.
+- **Readers must use exact top-level keys and escape the values.** A case variant or nested `org_name` is stored untouched (only the exact top-level keys are replaced), and an org name containing quotes, backslashes or markup is stored verbatim, so anything that renders it must escape it.
+- **The 256 KB cap is per row, not total (security review F2/F6).** A member can still create many events and publish up to 256 KB on each, the results page reads every row with no limit, and the database does not bound the request size or the nesting depth of a payload (a few thousand levels are accepted; a far deeper one fails with a stack-depth error). Before many orgs exist: a body-size cap at the edge together with the slug rate limit, and a results list that does not pull whole payloads (or paginates). Real payloads are about 3 KB.
+- **The anonymous-function pin excludes some functions on purpose:** functions that belong to an extension (pgTAP installs dozens while the file runs), trigger and event-trigger functions (they cannot be called), and `rls_auto_enable`, a Supabase event-trigger helper the cloud project grants to anon and a local stack does not.
+- **`public_event_summary` still shows rehearsal events** (with `is_test`), like the table read it replaces; the audience surfaces mark them (D9).
+- **`public_results` now has column-level anon grants.** A column added later is invisible to anon until granted, which is the point, but a client that selects `*` as anon fails (`42501`) by design.
+- **D2 has two follow-ups:** `findLatestEventForOrg` must call `.rpc('public_event_summary', { p_org_id }).maybeSingle()` (the function returns a set of at most one row), and the `.from('events')` mock in `src/core/events.test.js` must change.
+
+---
+
+## Known open items from T-TEN.C1 (2026-10-11)
+
+_Client only: `src/core/orgContext.js` and `src/core/noOrgScreen.js` (plus `noOrgScreen.css`). **Nothing calls them yet**; C2 wires them in. No migration._
+
+- **C2 must wire it this way.**
+  - Call `refresh(session)` from the existing `onAuthStateChange` handler (it defers its own database read, so the auth-lock rule holds) and use `retry()` for the Retry button after an error.
+  - `no_org` mounts `mountNoOrgScreen`. Its `onSignedOut` must do what the header's Sign out does (set the hash and dispatch a synthetic `hashchange`, or signing out from `#/events` leaves the old screen up), and C2 must not rely on that callback alone: if the sign-out event makes the router abort the screen first, the callback is skipped.
+  - `error` needs the existing `renderRetryableError` shape.
+  - Call `destroy()` on unmount.
+- **Refines the B3 note.** The B3 item said to treat a 400 from `my_orgs` as "no organisation". Review showed a bare 400 can also come from a proxy or CDN and would lock an organiser out, so only the database's `22P02` means that; any other 400 is an ordinary failure (keeps the last answer).
+- **Three copies of "must choose a password first"** now exist (`main.js` twice, `orgContext.js`). Export one predicate from `setPasswordScreen.js` and use it in all three when `main.js` is edited in C2.
+- **Two copies of sign-out** now exist (`appShell.js`, `noOrgScreen.js`); the header one has no timeout and shows no failure message. Share one helper when C2 touches the shell, and decide how to avoid two buttons named "Sign out" on the no-org screen (the header's nav links also stay visible there).
+- **Two tabs can act in different orgs.** A switch in one tab is not seen by another until it reloads or refreshes. Every write is still checked by the database against the org it names; C6's outbox should key on `getActiveOrgIdFor(<session user>)`.
+- **The remembered choice stays on the device** after sign-out (an org id per user id under `seduh.activeOrg.<userId>`; ids only, no names or tokens). Shared iPads keep one entry per account that signed in there.
+- **The screen has never been rendered in a browser.** The accessibility review was by reading code and CSS; check it at 360px (full-width button, no sideways scroll for a long email, focus ring, VoiceOver/TalkBack) when C2 mounts it.
+- **The copy says "ask its owner to add you".** True for a removed organiser; a Guess the Bean account would ignore it. Revisit with product wording if those accounts ever land here often.
+
+---
+
+## Known open items from T-TEN.C2 (2026-10-11)
+
+_Client only: `src/main.js` and the shared helpers. No migration._
+
+- **C3 must add what C2 deliberately left out.**
+  - The switcher control itself (nothing calls `switchOrg` yet, so its refusal messages have no UI), reachable and 44px-tall, collapsed under the hamburger below 1366px.
+  - The active organisation's name, visible in the header.
+  - A persistent `aria-live` announcement ("Now working in <name>. Showing Events.") for BOTH a deliberate switch and an involuntary change (a membership that fell away, another account signing in). Today an involuntary change just lands on Events with no cue. Because the switcher sits in the header, the router's "focus the heading only if nothing has focus" rule will not move focus: C3 must decide whether to focus the heading itself.
+  - Route C3's UI and C7's automatic switch through `switchOrg` (or a shared check), not `orgContext.setActiveOrg` directly: the unsynced-changes guard lives only in `switchOrg`, and the handle returned by `mountApp` also exposes `orgContext`.
+- **C6 closes the remaining outbox gaps.**
+  - The guard in `switchOrg` is check-then-act: a change queued between the outbox read and the switch (by the screen still on show, or by a second tab) slips through. Nothing is lost or mis-attributed (the operation's payload carries the old organisation and the database checks membership), but "no old-organisation operations while the new one is active" is not airtight until operations carry their user and organisation.
+  - The message "Wait for it to sync" is wrong for a stuck operation or one left by another account, and `switchOrg` counts the whole device. C6 should split pending / stuck / from another account.
+  - The no-organisation flush skip keeps other people's operations, but a person removed from their organisation also keeps their own unflushed ones stuck, shown as "Not synced (N)" with no explanation on the no-organisation screen.
+  - An involuntary organisation change replaces the screen without checking the outbox, even mid-heat. Drafts are keyed by heat or match id and survive, but C3/C7 should confirm the timing and scoring screens keep an unconfirmed form or running timer when they are unmounted.
+- **The remembered organisation list is a hint, not authority.** It holds organisation id, name, slug and role per user under `seduh.orgs.<userId>` (names and slugs are public in the results archive; the role is not), stays on the device after sign-out like the last-used-org hint, and can show an organisation the person was removed from until the next real answer (the database still refuses every read and write). It is erased by an answer of "no organisation".
+- **One `my_orgs` request per auth event** (including the hourly token refresh) plus one per console navigation only while the answer is missing.
+- **Nav on the no-organisation and error screens.** The shell's nav stays fully populated there (Events just shows the same screen again; the Team link is correctly absent). Two buttons named "Sign out" exist on the no-organisation screen (the header's and the screen's): kept on purpose, since the screen's is the one that works at 360px (the header's is behind the hamburger); the header's now also reports failures. Consider a minimal nav for those two states.
+- **Audience routes still use `VITE_DEFAULT_ORG_ID`** (`getLegacyAudienceOrgId()`), until D1. Set, a two-organisation organiser's "Projector view" opens the legacy organisation's display whichever organisation is active: D1/D4 fix this with slug-qualified links. The local `.env` and the e2e dev server still set it; the production dashboard variable is removed in E5 after D1.
+- **The "out of date" card has never been rendered in a browser** on a real projector or at 360px; neither has the Retry or loading card. Check in C3/D5.
+- **`organiser-flow.spec.js`'s hamburger focus test is flaky under parallel load** on a slow machine (passes alone). Pre-existing; not touched.
+- **Team screen heading and copy naming the organisation** remain C4.

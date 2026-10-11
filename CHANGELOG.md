@@ -1,8 +1,123 @@
-## T-TEN.B3: `my_orgs()` · 2026-10-11
+## T-TEN.C2: the console takes its organisation from the database · 2026-10-11
 
-**Task:** T-TEN.B3 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (PR 4). One migration, `20261011150000_tenancy_my_orgs`; **not pushed to the cloud project until the product owner says so.**
+**Task:** T-TEN.C2 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase C, the client). Client only: no migration, nothing to push to the cloud project.
 
 **Status: in review, not merged.**
+
+**Why:** until now the console worked in whichever organisation was baked into the build (`VITE_DEFAULT_ORG_ID`). It now asks the database which organisations the signed-in person belongs to (C1's `orgContext`) and works in the active one.
+
+**What changed:**
+
+- **`src/main.js`:**
+  - **Organisation comes from the person.** `requireAuth` waits for the organisation answer before any console route mounts, and hands the screen its `orgId` at mount (`/events`, `/team` and the event hub). Ordinary navigation costs no request once the answer is known.
+  - **Account in no organisation:** it gets the "This account isn't part of an organisation" screen (C1), on every console route, never an empty Events list.
+  - **Failed or slow load:** a status message ("Loading your organisation…") replaces the blank page while the answer is on its way. A failed first load shows a Retry card whose button shows "Retrying…" and ignores a second click. Plain navigation, and coming back online, also ask again.
+  - **Boots with `VITE_DEFAULT_ORG_ID` unset.** The variable now only names the organisation the anonymous audience routes (`/live/*`) show, until T-TEN.D1. Unset, those three routes show a "This link is out of date" card in the audience surfaces' own holding-card look (stage look on the projector and splash, paper look on a phone), and the organiser's own nav leaves out the three audience links. CI's smoke build now deliberately omits the variable, so a real browser proves the boot.
+  - **Switching organisation:** `switchOrg(orgId)` is refused, with a message to show, while this device holds changes that have not synced (and when it cannot tell). When the organisation in force changes by any route (a switch, a membership that fell away, another account signing in or out in a second tab, an expired session), the console is sent back to `#/events`: the router aborts the old screen's in-flight loads through its signal, so nothing from the old organisation lands in the new one's list. The history entry is replaced, so Back cannot return to the old organisation's URL. Nothing here ever moves anyone off an audience route.
+  - **Team link follows the active organisation:** asked per organisation, cleared the moment the organisation changes, and a late answer for the previous organisation is ignored.
+  - **Queued changes are never replayed under the login of someone who belongs to no organisation** (they were left by somebody else on a shared device; the database would refuse them as permanent failures and the outbox would drop them). Everyone else's flushing is untouched.
+- **`src/core/orgContext.js`:** also remembers the last answer per user on the device (`seduh.orgs.<userId>`) and, when the first question of a visit fails and nothing is known, uses it as a stand-in marked `stale`, so a reload on flaky venue wifi does not lock an organiser out of a heat in progress. The next real answer replaces it; an answer of "no organisation" erases it. New `whenSettled()` and `retry()`.
+- **Shared helpers (from the C1 reviews):** `core/sessionGate.js` (one "must choose a password first" check, replacing three copies), `core/signOut.js` (one sign-out with the shared timeout, used by the header and the no-organisation screen), `core/navigation.js` (`goToHash`, `replaceHash`: the router re-resolves exactly once). The header's Sign out now says why when it fails or times out (a polite status line) instead of doing nothing.
+- **Config:** `getDefaultOrgId()` (threw when unset) is replaced by `getLegacyAudienceOrgId()` (never throws). `.env.example`, `README.md` and `ci.yml` updated.
+
+**Verified:** 3575 unit tests pass, including `main.test.js` with 0 / 1 / 2 organisations, a switch that shows only the new organisation's events, and a slow-resolving screen whose late result never lands in the new organisation (the plan's acceptance criteria). The real organiser flow passes against the local Supabase stack (the hamburger focus test is flaky under parallel load on this machine and passes alone). Every deliberate break of `main.js`'s new behaviour was caught by a test that names it.
+
+**Reviews:** module-boundary-checker (boundary holds; duplicated hash navigation and a hard-coded route fixed, docs updated), code-reviewer (no blockers; the stale-screen-after-another-account case, error retry, unmount safety fixed), test-auditor (about 60 mutations on copies; eight gaps filled), offline-sync-auditor (outbox untouched and safe; the no-organisation flush skip and the reload-on-flaky-wifi lock-out fixed, the rest recorded for C6), ui-accessibility-reviewer (audience card styling, dead nav links, Retry feedback, loading state, Back button fixed; the announcement of an organisation change is C3's). Each was run as a general-purpose agent following the project's `.claude/agents/*.md` definition.
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-TEN.C2".
+
+## T-BTC.demo-payload-derive: derive BTC demo totals from scoring · 2026-10-11
+
+**Task:** Keep the demo/test payload builder tied to BTC's real scoring rule. Client and test fixtures only: no migration and nothing to push to the cloud project.
+
+**Status: in review, not merged.**
+
+**What changed:** `demoLivePayload.js` now turns each fixture's deterministic token total into cup votes and calls `computeScores()` for every match, instead of repeating the win, fastest and signature-bonus arithmetic. Its demo-only fixture records retain those votes for the invariant test. The preliminary standings reducer remains local because production has no pure reducer for the database view's aggregate rows; the test independently recomputes and ranks those rows with `core/ranking.js` and pins the resulting table.
+
+**Verified:** `demoLivePayload.test.js` recomputes every confirmed preliminary and knockout fixture match from its cup votes, checks the values shown in the payload, and pins the complete preliminary table plus bonus-bearing knockout totals. Mutation checks: changing the fastest bonus from +2 to +3 fails the new test; changing the deterministic preliminary fixture vote source also fails it. Both mutations were restored.
+
+**Flagged, not changed:** ROADMAP's remaining "Known open items from T-BTC.projector-screens".
+
+## T-TEN.C1: the org context and the "no organisation" screen · 2026-10-11
+
+**Task:** T-TEN.C1 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase C, the client). Client only: no migration, nothing to push to the cloud project. **Nothing calls the new code yet**: wiring it into `main.js` is C2, so the app behaves exactly as before.
+
+**Status: in review, not merged.**
+
+**Why:** the console still decides "which org" from a build-time variable (`VITE_DEFAULT_ORG_ID`). With several orgs, the console has to ask the database which orgs the signed-in person belongs to (B3's `my_orgs()`), remember which one they are working in, and cope with the person belonging to none.
+
+**What changed:**
+
+- **`src/core/orgContext.js`** (new, format-agnostic): `createOrgContext({ client, storage, timeoutMs })` returns one context per mounted app, with `refresh(session)`, `retry()`, `getState()`, `getOrgs()`, `getActiveOrgId()`, `getActiveOrg()`, `getActiveOrgIdFor(userId)`, `setActiveOrg(id)`, `subscribe(fn)` and `destroy()`. It asks `my_orgs` with a plain rpc (a POST, never a cacheable GET).
+  - **Which org is active:** the only one; else the one this user used last (kept per user under `seduh.activeOrg.<userId>`); else the first by name. A remembered org the user has left falls back to another one and is forgotten, never an error. An explicit pick, even of the org that is already active, is remembered.
+  - **Zero orgs is a state of its own** (`no_org`), not an error and not an empty list: Guess the Bean accounts share the same logins.
+  - **Failures never lock an organiser out.** Only an empty list or the database's `22P02` (a token with no usable user id) mean "no organisation". Offline, a timeout, a 401, a gateway's 400 or a page that is not JSON are failures: the last known answer is kept, and an error is reported only when nothing is known yet.
+  - **Another account's orgs are never reused.** When the signed-in user changes (or someone signs out), the previous list is dropped at once, before the new answer arrives, and a late answer for the earlier user is discarded. `getActiveOrgIdFor(userId)` gives writers (the outbox, C6) an org only for the user it was resolved for.
+  - **Overlapping auth events:** the newest answer wins, but an older good answer that arrives first is still used, so a newer refresh that fails does not throw it away.
+  - **Safe to call from `onAuthStateChange`:** `refresh()` never reads the database synchronously, and subscribers are called from a microtask, so even a subscriber that starts an RPC cannot deadlock behind supabase-js's auth lock.
+  - Timeouts follow `raceTimeout` / `DEFAULT_LOAD_TIMEOUT_MS`; storage that is missing, blocked or full is tolerated.
+- **`src/core/noOrgScreen.js` and `noOrgScreen.css`** (new): "This account isn't part of an organisation", with a Sign out button (busy label "Signing out…", a clear message and a ready button when sign-out fails or times out, focus on the heading on arrival). The stylesheet only wraps a long email at 360px and clears paragraph margins; it is linked from `app/index.html`.
+
+**Verified:** 94 unit tests for the context and 21 for the screen, covering every case the plan names (0 / 1 / 2 orgs, a stale stored id, a removed membership, unavailable storage, a slow or failed load, a race between two auth events) and more. Each claim was mutation-tested: every deliberate break of the code was caught by a test that names it.
+
+**Reviews:** module-boundary-checker (no violations), code-reviewer (no critical bugs; three Medium findings fixed: subscribers ran inside the auth callback, a malformed answer and any HTTP 400 could wipe a known org list), test-auditor (five High gaps fixed: the real default storage path, 401/403/5xx handling, role/name/slug changes, ordering, row defaults), ui-accessibility-reviewer (two Medium findings fixed: focus on the heading, copy that contradicted itself). Each was run as a general-purpose agent following the project's `.claude/agents/*.md` definition.
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-TEN.C1".
+
+## T-TEN.B7: anonymous surfaces, expand step · 2026-10-11
+
+**Task:** T-TEN.B7 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (PR 6; the last database task of phase B). One migration, `20261011170000_tenancy_anon_expand`; **pushed to the cloud project 2026-10-11 (cloud version `20261011075747`) and verified there**: all four functions (the two new ones, the stamp trigger function and `publish_event_results`) hash identically to the tested local copies with identical ACLs (anon and authenticated can execute the two new functions only; the trigger function is executable by no API role), the stamp trigger sorts after the two existing ones, anon's `SELECT` on `public_results` is the five-column list with no table-level grant, and a rolled-back live probe forged another name onto the existing published row and got the real org stamped back, found the org by its slug (in capitals) and its event summary, and had a non-object write refused (`22023`). The one existing published row has no stamp yet (it gets one the next time it is written). Applied as the full executable section of the file (the header comment stays in the repo only).
+
+**Status: merged (PR #210).**
+
+**Why:** the audience screens and the public results archive are anonymous, and anon can read `events`, `live_sessions` and `public_results` for every org. With many orgs that has to narrow (decision D-T3), but venue displays that are already open run cached JavaScript that still reads those tables, so it is done in two steps: this migration only ADDS the narrow, slug-addressed doors (expand); the client switches to them (D1/D2); a later, gated migration (D6, no live event) closes the old doors (contract).
+
+**What changed:**
+
+- **`public_org_by_slug(slug)`** returns `id, name, slug` for the ONE org with that slug, or nothing. The slug is trimmed and case-folded like `create_org` folds it, and must look like a slug _before_ folding (so a look-alike such as the Kelvin sign cannot alias a real org). There is no listing, no pattern matching (`%` and `_` are plain characters), and nothing else about the org. Executable by anon and authenticated.
+- **`public_event_summary(org_id)`** returns the org's newest event (`id, name, event_date, is_test`), or nothing, with a stable pick when two events share a timestamp. It replaces the anonymous table read in `findLatestEventForOrg`, without `org_id` or `created_at`; the schema review confirmed the audience screens read nothing else. Executable by anon and authenticated.
+- **A trigger on `public_results`** (`trg_public_results_stamp_org`) stamps the org's real name and slug into the payload as `org_name` / `org_slug` on EVERY insert or update, replacing anything the writer put under those keys (D-T4: the public archive stays global, so each row must say whose it is). It also refuses a payload that is not a JSON object and one over 256 KB (a real payload is about 3 KB; the results page reads every row, so one huge row would slow it for every org). It is a trigger, not function logic, because members can also write the table directly: both the schema and security reviews reproduced a member making their own result claim another org's name through a raw write, and the security review blocked on it. Rows published earlier lack the two keys: readers must tolerate that (D3).
+- **`publish_event_results`** keeps its body and gains one friendly refusal: a payload that is not a JSON object is refused with its own message after the event check, so a non-member still learns only "not found".
+- **Tightening:** anon loses `SELECT` on `public_results.published_by` (the auth user id of whoever published; nothing reads it). anon held `SELECT` on the whole table, and a column-level revoke cannot take one column out of a table grant, so the table grant became an explicit list (`id, event_id, org_id, payload, published_at`); a new column now stays hidden from anon until it is granted on purpose. `020_no_excess_table_privileges.sql` pinned the old table-level grant and now pins the three columns the results pages read plus the hidden `published_by`.
+- **Not here, on purpose (D6):** dropping `events_read_public` and the anon column grants on `events`, narrowing `live_sessions_read` to active rows. The existing surfaces keep working.
+- **Product decision (2026-10-11, Option 1):** an event's name, date and test flag are public as soon as the event exists, via `public_event_summary` (the splash screen needs the pre-event name). Nobody should put confidential details in an event name before announcing it. See ROADMAP.
+
+**Verified:** 83 new pgTAP assertions (`037`; the 256 KB cap is checked at its exact edge, in bytes, and does not count the stamp, so a payload that fit once can be republished; the exact list of columns anon can read on `public_results` is pinned); the whole suite passes on a database rebuilt from empty; the rollback block removes the trigger, the functions and the column grants and restores the previous `publish_event_results` body exactly. The test pins the exact set of functions anon can execute, so a new anonymous door must be added on purpose (extension, trigger and event-trigger functions, and a platform helper that differs between the cloud and a local stack, are excluded and say why). Mutation-tested.
+
+**Reviews:** schema-guardian (no blocking; found the stamp bypass, the stale-name limit and a rollback that left column grants behind), security-reviewer (BLOCKED once on the same bypass; also raised the payload size cap, the look-alike guard and the visibility decision above), test-auditor, each run as a general-purpose agent following the project's `.claude/agents/*.md` definition.
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-TEN.B7".
+
+## T-TEN.B4: org provisioning · 2026-10-11
+
+**Task:** T-TEN.B4 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (PR 5). One migration, `20261011160000_tenancy_provisioning`; **pushed to the cloud project 2026-10-11 (cloud version `20261011051012`) and verified there**: both functions hash identically to the tested local copies, executable by the service role only, `SECURITY DEFINER` with `search_path` pinned; the CHECK constraint and the immutability trigger are in place; and a rolled-back live probe showed a signed-in owner and anon are refused (`42501`) when creating an org, adding a member or renaming a slug, the service role reaches the function and gets the right refusal for a 2-character slug, a reserved slug, the existing slug (also in capitals), a missing owner and an existing member, and the table itself refuses a slug change and a malformed slug. Applied as the executable statements only (the long comments stay in the repo file).
+
+**Status: merged (PR #209) and live in the cloud project.**
+
+**Why:** with several orgs on one database, creating one has to be a single validated atomic operation, and giving an existing account a second membership has to be a deliberate service-role act (decisions D-T1 invite-only, D-T6 multi-org only through a service-role path, D-T8 slugs immutable).
+
+**What changed:**
+
+- **`create_org(name, slug, owner_user_id)`** returns the new org's id; one transaction creates the org and makes the given account its owner. The name is trimmed, 1 to 80 characters, with no control or bidi-override characters and not invisible-only. The slug is trimmed, validated as ASCII letters/digits with single hyphens BEFORE lower-casing (so look-alikes such as the Kelvin sign are refused whatever the database locale), 3 to 40 characters, folded to lower case, not one of 34 reserved words (the root pages and paths the repository serves, console and audience words, and a few generic ones), and not taken (compared case-insensitively). The owner must be an existing, active account (not deleted, banned or anonymous). Every refusal has a stable `hint` (`org_name_invalid`, `org_slug_invalid`, `org_slug_reserved`, `org_slug_taken`, `org_owner_not_found`); nothing is left behind on any refusal.
+- **`org_add_existing_member(org, user, role)`** is the only way to give an account a second membership; refuses a duplicate, a bad role, a missing org or an ineligible account, with hints `member_exists`, `member_role_invalid`, `org_not_found`, `member_user_not_found`. Adding someone clears a stale removal marker (the existing trigger).
+- **Both functions are executable by the service role only** (revoked from public, anon and authenticated), `SECURITY DEFINER`, `search_path` pinned.
+- **`orgs.slug` is immutable** once set (`trg_orgs_slug_immutable`), because slugs appear in printed and QR audience links; writing the same value back is allowed.
+- **`orgs_slug_format`** CHECK constraint so the slug format is a hard rule for every writer (the reserved list stays in the function so it can grow).
+- **The unique-violation and foreign-key handlers** only relabel their own constraints (`orgs_slug_key`, `org_members_pkey`, the two foreign keys) and re-raise anything else unchanged.
+- **Unchanged on purpose:** `team_add_member` still refuses an account that already belongs to an org, and `team_can_manage` still refuses a target who belongs to another org; pgTAP 036 pins both.
+- **Runbook** for provisioning an org added to the Repo section of `CLAUDE.md`, with the operator rule never to attach a Team-managed account to a second org.
+
+**Verified:** 163 new pgTAP assertions (`036`) pinning message AND hint; the whole suite, 1528, passes on a database rebuilt from empty; the rollback block removes the functions, trigger and constraint; mutation-tested (reserved list, slug pattern, case folding, the pre-validation Kelvin guard, control-character check, owner / org / account existence, eligibility, role check, the CHECK constraint, the immutability trigger, a changed hint, authenticated granted execute: each fails a specific assertion). The security review made live probes for every API role through PostgREST (anon 401, authenticated 403, service role reaches the body), simulated cloud-style default grants, shadowed tables and operators through `pg_temp`, and fuzzed every code point from 128 to U+2FFFF through the slug expressions.
+
+**Reviews:** schema-guardian (no blocking; reserved list missed `assets`, `bts` and `marketing`, handlers too broad, hints untested, inconsistent error codes: all fixed), security-reviewer (signed off on the boundary; case-sensitive duplicate check, ineligible accounts, input hygiene, PostgREST status codes: fixed or recorded), test-auditor (about 190 hand mutations; two blocking test gaps closed: the table CHECK was only half proven and the second-org owner role was never read back; also fixed a real migration defect, a 401-character name got the slug hint, plus trimming of tabs and newlines, one test row per invisible or bidi code point, a unique-violation pass-through test, near-miss roles, the stored lengths of the boundary names and a positive control for `team_can_manage`), each run as a general-purpose agent following the project's `.claude/agents/*.md` definition.
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-TEN.B4".
+
+## T-TEN.B3: `my_orgs()` · 2026-10-11
+
+**Task:** T-TEN.B3 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (PR 4). One migration, `20261011150000_tenancy_my_orgs`; **pushed to the cloud project 2026-10-11 (cloud version `20261011030525`) and verified there** (function and index settings, plus a rolled-back live probe: a stranger and a session with no user id get zero rows, the real owner exactly their own org, anon and the service role are refused).
+
+**Status: merged (PR #207) and live in the cloud project.**
 
 **Why:** the console is about to let one account belong to several orgs (phase C needs an org switcher) and must know which orgs the signed-in account is in, and as what. Reading `org_members` is not the answer: `org_members_read` lets a member read every member row of their org (that is how the Team screen lists the team), so "my orgs" must not be derived from it.
 
