@@ -235,7 +235,15 @@ function requireAuth(mount, { routerRef, orgContext, onConsoleMounted }) {
     // memberships; a change of person or organisation re-mounts the console (mountApp) rather than
     // mutating a screen in place. Remember who and which org this screen was built for.
     onConsoleMounted(`${org.userId}:${org.activeOrgId}`);
-    return mount(outlet, { ...params, orgId: org.activeOrgId });
+    // The name comes from the very snapshot the id came from (never from live state a moment later), so a
+    // screen can never show one organisation's name over another's data.
+    const activeOrg = org.orgs.find((candidate) => candidate.id === org.activeOrgId);
+    return mount(outlet, {
+      ...params,
+      orgId: org.activeOrgId,
+      // What to call it (the slug is added when two of the person's organisations share a name).
+      orgName: activeOrg ? orgLabel(activeOrg, org.orgs) : null,
+    });
   };
 }
 
@@ -328,6 +336,7 @@ export function buildRoutes({
   bareRoot,
   routerRef,
   onConsoleMounted,
+  setTeamHoldsSecret = () => {},
 }) {
   const auth = { routerRef, orgContext, onConsoleMounted };
   return [
@@ -348,7 +357,14 @@ export function buildRoutes({
     {
       pattern: '/team',
       mount: requireAuth(
-        (outlet, { client, signal, orgId }) => mountTeamScreen(outlet, { orgId, client, signal }),
+        (outlet, { client, signal, orgId, orgName }) =>
+          mountTeamScreen(outlet, {
+            orgId,
+            orgName,
+            client,
+            signal,
+            onLeaveGuard: (active) => setTeamHoldsSecret(active),
+          }),
         auth,
       ),
     },
@@ -587,6 +603,10 @@ function unsyncedSwitchMessage(count) {
 const SWITCH_CHECK_FAILED_MESSAGE =
   'Could not check whether everything on this device has synced, so the organisation was not switched. Try again.';
 const SWITCH_UNKNOWN_ORG_MESSAGE = 'That organisation is not available to this account.';
+// The Team screen is replaced when the organisation changes, and a one-time password on it "is shown once
+// and cannot be looked up again" (nor can one whose request is still being sent).
+const SWITCH_TEAM_OPEN_MESSAGE =
+  'The Team screen has a one-time password showing, or a change still being saved. Finish that first (press Done), then switch organisation.';
 
 // `orgContext` is created here unless a caller (a test, a future second shell) passes its own.
 // `legacyAudienceOrgId` is the one organisation the anonymous audience routes still show until T-TEN.D1.
@@ -761,6 +781,9 @@ export function mountApp(
   const currentRoutePath = () => location.hash.replace(/^#/, '') || '/events';
   // Who and which org the console screen on show was built for (null: none yet, or already replaced).
   let mountedKey = null;
+  // Set by the Team screen while leaving it would lose a one-time password; cleared whenever any console
+  // screen is mounted (the Team screen reports it again if it needs to).
+  let teamHoldsSecret = false;
   const routes = buildRoutes({
     legacyAudienceOrgId,
     orgContext,
@@ -768,6 +791,10 @@ export function mountApp(
     routerRef,
     onConsoleMounted: (key) => {
       mountedKey = key;
+      teamHoldsSecret = false;
+    },
+    setTeamHoldsSecret: (active) => {
+      teamHoldsSecret = active;
     },
   });
 
@@ -895,6 +922,8 @@ export function mountApp(
   // pending". The screen change itself follows from the org context's own notification above.
   async function switchOrg(orgId) {
     if (orgId === orgContext.getActiveOrgId()) return { ok: true };
+    if (teamHoldsSecret)
+      return { ok: false, reason: 'team_open', message: SWITCH_TEAM_OPEN_MESSAGE };
     let pending;
     try {
       // Bounded: an outbox read that never answers must not leave the switch (and the control) hanging.

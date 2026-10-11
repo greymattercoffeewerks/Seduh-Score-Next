@@ -4,6 +4,8 @@ import {
   describeMemberStatus,
   describeRemoved,
   mountTeamScreen,
+  teamHeading,
+  teamIntro,
 } from './teamScreen.js';
 import { TeamError } from './team.js';
 
@@ -168,6 +170,155 @@ function submitAdd(root) {
   q(root, '.team-add-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
 }
 const feedback = (root) => q(root, '#team-feedback');
+
+describe('whose team it is (T-TEN.C4)', () => {
+  it('teamHeading names the organisation, and is plain "Team" when it has no name', () => {
+    expect(teamHeading('Alpha Coffee')).toBe('Team for Alpha Coffee');
+    expect(teamHeading(null)).toBe('Team');
+    expect(teamHeading('')).toBe('Team');
+    expect(teamHeading(undefined)).toBe('Team');
+  });
+
+  it('teamIntro says these are managed accounts that belong only to this organisation', () => {
+    const named = teamIntro('Alpha Coffee');
+    expect(named).toContain('managed accounts: logins that belong only to Alpha Coffee');
+    expect(named).toContain('cannot be added to another organisation from this screen');
+    expect(named).toContain('one-time password; they choose their own');
+    expect(teamIntro(null)).toContain('belong only to this organisation');
+    expect(teamIntro(null)).not.toMatch(/null|undefined/);
+  });
+
+  it('the screen names the organisation in its heading and its opening text, once loaded', async () => {
+    const { root } = await mount(fakeTeamClient(), { orgName: 'Alpha Coffee' });
+    expect(q(root, 'h1').textContent).toBe('Team for Alpha Coffee');
+    // The heading is still the focus target after an action re-renders the screen.
+    expect(q(root, 'h1').id).toBe('team-heading');
+    expect(q(root, '.stage-meta').textContent).toBe(teamIntro('Alpha Coffee'));
+  });
+
+  it('names it while loading, too', async () => {
+    const client = { rpc: () => new Promise(() => {}) };
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const controller = new AbortController();
+    void mountTeamScreen(root, {
+      orgId: ORG,
+      orgName: 'Alpha Coffee',
+      client,
+      signal: controller.signal,
+    });
+    try {
+      await settle();
+      expect(q(root, 'h1').textContent).toBe('Team for Alpha Coffee');
+      expect(root.textContent).toContain('Loading the team…');
+    } finally {
+      controller.abort();
+      root.remove();
+    }
+  });
+
+  it('names it for someone who is not the owner, and when the load failed', async () => {
+    const notOwner = await mount(
+      fakeTeamClient([], { listError: { code: '42501', message: 'x' } }),
+      { orgName: 'Alpha Coffee' },
+    );
+    expect(q(notOwner.root, 'h1').textContent).toBe('Team for Alpha Coffee');
+    expect(notOwner.root.textContent).toContain('Only the owner can manage the team.');
+
+    const failed = await mount(
+      fakeTeamClient(undefined, { listError: { code: 'XX000', message: 'raw' } }),
+      {
+        orgName: 'Alpha Coffee',
+      },
+    );
+    expect(q(failed.root, 'h1').textContent).toBe('Team for Alpha Coffee');
+    // It really is the failure screen, not the loaded one: no team heading target, and a Retry.
+    expect(q(failed.root, '#team-heading')).toBeNull();
+    expect(q(failed.root, 'button').textContent).toBe('Retry');
+  });
+
+  it('without a name the screen says "Team" and calls the organisation "this organisation"', async () => {
+    const { root } = await mount(fakeTeamClient());
+    expect(q(root, 'h1').textContent).toBe('Team');
+    expect(q(root, '.stage-meta').textContent).toBe(teamIntro(null));
+  });
+
+  it('writes the name as text, never as markup', async () => {
+    const hostile = '<img src=x onerror=alert(1)>';
+    const { root } = await mount(fakeTeamClient(), { orgName: hostile });
+    expect(root.querySelector('img')).toBeNull();
+    expect(q(root, 'h1').textContent).toBe(`Team for ${hostile}`);
+  });
+});
+
+describe('the leave guard: what would be lost by leaving this screen (T-TEN.C4)', () => {
+  const mountGuarded = async (client, extra = {}) => {
+    const onLeaveGuard = vi.fn();
+    const mounted = await mount(client, { orgName: 'Alpha Coffee', onLeaveGuard, ...extra });
+    return { ...mounted, onLeaveGuard };
+  };
+
+  it('is quiet while nothing is at risk', async () => {
+    const { onLeaveGuard } = await mountGuarded(fakeTeamClient());
+    expect(onLeaveGuard).not.toHaveBeenCalled();
+  });
+
+  it('turns on while a one-time password is on show, and off again when Done is pressed', async () => {
+    const { root, onLeaveGuard } = await mountGuarded(fakeTeamClient());
+    type(q(root, '#team-email'), 'lee@example.com');
+    submitAdd(root);
+    await until(() => expect(q(root, '#team-password')).not.toBeNull());
+    expect(onLeaveGuard.mock.calls.at(-1)).toEqual([true]);
+
+    q(root, '#team-issued-done').click();
+    await until(() => expect(q(root, '#team-password')).toBeNull());
+    expect(onLeaveGuard.mock.calls.at(-1)).toEqual([false]);
+  });
+
+  it('turns on while a request is still being sent (its password has not been shown yet)', async () => {
+    const client = fakeTeamClient();
+    let finish;
+    client.functions.invoke = () =>
+      new Promise((resolve) => {
+        finish = () =>
+          resolve({ data: { userId: 'u9', email: 'x@x.com', password: 'pw' }, error: null });
+      });
+    const { root, onLeaveGuard } = await mountGuarded(client);
+    type(q(root, '#team-email'), 'lee@example.com');
+    submitAdd(root);
+    await until(() => expect(onLeaveGuard).toHaveBeenCalledWith(true));
+    expect(q(root, '#team-password')).toBeNull();
+    finish();
+    await until(() => expect(q(root, '#team-password')).not.toBeNull());
+    // Still on: the password is now on show.
+    expect(onLeaveGuard.mock.calls.at(-1)).toEqual([true]);
+  });
+
+  it('tells the caller once per change, not on every render', async () => {
+    const { root, onLeaveGuard } = await mountGuarded(fakeTeamClient());
+    type(q(root, '#team-email'), 'lee@example.com');
+    submitAdd(root);
+    await until(() => expect(q(root, '#team-password')).not.toBeNull());
+    const trues = onLeaveGuard.mock.calls.filter(([on]) => on === true).length;
+    expect(trues).toBe(1);
+  });
+
+  it('is released when the screen is unmounted with a password still on show', async () => {
+    const { root, screen, onLeaveGuard } = await mountGuarded(fakeTeamClient());
+    type(q(root, '#team-email'), 'lee@example.com');
+    submitAdd(root);
+    await until(() => expect(q(root, '#team-password')).not.toBeNull());
+    screen.unmount();
+    expect(onLeaveGuard.mock.calls.at(-1)).toEqual([false]);
+  });
+
+  it('works without a caller listening', async () => {
+    const { root } = await mount(fakeTeamClient());
+    type(q(root, '#team-email'), 'lee@example.com');
+    submitAdd(root);
+    await until(() => expect(q(root, '#team-password')).not.toBeNull());
+  });
+});
 
 describe('mountTeamScreen — the list', () => {
   it('lists the team with each person’s role and status, owner first, and offers actions only on non-owners', async () => {
