@@ -17,6 +17,14 @@
 
 **Flagged, not changed:** ROADMAP's "Known open items from T-TEN.B3" (notes for C1: use POST, treat a 400 as no org context; the expected advisor warning; DEFINER versus INVOKER).
 
+## T-BTC.tiebreak-lock-test: pgTAP proves the tie-break row lock · 2026-10-11
+
+**Task:** T-BTC.tiebreak-lock-test. Test-only follow-up to T-BTC.knockout-tiebreak; no migration or cloud change.
+
+**What changed:** `027_btc_tiebreak.sql` now creates a confirmed, level knockout fixture with a recorded decision and re-records that same decision. The no-op call uses `pgrowlocks` in the same transaction to prove its exact `btc_matches` row is not held `FOR UPDATE` before `record_btc_tiebreak`, then is held `FOR UPDATE` afterward. Because the call writes no row, an ordinary `UPDATE` lock cannot satisfy the assertion; the assertion filters by the row's `ctid`, so unrelated fixture locks cannot either.
+
+**Closed in ROADMAP:** T-BTC.knockout-tiebreak's missing `record_btc_tiebreak` row-lock test.
+
 ## T-TEN.B6: the org-id disclosure is closed · 2026-10-11
 
 **Task:** T-TEN.B6 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (PR 3). Two migrations, `20261011130000_tenancy_resolver_disclosure` and `20261011140000_tenancy_rpc_null_org_guard`, **pushed to the cloud project 2026-10-11 (cloud versions `20261010213446` and `20261010213533`, applied in order) and verified there**: all 13 resolver, internal-resolver and trigger bodies and all 18 RPC bodies hash identically to the tested local copies; the internal resolvers are executable by no API role; the RPCs are still SECURITY INVOKER with `search_path` pinned; and a live probe on the cloud, built to roll back, showed a stranger who is a member of nothing gets the same refusal from `delete_test_event`, `publish_session` and `publish_event_results` for the true org id, a wrong one and NULL, and for a real versus a missing event, while a direct write naming the real org gets the standard row-level-security refusal and the real owner still resolves their own org. The second migration was applied to the cloud as a short block that rewrites each function's own current definition with the one guard added (the repo file carries the full bodies and the rollback); the result is identical by hash.
@@ -9407,3 +9415,10 @@ Verifier: self-verified (same bootstrapping-order note as T0.2).
 **What changed:** The BTC bracket screen now keeps a single, attached inline `role="status"` note above its cards when a successful seeding-order or knockout tie-break save cannot refresh its data. The note includes a tap-target Reload button, stays visible until a successful read, and replaces rather than duplicates the old transient toast.
 
 **Verified:** BTC bracket and seeding tests cover both failed follow-up reads, node identity across rerenders, the note surviving beyond 1.5 seconds, busy Reload state, fresh-data reload and happy paths.
+
+## T-HARDEN.remove-publish-superseded · 2026-10-11
+
+Removed the unused direct-payload publish helpers from `src/core/publish.js`; both live
+formats already publish through `publishIntent.js`. The file now only exposes the shared
+active-session lookup, which gained direct regression coverage. Updated the affected
+history and implementation comments, and marked the matching ROADMAP item closed.

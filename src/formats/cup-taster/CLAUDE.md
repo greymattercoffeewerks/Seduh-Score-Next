@@ -109,7 +109,8 @@ follow-up, mirroring `timing.js`'s own `timingHandlers` — see `outboxHandlers`
 
 `outboxHandlers` (2026-08-29) — the composition point closing the cross-module
 handler-map gap: exports `cupTasterOutboxHandlers(client)`, spreading
-`timingHandlers`/`confirmHandlers`/core's `publishHandlers` into one map every real
+`timingHandlers`/`confirmHandlers`/`publishLiveSessionHandlers`/`resolveStageHandlers`
+into one map every real
 screen call site now passes as an optional `handlers` override, so a flush triggered from
 any of `timingScreen.js`/`timingManualScreen.js`/`scoringScreen.js` can process any of
 the 5 queued Cup Taster operation types, not just its own; deliberately not imported back
