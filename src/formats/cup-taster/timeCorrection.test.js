@@ -68,6 +68,11 @@ describe('validateReason', () => {
     );
   });
 
+  it('keeps the 120-character reason contract', () => {
+    expect(validateReason('x'.repeat(120))).toHaveLength(120);
+    expect(() => validateReason('x'.repeat(121))).toThrow('Keep the reason to 120 characters');
+  });
+
   it('measures the limit after trimming, so padding cannot push a valid reason over it', () => {
     expect(validateReason(`  ${'x'.repeat(REASON_MAX_LENGTH)}  `)).toHaveLength(REASON_MAX_LENGTH);
   });

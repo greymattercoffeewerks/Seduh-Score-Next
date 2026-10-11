@@ -485,6 +485,32 @@ describe('mountAppShell', () => {
       expect(document.activeElement).toBe(link);
     });
 
+    it('pressing the toggle while it already has focus (no new focus event) does not forget it: crossing still restores focus', async () => {
+      const { toggle, link } = await mountShell();
+      toggle.focus();
+      // A second press on the focused button: pointerdown, and no focusin because nothing moved.
+      toggle.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      toggle.dispatchEvent(new Event('click', { bubbles: true }));
+      toggle.blur(); // the browser's focus fixup when the toggle is hidden
+      expect(document.activeElement).toBe(document.body);
+
+      cross(true);
+
+      expect(document.activeElement).toBe(link);
+    });
+
+    it('a press on something else (the page, or non-focusable chrome) still forgets the header focus', async () => {
+      const { toggle } = await mountShell();
+      toggle.focus();
+      document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      toggle.blur();
+
+      cross(true);
+
+      // Nothing was stranded by the resize, so nothing is pulled to a link.
+      expect(document.activeElement).toBe(document.body);
+    });
+
     it('going inline after the browser already dropped focus to <body> (the toggle was hidden) still restores it to the first nav link', async () => {
       const { toggle, link } = await mountShell();
       toggle.focus();
@@ -901,6 +927,547 @@ describe('mountAppShell', () => {
       const { unmount } = mountAppShell(root, { client: { auth, from: () => ({}) } });
       unmount();
       expect(unsubscribe).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('the organisation slot (T-TEN.C3)', () => {
+    const ORG_A = { id: 'org-a', name: 'Alpha Coffee', slug: 'alpha-coffee' };
+    const ORG_B = { id: 'org-b', name: 'Bravo Roasters', slug: 'bravo-roasters' };
+    const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+    function mountWithShell() {
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      const shell = mountAppShell(root, { client: { auth: fakeAuth(), from: () => ({}) } });
+      return {
+        root,
+        shell,
+        slot: root.querySelector('.app-shell-org'),
+        notice: root.querySelector('#app-shell-org-notice'),
+        select: () => root.querySelector('.app-shell-org-select'),
+      };
+    }
+    afterEach(() => {
+      document.body.innerHTML = '';
+    });
+
+    it('is hidden and empty until it is told which organisations there are, and with none', () => {
+      const { shell, slot } = mountWithShell();
+      expect(slot.hidden).toBe(true);
+      shell.setOrganisation({ orgs: [ORG_A], activeOrgId: 'org-a' });
+      expect(slot.hidden).toBe(false);
+      shell.setOrganisation({ orgs: [], activeOrgId: null });
+      expect(slot.hidden).toBe(true);
+      expect(slot.childNodes).toHaveLength(0);
+    });
+
+    it('sits in the header between the brand and the Menu button, outside the collapsing panel', () => {
+      const { root, slot } = mountWithShell();
+      const header = root.querySelector('.app-shell-header');
+      const order = [...header.children].map((child) => child.className.split(' ')[0]);
+      expect(order.indexOf('app-shell-org')).toBe(order.indexOf('app-shell-brand') + 1);
+      expect(order.indexOf('app-shell-org')).toBeLessThan(order.indexOf('app-shell-nav-toggle'));
+      expect(root.querySelector('.app-shell-nav-panel').contains(slot)).toBe(false);
+    });
+
+    it('shows one organisation as a plain label a screen reader introduces as the organisation', () => {
+      const { shell, slot, select } = mountWithShell();
+      shell.setOrganisation({ orgs: [ORG_A], activeOrgId: 'org-a' });
+      expect(select()).toBeNull();
+      expect(slot.textContent).toBe('Organisation: Alpha Coffee');
+      expect(slot.querySelector('.sr-only').textContent).toBe('Organisation: ');
+    });
+
+    it('shows several as a native select named "Organisation", on the active one', () => {
+      const { shell, select } = mountWithShell();
+      shell.setOrganisation({ orgs: [ORG_A, ORG_B], activeOrgId: 'org-b' });
+      expect(select().tagName).toBe('SELECT');
+      expect(select().getAttribute('aria-label')).toBe('Organisation');
+      expect([...select().options].map((o) => [o.value, o.textContent])).toEqual([
+        ['org-a', 'Alpha Coffee'],
+        ['org-b', 'Bravo Roasters'],
+      ]);
+      expect(select().value).toBe('org-b');
+    });
+
+    it('warns, before use, that choosing switches straight away (WCAG 3.2.2)', () => {
+      const { shell, select, slot } = mountWithShell();
+      shell.setOrganisation({ orgs: [ORG_A, ORG_B], activeOrgId: 'org-a' });
+      const hintId = select().getAttribute('aria-describedby');
+      const hint = slot.querySelector(`#${hintId}`);
+      expect(hint.textContent).toBe('Choosing another organisation switches to it straight away.');
+      // `hidden`: not read a second time in browse mode, yet still the control's description.
+      expect(hint.hidden).toBe(true);
+    });
+
+    it('tells apart two organisations that share a name by their slug, and only those', () => {
+      const { shell, select } = mountWithShell();
+      const twin = { id: 'org-c', name: 'Alpha Coffee', slug: 'alpha-coffee-nz' };
+      shell.setOrganisation({ orgs: [ORG_A, twin, ORG_B], activeOrgId: 'org-a' });
+      expect([...select().options].map((o) => o.textContent)).toEqual([
+        'Alpha Coffee (alpha-coffee)',
+        'Alpha Coffee (alpha-coffee-nz)',
+        'Bravo Roasters',
+      ]);
+    });
+
+    it('writes names as text, never as markup', () => {
+      const { shell, slot, select } = mountWithShell();
+      const hostile = { id: 'org-x', name: '<img src=x onerror=alert(1)>', slug: 'x-x' };
+      shell.setOrganisation({ orgs: [hostile], activeOrgId: 'org-x' });
+      expect(slot.querySelector('img')).toBeNull();
+      expect(slot.textContent).toContain('<img src=x onerror=alert(1)>');
+      shell.setOrganisation({ orgs: [hostile, ORG_A], activeOrgId: 'org-x' });
+      expect(slot.querySelector('img')).toBeNull();
+      expect(select().options[0].textContent).toBe('<img src=x onerror=alert(1)>');
+    });
+
+    it('falls back to the first organisation when the active one is not in the list', () => {
+      const { shell, select } = mountWithShell();
+      shell.setOrganisation({ orgs: [ORG_A, ORG_B], activeOrgId: 'org-gone' });
+      expect(select().value).toBe('org-a');
+    });
+
+    it('keeps the very same select (and so keyboard focus) when the list changes', () => {
+      const { shell, select } = mountWithShell();
+      shell.setOrganisation({ orgs: [ORG_A, ORG_B], activeOrgId: 'org-a' });
+      const before = select();
+      before.focus();
+      shell.setOrganisation({
+        orgs: [ORG_A, ORG_B, { id: 'org-c', name: 'Charlie Beans', slug: 'charlie-beans' }],
+        activeOrgId: 'org-b',
+      });
+      expect(select()).toBe(before);
+      expect(document.activeElement).toBe(before);
+      expect(before.options).toHaveLength(3);
+      expect(before.value).toBe('org-b');
+    });
+
+    it('moves between a label and a select as the number of organisations changes', () => {
+      const { shell, slot, select } = mountWithShell();
+      shell.setOrganisation({ orgs: [ORG_A], activeOrgId: 'org-a' });
+      shell.setOrganisation({ orgs: [ORG_A, ORG_B], activeOrgId: 'org-a' });
+      expect(select()).not.toBeNull();
+      expect(slot.querySelector('.app-shell-org-label')).toBeNull();
+      shell.setOrganisation({ orgs: [ORG_B], activeOrgId: 'org-b' });
+      expect(select()).toBeNull();
+      expect(slot.textContent).toBe('Organisation: Bravo Roasters');
+      shell.setOrganisation({ orgs: [ORG_A, ORG_B], activeOrgId: 'org-b' });
+      expect(select().value).toBe('org-b');
+    });
+
+    describe('choosing another organisation', () => {
+      const choose = (select, orgId) => {
+        select.value = orgId;
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+
+      it('asks the caller to switch, and leaves the choice where it is on success', async () => {
+        const { shell, select, notice } = mountWithShell();
+        const onSelect = vi.fn(async () => ({ ok: true }));
+        shell.setOrganisation({ orgs: [ORG_A, ORG_B], activeOrgId: 'org-a', onSelect });
+        select().focus();
+        choose(select(), 'org-b');
+        await tick();
+        expect(onSelect).toHaveBeenCalledTimes(1);
+        expect(onSelect).toHaveBeenCalledWith('org-b');
+        expect(select().value).toBe('org-b');
+        expect(notice.textContent).toBe('');
+      });
+
+      it('on a refusal puts the select back, says why in a polite status panel, and keeps focus', async () => {
+        const { shell, select, notice } = mountWithShell();
+        const message = '2 changes on this device have not synced yet.';
+        shell.setOrganisation({
+          orgs: [ORG_A, ORG_B],
+          activeOrgId: 'org-a',
+          onSelect: async () => ({ ok: false, message }),
+        });
+        select().focus();
+        choose(select(), 'org-b');
+        await tick();
+        expect(select().value).toBe('org-a');
+        expect(notice.textContent).toBe(message);
+        expect(notice.classList.contains('app-shell-org-notice-open')).toBe(true);
+        expect(notice.getAttribute('role')).toBe('status');
+        expect(notice.getAttribute('aria-live')).toBe('polite');
+        expect(document.activeElement).toBe(select());
+      });
+
+      it('says something generic when a refusal carries no message, or the caller throws', async () => {
+        const { shell, select, notice } = mountWithShell();
+        shell.setOrganisation({
+          orgs: [ORG_A, ORG_B],
+          activeOrgId: 'org-a',
+          onSelect: async () => ({ ok: false }),
+        });
+        choose(select(), 'org-b');
+        await tick();
+        expect(notice.textContent).toBe('Could not switch organisation. Try again.');
+
+        shell.setOrganisation({
+          orgs: [ORG_A, ORG_B],
+          activeOrgId: 'org-a',
+          onSelect: async () => {
+            throw new Error('boom');
+          },
+        });
+        choose(select(), 'org-b');
+        await tick();
+        expect(notice.textContent).toBe('Could not switch organisation. Try again.');
+        expect(select().value).toBe('org-a');
+      });
+
+      it('with no caller to ask, refuses rather than pretending', async () => {
+        const { shell, select, notice } = mountWithShell();
+        shell.setOrganisation({ orgs: [ORG_A, ORG_B], activeOrgId: 'org-a' });
+        choose(select(), 'org-b');
+        await tick();
+        expect(select().value).toBe('org-a');
+        expect(notice.classList.contains('app-shell-org-notice-open')).toBe(true);
+      });
+
+      it('ignores choosing the organisation that is already active', async () => {
+        const { shell, select } = mountWithShell();
+        const onSelect = vi.fn(async () => ({ ok: true }));
+        shell.setOrganisation({ orgs: [ORG_A, ORG_B], activeOrgId: 'org-a', onSelect });
+        choose(select(), 'org-a');
+        await tick();
+        expect(onSelect).not.toHaveBeenCalled();
+      });
+
+      it('ignores a second choice while the first is still being decided', async () => {
+        const { shell, select } = mountWithShell();
+        let finish;
+        const onSelect = vi.fn(
+          () =>
+            new Promise((resolve) => {
+              finish = () => resolve({ ok: true });
+            }),
+        );
+        const orgs = [ORG_A, ORG_B, { id: 'org-c', name: 'Charlie Beans', slug: 'charlie-beans' }];
+        shell.setOrganisation({ orgs, activeOrgId: 'org-a', onSelect });
+        choose(select(), 'org-b');
+        choose(select(), 'org-c');
+        expect(onSelect).toHaveBeenCalledTimes(1);
+        expect(select().value).toBe('org-a');
+        finish();
+        await tick();
+        // After it settles, a new choice is accepted again.
+        shell.setOrganisation({ orgs, activeOrgId: 'org-b', onSelect });
+        choose(select(), 'org-c');
+        expect(onSelect).toHaveBeenCalledTimes(2);
+      });
+
+      it('clears an old refusal when the next choice is made', async () => {
+        const { shell, select, notice } = mountWithShell();
+        let answer = { ok: false, message: 'Not yet.' };
+        shell.setOrganisation({
+          orgs: [ORG_A, ORG_B],
+          activeOrgId: 'org-a',
+          onSelect: async () => answer,
+        });
+        choose(select(), 'org-b');
+        await tick();
+        expect(notice.textContent).toBe('Not yet.');
+        answer = { ok: true };
+        choose(select(), 'org-b');
+        expect(notice.textContent).toBe('');
+        await tick();
+        expect(notice.classList.contains('app-shell-org-notice-open')).toBe(false);
+      });
+
+      it('clears a refusal on Escape, and when focus leaves the control', async () => {
+        const { shell, select, notice } = mountWithShell();
+        shell.setOrganisation({
+          orgs: [ORG_A, ORG_B],
+          activeOrgId: 'org-a',
+          onSelect: async () => ({ ok: false, message: 'Not yet.' }),
+        });
+        select().focus();
+        choose(select(), 'org-b');
+        await tick();
+        expect(notice.textContent).toBe('Not yet.');
+        select().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        expect(notice.textContent).toBe('');
+
+        choose(select(), 'org-b');
+        await tick();
+        expect(notice.textContent).toBe('Not yet.');
+        select().blur();
+        expect(notice.textContent).toBe('');
+        expect(notice.classList.contains('app-shell-org-notice-open')).toBe(false);
+      });
+
+      it('other keys leave a refusal showing', async () => {
+        const { shell, select, notice } = mountWithShell();
+        shell.setOrganisation({
+          orgs: [ORG_A, ORG_B],
+          activeOrgId: 'org-a',
+          onSelect: async () => ({ ok: false, message: 'Not yet.' }),
+        });
+        choose(select(), 'org-b');
+        await tick();
+        select().dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+        expect(notice.textContent).toBe('Not yet.');
+      });
+    });
+
+    describe('what survives a change of focus, and what does not', () => {
+      const chooseIn = (select, orgId) => {
+        select.value = orgId;
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+
+      it('a quiet announcement survives the select losing focus (the new screen takes focus moments later)', () => {
+        const { shell, select, notice } = mountWithShell();
+        shell.setOrganisation({ orgs: [ORG_A, ORG_B], activeOrgId: 'org-a' });
+        select().focus();
+        shell.announceOrganisation('Now working in Bravo Roasters. Showing Events.');
+        select().blur();
+        expect(notice.textContent).toBe('Now working in Bravo Roasters. Showing Events.');
+      });
+
+      it('and Escape on the select does not wipe it either', () => {
+        const { shell, select, notice } = mountWithShell();
+        shell.setOrganisation({ orgs: [ORG_A, ORG_B], activeOrgId: 'org-a' });
+        shell.announceOrganisation('Now working in Bravo Roasters. Showing Events.');
+        select().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        expect(notice.textContent).toBe('Now working in Bravo Roasters. Showing Events.');
+      });
+
+      it('a tap or click anywhere dismisses a refusal (a touch browser may not blur the select)', async () => {
+        const { shell, select, notice } = mountWithShell();
+        shell.setOrganisation({
+          orgs: [ORG_A, ORG_B],
+          activeOrgId: 'org-a',
+          onSelect: async () => ({ ok: false, message: 'Not yet.' }),
+        });
+        chooseIn(select(), 'org-b');
+        await tick();
+        expect(notice.classList.contains('app-shell-org-notice-open')).toBe(true);
+        document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+        expect(notice.textContent).toBe('');
+        expect(notice.classList.contains('app-shell-org-notice-open')).toBe(false);
+      });
+
+      it('a tap does not wipe an announcement', () => {
+        const { shell, notice } = mountWithShell();
+        shell.announceOrganisation('Now working in Alpha Coffee. Showing Events.');
+        document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+        expect(notice.textContent).toBe('Now working in Alpha Coffee. Showing Events.');
+      });
+
+      it('an ignored re-pick or second choice leaves a refusal that is showing alone', async () => {
+        const { shell, select, notice } = mountWithShell();
+        shell.setOrganisation({
+          orgs: [ORG_A, ORG_B],
+          activeOrgId: 'org-a',
+          onSelect: async () => ({ ok: false, message: 'Not yet.' }),
+        });
+        chooseIn(select(), 'org-b');
+        await tick();
+        chooseIn(select(), 'org-a');
+        expect(notice.textContent).toBe('Not yet.');
+      });
+
+      it('an open refusal leaves no tap listener behind when the shell is unmounted', async () => {
+        const { shell, select } = mountWithShell();
+        shell.setOrganisation({
+          orgs: [ORG_A, ORG_B],
+          activeOrgId: 'org-a',
+          onSelect: async () => ({ ok: false, message: 'Not yet.' }),
+        });
+        chooseIn(select(), 'org-b');
+        await tick();
+        const remove = vi.spyOn(document, 'removeEventListener');
+        shell.unmount();
+        expect(remove.mock.calls.filter(([type]) => type === 'pointerdown')).toHaveLength(1);
+        remove.mockRestore();
+      });
+
+      it('the refusal listener is removed once the refusal is gone', async () => {
+        const { shell, select, notice, root } = mountWithShell();
+        const add = vi.spyOn(document, 'addEventListener');
+        const remove = vi.spyOn(document, 'removeEventListener');
+        shell.setOrganisation({
+          orgs: [ORG_A, ORG_B],
+          activeOrgId: 'org-a',
+          onSelect: async () => ({ ok: false, message: 'Not yet.' }),
+        });
+        chooseIn(select(), 'org-b');
+        await tick();
+        expect(add.mock.calls.filter(([type]) => type === 'pointerdown')).toHaveLength(1);
+        select().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        expect(remove.mock.calls.filter(([type]) => type === 'pointerdown')).toHaveLength(1);
+        expect(notice.textContent).toBe('');
+        add.mockRestore();
+        remove.mockRestore();
+        void root;
+      });
+    });
+
+    describe('while a choice is being decided, and after the control is gone', () => {
+      const chooseIn = (select, orgId) => {
+        select.value = orgId;
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+
+      it('marks the select busy (aria-disabled, so focus is not lost), then frees it', async () => {
+        const { shell, select } = mountWithShell();
+        let finish;
+        shell.setOrganisation({
+          orgs: [ORG_A, ORG_B],
+          activeOrgId: 'org-a',
+          onSelect: () =>
+            new Promise((resolve) => {
+              finish = () => resolve({ ok: true });
+            }),
+        });
+        select().focus();
+        chooseIn(select(), 'org-b');
+        expect(select().getAttribute('aria-disabled')).toBe('true');
+        expect(select().getAttribute('aria-busy')).toBe('true');
+        expect(select().disabled).toBe(false);
+        expect(document.activeElement).toBe(select());
+        finish();
+        await tick();
+        expect(select().hasAttribute('aria-disabled')).toBe(false);
+      });
+
+      it('does not flick back to the old organisation if the list is re-rendered meanwhile', async () => {
+        const { shell, select } = mountWithShell();
+        let finish;
+        const onSelect = () =>
+          new Promise((resolve) => {
+            finish = () => resolve({ ok: true });
+          });
+        shell.setOrganisation({ orgs: [ORG_A, ORG_B], activeOrgId: 'org-a', onSelect });
+        chooseIn(select(), 'org-b');
+        // An unrelated change (a role, a refresh) re-renders with the same active organisation.
+        shell.setOrganisation({ orgs: [ORG_A, ORG_B], activeOrgId: 'org-a', onSelect });
+        expect(select().value).toBe('org-b');
+        finish();
+        await tick();
+      });
+
+      it('shows no refusal if the control was taken away before the answer came', async () => {
+        const { shell, select, notice, slot } = mountWithShell();
+        let finish;
+        shell.setOrganisation({
+          orgs: [ORG_A, ORG_B],
+          activeOrgId: 'org-a',
+          onSelect: () =>
+            new Promise((resolve) => {
+              finish = () => resolve({ ok: false, message: 'Not yet.' });
+            }),
+        });
+        chooseIn(select(), 'org-b');
+        shell.setOrganisation({ orgs: [], activeOrgId: null });
+        finish();
+        await tick();
+        expect(slot.hidden).toBe(true);
+        expect(notice.textContent).toBe('');
+        expect(notice.classList.contains('app-shell-org-notice-open')).toBe(false);
+      });
+
+      it('clears a refusal when the control goes away (one organisation left, or none)', async () => {
+        const { shell, select, notice } = mountWithShell();
+        const refuse = async () => ({ ok: false, message: 'Not yet.' });
+        shell.setOrganisation({ orgs: [ORG_A, ORG_B], activeOrgId: 'org-a', onSelect: refuse });
+        chooseIn(select(), 'org-b');
+        await tick();
+        expect(notice.textContent).toBe('Not yet.');
+        shell.setOrganisation({ orgs: [ORG_A], activeOrgId: 'org-a' });
+        expect(notice.textContent).toBe('');
+
+        shell.setOrganisation({ orgs: [ORG_A, ORG_B], activeOrgId: 'org-a', onSelect: refuse });
+        chooseIn(select(), 'org-b');
+        await tick();
+        shell.setOrganisation({ orgs: [], activeOrgId: null });
+        expect(notice.textContent).toBe('');
+      });
+
+      it('leaves the options alone when the list has not changed (an open picker would collapse)', () => {
+        const { shell, select } = mountWithShell();
+        shell.setOrganisation({ orgs: [ORG_A, ORG_B], activeOrgId: 'org-a' });
+        const before = [...select().options];
+        shell.setOrganisation({ orgs: [ORG_A, ORG_B], activeOrgId: 'org-b' });
+        expect([...select().options]).toEqual(before);
+        expect(select().value).toBe('org-b');
+        shell.setOrganisation({
+          orgs: [ORG_A, { ...ORG_B, name: 'Bravo Roasters Ltd' }],
+          activeOrgId: 'org-b',
+        });
+        expect(select().options[1].textContent).toBe('Bravo Roasters Ltd');
+      });
+    });
+
+    describe('naming the active organisation in full', () => {
+      it('gives the full name, on a line of its own at the top of the menu, hidden from a screen reader', () => {
+        const { root, shell } = mountWithShell();
+        const line = root.querySelector('.app-shell-nav-panel > .app-shell-org-full');
+        expect(line.hidden).toBe(true);
+        expect(root.querySelector('.app-shell-nav-panel').firstElementChild).toBe(line);
+        shell.setOrganisation({ orgs: [ORG_A, ORG_B], activeOrgId: 'org-b' });
+        expect(line.hidden).toBe(false);
+        expect(line.textContent).toBe('Organisation: Bravo Roasters');
+        expect(line.getAttribute('aria-hidden')).toBe('true');
+        shell.setOrganisation({ orgs: [], activeOrgId: null });
+        expect(line.hidden).toBe(true);
+      });
+
+      it('puts the full name in a tooltip on the label and the select, for a pointer user', () => {
+        const { shell, slot, select } = mountWithShell();
+        const long = { id: 'org-l', name: 'Greymatter Coffee Werks Roasters and Cafe', slug: 'gm' };
+        shell.setOrganisation({ orgs: [long], activeOrgId: 'org-l' });
+        expect(slot.querySelector('.app-shell-org-label').title).toBe(long.name);
+        shell.setOrganisation({ orgs: [long, ORG_A], activeOrgId: 'org-l' });
+        expect(select().title).toBe(long.name);
+      });
+
+      it('names a nameless organisation by its slug, and keeps the hint attached after a label becomes a select', () => {
+        const { shell, slot, select } = mountWithShell();
+        const nameless = { id: 'org-n', name: '', slug: 'no-name-co' };
+        shell.setOrganisation({ orgs: [nameless], activeOrgId: 'org-n' });
+        expect(slot.textContent).toBe('Organisation: no-name-co');
+        shell.setOrganisation({ orgs: [nameless, ORG_A], activeOrgId: 'org-n' });
+        expect(select().options[0].textContent).toBe('no-name-co');
+        expect(slot.querySelector('#app-shell-org-hint')).not.toBeNull();
+      });
+
+      it('writes an announcement as text, never as markup', () => {
+        const { shell, notice } = mountWithShell();
+        shell.announceOrganisation('Now working in <img src=x onerror=alert(1)>. Showing Events.');
+        expect(notice.querySelector('img')).toBeNull();
+        expect(notice.textContent).toContain('<img src=x onerror=alert(1)>');
+      });
+    });
+
+    describe('announcing', () => {
+      it('speaks to a screen reader without opening the visible panel, and replaces a refusal', async () => {
+        const { shell, notice, select } = mountWithShell();
+        shell.setOrganisation({
+          orgs: [ORG_A, ORG_B],
+          activeOrgId: 'org-a',
+          onSelect: async () => ({ ok: false, message: 'Not yet.' }),
+        });
+        select().value = 'org-b';
+        select().dispatchEvent(new Event('change', { bubbles: true }));
+        await tick();
+        expect(notice.classList.contains('app-shell-org-notice-open')).toBe(true);
+
+        shell.announceOrganisation('Now working in Bravo Roasters. Showing Events.');
+        expect(notice.textContent).toBe('Now working in Bravo Roasters. Showing Events.');
+        expect(notice.classList.contains('app-shell-org-notice-open')).toBe(false);
+      });
+
+      it('uses the one persistent live region, so it is announced reliably', () => {
+        const { shell, notice, root } = mountWithShell();
+        shell.announceOrganisation('Now working in Alpha Coffee. Showing Events.');
+        expect(root.querySelector('#app-shell-org-notice')).toBe(notice);
+        expect(notice.getAttribute('aria-live')).toBe('polite');
+      });
     });
   });
 
@@ -1968,6 +2535,29 @@ describe('mountAppShell — sync panel', () => {
         button(root).click();
         expect(button(root).getAttribute('aria-expanded')).toBe('false');
         expect(panel.classList.contains('app-shell-sync-open')).toBe(false);
+      });
+
+      it('closes when a refused organisation switch opens its own panel in the same place', async () => {
+        const { root, shell } = await mountWithPending();
+        const ORG_A = { id: 'org-a', name: 'Alpha Coffee', slug: 'alpha-coffee' };
+        const ORG_B = { id: 'org-b', name: 'Bravo Roasters', slug: 'bravo-roasters' };
+        shell.setOrganisation({
+          orgs: [ORG_A, ORG_B],
+          activeOrgId: 'org-a',
+          onSelect: async () => ({ ok: false, message: 'Not yet.' }),
+        });
+        button(root).click();
+        const panel = root.querySelector('.app-shell-sync');
+        expect(panel.classList.contains('app-shell-sync-open')).toBe(true);
+
+        const select = root.querySelector('.app-shell-org-select');
+        select.value = 'org-b';
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(root.querySelector('#app-shell-org-notice').textContent).toBe('Not yet.');
+        expect(panel.classList.contains('app-shell-sync-open')).toBe(false);
+        expect(button(root).getAttribute('aria-expanded')).toBe('false');
       });
 
       it('stays open (and keeps its own class) while the status text changes underneath it', async () => {

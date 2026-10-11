@@ -66,6 +66,12 @@
 
 /* Truncates, never wraps: a long event name must not make the header taller or push the chip out of its
    row. The full name is the page's own heading. */
+/* Nothing to show (the events list): it must not take a share of the free width the organisation name
+   needs, or the name is squeezed to a few letters on a phone. */
+.app-shell-breadcrumb:empty {
+  display: none;
+}
+
 .app-shell-breadcrumb {
   flex: 1 1 0;
   min-width: 0;
@@ -74,6 +80,105 @@
   white-space: nowrap;
   color: var(--color-text-muted);
   font-size: var(--text-sm);
+}
+
+/* The organisation the console is working in (appShell.js, T-TEN.C3): a label, or a <select> when the
+   person belongs to several. It sits in the header's main row between the brand and the Menu button and
+   takes only slack: flex-basis 0, so its own width never makes the row wrap (the event name beside it
+   gives way first, and truncates). Truncates, never wraps, like the breadcrumb: the full name is in the
+   picker, and a long name must not make the sticky header taller. */
+.app-shell-org {
+  /* Twice the share of the event name beside it (flex-grow 2 against its 1): the name of the organisation is
+     who you are acting as, while the event name is repeated by the page's own heading. Measured at 1366px,
+     with the inline nav and a real event, an equal share left the slot 83px wide. */
+  flex: 2 1 0;
+  min-width: 0;
+  max-width: 20rem;
+}
+
+/* The full active organisation name, at the top of the menu, for where the slot truncates it (below
+   1366px; from there the slot has the room and the menu is not collapsed). Wraps instead of truncating. */
+.app-shell-org-full {
+  flex: 1 1 100%;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.app-shell-org-full[hidden] {
+  display: none;
+}
+
+.app-shell-org-label {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.app-shell-org-select {
+  display: block;
+  width: 100%;
+  min-height: var(--tap-target-min);
+  padding: 0 var(--space-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text);
+  background: var(--color-surface);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-bold);
+  border: var(--border-hairline) solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+}
+
+/* The organisation notice: a quiet announcement ("Now working in …") and, when a switch is refused, a
+   visible panel. The same persistent live-region recipe as the sync detail below (clipped away until it
+   opens, then an overlay under the header that never pushes the page). Written out separately rather
+   than shared, because the sync detail's rules are pinned selector by selector in appShell.test.js. */
+.app-shell-org-notice {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.app-shell-org-notice.app-shell-org-notice-open {
+  top: 100%;
+  right: var(--space-4);
+  left: var(--space-4);
+  width: auto;
+  height: auto;
+  margin: var(--space-1) 0 0;
+  padding: var(--space-3) var(--space-4);
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+  background: var(--color-surface);
+  /* A refusal is an error: the danger border carries the tone, the words carry the meaning. */
+  border: var(--border-hairline) solid var(--color-danger);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+@media (min-width: 640px) {
+  /* Under the control that raised it, not at the far right where a magnifier user would not look. */
+  .app-shell-org-notice.app-shell-org-notice-open {
+    right: auto;
+    left: var(--space-4);
+    width: min(28rem, calc(100% - 2 * var(--space-4)));
+  }
 }
 
 /* Hamburger toggle — mobile-first: visible by default, hidden once the nav
@@ -271,6 +376,11 @@
    read a variable, so the value is written in both places). */
 @media (min-width: 1366px) {
   .app-shell-nav-toggle {
+    display: none;
+  }
+
+  /* The slot has the room here (and the panel is not collapsed): no second copy of the name. */
+  .app-shell-org-full {
     display: none;
   }
 
