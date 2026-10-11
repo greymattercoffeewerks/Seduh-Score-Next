@@ -10,6 +10,7 @@ import { getLegacyAudienceOrgId } from './core/config.js';
 import { createOrgContext, ORG_STATUS } from './core/orgContext.js';
 import { mustChangePassword } from './core/sessionGate.js';
 import { goToHash, replaceHash } from './core/navigation.js';
+import { orgLabel } from './core/orgLabel.js';
 import { getSupabase } from './core/supabaseClient.js';
 import { el, setBusyDisabled } from './core/dom.js';
 import { describeError } from './core/errors.js';
@@ -777,7 +778,30 @@ export function mountApp(
   // signal, so nothing from the old organisation lands in the new one's list. Compared against the key
   // the screen was MOUNTED with, so it fires once, whatever path the context took to get there. The
   // Team link is re-asked at the same moment.
+  //
+  // The header's organisation slot is kept in step here too (the name, or the list to choose from), and
+  // a move to another organisation is announced to a screen reader, saying whether the person chose it
+  // or it happened to them.
+  let chosenOrgId = null;
+  const showOrganisation = (state) =>
+    shell.setOrganisation({
+      // Only a ready state has organisations to show: every other state has none.
+      orgs: state.orgs,
+      activeOrgId: state.activeOrgId,
+      onSelect: (orgId) => switchOrg(orgId),
+    });
+  showOrganisation(orgContext.getState());
   const unsubscribeOrgContext = orgContext.subscribe((state) => {
+    // Read and clear at once: a choice is only ever "the one that caused THIS change".
+    const chosen = chosenOrgId;
+    chosenOrgId = null;
+    // The header must never be able to stop the screen swap below (an old organisation's console left
+    // up under the new one is the invariant this subscriber exists for).
+    try {
+      showOrganisation(state);
+    } catch (err) {
+      console.error('main: the organisation slot failed to render', err);
+    }
     refreshTeamOwnership(currentSession);
     if (!onConsoleRoute || mountedKey === null) return;
     const key = state.status === ORG_STATUS.READY ? `${state.userId}:${state.activeOrgId}` : null;
@@ -786,8 +810,20 @@ export function mountApp(
         ? state.status === ORG_STATUS.IDLE || state.status === ORG_STATUS.NO_ORG
         : key !== mountedKey;
     if (!gone) return;
+    // Who the screen was built for, before it is forgotten: the same person in another organisation, or
+    // a different person altogether (another account signed in elsewhere).
+    const sameUser = mountedKey.startsWith(`${state.userId}:`);
     mountedKey = null;
     replaceHash('#/events');
+    if (key !== null) {
+      const active = state.orgs.find((org) => org.id === state.activeOrgId);
+      const arrival = `Now working in ${active ? orgLabel(active, state.orgs) : 'your organisation'}. Showing Events.`;
+      shell.announceOrganisation(
+        chosen === state.activeOrgId
+          ? arrival
+          : `${sameUser ? 'Your organisation' : 'Your account or organisation'} changed. ${arrival}`,
+      );
+    }
   });
 
   function updateChrome(route, params) {
@@ -861,7 +897,8 @@ export function mountApp(
     if (orgId === orgContext.getActiveOrgId()) return { ok: true };
     let pending;
     try {
-      pending = await listPendingOperations();
+      // Bounded: an outbox read that never answers must not leave the switch (and the control) hanging.
+      pending = await raceTimeout(listPendingOperations(), DEFAULT_LOAD_TIMEOUT_MS);
     } catch {
       return { ok: false, reason: 'unknown', message: SWITCH_CHECK_FAILED_MESSAGE };
     }
@@ -873,7 +910,9 @@ export function mountApp(
         message: unsyncedSwitchMessage(pending.length),
       };
     }
+    chosenOrgId = orgId;
     if (!orgContext.setActiveOrg(orgId)) {
+      chosenOrgId = null;
       return { ok: false, reason: 'unknown_org', message: SWITCH_UNKNOWN_ORG_MESSAGE };
     }
     return { ok: true };

@@ -20,7 +20,9 @@
 // `renderBody` callbacks already use — appShell owns the chrome MECHANICS
 // (a persistent header, a nav slot, an outlet); the composition root owns
 // what the nav actually SAYS.
-import { el, brandLockup } from './dom.js';
+import { el, brandLockup, setBusyDisabled } from './dom.js';
+import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
+import { orgLabel } from './orgLabel.js';
 import { findEvent } from './events.js';
 import { getSupabase } from './supabaseClient.js';
 import { isFlushInProgress, listPendingOperations, onOperationDropped } from './outbox.js';
@@ -144,7 +146,15 @@ export function mountAppShell(
   // links once the menu opens. `navPanel` itself is never recreated (only
   // navEl's own children, on every setNav()) — same persistent-node
   // reasoning the toggle below already relied on for `navEl`.
+  // The active organisation's FULL name, on its own wrapping line at the top of the menu: the header's
+  // slot truncates a long name, and below 1366px (where the slot is tight) this is where it can be read
+  // in full. Sighted aid only: a screen reader already gets the slot's own "Organisation: …" label.
+  const orgFullEl = el('div', {
+    className: 'app-shell-org-full',
+    attrs: { hidden: '', 'aria-hidden': 'true' },
+  });
   const navPanel = el('div', { className: 'app-shell-nav-panel', id: 'app-shell-nav-panel' }, [
+    orgFullEl,
     navEl,
     authEl,
   ]);
@@ -248,8 +258,17 @@ export function mountAppShell(
   // control re-sets this via the focusin that follows it, while a press on
   // non-focusable chrome (padding, the breadcrumb) or the page leaves focus on
   // <body> on purpose — nothing is stranded, so nothing should be restored.
-  const forgetHeaderFocus = () => {
-    lastHeaderFocus = null;
+  // ...except a press on the control that ALREADY has focus: that fires no new focusin, so clearing here
+  // would leave nothing to restore when the browser drops that control's focus at the breakpoint (found
+  // in a flaky browser test: a keyboard user dropped to the top of the page).
+  const forgetHeaderFocus = (event) => {
+    const active = document.activeElement;
+    const pressedFocused =
+      active &&
+      active !== document.body &&
+      header.contains(active) &&
+      active.contains(event.target);
+    lastHeaderFocus = pressedFocused ? active : null;
   };
   const inlineNavQuery =
     typeof window.matchMedia === 'function' ? window.matchMedia(INLINE_NAV_QUERY) : null;
@@ -315,11 +334,29 @@ export function mountAppShell(
     syncChipButton,
     syncEl,
   ]);
+  // ---- Which organisation the console is working in (T-TEN.C3) ----
+  // Identity must be unambiguous for someone who administers two organisations, so the active
+  // organisation's name is always in the header's main row, between the brand and the Menu button
+  // (never inside the collapsing panel, never in the event/sync row, whose layout it must not move).
+  // One organisation: a plain label. Two or more: a native <select> (full keyboard and screen-reader
+  // behaviour for free; the picker shows full names even where the closed control truncates).
+  // Format-agnostic: the shell is told the list, the active one and what to call on a choice;
+  // main.js owns what a switch means.
+  const orgEl = el('div', { className: 'app-shell-org', attrs: { hidden: '' } });
+  // One persistent live region (never rebuilt, like the sync region above) for two things: a quiet
+  // announcement for a screen reader ("Now working in …"), and a visible refusal that opens as an
+  // overlay under the header, so the header never grows and nothing below it moves.
+  const orgNoticeEl = el('div', {
+    className: 'app-shell-org-notice',
+    attrs: { role: 'status', 'aria-live': 'polite', id: 'app-shell-org-notice' },
+  });
   const header = el('header', { className: 'app-shell-header' }, [
     brandEl,
+    orgEl,
     contextEl,
     navToggle,
     navPanel,
+    orgNoticeEl,
   ]);
   const outlet = el('main', { className: 'app-shell-outlet' });
   // Quick, glance-based verification for bug reports (2026-09-05) — mirrors
@@ -788,6 +825,157 @@ export function mountAppShell(
     typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(syncHeaderHeightVar);
   headerResizeObserver?.observe(header);
 
+  // ---- the organisation slot: rendering, choosing, announcing ----
+  const ORG_SWITCH_FAILED_MESSAGE = 'Could not switch organisation. Try again.';
+  let orgState = { orgs: [], activeOrgId: null, onSelect: null };
+  let orgSelect = null;
+  let orgSwitching = false;
+
+  const refusalOpen = () => orgNoticeEl.classList.contains('app-shell-org-notice-open');
+  // Only a REFUSAL is ever cleared by the person moving on (Escape, leaving the control, tapping
+  // anywhere): the quiet announcement must survive the focus moves a switch itself causes, since the
+  // new screen takes focus within milliseconds of the announcement being written.
+  function clearRefusal() {
+    if (!refusalOpen()) return;
+    orgNoticeEl.classList.remove('app-shell-org-notice-open');
+    orgNoticeEl.textContent = '';
+    document.removeEventListener('pointerdown', onRefusalPointerDown);
+  }
+  // Any tap or click dismisses it: a touch browser may not blur a select when the person taps empty
+  // page, and on a phone the panel can sit over the page heading.
+  function onRefusalPointerDown() {
+    clearRefusal();
+  }
+  // A refusal the person must see (and a screen reader hears): the overlay opens under the header, in
+  // the place the sync detail uses, so that one closes.
+  function showOrganisationNotice(text) {
+    setDetailOpen(false);
+    orgNoticeEl.textContent = text;
+    orgNoticeEl.classList.add('app-shell-org-notice-open');
+    document.addEventListener('pointerdown', onRefusalPointerDown);
+  }
+  // Heard, not shown: the visible change is the name in the header and the screen underneath.
+  function announceOrganisation(text) {
+    clearRefusal();
+    orgNoticeEl.textContent = text;
+  }
+
+  // A native select switches the moment its value changes (arrow keys included), which WCAG 3.2.2
+  // (On Input) allows only if the person is told beforehand: the description is read with the control.
+  // `hidden`: browse mode does not read it a second time, while aria-describedby still does.
+  const orgHint = el('span', {
+    id: 'app-shell-org-hint',
+    text: 'Choosing another organisation switches to it straight away.',
+    attrs: { hidden: '' },
+  });
+
+  function buildOrgSelect() {
+    const select = el('select', {
+      className: 'app-shell-org-select',
+      attrs: { 'aria-label': 'Organisation', 'aria-describedby': 'app-shell-org-hint' },
+    });
+    select.addEventListener('change', async () => {
+      const chosen = select.value;
+      // A second choice while the first is being decided, or a re-pick of the current one: ignore
+      // (and leave whatever is on show alone).
+      if (orgSwitching || chosen === orgState.activeOrgId) {
+        select.value = orgState.activeOrgId ?? '';
+        return;
+      }
+      clearRefusal();
+      orgSwitching = true;
+      // aria-disabled, not disabled: a native disabled control loses focus.
+      setBusyDisabled(select, true);
+      let result;
+      try {
+        // Bounded: a hung check on the caller's side must not leave this control dead.
+        result = await raceTimeout(
+          Promise.resolve(orgState.onSelect?.(chosen)),
+          DEFAULT_LOAD_TIMEOUT_MS,
+        );
+      } catch {
+        result = { ok: false, message: ORG_SWITCH_FAILED_MESSAGE };
+      }
+      orgSwitching = false;
+      setBusyDisabled(select, false);
+      // Taken away while the answer was on its way (signed out, or no organisations left): there is
+      // nothing left to refuse on, and a panel must not open over the screen that replaced this one.
+      if (!select.isConnected) return;
+      if (!result?.ok) {
+        // Nothing changed: put the control back on what is true, and say why. Focus never left it.
+        select.value = orgState.activeOrgId ?? '';
+        showOrganisationNotice(result?.message || ORG_SWITCH_FAILED_MESSAGE);
+      }
+      // On success main.js calls setOrganisation() with the new active organisation, and the console
+      // re-mounts: the new screen focuses its own loading region and then its heading, as after any
+      // navigation (so focus does NOT stay here after a successful switch; the live region announces
+      // the change). A refusal re-mounts nothing, so there focus stays on this control.
+    });
+    // Escape closes a refusal (the native picker handles its own Escape); leaving the control means the
+    // person has moved on. Neither touches a quiet announcement.
+    select.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') clearRefusal();
+    });
+    select.addEventListener('blur', clearRefusal);
+    return select;
+  }
+
+  // Expects organisations as `{ id, name, slug }`.
+  function renderOrganisation() {
+    const { orgs, activeOrgId } = orgState;
+    if (orgs.length === 0) {
+      // Whatever refusal was showing belonged to a control that is going away.
+      clearRefusal();
+      orgEl.hidden = true;
+      orgFullEl.hidden = true;
+      orgEl.replaceChildren();
+      return;
+    }
+    const active = orgs.find((org) => org.id === activeOrgId) ?? orgs[0];
+    const activeLabel = orgLabel(active, orgs);
+    orgEl.hidden = false;
+    orgFullEl.hidden = false;
+    orgFullEl.textContent = `Organisation: ${activeLabel}`;
+    if (orgs.length === 1) {
+      clearRefusal();
+      orgEl.replaceChildren(
+        // `title`: the full name for a pointer user when the label is truncated (it does nothing on touch).
+        el('span', { className: 'app-shell-org-label', attrs: { title: activeLabel } }, [
+          el('span', { className: 'sr-only', text: 'Organisation: ' }),
+          document.createTextNode(activeLabel),
+        ]),
+      );
+      return;
+    }
+    // One select for the life of the shell: replacing it would drop the focus a keyboard user is on.
+    orgSelect ??= buildOrgSelect();
+    const labels = orgs.map((org) => orgLabel(org, orgs));
+    // Rebuilt only when the list really changed: replacing the options of an open picker collapses it.
+    const unchanged =
+      orgSelect.options.length === orgs.length &&
+      orgs.every(
+        (org, i) =>
+          orgSelect.options[i].value === org.id && orgSelect.options[i].textContent === labels[i],
+      );
+    if (!unchanged) {
+      orgSelect.replaceChildren(
+        ...orgs.map((org, i) => el('option', { text: labels[i], attrs: { value: org.id } })),
+      );
+    }
+    // While a choice is being decided the select shows that choice: do not flick it back.
+    if (!orgSwitching && orgSelect.value !== active.id) orgSelect.value = active.id;
+    orgSelect.title = activeLabel;
+    if (orgEl.firstChild !== orgSelect) orgEl.replaceChildren(orgSelect, orgHint);
+  }
+
+  // Tell the shell which organisations the signed-in person belongs to and which is active
+  // (an empty list hides the slot). `onSelect(orgId)` resolves to `{ ok, message }`: a refusal
+  // puts the control back and shows the message.
+  function setOrganisation({ orgs = [], activeOrgId = null, onSelect = null } = {}) {
+    orgState = { orgs, activeOrgId, onSelect };
+    renderOrganisation();
+  }
+
   async function setNav({ eventId = null, links = [] } = {}) {
     navEl.innerHTML = '';
     for (const link of links) {
@@ -901,6 +1089,8 @@ export function mountAppShell(
   return {
     outlet,
     setNav,
+    setOrganisation,
+    announceOrganisation,
     unmount() {
       headerResizeObserver?.disconnect();
       if (inlineNavQuery) {
@@ -910,6 +1100,7 @@ export function mountAppShell(
       }
       clearInterval(syncIntervalId);
       setDetailOpen(false);
+      clearRefusal();
       stopListeningForDrops();
       clearTimeout(dropCheckTimer);
       authSubscription.unsubscribe();
