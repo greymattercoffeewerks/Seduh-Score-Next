@@ -264,10 +264,31 @@ Supabase project: **linked, 2026-08-30** — cloud project "Seduh Score Next"
 migrations pushed via the Supabase MCP's `apply_migration` (not yet linked locally via
 `supabase link` — that needs the project's DB password from the dashboard, not set up
 this session; pushing further migrations can keep using the MCP, or `supabase link` once
-that password is in hand). A real org + organiser login were provisioned directly (see
+that password is in hand). The first org + organiser login were provisioned by hand (see
 CHANGELOG.md's dated entry) — credentials given to the user in chat, not committed
 anywhere. Local dev still defaults to the local stack (`npm run supabase -- start`,
 Studio at `http://127.0.0.1:54423`) — nothing about local dev changed.
+
+**Provisioning an org (T-TEN.B4; invite-only — there is no signup and no API role can do this).**
+Run these as the service role (the Supabase MCP's `execute_sql`), never from the app:
+
+1. Make sure the owner has an account (Auth → Add user in the dashboard) and that **they set their
+   own password**. Note their user id.
+2. `select public.create_org('Display Name', 'url-slug', '<owner user id>');` returns the new org's id.
+   The slug is trimmed and lower-cased, 3 to 40 letters/digits with single hyphens, not a reserved word
+   (`app`, `admin`, `api`, `www`, `live`, `results`, `tour`, `community`, `tools`, `guess-the-bean`,
+   `about`, `contact`, `privacy`, `terms`, `neutrality`, `login`, `signup`, `auth`, `assets`, `bts`,
+   `marketing`, `events`, `team`, `projector`, `phone`, `splash`, `help`, `docs`, `support`, `pricing`,
+   `status`, `static`, `settings`, `dashboard`) and not taken. **A slug can never be changed** (it is in
+   printed and QR audience links) and deleting an org frees it for reuse, so choose with care.
+3. To give an existing account a second membership (a two-org user):
+   `select public.org_add_existing_member('<org id>', '<user id>', 'organiser');`. Only attach an account
+   whose holder has set their own password, never one a Team screen created with a one-time password
+   (that org's owner still knows it).
+4. Refusals carry a stable `hint` (`org_slug_taken`, `org_slug_invalid`, `org_slug_reserved`,
+   `org_name_invalid`, `org_owner_not_found`, `member_exists`, ...): read the hint, not the text.
+5. To make someone else owner or demote an owner use `select public.org_set_role(...)` (B5); an org can
+   never be left without an owner.
 
 **Pushing a migration to the cloud project is a separate, manual step from merging its
 PR — merging to `main` only deploys the frontend (Cloudflare Workers Builds); it never

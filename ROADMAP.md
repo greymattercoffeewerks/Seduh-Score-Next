@@ -1897,13 +1897,13 @@ handoff §4's "one organiser, one org"; locks D-T1…D-T8). Why: `MULTI-TENANCY-
 pillars A and B. Not in scope: gating/entitlements (D14 stays a stub), admin console, self-serve
 signup, Seduh ID. Rule (lifted 2026-10-11, now that B1, B2 and B6 are in the cloud): a two-org user is created only through the service-role provisioning path (B4).
 
-| Phase | Tasks                                                                                                                                             | Status                                                                       |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| A     | A1 spec lock · A2 tenancy inventory                                                                                                               | Done                                                                         |
-| B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | In progress (B1, B2, B5, B6 done and in the cloud project; B3, B4, B7 to do) |
-| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | Not started                                                                  |
-| D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | Not started                                                                  |
-| E     | E1 negative matrix · E2 console Playwright · E3 security/perf · E4 docs · E5 rollout · E6 close-out                                               | Not started                                                                  |
+| Phase | Tasks                                                                                                                                             | Status                                                                                          |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| A     | A1 spec lock · A2 tenancy inventory                                                                                                               | Done                                                                                            |
+| B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | In progress (B1, B2, B3, B5, B6 done and in the cloud project; B4 built and reviewed; B7 to do) |
+| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | Not started                                                                                     |
+| D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | Not started                                                                                     |
+| E     | E1 negative matrix · E2 console Playwright · E3 security/perf · E4 docs · E5 rollout · E6 close-out                                               | Not started                                                                                     |
 
 Each D task is re-confirmed with the product owner before it starts (2026-10-10).
 
@@ -1939,7 +1939,7 @@ _Two migrations (`20261011130000_tenancy_resolver_disclosure`, `20261011140000_t
 
 ## Known open items from T-TEN.B3 (2026-10-11)
 
-_One migration, `20261011150000_tenancy_my_orgs` (`my_orgs()` plus the `org_members(user_id)` index). Reviewed by schema-guardian (no blocking), security-reviewer (signed off; 12 SQL probes and 13 real API requests through PostgREST found no way to see another user's membership) and test-auditor. **Not pushed to the cloud project until the product owner says so.**_
+_One migration, `20261011150000_tenancy_my_orgs` (`my_orgs()` plus the `org_members(user_id)` index). Reviewed by schema-guardian (no blocking), security-reviewer (signed off; 12 SQL probes and 13 real API requests through PostgREST found no way to see another user's membership) and test-auditor. **Pushed to the cloud project 2026-10-11 (cloud version `20261011030525`) and verified there:** function `SECURITY DEFINER`, `STABLE`, `search_path` pinned, no arguments, executable by authenticated only; the index is a plain btree on `user_id`; and a rolled-back live probe showed a stranger and a session with no user id get zero rows, the real owner exactly their own org and role, and anon and the service role are refused._
 
 - **Notes for C1 (`core/orgContext.js`).**
   - Call `my_orgs` with POST (supabase-js `.rpc('my_orgs')`, the default), not GET (`{ get: true }`). The function is STABLE so PostgREST allows GET, but the response varies by Authorization while PostgREST's `Vary` header does not, and shared iPads with several accounts are exactly the case where a cached per-user GET would be wrong.
@@ -1950,3 +1950,18 @@ _One migration, `20261011150000_tenancy_my_orgs` (`my_orgs()` plus the `org_memb
 - **The index is scale-readiness only.** At one org and one member the planner keeps scanning; measured on 3000 orgs, 12000 memberships it is used and goes from 0.69 ms to 0.15 ms. It also helps the `where user_id = ...` lookups in the team functions and the cascade from `auth.users`.
 - **Row estimate.** A set-returning SQL function is estimated at 1000 rows by default; add `rows 5` only if a later query joins on `my_orgs()`.
 - **Last-owner accounts cannot be deleted** until a successor is promoted (B5, intended); account deletion must go through the org first.
+
+---
+
+## Known open items from T-TEN.B4 (2026-10-11)
+
+_One migration, `20261011160000_tenancy_provisioning` (`create_org`, `org_add_existing_member`, `orgs_slug_format`, `trg_orgs_slug_immutable`). Reviewed by schema-guardian (no blocking; 8 non-blocking findings, all fixed or recorded here), security-reviewer (signed off on the boundary; 5 non-blocking, fixed or recorded) and test-auditor. **Not pushed to the cloud project until the product owner says so.** Cloud pre-check done 2026-10-11: the one existing slug (`grey-matter-coffee-werks`) satisfies the new CHECK and `auth.users` has the `deleted_at`, `is_anonymous` and `banned_until` columns the eligibility rule reads._
+
+- **Deleting an org frees its slug for reuse**, which defeats the "slugs are permanent because they are in printed links" rationale (D-T8). Only `postgres` can delete an org today. If org deletion ever becomes a real operation, keep a tombstone of retired slugs and refuse them in `create_org`.
+- **No audit trail for operator actions.** `create_org`, `org_add_existing_member` and `org_set_role` write no audit row. Consider `raise log` or an `org_events` table when an admin console exists.
+- **Attaching a Team-managed account to a second org** lets the first org's owner (who knows its one-time password) sign in there. Nothing in the schema marks an account as "managed", so this is an operator rule (in the CLAUDE.md runbook), not a database guarantee.
+- **Reserved words only protect new orgs.** Slugs are permanent, so the reserved list can grow but cannot un-create an org already named `help` or `status`. If slug routes ever move from `#/live/:orgSlug` to the site root or a subdomain, revisit the list.
+- **A name check is a hygiene check, not a spell check.** It refuses control characters, bidi overrides and invisible-only names; it does not refuse look-alike letters in a display name (only in the slug, which is ASCII-only before folding).
+- **A rare race is mapped, not tested:** an owner or org deleted between the existence check and the insert surfaces as the same `*_not_found` hint through a foreign-key handler. pgTAP runs in one session so cannot interleave it.
+- **PostgREST status codes.** "Not found" and "invalid" refusals use SQLSTATE 22023 (HTTP 400); a conflict is 23505. (P0002 would have been a 500.)
+- **Both functions are service-role only**, so there is no way to provision from the app by design (D-T1); an admin console phase will need its own, separately reviewed path.
