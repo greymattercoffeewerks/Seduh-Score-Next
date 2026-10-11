@@ -615,4 +615,56 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     await page.mouse.click(5, 400);
     await expect(page.locator('.app-shell-org-notice-open')).toHaveCount(0);
   });
+
+  test('the Team link is only there for the organisation the person owns, and the Team screen names the organisation it manages', async ({
+    page,
+  }) => {
+    await answerMyOrgs(page, [SECOND_ORG]);
+    await signIn(page);
+    await page.goto('/app/#/events');
+    const select = page.getByRole('combobox', { name: 'Organisation' });
+    const notice = page.locator('#app-shell-org-notice');
+    const heading = page.locator('.app-shell-outlet h1').first();
+    const teamLink = page.getByRole('link', { name: 'Team', exact: true });
+
+    // The made-up second organisation is first by name, so it starts active; the login owns only the
+    // seeded one. Wait for the first screen to settle (a switch during the first load hides the focus move).
+    await expect(select).toHaveValue(SECOND_ORG.org_id);
+    await expect(heading).toBeFocused();
+    await expect(teamLink).toHaveCount(0);
+
+    // Owner here: the link appears, and the screen it opens names this organisation.
+    await select.selectOption(SEEDED_ORG);
+    await expect(notice).toHaveText('Now working in Local Dev Org. Showing Events.');
+    await expect(teamLink).toBeVisible();
+    await teamLink.click();
+    await expect(heading).toHaveText('Team for Local Dev Org');
+    await expect(page.locator('.team-screen .stage-meta').first()).toContainText(
+      'logins that belong only to Local Dev Org',
+    );
+
+    // Switching away while the Team screen is on show replaces it, and the link goes with it.
+    await select.selectOption(SECOND_ORG.org_id);
+    await expect(notice).toHaveText(`Now working in ${SECOND_ORG.name}. Showing Events.`);
+    expect(new URL(page.url()).hash).toBe('#/events');
+    await expect(teamLink).toHaveCount(0);
+
+    // Opened by hand, the other organisation's Team screen names it and refuses a non-owner.
+    await navigateHash(page, '#/team');
+    await expect(heading).toHaveText(`Team for ${SECOND_ORG.name}`);
+    await expect(page.getByText('Only the owner can manage the team.')).toBeVisible();
+    // A long name wraps rather than scrolling the page sideways.
+    await page.setViewportSize({ width: 360, height: 800 });
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+
+    // And back: the first organisation's Team screen, named again.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await select.selectOption(SEEDED_ORG);
+    await expect(notice).toHaveText('Now working in Local Dev Org. Showing Events.');
+    await navigateHash(page, '#/team');
+    await expect(heading).toHaveText('Team for Local Dev Org');
+  });
 });

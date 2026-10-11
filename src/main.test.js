@@ -2446,6 +2446,161 @@ describe('organisation context wiring (T-TEN.C2)', () => {
     });
   });
 
+  describe('the Team screen is told whose team it is (T-TEN.C4)', () => {
+    it("passes the active organisation's name to the Team route", async () => {
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      stubScreen(mountTeamScreen, 'TEAM_SCREEN');
+      location.hash = '#/team';
+      await startApp({ client: orgClient() });
+      expect(mountTeamScreen.mock.calls[0][1]).toMatchObject({ orgId: 'org1', orgName: 'Org One' });
+    });
+
+    it('follows a switch: the next Team screen is for the new organisation', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      stubScreen(mountTeamScreen, 'TEAM_SCREEN');
+      const { app } = await startApp({ client: orgClient() });
+      await app.switchOrg('org2');
+      await vi.waitFor(() => expect(eventsOrgIds().at(-1)).toBe('org2'));
+      location.hash = '#/team';
+      await vi.waitFor(() => expect(mountTeamScreen).toHaveBeenCalled());
+      expect(mountTeamScreen.mock.calls.at(-1)[1]).toMatchObject({
+        orgId: 'org2',
+        orgName: 'Org Two',
+      });
+    });
+
+    it('Team in one organisation, switch, Team in the other: each is told its own name', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      stubScreen(mountTeamScreen, 'TEAM_SCREEN');
+      location.hash = '#/team';
+      const { app } = await startApp({ client: orgClient() });
+      expect(mountTeamScreen.mock.calls.at(-1)[1]).toMatchObject({
+        orgId: 'org1',
+        orgName: 'Org One',
+      });
+      const mountsBefore = mountTeamScreen.mock.calls.length;
+
+      await app.switchOrg('org2');
+      await vi.waitFor(() => expect(eventsOrgIds().at(-1)).toBe('org2'));
+      location.hash = '#/team';
+      await vi.waitFor(() =>
+        expect(mountTeamScreen.mock.calls.length).toBeGreaterThan(mountsBefore),
+      );
+      expect(mountTeamScreen.mock.calls.at(-1)[1]).toMatchObject({
+        orgId: 'org2',
+        orgName: 'Org Two',
+      });
+
+      await app.switchOrg('org1');
+      await vi.waitFor(() => expect(eventsOrgIds().at(-1)).toBe('org1'));
+      const mountsMid = mountTeamScreen.mock.calls.length;
+      location.hash = '#/team';
+      await vi.waitFor(() => expect(mountTeamScreen.mock.calls.length).toBeGreaterThan(mountsMid));
+      expect(mountTeamScreen.mock.calls.at(-1)[1]).toMatchObject({
+        orgId: 'org1',
+        orgName: 'Org One',
+      });
+    });
+
+    it('names the organisation from the same snapshot the id came from, never from live state a moment later', async () => {
+      const { createOrgContext } = await import('./core/orgContext.js');
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      stubScreen(mountTeamScreen, 'TEAM_SCREEN');
+      const client = orgClient();
+      const orgContext = createOrgContext({ client, storage: null });
+      // Live state that disagrees with the snapshot: the wrong organisation.
+      orgContext.getActiveOrg = () => ({ id: 'org2', name: 'Org Two', slug: 'org-two', role: '' });
+      location.hash = '#/team';
+      try {
+        await startApp({ client, orgContext });
+        expect(mountTeamScreen.mock.calls[0][1]).toMatchObject({
+          orgId: 'org1',
+          orgName: 'Org One',
+        });
+      } finally {
+        orgContext.destroy();
+      }
+    });
+
+    describe('leaving the Team screen with a one-time password on show', () => {
+      // A Team screen that reports a risk when the test says so, like the real one does.
+      let guard;
+      const stubTeamWithGuard = () =>
+        mountTeamScreen.mockImplementation(async (root, params) => {
+          root.textContent = 'TEAM_SCREEN';
+          guard = params.onLeaveGuard;
+          return { unmount: vi.fn() };
+        });
+
+      it('refuses a switch, saying why, until the person has finished there', async () => {
+        myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+        stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+        stubTeamWithGuard();
+        location.hash = '#/team';
+        const { app } = await startApp({ client: orgClient() });
+        guard(true);
+        const refused = await app.switchOrg('org2');
+        expect(refused).toMatchObject({ ok: false, reason: 'team_open' });
+        expect(refused.message).toBe(
+          'The Team screen has a one-time password showing, or a change still being saved. Finish that first (press Done), then switch organisation.',
+        );
+        expect(app.orgContext.getActiveOrgId()).toBe('org1');
+
+        guard(false);
+        expect(await app.switchOrg('org2')).toEqual({ ok: true });
+      });
+
+      it('shows the refusal under the header when the person uses the select', async () => {
+        myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+        stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+        stubTeamWithGuard();
+        location.hash = '#/team';
+        const { root } = await startApp({ client: orgClient() });
+        guard(true);
+        const select = root.querySelector('.app-shell-org-select');
+        select.value = 'org2';
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+        await vi.waitFor(() =>
+          expect(root.querySelector('#app-shell-org-notice').textContent).toContain(
+            'one-time password showing',
+          ),
+        );
+        expect(root.querySelector('.app-shell-org-notice-open')).not.toBeNull();
+        expect(select.value).toBe('org1');
+      });
+
+      it('no longer applies once the person has gone to another screen', async () => {
+        myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+        stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+        stubTeamWithGuard();
+        location.hash = '#/team';
+        const { app } = await startApp({ client: orgClient() });
+        guard(true);
+        location.hash = '#/events';
+        await vi.waitFor(() => expect(mountEventsScreen).toHaveBeenCalled());
+        expect(await app.switchOrg('org2')).toEqual({ ok: true });
+      });
+
+      it("does not apply to a different screen's switch before the Team screen was ever opened", async () => {
+        myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+        stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+        const { app } = await startApp({ client: orgClient() });
+        expect(await app.switchOrg('org2')).toEqual({ ok: true });
+      });
+    });
+
+    it('tells two organisations with the same name apart by slug', async () => {
+      const twin = { org_id: 'org2', name: 'Org One', slug: 'org-one-nz', role: 'owner' };
+      myOrgs.mockResolvedValue(answer(ORG_ONE, twin));
+      stubScreen(mountTeamScreen, 'TEAM_SCREEN');
+      location.hash = '#/team';
+      await startApp({ client: orgClient() });
+      expect(mountTeamScreen.mock.calls[0][1].orgName).toBe('Org One (org-one)');
+    });
+  });
+
   describe('the Team link across a switch', () => {
     it('an answer for the previous org that arrives late is ignored', async () => {
       myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
