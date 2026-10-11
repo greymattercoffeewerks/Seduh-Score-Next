@@ -1901,7 +1901,7 @@ signup, Seduh ID. Rule (lifted 2026-10-11, now that B1, B2 and B6 are in the clo
 | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
 | A     | A1 spec lock · A2 tenancy inventory                                                                                                               | Done                                            |
 | B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | Done (B1 to B7 merged and in the cloud project) |
-| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | In progress (C1 built, in review)               |
+| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | In progress (C1 merged, C2 built, in review)    |
 | D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | Not started                                     |
 | E     | E1 negative matrix · E2 console Playwright · E3 security/perf · E4 docs · E5 rollout · E6 close-out                                               | Not started                                     |
 
@@ -2002,3 +2002,27 @@ _Client only: `src/core/orgContext.js` and `src/core/noOrgScreen.js` (plus `noOr
 - **The remembered choice stays on the device** after sign-out (an org id per user id under `seduh.activeOrg.<userId>`; ids only, no names or tokens). Shared iPads keep one entry per account that signed in there.
 - **The screen has never been rendered in a browser.** The accessibility review was by reading code and CSS; check it at 360px (full-width button, no sideways scroll for a long email, focus ring, VoiceOver/TalkBack) when C2 mounts it.
 - **The copy says "ask its owner to add you".** True for a removed organiser; a Guess the Bean account would ignore it. Revisit with product wording if those accounts ever land here often.
+
+---
+
+## Known open items from T-TEN.C2 (2026-10-11)
+
+_Client only: `src/main.js` and the shared helpers. No migration._
+
+- **C3 must add what C2 deliberately left out.**
+  - The switcher control itself (nothing calls `switchOrg` yet, so its refusal messages have no UI), reachable and 44px-tall, collapsed under the hamburger below 1366px.
+  - The active organisation's name, visible in the header.
+  - A persistent `aria-live` announcement ("Now working in <name>. Showing Events.") for BOTH a deliberate switch and an involuntary change (a membership that fell away, another account signing in). Today an involuntary change just lands on Events with no cue. Because the switcher sits in the header, the router's "focus the heading only if nothing has focus" rule will not move focus: C3 must decide whether to focus the heading itself.
+  - Route C3's UI and C7's automatic switch through `switchOrg` (or a shared check), not `orgContext.setActiveOrg` directly: the unsynced-changes guard lives only in `switchOrg`, and the handle returned by `mountApp` also exposes `orgContext`.
+- **C6 closes the remaining outbox gaps.**
+  - The guard in `switchOrg` is check-then-act: a change queued between the outbox read and the switch (by the screen still on show, or by a second tab) slips through. Nothing is lost or mis-attributed (the operation's payload carries the old organisation and the database checks membership), but "no old-organisation operations while the new one is active" is not airtight until operations carry their user and organisation.
+  - The message "Wait for it to sync" is wrong for a stuck operation or one left by another account, and `switchOrg` counts the whole device. C6 should split pending / stuck / from another account.
+  - The no-organisation flush skip keeps other people's operations, but a person removed from their organisation also keeps their own unflushed ones stuck, shown as "Not synced (N)" with no explanation on the no-organisation screen.
+  - An involuntary organisation change replaces the screen without checking the outbox, even mid-heat. Drafts are keyed by heat or match id and survive, but C3/C7 should confirm the timing and scoring screens keep an unconfirmed form or running timer when they are unmounted.
+- **The remembered organisation list is a hint, not authority.** It holds organisation id, name, slug and role per user under `seduh.orgs.<userId>` (names and slugs are public in the results archive; the role is not), stays on the device after sign-out like the last-used-org hint, and can show an organisation the person was removed from until the next real answer (the database still refuses every read and write). It is erased by an answer of "no organisation".
+- **One `my_orgs` request per auth event** (including the hourly token refresh) plus one per console navigation only while the answer is missing.
+- **Nav on the no-organisation and error screens.** The shell's nav stays fully populated there (Events just shows the same screen again; the Team link is correctly absent). Two buttons named "Sign out" exist on the no-organisation screen (the header's and the screen's): kept on purpose, since the screen's is the one that works at 360px (the header's is behind the hamburger); the header's now also reports failures. Consider a minimal nav for those two states.
+- **Audience routes still use `VITE_DEFAULT_ORG_ID`** (`getLegacyAudienceOrgId()`), until D1. Set, a two-organisation organiser's "Projector view" opens the legacy organisation's display whichever organisation is active: D1/D4 fix this with slug-qualified links. The local `.env` and the e2e dev server still set it; the production dashboard variable is removed in E5 after D1.
+- **The "out of date" card has never been rendered in a browser** on a real projector or at 360px; neither has the Retry or loading card. Check in C3/D5.
+- **`organiser-flow.spec.js`'s hamburger focus test is flaky under parallel load** on a slow machine (passes alone). Pre-existing; not touched.
+- **Team screen heading and copy naming the organisation** remain C4.

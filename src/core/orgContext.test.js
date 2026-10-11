@@ -348,7 +348,7 @@ describe('setActiveOrg', () => {
     expect(context.setActiveOrg(null)).toBe(false);
     expect(context.setActiveOrg(undefined)).toBe(false);
     expect(context.getActiveOrgId()).toBe('org-a');
-    expect(storage.map.size).toBe(0);
+    expect(storage.map.has('seduh.activeOrg.user-1')).toBe(false);
     await tick();
     expect(listener).not.toHaveBeenCalled();
   });
@@ -1040,5 +1040,208 @@ describe('destroy', () => {
     await context.refresh(U1);
     await tick();
     expect(listener).not.toHaveBeenCalled();
+  });
+});
+
+describe('the remembered org list (a stand-in when the first question fails)', () => {
+  const snapshotKey = 'seduh.orgs.user-1';
+  const remembered = (...orgs) => JSON.stringify(orgs);
+
+  it('is written after every real answer with orgs, and holds what the screen shows', async () => {
+    const storage = memoryStorage();
+    const { client } = fakeClient(rows(B, A));
+    await started(client, U1, { storage });
+    expect(JSON.parse(storage.map.get(snapshotKey))).toEqual([A, B]);
+  });
+
+  it('stands in when the first question fails and nothing is known: ready, but marked stale', async () => {
+    const storage = memoryStorage({ [snapshotKey]: remembered(A, B) });
+    const { client } = fakeClient(failure());
+    const context = await started(client, U1, { storage });
+    expect(context.getState()).toMatchObject({ status: ORG_STATUS.READY, stale: true });
+    expect(context.getOrgs().map((o) => o.id)).toEqual(['org-a', 'org-b']);
+    expect(context.getActiveOrgId()).toBe('org-a');
+  });
+
+  it('honours the remembered "last used" org while standing in', async () => {
+    const storage = memoryStorage({
+      [snapshotKey]: remembered(A, B),
+      'seduh.activeOrg.user-1': 'org-b',
+    });
+    const { client } = fakeClient(failure());
+    const context = await started(client, U1, { storage });
+    expect(context.getActiveOrgId()).toBe('org-b');
+  });
+
+  it('stands in for every kind of failure: a hang, an error, a non-list answer', async () => {
+    vi.useFakeTimers();
+    const storage = memoryStorage({ [snapshotKey]: remembered(A) });
+    for (const answer of [new Promise(() => {}), failure({ code: '503' }, 503), { data: 'oops' }]) {
+      const { client } = fakeClient(answer);
+      const context = createOrgContext({ client, storage });
+      const pending = context.refresh(U1);
+      await vi.advanceTimersByTimeAsync(DEFAULT_LOAD_TIMEOUT_MS + 1);
+      await pending;
+      expect(context.getState()).toMatchObject({ status: ORG_STATUS.READY, stale: true });
+    }
+  });
+
+  it('the next real answer replaces it, and is no longer stale', async () => {
+    const storage = memoryStorage({ [snapshotKey]: remembered(A, B) });
+    const { client } = fakeClient(failure(), rows(A));
+    const context = await started(client, U1, { storage });
+    expect(context.getState().stale).toBe(true);
+    await context.retry();
+    expect(context.getState()).toMatchObject({ status: ORG_STATUS.READY, stale: false });
+    expect(context.getOrgs().map((o) => o.id)).toEqual(['org-a']);
+    expect(JSON.parse(storage.map.get(snapshotKey))).toEqual([A]);
+  });
+
+  it('is announced to subscribers like any other change', async () => {
+    const storage = memoryStorage({ [snapshotKey]: remembered(A) });
+    const { client } = fakeClient(failure(), rows(A));
+    const context = createOrgContext({ client, storage });
+    const seen = [];
+    context.subscribe((state) => seen.push(`${state.status}:${state.stale}`));
+    await context.refresh(U1);
+    await context.retry();
+    await tick();
+    expect(seen).toEqual(['loading:false', 'ready:true', 'ready:false']);
+  });
+
+  it('is never used for another user', async () => {
+    const storage = memoryStorage({ [snapshotKey]: remembered(A) });
+    const { client } = fakeClient(failure());
+    const context = await started(client, U2, { storage });
+    expect(context.getState().status).toBe(ORG_STATUS.ERROR);
+    expect(context.getOrgs()).toEqual([]);
+  });
+
+  it('is never used when something is already known (a failed later refresh keeps the real answer)', async () => {
+    const storage = memoryStorage();
+    const { client } = fakeClient(rows(B), failure());
+    const context = await started(client, U1, { storage });
+    storage.map.set(snapshotKey, remembered(A));
+    await context.refresh(U1);
+    expect(context.getOrgs().map((o) => o.id)).toEqual(['org-b']);
+    expect(context.getState().stale).toBe(false);
+  });
+
+  it('is erased by an answer that says "no organisation", so it cannot resurrect a lost membership', async () => {
+    const storage = memoryStorage({ [snapshotKey]: remembered(A) });
+    const { client } = fakeClient(rows(), failure());
+    const first = await started(client, U1, { storage });
+    expect(first.getState().status).toBe(ORG_STATUS.NO_ORG);
+    expect(storage.map.has(snapshotKey)).toBe(false);
+
+    const second = await started(client, U1, { storage });
+    expect(second.getState().status).toBe(ORG_STATUS.ERROR);
+  });
+
+  it('is erased by a 22P02 answer too', async () => {
+    const storage = memoryStorage({ [snapshotKey]: remembered(A) });
+    const { client } = fakeClient(failure({ code: '22P02' }, 400));
+    await started(client, U1, { storage });
+    expect(storage.map.has(snapshotKey)).toBe(false);
+  });
+
+  it('is ignored when it is empty, corrupt, or not a list', async () => {
+    for (const bad of ['', 'not json', '{"a":1}', '[]', 'null', '[{"name":"no id"}]']) {
+      const storage = memoryStorage({ [snapshotKey]: bad });
+      const { client } = fakeClient(failure());
+      const context = await started(client, U1, { storage });
+      expect(context.getState().status).toBe(ORG_STATUS.ERROR);
+    }
+  });
+
+  it('is sorted and cleaned like a real answer', async () => {
+    const storage = memoryStorage({
+      [snapshotKey]: remembered(B, A, { org_id: 'org-a', name: 'duplicate' }, null),
+    });
+    const { client } = fakeClient(failure());
+    const context = await started(client, U1, { storage });
+    expect(context.getOrgs().map((o) => o.id)).toEqual(['org-a', 'org-b']);
+  });
+
+  it('does nothing, and breaks nothing, with no storage or a storage that throws', async () => {
+    const { client } = fakeClient(rows(A), failure());
+    const context = await started(client, U1, { storage: null });
+    expect(context.getState().status).toBe(ORG_STATUS.READY);
+
+    const boom = () => {
+      throw new Error('SecurityError');
+    };
+    const broken = { getItem: boom, setItem: boom, removeItem: boom };
+    const { client: failing } = fakeClient(failure());
+    const withBroken = await started(failing, U1, { storage: broken });
+    expect(withBroken.getState().status).toBe(ORG_STATUS.ERROR);
+  });
+
+  it('a sign-out and a different user clear the stale flag', async () => {
+    const storage = memoryStorage({ [snapshotKey]: remembered(A) });
+    const { client } = fakeClient(failure());
+    const context = await started(client, U1, { storage });
+    expect(context.getState().stale).toBe(true);
+    await context.refresh(null);
+    expect(context.getState().stale).toBe(false);
+    await context.refresh(U2);
+    expect(context.getState().stale).toBe(false);
+  });
+});
+
+describe('whenSettled', () => {
+  it('resolves at once with the state when nothing has been asked', async () => {
+    const { rpc, client } = fakeClient(rows(A));
+    const context = createOrgContext({ client, storage: memoryStorage() });
+    expect(await context.whenSettled()).toBe(context.getState());
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it('waits for the refresh in flight and resolves with its answer, without asking anything itself', async () => {
+    const late = deferred();
+    const { rpc, client } = fakeClient(late.promise);
+    const context = createOrgContext({ client, storage: memoryStorage() });
+    const refreshing = context.refresh(U1);
+    let settled = false;
+    const waiting = context.whenSettled().then((state) => {
+      settled = true;
+      return state;
+    });
+    await tick();
+    expect(settled).toBe(false);
+    late.resolve(rows(A, B));
+    const state = await waiting;
+    await refreshing;
+    expect(state.status).toBe(ORG_STATUS.READY);
+    expect(state.orgs).toHaveLength(2);
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it('follows the newest refresh when a newer one started', async () => {
+    const slow = deferred();
+    const fast = deferred();
+    const { rpc, client } = fakeClient(slow.promise, fast.promise);
+    const context = createOrgContext({ client, storage: memoryStorage() });
+    context.refresh(U1);
+    context.refresh(U1);
+    const waiting = context.whenSettled();
+    await vi.waitFor(() => expect(rpc).toHaveBeenCalledTimes(2));
+    fast.resolve(rows(A, B));
+    expect((await waiting).orgs).toHaveLength(2);
+    slow.resolve(rows(A));
+  });
+
+  it('resolves to the idle state after a sign-out', async () => {
+    const { client } = fakeClient(rows(A));
+    const context = await started(client);
+    await context.refresh(null);
+    expect((await context.whenSettled()).status).toBe(ORG_STATUS.IDLE);
+  });
+
+  it('does not hang after destroy', async () => {
+    const { client } = fakeClient(rows(A));
+    const context = await started(client);
+    context.destroy();
+    await expect(context.whenSettled()).resolves.toBeDefined();
   });
 });

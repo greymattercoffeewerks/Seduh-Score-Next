@@ -1,18 +1,28 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { getDefaultOrgId } from './config.js';
+import { getLegacyAudienceOrgId } from './config.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe('getDefaultOrgId', () => {
+describe('getLegacyAudienceOrgId', () => {
   it('returns the configured VITE_DEFAULT_ORG_ID', () => {
     vi.stubEnv('VITE_DEFAULT_ORG_ID', 'org-123');
-    expect(getDefaultOrgId()).toBe('org-123');
+    expect(getLegacyAudienceOrgId()).toBe('org-123');
   });
 
-  it('throws a clear, specific error when unset — fails loud, not silently wrong', () => {
+  it('trims surrounding whitespace (a pasted dashboard value)', () => {
+    vi.stubEnv('VITE_DEFAULT_ORG_ID', '  org-123 \n');
+    expect(getLegacyAudienceOrgId()).toBe('org-123');
+  });
+
+  it('is null, and never throws, when the variable is empty, blank or missing', () => {
     vi.stubEnv('VITE_DEFAULT_ORG_ID', '');
-    expect(() => getDefaultOrgId()).toThrow(/VITE_DEFAULT_ORG_ID is not set/);
+    expect(getLegacyAudienceOrgId()).toBeNull();
+    vi.stubEnv('VITE_DEFAULT_ORG_ID', '   ');
+    expect(getLegacyAudienceOrgId()).toBeNull();
+    vi.stubEnv('VITE_DEFAULT_ORG_ID', undefined);
+    expect(() => getLegacyAudienceOrgId()).not.toThrow();
+    expect(getLegacyAudienceOrgId()).toBeNull();
   });
 });

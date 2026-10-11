@@ -1,10 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import {
-  mountNoOrgScreen,
-  NO_ORG_HEADING,
-  SIGN_OUT_FAILED_MESSAGE,
-  SIGN_OUT_SLOW_MESSAGE,
-} from './noOrgScreen.js';
+import { mountNoOrgScreen, NO_ORG_HEADING } from './noOrgScreen.js';
+import { SIGN_OUT_FAILED_MESSAGE, SIGN_OUT_SLOW_MESSAGE } from './signOut.js';
 import { DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
 
 function clientWith(signOut) {
@@ -94,11 +90,6 @@ describe('mountNoOrgScreen', () => {
     mount({ outlet });
     expect(outlet.querySelectorAll('h1')).toHaveLength(1);
     expect(outlet.querySelectorAll('button')).toHaveLength(1);
-  });
-
-  it('the two failure messages are different, and the slow one says what is slow', () => {
-    expect(SIGN_OUT_SLOW_MESSAGE).not.toBe(SIGN_OUT_FAILED_MESSAGE);
-    expect(SIGN_OUT_SLOW_MESSAGE).toMatch(/^Signing out is taking longer/);
   });
 });
 

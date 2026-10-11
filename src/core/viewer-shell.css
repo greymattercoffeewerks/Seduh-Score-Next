@@ -219,3 +219,24 @@
 [data-surface='stage'] .viewer-holding-body {
   font-size: max(var(--text-sm), calc(3.4 * var(--stage-unit, 1vh)));
 }
+
+/* The "this link is out of date" holding card shown on the audience routes when no organisation is
+   configured (main.js's mountOutOfDateLinkScreen). It fills the screen and centres the shared
+   .viewer-holding-card, so a projector or splash screen (data-surface="stage": dark tokens, the large
+   stage type above) and a phone (paper tokens) each show it in the established holding-state look.
+   The explicit background and colour matter in stage mode: the bare root has no chrome of its own to
+   carry the repainted tokens. */
+.out-of-date-link {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5) var(--space-4);
+  background: var(--color-canvas);
+  color: var(--color-text);
+}
+
+.out-of-date-link .viewer-holding-title {
+  margin: 0;
+}

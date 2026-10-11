@@ -66,15 +66,12 @@ jobs:
           # build step, and for the same reason — see that step's comment.
           VITE_SUPABASE_URL: http://127.0.0.1:54421
           VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
-          # Unlike the `app` job's own build step, THIS job actually boots the
-          # bundle in a real browser (smoke.spec.js) — core/config.js's
-          # getDefaultOrgId() throws at runtime if this is unset, which the
-          # `app` job's plain `npm run build` (no browser load) never
-          # exercises. smoke.spec.js's own assertions never depend on which
-          # org id this is, so it's a distinct, deliberately-unseeded id —
-          # only organiser-flow.spec.js's dev-server run below needs the
-          # REAL seeded org id.
-          VITE_DEFAULT_ORG_ID: 00000000-0000-0000-0000-000000000000
+          # VITE_DEFAULT_ORG_ID is deliberately NOT set for this build. Unlike the `app` job's plain
+          # `npm run build`, THIS job boots the bundle in a real browser (smoke.spec.js), so leaving the
+          # variable out proves the app still boots without it (an earlier outage came from clearing the
+          # dashboard variables; the organiser console now takes its organisation from the signed-in
+          # person's memberships). Only organiser-flow.spec.js's dev-server run below needs the
+          # REAL seeded org id, for the legacy audience links.
       - run: npm run test:e2e
         env:
           # The dev-app project (organiser-flow.spec.js) starts its own

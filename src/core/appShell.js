@@ -25,6 +25,8 @@ import { findEvent } from './events.js';
 import { getSupabase } from './supabaseClient.js';
 import { isFlushInProgress, listPendingOperations, onOperationDropped } from './outbox.js';
 import { computeSyncState } from './syncState.js';
+import { signOutWithTimeout } from './signOut.js';
+import { goToHash } from './navigation.js';
 import { APP_VERSION, NAMEPLATE } from './version.js';
 
 const APP_NAME = 'Seduh Score';
@@ -369,16 +371,23 @@ export function mountAppShell(
       text: 'Sign out',
       attrs: { type: 'button' },
     });
+    const authStatus = el('span', {
+      className: 'app-shell-auth-status',
+      attrs: { role: 'status', 'aria-live': 'polite' },
+    });
     signOutButton.addEventListener('click', async () => {
-      try {
-        const { error } = await client.auth.signOut();
-        if (error) throw error;
-      } catch {
-        // Found missing in review: an unguarded await here meant a failed
-        // signOut() (a real possibility over a bad connection) left the
-        // click handler throwing as an unhandled rejection and the user
-        // believing they'd signed out when they hadn't — the button stays
-        // enabled and clickable so they can just try again.
+      // Found missing in review: an unguarded await here meant a failed
+      // signOut() (a real possibility over a bad connection) left the
+      // click handler throwing as an unhandled rejection and the user
+      // believing they'd signed out when they hadn't — the button stays
+      // enabled and clickable so they can just try again. The shared helper
+      // (signOut.js) also gives up at the shared timeout, which this button
+      // used not to: a stalled connection could leave the click pending.
+      authStatus.textContent = '';
+      const failure = await signOutWithTimeout(client);
+      if (failure) {
+        // Say so (a polite live region): the button stays enabled so they can simply try again.
+        authStatus.textContent = failure;
         return;
       }
       // Found missing in review (code-reviewer/ui-accessibility-reviewer,
@@ -391,26 +400,15 @@ export function mountAppShell(
       // a failed attempt (the catch above) keeps the menu open on purpose,
       // so Sign out is still right there to retry without reopening it.
       closeMenu();
-      // Re-triggers the router (requireAuth finds no session and shows
-      // the login screen) — no extra plumbing needed between this shell
-      // and main.js's own routing. User-reported, 2026-09-09: signing out
-      // while ALREADY on #/events (a common case, e.g. the organiser
-      // landed there first) left the stale, still-rendered screen on
-      // screen indefinitely, needing a manual refresh — `location.hash =
-      // path` is a no-op when `path` already equals the current hash, so
-      // no `hashchange` event ever fires and router.js's own listener
-      // (`() => resolve(currentPath())`) never runs. Dispatching a
-      // synthetic `hashchange` unconditionally, after the assignment,
-      // forces the router to re-resolve regardless of whether the hash
-      // value actually changed — the listener only reads `location.hash`
-      // fresh via `currentPath()`, never anything off the event itself, so
-      // a plain `Event` (no `oldURL`/`newURL`) is sufficient.
-      location.hash = '#/events';
-      window.dispatchEvent(new Event('hashchange'));
+      // Re-triggers the router (requireAuth finds no session and shows the login screen). User-reported,
+      // 2026-09-09: signing out while ALREADY on #/events left the stale screen up, because assigning
+      // the same hash fires no hashchange; goToHash() (navigation.js) dispatches one in that case.
+      goToHash('#/events');
     });
     authEl.append(
       el('span', { className: 'app-shell-auth-email', text: session.user.email }),
       signOutButton,
+      authStatus,
     );
   }
 

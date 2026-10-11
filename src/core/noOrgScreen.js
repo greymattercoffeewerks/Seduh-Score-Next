@@ -1,7 +1,7 @@
 // "This account isn't part of an organisation" (T-TEN.C1) — shown, in front of every console route,
 // to someone who signed in fine but belongs to no organisation. That is a real state, not an
-// error: Guess the Bean accounts share the same logins, and an owner can also remove someone from
-// their org. Showing an empty Events list instead would look like "you have no events", and an
+// error: an account made for a different product signs in with the same logins, and an owner can also
+// remove someone from their org. Showing an empty Events list instead would look like "you have no events", and an
 // organiser who was just removed would not know why. Format-agnostic, like loginScreen.js.
 //
 // The one thing the person can do from here is sign out and use a different account, so that is the
@@ -13,12 +13,9 @@
 // app/index.html).
 import { getSupabase } from './supabaseClient.js';
 import { el, setBusyDisabled } from './dom.js';
-import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
+import { signOutWithTimeout } from './signOut.js';
 
 export const NO_ORG_HEADING = "This account isn't part of an organisation";
-export const SIGN_OUT_FAILED_MESSAGE = 'Could not sign out — check your connection and try again.';
-export const SIGN_OUT_SLOW_MESSAGE =
-  'Signing out is taking longer than expected — check your connection and try again.';
 
 export function mountNoOrgScreen(
   outlet,
@@ -34,8 +31,8 @@ export function mountNoOrgScreen(
   const heading = el('h1', { text: NO_ORG_HEADING, attrs: { tabindex: '-1' } });
   container.appendChild(heading);
 
-  // What is true, then what to do about it. A person removed from their organisation and a
-  // Guess the Bean account both land here, so neither paragraph assumes which they are.
+  // What is true, then what to do about it. A person removed from their organisation and an account
+  // that never belonged to one both land here, so neither paragraph assumes which they are.
   container.appendChild(
     el('p', {
       className: 'no-org-message',
@@ -72,13 +69,7 @@ export function mountNoOrgScreen(
     feedback.textContent = '';
     delete feedback.dataset.tone;
 
-    let failure = null;
-    try {
-      const { error } = await raceTimeout(client.auth.signOut(), DEFAULT_LOAD_TIMEOUT_MS);
-      if (error) failure = SIGN_OUT_FAILED_MESSAGE;
-    } catch (err) {
-      failure = err?.timedOut ? SIGN_OUT_SLOW_MESSAGE : SIGN_OUT_FAILED_MESSAGE;
-    }
+    const failure = await signOutWithTimeout(client);
 
     // The screen was replaced (a newer navigation, or this one unmounted) while the request was in
     // flight: it must not write to a node that is no longer on screen.

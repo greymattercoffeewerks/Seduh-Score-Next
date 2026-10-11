@@ -22,12 +22,19 @@
 //     microtask, never from inside `refresh()` / `setActiveOrg()`. That keeps both safe to call from
 //     `onAuthStateChange`, where supabase-js holds its auth lock and an RPC that needs the session
 //     would deadlock behind it, even if a subscriber starts one.
+//   * The last answer is remembered per user on the device (ids, names, slugs and roles, the same things
+//     the person sees on screen). When the first question of a visit fails (a reload on flaky venue wifi)
+//     and nothing is known yet, that remembered list stands in, marked `stale`, so the console does not
+//     lock an organiser out of a heat in progress; the next real answer replaces it. It is only a hint:
+//     the database still checks every read and write against the person's real memberships. An
+//     authoritative "no organisation" answer erases it.
 //   * Of overlapping refreshes for one user the newest answer wins, but an older good answer is still
 //     applied if it arrives while the newer one is in flight, so a newer refresh that fails does not
 //     throw a good answer away. An answer for an earlier user is dropped on arrival.
 //   * Storage can be missing, blocked or full (private mode); the app works without it.
 import { getSupabase } from './supabaseClient.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
+import { mustChangePassword } from './sessionGate.js';
 
 export const ORG_STATUS = Object.freeze({
   // Nobody is signed in (or they still have to choose a password): no question is being asked.
@@ -36,20 +43,23 @@ export const ORG_STATUS = Object.freeze({
   LOADING: 'loading',
   // One or more orgs, one of them active.
   READY: 'ready',
-  // Signed in, and in no organisation: a real state, not an error (a Guess the Bean account shares
-  // the same logins).
+  // Signed in, and in no organisation: a real state, not an error (an account made for a different
+  // product, or someone removed from their org, can sign in with no membership).
   NO_ORG: 'no_org',
   // Signed in, nothing known yet, and the question failed (offline, timed out, server error).
   ERROR: 'error',
 });
 
 const STORAGE_PREFIX = 'seduh.activeOrg.';
+const SNAPSHOT_PREFIX = 'seduh.orgs.';
 
 const IDLE_STATE = Object.freeze({
   status: ORG_STATUS.IDLE,
   userId: null,
   orgs: Object.freeze([]),
   activeOrgId: null,
+  // true only while the orgs shown are the remembered list standing in for an answer that failed.
+  stale: false,
 });
 
 // What the database says when the token has no usable user id (`sub` empty or not a UUID): 22P02
@@ -102,6 +112,7 @@ function sameState(a, b) {
     a.status === b.status &&
     a.userId === b.userId &&
     a.activeOrgId === b.activeOrgId &&
+    a.stale === b.stale &&
     sameOrgs(a.orgs, b.orgs)
   );
 }
@@ -111,7 +122,7 @@ function sameState(a, b) {
 function signedInUserId(session) {
   const userId = session?.user?.id;
   if (typeof userId !== 'string' || !userId) return null;
-  if (session.user.user_metadata?.must_change_password === true) return null;
+  if (mustChangePassword(session)) return null;
   return userId;
 }
 
@@ -133,6 +144,8 @@ export function createOrgContext({
   // The session the last refresh() was given, so retry() can ask again without the caller digging
   // it out of the auth client.
   let lastSession = null;
+  // The most recent refresh(), so a caller can wait for "whatever is in flight" without starting one.
+  let latestRefresh = Promise.resolve(state);
   const listeners = new Set();
   let deliveryQueued = false;
   let lastDelivered = state;
@@ -161,6 +174,37 @@ export function createOrgContext({
   function removeStored(userId) {
     try {
       getStore()?.removeItem(STORAGE_PREFIX + userId);
+    } catch {
+      // Nothing to clean up if storage cannot be reached.
+    }
+  }
+
+  // The remembered org list (see the header). Anything unreadable or empty counts as "none".
+  function readSnapshot(userId) {
+    try {
+      const raw = getStore()?.getItem(SNAPSHOT_PREFIX + userId);
+      const orgs = raw ? normaliseOrgs(JSON.parse(raw)) : null;
+      return orgs && orgs.length > 0 ? orgs : null;
+    } catch {
+      return null;
+    }
+  }
+  function writeSnapshot(userId, orgs) {
+    try {
+      const rows = orgs.map((org) => ({
+        org_id: org.id,
+        name: org.name,
+        slug: org.slug,
+        role: org.role,
+      }));
+      getStore()?.setItem(SNAPSHOT_PREFIX + userId, JSON.stringify(rows));
+    } catch {
+      // Blocked or full: there is simply no fallback next time.
+    }
+  }
+  function removeSnapshot(userId) {
+    try {
+      getStore()?.removeItem(SNAPSHOT_PREFIX + userId);
     } catch {
       // Nothing to clean up if storage cannot be reached.
     }
@@ -208,13 +252,25 @@ export function createOrgContext({
     return orgs[0].id;
   }
 
-  // A failed answer: keep what is known; only report an error when nothing is known yet. Only the
-  // newest question reports, so an older one failing while a newer one is still in flight cannot
-  // flash an error.
-  function reportFailure(mySeq, myEpoch) {
+  // A failed answer: keep what is known. When nothing is known yet, fall back to the remembered list
+  // for this user if there is one (marked stale), else report an error. Only the newest question
+  // reports, so an older one failing while a newer one is still in flight cannot flash an error.
+  function reportFailure(mySeq, myEpoch, userId) {
     if (myEpoch !== epoch || mySeq !== seq) return;
     const known = state.status === ORG_STATUS.READY || state.status === ORG_STATUS.NO_ORG;
-    if (!known) setState({ status: ORG_STATUS.ERROR });
+    if (known) return;
+    const remembered = readSnapshot(userId);
+    if (remembered) {
+      setState({
+        status: ORG_STATUS.READY,
+        userId,
+        orgs: remembered,
+        activeOrgId: chooseActive(userId, remembered, state.activeOrgId),
+        stale: true,
+      });
+      return;
+    }
+    setState({ status: ORG_STATUS.ERROR });
   }
 
   async function load(mySeq, myEpoch, userId) {
@@ -223,7 +279,7 @@ export function createOrgContext({
       // Evaluated inside the try, so even a synchronous throw from the client is a failure.
       result = await raceTimeout(client.rpc('my_orgs'), timeoutMs);
     } catch {
-      reportFailure(mySeq, myEpoch);
+      reportFailure(mySeq, myEpoch, userId);
       return;
     }
     // The signed-in user changed (or the context was destroyed) while this was in flight.
@@ -232,14 +288,14 @@ export function createOrgContext({
     let orgs;
     if (result?.error) {
       if (!isNoUserError(result.error)) {
-        reportFailure(mySeq, myEpoch);
+        reportFailure(mySeq, myEpoch, userId);
         return;
       }
       orgs = Object.freeze([]);
     } else {
       orgs = normaliseOrgs(result?.data);
       if (orgs === null) {
-        reportFailure(mySeq, myEpoch);
+        reportFailure(mySeq, myEpoch, userId);
         return;
       }
     }
@@ -254,13 +310,21 @@ export function createOrgContext({
       userId,
       orgs,
       activeOrgId: chooseActive(userId, orgs, state.activeOrgId),
+      stale: false,
     });
+    if (orgs.length > 0) writeSnapshot(userId, orgs);
+    else removeSnapshot(userId);
   }
 
   // Ask the database which orgs this session's user belongs to. Call it on every auth event
   // (including sign-out, with a null session). Resolves, with the state, once that question is
   // answered or overtaken; it never rejects.
   function refresh(session) {
+    latestRefresh = startRefresh(session);
+    return latestRefresh;
+  }
+
+  function startRefresh(session) {
     if (destroyed) return Promise.resolve(state);
     lastSession = session ?? null;
     seq += 1;
@@ -274,7 +338,13 @@ export function createOrgContext({
     if (state.userId !== userId) {
       // A different person: nothing from the previous account may be used, not even while waiting.
       epoch += 1;
-      setState({ status: ORG_STATUS.LOADING, userId, orgs: IDLE_STATE.orgs, activeOrgId: null });
+      setState({
+        status: ORG_STATUS.LOADING,
+        userId,
+        orgs: IDLE_STATE.orgs,
+        activeOrgId: null,
+        stale: false,
+      });
     } else if (state.status === ORG_STATUS.ERROR) {
       setState({ status: ORG_STATUS.LOADING });
     }
@@ -284,7 +354,7 @@ export function createOrgContext({
       .then(() => load(mySeq, myEpoch, userId))
       .catch((err) => {
         console.error('orgContext: refresh failed', err);
-        reportFailure(mySeq, myEpoch);
+        reportFailure(mySeq, myEpoch, userId);
       })
       .then(() => state);
   }
@@ -294,6 +364,10 @@ export function createOrgContext({
 
     // Ask again with the session the last refresh() was given (the Retry button after an error).
     retry: () => refresh(lastSession),
+
+    // Resolves, with the state, once the most recent refresh() has been answered or overtaken
+    // (immediately when none is in flight). Never starts a question of its own.
+    whenSettled: () => latestRefresh,
 
     getState: () => state,
     getOrgs: () => state.orgs,

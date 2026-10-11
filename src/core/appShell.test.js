@@ -3,6 +3,8 @@ import { mountAppShell } from './appShell.js';
 import { _clearAllForTests, outboxPut } from './db.js';
 import { enqueueOperation, flushOutbox } from './outbox.js';
 import { APP_VERSION, NAMEPLATE } from './version.js';
+import { DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
+import { SIGN_OUT_FAILED_MESSAGE, SIGN_OUT_SLOW_MESSAGE } from './signOut.js';
 
 // Every fake client needs a minimal auth shape now — mountAppShell's own
 // "signed in as X / sign out" control subscribes via
@@ -802,6 +804,95 @@ describe('mountAppShell', () => {
 
       expect(panel.classList.contains('app-shell-nav-panel-open')).toBe(true);
       document.body.removeChild(root);
+    });
+
+    describe('when Sign out does not work', () => {
+      // A shell signed in as organiser@local.test whose signOut() behaves as the test says, with the
+      // mobile menu open: returns the pieces the assertions look at.
+      function mountSignedInWith(signOut) {
+        const root = document.createElement('div');
+        document.body.appendChild(root);
+        const auth = {
+          signOut: vi.fn(signOut),
+          onAuthStateChange: (cb) => {
+            cb('SIGNED_IN', { user: { email: 'organiser@local.test' } });
+            return { data: { subscription: { unsubscribe: vi.fn() } } };
+          },
+        };
+        mountAppShell(root, { client: { auth, from: () => ({}) } });
+        const toggle = root.querySelector('.app-shell-nav-toggle');
+        toggle.dispatchEvent(new Event('click', { bubbles: true }));
+        return {
+          root,
+          auth,
+          panel: root.querySelector('.app-shell-nav-panel'),
+          status: root.querySelector('.app-shell-auth-status'),
+          button: [...root.querySelectorAll('button')].find((b) => b.textContent === 'Sign out'),
+        };
+      }
+      const clickAndSettle = async (button) => {
+        button.dispatchEvent(new Event('click', { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      };
+
+      afterEach(() => {
+        vi.useRealTimers();
+        location.hash = '';
+      });
+
+      it('says so in a polite status region next to the button, and leaves everything as it was', async () => {
+        const { root, panel, status, button } = mountSignedInWith(() =>
+          Promise.resolve({ error: new Error('network unreachable') }),
+        );
+        location.hash = '#/events/ev1';
+        await clickAndSettle(button);
+        expect(status.getAttribute('role')).toBe('status');
+        expect(status.getAttribute('aria-live')).toBe('polite');
+        expect(status.textContent).toBe(SIGN_OUT_FAILED_MESSAGE);
+        expect(location.hash).toBe('#/events/ev1');
+        expect(panel.classList.contains('app-shell-nav-panel-open')).toBe(true);
+        document.body.removeChild(root);
+      });
+
+      it('a sign-out that throws is reported the same way and goes nowhere', async () => {
+        const { root, panel, status, button } = mountSignedInWith(() =>
+          Promise.reject(new TypeError('Failed to fetch')),
+        );
+        location.hash = '#/events/ev1';
+        await clickAndSettle(button);
+        expect(status.textContent).toBe(SIGN_OUT_FAILED_MESSAGE);
+        expect(location.hash).toBe('#/events/ev1');
+        expect(panel.classList.contains('app-shell-nav-panel-open')).toBe(true);
+        document.body.removeChild(root);
+      });
+
+      it('a sign-out that never answers gives up at the shared timeout, with its own message', async () => {
+        vi.useFakeTimers();
+        const { root, panel, status, button } = mountSignedInWith(() => new Promise(() => {}));
+        location.hash = '#/events/ev1';
+        button.dispatchEvent(new Event('click', { bubbles: true }));
+        await vi.advanceTimersByTimeAsync(DEFAULT_LOAD_TIMEOUT_MS - 1);
+        expect(status.textContent).toBe('');
+        await vi.advanceTimersByTimeAsync(2);
+        expect(status.textContent).toBe(SIGN_OUT_SLOW_MESSAGE);
+        expect(location.hash).toBe('#/events/ev1');
+        expect(panel.classList.contains('app-shell-nav-panel-open')).toBe(true);
+        document.body.removeChild(root);
+      });
+
+      it('the message is cleared by the next attempt, and a success leaves none', async () => {
+        let attempt = 0;
+        const { root, status, button } = mountSignedInWith(() => {
+          attempt += 1;
+          return Promise.resolve({ error: attempt === 1 ? new Error('network') : null });
+        });
+        await clickAndSettle(button);
+        expect(status.textContent).toBe(SIGN_OUT_FAILED_MESSAGE);
+        await clickAndSettle(button);
+        expect(status.textContent).toBe('');
+        expect(location.hash).toBe('#/events');
+        document.body.removeChild(root);
+      });
     });
 
     it('unmount() unsubscribes from the auth-state listener', () => {
