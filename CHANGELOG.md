@@ -9537,3 +9537,9 @@ Removed the unused direct-payload publish helpers from `src/core/publish.js`; bo
 formats already publish through `publishIntent.js`. The file now only exposes the shared
 active-session lookup, which gained direct regression coverage. Updated the affected
 history and implementation comments, and marked the matching ROADMAP item closed.
+
+## 07-core-reason-validator: shared reason validation â€¢ 2026-10-11
+
+**What changed:** Added format-agnostic `core/reason.js`, which trims text (including NBSP), rejects empty or non-text values, and enforces the shared 120 UTF-16-unit limit. BTC knockout tie-breaks, BTC seeding orders, and Cup Taster time corrections now use it while preserving their existing exports, user-facing wording, and invalid-result shape. Added focused core tests for empty, whitespace-only, NBSP-only, boundary, non-text, and custom-limit inputs.
+
+**Why:** The same client-side rule was maintained separately in all three formats. The database constraints remain the authoritative enforcement.

@@ -28,10 +28,11 @@ import {
 import { buildClampedUpdate, timingHandlers } from './timing.js';
 import { formatDuration } from '../../core/duration.js';
 import { describeError } from '../../core/errors.js';
+import { checkReason, REASON_MAX } from '../../core/reason.js';
 import { getSupabase } from '../../core/supabaseClient.js';
 
 // Mirrors the RPC's own limit.
-export const REASON_MAX_LENGTH = 120;
+export const REASON_MAX_LENGTH = REASON_MAX;
 
 // Nothing a stopwatch records is longer than a day. Without a bound a mistyped
 // minutes field reaches the database as an integer-overflow error, which the outbox
@@ -58,16 +59,16 @@ export const CORRECTION_REASONS = ['Missed the stop', "Manual timekeeper's time"
 // Trims and validates a reason; returns the trimmed text, or throws a
 // CorrectionInputError whose message is fit to show to the person who typed it.
 export function validateReason(raw) {
-  const reason = typeof raw === 'string' ? raw.trim() : '';
-  if (reason === '')
+  const checked = checkReason(raw);
+  if (!checked.ok && checked.kind === 'empty')
     throw new CorrectionInputError('Choose or type a reason for the change.', 'reason');
-  if (reason.length > REASON_MAX_LENGTH) {
+  if (!checked.ok) {
     throw new CorrectionInputError(
-      `Keep the reason to ${REASON_MAX_LENGTH} characters or fewer.`,
+      `Keep the reason to ${checked.max} characters or fewer.`,
       'reason',
     );
   }
-  return reason;
+  return checked.reason;
 }
 
 // `heat` and `heatEntry` are the caller's own already-loaded, already-rendered

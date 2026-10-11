@@ -156,6 +156,14 @@ describe('validateTiebreak', () => {
     expect(over.message).toMatch(String(TIEBREAK_REASON_MAX));
   });
 
+  it('keeps the 120-character reason contract', () => {
+    expect(validateTiebreak({ winnerTeamId: 'a', reason: 'r'.repeat(120), teamIds })).toBeNull();
+    expect(validateTiebreak({ winnerTeamId: 'a', reason: 'r'.repeat(121), teamIds })).toEqual({
+      field: 'reason',
+      message: 'Keep the reason to 120 characters or fewer.',
+    });
+  });
+
   it('reports the winner problem first when both are wrong', () => {
     expect(validateTiebreak({ winnerTeamId: null, reason: '', teamIds }).field).toBe('winner');
   });

@@ -258,6 +258,14 @@ describe('validateSeedingOrder', () => {
       message: 'Keep the reason to 120 characters or fewer.',
     });
   });
+
+  it('keeps the 120-character reason contract', () => {
+    expect(validateSeedingOrder({ ...ok, reason: 'x'.repeat(120) })).toBeNull();
+    expect(validateSeedingOrder({ ...ok, reason: 'x'.repeat(121) })).toEqual({
+      field: 'reason',
+      message: 'Keep the reason to 120 characters or fewer.',
+    });
+  });
 });
 
 describe('recordSeedingTiebreak', () => {
