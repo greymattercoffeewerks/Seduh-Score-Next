@@ -1,5 +1,59 @@
 import { describe, it, expect } from 'vitest';
-import { DEMO_TEAM_NAMES, preliminaryPayload, knockoutPayload } from './demoLivePayload.js';
+import { rank, chainComparators } from '../../core/ranking.js';
+import { computeScores } from './scoring.js';
+import {
+  DEMO_TEAM_NAMES,
+  preliminaryFixtureMatches,
+  preliminaryPayload,
+  knockoutFixtureMatches,
+  knockoutPayload,
+} from './demoLivePayload.js';
+
+const KNOCKOUT_RESULTS = {
+  qf1: { tokensA: 40, fastest: 0, signature: [true, false] },
+  qf2: { tokensA: 20, fastest: 4 },
+  qf3: { tokensA: 30, tiebreak: { winner: 5, reason: 'Coin' } },
+  qf4: { tokensA: 33 },
+  sf1: { tokensA: 35, fastest: 0, signature: [true, false] },
+  sf2: { tokensA: 28, fastest: 5 },
+  third: { tokensA: 32, signature: [false, true] },
+  final: { tokensA: 26, fastest: 5, signature: [true, true] },
+};
+
+function recomputedStandings(records) {
+  const byTeam = new Map(
+    DEMO_TEAM_NAMES.map((name, i) => [`t${i + 1}`, { played: 0, wins: 0, points: 0 }]),
+  );
+  for (const { match, draft } of records.filter(({ match }) => match.round === 'preliminary')) {
+    const scores = computeScores(draft, match.round);
+    for (const [teamId, tokens, opponentTokens, total] of [
+      [match.team1_id, scores.team1Tokens, scores.team2Tokens, scores.team1Total],
+      [match.team2_id, scores.team2Tokens, scores.team1Tokens, scores.team2Total],
+    ]) {
+      const row = byTeam.get(teamId);
+      row.played += 1;
+      row.wins += tokens > opponentTokens ? 1 : 0;
+      row.points += total;
+    }
+  }
+  return rank(
+    DEMO_TEAM_NAMES.map((teamName, i) => ({
+      teamName,
+      teamId: `t${i + 1}`,
+      ...byTeam.get(`t${i + 1}`),
+    })),
+    chainComparators(
+      (a, b) => b.points - a.points,
+      (a, b) => b.wins - a.wins,
+    ),
+  ).map(({ item, position }) => ({
+    position,
+    teamName: item.teamName,
+    played: item.played,
+    wins: item.wins,
+    points: item.points,
+  }));
+}
 
 describe('demoLivePayload: the fixtures the preview page and the screen tests stand on', () => {
   it('is deterministic: the same call gives the same payload', () => {
@@ -7,6 +61,61 @@ describe('demoLivePayload: the fixtures the preview page and the screen tests st
     expect(knockoutPayload({ results: { qf1: { tokensA: 40 } } })).toEqual(
       knockoutPayload({ results: { qf1: { tokensA: 40 } } }),
     );
+  });
+
+  it('derives every demo match total from scoring.js cup votes, and pins the shown results and standings', () => {
+    const records = knockoutFixtureMatches({ results: KNOCKOUT_RESULTS }).filter(
+      ({ score }) => score,
+    );
+    for (const { match, score, draft } of records) {
+      const recomputed = computeScores(draft, match.round);
+      expect(score).toMatchObject({
+        team1_tokens: recomputed.team1Tokens,
+        team2_tokens: recomputed.team2Tokens,
+        team1_total: recomputed.team1Total,
+        team2_total: recomputed.team2Total,
+      });
+    }
+
+    // A fixture vote changes at least one points total; this pin makes that a deliberate
+    // update instead of a silent demo/test-data change.
+    const preliminary = preliminaryPayload({ playedCount: 28 });
+    expect(preliminary.standings).toEqual([
+      { position: 1, teamName: 'Bean Scene', played: 7, wins: 7, points: 259 },
+      { position: 2, teamName: 'Pour Decisions', played: 7, wins: 6, points: 237 },
+      { position: 3, teamName: 'Crema Crew', played: 7, wins: 4, points: 211 },
+      { position: 4, teamName: 'Drip Society', played: 7, wins: 4, points: 182 },
+      { position: 5, teamName: 'Grind House', played: 7, wins: 3, points: 176 },
+      { position: 6, teamName: 'Roast Republic', played: 7, wins: 2, points: 137 },
+      { position: 7, teamName: 'Latte Lab', played: 7, wins: 2, points: 124 },
+      { position: 8, teamName: 'Steam Team', played: 7, wins: 0, points: 98 },
+    ]);
+    expect(preliminary.standings).toEqual(recomputedStandings(preliminaryFixtureMatches()));
+
+    const knockout = knockoutPayload({ results: KNOCKOUT_RESULTS });
+    const byMatchId = new Map(records.map(({ match, score }) => [match.id, score]));
+    for (const result of knockout.recentResults) {
+      const score = byMatchId.get(result.matchId);
+      expect(result.teams.map(({ tokens, total }) => ({ tokens, total }))).toEqual([
+        { tokens: score.team1_tokens, total: score.team1_total },
+        { tokens: score.team2_tokens, total: score.team2_total },
+      ]);
+    }
+    expect(
+      ['qf1', 'qf2', 'qf3', 'qf4', 'sf1', 'sf2', 'third', 'final'].map((id) => {
+        const score = byMatchId.get(id);
+        return [id, score.team1_total, score.team2_total];
+      }),
+    ).toEqual([
+      ['qf1', 49, 20],
+      ['qf2', 20, 47],
+      ['qf3', 30, 30],
+      ['qf4', 38, 27],
+      ['sf1', 44, 25],
+      ['sf2', 30, 37],
+      ['third', 37, 30],
+      ['final', 28, 41],
+    ]);
   });
 
   it('runs the preliminary as a full round robin of eight teams, played in order', () => {

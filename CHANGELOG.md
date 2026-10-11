@@ -25,6 +25,17 @@
 **Reviews:** module-boundary-checker (boundary holds; duplicated hash navigation and a hard-coded route fixed, docs updated), code-reviewer (no blockers; the stale-screen-after-another-account case, error retry, unmount safety fixed), test-auditor (about 60 mutations on copies; eight gaps filled), offline-sync-auditor (outbox untouched and safe; the no-organisation flush skip and the reload-on-flaky-wifi lock-out fixed, the rest recorded for C6), ui-accessibility-reviewer (audience card styling, dead nav links, Retry feedback, loading state, Back button fixed; the announcement of an organisation change is C3's). Each was run as a general-purpose agent following the project's `.claude/agents/*.md` definition.
 
 **Flagged, not changed:** ROADMAP's "Known open items from T-TEN.C2".
+## T-BTC.demo-payload-derive: derive BTC demo totals from scoring · 2026-10-11
+
+**Task:** Keep the demo/test payload builder tied to BTC's real scoring rule. Client and test fixtures only: no migration and nothing to push to the cloud project.
+
+**Status: in review, not merged.**
+
+**What changed:** `demoLivePayload.js` now turns each fixture's deterministic token total into cup votes and calls `computeScores()` for every match, instead of repeating the win, fastest and signature-bonus arithmetic. Its demo-only fixture records retain those votes for the invariant test. The preliminary standings reducer remains local because production has no pure reducer for the database view's aggregate rows; the test independently recomputes and ranks those rows with `core/ranking.js` and pins the resulting table.
+
+**Verified:** `demoLivePayload.test.js` recomputes every confirmed preliminary and knockout fixture match from its cup votes, checks the values shown in the payload, and pins the complete preliminary table plus bonus-bearing knockout totals. Mutation checks: changing the fastest bonus from +2 to +3 fails the new test; changing the deterministic preliminary fixture vote source also fails it. Both mutations were restored.
+
+**Flagged, not changed:** ROADMAP's remaining "Known open items from T-BTC.projector-screens".
 
 ## T-TEN.C1: the org context and the "no organisation" screen · 2026-10-11
 
