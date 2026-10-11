@@ -1,8 +1,32 @@
-## T-TEN.B4: org provisioning · 2026-10-11
+## T-TEN.B7: anonymous surfaces, expand step · 2026-10-11
 
-**Task:** T-TEN.B4 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (PR 5). One migration, `20261011160000_tenancy_provisioning`; **not pushed to the cloud project until the product owner says so.**
+**Task:** T-TEN.B7 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (PR 6; the last database task of phase B). One migration, `20261011170000_tenancy_anon_expand`; **not pushed to the cloud project until the product owner says so.**
 
 **Status: in review, not merged.**
+
+**Why:** the audience screens and the public results archive are anonymous, and anon can read `events`, `live_sessions` and `public_results` for every org. With many orgs that has to narrow (decision D-T3), but venue displays that are already open run cached JavaScript that still reads those tables, so it is done in two steps: this migration only ADDS the narrow, slug-addressed doors (expand); the client switches to them (D1/D2); a later, gated migration (D6, no live event) closes the old doors (contract).
+
+**What changed:**
+
+- **`public_org_by_slug(slug)`** returns `id, name, slug` for the ONE org with that slug, or nothing. The slug is trimmed and case-folded like `create_org` folds it, and must look like a slug _before_ folding (so a look-alike such as the Kelvin sign cannot alias a real org). There is no listing, no pattern matching (`%` and `_` are plain characters), and nothing else about the org. Executable by anon and authenticated.
+- **`public_event_summary(org_id)`** returns the org's newest event (`id, name, event_date, is_test`), or nothing, with a stable pick when two events share a timestamp. It replaces the anonymous table read in `findLatestEventForOrg`, without `org_id` or `created_at`; the schema review confirmed the audience screens read nothing else. Executable by anon and authenticated.
+- **A trigger on `public_results`** (`trg_public_results_stamp_org`) stamps the org's real name and slug into the payload as `org_name` / `org_slug` on EVERY insert or update, replacing anything the writer put under those keys (D-T4: the public archive stays global, so each row must say whose it is). It also refuses a payload that is not a JSON object and one over 256 KB (a real payload is about 3 KB; the results page reads every row, so one huge row would slow it for every org). It is a trigger, not function logic, because members can also write the table directly: both the schema and security reviews reproduced a member making their own result claim another org's name through a raw write, and the security review blocked on it. Rows published earlier lack the two keys: readers must tolerate that (D3).
+- **`publish_event_results`** keeps its body and gains one friendly refusal: a payload that is not a JSON object is refused with its own message after the event check, so a non-member still learns only "not found".
+- **Tightening:** anon loses `SELECT` on `public_results.published_by` (the auth user id of whoever published; nothing reads it). anon held `SELECT` on the whole table, and a column-level revoke cannot take one column out of a table grant, so the table grant became an explicit list (`id, event_id, org_id, payload, published_at`); a new column now stays hidden from anon until it is granted on purpose. `020_no_excess_table_privileges.sql` pinned the old table-level grant and now pins the three columns the results pages read plus the hidden `published_by`.
+- **Not here, on purpose (D6):** dropping `events_read_public` and the anon column grants on `events`, narrowing `live_sessions_read` to active rows. The existing surfaces keep working.
+- **Product decision (2026-10-11, Option 1):** an event's name, date and test flag are public as soon as the event exists, via `public_event_summary` (the splash screen needs the pre-event name). Nobody should put confidential details in an event name before announcing it. See ROADMAP.
+
+**Verified:** 83 new pgTAP assertions (`037`; the 256 KB cap is checked at its exact edge, in bytes, and does not count the stamp, so a payload that fit once can be republished; the exact list of columns anon can read on `public_results` is pinned); the whole suite passes on a database rebuilt from empty; the rollback block removes the trigger, the functions and the column grants and restores the previous `publish_event_results` body exactly. The test pins the exact set of functions anon can execute, so a new anonymous door must be added on purpose (extension, trigger and event-trigger functions, and a platform helper that differs between the cloud and a local stack, are excluded and say why). Mutation-tested.
+
+**Reviews:** schema-guardian (no blocking; found the stamp bypass, the stale-name limit and a rollback that left column grants behind), security-reviewer (BLOCKED once on the same bypass; also raised the payload size cap, the look-alike guard and the visibility decision above), test-auditor, each run as a general-purpose agent following the project's `.claude/agents/*.md` definition.
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-TEN.B7".
+
+## T-TEN.B4: org provisioning · 2026-10-11
+
+**Task:** T-TEN.B4 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (PR 5). One migration, `20261011160000_tenancy_provisioning`; **pushed to the cloud project 2026-10-11 (cloud version `20261011051012`) and verified there**: both functions hash identically to the tested local copies, executable by the service role only, `SECURITY DEFINER` with `search_path` pinned; the CHECK constraint and the immutability trigger are in place; and a rolled-back live probe showed a signed-in owner and anon are refused (`42501`) when creating an org, adding a member or renaming a slug, the service role reaches the function and gets the right refusal for a 2-character slug, a reserved slug, the existing slug (also in capitals), a missing owner and an existing member, and the table itself refuses a slug change and a malformed slug. Applied as the executable statements only (the long comments stay in the repo file).
+
+**Status: merged (PR #209) and live in the cloud project.**
 
 **Why:** with several orgs on one database, creating one has to be a single validated atomic operation, and giving an existing account a second membership has to be a deliberate service-role act (decisions D-T1 invite-only, D-T6 multi-org only through a service-role path, D-T8 slugs immutable).
 

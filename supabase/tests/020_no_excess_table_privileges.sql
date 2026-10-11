@@ -5,7 +5,7 @@
 -- This doubles as a regression guard for FUTURE migrations: a later migration that creates a table
 -- and explicitly `grant all`s it to anon/authenticated, or that resets default privileges, fails here.
 begin;
-select plan(10);
+select plan(11);
 
 -- 1. no public table or view grants any of the four to anon or authenticated
 select is(
@@ -50,7 +50,12 @@ select ok(has_table_privilege('authenticated', 'public.sessions', 'UPDATE'), 'a 
 select ok(has_table_privilege('authenticated', 'public.ct_results', 'INSERT')
           and has_table_privilege('authenticated', 'public.ct_results', 'UPDATE')
           and has_table_privilege('authenticated', 'public.ct_results', 'DELETE'), 'organisers can still write results');
-select ok(has_table_privilege('anon', 'public.public_results', 'SELECT'), 'anon can still read the public results archive');
+select ok(has_column_privilege('anon', 'public.public_results', 'event_id', 'SELECT')
+          and has_column_privilege('anon', 'public.public_results', 'payload', 'SELECT')
+          and has_column_privilege('anon', 'public.public_results', 'published_at', 'SELECT'),
+          'anon can still read the public results archive (the three columns the results pages select)');
+select ok(not has_column_privilege('anon', 'public.public_results', 'published_by', 'SELECT'),
+          'but not who published it (published_by is an auth user id; T-TEN.B7)');
 select ok(has_table_privilege('anon', 'public.live_sessions', 'SELECT'), 'anon can still read live sessions');
 select ok(has_table_privilege('authenticated', 'public.score_change_log', 'SELECT')
           and not has_table_privilege('authenticated', 'public.score_change_counts', 'SELECT'),
