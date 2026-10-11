@@ -1,3 +1,22 @@
+## T-TEN.B3: `my_orgs()` · 2026-10-11
+
+**Task:** T-TEN.B3 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (PR 4). One migration, `20261011150000_tenancy_my_orgs`; **not pushed to the cloud project until the product owner says so.**
+
+**Status: in review, not merged.**
+
+**Why:** the console is about to let one account belong to several orgs (phase C needs an org switcher) and must know which orgs the signed-in account is in, and as what. Reading `org_members` is not the answer: `org_members_read` lets a member read every member row of their org (that is how the Team screen lists the team), so "my orgs" must not be derived from it.
+
+**What changed:**
+
+- **`my_orgs()`** returns `org_id, name, slug, role`, one row per org the caller belongs to, ordered by name then slug, for `auth.uid()` only (no arguments, so there is nothing to point at someone else). An account in no org (a Guess the Bean account) gets zero rows, not an error. `SECURITY DEFINER` with `search_path` pinned; executable by `authenticated` only (revoked from public, anon and service_role).
+- **`org_members_user_id_idx`** on `org_members(user_id)`: the primary key leads with `org_id`, so a lookup by user alone had no index.
+
+**Verified:** 22 new pgTAP assertions (`035`); the whole suite, 1363, passes on a database rebuilt from empty; the rollback block removes both objects; mutation-tested (no user scoping, anon or service_role granted, index dropped, `order by id`, no slug tiebreak, each fails a specific assertion). The ordering fixtures were built so name order, id order and insertion order all differ, and two orgs share a name with the opposite slug order. The security reviewer made 12 SQL probes and 13 real requests through PostgREST (member, non-member, no `sub`, extra arguments or query parameters, embedding, `count=exact`, anon key, service-role key, bad signature, forged headers) and found no route to another user's membership.
+
+**Reviews:** schema-guardian (no blocking; found the ordering test could not detect a wrong `ORDER BY`, fixed), security-reviewer (signed off; found the test only used the legacy `request.jwt.claim.sub` so a JSON-claims case was added), test-auditor (no blocking; three weak spots fixed: an Aardvark fixture whose slug order is opposite to its name order so `order by slug` alone fails, the role compared in an org where the caller's role differs from the co-members', and the index required to be a plain non-unique non-partial btree), each run as a general-purpose agent following the project's `.claude/agents/*.md` definition. About 20 further hand mutations from the auditor (double join, org-scoped filters, `coalesce(auth.uid(), …)`, dropped `security definer` or `search_path`, extra column, wrong grants, wrong indexes) are all caught.
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-TEN.B3" (notes for C1: use POST, treat a 400 as no org context; the expected advisor warning; DEFINER versus INVOKER).
+
 ## T-TEN.B6: the org-id disclosure is closed · 2026-10-11
 
 **Task:** T-TEN.B6 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (PR 3). Two migrations, `20261011130000_tenancy_resolver_disclosure` and `20261011140000_tenancy_rpc_null_org_guard`, **pushed to the cloud project 2026-10-11 (cloud versions `20261010213446` and `20261010213533`, applied in order) and verified there**: all 13 resolver, internal-resolver and trigger bodies and all 18 RPC bodies hash identically to the tested local copies; the internal resolvers are executable by no API role; the RPCs are still SECURITY INVOKER with `search_path` pinned; and a live probe on the cloud, built to roll back, showed a stranger who is a member of nothing gets the same refusal from `delete_test_event`, `publish_session` and `publish_event_results` for the true org id, a wrong one and NULL, and for a real versus a missing event, while a direct write naming the real org gets the standard row-level-security refusal and the real owner still resolves their own org. The second migration was applied to the cloud as a short block that rewrites each function's own current definition with the one guard added (the repo file carries the full bodies and the rollback); the result is identical by hash.
