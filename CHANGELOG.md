@@ -25,6 +25,7 @@
 **Reviews:** module-boundary-checker (boundary holds; duplicated hash navigation and a hard-coded route fixed, docs updated), code-reviewer (no blockers; the stale-screen-after-another-account case, error retry, unmount safety fixed), test-auditor (about 60 mutations on copies; eight gaps filled), offline-sync-auditor (outbox untouched and safe; the no-organisation flush skip and the reload-on-flaky-wifi lock-out fixed, the rest recorded for C6), ui-accessibility-reviewer (audience card styling, dead nav links, Retry feedback, loading state, Back button fixed; the announcement of an organisation change is C3's). Each was run as a general-purpose agent following the project's `.claude/agents/*.md` definition.
 
 **Flagged, not changed:** ROADMAP's "Known open items from T-TEN.C2".
+
 ## T-BTC.demo-payload-derive: derive BTC demo totals from scoring · 2026-10-11
 
 **Task:** Keep the demo/test payload builder tied to BTC's real scoring rule. Client and test fixtures only: no migration and nothing to push to the cloud project.
