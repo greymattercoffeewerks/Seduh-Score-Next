@@ -1,8 +1,27 @@
+## T-TEN.D5: the audience of two organisations, end to end · 2026-10-13
+
+**Task:** T-TEN.D5 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase D). Tests only: no app code, no migration, nothing to push to the cloud project.
+
+**Status: in review, not merged.**
+
+**What changed:**
+
+- **A new browser spec, `tests/e2e/audience-isolation.spec.js`, with its own project `dev-audience`** (runs after `dev-app`, on the same dev server and local stack). It creates TWO real organisations, each with an organiser, an event and an active live session: "Alpha" (Cup Taster) and "Bravo" (Brewers Cup, built by the real payload assembler), and drives anonymous audiences, each in its own browser context.
+- **Each organisation's projector and phone show only its own event, in its own format** (Cup Taster's body and Brewers Cup's own body), with no sign-in and no organiser chrome.
+- **What one organisation publishes reaches its own open screens and never the other's.** Both directions; the "nothing crossed over" checks run only after both changes have visibly arrived.
+- **A wrong slug shows the not-found card on both surfaces** (a fresh visitor for each, so one card cannot stand in for the next), and **the old slug-less link still opens a surface** without showing either new organisation.
+- **The three surfaces in one tab:** phone, projector, splash, projector, phone, each still showing its own organisation's event (the splash names the event it was opened for).
+- **`tests/e2e/support/tenants.js`** makes the organisations the way production does: the service-role `create_org` door (the only path that creates one), then every other write as the new organiser with their own token. The signing secret is the Supabase CLI's published local-development one and the helper refuses to run unless the stack is on this machine.
+
+**Verified:** the whole Playwright suite (29 tests: smoke, countdown harness, 21 organiser-flow, 5 new) against the real local stack, three times for the new file. Deliberate breaks of the app (every slug opening one fixed organisation; the live read ignoring the organisation) were each caught; removing the live-channel's organisation filter was NOT caught, because the screen then only re-reads its own organisation (an extra read, not a visible leak). One independent test audit; findings applied: a publish made before a screen's live channel joined could be missed (the spec now repeats the publish until it lands), vacuous splash, legacy-link and wrong-slug checks made real, and the target-stack guard.
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-TEN.D5".
+
 ## T-TEN.D4: every audience link names the organiser, and the phone view has a QR code · 2026-10-13
 
 **Task:** T-TEN.D4 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase D). Client only: no migration, nothing to push to the cloud project. The owner confirmed (2026-10-12) both the QR code for the audience and links for any organisation.
 
-**Status: in review, not merged.**
+**Status: merged to `dev` and released to `main` (2026-10-12).**
 
 **What changed:**
 
