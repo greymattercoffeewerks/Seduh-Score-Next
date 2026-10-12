@@ -312,6 +312,71 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     await expect(page.getByText('Connecting…')).toBeHidden({ timeout: 15000 });
   });
 
+  // T-TEN.D1: audience links that name the organiser, against the real database's public_org_by_slug.
+  test('a slug-qualified audience link opens that organiser surfaces; a wrong slug says so; an old link still works', async ({
+    page,
+  }) => {
+    await signIn(page);
+
+    await navigateHash(page, '#/live/local-dev-org/phone');
+    await expect(page.locator('.app-shell-root')).toBeHidden();
+    await expect(page.locator('.app-bare-root .viewer-badge')).toHaveText(/live/i, {
+      timeout: 15000,
+    });
+    await expect(page.getByText('Connecting…')).toBeHidden({ timeout: 15000 });
+
+    await navigateHash(page, '#/live/local-dev-org/projector');
+    await expect(page.locator('.app-bare-root .viewer-shell')).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('.app-bare-root')).toHaveAttribute('data-surface', 'stage');
+
+    // A mistyped organiser is told so, on the phone and the projector, and never reads as "no event tonight".
+    await navigateHash(page, '#/live/local-dev-orgg/phone');
+    await expect(page.getByText('We couldn’t find that organiser')).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('.app-bare-root .viewer-shell')).toHaveCount(0);
+    await expect(page.getByText('Not live')).toHaveCount(0);
+
+    // ...and the old slug-less link (the build's configured organisation) still opens a surface.
+    await navigateHash(page, '#/live/phone');
+    await expect(page.locator('.app-bare-root .viewer-badge')).toHaveText(/live/i, {
+      timeout: 15000,
+    });
+    await expect(page.getByText('We couldn’t find that organiser')).toHaveCount(0);
+  });
+
+  // The audience is anonymous: the same links, with nobody signed in, prove the public door and the surfaces'
+  // own reads work for the `anon` role through a real browser (pgTAP 037 covers the grants on their own).
+  test('anonymous visitors: a slug link opens the surface, a wrong slug says so, and the page never asks anyone to sign in', async ({
+    browser,
+  }) => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    try {
+      await page.goto('/app/#/live/local-dev-org/phone');
+      await expect(page.locator('.app-bare-root .viewer-badge')).toHaveText(/^(live|not live)$/i, {
+        timeout: 15000,
+      });
+      await expect(page.locator('.app-shell-root')).toBeHidden();
+      await expect(page.getByText('Opening this link…')).toHaveCount(0);
+
+      await page.goto('/app/#/live/local-dev-org/projector');
+      await expect(page.locator('.app-bare-root .viewer-shell')).toBeVisible({ timeout: 15000 });
+
+      await page.goto('/app/#/live/no-such-organiser/phone');
+      await expect(page.getByText('We couldn’t find that organiser')).toBeVisible({
+        timeout: 15000,
+      });
+      await expect(page.getByRole('heading', { name: /sign in/i })).toHaveCount(0);
+
+      // a link with a broken percent-escape is not a blank page
+      await page.goto('/app/#/live/100%/phone');
+      await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible({
+        timeout: 15000,
+      });
+    } finally {
+      await context.close();
+    }
+  });
+
   test('an unknown route shows an inline "Page not found" with a link back to events', async ({
     page,
   }) => {

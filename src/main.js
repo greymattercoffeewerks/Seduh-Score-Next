@@ -6,7 +6,8 @@
 // or is itself the format module being wired (formats/cup-taster/*).
 import { createRouter } from './core/router.js';
 import { mountAppShell } from './core/appShell.js';
-import { getLegacyAudienceOrgId } from './core/config.js';
+import { getLegacyAudienceOrgId, getLegacyAudienceOrgSlug } from './core/config.js';
+import { resolveOrgBySlug } from './core/orgResolver.js';
 import { createOrgContext, ORG_STATUS } from './core/orgContext.js';
 import { mustChangePassword } from './core/sessionGate.js';
 import { goToHash, replaceHash } from './core/navigation.js';
@@ -484,28 +485,166 @@ function mountEventHomeScreen(outlet, { eventId, client, signal }) {
   return attempt();
 }
 
-// The audience routes (/live/*) still show one organisation, named at build time (T-TEN.D1 replaces that
-// with slug-qualified links). When it is not configured, say so plainly instead of failing: an unset
-// build variable must never take the whole app down. Shown with the audience surfaces' own holding-card
-// look (viewer-shell.css): large, centred, dark stage tokens on a projector or the splash screen, the
-// ordinary paper look on a phone. Its unmount does nothing, like the not-found screen's: the router
-// mounts the next screen first, and the three routes share one root.
-function mountOutOfDateLinkScreen(root, { stage }) {
+// The holding card of the audience routes (viewer-shell.css's look): large, centred, dark stage tokens on a
+// projector or the splash screen, the ordinary paper look on a phone. ONE card per mount, its text changed in
+// place: the body is a persistent polite live region, so a screen reader hears each change once and nothing
+// at all when the same words are set again (a card rebuilt on every retry would be announced, or not, at
+// random). `action` is an optional button (a phone's "Try again now").
+function createHoldingCard(root, { stage }) {
   root.innerHTML = '';
   if (stage) root.setAttribute('data-surface', 'stage');
-  root.appendChild(
-    el('div', { className: 'out-of-date-link' }, [
-      el('div', { className: 'viewer-holding-card' }, [
-        el('h1', { className: 'viewer-holding-title', text: 'This link is out of date' }),
-        el('p', {
-          className: 'viewer-holding-body',
-          text: 'Ask whoever shared it with you for a new one.',
-        }),
-      ]),
-    ]),
-  );
+  const title = el('h1', { className: 'viewer-holding-title' });
+  const body = el('p', {
+    className: 'viewer-holding-body',
+    attrs: { role: 'status', 'aria-live': 'polite' },
+  });
+  const action = el('button', {
+    className: 'btn btn-primary tap-target',
+    attrs: { type: 'button', hidden: '' },
+  });
+  const card = el('div', { className: 'out-of-date-link' }, [
+    el('div', { className: 'viewer-holding-card' }, [title, body, action]),
+  ]);
+  root.appendChild(card);
+  return {
+    isShown: () => root.contains(card),
+    set({ title: titleText, body: bodyText, actionLabel = null, onAction = null }) {
+      if (title.textContent !== titleText) title.textContent = titleText;
+      if (body.textContent !== bodyText) body.textContent = bodyText;
+      action.hidden = !actionLabel;
+      action.onclick = onAction;
+      if (actionLabel) action.textContent = actionLabel;
+    },
+  };
+}
+
+// A card that does not change: "This link is out of date". Its unmount does nothing, like the not-found
+// screen's: the router mounts the next screen first, and the three routes share one root.
+function mountOutOfDateLinkScreen(root, { stage }) {
+  createHoldingCard(root, { stage }).set({
+    title: 'This link is out of date',
+    body: 'Ask whoever shared it with you for a new one.',
+  });
   return { unmount() {} };
 }
+
+// ---- Audience links that name the organiser (T-TEN.D1) ----
+//
+// #/live/<slug>/projector (and /phone, /splash): the slug is turned into the organisation the surface works
+// with (core/orgResolver.js), and the three outcomes are told apart on the screen: found (the surface
+// mounts), not found ("We couldn't find that organiser": a mistyped or retired link must never read as "no
+// event tonight"), and could not be asked (a card that says so and keeps trying until it can, so a projector
+// that lost its wifi recovers by itself). The card is on screen from the first moment (the first lookup can
+// take its whole 10-second allowance on bad wifi: never a blank page). The old slug-less links go through the
+// same path when a legacy slug is configured (the shim): the slug, when set, is the only one asked; a slug
+// that does not resolve shows "not found" and does NOT fall back to the older org id.
+const AUDIENCE_RETRY_MS = [3000, 6000, 12000, 20000, 30000];
+// Every phone in a room that loses its wifi would otherwise retry on the same beat.
+const AUDIENCE_RETRY_JITTER = 0.25;
+
+function mountAudienceBySlug(outlet, { slug, stage, client, signal, mountSurface }) {
+  let stopped = false;
+  let inner = null;
+  let timer = null;
+  let attempt = 0;
+  let card = null;
+
+  function showCard(content) {
+    if (!card?.isShown()) {
+      resetBareSurface(outlet);
+      card = createHoldingCard(outlet, { stage });
+    }
+    card.set(content);
+  }
+
+  async function resolve() {
+    clearTimeout(timer);
+    timer = null;
+    if (stopped || signal?.aborted) return;
+    const outcome = await resolveOrgBySlug(slug, client);
+    // Superseded while asking (the person moved on, or this was unmounted): nothing may touch the outlet.
+    if (stopped || signal?.aborted) return;
+    if (outcome.status === 'found') {
+      // Where focus is now: on this card or on the page, in which case it goes to the surface's heading.
+      const hadFocus =
+        document.activeElement === document.body || outlet.contains(document.activeElement);
+      resetBareSurface(outlet);
+      try {
+        inner = (await mountSurface(outlet, { orgId: outcome.org.id, client, signal })) ?? null;
+      } catch (error) {
+        // The surface itself failed to start: say so and keep trying, never a dead card.
+        console.error('main: an audience surface failed to start', error);
+        if (!stopped && !signal?.aborted) scheduleRetry();
+        return;
+      }
+      // Unmounted while the surface itself was still starting: take it down again.
+      if (stopped) {
+        await inner?.unmount?.();
+        return;
+      }
+      if (hadFocus) focusFirstHeading(outlet);
+      return;
+    }
+    if (outcome.status === 'not_found') {
+      showCard({
+        title: 'We couldn’t find that organiser',
+        body: 'This link doesn’t match any organiser. Check the link, or ask whoever shared it with you for a new one.',
+      });
+      return;
+    }
+    scheduleRetry();
+  }
+
+  function scheduleRetry() {
+    showCard({
+      title: 'We can’t reach Seduh right now',
+      body: 'Check the internet connection. This page will update by itself.',
+      // A phone's owner can act on it; nobody is touching a projector, where a button only invites a stray tap.
+      ...(stage ? {} : { actionLabel: 'Try again now', onAction: resolve }),
+    });
+    const base = AUDIENCE_RETRY_MS[Math.min(attempt, AUDIENCE_RETRY_MS.length - 1)];
+    attempt += 1;
+    timer = setTimeout(resolve, base * (1 + Math.random() * AUDIENCE_RETRY_JITTER));
+  }
+
+  // Back on the network, or back on the tab: try at once rather than wait out the backoff (only while this
+  // is still waiting to retry).
+  function tryNow() {
+    if (timer !== null) resolve();
+  }
+  const onVisible = () => {
+    if (document.visibilityState === 'visible') tryNow();
+  };
+  window.addEventListener('online', tryNow);
+  document.addEventListener('visibilitychange', onVisible);
+
+  resetBareSurface(outlet);
+  showCard({ title: 'Opening this link…', body: 'One moment.' });
+  return resolve().then(() => ({
+    unmount() {
+      stopped = true;
+      clearTimeout(timer);
+      window.removeEventListener('online', tryNow);
+      document.removeEventListener('visibilitychange', onVisible);
+      return inner?.unmount?.();
+    },
+  }));
+}
+
+function focusFirstHeading(root) {
+  const heading = root.querySelector('h1, h2');
+  if (!heading) return;
+  if (!heading.hasAttribute('tabindex')) heading.setAttribute('tabindex', '-1');
+  heading.focus();
+}
+
+// What each audience surface is: the stage look (projector, splash) or the paper look (phone), and what
+// mounts once the organisation is known.
+const AUDIENCE_SURFACES = {
+  projector: { stage: true, mountSurface: mountProjector },
+  phone: { stage: false, mountSurface: mountPhone },
+  splash: { stage: true, mountSurface: mountSplashScreen },
+};
 
 function mountNotFoundScreen(root) {
   root.innerHTML = '';
@@ -537,6 +676,7 @@ function resetBareSurface(outlet) {
 
 export function buildRoutes({
   legacyAudienceOrgId,
+  legacyAudienceOrgSlug = null,
   orgContext,
   bareRoot,
   routerRef,
@@ -737,50 +877,40 @@ export function buildRoutes({
         auth,
       ),
     },
-    {
-      // Deliberately NOT wrapped in requireAuth — the audience never
-      // authenticates, by design (live_sessions is anon-readable; see
-      // 20260821240000_grants.sql). `signal` IS threaded through here —
-      // this shares `bareRoot` with `/live/splash` (below), which already
-      // gets it; leaving this route unprotected would have left an
-      // asymmetric gap on the same shared outlet (found in review,
-      // correcting an earlier claim that viewer-shell.js's own `mounted`
-      // flag already covered this — it doesn't: `mounted` is set true
-      // BEFORE the initial refresh()'s own network await, so it only
-      // catches a callback firing after a legitimate unmount(), not the
-      // still-in-flight FIRST load this whole fix is about).
-      pattern: '/live/projector',
-      chrome: false,
-      outlet: bareRoot,
-      mount: (outlet, { client, signal }) => {
-        resetBareSurface(outlet);
-        if (!legacyAudienceOrgId) return mountOutOfDateLinkScreen(outlet, { stage: true });
-        return mountProjector(outlet, { orgId: legacyAudienceOrgId, client, signal });
+    // The audience routes: deliberately NOT wrapped in requireAuth — the audience never authenticates, by
+    // design (live_sessions is anon-readable; see 20260821240000_grants.sql). `signal` IS threaded through
+    // every one: the three share `bareRoot`, and leaving any unprotected would leave a gap on the shared
+    // outlet (viewer-shell.js's own `mounted` flag does not cover a still-in-flight FIRST load).
+    //
+    // Slug-qualified links (T-TEN.D1), then the old slug-less ones, which keep working (the legacy shim).
+    ...Object.entries(AUDIENCE_SURFACES).flatMap(([name, { stage, mountSurface }]) => [
+      {
+        pattern: `/live/:orgSlug/${name}`,
+        chrome: false,
+        outlet: bareRoot,
+        mount: (outlet, { orgSlug, client, signal }) =>
+          mountAudienceBySlug(outlet, { slug: orgSlug, stage, client, signal, mountSurface }),
       },
-    },
-    {
-      pattern: '/live/phone',
-      chrome: false,
-      outlet: bareRoot,
-      mount: (outlet, { client, signal }) => {
-        resetBareSurface(outlet);
-        if (!legacyAudienceOrgId) return mountOutOfDateLinkScreen(outlet, { stage: false });
-        return mountPhone(outlet, { orgId: legacyAudienceOrgId, client, signal });
+      {
+        pattern: `/live/${name}`,
+        chrome: false,
+        outlet: bareRoot,
+        mount: (outlet, { client, signal }) => {
+          if (legacyAudienceOrgSlug) {
+            return mountAudienceBySlug(outlet, {
+              slug: legacyAudienceOrgSlug,
+              stage,
+              client,
+              signal,
+              mountSurface,
+            });
+          }
+          resetBareSurface(outlet);
+          if (!legacyAudienceOrgId) return mountOutOfDateLinkScreen(outlet, { stage });
+          return mountSurface(outlet, { orgId: legacyAudienceOrgId, client, signal });
+        },
       },
-    },
-    {
-      // Deliberately NOT wrapped in requireAuth — same reasoning as the two
-      // routes above: meant to be pulled up on the projector (or any
-      // screen) on demand, and the audience never authenticates.
-      pattern: '/live/splash',
-      chrome: false,
-      outlet: bareRoot,
-      mount: (outlet, { client, signal }) => {
-        resetBareSurface(outlet);
-        if (!legacyAudienceOrgId) return mountOutOfDateLinkScreen(outlet, { stage: true });
-        return mountSplashScreen(outlet, { orgId: legacyAudienceOrgId, client, signal });
-      },
-    },
+    ]),
   ];
 }
 
@@ -835,6 +965,7 @@ export function mountApp(
     client = getSupabase(),
     orgContext: injectedOrgContext,
     legacyAudienceOrgId = getLegacyAudienceOrgId(),
+    legacyAudienceOrgSlug = getLegacyAudienceOrgSlug(),
   } = {},
 ) {
   root.innerHTML = '';
@@ -1026,6 +1157,7 @@ export function mountApp(
   let teamHoldsSecret = false;
   const routes = buildRoutes({
     legacyAudienceOrgId,
+    legacyAudienceOrgSlug,
     orgContext,
     bareRoot,
     routerRef,
@@ -1149,11 +1281,16 @@ export function mountApp(
     if (isTeamOwner) {
       links.push({ label: 'Team', href: '#/team', active: route.pattern === '/team' });
     }
-    // The audience screens still show ONE organisation (the legacy one, until T-TEN.D1/D4 make the links
-    // slug-qualified). These links are offered only while that is the organisation the console is working
+    // These links are the OLD slug-less ones (the legacy shim), which show ONE organisation (T-TEN.D4 makes
+    // them slug-qualified). These links are offered only while that is the organisation the console is working
     // in: otherwise "Projector view" would open another organisation's display under this one's header (or
     // only the "out of date" card, when none is configured).
-    if (legacyAudienceOrgId && legacyAudienceOrgId === orgContext.getActiveOrgId()) {
+    const activeOrg = orgContext.getActiveOrg();
+    // The same precedence as the old links themselves: the legacy slug when there is one, else the org id.
+    const legacyIsActive = legacyAudienceOrgSlug
+      ? Boolean(activeOrg) && activeOrg.slug === legacyAudienceOrgSlug.toLowerCase()
+      : Boolean(legacyAudienceOrgId) && legacyAudienceOrgId === orgContext.getActiveOrgId();
+    if (legacyIsActive) {
       links.push(
         { label: 'Splash screen', href: '#/live/splash', openInNewTab: true },
         { label: 'Projector view', href: '#/live/projector', openInNewTab: true },
