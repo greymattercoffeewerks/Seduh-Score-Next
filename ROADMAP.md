@@ -1897,13 +1897,13 @@ handoff §4's "one organiser, one org"; locks D-T1…D-T8). Why: `MULTI-TENANCY-
 pillars A and B. Not in scope: gating/entitlements (D14 stays a stub), admin console, self-serve
 signup, Seduh ID. Rule (lifted 2026-10-11, now that B1, B2 and B6 are in the cloud): a two-org user is created only through the service-role provisioning path (B4).
 
-| Phase | Tasks                                                                                                                                             | Status                                               |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| A     | A1 spec lock · A2 tenancy inventory                                                                                                               | Done                                                 |
-| B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | Done (B1 to B7 merged and in the cloud project)      |
-| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | Done (C1 to C7 merged)                               |
-| D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | In progress (D1, D2, D3 merged; D4 built, in review) |
-| E     | E1 negative matrix · E2 console Playwright · E3 security/perf · E4 docs · E5 rollout · E6 close-out                                               | Not started                                          |
+| Phase | Tasks                                                                                                                                             | Status                                          |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| A     | A1 spec lock · A2 tenancy inventory                                                                                                               | Done                                            |
+| B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | Done (B1 to B7 merged and in the cloud project) |
+| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | Done (C1 to C7 merged)                          |
+| D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | In progress (D1-D4 merged; D5 built, in review) |
+| E     | E1 negative matrix · E2 console Playwright · E3 security/perf · E4 docs · E5 rollout · E6 close-out                                               | Not started                                     |
 
 Each D task is re-confirmed with the product owner before it starts (2026-10-10).
 
@@ -2125,7 +2125,7 @@ _Client only: `core/events.js` and the test fakes. No migration._
 _Client only: `marketing/resultsScreen.js`, `marketing/resultsSheet.js`, `core/publicResults.js`, `core/orgLabel.js`. No migration._
 
 - **The archive page still downloads every published payload** (it needs them all for its stats tiles and list; only the sheet became per-event). Measured: about 2.7 KB per result, so about 270 KB at 100 results and about 800 KB at 300. Past that it should be paged or given a lighter list (and its stats computed in the database). There is no `limit` or `range` today, and PostgREST's `max_rows` (1000 in the local config; the cloud value was not checked) would silently drop the oldest results and make the tiles wrong past it. A payload may be up to 256 KB (the database's cap), so the worst case is far above the typical.
-- **The one result already published in production shows no organiser** (it predates the stamp). Re-publishing it from the report screen stamps it; a one-off update of that row would too (the trigger stamps on every write). Not done: it writes production data.
+- **The one result already published in production shows no organiser** (it predates the stamp). **Done 2026-10-12** with the owner's go-ahead: a no-op update of that one row let the trigger stamp the name and slug.
 - **The name is the name as of publishing:** a renamed organisation keeps its old name on old results until they are republished (right for a historic result).
 - **Two organisations may share a display name**, and the page shows only the name (the database also stamps `org_slug`). Operator-created, so rare; showing the slug when two names on the page collide would tell them apart.
 - **A publisher still controls the event name, city, venue and cafe lines**, so a result can be titled to look like another brand; only the "Organised by" line is authoritative (D-T4).
@@ -2143,3 +2143,14 @@ _Client only: `core/audienceLinksCard.js`, `core/eventsScreen.js`, `main.js`. No
 - **There are no BTC-specific links.** The BTC projector and phone use the same slug-qualified routes as Cup Taster, so the three links cover both; a separate card per format was not needed.
 - **The QR size (11rem, about 176 px) was chosen by eye** and checked in a screenshot, not scanned by a phone camera. Worth one real scan before an event.
 - **Old slug-less links still work through the legacy shim** (D1) until the owner sets `VITE_LEGACY_AUDIENCE_ORG_SLUG` in Cloudflare Pages and later retires them (D6/E).
+
+---
+
+## Known open items from T-TEN.D5 (2026-10-13)
+
+_Tests only: `tests/e2e/audience-isolation.spec.js`, `tests/e2e/support/tenants.js`, `playwright.config.js`._
+
+- **Each local run leaves two organisations behind** (with their organiser and event; the live sessions are ended). The database refuses to remove a sole owner (T-TEN.A5) and the service role has no table access to delete an organisation. Slugs and emails are unique per run, so nothing collides, and CI's stack is thrown away; a long-lived local stack just collects `d5-*` rows until a `supabase db reset`.
+- **The Cup Taster payload in the spec is hand-written** (the Brewers Cup one comes from the real assembler). A change to the payload's shape would fail loudly (the screens would not render), not silently.
+- **The live-channel organisation filter has no visible effect to test** (a screen without it only re-reads its own organisation). It is a cost and privacy-in-depth setting, not a leak, so no test pins it.
+- **The spec needs the whole local stack and the dev server**, so `--project=dev-audience` also runs the harness and organiser-flow projects first unless `--no-deps` is passed.
