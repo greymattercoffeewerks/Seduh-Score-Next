@@ -14,7 +14,9 @@ import { orgLabel } from './core/orgLabel.js';
 import { getSupabase } from './core/supabaseClient.js';
 import { el, setBusyDisabled } from './core/dom.js';
 import { describeError } from './core/errors.js';
-import { findEvent } from './core/events.js';
+import { findEvent, findEventOrgId } from './core/events.js';
+import { cacheGet, cacheSet } from './core/db.js';
+import { findMatchEventId } from './formats/btc/matches.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './core/timeout.js';
 import { mountEventsScreen } from './core/eventsScreen.js';
 import { mountLoginScreen } from './core/loginScreen.js';
@@ -99,6 +101,8 @@ const TIMEOUT_MESSAGE =
 const ORG_LOAD_ERROR_MESSAGE =
   'Could not load your organisation — check your connection and try again.';
 const ORG_LOADING_MESSAGE = 'Loading your organisation…';
+const ORG_CHANGED_MESSAGE =
+  'Your organisation changed while this event was opening. Try again to open it in the one you are working in now.';
 
 // The holding state for a wait with no screen to show yet (the same role=status pattern as the retry
 // card, without the error tone): a cold load on slow wifi would otherwise be a blank page for up to the
@@ -138,6 +142,178 @@ async function resolveOrg(orgContext, session, signal) {
   return orgContext.getState();
 }
 
+// ---- Links into another organisation's event (T-TEN.C7) ----
+//
+// Every console route is organisation-scoped, and the person's active organisation decides the header,
+// the Events list, what gets queued and what gets sent. An event URL carries no organisation, and a
+// person in two organisations can open either one's events (they are visible to every member). So for an
+// event-keyed route the event's own organisation is read first: the same as the active one (the common
+// case: nothing changes), another of theirs (switch to it, say so, then show the event), or not one of
+// theirs / not there at all ("not found": the database makes those the same answer). Only asked of a
+// person in two or more organisations: with one, every event they can see is in it, and the usual
+// offline-first loads are not given an extra read to wait for.
+//
+// The answer is remembered on the device (an event never changes organisation), so reloading an event
+// page with no connection still finds its organisation. A failed read with nothing remembered is a Retry
+// card, never a guess.
+
+// A malformed id (not a uuid) is "no such row", not a failure worth retrying.
+const INVALID_TEXT_REPRESENTATION = '22P02';
+const isInvalidIdError = (err) => err?.code === INVALID_TEXT_REPRESENTATION;
+
+// How long a read of the device's own memory may take before it is given up on (a stuck IndexedDB open must
+// not hang a navigation).
+const REMEMBERED_READ_TIMEOUT_MS = 2000;
+const readRemembered = (key) =>
+  raceTimeout(cacheGet(key), REMEMBERED_READ_TIMEOUT_MS).catch(() => null);
+
+// Resolves to the value, or null when there is none to be had (no such row, or a malformed id); throws when it
+// cannot tell. A found answer is remembered on this device. `settled`: the answer can never change (an
+// event never changes organisation), so what was remembered is used at once, with no request to wait for;
+// otherwise the database is asked first and the memory is only the fallback when that read fails.
+async function rememberedLookup(key, read, { settled = false } = {}) {
+  if (settled) {
+    const remembered = await readRemembered(key);
+    if (remembered) return remembered;
+  }
+  try {
+    const value = await raceTimeout(read(), DEFAULT_LOAD_TIMEOUT_MS);
+    if (value) cacheSet(key, value).catch(() => {});
+    return value ?? null;
+  } catch (err) {
+    if (isInvalidIdError(err)) return null;
+    const remembered = settled ? null : await readRemembered(key);
+    if (remembered) return remembered;
+    throw err;
+  }
+}
+
+// { status: 'found', orgId }; { status: 'missing' }; { status: 'error', error }.
+// A BTC match is resolved through its event (that is what its screen shows, whatever event id the URL
+// carries); any other event-keyed route uses the event id in the URL.
+async function resolveRouteOrg(params, client) {
+  try {
+    const eventId = params.matchId
+      ? await rememberedLookup(`matchEvent:${params.matchId}`, () =>
+          findMatchEventId(params.matchId, client),
+        )
+      : params.eventId;
+    if (!eventId) return { status: 'missing' };
+    const orgId = await rememberedLookup(
+      `eventOrg:${eventId}`,
+      () => findEventOrgId(eventId, client),
+      { settled: true },
+    );
+    return orgId ? { status: 'found', orgId } : { status: 'missing' };
+  } catch (error) {
+    return { status: 'error', error };
+  }
+}
+
+// The card shown when the event belongs to another of the person's organisations but the console cannot
+// move there yet (changes here have not synced): says so, with the reason, and a way back.
+function mountOtherOrgBlockedScreen(outlet, { orgName, currentOrgName, result, retry }) {
+  outlet.innerHTML = '';
+  const heading = el('h1', {
+    text: `This event is in ${orgName}`,
+    attrs: { tabindex: '-1', 'aria-describedby': 'other-org-reason' },
+  });
+  outlet.appendChild(
+    el('section', { className: 'screen-container' }, [
+      heading,
+      el('p', { id: 'other-org-reason', text: blockedReason(result, currentOrgName) }),
+      el('div', { className: 'btn-row' }, [
+        el('button', {
+          className: 'btn btn-primary tap-target',
+          text: 'Try again',
+          attrs: { type: 'button' },
+        }),
+        el('a', {
+          className: 'btn btn-outline tap-target',
+          text: `Back to ${currentOrgName} events`,
+          attrs: { href: '#/events' },
+        }),
+      ]),
+    ]),
+  );
+  outlet.querySelector('button').addEventListener('click', retry);
+  heading.focus();
+  return { unmount() {} };
+}
+
+// Why the link cannot open yet, in words for someone who never asked to switch: they followed a link.
+function blockedReason(result, currentOrgName) {
+  if (result.reason === 'unsynced') {
+    const many = result.count !== 1;
+    return `You are working in ${currentOrgName}. ${result.count} ${many ? 'changes' : 'change'} on this device ${many ? 'have' : 'has'} not synced yet, so this event cannot be opened yet. Wait for ${many ? 'them' : 'it'} to sync, then try again.`;
+  }
+  return `You are working in ${currentOrgName}. ${result.message}`;
+}
+
+// Resolves to `{ org, notice }` (the organisation snapshot to mount under, switched if needed, and what to
+// say about it) or to `{ screen }` (something already put in the outlet instead: not found, a Retry card, the
+// blocked card; `screen` is undefined when the navigation is being started again or was superseded).
+async function placeEventRoute(
+  outlet,
+  params,
+  org,
+  { orgContext, switchOrgForRoute, retry, showCard },
+) {
+  if (org.orgs.length < 2 || !(params.eventId || params.matchId)) return { org };
+  const target = await resolveRouteOrg(params, params.client);
+  if (params.signal?.aborted) return { screen: undefined };
+  // The organisation may have been changed (the header's select) while the lookup was on its way: this
+  // navigation was started under the old one, so start it again under the new one rather than mounting an
+  // event under a label that is no longer true.
+  const fresh = orgContext.getState();
+  if (
+    fresh.status !== ORG_STATUS.READY ||
+    fresh.userId !== org.userId ||
+    fresh.activeOrgId !== org.activeOrgId
+  ) {
+    retry();
+    return { screen: undefined };
+  }
+  if (target.status === 'error') {
+    const message = target.error?.timedOut ? TIMEOUT_MESSAGE : describeError(target.error);
+    return { screen: showCard(renderRetryableError(outlet, message, retry)) };
+  }
+  const memberOrg =
+    target.status === 'found' && org.orgs.find((candidate) => candidate.id === target.orgId);
+  if (!memberOrg) return { screen: showCard(mountNotFoundScreen(outlet)) };
+  if (target.orgId === org.activeOrgId) return { org };
+
+  // (If the person moves on while this is being checked, the switch still happens: header and screen are
+  // then both the new organisation's, never mixed.)
+  const result = await switchOrgForRoute(target.orgId);
+  if (params.signal?.aborted) return { screen: undefined };
+  if (!result.ok) {
+    const current = org.orgs.find((candidate) => candidate.id === org.activeOrgId);
+    return {
+      screen: showCard(
+        mountOtherOrgBlockedScreen(outlet, {
+          orgName: orgLabel(memberOrg, org.orgs),
+          currentOrgName: current ? orgLabel(current, org.orgs) : 'your organisation',
+          result,
+          retry,
+        }),
+      ),
+    };
+  }
+  const now = orgContext.getState();
+  if (now.status !== ORG_STATUS.READY || now.activeOrgId !== target.orgId) {
+    // Something else moved the organisation again. Not started over by itself (an organisation that keeps
+    // moving would loop): the person is told, and Try again is theirs.
+    return { screen: showCard(renderRetryableError(outlet, ORG_CHANGED_MESSAGE, retry)) };
+  }
+  // Said once the event's screen is on show and has taken focus (a polite announcement written while focus
+  // is still moving is the one a screen reader drops).
+  return {
+    org: now,
+    notice: `Now working in ${orgLabel(memberOrg, now.orgs)}, the organisation this event belongs to.`,
+  };
+}
+
 // Temporary auth gate (2026-08-30) — deliberately confined to this file,
 // not core/router.js, since router.js is meant to be reused unedited by a
 // future format and this concept (an unauthenticated screen swap-in) is
@@ -146,7 +322,17 @@ async function resolveOrg(orgContext, session, signal) {
 // it's still null at buildRoutes() call time (createRouter() needs the
 // routes this function returns), but by the time either can actually fire,
 // mountApp has already set it.
-function requireAuth(mount, { routerRef, orgContext, onConsoleMounted }) {
+function requireAuth(
+  mount,
+  {
+    routerRef,
+    orgContext,
+    onConsoleMounted,
+    switchOrgForRoute,
+    showRouteNotice,
+    clearEventContext,
+  },
+) {
   return async (outlet, params) => {
     // '/events' fallback matches router.start()'s own fallbackPath below —
     // found in testing: an empty hash (the common case for reaching the
@@ -196,7 +382,7 @@ function requireAuth(mount, { routerRef, orgContext, onConsoleMounted }) {
     if (!settledFor(orgContext.getState(), session.user?.id)) {
       renderLoadingStatus(outlet, ORG_LOADING_MESSAGE);
     }
-    const org = await resolveOrg(orgContext, session, params.signal);
+    let org = await resolveOrg(orgContext, session, params.signal);
     if (params.signal?.aborted) return undefined;
     if (org.status === ORG_STATUS.IDLE) {
       // A sign-out landed while we waited (another tab, or an expired refresh token). Ask the auth
@@ -231,6 +417,23 @@ function requireAuth(mount, { routerRef, orgContext, onConsoleMounted }) {
       // resolveOrg asks again from an error, so Retry is just "resolve this route again".
       return renderRetryableError(outlet, ORG_LOAD_ERROR_MESSAGE, resolveCurrentPath);
     }
+    // A link into an event (or a BTC match) of ANOTHER of this person's organisations: the console must
+    // work in that event's organisation, never show it under the wrong organisation's name (T-TEN.C7).
+    const placed = await placeEventRoute(outlet, params, org, {
+      orgContext,
+      switchOrgForRoute,
+      retry: resolveCurrentPath,
+      // A card put up for this link (not found, Retry, blocked) is about the organisation the person is
+      // in now: it names no event, so the header must not keep naming one, and moving to another
+      // organisation takes them to that organisation's Events list like any other screen.
+      showCard: (card) => {
+        clearEventContext();
+        onConsoleMounted(`${org.userId}:${org.activeOrgId}`);
+        return card;
+      },
+    });
+    if ('screen' in placed) return placed.screen;
+    org = placed.org;
     // The organisation the console works in is handed to the screen at mount, from the person's own
     // memberships; a change of person or organisation re-mounts the console (mountApp) rather than
     // mutating a screen in place. Remember who and which org this screen was built for.
@@ -238,12 +441,14 @@ function requireAuth(mount, { routerRef, orgContext, onConsoleMounted }) {
     // The name comes from the very snapshot the id came from (never from live state a moment later), so a
     // screen can never show one organisation's name over another's data.
     const activeOrg = org.orgs.find((candidate) => candidate.id === org.activeOrgId);
-    return mount(outlet, {
+    const screen = await mount(outlet, {
       ...params,
       orgId: org.activeOrgId,
       // What to call it (the slug is added when two of the person's organisations share a name).
       orgName: activeOrg ? orgLabel(activeOrg, org.orgs) : null,
     });
+    if (placed.notice && !params.signal?.aborted) showRouteNotice(placed.notice);
+    return screen;
   };
 }
 
@@ -337,8 +542,21 @@ export function buildRoutes({
   routerRef,
   onConsoleMounted,
   setTeamHoldsSecret = () => {},
+  showRouteNotice = () => {},
+  clearEventContext = () => {},
+  switchOrgForRoute = async () => ({
+    ok: false,
+    message: 'This event belongs to another of your organisations, which could not be opened.',
+  }),
 }) {
-  const auth = { routerRef, orgContext, onConsoleMounted };
+  const auth = {
+    routerRef,
+    orgContext,
+    onConsoleMounted,
+    switchOrgForRoute,
+    showRouteNotice,
+    clearEventContext,
+  };
   return [
     {
       pattern: '/events',
@@ -801,6 +1019,8 @@ export function mountApp(
   const currentRoutePath = () => location.hash.replace(/^#/, '') || '/events';
   // Who and which org the console screen on show was built for (null: none yet, or already replaced).
   let mountedKey = null;
+  // The address a route notice was shown at (see showRouteNotice).
+  let noticeHash = null;
   // Set by the Team screen while leaving it would lose a one-time password; cleared whenever any console
   // screen is mounted (the Team screen reports it again if it needs to).
   let teamHoldsSecret = false;
@@ -816,6 +1036,9 @@ export function mountApp(
     setTeamHoldsSecret: (active) => {
       teamHoldsSecret = active;
     },
+    switchOrgForRoute,
+    showRouteNotice,
+    clearEventContext: () => shell.clearEventContext(),
   });
 
   // When the person or the organisation the console was built for is no longer the one in force (a
@@ -880,6 +1103,12 @@ export function mountApp(
   });
 
   function updateChrome(route, params) {
+    // A notice about the screen the person was on does not follow them to the next one (the same route
+    // announced twice, as a browser may, is not "the next one").
+    if (noticeHash !== null && location.hash !== noticeHash) {
+      noticeHash = null;
+      shell.dismissNotice();
+    }
     const showChrome = route.chrome !== false;
     shellRoot.hidden = !showChrome;
     bareRoot.hidden = showChrome;
@@ -977,6 +1206,24 @@ export function mountApp(
       return { ok: false, reason: 'unknown_org', message: SWITCH_UNKNOWN_ORG_MESSAGE };
     }
     return { ok: true };
+  }
+
+  // The same switch, for a link into another organisation's event: the navigation that asked for it is
+  // replacing whatever screen is on show, so that screen must not be sent back to the Events list by the
+  // organisation change it is about to cause (the org-context subscriber above).
+  async function switchOrgForRoute(orgId) {
+    mountedKey = null;
+    // This navigation is replacing the screen on show anyway (a link inside the same organisation would
+    // do the same), so a one-time password on the Team screen no longer blocks the switch.
+    teamHoldsSecret = false;
+    return switchOrg(orgId);
+  }
+
+  // The notice that explains why the organisation changed under a link (shown by requireAuth once the
+  // event's screen has focus). It belongs to the screen it explains: moving on puts it away.
+  function showRouteNotice(text) {
+    noticeHash = location.hash;
+    shell.showNotice(text);
   }
 
   return {
