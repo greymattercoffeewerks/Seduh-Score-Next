@@ -413,3 +413,21 @@ describe('createRouter', () => {
     expect(calls[0].outlet).not.toBe(defaultOutlet);
   });
 });
+
+describe('matchRoute with a link that cannot be decoded', () => {
+  it('treats a broken percent-escape as no match, not as an error', () => {
+    const routes = [{ pattern: '/live/:orgSlug/phone' }, { pattern: '/events/:eventId' }];
+    expect(() => matchRoute(routes, '/live/100%/phone')).not.toThrow();
+    expect(matchRoute(routes, '/live/100%/phone')).toBeNull();
+    expect(matchRoute(routes, '/live/%E0%A4%A/phone')).toBeNull();
+    // ...and decodes a good one
+    expect(matchRoute(routes, '/live/alpha%20coffee/phone').params).toEqual({
+      orgSlug: 'alpha coffee',
+    });
+  });
+
+  it('falls through to a later route that does match', () => {
+    const routes = [{ pattern: '/a/:x/b' }, { pattern: '/a/:y/:z' }];
+    expect(matchRoute(routes, '/a/ok/b').route).toBe(routes[0]);
+  });
+});
