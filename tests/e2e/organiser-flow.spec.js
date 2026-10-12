@@ -396,6 +396,86 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     }
   });
 
+  // T-TEN.D3: the public archive says whose event each result is (the name is stamped by the database on
+  // publish, whatever the publisher sent), and the printable sheet asks for ONE event, not the whole archive.
+  test('the public results archive names the organiser the database stamped, and the sheet reads one event', async ({
+    page,
+    browser,
+  }) => {
+    await signIn(page);
+    const SEEDED = '10c8c375-afe6-41c7-a54e-ffaa15429612';
+    const eventId = await page.evaluate(async (orgId) => {
+      const { createEvent } = await import('/src/core/events.js');
+      const { publishEventResults } = await import('/src/core/publicResults.js');
+      const { getSupabase } = await import('/src/core/supabaseClient.js');
+      const client = getSupabase();
+      const event = await createEvent(
+        orgId,
+        {
+          format: 'cup_taster',
+          name: 'D3 Attribution Cup',
+          eventDate: '2026-10-12',
+          city: 'Bandar',
+          isTest: false,
+        },
+        client,
+      );
+      await publishEventResults(
+        orgId,
+        event.id,
+        {
+          format: 'cup_taster',
+          eventName: 'D3 Attribution Cup',
+          city: 'Bandar',
+          eventDate: '2026-10-12',
+          competitors: 2,
+          rounds: 1,
+          winningTimeSecs: 100,
+          podium: [{ rank: 1, name: 'Alex', cafe: null, correct: 3, total: 7 }],
+          // a publisher cannot choose whose event it looks like: the database replaces this
+          org_name: 'Someone Else Entirely',
+        },
+        client,
+      );
+      return event.id;
+    }, SEEDED);
+
+    const context = await browser.newContext();
+    const visitor = await context.newPage();
+    const asked = [];
+    visitor.on('request', (request) => asked.push(request.url()));
+    try {
+      await visitor.goto('/results/');
+      await expect(visitor.locator('.results-latest-meta')).toContainText(
+        'Organised by Local Dev Org',
+        { timeout: 15000 },
+      );
+      await expect(visitor.locator('body')).not.toContainText('Someone Else Entirely');
+
+      asked.length = 0;
+      await visitor.goto(`/results/?sheet=${eventId}`);
+      await expect(visitor.locator('.results-sheet-title')).toHaveText('D3 Attribution Cup', {
+        timeout: 15000,
+      });
+      await expect(visitor.locator('.results-sheet-meta')).toContainText(
+        'Organised by Local Dev Org',
+      );
+      const reads = asked.filter((url) => url.includes('/rest/v1/public_results'));
+      expect(reads.length).toBeGreaterThan(0);
+      for (const url of reads) expect(url).toContain(`event_id=eq.${eventId}`);
+    } finally {
+      await context.close();
+      await page.evaluate(
+        async ({ orgId, id }) => {
+          const { unpublishEventResults } = await import('/src/core/publicResults.js');
+          const { getSupabase } = await import('/src/core/supabaseClient.js');
+          await unpublishEventResults(orgId, id, getSupabase());
+        },
+        { orgId: SEEDED, id: eventId },
+      );
+    }
+  });
+
   test('an unknown route shows an inline "Page not found" with a link back to events', async ({
     page,
   }) => {

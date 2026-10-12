@@ -1,3 +1,22 @@
+## T-TEN.D3: the public results archive says whose event each result is · 2026-10-12
+
+**Task:** T-TEN.D3 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase D; decision D-T4: the public archive stays global, so every result must say whose it is). Client only: no migration, nothing to push to the cloud project (the database stamps the name on publish: T-TEN.B7, applied to the cloud project).
+
+**Status: in review, not merged.**
+
+**What changed:**
+
+- **The archive names the organiser** (`marketing/resultsScreen.js`): the latest result's line reads "14 Sept 2026 · Jakarta · Organised by <name>", and each archive row shows the name under the event (a screen reader hears "Organised by …"). The name is the one the database stamped into the published result (`org_name`, replacing anything the publisher sent). Results published before that was added carry no name and show nothing; the one result in production today is such a row (re-publishing it from the report screen stamps it).
+- **The printable sheet names the organiser too** (`marketing/resultsSheet.js`), and **asks for one event's row by id** (`findPublishedResultForEvent`) instead of downloading every published payload and picking one in the browser. A link whose id is not even a uuid reads "not available" rather than a retry.
+- **`publishedOrgName` (`core/publicResults.js`)** cleans the name the way every other place that shows an organisation does (`core/orgLabel.js`'s `cleanOrgName`: invisible text-direction controls removed, a blank name is no name); it is always shown as text, never markup. Long names wrap (the latest-result line, the sheet header and the archive cell) and the table's scroll region is positioned so the screen-reader text cannot widen a phone's page.
+- **Measured (cloud project, 2026-10-12):** one published result, 2.7 KB, no `org_name`. The archive page downloads every published payload to build its stats, so at about 300 results (roughly 800 KB) it should be paged or given a lighter list; see ROADMAP.
+
+**Verified:** the full suite (3925 unit tests in 137 files), lint and Prettier on the whole repository, the production build, and the whole organiser-flow browser file (20 tests, against the real local database) pass. A browser test publishes a real result carrying a forged `org_name`, then in a fresh anonymous browser the archive shows the real organiser ("Local Dev Org") and never the forged one, and the sheet's request is filtered to that one event. Every deliberate break (the cleaning, the key, the three places the name is shown, the per-event read) was caught by a named test.
+
+**Reviews:** security-reviewer (no blocking issue; the cloud migration check, the malformed-id handling and the unbounded-listing note came from it), code-reviewer with the accessibility check (one cleaning function instead of two, the screen-reader wording, the long-name wrapping), each run as a general-purpose agent following the project's `.claude/agents/*.md` definition.
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-TEN.D3".
+
 ## Privacy page: the public also sees which organisation ran a published event · 2026-10-12
 
 **Why:** with T-TEN.D3 the public results archive and the printable results sheet say "Organised by <organisation name>" on every published result (the name is stamped by the database when the organiser publishes). CLAUDE.md: changing what is public changes the Privacy page. The owner approved showing the name.

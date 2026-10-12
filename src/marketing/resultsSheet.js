@@ -12,7 +12,7 @@
 // never innerHTML.
 import { el, withSrExpansion } from '../core/dom.js';
 import { formatDuration, formatDurationLong } from '../core/duration.js';
-import { listPublishedResults } from '../core/publicResults.js';
+import { findPublishedResultForEvent, publishedOrgName } from '../core/publicResults.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../core/timeout.js';
 import { buildPublicFooter } from './publicFooter.js';
 import { buildPublicHeader } from './publicHeader.js';
@@ -152,10 +152,12 @@ function formatPublished(publishedAt) {
 export function buildResultsSheet(event) {
   const content = sheetContentFor(event);
   const title = cleanText(event.eventName) || 'Results';
+  const organiser = publishedOrgName(event);
   const meta = [
     formatEventDate(event.eventDate),
     cleanText(event.venue) || null,
     cleanText(event.city) || null,
+    organiser ? `Organised by ${organiser}` : null,
   ].filter(Boolean);
 
   const facts = [];
@@ -340,10 +342,22 @@ export async function mountResultsSheet(root, { eventId, client } = {}) {
       'Loading the results sheet…',
     );
 
-    let rows;
+    // One event's own row, asked for by its id (the sheet used to download every published payload to
+    // show one, which grows with every organisation that publishes).
+    let row;
     try {
-      rows = await raceTimeout(listPublishedResults(client), DEFAULT_LOAD_TIMEOUT_MS);
+      row = await raceTimeout(
+        findPublishedResultForEvent(eventId, client),
+        DEFAULT_LOAD_TIMEOUT_MS,
+      );
     } catch (err) {
+      // An id that is not even a uuid (a mistyped or truncated link) is "no such sheet", not a fault worth
+      // retrying: the database says so with this code when asked for it.
+      if (err?.code === '22P02') {
+        const missing = 'This results sheet is not available — it may have been unpublished.';
+        show(statusSection(missing), missing);
+        return;
+      }
       const message = err.timedOut
         ? 'This is taking longer than expected — check your connection and try again.'
         : 'Something went wrong loading the results sheet — please try again.';
@@ -351,7 +365,6 @@ export async function mountResultsSheet(root, { eventId, client } = {}) {
       return;
     }
 
-    const row = rows.find((candidate) => candidate.event_id === eventId);
     if (!row) {
       const message = 'This results sheet is not available — it may have been unpublished.';
       show(statusSection(message), message);
