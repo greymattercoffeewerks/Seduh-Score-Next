@@ -366,4 +366,104 @@ describe('mountResultsScreen', () => {
       [...root.querySelectorAll('.results-archive-records summary')].map((s) => s.textContent),
     ).toEqual(['How “Has Podium” was scored']);
   });
+
+  describe('whose event it is (T-TEN.D3)', () => {
+    const row = (overrides, id = 'ev1', at = '2026-09-16T00:00:00Z') => ({
+      event_id: id,
+      payload: samplePayload(overrides),
+      published_at: at,
+    });
+
+    it('names the organiser on the latest result and in the archive row', async () => {
+      await mountResultsScreen(root, {
+        client: fakeClient({
+          data: [
+            row({ org_name: 'Grey Matter Coffee Werks' }),
+            row({ org_name: 'Grey Matter Coffee Werks' }, 'ev2', '2026-08-30T00:00:00Z'),
+          ],
+          error: null,
+        }),
+      });
+      expect(root.querySelector('.results-latest-meta').textContent).toBe(
+        '14 Sept 2026 · Jakarta · Organised by Grey Matter Coffee Werks',
+      );
+      expect(root.querySelector('.results-archive-organiser').textContent).toBe(
+        'Organised by Grey Matter Coffee Werks',
+      );
+      // said to a screen reader, shown as the name alone
+      expect(root.querySelector('.results-archive-organiser .sr-only').textContent).toBe(
+        'Organised by ',
+      );
+    });
+
+    it('tells two organisers apart: the latest result and the archive each carry their own', async () => {
+      await mountResultsScreen(root, {
+        client: fakeClient({
+          data: [
+            row({ org_name: 'Alpha Coffee', eventName: 'Alpha Open' }, 'ev1'),
+            row(
+              { org_name: 'Bravo Roasters', eventName: 'Bravo Open' },
+              'ev2',
+              '2026-08-30T00:00:00Z',
+            ),
+          ],
+          error: null,
+        }),
+      });
+      expect(root.querySelector('.results-latest-meta').textContent).toContain(
+        'Organised by Alpha Coffee',
+      );
+      const cells = [...root.querySelectorAll('.results-archive-row')].map(
+        (tr) => tr.querySelector('.results-archive-organiser')?.textContent,
+      );
+      expect(cells).toEqual(['Organised by Bravo Roasters']);
+    });
+
+    it('shows nothing for a row published before the name was stamped, and still renders it', async () => {
+      await mountResultsScreen(root, {
+        client: fakeClient({
+          data: [row({}), row({}, 'ev2', '2026-08-30T00:00:00Z')],
+          error: null,
+        }),
+      });
+      expect(root.querySelector('.results-archive-organiser')).toBeNull();
+      expect(root.querySelector('.results-latest-meta').textContent).toBe('14 Sept 2026 · Jakarta');
+      expect(root.textContent).not.toContain('Organised by');
+      expect(root.querySelectorAll('.results-archive-row')).toHaveLength(1);
+    });
+
+    it('shows the name as text, never as markup', async () => {
+      const hostile = '<img src=x onerror=alert(1)> Coffee';
+      await mountResultsScreen(root, {
+        client: fakeClient({
+          data: [
+            row({ org_name: hostile }),
+            row({ org_name: hostile }, 'ev2', '2026-08-30T00:00:00Z'),
+          ],
+          error: null,
+        }),
+      });
+      expect(root.querySelector('img')).toBeNull();
+      expect(root.querySelector('.results-archive-organiser').textContent).toBe(
+        `Organised by ${hostile}`,
+      );
+    });
+
+    it('cleans the name of text-direction controls, and a blank name shows nothing', async () => {
+      await mountResultsScreen(root, {
+        client: fakeClient({
+          data: [
+            row({ org_name: '\u202EAlpha Coffee' }),
+            row({ org_name: '   ' }, 'ev2', '2026-08-30T00:00:00Z'),
+          ],
+          error: null,
+        }),
+      });
+      expect(root.querySelector('.results-latest-meta').textContent).toContain(
+        'Organised by Alpha Coffee',
+      );
+      expect(root.querySelector('.results-latest-meta').textContent).not.toContain('\u202E');
+      expect(root.querySelector('.results-archive-organiser')).toBeNull();
+    });
+  });
 });
