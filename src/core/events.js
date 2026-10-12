@@ -50,25 +50,19 @@ export async function findEventOrgId(eventId, client = getSupabase()) {
 // only — `events.status` (draft/running/concluded) exists in the schema but
 // nothing anywhere writes it yet, so it isn't a reliable "started" signal;
 // any event row at all is treated as "there's an event for tonight," full
-// stop. `.maybeSingle()`, not `.single()` like findEvent above — zero
-// events for an org is a normal, expected outcome here, not an error.
+// stop. Zero events for an org is a normal, expected outcome here (null), not an error.
 export async function findLatestEventForOrg(orgId, client = getSupabase()) {
-  // Explicit columns, never '*' — this is called from two PUBLIC,
-  // unauthenticated surfaces (viewer-shell.js, splashScreen.js), and `anon`
-  // only has a COLUMN-level grant on this exact list (migration
-  // 20260831100000) precisely because `select('*')` from a column-scoped
-  // role always fails, by Postgres design, regardless of RLS. `created_at`
-  // is included even though no caller reads it — ORDER BY requires SELECT
-  // on the column being sorted by, not just the columns returned.
-  const { data, error } = await client
-    .from('events')
-    .select('id, org_id, name, event_date, is_test, created_at')
-    .eq('org_id', orgId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  // Through public_event_summary (T-TEN.B7/D2), not a table read: this is called from the PUBLIC,
+  // unauthenticated surfaces (viewer-shell.js, splashScreen.js), and the narrow door gives them exactly what
+  // they show (id, name, event_date, is_test) for exactly the organisation they were opened for, without
+  // `anon` needing any read of the `events` table at all (T-TEN.D6 removes that read). The row has no
+  // org_id or created_at: nothing here uses them. A function that returns a table answers with an array.
+  const { data, error } = await client.rpc('public_event_summary', { p_org_id: orgId });
   if (error) throw error;
-  return data;
+  // Anything but a list of rows is a failure to ask, never "no event": the callers show an event-less
+  // holding state for null.
+  if (!Array.isArray(data)) throw new Error('public_event_summary: unexpected response');
+  return data[0] ?? null;
 }
 
 // Every event for an org, newest first — the list core/eventsScreen.js
