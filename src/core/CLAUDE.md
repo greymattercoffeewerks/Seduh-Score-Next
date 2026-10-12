@@ -284,3 +284,10 @@ is_test) or null; an answer that is not a list is a failure to ask, never "no ev
 use it (or another narrow door), never `from('events')`: T-TEN.D6 removes the anon read. Test fakes for the
 audience surfaces should answer `rpc('public_event_summary')` and RECORD a table read as a violation instead of
 throwing (the callers swallow errors as "no event"). See ROADMAP.md's "Known open items from T-TEN.D2".
+
+T-TEN.D3 (2026-10-12) — whose result is it. `publishedOrgName(payload)` (core/publicResults.js) reads the `org_name`
+the database stamps into every published result and cleans it with `cleanOrgName` (core/orgLabel.js: the one
+place that strips invisible text-direction controls from an organisation's name). Anything public that shows
+an organisation's name uses these two, as text. The results sheet asks for one event
+(`findPublishedResultForEvent`); the archive page still downloads every payload (ROADMAP: threshold). See
+ROADMAP.md's "Known open items from T-TEN.D3".
