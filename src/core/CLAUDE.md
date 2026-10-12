@@ -277,3 +277,10 @@ mistyped link, nor "not found" for a dropped connection). It follows the databas
 file that knows both core and the formats); the old slug-less links are the legacy shim (`config.js`:
 `getLegacyAudienceOrgSlug` first, else `getLegacyAudienceOrgId`). `core/router.js`'s `matchRoute` treats an
 undecodable segment as no match. See ROADMAP.md's "Known open items from T-TEN.D1".
+
+T-TEN.D2 (2026-10-12) — the audience screens no longer read the `events` table. `findLatestEventForOrg`
+(core/events.js) calls the RPC `public_event_summary(p_org_id)` and returns its first row (id, name, event_date,
+is_test) or null; an answer that is not a list is a failure to ask, never "no event". A new anonymous screen must
+use it (or another narrow door), never `from('events')`: T-TEN.D6 removes the anon read. Test fakes for the
+audience surfaces should answer `rpc('public_event_summary')` and RECORD a table read as a violation instead of
+throwing (the callers swallow errors as "no event"). See ROADMAP.md's "Known open items from T-TEN.D2".
