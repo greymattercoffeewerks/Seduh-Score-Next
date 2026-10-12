@@ -41,7 +41,7 @@ vi.mock('../../core/outbox.js', () => ({
   enqueueOperation: vi.fn(async (type, payload) => {
     queue.push({ type, payload });
   }),
-  listPendingOperations: vi.fn(async () => {
+  listAllOperations: vi.fn(async () => {
     beforeQueueRead?.();
     return queue;
   }),
@@ -959,8 +959,8 @@ describe('mountScoringScreen', () => {
 
     it('is NOT treated as dropped when the queue cannot be read either', async () => {
       await submitOffline();
-      const { listPendingOperations } = await import('../../core/outbox.js');
-      listPendingOperations.mockRejectedValueOnce(new Error('idb down'));
+      const { listAllOperations } = await import('../../core/outbox.js');
+      listAllOperations.mockRejectedValueOnce(new Error('idb down'));
       byText('Check sync status').click();
       await flush();
       expect(notice().textContent).toMatch(/waiting to sync/);

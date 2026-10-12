@@ -23,7 +23,7 @@ import {
   buildRpcHandler,
   enqueueOperation,
   flushOutbox,
-  listPendingOperations,
+  listAllOperations,
 } from '../../core/outbox.js';
 import { getSupabase } from '../../core/supabaseClient.js';
 export { roundLabel } from './roundNames.js';
@@ -281,7 +281,8 @@ export async function wasOperationProcessed(operationId, client = getSupabase())
 
 // Is this operation still waiting in the local outbox (not yet applied, not dropped)?
 export async function isOperationQueued(operationId) {
-  const pending = await listPendingOperations();
+  // Whoever owns it: this asks whether the write is still waiting at all, not whether it can run now.
+  const pending = await listAllOperations();
   return pending.some((op) => op.payload?.p_operation_id === operationId);
 }
 

@@ -18,7 +18,7 @@ import { el, labeledField } from './dom.js';
 import { describeError } from './errors.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
 import { createEvent, listEventsForOrg, deleteTestEvent } from './events.js';
-import { countPendingOperations } from './outbox.js';
+import { countOperationsInOrg } from './outbox.js';
 
 export function blankDraft(defaultFormat) {
   return { name: '', eventDate: '', venue: '', city: '', isTest: false, format: defaultFormat };
@@ -318,9 +318,9 @@ export async function mountEventsScreen(
   // see renderEventsList's own comment for why this is keyed by id rather
   // than a single shared value.
   let deleteStates = {};
-  // This device's outbox size as of the last Delete click — see
-  // unsyncedWritesWarning. Deliberately one value, not per row: it counts the
-  // whole device's queue, so the latest read is the right one for any row.
+  // How many queued changes on this device are for THIS organisation (any account's), as of the last
+  // Delete click — see unsyncedWritesWarning. Deliberately one value, not per row: it counts the
+  // organisation's whole queue, so the latest read is the right one for any row.
   let unsyncedWrites;
 
   function setFeedback(feedback, message, tone) {
@@ -447,7 +447,7 @@ export async function mountEventsScreen(
     // focus lands on "Confirm delete" (see unsyncedWritesWarning). Bounded:
     // a hung IndexedDB open must degrade to "Couldn't check", not leave
     // Delete doing nothing.
-    const count = await raceTimeout(countPendingOperations(), unsyncedCheckTimeoutMs).catch(
+    const count = await raceTimeout(countOperationsInOrg(orgId), unsyncedCheckTimeoutMs).catch(
       (err) => {
         console.error('eventsScreen: unsynced-writes count failed', err);
         return null;
