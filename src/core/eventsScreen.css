@@ -137,3 +137,10 @@
   width: var(--tap-target-min);
   height: var(--tap-target-min);
 }
+
+/* An organisation's name is typed by a person and sits in these headings: an unbroken one must wrap, not
+   push the page sideways (the same rule the Team screen's headings have). */
+.events-screen h2 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
