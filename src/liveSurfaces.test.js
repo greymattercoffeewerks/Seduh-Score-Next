@@ -8,22 +8,30 @@ import { preliminaryPayload } from './formats/btc/demoLivePayload.js';
 function fakeClient(initialRow, { events = [{ id: 'ev1' }] } = {}) {
   let row = initialRow;
   let onChange = () => {};
+  const asked = [];
   return {
     setRow(next) {
       row = next;
       onChange();
     },
     from: (table) => {
+      if (table === 'events')
+        throw new Error('the audience surfaces must not read the events table');
       const builder = {
         select: () => builder,
         eq: () => builder,
         order: () => builder,
         limit: () => builder,
-        maybeSingle: () =>
-          Promise.resolve({ data: table === 'events' ? (events[0] ?? null) : row, error: null }),
+        maybeSingle: () => Promise.resolve({ data: row, error: null }),
       };
       return builder;
     },
+    // public_event_summary: the organisation's newest event as a one-row table (T-TEN.D2)
+    rpc: (name, args) => {
+      asked.push([name, args]);
+      return Promise.resolve({ data: events.slice(0, 1), error: null });
+    },
+    asked,
     channel: () => ({
       on(_type, _filter, cb) {
         onChange = cb;

@@ -64,6 +64,7 @@ function fakeClient({ organisers = { alpha: 'org1' }, rpcFailures = 0 } = {}) {
   return {
     removedChannels,
     reads,
+    registered,
     auth: {
       getSession: () => Promise.resolve({ data: { session: { user: { email: 'o@test.com' } } } }),
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe: vi.fn() } } }),
@@ -71,10 +72,23 @@ function fakeClient({ organisers = { alpha: 'org1' }, rpcFailures = 0 } = {}) {
     },
     // No live session, but the org has an event: the "Waiting for the
     // organiser" holding state.
-    from: (table) => builder(table === 'events' ? { id: 'ev1' } : null, table),
+    from: (table) => {
+      // The audience surfaces ask the narrow public_event_summary door (T-TEN.D2), never the table.
+      if (table === 'events')
+        throw new Error('the audience surfaces must not read the events table');
+      return builder(null, table);
+    },
     // public_org_by_slug (T-TEN.B7): one organiser or nothing; `rpcFailures` makes the first calls fail
     // as a dropped connection would.
     rpc: (name, args) => {
+      if (name === 'public_event_summary') {
+        // one event for every organisation; the organisation each read was for is recorded
+        reads.push(['events', 'org_id', args.p_org_id]);
+        return Promise.resolve({
+          data: [{ id: 'ev1', name: 'Event', event_date: null, is_test: false }],
+          error: null,
+        });
+      }
       if (name !== 'public_org_by_slug') return Promise.resolve({ data: null, error: null });
       if (failuresLeft > 0) {
         failuresLeft -= 1;
@@ -311,12 +325,19 @@ describe('the same switching through links that name the organiser (T-TEN.D1)', 
     const orgReads = () =>
       client.reads.filter(([, column]) => column === 'org_id').map(([, , value]) => value);
     expect(new Set(orgReads())).toEqual(new Set(['org2']));
+    // the realtime channel is keyed on the resolved organisation too (one per mount)
+    expect(
+      [...client.registered.keys()].every((topic) => topic.startsWith('live_sessions:org2:')),
+    ).toBe(true);
 
     client.reads.length = 0;
     await go('#/live/alpha/projector');
     await vi.waitFor(() => holdingShown(bareRoot));
     expect(orgReads().length).toBeGreaterThan(0);
     expect(new Set(orgReads())).toEqual(new Set(['org1']));
+    expect(
+      [...client.registered.keys()].some((topic) => topic.startsWith('live_sessions:org1:')),
+    ).toBe(true);
   });
 
   it('asks once for a slug however many surfaces the tab shows (and remembers it for the page)', async () => {
