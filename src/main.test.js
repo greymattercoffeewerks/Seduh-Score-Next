@@ -99,8 +99,23 @@ vi.mock('./formats/btc/scoringScreen.js', () => ({
 // the format-dispatch existed keeps testing exactly what it did before, unmodified —
 // only the new tests specifically about dispatch override this per-call.
 const findEvent = vi.fn(() => Promise.resolve({ id: 'ev1', format: 'cup_taster' }));
+const findMatchEventId = vi.fn(() => Promise.resolve(null));
+vi.mock('./formats/btc/matches.js', () => ({
+  findMatchEventId: (...args) => findMatchEventId(...args),
+}));
+// What the device remembers about which organisation an event belongs to (T-TEN.C7): nothing, unless a test
+// says so. Mocked: the real one is IndexedDB, which these tests do not otherwise touch.
+const cacheGet = vi.fn(() => Promise.resolve(null));
+const cacheSet = vi.fn(() => Promise.resolve());
+vi.mock('./core/db.js', () => ({
+  cacheGet: (...args) => cacheGet(...args),
+  cacheSet: (...args) => cacheSet(...args),
+}));
+// Which organisation an event belongs to (T-TEN.C7): the first organisation unless a test says otherwise.
+const findEventOrgId = vi.fn(() => Promise.resolve('org1'));
 vi.mock('./core/events.js', () => ({
   findEvent: (...args) => findEvent(...args),
+  findEventOrgId: (...args) => findEventOrgId(...args),
 }));
 
 // Mocked at the module level, same as every screen above — appShell.js
@@ -1721,6 +1736,8 @@ describe('organisation context wiring (T-TEN.C2)', () => {
     canManageTeam.mockResolvedValue(false);
     listPendingOperations.mockReset();
     listPendingOperations.mockResolvedValue([]);
+    findEventOrgId.mockReset();
+    findEventOrgId.mockResolvedValue('org1');
   });
   afterEach(() => {
     localStorage.clear();
@@ -1830,6 +1847,7 @@ describe('organisation context wiring (T-TEN.C2)', () => {
       stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
       stubScreen(mountEventDashboardScreen, 'DASHBOARD_SCREEN');
       stubScreen(mountTeamScreen, 'TEAM_SCREEN');
+      findEventOrgId.mockResolvedValue('org2');
       await startApp({ client: orgClient() });
       location.hash = '#/events/ev1';
       await settle();
@@ -2214,6 +2232,7 @@ describe('organisation context wiring (T-TEN.C2)', () => {
     it('a change that nobody chose does not add a history entry (Back must not return to the old org)', async () => {
       myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
       localStorage.setItem('seduh.activeOrg.user-1', 'org2');
+      findEventOrgId.mockResolvedValue('org2');
       stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
       stubScreen(mountSetupScreen, 'SETUP_SCREEN');
       location.hash = '#/events/ev1/setup';
@@ -2611,6 +2630,567 @@ describe('organisation context wiring (T-TEN.C2)', () => {
       await settle();
       expect(flushOutbox).not.toHaveBeenCalled();
       expect(lastOwner()).toEqual({ userId: 'user-1', orgId: null });
+    });
+  });
+
+  describe('a link into an event of another organisation (T-TEN.C7)', () => {
+    const notice = (root) => root.querySelector('.app-shell-org-notice');
+    const noticeOpen = (root) => notice(root).classList.contains('app-shell-org-notice-open');
+    const activeOrgOf = (app) => app.orgContext.getState().activeOrgId;
+
+    async function startTwoOrgsAt(hash, eventOrg) {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      findEventOrgId.mockResolvedValue(eventOrg);
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      stubScreen(mountSetupScreen, 'SETUP_SCREEN');
+      stubScreen(mountEventDashboardScreen, 'DASHBOARD_SCREEN');
+      stubScreen(mountBtcScoringScreen, 'BTC_SCORING_SCREEN');
+      location.hash = hash;
+      return startApp({ client: orgClient() });
+    }
+
+    beforeEach(() => {
+      findEventOrgId.mockReset();
+      findEventOrgId.mockResolvedValue('org1');
+      findMatchEventId.mockReset();
+      cacheGet.mockReset();
+      cacheGet.mockResolvedValue(null);
+      cacheSet.mockClear();
+    });
+
+    it('an event in the active organisation just opens: nothing switches, no notice', async () => {
+      const { app, root } = await startTwoOrgsAt('#/events/ev1/setup', 'org1');
+      expect(root.textContent).toContain('SETUP_SCREEN');
+      expect(activeOrgOf(app)).toBe('org1');
+      expect(noticeOpen(root)).toBe(false);
+      expect(findEventOrgId).toHaveBeenCalledWith('ev1', expect.anything());
+    });
+
+    it('an event in the other organisation of the person switches to it, says so, and opens the event there', async () => {
+      const { app, root } = await startTwoOrgsAt('#/events/ev1/setup', 'org2');
+      await vi.waitFor(() => expect(root.textContent).toContain('SETUP_SCREEN'));
+      expect(activeOrgOf(app)).toBe('org2');
+      // still on the event: the switch did not send them to the Events list
+      expect(location.hash).toBe('#/events/ev1/setup');
+      expect(noticeOpen(root)).toBe(true);
+      expect(notice(root).textContent).toBe(
+        'Now working in Org Two, the organisation this event belongs to.',
+      );
+      expect(notice(root).dataset.tone).toBe('info');
+      expect(root.querySelector('.app-shell-org select').value).toBe('org2');
+      // the Events list, opened next, is the new organisation's
+      location.hash = '#/events';
+      await vi.waitFor(() => expect(eventsOrgIds().at(-1)).toBe('org2'));
+    });
+
+    it('never mounts the event before the switch has happened', async () => {
+      const seen = [];
+      mountSetupScreen.mockImplementation(async (outlet) => {
+        seen.push(setActiveOrgSeen());
+        outlet.textContent = 'SETUP_SCREEN';
+        return { unmount: vi.fn() };
+      });
+      let setActiveOrgSeen = () => null;
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      findEventOrgId.mockResolvedValue('org2');
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      location.hash = '#/events/ev1/setup';
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      const app = mountApp(root, { client: orgClient(), legacyAudienceOrgId: 'org1' });
+      activeApp = app;
+      setActiveOrgSeen = () => app.orgContext.getState().activeOrgId;
+      await app.ready;
+      await vi.waitFor(() => expect(seen.length).toBeGreaterThan(0));
+      expect(seen).toEqual(['org2']);
+    });
+
+    it('reads a BTC match through its event: the match decides, not the event id in the URL', async () => {
+      findMatchEventId.mockResolvedValue('ev9');
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      findEventOrgId.mockImplementation(async (eventId) => (eventId === 'ev9' ? 'org2' : 'org1'));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      stubScreen(mountBtcScoringScreen, 'BTC_SCORING_SCREEN');
+      location.hash = '#/events/ev1/btc/matches/m1/scoring';
+      const { app, root } = await startApp({ client: orgClient() });
+      await vi.waitFor(() => expect(root.textContent).toContain('BTC_SCORING_SCREEN'));
+      expect(findMatchEventId).toHaveBeenCalledWith('m1', expect.anything());
+      expect(findEventOrgId).toHaveBeenCalledWith('ev9', expect.anything());
+      expect(activeOrgOf(app)).toBe('org2');
+    });
+
+    it('an event in an organisation the person is not in is "not found", and nothing switches', async () => {
+      const { app, root } = await startTwoOrgsAt('#/events/ev1/setup', 'org9');
+      await vi.waitFor(() => expect(root.textContent).toContain('Page not found'));
+      expect(root.textContent).not.toContain('SETUP_SCREEN');
+      expect(activeOrgOf(app)).toBe('org1');
+      expect(mountSetupScreen).not.toHaveBeenCalled();
+    });
+
+    it('an event that is not there, or cannot be seen, is "not found" too', async () => {
+      const { root } = await startTwoOrgsAt('#/events/ev1/setup', null);
+      await vi.waitFor(() => expect(root.textContent).toContain('Page not found'));
+      expect(mountSetupScreen).not.toHaveBeenCalled();
+    });
+
+    it('a malformed event id is "not found", not a Retry that can never work', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      findEventOrgId.mockRejectedValue(
+        Object.assign(new Error('invalid input'), { code: '22P02' }),
+      );
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      location.hash = '#/events/not-a-uuid/setup';
+      const { root } = await startApp({ client: orgClient() });
+      await vi.waitFor(() => expect(root.textContent).toContain('Page not found'));
+    });
+
+    it('a match that is not there is "not found"', async () => {
+      findMatchEventId.mockResolvedValue(null);
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      location.hash = '#/events/ev1/btc/matches/m1/scoring';
+      const { root } = await startApp({ client: orgClient() });
+      await vi.waitFor(() => expect(root.textContent).toContain('Page not found'));
+      expect(mountBtcScoringScreen).not.toHaveBeenCalled();
+    });
+
+    it("while this account's changes in the current organisation have not synced, says the event is in the other one and why it cannot open yet", async () => {
+      listPendingOperations.mockResolvedValue([{ id: 'op-1', attempts: 0 }]);
+      const { app, root } = await startTwoOrgsAt('#/events/ev1/setup', 'org2');
+      await vi.waitFor(() => expect(root.textContent).toContain('This event is in Org Two'));
+      const heading = root.querySelector('.screen-container h1');
+      expect(document.activeElement).toBe(heading);
+      const reason = root.querySelector('#other-org-reason');
+      expect(heading.getAttribute('aria-describedby')).toBe('other-org-reason');
+      expect(reason.textContent).toBe(
+        'You are working in Org One. 1 change on this device has not synced yet, so this event cannot be opened yet. Wait for it to sync, then try again.',
+      );
+      expect(root.querySelector('.screen-container a[href="#/events"]').textContent).toBe(
+        'Back to Org One events',
+      );
+      expect(activeOrgOf(app)).toBe('org1');
+      expect(mountSetupScreen).not.toHaveBeenCalled();
+      // the header names no event while a card that is not one is on show
+      expect(root.querySelector('.app-shell-context').textContent).not.toContain('October');
+    });
+
+    it('the notice does not follow the person to the next screen', async () => {
+      const { root } = await startTwoOrgsAt('#/events/ev1/setup', 'org2');
+      await vi.waitFor(() => expect(noticeOpen(root)).toBe(true));
+      location.hash = '#/events';
+      await vi.waitFor(() => expect(noticeOpen(root)).toBe(false));
+    });
+
+    it('a card is not an event: the header stops naming the event while it is up', async () => {
+      findEvent.mockResolvedValue({ id: 'ev1', name: 'October Cup', format: 'cup_taster' });
+      listPendingOperations.mockResolvedValue([{ id: 'op-1', attempts: 0 }]);
+      const { root } = await startTwoOrgsAt('#/events/ev1/setup', 'org2');
+      await vi.waitFor(() => expect(root.textContent).toContain('This event is in Org Two'));
+      await settle();
+      await settle();
+      expect(root.querySelector('.app-shell-breadcrumb').textContent).toBe('');
+      findEvent.mockResolvedValue({ id: 'ev1', format: 'cup_taster' });
+    });
+
+    it('says it in the plural', async () => {
+      listPendingOperations.mockResolvedValue([{ id: 'a' }, { id: 'b' }]);
+      const first = await startTwoOrgsAt('#/events/ev1/setup', 'org2');
+      await vi.waitFor(() =>
+        expect(first.root.querySelector('#other-org-reason')?.textContent).toContain(
+          '2 changes on this device have not synced yet, so this event cannot be opened yet. Wait for them to sync',
+        ),
+      );
+    });
+
+    it("Try again opens the event once everything has synced, in the event's organisation", async () => {
+      listPendingOperations.mockResolvedValue([{ id: 'op-1', attempts: 0 }]);
+      const { app, root } = await startTwoOrgsAt('#/events/ev1/setup', 'org2');
+      await vi.waitFor(() => expect(root.textContent).toContain('This event is in Org Two'));
+      // let every navigation the browser started for this link finish first: only Try again may open it now
+      for (let i = 0; i < 4; i += 1) await settle();
+      expect(mountSetupScreen).not.toHaveBeenCalled();
+      listPendingOperations.mockResolvedValue([]);
+      [...root.querySelectorAll('button')].find((b) => b.textContent === 'Try again').click();
+      await vi.waitFor(() => expect(root.textContent).toContain('SETUP_SCREEN'));
+      expect(activeOrgOf(app)).toBe('org2');
+    });
+
+    it('a blocked card is tracked like any screen: choosing an organisation in the header takes the person to its Events list', async () => {
+      listPendingOperations.mockResolvedValue([{ id: 'op-1', attempts: 0 }]);
+      const { app, root } = await startTwoOrgsAt('#/events/ev1/setup', 'org2');
+      await vi.waitFor(() => expect(root.textContent).toContain('This event is in Org Two'));
+      listPendingOperations.mockResolvedValue([]);
+      await app.switchOrg('org2');
+      await vi.waitFor(() => expect(location.hash).toBe('#/events'));
+    });
+
+    it('two organisations with the same name are told apart by slug in the notice', async () => {
+      const twin = { org_id: 'org2', name: 'Org One', slug: 'org-one-nz', role: 'owner' };
+      myOrgs.mockResolvedValue(answer(ORG_ONE, twin));
+      findEventOrgId.mockResolvedValue('org2');
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      stubScreen(mountSetupScreen, 'SETUP_SCREEN');
+      location.hash = '#/events/ev1/setup';
+      const { root } = await startApp({ client: orgClient() });
+      await vi.waitFor(() => expect(noticeOpen(root)).toBe(true));
+      expect(notice(root).textContent).toBe(
+        'Now working in Org One (org-one-nz), the organisation this event belongs to.',
+      );
+    });
+
+    it('with one organisation it asks nothing about the event: opening events costs no extra read', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE));
+      stubScreen(mountSetupScreen, 'SETUP_SCREEN');
+      location.hash = '#/events/ev1/setup';
+      const { root } = await startApp({ client: orgClient() });
+      expect(root.textContent).toContain('SETUP_SCREEN');
+      expect(findEventOrgId).not.toHaveBeenCalled();
+      expect(findMatchEventId).not.toHaveBeenCalled();
+    });
+
+    it('routes that are not about an event never ask', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      stubScreen(mountTeamScreen, 'TEAM_SCREEN');
+      location.hash = '#/events';
+      await startApp({ client: orgClient() });
+      location.hash = '#/team';
+      await settle();
+      await settle();
+      expect(findEventOrgId).not.toHaveBeenCalled();
+    });
+
+    it('remembers which organisation an event is in, and never remembers "there is none"', async () => {
+      await startTwoOrgsAt('#/events/ev1/setup', 'org1');
+      expect(cacheSet).toHaveBeenCalledWith('eventOrg:ev1', 'org1');
+      cacheSet.mockClear();
+      findEventOrgId.mockResolvedValue(null);
+      location.hash = '#/events/ev2/setup';
+      await vi.waitFor(() => expect(findEventOrgId).toHaveBeenCalledWith('ev2', expect.anything()));
+      await settle();
+      expect(cacheSet).not.toHaveBeenCalled();
+    });
+
+    it('uses what it remembered at once, without asking the network (an event never changes organisation)', async () => {
+      cacheGet.mockImplementation(async (key) => (key === 'eventOrg:ev1' ? 'org2' : null));
+      const { app, root } = await startTwoOrgsAt('#/events/ev1/setup', 'org1');
+      await vi.waitFor(() => expect(root.textContent).toContain('SETUP_SCREEN'));
+      expect(activeOrgOf(app)).toBe('org2');
+      expect(findEventOrgId).not.toHaveBeenCalled();
+    });
+
+    it('a remembered answer for an organisation the person is no longer in is "not found"', async () => {
+      cacheGet.mockImplementation(async (key) => (key === 'eventOrg:ev1' ? 'org9' : null));
+      const { root } = await startTwoOrgsAt('#/events/ev1/setup', 'org1');
+      await vi.waitFor(() => expect(root.textContent).toContain('Page not found'));
+    });
+
+    it('a device memory that never answers does not hang the navigation', async () => {
+      cacheGet.mockImplementation(() => new Promise(() => {}));
+      const { root } = await startTwoOrgsAt('#/events/ev1/setup', 'org1');
+      await vi.waitFor(() => expect(root.textContent).toContain('SETUP_SCREEN'), {
+        timeout: 4000,
+      });
+    });
+
+    it('a device memory that fails to read or to write still lets the event open', async () => {
+      cacheGet.mockRejectedValue(new Error('idb'));
+      cacheSet.mockRejectedValue(new Error('idb'));
+      const { root } = await startTwoOrgsAt('#/events/ev1/setup', 'org1');
+      await vi.waitFor(() => expect(root.textContent).toContain('SETUP_SCREEN'));
+    });
+
+    it('a match read that fails falls back to the remembered event of that match; a read that works is remembered', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      cacheGet.mockImplementation(async (key) => (key === 'matchEvent:m1' ? 'ev9' : null));
+      findMatchEventId.mockRejectedValue(new TypeError('Failed to fetch'));
+      findEventOrgId.mockResolvedValue('org1');
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      stubScreen(mountBtcScoringScreen, 'BTC_SCORING_SCREEN');
+      location.hash = '#/events/ev1/btc/matches/m1/scoring';
+      const { root } = await startApp({ client: orgClient() });
+      await vi.waitFor(() => expect(root.textContent).toContain('BTC_SCORING_SCREEN'));
+      expect(findEventOrgId).toHaveBeenCalledWith('ev9', expect.anything());
+
+      findMatchEventId.mockReset();
+      findMatchEventId.mockResolvedValue('ev9');
+      location.hash = '#/events/ev1/btc/matches/m2/scoring';
+      await vi.waitFor(() => expect(cacheSet).toHaveBeenCalledWith('matchEvent:m2', 'ev9'));
+    });
+
+    it('a malformed match id is "not found"', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      findMatchEventId.mockRejectedValue(Object.assign(new Error('invalid'), { code: '22P02' }));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      location.hash = '#/events/ev1/btc/matches/nope/scoring';
+      const { root } = await startApp({ client: orgClient() });
+      await vi.waitFor(() => expect(root.textContent).toContain('Page not found'));
+    });
+
+    it('a match whose event is in the active organisation opens there, whatever organisation the URL event is in', async () => {
+      findMatchEventId.mockResolvedValue('ev-mine');
+      findEventOrgId.mockImplementation(async (id) => (id === 'ev-mine' ? 'org1' : 'org2'));
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      stubScreen(mountBtcScoringScreen, 'BTC_SCORING_SCREEN');
+      location.hash = '#/events/ev-other/btc/matches/m1/scoring';
+      const { app, root } = await startApp({ client: orgClient() });
+      await vi.waitFor(() => expect(root.textContent).toContain('BTC_SCORING_SCREEN'));
+      expect(activeOrgOf(app)).toBe('org1');
+      expect(noticeOpen(root)).toBe(false);
+    });
+
+    it('a match whose event is in an organisation the person is not in is "not found"', async () => {
+      findMatchEventId.mockResolvedValue('ev9');
+      findEventOrgId.mockResolvedValue('org9');
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      location.hash = '#/events/ev1/btc/matches/m1/scoring';
+      const { root } = await startApp({ client: orgClient() });
+      await vi.waitFor(() => expect(root.textContent).toContain('Page not found'));
+      expect(mountBtcScoringScreen).not.toHaveBeenCalled();
+    });
+
+    it('a lookup that never answers gives the timeout Retry, not a guess, and Retry asks again', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout'] });
+      try {
+        myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+        findEventOrgId.mockImplementation(() => new Promise(() => {}));
+        stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+        stubScreen(mountSetupScreen, 'SETUP_SCREEN');
+        location.hash = '#/events/ev1/setup';
+        const root = document.createElement('div');
+        document.body.appendChild(root);
+        const app = mountApp(root, { client: orgClient(), legacyAudienceOrgId: 'org1' });
+        activeApp = app;
+        await vi.advanceTimersByTimeAsync(11000);
+        await vi.advanceTimersByTimeAsync(0);
+        expect(root.textContent).toContain('taking longer than expected');
+        expect(mountSetupScreen).not.toHaveBeenCalled();
+        findEventOrgId.mockResolvedValue('org1');
+        [...root.querySelectorAll('button')].find((b) => b.textContent === 'Retry').click();
+        await vi.advanceTimersByTimeAsync(50);
+        expect(root.textContent).toContain('SETUP_SCREEN');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('with no connection, uses what it remembered (and switches to it)', async () => {
+      cacheGet.mockImplementation(async (key) => (key === 'eventOrg:ev1' ? 'org2' : null));
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      findEventOrgId.mockRejectedValue(new TypeError('Failed to fetch'));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      stubScreen(mountSetupScreen, 'SETUP_SCREEN');
+      location.hash = '#/events/ev1/setup';
+      const { app, root } = await startApp({ client: orgClient() });
+      await vi.waitFor(() => expect(root.textContent).toContain('SETUP_SCREEN'));
+      expect(activeOrgOf(app)).toBe('org2');
+    });
+
+    it('with no connection and nothing remembered, shows a Retry, never a guess, and Retry works', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      findEventOrgId.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+      findEventOrgId.mockResolvedValue('org1');
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      stubScreen(mountSetupScreen, 'SETUP_SCREEN');
+      location.hash = '#/events/ev1/setup';
+      const { root } = await startApp({ client: orgClient() });
+      expect(root.textContent).not.toContain('SETUP_SCREEN');
+      expect(mountSetupScreen).not.toHaveBeenCalled();
+      const retry = [...root.querySelectorAll('button')].find((b) => b.textContent === 'Retry');
+      expect(retry).toBeTruthy();
+      const asked = findEventOrgId.mock.calls.length;
+      retry.click();
+      await vi.waitFor(() => expect(root.textContent).toContain('SETUP_SCREEN'));
+      expect(findEventOrgId.mock.calls.length).toBeGreaterThan(asked);
+    });
+
+    it('the notice goes when the person taps elsewhere, and the organisation stays switched', async () => {
+      const { app, root } = await startTwoOrgsAt('#/events/ev1/setup', 'org2');
+      await vi.waitFor(() => expect(noticeOpen(root)).toBe(true));
+      document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      expect(noticeOpen(root)).toBe(false);
+      expect(activeOrgOf(app)).toBe('org2');
+    });
+
+    it('from a screen already on show, the link switches without sending the person back to the Events list', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      stubScreen(mountSetupScreen, 'SETUP_SCREEN');
+      location.hash = '#/events';
+      const { app, root } = await startApp({ client: orgClient() });
+      expect(root.textContent).toContain('EVENTS_SCREEN');
+      findEventOrgId.mockResolvedValue('org2');
+      location.hash = '#/events/ev1/setup';
+      await vi.waitFor(() => expect(root.textContent).toContain('SETUP_SCREEN'));
+      expect(activeOrgOf(app)).toBe('org2');
+      await settle();
+      await settle();
+      expect(location.hash).toBe('#/events/ev1/setup');
+      // The screen was built for the new organisation, so a later move back is a real change: the person
+      // is taken to the Events list of the organisation they are now in.
+      await app.switchOrg('org1');
+      await vi.waitFor(() => expect(location.hash).toBe('#/events'));
+    });
+
+    it('the screen is built for the NEW organisation: a later change of organisation is judged against it', async () => {
+      const { app, root } = await startTwoOrgsAt('#/events/ev1/setup', 'org2');
+      await vi.waitFor(() => expect(root.textContent).toContain('SETUP_SCREEN'));
+      // Nothing changes while the person is on the event: the console must not take them away from it.
+      await app.orgContext.refresh(signedIn());
+      await settle();
+      await settle();
+      expect(location.hash).toBe('#/events/ev1/setup');
+      expect(root.textContent).toContain('SETUP_SCREEN');
+      // ...but a real change of organisation still sends them to the Events list of the new one.
+      await app.switchOrg('org1');
+      await vi.waitFor(() => expect(location.hash).toBe('#/events'));
+    });
+
+    it("if the organisation is not the event's once the switch is over, it starts again rather than mounting under the wrong one", async () => {
+      const { createOrgContext } = await import('./core/orgContext.js');
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      findEventOrgId.mockResolvedValue('org2');
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      stubScreen(mountSetupScreen, 'SETUP_SCREEN');
+      const client = orgClient();
+      const orgContext = createOrgContext({ client, storage: null });
+      const realSet = orgContext.setActiveOrg;
+      // Something else moves the organisation straight back, as the switch reports success.
+      orgContext.setActiveOrg = (orgId) => {
+        const ok = realSet(orgId);
+        if (orgId === 'org2') realSet('org1');
+        return ok;
+      };
+      location.hash = '#/events/ev1/setup';
+      const { root } = await startApp({ client, orgContext });
+      await vi.waitFor(() =>
+        expect([...root.querySelectorAll('button')].some((b) => b.textContent === 'Retry')).toBe(
+          true,
+        ),
+      );
+      expect(mountSetupScreen).not.toHaveBeenCalled();
+    });
+
+    it('an organisation chosen in the header while the lookup is on its way starts the link again under it', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      stubScreen(mountSetupScreen, 'SETUP_SCREEN');
+      const lateAnswers = [];
+      findEventOrgId.mockImplementation(() => new Promise((resolve) => lateAnswers.push(resolve)));
+      location.hash = '#/events/ev1/setup';
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      const app = mountApp(root, { client: orgClient(), legacyAudienceOrgId: 'org1' });
+      activeApp = app;
+      await vi.waitFor(() => expect(lateAnswers.length).toBeGreaterThan(0));
+      // the person picks the other organisation in the header while it is still being looked up
+      app.orgContext.setActiveOrg('org2');
+      findEventOrgId.mockResolvedValue('org1');
+      for (const answerLate of lateAnswers) answerLate('org1');
+      // ...the stale navigation is not mounted under the old label: it starts again, and ends in the
+      // event's own organisation
+      await vi.waitFor(() => expect(root.textContent).toContain('SETUP_SCREEN'));
+      expect(activeOrgOf(app)).toBe('org1');
+    });
+
+    it('a Team screen holding a one-time password does not stop a link from opening (the link is replacing it anyway)', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      findEventOrgId.mockResolvedValue('org2');
+      let teamOptions;
+      mountTeamScreen.mockImplementation(async (outlet, options) => {
+        teamOptions = options;
+        outlet.textContent = 'TEAM_SCREEN';
+        return { unmount: vi.fn() };
+      });
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      stubScreen(mountSetupScreen, 'SETUP_SCREEN');
+      location.hash = '#/team';
+      const { app, root } = await startApp({ client: orgClient() });
+      await vi.waitFor(() => expect(root.textContent).toContain('TEAM_SCREEN'));
+      teamOptions.onLeaveGuard(true);
+      location.hash = '#/events/ev1/setup';
+      await vi.waitFor(() => expect(root.textContent).toContain('SETUP_SCREEN'));
+      expect(activeOrgOf(app)).toBe('org2');
+      // and the header's select works afterwards: the flag did not stay set
+      const back = await app.switchOrg('org1');
+      expect(back.ok).toBe(true);
+    });
+
+    it('a link abandoned while the outbox is being checked opens nothing and says nothing', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      stubScreen(mountSetupScreen, 'SETUP_SCREEN');
+      location.hash = '#/events';
+      const { root } = await startApp({ client: orgClient() });
+      findEventOrgId.mockResolvedValue('org2');
+      let finishCheck;
+      listPendingOperations.mockImplementation(
+        () => new Promise((resolve) => (finishCheck = resolve)),
+      );
+      location.hash = '#/events/ev1/setup';
+      await vi.waitFor(() => expect(finishCheck).toBeTypeOf('function'));
+      location.hash = '#/events';
+      await settle();
+      finishCheck([]);
+      await settle();
+      await settle();
+      expect(mountSetupScreen).not.toHaveBeenCalled();
+      expect(noticeOpen(root)).toBe(false);
+    });
+
+    it('every event-keyed console route is checked for a person in two organisations', async () => {
+      const paths = [
+        '',
+        '/setup',
+        '/roster',
+        '/report',
+        '/stages/s1/heats',
+        '/stages/s1/standings',
+        '/heats/h1/timing',
+        '/heats/h1/scoring',
+        '/btc/setup',
+        '/btc/matches',
+        '/btc/standings',
+        '/btc/bracket',
+      ];
+      for (const path of paths) {
+        findEventOrgId.mockClear();
+        location.hash = `#/events/ev1${path}`;
+        const { app } = await startTwoOrgsAt(`#/events/ev1${path}`, 'org1');
+        expect(findEventOrgId, path).toHaveBeenCalledWith('ev1', expect.anything());
+        await app.unmount();
+        activeApp = null;
+      }
+    });
+
+    it('a navigation that moves on while the lookup is in flight opens only the newer screen', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      const lateAnswers = [];
+      findEventOrgId.mockImplementation(() => new Promise((resolve) => lateAnswers.push(resolve)));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      stubScreen(mountSetupScreen, 'SETUP_SCREEN');
+      location.hash = '#/events/ev1/setup';
+      const { app, root } = await startTwoOrgsLate();
+      async function startTwoOrgsLate() {
+        const root2 = document.createElement('div');
+        document.body.appendChild(root2);
+        const app2 = mountApp(root2, { client: orgClient(), legacyAudienceOrgId: 'org1' });
+        activeApp = app2;
+        await settle();
+        await settle();
+        return { app: app2, root: root2 };
+      }
+      location.hash = '#/events';
+      await settle();
+      expect(lateAnswers.length).toBeGreaterThan(0);
+      for (const answerOld of lateAnswers) answerOld('org2'); // the old lookups answer late
+      await settle();
+      await settle();
+      expect(mountSetupScreen).not.toHaveBeenCalled();
+      expect(app.orgContext.getState().activeOrgId).toBe('org1');
+      expect(root.textContent).toContain('EVENTS_SCREEN');
     });
   });
 

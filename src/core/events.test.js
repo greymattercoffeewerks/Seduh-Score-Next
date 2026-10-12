@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   createEvent,
   findEvent,
+  findEventOrgId,
   findLatestEventForOrg,
   listEventsForOrg,
   deleteTestEvent,
@@ -17,7 +18,10 @@ function fakeClient(response) {
           calls.push(['insert', table, payload]);
           return builder;
         },
-        select: () => builder,
+        select: (...args) => {
+          calls.push(['select', table, ...args]);
+          return builder;
+        },
         eq: (...args) => {
           calls.push(['eq', ...args]);
           return builder;
@@ -115,6 +119,25 @@ describe('findEvent', () => {
   it('throws on a query error', async () => {
     const client = fakeClient({ data: null, error: new Error('not found') });
     await expect(findEvent('missing', client)).rejects.toThrow('not found');
+  });
+});
+
+describe('findEventOrgId (T-TEN.C7)', () => {
+  it('returns the organisation the event belongs to, reading only that column', async () => {
+    const client = fakeClient({ data: { org_id: 'org2' }, error: null });
+    expect(await findEventOrgId('ev1', client)).toBe('org2');
+    expect(client.calls).toContainEqual(['select', 'events', 'org_id']);
+    expect(client.calls).toContainEqual(['eq', 'id', 'ev1']);
+  });
+
+  it('returns null, not an error, when there is no such event (or it cannot be seen)', async () => {
+    const client = fakeClient({ data: null, error: null });
+    expect(await findEventOrgId('ev1', client)).toBeNull();
+  });
+
+  it('throws on a failed read: that says nothing about whether the event exists', async () => {
+    const client = fakeClient({ data: null, error: new Error('offline') });
+    await expect(findEventOrgId('ev1', client)).rejects.toThrow('offline');
   });
 });
 

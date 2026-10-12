@@ -1,3 +1,26 @@
+## T-TEN.C7: a link into another organisation's event moves the console to that organisation · 2026-10-12
+
+**Task:** T-TEN.C7 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase C, the client), the last step of phase C. Client only: no migration, nothing to push to the cloud project.
+
+**Status: in review, not merged.**
+
+**Why:** an event URL carries no organisation, and a person in two organisations can open either one's events (every member can see them). Without a guard, an event of one organisation could be shown under the other one's name in the header, with the other one's Events list, and with writes queued for the wrong place.
+
+**What changed:**
+
+- **A route guard for every event-keyed console route** (`main.js`: `placeEventRoute`, `resolveRouteOrg`): for a person in two or more organisations the event's own organisation is read first. The same as the active one: the event just opens. Another of theirs: the console switches to it (through the existing switch, so it is refused while this account has unsynced changes in the current organisation), the event opens, and a notice says "Now working in <organisation>, the organisation this event belongs to." Not one of theirs, not there, or a malformed id: the existing "Page not found" card (the database makes "does not exist" and "not yours" the same answer, so nothing is revealed). A BTC match route is resolved through the match's own event, not the event id in the URL.
+- **Single-organisation people (everyone in production today) are never asked**: no extra read, no change.
+- **Offline and slow connections:** the event's organisation never changes (T-TEN.B1), so a found answer is remembered on the device (IndexedDB `eventOrg:<id>`) and used at once next time, with no request to wait for; a match's event is remembered as a fallback when its read fails. A failed read with nothing remembered is a Retry card, never a guess. Reads of the device's memory are bounded (2 seconds).
+- **The notice** (`appShell.js`, `appShell.css`): a visible panel under the header in the existing live region, with a quiet border (not the error colour). It is shown once the event's screen has taken focus (a polite announcement written while focus is moving is the one a screen reader drops), lets taps pass through, goes with Escape from anywhere or a tap elsewhere, and does not follow the person to the next screen.
+- **When the switch is refused** (unsynced changes in the current organisation), a card replaces the screen: "This event is in <organisation>", why, in words for someone who only followed a link ("You are working in X. N changes on this device have not synced yet, so this event cannot be opened yet. Wait for them to sync, then try again."), a Try again button and "Back to <X> events". The header names no event while a card is up, and the card counts as the current organisation's screen, so choosing another organisation in the header takes the person to its Events list.
+- **Races closed:** an organisation chosen in the header while the lookup was on its way starts the link again under it (never mounts an event under a label that is no longer true); an organisation that moves again right after the switch gives a Try again card instead of looping; a one-time password on the Team screen no longer blocks the switch (the link replaces that screen anyway, as any link does).
+
+**Verified:** the full suite (3839 unit tests in 136 files), lint and Prettier on the whole repository, the production build, and the whole organiser-flow browser file (17 tests, against the real local database) pass. Two existing switcher browser tests now start on an event of the real organisation (remembered as the person's last organisation) instead of an event under the faked second one, which the guard would now correctly move; the header layout tests that open an event start in the event's own organisation. Every deliberate break of the guard was caught by a named test, with one exception (a one-time password blocking the link) that jsdom's doubled navigation hides, and one real-browser-only check (the screen's organisation key after a switch from a screen already on show).
+
+**Reviews:** offline-sync-auditor (no blocking issue; the cache-first answer, the post-mount notice and the pointer-events fix came from it), code-reviewer (the stale-snapshot race, the breadcrumb, the Team case), ui-accessibility-reviewer (keyboard dismissal, the notice's lifetime, the card's wording and focus), test-auditor, each run as a general-purpose agent following the project's `.claude/agents/*.md` definition.
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-TEN.C7".
+
 ## T-TEN.C6: one device's outbox is shared safely between accounts and organisations · 2026-10-12
 
 **Task:** T-TEN.C6 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase C, the client). Client only: no migration, nothing to push to the cloud project.

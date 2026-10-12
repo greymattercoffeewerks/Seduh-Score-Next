@@ -5,6 +5,7 @@ import {
   listMatches,
   listJudgeIdsForMatch,
   findMatchById,
+  findMatchEventId,
   removeMatch,
 } from './matches.js';
 
@@ -17,6 +18,7 @@ function fakeClient({ tables = {}, rpc, errorOn } = {}) {
     db[table] = rows.map((row) => ({ ...row }));
   }
   const rpcCalls = [];
+  const selects = [];
 
   function matchesFilters(row, filters) {
     return filters.every(([col, val]) => row[col] === val);
@@ -29,7 +31,8 @@ function fakeClient({ tables = {}, rpc, errorOn } = {}) {
   function makeBuilder(table) {
     const filters = [];
     const builder = {
-      select() {
+      select(columns) {
+        selects.push([table, columns]);
         return builder;
       },
       eq(col, val) {
@@ -49,6 +52,13 @@ function fakeClient({ tables = {}, rpc, errorOn } = {}) {
             ? { data: { ...row }, error: null }
             : { data: null, error: { code: 'PGRST116', message: 'no rows' } },
         );
+      },
+      maybeSingle() {
+        if (fails(table, 'maybeSingle')) {
+          return Promise.resolve({ data: null, error: { code: '42501' } });
+        }
+        const row = (db[table] ?? []).find((r) => matchesFilters(r, filters));
+        return Promise.resolve({ data: row ? { ...row } : null, error: null });
       },
       delete() {
         if (fails(table, 'delete')) {
@@ -76,6 +86,7 @@ function fakeClient({ tables = {}, rpc, errorOn } = {}) {
       return Promise.resolve(rpc ?? { data: null, error: null });
     },
     rpcCalls,
+    selects,
   };
 }
 
@@ -243,5 +254,33 @@ describe('findMatchById', () => {
       errorOn: 'btc_matches.single',
     });
     await expect(findMatchById('m1', client)).rejects.toMatchObject({ code: '42501' });
+  });
+});
+
+describe('findMatchEventId (T-TEN.C7)', () => {
+  it('returns the event the match belongs to', async () => {
+    const client = fakeClient({
+      tables: {
+        btc_matches: [
+          { id: 'm1', event_id: 'ev1' },
+          { id: 'm2', event_id: 'ev2' },
+        ],
+      },
+    });
+    expect(await findMatchEventId('m2', client)).toBe('ev2');
+    expect(client.selects).toContainEqual(['btc_matches', 'event_id']);
+  });
+
+  it('returns null, not an error, when there is no such match (or it cannot be seen)', async () => {
+    const client = fakeClient({ tables: { btc_matches: [] } });
+    expect(await findMatchEventId('nope', client)).toBeNull();
+  });
+
+  it('throws on a failed read: that says nothing about whether the match exists', async () => {
+    const client = fakeClient({
+      tables: { btc_matches: [{ id: 'm1', event_id: 'ev1' }] },
+      errorOn: 'btc_matches.maybeSingle',
+    });
+    await expect(findMatchEventId('m1', client)).rejects.toMatchObject({ code: '42501' });
   });
 });
