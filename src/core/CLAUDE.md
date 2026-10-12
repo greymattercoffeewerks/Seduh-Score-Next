@@ -291,3 +291,9 @@ place that strips invisible text-direction controls from an organisation's name)
 an organisation's name uses these two, as text. The results sheet asks for one event
 (`findPublishedResultForEvent`); the archive page still downloads every payload (ROADMAP: threshold). See
 ROADMAP.md's "Known open items from T-TEN.D3".
+
+T-TEN.D4 (2026-10-13) — audience links. `audienceHash(slug, surface)` and `audienceLinksFor(slug)` (main.js) build
+the slug-qualified `#/live/<slug>/<surface>` links, absolute for the page served; the organiser's menu and the
+Events screen's "Share with your audience" card (`core/audienceLinksCard.js`, with a lazily loaded QR on the phone
+view) both use them, for any organisation with a slug. The card is built once and re-appended across redraws so
+its live status line is never replaced. See ROADMAP.md's "Known open items from T-TEN.D4".

@@ -1897,13 +1897,13 @@ handoff §4's "one organiser, one org"; locks D-T1…D-T8). Why: `MULTI-TENANCY-
 pillars A and B. Not in scope: gating/entitlements (D14 stays a stub), admin console, self-serve
 signup, Seduh ID. Rule (lifted 2026-10-11, now that B1, B2 and B6 are in the cloud): a two-org user is created only through the service-role provisioning path (B4).
 
-| Phase | Tasks                                                                                                                                             | Status                                           |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| A     | A1 spec lock · A2 tenancy inventory                                                                                                               | Done                                             |
-| B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | Done (B1 to B7 merged and in the cloud project)  |
-| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | Done (C1 to C7 merged)                           |
-| D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | In progress (D1, D2 merged; D3 built, in review) |
-| E     | E1 negative matrix · E2 console Playwright · E3 security/perf · E4 docs · E5 rollout · E6 close-out                                               | Not started                                      |
+| Phase | Tasks                                                                                                                                             | Status                                               |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| A     | A1 spec lock · A2 tenancy inventory                                                                                                               | Done                                                 |
+| B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | Done (B1 to B7 merged and in the cloud project)      |
+| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | Done (C1 to C7 merged)                               |
+| D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | In progress (D1, D2, D3 merged; D4 built, in review) |
+| E     | E1 negative matrix · E2 console Playwright · E3 security/perf · E4 docs · E5 rollout · E6 close-out                                               | Not started                                          |
 
 Each D task is re-confirmed with the product owner before it starts (2026-10-10).
 
@@ -2131,3 +2131,15 @@ _Client only: `marketing/resultsScreen.js`, `marketing/resultsSheet.js`, `core/p
 - **A publisher still controls the event name, city, venue and cafe lines**, so a result can be titled to look like another brand; only the "Organised by" line is authoritative (D-T4).
 - **The public Privacy page (`marketing/trustContent.js`, `design/copy/privacy-page-draft.md`) does not yet say the public also sees the name of the organisation that ran each published event.** A wording and policy decision for the owner (CLAUDE.md: changing what is public changes the Privacy page).
 - **The sheet's per-event read has no browser test for an unpublished event**, only unit tests.
+
+---
+
+## Known open items from T-TEN.D4 (2026-10-13)
+
+_Client only: `core/audienceLinksCard.js`, `core/eventsScreen.js`, `main.js`. No migration._
+
+- **The card sits below the events list and the create form.** On a phone the organiser scrolls past the form to reach the QR. A conscious choice (the working screen is unchanged); moving it up, or behind a "Share" button, is a product decision.
+- **The links are built on the page the organiser is on.** A link made from a preview or local address opens that address. The organiser should copy links from the production site.
+- **There are no BTC-specific links.** The BTC projector and phone use the same slug-qualified routes as Cup Taster, so the three links cover both; a separate card per format was not needed.
+- **The QR size (11rem, about 176 px) was chosen by eye** and checked in a screenshot, not scanned by a phone camera. Worth one real scan before an event.
+- **Old slug-less links still work through the legacy shim** (D1) until the owner sets `VITE_LEGACY_AUDIENCE_ORG_SLUG` in Cloudflare Pages and later retires them (D6/E).
