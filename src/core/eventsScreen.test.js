@@ -1028,3 +1028,76 @@ describe('which organisation an event belongs to (T-TEN.C5)', () => {
     });
   });
 });
+
+describe('the audience links card on the Events screen (T-TEN.D4)', () => {
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const LINKS = {
+    phone: 'https://seduh.example/app/#/live/alpha/phone',
+    projector: 'https://seduh.example/app/#/live/alpha/projector',
+    splash: 'https://seduh.example/app/#/live/alpha/splash',
+  };
+
+  it('shows the card, with all three links, when the caller has links for the organisation', async () => {
+    const root = document.createElement('div');
+    await mountEventsScreen(root, {
+      orgId: 'org1',
+      orgName: 'Alpha Coffee',
+      audienceLinks: LINKS,
+      client: fakeClient({ events: [] }),
+      defaultFormat: 'cup_taster',
+    });
+    expect(root.querySelector('#audience-links-heading').textContent).toBe(
+      'Share with your audience',
+    );
+    expect([...root.querySelectorAll('.audience-links-url')].map((c) => c.textContent)).toEqual([
+      LINKS.phone,
+      LINKS.projector,
+      LINKS.splash,
+    ]);
+  });
+
+  it('shows no card when there are no links to give', async () => {
+    const root = document.createElement('div');
+    await mountEventsScreen(root, {
+      orgId: 'org1',
+      client: fakeClient({ events: [] }),
+      defaultFormat: 'cup_taster',
+    });
+    expect(root.querySelector('.audience-links-card')).toBeNull();
+  });
+
+  it('comes after the events list and the create form, so the working screen is unchanged', async () => {
+    const root = document.createElement('div');
+    await mountEventsScreen(root, {
+      orgId: 'org1',
+      audienceLinks: LINKS,
+      client: fakeClient({ events: [] }),
+      defaultFormat: 'cup_taster',
+    });
+    const headings = [...root.querySelectorAll('h1, h2')].map((h) => h.textContent);
+    expect(headings.at(-1)).toBe('Share with your audience');
+    expect(headings[0]).toBe('Events');
+  });
+
+  it('is the same card after the screen redraws (creating an event): its QR and its "copied" line survive', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    await mountEventsScreen(root, {
+      orgId: 'org1',
+      audienceLinks: LINKS,
+      client: fakeClient({ events: [] }),
+      defaultFormat: 'cup_taster',
+    });
+    const card = root.querySelector('.audience-links-card');
+    const field = root.querySelector('[data-field="name"]');
+    field.value = 'New Cup';
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    root
+      .querySelector('form')
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await tick();
+    await tick();
+    expect(root.querySelector('.audience-links-card')).toBe(card);
+    root.remove();
+  });
+});

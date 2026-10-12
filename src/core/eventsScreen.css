@@ -144,3 +144,90 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+/* "Share with your audience" (T-TEN.D4): one row per link, the phone view's QR code beside its text (below it on a
+   narrow screen). The link text wraps anywhere: a slug is free text and a URL has no spaces to break at. */
+.audience-links-intro {
+  overflow-wrap: anywhere;
+}
+
+.audience-links-list {
+  list-style: none;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-5);
+}
+
+.audience-links-item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  align-items: flex-start;
+}
+
+.audience-links-text {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+
+.audience-links-label {
+  margin: 0;
+}
+
+.audience-links-hint {
+  margin: var(--space-1) 0 var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.audience-links-url {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: var(--text-sm);
+}
+
+.audience-links-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+/* The code is a picture of the link: dark on white whatever the theme, or a phone camera cannot read it. */
+.audience-links-qr {
+  flex: 0 0 auto;
+  padding: var(--space-3);
+  background: #fff;
+  border: var(--border-hairline) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  line-height: 0;
+}
+
+.audience-links-qr svg {
+  width: 11rem;
+  height: 11rem;
+}
+
+/* Reserve the picture's size so the row does not jump when the code arrives. */
+.audience-links-qr:not([hidden]) {
+  min-width: calc(11rem + 2 * var(--space-3));
+  min-height: calc(11rem + 2 * var(--space-3));
+  box-sizing: border-box;
+}
+
+.audience-links-actions a.btn {
+  text-decoration: none;
+}
+
+/* Never display:none while empty: a live region that is not rendered beforehand is not reliably announced
+   when text arrives. An empty paragraph has no height, so it costs nothing at rest. */
+.audience-links-status:empty {
+  margin: 0;
+}
+
+.audience-links-status {
+  margin: var(--space-3) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
