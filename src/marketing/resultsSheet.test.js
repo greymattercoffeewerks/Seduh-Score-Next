@@ -8,13 +8,34 @@ import {
 import { formatDurationLong } from '../core/duration.js';
 import { DEFAULT_LOAD_TIMEOUT_MS } from '../core/timeout.js';
 
+// A table fake for the per-event read (T-TEN.D3): `response` is `{ data: [rows], error }`; the sheet asks for ONE
+// event's row by its id (`.eq('event_id', id).maybeSingle()`), so the fake filters the rows the same way and
+// records what was asked.
 function fakeClient(response) {
+  const asked = [];
   return {
-    from() {
+    asked,
+    from(table) {
+      const filters = [];
+      asked.push({ table, filters });
       const builder = {
-        select: () => builder,
-        order: () => builder,
-        then: (resolve, reject) => Promise.resolve(response).then(resolve, reject),
+        select: (columns) => {
+          asked.at(-1).columns = columns;
+          return builder;
+        },
+        eq: (column, value) => {
+          filters.push([column, value]);
+          return builder;
+        },
+        order: () => {
+          throw new Error('the sheet must not download the whole list');
+        },
+        maybeSingle: () => {
+          if (response.error) return Promise.resolve({ data: null, error: response.error });
+          const rows = response.data ?? [];
+          const row = rows.find((candidate) => filters.every(([c, v]) => candidate[c] === v));
+          return Promise.resolve({ data: row ?? null, error: null });
+        },
       };
       return builder;
     },
@@ -445,10 +466,12 @@ describe('mountResultsSheet', () => {
     const client = {
       from: () => ({
         select: () => ({
-          order: () =>
-            new Promise((resolve) => {
-              release = () => resolve({ data: rows(), error: null });
-            }),
+          eq: () => ({
+            maybeSingle: () =>
+              new Promise((resolve) => {
+                release = () => resolve({ data: rows()[0], error: null });
+              }),
+          }),
         }),
       }),
     };
@@ -516,14 +539,16 @@ describe('mountResultsSheet', () => {
     const client = {
       from: () => ({
         select: () => ({
-          order: () => {
-            attempt += 1;
-            return Promise.resolve(
-              attempt === 1
-                ? { data: null, error: new Error('network error') }
-                : { data: rows(), error: null },
-            );
-          },
+          eq: () => ({
+            maybeSingle: () => {
+              attempt += 1;
+              return Promise.resolve(
+                attempt === 1
+                  ? { data: null, error: new Error('network error') }
+                  : { data: rows()[0], error: null },
+              );
+            },
+          }),
         }),
       }),
     };
@@ -583,7 +608,11 @@ describe('mountResultsSheet', () => {
 
   it('says the load is slow rather than hanging on "Loading…" forever, and offers Try again', async () => {
     vi.useFakeTimers();
-    const client = { from: () => ({ select: () => ({ order: () => new Promise(() => {}) }) }) };
+    const client = {
+      from: () => ({
+        select: () => ({ eq: () => ({ maybeSingle: () => new Promise(() => {}) }) }),
+      }),
+    };
     const mounting = mountResultsSheet(root, { eventId: 'ev1', client });
     expect(root.textContent).toContain('Loading the results sheet');
     await vi.advanceTimersByTimeAsync(DEFAULT_LOAD_TIMEOUT_MS + 1);
@@ -591,6 +620,38 @@ describe('mountResultsSheet', () => {
     expect(root.textContent).toContain('taking longer than expected');
     expect([...root.querySelectorAll('button')].some((b) => b.textContent === 'Try again')).toBe(
       true,
+    );
+  });
+
+  it('asks for that one event by its id, from the published results, and nothing else (T-TEN.D3)', async () => {
+    const client = fakeClient({ data: rows(), error: null });
+    await mountResultsSheet(root, { eventId: 'ev1', client });
+    expect(client.asked).toHaveLength(1);
+    expect(client.asked[0].table).toBe('public_results');
+    expect(client.asked[0].filters).toEqual([['event_id', 'ev1']]);
+    expect(client.asked[0].columns).toBe('event_id, payload, published_at');
+  });
+
+  it('names the organiser in the sheet header when the published row carries one, and omits it when not', () => {
+    const withName = buildResultsSheet({ ...payload({ org_name: 'Grey Matter Coffee Werks' }) });
+    expect(withName.querySelector('.results-sheet-meta').textContent).toContain(
+      'Organised by Grey Matter Coffee Werks',
+    );
+    const without = buildResultsSheet({ ...payload() });
+    expect(without.querySelector('.results-sheet-meta').textContent).not.toContain('Organised by');
+    const textOnly = buildResultsSheet({ ...payload({ org_name: '<b>x</b>' }) });
+    expect(textOnly.querySelector('.results-sheet-meta b')).toBeNull();
+  });
+
+  it('says "not available", not a fault to retry, for an id that is not even a uuid', async () => {
+    const client = fakeClient({
+      data: null,
+      error: Object.assign(new Error('invalid input syntax for type uuid'), { code: '22P02' }),
+    });
+    await mountResultsSheet(root, { eventId: 'not-a-uuid', client });
+    expect(root.textContent).toContain('This results sheet is not available');
+    expect([...root.querySelectorAll('button')].some((b) => b.textContent === 'Try again')).toBe(
+      false,
     );
   });
 });
