@@ -1,3 +1,23 @@
+## T-TEN.D2: the audience screens ask the narrow event door, not the events table · 2026-10-12
+
+**Task:** T-TEN.D2 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase D, audience addressing). Client only: no migration, nothing to push to the cloud project (the database side, `public_event_summary`, is T-TEN.B7 and already live).
+
+**Status: in review, not merged.**
+
+**Why:** the projector, phone and splash screen found out whether their organisation has an event by reading the `events` table as the `anon` role, a read that was open to every organisation's events. With many organisations that read has to close (T-TEN.D6); this step moves the screens off it first, so closing it breaks nothing.
+
+**What changed:**
+
+- **`findLatestEventForOrg` (`core/events.js`) now calls `public_event_summary(p_org_id)`**, which returns one row (id, name, event date, test flag) for exactly the organisation the screen was opened for, or no rows. The row no longer carries `org_id` or `created_at` (nothing used them). Both audience callers (`viewer-shell.js`, `splashScreen.js`) are unchanged, as are their timeouts. An answer that is not a list of rows is a failure to ask (it throws), never "no event".
+- **No visible change:** the same cards, wording and behaviour. The realtime channel stays keyed on the resolved organisation (one per mount; now pinned by a test); the surfaces still read `live_sessions` directly, which D6 narrows.
+- **After this step no anonymous code path reads the `events` table** (the security review grepped every audience import path and the results pages): D6 can drop `events_read_public` and the anon column grants on `events` without breaking a client path.
+
+**Verified:** the full suite (3912 unit tests in 137 files), lint and Prettier on the whole repository, the production build, and the whole organiser-flow browser file (19 tests, against the real local database) pass. The fake clients in six test files now answer the RPC; each records (rather than throws, which the screens would swallow as "no event") a read of the `events` table, which fails the test, and records which organisation was asked about. In a real browser an anonymous visitor opening the splash screen makes a successful request to `rpc/public_event_summary` and, over the whole visit, none to `/rest/v1/events`. Every deliberate break (reading the table again, the wrong function or argument, an error read as "no event", the oldest row, a non-list answer, a lost timeout bound) was caught by a named test. Two viewer-shell timeout tests had silently stopped testing their timeout (their hand-built client had no `rpc`) and were repaired.
+
+**Reviews:** security-reviewer (no blocking issue; the non-list answer hardening came from it), test-auditor (the vacuous timeout tests, the swallowed guards, the unchecked organisation argument, the over-permissive fake, the preview harnesses and a stronger browser assertion came from it), each run as a general-purpose agent following the project's `.claude/agents/*.md` definition.
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-TEN.D2".
+
 ## T-TEN.D1: audience links that name the organiser, with the old links kept working · 2026-10-12
 
 **Task:** T-TEN.D1 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase D, audience addressing; decision D-T2). Client only: no migration, nothing to push to the cloud project (the database side, `public_org_by_slug`, is T-TEN.B7 and already live).

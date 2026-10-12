@@ -350,6 +350,10 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
   }) => {
     const context = await browser.newContext();
     const page = await context.newPage();
+    // What the audience surfaces ask the database (T-TEN.D2): the narrow public_event_summary door, and never
+    // the `events` table itself (which T-TEN.D6 closes to anonymous callers).
+    const asked = [];
+    page.on('request', (request) => asked.push(request.url()));
     try {
       await page.goto('/app/#/live/local-dev-org/phone');
       await expect(page.locator('.app-bare-root .viewer-badge')).toHaveText(/^(live|not live)$/i, {
@@ -360,6 +364,18 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
 
       await page.goto('/app/#/live/local-dev-org/projector');
       await expect(page.locator('.app-bare-root .viewer-shell')).toBeVisible({ timeout: 15000 });
+      // (the splash screen always reads the current event; the projector only does while no live session
+      // already proves there is one)
+      const summary = page.waitForResponse(
+        (response) => response.url().includes('/rest/v1/rpc/public_event_summary'),
+        { timeout: 15000 },
+      );
+      await page.goto('/app/#/live/local-dev-org/splash');
+      await expect(page.locator('.app-bare-root .splash-content')).toBeVisible({ timeout: 15000 });
+      // the door must actually ANSWER (a missing function or grant would be a 4xx the screen swallows)
+      const response = await summary;
+      expect(response.ok()).toBe(true);
+      expect(Array.isArray(await response.json())).toBe(true);
 
       await page.goto('/app/#/live/no-such-organiser/phone');
       await expect(page.getByText('We couldn’t find that organiser')).toBeVisible({
@@ -372,6 +388,9 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
       await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible({
         timeout: 15000,
       });
+      // ...and, over the whole visit, the `events` table itself was never asked (checked last, after the
+      // surfaces were left, so a read fired late would still count)
+      expect(asked.filter((url) => /\/rest\/v1\/events(\?|$)/.test(url))).toEqual([]);
     } finally {
       await context.close();
     }

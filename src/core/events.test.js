@@ -142,22 +142,59 @@ describe('findEventOrgId (T-TEN.C7)', () => {
 });
 
 describe('findLatestEventForOrg', () => {
-  it('returns the matching event', async () => {
-    const event = { id: 'ev1', org_id: 'org1', name: 'October Cup' };
-    const client = fakeClient({ data: event, error: null });
+  function rpcClient(response) {
+    const calls = [];
+    return {
+      calls,
+      rpc: (name, args) => {
+        calls.push([name, args]);
+        return Promise.resolve(response);
+      },
+      from: () => {
+        throw new Error('findLatestEventForOrg must not read a table');
+      },
+    };
+  }
+
+  it('asks the narrow public_event_summary door for that organisation, and returns its one row', async () => {
+    const event = { id: 'ev1', name: 'October Cup', event_date: '2026-10-01', is_test: false };
+    const client = rpcClient({ data: [event], error: null });
     expect(await findLatestEventForOrg('org1', client)).toEqual(event);
-    expect(client.calls).toContainEqual(['eq', 'org_id', 'org1']);
-    expect(client.calls).toContainEqual(['order', 'created_at', { ascending: false }]);
-    expect(client.calls).toContainEqual(['limit', 1]);
+    expect(client.calls).toEqual([['public_event_summary', { p_org_id: 'org1' }]]);
+  });
+
+  it('passes each organisation id through unchanged', async () => {
+    const client = rpcClient({ data: [], error: null });
+    await findLatestEventForOrg('org-a', client);
+    await findLatestEventForOrg('org-b', client);
+    expect(client.calls.map(([, args]) => args.p_org_id)).toEqual(['org-a', 'org-b']);
+  });
+
+  it('hands back the row as the function returned it: id, name, date and test flag only', async () => {
+    const row = { id: 'ev1', name: 'October Cup', event_date: null, is_test: false };
+    const result = await findLatestEventForOrg('org1', rpcClient({ data: [row], error: null }));
+    expect(Object.keys(result).sort()).toEqual(['event_date', 'id', 'is_test', 'name']);
+  });
+
+  it('returns only the first row if more than one comes back', async () => {
+    const client = rpcClient({ data: [{ id: 'new' }, { id: 'old' }], error: null });
+    expect(await findLatestEventForOrg('org1', client)).toEqual({ id: 'new' });
   });
 
   it('returns null, not a thrown error, when the org has no events yet', async () => {
-    const client = fakeClient({ data: null, error: null });
-    expect(await findLatestEventForOrg('org1', client)).toBeNull();
+    expect(await findLatestEventForOrg('org1', rpcClient({ data: [], error: null }))).toBeNull();
   });
 
-  it('throws on a real query error', async () => {
-    const client = fakeClient({ data: null, error: new Error('connection refused') });
+  it('throws for an answer that is not a list of rows: that is a failure to ask, never "no event"', async () => {
+    for (const data of [null, undefined, {}, 'x']) {
+      await expect(findLatestEventForOrg('org1', rpcClient({ data, error: null }))).rejects.toThrow(
+        'unexpected response',
+      );
+    }
+  });
+
+  it('throws on a real error, so the caller can tell "could not ask" from "no event"', async () => {
+    const client = rpcClient({ data: null, error: new Error('connection refused') });
     await expect(findLatestEventForOrg('org1', client)).rejects.toThrow('connection refused');
   });
 });
