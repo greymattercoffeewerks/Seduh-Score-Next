@@ -10,7 +10,7 @@ import {
 } from './eventsScreen.js';
 import { DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
 import { _clearAllForTests } from './db.js';
-import { enqueueOperation } from './outbox.js';
+import { enqueueOperation, setOutboxOwner, _resetOutboxOwnerForTests } from './outbox.js';
 
 // Delete now reads this device's outbox before showing its confirm step, so
 // the step appears after an await rather than synchronously.
@@ -478,6 +478,30 @@ describe('mountEventsScreen', () => {
         expect(document.activeElement).toBe(confirm);
       } finally {
         document.body.removeChild(root);
+      }
+    });
+
+    it('counts what any account queued for THIS organisation, and nothing queued for another one (T-TEN.C6)', async () => {
+      try {
+        setOutboxOwner({ userId: 'alice', orgId: 'org1' });
+        await enqueueOperation('confirm_heat', { p_org_id: 'org1', p_heat_id: 'h1' });
+        setOutboxOwner({ userId: 'bob', orgId: 'org2' });
+        await enqueueOperation('confirm_heat', { p_org_id: 'org2', p_heat_id: 'h2' });
+        // somebody else is signed in now: the warning is about the event's organisation, not the signed-in account
+        setOutboxOwner({ userId: 'carol', orgId: 'org1' });
+        const root = document.createElement('div');
+        document.body.appendChild(root);
+        try {
+          await mountWithTestEvent(root).mounted;
+          await openDeleteConfirm(root, 'ev1');
+          expect(root.querySelector('#delete-warning-ev1').textContent).toContain(
+            "1 write on this device hasn't synced yet.",
+          );
+        } finally {
+          document.body.removeChild(root);
+        }
+      } finally {
+        _resetOutboxOwnerForTests();
       }
     });
 

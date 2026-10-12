@@ -9,12 +9,12 @@ vi.mock('../../core/db.js', () => ({
 }));
 const enqueueOperation = vi.fn(async () => {});
 const flushOutbox = vi.fn(async () => ({ ok: true }));
-const listPendingOperations = vi.fn(async () => []);
+const listAllOperations = vi.fn(async () => []);
 vi.mock('../../core/outbox.js', () => ({
   enqueueOperation: (...args) => enqueueOperation(...args),
   flushOutbox: (...args) => flushOutbox(...args),
   buildRpcHandler: (client, type) => ({ client, type }),
-  listPendingOperations: (...args) => listPendingOperations(...args),
+  listAllOperations: (...args) => listAllOperations(...args),
 }));
 
 const {
@@ -68,7 +68,7 @@ beforeEach(() => {
   cache.clear();
   enqueueOperation.mockClear();
   flushOutbox.mockClear();
-  listPendingOperations.mockClear();
+  listAllOperations.mockClear();
 });
 
 describe('round configuration', () => {
@@ -534,12 +534,12 @@ describe('wasOperationProcessed', () => {
 
 describe('isOperationQueued', () => {
   it('finds an operation by the id in its payload, and only that one', async () => {
-    listPendingOperations.mockResolvedValueOnce([
+    listAllOperations.mockResolvedValueOnce([
       { id: 'q1', type: 'confirm_btc_match', payload: { p_operation_id: 'op-1' } },
       { id: 'q2', type: 'other', payload: { p_operation_id: 'op-2' } },
     ]);
     expect(await isOperationQueued('op-2')).toBe(true);
-    listPendingOperations.mockResolvedValueOnce([
+    listAllOperations.mockResolvedValueOnce([
       { id: 'q1', type: 'confirm_btc_match', payload: { p_operation_id: 'op-1' } },
     ]);
     expect(await isOperationQueued('op-9')).toBe(false);

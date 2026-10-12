@@ -13,16 +13,30 @@
 // app/index.html).
 import { getSupabase } from './supabaseClient.js';
 import { el, setBusyDisabled } from './dom.js';
-import { signOutWithTimeout } from './signOut.js';
+import { signOutWithTimeout, unsyncedSignOutWarning } from './signOut.js';
+import { listAccountOperations } from './outbox.js';
 
 export const NO_ORG_HEADING = "This account isn't part of an organisation";
 
 export function mountNoOrgScreen(
   outlet,
-  { client = getSupabase(), email = null, onSignedOut, signal } = {},
+  {
+    client = getSupabase(),
+    email = null,
+    onSignedOut,
+    signal,
+    // Injectable like `client`; and how long after the warning appears a press is ignored (a double tap).
+    accountOperations = listAccountOperations,
+    armGraceMs = 600,
+  } = {},
 ) {
   outlet.innerHTML = '';
   let signingOut = false;
+  // Changes this account made earlier may still be waiting on this device: the first press says so (as
+  // the header's Sign out does), and the next press signs out.
+  let armed = false;
+  let armedAt = 0;
+  let checking = false;
   let unmounted = false;
 
   const container = el('section', { className: 'screen-container' });
@@ -62,12 +76,30 @@ export function mountNoOrgScreen(
   });
 
   signOutButton.addEventListener('click', async () => {
-    if (signingOut) return;
+    if (signingOut || checking) return;
+    if (armed && Date.now() - armedAt < armGraceMs) return;
+    feedback.textContent = '';
+    delete feedback.dataset.tone;
+    if (!armed) {
+      checking = true;
+      let warning;
+      try {
+        warning = await unsyncedSignOutWarning(email, accountOperations);
+      } finally {
+        checking = false;
+      }
+      if (unmounted || signal?.aborted) return;
+      if (warning) {
+        armed = true;
+        armedAt = Date.now();
+        feedback.textContent = warning;
+        return;
+      }
+    }
     signingOut = true;
     setBusyDisabled(signOutButton, true);
     signOutButton.textContent = 'Signing out…';
     feedback.textContent = '';
-    delete feedback.dataset.tone;
 
     const failure = await signOutWithTimeout(client);
 

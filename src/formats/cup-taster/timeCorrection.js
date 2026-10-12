@@ -23,7 +23,7 @@ import {
   droppedErrorFor,
   enqueueOperation,
   flushOutbox,
-  listPendingOperations,
+  listAllOperations,
 } from '../../core/outbox.js';
 import { buildClampedUpdate, timingHandlers } from './timing.js';
 import { formatDuration } from '../../core/duration.js';
@@ -180,7 +180,8 @@ export async function attemptCorrection(heat, heatEntry, rawSecs, reason, orgId,
 // refused.
 export async function isStillQueued(check) {
   try {
-    return (await listPendingOperations()).some((operation) => operation.id === check.operationId);
+    // Whoever owns it: a write that is safely waiting must not read as dropped because the owner changed.
+    return (await listAllOperations()).some((operation) => operation.id === check.operationId);
   } catch {
     // Can't read the outbox: fall back to the flush result's own account.
     console.warn('timeCorrection: could not read the outbox to see whether a correction is queued');
@@ -200,7 +201,7 @@ export async function isStillQueued(check) {
 export async function loadPendingWork(heatId) {
   const work = { queuedEntryIds: new Set(), confirmQueued: false };
   try {
-    for (const operation of await listPendingOperations()) {
+    for (const operation of await listAllOperations()) {
       if (operation.type === 'correct_heat_time') {
         work.queuedEntryIds.add(operation.payload?.p_heat_entry_id);
       } else if (operation.type === 'confirm_heat' && operation.payload?.p_heat_id === heatId) {

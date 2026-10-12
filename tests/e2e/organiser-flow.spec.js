@@ -559,6 +559,110 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     }
   });
 
+  test("another account's unsynced change is reported, left alone by a flush, and does not change the header", async ({
+    page,
+  }) => {
+    await answerMyOrgs(page, [SECOND_ORG]);
+    await signIn(page);
+    await page.goto('/app/#/events/7c2b6a2a-2f3a-4b6e-9b0a-2e6b4a1c9d01');
+    await expect(page.locator('.app-shell-sync-chip-live')).toBeVisible();
+    // A change queued on this device by somebody else (T-TEN.C6), as a previous account would have left it.
+    await page.evaluate(async () => {
+      const db = await import('/src/core/db.js');
+      await db.outboxPut({
+        id: 'someone-elses-change',
+        type: 'layout_probe',
+        payload: {},
+        userId: 'a-different-account',
+        orgId: null,
+        createdAt: Date.now(),
+        attempts: 0,
+        lastError: null,
+      });
+    });
+    const chip = page.locator('.app-shell-sync-chip-pending');
+    await expect(chip).toBeVisible({ timeout: 8000 });
+    await expect(chip).toHaveText('Unsent (1 other)');
+    await chip.click();
+    await expect(page.locator('.app-shell-sync')).toHaveText(
+      '1 unsynced change from another account. Sign in as that account to send it.',
+    );
+    // A flush for the signed-in account runs nothing of it: no attempt counted, no error recorded, not removed.
+    const left = await page.evaluate(async () => {
+      const outbox = await import('/src/core/outbox.js');
+      const db = await import('/src/core/db.js');
+      await outbox.flushOutbox({});
+      return (await db.outboxListAll()).map((o) => [o.id, o.attempts, o.lastError]);
+    });
+    expect(left).toEqual([['someone-elses-change', 0, null]]);
+    await page.locator('.app-shell-sync-chip-pending').click();
+    for (const width of WIDTHS) {
+      await page.setViewportSize({ width, height: 800 });
+      await expectSlotChangesNothing(page, `with another account's change waiting at ${width}px`, {
+        minSlotWidth: 0,
+      });
+    }
+  });
+
+  test('signing out with an unsynced change warns under the header without moving anything, at every width, and pressing it again signs out', async ({
+    page,
+  }) => {
+    await signIn(page);
+    await page.goto('/app/#/events/7c2b6a2a-2f3a-4b6e-9b0a-2e6b4a1c9d01');
+    await expect(page.locator('.app-shell-sync-chip-live')).toBeVisible();
+    // This account's own unsynced change (it is queued in the signed-in account's own organisation).
+    await page.evaluate(async () => {
+      const outbox = await import('/src/core/outbox.js');
+      await outbox.enqueueOperation('layout_probe', {});
+    });
+    await expect(page.locator('.app-shell-sync-chip-pending')).toBeVisible({ timeout: 8000 });
+    const WARNING_WIDTHS = [320, 360, 640, 900, 1365, 1366, 1600];
+    for (const width of WARNING_WIDTHS) {
+      await page.setViewportSize({ width, height: 800 });
+      const toggle = page.locator('.app-shell-nav-toggle');
+      const menuOpen = await toggle.isVisible();
+      if (menuOpen) await toggle.click();
+      const signOut = page.getByRole('button', { name: /^Sign out/ });
+      const before = await page.locator('.app-shell-header').boundingBox();
+      await signOut.click();
+      const notice = page.locator('.app-shell-org-notice');
+      await expect(notice).toContainText('1 change has not been sent yet');
+      await expect(notice).toBeVisible();
+      const after = await page.locator('.app-shell-header').boundingBox();
+      expect(after.height, `header height at ${width}px`).toBe(before.height);
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(overflow, `horizontal overflow at ${width}px`).toBeLessThanOrEqual(0);
+      // withdraw it again (tap elsewhere) before the next width
+      await page.locator('.app-shell-outlet').click({ position: { x: 5, y: 5 }, force: true });
+      await expect(page.locator('.app-shell-org-notice')).not.toHaveClass(
+        /app-shell-org-notice-open/,
+      );
+      if (menuOpen && (await toggle.getAttribute('aria-expanded')) === 'true') await toggle.click();
+    }
+    // The change was never touched by asking.
+    const kept = await page.evaluate(async () => {
+      const db = await import('/src/core/db.js');
+      return (await db.outboxListAll()).length;
+    });
+    expect(kept).toBe(1);
+    // Second press signs out, and the change stays on the device for this account.
+    await page.setViewportSize({ width: 1600, height: 800 });
+    await page.getByRole('button', { name: /^Sign out/ }).click();
+    await expect(page.locator('.app-shell-org-notice')).toContainText('press Sign out again');
+    await page.waitForTimeout(700); // past the double-tap guard
+    await page.getByRole('button', { name: /^Sign out/ }).click();
+    await expect(page.getByRole('heading', { name: /sign in/i }).first()).toBeVisible({
+      timeout: 10000,
+    });
+    const keptAfter = await page.evaluate(async () => {
+      const db = await import('/src/core/db.js');
+      return (await db.outboxListAll()).length;
+    });
+    expect(keptAfter).toBe(1);
+  });
+
   test('with two organisations the header offers a select: choosing the other switches, announces it (and the announcement stays), and moves focus to the new screen', async ({
     page,
   }) => {
