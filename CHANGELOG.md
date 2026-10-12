@@ -1,8 +1,27 @@
+## T-TEN.D4: every audience link names the organiser, and the phone view has a QR code · 2026-10-13
+
+**Task:** T-TEN.D4 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase D). Client only: no migration, nothing to push to the cloud project. The owner confirmed (2026-10-12) both the QR code for the audience and links for any organisation.
+
+**Status: in review, not merged.**
+
+**What changed:**
+
+- **A "Share with your audience" card on the Events screen** (`core/audienceLinksCard.js`): the phone, projector and splash links for the organisation the organiser is working in, each shown as selectable text with a **Copy link** button and an **Open** link (new tab), and a **QR code for the phone view** so an audience can join by pointing a camera at the screen. The links are absolute (the page the organiser is on plus `#/live/<slug>/...`), so a link made on the production site opens the production site. Nobody has to sign in to open them.
+- **The organiser's own menu links are slug-qualified for every organisation** (`main.js`: `audienceHash`, `audienceLinksFor`). They used to exist only for the one legacy organisation, because the old slug-less links could only show that one; an organisation with no slug shows none.
+- **The QR is loaded on demand** (its own 21 KB chunk, only once the card is on screen), drawn by `qrcode-generator` as SVG from the link alone, and hidden from assistive technology (the link beside it says the same thing). If the library cannot load, or no code can be made for the link, the empty frame is hidden and the links stay.
+- **Accessibility:** one polite status line says which link was copied (or that copying failed and the link can be selected by hand); it is never `display: none`, so it is announced reliably. Each button names its link; "Open" carries the new-tab warning; the list keeps its list role; a long unbroken organisation name wraps instead of widening a phone.
+
+**Verified:** the full suite (3948 unit tests in 138 files), lint and Prettier on the whole repository, the production build, and the whole organiser-flow browser file (21 tests, against the real local database). The new browser test shows the three slug-qualified links, a drawn QR, no sideways scroll at 360 px, the menu links, and that the phone link opens the phone surface; a pre-existing browser test (long unbroken organisation name) caught the card's intro line overflowing a phone, now fixed. Deliberate breaks of the card and the link helpers were each caught by a named test; two that survived (the hash not trimmed or encoded) got their own tests.
+
+**Reviews:** one combined review (code, accessibility, security-sensitive parts, test quality) run as a general-purpose agent following the project's `.claude/agents/*.md` definitions: no blocking finding. Acted on: live region never hidden, list role, QR size 9rem to 11rem with reserved space, "Open" not underlined, the QR host found from the surface table rather than by position.
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-TEN.D4".
+
 ## T-TEN.D3: the public results archive says whose event each result is · 2026-10-12
 
 **Task:** T-TEN.D3 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase D; decision D-T4: the public archive stays global, so every result must say whose it is). Client only: no migration, nothing to push to the cloud project (the database stamps the name on publish: T-TEN.B7, applied to the cloud project).
 
-**Status: in review, not merged.**
+**Status: merged to `dev` and released to `main` (2026-10-12).**
 
 **What changed:**
 
