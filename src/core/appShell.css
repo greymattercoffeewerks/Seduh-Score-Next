@@ -172,6 +172,14 @@
   line-height: var(--leading-normal);
 }
 
+/* Something that happened rather than something that went wrong: the same panel, without the error border.
+   It is read, not used: taps pass through it (it overlays the top of the screen the person just opened, and
+   a first tap on a control there must act on the control); the tap that lands anywhere puts it away. */
+.app-shell-org-notice.app-shell-org-notice-open[data-tone='info'] {
+  border-color: var(--color-border-strong);
+  pointer-events: none;
+}
+
 @media (min-width: 640px) {
   /* Under the control that raised it, not at the far right where a magnifier user would not look. */
   .app-shell-org-notice.app-shell-org-notice-open {
