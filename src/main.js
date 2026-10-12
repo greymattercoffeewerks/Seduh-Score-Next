@@ -38,7 +38,7 @@ import { mountMatchesScreen as mountBtcMatchesScreen } from './formats/btc/match
 import { mountStandingsScreen as mountBtcStandingsScreen } from './formats/btc/standingsScreen.js';
 import { mountBracketScreen as mountBtcBracketScreen } from './formats/btc/bracketScreen.js';
 import { mountScoringScreen as mountBtcScoringScreen } from './formats/btc/scoringScreen.js';
-import { flushOutbox, listPendingOperations } from './core/outbox.js';
+import { flushOutbox, listPendingOperations, setOutboxOwner } from './core/outbox.js';
 import { btcOutboxHandlers, btcOperationLabels } from './formats/btc/outboxHandlers.js';
 import {
   cupTasterOutboxHandlers,
@@ -675,15 +675,28 @@ export function mountApp(
   // was already known before the first route resolved.
   let hasSession = false;
   let onConsoleRoute = false;
+  // The outbox replays only the signed-in account's operations in the active organisation (T-TEN.C6:
+  // core/outbox.js), so it has to be told who and where. Nobody signed in until the first auth event
+  // says otherwise: from here on nothing can flush for a person who is not known, which is the
+  // fail-closed side of the outbox's "unset" default. Called whenever the session or the active
+  // organisation changes, and always BEFORE the flush those changes may start.
+  setOutboxOwner(null);
+  let currentSession = null;
+  function syncOutboxOwner() {
+    const userId = currentSession?.user?.id ?? null;
+    setOutboxOwner(userId ? { userId, orgId: orgContext.getActiveOrgIdFor(userId) } : null);
+  }
   function flushIfOwner() {
     if (!hasSession || !onConsoleRoute) return;
-    // Someone in no organisation cannot have written anything here, so whatever is queued on this
-    // device was left by somebody else (the org state is always the signed-in person's own: it is
-    // refreshed on every auth event): replaying it under this person's login would be refused by the
-    // database as a permanent failure, and the outbox would drop it. Keep it for its owner (until
-    // T-TEN.C6 tags operations, this is the only definite "not yours" signal there is).
-    const orgState = orgContext.getState();
-    if (orgState.status === ORG_STATUS.NO_ORG) return;
+    // Only once the organisation is known: the outbox replays an operation only in the organisation it
+    // was made in, so a flush before the answer arrives could run nothing that matters, and the answer
+    // itself starts one (the org-context subscriber below). That also covers someone in no organisation
+    // at all: whatever is queued on this device was left by somebody else, and replaying it under this
+    // person's login would be refused by the database as a permanent failure, which the outbox would
+    // then drop. The outbox refuses to replay an operation that is not this account's in this
+    // organisation too; this is the second, independent barrier.
+    const userId = currentSession?.user?.id;
+    if (!userId || !orgContext.getActiveOrgIdFor(userId)) return;
     attemptReconnectFlush(client);
   }
 
@@ -697,7 +710,6 @@ export function mountApp(
   let teamOwnerOrgId = null;
   let ownerCheckSeq = 0;
   let lastNav = null;
-  let currentSession = null;
   function setTeamOwner(value) {
     if (value === isTeamOwner) return;
     isTeamOwner = value;
@@ -738,21 +750,27 @@ export function mountApp(
   } = client.auth.onAuthStateChange((_event, session) => {
     hasSession = Boolean(session);
     currentSession = session;
+    syncOutboxOwner();
     // Not awaited, and it reads the database only a tick later (see orgContext.js): safe here.
     orgContext.refresh(session);
     flushIfOwner();
     refreshTeamOwnership(session);
   });
 
-  function onOnline() {
-    flushIfOwner();
-    // Coming back online after a failed or stand-in organisation answer: ask again, and if the console
-    // was showing the error card, show the real screen.
+  // After a failed or stand-in organisation answer: ask again, and if the console was showing the error
+  // card, show the real screen. Queued changes cannot be sent until the organisation is known (the outbox
+  // replays an operation only in the organisation it was made in), so this also has to happen while the
+  // device stays online, not only when it comes back: see the retry timer below.
+  function retryOrgIfNeeded() {
     const orgState = orgContext.getState();
     if (!currentSession || (orgState.status !== ORG_STATUS.ERROR && !orgState.stale)) return;
     orgContext.retry().then(() => {
       if (orgState.status === ORG_STATUS.ERROR) routerRef.current?.resolve(currentRoutePath());
     });
+  }
+  function onOnline() {
+    flushIfOwner();
+    retryOrgIfNeeded();
   }
   window.addEventListener('online', onOnline);
 
@@ -767,6 +785,7 @@ export function mountApp(
   // 'online' listener above already covers coming back).
   const retryIntervalId = setInterval(() => {
     if (!hasSession || !onConsoleRoute || !navigator.onLine) return;
+    retryOrgIfNeeded();
     listPendingOperations()
       .then((operations) => {
         if (operations.length > 0) attemptReconnectFlush(client);
@@ -823,6 +842,10 @@ export function mountApp(
     // Read and clear at once: a choice is only ever "the one that caused THIS change".
     const chosen = chosenOrgId;
     chosenOrgId = null;
+    // The organisation the outbox works for follows the active one (a person who just switched to an
+    // organisation, or whose organisation has only just been answered, has operations waiting there).
+    syncOutboxOwner();
+    flushIfOwner();
     // The header must never be able to stop the screen swap below (an old organisation's console left
     // up under the new one is the invariant this subscriber exists for).
     try {
@@ -921,10 +944,14 @@ export function mountApp(
 
   const started = router.start(shell.outlet, { fallbackPath: '/events' });
 
-  // Switch the organisation the console works in. Refused, with a message to show, while this device
-  // still holds changes that have not synced: they were made in the current organisation, and until
-  // the outbox records which organisation each belongs to (T-TEN.C6) the only safe rule is "none
-  // pending". The screen change itself follows from the org context's own notification above.
+  // Switch the organisation the console works in. Refused, with a message to show, while this account
+  // still has changes in the CURRENT organisation that have not synced (the outbox's own list: another
+  // account's changes, or this account's in another organisation, are not this switch's business, and
+  // the sync panel reports them). The refusal is a courtesy, not the safety: every operation is
+  // tagged with the organisation it was made in, so one queued in the instant between the check and the
+  // switch (a write from the screen being replaced) stays queued for that organisation and is reported
+  // as waiting for it, never replayed into the new one. The screen change itself follows from the org
+  // context's own notification above.
   async function switchOrg(orgId) {
     if (orgId === orgContext.getActiveOrgId()) return { ok: true };
     if (teamHoldsSecret)
@@ -971,6 +998,9 @@ export function mountApp(
       routerRef.current = null;
       // Only a context made here is this app's to end; an injected one belongs to its caller.
       if (!injectedOrgContext) orgContext.destroy();
+      // Nobody is being worked for any more. Before the awaits: a newer mountApp() that starts while this
+      // one is still stopping must not have its owner taken away afterwards.
+      setOutboxOwner(null);
       await router.stop();
       shell.unmount();
       window.removeEventListener('online', onOnline);

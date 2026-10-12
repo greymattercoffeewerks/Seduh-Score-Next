@@ -17,6 +17,12 @@ const flushOutbox = vi.fn(() =>
 vi.mock('./core/outbox.js', () => ({
   flushOutbox: (...args) => flushOutbox(...args),
   listPendingOperations: () => Promise.resolve([]),
+  listOtherOperations: () => Promise.resolve({ otherOrg: [], otherAccount: [] }),
+  listAccountOperations: () => Promise.resolve([]),
+  payloadOrgId: () => null,
+  partitionOperations: () => Promise.resolve({ own: [], otherOrg: [], otherAccount: [] }),
+  getOutboxOwner: () => undefined,
+  setOutboxOwner: () => {},
   isFlushInProgress: () => false,
   onOperationDropped: () => () => {},
 }));
