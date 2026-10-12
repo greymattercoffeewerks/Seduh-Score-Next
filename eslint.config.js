@@ -8,6 +8,8 @@ export default [
     ignores: [
       'dist/**',
       'node_modules/**',
+      // Local scratch output (never committed); not part of the app.
+      'brag-output/**',
       'eslint-rules/**',
       // The config wires up 'seduh-next/no-trio-vocabulary' by name, which
       // trips its own rule (\btrio\b matches inside the kebab-case id).
