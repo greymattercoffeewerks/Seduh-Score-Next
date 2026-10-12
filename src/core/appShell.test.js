@@ -1,10 +1,20 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import { mountAppShell } from './appShell.js';
-import { _clearAllForTests, outboxPut } from './db.js';
-import { enqueueOperation, flushOutbox } from './outbox.js';
+import { _clearAllForTests, outboxPut, outboxListAll, outboxRemove } from './db.js';
+import {
+  enqueueOperation,
+  flushOutbox,
+  countPendingOperations,
+  setOutboxOwner,
+  _resetOutboxOwnerForTests,
+} from './outbox.js';
 import { APP_VERSION, NAMEPLATE } from './version.js';
 import { DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
-import { SIGN_OUT_FAILED_MESSAGE, SIGN_OUT_SLOW_MESSAGE } from './signOut.js';
+import {
+  SIGN_OUT_FAILED_MESSAGE,
+  SIGN_OUT_SLOW_MESSAGE,
+  SIGN_OUT_UNCHECKED_MESSAGE,
+} from './signOut.js';
 
 // Every fake client needs a minimal auth shape now — mountAppShell's own
 // "signed in as X / sign out" control subscribes via
@@ -701,6 +711,8 @@ describe('mountAppShell', () => {
     expect(root.children.length).toBe(0);
   });
 
+  // Nothing waiting to sync, answered at once: these tests are about the button, not the outbox read.
+  const noUnsynced = () => Promise.resolve([]);
   function fakeAuthWithTrigger() {
     let listener = null;
     const unsubscribe = vi.fn();
@@ -745,7 +757,7 @@ describe('mountAppShell', () => {
       const root = document.createElement('div');
       document.body.appendChild(root);
       const { auth, trigger } = fakeAuthWithTrigger();
-      mountAppShell(root, { client: { auth, from: () => ({}) } });
+      mountAppShell(root, { client: { auth, from: () => ({}) }, accountOperations: noUnsynced });
       trigger({ user: { email: 'organiser@local.test' } });
       location.hash = '#/events/ev1/setup';
 
@@ -763,7 +775,7 @@ describe('mountAppShell', () => {
       const root = document.createElement('div');
       document.body.appendChild(root);
       const { auth, trigger } = fakeAuthWithTrigger();
-      mountAppShell(root, { client: { auth, from: () => ({}) } });
+      mountAppShell(root, { client: { auth, from: () => ({}) }, accountOperations: noUnsynced });
       trigger({ user: { email: 'organiser@local.test' } });
       location.hash = '#/events';
 
@@ -787,7 +799,7 @@ describe('mountAppShell', () => {
       const root = document.createElement('div');
       document.body.appendChild(root);
       const { auth, trigger } = fakeAuthWithTrigger();
-      mountAppShell(root, { client: { auth, from: () => ({}) } });
+      mountAppShell(root, { client: { auth, from: () => ({}) }, accountOperations: noUnsynced });
       trigger({ user: { email: 'organiser@local.test' } });
 
       const toggle = root.querySelector('.app-shell-nav-toggle');
@@ -816,7 +828,10 @@ describe('mountAppShell', () => {
           return { data: { subscription: { unsubscribe: vi.fn() } } };
         },
       };
-      mountAppShell(root, { client: { auth: failingAuth, from: () => ({}) } });
+      mountAppShell(root, {
+        client: { auth: failingAuth, from: () => ({}) },
+        accountOperations: noUnsynced,
+      });
 
       const toggle = root.querySelector('.app-shell-nav-toggle');
       const panel = root.querySelector('.app-shell-nav-panel');
@@ -845,7 +860,7 @@ describe('mountAppShell', () => {
             return { data: { subscription: { unsubscribe: vi.fn() } } };
           },
         };
-        mountAppShell(root, { client: { auth, from: () => ({}) } });
+        mountAppShell(root, { client: { auth, from: () => ({}) }, accountOperations: noUnsynced });
         const toggle = root.querySelector('.app-shell-nav-toggle');
         toggle.dispatchEvent(new Event('click', { bubbles: true }));
         return {
@@ -3030,5 +3045,532 @@ describe('mountAppShell — sync panel', () => {
     await tick(100);
     expect(syncEl.textContent).toBe(atUnmount);
     expect(syncEl.textContent).not.toContain('lost');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// T-TEN.C6: one browser's outbox is shared by every account and organisation that uses the device.
+// What waits for somebody else is reported (never run, never dropped), and signing out says what it
+// leaves behind.
+// ---------------------------------------------------------------------------------------------
+describe('mountAppShell — work that belongs to somebody else (T-TEN.C6)', () => {
+  const ALICE = { userId: 'alice', orgId: 'org1' };
+  const BOB = { userId: 'bob', orgId: 'org1' };
+  const ORG_A = { id: 'org1', name: 'Alpha Coffee', slug: 'alpha-coffee' };
+  const ORG_B = { id: 'org2', name: 'Bravo Roasters', slug: 'bravo-roasters' };
+  const ORG_C = { id: 'org3', name: 'Charlie Beans', slug: 'charlie-beans' };
+  const queue = (heat, org = 'org1') =>
+    enqueueOperation('confirm_heat', { p_org_id: org, p_heat_id: heat });
+  const detail = (root) => root.querySelector('.app-shell-sync');
+  const chip = (root) => root.querySelector('button.app-shell-sync-chip');
+  const tick = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  function signedInClient(email = 'alice@test.com') {
+    let listener = null;
+    const auth = {
+      signOut: vi.fn(() => Promise.resolve({ error: null })),
+      onAuthStateChange: (cb) => {
+        listener = cb;
+        cb('SIGNED_IN', { user: { id: 'u1', email } });
+        return { data: { subscription: { unsubscribe: vi.fn() } } };
+      },
+    };
+    return { auth, from: () => ({}), fire: (event, session) => listener(event, session) };
+  }
+  function mount(options = {}) {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const shell = mountAppShell(root, { client: signedInClient(), syncPollMs: 20, ...options });
+    return { root, shell };
+  }
+
+  beforeEach(async () => {
+    await _clearAllForTests();
+    _resetOutboxOwnerForTests();
+    location.hash = '';
+  });
+  afterEach(() => {
+    _resetOutboxOwnerForTests();
+    vi.useRealTimers();
+    document.body.innerHTML = '';
+  });
+
+  describe('the sync panel', () => {
+    it("says so when the only unsynced changes on the device are another account's, and how to send them", async () => {
+      setOutboxOwner(ALICE);
+      await queue('h1');
+      setOutboxOwner(BOB);
+      const { root } = mount();
+      await vi.waitFor(() =>
+        expect(detail(root).textContent).toBe(
+          '1 unsynced change from another account. Sign in as that account to send it.',
+        ),
+      );
+      expect(chip(root).hidden).toBe(false);
+      expect(chip(root).textContent).toBe('Unsent (1 other)');
+    });
+
+    it("pluralises, and does not count them as this account's own pending", async () => {
+      setOutboxOwner(ALICE);
+      await queue('h1');
+      await queue('h2');
+      setOutboxOwner(BOB);
+      const { root } = mount();
+      await vi.waitFor(() =>
+        expect(detail(root).textContent).toBe(
+          '2 unsynced changes from another account. Sign in as that account to send them.',
+        ),
+      );
+      expect(detail(root).textContent).not.toContain('pending');
+    });
+
+    it("names the organisation when the account's own changes are waiting in another one", async () => {
+      setOutboxOwner(ALICE);
+      await queue('h1', 'org1');
+      setOutboxOwner({ userId: 'alice', orgId: 'org2' });
+      const { root, shell } = mount();
+      shell.setOrganisation({ orgs: [ORG_A, ORG_B], activeOrgId: 'org2', onSelect: () => {} });
+      await vi.waitFor(() =>
+        expect(detail(root).textContent).toBe(
+          '1 unsynced change waiting in Alpha Coffee. Switch to it to send it.',
+        ),
+      );
+    });
+
+    it('does not guess a name when the changes are in several organisations', async () => {
+      setOutboxOwner(ALICE);
+      await queue('h1', 'org1');
+      await queue('h2', 'org2');
+      setOutboxOwner({ userId: 'alice', orgId: 'org3' });
+      const { root, shell } = mount();
+      shell.setOrganisation({
+        orgs: [ORG_A, ORG_B, ORG_C],
+        activeOrgId: 'org3',
+        onSelect: () => {},
+      });
+      await vi.waitFor(() =>
+        expect(detail(root).textContent).toBe(
+          '2 unsynced changes waiting in another of your organisations. Switch to it to send them.',
+        ),
+      );
+    });
+
+    it('does not offer to switch to an organisation this account is not part of', async () => {
+      setOutboxOwner(ALICE);
+      await queue('h1', 'org9');
+      setOutboxOwner({ userId: 'alice', orgId: 'org2' });
+      const { root, shell } = mount();
+      shell.setOrganisation({ orgs: [ORG_A, ORG_B], activeOrgId: 'org2', onSelect: () => {} });
+      await vi.waitFor(() =>
+        expect(detail(root).textContent).toBe(
+          '1 unsynced change from an organisation this account is not part of. It stays on this device.',
+        ),
+      );
+      expect(detail(root).textContent).not.toContain('Switch');
+    });
+
+    it("says it plainly when there is both another account's and another organisation's", async () => {
+      setOutboxOwner(ALICE);
+      await queue('h1', 'org1');
+      setOutboxOwner(BOB);
+      await queue('h2', 'org1');
+      setOutboxOwner({ userId: 'alice', orgId: 'org2' });
+      const { root } = mount();
+      await vi.waitFor(() =>
+        expect(detail(root).textContent).toBe(
+          '2 unsynced changes are waiting for another account or organisation.',
+        ),
+      );
+    });
+
+    it("keeps this account's own pending count as it was while it has work waiting (a live region that changes as they score)", async () => {
+      setOutboxOwner(ALICE);
+      await queue('mine');
+      setOutboxOwner(BOB);
+      await queue('theirs');
+      setOutboxOwner(ALICE);
+      const { root } = mount();
+      await vi.waitFor(() => expect(detail(root).textContent).toBe('Not synced (1 pending)'));
+      expect(chip(root).textContent).toBe('Not synced (1)');
+      // Several polls later it has not grown a second sentence.
+      await tick(100);
+      expect(detail(root).textContent).toBe('Not synced (1 pending)');
+    });
+
+    it("says what waits for somebody else once this account's own work has gone", async () => {
+      setOutboxOwner(ALICE);
+      await queue('mine');
+      setOutboxOwner(BOB);
+      await queue('theirs');
+      setOutboxOwner(ALICE);
+      const { root } = mount();
+      await vi.waitFor(() => expect(detail(root).textContent).toBe('Not synced (1 pending)'));
+      await flushOutbox({ confirm_heat: () => Promise.resolve() });
+      await vi.waitFor(() => expect(detail(root).textContent).toContain('from another account'));
+    });
+
+    it("stays on what it was showing, and never says 'Synced', when the read fails", async () => {
+      setOutboxOwner(ALICE);
+      await queue('h1');
+      setOutboxOwner(BOB);
+      const { root } = mount();
+      await vi.waitFor(() => expect(detail(root).textContent).toContain('from another account'));
+      const realGetAll = IDBIndex.prototype.getAll;
+      IDBIndex.prototype.getAll = () => {
+        throw new Error('idb down');
+      };
+      const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        await tick(100);
+        expect(detail(root).textContent).toContain('from another account');
+        expect(detail(root).textContent).not.toContain('Synced');
+      } finally {
+        IDBIndex.prototype.getAll = realGetAll;
+        logged.mockRestore();
+      }
+    });
+
+    it("says nothing yet, rather than 'waiting in another organisation', while the organisation is still loading", async () => {
+      setOutboxOwner(ALICE);
+      await queue('mine', 'org1');
+      setOutboxOwner({ userId: 'alice', orgId: null });
+      const { root } = mount();
+      await tick(100);
+      expect(chip(root).hidden).toBe(true);
+      expect(detail(root).textContent).not.toContain('another');
+      expect(detail(root).textContent).not.toBe('Synced');
+      // ...and tells the truth once it is known
+      setOutboxOwner(ALICE);
+      await vi.waitFor(() => expect(detail(root).textContent).toBe('Not synced (1 pending)'));
+    });
+
+    it('updates when more changes of somebody else arrive', async () => {
+      setOutboxOwner(ALICE);
+      await queue('theirs-1');
+      setOutboxOwner(BOB);
+      const { root } = mount();
+      await vi.waitFor(() => expect(detail(root).textContent).toContain('1 unsynced change from'));
+      setOutboxOwner(ALICE);
+      await queue('theirs-2');
+      setOutboxOwner(BOB);
+      await vi.waitFor(() => expect(detail(root).textContent).toContain('2 unsynced changes from'));
+    });
+
+    it('updates when the changes waiting are in a different organisation but the count is the same', async () => {
+      setOutboxOwner(ALICE);
+      await queue('a1', 'org1');
+      setOutboxOwner({ userId: 'alice', orgId: 'org3' });
+      const { root, shell } = mount();
+      shell.setOrganisation({
+        orgs: [ORG_A, ORG_B, ORG_C],
+        activeOrgId: 'org3',
+        onSelect: () => {},
+      });
+      await vi.waitFor(() => expect(detail(root).textContent).toContain('waiting in Alpha Coffee'));
+      await outboxRemove((await outboxListAll())[0].id);
+      await queue('b1', 'org2');
+      await vi.waitFor(() =>
+        expect(detail(root).textContent).toContain('waiting in Bravo Roasters'),
+      );
+    });
+
+    it("is 'Synced' when everything on the device is this account's own, in this organisation (and was read: a change arrives later and shows)", async () => {
+      setOutboxOwner(ALICE);
+      const { root, shell } = mount();
+      await shell.setNav({ eventId: 'ev1', links: [] });
+      await vi.waitFor(() => expect(detail(root).textContent).toBe('Synced'));
+      // Several polls with an own change and a legacy change that names no organisation: still own
+      // work, never reported as somebody else's.
+      await queue('mine');
+      await outboxPut({
+        id: 'legacy-1',
+        type: 'confirm_heat',
+        payload: { p_heat_id: 'old' },
+        createdAt: Date.now() + 1,
+        attempts: 0,
+        lastError: null,
+      });
+      await vi.waitFor(() => expect(detail(root).textContent).toBe('Not synced (2 pending)'));
+      await tick(100);
+      expect(detail(root).textContent).toBe('Not synced (2 pending)');
+      expect(detail(root).textContent).not.toContain('other');
+    });
+
+    it("follows the owner: the same change is somebody else's and then this account's again", async () => {
+      setOutboxOwner(ALICE);
+      await queue('h1');
+      setOutboxOwner(BOB);
+      const { root } = mount();
+      await vi.waitFor(() => expect(detail(root).textContent).toContain('from another account'));
+      setOutboxOwner(ALICE);
+      await vi.waitFor(() => expect(detail(root).textContent).toBe('Not synced (1 pending)'));
+    });
+
+    it('signed out, says the changes wait for their account to sign in', async () => {
+      setOutboxOwner(ALICE);
+      await queue('h1');
+      setOutboxOwner(null);
+      const { root } = mount();
+      await vi.waitFor(() => expect(detail(root).textContent).toContain('from another account'));
+    });
+  });
+
+  describe('Sign out with changes that have not synced', () => {
+    const signOutButton = (root) =>
+      [...root.querySelectorAll('button')].find((b) => /^Sign out/.test(b.textContent));
+    const notice = (root) => root.querySelector('.app-shell-org-notice');
+    const noticeOpen = (root) => notice(root).classList.contains('app-shell-org-notice-open');
+    const click = (button) => button.dispatchEvent(new Event('click', { bubbles: true }));
+    const press = (button) => {
+      button.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      click(button);
+    };
+    const quick = { signOutArmGraceMs: 0 };
+    const WARNING_2 =
+      '2 changes have not been sent yet. They stay on this device and are sent once alice@test.com is signed in. To sign out now, press Sign out again.';
+
+    it('goes straight through when nothing is waiting', async () => {
+      setOutboxOwner(ALICE);
+      const client = signedInClient();
+      const { root } = mount({ client });
+      click(signOutButton(root));
+      await vi.waitFor(() => expect(client.auth.signOut).toHaveBeenCalledTimes(1));
+      expect(noticeOpen(root)).toBe(false);
+    });
+
+    it('first says how many are waiting and what happens to them, under the header, and does not sign out', async () => {
+      setOutboxOwner(ALICE);
+      await queue('h1');
+      await queue('h2');
+      const client = signedInClient('alice@test.com');
+      const { root } = mount({ client, ...quick });
+      click(signOutButton(root));
+      await vi.waitFor(() => expect(notice(root).textContent).toBe(WARNING_2));
+      // In the overlay region, not in the header's own row (the header must never grow).
+      expect(noticeOpen(root)).toBe(true);
+      expect(notice(root).getAttribute('role')).toBe('status');
+      expect(root.querySelector('.app-shell-auth-status').textContent).toBe('');
+      expect(client.auth.signOut).not.toHaveBeenCalled();
+      expect(noticeOpen(root)).toBe(true);
+      // nothing was thrown away by asking
+      expect(await countPendingOperations()).toBe(2);
+    });
+
+    it('says it in the singular', async () => {
+      setOutboxOwner(ALICE);
+      await queue('h1');
+      const { root } = mount(quick);
+      click(signOutButton(root));
+      await vi.waitFor(() =>
+        expect(notice(root).textContent).toBe(
+          '1 change has not been sent yet. It stays on this device and is sent once alice@test.com is signed in. To sign out now, press Sign out again.',
+        ),
+      );
+    });
+
+    it('says "this account" when it does not know the email', async () => {
+      setOutboxOwner(ALICE);
+      await queue('h1');
+      const client = signedInClient('');
+      const { root } = mount({ client, ...quick });
+      click(signOutButton(root));
+      await vi.waitFor(() =>
+        expect(notice(root).textContent).toContain('once this account is signed in'),
+      );
+    });
+
+    it('signs out on the second press, and still keeps the changes for their owner', async () => {
+      setOutboxOwner(ALICE);
+      await queue('h1');
+      const client = signedInClient();
+      const { root } = mount({ client, ...quick });
+      click(signOutButton(root));
+      await vi.waitFor(() => expect(noticeOpen(root)).toBe(true));
+      click(signOutButton(root));
+      await vi.waitFor(() => expect(client.auth.signOut).toHaveBeenCalledTimes(1));
+      expect(await outboxListAll()).toHaveLength(1);
+      await vi.waitFor(() => expect(noticeOpen(root)).toBe(false));
+    });
+
+    it('ignores a press that follows at once (a double tap has not read the warning)', async () => {
+      setOutboxOwner(ALICE);
+      await queue('h1');
+      const client = signedInClient();
+      const { root } = mount({ client });
+      click(signOutButton(root));
+      await vi.waitFor(() => expect(noticeOpen(root)).toBe(true));
+      click(signOutButton(root));
+      await tick(50);
+      expect(client.auth.signOut).not.toHaveBeenCalled();
+      expect(noticeOpen(root)).toBe(true);
+    });
+
+    it('ignores a second press while the first is still counting', async () => {
+      setOutboxOwner(ALICE);
+      let release;
+      const accountOperations = vi.fn(() => new Promise((resolve) => (release = resolve)));
+      const client = signedInClient();
+      const { root } = mount({ client, accountOperations, ...quick });
+      click(signOutButton(root));
+      click(signOutButton(root));
+      expect(accountOperations).toHaveBeenCalledTimes(1);
+      release([]);
+      await vi.waitFor(() => expect(client.auth.signOut).toHaveBeenCalledTimes(1));
+    });
+
+    it('stays armed when the sign-out itself fails, so the next press tries again without a new warning', async () => {
+      setOutboxOwner(ALICE);
+      await queue('h1');
+      const client = signedInClient();
+      client.auth.signOut.mockResolvedValueOnce({ error: new Error('network') });
+      const { root } = mount({ client, ...quick });
+      click(signOutButton(root));
+      await vi.waitFor(() => expect(noticeOpen(root)).toBe(true));
+      click(signOutButton(root));
+      await vi.waitFor(() =>
+        expect(root.querySelector('.app-shell-auth-status').textContent).toBe(
+          SIGN_OUT_FAILED_MESSAGE,
+        ),
+      );
+      expect(noticeOpen(root)).toBe(true);
+      click(signOutButton(root));
+      await vi.waitFor(() => expect(client.auth.signOut).toHaveBeenCalledTimes(2));
+    });
+
+    it('withdraws the warning after a while: the count was as of when it was shown', async () => {
+      setOutboxOwner(ALICE);
+      await queue('h1');
+      const { root } = mount({ ...quick, signOutArmMs: 200 });
+      click(signOutButton(root));
+      await vi.waitFor(() => expect(noticeOpen(root)).toBe(true));
+      await vi.waitFor(() => expect(noticeOpen(root)).toBe(false));
+      expect(signOutButton(root).textContent).toBe('Sign out');
+      expect(notice(root).textContent).toBe('');
+    });
+
+    it('withdraws it when the menu is closed', async () => {
+      setOutboxOwner(ALICE);
+      await queue('h1');
+      const { root } = mount(quick);
+      const toggle = root.querySelector('.app-shell-nav-toggle');
+      click(toggle);
+      click(signOutButton(root));
+      await vi.waitFor(() => expect(noticeOpen(root)).toBe(true));
+      click(toggle);
+      expect(noticeOpen(root)).toBe(false);
+      expect(signOutButton(root).textContent).toBe('Sign out');
+    });
+
+    it('closing the menu with Escape withdraws it too, and the next press counts afresh', async () => {
+      setOutboxOwner(ALICE);
+      await queue('h1');
+      const client = signedInClient();
+      const { root } = mount({ client, ...quick });
+      click(root.querySelector('.app-shell-nav-toggle'));
+      click(signOutButton(root));
+      await vi.waitFor(() => expect(noticeOpen(root)).toBe(true));
+      signOutButton(root).dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+      );
+      expect(noticeOpen(root)).toBe(false);
+      click(signOutButton(root));
+      await vi.waitFor(() => expect(noticeOpen(root)).toBe(true));
+      expect(client.auth.signOut).not.toHaveBeenCalled();
+    });
+
+    it('after the warning was dismissed, the next press warns again instead of signing out', async () => {
+      setOutboxOwner(ALICE);
+      await queue('h1');
+      const client = signedInClient();
+      const { root } = mount({ client, ...quick });
+      click(signOutButton(root));
+      await vi.waitFor(() => expect(noticeOpen(root)).toBe(true));
+      document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      expect(noticeOpen(root)).toBe(false);
+      click(signOutButton(root));
+      await vi.waitFor(() => expect(noticeOpen(root)).toBe(true));
+      expect(client.auth.signOut).not.toHaveBeenCalled();
+    });
+
+    it('withdraws it when the person taps anywhere else, but not when they press the button it is about', async () => {
+      setOutboxOwner(ALICE);
+      await queue('h1');
+      const client = signedInClient();
+      const { root } = mount({ client, ...quick });
+      click(signOutButton(root));
+      await vi.waitFor(() => expect(noticeOpen(root)).toBe(true));
+      // the press on the button itself (pointerdown, then click) is the confirmation, not a dismissal
+      press(signOutButton(root));
+      await vi.waitFor(() => expect(client.auth.signOut).toHaveBeenCalledTimes(1));
+
+      const again = mount({ ...quick });
+      click(signOutButton(again.root));
+      await vi.waitFor(() => expect(noticeOpen(again.root)).toBe(true));
+      document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      expect(noticeOpen(again.root)).toBe(false);
+      expect(signOutButton(again.root).textContent).toBe('Sign out');
+    });
+
+    it('keeps the half-confirmed sign-out when the same session is announced again', async () => {
+      setOutboxOwner(ALICE);
+      await queue('h1');
+      const client = signedInClient();
+      const { root } = mount({ client, ...quick });
+      click(signOutButton(root));
+      await vi.waitFor(() => expect(noticeOpen(root)).toBe(true));
+      const button = signOutButton(root);
+      client.fire('TOKEN_REFRESHED', { user: { id: 'u1', email: 'alice@test.com' } });
+      expect(signOutButton(root)).toBe(button);
+      expect(noticeOpen(root)).toBe(true);
+      expect(noticeOpen(root)).toBe(true);
+    });
+
+    it('a different person gets a fresh, unarmed button', async () => {
+      setOutboxOwner(ALICE);
+      await queue('h1');
+      const client = signedInClient();
+      const { root } = mount({ client, ...quick });
+      click(signOutButton(root));
+      await vi.waitFor(() => expect(noticeOpen(root)).toBe(true));
+      client.fire('SIGNED_IN', { user: { id: 'u2', email: 'bob@test.com' } });
+      expect(signOutButton(root).textContent).toBe('Sign out');
+      expect(noticeOpen(root)).toBe(false);
+    });
+
+    it("counts the account's changes in every organisation, and never another account's", async () => {
+      setOutboxOwner(ALICE);
+      await queue('a1', 'org1');
+      await queue('a2', 'org2');
+      setOutboxOwner(BOB);
+      await queue('b1', 'org1');
+      setOutboxOwner(ALICE);
+      const { root } = mount(quick);
+      click(signOutButton(root));
+      await vi.waitFor(() => expect(notice(root).textContent).toContain('2 changes have not'));
+    });
+
+    it("does not warn the signed-in account about somebody else's changes", async () => {
+      setOutboxOwner(ALICE);
+      await queue('a1');
+      setOutboxOwner(BOB);
+      const client = signedInClient('bob@test.com');
+      const { root } = mount({ client });
+      click(signOutButton(root));
+      await vi.waitFor(() => expect(client.auth.signOut).toHaveBeenCalledTimes(1));
+    });
+
+    it('when it cannot tell, says so and asks again rather than guessing either way', async () => {
+      const client = signedInClient();
+      const { root } = mount({
+        client,
+        ...quick,
+        accountOperations: () => Promise.reject(new Error('indexeddb unavailable')),
+      });
+      click(signOutButton(root));
+      await vi.waitFor(() => expect(notice(root).textContent).toBe(SIGN_OUT_UNCHECKED_MESSAGE));
+      expect(client.auth.signOut).not.toHaveBeenCalled();
+      click(signOutButton(root));
+      await vi.waitFor(() => expect(client.auth.signOut).toHaveBeenCalledTimes(1));
+    });
   });
 });

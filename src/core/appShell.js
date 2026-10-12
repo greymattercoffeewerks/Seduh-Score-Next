@@ -25,13 +25,22 @@ import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
 import { orgLabel } from './orgLabel.js';
 import { findEvent } from './events.js';
 import { getSupabase } from './supabaseClient.js';
-import { isFlushInProgress, listPendingOperations, onOperationDropped } from './outbox.js';
+import {
+  getOutboxOwner,
+  isFlushInProgress,
+  listAccountOperations,
+  onOperationDropped,
+  partitionOperations,
+  payloadOrgId,
+} from './outbox.js';
 import { computeSyncState } from './syncState.js';
-import { signOutWithTimeout } from './signOut.js';
+import { signOutWithTimeout, unsyncedSignOutWarning } from './signOut.js';
 import { goToHash } from './navigation.js';
 import { APP_VERSION, NAMEPLATE } from './version.js';
 
 const APP_NAME = 'Seduh Score';
+const SIGN_OUT_ARM_MS = 15000;
+const SIGN_OUT_ARM_GRACE_MS = 600;
 
 // How often the sync panel re-checks the outbox — a plain poll, not a
 // realtime subscription, since outbox state is local IndexedDB with no
@@ -84,6 +93,14 @@ export function mountAppShell(
     appName = APP_NAME,
     client = getSupabase(),
     syncPollMs = SYNC_POLL_MS,
+    // What signing out would leave behind for this account (T-TEN.C6). Injectable for the same reason
+    // `client` is: a test of the button itself should not depend on how long an IndexedDB read takes.
+    accountOperations = listAccountOperations,
+    // How long a sign-out warning waits to be confirmed before it is withdrawn (it is a count as of now),
+    // and how long after it appears a press is ignored (a double tap must not confirm what was never
+    // read). Injectable so a test need not wait them out.
+    signOutArmMs = SIGN_OUT_ARM_MS,
+    signOutArmGraceMs = SIGN_OUT_ARM_GRACE_MS,
     dropCheckMs = DROP_CHECK_MS,
     dropMaxWaitMs = DROP_MAX_WAIT_MS,
     // Optional map of outbox operation `type` -> a short, lowercase gerund
@@ -199,7 +216,10 @@ export function mountAppShell(
   // different KINDS of control now live in one collapsible unit, and each
   // needs the identical close side effect, not just the one link-click
   // case this used to be inlined for.
+  // Set by the Sign out button: closing the menu is walking away from a half-confirmed sign-out.
+  let disarmSignOut = () => {};
   function closeMenu() {
+    disarmSignOut();
     navPanel.classList.remove('app-shell-nav-panel-open');
     navToggle.setAttribute('aria-expanded', 'false');
     // Whatever inside the panel had focus is about to be hidden (a tap on a
@@ -209,6 +229,7 @@ export function mountAppShell(
   }
   navToggle.addEventListener('click', () => {
     const open = navPanel.classList.toggle('app-shell-nav-panel-open');
+    if (!open) disarmSignOut();
     navToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
   });
   // Escape closes the menu and returns focus to the toggle — found in
@@ -350,6 +371,10 @@ export function mountAppShell(
     className: 'app-shell-org-notice',
     attrs: { role: 'status', 'aria-live': 'polite', id: 'app-shell-org-notice' },
   });
+  // Who to tell when the open notice is dismissed (the sign-out warning disarms its button), and the one
+  // control a press on which must not dismiss it (the button the warning is about).
+  let noticeOnDismiss = null;
+  let noticeKeepOpenFor = null;
   const header = el('header', { className: 'app-shell-header' }, [
     brandEl,
     orgEl,
@@ -400,7 +425,15 @@ export function mountAppShell(
   // login screen mounts inside THIS shell's own outlet — see main.js's
   // requireAuth), so a static fetch at mount time would show "signed out"
   // forever even after a real sign-in succeeds.
+  // Rebuilt only when the person changes: an auth event that carries the same session again (a token
+  // refresh, the tab regaining focus) must not wipe a half-confirmed sign-out or drop focus to the page.
+  let renderedAuthKey = null;
   function renderAuth(session) {
+    const key = session ? `${session.user?.id ?? ''}:${session.user?.email ?? ''}` : null;
+    if (key === renderedAuthKey) return;
+    renderedAuthKey = key;
+    disarmSignOut();
+    disarmSignOut = () => {};
     authEl.innerHTML = '';
     if (!session) return;
     const signOutButton = el('button', {
@@ -412,7 +445,45 @@ export function mountAppShell(
       className: 'app-shell-auth-status',
       attrs: { role: 'status', 'aria-live': 'polite' },
     });
+    // Signing out leaves whatever has not synced on this device (kept for this account, sent when it is
+    // signed in again), but never without the person knowing: the first press says how many changes are
+    // waiting, in the notice under the header (it overlays the page: the header never grows), and the
+    // next press signs out. The button keeps its label: a longer one wrapped the narrow menu row. The
+    // warning is a count as of now, so it is withdrawn after a while, when the menu is closed, and when
+    // the notice is dismissed; the next press then counts afresh.
+    let armed = false;
+    let armedAt = 0;
+    let checking = false;
+    let armTimer = null;
+    function disarm() {
+      if (!armed) return;
+      armed = false;
+      clearTimeout(armTimer);
+      // Only if the open notice is this one's (it clears itself through the dismiss callback).
+      if (noticeOnDismiss === disarm) clearRefusal();
+    }
+    disarmSignOut = disarm;
     signOutButton.addEventListener('click', async () => {
+      if (checking) return;
+      authStatus.textContent = '';
+      // A double tap lands on the relabelled button before the warning can have been read.
+      if (armed && Date.now() - armedAt < signOutArmGraceMs) return;
+      if (!armed) {
+        checking = true;
+        let warning;
+        try {
+          warning = await unsyncedSignOutWarning(session.user?.email, accountOperations);
+        } finally {
+          checking = false;
+        }
+        if (warning) {
+          armed = true;
+          armedAt = Date.now();
+          showOrganisationNotice(warning, { onDismiss: disarm, keepOpenFor: signOutButton });
+          armTimer = setTimeout(clearRefusal, signOutArmMs);
+          return;
+        }
+      }
       // Found missing in review: an unguarded await here meant a failed
       // signOut() (a real possibility over a bad connection) left the
       // click handler throwing as an unhandled rejection and the user
@@ -420,7 +491,6 @@ export function mountAppShell(
       // enabled and clickable so they can just try again. The shared helper
       // (signOut.js) also gives up at the shared timeout, which this button
       // used not to: a stalled connection could leave the click pending.
-      authStatus.textContent = '';
       const failure = await signOutWithTimeout(client);
       if (failure) {
         // Say so (a polite live region): the button stays enabled so they can simply try again.
@@ -437,6 +507,7 @@ export function mountAppShell(
       // a failed attempt (the catch above) keeps the menu open on purpose,
       // so Sign out is still right there to retry without reopening it.
       closeMenu();
+      clearRefusal();
       // Re-triggers the router (requireAuth finds no session and shows the login screen). User-reported,
       // 2026-09-09: signing out while ALREADY on #/events left the stale screen up, because assigning
       // the same hash fires no hashchange; goToHash() (navigation.js) dispatches one in that case.
@@ -655,6 +726,32 @@ export function mountAppShell(
     lastSyncStatus = 'holding';
     syncHeaderHeightVar();
   }
+  // What is waiting on this device for somebody else, in a sentence (T-TEN.C6). `lastOtherOrgIds` are the
+  // organisations the signed-in person's own waiting changes were made in. Never blames anyone and never
+  // offers to discard: the way forward is always to be that account, or in that organisation.
+  let lastOtherOrgIds = new Set();
+  function elsewhereSentence({ otherOrg, otherAccount }) {
+    const total = otherOrg + otherAccount;
+    const noun = total === 1 ? 'unsynced change' : 'unsynced changes';
+    const them = total === 1 ? 'it' : 'them';
+    if (otherAccount === 0) {
+      const known = [...lastOtherOrgIds].map((id) => orgState.orgs.find((org) => org.id === id));
+      // Waiting in an organisation this account is not (or no longer) a member of: there is nothing to
+      // switch to, so do not say there is. They stay on the device.
+      if (known.some((org) => !org)) {
+        return `${total} unsynced ${total === 1 ? 'change' : 'changes'} from an organisation this account is not part of. ${total === 1 ? 'It stays' : 'They stay'} on this device.`;
+      }
+      const where =
+        lastOtherOrgIds.size === 1
+          ? orgLabel(known[0], orgState.orgs)
+          : 'another of your organisations';
+      return `${total} ${noun} waiting in ${where}. Switch to it to send ${them}.`;
+    }
+    if (otherOrg === 0) {
+      return `${total} ${noun} from another account. Sign in as that account to send ${them}.`;
+    }
+    return `${total} ${noun} are waiting for another account or organisation.`;
+  }
   function renderSync(state) {
     // The chip shows exactly while there's something to show — 'off' (no
     // event context, nothing pending or lost) shows nothing. Not keyed on
@@ -715,7 +812,15 @@ export function mountAppShell(
         ? `Not synced — ${label} failed (${state.pendingCount} pending)`
         : `Not synced — retrying failed (${state.pendingCount} pending)`;
       setChip('stuck', `Sync failing (${state.pendingCount})`);
+    } else if (state.pendingCount === 0) {
+      // Nothing of this person's own is waiting: what is on the device belongs to someone else.
+      const away = state.elsewhere.otherOrg + state.elsewhere.otherAccount;
+      syncEl.classList.add('app-shell-sync-pending');
+      syncEl.textContent = elsewhereSentence(state.elsewhere);
+      setChip('pending', `Unsent (${away} other)`);
     } else {
+      // This person's own work comes first and keeps its short wording (a live region: the count changes
+      // while they score). What waits for somebody else is reported once their own work has gone.
       syncEl.classList.add('app-shell-sync-pending');
       syncEl.textContent = `Not synced (${state.pendingCount} pending)`;
       setChip('pending', `Not synced (${state.pendingCount})`);
@@ -729,8 +834,12 @@ export function mountAppShell(
     // throwing an unhandled rejection on every poll tick (found in review:
     // code-reviewer, 2026-09-26).
     let operations;
+    let others = { otherOrg: [], otherAccount: [] };
     try {
-      operations = await listPendingOperations();
+      // One read, split once: the owner cannot change between "mine" and "somebody else's".
+      const parts = await partitionOperations();
+      operations = parts.own;
+      others = { otherOrg: parts.otherOrg, otherAccount: parts.otherAccount };
     } catch (err) {
       console.error('appShell: pending-operation read failed', err);
       // A newly announced loss needs nothing from the queue — show it anyway
@@ -744,20 +853,29 @@ export function mountAppShell(
       }
       operations = [];
     }
+    // The organisation is not known yet (the page has only just loaded): this person's own changes in
+    // it would read as "waiting in another organisation", which is not true, and "Synced" would not be
+    // either. Say nothing this tick; the next one, once it is known, tells the truth.
+    const owner = getOutboxOwner();
+    if (owner && owner.userId && owner.orgId == null && others.otherOrg.length > 0) return;
     // A drop can land during that read — its operation is already missing
     // from `operations`, so rendering them now would under-report.
     if (hasUnannouncedDrops()) return;
+    lastOtherOrgIds = new Set(
+      others.otherOrg.map((operation) => operation.orgId ?? payloadOrgId(operation.payload)),
+    );
     const state = computeSyncState({
       enabled: cachedEventId != null,
       operations,
       lastFlushError,
+      elsewhere: { otherOrg: others.otherOrg.length, otherAccount: others.otherAccount.length },
     });
     // Skip re-rendering (and re-announcing via aria-live) when nothing
     // actually changed since the last poll — found in review: without this,
     // every 3s tick would re-mutate syncEl even while idle at "live",
     // spamming an aria-live announcement for no real change.
     const pendingPart = state.lastFlushError ? '' : state.pendingCount;
-    const key = `${state.status}:${pendingPart}:${state.stuckOperation?.type ?? ''}:${state.stuckOperation?.id ?? ''}:${state.lastFlushError ? lostWriteCount : 0}`;
+    const key = `${state.status}:${pendingPart}:${state.stuckOperation?.type ?? ''}:${state.stuckOperation?.id ?? ''}:${state.lastFlushError ? lostWriteCount : 0}:${state.elsewhere.otherOrg}:${state.elsewhere.otherAccount}:${[...lastOtherOrgIds].join(',')}`;
     if (key === lastSyncKey) return;
     lastSyncKey = key;
     lastSyncStatus = state.status;
@@ -840,18 +958,27 @@ export function mountAppShell(
     orgNoticeEl.classList.remove('app-shell-org-notice-open');
     orgNoticeEl.textContent = '';
     document.removeEventListener('pointerdown', onRefusalPointerDown);
+    const onDismiss = noticeOnDismiss;
+    noticeOnDismiss = null;
+    noticeKeepOpenFor = null;
+    onDismiss?.();
   }
   // Any tap or click dismisses it: a touch browser may not blur a select when the person taps empty
-  // page, and on a phone the panel can sit over the page heading.
-  function onRefusalPointerDown() {
+  // page, and on a phone the panel can sit over the page heading. (Except on the control it is about.)
+  function onRefusalPointerDown(event) {
+    if (noticeKeepOpenFor?.contains(event.target)) return;
     clearRefusal();
   }
-  // A refusal the person must see (and a screen reader hears): the overlay opens under the header, in
-  // the place the sync detail uses, so that one closes.
-  function showOrganisationNotice(text) {
+  // A notice the person must see (and a screen reader hears): the overlay opens under the header, in
+  // the place the sync detail uses, so that one closes. A refusal to switch organisation, and the
+  // warning before signing out with changes that have not synced.
+  function showOrganisationNotice(text, { onDismiss = null, keepOpenFor = null } = {}) {
+    clearRefusal();
     setDetailOpen(false);
     orgNoticeEl.textContent = text;
     orgNoticeEl.classList.add('app-shell-org-notice-open');
+    noticeOnDismiss = onDismiss;
+    noticeKeepOpenFor = keepOpenFor;
     document.addEventListener('pointerdown', onRefusalPointerDown);
   }
   // Heard, not shown: the visible change is the name in the header and the screen underneath.

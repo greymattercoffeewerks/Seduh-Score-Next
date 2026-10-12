@@ -8,6 +8,7 @@ describe('computeSyncState', () => {
       pendingCount: 0,
       stuckOperation: null,
       lastFlushError: null,
+      elsewhere: { otherOrg: 0, otherAccount: 0 },
     });
   });
 
@@ -31,6 +32,7 @@ describe('computeSyncState', () => {
       pendingCount: 0,
       stuckOperation: null,
       lastFlushError: null,
+      elsewhere: { otherOrg: 0, otherAccount: 0 },
     });
   });
 
@@ -106,5 +108,55 @@ describe('computeSyncState', () => {
     for (const input of notSyncedCases) {
       expect(computeSyncState(input).status).toBe('not synced');
     }
+  });
+
+  describe('work that is on the device but belongs to somebody else (T-TEN.C6)', () => {
+    it("is not synced, even with nothing of this person's own pending and sync off", () => {
+      for (const enabled of [true, false]) {
+        const result = computeSyncState({
+          enabled,
+          operations: [],
+          elsewhere: { otherOrg: 0, otherAccount: 2 },
+        });
+        expect(result.status).toBe('not synced');
+        expect(result.elsewhere).toEqual({ otherOrg: 0, otherAccount: 2 });
+      }
+    });
+
+    it("is not counted in the pending count, which is only this person's own", () => {
+      const result = computeSyncState({
+        enabled: true,
+        operations: [{ id: 'a', attempts: 0 }],
+        elsewhere: { otherOrg: 3, otherAccount: 4 },
+      });
+      expect(result.pendingCount).toBe(1);
+      expect(result.stuckOperation).toBeNull();
+    });
+
+    it("a failing operation of somebody else is never named as this person's stuck one", () => {
+      const result = computeSyncState({
+        enabled: true,
+        operations: [],
+        elsewhere: { otherOrg: 1, otherAccount: 0 },
+      });
+      expect(result.stuckOperation).toBeNull();
+    });
+
+    it('never reports a negative count', () => {
+      const result = computeSyncState({
+        enabled: true,
+        operations: [],
+        elsewhere: { otherOrg: -1, otherAccount: 1 },
+      });
+      expect(result.elsewhere).toEqual({ otherOrg: 0, otherAccount: 1 });
+    });
+
+    it('treats a missing or junk count as none', () => {
+      for (const elsewhere of [null, undefined, {}, { otherOrg: 'x', otherAccount: -3 }]) {
+        const result = computeSyncState({ enabled: true, operations: [], elsewhere });
+        expect(result.status).toBe('live');
+        expect(result.elsewhere).toEqual({ otherOrg: 0, otherAccount: 0 });
+      }
+    });
   });
 });

@@ -23,18 +23,45 @@
 // first operation with attempts > 0 — a poison operation (repeatedly
 // failing) needs to reach a human, not just accumulate silently in
 // IndexedDB (the gap offline-sync-auditor flagged during T3.2's review).
-export function computeSyncState({ enabled, operations, lastFlushError = null }) {
+//
+// `elsewhere` (T-TEN.C6): `{ otherOrg, otherAccount }`, how many operations on this device are waiting for
+// somebody else (outbox.js's partitionOperations()). They are not this person's to send, so they are never
+// counted in `pendingCount` (which is what the sync panel's retry and stuck logic is about), but a device
+// that holds unsent work is not "synced": they make the state "not synced" all the same, and are reported
+// separately so the panel can say whose they are.
+export function computeSyncState({ enabled, operations, lastFlushError = null, elsewhere = null }) {
   const ops = Array.isArray(operations) ? operations : [];
   const pendingCount = ops.length;
+  const otherOrg = Math.max(0, Number(elsewhere?.otherOrg) || 0);
+  const otherAccount = Math.max(0, Number(elsewhere?.otherAccount) || 0);
+  const away = { otherOrg, otherAccount };
 
-  if (pendingCount > 0 || lastFlushError != null) {
+  if (pendingCount > 0 || lastFlushError != null || otherOrg + otherAccount > 0) {
     const stuckOperation = ops.find((op) => op?.attempts > 0) ?? null;
-    return { status: 'not synced', pendingCount, stuckOperation, lastFlushError };
+    return {
+      status: 'not synced',
+      pendingCount,
+      stuckOperation,
+      lastFlushError,
+      elsewhere: away,
+    };
   }
 
   if (!enabled) {
-    return { status: 'off', pendingCount: 0, stuckOperation: null, lastFlushError: null };
+    return {
+      status: 'off',
+      pendingCount: 0,
+      stuckOperation: null,
+      lastFlushError: null,
+      elsewhere: away,
+    };
   }
 
-  return { status: 'live', pendingCount: 0, stuckOperation: null, lastFlushError: null };
+  return {
+    status: 'live',
+    pendingCount: 0,
+    stuckOperation: null,
+    lastFlushError: null,
+    elsewhere: away,
+  };
 }

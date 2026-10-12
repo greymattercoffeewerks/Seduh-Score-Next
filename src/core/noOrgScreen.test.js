@@ -11,7 +11,12 @@ function mount(options = {}) {
   const outlet = options.outlet ?? document.createElement('div');
   if (!outlet.isConnected) document.body.appendChild(outlet);
   const client = options.client ?? clientWith(async () => ({ error: null }));
-  const screen = mountNoOrgScreen(outlet, { client, ...options });
+  const screen = mountNoOrgScreen(outlet, {
+    client,
+    // Nothing waiting to sync, answered at once: these tests are about the button, not the outbox read.
+    accountOperations: () => Promise.resolve([]),
+    ...options,
+  });
   return { outlet, client, screen };
 }
 
@@ -114,6 +119,7 @@ describe('signing out', () => {
     const { outlet } = mount({ client, onSignedOut });
     const button = outlet.querySelector('button');
     button.click();
+    await tick(); // the outbox is asked first, then the sign-out starts
     expect(button.textContent).toBe('Signing out…');
     expect(button.getAttribute('aria-disabled')).toBe('true');
     expect(button.getAttribute('aria-busy')).toBe('true');
@@ -140,6 +146,7 @@ describe('signing out', () => {
     const button = outlet.querySelector('button');
     button.click();
     button.click();
+    await tick();
     finish();
     await vi.waitFor(() => expect(onSignedOut).toHaveBeenCalledTimes(1));
     expect(client.auth.signOut).toHaveBeenCalledTimes(1);
@@ -213,6 +220,7 @@ describe('signing out', () => {
     const { outlet, screen } = mount({ client });
     const region = outlet.querySelector('[role="status"]');
     outlet.querySelector('button').click();
+    await tick();
     screen.unmount();
     finish();
     await tick();
@@ -230,6 +238,7 @@ describe('signing out', () => {
     const onSignedOut = vi.fn();
     const { outlet, screen } = mount({ client, onSignedOut });
     outlet.querySelector('button').click();
+    await tick();
     screen.unmount();
     finish();
     await tick();
@@ -248,6 +257,7 @@ describe('signing out', () => {
     const onSignedOut = vi.fn();
     const { outlet } = mount({ client, onSignedOut, signal: controller.signal });
     outlet.querySelector('button').click();
+    await tick();
     controller.abort();
     finish();
     await tick();
@@ -274,5 +284,73 @@ describe('signing out', () => {
     await vi.waitFor(() =>
       expect(errorSpy).toHaveBeenCalledWith('noOrgScreen: onSignedOut threw', expect.any(Error)),
     );
+  });
+});
+
+describe('mountNoOrgScreen — changes that have not synced (T-TEN.C6)', () => {
+  const waiting = (n) => () =>
+    Promise.resolve(Array.from({ length: n }, (_, i) => ({ id: `op${i}` })));
+
+  it('first says how many are waiting, and signs out only on the second press', async () => {
+    const { outlet, client } = mount({
+      email: 'sam@example.com',
+      accountOperations: waiting(2),
+      armGraceMs: 0,
+    });
+    const button = outlet.querySelector('button');
+    button.click();
+    await vi.waitFor(() =>
+      expect(outlet.querySelector('[role="status"]').textContent).toBe(
+        '2 changes have not been sent yet. They stay on this device and are sent once sam@example.com is signed in. To sign out now, press Sign out again.',
+      ),
+    );
+    expect(client.auth.signOut).not.toHaveBeenCalled();
+    expect(button.textContent).toBe('Sign out');
+    button.click();
+    await vi.waitFor(() => expect(client.auth.signOut).toHaveBeenCalledTimes(1));
+  });
+
+  it('ignores a press that follows at once', async () => {
+    const { outlet, client } = mount({ accountOperations: waiting(1) });
+    const button = outlet.querySelector('button');
+    button.click();
+    await vi.waitFor(() =>
+      expect(outlet.querySelector('[role="status"]').textContent).not.toBe(''),
+    );
+    button.click();
+    await tick();
+    expect(client.auth.signOut).not.toHaveBeenCalled();
+  });
+
+  it('when it cannot tell, says so and lets the person decide', async () => {
+    const { outlet, client } = mount({
+      accountOperations: () => Promise.reject(new Error('idb down')),
+      armGraceMs: 0,
+    });
+    const button = outlet.querySelector('button');
+    button.click();
+    await vi.waitFor(() =>
+      expect(outlet.querySelector('[role="status"]').textContent).not.toBe(''),
+    );
+    expect(outlet.querySelector('[role="status"]').textContent).toContain('Could not check');
+    expect(client.auth.signOut).not.toHaveBeenCalled();
+  });
+
+  it('keeps the warning armed when the sign-out then fails', async () => {
+    const { outlet } = mount({
+      client: clientWith(async () => ({ error: { message: 'network' } })),
+      accountOperations: waiting(1),
+      armGraceMs: 0,
+    });
+    const button = outlet.querySelector('button');
+    button.click();
+    await vi.waitFor(() =>
+      expect(outlet.querySelector('[role="status"]').textContent).not.toBe(''),
+    );
+    button.click();
+    await vi.waitFor(() =>
+      expect(outlet.querySelector('[role="status"]').textContent).toBe(SIGN_OUT_FAILED_MESSAGE),
+    );
+    expect(button.textContent).toBe('Sign out');
   });
 });
