@@ -233,6 +233,10 @@ reads **only** the published `public_results` row (never live tables), so it is 
 construction: every field is rebuilt from known keys and type-checked, text goes in via `textContent`,
 and nothing outside the fixed public fields (no phone, email, set-by-set marks) can reach it.
 
+- It asks for ONE event's row by id (`findPublishedResultForEvent`), not the whole archive (T-TEN.D3), and
+  its meta line says "Organised by <name>" from the `org_name` the database stamps into every published
+  payload (rows published before that have none and show nothing). The archive page shows the same name
+  on the latest result and under each event; both go through `publishedOrgName` (core/publicResults.js).
 - What it prints depends on the organiser's choice at publish time (the report screen's "What to
   publish" radios): the **podium** (default) or the **full standings** — the payload carries
   `standings` only in the second case (`src/formats/cup-taster/resultsPublishing.js`).

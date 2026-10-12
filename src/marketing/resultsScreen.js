@@ -10,7 +10,7 @@ import { el, withSrExpansion } from '../core/dom.js';
 import { formatDuration, formatDurationLong } from '../core/duration.js';
 import { revealOnScroll } from '../core/scrollReveal.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../core/timeout.js';
-import { listPublishedResults } from '../core/publicResults.js';
+import { listPublishedResults, publishedOrgName } from '../core/publicResults.js';
 import { buildPublicFooter } from './publicFooter.js';
 import { buildPublicHeader } from './publicHeader.js';
 import { buildScoringRecord } from './scoringRecord.js';
@@ -179,9 +179,12 @@ function buildLatestResult(event, client) {
   // review (code-reviewer): an earlier version called formatDate()
   // unconditionally here, crashing the whole page for any event published
   // without a date.
-  const metaParts = [event.eventDate ? formatDate(event.eventDate) : null, event.city].filter(
-    Boolean,
-  );
+  const organiser = publishedOrgName(event);
+  const metaParts = [
+    event.eventDate ? formatDate(event.eventDate) : null,
+    event.city,
+    organiser ? `Organised by ${organiser}` : null,
+  ].filter(Boolean);
   return el(
     'section',
     { className: 'results-latest', attrs: { 'aria-labelledby': 'latest-title' } },
@@ -226,6 +229,8 @@ function archiveRow(event) {
   // version assumed `event.podium[0]` always exists.
   const winner = event.podium[0];
   if (!winner) return null;
+  // Whose event it is (rows published before the name was stamped have none: nothing is shown for them).
+  const organiser = publishedOrgName(event);
   return el('tr', { className: 'results-archive-row' }, [
     el('td', { className: 'results-archive-date' }, [
       el('span', {
@@ -236,6 +241,15 @@ function archiveRow(event) {
     el('td', {}, [
       el('span', { className: 'results-archive-name', text: event.eventName }),
       el('span', { className: 'results-archive-format', text: formatLabel(event.format) }),
+      ...(organiser
+        ? [
+            el('span', { className: 'results-archive-organiser' }, [
+              // Said, not just shown, so the line under the format is not mistaken for a venue or sponsor.
+              el('span', { className: 'sr-only', text: 'Organised by ' }),
+              document.createTextNode(organiser),
+            ]),
+          ]
+        : []),
     ]),
     el('td', { text: event.city ?? '—' }),
     el('td', { className: 'results-archive-winner', text: winner.name }),

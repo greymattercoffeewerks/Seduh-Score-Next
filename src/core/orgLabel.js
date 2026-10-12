@@ -14,6 +14,10 @@ function clean(text) {
   return typeof text === 'string' ? text.replace(BIDI_CONTROLS, '').trim() : '';
 }
 
+// The same cleaning for anywhere else an organisation's name is shown (the public results pages, from the
+// name the database stamps into a published result). Empty when there is no usable name.
+export const cleanOrgName = clean;
+
 export function orgLabel(org, orgs) {
   const baseOf = (o) => clean(o.name) || clean(o.slug);
   const base = baseOf(org) || 'Unnamed organisation';

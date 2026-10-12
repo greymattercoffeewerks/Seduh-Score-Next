@@ -1897,13 +1897,13 @@ handoff §4's "one organiser, one org"; locks D-T1…D-T8). Why: `MULTI-TENANCY-
 pillars A and B. Not in scope: gating/entitlements (D14 stays a stub), admin console, self-serve
 signup, Seduh ID. Rule (lifted 2026-10-11, now that B1, B2 and B6 are in the cloud): a two-org user is created only through the service-role provisioning path (B4).
 
-| Phase | Tasks                                                                                                                                             | Status                                          |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| A     | A1 spec lock · A2 tenancy inventory                                                                                                               | Done                                            |
-| B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | Done (B1 to B7 merged and in the cloud project) |
-| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | Done (C1 to C7 merged)                          |
-| D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | In progress (D1 merged; D2 built, in review)    |
-| E     | E1 negative matrix · E2 console Playwright · E3 security/perf · E4 docs · E5 rollout · E6 close-out                                               | Not started                                     |
+| Phase | Tasks                                                                                                                                             | Status                                           |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| A     | A1 spec lock · A2 tenancy inventory                                                                                                               | Done                                             |
+| B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | Done (B1 to B7 merged and in the cloud project)  |
+| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | Done (C1 to C7 merged)                           |
+| D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | In progress (D1, D2 merged; D3 built, in review) |
+| E     | E1 negative matrix · E2 console Playwright · E3 security/perf · E4 docs · E5 rollout · E6 close-out                                               | Not started                                      |
 
 Each D task is re-confirmed with the product owner before it starts (2026-10-10).
 
@@ -2117,3 +2117,17 @@ _Client only: `core/events.js` and the test fakes. No migration._
 - **`supabase/tests/003_rls.sql` still replicates the old anonymous table query** (around line 183): D6 removes it with the grants.
 - **The browser test covers the splash screen's request, not the projector's:** the projector only asks for the event while no live session already proves there is one, so whether it asks depends on what earlier tests left behind. The unit and real-screen tests cover the projector's ask.
 - **The results pages were not part of the "no anonymous read of `events`" check by browser** (they read `public_results` and RPCs; D3).
+
+---
+
+## Known open items from T-TEN.D3 (2026-10-12)
+
+_Client only: `marketing/resultsScreen.js`, `marketing/resultsSheet.js`, `core/publicResults.js`, `core/orgLabel.js`. No migration._
+
+- **The archive page still downloads every published payload** (it needs them all for its stats tiles and list; only the sheet became per-event). Measured: about 2.7 KB per result, so about 270 KB at 100 results and about 800 KB at 300. Past that it should be paged or given a lighter list (and its stats computed in the database). There is no `limit` or `range` today, and PostgREST's `max_rows` (1000 in the local config; the cloud value was not checked) would silently drop the oldest results and make the tiles wrong past it. A payload may be up to 256 KB (the database's cap), so the worst case is far above the typical.
+- **The one result already published in production shows no organiser** (it predates the stamp). Re-publishing it from the report screen stamps it; a one-off update of that row would too (the trigger stamps on every write). Not done: it writes production data.
+- **The name is the name as of publishing:** a renamed organisation keeps its old name on old results until they are republished (right for a historic result).
+- **Two organisations may share a display name**, and the page shows only the name (the database also stamps `org_slug`). Operator-created, so rare; showing the slug when two names on the page collide would tell them apart.
+- **A publisher still controls the event name, city, venue and cafe lines**, so a result can be titled to look like another brand; only the "Organised by" line is authoritative (D-T4).
+- **The public Privacy page (`marketing/trustContent.js`, `design/copy/privacy-page-draft.md`) does not yet say the public also sees the name of the organisation that ran each published event.** A wording and policy decision for the owner (CLAUDE.md: changing what is public changes the Privacy page).
+- **The sheet's per-event read has no browser test for an unpublished event**, only unit tests.

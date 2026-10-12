@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   listPublishedResults,
+  publishedOrgName,
   findPublishedResultForEvent,
   publishEventResults,
   unpublishEventResults,
@@ -114,5 +115,40 @@ describe('unpublishEventResults', () => {
   it('throws on an RPC error rather than silently succeeding', async () => {
     const client = fakeRpcClient({ data: null, error: new Error('network error') });
     await expect(unpublishEventResults('org1', 'ev1', client)).rejects.toThrow('network error');
+  });
+});
+
+describe('publishedOrgName (T-TEN.D3)', () => {
+  it('returns the organiser name the database stamped into the payload', () => {
+    expect(publishedOrgName({ org_name: 'Grey Matter Coffee Werks' })).toBe(
+      'Grey Matter Coffee Werks',
+    );
+  });
+
+  it('trims it, and treats a name of only spaces as no name', () => {
+    expect(publishedOrgName({ org_name: '  Alpha Coffee \n' })).toBe('Alpha Coffee');
+    expect(publishedOrgName({ org_name: '   ' })).toBeNull();
+  });
+
+  it('removes invisible text-direction controls (an unclosed override would reverse what follows)', () => {
+    expect(publishedOrgName({ org_name: '\u202EAlpha\u200F Coffee\u2069' })).toBe('Alpha Coffee');
+    expect(publishedOrgName({ org_name: '\u202E\u200F' })).toBeNull();
+  });
+
+  it('is null for a row published before the name was stamped, or anything that is not text', () => {
+    for (const payload of [
+      {},
+      null,
+      undefined,
+      { org_name: null },
+      { org_name: 7 },
+      { org_name: {} },
+    ]) {
+      expect(publishedOrgName(payload)).toBeNull();
+    }
+  });
+
+  it('does not touch the letters of the name (the archive shows it as typed)', () => {
+    expect(publishedOrgName({ org_name: 'Kopi <b>Seduh</b> & Co' })).toBe('Kopi <b>Seduh</b> & Co');
   });
 });
