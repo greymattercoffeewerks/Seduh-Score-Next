@@ -1,3 +1,9 @@
+## Privacy page: the public also sees which organisation ran a published event · 2026-10-12
+
+**Why:** with T-TEN.D3 the public results archive and the printable results sheet say "Organised by <organisation name>" on every published result (the name is stamped by the database when the organiser publishes). CLAUDE.md: changing what is public changes the Privacy page. The owner approved showing the name.
+
+**What changed:** one sentence in "Who can see it" (`src/marketing/trustContent.js`, and the owner-edited source `design/copy/privacy-page-draft.md`): "Every published result also shows the name of the organisation that ran the event." The page's last-updated date is now 12 October 2026. Copy only: no code path changes.
+
 ## T-TEN.D2: the audience screens ask the narrow event door, not the events table · 2026-10-12
 
 **Task:** T-TEN.D2 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase D, audience addressing). Client only: no migration, nothing to push to the cloud project (the database side, `public_event_summary`, is T-TEN.B7 and already live).
