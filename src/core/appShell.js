@@ -958,9 +958,11 @@ export function mountAppShell(
     orgNoticeEl.classList.remove('app-shell-org-notice-open');
     orgNoticeEl.textContent = '';
     document.removeEventListener('pointerdown', onRefusalPointerDown);
+    document.removeEventListener('keydown', onRefusalKeyDown);
     const onDismiss = noticeOnDismiss;
     noticeOnDismiss = null;
     noticeKeepOpenFor = null;
+    delete orgNoticeEl.dataset.tone;
     onDismiss?.();
   }
   // Any tap or click dismisses it: a touch browser may not blur a select when the person taps empty
@@ -969,17 +971,28 @@ export function mountAppShell(
     if (noticeKeepOpenFor?.contains(event.target)) return;
     clearRefusal();
   }
+  // And Escape, wherever focus is: a keyboard or switch user must be able to put it away (it overlays the
+  // top of the page, where the focused heading is).
+  function onRefusalKeyDown(event) {
+    if (event.key === 'Escape') clearRefusal();
+  }
   // A notice the person must see (and a screen reader hears): the overlay opens under the header, in
   // the place the sync detail uses, so that one closes. A refusal to switch organisation, and the
   // warning before signing out with changes that have not synced.
-  function showOrganisationNotice(text, { onDismiss = null, keepOpenFor = null } = {}) {
+  function showOrganisationNotice(
+    text,
+    { onDismiss = null, keepOpenFor = null, tone = null } = {},
+  ) {
     clearRefusal();
     setDetailOpen(false);
     orgNoticeEl.textContent = text;
+    // 'info': something that happened, not something that went wrong (the border is not the error colour).
+    if (tone) orgNoticeEl.dataset.tone = tone;
     orgNoticeEl.classList.add('app-shell-org-notice-open');
     noticeOnDismiss = onDismiss;
     noticeKeepOpenFor = keepOpenFor;
     document.addEventListener('pointerdown', onRefusalPointerDown);
+    document.addEventListener('keydown', onRefusalKeyDown);
   }
   // Heard, not shown: the visible change is the name in the header and the screen underneath.
   function announceOrganisation(text) {
@@ -1218,6 +1231,20 @@ export function mountAppShell(
     setNav,
     setOrganisation,
     announceOrganisation,
+    // A notice the person can see (until they tap elsewhere) and a screen reader hears, that is not an
+    // error: "Now working in …, the organisation this event belongs to." (main.js, T-TEN.C7).
+    showNotice: (text) => showOrganisationNotice(text, { tone: 'info' }),
+    // Puts away whatever notice is open (main.js, when the person moves to another screen: a notice must
+    // not outlive the screen it explains).
+    dismissNotice: clearRefusal,
+    // The header names no event any more (a card that is not an event's screen has replaced it): the same
+    // as setNav without an event, without touching the links.
+    clearEventContext() {
+      cachedEventId = null;
+      breadcrumbEl.textContent = '';
+      updateContextRow();
+      refreshSync();
+    },
     unmount() {
       headerResizeObserver?.disconnect();
       if (inlineNavQuery) {

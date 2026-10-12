@@ -1897,13 +1897,13 @@ handoff §4's "one organiser, one org"; locks D-T1…D-T8). Why: `MULTI-TENANCY-
 pillars A and B. Not in scope: gating/entitlements (D14 stays a stub), admin console, self-serve
 signup, Seduh ID. Rule (lifted 2026-10-11, now that B1, B2 and B6 are in the cloud): a two-org user is created only through the service-role provisioning path (B4).
 
-| Phase | Tasks                                                                                                                                             | Status                                             |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| A     | A1 spec lock · A2 tenancy inventory                                                                                                               | Done                                               |
-| B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | Done (B1 to B7 merged and in the cloud project)    |
-| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | In progress (C1 to C5 merged; C6 built, in review) |
-| D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | Not started                                        |
-| E     | E1 negative matrix · E2 console Playwright · E3 security/perf · E4 docs · E5 rollout · E6 close-out                                               | Not started                                        |
+| Phase | Tasks                                                                                                                                             | Status                                               |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| A     | A1 spec lock · A2 tenancy inventory                                                                                                               | Done                                                 |
+| B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | Done (B1 to B7 merged and in the cloud project)      |
+| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | Phase C built (C1 to C6 merged; C7 built, in review) |
+| D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | Not started                                          |
+| E     | E1 negative matrix · E2 console Playwright · E3 security/perf · E4 docs · E5 rollout · E6 close-out                                               | Not started                                          |
 
 Each D task is re-confirmed with the product owner before it starts (2026-10-10).
 
@@ -2078,3 +2078,17 @@ _Client only: `core/outbox.js`, `main.js`, `core/appShell.js`, `core/signOut.js`
 - **A manual screen-reader and real-phone pass** is still owed for the C3 to C6 additions (the sync notice, the sign-out warning).
 - **The unset-owner default in `core/outbox.js` is "ownership not in use"**, so bare tests need no setup; production sets `null` at mount, before anything can flush. Making `null` the default would mean every outbox test opting out.
 - **C7 note:** screens still take their organisation id from the router. A deep link into an event of a non-active organisation must switch the active organisation (the outbox would otherwise hold its writes as "waiting in another organisation").
+
+---
+
+## Known open items from T-TEN.C7 (2026-10-12)
+
+_Client only: `main.js` (the route guard), `core/events.js`, `formats/btc/matches.js`, `core/appShell.js`/`.css`. No migration._
+
+- **Heat, stage and match ids inside a URL are not checked against the event id in it.** The guard decides by the event (or, for a BTC match, the match's event). A hand-built URL such as `/events/<event of A>/heats/<heat of B>/scoring` still renders B's heat while the header says A, for a person who is a member of both. Label integrity only; not asked for by the plan.
+- **A link followed while the outbox check is in flight and then abandoned still switches the organisation** (header and the screen the person moved on to agree, so nothing is mixed). No notice is shown for it.
+- **The BTC match's event is remembered but not enforced:** `btc_matches.event_id` has no immutability trigger (the event's organisation has one), so the remembered match-to-event answer rests on convention. The match read is network-first for that reason.
+- **A person who has just joined a second organisation, with an old cached snapshot of their memberships, gets "Page not found" for its events until they are online** (the organisation list is the one the console already holds).
+- **Offline reload of a timing or scoring screen still needs the network to load the screen itself** (unchanged by C7): the guard now finds the event's organisation from the device's memory, but the screen's own load is what fails offline.
+- **The unit tests cannot see a one-time password on the Team screen blocking a link** (jsdom runs every navigation twice and the second run finds the flag already cleared); the code resets the flag before switching.
+- **A manual screen-reader and real-phone pass** is still owed for the C3 to C7 additions (the notice, the card).

@@ -1312,9 +1312,18 @@ describe('mountAppShell', () => {
         });
         chooseIn(select(), 'org-b');
         await tick();
-        expect(add.mock.calls.filter(([type]) => type === 'pointerdown')).toHaveLength(1);
+        const addedFor = (type) => add.mock.calls.filter(([t]) => t === type).map(([, fn]) => fn);
+        const removedFor = (type) =>
+          remove.mock.calls.filter(([t]) => t === type).map(([, fn]) => fn);
+        // one dismissal listener of each kind while the refusal is up...
+        const [onPointer] = addedFor('pointerdown');
+        const [onKey] = addedFor('keydown');
+        expect(addedFor('pointerdown')).toHaveLength(1);
+        expect(onKey).toBeTypeOf('function');
         select().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-        expect(remove.mock.calls.filter(([type]) => type === 'pointerdown')).toHaveLength(1);
+        // ...and exactly those are taken off again
+        expect(removedFor('pointerdown')).toContain(onPointer);
+        expect(removedFor('keydown')).toContain(onKey);
         expect(notice.textContent).toBe('');
         add.mockRestore();
         remove.mockRestore();
@@ -3572,5 +3581,92 @@ describe('mountAppShell — work that belongs to somebody else (T-TEN.C6)', () =
       click(signOutButton(root));
       await vi.waitFor(() => expect(client.auth.signOut).toHaveBeenCalledTimes(1));
     });
+  });
+});
+
+describe('mountAppShell — showNotice (T-TEN.C7)', () => {
+  const ORG_A = { id: 'a', name: 'A', slug: 'a' };
+  const ORG_B = { id: 'b', name: 'B', slug: 'b' };
+  function mountShell() {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const shell = mountAppShell(root, { client: { auth: fakeAuth(), from: () => ({}) } });
+    return { root, shell, notice: root.querySelector('.app-shell-org-notice') };
+  }
+  const isOpen = (notice) => notice.classList.contains('app-shell-org-notice-open');
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('opens a visible, polite notice that is not styled as an error, and a tap elsewhere closes it', () => {
+    const { shell, notice } = mountShell();
+    shell.showNotice('Now working in Org Two, the organisation this event belongs to.');
+    expect(isOpen(notice)).toBe(true);
+    expect(notice.textContent).toBe(
+      'Now working in Org Two, the organisation this event belongs to.',
+    );
+    expect(notice.dataset.tone).toBe('info');
+    expect(notice.getAttribute('role')).toBe('status');
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    expect(isOpen(notice)).toBe(false);
+    expect(notice.textContent).toBe('');
+    expect(notice.dataset.tone).toBeUndefined();
+  });
+
+  it('Escape closes it wherever focus is (the keyboard way to put it away)', () => {
+    const { shell, notice } = mountShell();
+    shell.showNotice('Now working in Org Two.');
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(isOpen(notice)).toBe(false);
+  });
+
+  it('other keys leave it open', () => {
+    const { shell, notice } = mountShell();
+    shell.showNotice('Now working in Org Two.');
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+    expect(isOpen(notice)).toBe(true);
+  });
+
+  it('dismissNotice puts it away (a notice does not follow the person to the next screen)', () => {
+    const { shell, notice } = mountShell();
+    shell.showNotice('Now working in Org Two.');
+    shell.dismissNotice();
+    expect(isOpen(notice)).toBe(false);
+    expect(notice.dataset.tone).toBeUndefined();
+  });
+
+  it('a second notice replaces the first', () => {
+    const { shell, notice } = mountShell();
+    shell.showNotice('First.');
+    shell.showNotice('Second.');
+    expect(notice.textContent).toBe('Second.');
+  });
+
+  it('a refusal that follows a quiet notice is not quiet', async () => {
+    const { shell, root, notice } = mountShell();
+    shell.showNotice('Now working in Org Two.');
+    shell.setOrganisation({
+      orgs: [ORG_A, ORG_B],
+      activeOrgId: 'a',
+      onSelect: async () => ({ ok: false, message: 'Not yet.' }),
+    });
+    const select = root.querySelector('.app-shell-org select');
+    select.value = 'b';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(notice.textContent).toBe('Not yet.');
+    expect(notice.dataset.tone).toBeUndefined();
+  });
+
+  it('clearEventContext takes the event name out of the header and leaves the links', async () => {
+    const { shell, root } = mountShell();
+    await shell.setNav({
+      eventId: null,
+      links: [{ href: '#/events', label: 'Events' }],
+    });
+    root.querySelector('.app-shell-breadcrumb').textContent = 'October Cup';
+    shell.clearEventContext();
+    expect(root.querySelector('.app-shell-breadcrumb').textContent).toBe('');
+    expect(root.querySelector('.app-shell-link')).not.toBeNull();
   });
 });

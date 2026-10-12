@@ -62,6 +62,18 @@ export async function listMatches(eventId, round, client = getSupabase()) {
   return withJudges;
 }
 
+// The event a match belongs to, or null when there is no such match as far as this person can see.
+// Throws on a failed read. (Used to find a match's organisation through its event: main.js.)
+export async function findMatchEventId(matchId, client = getSupabase()) {
+  const { data, error } = await client
+    .from('btc_matches')
+    .select('event_id')
+    .eq('id', matchId)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.event_id ?? null;
+}
+
 export async function findMatchById(matchId, client = getSupabase()) {
   const { data, error } = await client.from('btc_matches').select('*').eq('id', matchId).single();
   if (error) throw error;
