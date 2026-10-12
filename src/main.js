@@ -447,6 +447,8 @@ function requireAuth(
       orgId: org.activeOrgId,
       // What to call it (the slug is added when two of the person's organisations share a name).
       orgName: activeOrg ? orgLabel(activeOrg, org.orgs) : null,
+      // For the links an organiser hands to the audience.
+      orgSlug: activeOrg?.slug ?? null,
     });
     if (placed.notice && !params.signal?.aborted) showRouteNotice(placed.notice);
     return screen;
@@ -631,6 +633,25 @@ function mountAudienceBySlug(outlet, { slug, stage, client, signal, mountSurface
   }));
 }
 
+// The audience links an organiser hands out for ONE organisation (T-TEN.D4): slug-qualified, so each names the
+// organiser and works for any organisation. The ORIGIN and path are where this page is served from (so a link
+// made on the production site opens the production site); a slug is letters, digits and hyphens, so encoding
+// it changes nothing but is kept for safety. Null when the organisation has no slug to name.
+export function audienceHash(orgSlug, surface) {
+  if (typeof orgSlug !== 'string' || !orgSlug.trim()) return null;
+  return `#/live/${encodeURIComponent(orgSlug.trim())}/${surface}`;
+}
+
+export function audienceLinksFor(orgSlug, location = window.location) {
+  if (!audienceHash(orgSlug, 'phone')) return null;
+  const page = `${location.origin}${location.pathname}`;
+  return {
+    phone: page + audienceHash(orgSlug, 'phone'),
+    projector: page + audienceHash(orgSlug, 'projector'),
+    splash: page + audienceHash(orgSlug, 'splash'),
+  };
+}
+
 function focusFirstHeading(root) {
   const heading = root.querySelector('h1, h2');
   if (!heading) return;
@@ -701,10 +722,11 @@ export function buildRoutes({
     {
       pattern: '/events',
       mount: requireAuth(
-        (outlet, { client, signal, orgId, orgName }) =>
+        (outlet, { client, signal, orgId, orgName, orgSlug }) =>
           mountEventsScreen(outlet, {
             orgId,
             orgName,
+            audienceLinks: audienceLinksFor(orgSlug),
             client,
             defaultFormat: 'cup_taster',
             formatOptions: FORMAT_OPTIONS,
@@ -1281,20 +1303,20 @@ export function mountApp(
     if (isTeamOwner) {
       links.push({ label: 'Team', href: '#/team', active: route.pattern === '/team' });
     }
-    // These links are the OLD slug-less ones (the legacy shim), which show ONE organisation (T-TEN.D4 makes
-    // them slug-qualified). These links are offered only while that is the organisation the console is working
-    // in: otherwise "Projector view" would open another organisation's display under this one's header (or
-    // only the "out of date" card, when none is configured).
-    const activeOrg = orgContext.getActiveOrg();
-    // The same precedence as the old links themselves: the legacy slug when there is one, else the org id.
-    const legacyIsActive = legacyAudienceOrgSlug
-      ? Boolean(activeOrg) && activeOrg.slug === legacyAudienceOrgSlug.toLowerCase()
-      : Boolean(legacyAudienceOrgId) && legacyAudienceOrgId === orgContext.getActiveOrgId();
-    if (legacyIsActive) {
+    // The audience screens, for whichever organisation the console is working in (T-TEN.D4): slug-qualified
+    // links, so any organisation's organiser has them (they used to exist only for the one legacy organisation,
+    // because the old links could only show that one). They open in a new tab; the Events screen also offers
+    // them with a QR code to hand to the audience.
+    const activeSlug = orgContext.getActiveOrg()?.slug;
+    if (audienceHash(activeSlug, 'phone')) {
       links.push(
-        { label: 'Splash screen', href: '#/live/splash', openInNewTab: true },
-        { label: 'Projector view', href: '#/live/projector', openInNewTab: true },
-        { label: 'Phone view', href: '#/live/phone', openInNewTab: true },
+        { label: 'Splash screen', href: audienceHash(activeSlug, 'splash'), openInNewTab: true },
+        {
+          label: 'Projector view',
+          href: audienceHash(activeSlug, 'projector'),
+          openInNewTab: true,
+        },
+        { label: 'Phone view', href: audienceHash(activeSlug, 'phone'), openInNewTab: true },
       );
     }
     shell.setNav({ eventId: params.eventId ?? null, links });

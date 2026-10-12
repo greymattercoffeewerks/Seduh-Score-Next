@@ -19,6 +19,7 @@ import { describeError } from './errors.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
 import { createEvent, listEventsForOrg, deleteTestEvent } from './events.js';
 import { countOperationsInOrg } from './outbox.js';
+import { buildAudienceLinksCard } from './audienceLinksCard.js';
 
 export function blankDraft(defaultFormat) {
   return { name: '', eventDate: '', venue: '', city: '', isTest: false, format: defaultFormat };
@@ -297,6 +298,9 @@ export async function mountEventsScreen(
     orgId,
     // What to call the organisation in the headings (the caller knows it; this screen only receives the id).
     orgName = null,
+    // The audience links for this organisation ({ phone, projector, splash }: absolute, slug-qualified), or
+    // null when there are none to show. Built by the caller, which knows the routes.
+    audienceLinks = null,
     client = getSupabase(),
     defaultFormat,
     formatOptions,
@@ -322,6 +326,8 @@ export async function mountEventsScreen(
   // Delete click — see unsyncedWritesWarning. Deliberately one value, not per row: it counts the
   // organisation's whole queue, so the latest read is the right one for any row.
   let unsyncedWrites;
+  // Built once: the card keeps its QR code and its "copied" line across the screen's own re-renders.
+  const audienceCard = audienceLinks ? buildAudienceLinksCard(audienceLinks, { orgName }) : null;
 
   function setFeedback(feedback, message, tone) {
     feedback.textContent = message ?? '';
@@ -573,6 +579,8 @@ export async function mountEventsScreen(
         form,
       ]),
     );
+
+    if (audienceCard) container.appendChild(audienceCard);
 
     root.appendChild(container);
 

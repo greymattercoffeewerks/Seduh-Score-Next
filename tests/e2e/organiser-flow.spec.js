@@ -343,6 +343,50 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     await expect(page.getByText('We couldn’t find that organiser')).toHaveCount(0);
   });
 
+  // T-TEN.D4: the organiser is handed links that name their organisation, with a QR code for the phone view.
+  test('the Events screen offers slug-qualified audience links and a QR code, and the phone link opens', async ({
+    page,
+  }) => {
+    await signIn(page);
+    await expect(page.locator('form.create-event-form')).toBeVisible();
+
+    const card = page.locator('.audience-links-card');
+    await expect(card.getByRole('heading', { name: 'Share with your audience' })).toBeVisible();
+    const urls = await card.locator('.audience-links-url').allTextContents();
+    expect(urls).toHaveLength(3);
+    expect(urls.map((u) => u.split('#')[1])).toEqual([
+      '/live/local-dev-org/phone',
+      '/live/local-dev-org/projector',
+      '/live/local-dev-org/splash',
+    ]);
+    // Absolute, so it can be pasted into a message: the page the organiser is on, plus the hash.
+    expect(urls[0].startsWith(new URL(page.url()).origin)).toBe(true);
+    // The QR is a drawn picture, not an empty frame, and the card never overflows a phone.
+    await expect(card.locator('.audience-links-qr svg')).toBeVisible({ timeout: 15000 });
+    await page.setViewportSize({ width: 360, height: 800 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+
+    // The organiser's own menu carries the same links, naming the organisation.
+    await page.getByRole('button', { name: 'Menu', exact: true }).click();
+    expect(
+      await page
+        .locator('.app-shell-link[target="_blank"]')
+        .evaluateAll((links) => links.map((l) => l.getAttribute('href'))),
+    ).toEqual([
+      '#/live/local-dev-org/splash',
+      '#/live/local-dev-org/projector',
+      '#/live/local-dev-org/phone',
+    ]);
+
+    // The link the card shows really opens the phone surface.
+    await navigateHash(page, '#' + urls[0].split('#')[1]);
+    await expect(page.locator('.app-bare-root .viewer-badge')).toHaveText(/live/i, {
+      timeout: 15000,
+    });
+  });
+
   // The audience is anonymous: the same links, with nobody signed in, prove the public door and the surfaces'
   // own reads work for the `anon` role through a real browser (pgTAP 037 covers the grants on their own).
   test('anonymous visitors: a slug link opens the surface, a wrong slug says so, and the page never asks anyone to sign in', async ({
