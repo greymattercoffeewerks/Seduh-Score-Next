@@ -267,3 +267,13 @@ member or not there is "Page not found". A found answer is remembered on the dev
 keys `eventOrg:`/`matchEvent:`) and used first, because an event never changes organisation. A new
 event-keyed route needs nothing: any route with `:eventId` or `:matchId` goes through `requireAuth`. See
 ROADMAP.md's "Known open items from T-TEN.C7".
+
+T-TEN.D1 (2026-10-12) — audience links name the organiser. `core/orgResolver.js`'s `resolveOrgBySlug(slug,
+client)` turns a slug into `{ status: 'found', org } | { status: 'not_found' } | { status: 'error', error }` through
+`public_org_by_slug`; the three outcomes must stay distinct (an audience must never read "no event tonight" for a
+mistyped link, nor "not found" for a dropped connection). It follows the database's own slug rules before asking
+(a link that cannot be a slug is "not found" without a request) and remembers only found answers. The routes
+(`#/live/:orgSlug/projector|phone|splash`) and the retry card live in `main.js` (`mountAudienceBySlug`: the one
+file that knows both core and the formats); the old slug-less links are the legacy shim (`config.js`:
+`getLegacyAudienceOrgSlug` first, else `getLegacyAudienceOrgId`). `core/router.js`'s `matchRoute` treats an
+undecodable segment as no match. See ROADMAP.md's "Known open items from T-TEN.D1".
