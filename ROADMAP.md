@@ -1897,13 +1897,13 @@ handoff §4's "one organiser, one org"; locks D-T1…D-T8). Why: `MULTI-TENANCY-
 pillars A and B. Not in scope: gating/entitlements (D14 stays a stub), admin console, self-serve
 signup, Seduh ID. Rule (lifted 2026-10-11, now that B1, B2 and B6 are in the cloud): a two-org user is created only through the service-role provisioning path (B4).
 
-| Phase | Tasks                                                                                                                                             | Status                                               |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| A     | A1 spec lock · A2 tenancy inventory                                                                                                               | Done                                                 |
-| B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | Done (B1 to B7 merged and in the cloud project)      |
-| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | Phase C built (C1 to C6 merged; C7 built, in review) |
-| D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | Not started                                          |
-| E     | E1 negative matrix · E2 console Playwright · E3 security/perf · E4 docs · E5 rollout · E6 close-out                                               | Not started                                          |
+| Phase | Tasks                                                                                                                                             | Status                                          |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| A     | A1 spec lock · A2 tenancy inventory                                                                                                               | Done                                            |
+| B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | Done (B1 to B7 merged and in the cloud project) |
+| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | Done (C1 to C7 merged)                          |
+| D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | In progress (D1 merged; D2 built, in review)    |
+| E     | E1 negative matrix · E2 console Playwright · E3 security/perf · E4 docs · E5 rollout · E6 close-out                                               | Not started                                     |
 
 Each D task is re-confirmed with the product owner before it starts (2026-10-10).
 
@@ -2092,3 +2092,28 @@ _Client only: `main.js` (the route guard), `core/events.js`, `formats/btc/matche
 - **Offline reload of a timing or scoring screen still needs the network to load the screen itself** (unchanged by C7): the guard now finds the event's organisation from the device's memory, but the screen's own load is what fails offline.
 - **The unit tests cannot see a one-time password on the Team screen blocking a link** (jsdom runs every navigation twice and the second run finds the flag already cleared); the code resets the flag before switching.
 - **A manual screen-reader and real-phone pass** is still owed for the C3 to C7 additions (the notice, the card).
+
+---
+
+## Known open items from T-TEN.D1 (2026-10-12)
+
+_Client only: `main.js` (`mountAudienceBySlug`), `core/orgResolver.js`, `core/config.js`, `core/router.js`, `core/viewer-shell.css`. No migration._
+
+- **The surfaces themselves still read `events` and `live_sessions` directly as anon** (D2 moves them to `public_event_summary` and the resolved organisation; D6 closes the old direct reads, only after D1 to D5 are deployed and no live event is in progress; venue projectors left open run old cached JavaScript).
+- **The organiser's own "Projector view / Phone view / Splash screen" nav links are still the OLD slug-less links** (they show the legacy organisation, so they appear only while that organisation is the active one). D4 makes every generated link slug-qualified.
+- **A deterministic failure (an unpushed migration, a revoked grant) shows "We can’t reach Seduh right now" and retries for ever** at one request per 30 seconds per open tab (with a quarter of jitter). Harmless to the database and it stops when the tab navigates away, but it is a misleading card for a permanent fault.
+- **A legacy slug that is set but wrong shows "not found" on every old link and does not fall back to `VITE_DEFAULT_ORG_ID`**: set it to `grey-matter-coffee-werks` exactly (the organiser's slug), or leave it unset until the Cloudflare variable is added.
+- **Moving from one audience surface to another: the old surface's live connection is only released once the new link's first lookup has answered** (the router takes the old screen down after the new mount resolves, up to 10 seconds on bad wifi). The screen itself shows the new "Opening this link…" card at once; the old surface's updates are already stopped (its abort signal fires the instant the new navigation starts).
+- **Real-screen and browser tests do not cover a VoiceOver/TalkBack pass** on the new cards, nor the card at 1920x1080 on a real projector (the width rule is reasoned from the CSS and unit-checked, not measured). Both fold into the manual screen-reader and real-phone pass already owed for the C3 to C7 additions.
+- **Not asked of the product owner yet (D4):** whether the audience links should also be offered as a QR code. The only audience links today are the three nav-menu links; `qrcode-generator` is used by Guess the Bean only.
+
+---
+
+## Known open items from T-TEN.D2 (2026-10-12)
+
+_Client only: `core/events.js` and the test fakes. No migration._
+
+- **When the event check cannot be made (a wifi drop of a few seconds, the 4-second bound), the projector and phone say "No event scheduled" rather than "could not check"** (`viewer-shell.js` treats a failed check as "no event" and only re-asks on the next live-session change or reconnect). This predates D2 (same wording before the RPC), so D2 left it: fixing it changes what the audience reads and needs a decision on the wording and a retry. The splash screen is unaffected (it stays on the brand-only line). A tri-state (unknown / none / has) with a neutral "could not check" card and a retry would close it.
+- **`supabase/tests/003_rls.sql` still replicates the old anonymous table query** (around line 183): D6 removes it with the grants.
+- **The browser test covers the splash screen's request, not the projector's:** the projector only asks for the event while no live session already proves there is one, so whether it asks depends on what earlier tests left behind. The unit and real-screen tests cover the projector's ask.
+- **The results pages were not part of the "no anonymous read of `events`" check by browser** (they read `public_results` and RPCs; D3).

@@ -99,6 +99,11 @@ vi.mock('./formats/btc/scoringScreen.js', () => ({
 // the format-dispatch existed keeps testing exactly what it did before, unmodified —
 // only the new tests specifically about dispatch override this per-call.
 const findEvent = vi.fn(() => Promise.resolve({ id: 'ev1', format: 'cup_taster' }));
+// Which organiser a slug in an audience link means (T-TEN.D1): a test says which.
+const resolveOrgBySlug = vi.fn(() => Promise.resolve({ status: 'not_found' }));
+vi.mock('./core/orgResolver.js', () => ({
+  resolveOrgBySlug: (...args) => resolveOrgBySlug(...args),
+}));
 const findMatchEventId = vi.fn(() => Promise.resolve(null));
 vi.mock('./formats/btc/matches.js', () => ({
   findMatchEventId: (...args) => findMatchEventId(...args),
@@ -222,7 +227,12 @@ let activeApp = null;
 async function startApp(overrides = {}) {
   const root = document.createElement('div');
   document.body.appendChild(root);
-  const app = mountApp(root, { client: fakeClient(), legacyAudienceOrgId: 'org1', ...overrides });
+  const app = mountApp(root, {
+    client: fakeClient(),
+    legacyAudienceOrgId: 'org1',
+    legacyAudienceOrgSlug: null,
+    ...overrides,
+  });
   await app.ready;
   activeApp = app;
   return { root, app };
@@ -544,6 +554,537 @@ describe('mountApp routing', () => {
       expect.anything(),
       expect.objectContaining({ orgId: 'org1', signal: expect.any(AbortSignal) }),
     );
+  });
+
+  describe('audience links that name the organiser (T-TEN.D1)', () => {
+    const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+    const ALPHA = { status: 'found', org: { id: 'org-alpha', name: 'Alpha', slug: 'alpha' } };
+    const BRAVO = { status: 'found', org: { id: 'org-bravo', name: 'Bravo', slug: 'bravo' } };
+
+    beforeEach(() => {
+      // Start from no link: a previous test's hash must not start this one's app on an audience route.
+      location.hash = '';
+      // No jitter unless a test asks for it: the retry beat is exactly the schedule.
+      vi.spyOn(Math, 'random').mockReturnValue(0);
+      resolveOrgBySlug.mockReset();
+      resolveOrgBySlug.mockImplementation(async (slug) => {
+        if (slug === 'alpha') return ALPHA;
+        if (slug === 'bravo') return BRAVO;
+        return { status: 'not_found' };
+      });
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      stubScreen(mountProjectorSurface, 'PROJECTOR_SCREEN');
+      stubScreen(mountPhoneSummary, 'PHONE_SCREEN');
+      stubScreen(mountSplashScreen, 'SPLASH_SCREEN');
+    });
+
+    afterEach(() => {
+      vi.mocked(Math.random).mockRestore();
+    });
+
+    it('each of the three surfaces mounts for the organiser the slug names, with the abort signal', async () => {
+      const { root } = await startApp();
+      for (const [name, screen, marker] of [
+        ['projector', mountProjectorSurface, 'PROJECTOR_SCREEN'],
+        ['phone', mountPhoneSummary, 'PHONE_SCREEN'],
+        ['splash', mountSplashScreen, 'SPLASH_SCREEN'],
+      ]) {
+        location.hash = `#/live/bravo/${name}`;
+        await vi.waitFor(() => expect(root.textContent).toContain(marker));
+        expect(screen).toHaveBeenLastCalledWith(
+          expect.anything(),
+          expect.objectContaining({ orgId: 'org-bravo', signal: expect.any(AbortSignal) }),
+        );
+      }
+    });
+
+    it('two organisers each get their own organisation', async () => {
+      const { root } = await startApp();
+      location.hash = '#/live/alpha/projector';
+      await vi.waitFor(() => expect(mountProjectorSurface).toHaveBeenCalled());
+      expect(mountProjectorSurface.mock.calls.at(-1)[1].orgId).toBe('org-alpha');
+      location.hash = '#/live/bravo/projector';
+      await vi.waitFor(() =>
+        expect(mountProjectorSurface.mock.calls.at(-1)[1].orgId).toBe('org-bravo'),
+      );
+      void root;
+    });
+
+    it('asks the resolver with the slug from the link, and mounts nothing from the legacy organisation', async () => {
+      await startApp({ legacyAudienceOrgId: 'org-legacy' });
+      location.hash = '#/live/alpha/phone';
+      await vi.waitFor(() => expect(mountPhoneSummary).toHaveBeenCalled());
+      expect(resolveOrgBySlug).toHaveBeenCalledWith('alpha', expect.anything());
+      expect(mountPhoneSummary.mock.calls.every((call) => call[1].orgId !== 'org-legacy')).toBe(
+        true,
+      );
+    });
+
+    it('a slug with no organiser says so, and mounts no surface (never "no event tonight")', async () => {
+      const { root } = await startApp();
+      location.hash = '#/live/nobody/projector';
+      await vi.waitFor(() => expect(root.textContent).toContain('We couldn’t find that organiser'));
+      expect(root.textContent).toContain('Check the link');
+      expect(root.textContent).not.toContain('PROJECTOR_SCREEN');
+      expect(root.textContent).not.toContain('Waiting for the organiser');
+      expect(mountProjectorSurface).not.toHaveBeenCalled();
+    });
+
+    it('the not-found card uses the stage look for the projector and splash, and the paper look for the phone', async () => {
+      const { root } = await startApp();
+      const bare = () => root.querySelector('.app-bare-root');
+      location.hash = '#/live/nobody/projector';
+      await vi.waitFor(() => expect(root.textContent).toContain('couldn’t find'));
+      expect(bare().getAttribute('data-surface')).toBe('stage');
+      location.hash = '#/live/nobody/phone';
+      await vi.waitFor(() => expect(bare().getAttribute('data-surface')).toBeNull());
+      expect(root.textContent).toContain('couldn’t find');
+      location.hash = '#/live/nobody/splash';
+      await vi.waitFor(() => expect(bare().getAttribute('data-surface')).toBe('stage'));
+    });
+
+    it('a failed lookup says it is trying again, keeps trying, and mounts the surface once it works (nobody reloads)', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout'] });
+      try {
+        let calls = 0;
+        resolveOrgBySlug.mockImplementation(async () => {
+          calls += 1;
+          return calls < 3 ? { status: 'error', error: new Error('offline') } : ALPHA;
+        });
+        const { root } = await startApp();
+        location.hash = '#/live/alpha/projector';
+        await vi.advanceTimersByTimeAsync(10);
+        expect(root.textContent).toContain('We can’t reach Seduh right now');
+        expect(root.textContent).toContain('This page will update by itself');
+        expect(root.textContent).not.toContain('couldn’t find that organiser');
+        // announced politely: it will be replaced by the surface without anyone touching the screen
+        const trying = [...root.querySelectorAll('[role="status"]')].find((node) =>
+          node.textContent.includes('This page will update by itself'),
+        );
+        expect(trying?.getAttribute('aria-live')).toBe('polite');
+        expect(mountProjectorSurface).not.toHaveBeenCalled();
+        await vi.advanceTimersByTimeAsync(3000);
+        expect(calls).toBeGreaterThanOrEqual(2);
+        expect(mountProjectorSurface).not.toHaveBeenCalled();
+        await vi.advanceTimersByTimeAsync(6000);
+        expect(root.textContent).toContain('PROJECTOR_SCREEN');
+        expect(root.textContent).not.toContain('This page will update by itself');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('a failed lookup becomes "not found" when the answer is that there is no such organiser', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout'] });
+      try {
+        const answers = [{ status: 'error', error: new Error('x') }, { status: 'not_found' }];
+        resolveOrgBySlug.mockImplementation(async () => answers.shift() ?? { status: 'not_found' });
+        const { root } = await startApp();
+        location.hash = '#/live/alpha/phone';
+        await vi.advanceTimersByTimeAsync(10);
+        expect(root.textContent).toContain('We can’t reach Seduh right now');
+        await vi.advanceTimersByTimeAsync(3100);
+        expect(root.textContent).toContain('We couldn’t find that organiser');
+        // and it has stopped asking
+        const asked = resolveOrgBySlug.mock.calls.length;
+        await vi.advanceTimersByTimeAsync(60000);
+        expect(resolveOrgBySlug.mock.calls.length).toBe(asked);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('moving to another screen stops the retrying', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout'] });
+      try {
+        resolveOrgBySlug.mockResolvedValue({ status: 'error', error: new Error('offline') });
+        const { root } = await startApp();
+        location.hash = '#/live/alpha/projector';
+        await vi.advanceTimersByTimeAsync(10);
+        location.hash = '#/events';
+        // (the router mounts the next screen before it takes the old one down, so wait for the next one)
+        for (let i = 0; i < 30 && !root.textContent.includes('EVENTS_SCREEN'); i += 1) {
+          await vi.advanceTimersByTimeAsync(100);
+        }
+        expect(root.textContent).toContain('EVENTS_SCREEN');
+        // ...and for the router to have taken the old one down, which it does just after (the next screen's
+        // own waits run on the same fake clock)
+        await vi.advanceTimersByTimeAsync(40000);
+        const asked = resolveOrgBySlug.mock.calls.length;
+        await vi.advanceTimersByTimeAsync(120000);
+        expect(resolveOrgBySlug.mock.calls.length).toBe(asked);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('a surface that was still starting when the person moved on is taken down again', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout'] });
+      try {
+        let calls = 0;
+        resolveOrgBySlug.mockImplementation(async () => {
+          calls += 1;
+          return calls < 2 ? { status: 'error', error: new Error('offline') } : ALPHA;
+        });
+        const surfaceHandle = { unmount: vi.fn() };
+        let finishStarting;
+        mountProjectorSurface.mockImplementation(
+          () => new Promise((resolve) => (finishStarting = () => resolve(surfaceHandle))),
+        );
+        const { root } = await startApp();
+        location.hash = '#/live/alpha/projector';
+        await vi.advanceTimersByTimeAsync(3100); // the retry finds the organiser and starts the surface
+        expect(finishStarting).toBeTypeOf('function');
+        location.hash = '#/events';
+        for (let i = 0; i < 40 && !root.textContent.includes('EVENTS_SCREEN'); i += 1) {
+          await vi.advanceTimersByTimeAsync(100);
+        }
+        await vi.advanceTimersByTimeAsync(40000);
+        finishStarting();
+        await vi.advanceTimersByTimeAsync(10);
+        expect(surfaceHandle.unmount).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('an answer that arrives after the person moved on mounts nothing', async () => {
+      let answerLate;
+      resolveOrgBySlug.mockImplementation(() => new Promise((resolve) => (answerLate = resolve)));
+      const { root } = await startApp();
+      location.hash = '#/live/alpha/projector';
+      await vi.waitFor(() => expect(answerLate).toBeTypeOf('function'));
+      location.hash = '#/live/phone';
+      await tick();
+      resolveOrgBySlug.mockImplementation(async () => ALPHA);
+      answerLate(ALPHA);
+      await tick();
+      await tick();
+      expect(mountProjectorSurface).not.toHaveBeenCalled();
+      expect(root.textContent).not.toContain('PROJECTOR_SCREEN');
+    });
+
+    it('the old slug-less links keep working through the legacy slug when one is configured', async () => {
+      const { root } = await startApp({
+        legacyAudienceOrgSlug: 'bravo',
+        legacyAudienceOrgId: 'org-legacy',
+      });
+      location.hash = '#/live/projector';
+      await vi.waitFor(() => expect(root.textContent).toContain('PROJECTOR_SCREEN'));
+      expect(resolveOrgBySlug).toHaveBeenCalledWith('bravo', expect.anything());
+      expect(mountProjectorSurface.mock.calls.at(-1)[1].orgId).toBe('org-bravo');
+    });
+
+    it('with no legacy slug yet, the old links use the configured org id, with no lookup at all', async () => {
+      const { root } = await startApp({ legacyAudienceOrgId: 'org-legacy' });
+      location.hash = '#/live/phone';
+      await vi.waitFor(() => expect(root.textContent).toContain('PHONE_SCREEN'));
+      expect(mountPhoneSummary.mock.calls.at(-1)[1].orgId).toBe('org-legacy');
+      expect(resolveOrgBySlug).not.toHaveBeenCalled();
+    });
+
+    it('with neither configured, the old links show the "out of date" card, never a crash', async () => {
+      const { root } = await startApp({ legacyAudienceOrgId: null, legacyAudienceOrgSlug: null });
+      for (const name of ['projector', 'phone', 'splash']) {
+        location.hash = `#/live/${name}`;
+        await vi.waitFor(() => expect(root.textContent).toContain('This link is out of date'));
+      }
+      expect(resolveOrgBySlug).not.toHaveBeenCalled();
+    });
+
+    it('shows a card from the first moment, never a blank page, while the first lookup is on its way', async () => {
+      resolveOrgBySlug.mockImplementation(() => new Promise(() => {}));
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      location.hash = '#/live/alpha/projector';
+      activeApp = mountApp(root, {
+        client: fakeClient(),
+        legacyAudienceOrgId: 'org1',
+        legacyAudienceOrgSlug: null,
+      });
+      await vi.waitFor(() => expect(root.textContent).toContain('Opening this link…'));
+      const bare = root.querySelector('.app-bare-root');
+      expect(bare.getAttribute('data-surface')).toBe('stage');
+      expect(bare.querySelector('.viewer-holding-body').getAttribute('role')).toBe('status');
+    });
+
+    it('retries on exactly the schedule 3, 6, 12, 20 and then every 30 seconds', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout'] });
+      try {
+        let now = 0;
+        const stamps = new Set();
+        resolveOrgBySlug.mockImplementation(async () => {
+          stamps.add(now);
+          return { status: 'error', error: new Error('offline') };
+        });
+        await startApp();
+        location.hash = '#/live/alpha/phone';
+        // a virtual clock in 100 ms steps; a superseded start (jsdom may begin the route twice) retries nothing
+        for (let step = 0; step < 1100; step += 1) {
+          await vi.advanceTimersByTimeAsync(100);
+          now += 100;
+        }
+        const times = [...stamps].sort((a, b) => a - b);
+        const gaps = times.slice(1).map((time, index) => time - times[index]);
+        // (the first gap is measured from when the first attempt was recorded, to within one 100 ms step)
+        expect(gaps[0]).toBeGreaterThanOrEqual(2900);
+        expect(gaps[0]).toBeLessThanOrEqual(3000);
+        expect(gaps.slice(1, 6)).toEqual([6000, 12000, 20000, 30000, 30000]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('spreads the retries (up to a quarter later), so a room of phones does not retry together', async () => {
+      vi.mocked(Math.random).mockReturnValue(0.999);
+      vi.useFakeTimers({ toFake: ['setTimeout'] });
+      try {
+        resolveOrgBySlug.mockResolvedValue({ status: 'error', error: new Error('offline') });
+        await startApp();
+        location.hash = '#/live/alpha/phone';
+        await vi.advanceTimersByTimeAsync(5);
+        const base = resolveOrgBySlug.mock.calls.length;
+        await vi.advanceTimersByTimeAsync(3500);
+        expect(resolveOrgBySlug.mock.calls.length).toBe(base);
+        await vi.advanceTimersByTimeAsync(400);
+        expect(resolveOrgBySlug.mock.calls.length).toBeGreaterThan(base);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('a card that keeps failing keeps the same words in the same live region: nothing is re-announced', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout'] });
+      try {
+        resolveOrgBySlug.mockResolvedValue({ status: 'error', error: new Error('offline') });
+        const { root } = await startApp();
+        location.hash = '#/live/alpha/phone';
+        await vi.advanceTimersByTimeAsync(10);
+        await vi.advanceTimersByTimeAsync(3100);
+        const body = root.querySelector('.app-bare-root .viewer-holding-body');
+        expect(body.textContent).toContain('Check the internet connection');
+        let changes = 0;
+        const observer = new MutationObserver((records) => {
+          changes += records.length;
+        });
+        observer.observe(body, { childList: true, characterData: true, subtree: true });
+        await vi.advanceTimersByTimeAsync(7000); // the next retry fails the same way
+        await Promise.resolve();
+        changes += observer.takeRecords().length;
+        expect(root.querySelector('.app-bare-root .viewer-holding-body')).toBe(body);
+        expect(changes).toBe(0);
+        observer.disconnect();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('a phone offers "Try again now", a projector does not; and the card looks like its surface', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout'] });
+      try {
+        resolveOrgBySlug.mockResolvedValue({ status: 'error', error: new Error('offline') });
+        const { root } = await startApp();
+        const bare = () => root.querySelector('.app-bare-root');
+        const tryNow = () =>
+          [...bare().querySelectorAll('button')].find((b) => b.textContent === 'Try again now');
+        location.hash = '#/live/alpha/phone';
+        await vi.advanceTimersByTimeAsync(10);
+        expect(tryNow()).toBeTruthy();
+        expect(tryNow().hidden).toBe(false);
+        expect(bare().getAttribute('data-surface')).toBeNull();
+        resolveOrgBySlug.mockResolvedValue(ALPHA);
+        tryNow().click();
+        await vi.advanceTimersByTimeAsync(10);
+        expect(root.textContent).toContain('PHONE_SCREEN');
+
+        resolveOrgBySlug.mockResolvedValue({ status: 'error', error: new Error('offline') });
+        location.hash = '#/live/alpha/projector';
+        await vi.advanceTimersByTimeAsync(10);
+        expect(bare().getAttribute('data-surface')).toBe('stage');
+        expect(tryNow()?.hidden ?? true).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('coming back online, or back to the tab, tries at once instead of waiting out the backoff', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout'] });
+      try {
+        resolveOrgBySlug.mockResolvedValue({ status: 'error', error: new Error('offline') });
+        await startApp();
+        location.hash = '#/live/alpha/projector';
+        await vi.advanceTimersByTimeAsync(10);
+        const before = resolveOrgBySlug.mock.calls.length;
+        window.dispatchEvent(new Event('online'));
+        await vi.advanceTimersByTimeAsync(5);
+        expect(resolveOrgBySlug.mock.calls.length).toBeGreaterThan(before);
+        const mid = resolveOrgBySlug.mock.calls.length;
+        document.dispatchEvent(new Event('visibilitychange'));
+        await vi.advanceTimersByTimeAsync(5);
+        expect(resolveOrgBySlug.mock.calls.length).toBeGreaterThan(mid);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('after the surface appeared, going online again asks nothing more', async () => {
+      const { root } = await startApp();
+      location.hash = '#/live/alpha/projector';
+      await vi.waitFor(() => expect(root.textContent).toContain('PROJECTOR_SCREEN'));
+      const asked = resolveOrgBySlug.mock.calls.length;
+      window.dispatchEvent(new Event('online'));
+      await tick();
+      expect(resolveOrgBySlug.mock.calls.length).toBe(asked);
+    });
+
+    it('the surface replacing a retry card gets focus on its heading', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout'] });
+      try {
+        let calls = 0;
+        resolveOrgBySlug.mockImplementation(async () => {
+          calls += 1;
+          return calls < 3 ? { status: 'error', error: new Error('offline') } : ALPHA;
+        });
+        mountProjectorSurface.mockImplementation(async (outlet) => {
+          outlet.innerHTML = '<h1>Projector</h1>';
+          return { unmount: vi.fn() };
+        });
+        const { root } = await startApp();
+        location.hash = '#/live/alpha/projector';
+        await vi.advanceTimersByTimeAsync(10);
+        await vi.advanceTimersByTimeAsync(20000);
+        expect(root.textContent).toContain('Projector');
+        expect(document.activeElement).toBe(root.querySelector('.app-bare-root h1'));
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('a surface that fails to start on a retry leaves a card that keeps trying, never a dead one', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout'] });
+      try {
+        let calls = 0;
+        resolveOrgBySlug.mockImplementation(async () => {
+          calls += 1;
+          return calls < 2 ? { status: 'error', error: new Error('offline') } : ALPHA;
+        });
+        let starts = 0;
+        mountProjectorSurface.mockImplementation(async (outlet) => {
+          starts += 1;
+          if (starts < 2) {
+            outlet.innerHTML = '<p>half-built surface</p>'; // it got as far as clearing the card
+            throw new Error('bad response');
+          }
+          outlet.textContent = 'PROJECTOR_SCREEN';
+          return { unmount: vi.fn() };
+        });
+        const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const { root } = await startApp();
+        location.hash = '#/live/alpha/projector';
+        await vi.advanceTimersByTimeAsync(10);
+        await vi.advanceTimersByTimeAsync(3100);
+        expect(root.textContent).not.toContain('PROJECTOR_SCREEN');
+        // the half-built surface is gone and the card says what is happening
+        expect(root.textContent).not.toContain('half-built surface');
+        expect(root.textContent).toContain('Check the internet connection');
+        await vi.advanceTimersByTimeAsync(7000);
+        expect(root.textContent).toContain('PROJECTOR_SCREEN');
+        logged.mockRestore();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    for (const [label, late] of [
+      ['an error', { status: 'error', error: new Error('late') }],
+      ['not found', { status: 'not_found' }],
+      ['an organiser', ALPHA],
+    ]) {
+      it(`${label} arriving after the person moved on paints nothing and arms no retry`, async () => {
+        vi.useFakeTimers({ toFake: ['setTimeout'] });
+        try {
+          const pending = [];
+          resolveOrgBySlug.mockImplementation(
+            (slug) => new Promise((resolve) => pending.push([slug, resolve])),
+          );
+          const { root } = await startApp();
+          location.hash = '#/live/alpha/projector';
+          await vi.advanceTimersByTimeAsync(10);
+          resolveOrgBySlug.mockImplementation(async () => BRAVO);
+          location.hash = '#/live/bravo/phone';
+          await vi.advanceTimersByTimeAsync(10);
+          expect(root.textContent).toContain('PHONE_SCREEN');
+          const asked = resolveOrgBySlug.mock.calls.length;
+          for (const [slug, resolve] of pending) if (slug === 'alpha') resolve(late);
+          await vi.advanceTimersByTimeAsync(60000);
+          expect(root.textContent).toContain('PHONE_SCREEN');
+          expect(root.textContent).not.toContain('Check the internet connection');
+          expect(root.textContent).not.toContain('couldn’t find');
+          expect(mountProjectorSurface).not.toHaveBeenCalled();
+          expect(resolveOrgBySlug.mock.calls.length).toBe(asked);
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+    }
+
+    it('a percent-encoded slug reaches the resolver decoded, and a capital letter as typed', async () => {
+      await startApp();
+      location.hash = '#/live/alpha%20coffee/phone';
+      await vi.waitFor(() =>
+        expect(resolveOrgBySlug).toHaveBeenCalledWith('alpha coffee', expect.anything()),
+      );
+      location.hash = '#/live/Alpha/phone';
+      await vi.waitFor(() =>
+        expect(resolveOrgBySlug).toHaveBeenCalledWith('Alpha', expect.anything()),
+      );
+    });
+
+    it('a link with a broken percent-escape is "Page not found", not a blank page', async () => {
+      const { root } = await startApp();
+      location.hash = '#/live/%E0%A4%A/phone';
+      await vi.waitFor(() => expect(root.textContent).toContain('Page not found'));
+      expect(resolveOrgBySlug).not.toHaveBeenCalled();
+    });
+
+    it('a legacy slug that does not exist shows "not found" on every old link, and the org id is not used instead', async () => {
+      const { root } = await startApp({
+        legacyAudienceOrgSlug: 'ghost',
+        legacyAudienceOrgId: 'org-legacy',
+      });
+      for (const [name, screen] of [
+        ['projector', mountProjectorSurface],
+        ['phone', mountPhoneSummary],
+        ['splash', mountSplashScreen],
+      ]) {
+        location.hash = `#/live/${name}`;
+        await vi.waitFor(() => expect(root.textContent).toContain('couldn’t find that organiser'));
+        expect(screen).not.toHaveBeenCalled();
+      }
+    });
+
+    it('the "out of date" card is in the stage look for the projector and splash, the paper look for the phone, and asks nothing', async () => {
+      const { root } = await startApp({ legacyAudienceOrgId: null, legacyAudienceOrgSlug: null });
+      const bare = () => root.querySelector('.app-bare-root');
+      for (const [name, look] of [
+        ['projector', 'stage'],
+        ['phone', null],
+        ['splash', 'stage'],
+      ]) {
+        location.hash = `#/live/${name}`;
+        await vi.waitFor(() => expect(bare().getAttribute('data-surface')).toBe(look));
+        expect(root.textContent).toContain('This link is out of date');
+      }
+      expect(resolveOrgBySlug).not.toHaveBeenCalled();
+    });
+
+    it('a slug that looks like a surface name is still an organiser (the three-part form is never mistaken for an old link)', async () => {
+      resolveOrgBySlug.mockResolvedValue(ALPHA);
+      const { root } = await startApp();
+      location.hash = '#/live/projector/phone';
+      await vi.waitFor(() => expect(root.textContent).toContain('PHONE_SCREEN'));
+      expect(resolveOrgBySlug).toHaveBeenCalledWith('projector', expect.anything());
+    });
   });
 
   it("resets a stale class/data-surface attribute on bareRoot BEFORE mounting the next of the three /live/* routes — regression coverage for the cross-screen residue bug (module-boundary-checker flagged the original per-screen cleanup as a real §6 violation: core/splashScreen.js hardcoding the format-specific 'projector-surface' class name; centralized here in main.js instead)", async () => {
@@ -3231,6 +3772,47 @@ describe('organisation context wiring (T-TEN.C2)', () => {
       await vi.waitFor(() =>
         expect(labels(root)).toEqual(['Events', 'Splash screen', 'Projector view', 'Phone view']),
       );
+    });
+
+    it('offers the audience links by the legacy organiser slug too, with no org id configured', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const labels = (root) =>
+        [...root.querySelectorAll('.app-shell-link')].map((link) =>
+          link.textContent.replace(/\s*\(.*\)$/, ''),
+        );
+      const { root, app } = await startApp({
+        client: orgClient(),
+        legacyAudienceOrgId: null,
+        legacyAudienceOrgSlug: 'org-one',
+      });
+      expect(labels(root)).toEqual(['Events', 'Splash screen', 'Projector view', 'Phone view']);
+      await app.switchOrg('org2');
+      await vi.waitFor(() => expect(labels(root)).toEqual(['Events']));
+    });
+
+    it('the audience links follow the legacy slug when there is one: a stale org id for the active organisation does not offer them', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const { root } = await startApp({
+        client: orgClient(),
+        legacyAudienceOrgId: 'org1',
+        legacyAudienceOrgSlug: 'org-two',
+      });
+      expect(
+        [...root.querySelectorAll('.app-shell-link')].map((link) => link.textContent),
+      ).not.toContain('Projector view');
+    });
+
+    it('the legacy slug is compared the way the database reads it: a capital letter in the setting still finds the organisation', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const { root } = await startApp({
+        client: orgClient(),
+        legacyAudienceOrgId: null,
+        legacyAudienceOrgSlug: 'Org-One',
+      });
+      expect(root.textContent).toContain('Projector view');
     });
 
     it('tells same-named organisations apart by slug', async () => {

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
 import {
   defaultHasContent,
   renderHoldingState,
@@ -19,11 +19,20 @@ import {
 // noEvent/notStarted distinction) keeps seeing 'notStarted' exactly as
 // before. Tests that DO care about the distinction pass `events: []`
 // explicitly.
+// What a fake saw that the real surfaces must never do. Recorded, not thrown: every caller of the event check
+// catches its errors, so a throw would be swallowed as "no event" and the test would still pass.
+const violations = [];
+afterEach(() => {
+  expect(violations).toEqual([]);
+  violations.length = 0;
+});
+
 function fakeClient(
   initialRows = [],
   { failNextRead = false, readDelayMs = 0, events = [{ id: 'ev1', org_id: 'org1' }] } = {},
 ) {
   const db = { live_sessions: [...initialRows], events: [...events] };
+  const asked = [];
   let changeHandler = null;
   let statusHandler = null;
   let removedChannel = null;
@@ -49,20 +58,9 @@ function fakeClient(
       limit: () => builder,
       maybeSingle() {
         if (table === 'events') {
-          const rows = db.events.filter((r) => matchesFilters(r, filters));
-          const snapshot = rows[0] ? { ...rows[0] } : null;
-          const willFail = shouldFailEvents;
-          if (shouldFailEvents) shouldFailEvents = false;
-          const resolveResult = () =>
-            willFail
-              ? { data: null, error: new Error('events read failed') }
-              : { data: snapshot, error: null };
-          if (eventsDelay > 0) {
-            return new Promise((resolve) =>
-              setTimeout(() => resolve(resolveResult()), eventsDelay),
-            );
-          }
-          return Promise.resolve(resolveResult());
+          // The audience surfaces ask the narrow public_event_summary door (T-TEN.D2), never the table.
+          violations.push('read the events table');
+          throw new Error('the audience surfaces must not read the events table');
         }
         // Snapshot the matching row AND the fail flag synchronously, at
         // CALL time — not after the delay, at resolution time. A real
@@ -117,7 +115,37 @@ function fakeClient(
 
   return {
     db,
+    asked,
     from: (table) => makeBuilder(table),
+    // public_event_summary: the organisation's newest event as a one-row table, or no rows.
+    rpc(name, args) {
+      if (name !== 'public_event_summary') {
+        return Promise.resolve({ data: null, error: new Error(`unexpected rpc ${name}`) });
+      }
+      asked.push(args);
+      const rows = db.events.filter((r) => r.org_id === args.p_org_id);
+      // exactly the four columns the real function returns (org_id is only what the fake filters on)
+      const snapshot = rows[0]
+        ? [
+            {
+              id: rows[0].id,
+              name: rows[0].name ?? 'Event',
+              event_date: rows[0].event_date ?? null,
+              is_test: rows[0].is_test ?? false,
+            },
+          ]
+        : [];
+      const willFail = shouldFailEvents;
+      if (shouldFailEvents) shouldFailEvents = false;
+      const resolveResult = () =>
+        willFail
+          ? { data: null, error: new Error('events read failed') }
+          : { data: snapshot, error: null };
+      if (eventsDelay > 0) {
+        return new Promise((resolve) => setTimeout(() => resolve(resolveResult()), eventsDelay));
+      }
+      return Promise.resolve(resolveResult());
+    },
     channel: () => channelObj,
     removeChannel: (ch) => {
       removedChannel = ch;
@@ -293,10 +321,10 @@ describe('mountViewerShell', () => {
     const root = document.createElement('div');
     const client = fakeClient([], { events: [] });
     const eventsBuilderCalls = [];
-    const realFrom = client.from;
-    client.from = (table) => {
-      if (table === 'events') eventsBuilderCalls.push(1);
-      return realFrom(table);
+    const realRpc = client.rpc;
+    client.rpc = (name, args) => {
+      if (name === 'public_event_summary') eventsBuilderCalls.push(args.p_org_id);
+      return realRpc(name, args);
     };
     await mountViewerShell(root, { orgId: 'org1', renderBody: vi.fn(), showChrome: false, client });
     expect(eventsBuilderCalls).toHaveLength(1);
@@ -322,10 +350,10 @@ describe('mountViewerShell', () => {
     const root = document.createElement('div');
     const client = fakeClient([], { events: [] });
     const eventsBuilderCalls = [];
-    const realFrom = client.from;
-    client.from = (table) => {
-      if (table === 'events') eventsBuilderCalls.push(1);
-      return realFrom(table);
+    const realRpc = client.rpc;
+    client.rpc = (name, args) => {
+      if (name === 'public_event_summary') eventsBuilderCalls.push(args.p_org_id);
+      return realRpc(name, args);
     };
     await mountViewerShell(root, { orgId: 'org1', renderBody: vi.fn(), showChrome: false, client });
     expect(root.textContent).toContain('No event scheduled');
@@ -368,21 +396,20 @@ describe('mountViewerShell', () => {
     try {
       const root = document.createElement('div');
       const client = {
-        from: (table) => ({
+        from: () => ({
           select: () => ({
             eq: () => ({
               eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }),
               order: () => ({
                 limit: () => ({
-                  maybeSingle: () =>
-                    table === 'events'
-                      ? new Promise(() => {})
-                      : Promise.resolve({ data: null, error: null }),
+                  maybeSingle: () => Promise.resolve({ data: null, error: null }),
                 }),
               }),
             }),
           }),
         }),
+        // the event check asks public_event_summary (T-TEN.D2): this one never answers
+        rpc: () => new Promise(() => {}),
         channel: () => ({
           on: () => ({ subscribe: () => {} }),
           subscribe() {
@@ -414,7 +441,7 @@ describe('mountViewerShell', () => {
     try {
       const root = document.createElement('div');
       const client = {
-        from: (table) => ({
+        from: () => ({
           select: () => ({
             eq: () => ({
               // live_sessions itself resolves, but only after 9s — close to
@@ -427,15 +454,14 @@ describe('mountViewerShell', () => {
               }),
               order: () => ({
                 limit: () => ({
-                  maybeSingle: () =>
-                    table === 'events'
-                      ? new Promise(() => {})
-                      : Promise.resolve({ data: null, error: null }),
+                  maybeSingle: () => Promise.resolve({ data: null, error: null }),
                 }),
               }),
             }),
           }),
         }),
+        // the event check asks public_event_summary (T-TEN.D2): this one never answers
+        rpc: () => new Promise(() => {}),
         channel: () => ({
           on: () => ({ subscribe: () => {} }),
           subscribe() {
@@ -1067,6 +1093,7 @@ describe('mountViewerShell', () => {
       return {
         state,
         registered,
+        rpc: () => Promise.resolve({ data: [{ id: 'ev1' }], error: null }),
         from: (table) => {
           const builder = {
             select: () => builder,
@@ -1076,8 +1103,7 @@ describe('mountViewerShell', () => {
             maybeSingle: () => {
               if (table === 'live_sessions') state.reads += 1;
               return Promise.resolve({
-                data:
-                  table === 'events' ? { id: 'ev1' } : session({ payload: { ...state.payload } }),
+                data: session({ payload: { ...state.payload } }),
                 error: null,
               });
             },
@@ -1480,5 +1506,49 @@ describe('viewer-shell.css: the TEST banner stays in view while a long page scro
   it('does not reserve anything for a real event (the host is only styled while it is not empty)', () => {
     const bare = blocks.filter((b) => b.selector === '.viewer-banner-host');
     expect(bare.every((b) => !/position:\s*sticky|padding/.test(b.body))).toBe(true);
+  });
+});
+
+describe('the event check goes through public_event_summary (T-TEN.D2)', () => {
+  const mountFor = async (client, orgId = 'org1') => {
+    const root = document.createElement('div');
+    await mountViewerShell(root, { orgId, renderBody: vi.fn(), showChrome: false, client });
+    return root;
+  };
+
+  it('asks about the organisation the surface was opened for, and nothing else', async () => {
+    const client = fakeClient([], { events: [{ id: 'ev1', org_id: 'org1' }] });
+    await mountFor(client);
+    expect(client.asked).toEqual([{ p_org_id: 'org1' }]);
+  });
+
+  it("an event of ANOTHER organisation does not count: this one has none ('No event scheduled')", async () => {
+    const client = fakeClient([], { events: [{ id: 'ev9', org_id: 'org2' }] });
+    const root = await mountFor(client, 'org1');
+    expect(root.textContent).toContain('No event scheduled');
+    const other = await mountFor(client, 'org2');
+    expect(other.textContent).toContain('Waiting for the organiser');
+  });
+
+  it('works with the four columns the function returns, and no more (no org_id, no created_at)', async () => {
+    const client = fakeClient([], { events: [{ id: 'ev1', org_id: 'org1', name: 'October Cup' }] });
+    const root = await mountFor(client);
+    expect(root.textContent).toContain('Waiting for the organiser');
+  });
+
+  it('an error in asking is logged and a later refresh that works then shows the event', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const client = fakeClient([], { events: [{ id: 'ev1', org_id: 'org1' }] });
+    client._failNextEventsRead();
+    const root = await mountFor(client);
+    expect(root.textContent).toContain('No event scheduled');
+    expect(logged).toHaveBeenCalledWith(
+      'viewer-shell: failed to check for an existing event',
+      expect.anything(),
+    );
+    client._triggerChange();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(root.textContent).toContain('Waiting for the organiser');
+    logged.mockRestore();
   });
 });

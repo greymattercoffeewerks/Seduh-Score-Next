@@ -36,18 +36,24 @@ vi.mock('./formats/btc/outboxHandlers.js', () => ({
 }));
 
 const { mountApp } = await import('./main.js');
+const { _clearOrgResolverForTests } = await import('./core/orgResolver.js');
 
 // A client with the two behaviours of supabase-js that caused bug 1:
 // channel(topic) returns the channel already registered under that topic,
 // and removeChannel() only deregisters it when unsubscribe() answers 'ok'
 // (here it never does, as when the connection is slow or dropped).
-function fakeClient() {
+function fakeClient({ organisers = { alpha: 'org1' }, rpcFailures = 0 } = {}) {
   const registered = new Map();
+  const reads = [];
+  let failuresLeft = rpcFailures;
   const removedChannels = [];
-  const builder = (row) => {
+  const builder = (row, table) => {
     const b = {
       select: () => b,
-      eq: () => b,
+      eq: (column, value) => {
+        reads.push([table, column, value]);
+        return b;
+      },
       order: () => b,
       limit: () => b,
       maybeSingle: () => Promise.resolve({ data: row, error: null }),
@@ -57,6 +63,8 @@ function fakeClient() {
   };
   return {
     removedChannels,
+    reads,
+    registered,
     auth: {
       getSession: () => Promise.resolve({ data: { session: { user: { email: 'o@test.com' } } } }),
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe: vi.fn() } } }),
@@ -64,7 +72,34 @@ function fakeClient() {
     },
     // No live session, but the org has an event: the "Waiting for the
     // organiser" holding state.
-    from: (table) => builder(table === 'events' ? { id: 'ev1' } : null),
+    from: (table) => {
+      // The audience surfaces ask the narrow public_event_summary door (T-TEN.D2), never the table.
+      if (table === 'events')
+        throw new Error('the audience surfaces must not read the events table');
+      return builder(null, table);
+    },
+    // public_org_by_slug (T-TEN.B7): one organiser or nothing; `rpcFailures` makes the first calls fail
+    // as a dropped connection would.
+    rpc: (name, args) => {
+      if (name === 'public_event_summary') {
+        // one event for every organisation; the organisation each read was for is recorded
+        reads.push(['events', 'org_id', args.p_org_id]);
+        return Promise.resolve({
+          data: [{ id: 'ev1', name: 'Event', event_date: null, is_test: false }],
+          error: null,
+        });
+      }
+      if (name !== 'public_org_by_slug') return Promise.resolve({ data: null, error: null });
+      if (failuresLeft > 0) {
+        failuresLeft -= 1;
+        return Promise.reject(new TypeError('Failed to fetch'));
+      }
+      const id = organisers[String(args.p_slug).trim().toLowerCase()];
+      return Promise.resolve({
+        data: id ? [{ id, name: 'Alpha', slug: args.p_slug }] : [],
+        error: null,
+      });
+    },
     channel(topic) {
       if (registered.has(topic)) return registered.get(topic);
       const chan = {
@@ -102,6 +137,7 @@ async function drain() {
 
 let activeApp = null;
 beforeEach(async () => {
+  _clearOrgResolverForTests();
   location.hash = '';
   sessionStorage.clear();
   await drain();
@@ -115,14 +151,18 @@ afterEach(async () => {
   await drain();
 });
 
-async function startOn(hash) {
+async function startOn(hash, { client = fakeClient(), ...options } = {}) {
   const root = document.createElement('div');
   document.body.appendChild(root);
   // Initial load straight onto an audience route, as a projector laptop's
   // bookmark would — no organiser screen ever mounts.
   location.hash = hash;
-  const client = fakeClient();
-  activeApp = mountApp(root, { client, legacyAudienceOrgId: 'org1' });
+  activeApp = mountApp(root, {
+    client,
+    legacyAudienceOrgId: 'org1',
+    legacyAudienceOrgSlug: null,
+    ...options,
+  });
   await activeApp.ready;
   return { client, bareRoot: root.querySelector('.app-bare-root') };
 }
@@ -183,5 +223,151 @@ describe('switching between the real audience routes in one tab', () => {
     expect(bareRoot.children).toHaveLength(1);
     expect(bareRoot.getAttribute('data-surface')).toBe('stage');
     expect(bareRoot.textContent).not.toContain('Connecting…');
+  });
+});
+
+describe('the same switching through links that name the organiser (T-TEN.D1)', () => {
+  it('leaves exactly the newest screen on the shared root after every switch — projector -> phone -> splash -> projector', async () => {
+    const { client, bareRoot } = await startOn('#/live/alpha/projector');
+    await vi.waitFor(() => holdingShown(bareRoot));
+    expect(bareRoot.children).toHaveLength(1);
+    expect(shell(bareRoot)).not.toBeNull();
+    expect(bareRoot.getAttribute('data-surface')).toBe('stage');
+
+    await go('#/live/alpha/phone');
+    await vi.waitFor(() => holdingShown(bareRoot));
+    expect(bareRoot.children).toHaveLength(1);
+    expect(bareRoot.getAttribute('data-surface')).toBeNull();
+    expect(bareRoot.textContent).not.toContain('Connecting…');
+    expect(client.removedChannels.length).toBeGreaterThanOrEqual(1);
+
+    await go('#/live/alpha/splash');
+    await vi.waitFor(() => expect(bareRoot.querySelector('.splash-content')).not.toBeNull());
+    expect(shell(bareRoot)).toBeNull();
+
+    await go('#/live/alpha/projector');
+    await vi.waitFor(() => holdingShown(bareRoot));
+    expect(shell(bareRoot)).not.toBeNull();
+    expect(bareRoot.querySelector('.splash-content')).toBeNull();
+    expect(bareRoot.children).toHaveLength(1);
+    expect(bareRoot.textContent).not.toContain('Connecting…');
+  });
+
+  it('the old slug-less links and the new ones mix freely in one tab', async () => {
+    const { bareRoot } = await startOn('#/live/projector');
+    await vi.waitFor(() => holdingShown(bareRoot));
+    await go('#/live/alpha/phone');
+    await vi.waitFor(() => holdingShown(bareRoot));
+    expect(bareRoot.children).toHaveLength(1);
+    await go('#/live/splash');
+    await vi.waitFor(() => expect(bareRoot.querySelector('.splash-content')).not.toBeNull());
+  });
+
+  it('a wrong slug says so on every surface, and a right link afterwards works', async () => {
+    const { bareRoot } = await startOn('#/live/nobody/projector');
+    await vi.waitFor(() =>
+      expect(bareRoot.textContent).toContain('We couldn’t find that organiser'),
+    );
+    expect(bareRoot.textContent).not.toContain('Waiting for the organiser');
+    expect(shell(bareRoot)).toBeNull();
+    expect(bareRoot.children).toHaveLength(1);
+
+    await go('#/live/nobody/splash');
+    await vi.waitFor(() =>
+      expect(bareRoot.textContent).toContain('We couldn’t find that organiser'),
+    );
+    expect(bareRoot.querySelector('.splash-content')).toBeNull();
+
+    await go('#/live/alpha/projector');
+    await vi.waitFor(() => holdingShown(bareRoot));
+    expect(bareRoot.textContent).not.toContain('We couldn’t find');
+    expect(bareRoot.children).toHaveLength(1);
+  });
+
+  it('a dropped connection says it is trying again, then the surface appears on its own', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    try {
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      location.hash = '#/live/alpha/phone';
+      activeApp = mountApp(root, {
+        client: fakeClient({ rpcFailures: 2 }),
+        legacyAudienceOrgId: 'org1',
+        legacyAudienceOrgSlug: null,
+      });
+      await vi.advanceTimersByTimeAsync(20);
+      const bareRoot = root.querySelector('.app-bare-root');
+      expect(bareRoot.textContent).toContain('We can’t reach Seduh right now');
+      expect(bareRoot.textContent).not.toContain('We couldn’t find that organiser');
+      await vi.advanceTimersByTimeAsync(3100);
+      await vi.waitFor(() => holdingShown(bareRoot));
+      expect(bareRoot.textContent).not.toContain('This page will update by itself');
+      expect(bareRoot.children).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+      vi.mocked(Math.random).mockRestore();
+    }
+  });
+
+  it('the legacy slug serves the old links through the same lookup', async () => {
+    const { bareRoot } = await startOn('#/live/phone', {
+      legacyAudienceOrgId: null,
+      legacyAudienceOrgSlug: 'alpha',
+    });
+    await vi.waitFor(() => holdingShown(bareRoot));
+  });
+
+  it('each organiser link reads its own organisation, and a switch never carries the other one over', async () => {
+    const client = fakeClient({ organisers: { alpha: 'org1', bravo: 'org2' } });
+    const { bareRoot } = await startOn('#/live/bravo/projector', { client });
+    await vi.waitFor(() => holdingShown(bareRoot));
+    const orgReads = () =>
+      client.reads.filter(([, column]) => column === 'org_id').map(([, , value]) => value);
+    expect(new Set(orgReads())).toEqual(new Set(['org2']));
+    // the realtime channel is keyed on the resolved organisation too (one per mount)
+    expect(
+      [...client.registered.keys()].every((topic) => topic.startsWith('live_sessions:org2:')),
+    ).toBe(true);
+
+    client.reads.length = 0;
+    await go('#/live/alpha/projector');
+    await vi.waitFor(() => holdingShown(bareRoot));
+    expect(orgReads().length).toBeGreaterThan(0);
+    expect(new Set(orgReads())).toEqual(new Set(['org1']));
+    expect(
+      [...client.registered.keys()].some((topic) => topic.startsWith('live_sessions:org1:')),
+    ).toBe(true);
+  });
+
+  it('asks once for a slug however many surfaces the tab shows (and remembers it for the page)', async () => {
+    const client = fakeClient();
+    const rpc = vi.spyOn(client, 'rpc');
+    const { bareRoot } = await startOn('#/live/alpha/projector', { client });
+    await vi.waitFor(() => holdingShown(bareRoot));
+    await go('#/live/alpha/phone');
+    await vi.waitFor(() => holdingShown(bareRoot));
+    await go('#/live/alpha/splash');
+    await vi.waitFor(() => expect(bareRoot.querySelector('.splash-content')).not.toBeNull());
+    expect(
+      rpc.mock.calls.filter(([name]) => name === 'public_org_by_slug').length,
+    ).toBeLessThanOrEqual(2);
+  });
+
+  it('a card, then a surface, leave one child and the right look each time (projector not found -> phone -> splash)', async () => {
+    const { bareRoot } = await startOn('#/live/nobody/projector');
+    await vi.waitFor(() => expect(bareRoot.textContent).toContain('couldn’t find that organiser'));
+    expect(bareRoot.getAttribute('data-surface')).toBe('stage');
+    expect(bareRoot.children).toHaveLength(1);
+
+    await go('#/live/alpha/phone');
+    await vi.waitFor(() => expect(shell(bareRoot)).not.toBeNull());
+    expect(bareRoot.getAttribute('data-surface')).toBeNull();
+    expect(bareRoot.children).toHaveLength(1);
+    expect(bareRoot.textContent).not.toContain('couldn’t find');
+
+    await go('#/live/alpha/splash');
+    await vi.waitFor(() => expect(bareRoot.querySelector('.splash-content')).not.toBeNull());
+    expect(bareRoot.getAttribute('data-surface')).toBe('stage');
   });
 });

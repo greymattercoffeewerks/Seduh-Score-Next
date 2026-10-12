@@ -31,6 +31,12 @@ function fakeClient(rows = []) {
       onChange();
     },
     from: (table) => builder(table),
+    // public_event_summary: one event for org1 (T-TEN.D2)
+    rpc: (name, args) =>
+      Promise.resolve({
+        data: name === 'public_event_summary' && args.p_org_id === 'org1' ? [{ id: 'ev1' }] : [],
+        error: null,
+      }),
     channel: () => ({
       on(_type, _filter, cb) {
         onChange = cb;

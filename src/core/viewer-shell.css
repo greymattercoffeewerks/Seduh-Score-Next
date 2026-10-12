@@ -240,3 +240,18 @@
 .out-of-date-link .viewer-holding-title {
   margin: 0;
 }
+
+/* On a projector or splash screen the card is as wide as the stage cards are (70% of the screen): the
+   default 44ch is measured in the small body type and would make a six-letter column of the big title. */
+[data-surface='stage'] .out-of-date-link .viewer-holding-card {
+  max-width: 70vw;
+}
+
+/* The only instruction on a phone's screen is this sentence, so it is body size, not the small print size. */
+.out-of-date-link .viewer-holding-body {
+  font-size: var(--text-base);
+}
+
+.out-of-date-link .viewer-holding-card .btn {
+  margin-top: var(--space-4);
+}

@@ -1,3 +1,48 @@
+## T-TEN.D2: the audience screens ask the narrow event door, not the events table · 2026-10-12
+
+**Task:** T-TEN.D2 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase D, audience addressing). Client only: no migration, nothing to push to the cloud project (the database side, `public_event_summary`, is T-TEN.B7 and already live).
+
+**Status: in review, not merged.**
+
+**Why:** the projector, phone and splash screen found out whether their organisation has an event by reading the `events` table as the `anon` role, a read that was open to every organisation's events. With many organisations that read has to close (T-TEN.D6); this step moves the screens off it first, so closing it breaks nothing.
+
+**What changed:**
+
+- **`findLatestEventForOrg` (`core/events.js`) now calls `public_event_summary(p_org_id)`**, which returns one row (id, name, event date, test flag) for exactly the organisation the screen was opened for, or no rows. The row no longer carries `org_id` or `created_at` (nothing used them). Both audience callers (`viewer-shell.js`, `splashScreen.js`) are unchanged, as are their timeouts. An answer that is not a list of rows is a failure to ask (it throws), never "no event".
+- **No visible change:** the same cards, wording and behaviour. The realtime channel stays keyed on the resolved organisation (one per mount; now pinned by a test); the surfaces still read `live_sessions` directly, which D6 narrows.
+- **After this step no anonymous code path reads the `events` table** (the security review grepped every audience import path and the results pages): D6 can drop `events_read_public` and the anon column grants on `events` without breaking a client path.
+
+**Verified:** the full suite (3912 unit tests in 137 files), lint and Prettier on the whole repository, the production build, and the whole organiser-flow browser file (19 tests, against the real local database) pass. The fake clients in six test files now answer the RPC; each records (rather than throws, which the screens would swallow as "no event") a read of the `events` table, which fails the test, and records which organisation was asked about. In a real browser an anonymous visitor opening the splash screen makes a successful request to `rpc/public_event_summary` and, over the whole visit, none to `/rest/v1/events`. Every deliberate break (reading the table again, the wrong function or argument, an error read as "no event", the oldest row, a non-list answer, a lost timeout bound) was caught by a named test. Two viewer-shell timeout tests had silently stopped testing their timeout (their hand-built client had no `rpc`) and were repaired.
+
+**Reviews:** security-reviewer (no blocking issue; the non-list answer hardening came from it), test-auditor (the vacuous timeout tests, the swallowed guards, the unchecked organisation argument, the over-permissive fake, the preview harnesses and a stronger browser assertion came from it), each run as a general-purpose agent following the project's `.claude/agents/*.md` definition.
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-TEN.D2".
+
+## T-TEN.D1: audience links that name the organiser, with the old links kept working · 2026-10-12
+
+**Task:** T-TEN.D1 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase D, audience addressing; decision D-T2). Client only: no migration, nothing to push to the cloud project (the database side, `public_org_by_slug`, is T-TEN.B7 and already live).
+
+**Status: in review, not merged.**
+
+**Why:** the anonymous audience screens (projector, phone, splash) found "their" organisation through a build-time id, so they could only ever show one. A link now names the organiser.
+
+**What changed:**
+
+- **New routes** `#/live/<organiser-slug>/projector`, `/phone` and `/splash` (`main.js`: `mountAudienceBySlug`). The slug is turned into the organisation the surfaces already use by `core/orgResolver.js` (`resolveOrgBySlug`, through the narrow anonymous door `public_org_by_slug`), then the same surface mounts as before. The surfaces themselves are unchanged in D1 (D2 narrows what they read; D6 closes the old direct reads).
+- **Three outcomes, told apart on the screen:** found (the surface mounts), not found ("We couldn’t find that organiser", never "no event tonight") and could not be asked ("We can’t reach Seduh right now … This page will update by itself"). The last keeps trying by itself (3, 6, 12, 20, then every 30 seconds, plus up to a quarter more so a room of phones does not retry together, and at once when the device comes back online or the tab is shown again) and the surface replaces the card with no reload; a phone also gets a "Try again now" button. A card is on screen from the first moment (the first lookup can take its whole 10 seconds on bad wifi: never a blank page). The card is one persistent live region whose words change in place, so a retry that fails the same way announces nothing new; when a retry succeeds, focus moves to the surface's heading.
+- **Slug rules follow the database:** a link that cannot be a slug (not letters, digits and single hyphens, longer than 100 characters, a look-alike character) is "not found" without a request and is never remembered; a found answer is remembered for the page's life (copies are handed out, so nothing can change what is remembered); "not found" and errors never are.
+- **The old slug-less links keep working** (the legacy shim, `config.js`: `getLegacyAudienceOrgSlug`): through `VITE_LEGACY_AUDIENCE_ORG_SLUG` when set, else through the older `VITE_DEFAULT_ORG_ID` exactly as before, else the "out of date" card. Deploying D1 cannot break an open projector or a printed link, in whatever order the Cloudflare variable is added. A legacy slug that does not resolve shows "not found" and does not fall back to the org id (the slug, when set, is the only one asked). The organiser's own nav links ("Projector view" and the like, still the old links until D4) follow the same precedence, case-insensitively.
+- **A link with a broken percent-escape** (`%E0%A4%A`) is "Page not found" instead of throwing out of the router (`core/router.js`): the audience slug is the first parameter people type by hand.
+- **Holding-card look** (`viewer-shell.css`): on a projector or splash the card is as wide as the stage cards (it was a six-letter column), and a phone's instruction is body size.
+
+**Verified:** the full suite (3902 unit tests in 137 files), lint and Prettier on the whole repository, the production build, and the whole organiser-flow browser file (19 tests, against the real local database, including an anonymous visitor in a fresh browser context opening a real slug link, a wrong slug and a broken escape) pass. The real-screen audience suite (`main.audienceRoutes.test.js`) is extended to the new routes: one child on the shared outlet and the right look after every switch, projector to phone to splash and back, old and new links mixed in one tab, a wrong slug, and a dropped connection recovering on its own. Every deliberate break of the new code was caught by a named test, except three judged equivalent (a redundant start-of-retry guard, a `clearTimeout` that guard makes redundant, and a listener removal whose effect the same guard hides).
+
+**Reviews:** security-reviewer (no blocking issue; the broken-escape throw, the cache key and the nav precedence came from it), code-reviewer, ui-accessibility-reviewer (the blank first moment, the persistent live region, focus on success, the phone button and the projector card width came from it), test-auditor, each run as a general-purpose agent following the project's `.claude/agents/*.md` definition.
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-TEN.D1".
+
+**Owner action (not urgent):** set `VITE_LEGACY_AUDIENCE_ORG_SLUG=grey-matter-coffee-werks` in Cloudflare Pages. Until then the old links keep using `VITE_DEFAULT_ORG_ID`.
+
 ## T-TEN.C7: a link into another organisation's event moves the console to that organisation · 2026-10-12
 
 **Task:** T-TEN.C7 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase C, the client), the last step of phase C. Client only: no migration, nothing to push to the cloud project.

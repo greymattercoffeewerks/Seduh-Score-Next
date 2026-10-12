@@ -154,6 +154,15 @@
 
         return {
           from: (table) => makeBuilder(table),
+          // public_event_summary (T-TEN.D2): the organisation's newest event as a one-row table
+          rpc: (name, args) =>
+            Promise.resolve({
+              data: db.events
+                .filter((e) => e.org_id === args.p_org_id)
+                .slice(0, 1)
+                .map((e) => ({ id: e.id })),
+              error: null,
+            }),
           channel: () => channelObj,
           removeChannel: () => {},
           // Demo-only helpers, not part of the real Supabase client shape.

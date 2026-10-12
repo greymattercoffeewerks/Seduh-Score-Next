@@ -35,7 +35,14 @@ export function matchRoute(routes, path) {
       const patternSegment = patternSegments[i];
       const pathSegment = pathSegments[i];
       if (patternSegment.startsWith(':')) {
-        params[patternSegment.slice(1)] = decodeURIComponent(pathSegment);
+        // A hand-typed link with a broken percent-escape (%E0%A4%A) is not a route at all: it must reach
+        // the not-found screen, not throw out of the navigation.
+        try {
+          params[patternSegment.slice(1)] = decodeURIComponent(pathSegment);
+        } catch {
+          matched = false;
+          break;
+        }
       } else if (patternSegment !== pathSegment) {
         matched = false;
         break;

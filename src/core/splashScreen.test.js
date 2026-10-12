@@ -3,16 +3,32 @@ import { mountSplashScreen } from './splashScreen.js';
 import { DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
 
 // Table-based fake client, mirroring eventDashboardScreen.test.js's own
-// minimal shape — `.limit()` added since findLatestEventForOrg's own query
-// chains through it (`events.js`'s `.order(...).limit(1).maybeSingle()`),
-// which that file's own fake never needed.
+// minimal shape, plus `rpc` for the public_event_summary door the event line is read through.
 function fakeClient({ tables = {} } = {}) {
   const queues = {};
+  const asked = [];
   for (const [table, response] of Object.entries(tables)) {
     queues[table] = Array.isArray(response) ? [...response] : [response];
   }
   return {
+    asked,
+    // public_event_summary (T-TEN.D2): the `events` responses below are answered as the one-row table the
+    // RPC returns; the table itself is never read.
+    rpc(name, args) {
+      if (name !== 'public_event_summary') throw new Error(`unexpected rpc ${name}`);
+      asked.push(args);
+      const queue = queues.events ?? [{ data: null, error: null }];
+      const response = queue.length > 1 ? queue.shift() : queue[0];
+      return Promise.resolve({
+        data: response.data ? [response.data] : [],
+        error: response.error ?? null,
+      });
+    },
     from(table) {
+      if (table === 'events') {
+        violations.push('read the events table');
+        throw new Error('the splash screen must not read the events table');
+      }
       const queue = queues[table] ?? [{ data: null, error: null }];
       const resolve = () => (queue.length > 1 ? queue.shift() : queue[0]);
       const builder = {
@@ -28,6 +44,14 @@ function fakeClient({ tables = {} } = {}) {
     },
   };
 }
+
+// A read of the events table by the splash screen is a violation, but the screen catches errors from its event
+// load, so a throw inside the fake would only read as "no event": record it and assert none happened.
+const violations = [];
+afterEach(() => {
+  expect(violations).toEqual([]);
+  violations.length = 0;
+});
 
 // Awaits one microtask turn so the fire-and-forget event-load promise chain
 // in mountSplashScreen (never awaited by the caller — the branded shell
@@ -136,17 +160,7 @@ describe('mountSplashScreen', () => {
     });
 
     it('times out and stays on the brand-only state rather than hanging or throwing', async () => {
-      function hungBuilder() {
-        const builder = {
-          select: () => builder,
-          eq: () => builder,
-          order: () => builder,
-          limit: () => builder,
-          maybeSingle: () => new Promise(() => {}), // never settles
-        };
-        return builder;
-      }
-      const hungClient = { from: () => hungBuilder() };
+      const hungClient = { rpc: () => new Promise(() => {}) }; // never settles
       const root = document.createElement('div');
       const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -212,28 +226,14 @@ describe('mountSplashScreen', () => {
     // before this screen's own fire-and-forget .then() continuation runs.
     let resolveEvent;
     const controllableClient = {
-      from: () => {
-        const builder = {
-          select: () => builder,
-          eq: () => builder,
-          order: () => builder,
-          limit: () => builder,
-          maybeSingle: () =>
-            new Promise((resolve) => {
-              resolveEvent = () =>
-                resolve({
-                  data: {
-                    id: 'ev1',
-                    name: 'October Cup',
-                    event_date: '2026-10-01',
-                    is_test: false,
-                  },
-                  error: null,
-                });
-            }),
-        };
-        return builder;
-      },
+      rpc: () =>
+        new Promise((resolve) => {
+          resolveEvent = () =>
+            resolve({
+              data: [{ id: 'ev1', name: 'October Cup', event_date: '2026-10-01', is_test: false }],
+              error: null,
+            });
+        }),
     };
     const controller = new AbortController();
     const root = document.createElement('div');
@@ -373,5 +373,31 @@ describe('mountSplashScreen', () => {
     expect(drift.style.top).toBe('68%');
 
     randomSpy.mockRestore();
+  });
+});
+
+describe('the event line goes through public_event_summary (T-TEN.D2)', () => {
+  it('asks once, for the organisation it was opened for', async () => {
+    const root = document.createElement('div');
+    const client = fakeClient({ tables: { events: { data: null, error: null } } });
+    mountSplashScreen(root, { orgId: 'org1', client });
+    await settle();
+    expect(client.asked).toEqual([{ p_org_id: 'org1' }]);
+  });
+
+  it('shows the test banner for a test event, from the four columns the function returns', async () => {
+    const root = document.createElement('div');
+    const client = fakeClient({
+      tables: {
+        events: {
+          data: { id: 'ev1', name: 'Dry Run', event_date: '2026-10-01', is_test: true },
+          error: null,
+        },
+      },
+    });
+    mountSplashScreen(root, { orgId: 'org1', client });
+    await settle();
+    expect(root.querySelector('.is-test-banner')).not.toBeNull();
+    expect(root.querySelector('.splash-eventline').textContent).toBe('Dry Run');
   });
 });
