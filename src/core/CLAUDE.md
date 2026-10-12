@@ -246,3 +246,14 @@ heading is `eventsListHeading(orgName)`, "Events in <name>", the create form's `
 "Create an event in <name>"; plain "Your events" / "Create event" with no name). Create, list and delete already
 used the `orgId` the screen was mounted with (T-TEN.C2); publishing deliberately uses the EVENT's own `org_id`,
 not the active organisation; the event hub reads live status from the event's own `org_id`. A superseded screen (its signal aborted) does not send create or delete. See ROADMAP.md's "Known open items from T-TEN.C5".
+
+T-TEN.C6 (2026-10-12) — the outbox has an owner. `core/outbox.js` tags every operation with `userId` and `orgId`
+at enqueue (the payload's own `p_org_id`/`orgId` wins) and only ever replays, counts (`listPendingOperations`,
+`countPendingOperations`) or lists for the sync panel the SIGNED-IN account's operations in the ACTIVE
+organisation; everything else is left untouched and reported (`partitionOperations`, one read split three ways).
+`main.js` sets the owner (`setOutboxOwner`) on every auth event and organisation change, before the flush that
+change may start; `undefined` (never set) is "ownership not in use" (bare tests), `null` is signed out. A question
+about one of your OWN just-queued writes ("is it still queued?") must use `listAllOperations()`, never the
+filtered list. Signing out with changes waiting is two-step (`signOut.js`'s `unsyncedSignOutWarning`, shown in
+the header's overlay notice; the no-organisation screen has its own copy of the flow). See ROADMAP.md's "Known
+open items from T-TEN.C6".
