@@ -181,7 +181,7 @@ vi.mock('./core/inputModality.js', () => ({
   trackInputModality: (...args) => trackInputModality(...args),
 }));
 
-const { mountApp } = await import('./main.js');
+const { mountApp, audienceHash, audienceLinksFor } = await import('./main.js');
 const { DEFAULT_LOAD_TIMEOUT_MS } = await import('./core/timeout.js');
 
 // What the database says the signed-in person belongs to (my_orgs()). One org by default, so every test
@@ -477,9 +477,9 @@ describe('mountApp routing', () => {
     // currently live for this org"), matching "Events" itself, not tied to
     // whichever event happens to be open.
     for (const [label, href] of [
-      ['Splash screen', '#/live/splash'],
-      ['Projector view', '#/live/projector'],
-      ['Phone view', '#/live/phone'],
+      ['Splash screen', '#/live/org-one/splash'],
+      ['Projector view', '#/live/org-one/projector'],
+      ['Phone view', '#/live/org-one/phone'],
     ]) {
       const link = byLabel(label);
       expect(link, `expected a nav link labeled "${label}"`).not.toBeUndefined();
@@ -2466,25 +2466,32 @@ describe('organisation context wiring (T-TEN.C2)', () => {
       }
     });
 
-    it("the organiser's own nav leaves out the three audience links while there is nothing for them to open", async () => {
+    it("the organiser's own nav leaves out the three audience links while the organisation has no slug to name", async () => {
+      myOrgs.mockResolvedValue(answer({ ...ORG_ONE, slug: '' }));
       stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
-      // Links that open in a new tab carry a hidden "(opens in a new tab)" suffix: compare the names.
       const labels = (root) =>
         [...root.querySelectorAll('.app-shell-link')].map((link) =>
           link.textContent.replace(/\s*\(.*\)$/, ''),
         );
-      const without = await startApp({ client: orgClient(), legacyAudienceOrgId: null });
-      expect(labels(without.root)).toEqual(['Events']);
-      await activeApp.unmount();
-      activeApp = null;
+      const { root } = await startApp({ client: orgClient() });
+      expect(labels(root)).toEqual(['Events']);
+    });
 
-      const withLegacy = await startApp({ client: orgClient(), legacyAudienceOrgId: 'org1' });
-      expect(labels(withLegacy.root)).toEqual([
-        'Events',
-        'Splash screen',
-        'Projector view',
-        'Phone view',
-      ]);
+    it('the audience links no longer depend on the legacy settings: any organisation has them, whatever the old links are set to', async () => {
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const labels = (root) =>
+        [...root.querySelectorAll('.app-shell-link')].map((link) =>
+          link.textContent.replace(/\s*\(.*\)$/, ''),
+        );
+      for (const legacy of [
+        { legacyAudienceOrgId: null, legacyAudienceOrgSlug: null },
+        { legacyAudienceOrgId: 'some-other-org', legacyAudienceOrgSlug: 'someone-else' },
+      ]) {
+        const { root } = await startApp({ client: orgClient(), ...legacy });
+        expect(labels(root)).toEqual(['Events', 'Splash screen', 'Projector view', 'Phone view']);
+        await activeApp.unmount();
+        activeApp = null;
+      }
     });
   });
 
@@ -3735,6 +3742,50 @@ describe('organisation context wiring (T-TEN.C2)', () => {
     });
   });
 
+  describe('the audience links are built for the active organisation (T-TEN.D4)', () => {
+    it('names the organiser in the hash, trimmed and encoded, and has nothing to name for a blank slug', () => {
+      expect(audienceHash('  alpha-coffee ', 'phone')).toBe('#/live/alpha-coffee/phone');
+      expect(audienceHash('a b/c', 'splash')).toBe('#/live/a%20b%2Fc/splash');
+      for (const none of ['', '   ', null, undefined, 7])
+        expect(audienceHash(none, 'phone')).toBeNull();
+    });
+
+    it('builds absolute links from where the page is served, and none for a blank slug', () => {
+      const where = { origin: 'https://seduh.example', pathname: '/app/' };
+      expect(audienceLinksFor(' alpha ', where)).toEqual({
+        phone: 'https://seduh.example/app/#/live/alpha/phone',
+        projector: 'https://seduh.example/app/#/live/alpha/projector',
+        splash: 'https://seduh.example/app/#/live/alpha/splash',
+      });
+      expect(audienceLinksFor('  ', where)).toBeNull();
+    });
+
+    it("tells the Events screen the active organisation's three slug-qualified links, absolute, for the page it is served from", async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const { app } = await startApp({ client: orgClient() });
+      const page = `${location.origin}${location.pathname}`;
+      expect(mountEventsScreen.mock.calls[0][1].audienceLinks).toEqual({
+        phone: `${page}#/live/org-one/phone`,
+        projector: `${page}#/live/org-one/projector`,
+        splash: `${page}#/live/org-one/splash`,
+      });
+      const before = mountEventsScreen.mock.calls.length;
+      await app.switchOrg('org2');
+      await vi.waitFor(() => expect(mountEventsScreen.mock.calls.length).toBeGreaterThan(before));
+      expect(mountEventsScreen.mock.calls.at(-1)[1].audienceLinks.phone).toBe(
+        `${page}#/live/org-two/phone`,
+      );
+    });
+
+    it('gives the Events screen no links for an organisation with no slug', async () => {
+      myOrgs.mockResolvedValue(answer({ ...ORG_ONE, slug: '  ' }));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      await startApp({ client: orgClient() });
+      expect(mountEventsScreen.mock.calls[0][1].audienceLinks).toBeNull();
+    });
+  });
+
   describe('the Events screen is told whose events these are (T-TEN.C5)', () => {
     it("passes the active organisation's id and name, and follows a switch", async () => {
       myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
@@ -3754,65 +3805,28 @@ describe('organisation context wiring (T-TEN.C2)', () => {
       });
     });
 
-    it('offers the audience links only while the organisation they open (the legacy one) is the active one', async () => {
+    it("offers each organisation's own audience links: the active organisation's slug is in every link", async () => {
       myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
       stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
-      // Names carry a hidden "(opens in a new tab)" suffix: compare the names themselves.
-      const labels = (root) =>
-        [...root.querySelectorAll('.app-shell-link')].map((link) =>
-          link.textContent.replace(/\s*\(.*\)$/, ''),
+      const hrefs = (root) =>
+        [...root.querySelectorAll('.app-shell-link[target="_blank"]')].map((link) =>
+          link.getAttribute('href'),
         );
-      const { root, app } = await startApp({ client: orgClient(), legacyAudienceOrgId: 'org1' });
-      expect(labels(root)).toEqual(['Events', 'Splash screen', 'Projector view', 'Phone view']);
+      const { root, app } = await startApp({ client: orgClient() });
+      expect(hrefs(root)).toEqual([
+        '#/live/org-one/splash',
+        '#/live/org-one/projector',
+        '#/live/org-one/phone',
+      ]);
 
       await app.switchOrg('org2');
-      await vi.waitFor(() => expect(labels(root)).toEqual(['Events']));
-
-      await app.switchOrg('org1');
       await vi.waitFor(() =>
-        expect(labels(root)).toEqual(['Events', 'Splash screen', 'Projector view', 'Phone view']),
+        expect(hrefs(root)).toEqual([
+          '#/live/org-two/splash',
+          '#/live/org-two/projector',
+          '#/live/org-two/phone',
+        ]),
       );
-    });
-
-    it('offers the audience links by the legacy organiser slug too, with no org id configured', async () => {
-      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
-      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
-      const labels = (root) =>
-        [...root.querySelectorAll('.app-shell-link')].map((link) =>
-          link.textContent.replace(/\s*\(.*\)$/, ''),
-        );
-      const { root, app } = await startApp({
-        client: orgClient(),
-        legacyAudienceOrgId: null,
-        legacyAudienceOrgSlug: 'org-one',
-      });
-      expect(labels(root)).toEqual(['Events', 'Splash screen', 'Projector view', 'Phone view']);
-      await app.switchOrg('org2');
-      await vi.waitFor(() => expect(labels(root)).toEqual(['Events']));
-    });
-
-    it('the audience links follow the legacy slug when there is one: a stale org id for the active organisation does not offer them', async () => {
-      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
-      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
-      const { root } = await startApp({
-        client: orgClient(),
-        legacyAudienceOrgId: 'org1',
-        legacyAudienceOrgSlug: 'org-two',
-      });
-      expect(
-        [...root.querySelectorAll('.app-shell-link')].map((link) => link.textContent),
-      ).not.toContain('Projector view');
-    });
-
-    it('the legacy slug is compared the way the database reads it: a capital letter in the setting still finds the organisation', async () => {
-      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
-      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
-      const { root } = await startApp({
-        client: orgClient(),
-        legacyAudienceOrgId: null,
-        legacyAudienceOrgSlug: 'Org-One',
-      });
-      expect(root.textContent).toContain('Projector view');
     });
 
     it('tells same-named organisations apart by slug', async () => {
