@@ -30,6 +30,20 @@ export async function findEvent(eventId, client = getSupabase()) {
   return data;
 }
 
+// The organisation an event belongs to, or null when there is no such event as far as this person can
+// see (the database hides another organisation's events: no row is the same answer for "does not exist"
+// and "not yours"). Only the one column is read. Throws on a failed read, which says nothing about whether
+// the event exists. An event never changes organisation (T-TEN.B1), so the answer can be remembered.
+export async function findEventOrgId(eventId, client = getSupabase()) {
+  const { data, error } = await client
+    .from('events')
+    .select('org_id')
+    .eq('id', eventId)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.org_id ?? null;
+}
+
 // Distinguishes "this org has no event scheduled" from "this org has an
 // event but nothing's been published yet" (viewer-shell.js's own two
 // separately-named holding states, handoff §8.4). Deliberately existence-
