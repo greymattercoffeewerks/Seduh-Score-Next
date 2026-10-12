@@ -257,3 +257,13 @@ about one of your OWN just-queued writes ("is it still queued?") must use `listA
 filtered list. Signing out with changes waiting is two-step (`signOut.js`'s `unsyncedSignOutWarning`, shown in
 the header's overlay notice; the no-organisation screen has its own copy of the flow). See ROADMAP.md's "Known
 open items from T-TEN.C6".
+
+T-TEN.C7 (2026-10-12) — a link into another organisation's event. `main.js` (the one file allowed to know both
+core and the formats) guards every event-keyed console route for a person in two or more organisations: it
+reads the event's `org_id` (`core/events.js`'s `findEventOrgId`; for a BTC match, `formats/btc/matches.js`'s
+`findMatchEventId` first), switches the console to it with the ordinary `switchOrg`, and shows the info
+notice (`appShell.showNotice`, `dismissNotice`, `clearEventContext`) once the event's screen has focus; not a
+member or not there is "Page not found". A found answer is remembered on the device (`cacheGet`/`cacheSet`,
+keys `eventOrg:`/`matchEvent:`) and used first, because an event never changes organisation. A new
+event-keyed route needs nothing: any route with `:eventId` or `:matchId` goes through `requireAuth`. See
+ROADMAP.md's "Known open items from T-TEN.C7".
