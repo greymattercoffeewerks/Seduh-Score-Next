@@ -7,6 +7,18 @@
 // Taster's). Lives in core/, not a format directory, mirroring
 // core/publish.js's own placement reasoning for findActiveLiveEventId.
 import { getSupabase } from './supabaseClient.js';
+import { cleanOrgName } from './orgLabel.js';
+
+// Whose results these are. The database stamps the organiser's real name into every published payload
+// (`org_name`, trigger trg_public_results_stamp_org, T-TEN.B7), replacing anything the publisher sent, so
+// the archive can say who ran each event. Rows published before that was added carry no name: null, never
+// a guess. The name is cleaned the way every other place that shows an organisation's name cleans it
+// (core/orgLabel.js: invisible text-direction controls removed, a name of only spaces is no name). It is
+// the name AS OF PUBLISHING: a renamed organisation keeps its old name on old rows until they are
+// republished, which is right for a historic result. Render the result as text, never as markup.
+export function publishedOrgName(payload) {
+  return cleanOrgName(payload?.org_name) || null;
+}
 
 // Anon-safe, newest-first — the public archive page's own read
 // (src/marketing/resultsScreen.js).
