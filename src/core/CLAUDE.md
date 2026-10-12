@@ -240,3 +240,9 @@ while it is on (reason `team_open`) and resets it whenever any console screen mo
 the SAME snapshot that supplied the id, never from live state. `orgLabel` now trims names and removes invisible
 text-direction controls (an unclosed right-to-left override scrambles a sentence the name sits in). The Team link's
 own re-ask per organisation is T-TEN.C2's. See ROADMAP.md's "Known open items from T-TEN.C4".
+
+T-TEN.C5 (2026-10-12) — events follow the active organisation. `mountEventsScreen` gained `orgName` (the list
+heading is `eventsListHeading(orgName)`, "Events in <name>", the create form's `createEventHeading(orgName)`,
+"Create an event in <name>"; plain "Your events" / "Create event" with no name). Create, list and delete already
+used the `orgId` the screen was mounted with (T-TEN.C2); publishing deliberately uses the EVENT's own `org_id`,
+not the active organisation; the event hub reads live status from the event's own `org_id`. A superseded screen (its signal aborted) does not send create or delete. See ROADMAP.md's "Known open items from T-TEN.C5".

@@ -1901,7 +1901,7 @@ signup, Seduh ID. Rule (lifted 2026-10-11, now that B1, B2 and B6 are in the clo
 | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
 | A     | A1 spec lock · A2 tenancy inventory                                                                                                               | Done                                               |
 | B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | Done (B1 to B7 merged and in the cloud project)    |
-| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | In progress (C1 to C3 merged; C4 built, in review) |
+| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | In progress (C1 to C4 merged; C5 built, in review) |
 | D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | Not started                                        |
 | E     | E1 negative matrix · E2 console Playwright · E3 security/perf · E4 docs · E5 rollout · E6 close-out                                               | Not started                                        |
 
@@ -2050,3 +2050,13 @@ _Client only: `src/core/teamScreen.js`, `src/core/orgLabel.js`, and the wiring i
 - **The copy says accounts "cannot be added to another organisation from this screen" without saying where it can be done.** Today it is operator-only (decision D-T6), so no route is named; add one when a support route exists.
 - **A very long unbroken organisation name** wraps (no sideways scroll at 360px) but pushes the add-a-member form down the screen; a cap on the heading's lines would fix it if it ever matters.
 - **Still owed** from C3: the manual screen-reader and real-phone pass, which should include the Team screen's new heading ("Team for <name>").
+
+---
+
+## Known open items from T-TEN.C5 (2026-10-12)
+
+_Client only: `src/core/eventsScreen.js` and the wiring in `src/main.js`. No migration._
+
+- **Publishing uses the event's own organisation**, not the active one (`reportScreen.js` reads `data.event.org_id`). Correct, and what lets T-TEN.C7's deep link into a non-active organisation's event publish at all; but until C7 switches the active organisation for such a link, the header can say one organisation while the report screen on show belongs to another. C7 must either switch or show the event's organisation.
+- **Audience links depend on the legacy organisation** until T-TEN.D1/D4 make them slug-qualified: they are offered only while the active organisation is the legacy one.
+- **The organisation is fixed when the Events screen mounts**, like the Team screen's wording: a rename while it is on show keeps the old heading until the next navigation. Every request carries the organisation's id, so only the words are stale.

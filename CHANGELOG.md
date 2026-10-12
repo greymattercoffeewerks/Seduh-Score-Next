@@ -1,3 +1,26 @@
+## T-TEN.C5: events are created, listed and deleted in the active organisation, and the form says which · 2026-10-12
+
+**Task:** T-TEN.C5 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase C, the client). Client only: no migration, nothing to push to the cloud project.
+
+**Status: in review, not merged.**
+
+**Why:** someone who works in two organisations must never create an event in the wrong one.
+
+**What was confirmed (no change needed):** the Events screen is handed the active organisation's id when it is mounted (T-TEN.C2) and passes it, unchanged, to `createEvent` (the `org_id` of the insert), `listEventsForOrg` (the `org_id` filter) and `deleteTestEvent` (`p_org_id`); the screen is replaced when the organisation changes, so a screen never outlives the organisation it was built for. `publishEventResults` / `unpublishEventResults` are given the **event's own** `org_id` (read from the event the report screen loaded), not the active organisation: that is correct, since the database requires the organisation to be the event's own, and it keeps working for an event of a non-active organisation opened by a link (T-TEN.C7).
+
+**What changed:**
+
+- **The Events screen names the organisation** (`src/core/eventsScreen.js`, `src/main.js`): the list heading reads "Events in <name>" (was "Your events") and the create form's heading reads "Create an event in <name>" (was "Create event"); with no name (or only spaces) the old headings remain. The form is labelled by its heading, and the success message says where the event went ("Event created in <name>."). The name is the organisation's label from the same snapshot as its id (`core/orgLabel.js`: the slug is added when two of the person's organisations share a name; names are trimmed and cleaned of invisible text-direction controls). A long unbroken name wraps in the headings (`eventsScreen.css`) instead of scrolling the page sideways.
+- **A superseded Events screen sends nothing** (`eventsScreen.js`): while the organisation has just changed and the old screen is still on show, create and delete return early once the screen's signal is aborted, so an event can never be written to the organisation the person has just left.
+- **The event hub reads the live status of the event's own organisation** (`eventDashboardScreen.js`, `main.js`): it used to be handed the active organisation's id; a link to an event of another of the person's organisations would have shown the wrong organisation's live event. The `orgId` option is gone.
+- **The audience links** ("Projector view" and the like) show only while the active organisation is the legacy audience organisation, and are redrawn when the organisation changes (`main.js`). Those screens still show one organisation until T-TEN.D1/D4.
+
+**Verified:** the full suite (3697 unit tests in 135 files), lint and Prettier on every changed file, the production build, and the whole organiser-flow browser file (13 tests, against the real local database) pass. Unit tests pin that a screen mounted for the second organisation lists, creates and deletes in that organisation and sends no other organisation's id, that the headings name it (and read as before without a name, and as text, never markup), and that the events route is told the active organisation's id and name and follows a switch. A real-browser test checks both headings against the real organisation in the real database. Every deliberate break of the new headings (with and without trimming), of the organisation id in create, list and delete, of the abort guards, the success message, the form label, the dashboard's organisation and the audience-link rule was caught by a test that names it.
+
+**Reviews:** code-reviewer (an audit of every place the client picks an organisation id), ui-accessibility-reviewer, test-auditor, each run as a general-purpose agent following the project's `.claude/agents/*.md` definition.
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-TEN.C5".
+
 ## T-TEN.C4: the Team link and screen follow the active organisation · 2026-10-12
 
 **Task:** T-TEN.C4 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase C, the client). Client only: no migration, nothing to push to the cloud project.

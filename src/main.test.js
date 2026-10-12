@@ -1782,7 +1782,7 @@ describe('organisation context wiring (T-TEN.C2)', () => {
       expect(myOrgs).not.toHaveBeenCalled();
     });
 
-    it('passes the active org to the event hub and the Team screen too', async () => {
+    it('passes the active org to the Team screen, and none to the event hub (an event knows its own organisation)', async () => {
       myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
       localStorage.setItem('seduh.activeOrg.user-1', 'org2');
       stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
@@ -1794,7 +1794,8 @@ describe('organisation context wiring (T-TEN.C2)', () => {
       location.hash = '#/team';
       await settle();
       await settle();
-      expect(mountEventDashboardScreen.mock.calls[0][1].orgId).toBe('org2');
+      expect(mountEventDashboardScreen.mock.calls[0][1].orgId).toBeUndefined();
+      expect(mountEventDashboardScreen.mock.calls[0][1].eventId).toBe('ev1');
       expect(mountTeamScreen.mock.calls[0][1].orgId).toBe('org2');
     });
   });
@@ -2443,6 +2444,58 @@ describe('organisation context wiring (T-TEN.C2)', () => {
       window.dispatchEvent(new Event('online'));
       await settle();
       expect(flushOutbox).toHaveBeenCalled();
+    });
+  });
+
+  describe('the Events screen is told whose events these are (T-TEN.C5)', () => {
+    it("passes the active organisation's id and name, and follows a switch", async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      const { app } = await startApp({ client: orgClient() });
+      expect(mountEventsScreen.mock.calls[0][1]).toMatchObject({
+        orgId: 'org1',
+        orgName: 'Org One',
+      });
+      const before = mountEventsScreen.mock.calls.length;
+
+      await app.switchOrg('org2');
+      await vi.waitFor(() => expect(mountEventsScreen.mock.calls.length).toBeGreaterThan(before));
+      expect(mountEventsScreen.mock.calls.at(-1)[1]).toMatchObject({
+        orgId: 'org2',
+        orgName: 'Org Two',
+      });
+    });
+
+    it('offers the audience links only while the organisation they open (the legacy one) is the active one', async () => {
+      myOrgs.mockResolvedValue(answer(ORG_ONE, ORG_TWO));
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      // Names carry a hidden "(opens in a new tab)" suffix: compare the names themselves.
+      const labels = (root) =>
+        [...root.querySelectorAll('.app-shell-link')].map((link) =>
+          link.textContent.replace(/\s*\(.*\)$/, ''),
+        );
+      const { root, app } = await startApp({ client: orgClient(), legacyAudienceOrgId: 'org1' });
+      expect(labels(root)).toEqual(['Events', 'Splash screen', 'Projector view', 'Phone view']);
+
+      await app.switchOrg('org2');
+      await vi.waitFor(() => expect(labels(root)).toEqual(['Events']));
+
+      await app.switchOrg('org1');
+      await vi.waitFor(() =>
+        expect(labels(root)).toEqual(['Events', 'Splash screen', 'Projector view', 'Phone view']),
+      );
+    });
+
+    it('tells same-named organisations apart by slug', async () => {
+      const twin = { org_id: 'org2', name: 'Org One', slug: 'org-one-nz', role: 'owner' };
+      myOrgs.mockResolvedValue(answer(ORG_ONE, twin));
+      localStorage.setItem('seduh.activeOrg.user-1', 'org2');
+      stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+      await startApp({ client: orgClient() });
+      expect(mountEventsScreen.mock.calls[0][1]).toMatchObject({
+        orgId: 'org2',
+        orgName: 'Org One (org-one-nz)',
+      });
     });
   });
 

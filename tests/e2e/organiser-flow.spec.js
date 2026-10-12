@@ -66,6 +66,11 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
 
     // --- Events screen: create ---
     await expect(page.locator('.app-shell-name')).toHaveText('Seduh Score');
+    // The form says which organisation the event will be created in, and the list whose events these are.
+    await expect(
+      page.getByRole('heading', { name: 'Create an event in Local Dev Org' }),
+    ).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Events in Local Dev Org' })).toBeVisible();
     await page.getByLabel('Event name').fill(eventName);
     await page.getByRole('button', { name: 'Create event' }).click();
     const eventLink = page.getByRole('link', { name: eventName });
@@ -666,5 +671,33 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     await expect(notice).toHaveText('Now working in Local Dev Org. Showing Events.');
     await navigateHash(page, '#/team');
     await expect(heading).toHaveText('Team for Local Dev Org');
+  });
+
+  test('a long unbroken organisation name wraps in the Events headings instead of scrolling the page sideways', async ({
+    page,
+  }) => {
+    const longName = 'A'.repeat(70);
+    await answerMyOrgs(page, [
+      {
+        org_id: '10c8c375-afe6-41c7-a54e-ffaa15429688',
+        name: longName,
+        slug: 'long-name-co',
+        role: 'organiser',
+      },
+    ]);
+    await signIn(page);
+    await page.setViewportSize({ width: 360, height: 800 });
+    await page.goto('/app/#/events');
+    // First by name, so it starts active.
+    await expect(
+      page.getByRole('heading', { name: `Create an event in ${longName}` }),
+    ).toBeVisible();
+    await expect(page.getByRole('heading', { name: `Events in ${longName}` })).toBeVisible();
+    // The form is named by its heading for someone who jumps straight to it.
+    await expect(page.getByRole('form', { name: `Create an event in ${longName}` })).toBeVisible();
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
   });
 });

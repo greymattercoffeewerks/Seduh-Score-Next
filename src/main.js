@@ -260,7 +260,7 @@ function requireAuth(mount, { routerRef, orgContext, onConsoleMounted }) {
 // accepted redundant read rather than restructuring that already-shipped, already-
 // reviewed screen to accept a pre-fetched event; same tradeoff requireAuth() below
 // already makes with its own extra getSession() hop.
-function mountEventHomeScreen(outlet, { eventId, orgId, client, signal }) {
+function mountEventHomeScreen(outlet, { eventId, client, signal }) {
   async function attempt() {
     let event;
     try {
@@ -274,7 +274,7 @@ function mountEventHomeScreen(outlet, { eventId, orgId, client, signal }) {
     if (event.format === 'btc') {
       return mountBtcEventDashboardScreen(outlet, { eventId, client, signal });
     }
-    return mountEventDashboardScreen(outlet, { eventId, orgId, client, signal });
+    return mountEventDashboardScreen(outlet, { eventId, client, signal });
   }
   return attempt();
 }
@@ -343,9 +343,10 @@ export function buildRoutes({
     {
       pattern: '/events',
       mount: requireAuth(
-        (outlet, { client, signal, orgId }) =>
+        (outlet, { client, signal, orgId, orgName }) =>
           mountEventsScreen(outlet, {
             orgId,
+            orgName,
             client,
             defaultFormat: 'cup_taster',
             formatOptions: FORMAT_OPTIONS,
@@ -371,8 +372,8 @@ export function buildRoutes({
     {
       pattern: '/events/:eventId',
       mount: requireAuth(
-        (outlet, { eventId, client, signal, orgId }) =>
-          mountEventHomeScreen(outlet, { eventId, orgId, client, signal }),
+        (outlet, { eventId, client, signal }) =>
+          mountEventHomeScreen(outlet, { eventId, client, signal }),
         auth,
       ),
     },
@@ -830,6 +831,8 @@ export function mountApp(
       console.error('main: the organisation slot failed to render', err);
     }
     refreshTeamOwnership(currentSession);
+    // The audience links depend on which organisation is active.
+    if (lastNav) renderNav(lastNav.route, lastNav.params);
     if (!onConsoleRoute || mountedKey === null) return;
     const key = state.status === ORG_STATUS.READY ? `${state.userId}:${state.activeOrgId}` : null;
     const gone =
@@ -894,9 +897,11 @@ export function mountApp(
     if (isTeamOwner) {
       links.push({ label: 'Team', href: '#/team', active: route.pattern === '/team' });
     }
-    // Without the legacy audience organisation these links would only open the "out of date" card, so
-    // they are left out until T-TEN.D4 makes them slug-qualified.
-    if (legacyAudienceOrgId) {
+    // The audience screens still show ONE organisation (the legacy one, until T-TEN.D1/D4 make the links
+    // slug-qualified). These links are offered only while that is the organisation the console is working
+    // in: otherwise "Projector view" would open another organisation's display under this one's header (or
+    // only the "out of date" card, when none is configured).
+    if (legacyAudienceOrgId && legacyAudienceOrgId === orgContext.getActiveOrgId()) {
       links.push(
         { label: 'Splash screen', href: '#/live/splash', openInNewTab: true },
         { label: 'Projector view', href: '#/live/projector', openInNewTab: true },

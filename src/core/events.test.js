@@ -193,3 +193,30 @@ describe('deleteTestEvent', () => {
     );
   });
 });
+
+describe('the organisation id is the one given, at the module layer (T-TEN.C5)', () => {
+  it('createEvent inserts under the organisation it is given', async () => {
+    const client = fakeClient({ data: { id: 'ev9' }, error: null });
+    await createEvent('org-xyz', { format: 'cup_taster', name: 'Cup' }, client);
+    const insert = client.calls.find(([kind]) => kind === 'insert');
+    expect(insert[2].org_id).toBe('org-xyz');
+  });
+
+  it('listEventsForOrg filters on the organisation it is given', async () => {
+    const client = fakeClient({ data: [], error: null });
+    await listEventsForOrg('org-xyz', client);
+    expect(client.calls).toContainEqual(['eq', 'org_id', 'org-xyz']);
+  });
+
+  it('deleteTestEvent sends the organisation it is given as p_org_id', async () => {
+    const calls = [];
+    const client = {
+      rpc: (name, payload) => {
+        calls.push([name, payload]);
+        return Promise.resolve({ error: null });
+      },
+    };
+    await deleteTestEvent('org-xyz', 'ev1', client);
+    expect(calls).toEqual([['delete_test_event', { p_org_id: 'org-xyz', p_event_id: 'ev1' }]]);
+  });
+});
