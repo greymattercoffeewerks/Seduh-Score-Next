@@ -144,6 +144,32 @@ describe('mountEventDashboardScreen', () => {
     expect(badge.classList.contains('event-live-status-live')).toBe(true);
   });
 
+  it("asks about live sessions in the EVENT's own organisation, not whichever the console is working in", async () => {
+    const root = document.createElement('div');
+    const eqCalls = [];
+    const client = fakeClient({
+      tables: {
+        events: { data: { ...nonTestEvent, org_id: 'org9' }, error: null },
+        ct_stages: { data: [], error: null },
+        live_sessions: { data: { event_id: 'ev1' }, error: null },
+      },
+    });
+    const from = client.from.bind(client);
+    client.from = (table) => {
+      const builder = from(table);
+      const eq = builder.eq;
+      builder.eq = (...args) => {
+        eqCalls.push([table, ...args]);
+        return eq(...args);
+      };
+      return builder;
+    };
+    // (No organisation is passed any more: the event itself says whose it is.)
+    await mountEventDashboardScreen(root, { eventId: 'ev1', client });
+    expect(eqCalls).toContainEqual(['live_sessions', 'org_id', 'org9']);
+    expect(root.querySelector('.event-live-status').textContent).toContain('Live now');
+  });
+
   it('names the other event when a DIFFERENT event is the org\'s active live_sessions row — the exact confusion this feature exists to close (a bare "Not currently live" doesn\'t tell the organiser where to look)', async () => {
     const root = document.createElement('div');
     const client = fakeClient({

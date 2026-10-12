@@ -5,10 +5,12 @@ import {
   renderEventsList,
   renderCreateForm,
   mountEventsScreen,
+  eventsListHeading,
+  createEventHeading,
 } from './eventsScreen.js';
 import { DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
 import { _clearAllForTests } from './db.js';
-import { enqueueOperation } from './outbox.js';
+import { enqueueOperation, setOutboxOwner, _resetOutboxOwnerForTests } from './outbox.js';
 
 // Delete now reads this device's outbox before showing its confirm step, so
 // the step appears after an await rather than synchronously.
@@ -479,6 +481,30 @@ describe('mountEventsScreen', () => {
       }
     });
 
+    it('counts what any account queued for THIS organisation, and nothing queued for another one (T-TEN.C6)', async () => {
+      try {
+        setOutboxOwner({ userId: 'alice', orgId: 'org1' });
+        await enqueueOperation('confirm_heat', { p_org_id: 'org1', p_heat_id: 'h1' });
+        setOutboxOwner({ userId: 'bob', orgId: 'org2' });
+        await enqueueOperation('confirm_heat', { p_org_id: 'org2', p_heat_id: 'h2' });
+        // somebody else is signed in now: the warning is about the event's organisation, not the signed-in account
+        setOutboxOwner({ userId: 'carol', orgId: 'org1' });
+        const root = document.createElement('div');
+        document.body.appendChild(root);
+        try {
+          await mountWithTestEvent(root).mounted;
+          await openDeleteConfirm(root, 'ev1');
+          expect(root.querySelector('#delete-warning-ev1').textContent).toContain(
+            "1 write on this device hasn't synced yet.",
+          );
+        } finally {
+          document.body.removeChild(root);
+        }
+      } finally {
+        _resetOutboxOwnerForTests();
+      }
+    });
+
     it('shows no warning when nothing is queued', async () => {
       const root = document.createElement('div');
       await mountWithTestEvent(root).mounted;
@@ -700,5 +726,305 @@ describe('mountEventsScreen', () => {
     expect(root.querySelector('.screen-feedback').dataset.tone).toBe('error');
     // Back to the plain Delete button, not stuck showing "Deleting…" forever.
     expect(root.querySelector('#delete-event-ev2')).not.toBeNull();
+  });
+});
+
+describe('which organisation an event belongs to (T-TEN.C5)', () => {
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const h2s = (root) => [...root.querySelectorAll('h2')].map((h) => h.textContent);
+  async function createNamed(root, name) {
+    const field = root.querySelector('[data-field="name"]');
+    field.value = name;
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    root
+      .querySelector('form')
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await tick();
+  }
+
+  it('the two headings name the organisation, and read as before without a name', () => {
+    expect(eventsListHeading('Alpha Coffee')).toBe('Events in Alpha Coffee');
+    expect(createEventHeading('Alpha Coffee')).toBe('Create an event in Alpha Coffee');
+    for (const none of [null, undefined, '', '   ']) {
+      expect(eventsListHeading(none)).toBe('Your events');
+      expect(createEventHeading(none)).toBe('Create event');
+    }
+  });
+
+  it('the screen names the organisation above the list and above the create form', async () => {
+    const root = document.createElement('div');
+    const client = fakeClient({
+      events: [{ id: 'ev1', org_id: 'org1', name: 'October Cup', is_test: false }],
+    });
+    await mountEventsScreen(root, {
+      orgId: 'org1',
+      orgName: 'Alpha Coffee',
+      client,
+      defaultFormat: 'cup_taster',
+    });
+    expect(h2s(root)).toEqual(['Events in Alpha Coffee', 'Create an event in Alpha Coffee']);
+    // The create heading sits in the same card as the form it describes.
+    const card = [...root.querySelectorAll('.card')].find((c) => c.querySelector('form'));
+    expect(card.querySelector('h2').textContent).toBe('Create an event in Alpha Coffee');
+  });
+
+  it('without a name the headings are the ones it always had', async () => {
+    const root = document.createElement('div');
+    await mountEventsScreen(root, {
+      orgId: 'org1',
+      client: fakeClient({
+        events: [{ id: 'ev1', org_id: 'org1', name: 'October Cup', is_test: false }],
+      }),
+      defaultFormat: 'cup_taster',
+    });
+    expect(h2s(root)).toEqual(['Your events', 'Create event']);
+  });
+
+  it('writes the name as text, never as markup', async () => {
+    const root = document.createElement('div');
+    const hostile = '<img src=x onerror=alert(1)>';
+    await mountEventsScreen(root, {
+      orgId: 'org1',
+      orgName: hostile,
+      client: fakeClient({
+        events: [{ id: 'ev1', org_id: 'org1', name: 'October Cup', is_test: false }],
+      }),
+      defaultFormat: 'cup_taster',
+    });
+    expect(root.querySelector('img')).toBeNull();
+    expect(h2s(root)).toContain(`Create an event in ${hostile}`);
+  });
+
+  // A client that honours the organisation: one shared database, `eq('org_id')` filters, and a delete that
+  // only removes a row when BOTH the organisation and the event id match (like the real RPC).
+  function orgClient(initial) {
+    const db = { events: [...initial] };
+    const calls = [];
+    let insertGate = null;
+    return {
+      calls,
+      db,
+      holdInserts(gate) {
+        insertGate = gate;
+      },
+      rpc: (name, payload) => {
+        calls.push(['rpc', name, payload]);
+        if (name === 'delete_test_event') {
+          db.events = db.events.filter(
+            (row) => !(row.id === payload.p_event_id && row.org_id === payload.p_org_id),
+          );
+        }
+        return Promise.resolve({ data: null, error: null });
+      },
+      from(table) {
+        let orgFilter = null;
+        const builder = {
+          select: () => builder,
+          insert: (payload) => {
+            calls.push(['insert', table, payload]);
+            const row = { id: `ev-new-${db.events.length}`, ...payload };
+            return {
+              select: () => ({
+                single: async () => {
+                  if (insertGate) await insertGate;
+                  db.events.push(row);
+                  return { data: row, error: null };
+                },
+              }),
+            };
+          },
+          eq: (column, value) => {
+            calls.push(['eq', table, column, value]);
+            if (column === 'org_id') orgFilter = value;
+            return builder;
+          },
+          order: () => builder,
+          then: (resolve, reject) =>
+            Promise.resolve({
+              data: db.events.filter((row) => orgFilter === null || row.org_id === orgFilter),
+              error: null,
+            }).then(resolve, reject),
+        };
+        return builder;
+      },
+    };
+  }
+  const BOTH = [
+    { id: 'ev-a', org_id: 'org1', name: 'Alpha Test Run', is_test: true },
+    { id: 'ev-b', org_id: 'org2', name: 'Bravo Test Run', is_test: true },
+  ];
+  const mounted = [];
+  function mountFor(orgId, orgName, client, extra = {}) {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    mounted.push(root);
+    const screen = mountEventsScreen(root, {
+      orgId,
+      orgName,
+      client,
+      defaultFormat: 'cup_taster',
+      ...extra,
+    });
+    return { root, screen };
+  }
+  afterEach(() => {
+    for (const root of mounted.splice(0)) root.remove();
+  });
+
+  it('a screen mounted for the second organisation lists only that organisation', async () => {
+    const client = orgClient(BOTH);
+    const { root, screen } = mountFor('org2', 'Bravo Roasters', client);
+    await screen;
+    expect(root.textContent).toContain('Bravo Test Run');
+    expect(root.textContent).not.toContain('Alpha Test Run');
+  });
+
+  it('creates in that organisation, re-lists it (still only its events), and says where the event went', async () => {
+    const client = orgClient(BOTH);
+    const { root, screen } = mountFor('org2', 'Bravo Roasters', client);
+    await screen;
+    await createNamed(root, 'Bravo Open');
+    const insert = client.calls.find(([kind]) => kind === 'insert');
+    expect(insert[2]).toMatchObject({ org_id: 'org2', name: 'Bravo Open' });
+    // The list was read for org2 twice (mount, then after creating), never for another organisation.
+    const listed = client.calls
+      .filter(([kind, , column]) => kind === 'eq' && column === 'org_id')
+      .map(([, , , value]) => value);
+    expect(listed).toEqual(['org2', 'org2']);
+    expect(root.textContent).toContain('Bravo Open');
+    expect(root.textContent).toContain('Bravo Test Run');
+    expect(root.textContent).not.toContain('Alpha Test Run');
+    expect(root.querySelector('.screen-feedback').textContent).toBe(
+      'Event created in Bravo Roasters.',
+    );
+  });
+
+  it('names the organisation without the spaces around it', async () => {
+    const client = orgClient(BOTH);
+    const { root, screen } = mountFor('org2', '  Bravo Roasters  ', client);
+    await screen;
+    await createNamed(root, 'Bravo Open');
+    expect(root.querySelector('.screen-feedback').textContent).toBe(
+      'Event created in Bravo Roasters.',
+    );
+  });
+
+  it('says plain "Event created." when it has no name for the organisation', async () => {
+    const client = orgClient(BOTH);
+    const { root, screen } = mountFor('org2', null, client);
+    await screen;
+    await createNamed(root, 'Bravo Open');
+    expect(root.querySelector('.screen-feedback').textContent).toBe('Event created.');
+  });
+
+  it("deletes in that organisation, and the other organisation's event is untouched", async () => {
+    const client = orgClient(BOTH);
+    const { root, screen } = mountFor('org2', 'Bravo Roasters', client);
+    await screen;
+    await openDeleteConfirm(root, 'ev-b');
+    root.querySelector('#confirm-delete-ev-b').click();
+    await tick();
+    expect(client.calls).toContainEqual([
+      'rpc',
+      'delete_test_event',
+      { p_org_id: 'org2', p_event_id: 'ev-b' },
+    ]);
+    expect(client.db.events.map((row) => row.id)).toEqual(['ev-a']);
+  });
+
+  it('two screens on one client never leak into each other', async () => {
+    const client = orgClient(BOTH);
+    const first = mountFor('org1', 'Alpha Coffee', client);
+    const second = mountFor('org2', 'Bravo Roasters', client);
+    await first.screen;
+    await second.screen;
+    await createNamed(second.root, 'Bravo Open');
+    expect(first.root.textContent).not.toContain('Bravo');
+    expect(first.root.textContent).toContain('Alpha Test Run');
+    expect(second.root.textContent).not.toContain('Alpha Test Run');
+    expect(h2s(first.root)).toEqual(['Events in Alpha Coffee', 'Create an event in Alpha Coffee']);
+    expect(h2s(second.root)).toEqual([
+      'Events in Bravo Roasters',
+      'Create an event in Bravo Roasters',
+    ]);
+  });
+
+  it('labels the create form with its heading, so someone who jumps to the form hears the organisation', async () => {
+    const client = orgClient(BOTH);
+    const { root, screen } = mountFor('org1', 'Alpha Coffee', client);
+    await screen;
+    const form = root.querySelector('form');
+    const heading = root.querySelector(`#${form.getAttribute('aria-labelledby')}`);
+    expect(heading.tagName).toBe('H2');
+    expect(heading.textContent).toBe('Create an event in Alpha Coffee');
+  });
+
+  describe('a screen that has been superseded sends nothing', () => {
+    it('a create submitted after the signal was aborted is not sent, and nothing is painted', async () => {
+      const client = orgClient(BOTH);
+      const controller = new AbortController();
+      const { root, screen } = mountFor('org1', 'Alpha Coffee', client, {
+        signal: controller.signal,
+      });
+      await screen;
+      const before = root.innerHTML;
+      controller.abort();
+      await createNamed(root, 'Too Late');
+      expect(client.calls.some(([kind]) => kind === 'insert')).toBe(false);
+      expect(root.innerHTML).toBe(before);
+    });
+
+    it('a delete confirmed after the signal was aborted is not sent', async () => {
+      const client = orgClient(BOTH);
+      const controller = new AbortController();
+      const { root, screen } = mountFor('org1', 'Alpha Coffee', client, {
+        signal: controller.signal,
+      });
+      await screen;
+      await openDeleteConfirm(root, 'ev-a');
+      controller.abort();
+      root.querySelector('#confirm-delete-ev-a').click();
+      await tick();
+      expect(client.calls.some(([kind]) => kind === 'rpc')).toBe(false);
+      expect(client.db.events.map((row) => row.id)).toContain('ev-a');
+    });
+
+    it('a create already in flight when the organisation changes lands in the old organisation, and paints nothing over the new screen', async () => {
+      const client = orgClient(BOTH);
+      let release;
+      client.holdInserts(new Promise((resolve) => (release = resolve)));
+      const controller = new AbortController();
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      mounted.push(root);
+      await mountEventsScreen(root, {
+        orgId: 'org1',
+        orgName: 'Alpha Coffee',
+        client,
+        defaultFormat: 'cup_taster',
+        signal: controller.signal,
+      });
+      // Submit in the old organisation (the insert is held), then the console moves to the other one.
+      const submitting = createNamed(root, 'Alpha Open');
+      await tick();
+      controller.abort();
+      await mountEventsScreen(root, {
+        orgId: 'org2',
+        orgName: 'Bravo Roasters',
+        client,
+        defaultFormat: 'cup_taster',
+      });
+      release();
+      await submitting;
+      await tick();
+
+      // The event was created where the person was when they pressed Create…
+      const insert = client.calls.find(([kind]) => kind === 'insert');
+      expect(insert[2].org_id).toBe('org1');
+      // …and the screen now showing belongs to the new organisation and was not painted over.
+      expect(h2s(root)).toEqual(['Events in Bravo Roasters', 'Create an event in Bravo Roasters']);
+      expect(root.textContent).not.toContain('Alpha Open');
+      expect(root.textContent).not.toContain('Event created');
+    });
   });
 });

@@ -165,3 +165,6 @@ playwright/.cache/
 # header comment. Working state, not a deliverable; multiple sessions had been
 # independently leaving it untracked-but-unignored rather than deciding this.
 state.json
+
+# Local scratch output (screenshots, helper scripts, drafts); never committed.
+brag-output/

@@ -231,3 +231,29 @@ moving, because a successful switch re-mounts the console and the new screen tak
 person must tell two apart (slug added when a name is shared). `main.js` keeps the slot in step in its org-context
 subscriber and announces a deliberate switch ("Now working in …") differently from a change nobody asked for. See
 ROADMAP.md's "Known open items from T-TEN.C3".
+
+T-TEN.C4 (2026-10-12) — the Team screen follows the active organisation. `mountTeamScreen` gained `orgName` (the
+heading is `teamHeading(orgName)`, "Team for <name>"; the opening text `teamIntro(orgName)` says these are managed
+accounts that belong only to this organisation, decision D-T6) and `onLeaveGuard(active)`, told whenever leaving the
+screen would lose a one-time password (on show, or its request still in flight); `main.js` refuses `switchOrg`
+while it is on (reason `team_open`) and resets it whenever any console screen mounts. `main.js` takes the name from
+the SAME snapshot that supplied the id, never from live state. `orgLabel` now trims names and removes invisible
+text-direction controls (an unclosed right-to-left override scrambles a sentence the name sits in). The Team link's
+own re-ask per organisation is T-TEN.C2's. See ROADMAP.md's "Known open items from T-TEN.C4".
+
+T-TEN.C5 (2026-10-12) — events follow the active organisation. `mountEventsScreen` gained `orgName` (the list
+heading is `eventsListHeading(orgName)`, "Events in <name>", the create form's `createEventHeading(orgName)`,
+"Create an event in <name>"; plain "Your events" / "Create event" with no name). Create, list and delete already
+used the `orgId` the screen was mounted with (T-TEN.C2); publishing deliberately uses the EVENT's own `org_id`,
+not the active organisation; the event hub reads live status from the event's own `org_id`. A superseded screen (its signal aborted) does not send create or delete. See ROADMAP.md's "Known open items from T-TEN.C5".
+
+T-TEN.C6 (2026-10-12) — the outbox has an owner. `core/outbox.js` tags every operation with `userId` and `orgId`
+at enqueue (the payload's own `p_org_id`/`orgId` wins) and only ever replays, counts (`listPendingOperations`,
+`countPendingOperations`) or lists for the sync panel the SIGNED-IN account's operations in the ACTIVE
+organisation; everything else is left untouched and reported (`partitionOperations`, one read split three ways).
+`main.js` sets the owner (`setOutboxOwner`) on every auth event and organisation change, before the flush that
+change may start; `undefined` (never set) is "ownership not in use" (bare tests), `null` is signed out. A question
+about one of your OWN just-queued writes ("is it still queued?") must use `listAllOperations()`, never the
+filtered list. Signing out with changes waiting is two-step (`signOut.js`'s `unsyncedSignOutWarning`, shown in
+the header's overlay notice; the no-organisation screen has its own copy of the flow). See ROADMAP.md's "Known
+open items from T-TEN.C6".

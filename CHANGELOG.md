@@ -1,3 +1,73 @@
+## T-TEN.C6: one device's outbox is shared safely between accounts and organisations · 2026-10-12
+
+**Task:** T-TEN.C6 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase C, the client). Client only: no migration, nothing to push to the cloud project.
+
+**Status: in review, not merged.**
+
+**Why:** one browser's IndexedDB outbox is shared by everyone who signs in on that device and by every organisation one person works in. The queue replayed every operation under whoever was signed in; the database refuses an operation from a non-member as a PERMANENT failure, and a permanent failure is removed from the queue. So a second account signing in on a venue tablet could silently destroy the first one's unsynced scoring.
+
+**What changed:**
+
+- **Operations are tagged and replayed only by their owner** (`core/outbox.js`, `main.js`): each queued operation records the account (`userId`) and the organisation (`orgId`, the payload's own `p_org_id`/`orgId`, else the active one) it was made in. `main.js` tells the outbox who is signed in and which organisation is active (`setOutboxOwner`, on every auth event and organisation change, before the flush that change may start). A flush lists, and re-checks before every operation, only the signed-in account's operations in the active organisation. Everything else is left exactly as it is: not run, not counted as a failure, no attempt recorded, not dropped, not reordered. `undefined` owner (never set) means ownership is not in use and is the state of a bare test only; `main.js` sets `null` (signed out: nothing runs) before anything can flush.
+- **Operations queued before this change** carry no `userId`: they belong to whoever is signed in (the account cannot be recovered), but their organisation is read from the payload, so they are never replayed into another one. Nothing is dropped by the migration, and there is no IndexedDB version bump (deliberate deviation from the plan: no new index is needed, the filter is client side).
+- **A permanent failure after the owner changed never removes the operation**: if another account signed in while a request was in flight, the operation is left for its owner.
+- **The sync panel reports work waiting for somebody else** (`appShell.js`, `syncState.js`): "Unsent (N other)" with "N unsynced changes from another account. Sign in as that account to send them." or "... waiting in <organisation>. Switch to it to send them." (no "switch" offered for an organisation the account is not in). It is "not synced", never "Synced", and never counted in the account's own pending count. The panel stays quiet while the organisation is still loading rather than guessing.
+- **Signing out with changes waiting warns first** (`appShell.js`, `noOrgScreen.js`, `signOut.js`): the first press says how many changes the account has waiting, that they stay on this device and are sent once the account is signed in again, and to press Sign out again. The warning is the notice under the header (it overlays the page: the header does not grow at any width), is withdrawn after 15 seconds, when the menu closes or when anything else is tapped, ignores a double tap, and survives token refreshes. If the outbox cannot be read it says so and lets the person decide. The button keeps its label.
+- **The organisation switch** counts only this account's changes in the current organisation. Every operation is tagged with the organisation it was made in, so one queued in the instant between the check and the switch stays queued for that organisation and is reported, never replayed into the new one.
+- **Consumers of the queue**: "is this write still queued?" questions (BTC `isOperationQueued`, the time-correction screen) now ask the whole device's queue, so a write that is safely waiting is never taken for a dropped one because the owner changed. The delete-a-test-event warning counts what any account queued for that event's organisation.
+- **Recovery:** the 15-second retry timer now also asks for the organisation again while it is unknown and the device is online (queued changes cannot be sent without it), and a flush waits until the organisation is known.
+
+**Verified:** the full suite (3788 unit tests in 136 files), lint and Prettier on the whole repository, the production build, and the whole organiser-flow browser file (15 tests, against the real local database) pass. Unit tests simulate: account A queues, account B signs in on the same device, B's flush leaves A's operations untouched (same records, no attempts, no error), A signs back in and they send; an owner change in the middle of a pass; two organisations of one account with interleaved work; an operation that names no organisation; a caller that joins a flush already running. Two browser tests check another account's change (reported, left alone by a real flush) and the sign-out warning at 320, 360, 640, 900, 1365, 1366 and 1600px (header height unchanged, no sideways scroll). About 80 deliberate breaks of the new behaviour were each caught by a named test.
+
+**Reviews:** offline-sync-auditor (blocking: no blocking issue; its two Medium findings are fixed: "is it still queued" no longer depends on the owner, and a permanent failure after an owner change keeps the operation), code-reviewer, ui-accessibility-reviewer (the warning moved into the overlay notice, with timers and a double-tap guard), test-auditor, each run as a general-purpose agent following the project's `.claude/agents/*.md` definition.
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-TEN.C6".
+
+## T-TEN.C5: events are created, listed and deleted in the active organisation, and the form says which · 2026-10-12
+
+**Task:** T-TEN.C5 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase C, the client). Client only: no migration, nothing to push to the cloud project.
+
+**Status: in review, not merged.**
+
+**Why:** someone who works in two organisations must never create an event in the wrong one.
+
+**What was confirmed (no change needed):** the Events screen is handed the active organisation's id when it is mounted (T-TEN.C2) and passes it, unchanged, to `createEvent` (the `org_id` of the insert), `listEventsForOrg` (the `org_id` filter) and `deleteTestEvent` (`p_org_id`); the screen is replaced when the organisation changes, so a screen never outlives the organisation it was built for. `publishEventResults` / `unpublishEventResults` are given the **event's own** `org_id` (read from the event the report screen loaded), not the active organisation: that is correct, since the database requires the organisation to be the event's own, and it keeps working for an event of a non-active organisation opened by a link (T-TEN.C7).
+
+**What changed:**
+
+- **The Events screen names the organisation** (`src/core/eventsScreen.js`, `src/main.js`): the list heading reads "Events in <name>" (was "Your events") and the create form's heading reads "Create an event in <name>" (was "Create event"); with no name (or only spaces) the old headings remain. The form is labelled by its heading, and the success message says where the event went ("Event created in <name>."). The name is the organisation's label from the same snapshot as its id (`core/orgLabel.js`: the slug is added when two of the person's organisations share a name; names are trimmed and cleaned of invisible text-direction controls). A long unbroken name wraps in the headings (`eventsScreen.css`) instead of scrolling the page sideways.
+- **A superseded Events screen sends nothing** (`eventsScreen.js`): while the organisation has just changed and the old screen is still on show, create and delete return early once the screen's signal is aborted, so an event can never be written to the organisation the person has just left.
+- **The event hub reads the live status of the event's own organisation** (`eventDashboardScreen.js`, `main.js`): it used to be handed the active organisation's id; a link to an event of another of the person's organisations would have shown the wrong organisation's live event. The `orgId` option is gone.
+- **The audience links** ("Projector view" and the like) show only while the active organisation is the legacy audience organisation, and are redrawn when the organisation changes (`main.js`). Those screens still show one organisation until T-TEN.D1/D4.
+
+**Verified:** the full suite (3697 unit tests in 135 files), lint and Prettier on every changed file, the production build, and the whole organiser-flow browser file (13 tests, against the real local database) pass. Unit tests pin that a screen mounted for the second organisation lists, creates and deletes in that organisation and sends no other organisation's id, that the headings name it (and read as before without a name, and as text, never markup), and that the events route is told the active organisation's id and name and follows a switch. A real-browser test checks both headings against the real organisation in the real database. Every deliberate break of the new headings (with and without trimming), of the organisation id in create, list and delete, of the abort guards, the success message, the form label, the dashboard's organisation and the audience-link rule was caught by a test that names it.
+
+**Reviews:** code-reviewer (an audit of every place the client picks an organisation id), ui-accessibility-reviewer, test-auditor, each run as a general-purpose agent following the project's `.claude/agents/*.md` definition.
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-TEN.C5".
+
+## T-TEN.C4: the Team link and screen follow the active organisation · 2026-10-12
+
+**Task:** T-TEN.C4 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase C, the client). Client only: no migration, nothing to push to the cloud project.
+
+**Status: in review, not merged.**
+
+**Why:** someone who owns one organisation and is only an organiser in another must never be unsure whose team they are looking at, or lose a one-time password because they switched organisation. The Team _link_ already followed the active organisation (T-TEN.C2); the screen itself did not say whose team it was.
+
+**What changed:**
+
+- **The Team screen names the organisation** (`src/core/teamScreen.js`, `src/main.js`): the heading reads "Team for <name>" in all four states (loading, not the owner, load failed, loaded) and stays plain "Team" with no name; the opening text now says these are managed accounts that belong only to this organisation and cannot be added to another one from this screen (decision D-T6). The name is the organisation's label (`core/orgLabel.js`: the slug is added when two of the person's organisations share a name) and comes from the same snapshot as the organisation's id, so a screen can never show one organisation's name over another's data.
+- **A switch cannot destroy a one-time password.** The Team screen is replaced when the organisation changes, and a password on it is "shown once and cannot be looked up again". The screen now reports (`onLeaveGuard`) whenever leaving it would lose something: a password on show, or an add/reset/restore request still being sent (whose password has not been shown yet). While that is so, `switchOrg` is refused with "The Team screen has a one-time password showing, or a change still being saved. Finish that first (press Done), then switch organisation." The refusal shows under the header like the unsynced-changes one. It clears on Done, on leaving the screen, and when any other screen mounts.
+- **Organisation names are cleaned** before they are put in a sentence (`orgLabel.js`): surrounding space is trimmed (a name of only spaces counts as no name) and invisible text-direction controls are removed (an unclosed right-to-left override scrambled the rest of the intro paragraph). This also covers the header, the list and the announcement.
+
+**Already in place from C2, verified here:** the Team link is re-asked for the active organisation on every auth event and every organisation change, a failed check changes nothing, a late answer for the previous organisation is ignored (the `seq` guard), and the link of the previous organisation is gone at once on a switch; tests cover an owner in A who is only an organiser in B.
+
+**Verified:** 3674 unit tests pass, including the guard (a password on show, a request in flight, released on Done and on unmount, once per change), the name from the same snapshot, Team in one organisation then the other, and the cleaning of names. A real-browser test against the local Supabase stack clicks the real Team link as the owner, checks the heading and text, switches away while on the Team screen (it is replaced and the link goes), opens the other organisation's Team screen by hand (named, refused for a non-owner, no sideways scroll at 360px) and switches back. Every deliberate break of the new code was caught by a test that names it.
+
+**Reviews:** ui-accessibility-reviewer (no blockers; found the text-direction problem, checked the heading and a long name at 360px in a real browser), code-reviewer (no blockers for the link logic; found the name/id snapshot mix and the lost-password trap), test-auditor (the first browser test did not prove "follows a switch"; rewritten). Each was run as a general-purpose agent following the project's `.claude/agents/*.md` definition.
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-TEN.C4".
+
 ## T-TEN.C3: the organisation in the header, and the switcher · 2026-10-11
 
 **Task:** T-TEN.C3 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase C, the client). Client only: no migration, nothing to push to the cloud project.

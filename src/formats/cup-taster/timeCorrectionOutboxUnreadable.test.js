@@ -1,12 +1,12 @@
 // What the pending-work helpers do when the outbox itself cannot be read. Its own file because
-// it replaces listPendingOperations for every test in it.
+// it replaces listAllOperations for every test in it.
 import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('../../core/outbox.js', async (importOriginal) => {
   const original = await importOriginal();
   return {
     ...original,
-    listPendingOperations: vi.fn(() => Promise.reject(new Error('IndexedDB is unavailable'))),
+    listAllOperations: vi.fn(() => Promise.reject(new Error('IndexedDB is unavailable'))),
   };
 });
 vi.spyOn(console, 'warn').mockImplementation(() => {});

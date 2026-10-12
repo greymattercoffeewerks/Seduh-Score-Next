@@ -1897,13 +1897,13 @@ handoff §4's "one organiser, one org"; locks D-T1…D-T8). Why: `MULTI-TENANCY-
 pillars A and B. Not in scope: gating/entitlements (D14 stays a stub), admin console, self-serve
 signup, Seduh ID. Rule (lifted 2026-10-11, now that B1, B2 and B6 are in the cloud): a two-org user is created only through the service-role provisioning path (B4).
 
-| Phase | Tasks                                                                                                                                             | Status                                           |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| A     | A1 spec lock · A2 tenancy inventory                                                                                                               | Done                                             |
-| B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | Done (B1 to B7 merged and in the cloud project)  |
-| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | In progress (C1, C2 merged; C3 built, in review) |
-| D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | Not started                                      |
-| E     | E1 negative matrix · E2 console Playwright · E3 security/perf · E4 docs · E5 rollout · E6 close-out                                               | Not started                                      |
+| Phase | Tasks                                                                                                                                             | Status                                             |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| A     | A1 spec lock · A2 tenancy inventory                                                                                                               | Done                                               |
+| B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | Done (B1 to B7 merged and in the cloud project)    |
+| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | In progress (C1 to C5 merged; C6 built, in review) |
+| D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | Not started                                        |
+| E     | E1 negative matrix · E2 console Playwright · E3 security/perf · E4 docs · E5 rollout · E6 close-out                                               | Not started                                        |
 
 Each D task is re-confirmed with the product owner before it starts (2026-10-10).
 
@@ -2038,3 +2038,43 @@ _Client only: the organisation slot in `src/core/appShell.js` / `appShell.css`, 
 - **The refusal panel has no timer** (it clears on Escape, on leaving the control, on a tap anywhere, or on the next choice) and, at 360px, can sit over the page heading until dismissed. The tap-anywhere dismissal is there for iOS Safari, which does not reliably blur a select; not verified on a device.
 - **A timing-sensitive existing test is flaky under heavy parallel load** (`appShell.test.js`, "still announces at the cap when the wall clock steps backwards during the hold": real timers and a 100ms window). It passes alone and in a quiet full run; it failed twice while mutation runs shared the machine. Not touched by C3.
 - **Forced-colors mode hides the Menu button's three bars** (pre-existing, not C3's): worth its own item.
+
+---
+
+## Known open items from T-TEN.C4 (2026-10-12)
+
+_Client only: `src/core/teamScreen.js`, `src/core/orgLabel.js`, and the wiring in `src/main.js`. No migration._
+
+- **An involuntary organisation change still replaces the Team screen**, with a one-time password on it if there is one: a membership that falls away, or another account signing in in a second tab, cannot be refused the way a deliberate switch now is. The password is recoverable (Reset password on that member, from the organisation they belong to), but the screen says "cannot be looked up again". Rare; a fuller answer belongs with C7's deep-link switch and C6's ownership work.
+- **The Team screen's wording is fixed at mount.** An operator renaming the organisation, or a second organisation with the same name appearing, while the Team screen is on show leaves the old heading until the next navigation (the header updates at once). Wording only: every request carries the organisation's id. Folding the label into the console key would eject an owner mid-task.
+- **The copy says accounts "cannot be added to another organisation from this screen" without saying where it can be done.** Today it is operator-only (decision D-T6), so no route is named; add one when a support route exists.
+- **A very long unbroken organisation name** wraps (no sideways scroll at 360px) but pushes the add-a-member form down the screen; a cap on the heading's lines would fix it if it ever matters.
+- **Still owed** from C3: the manual screen-reader and real-phone pass, which should include the Team screen's new heading ("Team for <name>").
+
+---
+
+## Known open items from T-TEN.C5 (2026-10-12)
+
+_Client only: `src/core/eventsScreen.js` and the wiring in `src/main.js`. No migration._
+
+- **Publishing uses the event's own organisation**, not the active one (`reportScreen.js` reads `data.event.org_id`). Correct, and what lets T-TEN.C7's deep link into a non-active organisation's event publish at all; but until C7 switches the active organisation for such a link, the header can say one organisation while the report screen on show belongs to another. C7 must either switch or show the event's organisation.
+- **Audience links depend on the legacy organisation** until T-TEN.D1/D4 make them slug-qualified: they are offered only while the active organisation is the legacy one.
+- **The organisation is fixed when the Events screen mounts**, like the Team screen's wording: a rename while it is on show keeps the old heading until the next navigation. Every request carries the organisation's id, so only the words are stale.
+
+---
+
+## Known open items from T-TEN.C6 (2026-10-12)
+
+_Client only: `core/outbox.js`, `main.js`, `core/appShell.js`, `core/signOut.js`, `core/noOrgScreen.js`. No migration._
+
+- **No way out for operations that can never be sent.** If the account that made them never signs in again on this device, or has since left the organisation, they stay on the device for good and the panel keeps saying "Unsent (N other)" (the wording no longer offers a switch that is impossible). An owner-confirmed discard, or an export, is a product decision and is not built. On a shared venue tablet a permanent amber chip trains people to ignore it.
+- **A small window remains between the session and the token.** The owner follows auth events, but a request reads the token from shared storage when it is sent. If another tab signs the account out and a different one in while this tab's request is on its way, the request can carry the new token before this tab's auth event lands. The database then refuses it as a non-member (permanent); the operation is now kept, not removed, if the owner has changed by the time the failure arrives, but a failure that arrives before this tab hears of the change is still judged as it always was.
+- **The lost-write notice hides the "waiting for somebody else" sentence** while it is up (it lasts until the tab is closed and is not scoped to an account), though the chip still counts them.
+- **Operations queued while nobody is signed in, or before ownership tags existed, belong to whoever signs in next** (their organisation is still read from the payload, so they never go to another one). If that person is in the organisation with a lesser role, the database may refuse them. Pinned by tests so a change is deliberate. Every production payload names its organisation.
+- **A flush that skipped the caller's own operation (the owner changed) reports a clean result**; screens that ask "did my write land?" use the whole-queue check, which is why the BTC and time-correction checks were moved to it. A screen that only reads `stopped` could still say "saved" for a write that is queued for another owner. Narrow: screens are replaced when the owner changes.
+- **"Unsent (N other)" uses the same amber as the account's own pending changes.** A muted style would need the sync chip's CSS (pinned selector by selector in `appShell.test.js`) to change.
+- **Old tabs running old code ignore the tags** and replay everything: reload every open tab after the update.
+- **A member removed from every organisation who has changes waiting** sees the sign-out warning on the no-organisation screen, but those changes cannot be sent until they are added back.
+- **A manual screen-reader and real-phone pass** is still owed for the C3 to C6 additions (the sync notice, the sign-out warning).
+- **The unset-owner default in `core/outbox.js` is "ownership not in use"**, so bare tests need no setup; production sets `null` at mount, before anything can flush. Making `null` the default would mean every outbox test opting out.
+- **C7 note:** screens still take their organisation id from the router. A deep link into an event of a non-active organisation must switch the active organisation (the outbox would otherwise hold its writes as "waiting in another organisation").

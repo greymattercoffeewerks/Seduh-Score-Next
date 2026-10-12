@@ -9,11 +9,23 @@ import {
   onOperationDropped,
   droppedErrorFor,
   isFlushInProgress,
+  setOutboxOwner,
+  getOutboxOwner,
+  listOtherOperations,
+  listAccountOperations,
+  listAllOperations,
+  partitionOperations,
+  countOperationsInOrg,
+  operationOwnership,
+  payloadOrgId,
+  OWNERSHIP,
+  _resetOutboxOwnerForTests,
 } from './outbox.js';
-import { _clearAllForTests, outboxRemove } from './db.js';
+import { _clearAllForTests, outboxRemove, outboxPut, outboxListAll } from './db.js';
 
 beforeEach(async () => {
   await _clearAllForTests();
+  _resetOutboxOwnerForTests();
 });
 
 describe('enqueueOperation', () => {
@@ -922,5 +934,458 @@ describe('isFlushInProgress', () => {
     release();
     await running;
     expect(isFlushInProgress()).toBe(false);
+  });
+});
+
+describe('whose operation it is (T-TEN.C6)', () => {
+  const ALICE = { userId: 'alice', orgId: 'org1' };
+  const BOB = { userId: 'bob', orgId: 'org1' };
+  const flushOk = () => {
+    const ran = [];
+    const handlers = {
+      confirm_heat: (payload) => {
+        ran.push(payload.p_heat_id);
+        return Promise.resolve();
+      },
+    };
+    return { ran, handlers };
+  };
+  const queue = (heat, org = 'org1') =>
+    enqueueOperation('confirm_heat', { p_org_id: org, p_heat_id: heat });
+
+  describe('tagging', () => {
+    it('tags an operation with the signed-in account and the active organisation', async () => {
+      setOutboxOwner(ALICE);
+      const op = await enqueueOperation('confirm_heat', { p_heat_id: 'h2' });
+      expect(op).toMatchObject({ userId: 'alice', orgId: 'org1' });
+      const stored = await outboxListAll();
+      expect(stored.map((o) => [o.userId, o.orgId])).toEqual([['alice', 'org1']]);
+    });
+
+    it('uses the organisation the payload is for, even when the active one has moved on', async () => {
+      setOutboxOwner({ userId: 'alice', orgId: 'org2' });
+      const op = await queue('h1', 'org1');
+      expect(op.orgId).toBe('org1');
+      expect(await countPendingOperations()).toBe(0);
+    });
+
+    it("reads a publish intent's organisation too", async () => {
+      setOutboxOwner(ALICE);
+      const op = await enqueueOperation('publish_session', { orgId: 'org7', eventId: 'e1' });
+      expect(op.orgId).toBe('org7');
+    });
+
+    it('leaves the tags empty when nobody has been set as the owner', async () => {
+      const op = await enqueueOperation('confirm_heat', { heatId: 'h1' });
+      expect(op.userId).toBeNull();
+      expect(op.orgId).toBeNull();
+    });
+
+    it('payloadOrgId only trusts a non-empty string', () => {
+      expect(payloadOrgId({ p_org_id: 'a' })).toBe('a');
+      expect(payloadOrgId({ orgId: 'b' })).toBe('b');
+      expect(payloadOrgId({ p_org_id: 'a', orgId: 'b' })).toBe('a');
+      for (const bad of [null, undefined, {}, { p_org_id: '' }, { p_org_id: 7 }, 'x']) {
+        expect(payloadOrgId(bad)).toBeNull();
+      }
+    });
+
+    it('setOutboxOwner turns anything that is not an owner into signed-out, never into "unset"', () => {
+      for (const none of [null, undefined, false, 'alice', 0]) {
+        setOutboxOwner(none);
+        expect(getOutboxOwner()).toBeNull();
+      }
+      setOutboxOwner({ userId: 'u' });
+      expect(getOutboxOwner()).toEqual({ userId: 'u', orgId: null });
+    });
+  });
+
+  describe('who a flush replays for', () => {
+    it("leaves another account's operations untouched, and runs them when that account is back", async () => {
+      setOutboxOwner(ALICE);
+      await queue('h1');
+      const before = await outboxListAll();
+
+      setOutboxOwner(BOB);
+      const { ran, handlers } = flushOk();
+      const result = await flushOutbox(handlers);
+      expect(ran).toEqual([]);
+      expect(result).toEqual({ processed: 0, stopped: false, permanentFailure: false });
+      // untouched: same record, no attempt counted, no error recorded
+      expect(await outboxListAll()).toEqual(before);
+      expect(await countPendingOperations()).toBe(0);
+      expect((await listOtherOperations()).otherAccount).toHaveLength(1);
+
+      setOutboxOwner(ALICE);
+      const again = flushOk();
+      await flushOutbox(again.handlers);
+      expect(again.ran).toEqual(['h1']);
+      expect(await outboxListAll()).toEqual([]);
+    });
+
+    it("an account's own queue is not held up by somebody else's, whichever came first", async () => {
+      setOutboxOwner(ALICE);
+      await queue('alice-1');
+      setOutboxOwner(BOB);
+      await queue('bob-1');
+      setOutboxOwner(ALICE);
+      await queue('alice-2');
+      const { ran, handlers } = flushOk();
+      await flushOutbox(handlers);
+      expect(ran).toEqual(['alice-1', 'alice-2']);
+      expect((await outboxListAll()).map((o) => o.payload.p_heat_id)).toEqual(['bob-1']);
+    });
+
+    it('does not run an operation that belongs to another organisation of the same account', async () => {
+      setOutboxOwner(ALICE);
+      await queue('h1', 'org1');
+      setOutboxOwner({ userId: 'alice', orgId: 'org2' });
+      const { ran, handlers } = flushOk();
+      await flushOutbox(handlers);
+      expect(ran).toEqual([]);
+      const other = await listOtherOperations();
+      expect(other.otherOrg).toHaveLength(1);
+      expect(other.otherAccount).toHaveLength(0);
+
+      setOutboxOwner(ALICE);
+      await flushOutbox(handlers);
+      expect(ran).toEqual(['h1']);
+    });
+
+    it('while the organisation is still loading, runs nothing that names an organisation', async () => {
+      setOutboxOwner(ALICE);
+      await queue('h1');
+      setOutboxOwner({ userId: 'alice', orgId: null });
+      const { ran, handlers } = flushOk();
+      await flushOutbox(handlers);
+      expect(ran).toEqual([]);
+      expect(await outboxListAll()).toHaveLength(1);
+    });
+
+    it('signed out, runs nothing and says nothing is waiting for anyone', async () => {
+      setOutboxOwner(ALICE);
+      await queue('h1');
+      setOutboxOwner(null);
+      const { ran, handlers } = flushOk();
+      const result = await flushOutbox(handlers);
+      expect(ran).toEqual([]);
+      expect(result.processed).toBe(0);
+      expect(await countPendingOperations()).toBe(0);
+      expect((await listOtherOperations()).otherAccount).toHaveLength(1);
+      expect(await outboxListAll()).toHaveLength(1);
+    });
+
+    it('does not mistake a foreign operation for a missing handler, nor count an attempt against it', async () => {
+      setOutboxOwner(ALICE);
+      await enqueueOperation('some_other_format_type', { p_org_id: 'org1' });
+      setOutboxOwner(BOB);
+      const result = await flushOutbox({});
+      expect(result.stopped).toBe(false);
+      const [left] = await outboxListAll();
+      expect(left.attempts).toBe(0);
+      expect(left.lastError).toBeNull();
+    });
+
+    it("a permanent failure for one account never removes another account's operation", async () => {
+      setOutboxOwner(ALICE);
+      await queue('alice-1');
+      setOutboxOwner(BOB);
+      await queue('bob-1');
+      const err = Object.assign(new Error('conflict'), { permanent: true });
+      const result = await flushOutbox({ confirm_heat: () => Promise.reject(err) });
+      expect(result.permanentFailure).toBe(true);
+      expect(result.dropped).toHaveLength(1);
+      expect((await outboxListAll()).map((o) => o.payload.p_heat_id)).toEqual(['alice-1']);
+    });
+
+    it('stops at once if the owner changes in the middle of a pass', async () => {
+      setOutboxOwner(ALICE);
+      await queue('h1');
+      await queue('h2');
+      const ran = [];
+      const handlers = {
+        confirm_heat: (payload) => {
+          ran.push(payload.p_heat_id);
+          // somebody else signs in while the first one is being sent
+          setOutboxOwner(BOB);
+          return Promise.resolve();
+        },
+      };
+      await flushOutbox(handlers);
+      expect(ran).toEqual(['h1']);
+      expect((await outboxListAll()).map((o) => o.payload.p_heat_id)).toEqual(['h2']);
+    });
+
+    it("with no owner set, every operation is still the caller's (ownership not in use)", async () => {
+      await enqueueOperation('confirm_heat', { p_org_id: 'orgX', p_heat_id: 'h1' });
+      const { ran, handlers } = flushOk();
+      await flushOutbox(handlers);
+      expect(ran).toEqual(['h1']);
+    });
+  });
+
+  describe('operations queued before they were tagged', () => {
+    const untagged = (n, org) => ({
+      id: `legacy-${n}`,
+      type: 'confirm_heat',
+      payload: org ? { p_org_id: org, p_heat_id: `h${n}` } : { p_heat_id: `h${n}` },
+      createdAt: Date.now() + n,
+      attempts: 0,
+      lastError: null,
+    });
+
+    it('belongs to whoever is signed in, as long as it is for the active organisation', async () => {
+      await outboxPut(untagged(1, 'org1'));
+      for (const who of [ALICE, BOB]) {
+        setOutboxOwner(who);
+        expect(await countPendingOperations()).toBe(1);
+      }
+      const { ran, handlers } = flushOk();
+      setOutboxOwner(BOB);
+      await flushOutbox(handlers);
+      expect(ran).toEqual(['h1']);
+    });
+
+    it('is never replayed into another organisation', async () => {
+      await outboxPut(untagged(1, 'org1'));
+      setOutboxOwner({ userId: 'alice', orgId: 'org2' });
+      const { ran, handlers } = flushOk();
+      await flushOutbox(handlers);
+      expect(ran).toEqual([]);
+      expect((await listOtherOperations()).otherOrg).toHaveLength(1);
+    });
+
+    it("with no organisation anywhere in it, is anybody's", async () => {
+      await outboxPut(untagged(1, null));
+      setOutboxOwner({ userId: 'alice', orgId: 'org2' });
+      expect(await countPendingOperations()).toBe(1);
+    });
+  });
+
+  describe('what a person leaves behind', () => {
+    it("listAccountOperations counts the account's work in every organisation, and nobody else's", async () => {
+      setOutboxOwner(ALICE);
+      await queue('a1', 'org1');
+      await queue('a2', 'org2');
+      setOutboxOwner(BOB);
+      await queue('b1', 'org1');
+      setOutboxOwner(ALICE);
+      expect((await listAccountOperations()).map((o) => o.payload.p_heat_id)).toEqual(['a1', 'a2']);
+      expect((await listPendingOperations()).map((o) => o.payload.p_heat_id)).toEqual(['a1']);
+      setOutboxOwner(null);
+      expect(await listAccountOperations()).toEqual([]);
+    });
+
+    it('operationOwnership names each case', () => {
+      const op = { userId: 'alice', orgId: 'org1', payload: {} };
+      expect(operationOwnership(op, ALICE)).toBe(OWNERSHIP.OWN);
+      expect(operationOwnership(op, BOB)).toBe(OWNERSHIP.OTHER_ACCOUNT);
+      expect(operationOwnership(op, { userId: 'alice', orgId: 'org2' })).toBe(OWNERSHIP.OTHER_ORG);
+      expect(operationOwnership(op, null)).toBe(OWNERSHIP.OTHER_ACCOUNT);
+      expect(operationOwnership(op, undefined)).toBe(OWNERSHIP.OWN);
+    });
+  });
+});
+
+describe('who owns an operation — the harder cases (T-TEN.C6)', () => {
+  const ALICE = { userId: 'alice', orgId: 'org1' };
+  const BOB = { userId: 'bob', orgId: 'org1' };
+  const queue = (heat, org = 'org1') =>
+    enqueueOperation('confirm_heat', { p_org_id: org, p_heat_id: heat });
+  const heats = async () => (await outboxListAll()).map((o) => o.payload.p_heat_id);
+
+  describe('an owner change while an operation is being sent', () => {
+    it('a permanent failure for the previous owner never removes the operation', async () => {
+      setOutboxOwner(ALICE);
+      await queue('h1');
+      const dropped = vi.fn();
+      const stop = onOperationDropped(dropped);
+      const result = await flushOutbox({
+        confirm_heat: () => {
+          setOutboxOwner(BOB); // another account signed in while the request was on its way
+          return Promise.reject(Object.assign(new Error('not a member'), { permanent: true }));
+        },
+      });
+      stop();
+      expect(await heats()).toEqual(['h1']);
+      expect(dropped).not.toHaveBeenCalled();
+      expect(result.permanentFailure).toBe(false);
+      const [left] = await outboxListAll();
+      expect(left.attempts).toBe(0);
+      expect(left.lastError).toBeNull();
+    });
+
+    it('an ordinary failure for the previous owner does not count against it either', async () => {
+      setOutboxOwner(ALICE);
+      await queue('h1');
+      await flushOutbox({
+        confirm_heat: () => {
+          setOutboxOwner(BOB);
+          return Promise.reject(new Error('offline'));
+        },
+      });
+      const [left] = await outboxListAll();
+      expect(left.attempts).toBe(0);
+      expect(left.lastError).toBeNull();
+    });
+
+    it('a send that did land is still removed, whoever is the owner by then', async () => {
+      setOutboxOwner(ALICE);
+      await queue('h1');
+      await flushOutbox({
+        confirm_heat: () => {
+          setOutboxOwner(BOB);
+          return Promise.resolve();
+        },
+      });
+      expect(await heats()).toEqual([]);
+    });
+
+    it("the same pass then runs the new owner's operations, and leaves the old owner's", async () => {
+      setOutboxOwner(ALICE);
+      await queue('a1');
+      await queue('a2');
+      setOutboxOwner(BOB);
+      await queue('b1');
+      setOutboxOwner(ALICE);
+      const ran = [];
+      await flushOutbox({
+        confirm_heat: (payload) => {
+          ran.push(payload.p_heat_id);
+          if (payload.p_heat_id === 'a1') setOutboxOwner(BOB);
+          return Promise.resolve();
+        },
+      });
+      expect(ran).toEqual(['a1', 'b1']);
+      expect(await heats()).toEqual(['a2']);
+    });
+
+    it('a caller that joins a flush already running is judged by whoever is the owner when its turn comes', async () => {
+      setOutboxOwner(ALICE);
+      await queue('a1');
+      await queue('a2');
+      setOutboxOwner(BOB);
+      await queue('b1');
+      setOutboxOwner(ALICE);
+      const ran = [];
+      let release;
+      const gate = new Promise((resolve) => (release = resolve));
+      const handlers = {
+        confirm_heat: async (payload) => {
+          ran.push(payload.p_heat_id);
+          if (payload.p_heat_id === 'a1') await gate;
+        },
+      };
+      const first = flushOutbox(handlers);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      setOutboxOwner(BOB);
+      const second = flushOutbox(handlers); // joins the pass already in flight
+      release();
+      await Promise.all([first, second]);
+      expect(ran).toEqual(['a1', 'b1']);
+      expect(await heats()).toEqual(['a2']);
+    });
+  });
+
+  describe('one account in two organisations', () => {
+    it('runs only the active organisation, in order, and the other when it becomes the active one', async () => {
+      setOutboxOwner(ALICE);
+      await queue('o1-a', 'org1');
+      await queue('o2-a', 'org2');
+      await queue('o1-b', 'org1');
+      const ran = [];
+      const handlers = {
+        confirm_heat: (payload) => {
+          ran.push(payload.p_heat_id);
+          return Promise.resolve();
+        },
+      };
+      await flushOutbox(handlers);
+      expect(ran).toEqual(['o1-a', 'o1-b']);
+      expect(await heats()).toEqual(['o2-a']);
+
+      setOutboxOwner({ userId: 'alice', orgId: 'org2' });
+      await flushOutbox(handlers);
+      expect(ran).toEqual(['o1-a', 'o1-b', 'o2-a']);
+      expect(await heats()).toEqual([]);
+    });
+  });
+
+  describe('what the tags say when they disagree with the payload or with nobody', () => {
+    it('the tag wins over the payload', () => {
+      const op = { userId: 'alice', orgId: 'org1', payload: { p_org_id: 'org2' } };
+      expect(operationOwnership(op, ALICE)).toBe(OWNERSHIP.OWN);
+      expect(operationOwnership(op, { userId: 'alice', orgId: 'org2' })).toBe(OWNERSHIP.OTHER_ORG);
+    });
+
+    it('an owner whose user is unknown owns no operation that names a user', () => {
+      const op = { userId: 'alice', orgId: 'org1', payload: {} };
+      expect(operationOwnership(op, { userId: null, orgId: 'org1' })).toBe(OWNERSHIP.OTHER_ACCOUNT);
+    });
+
+    it('while signed out an untagged operation waits for somebody to be signed in, too', () => {
+      expect(operationOwnership({ payload: { p_org_id: 'org1' } }, null)).toBe(
+        OWNERSHIP.OTHER_ACCOUNT,
+      );
+    });
+
+    it('a payload that names no organisation is tagged with the active one at the time', async () => {
+      setOutboxOwner({ userId: 'alice', orgId: 'org2' });
+      const op = await enqueueOperation('confirm_heat', { p_org_id: null, p_heat_id: 'h1' });
+      expect(op.orgId).toBe('org2');
+      setOutboxOwner(ALICE);
+      expect(await countPendingOperations()).toBe(0);
+    });
+
+    it("a write queued while nobody is signed in is anybody's (the account is not known): pinned so a change is deliberate", async () => {
+      setOutboxOwner(null);
+      const op = await enqueueOperation('confirm_heat', { p_org_id: 'org1', p_heat_id: 'h1' });
+      expect(op.userId).toBeNull();
+      setOutboxOwner(BOB);
+      expect(await countPendingOperations()).toBe(1);
+    });
+  });
+
+  describe('looking at the whole queue', () => {
+    it('partitionOperations splits one read three ways', async () => {
+      setOutboxOwner(ALICE);
+      await queue('mine');
+      await queue('elsewhere', 'org2');
+      setOutboxOwner(BOB);
+      await queue('theirs');
+      setOutboxOwner(ALICE);
+      const parts = await partitionOperations();
+      expect(parts.own.map((o) => o.payload.p_heat_id)).toEqual(['mine']);
+      expect(parts.otherOrg.map((o) => o.payload.p_heat_id)).toEqual(['elsewhere']);
+      expect(parts.otherAccount.map((o) => o.payload.p_heat_id)).toEqual(['theirs']);
+    });
+
+    it('listAllOperations returns everything, whoever the owner is', async () => {
+      setOutboxOwner(ALICE);
+      await queue('a1');
+      setOutboxOwner(BOB);
+      await queue('b1', 'org2');
+      setOutboxOwner(null);
+      expect(await listAllOperations()).toHaveLength(2);
+    });
+
+    it('countOperationsInOrg counts one organisation, any account, plus whatever names none', async () => {
+      setOutboxOwner(ALICE);
+      await queue('a-org1', 'org1');
+      setOutboxOwner(BOB);
+      await queue('b-org1', 'org1');
+      await queue('b-org2', 'org2');
+      await outboxPut({
+        id: 'no-org',
+        type: 'confirm_heat',
+        payload: { p_heat_id: 'legacy' },
+        createdAt: Date.now() + 5,
+        attempts: 0,
+        lastError: null,
+      });
+      expect(await countOperationsInOrg('org1')).toBe(3);
+      expect(await countOperationsInOrg('org2')).toBe(2);
+      expect(await countOperationsInOrg('org9')).toBe(1);
+    });
   });
 });

@@ -5,6 +5,11 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 // outbox is mocked here, as main.test.js does.
 vi.mock('./outbox.js', () => ({
   listPendingOperations: () => Promise.resolve([]),
+  listOtherOperations: () => Promise.resolve({ otherOrg: [], otherAccount: [] }),
+  listAccountOperations: () => Promise.resolve([]),
+  payloadOrgId: () => null,
+  partitionOperations: () => Promise.resolve({ own: [], otherOrg: [], otherAccount: [] }),
+  getOutboxOwner: () => undefined,
   isFlushInProgress: () => false,
   onOperationDropped: () => () => {},
 }));
@@ -51,5 +56,35 @@ describe('the organisation select when the switch never answers', () => {
     select.value = 'org-b';
     select.dispatchEvent(new Event('change', { bubbles: true }));
     expect(onSelect).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('Sign out when the outbox read never answers (T-TEN.C6)', () => {
+  it('gives up at the shared timeout and says it could not check, instead of leaving the button stuck', async () => {
+    vi.useFakeTimers();
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const signOut = vi.fn(() => Promise.resolve({ error: null }));
+    mountAppShell(root, {
+      client: {
+        auth: {
+          signOut,
+          onAuthStateChange: (cb) => {
+            cb('SIGNED_IN', { user: { id: 'u1', email: 'a@test.com' } });
+            return { data: { subscription: { unsubscribe: () => {} } } };
+          },
+        },
+        from: () => ({}),
+      },
+      accountOperations: () => new Promise(() => {}),
+    });
+    const button = [...root.querySelectorAll('button')].find((b) => b.textContent === 'Sign out');
+    button.dispatchEvent(new Event('click', { bubbles: true }));
+    await vi.advanceTimersByTimeAsync(DEFAULT_LOAD_TIMEOUT_MS + 1);
+    expect(root.querySelector('.app-shell-org-notice').textContent).toBe(
+      'Could not check whether everything has synced. To sign out now, press Sign out again; anything not sent stays on this device.',
+    );
+    expect(signOut).not.toHaveBeenCalled();
+    expect(button.textContent).toBe('Sign out');
   });
 });

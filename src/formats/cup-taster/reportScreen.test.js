@@ -1235,6 +1235,44 @@ describe('mountReportScreen', () => {
       expect(root.textContent).toContain('Published to the public results archive.');
     });
 
+    it("publishes under the EVENT's own organisation, whatever organisation the console is working in", async () => {
+      const root = document.createElement('div');
+      const client = fakeClient({
+        tables: completeEventTables({
+          events: { data: { ...event, org_id: 'org9' }, error: null },
+        }),
+        rpc: { publish_event_results: { data: null, error: null } },
+      });
+      await mountReportScreen(root, { eventId: 'ev1', client });
+      await flush();
+      root.querySelector('.report-public-results button').click();
+      await flush();
+      const [, rpcName, rpcPayload] = client.calls.find(([kind]) => kind === 'rpc');
+      expect(rpcName).toBe('publish_event_results');
+      expect(rpcPayload.p_org_id).toBe('org9');
+    });
+
+    it("unpublishes under the EVENT's own organisation too", async () => {
+      const root = document.createElement('div');
+      const client = fakeClient({
+        tables: completeEventTables({
+          events: { data: { ...event, org_id: 'org9' }, error: null },
+          public_results: {
+            data: { event_id: 'ev1', payload: {}, published_at: '2026-09-17T00:00:00Z' },
+            error: null,
+          },
+        }),
+        rpc: { unpublish_event_results: { data: null, error: null } },
+      });
+      await mountReportScreen(root, { eventId: 'ev1', client });
+      await flush();
+      root.querySelector('.report-public-results button').click();
+      await flush();
+      const [, rpcName, rpcPayload] = client.calls.find(([kind]) => kind === 'rpc');
+      expect(rpcName).toBe('unpublish_event_results');
+      expect(rpcPayload.p_org_id).toBe('org9');
+    });
+
     describe('what to publish', () => {
       const publishedRow = (payload) => ({
         event_id: 'ev1',

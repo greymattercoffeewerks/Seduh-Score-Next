@@ -18,7 +18,7 @@ import { el, labeledField } from './dom.js';
 import { describeError } from './errors.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
 import { createEvent, listEventsForOrg, deleteTestEvent } from './events.js';
-import { countPendingOperations } from './outbox.js';
+import { countOperationsInOrg } from './outbox.js';
 
 export function blankDraft(defaultFormat) {
   return { name: '', eventDate: '', venue: '', city: '', isTest: false, format: defaultFormat };
@@ -277,10 +277,26 @@ export function renderCreateForm(draft, { disabled, formatOptions }) {
   );
 }
 
+// Which organisation the list belongs to and the new event will be created in, said where the person
+// reads it: someone who works in two organisations must never create an event in the wrong one.
+// The organisation is fixed when the screen mounts. The screen is replaced when it changes; until the
+// new one has drawn, a superseded screen is told to stop (its signal is aborted) and sends nothing.
+export function eventsListHeading(orgName) {
+  const name = orgName?.trim();
+  return name ? `Events in ${name}` : 'Your events';
+}
+
+export function createEventHeading(orgName) {
+  const name = orgName?.trim();
+  return name ? `Create an event in ${name}` : 'Create event';
+}
+
 export async function mountEventsScreen(
   root,
   {
     orgId,
+    // What to call the organisation in the headings (the caller knows it; this screen only receives the id).
+    orgName = null,
     client = getSupabase(),
     defaultFormat,
     formatOptions,
@@ -302,9 +318,9 @@ export async function mountEventsScreen(
   // see renderEventsList's own comment for why this is keyed by id rather
   // than a single shared value.
   let deleteStates = {};
-  // This device's outbox size as of the last Delete click — see
-  // unsyncedWritesWarning. Deliberately one value, not per row: it counts the
-  // whole device's queue, so the latest read is the right one for any row.
+  // How many queued changes on this device are for THIS organisation (any account's), as of the last
+  // Delete click — see unsyncedWritesWarning. Deliberately one value, not per row: it counts the
+  // organisation's whole queue, so the latest read is the right one for any row.
   let unsyncedWrites;
 
   function setFeedback(feedback, message, tone) {
@@ -377,6 +393,10 @@ export async function mountEventsScreen(
 
   async function handleCreate(event) {
     event.preventDefault();
+    // Superseded (the organisation changed and this screen is still on show while the new one loads):
+    // sending a create now would put the event in the organisation the person has just left, with no
+    // sign of it in the one they are looking at.
+    if (signal?.aborted) return;
     const validationError = validateDraft(draft);
     if (validationError) {
       pendingError = validationError;
@@ -402,7 +422,7 @@ export async function mountEventsScreen(
       );
       draft = blankDraft(defaultFormat);
       events = await listEventsForOrg(orgId, client);
-      pendingSuccess = 'Event created.';
+      pendingSuccess = orgName?.trim() ? `Event created in ${orgName.trim()}.` : 'Event created.';
       focusAfterRender = '#events-heading';
     } catch (err) {
       pendingError = describeError(err);
@@ -427,7 +447,7 @@ export async function mountEventsScreen(
     // focus lands on "Confirm delete" (see unsyncedWritesWarning). Bounded:
     // a hung IndexedDB open must degrade to "Couldn't check", not leave
     // Delete doing nothing.
-    const count = await raceTimeout(countPendingOperations(), unsyncedCheckTimeoutMs).catch(
+    const count = await raceTimeout(countOperationsInOrg(orgId), unsyncedCheckTimeoutMs).catch(
       (err) => {
         console.error('eventsScreen: unsynced-writes count failed', err);
         return null;
@@ -447,6 +467,7 @@ export async function mountEventsScreen(
   }
 
   async function handleConfirmDelete(eventId) {
+    if (signal?.aborted) return;
     // Explicit re-entrancy guard — found in review (code-reviewer): without
     // this, only an accident of full-DOM-rebuild-per-render (the confirm
     // button node being gone by the time a second click could physically
@@ -528,7 +549,7 @@ export async function mountEventsScreen(
 
     container.appendChild(
       el('div', { className: 'card' }, [
-        el('h2', { text: 'Your events' }),
+        el('h2', { text: eventsListHeading(orgName) }),
         renderEventsList(events, {
           deleteStates,
           deleteHandlers: {
@@ -543,9 +564,14 @@ export async function mountEventsScreen(
     );
 
     const form = renderCreateForm(draft, { disabled: creating, formatOptions });
+    // Named by its heading, so someone who jumps straight to the form hears which organisation it is for.
+    form.setAttribute('aria-labelledby', 'create-event-heading');
     form.addEventListener('submit', handleCreate);
     container.appendChild(
-      el('div', { className: 'card' }, [el('h2', { text: 'Create event' }), form]),
+      el('div', { className: 'card' }, [
+        el('h2', { id: 'create-event-heading', text: createEventHeading(orgName) }),
+        form,
+      ]),
     );
 
     root.appendChild(container);

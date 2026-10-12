@@ -85,7 +85,7 @@ export function renderStageCard(eventId, stage, hasHeats) {
 
 export async function mountEventDashboardScreen(
   root,
-  { eventId, orgId, client = getSupabase(), signal } = {},
+  { eventId, client = getSupabase(), signal } = {},
 ) {
   let loadFailedMessage = null;
   let loading = false;
@@ -134,7 +134,9 @@ export async function mountEventDashboardScreen(
     const event = await findEvent(eventId, client);
     const stages = await listStagesForEvent(eventId, client);
     const hasHeatsFlags = await Promise.all(stages.map((stage) => stageHasHeats(stage.id, client)));
-    const activeLiveEventId = await findActiveLiveEventId(orgId, client);
+    // The EVENT's own organisation, not the one the console is working in: a link into another of the
+    // person's organisations' events must show that organisation's live status, never the active one's.
+    const activeLiveEventId = await findActiveLiveEventId(event.org_id, client);
     const isLive = activeLiveEventId === eventId;
     // Only fetched when there's actually another event to name — the
     // common cases (this event IS live, or no event is live anywhere for

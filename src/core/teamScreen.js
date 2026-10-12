@@ -76,7 +76,38 @@ function roleLabel(role) {
   return role === 'owner' ? 'Owner' : 'Team member';
 }
 
-export async function mountTeamScreen(root, { orgId, client = getSupabase(), signal } = {}) {
+// What the screen is called, and whose team it is. The people here are logins that belong ONLY to this
+// organisation (decision D-T6: a login created on this screen is a managed account of one organisation;
+// working in several is set up by an operator, never from here), so the heading and the opening text
+// name it: someone who runs two organisations must never be unsure which team they are changing.
+//
+// The name is given once, when the screen is mounted: an operator renaming the organisation while the
+// screen is on show leaves the old wording until the next navigation. That only affects wording (every
+// request carries the organisation's id), and ejecting an owner mid-task to refresh a label would be worse.
+export function teamHeading(orgName) {
+  return orgName ? `Team for ${orgName}` : 'Team';
+}
+
+export function teamIntro(orgName) {
+  const whose = orgName ? orgName : 'this organisation';
+  return (
+    `These are managed accounts: logins that belong only to ${whose}, and that cannot be added to ` +
+    'another organisation from this screen. Everyone you add gets their own login with the same ' +
+    'access to events as you, but cannot manage the team. You give them a one-time password; they ' +
+    'choose their own when they first sign in.'
+  );
+}
+
+// `orgName`: what to call the organisation in the heading and the text (the caller knows it; this
+// screen only ever receives the organisation's id).
+// `onLeaveGuard(active)`: told whenever leaving this screen would lose something that cannot be got
+// back from the screen: a one-time password on show ("shown once and cannot be looked up again"), or a
+// change still being sent whose password has not been shown yet. The caller refuses a switch of
+// organisation while it is on (the screen is replaced when the organisation changes).
+export async function mountTeamScreen(
+  root,
+  { orgId, orgName = null, client = getSupabase(), signal, onLeaveGuard = null } = {},
+) {
   let members = [];
   let removed = [];
   let removedLoaded = false; // has the removed list loaded at least once?
@@ -118,7 +149,7 @@ export async function mountTeamScreen(root, { orgId, client = getSupabase(), sig
     if (signal?.aborted) return;
     root.innerHTML = '';
     const container = el('section', { className: 'screen-container team-screen' });
-    container.appendChild(el('h1', { text: 'Team' }));
+    container.appendChild(el('h1', { text: teamHeading(orgName) }));
     const feedback = el('div', {
       className: 'screen-feedback',
       text: 'Loading the team…',
@@ -132,7 +163,7 @@ export async function mountTeamScreen(root, { orgId, client = getSupabase(), sig
   function renderBlocked() {
     root.innerHTML = '';
     const container = el('section', { className: 'screen-container team-screen' });
-    container.appendChild(el('h1', { text: 'Team' }));
+    container.appendChild(el('h1', { text: teamHeading(orgName) }));
     const feedback = el('div', {
       className: 'screen-feedback',
       text: notOwner ? 'Only the owner can manage the team.' : loadFailedMessage,
@@ -473,8 +504,17 @@ export async function mountTeamScreen(root, { orgId, client = getSupabase(), sig
     return form;
   }
 
+  let guardOn = false;
+  function syncLeaveGuard() {
+    const on = Boolean(issued) || busy;
+    if (on === guardOn) return;
+    guardOn = on;
+    onLeaveGuard?.(on);
+  }
+
   function render() {
     if (signal?.aborted) return;
+    syncLeaveGuard();
     if (notOwner || loadFailedMessage) {
       renderBlocked();
       return;
@@ -483,12 +523,12 @@ export async function mountTeamScreen(root, { orgId, client = getSupabase(), sig
     root.innerHTML = '';
     const container = el('section', { className: 'screen-container team-screen' });
     container.appendChild(
-      el('h1', { id: 'team-heading', text: 'Team', attrs: { tabindex: '-1' } }),
+      el('h1', { id: 'team-heading', text: teamHeading(orgName), attrs: { tabindex: '-1' } }),
     );
     container.appendChild(
       el('p', {
         className: 'stage-meta',
-        text: 'Everyone you add gets their own login with the same access to events as you, but cannot manage the team. You give them a one-time password; they choose their own when they first sign in.',
+        text: teamIntro(orgName),
       }),
     );
 
@@ -680,6 +720,11 @@ export async function mountTeamScreen(root, { orgId, client = getSupabase(), sig
     unmount() {
       // A one-time password must not outlive the screen it was shown on.
       issued = null;
+      // And nothing is left on screen to protect.
+      if (guardOn) {
+        guardOn = false;
+        onLeaveGuard?.(false);
+      }
     },
   };
 }

@@ -38,7 +38,7 @@ import { mountMatchesScreen as mountBtcMatchesScreen } from './formats/btc/match
 import { mountStandingsScreen as mountBtcStandingsScreen } from './formats/btc/standingsScreen.js';
 import { mountBracketScreen as mountBtcBracketScreen } from './formats/btc/bracketScreen.js';
 import { mountScoringScreen as mountBtcScoringScreen } from './formats/btc/scoringScreen.js';
-import { flushOutbox, listPendingOperations } from './core/outbox.js';
+import { flushOutbox, listPendingOperations, setOutboxOwner } from './core/outbox.js';
 import { btcOutboxHandlers, btcOperationLabels } from './formats/btc/outboxHandlers.js';
 import {
   cupTasterOutboxHandlers,
@@ -235,7 +235,15 @@ function requireAuth(mount, { routerRef, orgContext, onConsoleMounted }) {
     // memberships; a change of person or organisation re-mounts the console (mountApp) rather than
     // mutating a screen in place. Remember who and which org this screen was built for.
     onConsoleMounted(`${org.userId}:${org.activeOrgId}`);
-    return mount(outlet, { ...params, orgId: org.activeOrgId });
+    // The name comes from the very snapshot the id came from (never from live state a moment later), so a
+    // screen can never show one organisation's name over another's data.
+    const activeOrg = org.orgs.find((candidate) => candidate.id === org.activeOrgId);
+    return mount(outlet, {
+      ...params,
+      orgId: org.activeOrgId,
+      // What to call it (the slug is added when two of the person's organisations share a name).
+      orgName: activeOrg ? orgLabel(activeOrg, org.orgs) : null,
+    });
   };
 }
 
@@ -252,7 +260,7 @@ function requireAuth(mount, { routerRef, orgContext, onConsoleMounted }) {
 // accepted redundant read rather than restructuring that already-shipped, already-
 // reviewed screen to accept a pre-fetched event; same tradeoff requireAuth() below
 // already makes with its own extra getSession() hop.
-function mountEventHomeScreen(outlet, { eventId, orgId, client, signal }) {
+function mountEventHomeScreen(outlet, { eventId, client, signal }) {
   async function attempt() {
     let event;
     try {
@@ -266,7 +274,7 @@ function mountEventHomeScreen(outlet, { eventId, orgId, client, signal }) {
     if (event.format === 'btc') {
       return mountBtcEventDashboardScreen(outlet, { eventId, client, signal });
     }
-    return mountEventDashboardScreen(outlet, { eventId, orgId, client, signal });
+    return mountEventDashboardScreen(outlet, { eventId, client, signal });
   }
   return attempt();
 }
@@ -328,15 +336,17 @@ export function buildRoutes({
   bareRoot,
   routerRef,
   onConsoleMounted,
+  setTeamHoldsSecret = () => {},
 }) {
   const auth = { routerRef, orgContext, onConsoleMounted };
   return [
     {
       pattern: '/events',
       mount: requireAuth(
-        (outlet, { client, signal, orgId }) =>
+        (outlet, { client, signal, orgId, orgName }) =>
           mountEventsScreen(outlet, {
             orgId,
+            orgName,
             client,
             defaultFormat: 'cup_taster',
             formatOptions: FORMAT_OPTIONS,
@@ -348,15 +358,22 @@ export function buildRoutes({
     {
       pattern: '/team',
       mount: requireAuth(
-        (outlet, { client, signal, orgId }) => mountTeamScreen(outlet, { orgId, client, signal }),
+        (outlet, { client, signal, orgId, orgName }) =>
+          mountTeamScreen(outlet, {
+            orgId,
+            orgName,
+            client,
+            signal,
+            onLeaveGuard: (active) => setTeamHoldsSecret(active),
+          }),
         auth,
       ),
     },
     {
       pattern: '/events/:eventId',
       mount: requireAuth(
-        (outlet, { eventId, client, signal, orgId }) =>
-          mountEventHomeScreen(outlet, { eventId, orgId, client, signal }),
+        (outlet, { eventId, client, signal }) =>
+          mountEventHomeScreen(outlet, { eventId, client, signal }),
         auth,
       ),
     },
@@ -587,6 +604,10 @@ function unsyncedSwitchMessage(count) {
 const SWITCH_CHECK_FAILED_MESSAGE =
   'Could not check whether everything on this device has synced, so the organisation was not switched. Try again.';
 const SWITCH_UNKNOWN_ORG_MESSAGE = 'That organisation is not available to this account.';
+// The Team screen is replaced when the organisation changes, and a one-time password on it "is shown once
+// and cannot be looked up again" (nor can one whose request is still being sent).
+const SWITCH_TEAM_OPEN_MESSAGE =
+  'The Team screen has a one-time password showing, or a change still being saved. Finish that first (press Done), then switch organisation.';
 
 // `orgContext` is created here unless a caller (a test, a future second shell) passes its own.
 // `legacyAudienceOrgId` is the one organisation the anonymous audience routes still show until T-TEN.D1.
@@ -654,15 +675,28 @@ export function mountApp(
   // was already known before the first route resolved.
   let hasSession = false;
   let onConsoleRoute = false;
+  // The outbox replays only the signed-in account's operations in the active organisation (T-TEN.C6:
+  // core/outbox.js), so it has to be told who and where. Nobody signed in until the first auth event
+  // says otherwise: from here on nothing can flush for a person who is not known, which is the
+  // fail-closed side of the outbox's "unset" default. Called whenever the session or the active
+  // organisation changes, and always BEFORE the flush those changes may start.
+  setOutboxOwner(null);
+  let currentSession = null;
+  function syncOutboxOwner() {
+    const userId = currentSession?.user?.id ?? null;
+    setOutboxOwner(userId ? { userId, orgId: orgContext.getActiveOrgIdFor(userId) } : null);
+  }
   function flushIfOwner() {
     if (!hasSession || !onConsoleRoute) return;
-    // Someone in no organisation cannot have written anything here, so whatever is queued on this
-    // device was left by somebody else (the org state is always the signed-in person's own: it is
-    // refreshed on every auth event): replaying it under this person's login would be refused by the
-    // database as a permanent failure, and the outbox would drop it. Keep it for its owner (until
-    // T-TEN.C6 tags operations, this is the only definite "not yours" signal there is).
-    const orgState = orgContext.getState();
-    if (orgState.status === ORG_STATUS.NO_ORG) return;
+    // Only once the organisation is known: the outbox replays an operation only in the organisation it
+    // was made in, so a flush before the answer arrives could run nothing that matters, and the answer
+    // itself starts one (the org-context subscriber below). That also covers someone in no organisation
+    // at all: whatever is queued on this device was left by somebody else, and replaying it under this
+    // person's login would be refused by the database as a permanent failure, which the outbox would
+    // then drop. The outbox refuses to replay an operation that is not this account's in this
+    // organisation too; this is the second, independent barrier.
+    const userId = currentSession?.user?.id;
+    if (!userId || !orgContext.getActiveOrgIdFor(userId)) return;
     attemptReconnectFlush(client);
   }
 
@@ -676,7 +710,6 @@ export function mountApp(
   let teamOwnerOrgId = null;
   let ownerCheckSeq = 0;
   let lastNav = null;
-  let currentSession = null;
   function setTeamOwner(value) {
     if (value === isTeamOwner) return;
     isTeamOwner = value;
@@ -717,21 +750,27 @@ export function mountApp(
   } = client.auth.onAuthStateChange((_event, session) => {
     hasSession = Boolean(session);
     currentSession = session;
+    syncOutboxOwner();
     // Not awaited, and it reads the database only a tick later (see orgContext.js): safe here.
     orgContext.refresh(session);
     flushIfOwner();
     refreshTeamOwnership(session);
   });
 
-  function onOnline() {
-    flushIfOwner();
-    // Coming back online after a failed or stand-in organisation answer: ask again, and if the console
-    // was showing the error card, show the real screen.
+  // After a failed or stand-in organisation answer: ask again, and if the console was showing the error
+  // card, show the real screen. Queued changes cannot be sent until the organisation is known (the outbox
+  // replays an operation only in the organisation it was made in), so this also has to happen while the
+  // device stays online, not only when it comes back: see the retry timer below.
+  function retryOrgIfNeeded() {
     const orgState = orgContext.getState();
     if (!currentSession || (orgState.status !== ORG_STATUS.ERROR && !orgState.stale)) return;
     orgContext.retry().then(() => {
       if (orgState.status === ORG_STATUS.ERROR) routerRef.current?.resolve(currentRoutePath());
     });
+  }
+  function onOnline() {
+    flushIfOwner();
+    retryOrgIfNeeded();
   }
   window.addEventListener('online', onOnline);
 
@@ -746,6 +785,7 @@ export function mountApp(
   // 'online' listener above already covers coming back).
   const retryIntervalId = setInterval(() => {
     if (!hasSession || !onConsoleRoute || !navigator.onLine) return;
+    retryOrgIfNeeded();
     listPendingOperations()
       .then((operations) => {
         if (operations.length > 0) attemptReconnectFlush(client);
@@ -761,6 +801,9 @@ export function mountApp(
   const currentRoutePath = () => location.hash.replace(/^#/, '') || '/events';
   // Who and which org the console screen on show was built for (null: none yet, or already replaced).
   let mountedKey = null;
+  // Set by the Team screen while leaving it would lose a one-time password; cleared whenever any console
+  // screen is mounted (the Team screen reports it again if it needs to).
+  let teamHoldsSecret = false;
   const routes = buildRoutes({
     legacyAudienceOrgId,
     orgContext,
@@ -768,6 +811,10 @@ export function mountApp(
     routerRef,
     onConsoleMounted: (key) => {
       mountedKey = key;
+      teamHoldsSecret = false;
+    },
+    setTeamHoldsSecret: (active) => {
+      teamHoldsSecret = active;
     },
   });
 
@@ -795,6 +842,10 @@ export function mountApp(
     // Read and clear at once: a choice is only ever "the one that caused THIS change".
     const chosen = chosenOrgId;
     chosenOrgId = null;
+    // The organisation the outbox works for follows the active one (a person who just switched to an
+    // organisation, or whose organisation has only just been answered, has operations waiting there).
+    syncOutboxOwner();
+    flushIfOwner();
     // The header must never be able to stop the screen swap below (an old organisation's console left
     // up under the new one is the invariant this subscriber exists for).
     try {
@@ -803,6 +854,8 @@ export function mountApp(
       console.error('main: the organisation slot failed to render', err);
     }
     refreshTeamOwnership(currentSession);
+    // The audience links depend on which organisation is active.
+    if (lastNav) renderNav(lastNav.route, lastNav.params);
     if (!onConsoleRoute || mountedKey === null) return;
     const key = state.status === ORG_STATUS.READY ? `${state.userId}:${state.activeOrgId}` : null;
     const gone =
@@ -867,9 +920,11 @@ export function mountApp(
     if (isTeamOwner) {
       links.push({ label: 'Team', href: '#/team', active: route.pattern === '/team' });
     }
-    // Without the legacy audience organisation these links would only open the "out of date" card, so
-    // they are left out until T-TEN.D4 makes them slug-qualified.
-    if (legacyAudienceOrgId) {
+    // The audience screens still show ONE organisation (the legacy one, until T-TEN.D1/D4 make the links
+    // slug-qualified). These links are offered only while that is the organisation the console is working
+    // in: otherwise "Projector view" would open another organisation's display under this one's header (or
+    // only the "out of date" card, when none is configured).
+    if (legacyAudienceOrgId && legacyAudienceOrgId === orgContext.getActiveOrgId()) {
       links.push(
         { label: 'Splash screen', href: '#/live/splash', openInNewTab: true },
         { label: 'Projector view', href: '#/live/projector', openInNewTab: true },
@@ -889,12 +944,18 @@ export function mountApp(
 
   const started = router.start(shell.outlet, { fallbackPath: '/events' });
 
-  // Switch the organisation the console works in. Refused, with a message to show, while this device
-  // still holds changes that have not synced: they were made in the current organisation, and until
-  // the outbox records which organisation each belongs to (T-TEN.C6) the only safe rule is "none
-  // pending". The screen change itself follows from the org context's own notification above.
+  // Switch the organisation the console works in. Refused, with a message to show, while this account
+  // still has changes in the CURRENT organisation that have not synced (the outbox's own list: another
+  // account's changes, or this account's in another organisation, are not this switch's business, and
+  // the sync panel reports them). The refusal is a courtesy, not the safety: every operation is
+  // tagged with the organisation it was made in, so one queued in the instant between the check and the
+  // switch (a write from the screen being replaced) stays queued for that organisation and is reported
+  // as waiting for it, never replayed into the new one. The screen change itself follows from the org
+  // context's own notification above.
   async function switchOrg(orgId) {
     if (orgId === orgContext.getActiveOrgId()) return { ok: true };
+    if (teamHoldsSecret)
+      return { ok: false, reason: 'team_open', message: SWITCH_TEAM_OPEN_MESSAGE };
     let pending;
     try {
       // Bounded: an outbox read that never answers must not leave the switch (and the control) hanging.
@@ -937,6 +998,9 @@ export function mountApp(
       routerRef.current = null;
       // Only a context made here is this app's to end; an injected one belongs to its caller.
       if (!injectedOrgContext) orgContext.destroy();
+      // Nobody is being worked for any more. Before the awaits: a newer mountApp() that starts while this
+      // one is still stopping must not have its owner taken away afterwards.
+      setOutboxOwner(null);
       await router.stop();
       shell.unmount();
       window.removeEventListener('online', onOnline);

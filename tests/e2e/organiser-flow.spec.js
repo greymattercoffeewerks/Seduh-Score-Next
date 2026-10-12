@@ -66,6 +66,11 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
 
     // --- Events screen: create ---
     await expect(page.locator('.app-shell-name')).toHaveText('Seduh Score');
+    // The form says which organisation the event will be created in, and the list whose events these are.
+    await expect(
+      page.getByRole('heading', { name: 'Create an event in Local Dev Org' }),
+    ).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Events in Local Dev Org' })).toBeVisible();
     await page.getByLabel('Event name').fill(eventName);
     await page.getByRole('button', { name: 'Create event' }).click();
     const eventLink = page.getByRole('link', { name: eventName });
@@ -554,6 +559,110 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     }
   });
 
+  test("another account's unsynced change is reported, left alone by a flush, and does not change the header", async ({
+    page,
+  }) => {
+    await answerMyOrgs(page, [SECOND_ORG]);
+    await signIn(page);
+    await page.goto('/app/#/events/7c2b6a2a-2f3a-4b6e-9b0a-2e6b4a1c9d01');
+    await expect(page.locator('.app-shell-sync-chip-live')).toBeVisible();
+    // A change queued on this device by somebody else (T-TEN.C6), as a previous account would have left it.
+    await page.evaluate(async () => {
+      const db = await import('/src/core/db.js');
+      await db.outboxPut({
+        id: 'someone-elses-change',
+        type: 'layout_probe',
+        payload: {},
+        userId: 'a-different-account',
+        orgId: null,
+        createdAt: Date.now(),
+        attempts: 0,
+        lastError: null,
+      });
+    });
+    const chip = page.locator('.app-shell-sync-chip-pending');
+    await expect(chip).toBeVisible({ timeout: 8000 });
+    await expect(chip).toHaveText('Unsent (1 other)');
+    await chip.click();
+    await expect(page.locator('.app-shell-sync')).toHaveText(
+      '1 unsynced change from another account. Sign in as that account to send it.',
+    );
+    // A flush for the signed-in account runs nothing of it: no attempt counted, no error recorded, not removed.
+    const left = await page.evaluate(async () => {
+      const outbox = await import('/src/core/outbox.js');
+      const db = await import('/src/core/db.js');
+      await outbox.flushOutbox({});
+      return (await db.outboxListAll()).map((o) => [o.id, o.attempts, o.lastError]);
+    });
+    expect(left).toEqual([['someone-elses-change', 0, null]]);
+    await page.locator('.app-shell-sync-chip-pending').click();
+    for (const width of WIDTHS) {
+      await page.setViewportSize({ width, height: 800 });
+      await expectSlotChangesNothing(page, `with another account's change waiting at ${width}px`, {
+        minSlotWidth: 0,
+      });
+    }
+  });
+
+  test('signing out with an unsynced change warns under the header without moving anything, at every width, and pressing it again signs out', async ({
+    page,
+  }) => {
+    await signIn(page);
+    await page.goto('/app/#/events/7c2b6a2a-2f3a-4b6e-9b0a-2e6b4a1c9d01');
+    await expect(page.locator('.app-shell-sync-chip-live')).toBeVisible();
+    // This account's own unsynced change (it is queued in the signed-in account's own organisation).
+    await page.evaluate(async () => {
+      const outbox = await import('/src/core/outbox.js');
+      await outbox.enqueueOperation('layout_probe', {});
+    });
+    await expect(page.locator('.app-shell-sync-chip-pending')).toBeVisible({ timeout: 8000 });
+    const WARNING_WIDTHS = [320, 360, 640, 900, 1365, 1366, 1600];
+    for (const width of WARNING_WIDTHS) {
+      await page.setViewportSize({ width, height: 800 });
+      const toggle = page.locator('.app-shell-nav-toggle');
+      const menuOpen = await toggle.isVisible();
+      if (menuOpen) await toggle.click();
+      const signOut = page.getByRole('button', { name: /^Sign out/ });
+      const before = await page.locator('.app-shell-header').boundingBox();
+      await signOut.click();
+      const notice = page.locator('.app-shell-org-notice');
+      await expect(notice).toContainText('1 change has not been sent yet');
+      await expect(notice).toBeVisible();
+      const after = await page.locator('.app-shell-header').boundingBox();
+      expect(after.height, `header height at ${width}px`).toBe(before.height);
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(overflow, `horizontal overflow at ${width}px`).toBeLessThanOrEqual(0);
+      // withdraw it again (tap elsewhere) before the next width
+      await page.locator('.app-shell-outlet').click({ position: { x: 5, y: 5 }, force: true });
+      await expect(page.locator('.app-shell-org-notice')).not.toHaveClass(
+        /app-shell-org-notice-open/,
+      );
+      if (menuOpen && (await toggle.getAttribute('aria-expanded')) === 'true') await toggle.click();
+    }
+    // The change was never touched by asking.
+    const kept = await page.evaluate(async () => {
+      const db = await import('/src/core/db.js');
+      return (await db.outboxListAll()).length;
+    });
+    expect(kept).toBe(1);
+    // Second press signs out, and the change stays on the device for this account.
+    await page.setViewportSize({ width: 1600, height: 800 });
+    await page.getByRole('button', { name: /^Sign out/ }).click();
+    await expect(page.locator('.app-shell-org-notice')).toContainText('press Sign out again');
+    await page.waitForTimeout(700); // past the double-tap guard
+    await page.getByRole('button', { name: /^Sign out/ }).click();
+    await expect(page.getByRole('heading', { name: /sign in/i }).first()).toBeVisible({
+      timeout: 10000,
+    });
+    const keptAfter = await page.evaluate(async () => {
+      const db = await import('/src/core/db.js');
+      return (await db.outboxListAll()).length;
+    });
+    expect(keptAfter).toBe(1);
+  });
+
   test('with two organisations the header offers a select: choosing the other switches, announces it (and the announcement stays), and moves focus to the new screen', async ({
     page,
   }) => {
@@ -614,5 +723,85 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
 
     await page.mouse.click(5, 400);
     await expect(page.locator('.app-shell-org-notice-open')).toHaveCount(0);
+  });
+
+  test('the Team link is only there for the organisation the person owns, and the Team screen names the organisation it manages', async ({
+    page,
+  }) => {
+    await answerMyOrgs(page, [SECOND_ORG]);
+    await signIn(page);
+    await page.goto('/app/#/events');
+    const select = page.getByRole('combobox', { name: 'Organisation' });
+    const notice = page.locator('#app-shell-org-notice');
+    const heading = page.locator('.app-shell-outlet h1').first();
+    const teamLink = page.getByRole('link', { name: 'Team', exact: true });
+
+    // The made-up second organisation is first by name, so it starts active; the login owns only the
+    // seeded one. Wait for the first screen to settle (a switch during the first load hides the focus move).
+    await expect(select).toHaveValue(SECOND_ORG.org_id);
+    await expect(heading).toBeFocused();
+    await expect(teamLink).toHaveCount(0);
+
+    // Owner here: the link appears, and the screen it opens names this organisation.
+    await select.selectOption(SEEDED_ORG);
+    await expect(notice).toHaveText('Now working in Local Dev Org. Showing Events.');
+    await expect(teamLink).toBeVisible();
+    await teamLink.click();
+    await expect(heading).toHaveText('Team for Local Dev Org');
+    await expect(page.locator('.team-screen .stage-meta').first()).toContainText(
+      'logins that belong only to Local Dev Org',
+    );
+
+    // Switching away while the Team screen is on show replaces it, and the link goes with it.
+    await select.selectOption(SECOND_ORG.org_id);
+    await expect(notice).toHaveText(`Now working in ${SECOND_ORG.name}. Showing Events.`);
+    expect(new URL(page.url()).hash).toBe('#/events');
+    await expect(teamLink).toHaveCount(0);
+
+    // Opened by hand, the other organisation's Team screen names it and refuses a non-owner.
+    await navigateHash(page, '#/team');
+    await expect(heading).toHaveText(`Team for ${SECOND_ORG.name}`);
+    await expect(page.getByText('Only the owner can manage the team.')).toBeVisible();
+    // A long name wraps rather than scrolling the page sideways.
+    await page.setViewportSize({ width: 360, height: 800 });
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+
+    // And back: the first organisation's Team screen, named again.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await select.selectOption(SEEDED_ORG);
+    await expect(notice).toHaveText('Now working in Local Dev Org. Showing Events.');
+    await navigateHash(page, '#/team');
+    await expect(heading).toHaveText('Team for Local Dev Org');
+  });
+
+  test('a long unbroken organisation name wraps in the Events headings instead of scrolling the page sideways', async ({
+    page,
+  }) => {
+    const longName = 'A'.repeat(70);
+    await answerMyOrgs(page, [
+      {
+        org_id: '10c8c375-afe6-41c7-a54e-ffaa15429688',
+        name: longName,
+        slug: 'long-name-co',
+        role: 'organiser',
+      },
+    ]);
+    await signIn(page);
+    await page.setViewportSize({ width: 360, height: 800 });
+    await page.goto('/app/#/events');
+    // First by name, so it starts active.
+    await expect(
+      page.getByRole('heading', { name: `Create an event in ${longName}` }),
+    ).toBeVisible();
+    await expect(page.getByRole('heading', { name: `Events in ${longName}` })).toBeVisible();
+    // The form is named by its heading for someone who jumps straight to it.
+    await expect(page.getByRole('form', { name: `Create an event in ${longName}` })).toBeVisible();
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
   });
 });

@@ -32,6 +32,74 @@ function nextSequence() {
   return sequenceCounter;
 }
 
+// ---------------------------------------------------------------------
+// Whose operation is it? (T-TEN.C6, shared-device safety)
+//
+// One browser's IndexedDB outbox is shared by everyone who signs in on that device, and by every
+// organisation one person works in. Replaying a queue under the wrong login is not harmless: the
+// database refuses an operation from someone who is not a member of its organisation as a PERMANENT
+// failure, and a permanent failure is removed from the queue (see runFlush). So an operation is tagged
+// when it is queued with the account (`userId`) and organisation (`orgId`) it was made in, and a flush
+// only ever replays operations that belong to the signed-in account in the ACTIVE organisation.
+// Everything else is left exactly as it is: not run, not counted as a failure, not dropped, not
+// reordered. It is waiting for its owner, and the sync panel says so (appShell.js).
+//
+// The owner is ambient: main.js sets it (setOutboxOwner) from the session and the organisation context,
+// because no screen knows who is signed in and threading it through every queued write would mean
+// touching every format. This file stays format-agnostic: the only thing it knows about a payload is
+// the project-wide name of the organisation parameter (`p_org_id`, or `orgId` on a publish intent).
+//
+// `undefined` (never set) means ownership is not in use and every operation is the caller's: that is
+// the state of a bare test and of nothing in production, where main.js's mountApp() sets the owner
+// before anything can flush. `null` means signed out: nothing belongs to anybody, so nothing runs.
+// Operations queued before this change carry no tags: an operation with no `userId` is treated as
+// belonging to whoever is signed in (today's behaviour — the account cannot be recovered), but its
+// organisation is still read from its payload, so it is never replayed into another organisation.
+// ---------------------------------------------------------------------
+let currentOwner;
+
+// `owner`: `{ userId, orgId }` (either may be null while the organisation is still loading), or null
+// when signed out. Anything that is not an object becomes null: never "unset" by accident.
+export function setOutboxOwner(owner) {
+  currentOwner =
+    owner && typeof owner === 'object'
+      ? { userId: owner.userId ?? null, orgId: owner.orgId ?? null }
+      : null;
+}
+
+export function getOutboxOwner() {
+  return currentOwner;
+}
+
+// Test-only: back to "ownership not in use", so one test's owner cannot leak into the next.
+export function _resetOutboxOwnerForTests() {
+  currentOwner = undefined;
+}
+
+// The organisation a payload is for, by the project-wide parameter name; null when it names none.
+export function payloadOrgId(payload) {
+  const id = payload?.p_org_id ?? payload?.orgId;
+  return typeof id === 'string' && id ? id : null;
+}
+
+export const OWNERSHIP = Object.freeze({
+  OWN: 'own',
+  OTHER_ORG: 'other_org',
+  OTHER_ACCOUNT: 'other_account',
+});
+
+// Where an operation stands relative to `owner` (default: the current one).
+export function operationOwnership(operation, owner = currentOwner) {
+  if (owner === undefined) return OWNERSHIP.OWN;
+  if (owner === null) return OWNERSHIP.OTHER_ACCOUNT;
+  if (operation.userId != null && operation.userId !== owner.userId) {
+    return OWNERSHIP.OTHER_ACCOUNT;
+  }
+  const orgId = operation.orgId ?? payloadOrgId(operation.payload);
+  if (orgId != null && orgId !== owner.orgId) return OWNERSHIP.OTHER_ORG;
+  return OWNERSHIP.OWN;
+}
+
 // Queues an operation and persists it immediately — the write this function
 // returns from has already survived a page reload/crash the instant it
 // resolves, before any network attempt is even made (§9: "writes render
@@ -41,6 +109,11 @@ export async function enqueueOperation(type, payload) {
     id: crypto.randomUUID(),
     type,
     payload,
+    // Who made it and where it lands. The organisation is the payload's own when it names one: that
+    // is where the write will actually go, even if a screen that was just replaced queues it after
+    // the active organisation has moved on. No owner yet: left null, which reads as "anyone's" (above).
+    userId: currentOwner?.userId ?? null,
+    orgId: payloadOrgId(payload) ?? currentOwner?.orgId ?? null,
     createdAt: nextSequence(),
     attempts: 0,
     lastError: null,
@@ -197,12 +270,68 @@ export function droppedErrorFor(flushResult, operationId) {
   return flushResult?.dropped?.find((drop) => drop.operationId === operationId)?.error ?? null;
 }
 
-export async function countPendingOperations() {
-  return (await outboxListAll()).length;
+// The operations a flush would run now: the signed-in account's, in the active organisation, oldest
+// first. Every "how much is waiting?" question about THIS person's work (the sync panel, the retry
+// timer, the organisation switch, deleting a test event) is asked of this list, never of the whole
+// device's queue.
+export async function listPendingOperations() {
+  const owner = currentOwner;
+  return (await outboxListAll()).filter(
+    (operation) => operationOwnership(operation, owner) === OWNERSHIP.OWN,
+  );
 }
 
-export async function listPendingOperations() {
+export async function countPendingOperations() {
+  return (await listPendingOperations()).length;
+}
+
+// The whole device's queue split by whose it is, from ONE read and one owner (two separate reads could
+// straddle a change of owner and count an operation twice): `own` is what a flush would run;
+// `otherOrg` is the signed-in account's own, waiting for its organisation to be the active one;
+// `otherAccount` was made by somebody else (or there is nobody signed in). Never run, never dropped.
+export async function partitionOperations() {
+  const owner = currentOwner;
+  const own = [];
+  const otherOrg = [];
+  const otherAccount = [];
+  for (const operation of await outboxListAll()) {
+    const ownership = operationOwnership(operation, owner);
+    if (ownership === OWNERSHIP.OWN) own.push(operation);
+    else if (ownership === OWNERSHIP.OTHER_ORG) otherOrg.push(operation);
+    else otherAccount.push(operation);
+  }
+  return { own, otherOrg, otherAccount };
+}
+
+export async function listOtherOperations() {
+  const { otherOrg, otherAccount } = await partitionOperations();
+  return { otherOrg, otherAccount };
+}
+
+// Every operation on the device whoever it belongs to, oldest first. ONLY for "is this operation still
+// in the queue at all?" questions about an operation the caller itself just queued: such a question must
+// not read "no" because the owner changed in the meantime, or a write that is safely waiting would be
+// taken for one that was dropped and entered again.
+export async function listAllOperations() {
   return outboxListAll();
+}
+
+// Operations waiting for one organisation, whichever account made them: what deleting one of its events
+// could orphan. One that names no organisation at all could be for this one, so it counts.
+export async function countOperationsInOrg(orgId) {
+  return (await outboxListAll()).filter((operation) => {
+    const operationOrg = operation.orgId ?? payloadOrgId(operation.payload);
+    return operationOrg == null || operationOrg === orgId;
+  }).length;
+}
+
+// Everything the signed-in ACCOUNT has waiting on this device, in any of its organisations: what
+// signing out would leave behind for them.
+export async function listAccountOperations() {
+  const owner = currentOwner;
+  return (await outboxListAll()).filter(
+    (operation) => operationOwnership(operation, owner) !== OWNERSHIP.OTHER_ACCOUNT,
+  );
 }
 
 // Reentrancy guard — a flush already in progress must not run a second,
@@ -307,7 +436,7 @@ function withCrossTabLock(fn) {
   return locks ? locks.request(FLUSH_LOCK_NAME, fn) : fn();
 }
 
-// Replays every queued operation, strictly in FIFO (createdAt) order,
+// Replays the owner's queued operations, strictly in FIFO (createdAt) order,
 // stopping at the first operation that fails for a genuine reason — a
 // dependent operation queued after one that hasn't succeeded yet must never
 // run ahead of it (§9's "operations, not rows" guarantee extended to the
@@ -362,7 +491,7 @@ async function runFlush(handlers) {
   const dropped = [];
 
   for (;;) {
-    const operations = await outboxListAll();
+    const operations = await listPendingOperations();
     if (operations.length === 0) {
       return lastPermanentError
         ? {
@@ -377,6 +506,10 @@ async function runFlush(handlers) {
     }
 
     for (const operation of operations) {
+      // Whoever is signed in, or whichever organisation is active, may have changed since this batch was
+      // read (signing out, switching, a second account signing in in another tab): what is left of it is
+      // not this flush's to run. Leave it, and read the queue again for the new owner.
+      if (operationOwnership(operation) !== OWNERSHIP.OWN) break;
       try {
         const handler = handlers[operation.type];
         if (!handler) {
@@ -391,6 +524,11 @@ async function runFlush(handlers) {
         await outboxRemove(operation.id);
         processed += 1;
       } catch (error) {
+        // Somebody else became the owner while the handler was running (another account signed in, the
+        // organisation changed): whatever it threw is about a request made for the previous owner, and
+        // this operation is no longer this flush's to judge. In particular a PERMANENT failure must not
+        // remove it. Left exactly as it is, for its owner; the next pass starts from the new owner's queue.
+        if (operationOwnership(operation) !== OWNERSHIP.OWN) break;
         if (error?.permanent) {
           // See the module comment above `runFlush` — this operation can
           // never succeed as-is, so it's removed rather than left to block
