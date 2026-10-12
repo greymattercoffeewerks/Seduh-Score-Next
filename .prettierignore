@@ -7,3 +7,6 @@ Handoffs and Specs/
 # Android companion project — Kotlin/Gradle, not a prettier target; build output
 # (reports, generated JSON/HTML) would otherwise fail format:check locally.
 android/
+
+# Local scratch output (never committed); not part of the app, so not a format target.
+brag-output/
