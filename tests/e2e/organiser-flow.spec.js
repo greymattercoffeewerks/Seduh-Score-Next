@@ -440,9 +440,9 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
   // organisation; the second is added by answering my_orgs() in the browser, which is all the client sees.
   // Everything else (the sign-in, the event, RLS) is real.
   const SEEDED_ORG = '10c8c375-afe6-41c7-a54e-ffaa15429612';
-  async function answerMyOrgs(page, extra) {
+  async function answerMyOrgs(page, extra, seededName = 'Local Dev Org') {
     const orgs = [
-      { org_id: SEEDED_ORG, name: 'Local Dev Org', slug: 'local-dev-org', role: 'owner' },
+      { org_id: SEEDED_ORG, name: seededName, slug: 'local-dev-org', role: 'owner' },
       ...extra,
     ];
     await page.route('**/rest/v1/rpc/my_orgs', (route) =>
@@ -455,6 +455,16 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     slug: 'greymatter-coffee-werks',
     role: 'organiser',
   };
+
+  // Which organisation the console starts in, as the person's last choice remembered on this device: the
+  // faked second organisation sorts first, so without this every test starts in it.
+  async function startInOrg(page, orgId) {
+    await page.evaluate(async (id) => {
+      const mod = await import('/src/core/supabaseClient.js');
+      const { data } = await mod.getSupabase().auth.getSession();
+      localStorage.setItem(`seduh.activeOrg.${data.session.user.id}`, id);
+    }, orgId);
+  }
 
   // The header with and without the organisation slot (display:none on the slot is the "without": the
   // slot adds no height, moves no chip, adds no sideways scroll). The slot's own readability is checked
@@ -533,7 +543,13 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
   test('a long email, a pending sync chip and a long organisation name still leave the header as it was', async ({
     page,
   }) => {
-    await answerMyOrgs(page, [SECOND_ORG]);
+    // The event's own organisation is the active one (so opening the event moves nothing) and carries the
+    // long name; the second organisation is short and sorts last.
+    await answerMyOrgs(
+      page,
+      [{ ...SECOND_ORG, name: 'Zebra Beans', slug: 'zebra-beans' }],
+      SECOND_ORG.name,
+    );
     await signIn(page);
     await page.goto('/app/#/events/7c2b6a2a-2f3a-4b6e-9b0a-2e6b4a1c9d01');
     await expect(page.locator('.app-shell-sync-chip-live')).toBeVisible();
@@ -564,7 +580,9 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
   }) => {
     await answerMyOrgs(page, [SECOND_ORG]);
     await signIn(page);
+    await startInOrg(page, SEEDED_ORG);
     await page.goto('/app/#/events/7c2b6a2a-2f3a-4b6e-9b0a-2e6b4a1c9d01');
+    await page.reload();
     await expect(page.locator('.app-shell-sync-chip-live')).toBeVisible();
     // A change queued on this device by somebody else (T-TEN.C6), as a previous account would have left it.
     await page.evaluate(async () => {
@@ -663,16 +681,86 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     expect(keptAfter).toBe(1);
   });
 
+  // T-TEN.C7: an event URL carries no organisation. Opening one that belongs to another of the person's
+  // organisations moves the console to that organisation (and says so), never showing it under the wrong
+  // organisation's name. The seeded event is in the real organisation; the faked second one sorts first, so
+  // it is the active one until the link is opened.
+  test("a link to an event in the person's other organisation switches to it, says so, and opens the event", async ({
+    page,
+  }) => {
+    await answerMyOrgs(page, [SECOND_ORG]);
+    await signIn(page);
+    await page.goto('/app/#/events');
+    const select = page.getByRole('combobox', { name: 'Organisation' });
+    await expect(select).toHaveValue(SECOND_ORG.org_id);
+    await expect(page.locator('.app-shell-outlet h1').first()).toBeFocused();
+
+    await page.goto('/app/#/events/7c2b6a2a-2f3a-4b6e-9b0a-2e6b4a1c9d01');
+    const notice = page.locator('#app-shell-org-notice');
+    await expect(notice).toHaveText(
+      'Now working in Local Dev Org, the organisation this event belongs to.',
+    );
+    await expect(page.locator('.app-shell-org-notice-open')).toBeVisible();
+    await expect(select).toHaveValue(SEEDED_ORG);
+    // still on the event, which is the real one
+    expect(new URL(page.url()).hash).toContain('#/events/7c2b6a2a');
+    await expect(page.locator('.app-shell-sync-chip-live')).toBeVisible();
+    await expect(page.locator('.app-shell-outlet h1').first()).toBeVisible();
+    // a tap anywhere puts the notice away; the organisation stays
+    // remembered on this device, so a reload on a slow connection need not wait for the question again
+    const remembered = await page.evaluate(async () => {
+      const db = await import('/src/core/db.js');
+      return db.cacheGet('eventOrg:7c2b6a2a-2f3a-4b6e-9b0a-2e6b4a1c9d01');
+    });
+    expect(remembered).toBe(SEEDED_ORG);
+    // Escape puts the notice away, from wherever focus is
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.app-shell-org-notice-open')).toHaveCount(0);
+    await expect(select).toHaveValue(SEEDED_ORG);
+    // The event screen was built for the organisation the link moved to, so choosing the other one now is a
+    // real change: it goes to that organisation's Events list (not left showing this organisation's event).
+    await select.selectOption(SECOND_ORG.org_id);
+    await expect(page.locator('#app-shell-org-notice')).toContainText('Now working in');
+    expect(new URL(page.url()).hash).toBe('#/events');
+    await expect(select).toHaveValue(SECOND_ORG.org_id);
+  });
+
+  test("a link to an event in an organisation the person is not part of says 'Page not found' and changes nothing", async ({
+    page,
+  }) => {
+    // The client is told the person is in two organisations, neither of which is the one the event is in.
+    const OTHER = {
+      ...SECOND_ORG,
+      org_id: '10c8c375-afe6-41c7-a54e-ffaa15429698',
+      name: 'Another Org',
+      slug: 'another-org',
+    };
+    await page.route('**/rest/v1/rpc/my_orgs', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([SECOND_ORG, OTHER]),
+      }),
+    );
+    await signIn(page);
+    await page.goto('/app/#/events/7c2b6a2a-2f3a-4b6e-9b0a-2e6b4a1c9d01');
+    await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
+    await expect(page.getByRole('combobox', { name: 'Organisation' })).toHaveValue(OTHER.org_id);
+    await expect(page.locator('.app-shell-org-notice-open')).toHaveCount(0);
+  });
+
   test('with two organisations the header offers a select: choosing the other switches, announces it (and the announcement stays), and moves focus to the new screen', async ({
     page,
   }) => {
     await answerMyOrgs(page, [SECOND_ORG]);
     await signIn(page);
+    await startInOrg(page, SEEDED_ORG);
     await page.goto('/app/#/events/7c2b6a2a-2f3a-4b6e-9b0a-2e6b4a1c9d01');
+    await page.reload();
     const select = page.getByRole('combobox', { name: 'Organisation' });
     await expect(select).toBeVisible();
-    // The first by name is active, and the select is described before use.
-    await expect(select).toHaveValue(SECOND_ORG.org_id);
+    // The remembered organisation is active (it is the event's own), and the select is described before use.
+    await expect(select).toHaveValue(SEEDED_ORG);
     await expect(select).toHaveAccessibleDescription(
       'Choosing another organisation switches to it straight away.',
     );
@@ -681,16 +769,17 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     await expect(page.locator('.app-shell-outlet h1').first()).toBeFocused();
 
     await select.focus();
-    await select.selectOption(SEEDED_ORG);
+    await select.selectOption(SECOND_ORG.org_id);
     const notice = page.locator('#app-shell-org-notice');
-    await expect(notice).toHaveText('Now working in Local Dev Org. Showing Events.');
+    await expect(notice).toHaveText(`Now working in ${SECOND_ORG.name}. Showing Events.`);
+    // the event screen was replaced by the other organisation's Events list
     expect(new URL(page.url()).hash).toBe('#/events');
-    await expect(select).toHaveValue(SEEDED_ORG);
+    await expect(select).toHaveValue(SECOND_ORG.org_id);
     // The console re-mounted, so the new screen takes focus (the select blurs): the announcement must
     // survive that, or a screen reader never speaks it.
     await expect(page.locator('.app-shell-outlet h1').first()).toBeFocused();
     await page.waitForTimeout(600);
-    await expect(notice).toHaveText('Now working in Local Dev Org. Showing Events.');
+    await expect(notice).toHaveText(`Now working in ${SECOND_ORG.name}. Showing Events.`);
     // Heard, not shown: no panel opens under the header.
     await expect(page.locator('.app-shell-org-notice-open')).toHaveCount(0);
   });
@@ -700,9 +789,11 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
   }) => {
     await answerMyOrgs(page, [SECOND_ORG]);
     await signIn(page);
+    await startInOrg(page, SEEDED_ORG);
     await page.goto('/app/#/events/7c2b6a2a-2f3a-4b6e-9b0a-2e6b4a1c9d01');
+    await page.reload();
     const select = page.getByRole('combobox', { name: 'Organisation' });
-    await expect(select).toHaveValue(SECOND_ORG.org_id);
+    await expect(select).toHaveValue(SEEDED_ORG);
     await expect(page.locator('.app-shell-outlet h1').first()).toBeFocused();
     await page.evaluate(async () => {
       const outbox = await import('/src/core/outbox.js');
@@ -711,17 +802,18 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     const headerBefore = await measureHeader(page);
 
     await select.focus();
-    await select.selectOption(SEEDED_ORG);
+    await select.selectOption(SECOND_ORG.org_id);
     const panel = page.locator('.app-shell-org-notice-open');
     await expect(panel).toBeVisible();
     await expect(panel).toContainText('not synced yet');
-    await expect(select).toHaveValue(SECOND_ORG.org_id);
+    await expect(select).toHaveValue(SEEDED_ORG);
     await expect(select).toBeFocused();
+    // a refusal keeps the person on the event they were looking at
     expect(new URL(page.url()).hash).toContain('#/events/7c2b6a2a');
     // It overlays: the header is exactly as tall as before.
     expect((await measureHeader(page)).header).toBe(headerBefore.header);
 
-    await page.mouse.click(5, 400);
+    await page.locator('.app-shell-outlet h1').first().click();
     await expect(page.locator('.app-shell-org-notice-open')).toHaveCount(0);
   });
 
