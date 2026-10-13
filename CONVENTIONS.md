@@ -113,8 +113,11 @@ specifically.
 
 ## RLS pattern
 
-One organiser, one org, for October (handoff §4). Read on `live_sessions` is open and
-unauthenticated by design — audience surfaces have no login. Write anywhere requires
+Many organisations in one database (T-TEN, `HANDOFF-CORRECTION-002.md`; handoff §4's
+"one organiser, one org" no longer holds). A person can belong to several organisations;
+the console works in the one they have chosen. Audience surfaces have no login: an anonymous
+caller reads only ACTIVE `live_sessions` rows (and published results), plus whatever the
+narrow `SECURITY DEFINER` doors answer; `events` is closed to anon. Write anywhere requires
 `org_members` membership in the owning org. Everything else is org-scoped read and
 write. Every `FOR INSERT`/`FOR UPDATE`/`FOR ALL` policy needs an explicit `WITH CHECK` —
 `USING` alone governs reads and the pre-image of updates, not what gets written; CI
@@ -148,6 +151,44 @@ until a live-proven cross-org exploit (an org member inserting a row with their 
 rejecting a mismatch. When adding a table with more than one FK that encodes the same
 real-world entity from two directions, check whether the schema alone guarantees they
 agree, or whether a trigger is needed.
+
+**Cross-reference triggers refuse a non-member first.** Such a trigger runs BEFORE
+row-level security and is `SECURITY DEFINER`, so unless it opens with
+`perform app.refuse_non_member(<the row's org>, '<table>')` it answers a non-member with
+its own message when guessed ids do not fit and the standard 42501 when they do: a yes/no
+oracle about one id pair. Read the org with an `app.org_id_for_*_internal` resolver (they
+never depend on who is calling), and compare with `is distinct from`, never `<>` (a
+missing parent is NULL, and `NULL <> x` is NULL, which passes). `045` fails when a
+`SECURITY DEFINER` `BEFORE ROW` trigger function has neither the gate nor the standard
+refusal.
+
+### How to add a tenant table (checklist; each item is enforced by a test that fails CI)
+
+1. **Scope** it to an organisation: an `org_id` column, or a chain of immutable parents up
+   to `events.org_id` with an `app.org_id_for_*` resolver (never a policy that walks the
+   chain inline).
+2. **Row-level security on**, a `_read` and a `_write` policy built on
+   `app.is_org_member(...)`, and an explicit `WITH CHECK` on the write one (`000`).
+3. **Freeze the parent columns**: a `before update` trigger calling
+   `app.forbid_parent_change(...)` for `org_id` and for every parent id column, enabled,
+   row-level and unconditional (`033` for `org_id`, `040` for every tenant table, `042`
+   for the leaf tables). Do this in the same migration that adds the column.
+4. **Base grants** (a separate layer from RLS) kept narrow: no privilege `anon` or
+   `authenticated` does not use (`020`; production has narrow privileges, CI's database
+   broad ones, so a test must hold in both).
+5. **Two ids that must agree** (a child and a parent from two directions): a
+   cross-reference trigger that opens with `refuse_non_member` (above).
+6. **Views** are `security_invoker`. Anything anonymous people need is a narrow
+   `SECURITY DEFINER` function that checks its own input, never a table grant.
+7. **Add it to the matrices**: `supabase/tests/040_cross_org_matrix.sql` (read, update,
+   delete, insert and move, for anon, a signed-in stranger, each organisation's member and
+   a member of both, with exact row counts) and, for every RPC that takes an organisation,
+   event, heat, match, stage, slot, entry or person id,
+   `supabase/tests/041_cross_org_rpcs.sql` (six cross-organisation attempts, each refused
+   with the function's own guard). The completeness guards in both fail until you do.
+8. **Cloud**: merging the migration's PR only deploys the frontend. Push the migration
+   with `apply_migration` as a separate, owner-approved step, then compare
+   `list_migrations` and re-run the advisors.
 
 ---
 

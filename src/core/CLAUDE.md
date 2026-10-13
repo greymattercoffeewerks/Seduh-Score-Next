@@ -304,3 +304,36 @@ load with a Retry that cannot work. Gentler than the several-organisation path, 
 the whole question has one 2.5-second budget and ANY failure (offline, error, timeout, a stand-in organisation list)
 opens the screen as it always did; answers are remembered on the device, a match's event first. See ROADMAP.md's "Known
 open items from the event-link guard".
+
+T-TEN.D5 (2026-10-13) — the audience-isolation Playwright project (`dev-audience`): `tests/e2e/audience-isolation.spec.js`
+and `tests/e2e/support/tenants.js` (`createTenant`, `localStack`, `addMember`, `createLoneUser`; the helpers sign a
+service-role token with the published LOCAL secret and refuse anything that is not localhost). Two organisations
+with live events, anonymous browsers on slug links: each sees only its own organiser's event.
+
+T-TEN.D6 (2026-10-13) — the anonymous contract (`20261013100000_tenancy_anon_contract.sql`): `events_read_public` and
+anon's `events` privileges are gone; `live_sessions` reads only ACTIVE rows to anon and authenticated, and writes are
+authenticated-only. Anything an audience screen needs about an event comes through a narrow door; a test fake that
+queries `events` as anon is a bug, not a missing mock. The splash prefers the LIVE event
+(`public_event_summary`: live, non-test, newest).
+
+Event-selection guards (2026-10-13) — `core/publish.js`'s `findLiveElsewhere` (fail-open, 2.5 s) and `takeOverWarning`:
+starting a heat (Cup Taster `timingScreen`) or confirming a match (BTC `scoringScreen`) while another event of the
+organisation is live shows a warning card with a two-tap "Replace it and start heat" and a Cancel, and publishing
+replaces the one active live session an organisation can have. The warning never blocks on a slow or failed check.
+Accessibility patterns that bit here: a live region is never `display:none` (collapse it instead), a `.btn` needs its
+own `[hidden]` rule, and the warning is linked with `aria-describedby`.
+
+T-TEN.E1 (2026-10-13) — the cross-organisation negative matrices (`supabase/tests/040`, `041`) and the freeze on the
+remaining parents (`20261013140000`, `042`). They run as side-effect-free probes (sentinel-rollback sub-transactions)
+and must hold on a database with narrow privileges (production) AND broad ones (CI's default).
+
+T-TEN.E2 (2026-10-13) — the console Playwright project (`dev-tenancy`, `tests/e2e/organiser-tenancy.spec.js`): real
+organisations A, B and C and people in one, two or no organisation drive the switcher, event-link guard, team screen
+and take-over warning in a real browser.
+
+T-TEN.E3 (2026-10-13) — security and performance pass: advisors classified, the cheap findings migrated
+(`20261013150000`), and the full-surface security review's first finding closed by `20261013160000` (the membership gate
+on six cross-reference triggers, test `045`). Measured: every query the app asks takes 0.3 to 4 ms at 5,000 events and
+160,000 heat entries; an UNFILTERED read of a leaf table costs about 0.2 ms per row (33 s for all heat entries), so a
+new report or export reads through a `SECURITY DEFINER` function that checks the caller once (as `get_dispute_pack`
+does). See ROADMAP.md's "Known open items from T-TEN.E3".

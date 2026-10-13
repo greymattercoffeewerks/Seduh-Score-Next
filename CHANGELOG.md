@@ -1,3 +1,22 @@
+## T-TEN.E4 documentation and T-TEN.E6 close-out · 2026-10-14
+
+**Task:** T-TEN.E4 (documentation) and T-TEN.E6 (close-out) of `Handoffs and Specs/TENANCY-WORK-PLAN.md`, done before E5 step 7 at the owner's request. Documentation, version bump and state only; no application code, no migration.
+
+**Status: in review. Version 3.2.0 to 3.3.0 (a minor bump for a new capability; the nameplate stays Gadong, since a nameplate move is a capability-era boundary and the owner has not called one).**
+
+**What was done:**
+
+- `CLAUDE.md`: a "Tenancy" section in Non-negotiables (frozen parents, `is_org_member` as the only access test, the membership gate on cross-reference triggers, anonymous access only through narrow doors, slug-qualified audience links, service-role-only provisioning, the matrices as the completeness check) and a Repo paragraph on the Cloudflare build variables (`VITE_DEFAULT_ORG_ID` removed 2026-10-13; the legacy slug stays; preview builds receive none of them; how to verify a production change; rollback).
+- `CONVENTIONS.md`: the RLS pattern no longer says "one organiser, one org"; a paragraph on cross-reference triggers and `refuse_non_member`; "How to add a tenant table", an eight-item checklist where each item names the test that fails CI without it.
+- `src/core/CLAUDE.md`: D5, D6, the event-selection guards, E1, E2 and E3 (the sections that were missing).
+- `.env.example` and `README.md`: the legacy slug is the documented variable; `VITE_DEFAULT_ORG_ID` is marked deprecated.
+- `ROADMAP.md`: the tenancy phase table (D done; E in progress, with step 7 named). Plan and spec documents (local, not tracked): E4 and E6 ticked, `HANDOFF-CORRECTION-002.md` and the scoping document carry a status line.
+- `state.json` reset to the one remaining step.
+
+**E6 checklist:** no blocking findings open (every security-reviewer run ended with none; the review outcomes are in the entries below); every deferred finding is in ROADMAP.md under its "Known open items from T-TEN.*" heading; counts at close-out: **3,989 unit tests in 138 files, 1,930 database assertions in 45 files**, lint and formatting clean, the Playwright projects green in CI.
+
+**Still open (named, not hidden):** E5 step 7, a real second-organisation run-through in production with `grey-matter-rehearsal` (needs the owner at a real sign-in). Until it is done the tenancy row in ROADMAP.md stays "In progress".
+
 ## T-TEN.E5 step 6: `VITE_DEFAULT_ORG_ID` removed from production · 2026-10-13
 
 **Task:** step 6 of the T-TEN.E5 rollout runbook. Dashboard change by the owner, verified here; no code.
