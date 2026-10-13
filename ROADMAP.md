@@ -2174,7 +2174,7 @@ _Database: `supabase/migrations/20261013100000_tenancy_anon_contract.sql`, `supa
 
 _`supabase/migrations/20261013120000_public_event_summary_prefers_live.sql`, `core/publish.js`, `cup-taster/timingScreen.js`, `btc/scoringScreen.js`._
 
-- **The migration is not applied to the cloud project yet.** Safe at any time (same signature, columns and grants). Until then the production splash still shows the newest event, test events included.
+- **Applied to the cloud project 2026-10-13** (cloud version `20261013023650`) and verified on production: the splash names the live event.
 - **The links still address the organisation, not an event.** The projector and phone show whichever event of the organisation last went live; the splash shows the live one (or the newest real one). To pin a screen to one specific event while another is live (two real events at once under one organisation), event-pinned audience links (`#/live/<slug>/<event>/...`) and a public door that takes an event id would be needed. Not built; the rehearsal organisation and the take-over guard cover the practice-and-test case.
 - **The take-over warning is computed when the screen loads.** If another device makes a different event live afterwards, the warning is stale: absent (the start then replaces it, as before the guard) or still shown (one extra tap). Checking again at the tap would add a network round trip to a time-critical tap, so it does not.
 - **A re-render while "Replace it and start heat" is armed** (a pending-work recheck, an error) rebuilds the card; the armed state is lost safely (it asks again) but keyboard focus falls to the page.

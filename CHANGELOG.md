@@ -2,7 +2,7 @@
 
 **Task:** follow-up to phase D (owner request, 2026-10-13): "how do I direct the app to the right event?" while preparing several events and tests. Not a numbered tenancy task. One database function change, two screens, tests.
 
-**Status: in review, not merged. The migration `20261013120000_public_event_summary_prefers_live.sql` is NOT applied to the cloud project yet (it is compatible with the running site and can be applied at any time; it needs no quiet window).**
+**Status: merged to `dev` (#236) and released to `main` (#237) on 2026-10-13. The migration `20261013120000_public_event_summary_prefers_live.sql` was applied to the cloud project the same day (cloud version `20261013023650`, with the owner's go-ahead). Verified on https://www.seduhscore.com: Grey Matter's splash now reads "Grey Matter Cup Taster Competition 2026 · LIVE" (it read "Test Event 1 · TEST DATA" before), the function is still SECURITY DEFINER with a pinned search_path and executable by anon and authenticated only, and the rehearsal organisation's splash opens to an empty holding state.**
 
 **What changed:**
 
