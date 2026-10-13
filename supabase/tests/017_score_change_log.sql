@@ -334,6 +334,9 @@ reset request.jwt.claim.sub;
 set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000000005';
 select is((select count(*)::int from score_change_log), 0, 'a non-member reads zero log rows');
 reset role;
+-- the rest runs as the table owner with NO signed-in person: a claim left over from above would make this session look
+-- like a caller, and the cross-reference triggers refuse a caller who is not a member of the org (T-TEN.E3 follow-up)
+reset request.jwt.claim.sub;
 select ok((select count(*) from score_change_log where org_id = '00000000-0000-0000-0000-000000000010') > 10,
   'while the log the non-member could not read was in fact well populated');
 
