@@ -1,8 +1,8 @@
 -- T1.3 RLS — handoff §4, §14 T1.3 AC.
--- Proves: a non-member reads zero rows from every table except live_sessions, and
--- an unauthenticated client can read live_sessions and cannot write it.
+-- Proves: a non-member reads zero rows from every table except the ACTIVE rows of live_sessions, and
+-- an unauthenticated client can read those and cannot write live_sessions or touch events.
 begin;
-select plan(30);
+select plan(25);
 
 -- ---------- fixtures (as postgres, bypasses RLS) ----------
 
@@ -119,9 +119,9 @@ reset request.jwt.claim.sub;
 set local role anon;
 
 select is(
-  (select count(*)::int from live_sessions),
+  (select count(*)::int from live_sessions where org_id = '00000000-0000-0000-0000-000000000010'),
   1,
-  'an unauthenticated (anon) client CAN read live_sessions'
+  'an unauthenticated (anon) client CAN read an active live session'
 );
 
 select throws_ok(
@@ -135,32 +135,15 @@ select throws_ok(
 
 reset role;
 
--- ---------- events: anon-safe column read (20260831100000) ----------
--- The Definition of Done says a schema/policy change's negative test
--- "cannot be waived by reading the policy and reasoning it looks correct"
--- — found in security-reviewer's own pass on that migration. A Postgres
--- column-level grant fails the WHOLE query the moment any non-granted
--- column is referenced, so "denied on the withheld columns" is provable
--- directly, the same way `throws_ok` already proves live_sessions' own
--- write denial above.
-
--- Proves the actual MECHANISM (this migration's own table-level revoke ran
--- and took effect), not just its externally-observable outcome — found in
--- review (security-reviewer): the column-read assertions below prove
--- "anon can't read venue", but on an environment where anon never had
--- table-level SELECT to begin with (this project's own local/CI
--- environments have differed on exactly this — see the migration's own
--- comment), those same assertions would pass identically whether or not
--- this migration's `revoke select, insert, update, delete on events from
--- anon` line ever ran at all. `has_table_privilege`, run as postgres (not
--- anon — the function checks a NAMED role's privilege, it doesn't need to
--- assume that role's own session), is environment-independent: it fails
--- this test in EITHER starting-state scenario if the revoke is ever
--- accidentally dropped from the migration.
+-- ---------- events: closed to anon (T-TEN.D6, replacing the 20260831100000 safe-column read) ----------
+-- Until T-TEN.D6 anon could read six safe columns of every organisation's events; the audience surfaces now
+-- use public_event_summary, so anon holds nothing on the table. The full set of cases (policies, column
+-- grants, the doors that replaced the read) is in 038_anon_contract.sql; these keep this file's own
+-- "anon cannot touch events" statement true to the current contract.
 select is(
   has_table_privilege('anon', 'events', 'select'),
   false,
-  'anon has no table-level SELECT on events (column grant only)'
+  'anon has no table-level SELECT on events'
 );
 select is(
   has_table_privilege('anon', 'events', 'insert'),
@@ -180,36 +163,11 @@ select is(
 
 set local role anon;
 
--- Replicates findLatestEventForOrg's own real query shape (events.js),
--- not just a bare count — `order by created_at desc limit 1` specifically
--- exercises the one granted column (created_at) nothing ever reads the
--- VALUE of, and reading name/is_test proves the actual fields the caller
--- needs, not just that a row is countable. A regression that shrank the
--- grant to only id/org_id would still pass a bare count(*) check but fail
--- every assertion below (found in review — schema-guardian: the original
--- single count-based assertion under-proved the grant).
-select is(
-  (select name from events
-     where org_id = '00000000-0000-0000-0000-000000000010'
-     order by created_at desc limit 1),
-  'Test Event',
-  'an unauthenticated (anon) client can read events.name via the granted safe columns'
-);
-
-select is(
-  (select is_test from events
-     where org_id = '00000000-0000-0000-0000-000000000010'
-     order by created_at desc limit 1),
-  false,
-  'an unauthenticated (anon) client can read events.is_test via the granted safe columns'
-);
-
-select is(
-  (select event_date from events
-     where org_id = '00000000-0000-0000-0000-000000000010'
-     order by created_at desc limit 1),
+select throws_ok(
+  $$ select name from events $$,
+  '42501',
   null,
-  'an unauthenticated (anon) client can read events.event_date via the granted safe columns'
+  'an unauthenticated (anon) client cannot read events.name'
 );
 
 select throws_ok(
@@ -220,37 +178,10 @@ select throws_ok(
 );
 
 select throws_ok(
-  $$ select status from events $$,
+  $$ select count(*) from events $$,
   '42501',
   null,
-  'an unauthenticated (anon) client cannot read events.status'
-);
-
-select throws_ok(
-  $$ select config from events $$,
-  '42501',
-  null,
-  'an unauthenticated (anon) client cannot read events.config'
-);
-
--- The migration's own comment names five withheld columns (venue, status,
--- config, format, updated_at) — the three above plus these two, each its
--- own case rather than folded together, matching the bar the other four
--- withheld-column checks already set. `format` in particular is the more
--- plausible future regression: a caller wanting it added to the anon-safe
--- list without updating the grant (found in review — test-auditor).
-select throws_ok(
-  $$ select format from events $$,
-  '42501',
-  null,
-  'an unauthenticated (anon) client cannot read events.format'
-);
-
-select throws_ok(
-  $$ select updated_at from events $$,
-  '42501',
-  null,
-  'an unauthenticated (anon) client cannot read events.updated_at'
+  'an unauthenticated (anon) client cannot even count events'
 );
 
 select throws_ok(
