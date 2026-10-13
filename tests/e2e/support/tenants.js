@@ -59,6 +59,32 @@ export function localStack() {
 }
 
 /**
+ * Makes an existing person a member of an organisation, through the service-role door provisioning uses
+ * (org_add_existing_member), so one person can belong to two organisations. `role` is 'owner' or 'organiser'.
+ */
+export async function addMember(tenant, person, role = 'organiser') {
+  assertLocalStack();
+  await call('/rest/v1/rpc/org_add_existing_member', {
+    method: 'POST',
+    key: signLocalKey('service_role'),
+    body: { p_org_id: tenant.orgId, p_user_id: person.userId, p_role: role },
+  });
+}
+
+/** A signed-up person who belongs to NO organisation (an account made for something else, or someone removed). */
+export async function createLoneUser(label) {
+  assertLocalStack();
+  const unique = `${Date.now().toString(36)}${randomUUID().slice(0, 4)}`;
+  const email = `d5-lone-${label}-${unique}@local.test`;
+  const user = await call('/auth/v1/admin/users', {
+    method: 'POST',
+    key: signLocalKey('service_role'),
+    body: { email, password: PASSWORD, email_confirm: true },
+  });
+  return { userId: user.id, email, password: PASSWORD };
+}
+
+/**
  * Creates one organisation with its own organiser, one event and one ACTIVE live session carrying `payload`.
  * Slugs and emails are unique per run, so a persistent local stack is never collided with.
  */
@@ -114,6 +140,8 @@ export async function createTenant({ label, format, payload, eventName }) {
     slug,
     orgId,
     userId: user.id,
+    email,
+    password: PASSWORD,
     eventId: event.id,
     liveId: live.id,
     orgName: `D5 ${label} ${unique}`,

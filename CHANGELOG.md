@@ -1,8 +1,32 @@
+## T-TEN.E2: the organiser console with real organisations · 2026-10-13
+
+**Task:** T-TEN.E2 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase E). Tests only: no app code, no migration.
+
+**Status: in review, not merged.**
+
+**What changed:**
+
+- **`tests/e2e/organiser-tenancy.spec.js`, in its own Playwright project `dev-tenancy`** (runs after `dev-audience` on the same shared stack). `organiser-flow.spec.js` already drives the switcher, the deep-link notice and the refused switch, but it FAKES the `my_orgs` answer, so its second organisation has no rows behind it. Here every organisation, person and event is real, created through the doors production uses (`create_org`, `org_add_existing_member`), so the database's own row-level security answers: person B in organisation B only; person AB who owns A and is an organiser of B; a stranger organisation C; and an account in no organisation.
+- **What it proves:**
+  - a person in one organisation sees exactly that organisation's events (an exact count, not one named event absent), is offered no switcher, and an event they create lands in their organisation and in the database;
+  - a person in both switches (announced), creates an event in B, never sees A's events in B's list or B's in A's, and the new event belongs to B in the database;
+  - a link to an event in their other organisation switches to it and says so, both followed inside the app and opened cold (an emailed link, a new tab);
+  - a person in two organisations opening a THIRD organisation's event gets "Page not found", is not moved, and sees nothing of it (the first end-to-end run of that guard branch against a real database);
+  - an unsynced change on the device refuses the switch with the exact reason, stays put, and the same choice goes through once nothing is waiting;
+  - an account in no organisation is told so and offered no organisation and no events.
+- **A real finding, recorded as a known gap, not a leak:** the route guard that works out which organisation an event link belongs to runs only for a person in TWO OR MORE organisations (`org.orgs.length < 2` returns early in `placeEventRoute`). A person in ONE organisation who opens another organisation's event link skips it: the event screen tries to load, the database hides the event, and they see the generic "Something went wrong saving that — try again" with a Retry that can never work, instead of "Page not found". Nothing of the other organisation is exposed (a test asserts that). The ideal behaviour is a `test.fail()` test that passes while the gap exists and FAILS the day it is fixed, so it cannot be forgotten.
+- **"The app boots with `VITE_DEFAULT_ORG_ID` unset"** is covered by the built-app smoke test (a build made without it), the unit test in `src/main.test.js`, and this file's people working in organisations that are not the default one. It is stated plainly in the spec that this file is not itself a boot test (its dev server has the variable set).
+- `tests/e2e/support/tenants.js` gains `addMember` (the provisioning door that puts one person in two organisations), `createLoneUser`, and exposes each tenant's sign-in details.
+
+**Verified:** the whole Playwright suite on a dev server with the local environment, and the new file twice in a row (8 tests, one expected failure). Two deliberate breaks of the app (the events list not filtering by organisation; an event link no longer switching to its organisation) were each caught. A test audit by the Haiku `test-auditor` (run by its own name for the first time) found real weaknesses, all fixed: the stranger-link test rested on a fixed sleep and could not fail on a leak (it now waits for a terminal state and the third organisation exercises the real guard), the "never switched" claim was unfalsifiable for a one-organisation person, hash-only `page.goto` was used where the other spec warns against it (and the cold link is now tested), the refusal text is asserted in full and the refusal is shown not to be permanent, and the known-gap test now fails only for the right reason.
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-TEN.E2".
+
 ## T-TEN.E1: the cross-organisation negative matrix · 2026-10-13
 
 **Task:** T-TEN.E1 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase E). Tests, plus one small migration that the tests found necessary (below): no app code.
 
-**Status: in review, not merged. One migration (`20261013140000_tenancy_freeze_remaining_parents.sql`, a finding of this task) is NOT applied to the cloud project yet.**
+**Status: merged to `dev` (#239). The migration `20261013140000_tenancy_freeze_remaining_parents.sql` (a finding of this task) was applied to the cloud project on 2026-10-13 (cloud version `20261013042316`), with the owner's go-ahead; checked there: both triggers present and enabled, production holds no tiebreak rows and one counter row.**
 
 **What changed:**
 
