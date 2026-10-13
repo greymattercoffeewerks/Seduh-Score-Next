@@ -16,6 +16,13 @@
 -- Every attempt runs in a sub-transaction that is always rolled back (e1.affected / e1.refusal), so nothing the
 -- matrix tries, even if it succeeded, can change the fixtures or hide a later failure.
 --
+-- It must hold in BOTH kinds of database this project meets. Production (and a long-lived local stack) has the
+-- narrow table privileges the revoke migrations leave: anon holds almost nothing, members hold only what each
+-- table needs. A database built from scratch by a newer Supabase CLI (CI) hands `anon` and `authenticated` ALL
+-- privileges on every new table, so there the ONLY barrier is row-level security. The matrix passes in both, which
+-- is the point: nothing below depends on a missing privilege, except the one table whose member-update answer
+-- differs between them (marked update_env), and for that one only the organisation boundary is asserted.
+--
 -- And the structure that keeps it honest (a new table fails here until someone decides about it):
 --   * every public table has row-level security enabled;
 --   * every public table is either in this matrix or is one of the three creator-scoped Guess the Bean tables;
@@ -24,7 +31,7 @@
 --   * the privileges `anon` holds on tables and columns are exactly the pinned list below.
 -- (org_id immutability on every table that carries the column is pinned separately by 033.)
 begin;
-select plan(151);
+select plan(154);
 
 -- ============ helpers (rolled back with the rest) ============
 
@@ -64,6 +71,19 @@ begin
   raise exception using errcode = 'P9999', message = 'sentinel';
 exception when others then
   return sqlerrm;
+end $$;
+
+-- What a MOVE did: the SQLSTATE it was refused with, 'zero' when it ran but no row was visible to change (row-level
+-- security, where there is no policy to allow it), or 'ok' when it really moved a row; always rolled back.
+create function e1.move_code(stmt text) returns text language plpgsql as $$
+declare n int;
+begin
+  execute stmt;
+  get diagnostics n = row_count;
+  raise exception using errcode = 'P9999', message = n::text;
+exception when others then
+  if sqlstate = 'P9999' then return case when sqlerrm::int = 0 then 'zero' else 'ok' end; end if;
+  return sqlstate;
 end $$;
 
 -- How many rows of a table match; 0 when the caller may not read the table at all.
@@ -163,7 +183,8 @@ create table e1.spec (
   member_update boolean not null,
   read_rule text not null default 'members',
   move_stmt text,
-  insert_cols text            -- NULL: every column; otherwise the columns a signed-in caller may insert
+  insert_cols text,           -- NULL: every column; otherwise the columns a signed-in caller may insert
+  update_env boolean not null default false  -- members may or may not update it, depending on the database's default privileges
 );
 insert into e1.spec (tbl, filter, set_col, member_read, member_update, read_rule, move_stmt) values
   ('orgs',                  'id = e1.u(''@'', 100)',        'name',          true,  false, 'members', null),
@@ -197,6 +218,10 @@ insert into e1.spec (tbl, filter, set_col, member_read, member_update, read_rule
 -- of the row is built from them; with the others included the refusal would be a column privilege, not row-level security
 update e1.spec set insert_cols = 'event_id, team_id, total_points, wins, group_size, tiebreak_rank, reason'
  where tbl = 'btc_seeding_tiebreaks';
+
+-- the ledger of processed operations is insert-only in production (no UPDATE privilege) but its policy would allow
+-- an update where default privileges grant one; either way only the owning organisation's members may
+update e1.spec set update_env = true where tbl = 'processed_operations';
 
 select is((select count(*)::int from e1.spec), 26, 'the matrix covers 26 tenant tables');
 
@@ -281,7 +306,7 @@ call e1.run_as('user_ab');
 -- user_ab belongs to both organisations: can anything be moved from one to the other?
 insert into e1.results
 select 'user_ab', s.tbl, d.src, 'move', null,
-       e1.refusal(replace(replace(s.move_stmt, '#', d.dst), '@', d.src)),
+       e1.move_code(replace(replace(s.move_stmt, '#', d.dst), '@', d.src)),
        e1.refusal_msg(replace(replace(s.move_stmt, '#', d.dst), '@', d.src))
   from e1.spec s cross join (values ('aaaa', 'bbbb'), ('bbbb', 'aaaa')) d(src, dst)
  where s.move_stmt is not null;
@@ -315,7 +340,9 @@ select is(
 select is(
   (select string_agg(r.caller || '/' || r.org || '=' || (r.n > 0)::text, ' ' order by r.caller, r.org)
      from e1.results r where r.tbl = s.tbl and r.kind = 'update'),
-  (select string_agg(r.caller || '/' || r.org || '=' || e1.expect_update(r.caller, r.org, s.tbl)::text, ' ' order by r.caller, r.org)
+  (select string_agg(r.caller || '/' || r.org || '='
+                     || case when s.update_env and e1.member(r.caller, r.org) then (r.n > 0)::text
+                             else e1.expect_update(r.caller, r.org, s.tbl)::text end, ' ' order by r.caller, r.org)
      from e1.results r where r.tbl = s.tbl and r.kind = 'update'),
   s.tbl || ': who can UPDATE which organisation''s row'
 ) from e1.spec s order by s.tbl;
@@ -339,10 +366,10 @@ select is(
   (select coalesce(string_agg(r.org || '=' || r.code, ' ' order by r.org), 'none')
      from e1.results r
     where r.tbl = s.tbl and r.kind = 'move'
-      and r.code not in ('23001', '42501')
+      and r.code not in ('23001', '42501', 'zero')
       and not (r.code = 'P0001' and r.msg ~ '(cannot be moved|must belong|must match)')),
   'none',
-  s.tbl || ': a member of both organisations cannot move the row from one to the other, either way (immutable column, row-level security, or the tables'' own cross-organisation triggers)'
+  s.tbl || ': a member of both organisations cannot move the row from one to the other, either way (an immutable column, no privilege, no row visible under row-level security, or the tables'' own cross-organisation triggers)'
 ) from e1.spec s where s.move_stmt is not null order by s.tbl;
 
 select is(
@@ -413,12 +440,31 @@ select is(
   (select coalesce(string_agg(t.tbl, ', ' order by t.tbl), 'none')
      from (values ('score_change_counts'), ('team_removed_members')) t(tbl)
     where exists (select 1 from pg_policies p where p.schemaname = 'public' and p.tablename = t.tbl)
-       or has_table_privilege('anon', 'public.' || t.tbl, 'select,insert,update,delete')
-       or has_table_privilege('authenticated', 'public.' || t.tbl, 'select,insert,update,delete')
-       or exists (select 1 from information_schema.column_privileges cp
-                   where cp.table_schema = 'public' and cp.table_name = t.tbl and cp.grantee in ('anon', 'authenticated'))),
+       -- (where a newer CLI grants every table privilege by default, the missing policy is the whole barrier, and the
+       -- matrix above shows it holds: only the policy is asserted there)
+       or (not has_table_privilege('anon', 'public.ct_heats', 'select') and (
+            has_table_privilege('anon', 'public.' || t.tbl, 'select,insert,update,delete')
+         or has_table_privilege('authenticated', 'public.' || t.tbl, 'select,insert,update,delete')
+         or exists (select 1 from information_schema.column_privileges cp
+                     where cp.table_schema = 'public' and cp.table_name = t.tbl and cp.grantee in ('anon', 'authenticated'))))),
   'none',
-  'the two deny-all tables have no policy and no privilege for anon or signed-in callers (they are reached only through definer functions)'
+  'the two deny-all tables have no policy (and, where privileges are narrow, no privilege for anon or signed-in callers): they are reached only through definer functions'
+);
+
+-- the plan's "immutability" meta-test for tables WITHOUT an org_id column (033 covers the ones that have it): every
+-- tenant table must have an enabled BEFORE UPDATE row trigger that freezes its parents or checks them, so a member
+-- of two organisations cannot re-point a row even where privileges are broad
+select is(
+  (select coalesce(string_agg(s.tbl, ', ' order by s.tbl), 'none')
+     from e1.spec s
+    where not exists (
+      select 1 from pg_trigger t join pg_proc p on p.oid = t.tgfoid
+       where t.tgrelid = ('public.' || s.tbl)::regclass and not t.tgisinternal and t.tgenabled <> 'D'
+         and (t.tgtype & 1) > 0 and (t.tgtype & 2) > 0 and (t.tgtype & 16) > 0
+         and (p.proname in ('forbid_parent_change', 'forbid_btc_event_change', 'forbid_score_change_log_mutation')
+              or p.proname like 'check\_%'))),
+  'none',
+  'every tenant table has a BEFORE UPDATE trigger that freezes or checks its parents (a new table fails until it has one)'
 );
 
 -- views are not covered by row-level security of their own: each must run with its CALLER's rights, or it would
@@ -433,18 +479,38 @@ select is(
 select cmp_ok((select count(*)::int from pg_class c join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public' where c.relkind = 'v'), '>=', 6,
   'and the guard sees the six views known today (zero would mean it matches nothing)');
 
--- the privileges anon holds on tables and columns, pinned: a new anonymous door cannot appear unnoticed
+-- What anon can reach is decided by POLICIES (a database built by a newer CLI gives it every table privilege, so
+-- privileges alone say little): the policies that name anon are pinned, and every policy that applies to every
+-- role must be tied to the caller (a membership or creator check), so a new `using (true)` cannot slip in.
 select is(
-  (select string_agg(x, ', ' order by x) from (
-     select table_name || ':' || privilege_type as x from information_schema.table_privileges
-      where table_schema = 'public' and grantee = 'anon'
-     union
-     select table_name || '.' || column_name || ':' || privilege_type from information_schema.column_privileges
-      where table_schema = 'public' and grantee = 'anon'
-        and table_name not in (select table_name from information_schema.table_privileges where table_schema = 'public' and grantee = 'anon')
-   ) q),
-  'contacts:INSERT, contacts:SELECT, guesses:INSERT, live_sessions:SELECT, public_results.event_id:SELECT, public_results.id:SELECT, public_results.org_id:SELECT, public_results.payload:SELECT, public_results.published_at:SELECT, sessions.guess_enabled:SELECT, sessions.id:SELECT, sessions.orientation:SELECT, sessions.revealed:SELECT',
-  'anon holds exactly these table and column privileges: the public archive columns, the live sessions, and the Guess the Bean participant doors'
+  (select string_agg(p.tablename || '.' || p.policyname, ', ' order by p.tablename, p.policyname)
+     from pg_policies p where p.schemaname = 'public' and 'anon' = any (p.roles)),
+  'contacts.contacts_insert, guesses.guesses_insert, guesses.guesses_select_anon_feed, live_sessions.live_sessions_read, public_results.public_results_read_public, sessions.sessions_select',
+  'the policies that name anon are exactly: the Guess the Bean participant doors, the active live sessions and the public archive'
+);
+select is(
+  (select coalesce(string_agg(p.tablename || '.' || p.policyname, ', ' order by p.tablename, p.policyname), 'none')
+     from pg_policies p
+    where p.schemaname = 'public' and 'public' = any (p.roles)
+      and (coalesce(p.qual, '') || ' ' || coalesce(p.with_check, '')) !~ '(is_org_member|org_id_for_[a-z_]+|auth\.uid\(\)|session_is_creator)'),
+  'none',
+  'every policy that applies to every role (anon included) is tied to the caller by a membership or creator check'
+);
+-- ...and in a database with the narrow privileges (production, a long-lived local stack) anon holds almost nothing:
+-- skipped where a newer CLI granted everything by default (that environment is exactly what the policy pins above are for)
+select is(
+  case when has_table_privilege('anon', 'public.ct_heats', 'select') then 'skipped: this database grants anon every table privilege by default'
+       else (select string_agg(x, ', ' order by x) from (
+         select table_name || ':' || privilege_type as x from information_schema.table_privileges
+          where table_schema = 'public' and grantee = 'anon'
+         union
+         select table_name || '.' || column_name || ':' || privilege_type from information_schema.column_privileges
+          where table_schema = 'public' and grantee = 'anon'
+            and table_name not in (select table_name from information_schema.table_privileges where table_schema = 'public' and grantee = 'anon')
+       ) q) end,
+  case when has_table_privilege('anon', 'public.ct_heats', 'select') then 'skipped: this database grants anon every table privilege by default'
+       else 'contacts:INSERT, contacts:SELECT, guesses:INSERT, live_sessions:SELECT, public_results.event_id:SELECT, public_results.id:SELECT, public_results.org_id:SELECT, public_results.payload:SELECT, public_results.published_at:SELECT, sessions.guess_enabled:SELECT, sessions.id:SELECT, sessions.orientation:SELECT, sessions.revealed:SELECT' end,
+  'where privileges are narrow (production): anon holds exactly the public archive columns, the live sessions and the Guess the Bean participant doors'
 );
 
 select * from finish();
