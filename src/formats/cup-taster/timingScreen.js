@@ -33,6 +33,7 @@ import {
 } from './timeCorrectionEditor.js';
 import { cupTasterOutboxHandlers } from './outboxHandlers.js';
 import { publishLiveSession } from './liveSession.js';
+import { findLiveElsewhere, takeOverWarning } from '../../core/publish.js';
 import { remainingSecs, isExpired } from '../../core/countdown.js';
 import { getSupabase } from '../../core/supabaseClient.js';
 import { el } from '../../core/dom.js';
@@ -508,7 +509,13 @@ export async function mountTimingScreen(
       client,
     );
     const hydrated = hydrateEntries(heatEntries, roster);
-    return { event, heat, hydrated, pending };
+    // Only a heat that has not started offers "Start heat", the one thing that can put this event on the venue
+    // screens in place of another (T-TEN, event-selection guard). Fails open: no answer means no warning.
+    const liveElsewhere =
+      heat.status === 'pending' && heat.timing_mode === 'app'
+        ? await findLiveElsewhere(event.org_id, eventId, client)
+        : null;
+    return { event, heat, hydrated, pending, liveElsewhere };
   }
 
   // Accepted tradeoff, found in review (code-reviewer): if the countdown
@@ -698,7 +705,47 @@ export async function mountTimingScreen(
         className: 'btn btn-primary tap-target',
         text: 'Start heat',
       });
+      // Starting a heat publishes this event to the venue screens (projector, phones, splash), replacing
+      // whichever event of this organisation is on them. When there IS another one, say so up front and ask
+      // for a second, explicit tap; nothing changes when there is not.
+      const takeOver = data.liveElsewhere
+        ? takeOverWarning(
+            { name: data.event.name, isTest: data.event.is_test === true },
+            data.liveElsewhere,
+          )
+        : null;
+      let takeOverArmed = false;
+      const cancelTakeOver = takeOver
+        ? el('button', {
+            className: 'btn btn-outline tap-target take-over-cancel',
+            text: 'Cancel',
+            attrs: { type: 'button' },
+          })
+        : null;
+      if (cancelTakeOver) {
+        cancelTakeOver.hidden = true;
+        cancelTakeOver.addEventListener('click', () => {
+          takeOverArmed = false;
+          startButton.textContent = 'Start heat';
+          cancelTakeOver.hidden = true;
+          setFeedback(feedback, null);
+          startButton.focus();
+        });
+      }
       startButton.addEventListener('click', async () => {
+        if (takeOver && !takeOverArmed) {
+          takeOverArmed = true;
+          startButton.textContent = 'Replace it and start heat';
+          cancelTakeOver.hidden = false;
+          setFeedback(
+            feedback,
+            `${takeOver} Press “Replace it and start heat” to go on.`,
+            'pending',
+          );
+          return;
+        }
+        // Going on: Cancel no longer applies once the start is in flight.
+        if (cancelTakeOver) cancelTakeOver.hidden = true;
         // Mutated directly rather than via a full render() — matches this
         // file's own established philosophy (see its top comment) of never
         // rebuilding the whole subtree for anything short of a real
@@ -747,6 +794,8 @@ export async function mountTimingScreen(
         await renderOrShowError(feedback, () => {
           startButton.disabled = false;
           startButton.textContent = 'Start heat';
+          // Back to the start: if another event is still live, the next tap asks again.
+          takeOverArmed = false;
         });
       });
       container.appendChild(
@@ -755,7 +804,20 @@ export async function mountTimingScreen(
           renderRosterPreview(data.hydrated),
         ]),
       );
-      container.appendChild(el('div', { className: 'card' }, [startButton]));
+      container.appendChild(
+        el(
+          'div',
+          { className: 'card' },
+          [
+            takeOver ? el('p', { className: 'take-over-warning', text: takeOver }) : null,
+            // Two buttons with a gap between them: the one that replaces the live event must never sit
+            // flush against Cancel on a narrow screen.
+            takeOver
+              ? el('div', { className: 'take-over-actions' }, [startButton, cancelTakeOver])
+              : startButton,
+          ].filter(Boolean),
+        ),
+      );
     } else if (data.heat.status === 'timing') {
       container.appendChild(
         el('h2', {

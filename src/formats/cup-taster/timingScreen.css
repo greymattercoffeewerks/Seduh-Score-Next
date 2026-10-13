@@ -318,3 +318,21 @@
   color: var(--color-text-muted);
   font-size: var(--text-sm);
 }
+
+/* Another event of this organisation is on the venue screens: said up front, above Start heat. */
+.take-over-warning {
+  margin: 0 0 var(--space-3);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.take-over-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+/* `.btn` sets its own display, which beats the browser's [hidden] rule. */
+.take-over-cancel[hidden] {
+  display: none;
+}

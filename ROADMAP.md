@@ -2167,3 +2167,17 @@ _Database: `supabase/migrations/20261013100000_tenancy_anon_contract.sql`, `supa
 - **Realtime and a deactivate-only change.** A database change reaches an anonymous screen only if the NEW row is visible to it. `publish_session` deactivates the old row and activates the new one in one transaction, so screens are told by the new row. A future "end the session without a replacement" would not reach open screens by itself (they would show the last state until reloaded); whoever adds that must signal the audience another way.
 - **The browser check of "only active rows" is weak on a fresh database** (the test organisations only ever have active sessions); the pgTAP file carries the real proof. It bites on a long-lived local stack.
 - **A venue display running pre-D2 code stays blank after the push until reloaded.** That is the intended cost of the contract step, and why it waits for a quiet window.
+
+---
+
+## Known open items from the event-selection guards (2026-10-13)
+
+_`supabase/migrations/20261013120000_public_event_summary_prefers_live.sql`, `core/publish.js`, `cup-taster/timingScreen.js`, `btc/scoringScreen.js`._
+
+- **The migration is not applied to the cloud project yet.** Safe at any time (same signature, columns and grants). Until then the production splash still shows the newest event, test events included.
+- **The links still address the organisation, not an event.** The projector and phone show whichever event of the organisation last went live; the splash shows the live one (or the newest real one). To pin a screen to one specific event while another is live (two real events at once under one organisation), event-pinned audience links (`#/live/<slug>/<event>/...`) and a public door that takes an event id would be needed. Not built; the rehearsal organisation and the take-over guard cover the practice-and-test case.
+- **The take-over warning is computed when the screen loads.** If another device makes a different event live afterwards, the warning is stale: absent (the start then replaces it, as before the guard) or still shown (one extra tap). Checking again at the tap would add a network round trip to a time-critical tap, so it does not.
+- **A re-render while "Replace it and start heat" is armed** (a pending-work recheck, an error) rebuilds the card; the armed state is lost safely (it asks again) but keyboard focus falls to the page.
+- **Only the first publishing action asks.** Confirming a heat or resolving a stage in Cup Taster still publishes without asking (it can only take over if another event started between), and BTC asks only by a warning, not a second tap.
+- **`.take-over-warning` is styled in two stylesheets** (Cup Taster timing, BTC scoring); one shared stylesheet would do.
+- **The existing `ui.gotoMissing` button in BTC scoring has the same `[hidden]`-versus-`.btn` display problem** that the Cancel button had (a `.btn` ignores the browser's `[hidden]`). Not touched here; worth a repo-wide `.btn[hidden] { display: none; }`.
