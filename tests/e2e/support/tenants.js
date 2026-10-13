@@ -52,6 +52,12 @@ async function call(path, { method = 'GET', key, token, body, headers = {} } = {
   return text ? JSON.parse(text) : null;
 }
 
+/** The public (anon) key and API address of the local stack, for tests that talk to the database directly. */
+export function localStack() {
+  assertLocalStack();
+  return { api: API, anonKey: process.env.VITE_SUPABASE_ANON_KEY || signLocalKey('anon') };
+}
+
 /**
  * Creates one organisation with its own organiser, one event and one ACTIVE live session carrying `payload`.
  * Slugs and emails are unique per run, so a persistent local stack is never collided with.
