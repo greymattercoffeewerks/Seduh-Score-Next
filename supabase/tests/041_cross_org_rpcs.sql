@@ -18,7 +18,7 @@
 -- is shown to list exactly the caller's own organisations, and a new RPC that takes one of these ids fails here
 -- until it is added to the matrix (or consciously exempted).
 begin;
-select plan(60);
+select plan(64);
 
 create schema e1;
 grant usage on schema e1 to anon, authenticated;
@@ -57,6 +57,7 @@ begin
       (e1.u(t, 100), '00000000-0000-0000-0000-000000000003', 'organiser');
     insert into events (id, org_id, format, name) values (e1.u(t, 1), e1.u(t, 100), 'cup_taster', 'Event ' || t);
     insert into events (id, org_id, format, name, is_test) values (e1.u(t, 20), e1.u(t, 100), 'cup_taster', 'Test event ' || t, true);
+    insert into events (id, org_id, format, name, is_test) values (e1.u(t, 50), e1.u(t, 100), 'btc', 'Brewers event ' || t, true);
     insert into event_entries (id, event_id, display_name) values (e1.u(t, 2), e1.u(t, 1), 'Cupper ' || t);
     insert into people (id, org_id, display_name, phone) values
       (e1.u(t, 17), e1.u(t, 100), 'Person ' || t, '555-1' || t),
@@ -85,7 +86,8 @@ $fixture$;
 -- org_only: the function takes no resource (so only "who may call it for this organisation" is asked).
 -- org_arg:  false for a function that is told no organisation, only the resource (create_btc_match): a caller who
 --   belongs to the resource's organisation is then simply allowed, so only callers who do not belong attack it.
-create table e1.rpc (name text primary key, sql text not null, org_only boolean not null default false, org_arg boolean not null default true);
+create table e1.rpc (name text primary key, sql text not null, org_only boolean not null default false, org_arg boolean not null default true,
+  own_expect text not null default 'ok');  -- the exact outcome of the caller's OWN call: 'ok', or the one downstream rule that stops it
 insert into e1.rpc (name, sql, org_only) values
   ('start_heat', 'select public.start_heat(gen_random_uuid(), e1.u(''@'',100), e1.u(''%'',6), now())', false),
   ('auto_max_heat', 'select public.auto_max_heat(gen_random_uuid(), e1.u(''@'',100), e1.u(''%'',6), now())', false),
@@ -105,13 +107,26 @@ insert into e1.rpc (name, sql, org_only) values
   ('record_btc_seeding_tiebreak', 'select public.record_btc_seeding_tiebreak(e1.u(''@'',100), e1.u(''%'',1), array[e1.u(''%'',9), e1.u(''%'',10)], ''a reason'')', false),
   ('generate_btc_bracket', 'select public.generate_btc_bracket(e1.u(''@'',100), e1.u(''%'',1))', false),
   ('create_btc_bracket_match', 'select public.create_btc_bracket_match(e1.u(''@'',100), e1.u(''%'',14), array[e1.u(''%'',11)])', false),
-  ('load_btc_demo', 'select public.load_btc_demo(e1.u(''@'',100), e1.u(''%'',1), true)', false),
+  ('load_btc_demo', 'select public.load_btc_demo(e1.u(''@'',100), e1.u(''%'',50), true)', false),
   ('create_btc_match', 'select public.create_btc_match(e1.u(''%'',1), ''preliminary'', e1.u(''%'',9), e1.u(''%'',10), array[e1.u(''%'',11), e1.u(''%'',21), e1.u(''%'',22)])', false),
   ('team_list_members', 'select * from public.team_list_members(e1.u(''@'',100))', true),
   ('team_list_removed_members', 'select * from public.team_list_removed_members(e1.u(''@'',100))', true),
   ('team_remove_member', 'select public.team_remove_member(e1.u(''@'',100), ''00000000-0000-0000-0000-000000000003''::uuid)', true);
 
 update e1.rpc set org_arg = false where name = 'create_btc_match';
+-- Where the organisation's own call is stopped by a LATER rule of the function (the fixture is a pending heat, an
+-- unscored cupper, a bracket that exists, ...), the rule is named here, so the own call is shown to pass the
+-- organisation check and stop at exactly that rule, not for some unrelated reason.
+update e1.rpc set own_expect = case name
+  when 'confirm_btc_match'           then 'P0001: confirm_btc_match: match must have exactly 3 judges'
+  when 'confirm_heat'                then 'P0001: confirm_heat: 1 cupper\(s\) do not have every set scored'
+  when 'correct_heat_time'           then 'P0002: CONFLICT: heat .* is pending, its times can no longer be corrected'
+  when 'create_btc_bracket_match'    then 'P0001: create_btc_bracket_match: both of this slot''s teams must be known first'
+  when 'generate_btc_bracket'        then 'P0001: generate_btc_bracket: a bracket already exists for this event'
+  when 'record_btc_seeding_tiebreak' then 'P0001: record_btc_seeding_tiebreak: the bracket already exists, so the seeds are fixed'
+  when 'record_btc_tiebreak'         then 'P0001: record_btc_tiebreak: a tie-break applies to knockout matches only'
+  when 'record_heat_time'            then 'P0002: CONFLICT: heat .* is pending now, expected timing'
+  else 'ok' end;
 select is((select count(*)::int from e1.rpc), 23, 'the matrix covers 23 RPCs');
 select is(
   (select coalesce(string_agg(r.name, ', '), 'none') from e1.rpc r
@@ -172,7 +187,7 @@ reset role;
 
 -- the function's own guard speaking (and not an argument error, a missing row of the fixture, or success)
 create function e1.is_guard(code text) returns boolean language sql immutable as $$
-  select code ~ '^(42501|P0001): ' and code ~* '(not found|does not belong|only an owner|permission denied|row-level security|not a member|must belong|not allowed)'
+  select code ~ '^(42501|P0001): ' and code ~* '(not found|does not belong|only an owner)'
 $$;
 
 -- ============ every cross-organisation attempt is refused by the guard ============
@@ -187,10 +202,24 @@ select is(
 -- ...and the own-organisation call is not refused by that guard: the attempts above are not just a broken call
 select is(
   (select coalesce(string_agg(r.caller || ' ' || r.kind || ' -> ' || left(r.code, 90), E'\n' order by r.kind, r.caller), 'none')
-     from e1.results r where r.rpc = q.name and r.kind like 'own:%' and e1.is_guard(r.code)),
+     from e1.results r where r.rpc = q.name and r.kind like 'own:%' and r.code !~ ('^(' || q.own_expect || ')')),
   'none',
-  q.name || ': the same call for the caller''s own organisation is not refused by that guard'
+  q.name || ': the same call for the caller''s own organisation gets exactly its expected outcome (' || left(q.own_expect, 60) || ')'
 ) from e1.rpc q order by q.name;
+
+-- each RPC was attacked, and its own organisation's callers did call it (a missing row would otherwise pass)
+select cmp_ok(
+  (select min(c)::int from (select count(*) filter (where r.kind like 'attack%') as c from e1.results r group by r.rpc) x),
+  '>=', 3, 'every RPC was attacked at least three ways');
+select is((select count(distinct rpc)::int from e1.results), (select count(*)::int from e1.rpc), 'and every RPC in the matrix produced results');
+select cmp_ok(
+  (select min(c)::int from (select count(*) filter (where r.kind like 'own:%') as c from e1.results r group by r.rpc) x),
+  '>=', 2, 'and was called by its own organisation''s members');
+select is(
+  (select coalesce(string_agg(r.rpc, ', '), 'none')
+     from (select name as rpc from e1.rpc r2 where (select count(*) from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = r2.name) <> 1) r),
+  'none',
+  'every RPC in the matrix has exactly one overload (the guards below match functions by name)');
 
 -- ============ who may call what at all ============
 
@@ -213,19 +242,21 @@ select is(
 select is(
   (select coalesce(string_agg(p.proname, ', ' order by p.proname), 'none')
      from pg_proc p
-    where p.pronamespace = 'public'::regnamespace and p.prokind = 'f'
+    where p.pronamespace = 'public'::regnamespace and p.prokind in ('f', 'p')
       and p.prorettype <> 'trigger'::regtype
       and not exists (select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e')
-      and has_function_privilege('authenticated', p.oid, 'execute')
+      and (has_function_privilege('authenticated', p.oid, 'execute') or has_function_privilege('anon', p.oid, 'execute'))
       -- ANY uuid (or uuid[]) argument, named or not: an id of something that belongs to an organisation
       and exists (select 1 from unnest(p.proargtypes::oid[]) a where a in ('uuid'::regtype::oid, '_uuid'::regtype::oid))
       and p.proname not in (select name from e1.rpc)
       -- exempt, each by its own test: the public doors and read helpers (037, 039, 025, 026, 019) and the creator-scoped
       -- Guess the Bean functions (010)
-      and p.proname not in ('public_event_summary', 'team_can_manage', 'team_can_restore', 'get_scoring_record',
-                            'reset_guess_session_data', 'session_bean_count', 'session_display_guesses', 'submit_guess')),
+      and p.oid::regprocedure::text not in (
+        'public_event_summary(uuid)', 'team_can_manage(uuid,uuid)', 'team_can_restore(uuid,uuid)', 'get_scoring_record(uuid)',
+        'reset_guess_session_data(uuid)', 'session_bean_count(uuid)', 'session_display_guesses(uuid)',
+        'submit_guess(uuid,text,integer,text,text)')),
   'none',
-  'every function a signed-in caller can run that takes a uuid (an organisation, event, heat, match, stage, slot, entry, person or user id) is in this matrix or on the short, named exemption list: a new one fails here until it is added to e1.rpc');
+  'every function or procedure a signed-in or anonymous caller can run that takes a uuid (an organisation, event, heat, match, stage, slot, entry, person or user id) is in this matrix or on the short, named exemption list: a new one fails here until it is added to e1.rpc');
 
 -- ============ the read-only helpers and doors ============
 
