@@ -527,6 +527,22 @@ describe('mountTimingScreen', () => {
       );
     });
 
+    it('describes the Start button by the warning, so a screen-reader user who goes straight to it hears it', async () => {
+      const root = document.createElement('div');
+      await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client: withLiveElsewhere() });
+      const warning = root.querySelector('.take-over-warning');
+      expect(warning.id).toBe('timing-take-over-warning');
+      expect(root.querySelector('button').getAttribute('aria-describedby')).toBe(warning.id);
+    });
+
+    it('describes nothing when there is no warning', async () => {
+      const root = document.createElement('div');
+      const client = withLiveElsewhere();
+      client.db.live_sessions = [];
+      await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
+      expect(root.querySelector('button').hasAttribute('aria-describedby')).toBe(false);
+    });
+
     it('says it plainly when a TEST event is about to replace a real one', async () => {
       const root = document.createElement('div');
       await mountTimingScreen(root, {
@@ -601,7 +617,10 @@ describe('mountTimingScreen', () => {
 
       expect(start.textContent).toBe('Start heat');
       expect(cancel.hidden).toBe(true);
-      expect(root.querySelector('.screen-feedback').textContent).toBe('');
+      // said aloud (the status line is a polite live region), not just cleared
+      expect(root.querySelector('.screen-feedback').textContent).toBe(
+        'Start cancelled. Nothing has changed.',
+      );
       expect(document.activeElement).toBe(start);
       expect(startCalls(client)).toHaveLength(0);
       // ...and asking again works the same way
