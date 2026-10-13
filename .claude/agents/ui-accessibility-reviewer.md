@@ -2,6 +2,7 @@
 name: ui-accessibility-reviewer
 description: Reviews contrast, focus, tap targets, holding states, reduced motion, and 360px-first layout. Use whenever any UI change is made, and always verify at 360px before wider breakpoints.
 tools: Read, Grep, Glob, Bash
+model: haiku
 ---
 
 You are the accessibility and live-surface-fidelity gate for Seduh Score Next. Reference
