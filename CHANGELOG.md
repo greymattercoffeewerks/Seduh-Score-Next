@@ -1,3 +1,30 @@
+## T-TEN.E5 step 6: `VITE_DEFAULT_ORG_ID` removed from production · 2026-10-13
+
+**Task:** step 6 of the T-TEN.E5 rollout runbook. Dashboard change by the owner, verified here; no code.
+
+**What was done:** the owner deleted `VITE_DEFAULT_ORG_ID` from the Cloudflare build variables (the build keeps `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` and `VITE_LEGACY_AUDIENCE_ORG_SLUG=grey-matter-coffee-werks`) and retried the production build.
+
+**Verified on the live site** (`www.seduhscore.com`, bundle `app-DqYBFZHc.js`): the bundle holds the Supabase URL and the legacy slug and no longer holds the old organisation id; `/app/` boots to the sign-in page with no console errors; the old slug-less links `#/live/splash`, `#/live/projector` and `#/live/phone` still open the right event by slug alone, as does `#/live/grey-matter-coffee-werks/splash`; `#/live/grey-matter-rehearsal/splash` shows the empty splash (no events).
+
+**Note for next time:** Cloudflare preview builds (pull request branches) do NOT receive the dashboard variables, so a preview shows "supabaseUrl is required" whatever the variables say; only a production build (branch `main`) tells you anything about them.
+
+## T-TEN.E3 follow-up: the membership gate on the remaining cross-reference triggers · 2026-10-13
+
+**Task:** the first of the two low-severity findings of the T-TEN.E3 full-surface security review. One migration (`20261013160000_tenancy_trigger_membership_gate.sql`) and its test; no application code.
+
+**Status: merged (#250) and applied to the cloud project 2026-10-13 (cloud migration version `20261013082049`, name `tenancy_trigger_membership_gate`).** Checked in the cloud afterwards: all six trigger functions call `app.refuse_non_member`; the helper is executable by no API role (ACL: owner only); no other SECURITY DEFINER BEFORE ROW trigger function lacks the gate or the standard refusal (apart from the two named exceptions).
+
+**What was done:**
+
+- Six BEFORE ROW SECURITY DEFINER triggers (`person_merges`, `ct_results`, `btc_matches`, `btc_match_judges`, `btc_match_bonuses`, `btc_bracket_slots`) answered a signed-in non-member with a bespoke P0001 when guessed ids did not fit together and the standard row-level-security 42501 when they did: a yes/no oracle about one id relationship (the caller needed the right unguessable UUIDs). Each now first refuses a caller who is not a member of the row's org with the standard 42501, whatever ids they named, through one shared helper `app.refuse_non_member` (executable by no API role), the same gate T-TEN.B6 gave `live_sessions`, `public_results` and `event_entries`. A member is unaffected; a writer with no user and no API role (postgres, seeds, migrations) is still checked strictly. Also `is distinct from` in place of `<>` in the two triggers that still used it (a missing parent now fails with the trigger's own P0001 where the foreign key used to report 23503).
+- `supabase/tests/045_trigger_membership_gate.sql` (42 assertions): the same refusal for fitting and clashing ids and for a missing parent, on INSERT and UPDATE; a member still gets each trigger's own message and can still write a real pair; no-user, anon and postgres callers; the helper's grants; and a catalog guard that fails when any SECURITY DEFINER BEFORE ROW trigger function appears with neither the gate nor the standard refusal (two named exceptions). `017` and `027` each gained one line (`reset request.jwt.claim.sub` after `reset role`): a claim left over from a signed-in section made the owner session look like a caller.
+
+**Verified:** the whole database suite (45 files, 1930 assertions) on a database rebuilt from scratch; removing the gate from two triggers fails 5 of the first 35 assertions.
+
+**Reviews:** `security-reviewer`: no blocking findings (gate checked against each table's own policy, every writer of the six tables is an invoker-rights RPC so a member who passes RLS passes the gate); `test-auditor`: four proof gaps (anon, missing parent, UPDATE path, a hidden error message), all closed above.
+
+**Not done, decided with the owner:** the second finding (the `team-accounts` function answers 409 for any taken email) stays, see ROADMAP.
+
 ## T-TEN.E3: security and performance pass · 2026-10-13
 
 **Task:** T-TEN.E3 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase E). One small migration and its test; no application code.
