@@ -150,13 +150,23 @@ async function resolveOrg(orgContext, session, signal) {
 // person in two organisations can open either one's events (they are visible to every member). So for an
 // event-keyed route the event's own organisation is read first: the same as the active one (the common
 // case: nothing changes), another of theirs (switch to it, say so, then show the event), or not one of
-// theirs / not there at all ("not found": the database makes those the same answer). Only asked of a
-// person in two or more organisations: with one, every event they can see is in it, and the usual
-// offline-first loads are not given an extra read to wait for.
+// theirs / not there at all ("not found": the database makes those the same answer).
+//
+// A person with ONE organisation is asked too, but more gently (placeOwnOrgEventRoute): there is nothing to
+// switch to, so the only question is "is this event mine?", and the answer is never allowed to hold up or
+// break the screen. Without it, an event link from ANOTHER organisation (which the database hides from them)
+// reached the event screen, failed to load, and showed a generic "Something went wrong saving that" with a
+// Retry that could never work. The answer is remembered on the device (so an event, or a BTC match, costs one
+// read the first time it is opened there), the whole question is given up on after a couple of seconds, and on
+// any failure the event screen opens exactly as it always did. The one cost is a wait of up to that couple of
+// seconds on the very first visit to an event when the network is black-holed (connected, but nothing answers).
+// Only the first visit sees "Page not found" for an event that has since been deleted: one already remembered
+// opens its screen straight away, and the screen reports its own load failure.
 //
 // The answer is remembered on the device (an event never changes organisation), so reloading an event
-// page with no connection still finds its organisation. A failed read with nothing remembered is a Retry
-// card, never a guess.
+// page with no connection still finds its organisation. For a person with SEVERAL organisations a failed read
+// with nothing remembered is a Retry card, never a guess (they need the answer to know where to work); a person
+// with one is never refused for want of it.
 
 // A malformed id (not a uuid) is "no such row", not a failure worth retrying.
 const INVALID_TEXT_REPRESENTATION = '22P02';
@@ -172,13 +182,17 @@ const readRemembered = (key) =>
 // cannot tell. A found answer is remembered on this device. `settled`: the answer can never change (an
 // event never changes organisation), so what was remembered is used at once, with no request to wait for;
 // otherwise the database is asked first and the memory is only the fallback when that read fails.
-async function rememberedLookup(key, read, { settled = false } = {}) {
+async function rememberedLookup(
+  key,
+  read,
+  { settled = false, timeoutMs = DEFAULT_LOAD_TIMEOUT_MS } = {},
+) {
   if (settled) {
     const remembered = await readRemembered(key);
     if (remembered) return remembered;
   }
   try {
-    const value = await raceTimeout(read(), DEFAULT_LOAD_TIMEOUT_MS);
+    const value = await raceTimeout(read(), timeoutMs);
     if (value) cacheSet(key, value).catch(() => {});
     return value ?? null;
   } catch (err) {
@@ -192,18 +206,21 @@ async function rememberedLookup(key, read, { settled = false } = {}) {
 // { status: 'found', orgId }; { status: 'missing' }; { status: 'error', error }.
 // A BTC match is resolved through its event (that is what its screen shows, whatever event id the URL
 // carries); any other event-keyed route uses the event id in the URL.
-async function resolveRouteOrg(params, client) {
+async function resolveRouteOrg(params, client, { timeoutMs } = {}) {
   try {
     const eventId = params.matchId
-      ? await rememberedLookup(`matchEvent:${params.matchId}`, () =>
-          findMatchEventId(params.matchId, client),
+      ? await rememberedLookup(
+          `matchEvent:${params.matchId}`,
+          () => findMatchEventId(params.matchId, client),
+          // a match never moves to another event, so what is remembered is used at once (like the event's organisation)
+          { settled: true, timeoutMs },
         )
       : params.eventId;
     if (!eventId) return { status: 'missing' };
     const orgId = await rememberedLookup(
       `eventOrg:${eventId}`,
       () => findEventOrgId(eventId, client),
-      { settled: true },
+      { settled: true, timeoutMs },
     );
     return orgId ? { status: 'found', orgId } : { status: 'missing' };
   } catch (error) {
@@ -251,6 +268,41 @@ function blockedReason(result, currentOrgName) {
   return `You are working in ${currentOrgName}. ${result.message}`;
 }
 
+// How long a person with one organisation waits, in all, for "whose event is this?" before the event screen is
+// simply opened.
+const OWN_ORG_LOOKUP_TIMEOUT_MS = 2500;
+
+// A person with ONE organisation opening an event link: is it theirs? Not theirs (or not there: the database
+// makes those the same answer) is "Page not found", the same card people in several organisations get. A question
+// that cannot be answered (offline, slow, an error) is NOT a reason to refuse: the event screen opens as it
+// always did, and it reports its own load failure if the event really is out of reach.
+async function placeOwnOrgEventRoute(outlet, params, org, { orgContext, retry, showCard }) {
+  // ONE budget for the whole question (the remembered answers and the reads together), not one per read.
+  const target = await raceTimeout(
+    resolveRouteOrg(params, params.client, { timeoutMs: OWN_ORG_LOOKUP_TIMEOUT_MS }),
+    OWN_ORG_LOOKUP_TIMEOUT_MS,
+  ).catch((error) => ({ status: 'error', error }));
+  if (params.signal?.aborted) return { screen: undefined };
+  // As for several organisations: if the person or organisation changed while the lookup was on its way, this
+  // navigation was started under the old one, so start it again.
+  const fresh = orgContext.getState();
+  if (
+    fresh.status !== ORG_STATUS.READY ||
+    fresh.userId !== org.userId ||
+    fresh.activeOrgId !== org.activeOrgId
+  ) {
+    retry();
+    return { screen: undefined };
+  }
+  // While the list of organisations is only the remembered stand-in (the real one could not be fetched), "not in
+  // my list" proves nothing: a person added since would be told their own event does not exist.
+  if (target.status === 'error' || org.stale) return { org };
+  const theirs =
+    target.status === 'found' && org.orgs.some((candidate) => candidate.id === target.orgId);
+  if (!theirs) return { screen: showCard(mountNotFoundScreen(outlet)) };
+  return { org };
+}
+
 // Resolves to `{ org, notice }` (the organisation snapshot to mount under, switched if needed, and what to
 // say about it) or to `{ screen }` (something already put in the outlet instead: not found, a Retry card, the
 // blocked card; `screen` is undefined when the navigation is being started again or was superseded).
@@ -260,7 +312,9 @@ async function placeEventRoute(
   org,
   { orgContext, switchOrgForRoute, retry, showCard },
 ) {
-  if (org.orgs.length < 2 || !(params.eventId || params.matchId)) return { org };
+  if (!(params.eventId || params.matchId)) return { org };
+  if (org.orgs.length < 2)
+    return placeOwnOrgEventRoute(outlet, params, org, { orgContext, retry, showCard });
   const target = await resolveRouteOrg(params, params.client);
   if (params.signal?.aborted) return { screen: undefined };
   // The organisation may have been changed (the header's select) while the lookup was on its way: this

@@ -1,3 +1,21 @@
+## Event links: a person with one organisation is told "Page not found" for another organisation's event · 2026-10-13
+
+**Task:** closes the known gap found by T-TEN.E2 (owner decision, 2026-10-13: "Do A now"). Client only: no migration.
+
+**Status: in review, not merged.**
+
+**What changed:**
+
+- **A person with ONE organisation is now asked whose event a link belongs to** (`placeOwnOrgEventRoute`, `src/main.js`). Before, the guard that does this ran only for people in two or more organisations, so an event link belonging to ANOTHER organisation (which the database hides from them) reached the event screen, failed to load, and showed a generic "Something went wrong saving that — try again" with a Retry that could never work. Now an event that is not theirs, or not there (the database makes those the same answer), shows "Page not found", the same card everyone else gets. Nothing of the other organisation was ever exposed; this was a wrong message, not a leak.
+- **It never holds up or breaks the screen.** The question is remembered on the device (an event never changes organisation, so each event costs one read, once), is given up on after 2.5 seconds, and on ANY failure to answer (offline, an error, a hang) the event screen opens exactly as it always did and reports its own load failure if the event really is out of reach. People with several organisations keep their existing behaviour (a failed lookup is a Retry card for them, because they need the answer to know which organisation to work in).
+- A BTC match link is resolved through its event, as before.
+
+**Verified:** 3983 unit tests in 138 files; lint and Prettier; the whole Playwright suite (36 tests). In the real browser, a person in one real organisation opening another real organisation's event now gets "Page not found" with no Retry, and their own event still opens; the test that had recorded the gap as an expected failure (`test.fail()`) is now an ordinary passing test. Deliberate breaks of the new path were each caught: nobody asked, a failed question refusing instead of opening, someone else's organisation counted as theirs, a missing event counted as theirs, no time limit, the answer not remembered. NOT covered by a test: the branch that restarts the navigation when the person or organisation changes while the question is in flight, for one-organisation people (its several-organisation twin is tested).
+
+**Reviews:** a `code-reviewer` and a Haiku `test-auditor`, run by their own names; both found real problems in the first version, all fixed: the BTC match lookup asked the network first on EVERY open (on venue wifi that is connected but answers nothing it would have cost 2.5 seconds each time; a match's event is now remembered first, like the event's organisation); the 2.5 seconds was per read, not per question (a match route could wait about 9; the whole question now has ONE 2.5-second budget, and a fake-clock test pins it for an event, a match whose event and organisation both hang, and a device memory that never answers); while the organisation list is only the remembered stand-in, "not in my list" proves nothing (a person added since would be told their own event does not exist), so it now opens; several comments were untrue and are corrected. The auditor found that the "remembered" and "fail open" tests would have passed with the guard deleted (they now assert that the answer decided the outcome, that the question was asked, and that what is found is written to the device), and that one test waited real time (now a fake clock).
+
+**Flagged, not changed:** ROADMAP's "Known open items from the event-link guard".
+
 ## T-TEN.E2: the organiser console with real organisations · 2026-10-13
 
 **Task:** T-TEN.E2 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase E). Tests only: no app code, no migration.

@@ -297,3 +297,10 @@ the slug-qualified `#/live/<slug>/<surface>` links, absolute for the page served
 Events screen's "Share with your audience" card (`core/audienceLinksCard.js`, with a lazily loaded QR on the phone
 view) both use them, for any organisation with a slug. The card is built once and re-appended across redraws so
 its live status line is never replaced. See ROADMAP.md's "Known open items from T-TEN.D4".
+
+T-TEN event-link guard (2026-10-13) — a person with ONE organisation is asked too (`placeOwnOrgEventRoute` in main.js):
+an event (or BTC match) link that is not theirs, or not there, is "Page not found" instead of a screen that fails to
+load with a Retry that cannot work. Gentler than the several-organisation path, because there is nothing to switch to:
+the whole question has one 2.5-second budget and ANY failure (offline, error, timeout, a stand-in organisation list)
+opens the screen as it always did; answers are remembered on the device, a match's event first. See ROADMAP.md's "Known
+open items from the event-link guard".

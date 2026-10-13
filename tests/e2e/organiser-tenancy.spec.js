@@ -218,59 +218,28 @@ test.describe('the organiser console with real organisations (real app, real loc
     await expect(page.locator('.app-shell-org-notice-open')).toHaveCount(0);
   });
 
-  test('a person in one organisation opening another organisation’s event is shown nothing of it and is not moved', async ({
+  test('a link to another organisation’s event says "Page not found" to a person in one organisation, shows nothing of it, and does not move them', async ({
     page,
   }) => {
     test.setTimeout(60000);
     await signInAs(page, personB);
     await expect(page.getByRole('heading', { name: `Events in ${orgB.orgName}` })).toBeVisible();
 
-    // A's event is real, but not theirs: the database shows them nothing. Wait for the screen to reach a TERMINAL
-    // state (today a retryable error, the day the known gap below is fixed "Page not found"), then check what it shows.
+    // A's event is real, but not theirs: the database shows them nothing, and the console says so (a person with
+    // ONE organisation is asked whose event a link is too, so it is not left to fail with a Retry that cannot work)
     await navigateHash(page, `#/events/${orgA.eventId}`);
-    await expect(
-      page
-        .getByRole('button', { name: 'Retry' })
-        .or(page.getByRole('heading', { name: 'Page not found' })),
-    ).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Retry' })).toHaveCount(0);
     await expect(page.getByText(`Console A event ${uniq}`)).toHaveCount(0);
     await expect(page.getByText(orgA.orgName)).toHaveCount(0);
     // (this person has one organisation, so there is nothing to switch to: a notice here would be a leak of its own)
     await expect(page.locator('#app-shell-org-notice')).toHaveText('');
     await expect(page.locator('.app-shell-org-notice-open')).toHaveCount(0);
-    // and their own organisation is still theirs
+    // and their own organisation, and their own events, are still theirs
     await navigateHash(page, '#/events');
     await expect(page.getByRole('heading', { name: `Events in ${orgB.orgName}` })).toBeVisible();
-  });
-
-  // KNOWN GAP (ROADMAP, T-TEN.E2): the route guard that works out which organisation an event link belongs to only
-  // runs for a person in TWO OR MORE organisations (src/main.js: `org.orgs.length < 2`). A person in one organisation
-  // who opens another organisation's event link skips it: the event screen tries to load, the database hides the
-  // event, and they see the generic "Something went wrong saving that — try again" with a Retry that can never work,
-  // instead of "Page not found". Nothing of the other organisation is exposed (the test above), so this is a wrong
-  // message, not a leak. test.fail() keeps this honest: it passes while the gap exists and FAILS the day it is fixed,
-  // so the marker is removed (and the case becomes an ordinary test) when the guard covers one-organisation people too.
-  test('a link to another organisation’s event says "Page not found" to a person in one organisation', async ({
-    page,
-  }) => {
-    test.fail(
-      true,
-      'known gap: the event-route guard only runs for people in two or more organisations',
-    );
-    test.setTimeout(60000);
-    await signInAs(page, personB);
-    await expect(page.getByRole('heading', { name: `Events in ${orgB.orgName}` })).toBeVisible();
-    await navigateHash(page, `#/events/${orgA.eventId}`);
-    // the screen has settled (so a failure below is about its CONTENT, not about a slow load or a broken sign-in) ...
-    await expect(
-      page
-        .getByRole('button', { name: 'Retry' })
-        .or(page.getByRole('heading', { name: 'Page not found' })),
-    ).toBeVisible();
-    // ... and what it settled on should be "Page not found"
-    await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible({
-      timeout: 1000,
-    });
+    await navigateHash(page, `#/events/${orgB.eventId}`);
+    await expect(page.getByRole('heading', { name: `Console B event ${uniq}` })).toBeVisible();
   });
 
   test('an unsynced change on this device refuses the switch, says exactly why, stays in the organisation, and the switch works once it has synced', async ({
