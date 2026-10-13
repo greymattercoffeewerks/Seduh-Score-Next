@@ -1,3 +1,13 @@
+## T-TEN.E5 step 7: a real second organisation in production · 2026-10-14
+
+**Task:** the last step of the T-TEN.E5 rollout runbook, run by the owner by hand on `www.seduhscore.com` with their own login (already owner of both `grey-matter-coffee-werks` and `grey-matter-rehearsal`, so no provisioning was needed). **Status: passed. This closes the tenancy phase.**
+
+**What the owner exercised, all of it passing:** the organisation switcher shows both organisations; each organisation's Events list holds only its own events; a test event created in the rehearsal organisation does not appear in Coffee Werks, and Coffee Werks' own list was unchanged; with the rehearsal event live, an anonymous browser saw it on the rehearsal splash, projector and phone, and the Coffee Werks splash STILL showed its own event (each organisation has its own live session); a console link into the other organisation's event switched to it, said so, and opened it; deleting the test event returned the rehearsal splash to empty.
+
+**Verified afterwards in the cloud (read-only):** the rehearsal organisation has 0 events, 0 live rows, 0 stages and 0 heats again; Coffee Werks still has its 2 events and its 1 active live session.
+
+**Not tested on production:** a person in one organisation only (the second login, `greymatter.cw@outlook.com`) was not signed in as; that case is covered by the E2 Playwright project and the cross-organisation matrices.
+
 ## T-TEN.E4 documentation and T-TEN.E6 close-out · 2026-10-14
 
 **Task:** T-TEN.E4 (documentation) and T-TEN.E6 (close-out) of `Handoffs and Specs/TENANCY-WORK-PLAN.md`, done before E5 step 7 at the owner's request. Documentation, version bump and state only; no application code, no migration.
@@ -15,7 +25,7 @@
 
 **E6 checklist:** no blocking findings open (every security-reviewer run ended with none; the review outcomes are in the entries below); every deferred finding is in ROADMAP.md under its "Known open items from T-TEN.*" heading; counts at close-out: **3,989 unit tests in 138 files, 1,930 database assertions in 45 files**, lint and formatting clean, the Playwright projects green in CI.
 
-**Still open (named, not hidden):** E5 step 7, a real second-organisation run-through in production with `grey-matter-rehearsal` (needs the owner at a real sign-in). Until it is done the tenancy row in ROADMAP.md stays "In progress".
+**Closed afterwards:** E5 step 7 passed, see the entry above it.
 
 ## T-TEN.E5 step 6: `VITE_DEFAULT_ORG_ID` removed from production · 2026-10-13
 
