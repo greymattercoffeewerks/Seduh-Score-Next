@@ -62,16 +62,16 @@ about original design intent.
 
 ## Current state
 
-| Phase                          | Status         | What it covers                                                                                                        |
-| ------------------------------ | -------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Phase 0 — Foundation           | ✅ Done        | Scaffold, Claude Code tooling, Supabase local stack + CI, doc seed                                                    |
-| Phase 1 — Schema and security  | ✅ Done        | Core tables, Cup Taster tables, RLS, `WITH CHECK` gate                                                                |
-| Phase 2 — Core libraries       | ✅ Done        | `partition`, `ranking`, `advancement`, `countdown`, `timeclamp`, `entitlements`                                       |
-| Phase 3 — Registry and offline | ✅ Done        | `registry`, IndexedDB mirror + outbox, sync state panel                                                               |
-| Phase 4 — Cup Taster           | ✅ Done        | Setup, heat generation, timing (app + manual), scoring, standings/advancement, report, export                         |
-| Phase 5 — Live surfaces        | ✅ Done        | `publish`, `viewer-shell`, projector, phone summary, automatic publishing on heat actions                             |
-| Phase 6 — Hardening            | ✅ Done        | Accessibility pass, offline soak, dry run (local + production)                                                        |
-| Tenancy core (A+B)             | 🚧 In progress | Multi-org hardening, `my_orgs()`, org context + switcher, slug-addressed audience surfaces — see "Tenancy core" below |
+| Phase                          | Status             | What it covers                                                                                                        |
+| ------------------------------ | ------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| Phase 0 — Foundation           | ✅ Done            | Scaffold, Claude Code tooling, Supabase local stack + CI, doc seed                                                    |
+| Phase 1 — Schema and security  | ✅ Done            | Core tables, Cup Taster tables, RLS, `WITH CHECK` gate                                                                |
+| Phase 2 — Core libraries       | ✅ Done            | `partition`, `ranking`, `advancement`, `countdown`, `timeclamp`, `entitlements`                                       |
+| Phase 3 — Registry and offline | ✅ Done            | `registry`, IndexedDB mirror + outbox, sync state panel                                                               |
+| Phase 4 — Cup Taster           | ✅ Done            | Setup, heat generation, timing (app + manual), scoring, standings/advancement, report, export                         |
+| Phase 5 — Live surfaces        | ✅ Done            | `publish`, `viewer-shell`, projector, phone summary, automatic publishing on heat actions                             |
+| Phase 6 — Hardening            | ✅ Done            | Accessibility pass, offline soak, dry run (local + production)                                                        |
+| Tenancy core (A+B)             | ✅ Done 2026-10-14 | Multi-org hardening, `my_orgs()`, org context + switcher, slug-addressed audience surfaces — see "Tenancy core" below |
 
 **Deadline: 4 October 2026, Cup Tasters event.**
 
@@ -1897,13 +1897,13 @@ handoff §4's "one organiser, one org"; locks D-T1…D-T8). Why: `MULTI-TENANCY-
 pillars A and B. Not in scope: gating/entitlements (D14 stays a stub), admin console, self-serve
 signup, Seduh ID. Rule (lifted 2026-10-11, now that B1, B2 and B6 are in the cloud): a two-org user is created only through the service-role provisioning path (B4).
 
-| Phase | Tasks                                                                                                                                             | Status                                                                                                                              |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| A     | A1 spec lock · A2 tenancy inventory                                                                                                               | Done                                                                                                                                |
-| B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | Done (B1 to B7 merged and in the cloud project)                                                                                     |
-| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | Done (C1 to C7 merged)                                                                                                              |
-| D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | Done (D1 to D6 merged, released to main, and in the cloud project)                                                                  |
-| E     | E1 negative matrix · E2 console Playwright · E3 security/perf · E4 docs · E5 rollout · E6 close-out                                               | In progress (E1 to E4 and E6 done; E5 steps 1 to 6 done, step 7 (a real second-organisation run-through in production) still to do) |
+| Phase | Tasks                                                                                                                                             | Status                                                                                   |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| A     | A1 spec lock · A2 tenancy inventory                                                                                                               | Done                                                                                     |
+| B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | Done (B1 to B7 merged and in the cloud project)                                          |
+| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | Done (C1 to C7 merged)                                                                   |
+| D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | Done (D1 to D6 merged, released to main, and in the cloud project)                       |
+| E     | E1 negative matrix · E2 console Playwright · E3 security/perf · E4 docs · E5 rollout · E6 close-out                                               | Done (E5 step 7, the real two-organisation run-through in production, passed 2026-10-14) |
 
 Each D task is re-confirmed with the product owner before it starts (2026-10-10).
 
