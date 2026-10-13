@@ -2,7 +2,7 @@
 
 **Task:** T-TEN.E3 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase E). One small migration and its test; no application code.
 
-**Status: in review, not merged. The migration `20261013150000_e3_advisor_followups.sql` is NOT applied to the cloud project yet.**
+**Status: merged (#246) and applied to the cloud project 2026-10-13 (cloud migration version `20261013065727`, name `e3_advisor_followups`).** Checked in the cloud afterwards: `rls_auto_enable()` is executable by neither anon nor authenticated (ACL is the owner only; the `ensure_rls` event trigger is still enabled); the four `sessions` policies read `( SELECT auth.uid() )`; the three indexes exist; the advisors no longer list any of them.
 
 **What was done:**
 
