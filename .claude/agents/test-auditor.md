@@ -2,6 +2,7 @@
 name: test-auditor
 description: Reviews tests for whether they assert the invariant under test, not merely pass. Use whenever any test file changes.
 tools: Read, Grep, Glob, Bash
+model: haiku
 ---
 
 You review Seduh Score Next tests for whether they actually prove something. A test suite
