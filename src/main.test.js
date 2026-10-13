@@ -430,10 +430,12 @@ describe('mountApp routing', () => {
   it('#/events/:eventId/btc/matches/:matchId/scoring routes to the BTC scoring screen with the right param and allOutboxHandlers, not the BTC-only handler map', async () => {
     stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
     stubScreen(mountBtcScoringScreen, 'BTC_SCORING_SCREEN');
+    // (even for a person with one organisation, the match's event is looked up: is it theirs?)
+    findMatchEventId.mockResolvedValue('ev1');
     const { root } = await startApp();
     location.hash = '#/events/ev1/btc/matches/m1/scoring';
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(root.textContent).toContain('BTC_SCORING_SCREEN');
+    await vi.waitFor(() => expect(root.textContent).toContain('BTC_SCORING_SCREEN'));
+    findMatchEventId.mockResolvedValue(null);
     expect(mountBtcScoringScreen).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ matchId: 'm1' }),
@@ -3386,14 +3388,196 @@ describe('organisation context wiring (T-TEN.C2)', () => {
       );
     });
 
-    it('with one organisation it asks nothing about the event: opening events costs no extra read', async () => {
-      myOrgs.mockResolvedValue(answer(ORG_ONE));
-      stubScreen(mountSetupScreen, 'SETUP_SCREEN');
-      location.hash = '#/events/ev1/setup';
-      const { root } = await startApp({ client: orgClient() });
-      expect(root.textContent).toContain('SETUP_SCREEN');
-      expect(findEventOrgId).not.toHaveBeenCalled();
-      expect(findMatchEventId).not.toHaveBeenCalled();
+    describe('a person with ONE organisation (never switched, never held up)', () => {
+      async function startOneOrgAt(hash) {
+        myOrgs.mockResolvedValue(answer(ORG_ONE));
+        stubScreen(mountSetupScreen, 'SETUP_SCREEN');
+        stubScreen(mountBtcScoringScreen, 'BTC_SCORING_SCREEN');
+        stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+        mountSetupScreen.mockClear();
+        mountBtcScoringScreen.mockClear();
+        location.hash = hash;
+        return startApp({ client: orgClient() });
+      }
+
+      it('an event of their organisation opens, after one question about whose it is', async () => {
+        findEventOrgId.mockResolvedValue('org1');
+        const { app, root } = await startOneOrgAt('#/events/ev1/setup');
+        await vi.waitFor(() => expect(root.textContent).toContain('SETUP_SCREEN'));
+        expect(findEventOrgId).toHaveBeenCalledWith('ev1', expect.anything());
+        expect(activeOrgOf(app)).toBe('org1');
+        expect(noticeOpen(root)).toBe(false);
+      });
+
+      it('remembers the answer on the device: what is remembered decides, with no read at all', async () => {
+        // a remembered answer for an event of an organisation that is NOT theirs: "not found", and nothing was asked
+        cacheGet.mockImplementation(async (key) =>
+          key === 'eventOrg:ev1' ? 'org-someone-else' : null,
+        );
+        const { root } = await startOneOrgAt('#/events/ev1/setup');
+        await vi.waitFor(() => expect(root.textContent).toContain('Page not found'));
+        expect(cacheGet).toHaveBeenCalledWith('eventOrg:ev1');
+        expect(findEventOrgId).not.toHaveBeenCalled();
+        expect(mountSetupScreen).not.toHaveBeenCalled();
+      });
+
+      it('...and one remembered as theirs opens straight away, with no read', async () => {
+        cacheGet.mockImplementation(async (key) => (key === 'eventOrg:ev1' ? 'org1' : null));
+        const { root } = await startOneOrgAt('#/events/ev1/setup');
+        await vi.waitFor(() => expect(root.textContent).toContain('SETUP_SCREEN'));
+        expect(findEventOrgId).not.toHaveBeenCalled();
+      });
+
+      it('writes what it finds to the device, so the next visit to that event asks nothing', async () => {
+        findEventOrgId.mockResolvedValue('org1');
+        const { root } = await startOneOrgAt('#/events/ev1/setup');
+        await vi.waitFor(() => expect(root.textContent).toContain('SETUP_SCREEN'));
+        expect(cacheSet).toHaveBeenCalledWith('eventOrg:ev1', 'org1');
+      });
+
+      it('an event the database hides from them (or that is not there) is "Page not found", and its screen is never mounted', async () => {
+        findEventOrgId.mockResolvedValue(null);
+        const { root } = await startOneOrgAt('#/events/ev-elsewhere/setup');
+        await vi.waitFor(() => expect(root.textContent).toContain('Page not found'));
+        expect(mountSetupScreen).not.toHaveBeenCalled();
+        expect(noticeOpen(root)).toBe(false);
+      });
+
+      it('an event that is in an organisation that is not theirs is "Page not found" too, and they are not moved', async () => {
+        findEventOrgId.mockResolvedValue('org-someone-else');
+        const { app, root } = await startOneOrgAt('#/events/ev1/setup');
+        await vi.waitFor(() => expect(root.textContent).toContain('Page not found'));
+        expect(mountSetupScreen).not.toHaveBeenCalled();
+        expect(activeOrgOf(app)).toBe('org1');
+      });
+
+      it('a malformed event id is "not found", not a Retry that can never work', async () => {
+        findEventOrgId.mockRejectedValue(
+          Object.assign(new Error('invalid input'), { code: '22P02' }),
+        );
+        const { root } = await startOneOrgAt('#/events/not-a-uuid/setup');
+        await vi.waitFor(() => expect(root.textContent).toContain('Page not found'));
+      });
+
+      it('FAILS OPEN: when the question cannot be answered (offline, an error), the event screen opens exactly as it did before', async () => {
+        // what a real fetch throws when there is no network
+        findEventOrgId.mockRejectedValue(new TypeError('Failed to fetch'));
+        const { root } = await startOneOrgAt('#/events/ev1/setup');
+        await vi.waitFor(() => expect(root.textContent).toContain('SETUP_SCREEN'));
+        // it WAS asked, and could not be answered
+        expect(findEventOrgId).toHaveBeenCalledWith('ev1', expect.anything());
+        expect(root.textContent).not.toContain('Page not found');
+        // and no Retry card stands in front of it (a person with several organisations gets one: they need the answer)
+        expect(root.textContent).not.toMatch(/try again/i);
+      });
+
+      describe('a question that takes too long is given up on (fake clock: the whole question has ONE 2.5s budget)', () => {
+        async function opensAfter(hash, hang) {
+          vi.useFakeTimers({ toFake: ['setTimeout'] });
+          try {
+            myOrgs.mockResolvedValue(answer(ORG_ONE));
+            stubScreen(mountSetupScreen, 'SETUP_SCREEN');
+            mountBtcScoringScreen.mockImplementation(async (outlet) => {
+              outlet.textContent = 'SETUP_SCREEN';
+              return { unmount: vi.fn() };
+            });
+            stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+            // the console is up first, then the person follows the link (as the other fake-clock tests do)
+            location.hash = '#/events';
+            const { root } = await startApp({ client: orgClient() });
+            hang();
+            location.hash = hash;
+            await vi.advanceTimersByTimeAsync(2400);
+            expect(root.textContent).not.toContain('SETUP_SCREEN');
+            expect(root.textContent).not.toContain('Page not found');
+            await vi.advanceTimersByTimeAsync(300);
+            expect(root.textContent).toContain('SETUP_SCREEN');
+            expect(root.textContent).not.toContain('Page not found');
+          } finally {
+            vi.useRealTimers();
+          }
+        }
+
+        it('an event whose organisation never answers', async () => {
+          await opensAfter('#/events/ev1/setup', () => {
+            findEventOrgId.mockReturnValue(new Promise(() => {}));
+          });
+          expect(findEventOrgId).toHaveBeenCalled();
+        });
+
+        it("a BTC match whose event never answers, then the event's organisation as well: still one budget, not one per read", async () => {
+          await opensAfter('#/events/ev1/btc/matches/m1/scoring', () => {
+            findMatchEventId.mockReturnValue(new Promise(() => {}));
+            findEventOrgId.mockReturnValue(new Promise(() => {}));
+          });
+          findMatchEventId.mockResolvedValue(null);
+        });
+
+        it('a device memory that never answers', async () => {
+          await opensAfter('#/events/ev1/setup', () => {
+            cacheGet.mockReturnValue(new Promise(() => {}));
+            findEventOrgId.mockReturnValue(new Promise(() => {}));
+          });
+        });
+      });
+
+      it('a BTC match is resolved through its event: its own event opens, a match that is not there is "not found"', async () => {
+        findMatchEventId.mockResolvedValue('ev9');
+        findEventOrgId.mockImplementation(async (eventId) => (eventId === 'ev9' ? 'org1' : null));
+        const first = await startOneOrgAt('#/events/ev1/btc/matches/m1/scoring');
+        await vi.waitFor(() => expect(first.root.textContent).toContain('BTC_SCORING_SCREEN'));
+        expect(findMatchEventId).toHaveBeenCalledWith('m1', expect.anything());
+        expect(findEventOrgId).toHaveBeenCalledWith('ev9', expect.anything());
+        await first.app.unmount();
+
+        findMatchEventId.mockResolvedValue(null);
+        mountBtcScoringScreen.mockClear();
+        const second = await startOneOrgAt('#/events/ev1/btc/matches/m2/scoring');
+        await vi.waitFor(() => expect(second.root.textContent).toContain('Page not found'));
+        expect(mountBtcScoringScreen).not.toHaveBeenCalled();
+      });
+
+      it('a BTC match whose event is remembered on the device is opened without asking the network at all', async () => {
+        cacheGet.mockImplementation(async (key) =>
+          key === 'matchEvent:m1' ? 'ev9' : key === 'eventOrg:ev9' ? 'org1' : null,
+        );
+        const { root } = await startOneOrgAt('#/events/ev1/btc/matches/m1/scoring');
+        await vi.waitFor(() => expect(root.textContent).toContain('BTC_SCORING_SCREEN'));
+        expect(findMatchEventId).not.toHaveBeenCalled();
+        expect(findEventOrgId).not.toHaveBeenCalled();
+      });
+
+      it('while the list of organisations is only the remembered stand-in, "not in my list" proves nothing: the screen opens', async () => {
+        // The real list could not be fetched, so the one remembered on this device stands in (marked stale). The
+        // event is answered as belonging to an organisation that is not in that list (the person was added to it
+        // since): their own event must not be called "not found".
+        localStorage.setItem(
+          'seduh.orgs.user-1',
+          JSON.stringify([{ org_id: 'org1', name: 'Org One', slug: 'org-one', role: 'owner' }]),
+        );
+        try {
+          myOrgs.mockResolvedValue({ data: null, error: new Error('Failed to fetch') });
+          findEventOrgId.mockResolvedValue('org-added-since');
+          stubScreen(mountSetupScreen, 'SETUP_SCREEN');
+          mountSetupScreen.mockClear();
+          location.hash = '#/events/ev1/setup';
+          const { app, root } = await startApp({ client: orgClient() });
+          await vi.waitFor(() => expect(root.textContent).toContain('SETUP_SCREEN'));
+          // the premise: the list really is the stand-in, and the event really was looked up
+          expect(app.orgContext.getState().stale).toBe(true);
+          expect(findEventOrgId).toHaveBeenCalledWith('ev1', expect.anything());
+          expect(root.textContent).not.toContain('Page not found');
+        } finally {
+          localStorage.removeItem('seduh.orgs.user-1');
+        }
+      });
+
+      it('routes that are not about an event never ask', async () => {
+        await startOneOrgAt('#/events');
+        await settle();
+        expect(findEventOrgId).not.toHaveBeenCalled();
+        expect(findMatchEventId).not.toHaveBeenCalled();
+      });
     });
 
     it('routes that are not about an event never ask', async () => {
