@@ -1,7 +1,7 @@
 -- T-TEN.B7: anonymous surfaces, expand step.
 -- Proves: public_org_by_slug turns a slug into ONE org's (id, name, slug) for anon and signed-in callers,
 -- folds case and padding, and returns nothing for an unknown, empty, NULL, over-long or pattern-like
--- slug (no listing, no wildcard); public_event_summary returns an org's newest event with only the
+-- slug (no listing, no wildcard); public_event_summary returns an org's event (the newest real one; the live-first rule is tested in 039) with only the
 -- columns the audience surfaces use, nothing for an org with no events or an unknown or NULL id, and a
 -- stable pick when two events share a timestamp; both functions are executable by anon and
 -- authenticated only, SECURITY DEFINER with a pinned search_path; the set of functions anon can execute
@@ -99,8 +99,8 @@ select is(
 
 select results_eq(
   $$ select id, name, event_date, is_test from public_event_summary('00000000-0000-0000-0000-0000000000a0') $$,
-  $$ values ('00000000-0000-0000-0000-0000000000e2'::uuid, 'Alpha Rehearsal', '2026-10-08'::date, true) $$,
-  'anon gets an org''s NEWEST event (here the rehearsal, flagged is_test so the audience can mark it)'
+  $$ values ('00000000-0000-0000-0000-0000000000e1'::uuid, 'Alpha Real Night', '2026-10-04'::date, false) $$,
+  'anon gets an org''s newest REAL event (the newer rehearsal does not win; 039 covers the live-event rule)'
 );
 select results_eq(
   $$ select id, name from public_event_summary('00000000-0000-0000-0000-0000000000b0') $$,

@@ -1,8 +1,66 @@
+## Event-selection guards: the splash follows the live event, and starting a heat asks before replacing one · 2026-10-13
+
+**Task:** follow-up to phase D (owner request, 2026-10-13): "how do I direct the app to the right event?" while preparing several events and tests. Not a numbered tenancy task. One database function change, two screens, tests.
+
+**Status: in review, not merged. The migration `20261013120000_public_event_summary_prefers_live.sql` is NOT applied to the cloud project yet (it is compatible with the running site and can be applied at any time; it needs no quiet window).**
+
+**What changed:**
+
+- **The splash (and the "no live session yet" holding state) names the right event** (`public_event_summary`): the LIVE event first, otherwise the newest event that is not a test event, otherwise the newest. It used to pick the newest event by creation, test events included, so Grey Matter's production splash read "Test Event 1 · TEST DATA, NOT A LIVE EVENT" while a real event was the one on the projector. Same name, arguments, columns and grants.
+- **Starting a heat asks before it replaces another live event** (Cup Taster `timingScreen.js`). An organisation has one live session at a time and the first heat started in an event puts that event on the venue screens; nothing asked first. Now, when another event of the organisation is live, the Start-heat card says so up front ("“X” is on the venue screens. Continuing will put this event there instead.", and, plainly, when a TEST event would replace a real one), the first tap only arms ("Replace it and start heat", with Cancel, announced in the polite status line), and the second tap starts. Nothing changes when nothing else is live.
+- **Confirming a BTC match shows the same warning** on the Confirm-match card (`btc/scoringScreen.js`): up front and linked to the button for screen readers, without a second tap (the confirm is already a deliberate end-of-match step); it disappears once the match is confirmed.
+- **The check (`findLiveElsewhere`, `core/publish.js`) fails open and is time-boxed (2.5 s):** offline, slow or erroring, the answer is "nothing to warn about" and the start goes ahead exactly as before. It is logged, not silent.
+- **A rehearsal organisation exists in production** (created with the owner's go-ahead, 2026-10-13): "Grey Matter Rehearsal", slug `grey-matter-rehearsal`, owned by the owner's account only. Practice events there can never touch the real event's screens, and it has its own audience links.
+
+**Verified:** pgTAP (40 files, 1647 assertions) on a database rebuilt from scratch; 3972 unit tests in 138 files; lint, Prettier; the whole Playwright suite (29 tests, with CI's environment variables) including a new real-browser test: another event is live, the heat's page warns, the first tap starts nothing and leaves the other event live, Cancel puts it back, the second tap starts the heat and the live session moves to this event. Deliberate breaks of the check and the screen (11) were each caught. One combined review (accessibility, code, tests, SQL); findings applied: the "hidden" Cancel button was always visible (`.btn` sets its own display, so a `[hidden]` rule was added and the browser test now asserts it), Cancel is hidden once the start is in flight, the armed state resets with the button, the lookup is time-boxed, the BTC warning is linked to its button and hidden after confirming, the two buttons have a gap.
+
+**Flagged, not changed:** ROADMAP's "Known open items from the event-selection guards".
+
+## T-TEN.D6: the old anonymous doors are closed (contract step) · 2026-10-13
+
+**Task:** T-TEN.D6 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase D, decision D-T3: expand, switch, contract). A database migration plus tests; no app code changed.
+
+**Status: merged to `dev` (#234) and PUSHED to the cloud project on 2026-10-13** (no live event; the owner had reloaded the venue displays), as cloud migration version `20261013010530` (`tenancy_anon_contract`). Verified on the cloud afterwards: the policies and privileges are as intended, an anonymous `GET /events` is refused (HTTP 401), an anonymous `GET /live_sessions` lists only the active row, `public_org_by_slug` still answers, an anonymous write to `live_sessions` is refused, and on https://www.seduhscore.com the phone, projector and splash screens open by slug link, the old slug-less phone link still opens, and an unknown slug shows the not-found card. Not yet released to `main` (the migration file is on `dev`).
+
+**What changed:**
+
+- **`supabase/migrations/20261013100000_tenancy_anon_contract.sql`.**
+  - `events`: the anonymous policy `events_read_public` is dropped and every privilege `anon` held on the table is revoked (the six-column read included). An anonymous caller reaches an event only through `public_event_summary`, which returns one row for one organisation.
+  - `live_sessions`: the read policy is now `active` rows only, for anon and signed-in callers; a superseded session's payload is no longer public. Members still read every state of their own organisation's sessions. `anon` also loses its INSERT/UPDATE/DELETE/TRUNCATE privileges on the table.
+  - `live_sessions_write` is re-created for `authenticated` only (same checks). As a role-less FOR ALL policy it also ran `is_org_member` for anon on SELECT, a function anon cannot execute: with the old `using (true)` read policy that was folded away, with `using (active)` the whole anonymous read failed with "permission denied for function is_org_member". Found by the new pgTAP, before anything was applied anywhere.
+  - A guard at the top refuses to run unless the B7 doors (`public_event_summary`, `public_org_by_slug`) exist, since it is applied to the cloud project by hand. The rollback block is in the file's header (it does not restore anon's write privileges on `live_sessions`: nothing used them).
+- **Tests.** `supabase/tests/038_anon_contract.sql` (31 assertions: policies and privileges as postgres; anon, a signed-in non-member and members as themselves; the replacement doors, the archive and `publish_session` still work). `003_rls.sql`'s old "anon can read these event columns" cases became "anon cannot touch events" (and its live-session count is limited to its own fixture). A new browser case calls the real HTTP door as anon: `events` is refused (401/403) and every `live_sessions` row it can list is active.
+
+**Verified:** pgTAP, all 39 files (1638 assertions), on a local database rebuilt from scratch with every migration, and the whole Playwright suite (30 tests) against that database. Negative controls: the browser case fails with the old doors restored (and passes with the migration); the reviewer reverted each part of the migration in turn and the matching assertions failed (13 for the full rollback, plus each single part).
+
+**Reviews:** security-reviewer (a hard blocker) and schema-guardian, run together as one general-purpose agent following the project's `.claude/agents/*.md`: nothing blocks the merge or the push beyond the operational preconditions. Applied: the guard against a missing B7 door, the anon write-privilege revoke, the comment saying "superseded", not "finished", a Bravo superseded session in the fixture, and the dropped stale ROADMAP lines.
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-TEN.D6" (most importantly: an organisation's most recent session stays public until it publishes another).
+
+## T-TEN.D5: the audience of two organisations, end to end · 2026-10-13
+
+**Task:** T-TEN.D5 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase D). Tests only: no app code, no migration, nothing to push to the cloud project.
+
+**Status: merged to `dev` (2026-10-12).**
+
+**What changed:**
+
+- **A new browser spec, `tests/e2e/audience-isolation.spec.js`, with its own project `dev-audience`** (runs after `dev-app`, on the same dev server and local stack). It creates TWO real organisations, each with an organiser, an event and an active live session: "Alpha" (Cup Taster) and "Bravo" (Brewers Cup, built by the real payload assembler), and drives anonymous audiences, each in its own browser context.
+- **Each organisation's projector and phone show only its own event, in its own format** (Cup Taster's body and Brewers Cup's own body), with no sign-in and no organiser chrome.
+- **What one organisation publishes reaches its own open screens and never the other's.** Both directions; the "nothing crossed over" checks run only after both changes have visibly arrived.
+- **A wrong slug shows the not-found card on both surfaces** (a fresh visitor for each, so one card cannot stand in for the next), and **the old slug-less link still opens a surface** without showing either new organisation.
+- **The three surfaces in one tab:** phone, projector, splash, projector, phone, each still showing its own organisation's event (the splash names the event it was opened for).
+- **`tests/e2e/support/tenants.js`** makes the organisations the way production does: the service-role `create_org` door (the only path that creates one), then every other write as the new organiser with their own token. The signing secret is the Supabase CLI's published local-development one and the helper refuses to run unless the stack is on this machine.
+
+**Verified:** the whole Playwright suite (29 tests: smoke, countdown harness, 21 organiser-flow, 5 new) against the real local stack, three times for the new file. Deliberate breaks of the app (every slug opening one fixed organisation; the live read ignoring the organisation) were each caught; removing the live-channel's organisation filter was NOT caught, because the screen then only re-reads its own organisation (an extra read, not a visible leak). One independent test audit; findings applied: a publish made before a screen's live channel joined could be missed (the spec now repeats the publish until it lands), vacuous splash, legacy-link and wrong-slug checks made real, and the target-stack guard.
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-TEN.D5".
+
 ## T-TEN.D4: every audience link names the organiser, and the phone view has a QR code · 2026-10-13
 
 **Task:** T-TEN.D4 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase D). Client only: no migration, nothing to push to the cloud project. The owner confirmed (2026-10-12) both the QR code for the audience and links for any organisation.
 
-**Status: in review, not merged.**
+**Status: merged to `dev` and released to `main` (2026-10-12).**
 
 **What changed:**
 

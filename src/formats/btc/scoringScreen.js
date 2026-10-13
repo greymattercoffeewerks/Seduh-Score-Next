@@ -22,6 +22,7 @@ import { getSupabase } from '../../core/supabaseClient.js';
 import { el, setBusyDisabled, withFocusPreservation } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
 import { findEvent } from '../../core/events.js';
+import { findLiveElsewhere, takeOverWarning } from '../../core/publish.js';
 import { droppedErrorFor } from '../../core/outbox.js';
 import { enqueueBtcLive } from './liveSession.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
@@ -103,7 +104,12 @@ export async function mountScoringScreen(
       listJudges(match.event_id, client),
       listJudgeIdsForMatch(matchId, client),
     ]);
-    const data = { event, match, teams, judges, judgeIds };
+    // Confirming a match publishes this event to the venue screens, replacing another live event of the
+    // organisation. Said up front on the confirm card (not a second tap: the confirm flow is already a
+    // deliberate end-of-match step). Fails open, and is not asked for a match that is already confirmed.
+    const liveElsewhere =
+      match.status === 'confirmed' ? null : await findLiveElsewhere(event.org_id, event.id, client);
+    const data = { event, match, teams, judges, judgeIds, liveElsewhere };
     const stored = await loadDraft(matchId);
     const fresh = async () =>
       match.status === 'confirmed'
@@ -235,11 +241,18 @@ export async function mountScoringScreen(
         ? 'Re-confirm match'
         : 'Confirm match';
     setBusyDisabled(ui.confirmButton, locked() || !isComplete);
+    // What the button is described by: the take-over warning while it applies (so a screen-reader user who
+    // goes straight to the button hears it), then the "still missing" hint while the match is incomplete.
+    const describedBy = [
+      ui.takeOverWarning && !ui.takeOverWarning.hidden ? ui.takeOverWarning.id : null,
+      isComplete ? null : ui.confirmHint.id,
+    ].filter(Boolean);
+    if (describedBy.length)
+      ui.confirmButton.setAttribute('aria-describedby', describedBy.join(' '));
+    else ui.confirmButton.removeAttribute('aria-describedby');
     if (isComplete) {
-      ui.confirmButton.removeAttribute('aria-describedby');
       ui.confirmHint.hidden = true;
     } else {
-      ui.confirmButton.setAttribute('aria-describedby', ui.confirmHint.id);
       ui.confirmHint.textContent = `Confirm unlocks once every cup has a score. ${missing} cup${missing === 1 ? '' : 's'} still missing.`;
       ui.confirmHint.hidden = false;
     }
@@ -362,6 +375,8 @@ export async function mountScoringScreen(
     state.lockReason = null;
     state.staleMessage = null;
     state.info = null;
+    // The confirm has published this event, so "this will replace another event" no longer applies.
+    if (ui?.takeOverWarning) ui.takeOverWarning.hidden = true;
     if (fresh) {
       state.data = { ...state.data, match: fresh };
       state.draft = { ...state.draft, confirmOpId: null, baseUpdatedAt: fresh.updated_at };
@@ -793,13 +808,28 @@ export async function mountScoringScreen(
     });
     ui.gotoMissing.hidden = true;
     ui.gotoMissing.addEventListener('click', goToMissingCup);
+    const { liveElsewhere } = state.data;
     container.appendChild(
-      el('div', { className: 'card' }, [
-        ui.confirmButton,
-        ui.confirmHint,
-        ui.feedback,
-        ui.gotoMissing,
-      ]),
+      el(
+        'div',
+        { className: 'card' },
+        [
+          liveElsewhere
+            ? (ui.takeOverWarning = el('p', {
+                id: 'btc-take-over-warning',
+                className: 'take-over-warning',
+                text: takeOverWarning(
+                  { name: event?.name ?? '', isTest: event?.is_test === true },
+                  liveElsewhere,
+                ),
+              }))
+            : null,
+          ui.confirmButton,
+          ui.confirmHint,
+          ui.feedback,
+          ui.gotoMissing,
+        ].filter(Boolean),
+      ),
     );
 
     root.appendChild(container);

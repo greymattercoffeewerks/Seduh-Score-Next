@@ -244,6 +244,79 @@ describe('mountScoringScreen', () => {
     expect(root.querySelector('.is-test-banner')).not.toBeNull();
   });
 
+  describe('when another event of the organisation is on the venue screens', () => {
+    const warning = () => root.querySelector('.take-over-warning');
+    function liveElsewhere({ thisIsTest = false } = {}) {
+      db.events = [
+        { id: 'ev1', org_id: 'org1', name: 'Brewers B', is_test: thisIsTest },
+        { id: 'ev0', org_id: 'org1', name: 'Real Night A', is_test: false },
+      ];
+      db.live_sessions = [{ org_id: 'org1', event_id: 'ev0', active: true }];
+    }
+
+    it('says so on the confirm card, naming the event that would be replaced', async () => {
+      liveElsewhere();
+      await mount();
+      expect(warning().textContent).toBe(
+        '“Real Night A” is on the venue screens. Continuing will put this event there instead.',
+      );
+      expect(warning().closest('.card').contains(confirmButton())).toBe(true);
+    });
+
+    it('says it plainly when a TEST event would replace a real one', async () => {
+      liveElsewhere({ thisIsTest: true });
+      await mount();
+      expect(warning().textContent).toContain('This is a test event, and “Real Night A”');
+    });
+
+    it('is read with the Confirm button, ahead of the missing-cups hint', async () => {
+      liveElsewhere();
+      await mount();
+      expect(warning().id).toBe('btc-take-over-warning');
+      expect(confirmButton().getAttribute('aria-describedby')).toBe(
+        'btc-take-over-warning btc-confirm-hint',
+      );
+      await fillAll();
+      expect(confirmButton().getAttribute('aria-describedby')).toBe('btc-take-over-warning');
+    });
+
+    it('goes away once the match is confirmed, because it no longer applies', async () => {
+      liveElsewhere();
+      await mount();
+      await fillAll();
+      confirmButton().click();
+      await flush();
+      expect(root.querySelector('.screen-feedback[data-tone="success"]')).not.toBeNull();
+      expect(warning().hidden).toBe(true);
+      expect(confirmButton().hasAttribute('aria-describedby')).toBe(false);
+    });
+
+    it('does not get in the way of confirming', async () => {
+      liveElsewhere();
+      await mount();
+      await fillAll();
+      expect(confirmButton().disabled).toBe(false);
+    });
+
+    it('says nothing when this event is the live one, when nothing is live, or for a confirmed match', async () => {
+      db.live_sessions = [{ org_id: 'org1', event_id: 'ev1', active: true }];
+      await mount();
+      expect(warning()).toBeNull();
+      root.innerHTML = '';
+
+      db = baseDb();
+      await mount();
+      expect(warning()).toBeNull();
+      root.innerHTML = '';
+
+      db = baseDb();
+      liveElsewhere();
+      confirmedDb();
+      await mount();
+      expect(warning()).toBeNull();
+    });
+  });
+
   it('renders 20 cups for a knockout round', async () => {
     db = baseDb('final');
     await mount();

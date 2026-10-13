@@ -499,6 +499,148 @@ describe('mountTimingScreen', () => {
     expect(startButton.textContent).toBe('Starting…');
   });
 
+  describe('when another event of the organisation is on the venue screens', () => {
+    // The fake database carries the live session and the other event, as the real one would.
+    function withLiveElsewhere({ eventIsTest = false, otherIsTest = false } = {}) {
+      const client = buildFakeClient({
+        event: { id: 'ev1', org_id: 'org1', name: 'Rehearsal B', is_test: eventIsTest },
+        heat: appHeatPending,
+        entries: [{ id: 'he1', heat_id: 'h1', entry_id: 'e1', elapsed_secs: null }],
+        roster: [{ id: 'e1', display_name: 'Cupper One' }],
+      });
+      client.db.events.push({
+        id: 'ev0',
+        org_id: 'org1',
+        name: 'Real Night A',
+        is_test: otherIsTest,
+      });
+      client.db.live_sessions = [{ org_id: 'org1', event_id: 'ev0', active: true }];
+      return client;
+    }
+    const startCalls = (client) => client.calls.filter(([name]) => name === 'start_heat');
+
+    it('says so above Start heat, naming the event that would be replaced', async () => {
+      const root = document.createElement('div');
+      await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client: withLiveElsewhere() });
+      expect(root.querySelector('.take-over-warning').textContent).toBe(
+        '“Real Night A” is on the venue screens. Continuing will put this event there instead.',
+      );
+    });
+
+    it('says it plainly when a TEST event is about to replace a real one', async () => {
+      const root = document.createElement('div');
+      await mountTimingScreen(root, {
+        eventId: 'ev1',
+        heatId: 'h1',
+        client: withLiveElsewhere({ eventIsTest: true }),
+      });
+      expect(root.querySelector('.take-over-warning').textContent).toContain(
+        'This is a test event, and “Real Night A” is on the venue screens.',
+      );
+    });
+
+    it('does not start on the first tap: it asks, announces it, and offers Cancel', async () => {
+      const root = document.createElement('div');
+      const client = withLiveElsewhere();
+      await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
+      const [start, cancel] = root.querySelectorAll('button');
+      expect(cancel.hidden).toBe(true);
+
+      start.click();
+      await settle();
+
+      expect(startCalls(client)).toHaveLength(0);
+      expect(start.textContent).toBe('Replace it and start heat');
+      expect(start.disabled).toBe(false);
+      expect(cancel.hidden).toBe(false);
+      const feedback = root.querySelector('.screen-feedback');
+      expect(feedback.getAttribute('role')).toBe('status');
+      expect(feedback.textContent).toContain('“Real Night A” is on the venue screens.');
+    });
+
+    it('starts the heat on the second tap', async () => {
+      const root = document.createElement('div');
+      const client = withLiveElsewhere();
+      await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
+      const start = root.querySelector('button');
+      start.click();
+      await settle();
+      start.click();
+      await flush(() => expect(startCalls(client)).toHaveLength(1));
+    });
+
+    it('puts Start heat and Cancel in one row, and hides Cancel as soon as the second tap goes on', async () => {
+      const root = document.createElement('div');
+      const client = withLiveElsewhere();
+      await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
+      const [start, cancel] = root.querySelectorAll('button');
+      expect(start.parentElement).toBe(cancel.parentElement);
+      expect(start.parentElement.className).toBe('take-over-actions');
+      expect(cancel.className).toContain('take-over-cancel');
+
+      start.click();
+      await settle();
+      expect(cancel.hidden).toBe(false);
+      start.click();
+      // the very instant the second tap is taken, before the write settles
+      expect(cancel.hidden).toBe(true);
+      expect(start.disabled).toBe(true);
+      await flush(() => expect(startCalls(client)).toHaveLength(1));
+    });
+
+    it('Cancel puts everything back and starts nothing', async () => {
+      const root = document.createElement('div');
+      const client = withLiveElsewhere();
+      document.body.appendChild(root);
+      await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
+      const [start, cancel] = root.querySelectorAll('button');
+      start.click();
+      await settle();
+      cancel.click();
+      await settle();
+
+      expect(start.textContent).toBe('Start heat');
+      expect(cancel.hidden).toBe(true);
+      expect(root.querySelector('.screen-feedback').textContent).toBe('');
+      expect(document.activeElement).toBe(start);
+      expect(startCalls(client)).toHaveLength(0);
+      // ...and asking again works the same way
+      start.click();
+      await settle();
+      expect(start.textContent).toBe('Replace it and start heat');
+      root.remove();
+    });
+
+    it('asks nothing when this event is already the live one', async () => {
+      const root = document.createElement('div');
+      const client = withLiveElsewhere();
+      client.db.live_sessions = [{ org_id: 'org1', event_id: 'ev1', active: true }];
+      await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
+      expect(root.querySelector('.take-over-warning')).toBeNull();
+      root.querySelector('button').click();
+      await flush(() => expect(startCalls(client)).toHaveLength(1));
+    });
+
+    it('asks nothing when no event is live, and when the check cannot be made', async () => {
+      for (const sessions of [[], null]) {
+        const root = document.createElement('div');
+        const client = withLiveElsewhere();
+        client.db.live_sessions = sessions ?? [];
+        if (sessions === null) {
+          const realFrom = client.from.bind(client);
+          client.from = (table) => {
+            if (table === 'live_sessions') throw new Error('offline');
+            return realFrom(table);
+          };
+        }
+        await mountTimingScreen(root, { eventId: 'ev1', heatId: 'h1', client });
+        expect(root.querySelector('.take-over-warning')).toBeNull();
+        root.querySelector('button').click();
+        await flush(() => expect(startCalls(client)).toHaveLength(1));
+      }
+    });
+  });
+
   it('rejects mounting against a manual-timing-mode heat with an explanatory message, no start button', async () => {
     const root = document.createElement('div');
     const client = buildFakeClient({

@@ -74,5 +74,15 @@ export default defineConfig({
       dependencies: ['dev-harnesses'],
       use: { baseURL: 'http://127.0.0.1:5273' },
     },
+    {
+      // audience-isolation.spec.js (T-TEN.D5): anonymous audiences of TWO organisations against the same real
+      // local stack and dev server, so it runs after 'dev-app' for the same shared-backend reason (its own
+      // organisations and live sessions are created and removed by the spec, but one organiser's live session
+      // per organisation is all it needs, and a concurrent organiser-flow run would only add Realtime load).
+      name: 'dev-audience',
+      testMatch: /audience-isolation\.spec\.js/,
+      dependencies: ['dev-app'],
+      use: { baseURL: 'http://127.0.0.1:5273' },
+    },
   ],
 });

@@ -203,6 +203,10 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
 
     await page.context().setOffline(true);
     await startButton.click();
+    // On a stack that already holds another live event (left by an earlier run), the first tap asks before
+    // it replaces that event (T-TEN event-selection guard); a second tap goes on.
+    const replaceButton = page.getByRole('button', { name: 'Replace it and start heat' });
+    if (await replaceButton.isVisible()) await replaceButton.click();
     // Genuinely offline, not just a failed write: the render cycle that
     // follows a Start-heat attempt reloads heat state fresh from the
     // server (to check whether it actually landed) — offline, that reload
@@ -276,6 +280,109 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     await expect(page.getByRole('heading', { name: /^Timing — Heat 1$/ })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Start heat' })).not.toBeVisible();
     await expect(page.getByRole('button', { name: /Stop/ }).first()).toBeVisible();
+  });
+
+  // The event-selection guard: starting a heat puts THIS event on the venue screens, so when another event of
+  // the organisation is already there, the organiser is told and asked before it is replaced.
+  test('starting a heat asks before it replaces another live event, and the screens follow only after the second tap', async ({
+    page,
+  }) => {
+    test.setTimeout(90000);
+    await signIn(page);
+    const SEEDED = '10c8c375-afe6-41c7-a54e-ffaa15429612';
+    const uniq = Date.now();
+
+    // Another event of the organisation is live (what an earlier heat would have done).
+    const otherName = `E2E Live Elsewhere ${uniq}`;
+    const otherEventId = await page.evaluate(
+      async ({ orgId, name }) => {
+        const { createEvent } = await import('/src/core/events.js');
+        const { getSupabase } = await import('/src/core/supabaseClient.js');
+        const client = getSupabase();
+        const event = await createEvent(
+          orgId,
+          { format: 'cup_taster', name, eventDate: '2026-10-13', city: 'Bandar', isTest: false },
+          client,
+        );
+        const { error } = await client.rpc('publish_session', {
+          p_operation_id: crypto.randomUUID(),
+          p_org_id: orgId,
+          p_event_id: event.id,
+          p_format: 'cup_taster',
+          p_is_test: false,
+          p_payload: { stage: null, standings: [], eventName: name },
+          p_snapshot_at: new Date().toISOString(),
+        });
+        if (error) throw new Error(`publish_session failed: ${error.message}`);
+        return event.id;
+      },
+      { orgId: SEEDED, name: otherName },
+    );
+    const liveEventId = () =>
+      page.evaluate(async (orgId) => {
+        const { findActiveLiveEventId } = await import('/src/core/publish.js');
+        const { getSupabase } = await import('/src/core/supabaseClient.js');
+        return findActiveLiveEventId(orgId, getSupabase());
+      }, SEEDED);
+    expect(await liveEventId()).toBe(otherEventId);
+
+    // A second event, taken as far as a pending heat.
+    const eventName = `E2E Take Over ${uniq}`;
+    await page.reload();
+    await page.getByLabel('Event name').fill(eventName);
+    await page.getByRole('button', { name: 'Create event' }).click();
+    await page.getByRole('link', { name: eventName }).click();
+    const eventId = page.url().match(/events\/([0-9a-f-]{36})/)?.[1];
+    expect(eventId).toBeTruthy();
+    await page.getByRole('link', { name: 'Setup' }).click();
+    await page.getByRole('button', { name: 'Add stage' }).click();
+    await page.getByRole('button', { name: 'Save stage plan' }).click();
+    await expect(page.getByText('Stage plan saved.')).toBeVisible();
+    await page.getByRole('link', { name: 'Event home' }).click();
+    await page.getByRole('link', { name: 'Roster' }).click();
+    for (const [name, phone] of [
+      [`Take Over Cupper One ${uniq}`, `556-${uniq % 10000}`],
+      [`Take Over Cupper Two ${uniq}`, `556-${(uniq + 1) % 10000}`],
+    ]) {
+      await page.getByLabel('Name').fill(name);
+      await page.getByLabel('Phone').fill(phone);
+      await page.getByRole('button', { name: 'Register' }).click();
+      await expect(page.getByText(`${name} registered.`)).toBeVisible();
+    }
+    await page.getByRole('link', { name: 'Event home' }).click();
+    await page.getByRole('link', { name: 'Generate heats' }).click();
+    await page.getByRole('button', { name: 'Seed roster into this stage' }).click();
+    await page.getByRole('button', { name: 'Generate heats (random)' }).click();
+    await expect(page.getByRole('heading', { name: 'Heat 1' })).toBeVisible();
+    await page.getByRole('link', { name: 'Time this heat' }).click();
+    await expect(page.getByRole('heading', { name: /^Timing — Heat 1$/ })).toBeVisible();
+
+    // Said up front, naming the event that is on the screens.
+    await expect(page.locator('.take-over-warning')).toContainText(
+      `“${otherName}” is on the venue screens`,
+    );
+
+    // First tap: asks, starts nothing, the other event stays live. Cancel is not on screen until then.
+    const start = page.getByRole('button', { name: 'Start heat' });
+    await expect(page.getByRole('button', { name: 'Cancel' })).toBeHidden();
+    await start.click();
+    const replace = page.getByRole('button', { name: 'Replace it and start heat' });
+    await expect(replace).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible();
+    expect(await liveEventId()).toBe(otherEventId);
+
+    // Cancel puts it back; asking again works the same way.
+    await page.getByRole('button', { name: 'Cancel' }).click();
+    await expect(page.getByRole('button', { name: 'Start heat' })).toBeVisible();
+    expect(await liveEventId()).toBe(otherEventId);
+    await page.getByRole('button', { name: 'Start heat' }).click();
+
+    // Second tap goes on: the heat starts and THIS event is now the one on the venue screens.
+    await replace.click();
+    await expect(page.getByRole('heading', { name: 'Time remaining' })).toBeVisible({
+      timeout: 20000,
+    });
+    await expect.poll(liveEventId, { timeout: 20000 }).toBe(eventId);
   });
 
   test('the projector and phone live routes render their own chrome, not the organiser shell', async ({

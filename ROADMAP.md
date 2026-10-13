@@ -1897,13 +1897,13 @@ handoff §4's "one organiser, one org"; locks D-T1…D-T8). Why: `MULTI-TENANCY-
 pillars A and B. Not in scope: gating/entitlements (D14 stays a stub), admin console, self-serve
 signup, Seduh ID. Rule (lifted 2026-10-11, now that B1, B2 and B6 are in the cloud): a two-org user is created only through the service-role provisioning path (B4).
 
-| Phase | Tasks                                                                                                                                             | Status                                               |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| A     | A1 spec lock · A2 tenancy inventory                                                                                                               | Done                                                 |
-| B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | Done (B1 to B7 merged and in the cloud project)      |
-| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | Done (C1 to C7 merged)                               |
-| D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | In progress (D1, D2, D3 merged; D4 built, in review) |
-| E     | E1 negative matrix · E2 console Playwright · E3 security/perf · E4 docs · E5 rollout · E6 close-out                                               | Not started                                          |
+| Phase | Tasks                                                                                                                                             | Status                                                                                               |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| A     | A1 spec lock · A2 tenancy inventory                                                                                                               | Done                                                                                                 |
+| B     | B1 immutable `org_id` · B2 cross-org reference audit · B5 last owner · B6 resolver disclosure · B3 `my_orgs()` · B4 provisioning · B7 anon expand | Done (B1 to B7 merged and in the cloud project)                                                      |
+| C     | C1 `orgContext` · C2 `main.js` wiring · C3 header switcher · C4 team follows org · C5 event creation · C6 outbox ownership · C7 deep links        | Done (C1 to C7 merged)                                                                               |
+| D     | D1 slug routes + shim · D2 surfaces via resolver/RPC · D3 results attribution · D4 links and QR · D5 audience Playwright · D6 contract migration  | In progress (D1-D5 merged; D6 pushed to the cloud 2026-10-13; phase D done, pending release to main) |
+| E     | E1 negative matrix · E2 console Playwright · E3 security/perf · E4 docs · E5 rollout · E6 close-out                                               | Not started                                                                                          |
 
 Each D task is re-confirmed with the product owner before it starts (2026-10-10).
 
@@ -1929,7 +1929,7 @@ _Three migrations (`20261011100000_tenancy_org_id_immutable`, `20261011110000_te
 _Two migrations (`20261011130000_tenancy_resolver_disclosure`, `20261011140000_tenancy_rpc_null_org_guard`; apply together, in order). Reviewed by schema-guardian, security-reviewer (blocked once, then signed off on a delta review) and test-auditor. **pushed to the cloud project 2026-10-11 (cloud versions `20261010213446` and `20261010213533`, applied in order) and verified there**: all 13 resolver, internal-resolver and trigger bodies and all 18 RPC bodies hash identically to the tested local copies; the internal resolvers are executable by no API role; the RPCs are still SECURITY INVOKER with `search_path` pinned; and a live probe on the cloud, built to roll back, showed a stranger who is a member of nothing gets the same refusal from `delete_test_event`, `publish_session` and `publish_event_results` for the true org id, a wrong one and NULL, and for a real versus a missing event, while a direct write naming the real org gets the standard row-level-security refusal and the real owner still resolves their own org. The second migration was applied to the cloud as a short block that rewrites each function's own current definition with the one guard added (the repo file carries the full bodies and the rollback); the result is identical by hash. B1, B2 and B6 are now all in the cloud, so the "no two-org user" rule is lifted: a second org and a two-org member may now be created, only through the service-role provisioning path (B4, not built yet)._
 
 - **Other BEFORE ROW validation triggers still answer before row-level security** (the oracle class B6 closed for the org-match triggers): `check_btc_match_teams_event`, `check_btc_match_judge_event`, `check_btc_bracket_slot_event`, `check_btc_match_bonus_teams`, `check_person_merge_kept_org`, `check_ct_results_set_stage`. A signed-in non-member can tell, from the error, whether two ids they name are related. Pre-existing, not introduced by B6. Same fix pattern (gate on membership of the row's org first, raise the standard 42501). `check_ct_results_set_stage` also compares with `<>` against possibly-NULL subselects, so a missing parent passes the trigger (the foreign key still catches it).
-- **Anonymous reads still expose which org owns every event.** `events.org_id`, `live_sessions` and `public_results` are anon-readable (`events_read_public`, `live_sessions_read`, `public_results_read_public`), so "anon learns nothing about org ownership" cannot be signed off until B7/D6 narrow them. This is B7/D6's job, not B6's.
+- **Anonymous reads still expose which org owns every event.** `events.org_id`, `live_sessions` and `public_results` are anon-readable (`events_read_public`, `live_sessions_read`, `public_results_read_public`), so "anon learns nothing about org ownership" cannot be signed off until B7/D6 narrow them. This is B7/D6's job, not B6's. **After D6 (once pushed): `events` is closed, but `live_sessions` still lists every organisation that has ever published, with its latest payload (see "Known open items from T-TEN.D6"), and `public_results` is the intentionally public archive, so it still cannot be signed off.**
 - **The gated event resolver is about 15x slower in-database for an existing event than a missing one**, for a non-member (microseconds, because the membership lookup only runs when a row is found). Buried in network jitter, so not usable over HTTP; noted so nobody relies on it as a guarantee.
 - **Policy scans cost more per row.** `app.is_org_member(app.org_id_for_x(...))` now does a second membership lookup inside the resolver. Measured on 4000 rows as 1.7x to 2.7x for a whole-table policy scan (plan shape unchanged; inlining the membership check was not faster). Fine at current event sizes; E3 should re-measure with realistic data, and a full-table scan on a busy night is the thing to watch.
 - **A missing parent id now fails the org-match triggers with P0001** ("must match the owning org…", "person_id must belong to…") where the foreign key used to report 23503. The client treats both as permanent failures, so nothing breaks; the message is just less precise.
@@ -2114,7 +2114,7 @@ _Client only: `main.js` (`mountAudienceBySlug`), `core/orgResolver.js`, `core/co
 _Client only: `core/events.js` and the test fakes. No migration._
 
 - **When the event check cannot be made (a wifi drop of a few seconds, the 4-second bound), the projector and phone say "No event scheduled" rather than "could not check"** (`viewer-shell.js` treats a failed check as "no event" and only re-asks on the next live-session change or reconnect). This predates D2 (same wording before the RPC), so D2 left it: fixing it changes what the audience reads and needs a decision on the wording and a retry. The splash screen is unaffected (it stays on the brand-only line). A tri-state (unknown / none / has) with a neutral "could not check" card and a retry would close it.
-- **`supabase/tests/003_rls.sql` still replicates the old anonymous table query** (around line 183): D6 removes it with the grants.
+- **`supabase/tests/003_rls.sql` still replicates the old anonymous table query.** Done in D6: it now asserts anon cannot touch `events`.
 - **The browser test covers the splash screen's request, not the projector's:** the projector only asks for the event while no live session already proves there is one, so whether it asks depends on what earlier tests left behind. The unit and real-screen tests cover the projector's ask.
 - **The results pages were not part of the "no anonymous read of `events`" check by browser** (they read `public_results` and RPCs; D3).
 
@@ -2125,7 +2125,7 @@ _Client only: `core/events.js` and the test fakes. No migration._
 _Client only: `marketing/resultsScreen.js`, `marketing/resultsSheet.js`, `core/publicResults.js`, `core/orgLabel.js`. No migration._
 
 - **The archive page still downloads every published payload** (it needs them all for its stats tiles and list; only the sheet became per-event). Measured: about 2.7 KB per result, so about 270 KB at 100 results and about 800 KB at 300. Past that it should be paged or given a lighter list (and its stats computed in the database). There is no `limit` or `range` today, and PostgREST's `max_rows` (1000 in the local config; the cloud value was not checked) would silently drop the oldest results and make the tiles wrong past it. A payload may be up to 256 KB (the database's cap), so the worst case is far above the typical.
-- **The one result already published in production shows no organiser** (it predates the stamp). Re-publishing it from the report screen stamps it; a one-off update of that row would too (the trigger stamps on every write). Not done: it writes production data.
+- **The one result already published in production shows no organiser** (it predates the stamp). **Done 2026-10-12** with the owner's go-ahead: a no-op update of that one row let the trigger stamp the name and slug.
 - **The name is the name as of publishing:** a renamed organisation keeps its old name on old results until they are republished (right for a historic result).
 - **Two organisations may share a display name**, and the page shows only the name (the database also stamps `org_slug`). Operator-created, so rare; showing the slug when two names on the page collide would tell them apart.
 - **A publisher still controls the event name, city, venue and cafe lines**, so a result can be titled to look like another brand; only the "Organised by" line is authoritative (D-T4).
@@ -2143,3 +2143,41 @@ _Client only: `core/audienceLinksCard.js`, `core/eventsScreen.js`, `main.js`. No
 - **There are no BTC-specific links.** The BTC projector and phone use the same slug-qualified routes as Cup Taster, so the three links cover both; a separate card per format was not needed.
 - **The QR size (11rem, about 176 px) was chosen by eye** and checked in a screenshot, not scanned by a phone camera. Worth one real scan before an event.
 - **Old slug-less links still work through the legacy shim** (D1) until the owner sets `VITE_LEGACY_AUDIENCE_ORG_SLUG` in Cloudflare Pages and later retires them (D6/E).
+
+---
+
+## Known open items from T-TEN.D5 (2026-10-13)
+
+_Tests only: `tests/e2e/audience-isolation.spec.js`, `tests/e2e/support/tenants.js`, `playwright.config.js`._
+
+- **Each local run leaves two organisations behind** (with their organiser and event; the live sessions are ended). The database refuses to remove a sole owner (T-TEN.A5) and the service role has no table access to delete an organisation. Slugs and emails are unique per run, so nothing collides, and CI's stack is thrown away; a long-lived local stack just collects `d5-*` rows until a `supabase db reset`.
+- **The Cup Taster payload in the spec is hand-written** (the Brewers Cup one comes from the real assembler). A change to the payload's shape would fail loudly (the screens would not render), not silently.
+- **The live-channel organisation filter has no visible effect to test** (a screen without it only re-reads its own organisation). It is a cost and privacy-in-depth setting, not a leak, so no test pins it.
+- **The spec needs the whole local stack and the dev server**, so `--project=dev-audience` also runs the harness and organiser-flow projects first unless `--no-deps` is passed.
+
+---
+
+## Known open items from T-TEN.D6 (2026-10-13)
+
+_Database: `supabase/migrations/20261013100000_tenancy_anon_contract.sql`, `supabase/tests/038_anon_contract.sql`, `003_rls.sql`._
+
+- **Pushed to the cloud project on 2026-10-13** (cloud version `20261013010530`), in a quiet window with the displays reloaded, and verified after (see the CHANGELOG entry). A venue display left open on cached pre-D2 JavaScript goes blank until reloaded; that was the cost of the contract step.
+- **The splash shows the newest event by creation, test events included.** After the push, https://www.seduhscore.com/app/#/live/grey-matter-coffee-werks/splash read "Test Event 1 · TEST DATA, NOT A LIVE EVENT" because that is the organisation's newest event (`public_event_summary` picks by `created_at`). Not new (it did this before), but worth a decision before a real event: prefer a non-test event, or the live one.
+- **An organisation's most recent session stays public.** Only `publish_session` ever deactivates a session, so the latest one (test rehearsals included) stays `active` and readable by anyone, with its standings, names and times, until that organisation publishes again; `GET /rest/v1/live_sessions` therefore lists every organisation that has ever published. The audience surfaces need exactly that today. The real fix is a per-organisation door (an RPC that takes the organisation id) plus an "end the session" action, and then closing the table to anon altogether. Not done.
+- **Realtime and a deactivate-only change.** A database change reaches an anonymous screen only if the NEW row is visible to it. `publish_session` deactivates the old row and activates the new one in one transaction, so screens are told by the new row. A future "end the session without a replacement" would not reach open screens by itself (they would show the last state until reloaded); whoever adds that must signal the audience another way.
+- **The browser check of "only active rows" is weak on a fresh database** (the test organisations only ever have active sessions); the pgTAP file carries the real proof. It bites on a long-lived local stack.
+- **A venue display running pre-D2 code stays blank after the push until reloaded.** That is the intended cost of the contract step, and why it waits for a quiet window.
+
+---
+
+## Known open items from the event-selection guards (2026-10-13)
+
+_`supabase/migrations/20261013120000_public_event_summary_prefers_live.sql`, `core/publish.js`, `cup-taster/timingScreen.js`, `btc/scoringScreen.js`._
+
+- **The migration is not applied to the cloud project yet.** Safe at any time (same signature, columns and grants). Until then the production splash still shows the newest event, test events included.
+- **The links still address the organisation, not an event.** The projector and phone show whichever event of the organisation last went live; the splash shows the live one (or the newest real one). To pin a screen to one specific event while another is live (two real events at once under one organisation), event-pinned audience links (`#/live/<slug>/<event>/...`) and a public door that takes an event id would be needed. Not built; the rehearsal organisation and the take-over guard cover the practice-and-test case.
+- **The take-over warning is computed when the screen loads.** If another device makes a different event live afterwards, the warning is stale: absent (the start then replaces it, as before the guard) or still shown (one extra tap). Checking again at the tap would add a network round trip to a time-critical tap, so it does not.
+- **A re-render while "Replace it and start heat" is armed** (a pending-work recheck, an error) rebuilds the card; the armed state is lost safely (it asks again) but keyboard focus falls to the page.
+- **Only the first publishing action asks.** Confirming a heat or resolving a stage in Cup Taster still publishes without asking (it can only take over if another event started between), and BTC asks only by a warning, not a second tap.
+- **`.take-over-warning` is styled in two stylesheets** (Cup Taster timing, BTC scoring); one shared stylesheet would do.
+- **The existing `ui.gotoMissing` button in BTC scoring has the same `[hidden]`-versus-`.btn` display problem** that the Cancel button had (a `.btn` ignores the browser's `[hidden]`). Not touched here; worth a repo-wide `.btn[hidden] { display: none; }`.

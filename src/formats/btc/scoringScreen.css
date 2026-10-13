@@ -138,3 +138,10 @@
 .btc-scoring-screen .field-input::placeholder {
   color: var(--color-text-secondary);
 }
+
+/* Another event of this organisation is on the venue screens: said up front, above Confirm match. */
+.take-over-warning {
+  margin: 0 0 var(--space-3);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
