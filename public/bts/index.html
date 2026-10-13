@@ -105,6 +105,17 @@
       podium lives at /results/, at the organiser's choice. Also recorded
       here: the pre-event hardening, the fixes and features the event
       itself prompted, and the Brew Planner community tool.
+
+      Progress update, 2026-10-10: v3.1.0, still Gadong — no cycle bump, but
+      the project's first MINOR release (every earlier version moved the
+      patch or the major). v3.1.0 is the BTC live surfaces: the projector and
+      phone views serve whichever format is live, BTC publishes its live
+      state automatically, and it has its own venue display and phone view.
+      Alongside it: the BTC knockout tie-break, podium and one-click demo
+      data, and the post-event hardening wave (sign-in, owner-managed team
+      logins, heats-first page, brand lockup, header sync chip, redesigned
+      venue display). Facts follow CHANGELOG.md; the BTC live surfaces have
+      not yet been run at a live BTC event, and the copy says so.
     -->
     <style>
       @font-face {
@@ -1098,12 +1109,12 @@
           </div>
           <div class="ledger-row reveal">
             <span class="ledger-place">Gadong</span>
-            <span class="ledger-version">v3.0.19</span>
+            <span class="ledger-version">v3.1.0</span>
             <span class="ledger-status current"><span class="pulse-dot"></span>Current</span>
             <span class="ledger-note"
               >BTC (Barista Team Championship) — the second real competition format — then a trust
-              pass, hardening for the room, and the first live Cup Taster event on 4 October 2026,
-              plus the fixes it prompted.</span
+              pass, hardening for the room, the first live Cup Taster event on 4 October 2026 and
+              the fixes it prompted, and now BTC's own projector and phone screens.</span
             >
           </div>
           <div class="ledger-row reveal">
@@ -1134,7 +1145,7 @@
 
         <div class="stat-row reveal">
           <span><b>3</b> cycles</span>
-          <span><b>v3.0.19</b> now</span>
+          <span><b>v3.1.0</b> now</span>
           <span><b>2 / 4</b> formats</span>
           <span><b>1</b> live event</span>
           <span><b>3</b> community tools</span>
@@ -1148,26 +1159,125 @@
           <strong>Kiulap</strong> — seven phases per the project's frozen handoff spec, all shipped.
           Then <strong>Berakas</strong> — a front door nobody had planned for, followed by a public
           shelf for the useful extras. Now <strong>Gadong</strong> — the second real competition
-          format, and the first live event run on the platform. Newest first, one open at a time —
-          open a milestone to read it.
+          format, the first live event run on the platform, and BTC's own screens for the room.
+          Newest first, one open at a time — open a milestone to read it.
         </p>
 
         <div class="milestones">
-          <div class="milestone reveal is-open" id="ms-gadong-live">
+          <div class="milestone reveal is-open" id="ms-gadong-btc">
+            <h3 class="milestone-head">
+              <button
+                type="button"
+                class="milestone-toggle"
+                id="ms-gadong-btc-btn"
+                aria-expanded="true"
+                aria-controls="ms-gadong-btc-panel"
+              >
+                <span class="ms-text">
+                  <span class="ms-meta">Gadong · 9 to 10 October 2026 · v3.1.0 · 2 entries</span>
+                  <span class="ms-title">BTC takes the stage</span>
+                  <span class="ms-sum">BTC, decided in the room · BTC on the big screen</span>
+                </span>
+                <span class="ms-chev" aria-hidden="true"></span>
+              </button>
+            </h3>
+            <div
+              class="milestone-panel"
+              id="ms-gadong-btc-panel"
+              role="region"
+              aria-labelledby="ms-gadong-btc-btn"
+            >
+              <div class="milestone-inner">
+                <div class="log" data-stagger>
+                  <div class="log-item reveal">
+                    <div class="log-phase">Gadong</div>
+                    <div>
+                      <div class="log-head">
+                        <span class="log-name">BTC, decided in the room</span>
+                        <span class="log-ver">v3.0.x</span>
+                      </div>
+                      <div class="log-line shipped">
+                        <span class="k">Shipped</span
+                        ><span class="v"
+                          >Three things BTC needed before it could be trusted with a final. A level
+                          knockout match is decided by the organiser, who records which team goes
+                          through and a reason — the app does not score a tie-break cup, because the
+                          event's own rules decide how a tie is broken at the venue. A podium, first
+                          to fourth, and a fix so that a knockout corrected into a tie no longer
+                          leaves its old winner sitting in the next round. And a one-click demo:
+                          load a test event with an eight-team roster and scored preliminaries,
+                          ready for the bracket, so a rehearsal no longer means scoring 28 matches
+                          by hand.</span
+                        >
+                      </div>
+                      <div class="log-line felt">
+                        <span class="k">Felt like</span
+                        ><span class="v"
+                          >leaving the one judgement call that belongs to people with the people —
+                          and making the rehearsal cheap enough to actually do.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="log-item current reveal">
+                    <div class="log-phase">Gadong</div>
+                    <div>
+                      <div class="log-head">
+                        <span class="log-name">BTC on the big screen</span>
+                        <span class="log-ver">v3.1.0</span>
+                        <span class="log-now"><span class="pulse-dot"></span>Live now</span>
+                      </div>
+                      <div class="log-line shipped">
+                        <span class="k">Shipped</span
+                        ><span class="v"
+                          >BTC now has its own screens for the room. The projector and phone views
+                          serve whichever format is live, and BTC publishes its live state
+                          automatically as matches are scored, so the audience is never left on
+                          "event not published yet". The venue display loops through what is up next
+                          (round, teams, judges), the bracket, and the standings with ties kept
+                          together — and breaks in after a result with two short moments: the result
+                          recorded (both totals, what each is made of, who goes through, the
+                          organiser's tie-break reason in words) and, in the preliminaries, the rank
+                          impact. The phone gets one scrolling column: the champion once decided,
+                          where the event is up to, what is next, the top five with "show all", the
+                          bracket by round and the latest results, with a TEST banner pinned
+                          whenever the data is not real. Both screens draw their wording from one
+                          shared set of phrases, so they cannot describe the same fact two ways.
+                          This is v3.1.0 — the first minor release, because a feature set is not a
+                          patch. Built and tested; not yet run at a live BTC event.</span
+                        >
+                      </div>
+                      <div class="log-line felt">
+                        <span class="k">Felt like</span
+                        ><span class="v"
+                          >taking a format that already ran from a tablet and giving the room
+                          something to watch.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="milestone reveal" id="ms-gadong-live">
             <h3 class="milestone-head">
               <button
                 type="button"
                 class="milestone-toggle"
                 id="ms-gadong-live-btn"
-                aria-expanded="true"
+                aria-expanded="false"
                 aria-controls="ms-gadong-live-panel"
               >
                 <span class="ms-text">
-                  <span class="ms-meta"
-                    >Gadong · 4 October 2026 and after · v3.0.19 · 2 entries</span
-                  >
+                  <span class="ms-meta">Gadong · 4 to 9 October 2026 · v3.0.x · 3 entries</span>
                   <span class="ms-title">The first live event</span>
-                  <span class="ms-sum">Lessons from the first live event · Brew Planner</span>
+                  <span class="ms-sum"
+                    >Lessons from the first live event · Brew Planner · Made for the next
+                    event</span
+                  >
                 </span>
                 <span class="ms-chev" aria-hidden="true"></span>
               </button>
@@ -1237,6 +1347,39 @@
                         ><span class="v"
                           >turning the back-room maths of running a real event into something anyone
                           can pick up.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="log-item reveal">
+                    <div class="log-phase">Gadong</div>
+                    <div>
+                      <div class="log-head">
+                        <span class="log-name">Made for the next event</span>
+                        <span class="log-ver">v3.0.x</span>
+                      </div>
+                      <div class="log-line shipped">
+                        <span class="k">Shipped</span
+                        ><span class="v"
+                          >Sign-in hardened against the iPad failure — the cause is unconfirmed, so
+                          the screen now shows or hides the password and copes with autofill. Each
+                          team member gets their own login, created by the owner with a one-time
+                          password, so the change log names a person rather than a shared login;
+                          removed members are listed and can be restored. The heats page puts the
+                          next heat first with an "Up next" button and folds the roster away. One
+                          shared logo-and-wordmark lockup, aligned to the baseline and set in the
+                          same typeface everywhere. The sync status shrinks to a one-line chip so
+                          the header stays one line. And the venue display was rebuilt as one screen
+                          per moment from reusable parts — a heat on stage with a very large
+                          countdown, paged standings and the champion, then "Result recorded" and
+                          "Rank impact" — so other formats can reuse the same pieces.</span
+                        >
+                      </div>
+                      <div class="log-line felt">
+                        <span class="k">Felt like</span
+                        ><span class="v"
+                          >answering "too much at once" with one thing at a time.</span
                         >
                       </div>
                     </div>
