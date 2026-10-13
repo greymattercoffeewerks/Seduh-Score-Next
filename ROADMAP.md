@@ -2209,7 +2209,17 @@ _Tests only: `supabase/tests/040_cross_org_matrix.sql`, `supabase/tests/041_cros
 
 _Tests only: `tests/e2e/organiser-tenancy.spec.js`, `tests/e2e/support/tenants.js`, `playwright.config.js`._
 
-- **KNOWN GAP: the event-route guard does not run for a person in ONE organisation** (`placeEventRoute` in `src/main.js` returns early when `org.orgs.length < 2`). Opening another organisation's event link then shows the generic "Something went wrong saving that — try again" with a Retry that can never work, instead of "Page not found". Not a leak (the database hides the event and a test asserts nothing of it is shown). A fix is to resolve the link's organisation for one-organisation people too, failing OPEN on an error (so first visits offline still work) and showing "Page not found" only when the lookup says the event is not theirs; the `test.fail()` case in the spec turns into an ordinary test the day that lands. It would add one lookup, cached after the first, per event the person opens for the first time.
+- **The event-route guard for people in ONE organisation: fixed** (see "Known open items from the event-link guard"). It used to skip them, so another organisation's event link ended in a generic error with a Retry that could not work.
 - **No browser test boots the console without `VITE_DEFAULT_ORG_ID` AND signs in.** The built-app smoke test boots a build made without it (no backend), the unit test covers the memberships path, and the tenancy spec runs against a dev server that has the variable. A dev server started with the variable blank and the tenancy spec run against it would close it.
 - **The spec is serial** (one failure hides the rest of the file) and depends on the earlier projects having run; the tests do not depend on each other's state.
 - **Each run leaves three organisations and their people behind** on a long-lived local stack (the database refuses to remove a sole owner); slugs and emails are unique per run.
+
+---
+
+## Known open items from the event-link guard (2026-10-13)
+
+_`src/main.js` (`placeOwnOrgEventRoute`, `rememberedLookup`), `src/main.test.js`, `tests/e2e/organiser-tenancy.spec.js`._
+
+- **One extra read, once per event, for people with one organisation** (then remembered on the device). The first time a link to an event is opened on a device, its page waits for that read, for at most 2.5 seconds, before it renders; an event the person just created on this device could be remembered at creation to skip it.
+- **Untested branch:** the restart of the navigation when the person or organisation changes while the question is in flight, for ONE-organisation people (a deliberate break of it passes the unit tests; the several-organisation twin is tested).
+- **A remembered "this event is in my organisation" answer is trusted for the life of the device's storage**, as for several organisations; an event never changes organisation (T-TEN.B1), and what it is used for is deciding between "open the screen" and "switch", never granting access (the database still decides what is visible). A person removed from an organisation who still has the answer remembered would open the event screen and meet the database's own refusal.
