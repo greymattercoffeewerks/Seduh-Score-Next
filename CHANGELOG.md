@@ -1,8 +1,29 @@
+## T-TEN.D6: the old anonymous doors are closed (contract step) · 2026-10-13
+
+**Task:** T-TEN.D6 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase D, decision D-T3: expand, switch, contract). A database migration plus tests; no app code changed.
+
+**Status: in review, not merged. NOT PUSHED to the cloud project: that is a separate, manual step for a quiet window (no live event, venue displays reloaded). Merging this PR deploys only the website; the cloud database does not change until the migration is pushed.**
+
+**What changed:**
+
+- **`supabase/migrations/20261013100000_tenancy_anon_contract.sql`.**
+  - `events`: the anonymous policy `events_read_public` is dropped and every privilege `anon` held on the table is revoked (the six-column read included). An anonymous caller reaches an event only through `public_event_summary`, which returns one row for one organisation.
+  - `live_sessions`: the read policy is now `active` rows only, for anon and signed-in callers; a superseded session's payload is no longer public. Members still read every state of their own organisation's sessions. `anon` also loses its INSERT/UPDATE/DELETE/TRUNCATE privileges on the table.
+  - `live_sessions_write` is re-created for `authenticated` only (same checks). As a role-less FOR ALL policy it also ran `is_org_member` for anon on SELECT, a function anon cannot execute: with the old `using (true)` read policy that was folded away, with `using (active)` the whole anonymous read failed with "permission denied for function is_org_member". Found by the new pgTAP, before anything was applied anywhere.
+  - A guard at the top refuses to run unless the B7 doors (`public_event_summary`, `public_org_by_slug`) exist, since it is applied to the cloud project by hand. The rollback block is in the file's header (it does not restore anon's write privileges on `live_sessions`: nothing used them).
+- **Tests.** `supabase/tests/038_anon_contract.sql` (31 assertions: policies and privileges as postgres; anon, a signed-in non-member and members as themselves; the replacement doors, the archive and `publish_session` still work). `003_rls.sql`'s old "anon can read these event columns" cases became "anon cannot touch events" (and its live-session count is limited to its own fixture). A new browser case calls the real HTTP door as anon: `events` is refused (401/403) and every `live_sessions` row it can list is active.
+
+**Verified:** pgTAP, all 39 files (1638 assertions), on a local database rebuilt from scratch with every migration, and the whole Playwright suite (30 tests) against that database. Negative controls: the browser case fails with the old doors restored (and passes with the migration); the reviewer reverted each part of the migration in turn and the matching assertions failed (13 for the full rollback, plus each single part).
+
+**Reviews:** security-reviewer (a hard blocker) and schema-guardian, run together as one general-purpose agent following the project's `.claude/agents/*.md`: nothing blocks the merge or the push beyond the operational preconditions. Applied: the guard against a missing B7 door, the anon write-privilege revoke, the comment saying "superseded", not "finished", a Bravo superseded session in the fixture, and the dropped stale ROADMAP lines.
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-TEN.D6" (most importantly: an organisation's most recent session stays public until it publishes another).
+
 ## T-TEN.D5: the audience of two organisations, end to end · 2026-10-13
 
 **Task:** T-TEN.D5 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase D). Tests only: no app code, no migration, nothing to push to the cloud project.
 
-**Status: in review, not merged.**
+**Status: merged to `dev` (2026-10-12).**
 
 **What changed:**
 
