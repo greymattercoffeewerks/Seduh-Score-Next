@@ -176,12 +176,13 @@ select throws_ok(
   'an authenticated session with no resolvable user id is refused (not told about the mismatch)');
 reset role;
 set local role anon;
--- anon: a database with narrow privileges (production) refuses at the table ("permission denied"); one with broad
--- default privileges (CI) reaches the trigger and gets the row-level-security refusal. Either is a refusal that
--- says nothing about the ids; the trigger's own mismatch message is the failure.
+-- anon: a database with narrow privileges (production) refuses at the table ("permission denied for table"); one with
+-- broad default privileges (CI) refuses while the table's own policy runs ("permission denied for function
+-- is_org_member": anon may not call it, with or without this trigger) or with the row-level-security refusal. Each is
+-- a refusal that says nothing about the ids; the trigger's own mismatch message is the failure.
 select throws_matching(
   (select sql from writes where tbl = 'person_merges' and shape = 'clash'),
-  '^(permission denied for table person_merges|new row violates row-level security policy for table "person_merges")$',
+  '^(permission denied for (table person_merges|function is_org_member)|new row violates row-level security policy for table "person_merges")$',
   'an anon session is refused without being told about the mismatch');
 reset role;
 
