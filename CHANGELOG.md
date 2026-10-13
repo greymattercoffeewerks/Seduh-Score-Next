@@ -1,3 +1,24 @@
+## T-TEN.E3: security and performance pass · 2026-10-13
+
+**Task:** T-TEN.E3 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase E). One small migration and its test; no application code.
+
+**Status: in review, not merged. The migration `20261013150000_e3_advisor_followups.sql` is NOT applied to the cloud project yet.**
+
+**What was done:**
+
+- **Supabase advisors run on the cloud project (security and performance), every finding classified.**
+  - _Intended, pinned by tests, no change:_ the SECURITY DEFINER functions callable by anon or signed-in callers (`get_scoring_record`, `public_event_summary`, `public_org_by_slug`, `submit_guess`, `my_orgs`, `team_*`, `reset_guess_session_data`; each checks its caller, each is attacked by `041`); the two row-security tables with no policy (`score_change_counts`, `team_removed_members`: deliberate deny-all, pinned by `040`).
+  - _Fixed in the migration:_ `public.rls_auto_enable()` (a Supabase-installed EVENT TRIGGER helper that turns row security on for every new table, which stays) is no longer executable by anon or signed-in callers (calling it as an RPC already failed with "cannot display a value of type event_trigger" and does nothing; the statement is guarded because only the cloud project has the function); Guess the Bean's four `sessions` policies call `auth.uid()` once per query, not once per row; and the three foreign keys that matter (`ct_stage_entries.entry_id`, `event_entries.person_id`, `btc_seeding_tiebreaks (team_id, event_id)`: deleting a roster entry, a person or a rehearsal event scans these once per row deleted) have a covering index.
+  - _Left alone, with reasons (ROADMAP):_ 96 "multiple permissive policies" (every tenant table's `_read` and `_write` both run on a SELECT; splitting the write policies by command is a large change to security-critical rules for a cost that is small at today's volume, and `040`/`041` now make it safe to do when volume asks); 10 "unused indexes" (tiny tables; `org_members_user_id_idx` IS used by `my_orgs`: checked at 7,000 members); five unindexed foreign keys on tables that hold a handful of rows.
+  - _Owner action, not code:_ "leaked password protection" is disabled (Supabase dashboard, Authentication, password security).
+- **The performance check the plan asked for, measured on a synthetic 200-organisation data set** (5,000 events, 160,000 heat entries, 7,000 members) in a rolled-back transaction, as a signed-in person in two organisations. Every query the app really asks takes 0.3 to 4 ms (events list 1.5 ms, one heat's entries 4.0 ms, one event 0.3 ms, `my_orgs` 2.2 ms, an event's roster 1.8 ms): the membership check runs only on the rows an index already narrowed to, and `app.is_org_member` is an index-only scan on the primary key. **The latent cost: a read of a leaf table with NO filter costs about 0.2 ms per row (four chained security functions), 33 seconds for all 160,000 heat entries (71 ms for 5,000 events).** The app always filters by a parent id, so it never meets this today; it is recorded as a risk for any future unfiltered read.
+
+**Verified:** the whole database suite (44 files, 1888 assertions) on a database rebuilt from scratch; the new test fails when a sessions policy goes back to a per-row `auth.uid()` and when a covering index is dropped.
+
+**Reviews:** a full-surface `security-reviewer` run (the hard blocker): see below.
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-TEN.E3".
+
 ## Event links: a person with one organisation is told "Page not found" for another organisation's event · 2026-10-13
 
 **Task:** closes the known gap found by T-TEN.E2 (owner decision, 2026-10-13: "Do A now"). Client only: no migration.

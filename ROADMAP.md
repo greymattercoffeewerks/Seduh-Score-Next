@@ -2223,3 +2223,15 @@ _`src/main.js` (`placeOwnOrgEventRoute`, `rememberedLookup`), `src/main.test.js`
 - **One extra read, once per event, for people with one organisation** (then remembered on the device). The first time a link to an event is opened on a device, its page waits for that read, for at most 2.5 seconds, before it renders; an event the person just created on this device could be remembered at creation to skip it.
 - **Untested branch:** the restart of the navigation when the person or organisation changes while the question is in flight, for ONE-organisation people (a deliberate break of it passes the unit tests; the several-organisation twin is tested).
 - **A remembered "this event is in my organisation" answer is trusted for the life of the device's storage**, as for several organisations; an event never changes organisation (T-TEN.B1), and what it is used for is deciding between "open the screen" and "switch", never granting access (the database still decides what is visible). A person removed from an organisation who still has the answer remembered would open the event screen and meet the database's own refusal.
+
+---
+
+## Known open items from T-TEN.E3 (2026-10-13)
+
+_Database: `supabase/migrations/20261013150000_e3_advisor_followups.sql`, `supabase/tests/044_e3_advisor_followups.sql`._
+
+- **Not applied to the cloud project yet** (additive and quick; revoking the event-trigger helper's public EXECUTE, rewriting four Guess the Bean policies with the same meaning, three indexes).
+- **Unfiltered reads of a leaf table are slow by design of the policy chain** (measured: 0.2 ms per row, 33 s for 160,000 heat entries as a signed-in member). The app always filters by a parent id, so it never meets it. Anything new that reads a tenant table without a parent filter as a signed-in caller (an export, a report across events, a search) should go through a SECURITY DEFINER function that checks the caller once, as `get_dispute_pack` does, or the policies should be redesigned (for example an `org_id` column on the leaf tables, or one policy per command that avoids the double evaluation).
+- **96 "multiple permissive policies" advisor warnings**: every tenant table has a `_read` (SELECT) and a `_write` (FOR ALL) policy, so a SELECT evaluates both. Splitting the write policies into INSERT, UPDATE and DELETE (and scoping them `to authenticated`) halves the per-row work of a SELECT. Worth doing together with the unfiltered-read item above when volume asks; `040` and `041` are the safety net.
+- **Leaked-password protection is disabled** (Supabase dashboard, Authentication, password security; may need a paid plan). Owner action.
+- **Advisor findings that are noise at this scale:** "unused index" (10), and five unindexed foreign keys on tables that hold a handful of rows (who published or merged or removed something).
