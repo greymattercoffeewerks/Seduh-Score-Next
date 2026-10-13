@@ -154,6 +154,31 @@ Designed in from the first live-surface rendering task, not logged as a defect
 afterward. v4.x demo mode was indistinguishable from a real event in the audience view —
 that is the failure this project exists to close.
 
+### Tenancy: many organisations, one database (T-TEN, built 2026-10-10 to 2026-10-13)
+
+Supersedes handoff §4's "one organiser, one org" (see `HANDOFF-CORRECTION-002.md`, locked D-T1 to D-T8). The rules
+below are enforced by tests that fail CI, not by memory; the "how to add a tenant table" checklist is in
+`CONVENTIONS.md`.
+
+- **Every tenant table's parent is frozen.** A table with an `org_id` column has a `before update` trigger calling
+  `app.forbid_parent_change('org_id', ...)`; a table scoped through `event_id` / `stage_id` / `heat_id` / `match_id`
+  freezes those columns the same way (SQLSTATE 23001). A person who belongs to two organisations must not be able to
+  move a row between them. Tests `033` and `040` fail when a tenant table lacks it.
+- **Access is `app.is_org_member(...)` and nothing else.** Never a policy that reads `org_members` directly (the
+  recursion bug). A cross-reference `BEFORE ROW` `SECURITY DEFINER` trigger (two ids that must agree) must start with
+  `app.refuse_non_member(...)`, so a non-member gets the standard 42501 whatever ids they guess (test `045`'s catalog
+  guard fails otherwise).
+- **Anonymous people reach data only through narrow `SECURITY DEFINER` doors** (`public_org_by_slug`,
+  `public_event_summary`, `get_scoring_record`, `submit_guess`, the Guess the Bean feed), never a table read:
+  `events` is closed to anon, and `live_sessions` shows anon only ACTIVE rows (D6, `038`).
+- **Audience links name the organiser** (`#/live/<slug>/projector|phone|splash`). A slug can never be changed (it is in
+  printed and QR links). The old slug-less links are a legacy shim that shows the one organisation named by
+  `VITE_LEGACY_AUDIENCE_ORG_SLUG` (see Repo).
+- **Organisations are provisioned only by the service role** (runbook in the Repo section); there is no signup. The
+  interim rule "no two-organisation user in the cloud" was lifted 2026-10-11 (B1, B2 and B6 are there).
+- **Every new tenant table or RPC is added to the cross-organisation matrices** (`040` tables, `041` RPCs). A guard in
+  each fails when one is missing, so the fix is a matrix entry, not an exception.
+
 ### Definition of Done (handoff §11, restated)
 
 A task is done when: acceptance criteria are demonstrated, not asserted · tests pass
@@ -289,6 +314,17 @@ Run these as the service role (the Supabase MCP's `execute_sql`), never from the
    `org_name_invalid`, `org_owner_not_found`, `member_exists`, ...): read the hint, not the text.
 5. To make someone else owner or demote an owner use `select public.org_set_role(...)` (B5); an org can
    never be left without an owner.
+
+**Build variables (Cloudflare Workers Builds → Settings → Build → Variables and secrets).** Three, all `VITE_`:
+`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` and `VITE_LEGACY_AUDIENCE_ORG_SLUG=grey-matter-coffee-werks` (the one
+organisation the old slug-less audience links mean; retire it, and the shim in `src/core/config.js`, when those
+printed links are gone). `VITE_DEFAULT_ORG_ID` was **removed on 2026-10-13** (T-TEN.E5 step 6) and must not come back:
+the organiser console takes its organisation from the signed-in person's memberships, and an unset variable never
+throws. A change to these variables takes effect only on the NEXT production build (retry the latest build on
+`main`). **Preview builds (pull request branches) do not receive them at all**, so a preview shows "supabaseUrl is
+required" whatever the dashboard says; only a production build tells you anything. Check a production change by
+fetching `/app/`, then its `app-*.js`, and looking for the Supabase project ref and the slug; keep the previous
+deployment (Deployments → Rollback) one click away until you have.
 
 **Pushing a migration to the cloud project is a separate, manual step from merging its
 PR — merging to `main` only deploys the frontend (Cloudflare Workers Builds); it never
