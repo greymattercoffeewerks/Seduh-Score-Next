@@ -1,8 +1,94 @@
+## Event links: a person with one organisation is told "Page not found" for another organisation's event · 2026-10-13
+
+**Task:** closes the known gap found by T-TEN.E2 (owner decision, 2026-10-13: "Do A now"). Client only: no migration.
+
+**Status: in review, not merged.**
+
+**What changed:**
+
+- **A person with ONE organisation is now asked whose event a link belongs to** (`placeOwnOrgEventRoute`, `src/main.js`). Before, the guard that does this ran only for people in two or more organisations, so an event link belonging to ANOTHER organisation (which the database hides from them) reached the event screen, failed to load, and showed a generic "Something went wrong saving that — try again" with a Retry that could never work. Now an event that is not theirs, or not there (the database makes those the same answer), shows "Page not found", the same card everyone else gets. Nothing of the other organisation was ever exposed; this was a wrong message, not a leak.
+- **It never holds up or breaks the screen.** The question is remembered on the device (an event never changes organisation, so each event costs one read, once), is given up on after 2.5 seconds, and on ANY failure to answer (offline, an error, a hang) the event screen opens exactly as it always did and reports its own load failure if the event really is out of reach. People with several organisations keep their existing behaviour (a failed lookup is a Retry card for them, because they need the answer to know which organisation to work in).
+- A BTC match link is resolved through its event, as before.
+
+**Verified:** 3983 unit tests in 138 files; lint and Prettier; the whole Playwright suite (36 tests). In the real browser, a person in one real organisation opening another real organisation's event now gets "Page not found" with no Retry, and their own event still opens; the test that had recorded the gap as an expected failure (`test.fail()`) is now an ordinary passing test. Deliberate breaks of the new path were each caught: nobody asked, a failed question refusing instead of opening, someone else's organisation counted as theirs, a missing event counted as theirs, no time limit, the answer not remembered. NOT covered by a test: the branch that restarts the navigation when the person or organisation changes while the question is in flight, for one-organisation people (its several-organisation twin is tested).
+
+**Reviews:** a `code-reviewer` and a Haiku `test-auditor`, run by their own names; both found real problems in the first version, all fixed: the BTC match lookup asked the network first on EVERY open (on venue wifi that is connected but answers nothing it would have cost 2.5 seconds each time; a match's event is now remembered first, like the event's organisation); the 2.5 seconds was per read, not per question (a match route could wait about 9; the whole question now has ONE 2.5-second budget, and a fake-clock test pins it for an event, a match whose event and organisation both hang, and a device memory that never answers); while the organisation list is only the remembered stand-in, "not in my list" proves nothing (a person added since would be told their own event does not exist), so it now opens; several comments were untrue and are corrected. The auditor found that the "remembered" and "fail open" tests would have passed with the guard deleted (they now assert that the answer decided the outcome, that the question was asked, and that what is found is written to the device), and that one test waited real time (now a fake clock).
+
+**Flagged, not changed:** ROADMAP's "Known open items from the event-link guard".
+
+## T-TEN.E2: the organiser console with real organisations · 2026-10-13
+
+**Task:** T-TEN.E2 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase E). Tests only: no app code, no migration.
+
+**Status: in review, not merged.**
+
+**What changed:**
+
+- **`tests/e2e/organiser-tenancy.spec.js`, in its own Playwright project `dev-tenancy`** (runs after `dev-audience` on the same shared stack). `organiser-flow.spec.js` already drives the switcher, the deep-link notice and the refused switch, but it FAKES the `my_orgs` answer, so its second organisation has no rows behind it. Here every organisation, person and event is real, created through the doors production uses (`create_org`, `org_add_existing_member`), so the database's own row-level security answers: person B in organisation B only; person AB who owns A and is an organiser of B; a stranger organisation C; and an account in no organisation.
+- **What it proves:**
+  - a person in one organisation sees exactly that organisation's events (an exact count, not one named event absent), is offered no switcher, and an event they create lands in their organisation and in the database;
+  - a person in both switches (announced), creates an event in B, never sees A's events in B's list or B's in A's, and the new event belongs to B in the database;
+  - a link to an event in their other organisation switches to it and says so, both followed inside the app and opened cold (an emailed link, a new tab);
+  - a person in two organisations opening a THIRD organisation's event gets "Page not found", is not moved, and sees nothing of it (the first end-to-end run of that guard branch against a real database);
+  - an unsynced change on the device refuses the switch with the exact reason, stays put, and the same choice goes through once nothing is waiting;
+  - an account in no organisation is told so and offered no organisation and no events.
+- **A real finding, recorded as a known gap, not a leak:** the route guard that works out which organisation an event link belongs to runs only for a person in TWO OR MORE organisations (`org.orgs.length < 2` returns early in `placeEventRoute`). A person in ONE organisation who opens another organisation's event link skips it: the event screen tries to load, the database hides the event, and they see the generic "Something went wrong saving that — try again" with a Retry that can never work, instead of "Page not found". Nothing of the other organisation is exposed (a test asserts that). The ideal behaviour is a `test.fail()` test that passes while the gap exists and FAILS the day it is fixed, so it cannot be forgotten.
+- **"The app boots with `VITE_DEFAULT_ORG_ID` unset"** is covered by the built-app smoke test (a build made without it), the unit test in `src/main.test.js`, and this file's people working in organisations that are not the default one. It is stated plainly in the spec that this file is not itself a boot test (its dev server has the variable set).
+- `tests/e2e/support/tenants.js` gains `addMember` (the provisioning door that puts one person in two organisations), `createLoneUser`, and exposes each tenant's sign-in details.
+
+**Verified:** the whole Playwright suite on a dev server with the local environment, and the new file twice in a row (8 tests, one expected failure). Two deliberate breaks of the app (the events list not filtering by organisation; an event link no longer switching to its organisation) were each caught. A test audit by the Haiku `test-auditor` (run by its own name for the first time) found real weaknesses, all fixed: the stranger-link test rested on a fixed sleep and could not fail on a leak (it now waits for a terminal state and the third organisation exercises the real guard), the "never switched" claim was unfalsifiable for a one-organisation person, hash-only `page.goto` was used where the other spec warns against it (and the cold link is now tested), the refusal text is asserted in full and the refusal is shown not to be permanent, and the known-gap test now fails only for the right reason.
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-TEN.E2".
+
+## T-TEN.E1: the cross-organisation negative matrix · 2026-10-13
+
+**Task:** T-TEN.E1 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase E). Tests, plus one small migration that the tests found necessary (below): no app code.
+
+**Status: merged to `dev` (#239). The migration `20261013140000_tenancy_freeze_remaining_parents.sql` (a finding of this task) was applied to the cloud project on 2026-10-13 (cloud version `20261013042316`), with the owner's go-ahead; checked there: both triggers present and enabled, production holds no tiebreak rows and one counter row.**
+
+**What changed:**
+
+- **`supabase/tests/040_cross_org_matrix.sql`: every tenant TABLE (26) against five callers** (anon, a signed-in stranger, a member of A, a member of B, a member of both), with the answer written out per table, caller and organisation so a failure names the exact cell:
+  - **read:** a caller sees an organisation's rows only if they belong to it (plus the two tables that are public by design: the public archive to anon, and the ACTIVE live sessions to everyone; a finished live session is members-only);
+  - **update:** only members of the organisation, and only on tables members may write;
+  - **delete and insert (a copy of the other organisation's row):** refused to everyone who does not belong (insert with the standard 42501, built from the columns a caller may really insert);
+  - **move:** a member of BOTH organisations cannot move a row from one to the other in either direction: `org_id` is frozen (23001), every child refuses to be re-pointed at the other organisation's parent, or the table's own cross-organisation trigger refuses.
+    Every attempt runs in a sub-transaction that is always rolled back, so nothing it tries can change the fixtures.
+- **Guards that keep it complete:** every public table has row-level security; every public table is in the matrix (or is one of the three creator-scoped Guess the Bean tables); every matrix table has an organisation-scoped policy or is deny-all with no privilege for anon or signed-in callers; **every view is `security_invoker`**; the table and column privileges `anon` holds are pinned to an exact list; and exact row counts, so a missing result can never turn a comparison into an empty pass.
+- **`supabase/tests/041_cross_org_rpcs.sql`: every organisation-scoped RPC (23).** Six cross-organisation attempts per RPC (a stranger from the other organisation, a member of A with B's resource, a member naming the other organisation, a member of both naming one organisation with the other's resource in both directions, a signed-in stranger, and an organiser who is not an owner on the owner-only team functions) must ALL be refused by the function's own guard, and the matching own-organisation call must not be refused by that guard. The five service-role-only functions are pinned as not executable by anon or any signed-in caller; `my_orgs` is shown to list exactly the caller's organisations; and **a guard fails when a new function that a signed-in caller can run and that takes any uuid is not in the matrix** (or on the short, named exemption list).
+- **A real finding, fixed in a small migration (`20261013140000_tenancy_freeze_remaining_parents.sql`).** CI builds its database with a newer Supabase CLI that grants `anon` and `authenticated` every privilege on every table by default; production and a long-lived local stack have the narrow privileges the revoke migrations leave. The matrix failed in CI and showed that in a default-privilege database a member of BOTH organisations could move a `btc_seeding_tiebreaks` row to the other organisation's event: its write policy only asks that the NEW event belong to an organisation the caller is a member of, and the table had no freeze trigger (production is protected only because `authenticated` has UPDATE on just `reason` and `tiebreak_rank`). `score_change_counts` (unreachable to members) had none either. Both now freeze their parent columns like every other tenant table (`app.forbid_parent_change`, 23001; `supabase/tests/042_freeze_remaining_parents.sql`), and a new guard fails when any tenant table lacks a BEFORE UPDATE freeze or check trigger. The matrix now holds in BOTH kinds of database (it is also run with `grant all on all tables ... to anon, authenticated` added, rolled back); where it differs between them it asserts only the organisation boundary (the insert-only ledger table, the exact anon privilege list, which is pinned only where privileges are narrow, and which is otherwise replaced by pins on the POLICIES that name anon or apply to every role).
+- **A second review, on a cheaper model, found more weaknesses in the tests themselves, all fixed:** (Haiku, run as a bake-off against the earlier Sonnet review; the two found different real issues.) 36 of 86 own-organisation RPC calls were stopped by a later domain rule, so the "own call is not refused by the guard" check could not tell a passed guard from an unrelated failure: each RPC now has an exact expected own outcome (`ok`, or the named downstream rule), the attack guard accepts only "not found / does not belong / only an owner" (no more generic permission or row-level-security text), and `load_btc_demo` has a test BTC event so its own call really succeeds; the write helper no longer reports a broken statement as a refusal (a syntax, type or constraint error is `-1` and fails a "nothing broke" check); the member-update expectation for the ledger table is no longer the same expression on both sides (it follows the UPDATE privilege); the two privilege pins that cannot hold in a default-privilege database are now `skip()`ped with a stated reason, not silently equal; the function completeness guard covers procedures, functions only `anon` can run, and matches exemptions by signature; a member of just one organisation now tries every move too; the three exempt Guess the Bean tables are asserted to carry no `org_id` or `event_id`; and every RPC must have been attacked at least three ways and called by its own organisation.
+- The first run already found nothing wrong in the real schema; it found five wrong expectations of mine (a ledger table and a tiebreak table that members cannot update, a function that checks its judge count before its organisation, a team function a non-owner is rightly refused, an audit-counter table with no fixture rows). A reviewer then found the matrix's own gaps, all fixed: `btc_seeding_tiebreaks` was only refused by its "no bracket" lock and by a column privilege, never by its organisation check (it now has an event without a bracket and an insert built from the granted columns), views were outside every guard, the completeness guard matched argument names only, and nothing attacked the team functions as an organiser who is not an owner.
+
+**Verified:** the whole database suite (43 files, 1878 assertions) on a database rebuilt from scratch. **Ten deliberate breaks, each caught by a named assertion:** a table readable by everyone, an immutability trigger switched off, anonymous insert allowed, `create_org` executable by signed-in callers, a new unlisted organisation function (named `p_event_id`, and one named `p_person_id`), `app.is_org_member` answering yes to everyone (dozens of cells fail), a table's write policy reduced to its lock, a view without `security_invoker`, finished live sessions made public.
+
+**Reviews:** security-reviewer and test-auditor (one combined run, following the project's `.claude/agents/*.md`): the real schema has no cross-organisation hole that the matrix surfaced or missed (the reviewer also probed 16 mixed-parent re-points and inserts by hand); nothing blocks the merge.
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-TEN.E1".
+
+## Take-over guard: the arming message is announced, and the warning is part of the button · 2026-10-13
+
+**Task:** accessibility follow-up to the event-selection guards (#236), from a review run on Haiku against the shipped code (a bake-off of cheaper reviewer models; its findings were checked against the code and were real). Client only: no migration.
+
+**Status: in review, not merged.**
+
+**What changed:**
+
+- **The status line on the timing screen is announced.** `heatsScreen.css` hides an EMPTY status line with `display: none`, and the guard's arming message ("“X” is on the venue screens ... Press “Replace it and start heat” to go on.") is put into it at the moment of arming: text added to a region that was not rendered is often not spoken, so the only screen-reader cue on arming (and on Cancel) was probably silent. It is now collapsed instead (no space, no box, still in the accessibility tree), as the Brewers Cup scoring screen already did. A real-browser test now asserts the empty region is rendered with zero height, and was shown to fail without the rule.
+- **"Start heat" is described by the warning** (`aria-describedby`), as the BTC Confirm button already was, so a screen-reader user who goes straight to the button hears it.
+- **Cancel says what happened:** "Start cancelled. Nothing has changed." (it used to clear the line silently while focus returned to "Start heat").
+- **The BTC warning is hidden when the confirm is only queued** (offline), not just when it is confirmed: the screen no longer offers another confirm, so "this will replace another event" described an action that was not there, and the button was still described by it.
+- **The arming message wraps a long event name** (`overflow-wrap: anywhere`).
+
+**Verified:** 3975 unit tests in 138 files; lint and Prettier; the whole Playwright suite (29 tests).
+
+**Flagged, not changed:** ROADMAP's "Known open items from the event-selection guards".
+
 ## Event-selection guards: the splash follows the live event, and starting a heat asks before replacing one · 2026-10-13
 
 **Task:** follow-up to phase D (owner request, 2026-10-13): "how do I direct the app to the right event?" while preparing several events and tests. Not a numbered tenancy task. One database function change, two screens, tests.
 
-**Status: in review, not merged. The migration `20261013120000_public_event_summary_prefers_live.sql` is NOT applied to the cloud project yet (it is compatible with the running site and can be applied at any time; it needs no quiet window).**
+**Status: merged to `dev` (#236) and released to `main` (#237) on 2026-10-13. The migration `20261013120000_public_event_summary_prefers_live.sql` was applied to the cloud project the same day (cloud version `20261013023650`, with the owner's go-ahead). Verified on https://www.seduhscore.com: Grey Matter's splash now reads "Grey Matter Cup Taster Competition 2026 · LIVE" (it read "Test Event 1 · TEST DATA" before), the function is still SECURITY DEFINER with a pinned search_path and executable by anon and authenticated only, and the rehearsal organisation's splash opens to an empty holding state.**
 
 **What changed:**
 

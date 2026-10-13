@@ -2174,10 +2174,52 @@ _Database: `supabase/migrations/20261013100000_tenancy_anon_contract.sql`, `supa
 
 _`supabase/migrations/20261013120000_public_event_summary_prefers_live.sql`, `core/publish.js`, `cup-taster/timingScreen.js`, `btc/scoringScreen.js`._
 
-- **The migration is not applied to the cloud project yet.** Safe at any time (same signature, columns and grants). Until then the production splash still shows the newest event, test events included.
+- **Applied to the cloud project 2026-10-13** (cloud version `20261013023650`) and verified on production: the splash names the live event.
 - **The links still address the organisation, not an event.** The projector and phone show whichever event of the organisation last went live; the splash shows the live one (or the newest real one). To pin a screen to one specific event while another is live (two real events at once under one organisation), event-pinned audience links (`#/live/<slug>/<event>/...`) and a public door that takes an event id would be needed. Not built; the rehearsal organisation and the take-over guard cover the practice-and-test case.
 - **The take-over warning is computed when the screen loads.** If another device makes a different event live afterwards, the warning is stale: absent (the start then replaces it, as before the guard) or still shown (one extra tap). Checking again at the tap would add a network round trip to a time-critical tap, so it does not.
 - **A re-render while "Replace it and start heat" is armed** (a pending-work recheck, an error) rebuilds the card; the armed state is lost safely (it asks again) but keyboard focus falls to the page.
 - **Only the first publishing action asks.** Confirming a heat or resolving a stage in Cup Taster still publishes without asking (it can only take over if another event started between), and BTC asks only by a warning, not a second tap.
+- **"Start heat" uses the native `disabled` attribute on the button that has focus** (existing since 2026-09-11, and an existing test pins it): focus drops to the page while "Starting…" shows, and nothing announces it. `core/dom.js`'s `setBusyDisabled` (`aria-disabled` and `aria-busy`) is the project's pattern for this. The wait itself (`startHeat` and the publish flush) has no bound and no stated failure state if the connection accepts but never answers.
+- **A failed live check looks like "nothing is live"** (the guard is deliberately fail-open): on a flaky connection the organiser taps Start with no warning and no sign the check did not run. A third, quiet line ("couldn't check what is on the venue screens") would say so.
+- **A failed live-view publish after a successful start is only logged** (existing): the screen reports the heat as started while the venue screens may not have changed; the sync chip is the only surface.
+- **The armed state never expires:** once armed it stays "Replace it and start heat" until Cancel or a re-render.
 - **`.take-over-warning` is styled in two stylesheets** (Cup Taster timing, BTC scoring); one shared stylesheet would do.
-- **The existing `ui.gotoMissing` button in BTC scoring has the same `[hidden]`-versus-`.btn` display problem** that the Cancel button had (a `.btn` ignores the browser's `[hidden]`). Not touched here; worth a repo-wide `.btn[hidden] { display: none; }`.
+
+---
+
+## Known open items from T-TEN.E1 (2026-10-13)
+
+_Tests only: `supabase/tests/040_cross_org_matrix.sql`, `supabase/tests/041_cross_org_rpcs.sql`._
+
+- **The freeze-trigger migration is applied to the cloud project** (2026-10-13, cloud version `20261013042316`; two additive triggers on `btc_seeding_tiebreaks` and `score_change_counts`), so production no longer relies on narrow table privileges for those two tables.
+- **The catalog guard for child tables is now "has a BEFORE UPDATE freeze or check trigger", not "every parent column is frozen".** `033` only sees tables that carry an `org_id` column. For tables scoped through `event_id` / `stage_id` / `match_id`, `040` asserts every tenant table has a freezing or checking trigger and its "move" check tries one parent column per table (`ct_results` re-points `heat_entry_id`, not `set_id`). The reviewer probed 16 other mixed-parent re-points by hand (tiebreak winner, bracket slot match/team/feeder, bonus fastest team, `person_id`, `kept_id`, `entry_id`, `set_id`) and all were refused, by check triggers, freeze triggers or a check constraint, but about 20 foreign-key columns on tenant tables are in no `forbid_parent_change` list. A catalog guard ("every FK column on an updatable tenant table is frozen, check-triggered, or not updatable") is the real answer.
+- **Mixed-argument RPC calls are not exercised, and a second review proved why it matters:** every id in an attack comes from one organisation, so for several multi-id RPCs (`record_btc_tiebreak`, `record_btc_seeding_tiebreak`, `confirm_btc_match`, `create_btc_bracket_match`) the call is refused by an earlier domain rule and the foreign argument is never reached; the test would still pass if the foreign-argument check were removed. The fix is a fixture state where the own call SUCCEEDS, then an attack that changes only the foreign argument. `031` covers the inserts and manual probes found no hole.
+- **`create_btc_match` is attacked only by callers who belong to neither organisation** (it is told no organisation, so a caller who belongs to the resource's organisation is allowed); `user_ab` is not attacked with an event from one organisation and teams from the other.
+- **DELETE has no positive control** (a member deleting their own row), so "refused" for a stranger rests on the matching UPDATE control; the stranger's refusals are proven by the rolled-back sentinel and by the INSERT copies being refused with 42501 before any key check.
+- **The completeness guard for functions keys on uuid arguments and a name exemption list**, so a new overload of a covered name is treated as covered; an overload-aware check would compare function identities.
+- **`get_scoring_record` is only tested as anon on unpublished events here** (019 covers the published path).
+- **The anon-privilege pin fails if anything with PUBLIC grants, such as pgTAP itself, is installed in `public`.** Fine under the Supabase test runner, which installs it elsewhere.
+- **The `processed_operations` ledger lets a member UPDATE and DELETE their own organisation's rows where default privileges grant it** (its policy is ALL; production has INSERT and SELECT only). A member deleting a ledger row could let an operation replay. Own organisation only, and the privileges narrow it in production, but narrowing the policy to SELECT and INSERT is the structural fix. The matrix now follows the database's privilege rather than asserting insert-only.
+- **The completeness guard for tables checks that a freeze or check trigger EXISTS, not which columns it freezes** (a reviewer's point): removing one column from a trigger's argument list would not fail `040`. Decoding `tgargs` against every foreign-key column, the way `033` does for `org_id`, is the real guard.
+- **`040`'s guard on views checks `security_invoker` only;** there is no row-level probe of the six views as a stranger, and nothing guards foreign tables beyond the `relkind` filter.
+
+---
+
+## Known open items from T-TEN.E2 (2026-10-13)
+
+_Tests only: `tests/e2e/organiser-tenancy.spec.js`, `tests/e2e/support/tenants.js`, `playwright.config.js`._
+
+- **The event-route guard for people in ONE organisation: fixed** (see "Known open items from the event-link guard"). It used to skip them, so another organisation's event link ended in a generic error with a Retry that could not work.
+- **No browser test boots the console without `VITE_DEFAULT_ORG_ID` AND signs in.** The built-app smoke test boots a build made without it (no backend), the unit test covers the memberships path, and the tenancy spec runs against a dev server that has the variable. A dev server started with the variable blank and the tenancy spec run against it would close it.
+- **The spec is serial** (one failure hides the rest of the file) and depends on the earlier projects having run; the tests do not depend on each other's state.
+- **Each run leaves three organisations and their people behind** on a long-lived local stack (the database refuses to remove a sole owner); slugs and emails are unique per run.
+
+---
+
+## Known open items from the event-link guard (2026-10-13)
+
+_`src/main.js` (`placeOwnOrgEventRoute`, `rememberedLookup`), `src/main.test.js`, `tests/e2e/organiser-tenancy.spec.js`._
+
+- **One extra read, once per event, for people with one organisation** (then remembered on the device). The first time a link to an event is opened on a device, its page waits for that read, for at most 2.5 seconds, before it renders; an event the person just created on this device could be remembered at creation to skip it.
+- **Untested branch:** the restart of the navigation when the person or organisation changes while the question is in flight, for ONE-organisation people (a deliberate break of it passes the unit tests; the several-organisation twin is tested).
+- **A remembered "this event is in my organisation" answer is trusted for the life of the device's storage**, as for several organisations; an event never changes organisation (T-TEN.B1), and what it is used for is deciding between "open the screen" and "switch", never granting access (the database still decides what is visible). A person removed from an organisation who still has the answer remembered would open the event screen and meet the database's own refusal.

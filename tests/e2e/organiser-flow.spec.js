@@ -362,6 +362,14 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
       `“${otherName}” is on the venue screens`,
     );
 
+    // The status line is a live region, so it must be RENDERED while empty (an announcement into a display:none region
+    // is often not spoken), yet take no space.
+    const statusBox = await page.locator('.timing-screen .screen-feedback').evaluate((el) => ({
+      display: getComputedStyle(el).display,
+      height: el.getBoundingClientRect().height,
+    }));
+    expect(statusBox.display).not.toBe('none');
+    expect(statusBox.height).toBe(0);
     // First tap: asks, starts nothing, the other event stays live. Cancel is not on screen until then.
     const start = page.getByRole('button', { name: 'Start heat' });
     await expect(page.getByRole('button', { name: 'Cancel' })).toBeHidden();
@@ -373,6 +381,9 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
 
     // Cancel puts it back; asking again works the same way.
     await page.getByRole('button', { name: 'Cancel' }).click();
+    await expect(page.locator('.timing-screen .screen-feedback')).toHaveText(
+      'Start cancelled. Nothing has changed.',
+    );
     await expect(page.getByRole('button', { name: 'Start heat' })).toBeVisible();
     expect(await liveEventId()).toBe(otherEventId);
     await page.getByRole('button', { name: 'Start heat' }).click();

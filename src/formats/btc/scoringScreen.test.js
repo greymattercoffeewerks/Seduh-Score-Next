@@ -291,6 +291,17 @@ describe('mountScoringScreen', () => {
       expect(confirmButton().hasAttribute('aria-describedby')).toBe(false);
     });
 
+    it('is not shown, nor read with the button, once the confirm is queued (offline): the screen no longer offers it', async () => {
+      liveElsewhere();
+      flushOutcome = 'offline';
+      await mount();
+      await fillAll();
+      confirmButton().click();
+      await flush();
+      expect(warning().hidden).toBe(true);
+      expect(confirmButton().hasAttribute('aria-describedby')).toBe(false);
+    });
+
     it('does not get in the way of confirming', async () => {
       liveElsewhere();
       await mount();
