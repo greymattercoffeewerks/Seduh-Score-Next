@@ -364,6 +364,9 @@ select lives_ok(
   'a user in no org can call the helper but it finds nothing to act on'
 );
 reset role;
+-- the table owner again, with NO signed-in person: a claim left over from above would make this session look like a
+-- caller, and the cross-reference triggers refuse a caller who is not a member of the org (T-TEN.E3 follow-up)
+reset request.jwt.claim.sub;
 select is((select team2_id from btc_bracket_slots where slot_label = 'sf1' and event_id = '00000000-0000-0000-0000-0000000000e1'),
           null, 'and neither call touched the emptied seat (the helper runs under the caller''s rights, not the owner''s)');
 update btc_bracket_slots set team2_id = current_setting('test.qf2_team1')::uuid where slot_label = 'sf1' and event_id = '00000000-0000-0000-0000-0000000000e1';
