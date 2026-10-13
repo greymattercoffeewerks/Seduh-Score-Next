@@ -1,3 +1,27 @@
+## T-TEN.E1: the cross-organisation negative matrix · 2026-10-13
+
+**Task:** T-TEN.E1 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase E). Tests only: no app code, no migration, nothing to push to the cloud project.
+
+**Status: in review, not merged.**
+
+**What changed:**
+
+- **`supabase/tests/040_cross_org_matrix.sql`: every tenant TABLE (26) against five callers** (anon, a signed-in stranger, a member of A, a member of B, a member of both), with the answer written out per table, caller and organisation so a failure names the exact cell:
+  - **read:** a caller sees an organisation's rows only if they belong to it (plus the two tables that are public by design: the public archive to anon, and the ACTIVE live sessions to everyone; a finished live session is members-only);
+  - **update:** only members of the organisation, and only on tables members may write;
+  - **delete and insert (a copy of the other organisation's row):** refused to everyone who does not belong (insert with the standard 42501, built from the columns a caller may really insert);
+  - **move:** a member of BOTH organisations cannot move a row from one to the other in either direction: `org_id` is frozen (23001), every child refuses to be re-pointed at the other organisation's parent, or the table's own cross-organisation trigger refuses.
+    Every attempt runs in a sub-transaction that is always rolled back, so nothing it tries can change the fixtures.
+- **Guards that keep it complete:** every public table has row-level security; every public table is in the matrix (or is one of the three creator-scoped Guess the Bean tables); every matrix table has an organisation-scoped policy or is deny-all with no privilege for anon or signed-in callers; **every view is `security_invoker`**; the table and column privileges `anon` holds are pinned to an exact list; and exact row counts, so a missing result can never turn a comparison into an empty pass.
+- **`supabase/tests/041_cross_org_rpcs.sql`: every organisation-scoped RPC (23).** Six cross-organisation attempts per RPC (a stranger from the other organisation, a member of A with B's resource, a member naming the other organisation, a member of both naming one organisation with the other's resource in both directions, a signed-in stranger, and an organiser who is not an owner on the owner-only team functions) must ALL be refused by the function's own guard, and the matching own-organisation call must not be refused by that guard. The five service-role-only functions are pinned as not executable by anon or any signed-in caller; `my_orgs` is shown to list exactly the caller's organisations; and **a guard fails when a new function that a signed-in caller can run and that takes any uuid is not in the matrix** (or on the short, named exemption list).
+- The first run already found nothing wrong in the real schema; it found five wrong expectations of mine (a ledger table and a tiebreak table that members cannot update, a function that checks its judge count before its organisation, a team function a non-owner is rightly refused, an audit-counter table with no fixture rows). A reviewer then found the matrix's own gaps, all fixed: `btc_seeding_tiebreaks` was only refused by its "no bracket" lock and by a column privilege, never by its organisation check (it now has an event without a bracket and an insert built from the granted columns), views were outside every guard, the completeness guard matched argument names only, and nothing attacked the team functions as an organiser who is not an owner.
+
+**Verified:** the whole database suite (42 files, 1858 assertions) on a database rebuilt from scratch. **Ten deliberate breaks, each caught by a named assertion:** a table readable by everyone, an immutability trigger switched off, anonymous insert allowed, `create_org` executable by signed-in callers, a new unlisted organisation function (named `p_event_id`, and one named `p_person_id`), `app.is_org_member` answering yes to everyone (dozens of cells fail), a table's write policy reduced to its lock, a view without `security_invoker`, finished live sessions made public.
+
+**Reviews:** security-reviewer and test-auditor (one combined run, following the project's `.claude/agents/*.md`): the real schema has no cross-organisation hole that the matrix surfaced or missed (the reviewer also probed 16 mixed-parent re-points and inserts by hand); nothing blocks the merge.
+
+**Flagged, not changed:** ROADMAP's "Known open items from T-TEN.E1".
+
 ## Event-selection guards: the splash follows the live event, and starting a heat asks before replacing one · 2026-10-13
 
 **Task:** follow-up to phase D (owner request, 2026-10-13): "how do I direct the app to the right event?" while preparing several events and tests. Not a numbered tenancy task. One database function change, two screens, tests.

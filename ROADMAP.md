@@ -2181,3 +2181,17 @@ _`supabase/migrations/20261013120000_public_event_summary_prefers_live.sql`, `co
 - **Only the first publishing action asks.** Confirming a heat or resolving a stage in Cup Taster still publishes without asking (it can only take over if another event started between), and BTC asks only by a warning, not a second tap.
 - **`.take-over-warning` is styled in two stylesheets** (Cup Taster timing, BTC scoring); one shared stylesheet would do.
 - **The existing `ui.gotoMissing` button in BTC scoring has the same `[hidden]`-versus-`.btn` display problem** that the Cancel button had (a `.btn` ignores the browser's `[hidden]`). Not touched here; worth a repo-wide `.btn[hidden] { display: none; }`.
+
+---
+
+## Known open items from T-TEN.E1 (2026-10-13)
+
+_Tests only: `supabase/tests/040_cross_org_matrix.sql`, `supabase/tests/041_cross_org_rpcs.sql`._
+
+- **Child tables have no catalog guard for "every parent column is frozen".** `033` only sees tables that carry an `org_id` column, and says so. For tables scoped through `event_id` / `stage_id` / `match_id`, `040`'s "move" check is the de facto guard, but it tries one parent column per table (`ct_results` re-points `heat_entry_id`, not `set_id`). The reviewer probed 16 other mixed-parent re-points by hand (tiebreak winner, bracket slot match/team/feeder, bonus fastest team, `person_id`, `kept_id`, `entry_id`, `set_id`) and all were refused, by check triggers, freeze triggers or a check constraint, but about 20 foreign-key columns on tenant tables are in no `forbid_parent_change` list. A catalog guard ("every FK column on an updatable tenant table is frozen, check-triggered, or not updatable") is the real answer.
+- **Mixed-argument RPC calls are not exercised** (event A with team B, match A with winner B): every id in a call comes from one organisation, so the header's "mixed" claim is for the organisation-versus-resource mismatch only. `031` covers the inserts and the manual probes covered the refusals; a small table of mixed calls would close it.
+- **`create_btc_match` is attacked only by callers who belong to neither organisation** (it is told no organisation, so a caller who belongs to the resource's organisation is allowed); `user_ab` is not attacked with an event from one organisation and teams from the other.
+- **DELETE has no positive control** (a member deleting their own row), so "refused" for a stranger rests on the matching UPDATE control; the stranger's refusals are proven by the rolled-back sentinel and by the INSERT copies being refused with 42501 before any key check.
+- **The completeness guard for functions keys on uuid arguments and a name exemption list**, so a new overload of a covered name is treated as covered; an overload-aware check would compare function identities.
+- **`get_scoring_record` is only tested as anon on unpublished events here** (019 covers the published path).
+- **The anon-privilege pin fails if anything with PUBLIC grants, such as pgTAP itself, is installed in `public`.** Fine under the Supabase test runner, which installs it elsewhere.
