@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { createTenant } from './support/tenants.js';
+import { createTenant, localStack } from './support/tenants.js';
 import { DEMO_TEAM_NAMES, preliminaryPayload } from '../../src/formats/btc/demoLivePayload.js';
 
 // T-TEN.D5: the audience, anonymous and signed-out, against the real app and a real local Supabase stack with
@@ -213,6 +213,28 @@ test.describe('the audience of two organisations (real app, real local Supabase)
     } finally {
       await context.close();
     }
+  });
+
+  // T-TEN.D6, over the real HTTP door an anonymous caller (or an old, cached screen) would use.
+  test('an anonymous caller cannot list events, and the live sessions it can list are the active ones', async ({
+    request,
+  }) => {
+    const { api, anonKey } = localStack();
+    const headers = { apikey: anonKey, authorization: `Bearer ${anonKey}` };
+
+    const events = await request.get(`${api}/rest/v1/events?select=name`, { headers });
+    expect([401, 403]).toContain(events.status());
+
+    const sessions = await request.get(`${api}/rest/v1/live_sessions?select=org_id,active`, {
+      headers,
+    });
+    expect(sessions.ok()).toBe(true);
+    const rows = await sessions.json();
+    // Both organisations' live sessions are listed, and nothing that is not live.
+    expect(rows.map((row) => row.org_id)).toEqual(
+      expect.arrayContaining([alpha.orgId, bravo.orgId]),
+    );
+    expect(rows.every((row) => row.active === true)).toBe(true);
   });
 
   test('moving between phone, projector and splash in one tab keeps showing the same organisation’s event', async ({
