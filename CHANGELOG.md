@@ -2,7 +2,7 @@
 
 **Task:** T-TEN.D6 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase D, decision D-T3: expand, switch, contract). A database migration plus tests; no app code changed.
 
-**Status: in review, not merged. NOT PUSHED to the cloud project: that is a separate, manual step for a quiet window (no live event, venue displays reloaded). Merging this PR deploys only the website; the cloud database does not change until the migration is pushed.**
+**Status: merged to `dev` (#234) and PUSHED to the cloud project on 2026-10-13** (no live event; the owner had reloaded the venue displays), as cloud migration version `20261013010530` (`tenancy_anon_contract`). Verified on the cloud afterwards: the policies and privileges are as intended, an anonymous `GET /events` is refused (HTTP 401), an anonymous `GET /live_sessions` lists only the active row, `public_org_by_slug` still answers, an anonymous write to `live_sessions` is refused, and on https://www.seduhscore.com the phone, projector and splash screens open by slug link, the old slug-less phone link still opens, and an unknown slug shows the not-found card. Not yet released to `main` (the migration file is on `dev`).
 
 **What changed:**
 
