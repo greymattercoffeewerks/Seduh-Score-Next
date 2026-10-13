@@ -1,3 +1,21 @@
+## Take-over guard: the arming message is announced, and the warning is part of the button · 2026-10-13
+
+**Task:** accessibility follow-up to the event-selection guards (#236), from a review run on Haiku against the shipped code (a bake-off of cheaper reviewer models; its findings were checked against the code and were real). Client only: no migration.
+
+**Status: in review, not merged.**
+
+**What changed:**
+
+- **The status line on the timing screen is announced.** `heatsScreen.css` hides an EMPTY status line with `display: none`, and the guard's arming message ("“X” is on the venue screens ... Press “Replace it and start heat” to go on.") is put into it at the moment of arming: text added to a region that was not rendered is often not spoken, so the only screen-reader cue on arming (and on Cancel) was probably silent. It is now collapsed instead (no space, no box, still in the accessibility tree), as the Brewers Cup scoring screen already did. A real-browser test now asserts the empty region is rendered with zero height, and was shown to fail without the rule.
+- **"Start heat" is described by the warning** (`aria-describedby`), as the BTC Confirm button already was, so a screen-reader user who goes straight to the button hears it.
+- **Cancel says what happened:** "Start cancelled. Nothing has changed." (it used to clear the line silently while focus returned to "Start heat").
+- **The BTC warning is hidden when the confirm is only queued** (offline), not just when it is confirmed: the screen no longer offers another confirm, so "this will replace another event" described an action that was not there, and the button was still described by it.
+- **The arming message wraps a long event name** (`overflow-wrap: anywhere`).
+
+**Verified:** 3975 unit tests in 138 files; lint and Prettier; the whole Playwright suite (29 tests).
+
+**Flagged, not changed:** ROADMAP's "Known open items from the event-selection guards".
+
 ## Event-selection guards: the splash follows the live event, and starting a heat asks before replacing one · 2026-10-13
 
 **Task:** follow-up to phase D (owner request, 2026-10-13): "how do I direct the app to the right event?" while preparing several events and tests. Not a numbered tenancy task. One database function change, two screens, tests.

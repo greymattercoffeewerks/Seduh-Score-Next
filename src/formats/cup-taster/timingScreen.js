@@ -715,6 +715,8 @@ export async function mountTimingScreen(
           )
         : null;
       let takeOverArmed = false;
+      // A screen-reader user who reaches the button directly (not through the paragraph above it) hears the warning.
+      if (takeOver) startButton.setAttribute('aria-describedby', 'timing-take-over-warning');
       const cancelTakeOver = takeOver
         ? el('button', {
             className: 'btn btn-outline tap-target take-over-cancel',
@@ -728,7 +730,8 @@ export async function mountTimingScreen(
           takeOverArmed = false;
           startButton.textContent = 'Start heat';
           cancelTakeOver.hidden = true;
-          setFeedback(feedback, null);
+          // Said, not just cleared: a screen-reader user whose focus returns to "Start heat" hears that nothing changed.
+          setFeedback(feedback, 'Start cancelled. Nothing has changed.', 'pending');
           startButton.focus();
         });
       }
@@ -809,7 +812,13 @@ export async function mountTimingScreen(
           'div',
           { className: 'card' },
           [
-            takeOver ? el('p', { className: 'take-over-warning', text: takeOver }) : null,
+            takeOver
+              ? el('p', {
+                  id: 'timing-take-over-warning',
+                  className: 'take-over-warning',
+                  text: takeOver,
+                })
+              : null,
             // Two buttons with a gap between them: the one that replaces the live event must never sit
             // flush against Cancel on a narrow screen.
             takeOver
