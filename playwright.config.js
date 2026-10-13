@@ -84,5 +84,13 @@ export default defineConfig({
       dependencies: ['dev-app'],
       use: { baseURL: 'http://127.0.0.1:5273' },
     },
+    {
+      // organiser-tenancy.spec.js (T-TEN.E2): the organiser console with two REAL organisations and real people in
+      // them (organiser-flow.spec.js fakes the second organisation's answer). Same shared stack, so it runs last.
+      name: 'dev-tenancy',
+      testMatch: /organiser-tenancy\.spec\.js/,
+      dependencies: ['dev-audience'],
+      use: { baseURL: 'http://127.0.0.1:5273' },
+    },
   ],
 });
