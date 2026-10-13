@@ -1,3 +1,21 @@
+## Event-selection guards: the splash follows the live event, and starting a heat asks before replacing one · 2026-10-13
+
+**Task:** follow-up to phase D (owner request, 2026-10-13): "how do I direct the app to the right event?" while preparing several events and tests. Not a numbered tenancy task. One database function change, two screens, tests.
+
+**Status: in review, not merged. The migration `20261013120000_public_event_summary_prefers_live.sql` is NOT applied to the cloud project yet (it is compatible with the running site and can be applied at any time; it needs no quiet window).**
+
+**What changed:**
+
+- **The splash (and the "no live session yet" holding state) names the right event** (`public_event_summary`): the LIVE event first, otherwise the newest event that is not a test event, otherwise the newest. It used to pick the newest event by creation, test events included, so Grey Matter's production splash read "Test Event 1 · TEST DATA, NOT A LIVE EVENT" while a real event was the one on the projector. Same name, arguments, columns and grants.
+- **Starting a heat asks before it replaces another live event** (Cup Taster `timingScreen.js`). An organisation has one live session at a time and the first heat started in an event puts that event on the venue screens; nothing asked first. Now, when another event of the organisation is live, the Start-heat card says so up front ("“X” is on the venue screens. Continuing will put this event there instead.", and, plainly, when a TEST event would replace a real one), the first tap only arms ("Replace it and start heat", with Cancel, announced in the polite status line), and the second tap starts. Nothing changes when nothing else is live.
+- **Confirming a BTC match shows the same warning** on the Confirm-match card (`btc/scoringScreen.js`): up front and linked to the button for screen readers, without a second tap (the confirm is already a deliberate end-of-match step); it disappears once the match is confirmed.
+- **The check (`findLiveElsewhere`, `core/publish.js`) fails open and is time-boxed (2.5 s):** offline, slow or erroring, the answer is "nothing to warn about" and the start goes ahead exactly as before. It is logged, not silent.
+- **A rehearsal organisation exists in production** (created with the owner's go-ahead, 2026-10-13): "Grey Matter Rehearsal", slug `grey-matter-rehearsal`, owned by the owner's account only. Practice events there can never touch the real event's screens, and it has its own audience links.
+
+**Verified:** pgTAP (40 files, 1647 assertions) on a database rebuilt from scratch; 3972 unit tests in 138 files; lint, Prettier; the whole Playwright suite (29 tests, with CI's environment variables) including a new real-browser test: another event is live, the heat's page warns, the first tap starts nothing and leaves the other event live, Cancel puts it back, the second tap starts the heat and the live session moves to this event. Deliberate breaks of the check and the screen (11) were each caught. One combined review (accessibility, code, tests, SQL); findings applied: the "hidden" Cancel button was always visible (`.btn` sets its own display, so a `[hidden]` rule was added and the browser test now asserts it), Cancel is hidden once the start is in flight, the armed state resets with the button, the lookup is time-boxed, the BTC warning is linked to its button and hidden after confirming, the two buttons have a gap.
+
+**Flagged, not changed:** ROADMAP's "Known open items from the event-selection guards".
+
 ## T-TEN.D6: the old anonymous doors are closed (contract step) · 2026-10-13
 
 **Task:** T-TEN.D6 of `Handoffs and Specs/TENANCY-WORK-PLAN.md` (phase D, decision D-T3: expand, switch, contract). A database migration plus tests; no app code changed.
