@@ -1,8 +1,18 @@
+## T-TEN.E5 step 6: `VITE_DEFAULT_ORG_ID` removed from production · 2026-10-13
+
+**Task:** step 6 of the T-TEN.E5 rollout runbook. Dashboard change by the owner, verified here; no code.
+
+**What was done:** the owner deleted `VITE_DEFAULT_ORG_ID` from the Cloudflare build variables (the build keeps `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` and `VITE_LEGACY_AUDIENCE_ORG_SLUG=grey-matter-coffee-werks`) and retried the production build.
+
+**Verified on the live site** (`www.seduhscore.com`, bundle `app-DqYBFZHc.js`): the bundle holds the Supabase URL and the legacy slug and no longer holds the old organisation id; `/app/` boots to the sign-in page with no console errors; the old slug-less links `#/live/splash`, `#/live/projector` and `#/live/phone` still open the right event by slug alone, as does `#/live/grey-matter-coffee-werks/splash`; `#/live/grey-matter-rehearsal/splash` shows the empty splash (no events).
+
+**Note for next time:** Cloudflare preview builds (pull request branches) do NOT receive the dashboard variables, so a preview shows "supabaseUrl is required" whatever the variables say; only a production build (branch `main`) tells you anything about them.
+
 ## T-TEN.E3 follow-up: the membership gate on the remaining cross-reference triggers · 2026-10-13
 
 **Task:** the first of the two low-severity findings of the T-TEN.E3 full-surface security review. One migration (`20261013160000_tenancy_trigger_membership_gate.sql`) and its test; no application code.
 
-**Status: in review. The migration is NOT applied to the cloud project yet.**
+**Status: merged (#250) and applied to the cloud project 2026-10-13 (cloud migration version `20261013082049`, name `tenancy_trigger_membership_gate`).** Checked in the cloud afterwards: all six trigger functions call `app.refuse_non_member`; the helper is executable by no API role (ACL: owner only); no other SECURITY DEFINER BEFORE ROW trigger function lacks the gate or the standard refusal (apart from the two named exceptions).
 
 **What was done:**
 
