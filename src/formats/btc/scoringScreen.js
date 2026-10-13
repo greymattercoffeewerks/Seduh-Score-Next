@@ -394,6 +394,10 @@ export async function mountScoringScreen(
     if (outcome === 'pending') {
       state.lockReason = 'pending';
       setFeedback(null);
+      // The confirm is queued and the screen no longer offers another one, so "this will replace another event" would
+      // describe an action that is not available. The button's description follows.
+      if (ui?.takeOverWarning) ui.takeOverWarning.hidden = true;
+      updateConfirm();
       return;
     }
     // Dropped: the server refused it. A version conflict can only be resolved by
