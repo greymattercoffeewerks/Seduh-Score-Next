@@ -116,6 +116,23 @@
       logins, heats-first page, brand lockup, header sync chip, redesigned
       venue display). Facts follow CHANGELOG.md; the BTC live surfaces have
       not yet been run at a live BTC event, and the copy says so.
+
+      Progress update, 2026-10-14: v3.3.0, still Gadong — no cycle bump (a
+      nameplate move is a capability-era call and the owner has not made it),
+      but a second minor release. v3.2.0 is the BTC seeding tie-break (the
+      organiser orders teams that are level in the standings). v3.3.0 closes
+      the tenancy phase: the platform now runs more than one organisation
+      safely — the console follows the organisation the signed-in person
+      belongs to, audience links name the organiser, the public results
+      archive says whose event each result is, the old anonymous doors on
+      events and live sessions are closed, and a cross-organisation test
+      matrix guards every organisation-scoped table and function. Verified in
+      production by the owner on 2026-10-14 with a real second organisation.
+      Also: event-selection guards (the splash follows the live event;
+      starting a heat asks before replacing another live event). Facts follow
+      CHANGELOG.md; test counts are the E6 close-out figures. BTC remains a
+      format shown to prospective organisers, not yet a live event, and the
+      copy does not claim otherwise.
     -->
     <style>
       @font-face {
@@ -1109,12 +1126,13 @@
           </div>
           <div class="ledger-row reveal">
             <span class="ledger-place">Gadong</span>
-            <span class="ledger-version">v3.1.0</span>
+            <span class="ledger-version">v3.3.0</span>
             <span class="ledger-status current"><span class="pulse-dot"></span>Current</span>
             <span class="ledger-note"
               >BTC (Barista Team Championship) — the second real competition format — then a trust
-              pass, hardening for the room, the first live Cup Taster event on 4 October 2026 and
-              the fixes it prompted, and now BTC's own projector and phone screens.</span
+              pass, the first live Cup Taster event on 4 October 2026 and the fixes it prompted,
+              BTC's own projector and phone screens, and now the platform's first multi-organisation
+              release.</span
             >
           </div>
           <div class="ledger-row reveal">
@@ -1145,9 +1163,10 @@
 
         <div class="stat-row reveal">
           <span><b>3</b> cycles</span>
-          <span><b>v3.1.0</b> now</span>
+          <span><b>v3.3.0</b> now</span>
           <span><b>2 / 4</b> formats</span>
           <span><b>1</b> live event</span>
+          <span><b>2</b> organisations in production</span>
           <span><b>3</b> community tools</span>
         </div>
       </section>
@@ -1159,18 +1178,156 @@
           <strong>Kiulap</strong> — seven phases per the project's frozen handoff spec, all shipped.
           Then <strong>Berakas</strong> — a front door nobody had planned for, followed by a public
           shelf for the useful extras. Now <strong>Gadong</strong> — the second real competition
-          format, the first live event run on the platform, and BTC's own screens for the room.
-          Newest first, one open at a time — open a milestone to read it.
+          format, the first live event run on the platform, BTC's own screens for the room, and room
+          for more than one organiser. Newest first, one open at a time — open a milestone to read
+          it.
         </p>
 
         <div class="milestones">
-          <div class="milestone reveal is-open" id="ms-gadong-btc">
+          <div class="milestone reveal is-open" id="ms-gadong-tenancy">
+            <h3 class="milestone-head">
+              <button
+                type="button"
+                class="milestone-toggle"
+                id="ms-gadong-tenancy-btn"
+                aria-expanded="true"
+                aria-controls="ms-gadong-tenancy-panel"
+              >
+                <span class="ms-text">
+                  <span class="ms-meta"
+                    >Gadong · 10 to 14 October 2026 · v3.2.0 to v3.3.0 · 3 entries</span
+                  >
+                  <span class="ms-title">Room for more than one organiser</span>
+                  <span class="ms-sum"
+                    >Level teams, ordered by people · More than one organiser, safely · Pointing the
+                    app at the right event</span
+                  >
+                </span>
+                <span class="ms-chev" aria-hidden="true"></span>
+              </button>
+            </h3>
+            <div
+              class="milestone-panel"
+              id="ms-gadong-tenancy-panel"
+              role="region"
+              aria-labelledby="ms-gadong-tenancy-btn"
+            >
+              <div class="milestone-inner">
+                <div class="log" data-stagger>
+                  <div class="log-item current reveal">
+                    <div class="log-phase">Gadong</div>
+                    <div>
+                      <div class="log-head">
+                        <span class="log-name">Level teams, ordered by people</span>
+                        <span class="log-ver">v3.2.0</span>
+                        <span class="log-now"><span class="pulse-dot"></span>Live now</span>
+                      </div>
+                      <div class="log-line shipped">
+                        <span class="k">Shipped</span
+                        ><span class="v"
+                          >A BTC bracket is seeded from the standings, and seeds decide who plays
+                          whom — first meets eighth. When teams were level on points and wins across
+                          the cut-off, the bracket simply refused to generate, and teams level
+                          anywhere else were seeded in an arbitrary order. Now a "Teams level in the
+                          standings" card on the bracket screen lets the organiser put them in order
+                          and say why, and the order and the reason are recorded. Minor release
+                          v3.2.0.</span
+                        >
+                      </div>
+                      <div class="log-line felt">
+                        <span class="k">Felt like</span
+                        ><span class="v"
+                          >a tie being a decision somebody makes and signs, not something the
+                          software quietly settles.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="log-item current reveal">
+                    <div class="log-phase">Gadong</div>
+                    <div>
+                      <div class="log-head">
+                        <span class="log-name">More than one organiser, safely</span>
+                        <span class="log-ver">v3.3.0</span>
+                        <span class="log-now"><span class="pulse-dot"></span>Live now</span>
+                      </div>
+                      <div class="log-line shipped">
+                        <span class="k">Shipped</span
+                        ><span class="v"
+                          >Until now the platform worked for exactly one organisation, fixed into
+                          the build. It now works for many. The console asks the database which
+                          organisations the signed-in person belongs to, shows the one they are
+                          working in, and lets them switch; the Team screen, the Events list and the
+                          live-event guards all follow. Every audience link names the organiser, so
+                          a phone, projector or splash screen can only ever show that organiser's
+                          event, and the phone view has a QR code to join. The public results
+                          archive says whose event each result is. A shared tablet is safe: unsynced
+                          scoring queued by one account can no longer be lost when another signs in,
+                          and signing out warns first. A link into another organisation's event
+                          moves the console there and says so. On the database side the old
+                          anonymous doors on events and live sessions were closed, every table that
+                          holds an organisation's data is frozen to its parent, and a
+                          cross-organisation test matrix fails the build if any table or function is
+                          added without proof that one organisation cannot read or change another's.
+                          A security and performance pass followed. On 14 October the owner checked
+                          it on the real site with a second organisation: separate event lists,
+                          separate live events on the splash, projector and phone, and a console
+                          link that switched organisation. 3,989 unit tests and 1,930 database
+                          assertions at close-out. Minor release v3.3.0.</span
+                        >
+                      </div>
+                      <div class="log-line felt">
+                        <span class="k">Felt like</span
+                        ><span class="v"
+                          >turning "this is our scoring app" into "this is a platform" — and proving
+                          it with two real organisations before anyone else is asked to trust
+                          it.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="log-item current reveal">
+                    <div class="log-phase">Gadong</div>
+                    <div>
+                      <div class="log-head">
+                        <span class="log-name">Pointing the app at the right event</span>
+                        <span class="log-ver">v3.3.0</span>
+                        <span class="log-now"><span class="pulse-dot"></span>Live now</span>
+                      </div>
+                      <div class="log-line shipped">
+                        <span class="k">Shipped</span
+                        ><span class="v"
+                          >With several events and rehearsals in preparation, "which event is live?"
+                          needed an answer. The splash screen now names the live event first, then
+                          the newest real event, instead of whichever test was created last.
+                          Starting a heat, or confirming a BTC match, now asks before it would
+                          replace another live event, and the warning is announced to screen readers
+                          and is part of the button it guards.</span
+                        >
+                      </div>
+                      <div class="log-line felt">
+                        <span class="k">Felt like</span
+                        ><span class="v"
+                          >one more place where the app asks a person before it does something they
+                          can not undo mid-event.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="milestone reveal" id="ms-gadong-btc">
             <h3 class="milestone-head">
               <button
                 type="button"
                 class="milestone-toggle"
                 id="ms-gadong-btc-btn"
-                aria-expanded="true"
+                aria-expanded="false"
                 aria-controls="ms-gadong-btc-panel"
               >
                 <span class="ms-text">
