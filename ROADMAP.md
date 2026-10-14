@@ -6,8 +6,9 @@
 > is prerendered, in the sitemap and in the e2e smoke test. The review found one blocking item (the
 > board changed ten times a second, WCAG 2.3.1; now one column per tick) and several high ones
 > (focus loss, a sound error that could stick a draw, short test coverage), all fixed. Still open:
-> the typed-list entry limit, a confirmation on CLEAR, a shared `core/` audio helper, a real screen
-> reader pass, and the sound file's licence. See CHANGELOG.md and `src/tools/CLAUDE.md`.
+> the typed-list entry limit, a confirmation on CLEAR, a shared `core/` audio helper and a real
+> screen reader pass. (The sound file's licence was confirmed by the owner on 2026-10-14.) See
+> CHANGELOG.md and `src/tools/CLAUDE.md`.
 
 > **Brew Planner, a free Community tool (2026-09-29, extended 2026-10-07) — done.** A five-step
 > wizard at `/tools/brew-planner/` (no auth, no Supabase; card 04 on the Community hub) that works
