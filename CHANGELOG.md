@@ -1,3 +1,165 @@
+## T-DOCS.privacy-tools: the privacy page names the Brew Planner and the Random Selector · 2026-10-14
+
+**Task:** requested by the user. The privacy page's "On your device" section named the Timer, Guess the
+Bean setup and offline scoring as the things that keep data in the browser, and not the Brew Planner or
+the Random Selector, which both use `localStorage`. CLAUDE.md: changing what is stored changes the
+Privacy page.
+
+**What changed** (`src/marketing/trustContent.js`, and the owner-edited source
+`design/copy/privacy-page-draft.md`, which carries the same words):
+
+- The sentence now names the Timer, Brew Planner and Random Selector, says what each one keeps (the
+  Brew Planner: heats, coffees, machines and ticked-off items; the Random Selector: the entry list, its
+  settings and recent draws) and that neither tool sends it to us. Both tools have no account and no
+  database; the Brew Planner and Random Selector code make no network calls for this data.
+- A new bullet: **Random Selector share links** put the shared list in the link's web address, so anyone
+  with the link can read it, and the address may be kept by the app it is pasted into or in the logs of
+  the services that deliver the page, such as Cloudflare.
+- The page's last-updated date is now 14 October 2026.
+- One new test in `src/marketing/trustScreen.test.js` (the page names all three tools and the share-link
+  note).
+
+**For the owner to confirm:** the share-link wording is a new statement about logs and third parties,
+drafted from how query strings reach a web server, not from a log review. The draft file's header still
+says it is for owner review.
+
+## T-DOCS.brew-planner: Brew Planner documentation brought up to date · 2026-10-14
+
+**Task:** requested by the user after the Random Selector work: the Brew Planner is a free Community
+tool and its documentation had fallen behind the code. Documentation only; no code or behaviour change.
+
+**What was done:**
+
+- `src/tools/CLAUDE.md`: the Brew Planner entry now says it is a free Community tool, that it is
+  prerendered, in the sitemap and in the e2e smoke test, and records the 2026-10-07 additions that
+  only the changelog held (paper filters, three Cambro sizes at 85% fill, Coffee A/B/C samples, the
+  advisory `holdLimitMins` decision, 36 tests, the two deferred items).
+- `README.md`: the Brew Planner was missing from "What's in it" and "Public routes"; added both, and
+  the `prerender:public` row now lists it.
+- `src/marketing/CLAUDE.md`: the prerendering section listed four routes and omitted the Brew Planner.
+- `ROADMAP.md`: there was no Brew Planner entry at all; added one.
+
+**Checked and left alone:** the 2026-10-07 `T-TOOLS.brew-planner` changelog entry (history is not
+rewritten), `CLAUDE.md`'s architecture map (already lists `tools/brew-planner/`), and `public/bts/`.
+The Brew Planner's numbers in the docs were checked against `planner.js` (`CAMBRO_MAX_FILL` 0.85,
+sizes 1.5, 2.5 and 4.75 gal, `FILTERS_PER_BATCH` 1) and the test count against a run (36 pass).
+
+## T-TOOLS.random-selector: Random Selector, a free split-flap draw tool · 2026-10-14
+
+**Task:** a new standalone **free Community tool** at `/tools/random-selector/` (no account, no auth,
+no Supabase; same family as the Timer and Brew Planner, see `src/tools/CLAUDE.md`; card 05 on the
+Community hub). A split-flap board draws one entry from a list for running orders, prizes and lucky
+draws: weights (`Name | 2`), a share link, CSV import/export, Present mode, a draw history, optional
+"remove every selected entry". **First built by Codex** (branch `codex/split-flap-picker`, committed
+as one `wip` commit); reviewed, fixed and tested here by Claude. The branch was 100 commits behind
+`dev`, so it was merged forward (no conflicts) rather than rebased, keeping Codex's commit.
+
+**Blocking findings fixed:**
+
+- A draw could stick on DRAWING for good: the list stayed editable during the spin and the winner was
+  picked by index, so emptying or shortening the list made `finishDraw` bail out before it stopped the
+  spinner (reproduced in Chromium). The winner is now an entry object picked before the spin, list
+  controls are disabled and `updateEntries` ignores input until it lands, and `finishDraw` settles the
+  spinner first.
+- The flap animation ignored `prefers-reduced-motion`. It now runs only under `no-preference`, and with
+  "reduce" the board holds on DRAWING instead of changing about ten times a second.
+
+**Accessibility fixes (reviewed at 360px first):**
+
+- 44px tap targets (`--tap-target-min`) on every control; measured in Chromium at 360px and 1024px, no
+  overflow, the checkbox keeps a 24px box in a 44px label row.
+- Screen readers: one persistent polite live region outside the re-rendered subtree now announces
+  drawing, the result and status messages (the old `role="status"` note and `aria-live="assertive"`
+  reveal were rebuilt on every render and never spoke); the board is `role="img"` named from the draw
+  state; an `h1`; the draw button uses `aria-disabled` so focus survives the spin; the sound toggle
+  drops `aria-pressed`.
+- Found on the way, and not an assistive-technology-only bug: typing mid-list jumped the caret to the
+  end after every key (the textarea was rebuilt per keystroke), and Tab out of an edited weight landed
+  on `<body>`. The entry list is now one long-lived textarea, and weights, title, colour and volume
+  update in place.
+
+**Follow-up the same day (accent contrast and CSV):**
+
+- The user-chosen accent is no longer used as a text colour. `SOUND ON` was accent-coloured text, so a
+  pale accent made it unreadable; it is now bold with an accent underline. Text on the accent uses
+  `readableOn()` (WCAG relative luminance, pure black or white) instead of the old YIQ threshold, and
+  a test sweeps 512 colours for 4.5:1. The first version of that helper used the page's near-black
+  and the sweep caught it falling to 4.4:1 on mid-tones, hence pure black.
+- CSV is parsed properly: quoted cells with commas, doubled quotes and line breaks, CRLF, a byte-order
+  mark. The weight column is imported, so an export round-trips (checked in Chromium). An empty or
+  header-only file no longer wipes the list, a re-chosen file fires again, and a file over 80 entries
+  says "Imported 80 of 90 entries".
+
+**Community hub:** card 05 on `/community/` now describes what shipped ("Draw one entry from a list on
+a split-flap board, with weighted odds, CSV import, share links and a big-screen mode.") instead of
+the first draft's copy. Checked at 360px, 1024px and 1440px: five cards, no horizontal overflow.
+The privacy page was updated afterwards: see `T-DOCS.privacy-tools` above.
+
+**Public entry points (added later the same day):** the tool was not in `public/sitemap.xml`,
+`tools/prerender-public-pages.mjs` or `tests/e2e/smoke.spec.js`, which the Brew Planner had all three
+of when it shipped. All three now list it. Verified by running `npm run build` (the prerender step
+throws if its marker is missing; the rendered board has the static, reduced-motion state) and by
+fetching every page in the smoke test's list from `vite preview`: 11 of 11 pass, and the sitemap
+serves the new URL. The Playwright `built-app` project itself could not run here (the headless shell
+browser is not installed in this environment), so run `npm run test:e2e` once before merging.
+
+**Review pass (code-reviewer, module-boundary-checker, test-auditor, ui-accessibility-reviewer):**
+no module-boundary violation (only `core/dom.js` and now `core/export.js` are imported; nothing in
+`core/` or `formats/` depends on the tool). One BLOCKING finding, three HIGH, and a list of medium
+ones, all fixed here:
+
+- **Blocking (WCAG 2.3.1):** the board replaced itself about ten times a second at the default
+  motion setting. While drawing, one column of flaps now turns over per tick, so no flap changes more
+  than about once a second (measured in Chromium: at most 1). The flip is a one-shot class that only
+  exists under `no-preference`. Not run through a flash analyser.
+- **High:** KEEP RESULT and REDRAW dropped focus to `<body>` (now handed to the draw button); the draw
+  button was rebuilt and re-focused on every tick, 23 focus events in one spin, now 3; muted text on
+  the Present surface was 4.46:1 (now at least 6.6:1).
+- **Draw robustness (test-auditor, high):** a sound tick that throws left the board stuck on DRAWING,
+  and the default sound-on path had no test at all (jsdom's `play()` returns nothing, so a first
+  visit threw). The ticker can no longer throw out of a draw; sound-on tests added.
+- **Code review (medium):** typing in the entry list re-rendered the screen per keystroke, which ends
+  an IME or predictive-keyboard composition (now refreshed in place with no re-render); CSV import
+  could change weights or split names (`"Room | 5"`, a name with a line break); a bad `?draw=` link
+  failed silently; a shared list reset the visitor's sound setting; "copied" was reported for links
+  too long to open; corrupt saved history could blank the page; blocked browser storage threw at
+  mount; REDRAW after "remove selected" lost the entry; history numbering stuck at 20; held Space
+  re-drew; the Space shortcut fired on focused links and with modifiers; names over 56 characters
+  were cut mid-word with no marker (now word-wrapped with an ellipsis); `validDrawPreset(['quick'])`
+  stored an array.
+- **Shared code (module-boundary-checker):** CSV export and download now use `core/export.js`
+  (`buildCsv`, `downloadCsv`) instead of a second copy, with a byte-order mark for Excel and a guard
+  against spreadsheet formula injection. Not done: a shared `core/` audio helper (the AudioContext
+  set-up is a near-copy of the Timer's), and `core/export.js` revokes the blob URL immediately, which
+  can cancel the download in Safari.
+- **Other accessibility fixes:** 44px brand link, 3:1 control boundaries, a selected-preset ring that
+  survives a pale accent and forced colours, an unclipped focus ring in the weights list, 12px
+  minimum text, no horizontal scroll at 200% text.
+- **Test audit:** 30 mutants were run against the first 29 tests and 12 survived (no rejection
+  sampling, a uniform pick, an unweighted winner, a one-directional reduced-motion test, a CSS test a
+  longhand animation could pass, remove-by-name, ...). The tests now pin each with chosen random
+  values; the four mutants re-checked here (no rejection, uniform pick, animation outside the media
+  query, a throwing tick) are all caught.
+
+**Tests:** 69 in `src/tools/random-selector`: pure engine (fairness pinned with chosen random values,
+share codec, CSV, contrast known answers, saved state) and jsdom screen tests (draw lifecycle, reduced
+motion, sweep rate, live region, board name, focus, in-place edits, share links, storage failures,
+Present, Space, export). Verified: ESLint and `prettier --check .` repo-wide, the full unit suite, and
+the dev server in Chromium at 360px (flap changes per second, focus events, word wrap, tap targets,
+200% text, Present contrast, typing mid-list). E2e: see "Public entry points" above.
+
+**Reviews:** the four project reviewers above were run (the first three passes were by hand). A real
+screen reader, Safari and Firefox were not used.
+
+**Deferred (non-blocking):** typed lists over 80 entries and drafts over 10,000 characters are cut or
+unshareable without a warning; a weight of `0` becomes 1; the
+provenance and licence of `public/sounds/split-flap-click.mp3` still need confirming; an IME
+composition in the entry list is ended by the per-keystroke re-render.
+
+**Attribution:** the user asked that Codex be credited as a co-author for this tool. Codex's original
+commit carries no trailer, and the three earlier fix commits on the branch were pushed with only the
+Claude trailer (not rewritten). Commits from here on carry both trailers.
+
 ## T-TEN.E5 step 7: a real second organisation in production · 2026-10-14
 
 **Task:** the last step of the T-TEN.E5 rollout runbook, run by the owner by hand on `www.seduhscore.com` with their own login (already owner of both `grey-matter-coffee-werks` and `grey-matter-rehearsal`, so no provisioning was needed). **Status: passed. This closes the tenancy phase.**

@@ -16,6 +16,8 @@ than iterated from the legacy Seduh Score app. Live at
 | Throwdown, Liga Seduh               | Planned, not started  | `src/formats/throwdown/`, `src/formats/liga-seduh/`                           |
 | **Guess the Bean**                  | Live (Community tool) | `src/community/guess-the-bean/`, plus an Android widget in `android/`         |
 | **Competition Timer**               | Live (Community tool) | `src/tools/timer/`: no auth, no Supabase                                      |
+| **Brew Planner**                    | Live (Community tool) | `src/tools/brew-planner/`: batch-brew run-sheet, no auth, no Supabase         |
+| **Random Selector**                 | Live (Community tool) | `src/tools/random-selector/`: split-flap draw tool, no auth, no Supabase      |
 | Marketing & trust pages             | Live                  | `src/marketing/`: landing, Tour, About, Contact, Privacy, Terms, Neutrality   |
 
 Every format shares the format-agnostic modules in `src/core/`, including ranking,
@@ -34,6 +36,8 @@ append-only scoring record.
 | `/results/`                                                    | Public results archive                                      |
 | `/community/`                                                  | Community hub                                               |
 | `/tools/timer/`                                                | Competition Timer                                           |
+| `/tools/brew-planner/`                                         | Brew Planner (batch-brew run-sheet and Cambro cheat sheet)  |
+| `/tools/random-selector/`                                      | Random Selector (split-flap draw tool)                      |
 | `/guess-the-bean/`                                             | Guess the Bean (plus `play/` and `display/`)                |
 | `/about/`, `/contact/`, `/privacy/`, `/terms/`, `/neutrality/` | Trust pages                                                 |
 
@@ -72,7 +76,7 @@ npm run db:test    # pgTAP suite
 | `npm run dev`                     | Vite dev server (`127.0.0.1:5273`)                           |
 | `npm run build`                   | Production build; prerenders stable public pages             |
 | `npm run preview`                 | Serve the production build locally (`127.0.0.1:4173`)        |
-| `npm run prerender:public`        | Prerender the landing, Tour, Community, and Timer pages      |
+| `npm run prerender:public`        | Prerender the landing, Tour, Community, and tool pages       |
 | `npm test`                        | Vitest unit tests                                            |
 | `npm run test:watch`              | Vitest in watch mode                                         |
 | `npm run test:e2e`                | Playwright: `built-app`, `dev-harnesses`, `dev-app` projects |

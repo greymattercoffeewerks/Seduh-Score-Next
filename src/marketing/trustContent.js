@@ -12,7 +12,7 @@
 export const CONTACT_EMAIL = 'greymatter.cw@outlook.com';
 const EMAIL = `[${CONTACT_EMAIL}](mailto:${CONTACT_EMAIL})`;
 
-export const PRIVACY_UPDATED = '12 October 2026';
+export const PRIVACY_UPDATED = '14 October 2026';
 
 export const TRUST_PAGES = [
   {
@@ -141,7 +141,8 @@ export const TRUST_PAGES = [
       {
         type: 'ul',
         items: [
-          'The Timer tool, Guess the Bean setup and offline scoring store small amounts of data in your browser (local storage and IndexedDB) so they keep working without a connection. This stays on your device. We use no advertising trackers. We do use Cloudflare Web Analytics, a privacy-focused service that measures how pages perform and how many people visit, without tracking individuals across sites. We also use Google Search Console and Bing Webmaster Tools to see how the site appears in search results. They report on searches, not on individual visitors.',
+          'The Timer, Brew Planner and Random Selector tools, Guess the Bean setup and offline scoring store small amounts of data in your browser (local storage and IndexedDB) so they keep working without a connection. For the Brew Planner that is your heats, coffees, machines and ticked-off items. For the Random Selector it is your entry list, its settings and your recent draws. This stays on your device: neither tool sends it to us. We use no advertising trackers. We do use Cloudflare Web Analytics, a privacy-focused service that measures how pages perform and how many people visit, without tracking individuals across sites. We also use Google Search Console and Bing Webmaster Tools to see how the site appears in search results. They report on searches, not on individual visitors.',
+          '**Random Selector share links** put the list you shared in the link’s web address. Anyone you send the link to can read that list, and the address may be kept by the app you paste it into or in the logs of the services that deliver the page, such as Cloudflare. Leave out anything you would not want shared.',
         ],
       },
       { type: 'h2', text: 'Who can see it' },

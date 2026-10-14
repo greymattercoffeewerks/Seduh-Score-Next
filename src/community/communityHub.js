@@ -68,6 +68,16 @@ function brewerInstrument() {
   );
 }
 
+function selectorInstrument() {
+  return icon(
+    [
+      { tag: 'rect', x: '7', y: '9', width: '34', height: '30' },
+      { tag: 'path', d: 'M10 18h28M10 29h28M16 9v30M24 9v30M32 9v30' },
+    ],
+    'Split-flap display',
+  );
+}
+
 function arrow(text) {
   return el('span', { className: 'community-card-arrow', text: text ?? 'Open tool →' });
 }
@@ -174,6 +184,15 @@ function buildShelf() {
           href: '/tools/brew-planner/',
           meta: 'No account needed',
           instrument: brewerInstrument(),
+        }),
+        toolCard({
+          number: '05',
+          title: 'Random Selector',
+          eyebrow: 'For turns, prizes and lucky draws',
+          body: 'Draw one entry from a list on a split-flap board, with weighted odds, CSV import, share links and a big-screen mode.',
+          href: '/tools/random-selector/',
+          meta: 'No account needed',
+          instrument: selectorInstrument(),
         }),
       ]),
     ],
