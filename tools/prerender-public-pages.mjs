@@ -38,6 +38,12 @@ const ROUTES = [
     rootMarker: '<main class="bp"',
     marker: 'Seduh Brew Planner',
   },
+  {
+    output: 'tools/random-selector/index.html',
+    url: 'https://www.seduhscore.com/tools/random-selector/',
+    rootMarker: '<main class="random-selector"',
+    marker: 'SPLIT-FLAP EDITION',
+  },
   // The trust pages share one entry module and pick their page from #app's data-page.
   ...[
     ['about', 'Scoring for coffee competitions'],

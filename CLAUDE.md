@@ -24,8 +24,9 @@ the context it actually touches:
 - [src/core/CLAUDE.md](src/core/CLAUDE.md) — shared, format-agnostic modules and `main.js`
   wiring.
 - [src/marketing/CLAUDE.md](src/marketing/CLAUDE.md) — the public marketing landing page.
-- [src/tools/CLAUDE.md](src/tools/CLAUDE.md) — standalone free community tools (e.g. the
-  Timer), outside the core/formats module boundary entirely, with no auth/Supabase.
+- [src/tools/CLAUDE.md](src/tools/CLAUDE.md) — standalone free community tools (the
+  Timer, Brew Planner and Random Selector), outside the core/formats module boundary
+  entirely, with no auth/Supabase.
 - [src/community/guess-the-bean/CLAUDE.md](src/community/guess-the-bean/CLAUDE.md) —
   Guess the Bean, a free Community-tier tool with real auth+Supabase but no
   roster/scoring/advancement — a third kind of surface, neither `src/tools/` nor
@@ -222,6 +223,8 @@ android/guess-the-bean-widget/  ← native Android (Kotlin/Glance) widget, own G
                                    not part of the web build. See its own CLAUDE.md.
 tools/timer/index.html          ← standalone Timer tool entry. See src/tools/CLAUDE.md.
 tools/brew-planner/index.html   ← standalone Brew Planner wizard entry. See src/tools/CLAUDE.md.
+tools/random-selector/index.html ← standalone Random Selector (split-flap draw) entry, a free
+                                   Community tool. See src/tools/CLAUDE.md.
 community/index.html            ← public hub linking community tools and future resources.
 guess-the-bean/index.html       ← Guess the Bean entry. See
                                    src/community/guess-the-bean/CLAUDE.md.
@@ -231,7 +234,8 @@ src/
   marketing/                    ← public landing + Tour pages (no auth, no router).
                                    Outside the handoff's original scope —
                                    see src/marketing/CLAUDE.md.
-  tools/                        ← standalone free community tools (e.g. Timer) — no
+  tools/                        ← standalone free community tools (Timer, Brew Planner,
+                                   Random Selector) — no
                                    auth, no Supabase. See src/tools/CLAUDE.md.
   community/
     guess-the-bean/             ← a free Community-tier tool WITH real auth+Supabase

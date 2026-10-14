@@ -132,6 +132,15 @@ describe('mountTrustScreen', () => {
     expect(mount('contact').textContent).toContain('within 3 working days');
   });
 
+  it('names every tool that keeps data in the browser, and says a share link carries its list', () => {
+    const text = mount('privacy').textContent;
+    for (const tool of ['Timer', 'Brew Planner', 'Random Selector']) {
+      expect(text, tool).toContain(tool);
+    }
+    expect(text).toContain('neither tool sends it to us');
+    expect(text).toContain('Random Selector share links');
+  });
+
   it('does not put a pricing figure or claim in the Terms', () => {
     const text = mount('terms').textContent;
     expect(text).toContain('not part of these terms');

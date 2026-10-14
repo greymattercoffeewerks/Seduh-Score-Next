@@ -30,7 +30,8 @@ Seduh Score is run by Grey Matter Coffee Werks in Brunei. Questions or requests 
 
 **On your device**
 
-- The Timer tool, Guess the Bean setup and offline scoring store small amounts of data in your browser (local storage and IndexedDB) so they keep working without a connection. This stays on your device. We use no advertising trackers. We do use Cloudflare Web Analytics, a privacy-focused service that measures how pages perform and how many people visit, without tracking individuals across sites. We also use Google Search Console and Bing Webmaster Tools to see how the site appears in search results. They report on searches, not on individual visitors.
+- The Timer, Brew Planner and Random Selector tools, Guess the Bean setup and offline scoring store small amounts of data in your browser (local storage and IndexedDB) so they keep working without a connection. For the Brew Planner that is your heats, coffees, machines and ticked-off items. For the Random Selector it is your entry list, its settings and your recent draws. This stays on your device: neither tool sends it to us. We use no advertising trackers. We do use Cloudflare Web Analytics, a privacy-focused service that measures how pages perform and how many people visit, without tracking individuals across sites. We also use Google Search Console and Bing Webmaster Tools to see how the site appears in search results. They report on searches, not on individual visitors.
+- **Random Selector share links** put the list you shared in the link’s web address. Anyone you send the link to can read that list, and the address may be kept by the app you paste it into or in the logs of the services that deliver the page, such as Cloudflare. Leave out anything you would not want shared.
 
 ## Who can see it
 

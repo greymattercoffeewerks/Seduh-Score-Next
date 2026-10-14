@@ -1,5 +1,21 @@
 # Seduh Score Next — Roadmap
 
+> **Random Selector, a free Community tool (2026-10-14) — done; follow-ups open.** A split-flap
+> draw tool at `/tools/random-selector/` (no auth, no Supabase; card 05 on the Community hub), first
+> built by Codex, then reviewed by all four project reviewers, fixed and tested here (69 tests). It
+> is prerendered, in the sitemap and in the e2e smoke test. The review found one blocking item (the
+> board changed ten times a second, WCAG 2.3.1; now one column per tick) and several high ones
+> (focus loss, a sound error that could stick a draw, short test coverage), all fixed. Still open:
+> the typed-list entry limit, a confirmation on CLEAR, a shared `core/` audio helper, a real screen
+> reader pass, and the sound file's licence. See CHANGELOG.md and `src/tools/CLAUDE.md`.
+
+> **Brew Planner, a free Community tool (2026-09-29, extended 2026-10-07) — done.** A five-step
+> wizard at `/tools/brew-planner/` (no auth, no Supabase; card 04 on the Community hub) that works
+> out how many batches each heat needs, which machine brews each one and when, with a run-sheet,
+> paper-filter counts and Cambro sizing in three sizes. Prerendered, in the sitemap and in the
+> e2e smoke test. `holdLimitMins` is advisory by user decision. See CHANGELOG.md
+> (`T-TOOLS.brew-planner`) and `src/tools/CLAUDE.md`.
+
 > **BTC marketing go-live (2026-09-23) — done.** The public marketing site was still
 > calling BTC "BBTC" and listing it as "coming soon" after the BTC app-wiring pass shipped,
 > leaving a consistency gap between the actual shipped product and its public presence. Updated
