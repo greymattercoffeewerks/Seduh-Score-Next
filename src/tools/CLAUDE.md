@@ -92,8 +92,17 @@ self-contained CSS instead.
   numbers (76 batches, first brew 12:13 pm, longest hold 44 min) and is pinned by
   `planner.test.js`. Water per batch is dose × ratio; yield is dose × ratio − 2 × dose.
   Batches are scheduled backward from each heat's pool-by time. Ticks and inputs persist
-  to `localStorage` (`seduh-brew-planner-v1`). No auth, no Supabase; listed as card 04 on
-  the Community hub.
+  to `localStorage` (`seduh-brew-planner-v1`). No auth, no Supabase; a free **Community
+  tool**, listed as card 04 on the Community hub, and (unlike the Random Selector so far) in
+  `public/sitemap.xml`, `tools/prerender-public-pages.mjs` and `tests/e2e/smoke.spec.js`.
+  Extended 2026-10-07: one paper filter per batch (`FILTERS_PER_BATCH`), counted in total,
+  per stage and per machine; Cambros in three nominal sizes (1.5, 2.5 and 4.75 US gal)
+  counted at 85% fill (`CAMBRO_MAX_FILL`), where `containersNeeded()` is the single split
+  rule; the sample coffees are Coffee A/B/C (no real coffee names in the public example).
+  **`holdLimitMins` is advisory** (user decision, 2026-10-07): it drives the "over limit"
+  warning only, the scheduler does not enforce it. 36 tests across `planner.test.js` and
+  `brewPlannerScreen.test.js`. Known and deferred: timeline and inputs are not linked to
+  field-level errors; the Cambro size table scrolls about 14px at 360px.
 
 - `timer/` (`timer.js` pure state/logic, `timerScreen.js` DOM/wiring, `timer.css`),
   2026-09-12 — a standalone, general-purpose countdown timer (duration presets + custom

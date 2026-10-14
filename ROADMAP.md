@@ -9,6 +9,13 @@
 > licence. See CHANGELOG.md and
 > `src/tools/CLAUDE.md`.
 
+> **Brew Planner, a free Community tool (2026-09-29, extended 2026-10-07) — done.** A five-step
+> wizard at `/tools/brew-planner/` (no auth, no Supabase; card 04 on the Community hub) that works
+> out how many batches each heat needs, which machine brews each one and when, with a run-sheet,
+> paper-filter counts and Cambro sizing in three sizes. Prerendered, in the sitemap and in the
+> e2e smoke test. `holdLimitMins` is advisory by user decision. See CHANGELOG.md
+> (`T-TOOLS.brew-planner`) and `src/tools/CLAUDE.md`.
+
 > **BTC marketing go-live (2026-09-23) — done.** The public marketing site was still
 > calling BTC "BBTC" and listing it as "coming soon" after the BTC app-wiring pass shipped,
 > leaving a consistency gap between the actual shipped product and its public presence. Updated

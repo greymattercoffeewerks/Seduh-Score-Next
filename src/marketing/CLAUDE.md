@@ -181,7 +181,9 @@ aria-hidden.
 
 `npm run build` runs Vite first, then `tools/prerender-public-pages.mjs`. It writes the
 already-rendered HTML into the production output for the landing page, Tour, Community hub,
-and Timer. These are the only routes in scope because their content is stable and public.
+Timer and Brew Planner (the trust pages are prerendered too). These are the only routes in
+scope because their content is stable and public. The Random Selector (2026-10-14) is not
+in the list yet.
 The console and Guess the Bean routes remain client-rendered and `noindex`: they are
 authenticated, session-specific, or both.
 

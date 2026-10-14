@@ -1,3 +1,24 @@
+## T-DOCS.brew-planner: Brew Planner documentation brought up to date · 2026-10-14
+
+**Task:** requested by the user after the Random Selector work: the Brew Planner is a free Community
+tool and its documentation had fallen behind the code. Documentation only; no code or behaviour change.
+
+**What was done:**
+
+- `src/tools/CLAUDE.md`: the Brew Planner entry now says it is a free Community tool, that it is
+  prerendered, in the sitemap and in the e2e smoke test, and records the 2026-10-07 additions that
+  only the changelog held (paper filters, three Cambro sizes at 85% fill, Coffee A/B/C samples, the
+  advisory `holdLimitMins` decision, 36 tests, the two deferred items).
+- `README.md`: the Brew Planner was missing from "What's in it" and "Public routes"; added both, and
+  the `prerender:public` row now lists it.
+- `src/marketing/CLAUDE.md`: the prerendering section listed four routes and omitted the Brew Planner.
+- `ROADMAP.md`: there was no Brew Planner entry at all; added one.
+
+**Checked and left alone:** the 2026-10-07 `T-TOOLS.brew-planner` changelog entry (history is not
+rewritten), `CLAUDE.md`'s architecture map (already lists `tools/brew-planner/`), and `public/bts/`.
+The Brew Planner's numbers in the docs were checked against `planner.js` (`CAMBRO_MAX_FILL` 0.85,
+sizes 1.5, 2.5 and 4.75 gal, `FILTERS_PER_BATCH` 1) and the test count against a run (36 pass).
+
 ## T-TOOLS.random-selector: Random Selector, a free split-flap draw tool · 2026-10-14
 
 **Task:** a new standalone **free Community tool** at `/tools/random-selector/` (no account, no auth,
