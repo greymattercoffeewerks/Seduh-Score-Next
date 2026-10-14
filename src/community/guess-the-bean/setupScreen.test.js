@@ -618,24 +618,26 @@ describe('mountSetupScreen', () => {
     // (core/export.js) waits. The delayed callback is held back here so the test can see that.
     const realSetTimeout = globalThis.setTimeout;
     const revokeCallbacks = [];
-    vi.spyOn(globalThis, 'setTimeout').mockImplementation((fn, ms, ...rest) => {
-      if (ms === REVOKE_DELAY_MS) {
-        revokeCallbacks.push(fn);
-        return 0;
-      }
-      return realSetTimeout(fn, ms, ...rest);
-    });
-    let savedBlob = null;
-    let savedName = null;
-    const createUrl = vi.spyOn(URL, 'createObjectURL').mockImplementation((blob) => {
-      savedBlob = blob;
-      return 'blob:gtb-export';
-    });
-    const revokeUrl = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
-    const clicked = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function () {
-      savedName = this.download;
-    });
     try {
+      vi.spyOn(globalThis, 'setTimeout').mockImplementation((fn, ms, ...rest) => {
+        if (ms === REVOKE_DELAY_MS) {
+          revokeCallbacks.push(fn);
+          return 0;
+        }
+        return realSetTimeout(fn, ms, ...rest);
+      });
+      let savedBlob = null;
+      let savedName = null;
+      const createUrl = vi.spyOn(URL, 'createObjectURL').mockImplementation((blob) => {
+        savedBlob = blob;
+        return 'blob:gtb-export';
+      });
+      const revokeUrl = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+      const clicked = vi
+        .spyOn(HTMLAnchorElement.prototype, 'click')
+        .mockImplementation(function () {
+          savedName = this.download;
+        });
       const root = document.createElement('div');
       document.body.appendChild(root);
       await mountSetupScreen(root, {
@@ -660,6 +662,7 @@ describe('mountSetupScreen', () => {
 
       expect(createUrl).toHaveBeenCalledTimes(1);
       expect(clicked).toHaveBeenCalledTimes(1);
+      expect(savedBlob.type).toMatch(/^application\/json/);
       expect(savedName).toMatch(/^guess-the-bean-export-s1-\d{4}-\d{2}-\d{2}\.json$/);
       const exported = JSON.parse(
         await new Promise((resolve, reject) => {
@@ -671,13 +674,58 @@ describe('mountSetupScreen', () => {
       );
       expect(exported.session).toEqual({ id: 's1', name: 'Session One', beanCount: 428 });
       expect(exported.guesses).toHaveLength(1);
-      expect(exported.guesses[0].name).toBe('Amir');
+      expect(exported.guesses[0]).toMatchObject({
+        name: 'Amir',
+        guess: 430,
+        createdAt: '2026-10-14T01:00:00Z',
+      });
 
       // Not revoked at the click, only when the held-back callback runs.
       expect(revokeUrl).not.toHaveBeenCalled();
       expect(revokeCallbacks).toHaveLength(1);
       revokeCallbacks[0]();
       expect(revokeUrl).toHaveBeenCalledWith('blob:gtb-export');
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('frees the view and shows an error when the browser refuses the download', async () => {
+    vi.spyOn(URL, 'createObjectURL').mockImplementation(() => {
+      throw new Error('could not prepare that file');
+    });
+    try {
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      await mountSetupScreen(root, {
+        client: fakeClient({
+          sessions: [
+            {
+              id: 's1',
+              name: 'Session One',
+              bean_count: 428,
+              guess_enabled: true,
+              revealed: false,
+            },
+          ],
+          exportRows: [{ id: 'g1', name: 'Amir', guess: 430, created_at: '2026-10-14T01:00:00Z' }],
+        }),
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      root.querySelector('.gtb-session-row').click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const exportButton = () =>
+        [...root.querySelectorAll('button')].find((b) => b.textContent === 'Export data');
+      exportButton().click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(root.querySelector('.gtb-toast').textContent).toMatch(/could not prepare/i);
+      expect(root.querySelector('.gtb-toast').textContent).not.toMatch(/exported/i);
+      // Not left busy: the next click starts another export (a stuck view ignores it).
+      URL.createObjectURL.mockClear();
+      exportButton().click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
     } finally {
       vi.restoreAllMocks();
     }
