@@ -1,3 +1,28 @@
+## T-DOCS.privacy-tools: the privacy page names the Brew Planner and the Random Selector · 2026-10-14
+
+**Task:** requested by the user. The privacy page's "On your device" section named the Timer, Guess the
+Bean setup and offline scoring as the things that keep data in the browser, and not the Brew Planner or
+the Random Selector, which both use `localStorage`. CLAUDE.md: changing what is stored changes the
+Privacy page.
+
+**What changed** (`src/marketing/trustContent.js`, and the owner-edited source
+`design/copy/privacy-page-draft.md`, which carries the same words):
+
+- The sentence now names the Timer, Brew Planner and Random Selector, says what each one keeps (the
+  Brew Planner: heats, coffees, machines and ticked-off items; the Random Selector: the entry list, its
+  settings and recent draws) and that neither tool sends it to us. Both tools have no account and no
+  database; the Brew Planner and Random Selector code make no network calls for this data.
+- A new bullet: **Random Selector share links** put the shared list in the link's web address, so anyone
+  with the link can read it, and the address may be kept by the app it is pasted into or in the logs of
+  the services that deliver the page, such as Cloudflare.
+- The page's last-updated date is now 14 October 2026.
+- One new test in `src/marketing/trustScreen.test.js` (the page names all three tools and the share-link
+  note).
+
+**For the owner to confirm:** the share-link wording is a new statement about logs and third parties,
+drafted from how query strings reach a web server, not from a log review. The draft file's header still
+says it is for owner review.
+
 ## T-DOCS.brew-planner: Brew Planner documentation brought up to date · 2026-10-14
 
 **Task:** requested by the user after the Random Selector work: the Brew Planner is a free Community
@@ -68,9 +93,7 @@ as one `wip` commit); reviewed, fixed and tested here by Claude. The branch was 
 **Community hub:** card 05 on `/community/` now describes what shipped ("Draw one entry from a list on
 a split-flap board, with weighted odds, CSV import, share links and a big-screen mode.") instead of
 the first draft's copy. Checked at 360px, 1024px and 1440px: five cards, no horizontal overflow.
-Not changed: the privacy page's list of tools that keep data in the browser (it names the Timer, Guess
-the Bean setup and offline scoring, and does not name the Brew Planner or this tool, which also use
-`localStorage`; a share link also carries the list in its URL).
+The privacy page was updated afterwards: see `T-DOCS.privacy-tools` above.
 
 **Public entry points (added later the same day):** the tool was not in `public/sitemap.xml`,
 `tools/prerender-public-pages.mjs` or `tests/e2e/smoke.spec.js`, which the Brew Planner had all three
