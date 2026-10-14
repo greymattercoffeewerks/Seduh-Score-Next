@@ -1,3 +1,19 @@
+## T-FIX.gtb-export-revoke: Guess the Bean's export no longer revokes its download link at the click · 2026-10-14
+
+**Task:** requested by the user, from the module-boundary reviewer's finding on the Random Selector round.
+`handleExport` in `src/community/guess-the-bean/setupScreen.js` carried its own copy of the download plumbing
+and revoked the object URL at the click, which can cancel the download in Safari (the defect fixed in
+`core/export.js` in the Random Selector update). It now calls the shared `downloadJson`, which revokes after
+`REVOKE_DELAY_MS`.
+
+**What changes for the user:** the file is the same session export, with one difference: a very large export
+is written compact instead of pretty-printed, and the MIME type carries `;charset=utf-8`.
+
+**Tests:** one new test in `setupScreen.test.js` checks the downloaded file's name and content and that the URL
+is not revoked at the click (the delay callback is held back, then run). Reverting to the old inline code
+makes it fail. The reviewer also found that a throw from the download (a browser refusing it) left the
+view stuck as busy, as the old inline code did; that now shows the error toast and frees the view.
+
 ## T-TOOLS.random-selector-2: Petrol, a clearer weights list, and safety fixes for the Random Selector · 2026-10-14
 
 **Task:** incremental updates to the released Random Selector, requested by the user after the release
@@ -66,7 +82,7 @@ weight change. Five mutants of the new fixes (index by non-blank lines, no `s` f
 guard, opacity back, negative weight read as name) were each caught. Verified: ESLint, `prettier --check`,
 the full unit suite.
 
-**Not fixed, recorded in `src/tools/CLAUDE.md`:** Guess the Bean's JSON export still revokes at the click;
+**Not fixed, recorded in `src/tools/CLAUDE.md`:** Guess the Bean's JSON export still revokes at the click (fixed the same day, see `T-FIX.gtb-export-revoke`);
 audio, storage-guard, CSV-reader and weighted-pick helpers could move to `core/`; the CSV formula guard is only
 in this tool (a shared-writer change would alter Cup Taster's CSV, so it needs an owner decision); the
 warning is announced on every keystroke that changes it; a weight changed on load cannot be cleared from its

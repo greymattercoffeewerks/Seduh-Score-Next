@@ -18,6 +18,7 @@ import qrcode from 'qrcode-generator';
 import { getSupabase } from '../../core/supabaseClient.js';
 import { el, labeledField, setBusyDisabled, withFocusPreservation } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
+import { downloadJson } from '../../core/export.js';
 import {
   createSession,
   listMySessions,
@@ -202,15 +203,19 @@ export async function mountSetupScreen(root, { client = getSupabase(), signal } 
       session: { id: session.id, name: session.name, beanCount: session.bean_count },
       guesses: rows,
     };
-    const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `guess-the-bean-export-${session.id}-${new Date().toISOString().slice(0, 10)}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    // The shared writer, which revokes the object URL after a delay: revoking it at the click can
+    // cancel the download in Safari.
+    try {
+      downloadJson(
+        `guess-the-bean-export-${session.id}-${new Date().toISOString().slice(0, 10)}.json`,
+        exportObj,
+      );
+    } catch (err) {
+      // A browser refusing the download (memory, quota) must not leave the view locked as busy.
+      state.busy = false;
+      showToast(describeError(err));
+      return;
+    }
     state.busy = false;
     showToast('Data exported.');
   }

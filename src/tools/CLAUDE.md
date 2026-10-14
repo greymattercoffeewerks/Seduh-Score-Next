@@ -149,14 +149,13 @@ self-contained CSS instead.
     leaves Present mode.
   - `core/export.js` revokes a download's object URL after `REVOKE_DELAY_MS` (1 s), not at the
     click (Safari can cancel such a download); `downloadCsv` and `downloadJson` share one
-    `saveBlob`, and the tests hold the revoke back to prove it is not done at the click.
+    `saveBlob`, and the tests hold the revoke back to prove it is not done at the click. Guess the Bean's
+    session export (`src/community/guess-the-bean/setupScreen.js`) now calls `downloadJson` too.
   - **Public entry points (2026-10-14):** listed in `public/sitemap.xml`, prerendered by
     `tools/prerender-public-pages.mjs` (root marker `<main class="random-selector"`, copy
     `SPLIT-FLAP EDITION`) and asserted in `tests/e2e/smoke.spec.js`.
   - Persists to `localStorage` (`seduh-random-selector-v1`).
-  - **Reviewer follow-ups (2026-10-14, not done, outside this tool):** Guess the Bean's JSON export
-    (`src/community/guess-the-bean/setupScreen.js`) still revokes its URL at the click; call
-    `downloadJson`. Candidates to move into `core/`: the AudioContext click shared with the Timer,
+  - **Reviewer follow-ups (2026-10-14, not done, outside this tool):** Candidates to move into `core/`: the AudioContext click shared with the Timer,
     `browserStorage()` (the other tools' storage defaults still read `window.localStorage`
     unguarded), `parseCsv`, `weightedIndex`, and a `button()` helper. The CSV formula guard is
     only in this tool; putting it in the shared `buildCsv` would change Cup Taster's CSV for names
