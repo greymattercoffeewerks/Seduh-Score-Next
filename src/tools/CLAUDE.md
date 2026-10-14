@@ -74,13 +74,15 @@ self-contained CSS instead.
     accepted; a header row is skipped; the second column is the weight, so an export
     imports back unchanged. A file with no usable entries leaves the current list alone,
     and a file over `MAX_ENTRIES` (80) says "Imported 80 of 90 entries".
+  - **Public entry points (2026-10-14):** listed in `public/sitemap.xml`, prerendered by
+    `tools/prerender-public-pages.mjs` (root marker `<main class="random-selector"`, copy
+    `SPLIT-FLAP EDITION`; the prerender DOM reports `prefers-reduced-motion: reduce`, so the
+    prerendered board is the static one) and asserted in `tests/e2e/smoke.spec.js`.
   - Persists to `localStorage` (`seduh-random-selector-v1`); a share link loads over it
     without saving until the user edits.
   - **Open items (not yet done):** typing more than 80 entries into the list is still cut
     silently (only the CSV import reports it), and a draft over 10,000 characters cannot
-    be reloaded from its own share link; a weight of `0` becomes 1. The tool is
-    not yet in `public/sitemap.xml`, `tools/prerender-public-pages.mjs` or
-    `tests/e2e/smoke.spec.js`. The provenance and licence of
+    be reloaded from its own share link; a weight of `0` becomes 1. The provenance and licence of
     `public/sounds/split-flap-click.mp3` still need confirming. An IME composition in the
     entry list is ended by the per-keystroke re-render (the node is moved between trees).
 
@@ -93,8 +95,8 @@ self-contained CSS instead.
   `planner.test.js`. Water per batch is dose × ratio; yield is dose × ratio − 2 × dose.
   Batches are scheduled backward from each heat's pool-by time. Ticks and inputs persist
   to `localStorage` (`seduh-brew-planner-v1`). No auth, no Supabase; a free **Community
-  tool**, listed as card 04 on the Community hub, and (unlike the Random Selector so far) in
-  `public/sitemap.xml`, `tools/prerender-public-pages.mjs` and `tests/e2e/smoke.spec.js`.
+  tool**, listed as card 04 on the Community hub, and in `public/sitemap.xml`,
+  `tools/prerender-public-pages.mjs` and `tests/e2e/smoke.spec.js` (as the Random Selector now is).
   Extended 2026-10-07: one paper filter per batch (`FILTERS_PER_BATCH`), counted in total,
   per stage and per machine; Cambros in three nominal sizes (1.5, 2.5 and 4.75 US gal)
   counted at 85% fill (`CAMBRO_MAX_FILL`), where `containersNeeded()` is the single split

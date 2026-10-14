@@ -65,6 +65,14 @@ as one `wip` commit); reviewed, fixed and tested here by Claude. The branch was 
   header-only file no longer wipes the list, a re-chosen file fires again, and a file over 80 entries
   says "Imported 80 of 90 entries".
 
+**Public entry points (added later the same day):** the tool was not in `public/sitemap.xml`,
+`tools/prerender-public-pages.mjs` or `tests/e2e/smoke.spec.js`, which the Brew Planner had all three
+of when it shipped. All three now list it. Verified by running `npm run build` (the prerender step
+throws if its marker is missing; the rendered board has the static, reduced-motion state) and by
+fetching every page in the smoke test's list from `vite preview`: 11 of 11 pass, and the sitemap
+serves the new URL. The Playwright `built-app` project itself could not run here (the headless shell
+browser is not installed in this environment), so run `npm run test:e2e` once before merging.
+
 **Tests:** 29 in `src/tools/random-selector` (7 are screen tests that fail against the Codex version:
 mid-spin edit, reduced motion, live region, board name, focus through the spin, caret, in-place
 weights; the rest cover CSV, accent contrast and import). Verified: ESLint and Prettier on the tool, the full unit suite, and the dev server
@@ -75,8 +83,7 @@ in Chromium at 360px. E2e and the production build were not run.
 nothing from `src/formats/`. scoring/security/schema/offline-sync n/a.
 
 **Deferred (non-blocking):** typed lists over 80 entries and drafts over 10,000 characters are cut or
-unshareable without a warning; a weight of `0` becomes 1; the tool is
-not yet in `public/sitemap.xml`, `tools/prerender-public-pages.mjs` or `tests/e2e/smoke.spec.js`; the
+unshareable without a warning; a weight of `0` becomes 1; the
 provenance and licence of `public/sounds/split-flap-click.mp3` still need confirming; an IME
 composition in the entry list is ended by the per-keystroke re-render.
 

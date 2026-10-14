@@ -5,8 +5,8 @@
 > built by Codex and then reviewed, fixed and tested here. The two blocking findings (a draw that
 > could stick on DRAWING, and ignoring reduced motion), the 44px tap targets and the
 > screen-reader/focus fixes are in, as are accent-colour contrast and a real CSV round-trip.
-> Still open: the typed-list entry limit, a sitemap/prerender/e2e entry, and the sound file's
-> licence. See CHANGELOG.md and
+> It is prerendered, in the sitemap and in the e2e smoke test. Still open: the typed-list entry
+> limit and the sound file's licence. See CHANGELOG.md and
 > `src/tools/CLAUDE.md`.
 
 > **Brew Planner, a free Community tool (2026-09-29, extended 2026-10-07) — done.** A five-step

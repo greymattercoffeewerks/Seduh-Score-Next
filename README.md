@@ -76,7 +76,7 @@ npm run db:test    # pgTAP suite
 | `npm run dev`                     | Vite dev server (`127.0.0.1:5273`)                           |
 | `npm run build`                   | Production build; prerenders stable public pages             |
 | `npm run preview`                 | Serve the production build locally (`127.0.0.1:4173`)        |
-| `npm run prerender:public`        | Prerender the landing, Tour, Community, Timer, Brew Planner  |
+| `npm run prerender:public`        | Prerender the landing, Tour, Community, and tool pages       |
 | `npm test`                        | Vitest unit tests                                            |
 | `npm run test:watch`              | Vitest in watch mode                                         |
 | `npm run test:e2e`                | Playwright: `built-app`, `dev-harnesses`, `dev-app` projects |

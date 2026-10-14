@@ -20,6 +20,7 @@ test('public pages ship meaningful HTML before client JavaScript runs', async ({
     ['/community/', '<main class="community-hub"', 'Useful on the '],
     ['/tools/timer/', '<main class="timer"', 'Seduh Timer'],
     ['/tools/brew-planner/', '<main class="bp"', 'Seduh Brew Planner'],
+    ['/tools/random-selector/', '<main class="random-selector"', 'SPLIT-FLAP EDITION'],
     ['/about/', '<main class="trust-article"', 'Scoring for coffee competitions'],
     ['/contact/', '<main class="trust-article"', 'Get in touch.'],
     ['/privacy/', '<main class="trust-article"', 'What we hold, who can see it'],
