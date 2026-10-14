@@ -35,56 +35,95 @@ self-contained CSS instead.
   line with an optional `| weight` (integer 1 to 1000, at most 80 entries); a share link
   (`?draw=`) carries the list and settings; CSV import/export; a Present mode for projecting
   the board; a draw history; optional "remove every selected entry".
-  First built by Codex (branch `codex/split-flap-picker`), then reviewed, fixed and tested
-  by Claude. Pinned rules:
+  First built by Codex (branch `codex/split-flap-picker`), then reviewed (code, module-boundary,
+  test and accessibility reviewers), fixed and tested by Claude. Pinned rules:
   - **Fair draw.** `weightedIndex()` uses `crypto.getRandomValues` with rejection sampling
-    (no modulo bias; the tail test pins it). The winner is picked as an _entry object_ before
-    the board starts spinning, and every list control is disabled (and `updateEntries`
-    ignores input) until it lands, so editing mid-draw can neither strand the spinner on
+    (no modulo bias). The winner is picked as an _entry object_ before the board starts
+    spinning, and every list control is disabled (and `updateEntries` and the typing path
+    ignore input) until it lands, so editing mid-draw can neither strand the spinner on
     DRAWING nor award a different entry than the one drawn. `finishDraw` settles the
-    spinner before anything that could bail out.
-  - **Reduced motion.** The flap animation exists only under
-    `prefers-reduced-motion: no-preference` (a test reads the CSS to pin it). With
-    "reduce" the board holds on `DRAWING` instead of cycling random characters (that
-    cycling is about 10 changes a second), and the sound, if on, keeps its rhythm.
-  - **Screen readers.** `render()` tears the whole screen down on every tick, so anything a
+    spinner first, and the sound code (`createTicker`) can never throw out of `unlock()` or
+    `tick()`: sound is a courtesy, never something a draw depends on. Tests pin the
+    rejection tail, the weight distribution, the winner-to-result wiring and removal of
+    exactly the drawn entry (by stubbing `crypto.getRandomValues`), not just "one of the names".
+  - **No flashing (WCAG 2.3.1) and reduced motion.** While drawing, ONE COLUMN of flaps turns
+    over per tick, sweeping across the board (`sweepColumn`), so no flap changes more than
+    about once a second at any preset, in Present mode too (measured in Chromium: at most
+    1 change per flap per second). The flip animation is a one-shot `.is-flipping` class that
+    exists only under `prefers-reduced-motion: no-preference`; a test checks, by brace
+    counting, that no animation or `@keyframes` exists outside that block. With "reduce" the
+    board holds on `DRAWING`, and the sound, if on, keeps its rhythm. The earlier version
+    replaced the whole board about ten times a second, which a reviewer rated a probable
+    2.3.1 failure.
+  - **Screen readers and focus.** `render()` tears the whole screen down, so anything a
     screen reader must hear lives _outside_ that subtree: one persistent polite live region
     (`setNote()`) announces drawing, the result and every status message (an identical
     repeat alternates a trailing no-break space so it is announced again). The board is
     `role="img"` named from the draw state, never from the shuffling flaps. The draw
-    button uses `aria-disabled`, not `disabled`, so keyboard focus survives the spin. The
-    sound toggle has no `aria-pressed` (its label already says "SOUND ON"), the same call
-    `core/dom.js`'s `passwordToggle` makes.
-  - **Editing never replaces the control in use.** The entry list is one long-lived
-    `<textarea>` moved into each fresh tree (caret, selection and scroll are restored), so
-    typing mid-list no longer jumps the caret to the end. Weights, board title, accent
-    colour and volume commit **in place** (no `render()`): a rebuild there sent Tab to
-    `<body>`, dropped a slider drag and swallowed the click that blurred the field. Every
-    other control carries a `data-focus-key`.
-  - **44px targets** at 360px (`--tap-target-min`); the checkbox keeps a 24px box inside a
-    44px label row.
+    button uses `aria-disabled`, not `disabled`, and is NOT rebuilt per tick (a test pins
+    node identity), so focus survives the spin and a screen reader is not re-told "DRAWING"
+    ten times a second. KEEP RESULT and REDRAW hand focus to the draw button (their panel
+    disappears). The sound toggle has no `aria-pressed` (its label already says "SOUND
+    ON"), the same call `core/dom.js`'s `passwordToggle` makes.
+  - **Editing never replaces the control in use.** Typing in the entry list does not
+    re-render at all (`onEntriesInput`): it refreshes the counts, the weight rows, the draw
+    button state and removes a stale result panel, in place, so an IME or predictive
+    keyboard composition and a phone's soft keyboard are not interrupted. Weights, board
+    title, accent colour and volume also commit **in place**: a rebuild there sent Tab to
+    `<body>`, dropped a slider drag and swallowed the click that blurred the field. The entry
+    list is one long-lived `<textarea>` moved into each fresh tree on the other renders
+    (caret, selection and scroll are restored). Every other control carries a
+    `data-focus-key`.
+  - **Space draws only when nothing has focus**, with no modifier and no auto-repeat, and
+    only calls `preventDefault` when a draw actually starts.
+  - **44px targets** at 360px (`--tap-target-min`), brand link included; the checkbox keeps a
+    24px box inside a 44px label row. Inputs and presets use `--color-border-strong`
+    (the plain border token is under 3:1); the selected preset has a dark ring that does
+    not depend on the accent; no text is below 12px; the page does not scroll
+    horizontally at 200% text (the volume row, preset list, top bar and panel heading wrap).
+    Present mode raises `--color-text-muted` to the secondary token (4.46:1 was short of AA).
   - **The user-chosen accent is never a text colour** (a pale one would vanish on the paper
     surface): the sound toggle's ON state is bold with an accent-coloured underline. Text
-    _on_ the accent (selected preset, primary button) is `readableOn()`, pure black or
-    white by WCAG relative luminance; a test sweeps 512 colours and pins at least 4.5:1.
-    Pure black, not the page's near-black, because only pure black keeps the mid-tone worst
-    case above 4.5:1.
+    _on_ the accent (primary button) is `readableOn()`, pure black or white by WCAG relative
+    luminance; a test samples 512 colours and pins at least 4.5:1, and known-answer tests pin
+    the contrast formula itself. Pure black, not the page's near-black, because only pure
+    black keeps the mid-tone worst case above 4.5:1.
   - **CSV is real CSV** (`parseCsv`, `entriesFromCsv`, `entriesToCsv`, all pure and tested):
     quoted cells hold commas, doubled quotes and line breaks; CRLF and a byte-order mark are
-    accepted; a header row is skipped; the second column is the weight, so an export
-    imports back unchanged. A file with no usable entries leaves the current list alone,
-    and a file over `MAX_ENTRIES` (80) says "Imported 80 of 90 entries".
+    accepted; a header row is skipped; the second column is the weight. Export is built on
+    `core/export.js` (`buildCsv`, `downloadCsv`), not a second writer, with a BOM so Excel
+    reads UTF-8, and names starting with `= + - @` get a leading apostrophe that import
+    removes, so an export round-trips exactly and a hostile share link cannot plant a formula.
+    A name never spans lines (line breaks collapse to a space), and `formatEntries` writes an
+    explicit weight after a name that itself ends in `| 5`, so the list reads it back
+    unchanged. A file with no usable entries leaves the current list alone, and a file over
+    `MAX_ENTRIES` (80) says "Imported 80 of 90 entries".
+  - **Share links.** A `?draw=` link that cannot be read says so and loads the visitor's own
+    list; a shared list still takes the visitor's saved sound setting; the note says the
+    shared list replaces the visitor's saved one as soon as they edit or draw. "Copy share link"
+    checks the link decodes before saying "copied" (the practical ceiling is about 8,900
+    ASCII characters of list, lower for CJK; the 10,000 in the codec is unreachable behind the
+    12,000-character link cap).
+  - **Storage.** `browserStorage()` guards the read of `window.localStorage` (it can throw);
+    corrupt saved history records are dropped on load. REDRAW after "remove every selected
+    entry" puts the entry back where it was and drops its history row; history numbering
+    keeps counting past the 20 kept.
   - **Public entry points (2026-10-14):** listed in `public/sitemap.xml`, prerendered by
     `tools/prerender-public-pages.mjs` (root marker `<main class="random-selector"`, copy
-    `SPLIT-FLAP EDITION`; the prerender DOM reports `prefers-reduced-motion: reduce`, so the
-    prerendered board is the static one) and asserted in `tests/e2e/smoke.spec.js`.
-  - Persists to `localStorage` (`seduh-random-selector-v1`); a share link loads over it
-    without saving until the user edits.
+    `SPLIT-FLAP EDITION`) and asserted in `tests/e2e/smoke.spec.js`.
+  - Persists to `localStorage` (`seduh-random-selector-v1`).
   - **Open items (not yet done):** typing more than 80 entries into the list is still cut
-    silently (only the CSV import reports it), and a draft over 10,000 characters cannot
-    be reloaded from its own share link; a weight of `0` becomes 1. The provenance and licence of
-    `public/sounds/split-flap-click.mp3` still need confirming. An IME composition in the
-    entry list is ended by the per-keystroke re-render (the node is moved between trees).
+    silently (only the CSV import reports it); a weight of `0` becomes 1; LOAD EXAMPLE LIST and
+    CLEAR SESSION act at once with no confirmation or undo; the AudioContext set-up is a
+    near-copy of the Timer's (no shared helper in `core/` yet); `core/export.js`'s
+    `downloadCsv` revokes the blob URL immediately, which can cancel the download in Safari
+    (a fix belongs in core and would help every caller); the board colours are literal hex
+    values, not tokens; the paper surface never follows `prefers-color-scheme` (Present is the
+    only dark surface); the flash rate was measured, not run through a flash analyser; no real
+    screen reader (NVDA, VoiceOver, TalkBack) has been used on it; the caret test proves
+    identity in jsdom only, so a Playwright check of the caret in a real browser is still
+    owed; the provenance and licence of `public/sounds/split-flap-click.mp3` still need
+    confirming.
 
 - `brew-planner/` (`planner.js` pure engine, `plannerState.js` wizard state + storage,
   `brewPlannerScreen.js` DOM, `brewPlanner.css`), 2026-09-29 — a five-step wizard (Heats,

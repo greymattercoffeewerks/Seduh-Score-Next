@@ -1,3 +1,5 @@
+import { buildCsv } from '../../core/export.js';
+
 export const STORAGE_KEY = 'seduh-random-selector-v1';
 export const DEMO_ENTRIES = ['Amir', 'Bella', 'Chin', 'Dina', 'Evan', 'Fatin', 'Gareth', 'Hana'];
 export const DEFAULT_BOARD_TITLE = 'PLAYER DRAW';
@@ -9,7 +11,9 @@ export const DRAW_PRESETS = {
 };
 
 export function validDrawPreset(value) {
-  return Object.hasOwn(DRAW_PRESETS, value) ? value : 'standard';
+  // String() first: an array like ['quick'] coerces to a valid key, and must not be stored as-is.
+  const key = String(value);
+  return Object.hasOwn(DRAW_PRESETS, key) ? key : 'standard';
 }
 
 export function validSoundLevel(value) {
@@ -113,19 +117,50 @@ export function entriesFromCsv(text) {
   const rows = parseCsv(text);
   if (HEADER_NAME.test(rows[0]?.[0]?.trim() ?? '')) rows.shift();
   const all = rows
-    .map(([name = '', weight]) => ({ name: name.trim(), weight: normalizeWeight(weight) }))
+    .map(([name = '', weight]) => ({
+      // Line breaks collapse to a space: the entry list holds one name per line.
+      name: unguardCell(name.trim().replace(/\s+/g, ' ')),
+      weight: normalizeWeight(weight),
+    }))
     .filter((entry) => entry.name);
   return { entries: all.slice(0, MAX_ENTRIES), total: all.length };
 }
 
-export function entriesToCsv(entries) {
-  const rows = entries.map((entry) => `"${entry.name.replaceAll('"', '""')}",${entry.weight}`);
-  return ['Entry,Weight', ...rows].join('\r\n');
+// A spreadsheet runs a cell that starts with = + - or @ as a formula, and an entry list can come
+// from a hostile share link. Such names are exported with a leading apostrophe (which the
+// spreadsheet hides) and the apostrophe is removed again on import, so the round trip is exact.
+const FORMULA_CELL = /^'*[=+\-@\t\r]/;
+
+function guardCell(name) {
+  return FORMULA_CELL.test(name) ? `'${name}` : name;
 }
+
+function unguardCell(name) {
+  return /^'+[=+\-@\t\r]/.test(name) ? name.slice(1) : name;
+}
+
+// Built on core/export.js, the shared CSV writer, rather than a second copy of its quoting rules.
+export function entriesToCsv(entries) {
+  return buildCsv({
+    columns: [
+      { key: 'name', label: 'Entry' },
+      { key: 'weight', label: 'Weight' },
+    ],
+    rows: entries.map((entry) => ({ name: guardCell(entry.name), weight: entry.weight })),
+  });
+}
+
+const TRAILING_WEIGHT = /\|\s*\d+(?:\.\d+)?\s*$/;
 
 export function formatEntries(entries) {
   return entries
-    .map((entry) => (entry.weight === 1 ? entry.name : `${entry.name} | ${entry.weight}`))
+    .map((entry) =>
+      // A weight of 1 is left off, unless the name already ends in "| 5": the list would read that
+      // as a weight, so such a name is written with its own explicit weight after it.
+      entry.weight === 1 && !TRAILING_WEIGHT.test(entry.name)
+        ? entry.name
+        : `${entry.name} | ${entry.weight}`,
+    )
     .join('\n');
 }
 
@@ -194,7 +229,9 @@ export function loadSaved(storage = window.localStorage) {
       soundOn: candidate.soundOn !== false,
       boardTitle: validBoardTitle(candidate.boardTitle),
       accentColor: validAccentColor(candidate.accentColor),
-      history: Array.isArray(candidate.history) ? candidate.history.slice(-20) : [],
+      history: Array.isArray(candidate.history)
+        ? candidate.history.filter((record) => record && typeof record.name === 'string').slice(-20)
+        : [],
     };
   } catch {
     return null;
@@ -218,5 +255,15 @@ export function saveCurrent(state, storage = window.localStorage) {
     );
   } catch {
     // Storage is a convenience only; the picker remains usable when blocked.
+  }
+}
+
+// Reading window.localStorage can itself throw (site data blocked, sandboxed frames), and doing it
+// as a default parameter would take the whole page down with it, so it is read here, guarded.
+export function browserStorage() {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
   }
 }

@@ -1,7 +1,9 @@
 import { brandLockup, el, withFocusPreservation } from '../../core/dom.js';
+import { downloadCsv } from '../../core/export.js';
 import {
   decodeShare,
   DEMO_ENTRIES,
+  browserStorage,
   DEFAULT_ACCENT_COLOR,
   DEFAULT_BOARD_TITLE,
   DRAW_PRESETS,
@@ -31,32 +33,53 @@ function button(text, className, onClick, attrs = {}) {
   return node;
 }
 
-function boardRows(value) {
-  const clean = String(value)
-    .toUpperCase()
-    .slice(0, CELLS_PER_ROW * ROWS);
-  return Array.from({ length: ROWS }, (_, rowIndex) =>
-    clean
-      .slice(rowIndex * CELLS_PER_ROW, (rowIndex + 1) * CELLS_PER_ROW)
-      .padEnd(CELLS_PER_ROW, ' '),
-  );
+// Lay a name out on the board: one character per flap by code point (an emoji is one flap, not a
+// split surrogate), words kept whole on a row where they fit, and an ellipsis in the last flap when
+// the name is still too long. The result panel below always shows the full name.
+function boardCells(value) {
+  const rows = [];
+  let row = '';
+  const push = () => {
+    rows.push(row);
+    row = '';
+  };
+  for (const word of String(value).toUpperCase().split(/\s+/).filter(Boolean)) {
+    const characters = Array.from(word);
+    if (row && Array.from(row).length + 1 + characters.length <= CELLS_PER_ROW) {
+      row += ` ${word}`;
+      continue;
+    }
+    if (row) push();
+    for (let start = 0; start < characters.length; start += CELLS_PER_ROW) {
+      row = characters.slice(start, start + CELLS_PER_ROW).join('');
+      if (start + CELLS_PER_ROW < characters.length) push();
+    }
+  }
+  if (row) push();
+  const cells = rows.slice(0, ROWS).map((line) => {
+    const characters = Array.from(line);
+    return Array.from({ length: CELLS_PER_ROW }, (_, index) => characters[index] ?? ' ');
+  });
+  while (cells.length < ROWS) cells.push(Array(CELLS_PER_ROW).fill(' '));
+  if (rows.length > ROWS) cells[ROWS - 1][CELLS_PER_ROW - 1] = '…';
+  return cells.flat();
 }
 
 // The board is a picture of the result: its name comes from the draw state, never from the
 // characters flickering across the flaps, which would read out as 56 single letters.
-function splitFlapBoard(value, spinning, label) {
+function splitFlapBoard(value, label) {
+  const cells = boardCells(value);
   return el(
     'div',
     { className: 'selector-board', attrs: { role: 'img', 'aria-label': label } },
-    boardRows(value).map((row) =>
+    Array.from({ length: ROWS }, (_, rowIndex) =>
       el(
         'div',
         { className: 'selector-flap-row' },
-        [...row].map((character, index) =>
+        cells.slice(rowIndex * CELLS_PER_ROW, (rowIndex + 1) * CELLS_PER_ROW).map((character) =>
           el('span', {
-            className: `selector-flap${spinning ? ' is-spinning' : ''}`,
+            className: 'selector-flap',
             text: character,
-            attrs: { style: `--flap-delay:${index * 26}ms` },
           }),
         ),
       ),
@@ -64,11 +87,8 @@ function splitFlapBoard(value, spinning, label) {
   );
 }
 
-function randomBoardValue() {
-  return Array.from(
-    { length: 3 + Math.floor(Math.random() * 25) },
-    () => ALPHABET[Math.floor(Math.random() * ALPHABET.length)],
-  ).join('');
+function randomCharacter() {
+  return ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
 }
 
 function createTicker() {
@@ -87,6 +107,14 @@ function createTicker() {
   }
 
   function syntheticTick(volume) {
+    try {
+      playSyntheticTick(volume);
+    } catch {
+      // No usable audio at all: the board is still a complete signal on its own.
+    }
+  }
+
+  function playSyntheticTick(volume) {
     const audio = ensure();
     if (!audio) return;
     const oscillator = audio.createOscillator();
@@ -100,36 +128,61 @@ function createTicker() {
     oscillator.stop(audio.currentTime + 0.05);
   }
 
+  // play() returns a promise in browsers, nothing in some environments, and can throw: every path
+  // here goes through one promise so none of them can leave the draw half-finished.
+  function playSample() {
+    try {
+      return Promise.resolve(sample.play());
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  }
+
+  let unlocked = false;
+
+  // Sound is a courtesy on top of the board, never something a draw depends on: nothing below may
+  // throw out of unlock() or tick(), or a draw would stop before it shows its result.
   return {
     unlock() {
-      ensure();
-      if (!sample) return;
-      sample.muted = true;
-      sample
-        .play()
-        .then(() => {
-          sample.pause();
-          sample.currentTime = 0;
-          sample.muted = false;
-        })
-        .catch(() => {
-          sample.muted = false;
-          sampleAvailable = false;
-        });
+      try {
+        ensure();
+        // Once per page: the unlock play/pause must not run again over a live tick.
+        if (!sample || unlocked) return;
+        unlocked = true;
+        sample.muted = true;
+        playSample()
+          .then(() => {
+            sample.pause();
+            sample.currentTime = 0;
+            sample.muted = false;
+          })
+          .catch(() => {
+            sample.muted = false;
+            sampleAvailable = false;
+          });
+      } catch {
+        sampleAvailable = false;
+      }
     },
     tick(volume) {
-      const now = performance.now();
-      if (sampleAvailable && sample && now - lastSampleAt >= 105) {
-        lastSampleAt = now;
-        sample.volume = Math.min(1, volume * 1.5);
-        sample.currentTime = 0;
-        sample.play().catch(() => {
-          sampleAvailable = false;
-          syntheticTick(volume);
-        });
-        return;
+      try {
+        const now = performance.now();
+        if (sampleAvailable && sample && now - lastSampleAt >= 105) {
+          lastSampleAt = now;
+          sample.volume = Math.min(1, volume * 1.5);
+          sample.currentTime = 0;
+          playSample().catch((error) => {
+            // AbortError only means a newer play() or pause() pre-empted this one: not a failure.
+            if (error?.name === 'AbortError') return;
+            sampleAvailable = false;
+            syntheticTick(volume);
+          });
+          return;
+        }
+        if (!sampleAvailable) syntheticTick(volume);
+      } catch {
+        sampleAvailable = false;
       }
-      if (!sampleAvailable) syntheticTick(volume);
     },
   };
 }
@@ -138,9 +191,11 @@ function prefersReducedMotion() {
   return Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
 }
 
-export function mountRandomSelector(root, { storage = window.localStorage } = {}) {
-  const shared = decodeShare(new URLSearchParams(window.location.search).get('draw'));
-  const saved = shared ? null : loadSaved(storage);
+export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
+  const sharedParam = new URLSearchParams(window.location.search).get('draw');
+  const shared = decodeShare(sharedParam);
+  // Saved settings (sound on or off) still apply to a shared list; only its entries and history don't.
+  const saved = loadSaved(storage);
   const initialDraft = shared?.draft ?? saved?.draft ?? DEMO_ENTRIES.join('\n');
   const state = {
     draft: initialDraft,
@@ -156,7 +211,11 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
     spinning: false,
     soundOn: saved?.soundOn ?? true,
     reveal: null,
-    note: shared ? 'Shared draw loaded. Edit it, then copy a fresh link when ready.' : '',
+    note: shared
+      ? 'Shared draw loaded. It replaces your own saved list as soon as you edit or draw.'
+      : sharedParam
+        ? 'That share link could not be read, so your own list was loaded instead.'
+        : '',
     presenting: false,
   };
   const ticker = createTicker();
@@ -178,12 +237,23 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
     className: 'rs-textarea',
     attrs: { id: 'rs-entries', rows: '10', spellcheck: 'false', 'data-focus-key': 'entries' },
   });
-  entriesField.addEventListener('input', () => updateEntries(entriesField.value));
+  entriesField.addEventListener('input', () => onEntriesInput());
 
   // Fields that commit on blur (weights, title, colour) or fire continuously (volume) must not
   // trigger a rebuild: it would replace the very control being used, so a Tab lands on <body>, a
   // slider drag is dropped and the click that caused the blur is swallowed. They update in place.
-  const ui = { app: null, titleCell: null, percentCells: [], totalCell: null, colourCode: null };
+  const ui = {
+    app: null,
+    titleCell: null,
+    percentCells: [],
+    totalCell: null,
+    colourCode: null,
+    flaps: [],
+    drawButton: null,
+    countTop: null,
+    countPanel: null,
+    weightsList: null,
+  };
 
   function totalWeight() {
     return state.entries.reduce((sum, entry) => sum + entry.weight, 0);
@@ -197,6 +267,81 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
     });
     if (ui.totalCell) ui.totalCell.textContent = `${total} TOTAL WEIGHT`;
     if (entriesField.value !== state.draft) entriesField.value = state.draft;
+  }
+
+  function fillWeightRows(container) {
+    ui.percentCells = [];
+    const total = totalWeight();
+    container.replaceChildren(
+      ...state.entries.map((entry, index) => {
+        const field = el('input', {
+          className: 'rs-weight-input',
+          attrs: {
+            type: 'number',
+            min: '1',
+            max: '1000',
+            step: '1',
+            value: String(entry.weight),
+            'aria-label': `Weight for ${entry.name}`,
+            'data-focus-key': `weight-${index}`,
+            ...(state.spinning ? { disabled: '' } : {}),
+          },
+        });
+        field.addEventListener('change', () => {
+          if (state.spinning) return;
+          const next = Number(field.value);
+          if (Number.isFinite(next) && next >= 1) entry.weight = Math.min(1000, Math.round(next));
+          field.value = String(entry.weight);
+          state.draft = formatEntries(state.entries);
+          persist();
+          refreshWeightReadouts();
+        });
+        const percent = el('span', { text: `${((entry.weight / total) * 100).toFixed(1)}%` });
+        ui.percentCells[index] = percent;
+        return el('div', { className: 'rs-weight-row' }, [
+          el('span', { text: entry.name }),
+          field,
+          percent,
+        ]);
+      }),
+    );
+  }
+
+  // Typing in the entry list must not rebuild the screen: that moves the textarea, which ends an
+  // IME or predictive-keyboard composition and bounces a phone's soft keyboard on every key. Only
+  // what depends on the list is refreshed here, in place.
+  function onEntriesInput() {
+    if (state.spinning) return;
+    state.draft = entriesField.value;
+    state.entries = parseEntries(state.draft);
+    state.reveal = null;
+    persist();
+    const count = state.entries.length;
+    if (ui.countTop) ui.countTop.textContent = `${count} ENTRIES`;
+    if (ui.countPanel) ui.countPanel.textContent = `${count} loaded`;
+    if (ui.drawButton) {
+      if (count) ui.drawButton.removeAttribute('aria-disabled');
+      else ui.drawButton.setAttribute('aria-disabled', 'true');
+    }
+    ui.app?.querySelector('.rs-reveal')?.remove();
+    if (ui.weightsList) fillWeightRows(ui.weightsList);
+    refreshWeightReadouts();
+  }
+
+  // While drawing, one COLUMN of flaps turns over per tick, sweeping across the board, instead of
+  // the whole board changing at once. No flap changes more than about once a second, so the board
+  // stays far below the three-flashes-a-second limit (WCAG 2.3.1) at every preset, in Present mode
+  // too. The flaps are updated in place: rebuilding the screen on every tick replaced the focused
+  // draw button each time (a screen reader may re-announce it) and restarted every flap.
+  function sweepColumn(column) {
+    for (let row = 0; row < ROWS; row += 1) {
+      const flap = ui.flaps[row * CELLS_PER_ROW + column];
+      if (!flap) continue;
+      flap.textContent = randomCharacter();
+      flap.classList.remove('is-flipping');
+      void flap.offsetWidth; // restart the one-shot flip
+      flap.classList.add('is-flipping');
+    }
   }
 
   function setNote(text) {
@@ -240,12 +385,15 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
   }
 
   function drawRecord(entry, removed) {
+    // `n` keeps counting past the 20 kept, so the newest row is not stuck at "20".
+    const n = (state.history.at(-1)?.n ?? state.history.length) + 1;
     state.history = [
       ...state.history,
       {
         name: entry.name,
         weight: entry.weight,
         removed,
+        n,
         at: new Date().toISOString(),
       },
     ].slice(-20);
@@ -256,6 +404,8 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
     setNote(`${state.winner} kept as the selected result.`);
     state.reveal = null;
     render();
+    // The result panel (and the button that was just pressed) is gone: hand focus to the draw button.
+    ui.drawButton?.focus();
   }
 
   function finishDraw(entry) {
@@ -273,7 +423,7 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
       state.draft = formatEntries(state.entries);
     }
     drawRecord(entry, removed);
-    state.reveal = { entry, removed };
+    state.reveal = { entry, removed, index };
     setNote(
       removed
         ? `${entry.name} selected and removed from the draw.`
@@ -284,7 +434,12 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
   }
 
   function startDraw() {
-    if (state.spinning || !state.entries.length) return;
+    if (state.spinning) return;
+    if (!state.entries.length) {
+      setNote('Add at least one entry to draw.');
+      render();
+      return;
+    }
     if (state.soundOn) ticker.unlock();
     const picked = state.entries[weightedIndex(state.entries)];
     const { duration, tickRate } = DRAW_PRESETS[state.drawPreset];
@@ -293,41 +448,56 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
     state.reveal = null;
     setNote('Drawing an entry…');
     if (reduceMotion) state.winner = 'DRAWING';
+    let tickCount = 0;
     tickHandle = window.setInterval(() => {
       if (state.soundOn) ticker.tick(state.soundLevel);
       // Reduced motion: the board holds still while the sound (if on) keeps its rhythm.
       if (reduceMotion) return;
-      state.winner = randomBoardValue();
-      render();
+      sweepColumn(tickCount % CELLS_PER_ROW);
+      tickCount += 1;
     }, tickRate);
     finishHandle = window.setTimeout(() => finishDraw(picked), duration);
     render();
   }
 
   function redraw() {
-    if (!state.reveal) return;
+    if (!state.reveal || state.spinning) return;
+    const { entry, removed, index } = state.reveal;
+    if (removed) {
+      // The drawn entry was taken out of the list. Redrawing means that draw does not count, so it
+      // goes back where it was and its history row is dropped, instead of being lost for good.
+      state.entries.splice(index, 0, entry);
+      state.draft = formatEntries(state.entries);
+      state.history = state.history.slice(0, -1);
+    }
     state.reveal = null;
     state.winner = 'READY';
     state.drawn = null;
+    persist();
     render();
+    ui.drawButton?.focus();
     startDraw();
   }
 
   async function copyShareLink() {
+    const encoded = encodeShare({
+      draft: state.draft,
+      removeAfterDraw: state.removeAfterDraw,
+      drawPreset: state.drawPreset,
+      soundLevel: state.soundLevel,
+      boardTitle: state.boardTitle,
+      accentColor: state.accentColor,
+    });
+    // A link the tool itself would refuse to open must not be reported as copied.
+    if (!decodeShare(encoded)) {
+      setNote('This list is too long to share as a link. Export it as a CSV instead.');
+      render();
+      return;
+    }
     const url = new URL(window.location.href);
     url.search = '';
     url.hash = '';
-    url.searchParams.set(
-      'draw',
-      encodeShare({
-        draft: state.draft,
-        removeAfterDraw: state.removeAfterDraw,
-        drawPreset: state.drawPreset,
-        soundLevel: state.soundLevel,
-        boardTitle: state.boardTitle,
-        accentColor: state.accentColor,
-      }),
-    );
+    url.searchParams.set('draw', encoded);
     try {
       await navigator.clipboard.writeText(url.toString());
       setNote('Share link copied. Anyone opening it gets this list and setting.');
@@ -335,16 +505,6 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
       setNote('Could not copy the link automatically. Please try again.');
     }
     render();
-  }
-
-  function download(filename, contents) {
-    const blob = new Blob([contents], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    link.click();
-    URL.revokeObjectURL(url);
   }
 
   function render() {
@@ -376,6 +536,7 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
           ...(state.spinning || !state.entries.length ? { 'aria-disabled': 'true' } : {}),
         },
       );
+      ui.drawButton = drawButton;
       const soundButton = button(
         state.soundOn ? 'SOUND ON' : 'SOUND OFF',
         'rs-text-button',
@@ -400,7 +561,10 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
         el('header', { className: 'rs-topbar' }, [
           el('a', { className: 'rs-brand', attrs: { href: '/' } }, [brandLockup()]),
           el('div', { className: 'rs-top-actions' }, [
-            el('span', { className: 'rs-entry-count', text: `${state.entries.length} ENTRIES` }),
+            (ui.countTop = el('span', {
+              className: 'rs-entry-count',
+              text: `${state.entries.length} ENTRIES`,
+            })),
             soundButton,
             presentButton,
           ]),
@@ -419,7 +583,7 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
               el('span', { text: 'SEDUH SCORE' }),
               (ui.titleCell = el('span', { text: state.boardTitle })),
             ]),
-            splitFlapBoard(state.winner, state.spinning, boardLabel()),
+            splitFlapBoard(state.winner, boardLabel()),
             el('div', { className: 'rs-board-status' }, [
               el('span', { text: state.spinning ? 'STATUS: DRAWING' : 'STATUS: READY' }),
               el('span', { text: 'SPACE TO DRAW' }),
@@ -478,48 +642,15 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
         ]),
       );
       ui.app = app;
+      ui.flaps = [...app.querySelectorAll('.selector-flap')];
       host.replaceChildren(app);
 
       function buildControls() {
         if (entriesField.value !== state.draft) entriesField.value = state.draft;
         entriesField.disabled = state.spinning;
-        ui.percentCells = [];
-        const weights = el(
-          'div',
-          { className: 'rs-weights' },
-          state.entries.map((entry, index) => {
-            const field = el('input', {
-              className: 'rs-weight-input',
-              attrs: {
-                type: 'number',
-                min: '1',
-                max: '1000',
-                step: '1',
-                value: String(entry.weight),
-                'aria-label': `Weight for ${entry.name}`,
-                'data-focus-key': `weight-${index}`,
-                ...(state.spinning ? { disabled: '' } : {}),
-              },
-            });
-            field.addEventListener('change', () => {
-              if (state.spinning) return;
-              const next = Number(field.value);
-              if (Number.isFinite(next) && next >= 1)
-                entry.weight = Math.min(1000, Math.round(next));
-              field.value = String(entry.weight);
-              state.draft = formatEntries(state.entries);
-              persist();
-              refreshWeightReadouts();
-            });
-            const percent = el('span', { text: `${((entry.weight / total) * 100).toFixed(1)}%` });
-            ui.percentCells[index] = percent;
-            return el('div', { className: 'rs-weight-row' }, [
-              el('span', { text: entry.name }),
-              field,
-              percent,
-            ]);
-          }),
-        );
+        const weights = el('div', { className: 'rs-weights' });
+        ui.weightsList = weights;
+        fillWeightRows(weights);
         const importInput = el('input', {
           attrs: { type: 'file', accept: '.csv,text/csv', hidden: '' },
         });
@@ -551,7 +682,8 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
         const exportButton = button(
           'EXPORT LIST',
           'rs-link-button',
-          () => download('seduh-random-selector.csv', entriesToCsv(state.entries)),
+          // The byte-order mark makes Excel read the file as UTF-8 (Malay diacritics, CJK names).
+          () => downloadCsv('seduh-random-selector.csv', `\uFEFF${entriesToCsv(state.entries)}`),
           { 'data-focus-key': 'export' },
         );
         const shareButton = button(
@@ -567,7 +699,7 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
             el('p', { className: 'rs-kicker', text: 'ENTRY LIST' }),
             el('div', { className: 'rs-panel-heading' }, [
               el('h2', { text: 'Names in the draw' }),
-              el('span', { text: `${state.entries.length} loaded` }),
+              (ui.countPanel = el('span', { text: `${state.entries.length} loaded` })),
             ]),
             el('label', {
               className: 'rs-field-label',
@@ -614,7 +746,9 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
                     .reverse()
                     .map((record, index) =>
                       el('li', {}, [
-                        el('span', { text: String(state.history.length - index).padStart(2, '0') }),
+                        el('span', {
+                          text: String(record.n ?? state.history.length - index).padStart(2, '0'),
+                        }),
                         el('strong', { text: record.name }),
                         el('em', { text: record.removed ? 'removed' : 'kept' }),
                       ]),
@@ -756,14 +890,17 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
     if (weightsList) weightsList.scrollTop = weightsScroll;
   }
 
+  // Space draws only when nothing else has focus: a focused button, link or field already owns the
+  // key. No modifiers, no auto-repeat, and the page's own Space-to-scroll is left alone unless a draw
+  // actually starts.
   function handleKeydown(event) {
-    if (
-      event.code === 'Space' &&
-      !['TEXTAREA', 'INPUT', 'BUTTON'].includes(document.activeElement?.tagName)
-    ) {
-      event.preventDefault();
-      startDraw();
-    }
+    if (event.code !== 'Space' || event.repeat) return;
+    if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return;
+    const active = document.activeElement;
+    if (active && active !== document.body) return;
+    if (state.spinning || !state.entries.length) return;
+    event.preventDefault();
+    startDraw();
   }
   window.addEventListener('keydown', handleKeydown);
   root.replaceChildren(host, live);

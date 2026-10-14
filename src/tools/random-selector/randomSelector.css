@@ -47,9 +47,13 @@ textarea:focus-visible {
   gap: var(--space-4);
 }
 .rs-topbar {
+  flex-wrap: wrap;
   border-bottom: var(--border-hairline) solid var(--color-border);
 }
 .rs-brand {
+  display: inline-flex;
+  min-height: var(--tap-target-min);
+  align-items: center;
   --brand-lockup-size: 1.05rem;
   color: var(--color-text);
   text-decoration: none;
@@ -148,6 +152,8 @@ textarea:focus-visible {
   position: relative;
   z-index: 1;
   display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-3);
   justify-content: space-between;
   color: #aeb8b5;
 }
@@ -157,7 +163,7 @@ textarea:focus-visible {
 }
 .rs-board-status {
   margin: 0.8rem 0.2rem 0;
-  font-size: 0.64rem;
+  font-size: 0.75rem;
   color: #8e9996;
 }
 .selector-board {
@@ -202,9 +208,8 @@ textarea:focus-visible {
 }
 /* Motion is layered on a static board: with reduced motion the flaps simply hold still. */
 @media (prefers-reduced-motion: no-preference) {
-  .selector-flap.is-spinning {
-    animation: rs-flip 0.28s steps(2, end) infinite;
-    animation-delay: var(--flap-delay);
+  .selector-flap.is-flipping {
+    animation: rs-flip 0.28s steps(2, end) 1;
   }
   @keyframes rs-flip {
     50% {
@@ -317,6 +322,7 @@ textarea:focus-visible {
 }
 .rs-panel-heading {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
   gap: var(--space-3);
@@ -345,7 +351,7 @@ textarea:focus-visible {
   min-height: 12rem;
   padding: var(--space-3);
   resize: vertical;
-  border: var(--border-hairline) solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border-strong);
   border-radius: 0;
   background: var(--color-canvas);
   color: var(--color-text);
@@ -390,7 +396,7 @@ textarea:focus-visible {
   width: 100%;
   min-height: var(--tap-target-min);
   padding: 0.25rem;
-  border: var(--border-hairline) solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border-strong);
   border-radius: 0;
   background: var(--color-canvas);
   color: var(--color-text);
@@ -403,14 +409,14 @@ textarea:focus-visible {
 }
 .rs-preset-list {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(6rem, 1fr));
   gap: var(--space-2);
   margin-top: var(--space-3);
 }
 .rs-preset-button {
   min-height: var(--tap-target-min);
   padding: 0 var(--space-2);
-  border: var(--border-hairline) solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border-strong);
   border-radius: 0;
   background: var(--color-canvas);
   color: var(--color-text-secondary);
@@ -419,14 +425,15 @@ textarea:focus-visible {
   letter-spacing: 0.04em;
 }
 .rs-preset-button.is-selected {
-  border-color: var(--rs-accent);
+  border-color: var(--color-border-strong);
+  box-shadow: inset 0 0 0 2px var(--color-border-strong);
   background: var(--rs-accent);
   color: var(--rs-accent-contrast);
   font-weight: var(--font-weight-bold);
 }
 .rs-volume-control {
-  display: grid;
-  grid-template-columns: 1fr minmax(7rem, 0.9fr);
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-3);
   margin-top: var(--space-3);
@@ -436,6 +443,8 @@ textarea:focus-visible {
   letter-spacing: 0.05em;
 }
 .rs-volume-range {
+  flex: 1 1 7rem;
+  min-width: 0;
   width: 100%;
   min-height: var(--tap-target-min);
   margin: 0;
@@ -460,7 +469,7 @@ textarea:focus-visible {
   width: 100%;
   min-height: var(--tap-target-min);
   padding: 0 var(--space-3);
-  border: var(--border-hairline) solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border-strong);
   border-radius: 0;
   background: var(--color-canvas);
   color: var(--color-text);
@@ -487,7 +496,7 @@ textarea:focus-visible {
   width: var(--tap-target-min);
   height: var(--tap-target-min);
   padding: 0.1rem;
-  border: var(--border-hairline) solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border-strong);
   border-radius: 0;
   background: var(--color-canvas);
 }
@@ -600,14 +609,14 @@ textarea:focus-visible {
   }
   .rs-board-label {
     margin-bottom: 0.55rem;
-    font-size: 0.58rem;
+    font-size: 0.75rem;
   }
   .rs-board-status {
     margin-top: 0.55rem;
-    font-size: 0.52rem;
+    font-size: 0.75rem;
   }
   .rs-controls {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     margin: var(--space-5) var(--space-3);
   }
   .rs-entry-panel {
@@ -618,6 +627,15 @@ textarea:focus-visible {
     gap: 0;
   }
   .rs-top-actions .rs-text-button {
-    font-size: 0.64rem;
+    font-size: 0.75rem;
   }
+}
+
+/* The weights list scrolls, so an outset focus ring would be clipped at its edges. */
+.rs-weight-input:focus-visible {
+  outline-offset: -3px;
+}
+/* Muted text is a shade too dim on the dark Present surface (4.5:1 needed); use the secondary. */
+.random-selector[data-surface='stage'] {
+  --color-text-muted: var(--color-text-secondary);
 }

@@ -73,14 +73,53 @@ fetching every page in the smoke test's list from `vite preview`: 11 of 11 pass,
 serves the new URL. The Playwright `built-app` project itself could not run here (the headless shell
 browser is not installed in this environment), so run `npm run test:e2e` once before merging.
 
-**Tests:** 29 in `src/tools/random-selector` (7 are screen tests that fail against the Codex version:
-mid-spin edit, reduced motion, live region, board name, focus through the spin, caret, in-place
-weights; the rest cover CSV, accent contrast and import). Verified: ESLint and Prettier on the tool, the full unit suite, and the dev server
-in Chromium at 360px. E2e and the production build were not run.
+**Review pass (code-reviewer, module-boundary-checker, test-auditor, ui-accessibility-reviewer):**
+no module-boundary violation (only `core/dom.js` and now `core/export.js` are imported; nothing in
+`core/` or `formats/` depends on the tool). One BLOCKING finding, three HIGH, and a list of medium
+ones, all fixed here:
 
-**Reviews:** done by hand. The project's reviewer agents (`code-reviewer`, `module-boundary-checker`,
-`test-auditor`, `ui-accessibility-reviewer`) were **not** run. The tool imports only `core/dom.js` and
-nothing from `src/formats/`. scoring/security/schema/offline-sync n/a.
+- **Blocking (WCAG 2.3.1):** the board replaced itself about ten times a second at the default
+  motion setting. While drawing, one column of flaps now turns over per tick, so no flap changes more
+  than about once a second (measured in Chromium: at most 1). The flip is a one-shot class that only
+  exists under `no-preference`. Not run through a flash analyser.
+- **High:** KEEP RESULT and REDRAW dropped focus to `<body>` (now handed to the draw button); the draw
+  button was rebuilt and re-focused on every tick, 23 focus events in one spin, now 3; muted text on
+  the Present surface was 4.46:1 (now at least 6.6:1).
+- **Draw robustness (test-auditor, high):** a sound tick that throws left the board stuck on DRAWING,
+  and the default sound-on path had no test at all (jsdom's `play()` returns nothing, so a first
+  visit threw). The ticker can no longer throw out of a draw; sound-on tests added.
+- **Code review (medium):** typing in the entry list re-rendered the screen per keystroke, which ends
+  an IME or predictive-keyboard composition (now refreshed in place with no re-render); CSV import
+  could change weights or split names (`"Room | 5"`, a name with a line break); a bad `?draw=` link
+  failed silently; a shared list reset the visitor's sound setting; "copied" was reported for links
+  too long to open; corrupt saved history could blank the page; blocked browser storage threw at
+  mount; REDRAW after "remove selected" lost the entry; history numbering stuck at 20; held Space
+  re-drew; the Space shortcut fired on focused links and with modifiers; names over 56 characters
+  were cut mid-word with no marker (now word-wrapped with an ellipsis); `validDrawPreset(['quick'])`
+  stored an array.
+- **Shared code (module-boundary-checker):** CSV export and download now use `core/export.js`
+  (`buildCsv`, `downloadCsv`) instead of a second copy, with a byte-order mark for Excel and a guard
+  against spreadsheet formula injection. Not done: a shared `core/` audio helper (the AudioContext
+  set-up is a near-copy of the Timer's), and `core/export.js` revokes the blob URL immediately, which
+  can cancel the download in Safari.
+- **Other accessibility fixes:** 44px brand link, 3:1 control boundaries, a selected-preset ring that
+  survives a pale accent and forced colours, an unclipped focus ring in the weights list, 12px
+  minimum text, no horizontal scroll at 200% text.
+- **Test audit:** 30 mutants were run against the first 29 tests and 12 survived (no rejection
+  sampling, a uniform pick, an unweighted winner, a one-directional reduced-motion test, a CSS test a
+  longhand animation could pass, remove-by-name, ...). The tests now pin each with chosen random
+  values; the four mutants re-checked here (no rejection, uniform pick, animation outside the media
+  query, a throwing tick) are all caught.
+
+**Tests:** 69 in `src/tools/random-selector`: pure engine (fairness pinned with chosen random values,
+share codec, CSV, contrast known answers, saved state) and jsdom screen tests (draw lifecycle, reduced
+motion, sweep rate, live region, board name, focus, in-place edits, share links, storage failures,
+Present, Space, export). Verified: ESLint and `prettier --check .` repo-wide, the full unit suite, and
+the dev server in Chromium at 360px (flap changes per second, focus events, word wrap, tap targets,
+200% text, Present contrast, typing mid-list). E2e: see "Public entry points" above.
+
+**Reviews:** the four project reviewers above were run (the first three passes were by hand). A real
+screen reader, Safari and Firefox were not used.
 
 **Deferred (non-blocking):** typed lists over 80 entries and drafts over 10,000 characters are cut or
 unshareable without a warning; a weight of `0` becomes 1; the
