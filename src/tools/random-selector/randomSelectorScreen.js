@@ -108,6 +108,10 @@ function createTicker() {
   };
 }
 
+function prefersReducedMotion() {
+  return Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+}
+
 function csvEntries(source) {
   return source.split(/\r?\n/).map((line) => line.split(',')[0]?.replace(/^"|"$/g, '').trim()).filter(Boolean);
 }
@@ -142,6 +146,8 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
   function persist() { saveCurrent(state, storage); }
 
   function updateEntries(draft) {
+    // The winner is picked before the board starts spinning, so the list is frozen until it lands.
+    if (state.spinning) return;
     state.draft = draft;
     state.entries = parseEntries(draft);
     state.reveal = null;
@@ -174,15 +180,15 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
     render();
   }
 
-  function finishDraw(index) {
-    const entry = state.entries[index];
-    if (!entry) return;
-    state.winner = entry.name;
+  function finishDraw(entry) {
+    // Settle the spinner first: nothing below may leave the board stuck on DRAWING.
     state.spinning = false;
     clearInterval(tickHandle);
     tickHandle = null;
+    const index = state.entries.indexOf(entry);
+    state.winner = entry.name;
     if (state.soundOn) ticker.tick(state.soundLevel);
-    const removed = state.removeAfterDraw;
+    const removed = state.removeAfterDraw && index !== -1;
     if (removed) {
       state.entries = state.entries.filter((_, entryIndex) => entryIndex !== index);
       state.draft = formatEntries(state.entries);
@@ -197,16 +203,21 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
   function startDraw() {
     if (state.spinning || !state.entries.length) return;
     if (state.soundOn) ticker.unlock();
-    const index = weightedIndex(state.entries);
+    const picked = state.entries[weightedIndex(state.entries)];
+    const { duration, tickRate } = DRAW_PRESETS[state.drawPreset];
+    const reduceMotion = prefersReducedMotion();
     state.spinning = true;
     state.reveal = null;
     state.note = 'Drawing an entry…';
+    if (reduceMotion) state.winner = 'DRAWING';
     tickHandle = window.setInterval(() => {
-      state.winner = randomBoardValue();
       if (state.soundOn) ticker.tick(state.soundLevel);
+      // Reduced motion: the board holds still while the sound (if on) keeps its rhythm.
+      if (reduceMotion) return;
+      state.winner = randomBoardValue();
       render();
-    }, DRAW_PRESETS[state.drawPreset].tickRate);
-    finishHandle = window.setTimeout(() => finishDraw(index), DRAW_PRESETS[state.drawPreset].duration);
+    }, tickRate);
+    finishHandle = window.setTimeout(() => finishDraw(picked), duration);
     render();
   }
 
@@ -286,7 +297,7 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
           ]),
         ]));
       }
-      const autoRemove = el('input', { attrs: { type: 'checkbox', id: 'rs-remove-after' } });
+      const autoRemove = el('input', { attrs: { type: 'checkbox', id: 'rs-remove-after', ...(state.spinning ? { disabled: '' } : {}) } });
       autoRemove.checked = state.removeAfterDraw;
       autoRemove.addEventListener('change', () => { state.removeAfterDraw = autoRemove.checked; persist(); render(); });
       picker.append(el('label', { className: 'rs-auto-remove', attrs: { for: 'rs-remove-after' } }, [autoRemove, el('span', { text: 'Remove every selected entry automatically' })]));
@@ -296,11 +307,11 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
       root.replaceChildren(app);
 
       function buildControls() {
-        const textarea = el('textarea', { className: 'rs-textarea', attrs: { id: 'rs-entries', rows: '10', spellcheck: 'false', 'data-focus-key': 'entries' } });
+        const textarea = el('textarea', { className: 'rs-textarea', attrs: { id: 'rs-entries', rows: '10', spellcheck: 'false', 'data-focus-key': 'entries', ...(state.spinning ? { disabled: '' } : {}) } });
         textarea.value = state.draft;
         textarea.addEventListener('input', () => updateEntries(textarea.value));
         const weights = el('div', { className: 'rs-weights' }, state.entries.map((entry, index) => {
-          const field = el('input', { className: 'rs-weight-input', attrs: { type: 'number', min: '1', max: '1000', step: '1', value: String(entry.weight), 'aria-label': `Weight for ${entry.name}` } });
+          const field = el('input', { className: 'rs-weight-input', attrs: { type: 'number', min: '1', max: '1000', step: '1', value: String(entry.weight), 'aria-label': `Weight for ${entry.name}`, ...(state.spinning ? { disabled: '' } : {}) } });
           field.addEventListener('change', () => {
             const next = Number(field.value);
             if (!Number.isFinite(next) || next < 1) return;
@@ -316,12 +327,13 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
           const file = importInput.files?.[0];
           if (!file) return;
           const names = csvEntries(await file.text());
+          if (state.spinning) return;
           if (/^(name|names|entry|entries|participant|participants)$/i.test(names[0] ?? '')) names.shift();
           updateEntries(names.slice(0, 80).join('\n'));
           state.note = `Imported ${names.length} entries.`;
           render();
         });
-        const importButton = button('IMPORT CSV', 'rs-link-button', () => importInput.click());
+        const importButton = button('IMPORT CSV', 'rs-link-button', () => importInput.click(), state.spinning ? { disabled: '' } : {});
         const exportButton = button('EXPORT LIST', 'rs-link-button', () => download('seduh-random-selector.csv', `Entry,Weight\r\n${state.entries.map((entry) => `"${entry.name.replaceAll('"', '""')}",${entry.weight}`).join('\r\n')}`));
         const shareButton = button('COPY SHARE LINK', 'rs-link-button', () => { void copyShareLink(); });
         return el('section', { className: 'rs-controls' }, [
@@ -334,7 +346,7 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
             weights,
             buildDrawSettings(),
             buildEventBranding(),
-            el('div', { className: 'rs-entry-actions' }, [button('LOAD EXAMPLE LIST', 'rs-link-button', () => updateEntries(DEMO_ENTRIES.join('\n'))), button('CLEAR SESSION', 'rs-link-button', clearSession)]),
+            el('div', { className: 'rs-entry-actions' }, [button('LOAD EXAMPLE LIST', 'rs-link-button', () => updateEntries(DEMO_ENTRIES.join('\n')), state.spinning ? { disabled: '' } : {}), button('CLEAR SESSION', 'rs-link-button', clearSession, state.spinning ? { disabled: '' } : {})]),
             el('div', { className: 'rs-entry-actions rs-transfer-actions' }, [importButton, exportButton, shareButton, importInput]),
             ...(state.note ? [el('p', { className: 'rs-note', text: state.note, attrs: { role: 'status' } })] : []),
           ]),

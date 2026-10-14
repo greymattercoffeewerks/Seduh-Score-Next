@@ -28,8 +28,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .selector-flap-row { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: 1px; }
 .selector-flap { position: relative; display: grid; min-width: 0; height: clamp(1.85rem, 4.2vw, 2.7rem); place-items: center; overflow: hidden; color: #f0f1e9; background: linear-gradient(#2e3533 0 48%, #080909 49% 52%, #1c211f 53%); border: 1px solid #070909; box-shadow: inset 0 0 0 1px #424946, inset 0 .3rem .45rem #0008; font-family: var(--font-mono); font-size: clamp(.85rem, 2.15vw, 1.65rem); font-weight: var(--font-weight-medium); line-height: 1; text-shadow: 0 1px #000; }
 .selector-flap::after { position: absolute; inset: calc(50% - .5px) 0 auto; height: 1px; background: #070909; content: ''; }
-.selector-flap.is-spinning { animation: rs-flip .28s steps(2, end) infinite; animation-delay: var(--flap-delay); }
-@keyframes rs-flip { 50% { transform: rotateX(-78deg); } }
+/* Motion is layered on a static board: with reduced motion the flaps simply hold still. */
+@media (prefers-reduced-motion: no-preference) {
+  .selector-flap.is-spinning { animation: rs-flip .28s steps(2, end) infinite; animation-delay: var(--flap-delay); }
+  @keyframes rs-flip { 50% { transform: rotateX(-78deg); } }
+}
 .rs-draw-actions { justify-content: center; margin-top: var(--space-5); }
 .rs-draw-button, .rs-button { min-height: var(--tap-target-min); padding: 0 var(--space-5); border: var(--border-hairline) solid var(--color-border-strong); border-radius: 0; background: var(--color-border-strong); color: var(--color-canvas); font-family: var(--font-mono); font-size: var(--text-sm); font-weight: var(--font-weight-bold); letter-spacing: .08em; }
 .rs-draw-button::before { display: inline-block; width: .55rem; height: .55rem; margin-right: .7rem; border-radius: 50%; background: var(--rs-accent); content: ''; }
