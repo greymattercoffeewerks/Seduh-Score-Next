@@ -65,6 +65,13 @@ as one `wip` commit); reviewed, fixed and tested here by Claude. The branch was 
   header-only file no longer wipes the list, a re-chosen file fires again, and a file over 80 entries
   says "Imported 80 of 90 entries".
 
+**Community hub:** card 05 on `/community/` now describes what shipped ("Draw one entry from a list on
+a split-flap board, with weighted odds, CSV import, share links and a big-screen mode.") instead of
+the first draft's copy. Checked at 360px, 1024px and 1440px: five cards, no horizontal overflow.
+Not changed: the privacy page's list of tools that keep data in the browser (it names the Timer, Guess
+the Bean setup and offline scoring, and does not name the Brew Planner or this tool, which also use
+`localStorage`; a share link also carries the list in its URL).
+
 **Public entry points (added later the same day):** the tool was not in `public/sitemap.xml`,
 `tools/prerender-public-pages.mjs` or `tests/e2e/smoke.spec.js`, which the Brew Planner had all three
 of when it shipped. All three now list it. Verified by running `npm run build` (the prerender step

@@ -189,7 +189,7 @@ function buildShelf() {
           number: '05',
           title: 'Random Selector',
           eyebrow: 'For turns, prizes and lucky draws',
-          body: 'A tactile split-flap picker with weighted entries, shared lists and a clear decision after every draw.',
+          body: 'Draw one entry from a list on a split-flap board, with weighted odds, CSV import, share links and a big-screen mode.',
           href: '/tools/random-selector/',
           meta: 'No account needed',
           instrument: selectorInstrument(),
