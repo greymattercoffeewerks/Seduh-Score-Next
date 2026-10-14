@@ -152,9 +152,10 @@ the dev server in Chromium at 360px (flap changes per second, focus events, word
 screen reader, Safari and Firefox were not used.
 
 **Deferred (non-blocking):** typed lists over 80 entries and drafts over 10,000 characters are cut or
-unshareable without a warning; a weight of `0` becomes 1; the
-provenance and licence of `public/sounds/split-flap-click.mp3` still need confirming; an IME
-composition in the entry list is ended by the per-keystroke re-render.
+unshareable without a warning; a weight of `0` becomes 1; an IME
+composition in the entry list is ended by the per-keystroke re-render. (The licence of
+`public/sounds/split-flap-click.mp3` was confirmed by the owner on 2026-10-14, after this entry:
+"no problems with the licence". Where the file came from is still not recorded in the repo.)
 
 **Attribution:** the user asked that Codex be credited as a co-author for this tool. Codex's original
 commit carries no trailer, and the three earlier fix commits on the branch were pushed with only the

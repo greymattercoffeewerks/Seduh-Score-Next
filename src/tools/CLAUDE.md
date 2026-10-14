@@ -122,8 +122,9 @@ self-contained CSS instead.
     only dark surface); the flash rate was measured, not run through a flash analyser; no real
     screen reader (NVDA, VoiceOver, TalkBack) has been used on it; the caret test proves
     identity in jsdom only, so a Playwright check of the caret in a real browser is still
-    owed; the provenance and licence of `public/sounds/split-flap-click.mp3` still need
-    confirming.
+    owed. The licence of `public/sounds/split-flap-click.mp3` was confirmed by the owner on
+    2026-10-14 ("no problems with the licence"); where the file came from is not recorded in
+    the repo.
 
 - `brew-planner/` (`planner.js` pure engine, `plannerState.js` wizard state + storage,
   `brewPlannerScreen.js` DOM, `brewPlanner.css`), 2026-09-29 — a five-step wizard (Heats,
