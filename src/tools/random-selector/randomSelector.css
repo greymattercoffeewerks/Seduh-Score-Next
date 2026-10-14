@@ -84,7 +84,12 @@ textarea:focus-visible {
 }
 .rs-text-button,
 .rs-link-button {
-  padding: 0;
+  display: inline-flex;
+  min-width: var(--tap-target-min);
+  min-height: var(--tap-target-min);
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--space-2);
   border: 0;
   color: var(--color-text-secondary);
   background: transparent;
@@ -231,15 +236,17 @@ textarea:focus-visible {
 .rs-auto-remove {
   display: flex;
   width: fit-content;
-  margin: var(--space-4) auto 0;
+  min-height: var(--tap-target-min);
+  margin: var(--space-3) auto 0;
   align-items: center;
   gap: 0.6rem;
   color: var(--color-text-secondary);
   font-size: var(--text-sm);
 }
 .rs-auto-remove input {
-  width: 1.05rem;
-  height: 1.05rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: none;
   accent-color: var(--rs-accent);
 }
 .rs-reveal {
@@ -352,7 +359,7 @@ textarea:focus-visible {
 }
 .rs-weight-row {
   display: grid;
-  min-height: 2.2rem;
+  min-height: var(--tap-target-min);
   grid-template-columns: minmax(0, 1fr) 3.5rem 3.2rem;
   align-items: center;
   gap: var(--space-2);
@@ -372,6 +379,7 @@ textarea:focus-visible {
 }
 .rs-weight-input {
   width: 100%;
+  min-height: var(--tap-target-min);
   padding: 0.25rem;
   border: var(--border-hairline) solid var(--color-border);
   border-radius: 0;
@@ -391,7 +399,7 @@ textarea:focus-visible {
   margin-top: var(--space-3);
 }
 .rs-preset-button {
-  min-height: 2.6rem;
+  min-height: var(--tap-target-min);
   padding: 0 var(--space-2);
   border: var(--border-hairline) solid var(--color-border);
   border-radius: 0;
@@ -420,6 +428,8 @@ textarea:focus-visible {
 }
 .rs-volume-range {
   width: 100%;
+  min-height: var(--tap-target-min);
+  margin: 0;
   accent-color: var(--rs-accent);
 }
 .rs-volume-range:disabled {
@@ -439,7 +449,7 @@ textarea:focus-visible {
 }
 .rs-brand-title-input {
   width: 100%;
-  min-height: 2.6rem;
+  min-height: var(--tap-target-min);
   padding: 0 var(--space-3);
   border: var(--border-hairline) solid var(--color-border);
   border-radius: 0;
@@ -450,7 +460,7 @@ textarea:focus-visible {
 }
 .rs-color-field {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 2.6rem auto;
+  grid-template-columns: minmax(0, 1fr) var(--tap-target-min) auto;
   align-items: center;
   gap: var(--space-3);
   margin-top: var(--space-3);
@@ -465,8 +475,8 @@ textarea:focus-visible {
   font-size: var(--text-2xs);
 }
 .rs-color-input {
-  width: 2.6rem;
-  height: 2rem;
+  width: var(--tap-target-min);
+  height: var(--tap-target-min);
   padding: 0.1rem;
   border: var(--border-hairline) solid var(--color-border);
   border-radius: 0;
@@ -596,7 +606,7 @@ textarea:focus-visible {
     border-bottom: var(--border-hairline) solid var(--color-border);
   }
   .rs-top-actions {
-    gap: var(--space-2);
+    gap: 0;
   }
   .rs-top-actions .rs-text-button {
     font-size: 0.64rem;
