@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   browserStorage,
+  checkEntries,
+  describeEntryProblems,
+  insertDraftLine,
+  removeDraftLine,
+  replaceDraftLine,
   contrastRatio,
   decodeShare,
   encodeShare,
@@ -99,7 +104,10 @@ describe('random selector draw settings', () => {
     expect(validBoardTitle('  Friday   Finals  ')).toBe('Friday Finals');
     expect(validBoardTitle('')).toBe('PLAYER DRAW');
     expect(validAccentColor('#D96135')).toBe('#d96135');
-    expect(validAccentColor('orange')).toBe('#0fb5a3');
+    // No custom accent is null (the Petrol token); the old built-in default means the same thing.
+    expect(validAccentColor('orange')).toBeNull();
+    expect(validAccentColor(undefined)).toBeNull();
+    expect(validAccentColor('#0FB5A3')).toBeNull();
   });
 });
 
@@ -304,5 +312,108 @@ describe('random selector limits, share codec and saved state', () => {
         },
       }),
     ).not.toThrow();
+  });
+});
+
+describe('random selector says what it changed or left out', () => {
+  const lines = (count) => Array.from({ length: count }, (_, i) => `N${i}`).join('\n');
+
+  it('counts entries past the limit and the weights it had to change, and nothing else', () => {
+    const report = checkEntries(`${lines(MAX_ENTRIES + 3)}\n\n`);
+    expect(report.entries).toHaveLength(MAX_ENTRIES);
+    expect(report.ignored).toBe(3);
+    expect(report.adjusted).toEqual([]);
+    expect(report.entries[0].name).toBe('N0');
+    expect(report.entries.at(-1).name).toBe(`N${MAX_ENTRIES - 1}`);
+
+    const weights = checkEntries('A | 0\nB | 1500\nC | 2.6\nD | 2.0\nE | 7\nF');
+    expect(weights.adjusted).toEqual([
+      { name: 'A', written: '0', weight: 1 },
+      { name: 'B', written: '1500', weight: 1000 },
+      { name: 'C', written: '2.6', weight: 3 },
+    ]);
+    expect(weights.ignored).toBe(0);
+  });
+
+  it('reports a negative weight instead of reading it as part of the name', () => {
+    const report = checkEntries('A | -3\nB | abc');
+    expect(report.entries).toEqual([
+      { name: 'A', weight: 1 },
+      { name: 'B | abc', weight: 1 },
+    ]);
+    expect(report.adjusted).toEqual([{ name: 'A', written: '-3', weight: 1 }]);
+  });
+
+  it('keeps a line with a Unicode line separator in its name, and counts a nameless line', () => {
+    const report = checkEntries('A\nB\u2028C | 2\n| 3\n  | 7\nD');
+    expect(report.entries.map((entry) => entry.name)).toEqual(['A', 'B\u2028C', 'D']);
+    expect(report.entries[1].weight).toBe(2);
+    expect(report.nameless).toBe(2);
+    expect(describeEntryProblems(report)).toBe(
+      '2 lines have a weight but no name and are skipped.',
+    );
+    expect(describeEntryProblems(checkEntries('| 3'))).toBe(
+      '1 line has a weight but no name and is skipped.',
+    );
+  });
+
+  it('describes the findings in plain words, and is silent when there are none', () => {
+    expect(describeEntryProblems({ ignored: 0, nameless: 0, adjusted: [] })).toBe('');
+    expect(describeEntryProblems({ ignored: 1, adjusted: [] })).toBe(
+      `1 line is past the ${MAX_ENTRIES}-entry limit and ignored.`,
+    );
+    expect(describeEntryProblems({ ignored: 5, adjusted: [] })).toContain('5 lines are past');
+    const text = describeEntryProblems(checkEntries('A | 0\nB | 1500\nC | 2.6\nD | 0\nE | 0'));
+    expect(text).toBe(
+      'Weights run from 1 to 1000. Changed: “A” (0 → 1), “B” (1500 → 1000), “C” (2.6 → 3), and 2 more.',
+    );
+  });
+});
+
+describe('random selector edits one line of the typed list and leaves the rest as typed', () => {
+  const draft = 'Amir\n\nBella | 2\nChin';
+
+  it('replaces, removes and inserts by the position of the entry line', () => {
+    expect(replaceDraftLine(draft, 1, { name: 'Bella', weight: 5 })).toBe(
+      'Amir\n\nBella | 5\nChin',
+    );
+    expect(removeDraftLine(draft, 1)).toBe('Amir\n\nChin');
+    expect(insertDraftLine(draft, 1, { name: 'Zed', weight: 1 })).toBe(
+      'Amir\n\nZed\nBella | 2\nChin',
+    );
+  });
+
+  it('inserts at the end, into an empty list, and ignores a position that is not there', () => {
+    expect(insertDraftLine(draft, 3, { name: 'Zed', weight: 1 })).toBe(
+      'Amir\n\nBella | 2\nChin\nZed',
+    );
+    expect(insertDraftLine('', 0, { name: 'Zed', weight: 3 })).toBe('Zed | 3');
+    expect(replaceDraftLine(draft, 9, { name: 'X', weight: 1 })).toBe(draft);
+    expect(removeDraftLine(draft, 9)).toBe(draft);
+  });
+
+  it('counts entry lines the way checkEntries does, so a nameless line is never the one edited', () => {
+    const odd = '| 5\nAmir\n| 7\nBella';
+    expect(replaceDraftLine(odd, 0, { name: 'Amir', weight: 2 })).toBe('| 5\nAmir | 2\n| 7\nBella');
+    expect(removeDraftLine(odd, 1)).toBe('| 5\nAmir\n| 7');
+    expect(insertDraftLine(odd, 1, { name: 'Zed', weight: 1 })).toBe('| 5\nAmir\n| 7\nZed\nBella');
+    // Every position checkEntries reports is the line that gets edited.
+    const names = checkEntries(odd).entries.map((entry) => entry.name);
+    names.forEach((name, index) => {
+      expect(removeDraftLine(odd, index).split('\n')).not.toContain(name);
+    });
+  });
+
+  it('keeps blank lines when the list has no entry in it', () => {
+    expect(insertDraftLine('\n\n', 0, { name: 'Zed', weight: 1 })).toBe('Zed\n\n');
+    expect(insertDraftLine('| 3', 0, { name: 'Zed', weight: 1 })).toBe('| 3\nZed');
+  });
+
+  it('keeps entries past the limit when a middle line is removed', () => {
+    const long = Array.from({ length: MAX_ENTRIES + 2 }, (_, i) => `N${i}`).join('\n');
+    const after = removeDraftLine(long, 0);
+    expect(checkEntries(after).entries[0].name).toBe('N1');
+    expect(checkEntries(after).ignored).toBe(1);
+    expect(after.split('\n')).toHaveLength(MAX_ENTRIES + 1);
   });
 });

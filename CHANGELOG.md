@@ -1,3 +1,81 @@
+## T-TOOLS.random-selector-2: Petrol, a clearer weights list, and safety fixes for the Random Selector · 2026-10-14
+
+**Task:** incremental updates to the released Random Selector, requested by the user after the release
+(#261, #262): follow the Petrol design language; fix the look of the weight boxes (alignment off, spacing
+cramped, list flush to the right); and fix technical issues that affect safety and quality. Random Selector
+only; the Brew Planner was not touched. Three commits, in that order, plus follow-ups (below).
+
+**1. Petrol.** The first version had a brown wood board frame, a dozen hard-coded hex colours, a dark button
+with a dot, shadows, and a custom-accent default (`#0fb5a3`) that was not the design system's accent. Now
+every colour is a `--clr-*` / `--color-*` token; the board is graphite with teal rails and a `.cut-lg`
+corner; DRAW ENTRY and KEEP RESULT are the accent with `.cut-md` / `.cut-sm` corners (square while focused);
+no shadows; and with no custom accent the tool uses the Petrol accent token, so Present mode gets the stage
+teal. A picked colour is still honoured ("USE PETROL ACCENT" goes back; the old default means "none"). The
+meaningless LIVE label is gone; the board shows the shared live-dot while drawing.
+
+**2. The weights list.** Three aligned columns (entry, weight, odds) under sticky heads; 3.5rem rows with the
+weight box clear of the row lines; each share shown as a bar and a percentage; exactly five whole rows tall.
+
+**2b. The number was off-centre in the weight box (found by the user, measured here).** At 4x capture the ink
+sat about 7.5px left of the box centre at every width (left gap 24px, right gap 39px at 1280px): the browser
+reserves room for the number spinner's arrows even while hidden. Arrows removed; re-measured at 1280, 1024,
+700 and 360px for 1, 7, 12, 100 and 1000: within 0.16px of centre horizontally, within 0.5px vertically; the
+WEIGHT, ENTRY and ODDS heads sit exactly over their columns (0px). A stylesheet guard fails when the rules are
+removed. My first pixel measurement was wrong (it counted the dark border as ink) and is the reason the
+final method compares the ink's centre with the box's own centre in page coordinates.
+
+**3. Safety and quality.**
+
+- A typed list past 80 entries, or a weight outside 1 to 1000 (including `0`), used to be cut or changed with
+  no word. A line under the list now says so (and the live region, once per change).
+- Editing a weight or removing a drawn entry rewrote the whole typed list from the parsed entries, silently
+  dropping blank lines and entries past the limit. Now only that entry's line changes.
+- CLEAR SESSION and LOAD EXAMPLE LIST (and a CSV import) replaced the list at once with no way back. Now one
+  UNDO (list, history, board), dropped when anything else changes the list.
+- A CSV over 1 MB is refused before it is read (reading a huge file would freeze the page).
+- `core/export.js` revoked a download's URL at the click, which can cancel the download in Safari. Now after
+  1 s, in one shared `saveBlob` for `downloadCsv` and `downloadJson` (a core change; Cup Taster's exports
+  share it).
+- Escape leaves Present mode; the page gets the 16px and 32px favicons the Timer has.
+
+**4. Reviewer pass (code, module-boundary, test and accessibility reviewers) and its fixes.**
+
+- **High, fixed:** a line holding only a weight (`| 3`) counted as an entry line for the positional edits
+  but not for `checkEntries`, so with REMOVE AFTER DRAW the wrong line was deleted, the winner stayed in the
+  list and REDRAW added a duplicate; editing a weight overwrote the wrong line. One `parseLine` now decides
+  what an entry line is for both. Such lines are also reported ("skipped") instead of vanishing.
+- A line with a Unicode line separator in a name was dropped without a word (`.` does not match it): fixed
+  with the `s` flag. A negative weight (`A | -3`) used to become part of the name; it is now a weight
+  that is reported (`-3 → 1`).
+- A second CLEAR SESSION or LOAD EXAMPLE LIST snapshotted the already-empty list over the real undo, so the
+  list was lost; a no-op now keeps the first UNDO. UNDO is shown only beside the note that offered it, is
+  named "Undo: clear session", and the live region says it is available. A full render no longer
+  announces the list warning over the action's own note.
+- The weight box changed 2500 to 1000 and reverted `0` or empty with no word; it now says what it did.
+- Accessibility: the busy/disabled DRAW button was dimmed with `opacity` (label 2.9:1); it now uses token
+  colours. `scroll-padding-top` stops the sticky head covering a row reached with Shift+Tab (37 of 44px were
+  hidden). The warning is tied to the list (`aria-describedby`), each percentage is named for a screen reader,
+  and the footer is 12px, not 11px.
+- `insertDraftLine` kept the blank lines when the list held only blank lines.
+
+**Tests:** 104 in `src/tools/random-selector` and 12 in `core/export`. The reviewers' survivors are now
+caught: the spinner CSS guard parses the stylesheet (a commented-out rule used to pass), the 1 MB import
+limit is tested at 1,000,000 and 1,000,001 bytes, the revoke delay is pinned to at least 1 s and the spy is
+restored after every test, undo is checked for the board, the saved copy, import, and for being dropped on a
+weight change. Five mutants of the new fixes (index by non-blank lines, no `s` flag, undo without the no-op
+guard, opacity back, negative weight read as name) were each caught. Verified: ESLint, `prettier --check`,
+the full unit suite.
+
+**Not fixed, recorded in `src/tools/CLAUDE.md`:** Guess the Bean's JSON export still revokes at the click;
+audio, storage-guard, CSV-reader and weighted-pick helpers could move to `core/`; the CSV formula guard is only
+in this tool (a shared-writer change would alter Cup Taster's CSV, so it needs an owner decision); the
+warning is announced on every keystroke that changes it; a weight changed on load cannot be cleared from its
+weight box.
+
+**Still open (in `src/tools/CLAUDE.md`):** no shared audio helper with the Timer; the paper surface does not
+follow `prefers-color-scheme`; the flash rate was measured, not run through an analyser; no real screen reader
+pass; the caret test proves identity in jsdom only; `0` is read as 1 (now said aloud).
+
 ## T-DOCS.privacy-tools: the privacy page names the Brew Planner and the Random Selector · 2026-10-14
 
 **Task:** requested by the user. The privacy page's "On your device" section named the Timer, Guess the
@@ -152,9 +230,10 @@ the dev server in Chromium at 360px (flap changes per second, focus events, word
 screen reader, Safari and Firefox were not used.
 
 **Deferred (non-blocking):** typed lists over 80 entries and drafts over 10,000 characters are cut or
-unshareable without a warning; a weight of `0` becomes 1; the
-provenance and licence of `public/sounds/split-flap-click.mp3` still need confirming; an IME
-composition in the entry list is ended by the per-keystroke re-render.
+unshareable without a warning; a weight of `0` becomes 1; an IME
+composition in the entry list is ended by the per-keystroke re-render. (The licence of
+`public/sounds/split-flap-click.mp3` was confirmed by the owner on 2026-10-14, after this entry:
+"no problems with the licence". Where the file came from is still not recorded in the repo.)
 
 **Attribution:** the user asked that Codex be credited as a co-author for this tool. Codex's original
 commit carries no trailer, and the three earlier fix commits on the branch were pushed with only the
