@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   browserStorage,
+  checkEntries,
+  describeEntryProblems,
+  insertDraftLine,
+  removeDraftLine,
+  replaceDraftLine,
   contrastRatio,
   decodeShare,
   encodeShare,
@@ -307,5 +312,67 @@ describe('random selector limits, share codec and saved state', () => {
         },
       }),
     ).not.toThrow();
+  });
+});
+
+describe('random selector says what it changed or left out', () => {
+  const lines = (count) => Array.from({ length: count }, (_, i) => `N${i}`).join('\n');
+
+  it('counts entries past the limit and the weights it had to change, and nothing else', () => {
+    const report = checkEntries(`${lines(MAX_ENTRIES + 3)}\n\n`);
+    expect(report.entries).toHaveLength(MAX_ENTRIES);
+    expect(report.ignored).toBe(3);
+    expect(report.adjusted).toEqual([]);
+
+    const weights = checkEntries('A | 0\nB | 1500\nC | 2.6\nD | 2.0\nE | 7\nF');
+    expect(weights.adjusted).toEqual([
+      { name: 'A', written: '0', weight: 1 },
+      { name: 'B', written: '1500', weight: 1000 },
+      { name: 'C', written: '2.6', weight: 3 },
+    ]);
+    expect(weights.ignored).toBe(0);
+  });
+
+  it('describes the findings in plain words, and is silent when there are none', () => {
+    expect(describeEntryProblems({ ignored: 0, adjusted: [] })).toBe('');
+    expect(describeEntryProblems({ ignored: 1, adjusted: [] })).toBe(
+      `1 line is past the ${MAX_ENTRIES}-entry limit and ignored.`,
+    );
+    expect(describeEntryProblems({ ignored: 5, adjusted: [] })).toContain('5 lines are past');
+    const text = describeEntryProblems(checkEntries('A | 0\nB | 1500\nC | 2.6\nD | 0\nE | 0'));
+    expect(text).toBe(
+      'Weights run from 1 to 1000. Changed: “A” (0 → 1), “B” (1500 → 1000), “C” (2.6 → 3), and 2 more.',
+    );
+  });
+});
+
+describe('random selector edits one line of the typed list and leaves the rest as typed', () => {
+  const draft = 'Amir\n\nBella | 2\nChin';
+
+  it('replaces, removes and inserts by the position of the entry line', () => {
+    expect(replaceDraftLine(draft, 1, { name: 'Bella', weight: 5 })).toBe(
+      'Amir\n\nBella | 5\nChin',
+    );
+    expect(removeDraftLine(draft, 1)).toBe('Amir\n\nChin');
+    expect(insertDraftLine(draft, 1, { name: 'Zed', weight: 1 })).toBe(
+      'Amir\n\nZed\nBella | 2\nChin',
+    );
+  });
+
+  it('inserts at the end, into an empty list, and ignores a position that is not there', () => {
+    expect(insertDraftLine(draft, 3, { name: 'Zed', weight: 1 })).toBe(
+      'Amir\n\nBella | 2\nChin\nZed',
+    );
+    expect(insertDraftLine('', 0, { name: 'Zed', weight: 3 })).toBe('Zed | 3');
+    expect(replaceDraftLine(draft, 9, { name: 'X', weight: 1 })).toBe(draft);
+    expect(removeDraftLine(draft, 9)).toBe(draft);
+  });
+
+  it('keeps entries past the limit when a middle line is removed', () => {
+    const long = Array.from({ length: MAX_ENTRIES + 2 }, (_, i) => `N${i}`).join('\n');
+    const after = removeDraftLine(long, 0);
+    expect(checkEntries(after).entries[0].name).toBe('N1');
+    expect(checkEntries(after).ignored).toBe(1);
+    expect(after.split('\n')).toHaveLength(MAX_ENTRIES + 1);
   });
 });

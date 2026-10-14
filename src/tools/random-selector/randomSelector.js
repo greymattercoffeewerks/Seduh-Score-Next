@@ -52,17 +52,86 @@ export function normalizeWeight(value) {
     : 1;
 }
 
+// Reads the list and also reports what it had to change or leave out, so the screen can say so
+// instead of quietly drawing from something other than what was typed: `ignored` counts entries
+// past the limit, `adjusted` lists weights that were outside 1 to 1000 (or fractions) and what
+// they were read as.
+export function checkEntries(value) {
+  const entries = [];
+  const adjusted = [];
+  let ignored = 0;
+  for (const line of String(value).split('\n')) {
+    const match = line.trim().match(/^(.*?)(?:\s*\|\s*(\d+(?:\.\d+)?))?$/);
+    const name = match?.[1].trim();
+    if (!name) continue;
+    if (entries.length >= MAX_ENTRIES) {
+      ignored += 1;
+      continue;
+    }
+    const written = match[2];
+    const weight = normalizeWeight(written ?? 1);
+    if (written !== undefined && Number(written) !== weight)
+      adjusted.push({ name, written, weight });
+    entries.push({ name, weight });
+  }
+  return { entries, ignored, adjusted };
+}
+
 export function parseEntries(value) {
-  return String(value)
-    .split('\n')
-    .map((line) => {
-      const match = line.trim().match(/^(.*?)(?:\s*\|\s*(\d+(?:\.\d+)?))?$/);
-      const name = match?.[1].trim();
-      if (!name) return null;
-      return { name, weight: normalizeWeight(match?.[2] ?? 1) };
-    })
-    .filter(Boolean)
-    .slice(0, MAX_ENTRIES);
+  return checkEntries(value).entries;
+}
+
+// The sentence for checkEntries' findings, or '' when there is nothing to say.
+export function describeEntryProblems({ ignored, adjusted }) {
+  const parts = [];
+  if (ignored > 0) {
+    parts.push(
+      `${ignored} ${ignored === 1 ? 'line is' : 'lines are'} past the ${MAX_ENTRIES}-entry limit and ignored.`,
+    );
+  }
+  if (adjusted.length > 0) {
+    const shown = adjusted
+      .slice(0, 3)
+      .map((entry) => `“${entry.name}” (${entry.written} → ${entry.weight})`);
+    const more = adjusted.length > 3 ? `, and ${adjusted.length - 3} more` : '';
+    parts.push(`Weights run from 1 to 1000. Changed: ${shown.join(', ')}${more}.`);
+  }
+  return parts.join(' ');
+}
+
+// Edits of the typed list by position of the n-th entry line, leaving every other line (blank
+// lines, entries past the limit) exactly as typed. Rewriting the whole list from the parsed
+// entries would silently drop those.
+function contentLineIndexes(lines) {
+  const indexes = [];
+  lines.forEach((line, at) => {
+    if (line.trim() !== '') indexes.push(at);
+  });
+  return indexes;
+}
+
+export function replaceDraftLine(draft, index, entry) {
+  const lines = String(draft).split('\n');
+  const at = contentLineIndexes(lines)[index];
+  if (at === undefined) return String(draft);
+  lines[at] = formatEntries([entry]);
+  return lines.join('\n');
+}
+
+export function removeDraftLine(draft, index) {
+  const lines = String(draft).split('\n');
+  const at = contentLineIndexes(lines)[index];
+  if (at === undefined) return String(draft);
+  lines.splice(at, 1);
+  return lines.join('\n');
+}
+
+export function insertDraftLine(draft, index, entry) {
+  const lines = String(draft).split('\n');
+  const indexes = contentLineIndexes(lines);
+  if (indexes.length === 0) return formatEntries([entry]);
+  lines.splice(indexes[index] ?? lines.length, 0, formatEntries([entry]));
+  return lines.join('\n');
 }
 
 // WCAG 2.x relative luminance and contrast ratio for a #rrggbb colour.

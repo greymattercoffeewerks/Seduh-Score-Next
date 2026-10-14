@@ -1,3 +1,53 @@
+## T-TOOLS.random-selector-2: Petrol, a clearer weights list, and safety fixes for the Random Selector · 2026-10-14
+
+**Task:** incremental updates to the released Random Selector, requested by the user after the release
+(#261, #262): follow the Petrol design language; fix the look of the weight boxes (alignment off, spacing
+cramped, list flush to the right); and fix technical issues that affect safety and quality. Random Selector
+only; the Brew Planner was not touched. Three commits, in that order, plus one follow-up (below).
+
+**1. Petrol.** The first version had a brown wood board frame, a dozen hard-coded hex colours, a dark button
+with a dot, shadows, and a custom-accent default (`#0fb5a3`) that was not the design system's accent. Now
+every colour is a `--clr-*` / `--color-*` token; the board is graphite with teal rails and a `.cut-lg`
+corner; DRAW ENTRY and KEEP RESULT are the accent with `.cut-md` / `.cut-sm` corners (square while focused);
+no shadows; and with no custom accent the tool uses the Petrol accent token, so Present mode gets the stage
+teal. A picked colour is still honoured ("USE PETROL ACCENT" goes back; the old default means "none"). The
+meaningless LIVE label is gone; the board shows the shared live-dot while drawing.
+
+**2. The weights list.** Three aligned columns (entry, weight, odds) under sticky heads; 3.5rem rows with the
+weight box clear of the row lines; each share shown as a bar and a percentage; exactly five whole rows tall.
+
+**2b. The number was off-centre in the weight box (found by the user, measured here).** At 4x capture the ink
+sat about 7.5px left of the box centre at every width (left gap 24px, right gap 39px at 1280px): the browser
+reserves room for the number spinner's arrows even while hidden. Arrows removed; re-measured at 1280, 1024,
+700 and 360px for 1, 7, 12, 100 and 1000: within 0.16px of centre horizontally, within 0.5px vertically; the
+WEIGHT, ENTRY and ODDS heads sit exactly over their columns (0px). A stylesheet guard fails when the rules are
+removed. My first pixel measurement was wrong (it counted the dark border as ink) and is the reason the
+final method compares the ink's centre with the box's own centre in page coordinates.
+
+**3. Safety and quality.**
+
+- A typed list past 80 entries, or a weight outside 1 to 1000 (including `0`), used to be cut or changed with
+  no word. A line under the list now says so (and the live region, once per change).
+- Editing a weight or removing a drawn entry rewrote the whole typed list from the parsed entries, silently
+  dropping blank lines and entries past the limit. Now only that entry's line changes.
+- CLEAR SESSION and LOAD EXAMPLE LIST (and a CSV import) replaced the list at once with no way back. Now one
+  UNDO (list, history, board), dropped when anything else changes the list.
+- A CSV over 1 MB is refused before it is read (reading a huge file would freeze the page).
+- `core/export.js` revoked a download's URL at the click, which can cancel the download in Safari. Now after
+  1 s, in one shared `saveBlob` for `downloadCsv` and `downloadJson` (a core change; Cup Taster's exports
+  share it).
+- Escape leaves Present mode; the page gets the 16px and 32px favicons the Timer has.
+
+**Tests:** 89 in `src/tools/random-selector` (was 75) and 11 in `core/export`. Eight mutants of the new
+behaviours (weight edit and removal rewriting the list, no undo, undo surviving an edit, no import cap, no
+Escape, no warning, revoke at the click) were each caught by a test. Verified: ESLint, `prettier --check .`,
+the full unit suite, the dev server in Chromium at 360px and 1280px. The project's reviewer agents were not
+run on this round.
+
+**Still open (in `src/tools/CLAUDE.md`):** no shared audio helper with the Timer; the paper surface does not
+follow `prefers-color-scheme`; the flash rate was measured, not run through an analyser; no real screen reader
+pass; the caret test proves identity in jsdom only; `0` is read as 1 (now said aloud).
+
 ## T-DOCS.privacy-tools: the privacy page names the Brew Planner and the Random Selector · 2026-10-14
 
 **Task:** requested by the user. The privacy page's "On your device" section named the Timer, Guess the

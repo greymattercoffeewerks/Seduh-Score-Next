@@ -740,3 +740,108 @@ describe('random selector weights list', () => {
     expect(labels).toEqual(['50.0%', '25.0%', '25.0%']);
   });
 });
+
+describe('random selector says what it did not use, and lets a replace be undone', () => {
+  const live = () => root.querySelector('[role="status"]');
+  const type = (text) => {
+    textarea().value = text;
+    textarea().dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  const warning = () => root.querySelector('.rs-warning');
+  const longList = (count) => Array.from({ length: count }, (_, i) => `N${i}`).join('\n');
+
+  it('warns, in the page and by voice, about entries past the limit and clears the warning', () => {
+    mount();
+    expect(warning().hidden).toBe(true);
+    type(longList(83));
+    expect(warning().hidden).toBe(false);
+    expect(warning().textContent).toBe('3 lines are past the 80-entry limit and ignored.');
+    expect(live().textContent).toContain('3 lines are past the 80-entry limit');
+    type(longList(10));
+    expect(warning().hidden).toBe(true);
+  });
+
+  it('warns when a weight is written outside 1 to 1000 instead of changing it quietly', () => {
+    mount();
+    type('Amir | 0\nBella');
+    expect(warning().textContent).toBe('Weights run from 1 to 1000. Changed: “Amir” (0 → 1).');
+  });
+
+  it('keeps the entries past the limit when a weight is edited or an entry is removed', () => {
+    mount({ ...SAVED, draft: longList(82), removeAfterDraw: true });
+    const input = root.querySelector('.rs-weight-input');
+    input.value = '4';
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(textarea().value.split('\n')).toHaveLength(82);
+    expect(textarea().value.split('\n')[0]).toBe('N0 | 4');
+
+    drawValue(0);
+    drawButton().click();
+    vi.advanceTimersByTime(QUICK_MS + 100);
+    // N0 was drawn and removed; the 81st line took its place, nothing else was lost.
+    const lines = textarea().value.split('\n');
+    expect(lines).toHaveLength(81);
+    expect(lines).not.toContain('N0 | 4');
+    expect(root.querySelectorAll('.rs-weight-row')).toHaveLength(80);
+  });
+
+  it('undoes CLEAR SESSION, bringing back the list and the history', () => {
+    mount({ ...SAVED, history: [{ name: 'Zed', removed: false, n: 1 }] });
+    buttonByText('CLEAR SESSION').click();
+    expect(textarea().value).toBe('');
+    const undo = buttonByText('UNDO');
+    expect(undo).toBeDefined();
+
+    undo.focus();
+    undo.click();
+    expect(textarea().value).toBe('Amir\nBella\nChin');
+    expect(root.querySelectorAll('.rs-history li')).toHaveLength(1);
+    expect(live().textContent).toMatch(/Clear session undone/);
+    expect(buttonByText('UNDO')).toBeUndefined();
+    expect(document.activeElement).toBe(drawButton());
+  });
+
+  it('undoes LOAD EXAMPLE LIST', () => {
+    mount();
+    buttonByText('LOAD EXAMPLE LIST').click();
+    expect(textarea().value.split('\n')).toHaveLength(8);
+    buttonByText('UNDO').click();
+    expect(textarea().value).toBe('Amir\nBella\nChin');
+  });
+
+  it('offers no undo once the list has been edited or a draw has started', () => {
+    mount();
+    buttonByText('CLEAR SESSION').click();
+    type('Solo');
+    expect(buttonByText('UNDO')).toBeUndefined();
+
+    buttonByText('LOAD EXAMPLE LIST').click();
+    expect(buttonByText('UNDO')).toBeDefined();
+    drawButton().click();
+    expect(buttonByText('UNDO')).toBeUndefined();
+  });
+
+  it('refuses a CSV that is too large before reading it, and leaves the list alone', async () => {
+    mount();
+    const file = new File(['x'], 'big.csv', { type: 'text/csv' });
+    Object.defineProperty(file, 'size', { value: 2_000_000 });
+    const read = vi.fn(() => Promise.resolve('A\nB'));
+    file.text = read;
+    const input = root.querySelector('input[type="file"]');
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(read).not.toHaveBeenCalled();
+    expect(textarea().value).toBe('Amir\nBella\nChin');
+    expect(live().textContent).toMatch(/too large to import/);
+  });
+
+  it('leaves Present mode on Escape and puts focus back on the Present button', () => {
+    mount();
+    buttonByText('PRESENT').click();
+    expect(root.querySelector('.rs-controls')).toBeNull();
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(root.querySelector('.rs-controls')).not.toBeNull();
+    expect(document.activeElement).toBe(buttonByText('PRESENT'));
+  });
+});

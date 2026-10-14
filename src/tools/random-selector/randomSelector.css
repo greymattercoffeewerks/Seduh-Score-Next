@@ -728,3 +728,28 @@ textarea:focus-visible {
     justify-content: flex-end;
   }
 }
+
+/* What the typed list is not doing (entries past the limit, weights changed to fit), said in words
+   under the list. The warning colour is the Petrol token; the sentence carries the meaning. */
+.rs-warning {
+  margin: var(--space-2) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border-left: 0.25rem solid var(--color-warning);
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+.rs-warning[hidden] {
+  display: none;
+}
+/* The status line and its UNDO sit together. */
+.rs-note-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-3);
+}
+.rs-note-row .rs-note {
+  margin: var(--space-3) 0 0;
+}

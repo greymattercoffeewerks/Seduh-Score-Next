@@ -8,12 +8,17 @@ import {
   DRAW_PRESETS,
   encodeShare,
   entriesFromCsv,
+  checkEntries,
+  describeEntryProblems,
   entriesToCsv,
   formatEntries,
+  insertDraftLine,
   loadSaved,
   MAX_ENTRIES,
   parseEntries,
   PETROL_ACCENT_HEX,
+  removeDraftLine,
+  replaceDraftLine,
   readableOn,
   saveCurrent,
   validDrawPreset,
@@ -23,6 +28,8 @@ import {
   weightedIndex,
 } from './randomSelector.js';
 
+// A CSV bigger than this is refused before it is read: reading a huge file would freeze the page.
+const MAX_IMPORT_BYTES = 1_000_000;
 const CELLS_PER_ROW = 14;
 const ROWS = 4;
 const ALPHABET = ' ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -218,6 +225,7 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
         ? 'That share link could not be read, so your own list was loaded instead.'
         : '',
     presenting: false,
+    undo: null,
   };
   const ticker = createTicker();
   let tickHandle = null;
@@ -257,7 +265,10 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
     colourInput: null,
     accentReset: null,
     oddsFills: [],
+    warning: null,
+    undoButton: null,
   };
+  let lastWarning = '';
 
   function totalWeight() {
     return state.entries.reduce((sum, entry) => sum + entry.weight, 0);
@@ -275,6 +286,7 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
     });
     if (ui.totalCell) ui.totalCell.textContent = `${total} TOTAL WEIGHT`;
     if (entriesField.value !== state.draft) entriesField.value = state.draft;
+    showEntryProblems();
   }
 
   // One row per entry: the name, a weight box with room around it, and the entry's share of the
@@ -304,7 +316,10 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
         const next = Number(field.value);
         if (Number.isFinite(next) && next >= 1) entry.weight = Math.min(1000, Math.round(next));
         field.value = String(entry.weight);
-        state.draft = formatEntries(state.entries);
+        // Only this entry's line changes: rewriting the whole list from the parsed entries would
+        // drop blank lines and any entries past the limit.
+        state.draft = replaceDraftLine(state.draft, index, entry);
+        dropUndo();
         persist();
         refreshWeightReadouts();
       });
@@ -338,6 +353,7 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
   // what depends on the list is refreshed here, in place.
   function onEntriesInput() {
     if (state.spinning) return;
+    dropUndo();
     state.draft = entriesField.value;
     state.entries = parseEntries(state.draft);
     state.reveal = null;
@@ -351,7 +367,7 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
     }
     ui.app?.querySelector('.rs-reveal')?.remove();
     if (ui.weightsList) fillWeightRows(ui.weightsList);
-    refreshWeightReadouts();
+    refreshWeightReadouts(); // also refreshes the warning line
   }
 
   // While drawing, one COLUMN of flaps turns over per tick, sweeping across the board, instead of
@@ -387,8 +403,59 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
     if (ui.accentReset) ui.accentReset.hidden = !state.accentColor;
   }
 
+  // Says what the typed list is not doing (entries past the limit, weights outside 1 to 1000), in a
+  // line under the list and, when it changes, through the live region. Nothing is dropped silently.
+  function showEntryProblems() {
+    const message = describeEntryProblems(checkEntries(state.draft));
+    if (ui.warning) {
+      ui.warning.textContent = message;
+      ui.warning.hidden = !message;
+    }
+    if (message && message !== lastWarning) speak(message);
+    lastWarning = message;
+  }
+
+  // CLEAR SESSION, LOAD EXAMPLE LIST and a CSV import replace the whole list at once, so each keeps
+  // what it replaced for one UNDO. It is dropped the moment anything else changes the list.
+  function rememberForUndo(label) {
+    state.undo = {
+      label,
+      draft: state.draft,
+      history: state.history,
+      winner: state.winner,
+      drawn: state.drawn,
+    };
+  }
+
+  function dropUndo() {
+    if (!state.undo) return;
+    state.undo = null;
+    ui.undoButton?.remove();
+    ui.undoButton = null;
+  }
+
+  function undoLast() {
+    const saved = state.undo;
+    if (!saved || state.spinning) return;
+    state.undo = null;
+    state.draft = saved.draft;
+    state.entries = parseEntries(saved.draft);
+    state.history = saved.history;
+    state.winner = saved.winner;
+    state.drawn = saved.drawn;
+    state.reveal = null;
+    setNote(`${saved.label} undone.`);
+    persist();
+    render();
+    ui.drawButton?.focus();
+  }
+
   function setNote(text) {
     state.note = text;
+    speak(text);
+  }
+
+  function speak(text) {
     announcements += 1;
     // An identical message (the same entry drawn twice) is only re-announced if the text changes.
     live.textContent = announcements % 2 ? text : `${text}\u00a0`;
@@ -414,8 +481,17 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
     render();
   }
 
+  function loadExample() {
+    if (state.spinning) return;
+    rememberForUndo('Load example list');
+    updateEntries(DEMO_ENTRIES.join('\n'));
+    setNote('Example list loaded.');
+    render();
+  }
+
   function clearSession() {
     if (state.spinning) return;
+    rememberForUndo('Clear session');
     state.draft = '';
     state.entries = [];
     state.history = [];
@@ -462,8 +538,10 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
     if (state.soundOn) ticker.tick(state.soundLevel);
     const removed = state.removeAfterDraw && index !== -1;
     if (removed) {
-      state.entries = state.entries.filter((_, entryIndex) => entryIndex !== index);
-      state.draft = formatEntries(state.entries);
+      // Only the drawn entry's line goes; a list longer than the limit keeps its extra lines, and the
+      // next one in line takes the freed place.
+      state.draft = removeDraftLine(state.draft, index);
+      state.entries = parseEntries(state.draft);
     }
     drawRecord(entry, removed);
     state.reveal = { entry, removed, index };
@@ -484,6 +562,7 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
       return;
     }
     if (state.soundOn) ticker.unlock();
+    dropUndo();
     const picked = state.entries[weightedIndex(state.entries)];
     const { duration, tickRate } = DRAW_PRESETS[state.drawPreset];
     const reduceMotion = prefersReducedMotion();
@@ -509,8 +588,8 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
     if (removed) {
       // The drawn entry was taken out of the list. Redrawing means that draw does not count, so it
       // goes back where it was and its history row is dropped, instead of being lost for good.
-      state.entries.splice(index, 0, entry);
-      state.draft = formatEntries(state.entries);
+      state.draft = insertDraftLine(state.draft, index, entry);
+      state.entries = parseEntries(state.draft);
       state.history = state.history.slice(0, -1);
     }
     state.reveal = null;
@@ -709,6 +788,14 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
         importInput.addEventListener('change', async () => {
           const file = importInput.files?.[0];
           if (!file) return;
+          if (file.size > MAX_IMPORT_BYTES) {
+            importInput.value = '';
+            setNote(
+              'That file is too large to import (the limit is 1 MB). The list was left as it was.',
+            );
+            render();
+            return;
+          }
           const { entries, total } = entriesFromCsv(await file.text());
           // Choosing the same file again must fire `change` again.
           importInput.value = '';
@@ -719,6 +806,7 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
             render();
             return;
           }
+          rememberForUndo('Import');
           updateEntries(formatEntries(entries));
           setNote(
             total > entries.length
@@ -746,7 +834,8 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
           },
           { 'data-focus-key': 'share' },
         );
-        return el('section', { className: 'rs-controls' }, [
+        ui.undoButton = null;
+        const controls = el('section', { className: 'rs-controls' }, [
           el('article', { className: 'rs-entry-panel' }, [
             el('p', { className: 'rs-kicker', text: 'ENTRY LIST' }),
             el('div', { className: 'rs-panel-heading' }, [
@@ -759,6 +848,7 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
               attrs: { for: 'rs-entries' },
             }),
             entriesField,
+            (ui.warning = el('p', { className: 'rs-warning' })),
             el('div', { className: 'rs-weight-heading' }, [
               el('span', { text: 'WEIGHTS & ODDS' }),
               (ui.totalCell = el('span', { text: `${total} TOTAL WEIGHT` })),
@@ -767,12 +857,10 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
             buildDrawSettings(),
             buildEventBranding(),
             el('div', { className: 'rs-entry-actions' }, [
-              button(
-                'LOAD EXAMPLE LIST',
-                'rs-link-button',
-                () => updateEntries(DEMO_ENTRIES.join('\n')),
-                { 'data-focus-key': 'load-example', ...(state.spinning ? { disabled: '' } : {}) },
-              ),
+              button('LOAD EXAMPLE LIST', 'rs-link-button', loadExample, {
+                'data-focus-key': 'load-example',
+                ...(state.spinning ? { disabled: '' } : {}),
+              }),
               button('CLEAR SESSION', 'rs-link-button', clearSession, {
                 'data-focus-key': 'clear',
                 ...(state.spinning ? { disabled: '' } : {}),
@@ -784,7 +872,20 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
               shareButton,
               importInput,
             ]),
-            ...(state.note ? [el('p', { className: 'rs-note', text: state.note })] : []),
+            ...(state.note
+              ? [
+                  el('div', { className: 'rs-note-row' }, [
+                    el('p', { className: 'rs-note', text: state.note }),
+                    ...(state.undo
+                      ? [
+                          (ui.undoButton = button('UNDO', 'rs-link-button', undoLast, {
+                            'data-focus-key': 'undo',
+                          })),
+                        ]
+                      : []),
+                  ]),
+                ]
+              : []),
           ]),
           el('aside', { className: 'rs-history-panel' }, [
             el('p', { className: 'rs-kicker', text: 'DRAW HISTORY' }),
@@ -812,6 +913,8 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
                 }),
           ]),
         ]);
+        showEntryProblems();
+        return controls;
 
         function buildDrawSettings() {
           const presetButtons = Object.entries(DRAW_PRESETS).map(([key, preset]) =>
@@ -962,6 +1065,13 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
   // key. No modifiers, no auto-repeat, and the page's own Space-to-scroll is left alone unless a draw
   // actually starts.
   function handleKeydown(event) {
+    // Escape leaves Present mode, as it does any full-screen view.
+    if (event.key === 'Escape' && state.presenting) {
+      state.presenting = false;
+      render();
+      root.querySelector('[data-focus-key="present"]')?.focus();
+      return;
+    }
     if (event.code !== 'Space' || event.repeat) return;
     if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return;
     const active = document.activeElement;

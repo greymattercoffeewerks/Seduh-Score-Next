@@ -108,23 +108,53 @@ self-contained CSS instead.
     corrupt saved history records are dropped on load. REDRAW after "remove every selected
     entry" puts the entry back where it was and drops its history row; history numbering
     keeps counting past the 20 kept.
+  - **Petrol (2026-10-14).** The tool follows the design system (`src/ui/tokens/DESIGN.md`):
+    every colour in the stylesheet is a `--clr-*` / `--color-*` token (the first version had a
+    brown wood frame and a dozen hard-coded hex values), the board frame is graphite with teal
+    rails and a `.cut-lg` corner, the primary actions (DRAW ENTRY, KEEP RESULT) are the accent
+    with a `.cut-md` / `.cut-sm` corner that goes square while focused so the ring is not
+    clipped, and there are no shadows. With no custom accent the tool uses the Petrol accent
+    token (`PETROL_ACCENT_HEX` only fills the colour picker), so Present mode gets the stage
+    teal for free; `accentColor` is `null` for that, a picked colour still wins, "USE PETROL
+    ACCENT" goes back, the old built-in default `#0fb5a3` means "no custom accent", and a share
+    link without an accent overrides a saved one. The board's status shows the shared
+    `.status-live-dot` pulse while drawing and a static blip otherwise.
+  - **The weights list** is three aligned columns (entry, weight, odds) under sticky heads, rows
+    a fixed 3.5rem with the 44px weight box 6px clear of the row lines, each entry's share as a
+    bar plus an exact percentage (updated in place; the bar is dropped on a phone), and a list
+    exactly the heads plus five rows tall so no row is cut in half. **The number is centred
+    in the box by measurement**: a number field reserves room for its up/down arrows even while
+    hidden, which pushed the centred number 7.5px left, so the arrows are removed (Up/Down keys
+    still step; `inputmode="numeric"`). Re-measured in pixels at 1280, 1024, 700 and 360px for
+    1, 7, 12, 100 and 1000: the ink's centre is within 0.16px of the box centre; a stylesheet
+    guard pins the rules.
+  - **Nothing is dropped or changed silently** (`checkEntries`, `describeEntryProblems`): a line
+    under the list (and the live region, once per change) says when entries are past the
+    80-entry limit or a weight outside 1 to 1000 was changed ("Changed: “Amir” (0 → 1)").
+    Editing a weight or removing a drawn entry changes only that entry's line of the typed list
+    (`replaceDraftLine`, `removeDraftLine`, `insertDraftLine`), so blank lines and entries past
+    the limit survive; the old code rewrote the whole list from the parsed entries and lost them.
+  - **CLEAR SESSION, LOAD EXAMPLE LIST and a CSV import can be undone** (one level): the
+    status line shows UNDO, which restores the list, the history and the board; it goes away
+    when the list is edited, a weight is changed or a draw starts. (Chosen over a confirm box,
+    which is intrusive on a projector.) A CSV over 1 MB is refused before it is read; Escape
+    leaves Present mode.
+  - `core/export.js` revokes a download's object URL after `REVOKE_DELAY_MS` (1 s), not at the
+    click (Safari can cancel such a download); `downloadCsv` and `downloadJson` share one
+    `saveBlob`, and the tests hold the revoke back to prove it is not done at the click.
   - **Public entry points (2026-10-14):** listed in `public/sitemap.xml`, prerendered by
     `tools/prerender-public-pages.mjs` (root marker `<main class="random-selector"`, copy
     `SPLIT-FLAP EDITION`) and asserted in `tests/e2e/smoke.spec.js`.
   - Persists to `localStorage` (`seduh-random-selector-v1`).
-  - **Open items (not yet done):** typing more than 80 entries into the list is still cut
-    silently (only the CSV import reports it); a weight of `0` becomes 1; LOAD EXAMPLE LIST and
-    CLEAR SESSION act at once with no confirmation or undo; the AudioContext set-up is a
-    near-copy of the Timer's (no shared helper in `core/` yet); `core/export.js`'s
-    `downloadCsv` revokes the blob URL immediately, which can cancel the download in Safari
-    (a fix belongs in core and would help every caller); the board colours are literal hex
-    values, not tokens; the paper surface never follows `prefers-color-scheme` (Present is the
-    only dark surface); the flash rate was measured, not run through a flash analyser; no real
-    screen reader (NVDA, VoiceOver, TalkBack) has been used on it; the caret test proves
-    identity in jsdom only, so a Playwright check of the caret in a real browser is still
-    owed. The licence of `public/sounds/split-flap-click.mp3` was confirmed by the owner on
-    2026-10-14 ("no problems with the licence"); where the file came from is not recorded in
-    the repo.
+  - **Open items (not yet done):** the AudioContext set-up is a near-copy of the Timer's (no
+    shared helper in `core/` yet); the paper surface never follows `prefers-color-scheme`
+    (Present is the only dark surface); the flash rate was measured, not run through a flash
+    analyser; no real screen reader (NVDA, VoiceOver, TalkBack) has been used on it; the caret
+    test proves identity in jsdom only, so a Playwright check of the caret in a real browser is
+    still owed; a weight of `0` is read as 1 (now said out loud, but "0 means sits out" would be
+    a feature, not a fix). The licence of `public/sounds/split-flap-click.mp3` was confirmed by
+    the owner on 2026-10-14 ("no problems with the licence"); where the file came from is not
+    recorded in the repo.
 
 - `brew-planner/` (`planner.js` pure engine, `plannerState.js` wizard state + storage,
   `brewPlannerScreen.js` DOM, `brewPlanner.css`), 2026-09-29 — a five-step wizard (Heats,
