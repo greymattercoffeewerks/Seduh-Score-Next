@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { encodeShare, STORAGE_KEY } from './randomSelector.js';
 import { mountRandomSelector } from './randomSelectorScreen.js';
 
@@ -14,9 +15,24 @@ function fakeStorage(saved) {
 }
 
 const css = readFileSync(
-  resolve(process.cwd(), 'src/tools/random-selector/randomSelector.css'),
+  join(dirname(fileURLToPath(import.meta.url)), 'randomSelector.css'),
   'utf8',
 );
+
+// The declarations of every rule whose selector list contains `selector`, comments removed, so a
+// rule that has been commented out or reworded does not still satisfy a check.
+function declarationsOf(selector) {
+  const live = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  const found = {};
+  for (const [, selectors, body] of live.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    if (!selectors.split(',').some((part) => part.trim() === selector)) continue;
+    for (const declaration of body.split(';')) {
+      const at = declaration.indexOf(':');
+      if (at > 0) found[declaration.slice(0, at).trim()] = declaration.slice(at + 1).trim();
+    }
+  }
+  return found;
+}
 
 // Sound off keeps most tests off the media element, which jsdom does not implement; the sound-on
 // tests below stub play() themselves.
@@ -288,7 +304,7 @@ describe('random selector editing keeps the control in use', () => {
     expect(root.querySelector('.rs-weight-input')).toBe(input);
     expect(input.isConnected).toBe(true);
     expect(document.activeElement).toBe(input);
-    expect(root.querySelectorAll('.rs-weight-row > span:last-child')[0].textContent).toBe('60.0%');
+    expect(root.querySelectorAll('.rs-odds-value')[0].textContent).toBe('60.0%');
     const totalText = [...root.querySelectorAll('.rs-weight-heading span')].map(
       (n) => n.textContent,
     );
@@ -650,5 +666,339 @@ describe('random selector csv export', () => {
     const csv = "Entry,Weight\r\nZoë,2\r\n'=SUM(A1),1";
     expect(created).toHaveLength(1);
     expect(created[0].size).toBe(new TextEncoder().encode(BOM + csv).length);
+  });
+});
+
+describe('random selector follows the Petrol accent unless the user picks one', () => {
+  const app = () => root.querySelector('main');
+  const accentVar = () => app().style.getPropertyValue('--rs-accent');
+
+  it('sets no accent of its own by default, so the Petrol token applies', () => {
+    mount();
+    expect(app().getAttribute('style')).toBeNull();
+    expect(root.querySelector('.rs-color-field code').textContent).toBe('PETROL');
+    expect(buttonByText('USE PETROL ACCENT').hidden).toBe(true);
+  });
+
+  it('applies a saved custom accent and can go back to the Petrol one', () => {
+    mount({ ...SAVED, accentColor: '#d96135' });
+    expect(accentVar()).toBe('#d96135');
+    const reset = buttonByText('USE PETROL ACCENT');
+    expect(reset.hidden).toBe(false);
+
+    reset.focus();
+    reset.click();
+    expect(accentVar()).toBe('');
+    expect(app().style.getPropertyValue('--rs-accent-contrast')).toBe('');
+    expect(root.querySelector('.rs-color-field code').textContent).toBe('PETROL');
+    expect(reset.hidden).toBe(true);
+    expect(document.activeElement).toBe(root.querySelector('#rs-accent-color'));
+    expect(storage.written().accentColor).toBeNull();
+  });
+
+  it('treats the accent this tool used to default to as no custom accent', () => {
+    mount({ ...SAVED, accentColor: '#0fb5a3' });
+    expect(app().getAttribute('style')).toBeNull();
+  });
+
+  it('lets a share link without an accent override a saved custom one', () => {
+    window.history.replaceState(
+      null,
+      '',
+      `/tools/random-selector/?draw=${encodeShare({ draft: 'X\nY', removeAfterDraw: false, accentColor: null })}`,
+    );
+    mount({ ...SAVED, accentColor: '#d96135' });
+    expect(app().getAttribute('style')).toBeNull();
+  });
+});
+
+describe('random selector weights list', () => {
+  it('keeps the browser spinner out of the weight box so the number is centred in the whole box', () => {
+    // A number field reserves room for its up/down arrows even when they are not shown; with it the
+    // number measured 7px left of centre. Pixel-measured fix; this guards the rules that make it.
+    const input = declarationsOf('.rs-weight-input');
+    expect(input.appearance).toBe('textfield');
+    expect(input['-moz-appearance']).toBe('textfield');
+    for (const part of ['inner', 'outer']) {
+      const arrows = declarationsOf(`.rs-weight-input::-webkit-${part}-spin-button`);
+      expect(arrows['-webkit-appearance']).toBe('none');
+      expect(arrows.margin).toBe('0');
+    }
+    mount();
+    expect(root.querySelector('.rs-weight-input').getAttribute('inputmode')).toBe('numeric');
+  });
+
+  it('dims the busy DRAW button with token colours, not opacity that drags the label under 4.5:1', () => {
+    const busy = declarationsOf(".rs-draw-button[aria-disabled='true']");
+    expect(busy.opacity).toBeUndefined();
+    expect(busy.color).toBe('var(--color-text-muted)');
+    expect(busy.background).toBe('var(--color-surface-sunken)');
+  });
+
+  it('keeps a row reached by keyboard clear of the sticky head, and fine print at 12px or more', () => {
+    expect(declarationsOf('.rs-weights')['scroll-padding-top']).toBe(
+      declarationsOf('.rs-weights-head').height,
+    );
+    expect(declarationsOf('.rs-footer')['font-size']).toBe('var(--text-2xs)');
+  });
+
+  it('names each percentage for a screen reader and ties the list to its warning', () => {
+    mount();
+    expect(root.querySelector('.rs-odds .sr-only').textContent).toBe('Odds for Amir: ');
+    const describedBy = textarea().getAttribute('aria-describedby');
+    expect(root.querySelector(`#${describedBy}`)).toBe(root.querySelector('.rs-warning'));
+  });
+
+  it('shows column heads once, with a bar and a percentage per entry, and none when empty', () => {
+    mount();
+    const list = root.querySelector('.rs-weights');
+    const head = list.querySelector('.rs-weights-head');
+    expect(head.textContent).toBe('ENTRYWEIGHTODDS');
+    expect(head.getAttribute('aria-hidden')).toBe('true');
+    expect(list.querySelectorAll('.rs-weights-head')).toHaveLength(1);
+    expect(list.querySelectorAll('.rs-weight-row')).toHaveLength(3);
+    expect(list.querySelectorAll('.rs-odds-fill')).toHaveLength(3);
+
+    textarea().value = '';
+    textarea().dispatchEvent(new Event('input', { bubbles: true }));
+    expect(list.children).toHaveLength(0);
+  });
+
+  it('keeps every bar in step with the percentages when a weight changes', () => {
+    mount();
+    const input = root.querySelector('.rs-weight-input');
+    input.value = '2';
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    const widths = [...root.querySelectorAll('.rs-odds-fill')].map((fill) => fill.style.width);
+    const labels = [...root.querySelectorAll('.rs-odds-value')].map((cell) => cell.textContent);
+    expect(widths).toEqual(['50%', '25%', '25%']);
+    expect(labels).toEqual(['50.0%', '25.0%', '25.0%']);
+  });
+});
+
+describe('random selector says what it did not use, and lets a replace be undone', () => {
+  const live = () => root.querySelector('[role="status"]');
+  const type = (text) => {
+    textarea().value = text;
+    textarea().dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  const warning = () => root.querySelector('.rs-warning');
+  const board = () => root.querySelector('.selector-board');
+  const longList = (count) => Array.from({ length: count }, (_, i) => `N${i}`).join('\n');
+
+  it('warns, in the page and by voice, about entries past the limit and clears the warning', () => {
+    mount();
+    expect(warning().hidden).toBe(true);
+    type(longList(83));
+    expect(warning().hidden).toBe(false);
+    expect(warning().textContent).toBe('3 lines are past the 80-entry limit and ignored.');
+    expect(live().textContent).toContain('3 lines are past the 80-entry limit');
+    type(longList(10));
+    expect(warning().hidden).toBe(true);
+  });
+
+  it('warns when a weight is written outside 1 to 1000 instead of changing it quietly', () => {
+    mount();
+    type('Amir | 0\nBella');
+    expect(warning().textContent).toBe('Weights run from 1 to 1000. Changed: “Amir” (0 → 1).');
+  });
+
+  it('keeps the entries past the limit when a weight is edited or an entry is removed', () => {
+    mount({ ...SAVED, draft: longList(82), removeAfterDraw: true });
+    const input = root.querySelector('.rs-weight-input');
+    input.value = '4';
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(textarea().value.split('\n')).toHaveLength(82);
+    expect(textarea().value.split('\n')[0]).toBe('N0 | 4');
+
+    drawValue(0);
+    drawButton().click();
+    vi.advanceTimersByTime(QUICK_MS + 100);
+    // N0 was drawn and removed; the 81st line took its place, nothing else was lost.
+    const lines = textarea().value.split('\n');
+    expect(lines).toHaveLength(81);
+    expect(lines).not.toContain('N0 | 4');
+    expect(root.querySelectorAll('.rs-weight-row')).toHaveLength(80);
+  });
+
+  it('undoes CLEAR SESSION, bringing back the list and the history', () => {
+    mount({ ...SAVED, history: [{ name: 'Zed', removed: false, n: 1 }] });
+    buttonByText('CLEAR SESSION').click();
+    expect(textarea().value).toBe('');
+    const undo = buttonByText('UNDO');
+    expect(undo).toBeDefined();
+
+    undo.focus();
+    undo.click();
+    expect(textarea().value).toBe('Amir\nBella\nChin');
+    expect(root.querySelectorAll('.rs-history li')).toHaveLength(1);
+    expect(live().textContent).toMatch(/Clear session undone/);
+    expect(buttonByText('UNDO')).toBeUndefined();
+    expect(document.activeElement).toBe(drawButton());
+  });
+
+  it('undoes LOAD EXAMPLE LIST', () => {
+    mount();
+    buttonByText('LOAD EXAMPLE LIST').click();
+    expect(textarea().value.split('\n')).toHaveLength(8);
+    buttonByText('UNDO').click();
+    expect(textarea().value).toBe('Amir\nBella\nChin');
+  });
+
+  it('offers no undo once the list has been edited or a draw has started', () => {
+    mount();
+    buttonByText('CLEAR SESSION').click();
+    type('Solo');
+    expect(buttonByText('UNDO')).toBeUndefined();
+
+    buttonByText('LOAD EXAMPLE LIST').click();
+    expect(buttonByText('UNDO')).toBeDefined();
+    drawButton().click();
+    expect(buttonByText('UNDO')).toBeUndefined();
+  });
+
+  it('refuses a CSV that is too large before reading it, and leaves the list alone', async () => {
+    mount();
+    const file = new File(['x'], 'big.csv', { type: 'text/csv' });
+    Object.defineProperty(file, 'size', { value: 2_000_000 });
+    const read = vi.fn(() => Promise.resolve('A\nB'));
+    file.text = read;
+    const input = root.querySelector('input[type="file"]');
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(read).not.toHaveBeenCalled();
+    expect(textarea().value).toBe('Amir\nBella\nChin');
+    expect(live().textContent).toMatch(/too large to import/);
+  });
+
+  it('edits the entry that was meant when a line holds only a weight', () => {
+    mount({ ...SAVED, draft: 'Amir\n| 3\nBella\nChin', removeAfterDraw: true });
+    expect(warning().textContent).toBe('1 line has a weight but no name and is skipped.');
+    const input = root.querySelectorAll('.rs-weight-input')[1];
+    input.value = '5';
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(textarea().value).toBe('Amir\n| 3\nBella | 5\nChin');
+
+    // The odds bar for Bella puts her at index 1; she is drawn and must be the one removed.
+    drawValue(5);
+    drawButton().click();
+    vi.advanceTimersByTime(QUICK_MS + 100);
+    expect(root.querySelector('[role="status"]').textContent).toMatch(/Bella/);
+    expect(textarea().value).toBe('Amir\n| 3\nChin');
+  });
+
+  it('says what a weight box did with a number it could not use', () => {
+    mount();
+    const input = () => root.querySelector('.rs-weight-input');
+    const change = (value) => {
+      input().value = value;
+      input().dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    change('2500');
+    expect(input().value).toBe('1000');
+    expect(warning().textContent).toBe('Weight for Amir is 1000: weights run from 1 to 1000.');
+    expect(live().textContent).toContain('Weight for Amir is 1000');
+    change('');
+    expect(input().value).toBe('1000');
+    expect(live().textContent).toContain('must be 1 to 1000, so it stays 1000');
+    change('7');
+    expect(warning().hidden).toBe(true);
+  });
+
+  it('keeps the first UNDO when CLEAR SESSION or LOAD EXAMPLE LIST is pressed again', () => {
+    mount();
+    buttonByText('CLEAR SESSION').click();
+    buttonByText('CLEAR SESSION').click();
+    buttonByText('UNDO').click();
+    expect(textarea().value).toBe('Amir\nBella\nChin');
+
+    buttonByText('LOAD EXAMPLE LIST').click();
+    buttonByText('LOAD EXAMPLE LIST').click();
+    buttonByText('UNDO').click();
+    expect(textarea().value).toBe('Amir\nBella\nChin');
+  });
+
+  it('puts the board and the saved copy back too, and says what UNDO will undo', () => {
+    mount();
+    drawValue(0);
+    drawButton().click();
+    vi.advanceTimersByTime(QUICK_MS + 100);
+    expect(boardText()).not.toBe('');
+    buttonByText('CLEAR SESSION').click();
+    expect(board().getAttribute('aria-label')).toBe('Board ready. No entry drawn yet');
+    expect(storage.written().draft).toBe('');
+    expect(buttonByText('UNDO').getAttribute('aria-label')).toBe('Undo: clear session');
+    expect(live().textContent).toContain('Undo is available.');
+
+    buttonByText('UNDO').click();
+    expect(storage.written().draft).toBe('Amir\nBella\nChin');
+    expect(storage.written().history).toHaveLength(1);
+    expect(board().getAttribute('aria-label')).toBe('Selected entry: Amir');
+  });
+
+  it('drops UNDO when a weight is changed or another note replaces the one that offered it', () => {
+    mount();
+    buttonByText('CLEAR SESSION').click();
+    type('Amir | 2\nBella');
+    buttonByText('LOAD EXAMPLE LIST').click();
+    const input = root.querySelector('.rs-weight-input');
+    input.value = '3';
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(buttonByText('UNDO')).toBeUndefined();
+
+    buttonByText('CLEAR SESSION').click();
+    expect(buttonByText('UNDO')).toBeDefined();
+    buttonByText('COPY SHARE LINK').click();
+    expect(buttonByText('UNDO')).toBeUndefined();
+  });
+
+  it('keeps an undone replace from being announced over by the warning of the restored list', () => {
+    mount({ ...SAVED, draft: longList(83) });
+    buttonByText('CLEAR SESSION').click();
+    buttonByText('UNDO').click();
+    expect(live().textContent).toContain('Clear session undone.');
+    expect(warning().textContent).toContain('past the 80-entry limit');
+  });
+
+  it('undoes a CSV import', async () => {
+    mount();
+    const file = new File(['x'], 'a.csv', { type: 'text/csv' });
+    file.text = () => Promise.resolve('Zed\nYan');
+    const input = root.querySelector('input[type="file"]');
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(textarea().value).toBe('Zed\nYan');
+    buttonByText('UNDO').click();
+    expect(textarea().value).toBe('Amir\nBella\nChin');
+  });
+
+  it('accepts a CSV of exactly 1 MB and refuses one byte more', async () => {
+    mount();
+    const pick = async (size) => {
+      const file = new File(['x'], 'a.csv', { type: 'text/csv' });
+      Object.defineProperty(file, 'size', { value: size });
+      const read = vi.fn(() => Promise.resolve('Zed'));
+      file.text = read;
+      const input = root.querySelector('input[type="file"]');
+      Object.defineProperty(input, 'files', { value: [file], configurable: true });
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      await vi.advanceTimersByTimeAsync(0);
+      return read;
+    };
+    expect(await pick(1_000_001)).not.toHaveBeenCalled();
+    expect(textarea().value).toBe('Amir\nBella\nChin');
+    expect(await pick(1_000_000)).toHaveBeenCalled();
+    expect(textarea().value).toBe('Zed');
+  });
+
+  it('leaves Present mode on Escape and puts focus back on the Present button', () => {
+    mount();
+    buttonByText('PRESENT').click();
+    expect(root.querySelector('.rs-controls')).toBeNull();
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(root.querySelector('.rs-controls')).not.toBeNull();
+    expect(document.activeElement).toBe(buttonByText('PRESENT'));
   });
 });

@@ -1,5 +1,11 @@
-import { describe, it, expect, vi } from 'vitest';
-import { buildCsv, buildCsvForTables, downloadCsv, downloadJson } from './export.js';
+import { afterEach, describe, it, expect, vi } from 'vitest';
+import {
+  buildCsv,
+  buildCsvForTables,
+  downloadCsv,
+  downloadJson,
+  REVOKE_DELAY_MS,
+} from './export.js';
 
 describe('buildCsv', () => {
   const table = {
@@ -70,8 +76,34 @@ describe('buildCsvForTables', () => {
   });
 });
 
+// Holds back the delayed URL revoke so a test can see it was NOT done at the click (Safari can
+// cancel a download whose URL is revoked that early) and then run it. Other timers pass through.
+function deferRevoke() {
+  const realSetTimeout = globalThis.setTimeout;
+  const scheduled = [];
+  const spy = vi.spyOn(globalThis, 'setTimeout').mockImplementation((fn, ms, ...rest) => {
+    if (ms === REVOKE_DELAY_MS) {
+      scheduled.push(fn);
+      return 0;
+    }
+    return realSetTimeout(fn, ms, ...rest);
+  });
+  return { scheduled, restore: () => spy.mockRestore() };
+}
+
+// A failing assertion must not leave the setTimeout spy behind for the rest of the file.
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe('the delay before a download URL is revoked', () => {
+  it('is long enough for Safari to start the download (a literal, so it cannot drift to 0)', () => {
+    expect(REVOKE_DELAY_MS).toBeGreaterThanOrEqual(1000);
+  });
+});
+
 describe('downloadCsv', () => {
-  it('builds a Blob with the real CSV content and a csv MIME type, attaches a download link with the real filename, clicks it, then revokes the URL', async () => {
+  it('builds a Blob with the real CSV content and a csv MIME type, attaches a download link with the real filename, clicks it, then revokes the URL after a delay', async () => {
     // Captures the ACTUAL Blob passed to createObjectURL and the anchor's
     // real href/download at click time — not just that the mocked functions
     // were called some number of times. A version of downloadCsv that
@@ -94,6 +126,7 @@ describe('downloadCsv', () => {
         capturedDownload = this.download;
       });
 
+    const deferred = deferRevoke();
     downloadCsv('report.csv', 'a,b\r\n1,2');
 
     expect(createSpy).toHaveBeenCalledTimes(1);
@@ -112,7 +145,12 @@ describe('downloadCsv', () => {
     expect(clickSpy).toHaveBeenCalledTimes(1);
     expect(capturedHref).toBe('blob:fake-url');
     expect(capturedDownload).toBe('report.csv');
+    // Not revoked at the click: only after the delay.
+    expect(revokeSpy).not.toHaveBeenCalled();
+    expect(deferred.scheduled).toHaveLength(1);
+    deferred.scheduled[0]();
     expect(revokeSpy).toHaveBeenCalledWith('blob:fake-url');
+    deferred.restore();
     // The link is removed from the DOM again after the click — nothing left
     // behind for a caller to accidentally interact with.
     expect(document.querySelector('a[download="report.csv"]')).toBeNull();
@@ -124,7 +162,7 @@ describe('downloadCsv', () => {
 });
 
 describe('downloadJson', () => {
-  it('saves the value as pretty-printed JSON under the given filename, then revokes the URL', async () => {
+  it('saves the value as pretty-printed JSON under the given filename, then revokes the URL after a delay', async () => {
     let capturedBlob = null;
     vi.spyOn(URL, 'createObjectURL').mockImplementation((blob) => {
       capturedBlob = blob;
@@ -139,6 +177,7 @@ describe('downloadJson', () => {
       });
 
     const value = { pack_version: 1, cup_taster: { results: [{ correct: true, note: 'a, "b"' }] } };
+    const deferred = deferRevoke();
     downloadJson('Event dispute pack.json', value);
 
     expect(capturedBlob.type).toBe('application/json;charset=utf-8;');
@@ -153,7 +192,10 @@ describe('downloadJson', () => {
     expect(text).toContain('\n  "pack_version": 1');
     expect(capturedDownload).toBe('Event dispute pack.json');
     expect(clickSpy).toHaveBeenCalledTimes(1);
+    expect(revokeSpy).not.toHaveBeenCalled();
+    deferred.scheduled[0]();
     expect(revokeSpy).toHaveBeenCalledWith('blob:fake-json-url');
+    deferred.restore();
     // the temporary link does not linger in the document
     expect(document.querySelector('a[download]')).toBeNull();
   });

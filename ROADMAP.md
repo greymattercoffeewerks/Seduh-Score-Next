@@ -1,5 +1,11 @@
 # Seduh Score Next — Roadmap
 
+> **Random Selector, follow-up round (2026-10-14) — done.** Petrol design language (tokens, graphite
+> board, cut-corner actions, the Petrol accent by default), a clearer weights list with the number
+> pixel-measured to the centre of its box, and safety fixes (visible warnings instead of silent
+> changes, undo for CLEAR/LOAD/import, a 1 MB import cap, a Safari-safe download revoke in
+> `core/export.js`). See CHANGELOG.md (`T-TOOLS.random-selector-2`).
+
 > **Random Selector, a free Community tool (2026-10-14) — done; follow-ups open.** A split-flap
 > draw tool at `/tools/random-selector/` (no auth, no Supabase; card 05 on the Community hub), first
 > built by Codex, then reviewed by all four project reviewers, fixed and tested here (69 tests). It

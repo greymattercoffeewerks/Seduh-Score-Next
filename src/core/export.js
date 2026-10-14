@@ -45,13 +45,16 @@ export function buildCsvForTables(tables) {
     .join('\r\n\r\n');
 }
 
-// DOM. Triggers a browser download via a synthetic <a download> — the
-// standard client-side "save this string as a file" pattern, no server
-// round trip. Appended to the DOM before clicking (not strictly required by
-// every current browser, but the safe, portable form of this pattern) and
-// removed immediately after.
-export function downloadCsv(filename, csvContent) {
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+// How long a download's object URL stays alive after the click. Revoking it straight away can
+// cancel the download in Safari (and some Firefox builds), which start reading the URL a moment
+// after the click rather than during it; a second is far longer than that and costs nothing.
+export const REVOKE_DELAY_MS = 1000;
+
+// DOM. Saves a Blob as a file via a synthetic <a download> — the standard client-side "save this
+// as a file" pattern, no server round trip. The link is appended to the DOM before clicking (not
+// strictly required by every current browser, but the safe, portable form of this pattern) and
+// removed immediately after; the object URL is revoked after REVOKE_DELAY_MS, not at once.
+function saveBlob(filename, blob) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
@@ -59,7 +62,12 @@ export function downloadCsv(filename, csvContent) {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), REVOKE_DELAY_MS);
+}
+
+// DOM. Triggers a browser download of a CSV string.
+export function downloadCsv(filename, csvContent) {
+  saveBlob(filename, new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }));
 }
 
 // Above this many characters of compact JSON, skip the pretty-printing: indenting a very large
@@ -73,15 +81,5 @@ const PRETTY_JSON_LIMIT_CHARS = 5_000_000;
 export function downloadJson(filename, value) {
   const compact = JSON.stringify(value);
   const json = compact.length > PRETTY_JSON_LIMIT_CHARS ? compact : JSON.stringify(value, null, 2);
-  const blob = new Blob([json], {
-    type: 'application/json;charset=utf-8;',
-  });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  saveBlob(filename, new Blob([json], { type: 'application/json;charset=utf-8;' }));
 }

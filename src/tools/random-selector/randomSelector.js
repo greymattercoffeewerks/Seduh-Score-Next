@@ -3,7 +3,13 @@ import { buildCsv } from '../../core/export.js';
 export const STORAGE_KEY = 'seduh-random-selector-v1';
 export const DEMO_ENTRIES = ['Amir', 'Bella', 'Chin', 'Dina', 'Evan', 'Fatin', 'Gareth', 'Hana'];
 export const DEFAULT_BOARD_TITLE = 'PLAYER DRAW';
-export const DEFAULT_ACCENT_COLOR = '#0fb5a3';
+// No custom accent means the Petrol accent token, so the tool follows the design system on both
+// surfaces (a darker teal on paper, a lighter one in Present). The colour picker needs a hex to
+// show, so this is the paper value of that token (--clr-teal-700); it is never stored as a choice.
+export const PETROL_ACCENT_HEX = '#065a51';
+// What this tool used as its default before it followed the token. Saved lists and share links from
+// then carry it, and it means "no custom accent".
+const LEGACY_DEFAULT_ACCENT = '#0fb5a3';
 export const DRAW_PRESETS = {
   quick: { label: 'Quick', duration: 1000, tickRate: 68 },
   standard: { label: 'Standard', duration: 1850, tickRate: 92 },
@@ -28,9 +34,12 @@ export function validBoardTitle(value) {
   return title ? title.slice(0, 32) : DEFAULT_BOARD_TITLE;
 }
 
+// A custom accent as lower-case #rrggbb, or null for "use the Petrol accent".
 export function validAccentColor(value) {
-  const color = String(value ?? '').trim();
-  return /^#[\da-f]{6}$/i.test(color) ? color.toLowerCase() : DEFAULT_ACCENT_COLOR;
+  const color = String(value ?? '')
+    .trim()
+    .toLowerCase();
+  return /^#[\da-f]{6}$/.test(color) && color !== LEGACY_DEFAULT_ACCENT ? color : null;
 }
 
 export const MAX_ENTRIES = 80;
@@ -43,17 +52,111 @@ export function normalizeWeight(value) {
     : 1;
 }
 
+// One typed line as { name, written }, or null when it has no name (blank, or only a weight such
+// as "| 3"). `written` is the weight text as typed. The `s` flag lets the name hold a Unicode line
+// separator, which `.` would otherwise refuse and so drop the whole line. checkEntries and the
+// line-preserving edits below both go through this, so they always agree on which lines are entries.
+function parseLine(line) {
+  const match = line.trim().match(/^(.*?)(?:\s*\|\s*(-?\d+(?:\.\d+)?))?$/s);
+  const name = match?.[1].trim();
+  return name ? { name, written: match[2] } : null;
+}
+
+// Reads the list and also reports what it had to change or leave out, so the screen can say so
+// instead of quietly drawing from something other than what was typed: `ignored` counts entries
+// past the limit, `nameless` lines that hold text but no name, `adjusted` weights that were
+// outside 1 to 1000 (or fractions) and what they were read as.
+export function checkEntries(value) {
+  const entries = [];
+  const adjusted = [];
+  let ignored = 0;
+  let nameless = 0;
+  for (const line of String(value).split('\n')) {
+    const parsed = parseLine(line);
+    if (!parsed) {
+      if (line.trim() !== '') nameless += 1;
+      continue;
+    }
+    if (entries.length >= MAX_ENTRIES) {
+      ignored += 1;
+      continue;
+    }
+    const { name, written } = parsed;
+    const weight = normalizeWeight(written ?? 1);
+    if (written !== undefined && Number(written) !== weight)
+      adjusted.push({ name, written, weight });
+    entries.push({ name, weight });
+  }
+  return { entries, ignored, nameless, adjusted };
+}
+
 export function parseEntries(value) {
-  return String(value)
-    .split('\n')
-    .map((line) => {
-      const match = line.trim().match(/^(.*?)(?:\s*\|\s*(\d+(?:\.\d+)?))?$/);
-      const name = match?.[1].trim();
-      if (!name) return null;
-      return { name, weight: normalizeWeight(match?.[2] ?? 1) };
-    })
-    .filter(Boolean)
-    .slice(0, MAX_ENTRIES);
+  return checkEntries(value).entries;
+}
+
+// The sentence for checkEntries' findings, or '' when there is nothing to say.
+export function describeEntryProblems({ ignored, nameless = 0, adjusted }) {
+  const parts = [];
+  if (ignored > 0) {
+    parts.push(
+      `${ignored} ${ignored === 1 ? 'line is' : 'lines are'} past the ${MAX_ENTRIES}-entry limit and ignored.`,
+    );
+  }
+  if (nameless > 0) {
+    parts.push(
+      `${nameless} ${nameless === 1 ? 'line has' : 'lines have'} a weight but no name and ${nameless === 1 ? 'is' : 'are'} skipped.`,
+    );
+  }
+  if (adjusted.length > 0) {
+    const shown = adjusted
+      .slice(0, 3)
+      .map((entry) => `“${entry.name}” (${entry.written} → ${entry.weight})`);
+    const more = adjusted.length > 3 ? `, and ${adjusted.length - 3} more` : '';
+    parts.push(`Weights run from 1 to 1000. Changed: ${shown.join(', ')}${more}.`);
+  }
+  return parts.join(' ');
+}
+
+// Edits of the typed list by position of the n-th entry line, leaving every other line (blank
+// lines, nameless lines, entries past the limit) exactly as typed. Rewriting the whole list from
+// the parsed entries would silently drop those.
+function entryLineIndexes(lines) {
+  const indexes = [];
+  lines.forEach((line, at) => {
+    if (parseLine(line)) indexes.push(at);
+  });
+  return indexes;
+}
+
+export function replaceDraftLine(draft, index, entry) {
+  const lines = String(draft).split('\n');
+  const at = entryLineIndexes(lines)[index];
+  if (at === undefined) return String(draft);
+  lines[at] = formatEntries([entry]);
+  return lines.join('\n');
+}
+
+export function removeDraftLine(draft, index) {
+  const lines = String(draft).split('\n');
+  const at = entryLineIndexes(lines)[index];
+  if (at === undefined) return String(draft);
+  lines.splice(at, 1);
+  return lines.join('\n');
+}
+
+// Puts an entry back at position `index` among the entry lines (the end when that is past them),
+// keeping the lines around it. Blank lines alone are kept: "\n\n" plus one entry is "Zed\n\n".
+export function insertDraftLine(draft, index, entry) {
+  const lines = String(draft).split('\n');
+  const indexes = entryLineIndexes(lines);
+  const line = formatEntries([entry]);
+  if (indexes.length === 0) {
+    if (lines.every((existing) => existing.trim() === '')) lines[0] = line;
+    else lines.push(line);
+    return lines.join('\n');
+  }
+  lines.splice(indexes[index] ?? lines.length, 0, line);
+  return lines.join('\n');
 }
 
 // WCAG 2.x relative luminance and contrast ratio for a #rrggbb colour.
