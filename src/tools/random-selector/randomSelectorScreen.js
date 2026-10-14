@@ -4,7 +4,6 @@ import {
   decodeShare,
   DEMO_ENTRIES,
   browserStorage,
-  DEFAULT_ACCENT_COLOR,
   DEFAULT_BOARD_TITLE,
   DRAW_PRESETS,
   encodeShare,
@@ -14,6 +13,7 @@ import {
   loadSaved,
   MAX_ENTRIES,
   parseEntries,
+  PETROL_ACCENT_HEX,
   readableOn,
   saveCurrent,
   validDrawPreset,
@@ -205,7 +205,8 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
     drawPreset: shared?.drawPreset ?? saved?.drawPreset ?? 'standard',
     soundLevel: shared?.soundLevel ?? saved?.soundLevel ?? 0.6,
     boardTitle: shared?.boardTitle ?? saved?.boardTitle ?? DEFAULT_BOARD_TITLE,
-    accentColor: shared?.accentColor ?? saved?.accentColor ?? DEFAULT_ACCENT_COLOR,
+    // null is a real answer here ("no custom accent"), so it is not chained with ??.
+    accentColor: shared ? shared.accentColor : (saved?.accentColor ?? null),
     winner: 'READY',
     drawn: null,
     spinning: false,
@@ -253,6 +254,8 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
     countTop: null,
     countPanel: null,
     weightsList: null,
+    colourInput: null,
+    accentReset: null,
   };
 
   function totalWeight() {
@@ -342,6 +345,23 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
       void flap.offsetWidth; // restart the one-shot flip
       flap.classList.add('is-flipping');
     }
+  }
+
+  // No custom accent leaves --rs-accent to the stylesheet, which points it at the Petrol accent token
+  // (so Present mode gets the stage variant of it for free).
+  function applyAccent() {
+    if (ui.app) {
+      if (state.accentColor) {
+        ui.app.style.setProperty('--rs-accent', state.accentColor);
+        ui.app.style.setProperty('--rs-accent-contrast', readableOn(state.accentColor));
+      } else {
+        ui.app.style.removeProperty('--rs-accent');
+        ui.app.style.removeProperty('--rs-accent-contrast');
+      }
+    }
+    if (ui.colourInput) ui.colourInput.value = state.accentColor ?? PETROL_ACCENT_HEX;
+    if (ui.colourCode) ui.colourCode.textContent = state.accentColor?.toUpperCase() ?? 'PETROL';
+    if (ui.accentReset) ui.accentReset.hidden = !state.accentColor;
   }
 
   function setNote(text) {
@@ -522,12 +542,16 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
         className: `random-selector${state.presenting ? ' is-presenting' : ''}`,
         attrs: {
           'data-surface': state.presenting ? 'stage' : 'paper',
-          style: `--rs-accent:${state.accentColor};--rs-accent-contrast:${readableOn(state.accentColor)}`,
+          ...(state.accentColor
+            ? {
+                style: `--rs-accent:${state.accentColor};--rs-accent-contrast:${readableOn(state.accentColor)}`,
+              }
+            : {}),
         },
       });
       const drawButton = button(
         state.spinning ? 'DRAWING' : 'DRAW ENTRY',
-        'rs-draw-button',
+        'rs-draw-button cut-md',
         startDraw,
         {
           'data-focus-key': 'draw',
@@ -576,16 +600,21 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
         [
           el('div', { className: 'rs-section-line' }, [
             el('h1', { id: 'selector-heading', text: 'RANDOM SELECTOR' }),
-            el('span', { text: 'LIVE' }),
           ]),
-          el('div', { className: 'rs-board-frame' }, [
+          el('div', { className: 'rs-board-frame cut-lg' }, [
             el('div', { className: 'rs-board-label' }, [
               el('span', { text: 'SEDUH SCORE' }),
               (ui.titleCell = el('span', { text: state.boardTitle })),
             ]),
             splitFlapBoard(state.winner, boardLabel()),
             el('div', { className: 'rs-board-status' }, [
-              el('span', { text: state.spinning ? 'STATUS: DRAWING' : 'STATUS: READY' }),
+              el('span', { className: 'rs-board-state' }, [
+                el('span', {
+                  className: state.spinning ? 'status-live-dot' : 'rs-status-dot',
+                  attrs: { 'aria-hidden': 'true' },
+                }),
+                el('span', { text: state.spinning ? 'STATUS: DRAWING' : 'STATUS: READY' }),
+              ]),
               el('span', { text: 'SPACE TO DRAW' }),
             ]),
           ]),
@@ -604,7 +633,7 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
                 : 'Selected and kept in the draw.',
             }),
             el('div', { className: 'rs-reveal-actions' }, [
-              button('KEEP RESULT', 'rs-button rs-button-primary', keepResult, {
+              button('KEEP RESULT', 'rs-button rs-button-primary cut-sm', keepResult, {
                 'data-focus-key': 'keep-result',
               }),
               button('REDRAW', 'rs-button rs-button-outline', redraw, {
@@ -841,17 +870,30 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
             attrs: {
               id: 'rs-accent-color',
               type: 'color',
-              value: state.accentColor,
+              value: state.accentColor ?? PETROL_ACCENT_HEX,
               'data-focus-key': 'accent-color',
             },
           });
+          ui.colourInput = color;
           color.addEventListener('change', () => {
             state.accentColor = validAccentColor(color.value);
-            ui.app?.style.setProperty('--rs-accent', state.accentColor);
-            ui.app?.style.setProperty('--rs-accent-contrast', readableOn(state.accentColor));
-            if (ui.colourCode) ui.colourCode.textContent = state.accentColor.toUpperCase();
+            applyAccent();
             persist();
           });
+          const reset = button(
+            'USE PETROL ACCENT',
+            'rs-link-button',
+            () => {
+              state.accentColor = null;
+              applyAccent();
+              persist();
+              // The button hides itself, so focus moves to the colour control it belongs to.
+              color.focus();
+            },
+            { 'data-focus-key': 'accent-reset' },
+          );
+          reset.hidden = !state.accentColor;
+          ui.accentReset = reset;
           return el(
             'section',
             {
@@ -875,8 +917,11 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
               el('label', { className: 'rs-color-field', attrs: { for: 'rs-accent-color' } }, [
                 el('span', { text: 'ACCENT COLOUR' }),
                 color,
-                (ui.colourCode = el('code', { text: state.accentColor.toUpperCase() })),
+                (ui.colourCode = el('code', {
+                  text: state.accentColor?.toUpperCase() ?? 'PETROL',
+                })),
               ]),
+              el('div', { className: 'rs-color-reset' }, [reset]),
             ],
           );
         }

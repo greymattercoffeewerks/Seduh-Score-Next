@@ -99,7 +99,10 @@ describe('random selector draw settings', () => {
     expect(validBoardTitle('  Friday   Finals  ')).toBe('Friday Finals');
     expect(validBoardTitle('')).toBe('PLAYER DRAW');
     expect(validAccentColor('#D96135')).toBe('#d96135');
-    expect(validAccentColor('orange')).toBe('#0fb5a3');
+    // No custom accent is null (the Petrol token); the old built-in default means the same thing.
+    expect(validAccentColor('orange')).toBeNull();
+    expect(validAccentColor(undefined)).toBeNull();
+    expect(validAccentColor('#0FB5A3')).toBeNull();
   });
 });
 

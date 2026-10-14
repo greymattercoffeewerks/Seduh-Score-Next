@@ -131,19 +131,19 @@ textarea:focus-visible {
   margin: auto;
   padding: 1.6rem 1.7rem 1.25rem;
   overflow: hidden;
+  /* Instrument graphite with teal rails: the Petrol ramp, not wood, and flat (no shadows). */
   background: linear-gradient(
     90deg,
-    #60402c 0 0.55rem,
-    #171a1a 0.55rem calc(100% - 0.55rem),
-    #60402c calc(100% - 0.55rem)
+    var(--clr-teal-700) 0 0.35rem,
+    var(--clr-petrol-950) 0.35rem calc(100% - 0.35rem),
+    var(--clr-teal-700) calc(100% - 0.35rem)
   );
-  border: 0.45rem solid #252b2d;
-  box-shadow: 0 0.12rem 0 color-mix(in srgb, var(--color-border-strong) 35%, transparent);
+  border: 0.45rem solid var(--clr-petrol-800);
 }
 .rs-board-frame::before {
   position: absolute;
   inset: 0.8rem 1rem;
-  border: 1px solid #3c4544;
+  border: 1px solid var(--clr-petrol-700);
   content: '';
   pointer-events: none;
 }
@@ -155,7 +155,7 @@ textarea:focus-visible {
   flex-wrap: wrap;
   gap: 0 var(--space-3);
   justify-content: space-between;
-  color: #aeb8b5;
+  color: var(--clr-petrol-300);
 }
 .rs-board-label {
   margin: 0 0.2rem 0.9rem;
@@ -164,7 +164,6 @@ textarea:focus-visible {
 .rs-board-status {
   margin: 0.8rem 0.2rem 0;
   font-size: 0.75rem;
-  color: #8e9996;
 }
 .selector-board {
   position: relative;
@@ -172,8 +171,8 @@ textarea:focus-visible {
   display: grid;
   gap: 2px;
   padding: 0.65rem;
-  background: #0d1010;
-  border: 1px solid #38403e;
+  background: var(--clr-petrol-900);
+  border: 1px solid var(--clr-petrol-700);
 }
 .selector-flap-row {
   display: grid;
@@ -187,23 +186,23 @@ textarea:focus-visible {
   height: clamp(1.85rem, 4.2vw, 2.7rem);
   place-items: center;
   overflow: hidden;
-  color: #f0f1e9;
-  background: linear-gradient(#2e3533 0 48%, #080909 49% 52%, #1c211f 53%);
-  border: 1px solid #070909;
-  box-shadow:
-    inset 0 0 0 1px #424946,
-    inset 0 0.3rem 0.45rem #0008;
+  color: var(--clr-petrol-50);
+  background: linear-gradient(
+    var(--clr-petrol-700) 0 48%,
+    var(--clr-petrol-950) 49% 52%,
+    var(--clr-petrol-800) 53%
+  );
+  border: 1px solid var(--clr-petrol-950);
   font-family: var(--font-mono);
   font-size: clamp(0.85rem, 2.15vw, 1.65rem);
   font-weight: var(--font-weight-medium);
   line-height: 1;
-  text-shadow: 0 1px #000;
 }
 .selector-flap::after {
   position: absolute;
   inset: calc(50% - 0.5px) 0 auto;
   height: 1px;
-  background: #070909;
+  background: var(--clr-petrol-950);
   content: '';
 }
 /* Motion is layered on a static board: with reduced motion the flaps simply hold still. */
@@ -227,21 +226,25 @@ textarea:focus-visible {
   padding: 0 var(--space-5);
   border: var(--border-hairline) solid var(--color-border-strong);
   border-radius: 0;
-  background: var(--color-border-strong);
-  color: var(--color-canvas);
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   font-weight: var(--font-weight-bold);
   letter-spacing: 0.08em;
 }
-.rs-draw-button::before {
-  display: inline-block;
-  width: 0.55rem;
-  height: 0.55rem;
-  margin-right: 0.7rem;
-  border-radius: 50%;
+/* The primary action is the accent with an angular cut, as on the other Petrol call-to-actions. */
+.rs-draw-button {
+  border-color: var(--rs-accent);
   background: var(--rs-accent);
-  content: '';
+  color: var(--rs-accent-contrast);
+}
+.rs-draw-button:hover:not([aria-disabled='true']),
+.rs-button-primary:hover {
+  background: color-mix(in srgb, var(--rs-accent) 85%, black);
+}
+/* The cut corners would clip the focus ring, so the shape goes square while focused. */
+.rs-draw-button:focus-visible,
+.rs-button-primary:focus-visible {
+  clip-path: none;
 }
 .rs-draw-button[aria-disabled='true'] {
   cursor: not-allowed;
@@ -295,11 +298,6 @@ textarea:focus-visible {
   border-color: var(--rs-accent);
   background: var(--rs-accent);
   color: var(--rs-accent-contrast);
-}
-.rs-button-danger {
-  border-color: var(--color-danger);
-  background: var(--color-danger);
-  color: var(--color-danger-contrast);
 }
 .rs-controls {
   display: grid;
@@ -638,4 +636,23 @@ textarea:focus-visible {
 /* Muted text is a shade too dim on the dark Present surface (4.5:1 needed); use the secondary. */
 .random-selector[data-surface='stage'] {
   --color-text-muted: var(--color-text-secondary);
+}
+
+/* Status blip beside the board's state: static when idle, the shared live-dot pulse while drawing. */
+.rs-board-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.rs-status-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  background: var(--clr-petrol-400);
+}
+.rs-board-state .status-live-dot {
+  background: var(--clr-teal-300);
+}
+.rs-color-reset {
+  margin-top: var(--space-2);
 }

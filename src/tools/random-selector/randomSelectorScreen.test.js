@@ -652,3 +652,46 @@ describe('random selector csv export', () => {
     expect(created[0].size).toBe(new TextEncoder().encode(BOM + csv).length);
   });
 });
+
+describe('random selector follows the Petrol accent unless the user picks one', () => {
+  const app = () => root.querySelector('main');
+  const accentVar = () => app().style.getPropertyValue('--rs-accent');
+
+  it('sets no accent of its own by default, so the Petrol token applies', () => {
+    mount();
+    expect(app().getAttribute('style')).toBeNull();
+    expect(root.querySelector('.rs-color-field code').textContent).toBe('PETROL');
+    expect(buttonByText('USE PETROL ACCENT').hidden).toBe(true);
+  });
+
+  it('applies a saved custom accent and can go back to the Petrol one', () => {
+    mount({ ...SAVED, accentColor: '#d96135' });
+    expect(accentVar()).toBe('#d96135');
+    const reset = buttonByText('USE PETROL ACCENT');
+    expect(reset.hidden).toBe(false);
+
+    reset.focus();
+    reset.click();
+    expect(accentVar()).toBe('');
+    expect(app().style.getPropertyValue('--rs-accent-contrast')).toBe('');
+    expect(root.querySelector('.rs-color-field code').textContent).toBe('PETROL');
+    expect(reset.hidden).toBe(true);
+    expect(document.activeElement).toBe(root.querySelector('#rs-accent-color'));
+    expect(storage.written().accentColor).toBeNull();
+  });
+
+  it('treats the accent this tool used to default to as no custom accent', () => {
+    mount({ ...SAVED, accentColor: '#0fb5a3' });
+    expect(app().getAttribute('style')).toBeNull();
+  });
+
+  it('lets a share link without an accent override a saved custom one', () => {
+    window.history.replaceState(
+      null,
+      '',
+      `/tools/random-selector/?draw=${encodeShare({ draft: 'X\nY', removeAfterDraw: false, accentColor: null })}`,
+    );
+    mount({ ...SAVED, accentColor: '#d96135' });
+    expect(app().getAttribute('style')).toBeNull();
+  });
+});

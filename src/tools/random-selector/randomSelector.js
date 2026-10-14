@@ -3,7 +3,13 @@ import { buildCsv } from '../../core/export.js';
 export const STORAGE_KEY = 'seduh-random-selector-v1';
 export const DEMO_ENTRIES = ['Amir', 'Bella', 'Chin', 'Dina', 'Evan', 'Fatin', 'Gareth', 'Hana'];
 export const DEFAULT_BOARD_TITLE = 'PLAYER DRAW';
-export const DEFAULT_ACCENT_COLOR = '#0fb5a3';
+// No custom accent means the Petrol accent token, so the tool follows the design system on both
+// surfaces (a darker teal on paper, a lighter one in Present). The colour picker needs a hex to
+// show, so this is the paper value of that token (--clr-teal-700); it is never stored as a choice.
+export const PETROL_ACCENT_HEX = '#065a51';
+// What this tool used as its default before it followed the token. Saved lists and share links from
+// then carry it, and it means "no custom accent".
+const LEGACY_DEFAULT_ACCENT = '#0fb5a3';
 export const DRAW_PRESETS = {
   quick: { label: 'Quick', duration: 1000, tickRate: 68 },
   standard: { label: 'Standard', duration: 1850, tickRate: 92 },
@@ -28,9 +34,12 @@ export function validBoardTitle(value) {
   return title ? title.slice(0, 32) : DEFAULT_BOARD_TITLE;
 }
 
+// A custom accent as lower-case #rrggbb, or null for "use the Petrol accent".
 export function validAccentColor(value) {
-  const color = String(value ?? '').trim();
-  return /^#[\da-f]{6}$/i.test(color) ? color.toLowerCase() : DEFAULT_ACCENT_COLOR;
+  const color = String(value ?? '')
+    .trim()
+    .toLowerCase();
+  return /^#[\da-f]{6}$/.test(color) && color !== LEGACY_DEFAULT_ACCENT ? color : null;
 }
 
 export const MAX_ENTRIES = 80;
