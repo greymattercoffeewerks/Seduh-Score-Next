@@ -421,6 +421,18 @@ textarea:focus-visible {
   font-size: var(--text-sm);
   text-align: center;
 }
+/* A number field reserves room on its right for the browser's up/down spinner even while it is
+   hidden, which pushes the centred number off-centre (measured at about 7px). The arrows are taken
+   out so the number is centred in the whole box; the Up and Down keys still step it. */
+.rs-weight-input {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+.rs-weight-input::-webkit-inner-spin-button,
+.rs-weight-input::-webkit-outer-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
 /* The entry's share of the draw: a bar (the odds at a glance) and the exact percentage. */
 .rs-odds {
   display: flex;

@@ -697,6 +697,23 @@ describe('random selector follows the Petrol accent unless the user picks one', 
 });
 
 describe('random selector weights list', () => {
+  it('keeps the browser spinner out of the weight box so the number is centred in the whole box', () => {
+    // A number field reserves room for its up/down arrows even when they are not shown; with it the
+    // number measured 7px left of centre. Pixel-measured fix; this guards the rules that make it.
+    const rule = (selector) => css.slice(css.indexOf(selector));
+    expect(rule('.rs-weight-input {\n  appearance: textfield;')).toContain(
+      '-moz-appearance: textfield',
+    );
+    const spinRule = css.match(
+      /\.rs-weight-input::-webkit-inner-spin-button,\s*\.rs-weight-input::-webkit-outer-spin-button \{([^}]*)\}/,
+    );
+    expect(spinRule).not.toBeNull();
+    expect(spinRule[1]).toContain('-webkit-appearance: none');
+    expect(spinRule[1]).toContain('margin: 0');
+    mount();
+    expect(root.querySelector('.rs-weight-input').getAttribute('inputmode')).toBe('numeric');
+  });
+
   it('shows column heads once, with a bar and a percentage per entry, and none when empty', () => {
     mount();
     const list = root.querySelector('.rs-weights');

@@ -289,6 +289,7 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
         className: 'rs-weight-input',
         attrs: {
           type: 'number',
+          inputmode: 'numeric',
           min: '1',
           max: '1000',
           step: '1',
