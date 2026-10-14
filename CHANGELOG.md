@@ -1,3 +1,18 @@
+## T-FIX.gtb-export-revoke: Guess the Bean's export no longer revokes its download link at the click · 2026-10-14
+
+**Task:** requested by the user, from the module-boundary reviewer's finding on the Random Selector round.
+`handleExport` in `src/community/guess-the-bean/setupScreen.js` carried its own copy of the download plumbing
+and revoked the object URL at the click, which can cancel the download in Safari (the defect fixed in
+`core/export.js` in the Random Selector update). It now calls the shared `downloadJson`, which revokes after
+`REVOKE_DELAY_MS`.
+
+**What changes for the user:** the file is the same session export, with one difference: a very large export
+is written compact instead of pretty-printed, and the MIME type carries `;charset=utf-8`.
+
+**Tests:** one new test in `setupScreen.test.js` checks the downloaded file's name and content and that the URL
+is not revoked at the click (the delay callback is held back, then run). Reverting to the old inline code
+makes it fail.
+
 ## T-TOOLS.random-selector-2: Petrol, a clearer weights list, and safety fixes for the Random Selector · 2026-10-14
 
 **Task:** incremental updates to the released Random Selector, requested by the user after the release
