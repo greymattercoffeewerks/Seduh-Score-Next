@@ -96,7 +96,7 @@ textarea:focus-visible {
   text-decoration: underline;
   text-underline-offset: 0.25rem;
 }
-.rs-text-button[aria-pressed='true'] {
+.rs-text-button[data-on='true'] {
   color: var(--rs-accent);
   font-weight: var(--font-weight-bold);
 }
@@ -104,6 +104,11 @@ textarea:focus-visible {
   padding: clamp(2rem, 6vw, 4.5rem) var(--space-4) clamp(2.5rem, 6vw, 5rem);
   background: var(--color-surface-sunken);
   border-bottom: var(--border-hairline) solid var(--color-border);
+}
+.rs-section-line h1 {
+  margin: 0;
+  font: inherit;
+  letter-spacing: inherit;
 }
 .rs-section-line {
   max-width: 62rem;
@@ -229,7 +234,7 @@ textarea:focus-visible {
   background: var(--rs-accent);
   content: '';
 }
-.rs-draw-button:disabled {
+.rs-draw-button[aria-disabled='true'] {
   cursor: not-allowed;
   opacity: 0.55;
 }

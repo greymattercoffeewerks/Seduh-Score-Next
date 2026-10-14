@@ -102,3 +102,104 @@ describe('random selector reduced motion', () => {
     expect(outside).not.toMatch(/animation:/);
   });
 });
+
+describe('random selector screen-reader support', () => {
+  const live = () => root.querySelector('[role="status"]');
+  const board = () => root.querySelector('.selector-board');
+
+  it('announces the result through one live region that outlives every re-render', () => {
+    mount();
+    const region = live();
+    drawButton().click();
+    expect(region.textContent).toMatch(/Drawing an entry/);
+
+    vi.advanceTimersByTime(QUICK_MS + 100);
+
+    // Same node, still attached: a region rebuilt by render() is gone before it can be announced.
+    expect(live()).toBe(region);
+    expect(region.isConnected).toBe(true);
+    expect(region.textContent).toMatch(/^(Amir|Bella|Chin) selected and kept in the draw\./);
+    expect(root.querySelectorAll('[aria-live]')).toHaveLength(1);
+    expect(root.querySelectorAll('[role="status"]')).toHaveLength(1);
+  });
+
+  it('re-announces an identical message by changing its text', async () => {
+    vi.stubGlobal('navigator', { clipboard: { writeText: () => Promise.resolve() } });
+    mount();
+    const share = () =>
+      [...root.querySelectorAll('button')].find((b) => /SHARE LINK/.test(b.textContent));
+    share().click();
+    await vi.advanceTimersByTimeAsync(0);
+    const first = live().textContent;
+    share().click();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(live().textContent).not.toBe(first);
+    expect(live().textContent.trim()).toBe(first.trim());
+  });
+
+  it('names the board from the draw state, not from the shuffling flaps', () => {
+    mount();
+    expect(board().getAttribute('role')).toBe('img');
+    expect(board().getAttribute('aria-label')).toBe('Board ready. No entry drawn yet');
+
+    drawButton().click();
+    vi.advanceTimersByTime(QUICK_MS / 2);
+    expect(board().getAttribute('aria-label')).toBe('Drawing an entry');
+
+    vi.advanceTimersByTime(QUICK_MS);
+    const drawn = root.querySelector('.rs-reveal h2').textContent;
+    expect(board().getAttribute('aria-label')).toBe(`Selected entry: ${drawn}`);
+  });
+
+  it('keeps keyboard focus on the draw button through the whole spin', () => {
+    mount();
+    drawButton().focus();
+    drawButton().click();
+    expect(drawButton().getAttribute('aria-disabled')).toBe('true');
+    expect(drawButton().disabled).toBe(false);
+    expect(document.activeElement).toBe(drawButton());
+
+    vi.advanceTimersByTime(QUICK_MS + 100);
+    expect(document.activeElement).toBe(drawButton());
+    expect(drawButton().getAttribute('aria-disabled')).toBeNull();
+  });
+
+  it('gives the page a heading', () => {
+    mount();
+    expect(root.querySelector('h1').textContent).toBe('RANDOM SELECTOR');
+  });
+});
+
+describe('random selector editing keeps the control in use', () => {
+  it('keeps the caret and the same textarea while typing mid-list', () => {
+    mount();
+    const field = textarea();
+    field.focus();
+    field.value = 'AXmir\nBella\nChin';
+    field.setSelectionRange(2, 2);
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+
+    expect(textarea()).toBe(field);
+    expect(document.activeElement).toBe(field);
+    expect(field.selectionStart).toBe(2);
+    expect(root.querySelector('.rs-entry-count').textContent).toBe('3 ENTRIES');
+  });
+
+  it('updates weights in place without replacing the input being edited', () => {
+    mount();
+    const input = root.querySelector('.rs-weight-input');
+    input.focus();
+    input.value = '3';
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(root.querySelector('.rs-weight-input')).toBe(input);
+    expect(input.isConnected).toBe(true);
+    expect(document.activeElement).toBe(input);
+    expect(root.querySelectorAll('.rs-weight-row > span:last-child')[0].textContent).toBe('60.0%');
+    const totalText = [...root.querySelectorAll('.rs-weight-heading span')].map(
+      (n) => n.textContent,
+    );
+    expect(totalText).toContain('5 TOTAL WEIGHT');
+    expect(textarea().value).toBe('Amir | 3\nBella\nChin');
+  });
+});

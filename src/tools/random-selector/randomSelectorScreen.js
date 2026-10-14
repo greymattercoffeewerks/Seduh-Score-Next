@@ -38,10 +38,12 @@ function boardRows(value) {
   );
 }
 
-function splitFlapBoard(value, spinning) {
+// The board is a picture of the result: its name comes from the draw state, never from the
+// characters flickering across the flaps, which would read out as 56 single letters.
+function splitFlapBoard(value, spinning, label) {
   return el(
     'div',
-    { className: 'selector-board', attrs: { 'aria-label': `Selected entry: ${value}` } },
+    { className: 'selector-board', attrs: { role: 'img', 'aria-label': label } },
     boardRows(value).map((row) =>
       el(
         'div',
@@ -160,6 +162,7 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
     boardTitle: shared?.boardTitle ?? saved?.boardTitle ?? DEFAULT_BOARD_TITLE,
     accentColor: shared?.accentColor ?? saved?.accentColor ?? DEFAULT_ACCENT_COLOR,
     winner: 'READY',
+    drawn: null,
     spinning: false,
     soundOn: saved?.soundOn ?? true,
     reveal: null,
@@ -169,6 +172,55 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
   const ticker = createTicker();
   let tickHandle = null;
   let finishHandle = null;
+
+  // render() tears the whole screen down, so anything a screen reader must hear lives outside
+  // that subtree: a live region created inside it is replaced before it can be announced.
+  const live = el('div', {
+    className: 'sr-only',
+    attrs: { role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true' },
+  });
+  const host = el('div');
+  let announcements = 0;
+
+  // The entry list is one long-lived node, moved into each fresh tree, so its caret, scroll
+  // position and value survive the re-render that every keystroke triggers.
+  const entriesField = el('textarea', {
+    className: 'rs-textarea',
+    attrs: { id: 'rs-entries', rows: '10', spellcheck: 'false', 'data-focus-key': 'entries' },
+  });
+  entriesField.addEventListener('input', () => updateEntries(entriesField.value));
+
+  // Fields that commit on blur (weights, title, colour) or fire continuously (volume) must not
+  // trigger a rebuild: it would replace the very control being used, so a Tab lands on <body>, a
+  // slider drag is dropped and the click that caused the blur is swallowed. They update in place.
+  const ui = { app: null, titleCell: null, percentCells: [], totalCell: null, colourCode: null };
+
+  function totalWeight() {
+    return state.entries.reduce((sum, entry) => sum + entry.weight, 0);
+  }
+
+  function refreshWeightReadouts() {
+    const total = totalWeight();
+    state.entries.forEach((entry, index) => {
+      const cell = ui.percentCells[index];
+      if (cell) cell.textContent = `${((entry.weight / total) * 100).toFixed(1)}%`;
+    });
+    if (ui.totalCell) ui.totalCell.textContent = `${total} TOTAL WEIGHT`;
+    if (entriesField.value !== state.draft) entriesField.value = state.draft;
+  }
+
+  function setNote(text) {
+    state.note = text;
+    announcements += 1;
+    // An identical message (the same entry drawn twice) is only re-announced if the text changes.
+    live.textContent = announcements % 2 ? text : `${text}\u00a0`;
+  }
+
+  function boardLabel() {
+    if (state.spinning) return 'Drawing an entry';
+    if (state.drawn) return `Selected entry: ${state.drawn}`;
+    return 'Board ready. No entry drawn yet';
+  }
 
   function persist() {
     saveCurrent(state, storage);
@@ -190,8 +242,9 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
     state.entries = [];
     state.history = [];
     state.winner = 'READY';
+    state.drawn = null;
     state.reveal = null;
-    state.note = 'Session cleared. Ready for a new draw.';
+    setNote('Session cleared. Ready for a new draw.');
     persist();
     render();
   }
@@ -210,7 +263,7 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
 
   function keepResult() {
     if (!state.reveal) return;
-    state.note = `${state.winner} kept as the selected result.`;
+    setNote(`${state.winner} kept as the selected result.`);
     state.reveal = null;
     render();
   }
@@ -222,6 +275,7 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
     tickHandle = null;
     const index = state.entries.indexOf(entry);
     state.winner = entry.name;
+    state.drawn = entry.name;
     if (state.soundOn) ticker.tick(state.soundLevel);
     const removed = state.removeAfterDraw && index !== -1;
     if (removed) {
@@ -230,9 +284,11 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
     }
     drawRecord(entry, removed);
     state.reveal = { entry, removed };
-    state.note = removed
-      ? `${entry.name} selected and removed from the draw.`
-      : `${entry.name} selected and kept in the draw.`;
+    setNote(
+      removed
+        ? `${entry.name} selected and removed from the draw.`
+        : `${entry.name} selected and kept in the draw.`,
+    );
     persist();
     render();
   }
@@ -245,7 +301,7 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
     const reduceMotion = prefersReducedMotion();
     state.spinning = true;
     state.reveal = null;
-    state.note = 'Drawing an entry…';
+    setNote('Drawing an entry…');
     if (reduceMotion) state.winner = 'DRAWING';
     tickHandle = window.setInterval(() => {
       if (state.soundOn) ticker.tick(state.soundLevel);
@@ -262,6 +318,7 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
     if (!state.reveal) return;
     state.reveal = null;
     state.winner = 'READY';
+    state.drawn = null;
     render();
     startDraw();
   }
@@ -283,9 +340,9 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
     );
     try {
       await navigator.clipboard.writeText(url.toString());
-      state.note = 'Share link copied. Anyone opening it gets this list and setting.';
+      setNote('Share link copied. Anyone opening it gets this list and setting.');
     } catch {
-      state.note = 'Could not copy the link automatically. Please try again.';
+      setNote('Could not copy the link automatically. Please try again.');
     }
     render();
   }
@@ -301,8 +358,16 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
   }
 
   function render() {
+    const entriesFocused = document.activeElement === entriesField;
+    const selection = [
+      entriesField.selectionStart,
+      entriesField.selectionEnd,
+      entriesField.selectionDirection,
+    ];
+    const entriesScroll = entriesField.scrollTop;
+    const weightsScroll = root.querySelector('.rs-weights')?.scrollTop ?? 0;
     withFocusPreservation(root, () => {
-      const totalWeight = state.entries.reduce((sum, entry) => sum + entry.weight, 0);
+      const total = totalWeight();
       const app = el('main', {
         className: `random-selector${state.presenting ? ' is-presenting' : ''}`,
         attrs: {
@@ -316,7 +381,9 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
         startDraw,
         {
           'data-focus-key': 'draw',
-          ...(state.spinning || !state.entries.length ? { disabled: '' } : {}),
+          // aria-disabled, not disabled: a disabled button drops keyboard focus to <body> for
+          // the whole spin and nothing gives it back. startDraw already ignores these clicks.
+          ...(state.spinning || !state.entries.length ? { 'aria-disabled': 'true' } : {}),
         },
       );
       const soundButton = button(
@@ -327,7 +394,8 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
           persist();
           render();
         },
-        { 'aria-pressed': String(state.soundOn) },
+        // The label itself says the state ("SOUND ON"), so aria-pressed would read it twice.
+        { 'data-focus-key': 'sound', 'data-on': String(state.soundOn) },
       );
       const presentButton = button(
         state.presenting ? 'EXIT DISPLAY' : 'PRESENT',
@@ -336,6 +404,7 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
           state.presenting = !state.presenting;
           render();
         },
+        { 'data-focus-key': 'present' },
       );
       app.append(
         el('header', { className: 'rs-topbar' }, [
@@ -352,15 +421,15 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
         { className: 'rs-picker', attrs: { 'aria-labelledby': 'selector-heading' } },
         [
           el('div', { className: 'rs-section-line' }, [
-            el('span', { id: 'selector-heading', text: 'RANDOM SELECTOR' }),
+            el('h1', { id: 'selector-heading', text: 'RANDOM SELECTOR' }),
             el('span', { text: 'LIVE' }),
           ]),
           el('div', { className: 'rs-board-frame' }, [
             el('div', { className: 'rs-board-label' }, [
               el('span', { text: 'SEDUH SCORE' }),
-              el('span', { text: state.boardTitle }),
+              (ui.titleCell = el('span', { text: state.boardTitle })),
             ]),
-            splitFlapBoard(state.winner, state.spinning),
+            splitFlapBoard(state.winner, state.spinning, boardLabel()),
             el('div', { className: 'rs-board-status' }, [
               el('span', { text: state.spinning ? 'STATUS: DRAWING' : 'STATUS: READY' }),
               el('span', { text: 'SPACE TO DRAW' }),
@@ -371,31 +440,24 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
       );
       if (state.reveal) {
         picker.append(
-          el(
-            'section',
-            {
-              className: 'rs-reveal',
-              attrs: { 'aria-live': 'assertive', 'aria-labelledby': 'reveal-title' },
-            },
-            [
-              el('p', { className: 'rs-kicker', text: 'DRAW COMPLETE' }),
-              el('h2', { id: 'reveal-title', text: state.reveal.entry.name }),
-              el('p', {
-                className: 'rs-reveal-copy',
-                text: state.reveal.removed
-                  ? 'Selected and removed automatically from the draw.'
-                  : 'Selected and kept in the draw.',
+          el('section', { className: 'rs-reveal', attrs: { 'aria-labelledby': 'reveal-title' } }, [
+            el('p', { className: 'rs-kicker', text: 'DRAW COMPLETE' }),
+            el('h2', { id: 'reveal-title', text: state.reveal.entry.name }),
+            el('p', {
+              className: 'rs-reveal-copy',
+              text: state.reveal.removed
+                ? 'Selected and removed automatically from the draw.'
+                : 'Selected and kept in the draw.',
+            }),
+            el('div', { className: 'rs-reveal-actions' }, [
+              button('KEEP RESULT', 'rs-button rs-button-primary', keepResult, {
+                'data-focus-key': 'keep-result',
               }),
-              el('div', { className: 'rs-reveal-actions' }, [
-                button('KEEP RESULT', 'rs-button rs-button-primary', keepResult, {
-                  'data-focus-key': 'keep-result',
-                }),
-                button('REDRAW', 'rs-button rs-button-outline', redraw, {
-                  'data-focus-key': 'redraw-result',
-                }),
-              ]),
-            ],
-          ),
+              button('REDRAW', 'rs-button rs-button-outline', redraw, {
+                'data-focus-key': 'redraw-result',
+              }),
+            ]),
+          ]),
         );
       }
       const autoRemove = el('input', {
@@ -425,21 +487,13 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
           el('span', { text: 'SPLIT-FLAP EDITION' }),
         ]),
       );
-      root.replaceChildren(app);
+      ui.app = app;
+      host.replaceChildren(app);
 
       function buildControls() {
-        const textarea = el('textarea', {
-          className: 'rs-textarea',
-          attrs: {
-            id: 'rs-entries',
-            rows: '10',
-            spellcheck: 'false',
-            'data-focus-key': 'entries',
-            ...(state.spinning ? { disabled: '' } : {}),
-          },
-        });
-        textarea.value = state.draft;
-        textarea.addEventListener('input', () => updateEntries(textarea.value));
+        if (entriesField.value !== state.draft) entriesField.value = state.draft;
+        entriesField.disabled = state.spinning;
+        ui.percentCells = [];
         const weights = el(
           'div',
           { className: 'rs-weights' },
@@ -453,21 +507,26 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
                 step: '1',
                 value: String(entry.weight),
                 'aria-label': `Weight for ${entry.name}`,
+                'data-focus-key': `weight-${index}`,
                 ...(state.spinning ? { disabled: '' } : {}),
               },
             });
             field.addEventListener('change', () => {
+              if (state.spinning) return;
               const next = Number(field.value);
-              if (!Number.isFinite(next) || next < 1) return;
-              state.entries[index].weight = Math.min(1000, Math.round(next));
+              if (Number.isFinite(next) && next >= 1)
+                entry.weight = Math.min(1000, Math.round(next));
+              field.value = String(entry.weight);
               state.draft = formatEntries(state.entries);
               persist();
-              render();
+              refreshWeightReadouts();
             });
+            const percent = el('span', { text: `${((entry.weight / total) * 100).toFixed(1)}%` });
+            ui.percentCells[index] = percent;
             return el('div', { className: 'rs-weight-row' }, [
               el('span', { text: entry.name }),
               field,
-              el('span', { text: `${((entry.weight / totalWeight) * 100).toFixed(1)}%` }),
+              percent,
             ]);
           }),
         );
@@ -482,24 +541,31 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
           if (/^(name|names|entry|entries|participant|participants)$/i.test(names[0] ?? ''))
             names.shift();
           updateEntries(names.slice(0, 80).join('\n'));
-          state.note = `Imported ${names.length} entries.`;
+          setNote(`Imported ${names.length} entries.`);
           render();
         });
-        const importButton = button(
-          'IMPORT CSV',
-          'rs-link-button',
-          () => importInput.click(),
-          state.spinning ? { disabled: '' } : {},
-        );
-        const exportButton = button('EXPORT LIST', 'rs-link-button', () =>
-          download(
-            'seduh-random-selector.csv',
-            `Entry,Weight\r\n${state.entries.map((entry) => `"${entry.name.replaceAll('"', '""')}",${entry.weight}`).join('\r\n')}`,
-          ),
-        );
-        const shareButton = button('COPY SHARE LINK', 'rs-link-button', () => {
-          void copyShareLink();
+        const importButton = button('IMPORT CSV', 'rs-link-button', () => importInput.click(), {
+          'data-focus-key': 'import',
+          ...(state.spinning ? { disabled: '' } : {}),
         });
+        const exportButton = button(
+          'EXPORT LIST',
+          'rs-link-button',
+          () =>
+            download(
+              'seduh-random-selector.csv',
+              `Entry,Weight\r\n${state.entries.map((entry) => `"${entry.name.replaceAll('"', '""')}",${entry.weight}`).join('\r\n')}`,
+            ),
+          { 'data-focus-key': 'export' },
+        );
+        const shareButton = button(
+          'COPY SHARE LINK',
+          'rs-link-button',
+          () => {
+            void copyShareLink();
+          },
+          { 'data-focus-key': 'share' },
+        );
         return el('section', { className: 'rs-controls' }, [
           el('article', { className: 'rs-entry-panel' }, [
             el('p', { className: 'rs-kicker', text: 'ENTRY LIST' }),
@@ -512,10 +578,10 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
               text: 'One entry per line · add | 2 for double weight',
               attrs: { for: 'rs-entries' },
             }),
-            textarea,
+            entriesField,
             el('div', { className: 'rs-weight-heading' }, [
               el('span', { text: 'WEIGHTS & ODDS' }),
-              el('span', { text: `${totalWeight} TOTAL WEIGHT` }),
+              (ui.totalCell = el('span', { text: `${total} TOTAL WEIGHT` })),
             ]),
             weights,
             buildDrawSettings(),
@@ -525,14 +591,12 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
                 'LOAD EXAMPLE LIST',
                 'rs-link-button',
                 () => updateEntries(DEMO_ENTRIES.join('\n')),
-                state.spinning ? { disabled: '' } : {},
+                { 'data-focus-key': 'load-example', ...(state.spinning ? { disabled: '' } : {}) },
               ),
-              button(
-                'CLEAR SESSION',
-                'rs-link-button',
-                clearSession,
-                state.spinning ? { disabled: '' } : {},
-              ),
+              button('CLEAR SESSION', 'rs-link-button', clearSession, {
+                'data-focus-key': 'clear',
+                ...(state.spinning ? { disabled: '' } : {}),
+              }),
             ]),
             el('div', { className: 'rs-entry-actions rs-transfer-actions' }, [
               importButton,
@@ -540,9 +604,7 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
               shareButton,
               importInput,
             ]),
-            ...(state.note
-              ? [el('p', { className: 'rs-note', text: state.note, attrs: { role: 'status' } })]
-              : []),
+            ...(state.note ? [el('p', { className: 'rs-note', text: state.note })] : []),
           ]),
           el('aside', { className: 'rs-history-panel' }, [
             el('p', { className: 'rs-kicker', text: 'DRAW HISTORY' }),
@@ -579,9 +641,15 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
                 persist();
                 render();
               },
-              { 'aria-pressed': String(state.drawPreset === key) },
+              {
+                'aria-pressed': String(state.drawPreset === key),
+                'data-focus-key': `preset-${key}`,
+              },
             ),
           );
+          const volumeText = el('span', {
+            text: `SOUND VOLUME ${Math.round(state.soundLevel * 100)}%`,
+          });
           const soundLevel = el('input', {
             className: 'rs-volume-range',
             attrs: {
@@ -591,13 +659,14 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
               step: '0.1',
               value: String(state.soundLevel),
               'aria-label': 'Split-flap sound volume',
+              'data-focus-key': 'volume',
               ...(state.soundOn ? {} : { disabled: '' }),
             },
           });
           soundLevel.addEventListener('input', () => {
             state.soundLevel = validSoundLevel(soundLevel.value);
+            volumeText.textContent = `SOUND VOLUME ${Math.round(state.soundLevel * 100)}%`;
             persist();
-            render();
           });
           return el(
             'section',
@@ -609,13 +678,13 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
               ]),
               el(
                 'div',
-                { className: 'rs-preset-list', attrs: { 'aria-label': 'Draw duration' } },
+                {
+                  className: 'rs-preset-list',
+                  attrs: { role: 'group', 'aria-label': 'Draw duration' },
+                },
                 presetButtons,
               ),
-              el('label', { className: 'rs-volume-control' }, [
-                el('span', { text: `SOUND VOLUME ${Math.round(state.soundLevel * 100)}%` }),
-                soundLevel,
-              ]),
+              el('label', { className: 'rs-volume-control' }, [volumeText, soundLevel]),
             ],
           );
         }
@@ -633,8 +702,9 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
           });
           title.addEventListener('change', () => {
             state.boardTitle = validBoardTitle(title.value);
+            title.value = state.boardTitle;
+            if (ui.titleCell) ui.titleCell.textContent = state.boardTitle;
             persist();
-            render();
           });
           const color = el('input', {
             className: 'rs-color-input',
@@ -647,8 +717,10 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
           });
           color.addEventListener('change', () => {
             state.accentColor = validAccentColor(color.value);
+            ui.app?.style.setProperty('--rs-accent', state.accentColor);
+            ui.app?.style.setProperty('--rs-accent-contrast', accentContrast(state.accentColor));
+            if (ui.colourCode) ui.colourCode.textContent = state.accentColor.toUpperCase();
             persist();
-            render();
           });
           return el(
             'section',
@@ -673,13 +745,19 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
               el('label', { className: 'rs-color-field', attrs: { for: 'rs-accent-color' } }, [
                 el('span', { text: 'ACCENT COLOUR' }),
                 color,
-                el('code', { text: state.accentColor.toUpperCase() }),
+                (ui.colourCode = el('code', { text: state.accentColor.toUpperCase() })),
               ]),
             ],
           );
         }
       }
     });
+    entriesField.scrollTop = entriesScroll;
+    if (entriesFocused && document.activeElement === entriesField) {
+      entriesField.setSelectionRange(...selection);
+    }
+    const weightsList = root.querySelector('.rs-weights');
+    if (weightsList) weightsList.scrollTop = weightsScroll;
   }
 
   function handleKeydown(event) {
@@ -692,6 +770,7 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
     }
   }
   window.addEventListener('keydown', handleKeydown);
+  root.replaceChildren(host, live);
   render();
   return () => {
     window.removeEventListener('keydown', handleKeydown);
