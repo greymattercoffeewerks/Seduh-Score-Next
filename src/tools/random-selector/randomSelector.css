@@ -366,40 +366,84 @@ textarea:focus-visible {
   color: var(--color-text-muted);
 }
 .rs-weights {
-  max-height: 12rem;
+  /* Whole rows only (the column heads plus five 3.5rem rows), so a row is never cut in half. */
+  max-height: 20rem;
   overflow-y: auto;
-  border-top: var(--border-hairline) solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
+  background: var(--color-surface);
 }
+/* Name | weight | odds: the same three columns for the heads and every row. */
+.rs-weights-head,
 .rs-weight-row {
   display: grid;
-  min-height: var(--tap-target-min);
-  grid-template-columns: minmax(0, 1fr) 3.5rem 3.2rem;
+  grid-template-columns: minmax(0, 1fr) 4.5rem minmax(5.5rem, 0.9fr);
   align-items: center;
-  gap: var(--space-2);
+  column-gap: var(--space-4);
+  padding: 0 var(--space-4);
+}
+.rs-weights-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 2.25rem;
+  border-bottom: var(--border-hairline) solid var(--color-border);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: 0.08em;
+}
+.rs-weights-head span:nth-child(2) {
+  text-align: center;
+}
+.rs-weight-row {
+  height: 3.5rem;
   border-bottom: var(--border-hairline) solid var(--color-border);
   font-size: var(--text-sm);
 }
-.rs-weight-row > span:first-child {
+.rs-weight-row:last-child {
+  border-bottom: 0;
+}
+.rs-weight-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.rs-weight-row > span:last-child {
-  color: var(--color-text-muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  text-align: right;
-}
 .rs-weight-input {
   width: 100%;
-  min-height: var(--tap-target-min);
-  padding: 0.25rem;
+  height: var(--tap-target-min);
+  padding: 0 var(--space-2);
   border: var(--border-hairline) solid var(--color-border-strong);
   border-radius: 0;
   background: var(--color-canvas);
   color: var(--color-text);
   font-family: var(--font-mono);
-  font-size: var(--text-2xs);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+/* The entry's share of the draw: a bar (the odds at a glance) and the exact percentage. */
+.rs-odds {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.rs-odds-bar {
+  display: block;
+  flex: 1;
+  height: 0.5rem;
+  background: var(--color-surface-sunken);
+}
+.rs-odds-fill {
+  display: block;
+  height: 100%;
+  background: var(--rs-accent);
+}
+.rs-odds-value {
+  min-width: 3.4rem;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
   text-align: right;
 }
 .rs-draw-settings {
@@ -655,4 +699,20 @@ textarea:focus-visible {
 }
 .rs-color-reset {
   margin-top: var(--space-2);
+}
+
+/* On a phone the bar is dropped: the percentage alone keeps the three columns from crowding. */
+@media (max-width: 700px) {
+  .rs-weights-head,
+  .rs-weight-row {
+    grid-template-columns: minmax(0, 1fr) 4.5rem 3.6rem;
+    column-gap: var(--space-3);
+    padding: 0 var(--space-3);
+  }
+  .rs-odds-bar {
+    display: none;
+  }
+  .rs-odds {
+    justify-content: flex-end;
+  }
 }

@@ -256,58 +256,80 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
     weightsList: null,
     colourInput: null,
     accentReset: null,
+    oddsFills: [],
   };
 
   function totalWeight() {
     return state.entries.reduce((sum, entry) => sum + entry.weight, 0);
   }
 
+  const oddsText = (entry, total) => `${((entry.weight / total) * 100).toFixed(1)}%`;
+
   function refreshWeightReadouts() {
     const total = totalWeight();
     state.entries.forEach((entry, index) => {
       const cell = ui.percentCells[index];
-      if (cell) cell.textContent = `${((entry.weight / total) * 100).toFixed(1)}%`;
+      if (cell) cell.textContent = oddsText(entry, total);
+      const fill = ui.oddsFills[index];
+      if (fill) fill.style.width = `${(entry.weight / total) * 100}%`;
     });
     if (ui.totalCell) ui.totalCell.textContent = `${total} TOTAL WEIGHT`;
     if (entriesField.value !== state.draft) entriesField.value = state.draft;
   }
 
+  // One row per entry: the name, a weight box with room around it, and the entry's share of the
+  // draw as a bar and a percentage. The column heads are the first row of the same scrolling list
+  // (sticky), so they stay aligned with the columns whether or not a scrollbar is showing.
   function fillWeightRows(container) {
     ui.percentCells = [];
+    ui.oddsFills = [];
     const total = totalWeight();
-    container.replaceChildren(
-      ...state.entries.map((entry, index) => {
-        const field = el('input', {
-          className: 'rs-weight-input',
-          attrs: {
-            type: 'number',
-            min: '1',
-            max: '1000',
-            step: '1',
-            value: String(entry.weight),
-            'aria-label': `Weight for ${entry.name}`,
-            'data-focus-key': `weight-${index}`,
-            ...(state.spinning ? { disabled: '' } : {}),
-          },
-        });
-        field.addEventListener('change', () => {
-          if (state.spinning) return;
-          const next = Number(field.value);
-          if (Number.isFinite(next) && next >= 1) entry.weight = Math.min(1000, Math.round(next));
-          field.value = String(entry.weight);
-          state.draft = formatEntries(state.entries);
-          persist();
-          refreshWeightReadouts();
-        });
-        const percent = el('span', { text: `${((entry.weight / total) * 100).toFixed(1)}%` });
-        ui.percentCells[index] = percent;
-        return el('div', { className: 'rs-weight-row' }, [
-          el('span', { text: entry.name }),
-          field,
+    const rows = state.entries.map((entry, index) => {
+      const field = el('input', {
+        className: 'rs-weight-input',
+        attrs: {
+          type: 'number',
+          min: '1',
+          max: '1000',
+          step: '1',
+          value: String(entry.weight),
+          'aria-label': `Weight for ${entry.name}`,
+          'data-focus-key': `weight-${index}`,
+          ...(state.spinning ? { disabled: '' } : {}),
+        },
+      });
+      field.addEventListener('change', () => {
+        if (state.spinning) return;
+        const next = Number(field.value);
+        if (Number.isFinite(next) && next >= 1) entry.weight = Math.min(1000, Math.round(next));
+        field.value = String(entry.weight);
+        state.draft = formatEntries(state.entries);
+        persist();
+        refreshWeightReadouts();
+      });
+      const percent = el('span', {
+        className: 'rs-odds-value',
+        text: oddsText(entry, total),
+      });
+      const fill = el('span', { className: 'rs-odds-fill' });
+      fill.style.width = `${(entry.weight / total) * 100}%`;
+      ui.percentCells[index] = percent;
+      ui.oddsFills[index] = fill;
+      return el('div', { className: 'rs-weight-row' }, [
+        el('span', { className: 'rs-weight-name', text: entry.name }),
+        field,
+        el('div', { className: 'rs-odds' }, [
+          el('span', { className: 'rs-odds-bar', attrs: { 'aria-hidden': 'true' } }, [fill]),
           percent,
-        ]);
-      }),
-    );
+        ]),
+      ]);
+    });
+    const head = el('div', { className: 'rs-weights-head', attrs: { 'aria-hidden': 'true' } }, [
+      el('span', { text: 'ENTRY' }),
+      el('span', { text: 'WEIGHT' }),
+      el('span', { text: 'ODDS' }),
+    ]);
+    container.replaceChildren(...(rows.length ? [head, ...rows] : []));
   }
 
   // Typing in the entry list must not rebuild the screen: that moves the textarea, which ends an

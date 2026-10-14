@@ -288,7 +288,7 @@ describe('random selector editing keeps the control in use', () => {
     expect(root.querySelector('.rs-weight-input')).toBe(input);
     expect(input.isConnected).toBe(true);
     expect(document.activeElement).toBe(input);
-    expect(root.querySelectorAll('.rs-weight-row > span:last-child')[0].textContent).toBe('60.0%');
+    expect(root.querySelectorAll('.rs-odds-value')[0].textContent).toBe('60.0%');
     const totalText = [...root.querySelectorAll('.rs-weight-heading span')].map(
       (n) => n.textContent,
     );
@@ -693,5 +693,33 @@ describe('random selector follows the Petrol accent unless the user picks one', 
     );
     mount({ ...SAVED, accentColor: '#d96135' });
     expect(app().getAttribute('style')).toBeNull();
+  });
+});
+
+describe('random selector weights list', () => {
+  it('shows column heads once, with a bar and a percentage per entry, and none when empty', () => {
+    mount();
+    const list = root.querySelector('.rs-weights');
+    const head = list.querySelector('.rs-weights-head');
+    expect(head.textContent).toBe('ENTRYWEIGHTODDS');
+    expect(head.getAttribute('aria-hidden')).toBe('true');
+    expect(list.querySelectorAll('.rs-weights-head')).toHaveLength(1);
+    expect(list.querySelectorAll('.rs-weight-row')).toHaveLength(3);
+    expect(list.querySelectorAll('.rs-odds-fill')).toHaveLength(3);
+
+    textarea().value = '';
+    textarea().dispatchEvent(new Event('input', { bubbles: true }));
+    expect(list.children).toHaveLength(0);
+  });
+
+  it('keeps every bar in step with the percentages when a weight changes', () => {
+    mount();
+    const input = root.querySelector('.rs-weight-input');
+    input.value = '2';
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    const widths = [...root.querySelectorAll('.rs-odds-fill')].map((fill) => fill.style.width);
+    const labels = [...root.querySelectorAll('.rs-odds-value')].map((cell) => cell.textContent);
+    expect(widths).toEqual(['50%', '25%', '25%']);
+    expect(labels).toEqual(['50.0%', '25.0%', '25.0%']);
   });
 });
