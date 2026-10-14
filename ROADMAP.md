@@ -1,5 +1,13 @@
 # Seduh Score Next — Roadmap
 
+> **Random Selector, a free Community tool (2026-10-14) — done; follow-ups open.** A split-flap
+> draw tool at `/tools/random-selector/` (no auth, no Supabase; card 05 on the Community hub), first
+> built by Codex and then reviewed, fixed and tested here. The two blocking findings (a draw that
+> could stick on DRAWING, and ignoring reduced motion), the 44px tap targets and the
+> screen-reader/focus fixes are in. Still open: accent-colour contrast, CSV round-trip, entry
+> limits, a sitemap/prerender/e2e entry, and the sound file's licence. See CHANGELOG.md and
+> `src/tools/CLAUDE.md`.
+
 > **BTC marketing go-live (2026-09-23) — done.** The public marketing site was still
 > calling BTC "BBTC" and listing it as "coming soon" after the BTC app-wiring pass shipped,
 > leaving a consistency gap between the actual shipped product and its public presence. Updated

@@ -16,6 +16,7 @@ than iterated from the legacy Seduh Score app. Live at
 | Throwdown, Liga Seduh               | Planned, not started  | `src/formats/throwdown/`, `src/formats/liga-seduh/`                           |
 | **Guess the Bean**                  | Live (Community tool) | `src/community/guess-the-bean/`, plus an Android widget in `android/`         |
 | **Competition Timer**               | Live (Community tool) | `src/tools/timer/`: no auth, no Supabase                                      |
+| **Random Selector**                 | Live (Community tool) | `src/tools/random-selector/`: split-flap draw tool, no auth, no Supabase      |
 | Marketing & trust pages             | Live                  | `src/marketing/`: landing, Tour, About, Contact, Privacy, Terms, Neutrality   |
 
 Every format shares the format-agnostic modules in `src/core/`, including ranking,
@@ -34,6 +35,7 @@ append-only scoring record.
 | `/results/`                                                    | Public results archive                                      |
 | `/community/`                                                  | Community hub                                               |
 | `/tools/timer/`                                                | Competition Timer                                           |
+| `/tools/random-selector/`                                      | Random Selector (split-flap draw tool)                      |
 | `/guess-the-bean/`                                             | Guess the Bean (plus `play/` and `display/`)                |
 | `/about/`, `/contact/`, `/privacy/`, `/terms/`, `/neutrality/` | Trust pages                                                 |
 

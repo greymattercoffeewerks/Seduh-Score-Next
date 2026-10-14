@@ -27,6 +27,54 @@ self-contained CSS instead.
 
 ## Tools
 
+- `random-selector/` (`randomSelector.js` pure engine + storage + share-link codec,
+  `randomSelectorScreen.js` DOM, `randomSelector.css`, `main.js`), 2026-10-14 — a free
+  **Community tool** at `/tools/random-selector/` (card 05 on the Community hub; no account, no
+  auth, no Supabase, not tied to any event or format): a split-flap board that draws one entry
+  from a list, for competition running orders, prizes and lucky draws. Entries are one per
+  line with an optional `| weight` (integer 1 to 1000, at most 80 entries); a share link
+  (`?draw=`) carries the list and settings; CSV import/export; a Present mode for projecting
+  the board; a draw history; optional "remove every selected entry".
+  First built by Codex (branch `codex/split-flap-picker`), then reviewed, fixed and tested
+  by Claude. Pinned rules:
+  - **Fair draw.** `weightedIndex()` uses `crypto.getRandomValues` with rejection sampling
+    (no modulo bias; the tail test pins it). The winner is picked as an _entry object_ before
+    the board starts spinning, and every list control is disabled (and `updateEntries`
+    ignores input) until it lands, so editing mid-draw can neither strand the spinner on
+    DRAWING nor award a different entry than the one drawn. `finishDraw` settles the
+    spinner before anything that could bail out.
+  - **Reduced motion.** The flap animation exists only under
+    `prefers-reduced-motion: no-preference` (a test reads the CSS to pin it). With
+    "reduce" the board holds on `DRAWING` instead of cycling random characters (that
+    cycling is about 10 changes a second), and the sound, if on, keeps its rhythm.
+  - **Screen readers.** `render()` tears the whole screen down on every tick, so anything a
+    screen reader must hear lives _outside_ that subtree: one persistent polite live region
+    (`setNote()`) announces drawing, the result and every status message (an identical
+    repeat alternates a trailing no-break space so it is announced again). The board is
+    `role="img"` named from the draw state, never from the shuffling flaps. The draw
+    button uses `aria-disabled`, not `disabled`, so keyboard focus survives the spin. The
+    sound toggle has no `aria-pressed` (its label already says "SOUND ON"), the same call
+    `core/dom.js`'s `passwordToggle` makes.
+  - **Editing never replaces the control in use.** The entry list is one long-lived
+    `<textarea>` moved into each fresh tree (caret, selection and scroll are restored), so
+    typing mid-list no longer jumps the caret to the end. Weights, board title, accent
+    colour and volume commit **in place** (no `render()`): a rebuild there sent Tab to
+    `<body>`, dropped a slider drag and swallowed the click that blurred the field. Every
+    other control carries a `data-focus-key`.
+  - **44px targets** at 360px (`--tap-target-min`); the checkbox keeps a 24px box inside a
+    44px label row.
+  - Persists to `localStorage` (`seduh-random-selector-v1`); a share link loads over it
+    without saving until the user edits.
+  - **Open items (not yet done):** a light accent colour can make the `SOUND ON` text
+    unreadable (contrast is only computed for text on the accent); CSV export writes
+    weights but import ignores them, and a quoted name containing a comma is cut at the
+    comma; a list over 80 entries is silently cut and a draft over 10,000 characters
+    cannot be reloaded from its own share link; a weight of `0` becomes 1. The tool is
+    not yet in `public/sitemap.xml`, `tools/prerender-public-pages.mjs` or
+    `tests/e2e/smoke.spec.js`. The provenance and licence of
+    `public/sounds/split-flap-click.mp3` still need confirming. An IME composition in the
+    entry list is ended by the per-keystroke re-render (the node is moved between trees).
+
 - `brew-planner/` (`planner.js` pure engine, `plannerState.js` wizard state + storage,
   `brewPlannerScreen.js` DOM, `brewPlanner.css`), 2026-09-29 — a five-step wizard (Heats,
   Coffees, Machines, Timing, Cheat sheet) that turns a batch-brew setup into a run-sheet

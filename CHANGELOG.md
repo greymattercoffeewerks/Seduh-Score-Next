@@ -1,3 +1,57 @@
+## T-TOOLS.random-selector: Random Selector, a free split-flap draw tool · 2026-10-14
+
+**Task:** a new standalone **free Community tool** at `/tools/random-selector/` (no account, no auth,
+no Supabase; same family as the Timer and Brew Planner, see `src/tools/CLAUDE.md`; card 05 on the
+Community hub). A split-flap board draws one entry from a list for running orders, prizes and lucky
+draws: weights (`Name | 2`), a share link, CSV import/export, Present mode, a draw history, optional
+"remove every selected entry". **First built by Codex** (branch `codex/split-flap-picker`, committed
+as one `wip` commit); reviewed, fixed and tested here by Claude. The branch was 100 commits behind
+`dev`, so it was merged forward (no conflicts) rather than rebased, keeping Codex's commit.
+
+**Blocking findings fixed:**
+
+- A draw could stick on DRAWING for good: the list stayed editable during the spin and the winner was
+  picked by index, so emptying or shortening the list made `finishDraw` bail out before it stopped the
+  spinner (reproduced in Chromium). The winner is now an entry object picked before the spin, list
+  controls are disabled and `updateEntries` ignores input until it lands, and `finishDraw` settles the
+  spinner first.
+- The flap animation ignored `prefers-reduced-motion`. It now runs only under `no-preference`, and with
+  "reduce" the board holds on DRAWING instead of changing about ten times a second.
+
+**Accessibility fixes (reviewed at 360px first):**
+
+- 44px tap targets (`--tap-target-min`) on every control; measured in Chromium at 360px and 1024px, no
+  overflow, the checkbox keeps a 24px box in a 44px label row.
+- Screen readers: one persistent polite live region outside the re-rendered subtree now announces
+  drawing, the result and status messages (the old `role="status"` note and `aria-live="assertive"`
+  reveal were rebuilt on every render and never spoke); the board is `role="img"` named from the draw
+  state; an `h1`; the draw button uses `aria-disabled` so focus survives the spin; the sound toggle
+  drops `aria-pressed`.
+- Found on the way, and not an assistive-technology-only bug: typing mid-list jumped the caret to the
+  end after every key (the textarea was rebuilt per keystroke), and Tab out of an edited weight landed
+  on `<body>`. The entry list is now one long-lived textarea, and weights, title, colour and volume
+  update in place.
+
+**Tests:** 18 in `src/tools/random-selector` (7 are screen tests that fail against the Codex version:
+mid-spin edit, reduced motion, live region, board name, focus through the spin, caret, in-place
+weights). Verified: ESLint and Prettier on the tool, full unit suite (4007 tests), and the dev server
+in Chromium at 360px. E2e and the production build were not run.
+
+**Reviews:** done by hand. The project's reviewer agents (`code-reviewer`, `module-boundary-checker`,
+`test-auditor`, `ui-accessibility-reviewer`) were **not** run. The tool imports only `core/dom.js` and
+nothing from `src/formats/`. scoring/security/schema/offline-sync n/a.
+
+**Deferred (non-blocking):** a light accent colour can make `SOUND ON` unreadable; CSV export keeps
+weights but import drops them, and a quoted name with a comma is cut; lists over 80 entries and drafts
+over 10,000 characters are cut or unshareable without a warning; a weight of `0` becomes 1; the tool is
+not yet in `public/sitemap.xml`, `tools/prerender-public-pages.mjs` or `tests/e2e/smoke.spec.js`; the
+provenance and licence of `public/sounds/split-flap-click.mp3` still need confirming; an IME
+composition in the entry list is ended by the per-keystroke re-render.
+
+**Attribution:** the user asked that Codex be credited as a co-author for this tool. Codex's original
+commit carries no trailer, and the three earlier fix commits on the branch were pushed with only the
+Claude trailer (not rewritten). Commits from here on carry both trailers.
+
 ## T-TEN.E5 step 7: a real second organisation in production · 2026-10-14
 
 **Task:** the last step of the T-TEN.E5 rollout runbook, run by the owner by hand on `www.seduhscore.com` with their own login (already owner of both `grey-matter-coffee-werks` and `grey-matter-rehearsal`, so no provisioning was needed). **Status: passed. This closes the tenancy phase.**
