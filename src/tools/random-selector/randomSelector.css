@@ -247,8 +247,12 @@ textarea:focus-visible {
   clip-path: none;
 }
 .rs-draw-button[aria-disabled='true'] {
+  /* Token colours, not opacity: dimming the whole button took the label (including "DRAWING")
+     down to 2.9:1. The label is focusable and says why it cannot draw, so it must stay readable. */
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-muted);
   cursor: not-allowed;
-  opacity: 0.55;
 }
 .rs-auto-remove {
   display: flex;
@@ -369,6 +373,8 @@ textarea:focus-visible {
   /* Whole rows only (the column heads plus five 3.5rem rows), so a row is never cut in half. */
   max-height: 20rem;
   overflow-y: auto;
+  /* Keeps a row reached by keyboard clear of the sticky head (the head's height). */
+  scroll-padding-top: 2.25rem;
   border: var(--border-hairline) solid var(--color-border);
   background: var(--color-surface);
 }
@@ -606,7 +612,7 @@ textarea:focus-visible {
 .rs-footer {
   color: var(--color-text-muted);
   font-family: var(--font-mono);
-  font-size: var(--text-3xs);
+  font-size: var(--text-2xs);
 }
 .random-selector.is-presenting {
   background: var(--color-canvas);

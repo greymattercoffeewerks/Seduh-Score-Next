@@ -244,7 +244,13 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
   // position and value survive the re-render that every keystroke triggers.
   const entriesField = el('textarea', {
     className: 'rs-textarea',
-    attrs: { id: 'rs-entries', rows: '10', spellcheck: 'false', 'data-focus-key': 'entries' },
+    attrs: {
+      id: 'rs-entries',
+      rows: '10',
+      spellcheck: 'false',
+      'data-focus-key': 'entries',
+      'aria-describedby': 'rs-entries-warning',
+    },
   });
   entriesField.addEventListener('input', () => onEntriesInput());
 
@@ -269,6 +275,7 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
     undoButton: null,
   };
   let lastWarning = '';
+  let weightNote = '';
 
   function totalWeight() {
     return state.entries.reduce((sum, entry) => sum + entry.weight, 0);
@@ -313,9 +320,19 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
       });
       field.addEventListener('change', () => {
         if (state.spinning) return;
-        const next = Number(field.value);
-        if (Number.isFinite(next) && next >= 1) entry.weight = Math.min(1000, Math.round(next));
+        const typed = field.value.trim();
+        const next = Number(typed);
+        const valid = typed !== '' && Number.isFinite(next) && next >= 1;
+        const before = entry.weight;
+        if (valid) entry.weight = Math.min(1000, Math.round(next));
         field.value = String(entry.weight);
+        // A weight that is not used as typed is said out loud, never changed quietly.
+        weightNote = !valid
+          ? `Weight for ${entry.name} must be 1 to 1000, so it stays ${before}.`
+          : entry.weight !== next
+            ? `Weight for ${entry.name} is ${entry.weight}: weights run from 1 to 1000.`
+            : '';
+        if (weightNote) speak(weightNote);
         // Only this entry's line changes: rewriting the whole list from the parsed entries would
         // drop blank lines and any entries past the limit.
         state.draft = replaceDraftLine(state.draft, index, entry);
@@ -335,6 +352,7 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
         el('span', { className: 'rs-weight-name', text: entry.name }),
         field,
         el('div', { className: 'rs-odds' }, [
+          el('span', { className: 'sr-only', text: `Odds for ${entry.name}: ` }),
           el('span', { className: 'rs-odds-bar', attrs: { 'aria-hidden': 'true' } }, [fill]),
           percent,
         ]),
@@ -354,6 +372,7 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
   function onEntriesInput() {
     if (state.spinning) return;
     dropUndo();
+    weightNote = '';
     state.draft = entriesField.value;
     state.entries = parseEntries(state.draft);
     state.reveal = null;
@@ -403,16 +422,19 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
     if (ui.accentReset) ui.accentReset.hidden = !state.accentColor;
   }
 
-  // Says what the typed list is not doing (entries past the limit, weights outside 1 to 1000), in a
-  // line under the list and, when it changes, through the live region. Nothing is dropped silently.
-  function showEntryProblems() {
-    const message = describeEntryProblems(checkEntries(state.draft));
+  // Says what the typed list is not doing (entries past the limit, nameless lines, weights outside
+  // 1 to 1000), in a line under the list and, when it changes, through the live region. Nothing is
+  // dropped silently. A full render passes `announce: false`: whatever caused it has already set
+  // its own note, and a second message would replace that one in the polite live region.
+  function showEntryProblems({ announce = true } = {}) {
+    const found = describeEntryProblems(checkEntries(state.draft));
+    const message = [weightNote, found].filter(Boolean).join(' ');
     if (ui.warning) {
       ui.warning.textContent = message;
       ui.warning.hidden = !message;
     }
-    if (message && message !== lastWarning) speak(message);
-    lastWarning = message;
+    if (announce && found && found !== lastWarning) speak(found);
+    lastWarning = found;
   }
 
   // CLEAR SESSION, LOAD EXAMPLE LIST and a CSV import replace the whole list at once, so each keeps
@@ -424,6 +446,8 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
       history: state.history,
       winner: state.winner,
       drawn: state.drawn,
+      // The note that offers this UNDO; it goes away when a different note replaces that one.
+      note: undefined,
     };
   }
 
@@ -450,9 +474,13 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
     ui.drawButton?.focus();
   }
 
-  function setNote(text) {
+  // `undoable` marks a note that offers UNDO: the live region says so, and UNDO is shown only while
+  // that note is. Any other note means the moment has passed.
+  function setNote(text, { undoable = false } = {}) {
+    if (state.undo && !undoable) dropUndo();
     state.note = text;
-    speak(text);
+    if (undoable && state.undo) state.undo.note = text;
+    speak(undoable ? `${text} Undo is available.` : text);
   }
 
   function speak(text) {
@@ -483,22 +511,30 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
 
   function loadExample() {
     if (state.spinning) return;
-    rememberForUndo('Load example list');
-    updateEntries(DEMO_ENTRIES.join('\n'));
-    setNote('Example list loaded.');
+    const example = DEMO_ENTRIES.join('\n');
+    // Loading what is already there changes nothing, so it must not replace an earlier UNDO.
+    const changes = state.draft !== example;
+    if (changes) rememberForUndo('Load example list');
+    updateEntries(example);
+    setNote('Example list loaded.', {
+      undoable: changes || state.undo?.note === 'Example list loaded.',
+    });
     render();
   }
 
   function clearSession() {
     if (state.spinning) return;
-    rememberForUndo('Clear session');
+    // Clearing an empty session changes nothing, so it must not replace an earlier UNDO.
+    const changes = Boolean(state.draft || state.history.length || state.drawn);
+    if (changes) rememberForUndo('Clear session');
     state.draft = '';
     state.entries = [];
     state.history = [];
     state.winner = 'READY';
     state.drawn = null;
     state.reveal = null;
-    setNote('Session cleared. Ready for a new draw.');
+    const cleared = 'Session cleared. Ready for a new draw.';
+    setNote(cleared, { undoable: changes || state.undo?.note === cleared });
     persist();
     render();
   }
@@ -812,6 +848,7 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
             total > entries.length
               ? `Imported ${entries.length} of ${total} entries. The limit is ${MAX_ENTRIES}, so the rest were left out.`
               : `Imported ${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}.`,
+            { undoable: true },
           );
           render();
         });
@@ -848,7 +885,10 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
               attrs: { for: 'rs-entries' },
             }),
             entriesField,
-            (ui.warning = el('p', { className: 'rs-warning' })),
+            (ui.warning = el('p', {
+              className: 'rs-warning',
+              attrs: { id: 'rs-entries-warning' },
+            })),
             el('div', { className: 'rs-weight-heading' }, [
               el('span', { text: 'WEIGHTS & ODDS' }),
               (ui.totalCell = el('span', { text: `${total} TOTAL WEIGHT` })),
@@ -880,6 +920,7 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
                       ? [
                           (ui.undoButton = button('UNDO', 'rs-link-button', undoLast, {
                             'data-focus-key': 'undo',
+                            'aria-label': `Undo: ${state.undo.label.toLowerCase()}`,
                           })),
                         ]
                       : []),
@@ -913,7 +954,7 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
                 }),
           ]),
         ]);
-        showEntryProblems();
+        showEntryProblems({ announce: false });
         return controls;
 
         function buildDrawSettings() {

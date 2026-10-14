@@ -52,29 +52,42 @@ export function normalizeWeight(value) {
     : 1;
 }
 
+// One typed line as { name, written }, or null when it has no name (blank, or only a weight such
+// as "| 3"). `written` is the weight text as typed. The `s` flag lets the name hold a Unicode line
+// separator, which `.` would otherwise refuse and so drop the whole line. checkEntries and the
+// line-preserving edits below both go through this, so they always agree on which lines are entries.
+function parseLine(line) {
+  const match = line.trim().match(/^(.*?)(?:\s*\|\s*(-?\d+(?:\.\d+)?))?$/s);
+  const name = match?.[1].trim();
+  return name ? { name, written: match[2] } : null;
+}
+
 // Reads the list and also reports what it had to change or leave out, so the screen can say so
 // instead of quietly drawing from something other than what was typed: `ignored` counts entries
-// past the limit, `adjusted` lists weights that were outside 1 to 1000 (or fractions) and what
-// they were read as.
+// past the limit, `nameless` lines that hold text but no name, `adjusted` weights that were
+// outside 1 to 1000 (or fractions) and what they were read as.
 export function checkEntries(value) {
   const entries = [];
   const adjusted = [];
   let ignored = 0;
+  let nameless = 0;
   for (const line of String(value).split('\n')) {
-    const match = line.trim().match(/^(.*?)(?:\s*\|\s*(\d+(?:\.\d+)?))?$/);
-    const name = match?.[1].trim();
-    if (!name) continue;
+    const parsed = parseLine(line);
+    if (!parsed) {
+      if (line.trim() !== '') nameless += 1;
+      continue;
+    }
     if (entries.length >= MAX_ENTRIES) {
       ignored += 1;
       continue;
     }
-    const written = match[2];
+    const { name, written } = parsed;
     const weight = normalizeWeight(written ?? 1);
     if (written !== undefined && Number(written) !== weight)
       adjusted.push({ name, written, weight });
     entries.push({ name, weight });
   }
-  return { entries, ignored, adjusted };
+  return { entries, ignored, nameless, adjusted };
 }
 
 export function parseEntries(value) {
@@ -82,11 +95,16 @@ export function parseEntries(value) {
 }
 
 // The sentence for checkEntries' findings, or '' when there is nothing to say.
-export function describeEntryProblems({ ignored, adjusted }) {
+export function describeEntryProblems({ ignored, nameless = 0, adjusted }) {
   const parts = [];
   if (ignored > 0) {
     parts.push(
       `${ignored} ${ignored === 1 ? 'line is' : 'lines are'} past the ${MAX_ENTRIES}-entry limit and ignored.`,
+    );
+  }
+  if (nameless > 0) {
+    parts.push(
+      `${nameless} ${nameless === 1 ? 'line has' : 'lines have'} a weight but no name and ${nameless === 1 ? 'is' : 'are'} skipped.`,
     );
   }
   if (adjusted.length > 0) {
@@ -100,19 +118,19 @@ export function describeEntryProblems({ ignored, adjusted }) {
 }
 
 // Edits of the typed list by position of the n-th entry line, leaving every other line (blank
-// lines, entries past the limit) exactly as typed. Rewriting the whole list from the parsed
-// entries would silently drop those.
-function contentLineIndexes(lines) {
+// lines, nameless lines, entries past the limit) exactly as typed. Rewriting the whole list from
+// the parsed entries would silently drop those.
+function entryLineIndexes(lines) {
   const indexes = [];
   lines.forEach((line, at) => {
-    if (line.trim() !== '') indexes.push(at);
+    if (parseLine(line)) indexes.push(at);
   });
   return indexes;
 }
 
 export function replaceDraftLine(draft, index, entry) {
   const lines = String(draft).split('\n');
-  const at = contentLineIndexes(lines)[index];
+  const at = entryLineIndexes(lines)[index];
   if (at === undefined) return String(draft);
   lines[at] = formatEntries([entry]);
   return lines.join('\n');
@@ -120,17 +138,24 @@ export function replaceDraftLine(draft, index, entry) {
 
 export function removeDraftLine(draft, index) {
   const lines = String(draft).split('\n');
-  const at = contentLineIndexes(lines)[index];
+  const at = entryLineIndexes(lines)[index];
   if (at === undefined) return String(draft);
   lines.splice(at, 1);
   return lines.join('\n');
 }
 
+// Puts an entry back at position `index` among the entry lines (the end when that is past them),
+// keeping the lines around it. Blank lines alone are kept: "\n\n" plus one entry is "Zed\n\n".
 export function insertDraftLine(draft, index, entry) {
   const lines = String(draft).split('\n');
-  const indexes = contentLineIndexes(lines);
-  if (indexes.length === 0) return formatEntries([entry]);
-  lines.splice(indexes[index] ?? lines.length, 0, formatEntries([entry]));
+  const indexes = entryLineIndexes(lines);
+  const line = formatEntries([entry]);
+  if (indexes.length === 0) {
+    if (lines.every((existing) => existing.trim() === '')) lines[0] = line;
+    else lines.push(line);
+    return lines.join('\n');
+  }
+  lines.splice(indexes[index] ?? lines.length, 0, line);
   return lines.join('\n');
 }
 

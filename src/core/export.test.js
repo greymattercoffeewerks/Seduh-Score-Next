@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import {
   buildCsv,
   buildCsvForTables,
@@ -90,6 +90,17 @@ function deferRevoke() {
   });
   return { scheduled, restore: () => spy.mockRestore() };
 }
+
+// A failing assertion must not leave the setTimeout spy behind for the rest of the file.
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe('the delay before a download URL is revoked', () => {
+  it('is long enough for Safari to start the download (a literal, so it cannot drift to 0)', () => {
+    expect(REVOKE_DELAY_MS).toBeGreaterThanOrEqual(1000);
+  });
+});
 
 describe('downloadCsv', () => {
   it('builds a Blob with the real CSV content and a csv MIME type, attaches a download link with the real filename, clicks it, then revokes the URL after a delay', async () => {

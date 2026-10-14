@@ -130,13 +130,21 @@ self-contained CSS instead.
     guard pins the rules.
   - **Nothing is dropped or changed silently** (`checkEntries`, `describeEntryProblems`): a line
     under the list (and the live region, once per change) says when entries are past the
-    80-entry limit or a weight outside 1 to 1000 was changed ("Changed: “Amir” (0 → 1)").
-    Editing a weight or removing a drawn entry changes only that entry's line of the typed list
-    (`replaceDraftLine`, `removeDraftLine`, `insertDraftLine`), so blank lines and entries past
-    the limit survive; the old code rewrote the whole list from the parsed entries and lost them.
+    80-entry limit, a line holds only a weight (`| 3`, "skipped"), or a weight outside 1 to 1000
+    (negative too) was changed ("Changed: “Amir” (0 → 1)"); the weight box says the same when it
+    clamps or reverts a number. The warning is tied to the list with `aria-describedby`. Editing a
+    weight or removing a drawn entry changes only that entry's line of the typed list
+    (`replaceDraftLine`, `removeDraftLine`, `insertDraftLine`), so blank lines, nameless lines and
+    entries past the limit survive; the old code rewrote the whole list from the parsed entries
+    and lost them. **One line parser (`parseLine`) decides what an entry line is**, for
+    `checkEntries` and the positional edits alike; two predicates drifted apart once, and a
+    nameless line then made REMOVE AFTER DRAW delete the wrong line and leave the winner in.
   - **CLEAR SESSION, LOAD EXAMPLE LIST and a CSV import can be undone** (one level): the
     status line shows UNDO, which restores the list, the history and the board; it goes away
-    when the list is edited, a weight is changed or a draw starts. (Chosen over a confirm box,
+    when the list is edited, a weight is changed, a draw starts or a different note replaces the one
+    that offered it; pressing CLEAR or LOAD EXAMPLE again when it changes nothing keeps the first
+    UNDO (an empty-on-empty snapshot used to overwrite it). The button is named "Undo: clear
+    session" and the live region says "Undo is available". (Chosen over a confirm box,
     which is intrusive on a projector.) A CSV over 1 MB is refused before it is read; Escape
     leaves Present mode.
   - `core/export.js` revokes a download's object URL after `REVOKE_DELAY_MS` (1 s), not at the
@@ -146,6 +154,15 @@ self-contained CSS instead.
     `tools/prerender-public-pages.mjs` (root marker `<main class="random-selector"`, copy
     `SPLIT-FLAP EDITION`) and asserted in `tests/e2e/smoke.spec.js`.
   - Persists to `localStorage` (`seduh-random-selector-v1`).
+  - **Reviewer follow-ups (2026-10-14, not done, outside this tool):** Guess the Bean's JSON export
+    (`src/community/guess-the-bean/setupScreen.js`) still revokes its URL at the click; call
+    `downloadJson`. Candidates to move into `core/`: the AudioContext click shared with the Timer,
+    `browserStorage()` (the other tools' storage defaults still read `window.localStorage`
+    unguarded), `parseCsv`, `weightedIndex`, and a `button()` helper. The CSV formula guard is
+    only in this tool; putting it in the shared `buildCsv` would change Cup Taster's CSV for names
+    starting `= + - @`, so it needs an owner decision. Announcing the out-of-range warning on every
+    keystroke is chatty for a screen reader, and a weight changed on load (`Amir | 0`) cannot be
+    cleared from its weight box (typing the same number fires no event); both left as they are.
   - **Open items (not yet done):** the AudioContext set-up is a near-copy of the Timer's (no
     shared helper in `core/` yet); the paper surface never follows `prefers-color-scheme`
     (Present is the only dark surface); the flash rate was measured, not run through a flash

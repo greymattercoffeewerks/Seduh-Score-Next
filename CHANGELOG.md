@@ -3,7 +3,7 @@
 **Task:** incremental updates to the released Random Selector, requested by the user after the release
 (#261, #262): follow the Petrol design language; fix the look of the weight boxes (alignment off, spacing
 cramped, list flush to the right); and fix technical issues that affect safety and quality. Random Selector
-only; the Brew Planner was not touched. Three commits, in that order, plus one follow-up (below).
+only; the Brew Planner was not touched. Three commits, in that order, plus follow-ups (below).
 
 **1. Petrol.** The first version had a brown wood board frame, a dozen hard-coded hex colours, a dark button
 with a dot, shadows, and a custom-accent default (`#0fb5a3`) that was not the design system's accent. Now
@@ -38,11 +38,39 @@ final method compares the ink's centre with the box's own centre in page coordin
   share it).
 - Escape leaves Present mode; the page gets the 16px and 32px favicons the Timer has.
 
-**Tests:** 89 in `src/tools/random-selector` (was 75) and 11 in `core/export`. Eight mutants of the new
-behaviours (weight edit and removal rewriting the list, no undo, undo surviving an edit, no import cap, no
-Escape, no warning, revoke at the click) were each caught by a test. Verified: ESLint, `prettier --check .`,
-the full unit suite, the dev server in Chromium at 360px and 1280px. The project's reviewer agents were not
-run on this round.
+**4. Reviewer pass (code, module-boundary, test and accessibility reviewers) and its fixes.**
+
+- **High, fixed:** a line holding only a weight (`| 3`) counted as an entry line for the positional edits
+  but not for `checkEntries`, so with REMOVE AFTER DRAW the wrong line was deleted, the winner stayed in the
+  list and REDRAW added a duplicate; editing a weight overwrote the wrong line. One `parseLine` now decides
+  what an entry line is for both. Such lines are also reported ("skipped") instead of vanishing.
+- A line with a Unicode line separator in a name was dropped without a word (`.` does not match it): fixed
+  with the `s` flag. A negative weight (`A | -3`) used to become part of the name; it is now a weight
+  that is reported (`-3 → 1`).
+- A second CLEAR SESSION or LOAD EXAMPLE LIST snapshotted the already-empty list over the real undo, so the
+  list was lost; a no-op now keeps the first UNDO. UNDO is shown only beside the note that offered it, is
+  named "Undo: clear session", and the live region says it is available. A full render no longer
+  announces the list warning over the action's own note.
+- The weight box changed 2500 to 1000 and reverted `0` or empty with no word; it now says what it did.
+- Accessibility: the busy/disabled DRAW button was dimmed with `opacity` (label 2.9:1); it now uses token
+  colours. `scroll-padding-top` stops the sticky head covering a row reached with Shift+Tab (37 of 44px were
+  hidden). The warning is tied to the list (`aria-describedby`), each percentage is named for a screen reader,
+  and the footer is 12px, not 11px.
+- `insertDraftLine` kept the blank lines when the list held only blank lines.
+
+**Tests:** 104 in `src/tools/random-selector` and 12 in `core/export`. The reviewers' survivors are now
+caught: the spinner CSS guard parses the stylesheet (a commented-out rule used to pass), the 1 MB import
+limit is tested at 1,000,000 and 1,000,001 bytes, the revoke delay is pinned to at least 1 s and the spy is
+restored after every test, undo is checked for the board, the saved copy, import, and for being dropped on a
+weight change. Five mutants of the new fixes (index by non-blank lines, no `s` flag, undo without the no-op
+guard, opacity back, negative weight read as name) were each caught. Verified: ESLint, `prettier --check`,
+the full unit suite.
+
+**Not fixed, recorded in `src/tools/CLAUDE.md`:** Guess the Bean's JSON export still revokes at the click;
+audio, storage-guard, CSV-reader and weighted-pick helpers could move to `core/`; the CSV formula guard is only
+in this tool (a shared-writer change would alter Cup Taster's CSV, so it needs an owner decision); the
+warning is announced on every keystroke that changes it; a weight changed on load cannot be cleared from its
+weight box.
 
 **Still open (in `src/tools/CLAUDE.md`):** no shared audio helper with the Timer; the paper surface does not
 follow `prefers-color-scheme`; the flash rate was measured, not run through an analyser; no real screen reader
