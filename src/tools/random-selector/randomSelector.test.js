@@ -22,20 +22,45 @@ describe('random selector entries', () => {
   });
 
   it('formats weight one without extra syntax', () => {
-    expect(formatEntries([{ name: 'Amir', weight: 1 }, { name: 'Bella', weight: 3 }])).toBe('Amir\nBella | 3');
+    expect(
+      formatEntries([
+        { name: 'Amir', weight: 1 },
+        { name: 'Bella', weight: 3 },
+      ]),
+    ).toBe('Amir\nBella | 3');
   });
 });
 
 describe('random selector draw', () => {
   it('maps secure random values across weighted entries', () => {
-    const random = (values) => { values[0] = 1; };
-    expect(weightedIndex([{ name: 'Amir', weight: 1 }, { name: 'Bella', weight: 2 }], random)).toBe(1);
+    const random = (values) => {
+      values[0] = 1;
+    };
+    expect(
+      weightedIndex(
+        [
+          { name: 'Amir', weight: 1 },
+          { name: 'Bella', weight: 2 },
+        ],
+        random,
+      ),
+    ).toBe(1);
   });
 
   it('rejects values in the modulo-biased tail before selecting', () => {
     const values = [0xffff_ffff, 0];
-    const random = (target) => { target[0] = values.shift(); };
-    expect(weightedIndex([{ name: 'Amir', weight: 1 }, { name: 'Bella', weight: 2 }], random)).toBe(0);
+    const random = (target) => {
+      target[0] = values.shift();
+    };
+    expect(
+      weightedIndex(
+        [
+          { name: 'Amir', weight: 1 },
+          { name: 'Bella', weight: 2 },
+        ],
+        random,
+      ),
+    ).toBe(0);
   });
 });
 

@@ -13,7 +13,10 @@ function fakeStorage(saved) {
 }
 
 // Sound off keeps the test off the (unimplemented in jsdom) media element.
-const css = readFileSync(resolve(process.cwd(), 'src/tools/random-selector/randomSelector.css'), 'utf8');
+const css = readFileSync(
+  resolve(process.cwd(), 'src/tools/random-selector/randomSelector.css'),
+  'utf8',
+);
 
 const SAVED = { draft: 'Amir\nBella\nChin', soundOn: false, drawPreset: 'quick' };
 const QUICK_MS = 1000;
@@ -29,7 +32,11 @@ function mount(saved = SAVED) {
 
 const drawButton = () => root.querySelector('.rs-draw-button');
 const textarea = () => root.querySelector('#rs-entries');
-const boardText = () => [...root.querySelectorAll('.selector-flap')].map((flap) => flap.textContent).join('').trim();
+const boardText = () =>
+  [...root.querySelectorAll('.selector-flap')]
+    .map((flap) => flap.textContent)
+    .join('')
+    .trim();
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -87,7 +94,10 @@ describe('random selector reduced motion', () => {
   });
 
   it('only runs the flap animation when the user has no reduced-motion preference', () => {
-    const outside = css.replace(/@media \(prefers-reduced-motion: no-preference\) \{[\s\S]*?\n\}\n/, '');
+    const outside = css.replace(
+      /@media \(prefers-reduced-motion: no-preference\) \{[\s\S]*?\n\}\n/,
+      '',
+    );
     expect(css).toContain('animation:');
     expect(outside).not.toMatch(/animation:/);
   });
