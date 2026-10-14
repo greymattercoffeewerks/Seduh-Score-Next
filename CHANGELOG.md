@@ -11,7 +11,8 @@ is written compact instead of pretty-printed, and the MIME type carries `;charse
 
 **Tests:** one new test in `setupScreen.test.js` checks the downloaded file's name and content and that the URL
 is not revoked at the click (the delay callback is held back, then run). Reverting to the old inline code
-makes it fail.
+makes it fail. The reviewer also found that a throw from the download (a browser refusing it) left the
+view stuck as busy, as the old inline code did; that now shows the error toast and frees the view.
 
 ## T-TOOLS.random-selector-2: Petrol, a clearer weights list, and safety fixes for the Random Selector · 2026-10-14
 
@@ -81,7 +82,7 @@ weight change. Five mutants of the new fixes (index by non-blank lines, no `s` f
 guard, opacity back, negative weight read as name) were each caught. Verified: ESLint, `prettier --check`,
 the full unit suite.
 
-**Not fixed, recorded in `src/tools/CLAUDE.md`:** Guess the Bean's JSON export still revokes at the click;
+**Not fixed, recorded in `src/tools/CLAUDE.md`:** Guess the Bean's JSON export still revokes at the click (fixed the same day, see `T-FIX.gtb-export-revoke`);
 audio, storage-guard, CSV-reader and weighted-pick helpers could move to `core/`; the CSV formula guard is only
 in this tool (a shared-writer change would alter Cup Taster's CSV, so it needs an owner decision); the
 warning is announced on every keystroke that changes it; a weight changed on load cannot be cleared from its

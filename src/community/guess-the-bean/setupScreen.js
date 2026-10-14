@@ -205,10 +205,17 @@ export async function mountSetupScreen(root, { client = getSupabase(), signal } 
     };
     // The shared writer, which revokes the object URL after a delay: revoking it at the click can
     // cancel the download in Safari.
-    downloadJson(
-      `guess-the-bean-export-${session.id}-${new Date().toISOString().slice(0, 10)}.json`,
-      exportObj,
-    );
+    try {
+      downloadJson(
+        `guess-the-bean-export-${session.id}-${new Date().toISOString().slice(0, 10)}.json`,
+        exportObj,
+      );
+    } catch (err) {
+      // A browser refusing the download (memory, quota) must not leave the view locked as busy.
+      state.busy = false;
+      showToast(describeError(err));
+      return;
+    }
     state.busy = false;
     showToast('Data exported.');
   }
