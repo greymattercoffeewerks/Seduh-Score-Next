@@ -203,3 +203,36 @@ describe('random selector editing keeps the control in use', () => {
     expect(textarea().value).toBe('Amir | 3\nBella\nChin');
   });
 });
+
+describe('random selector csv import', () => {
+  const importField = () => root.querySelector('input[type="file"]');
+
+  async function importCsv(text) {
+    const file = new File([text], 'entries.csv', { type: 'text/csv' });
+    // jsdom's File has no text(); browsers do.
+    file.text = () => Promise.resolve(text);
+    Object.defineProperty(importField(), 'files', { value: [file], configurable: true });
+    importField().dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.advanceTimersByTimeAsync(0);
+  }
+
+  it('loads names and weights, keeping a quoted name with a comma whole', async () => {
+    mount();
+    await importCsv('Entry,Weight\r\n"Smith, John",3\r\nAmir');
+    expect(textarea().value).toBe('Smith, John | 3\nAmir');
+    expect(root.querySelector('[role="status"]').textContent).toMatch(/Imported 2 entries/);
+  });
+
+  it('leaves the current list alone when the file holds no entries', async () => {
+    mount();
+    await importCsv('Entry,Weight\r\n');
+    expect(textarea().value).toBe('Amir\nBella\nChin');
+    expect(root.querySelector('[role="status"]').textContent).toMatch(/No entries found/);
+  });
+
+  it('says so when the entry limit leaves some of the file out', async () => {
+    mount();
+    await importCsv(Array.from({ length: 90 }, (_, index) => `N${index}`).join('\n'));
+    expect(root.querySelector('[role="status"]').textContent).toMatch(/Imported 80 of 90 entries/);
+  });
+});

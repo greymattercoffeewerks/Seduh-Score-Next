@@ -97,8 +97,12 @@ textarea:focus-visible {
   text-underline-offset: 0.25rem;
 }
 .rs-text-button[data-on='true'] {
-  color: var(--rs-accent);
+  /* The accent is user-chosen, so it is never used as TEXT colour (a pale one would vanish on the
+     paper surface). The state is bold, and the accent only colours the underline. */
+  color: var(--color-text);
   font-weight: var(--font-weight-bold);
+  text-decoration-color: var(--rs-accent);
+  text-decoration-thickness: 0.2rem;
 }
 .rs-picker {
   padding: clamp(2rem, 6vw, 4.5rem) var(--space-4) clamp(2.5rem, 6vw, 5rem);

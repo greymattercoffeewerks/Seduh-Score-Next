@@ -29,24 +29,98 @@ export function validAccentColor(value) {
   return /^#[\da-f]{6}$/i.test(color) ? color.toLowerCase() : DEFAULT_ACCENT_COLOR;
 }
 
+export const MAX_ENTRIES = 80;
+
+// A weight is a whole number from 1 to 1000; anything else (blank, zero, negative, text) is 1.
+export function normalizeWeight(value) {
+  const weight = Number(value);
+  return Number.isFinite(weight) && weight > 0
+    ? Math.min(Math.max(1, Math.round(weight)), 1000)
+    : 1;
+}
+
 export function parseEntries(value) {
   return String(value)
     .split('\n')
     .map((line) => {
       const match = line.trim().match(/^(.*?)(?:\s*\|\s*(\d+(?:\.\d+)?))?$/);
       const name = match?.[1].trim();
-      const weight = Number(match?.[2] ?? 1);
       if (!name) return null;
-      return {
-        name,
-        weight:
-          Number.isFinite(weight) && weight > 0
-            ? Math.min(Math.max(1, Math.round(weight)), 1000)
-            : 1,
-      };
+      return { name, weight: normalizeWeight(match?.[2] ?? 1) };
     })
     .filter(Boolean)
-    .slice(0, 80);
+    .slice(0, MAX_ENTRIES);
+}
+
+// WCAG 2.x relative luminance and contrast ratio for a #rrggbb colour.
+function luminance(color) {
+  const [red, green, blue] = [1, 3, 5].map((start) => {
+    const channel = Number.parseInt(color.slice(start, start + 2), 16) / 255;
+    return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+}
+
+export function contrastRatio(first, second) {
+  const [lighter, darker] = [luminance(first), luminance(second)].sort((a, b) => b - a);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+// The text colour to put on a user-chosen accent: whichever of black or white contrasts more.
+// Pure black (not the page's near-black) is used because that is what makes the worst case, a
+// mid-tone accent, still reach 4.58:1, so text on any accent clears WCAG AA.
+export function readableOn(color) {
+  return contrastRatio(color, '#000000') >= contrastRatio(color, '#ffffff') ? '#000000' : '#ffffff';
+}
+
+// RFC 4180-style parser: quoted cells may hold commas, doubled quotes and line breaks, and
+// CRLF, LF and a leading byte-order mark (Excel's "CSV UTF-8") are all accepted.
+export function parseCsv(text) {
+  const source = String(text).replace(/^\uFEFF/, '');
+  const rows = [];
+  let row = [];
+  let cell = '';
+  let quoted = false;
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+    if (quoted) {
+      if (character !== '"') cell += character;
+      else if (source[index + 1] === '"') {
+        cell += '"';
+        index += 1;
+      } else quoted = false;
+    } else if (character === '"' && cell === '') quoted = true;
+    else if (character === ',') {
+      row.push(cell);
+      cell = '';
+    } else if (character === '\n' || character === '\r') {
+      if (character === '\r' && source[index + 1] === '\n') index += 1;
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = '';
+    } else cell += character;
+  }
+  if (cell !== '' || row.length) rows.push([...row, cell]);
+  return rows.filter((cells) => cells.some((value) => value.trim() !== ''));
+}
+
+const HEADER_NAME = /^(name|names|entry|entries|participant|participants)$/i;
+
+// First column is the name, an optional second column the weight; a header row is skipped.
+// `total` is how many entries the file held, so the caller can say when the limit cut some.
+export function entriesFromCsv(text) {
+  const rows = parseCsv(text);
+  if (HEADER_NAME.test(rows[0]?.[0]?.trim() ?? '')) rows.shift();
+  const all = rows
+    .map(([name = '', weight]) => ({ name: name.trim(), weight: normalizeWeight(weight) }))
+    .filter((entry) => entry.name);
+  return { entries: all.slice(0, MAX_ENTRIES), total: all.length };
+}
+
+export function entriesToCsv(entries) {
+  const rows = entries.map((entry) => `"${entry.name.replaceAll('"', '""')}",${entry.weight}`);
+  return ['Entry,Weight', ...rows].join('\r\n');
 }
 
 export function formatEntries(entries) {

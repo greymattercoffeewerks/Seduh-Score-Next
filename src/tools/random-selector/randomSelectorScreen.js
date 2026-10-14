@@ -6,9 +6,13 @@ import {
   DEFAULT_BOARD_TITLE,
   DRAW_PRESETS,
   encodeShare,
+  entriesFromCsv,
+  entriesToCsv,
   formatEntries,
   loadSaved,
+  MAX_ENTRIES,
   parseEntries,
+  readableOn,
   saveCurrent,
   validDrawPreset,
   validAccentColor,
@@ -132,20 +136,6 @@ function createTicker() {
 
 function prefersReducedMotion() {
   return Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
-}
-
-function csvEntries(source) {
-  return source
-    .split(/\r?\n/)
-    .map((line) => line.split(',')[0]?.replace(/^"|"$/g, '').trim())
-    .filter(Boolean);
-}
-
-function accentContrast(color) {
-  const red = Number.parseInt(color.slice(1, 3), 16);
-  const green = Number.parseInt(color.slice(3, 5), 16);
-  const blue = Number.parseInt(color.slice(5, 7), 16);
-  return (red * 299 + green * 587 + blue * 114) / 1000 > 170 ? '#0b0e10' : '#ffffff';
 }
 
 export function mountRandomSelector(root, { storage = window.localStorage } = {}) {
@@ -372,7 +362,7 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
         className: `random-selector${state.presenting ? ' is-presenting' : ''}`,
         attrs: {
           'data-surface': state.presenting ? 'stage' : 'paper',
-          style: `--rs-accent:${state.accentColor};--rs-accent-contrast:${accentContrast(state.accentColor)}`,
+          style: `--rs-accent:${state.accentColor};--rs-accent-contrast:${readableOn(state.accentColor)}`,
         },
       });
       const drawButton = button(
@@ -536,12 +526,22 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
         importInput.addEventListener('change', async () => {
           const file = importInput.files?.[0];
           if (!file) return;
-          const names = csvEntries(await file.text());
+          const { entries, total } = entriesFromCsv(await file.text());
+          // Choosing the same file again must fire `change` again.
+          importInput.value = '';
           if (state.spinning) return;
-          if (/^(name|names|entry|entries|participant|participants)$/i.test(names[0] ?? ''))
-            names.shift();
-          updateEntries(names.slice(0, 80).join('\n'));
-          setNote(`Imported ${names.length} entries.`);
+          // A file with nothing usable in it must not wipe the list that is already loaded.
+          if (!entries.length) {
+            setNote('No entries found in that file. The list was left as it was.');
+            render();
+            return;
+          }
+          updateEntries(formatEntries(entries));
+          setNote(
+            total > entries.length
+              ? `Imported ${entries.length} of ${total} entries. The limit is ${MAX_ENTRIES}, so the rest were left out.`
+              : `Imported ${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}.`,
+          );
           render();
         });
         const importButton = button('IMPORT CSV', 'rs-link-button', () => importInput.click(), {
@@ -551,11 +551,7 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
         const exportButton = button(
           'EXPORT LIST',
           'rs-link-button',
-          () =>
-            download(
-              'seduh-random-selector.csv',
-              `Entry,Weight\r\n${state.entries.map((entry) => `"${entry.name.replaceAll('"', '""')}",${entry.weight}`).join('\r\n')}`,
-            ),
+          () => download('seduh-random-selector.csv', entriesToCsv(state.entries)),
           { 'data-focus-key': 'export' },
         );
         const shareButton = button(
@@ -718,7 +714,7 @@ export function mountRandomSelector(root, { storage = window.localStorage } = {}
           color.addEventListener('change', () => {
             state.accentColor = validAccentColor(color.value);
             ui.app?.style.setProperty('--rs-accent', state.accentColor);
-            ui.app?.style.setProperty('--rs-accent-contrast', accentContrast(state.accentColor));
+            ui.app?.style.setProperty('--rs-accent-contrast', readableOn(state.accentColor));
             if (ui.colourCode) ui.colourCode.textContent = state.accentColor.toUpperCase();
             persist();
           });

@@ -63,13 +63,22 @@ self-contained CSS instead.
     other control carries a `data-focus-key`.
   - **44px targets** at 360px (`--tap-target-min`); the checkbox keeps a 24px box inside a
     44px label row.
+  - **The user-chosen accent is never a text colour** (a pale one would vanish on the paper
+    surface): the sound toggle's ON state is bold with an accent-coloured underline. Text
+    _on_ the accent (selected preset, primary button) is `readableOn()`, pure black or
+    white by WCAG relative luminance; a test sweeps 512 colours and pins at least 4.5:1.
+    Pure black, not the page's near-black, because only pure black keeps the mid-tone worst
+    case above 4.5:1.
+  - **CSV is real CSV** (`parseCsv`, `entriesFromCsv`, `entriesToCsv`, all pure and tested):
+    quoted cells hold commas, doubled quotes and line breaks; CRLF and a byte-order mark are
+    accepted; a header row is skipped; the second column is the weight, so an export
+    imports back unchanged. A file with no usable entries leaves the current list alone,
+    and a file over `MAX_ENTRIES` (80) says "Imported 80 of 90 entries".
   - Persists to `localStorage` (`seduh-random-selector-v1`); a share link loads over it
     without saving until the user edits.
-  - **Open items (not yet done):** a light accent colour can make the `SOUND ON` text
-    unreadable (contrast is only computed for text on the accent); CSV export writes
-    weights but import ignores them, and a quoted name containing a comma is cut at the
-    comma; a list over 80 entries is silently cut and a draft over 10,000 characters
-    cannot be reloaded from its own share link; a weight of `0` becomes 1. The tool is
+  - **Open items (not yet done):** typing more than 80 entries into the list is still cut
+    silently (only the CSV import reports it), and a draft over 10,000 characters cannot
+    be reloaded from its own share link; a weight of `0` becomes 1. The tool is
     not yet in `public/sitemap.xml`, `tools/prerender-public-pages.mjs` or
     `tests/e2e/smoke.spec.js`. The provenance and licence of
     `public/sounds/split-flap-click.mp3` still need confirming. An IME composition in the

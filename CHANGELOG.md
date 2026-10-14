@@ -32,18 +32,29 @@ as one `wip` commit); reviewed, fixed and tested here by Claude. The branch was 
   on `<body>`. The entry list is now one long-lived textarea, and weights, title, colour and volume
   update in place.
 
-**Tests:** 18 in `src/tools/random-selector` (7 are screen tests that fail against the Codex version:
+**Follow-up the same day (accent contrast and CSV):**
+
+- The user-chosen accent is no longer used as a text colour. `SOUND ON` was accent-coloured text, so a
+  pale accent made it unreadable; it is now bold with an accent underline. Text on the accent uses
+  `readableOn()` (WCAG relative luminance, pure black or white) instead of the old YIQ threshold, and
+  a test sweeps 512 colours for 4.5:1. The first version of that helper used the page's near-black
+  and the sweep caught it falling to 4.4:1 on mid-tones, hence pure black.
+- CSV is parsed properly: quoted cells with commas, doubled quotes and line breaks, CRLF, a byte-order
+  mark. The weight column is imported, so an export round-trips (checked in Chromium). An empty or
+  header-only file no longer wipes the list, a re-chosen file fires again, and a file over 80 entries
+  says "Imported 80 of 90 entries".
+
+**Tests:** 29 in `src/tools/random-selector` (7 are screen tests that fail against the Codex version:
 mid-spin edit, reduced motion, live region, board name, focus through the spin, caret, in-place
-weights). Verified: ESLint and Prettier on the tool, full unit suite (4007 tests), and the dev server
+weights; the rest cover CSV, accent contrast and import). Verified: ESLint and Prettier on the tool, the full unit suite, and the dev server
 in Chromium at 360px. E2e and the production build were not run.
 
 **Reviews:** done by hand. The project's reviewer agents (`code-reviewer`, `module-boundary-checker`,
 `test-auditor`, `ui-accessibility-reviewer`) were **not** run. The tool imports only `core/dom.js` and
 nothing from `src/formats/`. scoring/security/schema/offline-sync n/a.
 
-**Deferred (non-blocking):** a light accent colour can make `SOUND ON` unreadable; CSV export keeps
-weights but import drops them, and a quoted name with a comma is cut; lists over 80 entries and drafts
-over 10,000 characters are cut or unshareable without a warning; a weight of `0` becomes 1; the tool is
+**Deferred (non-blocking):** typed lists over 80 entries and drafts over 10,000 characters are cut or
+unshareable without a warning; a weight of `0` becomes 1; the tool is
 not yet in `public/sitemap.xml`, `tools/prerender-public-pages.mjs` or `tests/e2e/smoke.spec.js`; the
 provenance and licence of `public/sounds/split-flap-click.mp3` still need confirming; an IME
 composition in the entry list is ended by the per-keystroke re-render.
