@@ -70,16 +70,13 @@ validation-error re-render via `data-field`, the `aria-describedby`/`role="alert
 association, and toast focus after a successful add) — 51 tests total, still 1270/1270
 across the full suite.
 
-**Known debt, not blocking**: `shared.css` (see below) still duplicates the shared
-component-shape rules (`.screen-container`, `.card`, `.btn`, `.form-field`,
-`.field-input`, `.roster-list`, `.screen-feedback`) that Cup Taster's own screens all
-build on via `heatsScreen.css` — those rules physically live inside a Cup-Taster-specific
-file today, not `src/ui/tokens/` or `src/core/`, so a second format reusing them without
-duplicating would mean linking to another format's own CSS file, which the module
-boundary rules out. Flagged for a future extraction into a shared, format-agnostic home
-(e.g. `src/ui/tokens/components.css`) once a second format's needs make the shape of that
-extraction clear — not done now to avoid risking a live-app regression to Cup Taster's
-own screens by refactoring `heatsScreen.css` mid-task.
+**Known debt, not blocking** (reduced 2026-10-15): `shared.css` (see below) still duplicates the
+`.screen-container` (and its headings), `.stage-meta` and `.roster-list` rules that Cup Taster's
+own screens build on via `heatsScreen.css` — a format cannot link another format's CSS. The
+`.card`, `.btn*`, `.form-field*`, `.field-input` and `.screen-feedback` shapes were extracted
+into the format-agnostic `src/ui/tokens/components.css` (linked first by `app/index.html` and
+every `*.preview.html`), and `src/ui/tokens/components.test.js` fails if a copy comes back. The
+remaining three go the same way when someone next needs to change them.
 
 `matches` (T-BTC.2, 2026-09-18) — preliminary match creation. `create_btc_match`
 (`supabase/migrations/20260918100000_btc_create_match_rpc.sql`) atomically writes a

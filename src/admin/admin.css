@@ -1,112 +1,31 @@
 /*
- * The admin console's own styles. Self-contained, the same rule src/community/guess-the-bean/shared.css
- * follows: it loads the surface-agnostic design tokens (src/ui/tokens) and core/loginScreen.css, and nothing
- * from a format. The generic shapes below (.btn, .field-input, .form-field, .card, .screen-feedback) are the
- * class names core/dom.js and core/loginScreen.js's renderLoginForm emit; their rules live in a format's
- * stylesheet (heatsScreen.css) that this page must not load, so they are restated here from the same tokens.
+ * The admin console's own styles. It loads the surface-agnostic design tokens (src/ui/tokens), the shared
+ * component shapes (src/ui/tokens/components.css: .btn, .field-input, .form-field, .card, .screen-feedback, the
+ * class names core/dom.js and core/loginScreen.js's renderLoginForm emit) and core/loginScreen.css, and nothing
+ * from a format. Below: the few places the console differs from those shapes, then its own screens.
  * 360px first: everything stacks, nothing needs horizontal scrolling, every control is at least 44px tall.
  */
 
-/* ---- shapes emitted by core/dom.js and core/loginScreen.js ---- */
-
-.card {
-  background: var(--color-surface);
-  border: var(--border-strong) solid var(--color-border-strong);
-  border-radius: var(--radius-md);
-  padding: var(--space-5);
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--tap-target-min);
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-sm);
-  border: var(--border-hairline) solid transparent;
-  font-family: var(--font-body);
-  font-size: var(--text-base);
-  font-weight: var(--font-weight-semibold);
-  cursor: pointer;
-}
+/* ---- where the admin console differs from the shared shapes (src/ui/tokens/components.css) ---- */
 
 /* A busy button keeps its full colour: dimming white-on-teal to 0.6 drops it to about 3:1. The label
-   ("Signing in…") and the cursor say it is working. */
+   ("Signing in…") and the cursor say it is working. The console only ever marks a button busy with
+   aria-disabled; the shared shape's dimmed, not-allowed look stays for every other surface. */
 .btn[aria-disabled='true'] {
   cursor: progress;
+  opacity: 1;
 }
 
-.btn-primary {
-  background: var(--color-accent);
-  color: var(--color-accent-contrast);
-}
-
-.btn-primary:hover:not([aria-disabled='true']) {
-  background: var(--color-accent-hover);
-}
-
-.btn-outline {
-  background: transparent;
-  color: var(--color-text);
-  border-color: var(--color-border-strong);
-}
-
-.btn-outline:hover:not([aria-disabled='true']) {
-  background: var(--color-surface-sunken);
-}
-
-.form-field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
-.form-field-label {
-  font-size: var(--text-2xs);
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-wide);
-}
-
+/* A control's edge must reach 3:1 against what it sits on (WCAG 1.4.11); the shared --color-border is for
+   dividers. Proposed for the shared shape too; held back here so the organiser console does not change. */
 .field-input {
-  box-sizing: border-box;
-  min-height: var(--tap-target-min);
-  width: 100%;
-  padding: var(--space-2) var(--space-3);
-  /* A control's edge must reach 3:1 against what it sits on (WCAG 1.4.11); --color-border is for dividers. */
-  border: var(--border-hairline) solid var(--color-text-muted);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-family: var(--font-body);
-  font-size: var(--text-base);
+  border-color: var(--color-text-muted);
 }
 
-.field-input[aria-disabled='true'] {
-  color: var(--color-text-secondary);
-}
-
-.screen-feedback {
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-sm);
-  font-size: var(--text-sm);
-}
-
-.screen-feedback[data-tone='error'] {
-  background: var(--color-surface-sunken);
-  border: var(--border-hairline) solid var(--color-danger);
-  color: var(--color-danger);
-}
-
-.screen-feedback[data-tone='pending'] {
-  background: var(--color-surface-sunken);
-  border: var(--border-hairline) solid var(--color-border-strong);
-  color: var(--color-text);
-}
-
-/* Empty, it takes no room but stays in the accessibility tree (display:none can make a screen reader miss
-   the first message put into a live region). */
+/* Empty, the message region takes no room but stays in the accessibility tree (display:none can make a screen
+   reader miss the first message put into a live region). */
 .screen-feedback:empty {
+  display: block;
   position: absolute;
   width: 1px;
   height: 1px;

@@ -14,6 +14,7 @@
 //  - A refusal later, from any admin call, is the same signal as a refusal here. `isGateRefusal` names those
 //    hints so a screen can send the console back through this check instead of showing an error.
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../core/timeout.js';
+import { signOutRequest } from '../core/signOutRequest.js';
 
 export const GATE_STATE = Object.freeze({
   SIGNED_OUT: 'signedOut',
@@ -54,11 +55,7 @@ function isSessionGone(error) {
 // Drops a token the server no longer honours, so a reload does not find it again. Best effort: a failure here
 // changes nothing the person can act on.
 async function forgetDeadSession(client, ms) {
-  try {
-    await raceTimeout(client.auth.signOut({ scope: 'local' }), ms);
-  } catch {
-    // nothing to do
-  }
+  await signOutRequest(client, { scope: 'local', timeoutMs: ms });
 }
 
 async function signedOutWithNotice(client, ms) {
@@ -148,7 +145,7 @@ async function revoke(client, { token, scope }, ms) {
     if (error && !sessionAlreadyGone(error)) return { ok: false };
     unrevoked.delete(client);
     // The local copy is normally gone already; make sure.
-    await raceTimeout(client.auth.signOut({ scope: 'local' }), ms).catch(() => {});
+    await signOutRequest(client, { scope: 'local', timeoutMs: ms });
     return { ok: true };
   } catch {
     return { ok: false };
@@ -172,11 +169,11 @@ export async function signOut(
   try {
     const { data } = await raceTimeout(client.auth.getSession(), timeoutMs);
     token = data?.session?.access_token ?? null;
-    const { error } = await raceTimeout(client.auth.signOut({ scope }), timeoutMs);
-    if (!error) return { ok: true };
   } catch {
-    // fall through: a thrown request or a timeout is a failed sign-out
+    // no session to read: nothing to keep; the sign-out below still runs
   }
+  // A failed or stalled request (or a throw) is a failed sign-out; the token is kept for the retry.
+  if ((await signOutRequest(client, { scope, timeoutMs })).ok) return { ok: true };
   if (token) unrevoked.set(client, { token, scope });
   return { ok: false };
 }

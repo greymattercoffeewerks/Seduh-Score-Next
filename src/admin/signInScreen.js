@@ -10,12 +10,11 @@
 import {
   renderLoginForm,
   validateCredentials,
-  isInvalidCredentials,
   INVALID_CREDENTIALS_MESSAGE,
 } from '../core/loginScreen.js';
+import { signInWithPasswordRequest } from '../core/signInRequest.js';
 import { el } from '../core/dom.js';
 import { RATE_LIMIT_MESSAGE } from './mfa.js';
-import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../core/timeout.js';
 import { frame, setFeedback, setFormBusy } from './screenParts.js';
 
 const SLOW = 'This is taking longer than expected. Check your connection and try again.';
@@ -53,27 +52,23 @@ export function mountSignInScreen(root, { client, notice, onSignedIn } = {}) {
     setFeedback(feedback, '');
     setFormBusy(form, true, { idle: 'Sign in', working: 'Signing in…' });
 
-    let error;
-    try {
-      ({ error } = await raceTimeout(
-        client.auth.signInWithPassword({ email: draft.email, password: draft.password }),
-        DEFAULT_LOAD_TIMEOUT_MS,
-      ));
-    } catch (thrown) {
-      error = { transport: true, timedOut: Boolean(thrown?.timedOut) };
-    }
-    if (!error) {
+    // No trimmed-password retry here (see the header): `retryTrimmed` stays off.
+    const result = await signInWithPasswordRequest(client, {
+      email: draft.email,
+      password: draft.password,
+    });
+    if (result.ok) {
       onSignedIn?.();
       return;
     }
     signingIn = false;
     setFormBusy(form, false, { idle: 'Sign in', working: 'Signing in…' });
-    if (error.transport) setFeedback(feedback, error.timedOut ? SLOW : OFFLINE, 'error');
-    else if (isInvalidCredentials(error))
-      setFeedback(feedback, INVALID_CREDENTIALS_MESSAGE, 'error');
-    else if (error.code === 'over_request_rate_limit' || error.status === 429)
-      setFeedback(feedback, RATE_LIMIT_MESSAGE, 'error');
-    else setFeedback(feedback, OFFLINE, 'error');
+    const message = {
+      timeout: SLOW,
+      invalid: INVALID_CREDENTIALS_MESSAGE,
+      rate_limit: RATE_LIMIT_MESSAGE,
+    }[result.kind];
+    setFeedback(feedback, message ?? OFFLINE, 'error');
   });
 
   container.append(el('div', { className: 'card' }, [form]));

@@ -1,6 +1,7 @@
 /*
  * Report and analytics screen (T4.7/T4.8) — built on src/ui/tokens, reusing
- * heatsScreen.css's .screen-container/.card/.is-test-banner/.screen-feedback
+ * heatsScreen.css's .screen-container, components.css's .card/.screen-feedback
+ * and base.css's .is-test-banner
  * and standingsScreen.css's .standings-table (including its 480px
  * responsive-stack rule) for every table on this screen, rather than a
  * third copy of that pattern. Nothing here redefines those; this file adds

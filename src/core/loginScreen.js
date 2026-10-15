@@ -18,7 +18,7 @@
 // Lives in core/, not a format directory — auth is format-agnostic.
 import { getSupabase } from './supabaseClient.js';
 import { el, labeledField, passwordToggle, setBusyDisabled, withFocusPreservation } from './dom.js';
-import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
+import { signInWithPasswordRequest, isInvalidCredentials } from './signInRequest.js';
 
 export function validateCredentials(draft) {
   if (!draft.email.trim()) return 'Email is required.';
@@ -29,13 +29,9 @@ export function validateCredentials(draft) {
 export const INVALID_CREDENTIALS_MESSAGE =
   'That email and password do not match. Check the email, and use the Show/Hide button to read the password back: capital letters count.';
 
-// supabase-js reports a wrong email/password as code 'invalid_credentials' (older versions only
-// carry the message).
-export function isInvalidCredentials(error) {
-  return (
-    error?.code === 'invalid_credentials' || /invalid login credentials/i.test(error?.message ?? '')
-  );
-}
+// Re-exported: it moved to signInRequest.js with the request it classifies, and the admin console imports it
+// from here.
+export { isInvalidCredentials };
 
 // `onTogglePassword(isShown)` lets the caller remember the choice across its own re-renders; the
 // toggle itself changes the field in place.
@@ -143,51 +139,32 @@ export async function mountLoginScreen(root, { client = getSupabase(), onSignedI
     // be of what was submitted, not of whatever has been typed since.
     const email = draft.email.trim();
     const password = draft.password;
-    const attempt = (pw) =>
-      raceTimeout(client.auth.signInWithPassword({ email, password: pw }), DEFAULT_LOAD_TIMEOUT_MS);
 
-    let error;
-    try {
-      ({ error } = await attempt(password));
-      // A password copied from a chat often carries a space at either end. Tried exactly as typed
-      // first; only a rejection of that, with surrounding space present, earns one more try (which
-      // spends a second sign-in from the venue's shared per-IP rate budget, so never otherwise).
-      const trimmed = password.trim();
-      if (
-        error &&
-        isInvalidCredentials(error) &&
-        trimmed &&
-        trimmed !== password &&
-        !signal?.aborted
-      ) {
-        ({ error } = await attempt(trimmed));
+    // A password copied from a chat often carries a space at either end: `retryTrimmed` tries it exactly
+    // as typed first and only a wrong-password refusal of that earns one more try (signInRequest.js).
+    const result = await signInWithPasswordRequest(
+      client,
+      { email, password },
+      { retryTrimmed: true, isCancelled: () => Boolean(signal?.aborted) },
+    );
+
+    if (!result.ok) {
+      // A transport failure is not an expected auth rejection (signInWithPassword's own contract is to
+      // return {error}, not throw, for a refusal): this project's "unreliable venue wifi" design target
+      // treats it as a real, expected failure. A request that never settles is reported the same way
+      // with its own wording; without it a stalled connection left the form disabled and "Signing in…"
+      // forever, with no way to even correct a typo and retry.
+      if (result.kind === 'timeout') {
+        pendingError = 'This is taking longer than expected — check your connection and try again.';
+      } else if (result.kind === 'transport') {
+        pendingError = 'Could not sign in — check your connection and try again.';
+      } else {
+        // Supabase Auth's own error messages (e.g. "Invalid login credentials") are already meant to
+        // be shown to a user verbatim — unlike core/errors.js's describeError(), which guards against
+        // leaking a raw DB error's internals, this is the API's intended user-facing text.
+        pendingError =
+          result.kind === 'invalid' ? INVALID_CREDENTIALS_MESSAGE : result.error.message;
       }
-    } catch (err) {
-      // A thrown exception here is a network/transport failure, not an
-      // expected auth rejection (signInWithPassword's own documented
-      // contract is to return {error}, not throw, for invalid
-      // credentials) — this project's "unreliable venue wifi" design
-      // target treats this as a real, expected failure mode. raceTimeout
-      // itself throws the same way (with `.timedOut = true`) if the
-      // request never settles at all — found missing in review: without
-      // this wrap, a stalled connection left the form disabled and
-      // "Signing in…" forever, with no way to even correct a typo and
-      // retry.
-      pendingError = err.timedOut
-        ? 'This is taking longer than expected — check your connection and try again.'
-        : 'Could not sign in — check your connection and try again.';
-      signingIn = false;
-      render();
-      return;
-    }
-
-    if (error) {
-      // Supabase Auth's own error messages (e.g. "Invalid login
-      // credentials") are already meant to be shown to a user verbatim —
-      // unlike core/errors.js's describeError(), which guards against
-      // leaking a raw DB error's internals, this is the API's intended
-      // user-facing text.
-      pendingError = isInvalidCredentials(error) ? INVALID_CREDENTIALS_MESSAGE : error.message;
       signingIn = false;
       render();
       return;
