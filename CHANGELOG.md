@@ -1,3 +1,43 @@
+## T-ADM.B6: MFA on, a live-session gate, the admin-accounts Edge Function, and the account-create audit writer · 2026-10-15
+
+**Task:** T-ADM.B6 (Batch 7) of `Handoffs and Specs/ADMIN-CONSOLE-SPEC.md` (local, gitignored). Branch `admin/b6-mfa-admin-accounts`, worktree `C:\Dev\seduh-score-next-admin`, built on T-ADM.B5. Two new migrations, one new Edge Function, one config change, and test changes. No `src/` change and no `package.json` change. **Status: batch-complete and reviewed; not committed, not merged, not pushed to the cloud project. Not final:** the cloud rollout is owed (see below).
+
+**Why:** the admin console needs a second factor, and its authority must end when the session behind it ends. Until this batch the gate checked only the JWT signature, so "sign out everywhere" and removing a factor did not cut off a stolen session (spec D-A15 and section 7 item 1 were not true). Creating an owner account for a new organisation also had no audit record and no server-side door that checks the caller first.
+
+**What changed:**
+
+- `supabase/migrations/20261014140000_admin_record_account_create.sql` (new). `public.admin_record_account_create(p_actor_id, p_user_id)`, executable by `service_role` only (revoked from `public`, `anon`, `authenticated`). It writes an `account.create` row to `admin_audit_log` after checking that the actor is an active platform admin, is not the target, that the target exists, was created under five minutes ago and has never signed in, and that no `account.create` row is already recorded for it. Partial unique index `admin_audit_log_account_create_once_idx` makes the record once-only. It is the one writer that takes the actor as a parameter, so it cannot authenticate its caller. Honest limit: it widens who can write the audit log. Each row is bounded; the number of rows is not.
+- `supabase/migrations/20261014150000_admin_gate_requires_live_session.sql` (new). `app.require_platform_admin()` now also requires a live `auth.sessions` row for the token's `session_id`, owned by the caller, unexpired, at `aal2`. It refuses with `admin_session_ended` (session signed out, revoked or deleted) and `admin_mfa_required` (not `aal2`; removing a factor downgrades other sessions to `aal1`). `admin_session_ended` is checked last, after `admin_required` and `admin_mfa_required`, so a non-admin learns nothing new. Fails closed on a missing, non-uuid (guarded before the cast) or another user's `session_id`. The check reads `auth.sessions` as the function owner.
+- `supabase/functions/admin-accounts/` (new): `handler.js`, `index.ts`, `handler.test.js`. Action `create_owner`. Order: bearer token, `getUser`, `admin_can_provision` as the caller, then body validation, then the service client. The password is never logged (canary test). If the audit write fails the new login is deleted. Refusals carry hints `account_record_failed`, `account_stranded` and `account_state_unknown`; a taken email returns 409 `email_taken`.
+- `supabase/config.toml`: `[auth.mfa] max_enrolled_factors = 4` (lowered from the template's 10: an abandoned, never-verified enrolment counts against the cap, so a password-only session cannot pile them up; 4 rather than 2 so an admin can still enrol after a few abandoned ones and add a spare). TOTP enrol and verify enabled, **local stack only**. `[functions.admin-accounts] verify_jwt = true`.
+- Tests: `supabase/tests/051_admin_record_account_create.sql` (new, 36 assertions). `046` now 81 assertions, covering the session gate. `041` (service-role-only list now six names), `047`, `048`, `049`, and `050` (exact function list) updated. `supabase/tests/manual/admin-accounts-e2e.mjs` (new): 35 checks against the real local stack: the function paths; the exit gate refused with `insufficient_aal`; factor removal downgrading another session to `aal1`, with its old `aal2` token then refused; global sign-out ending the session; the factor cap refused with `too_many_enrolled_mfa_factors`.
+
+**Verification:**
+
+- Full pgTAP: 51 files, 2373 tests passing. Vitest: 141 files, 4164 tests passing (the admin-accounts handler suite, 67 tests, re-run for this entry: all passing). ESLint and Prettier clean.
+- Hand mutation testing: handler 54 of 54 mutants killed; writer mutants all killed; session-gate mutants all killed except one equivalent mutant (no observable behaviour change).
+- Reviews: security-reviewer, schema-guardian, test-auditor and code-reviewer, two passes each on the Batch 7 work. Every finding applied. Per-finding detail is not itemised here.
+
+**Accepted limits** (stated, not fixed in code):
+
+- Writer false attribution is bounded per row, not in number.
+- First-enrolment window: an admin with only a password can enrol a factor and reach `aal2`. Closed by the rollout runbook, not by code: set a temporary random password with the service key, enrol immediately, then set the real password. A factor challenge on first sign-in means someone else enrolled first, so treat it as a compromise.
+- TOTP is project-wide: a user with a verified factor cannot change their password from a password-only (`aal1`) session (GoTrue `insufficient_aal`). Anyone who knows a one-time password can enrol a factor on that account first.
+
+**Rollout checks owed (owner, spec section 8, steps 3 and 4):**
+
+- Cloud TOTP availability and the factor cap (set on the cloud project, not by `config.toml`).
+- `verify_jwt` on `admin-accounts`, confirmed via the MCP.
+- `has_table_privilege('postgres', 'auth.sessions', 'select')` is true.
+- Run `admin_can_provision` as the first smoke test.
+
+**Not done / still open:**
+
+- Not committed, not merged, not pushed. Cloud push is owner-approved and not done. In order: `20261014100000` through `20261014150000` (six migrations). Nothing from Batches 2 to 7 has been pushed to the cloud database.
+- Batch 8 console must: disable the submit button after the first click (a double-submit gave `[500, 500, 201]`) and keep the 201's password; not treat `am_i_platform_admin` as proof of a live session; treat `admin_session_ended` as "sign in again".
+- UI Batches 8 to 11 and the adversarial pass (12) not started; docs close-out (13) not started.
+- No footer version bump in this batch: `package.json` untouched.
+
 ## T-ADM.B5: guard proofs for the platform tables and admin functions, and a CONVENTIONS note · 2026-10-15
 
 **Task:** T-ADM.B5 (Batch 6) of `Handoffs and Specs/ADMIN-CONSOLE-SPEC.md` (local, gitignored). Branch `admin/b5-guard-proofs`, built on T-ADM.B4. One new pgTAP file and one new CONVENTIONS section; no migration and no application code. **Status: batch-complete and reviewed; not committed, not merged, not pushed to the cloud project (this batch has no migration to push). Not final:** the cloud rollout of the four earlier admin migrations is owed (see below).
