@@ -1,3 +1,60 @@
+## T-ADM.B4: audited admin write RPCs, each wrapping an existing service-role function · 2026-10-15
+
+**Task:** T-ADM.B4 (Batch 5) of `Handoffs and Specs/ADMIN-CONSOLE-SPEC.md` (local, gitignored). Branch `admin/b4-write-rpcs`, whose tip `ae12d51` is `origin/dev` (T-ADM.B1 to B3 are on `dev` via #271 to #273, not yet on `main`). One migration and one new pgTAP file, plus guard-list and assertion edits to three existing tests; no application code. **Status: branch-complete and reviewed; not committed, not merged, not pushed to the cloud project. Not final:** the rollout step below is owed.
+
+**Why:** the console has to create organisations, add members and change roles without hand-written service-role SQL. The three service-role functions behind those actions (`create_org`, `org_add_existing_member`, `org_set_role`) stay unchanged. Each new RPC wraps one of them, is callable only by a signed-in platform admin, and writes its audit row in the same transaction, so the action and its record succeed or fail together.
+
+**What changed:** migration `supabase/migrations/20261014130000_admin_write_rpcs.sql`, test `supabase/tests/049_admin_write_rpcs.sql` (136 assertions). Other edits:
+
+- `041_cross_org_rpcs.sql`: the exemption list gains `admin_create_org(text,text,uuid,boolean)`, `admin_add_member(uuid,uuid,text,boolean)` and `admin_set_role(uuid,uuid,text)`.
+- `047_admin_audit_log.sql`: two new assertions, one showing that a value that looks like a deny-listed key is accepted and one showing that a nested key is refused. Plan 76.
+- `048_admin_read_rpcs.sql`: plan 98. The `proconfig` check, which could pass vacuously on a null value, now uses `coalesce`. New checks: no function call appears in argument defaults; an organiser-only account and a flag-only account for `app.account_needs_attestation`.
+- The migration replaces `app.admin_audit_detail_ok` (the B2 CHECK helper) with a key-walker. It tests key names at any depth and in any case, and does not inspect values. The first, regex-on-text version refused an organisation named like `Phone Shop": 2` with an unhinted check violation. The rollback restores the old version.
+
+The migration adds three public `SECURITY DEFINER VOLATILE` RPCs:
+
+- `admin_create_org(name, slug, owner, p_attest_own_password default false) -> uuid`
+- `admin_add_member(org, user, role, p_attest_own_password default false)`
+- `admin_set_role(org, user, role)`
+
+Order in `admin_create_org` and `admin_add_member`:
+
+1. The admin gate, first.
+2. The self-target refusal (D-A8): 42501, hint `admin_self_target`. `admin_set_role` applies it too.
+3. The needs-attestation read for the target account.
+4. The existing service-role function. Its own refusals pass through with their SQLSTATE, message and hint, and they win.
+5. D-A9: if attestation was needed and `p_attest_own_password` is not true, raise 22023 `member_password_unset`. This rolls back what the existing function did.
+6. The audit row, in the same transaction: `org.create` `{slug, name, attested}`, `member.add` `{role, attested}`.
+
+`admin_set_role` has no attestation step. It validates the role up front, then locks the org row `FOR NO KEY UPDATE` and only then the member row `FOR NO KEY UPDATE`. That is the `protect_last_owner` order, which avoids a deadlock between two admins. Refusals: unknown org gives `org_not_found`; non-member gives `member_not_found`. Setting the role a member already has is a silent no-op that neither updates the row nor writes an audit row. The last-owner refusal is re-raised with the same SQLSTATE, message and hint `last_owner`. Only that exact P0001 is remapped; nothing else is.
+
+Audit row: `member.role_set` `{from, to}`.
+
+**Verification:**
+
+- Full pgTAP suite: 49 files, 2,306 tests passing.
+- `049`: 136 assertions.
+- Rollback block (8 statements) run inside a transaction.
+- Hand mutation testing: 49 mutants of the wrappers and 15 of the detail check, all killed. The first version of `049` (94 assertions) let two survive. The test auditor found more gaps: a vacuous `search_path` catalog check; no D-A9 proof for organiser-only or flag-only accounts; self-target ordering; success as the API role; a no-op that does not touch the row; side-effect deltas; message pass-through; and others. All were fixed before the count above.
+
+**Reviews:**
+
+- schema-guardian: no blocking defects. The organisation-name false positive and the lock order were fixed.
+- security-reviewer: no way past the admin gate, the audit atomicity or the attestation gate. The deadlock was fixed. Rejected: its suggestion to OR the one-time-password flag into the attestation rule, because that would make brand-new Edge Function logins demand attestation. The orphaned-team-login limit is recorded below.
+- test-auditor: survivors fixed as listed above.
+
+**Decisions recorded** (spec amendments):
+
+- The console calls every admin write RPC with POST. GET would put ids, slug and name in URLs, and a read-only transaction would fail the writes anyway.
+- Accepted limits, recorded in the spec: a second account an admin controls; an orphaned team login whose organisation was deleted; concurrent adds.
+
+**Not done / still open:**
+
+- Not committed or merged. Not pushed to the cloud project: that is a separate, owner-approved step after merge. Push in order `20261014100000`, `20261014110000`, `20261014120000`, `20261014130000`; compare with `list_migrations`; run the advisors. Advisor lint 0029 is expected on the seven admin functions that authenticated can execute (four from B3, three from this batch), by design.
+- The T-ADM.B3 entry's line "Write RPCs (Batch 5) are not started" is superseded by this entry. That entry is not edited.
+- Batch 6 (guard proofs and a CONVENTIONS note) not started. Batch 7 (MFA on, and the admin-accounts Edge Function): its service-role `account.create` writer takes the actor as a parameter, and its Batch 7 exit gate is that an aal1 session cannot enrol a second factor when a verified one exists. UI Batches 8 to 11 not started.
+- No footer version bump: no application code or `package.json` change. `ROADMAP.md` and `CONVENTIONS.md` not touched in this batch.
+
 ## T-ADM.B3: admin read RPCs, the reads the console will show, each behind the platform-admin gate · 2026-10-15
 
 **Task:** T-ADM.B3 (Batch 4) of `Handoffs and Specs/ADMIN-CONSOLE-SPEC.md` (local, gitignored). Branch `admin/b3-read-rpcs`, built on T-ADM.B2 (B1 and B2 are on `dev` via PRs #271 and #272, not yet on `main`). One migration and one pgTAP file, plus two guard-list edits in existing tests; no application code. **Status: branch-complete and reviewed; not committed, not merged, not pushed to the cloud project. Not final:** the rollout and push steps below are owed.

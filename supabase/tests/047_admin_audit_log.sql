@@ -15,7 +15,7 @@
 --
 -- Claims are set the production way, as JSON in request.jwt.claims; the sub is also set so auth.uid() agrees.
 begin;
-select plan(74);
+select plan(76);
 
 create schema t047;
 grant usage on schema t047 to anon, authenticated, service_role;
@@ -268,6 +268,13 @@ select is(
      from unnest(array['api_key', 'apiKey', 'apikey', 'otp', 'credentials', 'phone', 'phone_number', 'passcode', 'Token']) k
     where t047.state(format($q$select app.admin_audit('account.create', null, null, jsonb_build_object(%L, 1))$q$, k)) = 'ok'),
   'none', 'api_key, apikey, otp, credentials, phone and passcode style keys are all refused, in any case');
+
+-- the check looks at KEY names only: a value that merely looks like a key to a text search is fine (an org name such as
+-- 'Phone Shop": 2' once broke org creation), while a secret-looking key is still refused at any depth
+select is(t047.state($$select app.admin_audit('org.create', null, null, jsonb_build_object('name', 'Phone Shop": 2'))$$), 'ok',
+  'a VALUE that contains a quote, a deny-list word and a colon is accepted (values are not inspected)');
+select is(t047.state($$select app.admin_audit('org.create', null, null, jsonb_build_object('name', 'x', 'k', jsonb_build_array(jsonb_build_object('a', jsonb_build_array(jsonb_build_object('Phone', 1))))))$$), '23514',
+  'but a deny-list KEY nested inside arrays inside objects is still refused');
 
 -- the size boundary: build details whose text is exactly 4000 and 4001 characters
 select is(char_length(jsonb_build_object('n', repeat('x', 3991))::text), 4000, 'fixture check: this detail is exactly 4000 characters');
