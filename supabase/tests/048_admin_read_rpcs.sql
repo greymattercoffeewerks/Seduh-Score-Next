@@ -23,7 +23,7 @@
 -- soft-deleted, removed-from-team, pw (in A and B, with a one-time-password flag), a blank-email account, and two
 -- live accounts differing only in case. Claims are set as JSON in request.jwt.claims; the sub is also set.
 begin;
-select plan(95);
+select plan(98);
 
 create schema t048;
 grant usage on schema t048 to anon, authenticated, service_role;
@@ -95,6 +95,12 @@ insert into auth.users (id, email, deleted_at) values
   ('00000000-0000-0000-0000-0000000c0005', 't048-deleted@test.seduh-next', now());
 insert into auth.users (id, email, raw_user_meta_data) values
   ('00000000-0000-0000-0000-0000000c0007', 't048-pw-user@test.seduh-next', '{"must_change_password": true}');
+-- an account that is ONLY an organiser (any membership counts), in a side org whose slug is outside the t048- filters,
+-- and an account with the one-time-password flag but no membership and no marker (the flag is not part of the rule)
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000c0015', 't048-orgonly@test.seduh-next');
+insert into auth.users (id, email, raw_user_meta_data) values ('00000000-0000-0000-0000-0000000c0016', 't048-flagonly@test.seduh-next', '{"must_change_password": true}');
+insert into orgs (id, name, slug) values ('00000000-0000-0000-0000-0000000c00f0', 'X048 Aux', 'x048-aux');
+insert into org_members (org_id, user_id, role) values ('00000000-0000-0000-0000-0000000c00f0', '00000000-0000-0000-0000-0000000c0015', 'organiser');
 insert into app.platform_admins (user_id, note) values ('00000000-0000-0000-0000-0000000c0001', 't048 admin');
 
 insert into orgs (id, name, slug, created_at) values
@@ -139,8 +145,8 @@ select is(
   (select coalesce(string_agg(p.proname, ', ' order by p.proname), 'none')
      from pg_proc p
     where p.pronamespace = 'public'::regnamespace and p.proname in ('admin_list_orgs', 'admin_org_detail', 'admin_find_user', 'admin_list_audit')
-      and not (p.prosecdef and p.provolatile = 's' and p.proconfig @> array['search_path=""'])),
-  'none', 'all four are SECURITY DEFINER, STABLE, with search_path pinned to the empty string');
+      and not coalesce(p.prosecdef and p.provolatile = 's' and p.proconfig @> array['search_path=""'], false)),
+  'none', 'all four are SECURITY DEFINER, STABLE, with search_path pinned to the empty string (an unpinned one has a NULL proconfig and must still be reported)');
 select is(
   (select coalesce(string_agg(p.oid::regprocedure::text || '/' || r, ', ' order by p.oid::regprocedure::text, r), 'none')
      from pg_proc p, unnest(array['anon', 'service_role']) r
@@ -167,6 +173,14 @@ select is(
       and has_function_privilege('authenticated', p.oid, 'execute')
       and p.prosrc !~ '^\s*(#variable_conflict[^\n]*\n)?\s*(declare\s+([a-z_0-9]+\s+[a-z_0-9.]+;\s*)+)?begin\s+perform\s+app\.require_platform_admin\(\);'),
   'none', 'every admin_* function a signed-in caller can run begins with app.require_platform_admin(), and nothing runs before it');
+-- argument defaults are evaluated BEFORE the body, so before the gate: they must be literals, never a function call
+select is(
+  (select coalesce(string_agg(p.oid::regprocedure::text, ', ' order by p.oid::regprocedure::text), 'none')
+     from pg_proc p
+    where p.pronamespace = 'public'::regnamespace and p.proname like 'admin\_%' and p.prokind = 'f'
+      and has_function_privilege('authenticated', p.oid, 'execute')
+      and p.proargdefaults is not null and pg_get_expr(p.proargdefaults, 0) ~ '\('),
+  'none', 'no admin_* function has an argument default that calls a function (a default runs before the gate)');
 select is(
   (select array(select distinct m[1] from pg_proc p, regexp_matches(p.prosrc, '\m((?:public|auth|app)\.[a-z_]+)', 'g') m
                  where p.pronamespace = 'public'::regnamespace
@@ -239,6 +253,9 @@ select is(app.account_needs_attestation('00000000-0000-0000-0000-0000000c0007'),
 select is(app.account_needs_attestation('00000000-0000-0000-0000-0000000c0006'), true, 'an account removed from a team (no membership) needs it');
 select is(app.account_needs_attestation('00000000-0000-0000-0000-0000000c0003'), false, 'an account in no org and never removed does not');
 select is(app.account_needs_attestation(null), false, 'null is false, not an error');
+select is(app.account_needs_attestation('00000000-0000-0000-0000-0000000c0015'), true, 'an account that is only an ORGANISER somewhere needs it too (any membership counts)');
+select is(app.account_needs_attestation('00000000-0000-0000-0000-0000000c0016'), false,
+  'the one-time-password flag alone does not (a brand-new login from the Edge Function carries it; the flag is user-writable)');
 select t048.claims('00000000-0000-0000-0000-0000000c0001', 'aal2', 10);
 select is(
   (select coalesce(string_agg(u.email, ', ' order by u.email), 'none')
