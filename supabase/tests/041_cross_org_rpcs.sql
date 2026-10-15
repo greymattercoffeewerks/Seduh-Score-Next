@@ -227,10 +227,10 @@ select is(
   (select coalesce(string_agg(p.proname, ', ' order by p.proname), 'none')
      from pg_proc p
     where p.pronamespace = 'public'::regnamespace
-      and p.proname in ('create_org', 'org_add_existing_member', 'org_set_role', 'team_add_member', 'team_restore_member')
+      and p.proname in ('create_org', 'org_add_existing_member', 'org_set_role', 'team_add_member', 'team_restore_member', 'admin_record_account_create')
       and (has_function_privilege('anon', p.oid, 'execute') or has_function_privilege('authenticated', p.oid, 'execute'))),
   'none',
-  'the five service-role-only functions cannot be run by anon or by any signed-in caller');
+  'the six service-role-only functions cannot be run by anon or by any signed-in caller');
 
 select is(
   (select coalesce(string_agg(r.name, ', ' order by r.name), 'none')

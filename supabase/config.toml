@@ -304,12 +304,24 @@ auth_token = "env(SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN)"
 # Multi-factor-authentication is available to Supabase Pro plan.
 [auth.mfa]
 # Control how many MFA factors can be enrolled at once per user.
-max_enrolled_factors = 10
+# Lowered from the template's 10 to 4 on purpose (T-ADM.C1): an enrolment that is started but never verified (an
+# abandoned QR code) counts against this cap, so a small cap bounds how many a password-only session can pile up;
+# 4 and not 2 because the admin console must still be able to enrol after a few abandoned ones, and to add a spare.
+# The cap is refused with error_code too_many_enrolled_mfa_factors (pinned by tests/manual/admin-accounts-e2e.mjs).
+# THIS FILE GOVERNS THE LOCAL STACK ONLY: the cloud project's TOTP switch, its cap and the verify_jwt setting of a
+# function deployed through the MCP are set separately (spec section 8, rollout steps 3 and 4).
+max_enrolled_factors = 4
 
 # Control MFA via App Authenticator (TOTP)
+# TOTP (an authenticator app) is ON: the admin console requires aal2 (T-ADM.C1). Nothing else checks the assurance
+# level, so an organiser who never enrols is unaffected; but ANY signed-in user may now enrol a factor on their own
+# account. Two side effects to know (spec section 7): a user WITH a verified factor cannot change their password
+# from a password-only session (GoTrue: insufficient_aal), and nobody can stop a person who knows a one-time password
+# from enrolling a factor on that account first. The template line above says MFA is a Supabase Pro feature; whether
+# the cloud project's plan allows TOTP is an owner check (rollout step 3), not something this file can show.
 [auth.mfa.totp]
-enroll_enabled = false
-verify_enabled = false
+enroll_enabled = true
+verify_enabled = true
 
 # Configure MFA via Phone Messaging
 [auth.mfa.phone]
@@ -396,6 +408,11 @@ deno_version = 2
 # The owner-only team-accounts function (create / reset a team member's login). The gateway checks
 # the caller's JWT; the function then asks the database whether they own the org.
 [functions.team-accounts]
+verify_jwt = true
+
+# The platform-admin console's one login-creating function (T-ADM.C2). The gateway checks the caller's JWT; the
+# function then asks the database (admin_can_provision) whether they are a platform admin at aal2 with a fresh TOTP.
+[functions.admin-accounts]
 verify_jwt = true
 
 [analytics]

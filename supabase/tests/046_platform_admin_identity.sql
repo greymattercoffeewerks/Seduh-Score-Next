@@ -19,7 +19,7 @@
 -- org). Claims are set the production way, as JSON in request.jwt.claims (auth.jwt() reads that, not
 -- the legacy per-claim settings); the sub is also set so auth.uid() agrees on either path.
 begin;
-select plan(66);
+select plan(81);
 
 create schema t046;
 grant usage on schema t046 to anon, authenticated, service_role;
@@ -30,7 +30,7 @@ create function t046.claims(uid uuid, aal text, totp_age int default null) retur
 language plpgsql as $$
 declare c jsonb := jsonb_build_object('role', 'authenticated');
 begin
-  if uid is not null then c := c || jsonb_build_object('sub', uid); end if;
+  if uid is not null then c := c || jsonb_build_object('sub', uid, 'session_id', uid); end if;
   if aal is not null then c := c || jsonb_build_object('aal', aal); end if;
   if totp_age is not null then
     c := c || jsonb_build_object('amr', jsonb_build_array(
@@ -46,7 +46,7 @@ create function t046.claims_amr(uid uuid, aal text, amr jsonb) returns void
 language plpgsql as $$
 declare c jsonb := jsonb_build_object('role', 'authenticated');
 begin
-  if uid is not null then c := c || jsonb_build_object('sub', uid); end if;
+  if uid is not null then c := c || jsonb_build_object('sub', uid, 'session_id', uid); end if;
   if aal is not null then c := c || jsonb_build_object('aal', aal); end if;
   if amr is not null then c := c || jsonb_build_object('amr', amr); end if;
   perform set_config('request.jwt.claims', c::text, true);
@@ -60,6 +60,17 @@ begin
   perform set_config('request.jwt.claims', j, true);
   perform set_config('request.jwt.claim.sub', sub, true);
 end $$;
+
+-- A fully verified admin token (aal2, a TOTP ten seconds ago) carrying exactly the given session_id text (NULL = none).
+create function t046.claims_sid(uid uuid, sid text) returns void language plpgsql as $$
+declare c jsonb := jsonb_build_object('role', 'authenticated', 'sub', uid, 'aal', 'aal2',
+  'amr', jsonb_build_array(jsonb_build_object('method', 'totp', 'timestamp', extract(epoch from now())::bigint - 10)));
+begin
+  if sid is not null then c := c || jsonb_build_object('session_id', sid); end if;
+  perform set_config('request.jwt.claims', c::text, true);
+  perform set_config('request.jwt.claim.sub', uid::text, true);
+end $$;
+grant execute on function t046.claims_sid(uuid, text) to anon, authenticated, service_role;
 
 -- "SQLSTATE|hint" of a statement, or 'ok'; always runs as the caller's current role.
 create function t046.outcome(stmt text) returns text
@@ -113,6 +124,10 @@ insert into org_members (org_id, user_id, role) values
 insert into team_removed_members (org_id, user_id) values
   ('00000000-0000-0000-0000-0000000a00f0', '00000000-0000-0000-0000-0000000a0006'),
   ('00000000-0000-0000-0000-0000000a00f0', '00000000-0000-0000-0000-0000000a0007');
+
+-- a live session for every fixture login (app.require_platform_admin() now requires the token's session_id to name a
+-- real, unrevoked, aal2 session of the caller): the session id is the user id, which the claims helper below puts in the token
+insert into auth.sessions (id, user_id, aal) select id, id, 'aal2' from auth.users where id::text like '00000000-0000-0000-0000-0000000a%';
 
 -- ============ where the table lives and how it is locked ============
 
@@ -331,6 +346,76 @@ select is(
 select is(
   (select public.team_can_restore('00000000-0000-0000-0000-0000000a00f0', '00000000-0000-0000-0000-0000000a0006')),
   false, 'but not a platform admin who was removed from the team');
+
+-- ============ the session must still EXIST (D-A15; security review of Batch 7) ============
+-- An access token outlives its session (PostgREST checks only the signature), so a fully verified admin token is not
+-- enough: the token's session_id must name a live auth.sessions row of the caller. Each case below is otherwise a
+-- perfect token (admin, aal2, a TOTP ten seconds old), so ONLY the session rule can refuse it.
+
+select t046.claims_sid('00000000-0000-0000-0000-0000000a0001', null);
+select is(t046.outcome('select public.admin_can_provision()'), '42501|admin_session_ended',
+  'a verified admin whose token carries NO session_id is refused: admin_session_ended');
+select t046.claims_sid('00000000-0000-0000-0000-0000000a0001', 'not-a-uuid');
+select is(t046.outcome('select public.admin_can_provision()'), '42501|admin_session_ended',
+  'a session_id that is not a uuid is refused with the hint (the cast is guarded: no 22P02)');
+select t046.claims_sid('00000000-0000-0000-0000-0000000a0001', '00000000-0000-0000-0000-0000000a0003');
+select is(t046.outcome('select public.admin_can_provision()'), '42501|admin_session_ended',
+  'a session_id that names ANOTHER user''s live session is refused (a session belongs to its user)');
+select t046.claims_sid('00000000-0000-0000-0000-0000000a0001', '00000000-0000-0000-0000-00000000dead');
+select is(t046.outcome('select public.admin_can_provision()'), '42501|admin_session_ended', 'a well-formed session_id with no session behind it is refused');
+select t046.claims_sid('00000000-0000-0000-0000-0000000a0001', upper('00000000-0000-0000-0000-0000000a0001'));
+select is(t046.outcome('select public.admin_can_provision()'), 'ok', 'control: the admin''s own live session passes (the id is matched as a uuid, so letter case does not matter)');
+
+-- revoking the session (sign out everywhere, the dashboard, deleting the user's sessions) cuts the next call off
+reset role;
+delete from auth.sessions where id = '00000000-0000-0000-0000-0000000a0001';
+set local role authenticated;
+select t046.claims('00000000-0000-0000-0000-0000000a0001', 'aal2', 10);
+select is(t046.outcome('select public.admin_can_provision()'), '42501|admin_session_ended',
+  'the very same token is refused once its session is deleted (revocation takes effect on the next call)');
+select is(t046.outcome('select public.admin_list_orgs()'), '42501|admin_session_ended', 'for a read RPC too');
+reset role;
+insert into auth.sessions (id, user_id, aal) values ('00000000-0000-0000-0000-0000000a0001', '00000000-0000-0000-0000-0000000a0001', 'aal2');
+set local role authenticated;
+select t046.claims('00000000-0000-0000-0000-0000000a0001', 'aal2', 10);
+select is(t046.outcome('select public.admin_can_provision()'), 'ok', 'and it passes again once a session exists (nothing else changed)');
+
+-- Removing a factor does NOT delete the user's other sessions: GoTrue DOWNGRADES their rows to aal1 while a token minted
+-- earlier keeps claiming aal2 until it expires (verified on the real stack). The database row decides.
+reset role;
+update auth.sessions set aal = 'aal1' where id = '00000000-0000-0000-0000-0000000a0001';
+set local role authenticated;
+select t046.claims('00000000-0000-0000-0000-0000000a0001', 'aal2', 10);
+select is(t046.outcome('select public.admin_can_provision()'), '42501|admin_mfa_required',
+  'a token that still claims aal2 whose session row was DOWNGRADED to aal1 (the factor was removed) is refused: admin_mfa_required');
+reset role;
+update auth.sessions set aal = null where id = '00000000-0000-0000-0000-0000000a0001';
+set local role authenticated;
+select t046.claims('00000000-0000-0000-0000-0000000a0001', 'aal2', 10);
+select is(t046.outcome('select public.admin_can_provision()'), '42501|admin_mfa_required', 'and a session row with no aal at all is refused too (fail closed)');
+reset role;
+update auth.sessions set aal = 'aal2', not_after = now() - interval '1 minute' where id = '00000000-0000-0000-0000-0000000a0001';
+set local role authenticated;
+select t046.claims('00000000-0000-0000-0000-0000000a0001', 'aal2', 10);
+select is(t046.outcome('select public.admin_can_provision()'), '42501|admin_session_ended', 'a session past its not_after is ended');
+reset role;
+update auth.sessions set not_after = now() + interval '1 hour' where id = '00000000-0000-0000-0000-0000000a0001';
+set local role authenticated;
+select t046.claims('00000000-0000-0000-0000-0000000a0001', 'aal2', 10);
+select is(t046.outcome('select public.admin_can_provision()'), 'ok', 'control: an aal2 session inside its not_after passes');
+reset role;
+update auth.sessions set not_after = null where id = '00000000-0000-0000-0000-0000000a0001';
+set local role authenticated;
+
+-- the session check comes LAST: it tells a caller who fails an earlier rule nothing new
+select t046.raw_claims('{"role":"authenticated","sub":"00000000-0000-0000-0000-0000000a0002","aal":"aal2","amr":[]}', '00000000-0000-0000-0000-0000000a0002');
+select is(t046.outcome('select public.admin_can_provision()'), '42501|admin_required', 'a non-admin with no session_id still gets admin_required');
+select t046.raw_claims('{"role":"authenticated","sub":"00000000-0000-0000-0000-0000000a0001","aal":"aal1"}', '00000000-0000-0000-0000-0000000a0001');
+select is(t046.outcome('select public.admin_can_provision()'), '42501|admin_mfa_required', 'an admin at aal1 with no session_id still gets admin_mfa_required');
+
+select t046.raw_claims('{"role":"authenticated","sub":"00000000-0000-0000-0000-0000000a0001","aal":"aal2","amr":[{"method":"totp","timestamp":1}]}', '00000000-0000-0000-0000-0000000a0001');
+select is(t046.outcome('select public.admin_can_provision()'), '42501|admin_mfa_required',
+  'an admin with a STALE TOTP and no session_id still gets admin_mfa_required (the session check really is last)');
 
 -- ============ the app.* helper directly (as the owner, with the same claims) ============
 

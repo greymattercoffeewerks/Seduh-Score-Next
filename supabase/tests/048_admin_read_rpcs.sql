@@ -31,7 +31,7 @@ grant usage on schema t048 to anon, authenticated, service_role;
 create function t048.claims(uid uuid, aal text, totp_age int default null) returns void language plpgsql as $$
 declare c jsonb := jsonb_build_object('role', 'authenticated');
 begin
-  if uid is not null then c := c || jsonb_build_object('sub', uid); end if;
+  if uid is not null then c := c || jsonb_build_object('sub', uid, 'session_id', uid); end if;
   if aal is not null then c := c || jsonb_build_object('aal', aal); end if;
   if totp_age is not null then
     c := c || jsonb_build_object('amr', jsonb_build_array(
@@ -138,6 +138,10 @@ insert into app.admin_audit_log (at, actor_id, action, target_org_id, target_use
 create table t048.aid as select row_number() over (order by id)::int as n, id from app.admin_audit_log where id > (select coalesce(max(id), 0) - 5 from app.admin_audit_log);
 create table t048.base as select count(*)::int as total from app.admin_audit_log;
 grant select on t048.aid, t048.base to authenticated;
+
+-- a live session for every fixture login (app.require_platform_admin() now requires the token's session_id to name a
+-- real, unrevoked, aal2 session of the caller): the session id is the user id, which the claims helper below puts in the token
+insert into auth.sessions (id, user_id, aal) select id, id, 'aal2' from auth.users where id::text like '00000000-0000-0000-0000-0000000c%';
 
 -- ============ who may execute what ============
 

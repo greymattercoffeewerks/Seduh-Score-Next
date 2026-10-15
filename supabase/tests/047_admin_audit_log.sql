@@ -1,14 +1,15 @@
 -- T-ADM.B2: the admin audit log (spec: Handoffs and Specs/ADMIN-CONSOLE-SPEC.md, D-A6, D-A13, section 3.2).
 -- Proves: app.admin_audit_log is outside `public`, has RLS on, no policy and no foreign key, and no API role
--- (anon, authenticated, service_role) holds any privilege on it, its sequence or its functions; the writer,
--- app.admin_audit(), records the CALLER as the actor (never a parameter), records the org and user it was
+-- (anon, authenticated, service_role) holds any privilege on it or its sequence, nor on its three app functions; the console's
+-- writer, app.admin_audit(), records the CALLER as the actor (never a parameter; the Edge Function's own writer is 051), records the org and user it was
 -- given in the right columns, defaults detail to {}, and REFUSES anyone who is not a platform admin at aal2
 -- with a fresh TOTP (so a wrapper that forgets its own check cannot write); the log is append-only for
 -- EVERYONE, the table owner included, and also under session_replication_role = replica: UPDATE, DELETE and
 -- TRUNCATE are all refused with 42501 and leave the rows untouched, and the guarding triggers exist, are
 -- ENABLE ALWAYS and are the right kind; the CHECK constraints reject a malformed or over-long action, a
 -- non-object, null or oversized detail (4000 accepted, 4001 refused), and a detail whose KEY NAMES hold a
--- password, token, secret, email ... in any case, at any depth; exactly one function writes to the table.
+-- password, token, secret, email ... in any case, at any depth; exactly three functions mention the
+-- table (two writers and one reader).
 --
 -- Not claimed (documented in the migration): the table OWNER can still disable or drop the triggers,
 -- replace the trigger function or rewrite rows by DDL; values inside detail are not inspected.
@@ -24,7 +25,7 @@ grant usage on schema t047 to anon, authenticated, service_role;
 create function t047.session(uid uuid, aal text, totp_age int default null) returns void language plpgsql as $$
 declare c jsonb := jsonb_build_object('role', 'authenticated');
 begin
-  if uid is not null then c := c || jsonb_build_object('sub', uid); end if;
+  if uid is not null then c := c || jsonb_build_object('sub', uid, 'session_id', uid); end if;
   if aal is not null then c := c || jsonb_build_object('aal', aal); end if;
   if totp_age is not null then
     c := c || jsonb_build_object('amr', jsonb_build_array(
@@ -72,6 +73,10 @@ insert into app.platform_admins (user_id, note) values
   ('00000000-0000-0000-0000-0000000b0001', 'test admin'),
   ('00000000-0000-0000-0000-0000000b0002', 'test admin two');
 
+-- a live session for every fixture login (app.require_platform_admin() now requires the token's session_id to name a
+-- real, unrevoked, aal2 session of the caller): the session id is the user id, which the claims helper below puts in the token
+insert into auth.sessions (id, user_id, aal) select id, id, 'aal2' from auth.users where id::text like '00000000-0000-0000-0000-0000000b%';
+
 -- ============ where the table lives and how it is locked ============
 
 select is(
@@ -118,8 +123,8 @@ select ok(
   'the trigger function is NOT security definer (a plain refusal) and has search_path pinned');
 select is(
   (select string_agg(indexname, ', ' order by indexname) from pg_indexes where schemaname = 'app' and tablename = 'admin_audit_log'),
-  'admin_audit_log_org_id_idx, admin_audit_log_pkey',
-  'the table has exactly its primary key and the per-org index');
+  'admin_audit_log_account_create_once_idx, admin_audit_log_org_id_idx, admin_audit_log_pkey',
+  'the table has exactly its primary key, the per-org index and the one-account.create-per-login index');
 select ok(
   (select indexdef like '%(target_org_id, id DESC)' from pg_indexes
     where schemaname = 'app' and indexname = 'admin_audit_log_org_id_idx'),
@@ -201,8 +206,9 @@ select is(
 select is((select count(*)::int from app.admin_audit_log where id > (select mid from t047.base)), 3, 'three rows so far');
 select is((select count(distinct id)::int from app.admin_audit_log where id > (select mid from t047.base)), 3, 'each with its own id');
 
--- exactly one function WRITES to the table, and exactly one READS it (admin_list_audit, T-ADM.B3); a later batch
--- adds the service-role account.create writer and must add it here, deliberately
+-- exactly two functions WRITE to the table (app.admin_audit for the console's wrappers, and the service-role-only
+-- admin_record_account_create for the Edge Function, T-ADM.C2) and exactly one READS it (admin_list_audit, T-ADM.B3);
+-- any other must be added here, deliberately
 select is(
   (select coalesce(string_agg(n.nspname || '.' || p.proname, ', ' order by n.nspname, p.proname), 'none')
      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -210,7 +216,8 @@ select is(
       and p.prokind in ('f', 'p')
       and p.prorettype <> 'trigger'::regtype      -- the refusal trigger names the table in its message; it writes nothing
       and p.prosrc ~* 'admin_audit_log'),
-  'app.admin_audit, public.admin_list_audit', 'exactly two functions in app or public mention the table: the writer and the one reader');
+  'app.admin_audit, public.admin_list_audit, public.admin_record_account_create',
+  'exactly three functions in app or public mention the table: the writer, the one reader, and the service-role-only account.create writer');
 
 -- ============ append-only, even for the owner (the role this test runs as) ============
 
