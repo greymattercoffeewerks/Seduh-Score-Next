@@ -1,5 +1,5 @@
 // The admin sign-in: email and password, nothing else. Reuses the organiser console's form primitives
-// (core/loginScreen.js renderLoginForm, validateCredentials, isInvalidCredentials) but not its mount function
+// (core/loginScreen.js renderLoginForm, validateCredentials) and the shared request (core/signInRequest.js), but not its mount function
 // or its shared client: this surface signs in against its OWN client (adminClient.js, spec D-A15), and a
 // password-only session here is never enough to see anything (D-A5), so a successful sign-in only moves on to
 // the access check.

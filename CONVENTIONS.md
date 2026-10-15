@@ -339,7 +339,8 @@ section only records the conventions a new screen or token needs to follow.
   reserved-accent rules (violet, gold-as-fill-only) apply the same way: if no existing
   semantic token fits, that's a signal the token layer needs a new one, reasoned through
   and contrast-checked, not a hand-picked hex value in the consuming screen.
-- **The shared screen-chrome shapes live in `src/ui/tokens/components.css`, once**: `.card`, `.btn` /
+- **The shared screen-chrome shapes live in `src/ui/tokens/components.css`, once**: `.screen-container` (and
+  its headings), `.card`, `.btn` /
   `.btn-primary` / `.btn-outline`, `.form-field` / `.form-field-label` / `.form-field-hint`, `.field-input`,
   `.screen-feedback` (and its tones). `core/dom.js` and `core/loginScreen.js` emit these class names, so a
   page that draws a form links the file **by hand, after `tokens/index.css` and before its own screen CSS**

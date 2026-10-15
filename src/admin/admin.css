@@ -2,7 +2,9 @@
  * The admin console's own styles. It loads the surface-agnostic design tokens (src/ui/tokens), the shared
  * component shapes (src/ui/tokens/components.css: .btn, .field-input, .form-field, .card, .screen-feedback, the
  * class names core/dom.js and core/loginScreen.js's renderLoginForm emit) and core/loginScreen.css, and nothing
- * from a format. Below: the few places the console differs from those shapes, then its own screens.
+ * from a format. Below: the two places the console differs from those shapes, then its own screens. (Taking
+ * the shared shapes changed one thing the console used to restate: form labels are --color-text-secondary, the
+ * value the organiser console has always rendered, rather than --color-text-muted: darker, so a higher contrast.)
  * 360px first: everything stacks, nothing needs horizontal scrolling, every control is at least 44px tall.
  */
 
@@ -20,20 +22,6 @@
    dividers. Proposed for the shared shape too; held back here so the organiser console does not change. */
 .field-input {
   border-color: var(--color-text-muted);
-}
-
-/* Empty, the message region takes no room but stays in the accessibility tree (display:none can make a screen
-   reader miss the first message put into a live region). */
-.screen-feedback:empty {
-  display: block;
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  border: 0;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
 }
 
 /* ---- the admin screens ---- */

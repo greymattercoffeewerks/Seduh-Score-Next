@@ -71,12 +71,12 @@ association, and toast focus after a successful add) — 51 tests total, still 1
 across the full suite.
 
 **Known debt, not blocking** (reduced 2026-10-15): `shared.css` (see below) still duplicates the
-`.screen-container` (and its headings), `.stage-meta` and `.roster-list` rules that Cup Taster's
+`.stage-meta` and `.roster-list` rules that Cup Taster's
 own screens build on via `heatsScreen.css` — a format cannot link another format's CSS. The
-`.card`, `.btn*`, `.form-field*`, `.field-input` and `.screen-feedback` shapes were extracted
+`.screen-container` (and its headings), `.card`, `.btn*`, `.form-field*`, `.field-input` and `.screen-feedback` shapes were extracted
 into the format-agnostic `src/ui/tokens/components.css` (linked first by `app/index.html` and
 every `*.preview.html`), and `src/ui/tokens/components.test.js` fails if a copy comes back. The
-remaining three go the same way when someone next needs to change them.
+remaining two go the same way when someone next needs to change them.
 
 `matches` (T-BTC.2, 2026-09-18) — preliminary match creation. `create_btc_match`
 (`supabase/migrations/20260918100000_btc_create_match_rpc.sql`) atomically writes a

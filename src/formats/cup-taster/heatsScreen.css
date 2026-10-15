@@ -6,42 +6,14 @@
  * src/ui/tokens/components.css — later screens reuse those rather than inventing their own.
  */
 
-/* Shared by every format-screen container (.heats-screen, .timing-screen,
-   ...) — extracted here on the 2nd verbatim occurrence rather than left
-   duplicated, since it's not merely similar CSS but byte-for-byte identical
-   rules. Screens keep their own class too (as a semantic/scoping hook for
-   screen-specific rules below), just add .screen-container alongside it. */
-.screen-container {
-  max-width: var(--max-width-content);
-  margin: 0 auto;
-  padding: var(--space-5) var(--space-4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
-}
-
-.screen-container h1 {
-  font-family: var(--font-display);
-  font-size: var(--text-2xl);
-  line-height: var(--leading-tight);
-  margin: 0;
-}
-
-.screen-container h2 {
-  font-family: var(--font-display);
-  font-size: var(--text-lg);
-  line-height: var(--leading-snug);
-  margin: 0 0 var(--space-3) 0;
-}
+/* .screen-container and its headings, .card, .btn*, .form-field*, .field-input and .screen-feedback live in
+   src/ui/tokens/components.css (moved there; linked first by every page that loads this file). */
 
 .stage-meta {
   color: var(--color-text-secondary);
   font-size: var(--text-sm);
   margin: var(--space-1) 0 0 0;
 }
-
-/* .card, .btn*, .form-field*, .field-input and .screen-feedback live in src/ui/tokens/components.css
-   (moved there from this file; linked just before it). */
 
 .roster-list {
   list-style: none;
@@ -159,8 +131,6 @@
   align-items: center;
   gap: var(--space-3);
 }
-
-/* .screen-feedback and its tones: see src/ui/tokens/components.css. */
 
 /* Per-heat status badge (2026-08-29 app-wiring pass) — the "Confirmed"
    label heatActionLink() renders in place of a Timing/Scoring link once a

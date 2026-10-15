@@ -18,7 +18,7 @@
 // Lives in core/, not a format directory — auth is format-agnostic.
 import { getSupabase } from './supabaseClient.js';
 import { el, labeledField, passwordToggle, setBusyDisabled, withFocusPreservation } from './dom.js';
-import { signInWithPasswordRequest, isInvalidCredentials } from './signInRequest.js';
+import { signInWithPasswordRequest } from './signInRequest.js';
 
 export function validateCredentials(draft) {
   if (!draft.email.trim()) return 'Email is required.';
@@ -28,10 +28,6 @@ export function validateCredentials(draft) {
 
 export const INVALID_CREDENTIALS_MESSAGE =
   'That email and password do not match. Check the email, and use the Show/Hide button to read the password back: capital letters count.';
-
-// Re-exported: it moved to signInRequest.js with the request it classifies, and the admin console imports it
-// from here.
-export { isInvalidCredentials };
 
 // `onTogglePassword(isShown)` lets the caller remember the choice across its own re-renders; the
 // toggle itself changes the field in place.
@@ -152,8 +148,8 @@ export async function mountLoginScreen(root, { client = getSupabase(), onSignedI
       // A transport failure is not an expected auth rejection (signInWithPassword's own contract is to
       // return {error}, not throw, for a refusal): this project's "unreliable venue wifi" design target
       // treats it as a real, expected failure. A request that never settles is reported the same way
-      // with its own wording; without it a stalled connection left the form disabled and "Signing in…"
-      // forever, with no way to even correct a typo and retry.
+      // with its own wording; without a result for it a stalled connection left the form disabled and
+      // "Signing in…" forever, with no way to even correct a typo and retry.
       if (result.kind === 'timeout') {
         pendingError = 'This is taking longer than expected — check your connection and try again.';
       } else if (result.kind === 'transport') {

@@ -1,14 +1,13 @@
 /*
  * BTC — shared screen-chrome shapes that are still restated from
- * src/formats/cup-taster/heatsScreen.css: the screen container and its headings, the stage meta line and the
- * roster list. Extracted here on the 2nd screen needing them, matching the extract-on-2nd-use convention in
+ * src/formats/cup-taster/heatsScreen.css: the stage meta line and the roster list. Extracted here on the 2nd screen needing them, matching the extract-on-2nd-use convention in
  * CONVENTIONS.md. Mirrors the role of src/community/guess-the-bean/shared.css for its own directory.
  *
- * The CARD, BUTTON, FORM FIELD, FIELD INPUT and SCREEN FEEDBACK shapes are NOT here any more: they live once in
- * src/ui/tokens/components.css, which every page that loads this file links first (app/index.html and the
+ * The SCREEN CONTAINER, CARD, BUTTON, FORM FIELD, FIELD INPUT and SCREEN FEEDBACK shapes are NOT here any more: they
+ * live once in src/ui/tokens/components.css, which every page that loads this file links first (app/index.html and the
  * *.preview.html harnesses). A format cannot link another format's own CSS file (module boundary), so the
- * screen container, stage meta and roster list below remain a deliberate, flagged duplication until they get
- * the same format-agnostic extraction. See the Known debt note in src/formats/btc/CLAUDE.md. The
+ * stage meta and roster list below remain a deliberate, flagged duplication until they get the same
+ * format-agnostic extraction. See the Known debt note in src/formats/btc/CLAUDE.md. The
  * is-test-banner and tap-target classes are NOT duplicated: those already live in src/ui/tokens/base.css,
  * genuinely shared, loaded on every page.
  *
@@ -17,29 +16,6 @@
  * rest of the header is then parsed as CSS, which silently drops the first real
  * rules below it. jsdom-based tests cannot see this class of bug.
  */
-
-.screen-container {
-  max-width: var(--max-width-content);
-  margin: 0 auto;
-  padding: var(--space-5) var(--space-4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
-}
-
-.screen-container h1 {
-  font-family: var(--font-display);
-  font-size: var(--text-2xl);
-  line-height: var(--leading-tight);
-  margin: 0;
-}
-
-.screen-container h2 {
-  font-family: var(--font-display);
-  font-size: var(--text-lg);
-  line-height: var(--leading-snug);
-  margin: 0 0 var(--space-3) 0;
-}
 
 .stage-meta {
   color: var(--color-text-secondary);

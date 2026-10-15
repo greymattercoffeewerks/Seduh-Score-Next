@@ -3,9 +3,9 @@ import {
   validateCredentials,
   renderLoginForm,
   mountLoginScreen,
-  isInvalidCredentials,
   INVALID_CREDENTIALS_MESSAGE,
 } from './loginScreen.js';
+import { isInvalidCredentials } from './signInRequest.js';
 
 describe('validateCredentials', () => {
   it('requires a non-blank email', () => {

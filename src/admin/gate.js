@@ -170,7 +170,10 @@ export async function signOut(
     const { data } = await raceTimeout(client.auth.getSession(), timeoutMs);
     token = data?.session?.access_token ?? null;
   } catch {
-    // no session to read: nothing to keep; the sign-out below still runs
+    // The session could not be read, so there is no token to keep. Do NOT go on to sign out: a sign-out that
+    // then fails deletes the local session (auth-js) and the next attempt would find nothing to revoke and
+    // report success over a session the server still honours. Nothing is changed; the person tries again.
+    return { ok: false };
   }
   // A failed or stalled request (or a throw) is a failed sign-out; the token is kept for the retry.
   if ((await signOutRequest(client, { scope, timeoutMs })).ok) return { ok: true };

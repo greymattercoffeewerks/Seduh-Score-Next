@@ -1,7 +1,7 @@
 /*
- * BTC Setup screen (Phase T-BTC.2). The base screen-chrome shapes (screen
- * container, roster list, stage meta, field errors) live in shared.css, loaded
- * alongside this file; the card, buttons, form fields, field inputs and screen
+ * BTC Setup screen (Phase T-BTC.2). The base screen-chrome shapes (roster list,
+ * stage meta, field errors) live in shared.css, loaded
+ * alongside this file; the screen container, card, buttons, form fields, field inputs and screen
  * feedback live in src/ui/tokens/components.css. See the header comment in
  * shared.css for why the first group is still duplicated from the Cup Taster
  * heatsScreen.css file rather than imported.

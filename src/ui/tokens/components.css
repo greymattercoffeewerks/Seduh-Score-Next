@@ -1,6 +1,7 @@
 /*
- * Shared screen-chrome component shapes: .card, .btn / .btn-primary / .btn-outline, .form-field /
- * .form-field-label / .form-field-hint, .field-input, .screen-feedback (and its tones).
+ * Shared screen-chrome component shapes: .screen-container (and its headings), .card, .btn / .btn-primary /
+ * .btn-outline, .form-field / .form-field-label / .form-field-hint, .field-input, .screen-feedback (and its
+ * tones).
  *
  * One canonical copy. These used to live in src/formats/cup-taster/heatsScreen.css and be restated by
  * src/formats/btc/shared.css and src/admin/admin.css (a format could not link another format's CSS, and the
@@ -8,11 +9,40 @@
  * renderLoginForm() emit these class names, so every surface that draws a form needs them.
  *
  * NOT part of tokens/index.css, on purpose: that file is loaded by EVERY page, including ones that define their
- * own .form-field (src/tools/timer, src/community/guess-the-bean) or use .screen-feedback with their own
- * styling (src/marketing's results page). A page that wants these shapes links this file explicitly,
+ * own .form-field (src/tools/timer, src/community/guess-the-bean) or use the .screen-feedback class name with
+ * no styling of their own (src/marketing's results page: linking this file would restyle it). A page that
+ * wants these shapes links this file explicitly,
  * after tokens/index.css and BEFORE its own screen CSS, so a screen's own rules still win on source order.
  * Builds only on tokens: no value is invented here.
  */
+
+/* Shared by every format-screen container (.heats-screen, .timing-screen,
+   ...) — extracted here on the 2nd verbatim occurrence rather than left
+   duplicated, since it's not merely similar CSS but byte-for-byte identical
+   rules. Screens keep their own class too (as a semantic/scoping hook for
+   screen-specific rules below), just add .screen-container alongside it. */
+.screen-container {
+  max-width: var(--max-width-content);
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.screen-container h1 {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  line-height: var(--leading-tight);
+  margin: 0;
+}
+
+.screen-container h2 {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  line-height: var(--leading-snug);
+  margin: 0 0 var(--space-3) 0;
+}
 
 /* Border bumped from --border-hairline/--color-border to --border-strong/
    --color-border-strong (production UI/UX feedback, 2026-09-05) — the card
@@ -178,6 +208,19 @@
   color: var(--color-warning);
 }
 
+/* Empty, the message region takes no room but stays in the accessibility tree. It used to be display:none, and
+   several screens create the region empty and write text into it later (the scoring screen's "scores may not
+   be saved" warning, the no-organisation sign-out failure): a node that is display:none while empty is not in
+   the tree, so a screen reader may not announce the first message put into it. Out of the flow and clipped to
+   1px it takes the same (no) space. */
 .screen-feedback:empty {
-  display: none;
+  display: block;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
 }

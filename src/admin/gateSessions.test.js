@@ -190,3 +190,42 @@ describe('signing out with the real auth client when the network fails', () => {
     expect(await signOut(client, 'global', { timeoutMs: 2000 })).toEqual({ ok: false });
   });
 });
+
+// ---- signOut when the session cannot be read ----
+
+describe('signing out when the session cannot be read', () => {
+  const clientWithSession = (getSession) => ({
+    auth: {
+      getSession: vi.fn(getSession),
+      signOut: vi.fn(async () => ({ error: null })),
+      admin: { signOut: vi.fn(async () => ({ data: null, error: null })) },
+    },
+  });
+
+  it('a session lookup that throws does NOT sign out: nothing is lost, and the next attempt works', async () => {
+    let fail = true;
+    const client = clientWithSession(async () => {
+      if (fail) throw new TypeError('net');
+      return { data: { session: { access_token: 't' } } };
+    });
+    expect(await signOut(client, 'global', { timeoutMs: 50 })).toEqual({ ok: false });
+    // Signing out now would delete the local session (auth-js) with no token kept to revoke it with.
+    expect(client.auth.signOut).not.toHaveBeenCalled();
+    fail = false;
+    expect(await signOut(client, 'global', { timeoutMs: 50 })).toEqual({ ok: true });
+    expect(client.auth.signOut).toHaveBeenCalledTimes(1);
+    expect(client.auth.signOut).toHaveBeenCalledWith({ scope: 'global' });
+  });
+
+  it('a session lookup that never answers ends the attempt at the timeout, without signing out', async () => {
+    const client = clientWithSession(() => new Promise(() => {}));
+    expect(await signOut(client, 'local', { timeoutMs: 5 })).toEqual({ ok: false });
+    expect(client.auth.signOut).not.toHaveBeenCalled();
+  });
+
+  it('no session at all (signed out already) is an ordinary sign-out, not a failure', async () => {
+    const client = clientWithSession(async () => ({ data: { session: null } }));
+    expect(await signOut(client, 'local', { timeoutMs: 50 })).toEqual({ ok: true });
+    expect(client.auth.signOut).toHaveBeenCalledTimes(1);
+  });
+});
