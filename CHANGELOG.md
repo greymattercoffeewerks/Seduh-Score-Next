@@ -1,3 +1,39 @@
+## T-ADM.B2: admin audit log, the append-only record of platform-admin actions · 2026-10-15
+
+**Task:** T-ADM.B2 (Batch 3) of `Handoffs and Specs/ADMIN-CONSOLE-SPEC.md` (local, gitignored). Branch `admin/b2-audit-log`, built on T-ADM.B1 (B1 is on `dev` via PR #271, not yet on `main`). One migration and one pgTAP file, no application code. **Status: branch-complete and reviewed; not committed, not merged, not pushed to the cloud project. Not final:** the rollout and push steps below are owed.
+
+**Why:** every change the admin console makes has to leave a record that the console's own users cannot edit or erase. The table sits in `app`, has no API grants, and refuses UPDATE, DELETE and TRUNCATE. Nothing writes to it yet, so this batch changes no behaviour.
+
+**What changed:** migration `supabase/migrations/20261014110000_admin_audit_log.sql`, test `supabase/tests/047_admin_audit_log.sql` (74 assertions).
+
+- `app.admin_audit_log`: RLS on with no policies; every API role's privileges revoked, including the id sequence. No foreign keys to organisations or logins, so deleting either cannot cascade into the history. Ids can have gaps (a refused insert still uses an id), and a gap is not evidence of deletion.
+- Append-only: a `BEFORE UPDATE OR DELETE` row trigger and a `BEFORE TRUNCATE` statement trigger, both `ENABLE ALWAYS`, so they also refuse under `session_replication_role = replica`. Both call `app.forbid_admin_audit_mutation()`, a non-definer function that raises 42501 for every role.
+- CHECK constraints: `action` is a dotted vocabulary string of at most 60 characters; `detail` must be a JSON object of at most 4000 characters, and `app.admin_audit_detail_ok` refuses any key name, at any depth and in any case, containing pass, token, secret, email, api key, jwt, otp, credential or phone.
+- One index, `(target_org_id, id desc)`.
+- Writer `app.admin_audit(action, org, user, detail)`: calls `app.require_platform_admin()` itself, so it needs a platform admin at aal2 with a fresh TOTP (B1's gate). The actor is always `auth.uid()`, never a parameter.
+
+**Verification:**
+
+- Full pgTAP suite: 47 files, 2,070 tests passing, with `033`, `040`, `041`, `042` and `045` untouched.
+- `047`: 74 assertions.
+- Rollback block run inside a transaction: drops everything the migration creates and leaves `app.platform_admins` in place. The rollback destroys the audit history, so it must not be run against a log that holds real rows.
+- Hand mutation testing: 44 mutants of the migration (dropped, disabled or weakened triggers; each CHECK; each deny-list keyword; grants; a writer that swaps org and user; a writer without the admin check; search_path; an extra writer; index changes; RLS; FK). All 44 are killed by `047`. An earlier 47-assertion version let five survive; the schema review found them and the test was strengthened.
+
+**Reviews:**
+
+- schema-guardian: no blocking defects. Fixed: test gaps, an index/RPC mismatch, the rollback header literal, and comment accuracy.
+- security-reviewer: no API role can read, write or tamper with the table. Fixed: a bypassable detail secret check; an inaccurate "superuser" limit comment; a replica-mode bypass (closed by `ENABLE ALWAYS`); the writer now checks admin itself.
+
+**Honest limit** (in the migration header and the spec): the table owner (`postgres`, the role used by the dashboard, the MCP and migrations; not a superuser) can still disable or drop the triggers, replace the trigger function, rewrite rows by DDL, forge ids, actor or time, or drop the table. There is no tamper evidence and no retention or purge path. Values inside `detail` are not inspected; the key deny-list is a guard, not a content check.
+
+**Not done / still open:**
+
+- Not committed or merged. Not pushed to the cloud project: that is a separate, owner-approved step after merge, done together with Batch 2's migration, in order `20261014100000` then `20261014110000`. The cloud checks owed at rollout are those listed in the T-ADM.B1 entry.
+- No read RPC, wrappers, Edge Function or UI yet (Batches 4 to 13).
+- Constraints for later batches: Batch 5 wrappers must not log no-op actions. Batch 7's service-role `account.create` writer takes the actor as a parameter, not from `auth.uid()`.
+- No footer version bump: no application code or `package.json` change.
+- `ROADMAP.md` not touched (no T-ADM tracker yet; created at the close-out batch). `CONVENTIONS.md` not updated in this batch; the append-only table and the `app`-schema writer shape should be carried there at close-out.
+
 ## T-ADM.B1: platform-admin identity, the authorisation layer for the admin console · 2026-10-15
 
 **Task:** T-ADM.B1 (Batch 2) of `Handoffs and Specs/ADMIN-CONSOLE-SPEC.md` (local, gitignored). Branch `admin/b1-platform-identity`: one migration and one pgTAP file, no application code. **Status: branch-complete and reviewed; not merged, not pushed to the cloud project. Not final:** the rollout checks listed below are owed.
