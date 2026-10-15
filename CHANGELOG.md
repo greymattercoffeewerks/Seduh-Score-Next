@@ -1,3 +1,57 @@
+## T-ADM.B5: guard proofs for the platform tables and admin functions, and a CONVENTIONS note · 2026-10-15
+
+**Task:** T-ADM.B5 (Batch 6) of `Handoffs and Specs/ADMIN-CONSOLE-SPEC.md` (local, gitignored). Branch `admin/b5-guard-proofs`, built on T-ADM.B4. One new pgTAP file and one new CONVENTIONS section; no migration and no application code. **Status: batch-complete and reviewed; not committed, not merged, not pushed to the cloud project (this batch has no migration to push). Not final:** the cloud rollout of the four earlier admin migrations is owed (see below).
+
+**Why:** the platform tables (`app.platform_admins`, `app.admin_audit_log`) and the admin functions are the console's authority, and they are not tenant tables, so the tenancy contract tests do not cover them. Batch 6 pins their whole shape in one contract test, so a later migration that widens access fails CI rather than passing unnoticed. The CONVENTIONS section records the rule for the next person who adds a platform table or admin function.
+
+**What changed:**
+
+- `supabase/tests/050_platform_tables_contract.sql` (new, 15 assertions).
+- `CONVENTIONS.md`: a new section "Platform tables and admin functions (the admin console; not tenant tables)", nine numbered rules.
+
+`050` pins, for every relation in schema `app`:
+
+- Both platform tables exist, with RLS on (tables and foreign tables), no policy, and no default privileges row for schema `app`.
+- The ACL names only the owner: table level, column level (`attacl`), sequences and views.
+- No table or column privilege for `anon`, `authenticated` or `service_role`, checked with `has_*_privilege`, so a grant to `PUBLIC` counts.
+- The owner equals the schema's owner and is not an API role.
+
+Across the database:
+
+- Nothing named `platform_*` or `admin_*` (any case, any relation kind) exists in `public`.
+- The functions outside `app` that are named like admin or platform work, or whose body touches the platform tables, are exactly a pinned list of eleven: the nine admin doors plus `team_can_manage` and `team_can_restore`. Each is `SECURITY DEFINER` with `search_path` pinned. `coalesce` is used, so an unpinned function is reported rather than passing vacuously. Each is executable by `authenticated` and by neither `anon` nor `service_role`.
+- The `app` functions named admin, platform or attestation are executable by no API role.
+
+**Verification:**
+
+- Full pgTAP suite: 50 files, 2317+ tests passing.
+- The demonstration the work plan asked for: moving `app.platform_admins` into `public` makes `040`, `041` and `050` fail. Moving `app.admin_audit_log` makes `040` and `050` fail. `033` and `042` do not fire, since neither table has an `org_id` or a tenant parent, and need not.
+- Hand mutation testing: 32 mutants of the contract, all killed. They covered moves; table, column, `PUBLIC` and sequence grants; a policy; RLS off; new `app` tables; foreign tables; default privileges; an unpinned, invoker or ungranted admin door; extra public admin objects of every kind and case; an admin function in another schema; and an innocuous-name function that reads `platform_admins`.
+- The first version of `050` (11 assertions) let several mutants survive: a `PUBLIC` column grant, a door list keyed by name, a sanity guard that passed on any two tables, relkind and case gaps, and default privileges. The test auditor found them; all are fixed in the count above.
+
+**Reviews:**
+
+- test-auditor: survivors listed above, all fixed. It also fact-checked the CONVENTIONS section and found three errors, all corrected: it said `seed.sql` seeds a test admin (false: no seed inserts an admin); it misattributed which test checks what; and it misdescribed which GUC `auth.uid()` reads first.
+- No other reviewer run: this batch changes only a test and a doc, with no migration, RLS, RPC, scoring or UI change.
+
+**Decisions recorded** (spec amendments):
+
+- **No seed inserts an admin.** `seed.sql`'s header warns that `db reset --linked` applies it to a linked project, and the cloud project is linked through the MCP. This reverses the earlier spec statements that a seed would provide a test admin.
+- **Batch 8's Playwright dev-admin needs a local-only admin mechanism:** a CI step that runs a SQL file under `supabase/tests/support/` through `psql`. Never the seed.
+
+**Known blind spots of `050`** (stated limits, not fixed here):
+
+- An ungated function with an innocuous name.
+- A new `app` helper with an innocuous name.
+- Roles other than `anon`, `authenticated` and `service_role`.
+
+**Not done / still open:**
+
+- Not committed or merged. Not pushed to the cloud project. The four earlier admin migrations `20261014100000` to `20261014130000` are still unpushed. Push them in order, after owner approval, then compare with `list_migrations` and run the advisors.
+- `seed.sql`'s header is stale (it says no cloud project is linked). Left for the Batch 13 documentation pass.
+- Batch 7 (MFA on, and the admin-accounts Edge Function). Its exit gate: an `aal1` session cannot enrol a second factor when a verified one exists. UI Batches 8 to 11 and the adversarial pass (12) not started; docs close-out (13) not started.
+- No footer version bump: a test and a doc only, no application code or `package.json` change. `ROADMAP.md` not touched in this batch. `CONVENTIONS.md` changed by the new section only.
+
 ## T-ADM.B4: audited admin write RPCs, each wrapping an existing service-role function · 2026-10-15
 
 **Task:** T-ADM.B4 (Batch 5) of `Handoffs and Specs/ADMIN-CONSOLE-SPEC.md` (local, gitignored). Branch `admin/b4-write-rpcs`, whose tip `ae12d51` is `origin/dev` (T-ADM.B1 to B3 are on `dev` via #271 to #273, not yet on `main`). One migration and one new pgTAP file, plus guard-list and assertion edits to three existing tests; no application code. **Status: branch-complete and reviewed; not committed, not merged, not pushed to the cloud project. Not final:** the rollout step below is owed.

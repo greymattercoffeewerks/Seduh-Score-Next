@@ -190,6 +190,64 @@ refusal.
    with `apply_migration` as a separate, owner-approved step, then compare
    `list_migrations` and re-run the advisors.
 
+### Platform tables and admin functions (the admin console; not tenant tables)
+
+The admin console (`ADMIN-CONSOLE-SPEC.md`, local only) has tables that belong to no organisation:
+`app.platform_admins` and `app.admin_audit_log`. **Do not copy the tenant-table checklist for
+them, and do not add an exemption to `033`/`040`/`042`.** The rules are these.
+`supabase/tests/050_platform_tables_contract.sql` fails CI for the breaks it lists; its header states
+what it cannot see (an ungated function with an innocuous name, a new `app` helper with an
+innocuous name, roles other than `anon`/`authenticated`/`service_role`), and those are reviewed.
+
+1. **They live in the `app` schema, never `public`.** The API does not expose `app`; the tenant
+   guards cover `public` only, so nothing needs exempting. A platform table in `public` makes
+   `040` fail (every table in `public` must be in its matrix), and `050` fails on the name alone.
+2. **Row-level security on, no policy at all, and an ACL that names only the owner.** Non-exposure
+   is not the control (the cloud's exposed-schema setting is a dashboard value, and `anon` and
+   `authenticated` hold `USAGE` on `app`): the revokes are. Revoke the table, its identity sequence
+   and every function you add (`revoke all ... from public, anon, authenticated, service_role`).
+   `050` checks every table, foreign table, sequence and view in `app`: table, column and
+   sequence ACLs (a grant to `PUBLIC` included), the owner, and that no default privilege is set
+   for the schema.
+3. **No foreign keys to tenant tables** from a history table (an audit log must survive an org or a
+   login being deleted); an audit table is **append-only for everyone**, including the owner (a
+   `BEFORE UPDATE OR DELETE` row trigger and a `BEFORE TRUNCATE` statement trigger, both
+   `ENABLE ALWAYS`; see `047`). Be honest in the migration header about what the owner can still do.
+4. **An admin function is a public `SECURITY DEFINER` function that opens with
+   `perform app.require_platform_admin();` and nothing before it**: no declare initialiser, no
+   argument default that calls a function (a default runs before the body). `048` checks that shape
+   for every `public.admin_*` function a signed-in caller can run, and `050` that every function that
+   touches the platform tables is `SECURITY DEFINER` with `search_path = ''` and not executable by
+   `anon` or the service role. A function that writes is `VOLATILE` (`049` checks the three write
+   RPCs). The console calls these with **POST** (a convention: nothing tests it, because PostgREST
+   also allows GET for a `STABLE` function, which would put ids and emails in URLs and logs).
+5. **Every refusal keeps a stable hint** (`admin_required`, `admin_mfa_required`,
+   `admin_self_target`, `member_password_unset`, `last_owner`, ...): the UI switches on the hint,
+   never the text. A wrapper around an existing function lets that function's own refusals through
+   untouched and remaps only the one it must (and only by SQLSTATE **and** exact message).
+6. **A change and its audit row are one transaction** (`app.admin_audit` is called last, outside any
+   exception handler); a refused call writes nothing; a no-op writes nothing. The audit `detail`
+   holds only the pinned keys per action (`049`), and no key may name a secret
+   (`app.admin_audit_detail_ok`).
+7. **Add the function to the guards on purpose.** A public function that takes a uuid needs an entry in
+   `041`'s exemption list (its authorisation is the platform admin, not an organisation, and its test
+   file is named in the comment); a new function that is named like admin/platform work or touches the
+   platform tables goes in `050`'s exact list; a new reader or writer of the audit table goes in
+   `047`'s set; a new read RPC gets its result columns pinned in `048`.
+8. **Tests are written to fail.** A catalog check that reads a nullable column (`proconfig`, `relacl`)
+   wraps its predicate in `coalesce(..., false)`: `not (NULL)` silently drops the row and the check
+   passes for an unpinned function. Set the claims with BOTH `request.jwt.claims` and
+   `request.jwt.claim.sub` to the same user, and clear `claim.sub` when there is no user:
+   `auth.uid()` reads the legacy `claim.sub` first, `auth.jwt()` reads `claim` then `claims`, and they
+   disagree if only one is set (the helpers in `046` to `049` show the pattern). Look only at audit ids
+   above a baseline. Exercise success as the `authenticated` role, not only as the owner. Hand-run
+   mutants of every rule and confirm the test kills each one.
+9. **Cloud and seeds**: as for any migration, merging does not push it. The first admin is inserted
+   by SQL by the operator, never in a migration. **No seed inserts an admin** (each test inserts its
+   own inside its transaction; a local admin is inserted by hand, as `postgres`): do not add one to
+   `supabase/seed.sql`, whose own header warns that `db reset --linked` would apply it to a linked
+   project. Confirm the cloud's exposed schemas do not include `app` before pushing.
+
 ---
 
 ## Testing
