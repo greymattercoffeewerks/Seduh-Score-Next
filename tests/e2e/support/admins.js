@@ -12,9 +12,23 @@ import { generate } from 'otplib';
 import { createLoneUser } from './tenants.js';
 
 const DB_CONTAINER = process.env.SEDUH_DB_CONTAINER || 'supabase_db_seduh-score-next';
+
+// The SQL below is run in a container, as the database owner. It must only ever be a Supabase CLI database
+// container on THIS machine: a container name that is not one, or a Docker host that is not local, is refused
+// before anything is run (tenants.js checks the API address; this checks where the SQL goes).
+function assertLocalDatabase() {
+  if (!/^supabase_db_[a-z0-9_-]+$/.test(DB_CONTAINER)) {
+    throw new Error(`${DB_CONTAINER} is not a Supabase CLI database container name`);
+  }
+  const host = process.env.DOCKER_HOST;
+  if (host && !/^(unix|npipe):/.test(host)) {
+    throw new Error('admins.js only runs SQL through a local Docker, not DOCKER_HOST=' + host);
+  }
+}
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 function sql(statement) {
+  assertLocalDatabase();
   return execFileSync(
     'docker',
     [

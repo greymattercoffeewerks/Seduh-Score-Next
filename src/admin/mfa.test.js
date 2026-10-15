@@ -113,7 +113,7 @@ describe('beginEnrol', () => {
     const client = fakeClient({
       enrol: async () => ({
         data: null,
-        error: { code: 'too_many_enrolled_mfa_factors', message: 'cap 4' },
+        error: { code: 'unexpected_failure', message: 'internal detail' },
       }),
     });
     const result = await beginEnrol(client);
@@ -121,6 +121,45 @@ describe('beginEnrol', () => {
       ok: false,
       message: 'Something went wrong. Nothing was changed. Try again.',
     });
+  });
+
+  it('says what to do when the login has too many authenticator setups', async () => {
+    const client = fakeClient({
+      enrol: async () => ({
+        data: null,
+        error: { code: 'too_many_enrolled_mfa_factors', message: 'cap 4' },
+      }),
+    });
+    const result = await beginEnrol(client);
+    expect(result.ok).toBe(false);
+    expect(result.message).toMatch(/too many authenticator setups/);
+  });
+
+  it('refuses to touch anything when a verified factor already exists', async () => {
+    const client = fakeClient({ all: [{ id: 'v', factor_type: 'totp', status: 'verified' }] });
+    client.auth.mfa.listFactors = vi.fn(async () => ({
+      data: {
+        totp: [{ id: 'v', status: 'verified' }],
+        all: [{ id: 'v', factor_type: 'totp', status: 'verified' }],
+      },
+      error: null,
+    }));
+    const result = await beginEnrol(client);
+    expect(result.ok).toBe(false);
+    expect(client.auth.mfa.unenroll).not.toHaveBeenCalled();
+    expect(client.auth.mfa.enroll).not.toHaveBeenCalled();
+  });
+
+  it('refuses a QR code or key that is not what GoTrue documents', async () => {
+    for (const totp of [
+      { qr_code: 'javascript:alert(1)', secret: 'ABCD' },
+      { qr_code: 'data:image/svg+xml;utf-8,<svg/>', secret: 'not base32!' },
+      { qr_code: 'data:image/svg+xml;utf-8,<svg/>' },
+      {},
+    ]) {
+      const client = fakeClient({ enrol: async () => ({ data: { id: 'f', totp }, error: null }) });
+      expect((await beginEnrol(client)).ok).toBe(false);
+    }
   });
 
   it('explains a rate-limited enrolment as such (the message comes from the error)', async () => {

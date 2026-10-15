@@ -18,7 +18,6 @@ export function mountNoAccessScreen(root, { email, onSignOut }) {
   const { container, feedback } = frame('No access');
   container.append(
     el('p', { text: ADMIN_ERROR_COPY.admin_required }),
-    feedback,
     signedInStrip({ email, onSignOut, feedback }),
   );
   root.appendChild(container);
@@ -42,7 +41,6 @@ export function mountCheckFailedScreen(root, { email, message, onRetry, onSignOu
   container.append(
     el('p', { text: message }),
     retry,
-    feedback,
     signedInStrip({ email, onSignOut, feedback }),
   );
   root.appendChild(container);

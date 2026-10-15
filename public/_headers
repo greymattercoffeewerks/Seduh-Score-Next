@@ -4,19 +4,28 @@
 #    ever does not take effect, see spec section 2 R6);
 #  - Cache-Control: no-store: an admin screen is never cached by the browser or a shared cache;
 #  - frame-ancestors / X-Frame-Options: no other site may embed the console in a frame (clickjacking);
-#  - Referrer-Policy: nothing about where the operator came from is sent onward.
+#  - Referrer-Policy: nothing about where the operator came from is sent onward;
+#  - Content-Security-Policy: scripts, styles and fonts only from this site, images from this site and data:
+#    (the enrolment QR code is a data: URI), requests only to this site and Supabase. The admin session is
+#    kept in sessionStorage where any script on the page could read it, so the page is not allowed to load a
+#    script from anywhere else or run an inline one. `*.supabase.co` is the cloud project's API address;
+#    the local stack (http://127.0.0.1:54421) is deliberately not allowed here, since this file is the
+#    production one and the Vite dev server does not apply it;
+#  - X-Content-Type-Options: a response is never reinterpreted as a different type.
 # The console's hashed script and style files live under /assets/ and are shared with the other pages, so they
 # are deliberately not matched here.
 /admin
   X-Robots-Tag: noindex, nofollow
   Cache-Control: no-store
   X-Frame-Options: DENY
-  Content-Security-Policy: frame-ancestors 'none'
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://*.supabase.co; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'
+  X-Content-Type-Options: nosniff
   Referrer-Policy: no-referrer
 
 /admin/*
   X-Robots-Tag: noindex, nofollow
   Cache-Control: no-store
   X-Frame-Options: DENY
-  Content-Security-Policy: frame-ancestors 'none'
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://*.supabase.co; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'
+  X-Content-Type-Options: nosniff
   Referrer-Policy: no-referrer

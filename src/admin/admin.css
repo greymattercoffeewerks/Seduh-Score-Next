@@ -7,15 +7,6 @@
  * 360px first: everything stacks, nothing needs horizontal scrolling, every control is at least 44px tall.
  */
 
-body {
-  margin: 0;
-  background: var(--color-canvas);
-  color: var(--color-text);
-  font-family: var(--font-body);
-  font-size: var(--text-base);
-  line-height: var(--leading-normal);
-}
-
 /* ---- shapes emitted by core/dom.js and core/loginScreen.js ---- */
 
 .card {
@@ -39,9 +30,10 @@ body {
   cursor: pointer;
 }
 
+/* A busy button keeps its full colour: dimming white-on-teal to 0.6 drops it to about 3:1. The label
+   ("Signing in…") and the cursor say it is working. */
 .btn[aria-disabled='true'] {
-  cursor: not-allowed;
-  opacity: 0.6;
+  cursor: progress;
 }
 
 .btn-primary {
@@ -81,7 +73,8 @@ body {
   min-height: var(--tap-target-min);
   width: 100%;
   padding: var(--space-2) var(--space-3);
-  border: var(--border-hairline) solid var(--color-border);
+  /* A control's edge must reach 3:1 against what it sits on (WCAG 1.4.11); --color-border is for dividers. */
+  border: var(--border-hairline) solid var(--color-text-muted);
   border-radius: var(--radius-sm);
   background: var(--color-surface);
   color: var(--color-text);
@@ -111,8 +104,17 @@ body {
   color: var(--color-text);
 }
 
+/* Empty, it takes no room but stays in the accessibility tree (display:none can make a screen reader miss
+   the first message put into a live region). */
 .screen-feedback:empty {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
 }
 
 /* ---- the admin screens ---- */
@@ -172,7 +174,8 @@ body {
   gap: var(--space-3);
 }
 
-/* A QR code is read by a camera: it sits on white whatever the surface colour, with a quiet border. */
+/* A QR code is read by a camera: it sits on white whatever the surface colour, with a quiet border. This is
+   the one literal colour in this file on purpose (a scanner needs dark on light; there is no token for it). */
 .adm-qr {
   width: 12.5rem;
   max-width: 100%;
@@ -200,10 +203,7 @@ body {
 
 /* The header, notices, navigation and panel share one gutter: 16px on a phone, and on a wide screen
    whatever centres a 60rem column, so their left edges line up. */
-.adm-header,
-.adm-header-feedback,
-.adm-nav,
-.adm-main {
+:root {
   --adm-gutter: max(var(--space-4), calc((100% - 60rem) / 2));
 }
 
@@ -268,7 +268,7 @@ body {
   align-items: center;
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-sm);
-  border: var(--border-hairline) solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-text-muted);
   color: var(--color-text);
   text-decoration: none;
 }

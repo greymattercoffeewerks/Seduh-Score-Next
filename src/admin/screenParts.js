@@ -4,24 +4,29 @@ import { el, setBusyDisabled } from '../core/dom.js';
 
 export const SIGN_OUT_FAILED = 'Could not sign out. Check your connection and try again.';
 
-// One <section> with the screen's heading and its feedback region. The console moves focus to the heading
-// when a screen replaces the last one (a changed screen is announced, not silent); `feedback` is focusable so
-// an error can be announced by moving focus to it.
+// One <main> with the screen's heading and its feedback region directly under it. The console moves focus to
+// the heading (or to the feedback, when the screen opens with a notice) when a screen replaces the last one: a
+// changed screen is announced, not silent. `feedback` is focusable so an error can be announced by moving
+// focus to it, and it sits BEFORE the form so that Tab from it reaches the first field instead of leaving the
+// page. These screens are the whole page, so each one is its own `main` landmark (the console's own panels sit
+// inside the shell's).
 export function frame(title) {
   const heading = el('h1', { text: title, attrs: { tabindex: '-1', 'data-heading': 'true' } });
   const feedback = el('div', {
     className: 'screen-feedback',
     attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
   });
-  const container = el('section', { className: 'adm-screen' }, [heading]);
-  return { container, heading, feedback };
+  const container = el('main', { className: 'adm-screen' }, [heading, feedback]);
+  return { container, feedback };
 }
 
-export function setFeedback(feedback, message, tone) {
+// `focus: false` leaves focus where it is (a failed code stays in its field, to be retyped) and relies on the
+// live region alone to announce the message.
+export function setFeedback(feedback, message, tone, { focus = true } = {}) {
   feedback.textContent = message ?? '';
   if (message && tone) feedback.dataset.tone = tone;
   else delete feedback.dataset.tone;
-  if (message && tone === 'error') {
+  if (message && tone === 'error' && focus) {
     feedback.scrollIntoView?.({ block: 'nearest' });
     feedback.focus();
   }
@@ -30,7 +35,7 @@ export function setFeedback(feedback, message, tone) {
 // Disables a form's controls the accessible way (aria-disabled, see core/dom.js setBusyDisabled) and swaps
 // the submit button's label. The submit handler still guards against a second submit itself.
 export function setFormBusy(form, busy, { idle, working }) {
-  for (const control of form.querySelectorAll('input, select')) setBusyDisabled(control, busy);
+  for (const control of form.querySelectorAll('input')) setBusyDisabled(control, busy);
   const submit = form.querySelector('button[type="submit"]');
   if (submit) {
     setBusyDisabled(submit, busy);

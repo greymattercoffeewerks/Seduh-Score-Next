@@ -4,7 +4,7 @@
 // list), so a test drives the whole flow with a fake client.
 import { trackInputModality } from '../core/inputModality.js';
 import { getAdminClient } from './adminClient.js';
-import { checkAccess, signOut, GATE_STATE } from './gate.js';
+import { checkAccess, signOut, isGateRefusal, GATE_STATE } from './gate.js';
 import { PANELS } from './panels.js';
 import { mountShell } from './shell.js';
 import { mountSignInScreen } from './signInScreen.js';
@@ -15,14 +15,18 @@ import {
   mountCheckFailedScreen,
 } from './statusScreens.js';
 
-export function mountAdminConsole(
-  root,
-  { client = getAdminClient(), panels = PANELS, signal } = {},
-) {
+// While the console is open the gate is asked again now and then, not just at the start: a second factor goes
+// stale after an hour, and another tab's "Sign out everywhere" ends this tab's session, and until it is asked
+// the header would keep saying "Verified" over a console the database no longer honours.
+export const RECHECK_INTERVAL_MS = 5 * 60 * 1000;
+
+export function mountAdminConsole(root, { client = getAdminClient(), panels = PANELS } = {}) {
   // Pointer users get no focus ring on the heading the console moves focus to after each screen; a keypress
   // brings the rings back (the same rule the organiser console follows).
   const stopTrackingInputModality = trackInputModality();
   let current = null;
+  let ready = false;
+  let unmounted = false;
   // Each route() takes a number; an answer that arrives after a newer route() started is discarded, so a slow
   // check can never paint over a screen the person has already moved on from.
   let generation = 0;
@@ -41,8 +45,18 @@ export function mountAdminConsole(
   const onSignOut = () => signOutThenRoute('local');
   const onSignOutEverywhere = () => signOutThenRoute('global');
 
+  // What a panel uses to call an admin function. A gate refusal in the answer (the second factor went stale,
+  // the session ended, the login stopped being an admin) is handled HERE, by running the access check again,
+  // so no panel has to remember to look for it; the answer is still returned for the panel's own handling.
+  async function callAdmin(name, args) {
+    const result = await client.rpc(name, args);
+    if (isGateRefusal(result?.error)) route();
+    return result;
+  }
+
   function show(access) {
     clear();
+    ready = access.state === GATE_STATE.READY;
     const verified = () => route();
     switch (access.state) {
       case GATE_STATE.SIGNED_OUT:
@@ -50,7 +64,6 @@ export function mountAdminConsole(
           client,
           notice: access.notice,
           onSignedIn: () => route(),
-          signal,
         });
         break;
       case GATE_STATE.NOT_ADMIN:
@@ -77,7 +90,7 @@ export function mountAdminConsole(
         current = mountShell(root, {
           panels,
           email: access.email,
-          ctx: { client, onGateRefused: () => route() },
+          ctx: { client, callAdmin, onGateRefused: () => route() },
           onSignOut,
           onSignOutEverywhere,
         });
@@ -90,24 +103,50 @@ export function mountAdminConsole(
           onSignOut,
         });
     }
-    // A new screen is announced by moving focus to its heading (the shell's panel does its own).
-    root.querySelector('[data-heading]')?.focus();
+    // A new screen is announced by moving focus to its notice if it opens with one (why the person is back at
+    // sign-in), otherwise to its heading. The shell's panel moves focus to its own heading.
+    (
+      root.querySelector('.screen-feedback[data-tone]') ?? root.querySelector('[data-heading]')
+    )?.focus();
   }
 
   async function route() {
+    // A sign-in, a verified code or a sign-out that was still in flight when the console was unmounted lands
+    // here afterwards; it must not paint into a root that is no longer ours.
+    if (unmounted) return;
+    ready = false;
     const mine = ++generation;
     clear();
     current = mountCheckingScreen(root);
     const access = await checkAccess(client);
-    if (mine !== generation || signal?.aborted) return;
+    if (unmounted || mine !== generation) return;
     show(access);
   }
+
+  // Asks the gate again WITHOUT blanking the console; only a changed answer replaces it. A route() started in
+  // the meantime wins (it bumps `generation`), and a recheck never starts while nothing is `ready`.
+  async function recheck() {
+    if (unmounted || !ready) return;
+    const mine = generation;
+    const access = await checkAccess(client);
+    if (unmounted || mine !== generation || !ready) return;
+    if (access.state !== GATE_STATE.READY) show(access);
+  }
+
+  function onVisibilityChange() {
+    if (document.visibilityState !== 'hidden') recheck();
+  }
+  document.addEventListener('visibilitychange', onVisibilityChange);
+  const recheckTimer = setInterval(recheck, RECHECK_INTERVAL_MS);
 
   route();
 
   return {
     unmount() {
+      unmounted = true;
       generation += 1;
+      clearInterval(recheckTimer);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       stopTrackingInputModality();
       clear();
     },

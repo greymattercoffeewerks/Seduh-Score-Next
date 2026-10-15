@@ -1,124 +1,21 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { mountAdminConsole } from './console.js';
+import {
+  boot,
+  button,
+  cleanup,
+  field,
+  flush,
+  heading,
+  lastHandle,
+  makeClient,
+  submit,
+  type,
+} from './consoleHarness.js';
 
 // The whole console against a fake client: every screen the gate can produce, and the moves between them.
-// The fake keeps one piece of state (who is signed in, at which level) so a sign-in, a verified code or a
-// sign-out genuinely changes the next answer, as it does on the real server.
+// (The harness, consoleHarness.js, explains the fake.)
 
-const flush = async () => {
-  for (let i = 0; i < 10; i += 1) await Promise.resolve();
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  await Promise.resolve();
-};
-
-function makeClient({
-  isAdmin = true,
-  aal = 'aal1',
-  hasFactor = true,
-  signedIn = false,
-  gate = null,
-  verifyError = null,
-  signInError = null,
-  signOutError = null,
-} = {}) {
-  const state = { signedIn, aal, hasFactor, stale: [] };
-  const client = {
-    state,
-    auth: {
-      getSession: vi.fn(async () => ({
-        data: { session: state.signedIn ? { user: { email: 'ops@example.test' } } : null },
-        error: null,
-      })),
-      signInWithPassword: vi.fn(async () => {
-        if (signInError) return { error: signInError };
-        state.signedIn = true;
-        return { error: null };
-      }),
-      signOut: vi.fn(async ({ scope }) => {
-        if (signOutError) return { error: signOutError };
-        state.signedIn = false;
-        state.aal = 'aal1';
-        state.lastScope = scope;
-        return { error: null };
-      }),
-      mfa: {
-        listFactors: vi.fn(async () => ({
-          data: {
-            totp: state.hasFactor ? [{ id: 'factor-1', status: 'verified' }] : [],
-            all: [
-              ...(state.hasFactor
-                ? [{ id: 'factor-1', factor_type: 'totp', status: 'verified' }]
-                : []),
-              ...state.stale,
-            ],
-          },
-          error: null,
-        })),
-        unenroll: vi.fn(async ({ factorId }) => {
-          state.stale = state.stale.filter((f) => f.id !== factorId);
-          return { error: null };
-        }),
-        enroll: vi.fn(async () => ({
-          data: {
-            id: 'factor-new',
-            totp: { qr_code: 'data:image/svg+xml;utf-8,<svg/>', secret: 'ABCDEFGHIJKLMNOP' },
-          },
-          error: null,
-        })),
-        challengeAndVerify: vi.fn(async () => {
-          if (verifyError) return { error: verifyError };
-          state.aal = 'aal2';
-          state.hasFactor = true;
-          return { error: null };
-        }),
-      },
-    },
-    rpc: vi.fn(async (name) => {
-      if (name === 'am_i_platform_admin') {
-        return { data: { is_admin: isAdmin, aal: state.aal }, error: null };
-      }
-      if (name === 'admin_can_provision') {
-        if (gate) return gate(state);
-        return { data: true, error: null };
-      }
-      throw new Error(`unexpected rpc ${name}`);
-    }),
-  };
-  return client;
-}
-
-const mounted = [];
-function boot(client, options = {}) {
-  const root = document.createElement('div');
-  document.body.appendChild(root);
-  const handle = mountAdminConsole(root, { client, ...options });
-  mounted.push({ root, handle });
-  return root;
-}
-
-afterEach(() => {
-  for (const { root, handle } of mounted.splice(0)) {
-    handle.unmount();
-    root.remove();
-  }
-  window.location.hash = '';
-});
-
-const heading = (root) => root.querySelector('h1')?.textContent;
-const field = (root, name) => root.querySelector(`[data-field="${name}"]`);
-
-async function type(root, name, value) {
-  const input = field(root, name);
-  input.value = value;
-  input.dispatchEvent(new Event('input', { bubbles: true }));
-}
-
-async function submit(root) {
-  root
-    .querySelector('form')
-    .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-  await flush();
-}
+afterEach(cleanup);
 
 describe('signed out', () => {
   it('shows the admin sign-in and asks the database nothing', async () => {
@@ -463,7 +360,7 @@ describe('the console', () => {
     const client = makeClient({ signedIn: true, aal: 'aal2' });
     const root = boot(client, { panels });
     await flush();
-    expect(heading(root) ?? '').not.toBe('Verify it is you');
+    expect(root.querySelector('main').textContent).toBe('panel');
     // The next gate answer is "second factor stale"; the panel reports the refusal it got from a call.
     client.rpc = vi.fn(async (name) =>
       name === 'am_i_platform_admin'
@@ -495,7 +392,47 @@ describe('the console', () => {
     expect(root.querySelector('nav a[aria-current="page"]').textContent).toBe('A');
   });
 
-  it('a late answer from a check that was superseded never paints', async () => {
+  it('a check superseded by a newer one never paints', async () => {
+    let askPanel;
+    const panels = [
+      {
+        id: 'p',
+        label: 'P',
+        route: 'p',
+        mount: (host, ctx) => {
+          askPanel = ctx;
+          host.textContent = 'panel';
+          return { unmount() {} };
+        },
+      },
+    ];
+    const client = makeClient({ signedIn: true, aal: 'aal2' });
+    const root = boot(client, { panels });
+    await flush();
+    expect(root.querySelector('header')).not.toBeNull();
+
+    // The next two checks are held open; the SECOND one (the newer) answers first.
+    const held = [];
+    client.auth.getSession = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          held.push(resolve);
+        }),
+    );
+    askPanel.onGateRefused();
+    askPanel.onGateRefused();
+    expect(held).toHaveLength(2);
+    held[1]({ data: { session: null }, error: null });
+    await flush();
+    expect(heading(root)).toBe('Admin sign in');
+    // The older one now answers "signed in and ready"; it must be thrown away.
+    held[0]({ data: { session: { user: { email: 'late@example.test' } } }, error: null });
+    await flush();
+    expect(heading(root)).toBe('Admin sign in');
+    expect(root.querySelector('header')).toBeNull();
+  });
+
+  it('a check still pending when the console is unmounted never paints', async () => {
     const client = makeClient({ signedIn: false });
     let slow;
     client.auth.getSession = vi.fn(
@@ -505,11 +442,576 @@ describe('the console', () => {
         }),
     );
     const root = boot(client);
-    const handle = mounted.at(-1).handle;
-    handle.unmount();
+    lastHandle().unmount();
     slow({ data: { session: { user: { email: 'a@b.test' } } }, error: null });
     await flush();
     expect(root.querySelector('h1')).toBeNull();
+  });
+
+  it('a sign-in still in flight when the console is unmounted does not start a new check', async () => {
+    const client = makeClient();
+    let finish;
+    client.auth.signInWithPassword = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          finish = () => resolve({ error: null });
+        }),
+    );
+    const root = boot(client);
+    await flush();
+    await type(root, 'email', 'ops@example.test');
+    await type(root, 'password', 'pw');
+    root
+      .querySelector('form')
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await flush();
+    lastHandle().unmount();
+    const callsBefore = client.auth.getSession.mock.calls.length;
+    finish();
+    await flush();
+    expect(root.childNodes).toHaveLength(0);
+    expect(client.auth.getSession.mock.calls.length).toBe(callsBefore);
+  });
+
+  it('a sign-out still in flight when the console is unmounted does not paint afterwards', async () => {
+    const client = makeClient({ signedIn: true, aal: 'aal2' });
+    const root = boot(client);
+    await flush();
+    let finish;
+    client.auth.signOut = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          finish = () => resolve({ error: null });
+        }),
+    );
+    button(root, 'Sign out').click();
+    await flush();
+    lastHandle().unmount();
+    finish();
+    await flush();
+    expect(root.childNodes).toHaveLength(0);
+  });
+
+  describe('signing out when the request fails', () => {
+    async function readyShell(options) {
+      const client = makeClient({ signedIn: true, aal: 'aal2', ...options });
+      const root = boot(client);
+      await flush();
+      return { client, root };
+    }
+
+    it('keeps the token and the next attempt revokes THAT token on the server', async () => {
+      const { client, root } = await readyShell({ signOutError: { message: 'network' } });
+      button(root, 'Sign out').click();
+      await flush();
+      expect(root.querySelector('.adm-header-feedback').textContent).toMatch(/Could not sign out/);
+      // The local session is already gone (as with the real client), so a naive retry would find nothing to do.
+      expect(client.auth.admin.signOut).not.toHaveBeenCalled();
+
+      button(root, 'Sign out').click();
+      await flush();
+      expect(client.auth.admin.signOut).toHaveBeenCalledWith('token-1', 'local');
+      expect(heading(root)).toBe('Admin sign in');
+    });
+
+    it('a retry as "everywhere" revokes with the wider scope', async () => {
+      const { client, root } = await readyShell({ signOutError: { message: 'network' } });
+      button(root, 'Sign out').click();
+      await flush();
+      button(root, 'Sign out everywhere').click();
+      await flush();
+      expect(client.auth.admin.signOut).toHaveBeenCalledWith('token-1', 'global');
+    });
+
+    it('a revocation the server refuses is reported and can be tried again', async () => {
+      const { client, root } = await readyShell({
+        signOutError: { message: 'network' },
+        revokeError: { status: 500, message: 'down' },
+      });
+      button(root, 'Sign out').click();
+      await flush();
+      button(root, 'Sign out').click();
+      await flush();
+      expect(root.querySelector('.adm-header-feedback').textContent).toMatch(/Could not sign out/);
+      expect(root.querySelector('header')).not.toBeNull();
+      button(root, 'Sign out').click();
+      await flush();
+      expect(client.auth.admin.signOut).toHaveBeenCalledTimes(2);
+    });
+
+    it('"the session is already gone" (401, 403, 404) counts as signed out', async () => {
+      for (const status of [401, 403, 404]) {
+        const { client, root } = await readyShell({
+          signOutError: { message: 'network' },
+          revokeError: { status, message: 'gone' },
+        });
+        button(root, 'Sign out').click();
+        await flush();
+        button(root, 'Sign out').click();
+        await flush();
+        expect(client.auth.admin.signOut).toHaveBeenCalledTimes(1);
+        expect(heading(root)).toBe('Admin sign in');
+        cleanup();
+      }
+    });
+
+    it('both header buttons are out while either is working, and one click sends one request', async () => {
+      const { client, root } = await readyShell();
+      let finish;
+      client.auth.signOut = vi.fn(
+        () =>
+          new Promise((resolve) => {
+            finish = () => resolve({ error: null });
+          }),
+      );
+      const first = button(root, 'Sign out');
+      const second = button(root, 'Sign out everywhere');
+      first.click();
+      first.click();
+      second.click();
+      await flush();
+      expect(client.auth.signOut).toHaveBeenCalledTimes(1);
+      expect(first.getAttribute('aria-disabled')).toBe('true');
+      expect(second.getAttribute('aria-disabled')).toBe('true');
+      finish();
+      await flush();
+    });
+  });
+
+  it('a failed sign-out then a retry both reach the server for the same token', async () => {
+    const client = makeClient({ signedIn: true, isAdmin: false, signOutError: { message: 'x' } });
+    const root = boot(client);
+    await flush();
+    button(root, 'Sign out').click();
+    await flush();
+    button(root, 'Sign out').click();
+    await flush();
+    expect(client.auth.admin.signOut).toHaveBeenCalledWith('token-1', 'local');
+  });
+});
+
+describe('the sign-in screen when the request itself fails', () => {
+  it('a rejected request says the connection failed and the form works again', async () => {
+    const client = makeClient();
+    client.auth.signInWithPassword = vi.fn(() => Promise.reject(new TypeError('fetch failed')));
+    const root = boot(client);
+    await flush();
+    await type(root, 'email', 'ops@example.test');
+    await type(root, 'password', 'pw');
+    await submit(root);
+    expect(root.querySelector('.screen-feedback').textContent).toMatch(/Check your connection/);
+    const submitButton = root.querySelector('button[type="submit"]');
+    expect(submitButton.getAttribute('aria-disabled')).toBeNull();
+    expect(submitButton.textContent).toBe('Sign in');
+    expect(field(root, 'email').getAttribute('aria-disabled')).toBeNull();
+  });
+
+  it('a request that never answers ends in the slow message after ten seconds', async () => {
+    vi.useFakeTimers();
+    try {
+      const client = makeClient();
+      client.auth.signInWithPassword = vi.fn(() => new Promise(() => {}));
+      const root = boot(client);
+      await vi.advanceTimersByTimeAsync(10);
+      await type(root, 'email', 'ops@example.test');
+      await type(root, 'password', 'pw');
+      root
+        .querySelector('form')
+        .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await vi.advanceTimersByTimeAsync(10001);
+      expect(root.querySelector('.screen-feedback').textContent).toMatch(/longer than expected/);
+      expect(root.querySelector('button[type="submit"]').textContent).toBe('Sign in');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a rate-limited sign-in says to wait, not that the connection failed', async () => {
+    for (const error of [{ code: 'over_request_rate_limit', status: 429 }, { status: 429 }]) {
+      const client = makeClient({ signInError: error });
+      const root = boot(client);
+      await flush();
+      await type(root, 'email', 'ops@example.test');
+      await type(root, 'password', 'pw');
+      await submit(root);
+      expect(root.querySelector('.screen-feedback').textContent).toMatch(/Too many attempts/);
+      cleanup();
+    }
+  });
+});
+
+describe('the second-factor screens', () => {
+  it('shows the QR code GoTrue returned, not anything else', async () => {
+    const client = makeClient({ signedIn: true, hasFactor: false });
+    const root = boot(client);
+    await flush();
+    expect(root.querySelector('img.adm-qr').getAttribute('src')).toBe(
+      'data:image/svg+xml;utf-8,<svg/>',
+    );
+  });
+
+  it('Try again enrols once per click, and focus goes to the code field afterwards', async () => {
+    const client = makeClient({ signedIn: true, hasFactor: false });
+    const realEnrol = client.auth.mfa.enroll;
+    client.auth.mfa.enroll = vi.fn(async () => ({
+      data: null,
+      error: { code: 'x', message: 'x' },
+    }));
+    const root = boot(client);
+    await flush();
+    client.auth.mfa.enroll = realEnrol;
+    const retry = button(root, 'Try again');
+    retry.click();
+    retry.click();
+    await flush();
+    expect(realEnrol).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(field(root, 'code'));
+  });
+
+  it('a wrong code keeps focus in the code field and announces the message in the live region', async () => {
+    const client = makeClient({
+      signedIn: true,
+      verifyError: { code: 'mfa_verification_failed', message: 'Invalid TOTP code entered' },
+    });
+    const root = boot(client);
+    await flush();
+    await type(root, 'code', '000000');
+    await submit(root);
+    expect(document.activeElement).toBe(field(root, 'code'));
+    const live = root.querySelector('.screen-feedback');
+    expect(live.getAttribute('role')).toBe('status');
+    expect(live.textContent).toMatch(/did not work/);
+  });
+
+  it('the code field has a real label', async () => {
+    const root = boot(makeClient({ signedIn: true }));
+    await flush();
+    const label = root.querySelector('label[for="adm-code"]');
+    expect(label.textContent).toBe('6-digit code');
+    expect(root.querySelector('#adm-code')).toBe(field(root, 'code'));
+  });
+});
+
+describe('every screen before the console', () => {
+  const screens = [
+    ['sign-in', () => makeClient()],
+    ['no access', () => makeClient({ signedIn: true, isAdmin: false })],
+    ['challenge', () => makeClient({ signedIn: true })],
+    ['enrol', () => makeClient({ signedIn: true, hasFactor: false })],
+    [
+      'check failed',
+      () => {
+        const client = makeClient({ signedIn: true });
+        client.rpc = vi.fn(async () => ({ data: null, error: { message: 'down' }, status: 500 }));
+        return client;
+      },
+    ],
+  ];
+
+  it.each(screens)(
+    '%s: one main landmark, the message region right under the heading',
+    async (_name, make) => {
+      const root = boot(make());
+      await flush();
+      const mains = root.querySelectorAll('main');
+      expect(mains).toHaveLength(1);
+      const h1 = mains[0].querySelector('h1');
+      // A focused error must be followed, in Tab order, by the form (or button) it is about, not by the page's end.
+      expect(h1.nextElementSibling.classList.contains('screen-feedback')).toBe(true);
+      expect(mains[0].querySelectorAll('h1')).toHaveLength(1);
+    },
+  );
+
+  it('the forms leave the checking to the page (their own messages), not to the browser', async () => {
+    for (const make of [() => makeClient(), () => makeClient({ signedIn: true })]) {
+      const root = boot(make());
+      await flush();
+      expect(root.querySelector('form').noValidate).toBe(true);
+      cleanup();
+    }
+  });
+
+  it('opens on the notice, not the heading, when there is one to read', async () => {
+    const client = makeClient({
+      signedIn: true,
+      aal: 'aal2',
+      gate: () => ({ data: null, error: { hint: 'admin_session_ended' } }),
+    });
+    const root = boot(client);
+    await flush();
+    expect(document.activeElement).toBe(root.querySelector('.screen-feedback'));
+    expect(document.activeElement.textContent).toBe('Your session ended. Sign in again.');
+  });
+
+  it('opens on the heading when there is no notice', async () => {
+    const root = boot(makeClient());
+    await flush();
+    expect(document.activeElement).toBe(root.querySelector('h1'));
+  });
+});
+
+describe('the console keeps asking the gate while it is open', () => {
+  async function readyConsole() {
+    const client = makeClient({ signedIn: true, aal: 'aal2' });
+    const root = boot(client);
+    await flush();
+    expect(root.querySelector('header')).not.toBeNull();
+    return { client, root };
+  }
+
+  function refuseWith(client, hint) {
+    client.rpc = vi.fn(async (name) =>
+      name === 'am_i_platform_admin'
+        ? { data: { is_admin: true, aal: 'aal2' }, error: null }
+        : { data: null, error: { hint } },
+    );
+  }
+
+  const visible = (state) =>
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
+
+  it('when the tab becomes visible again, a stale second factor sends it back to the challenge', async () => {
+    const { client, root } = await readyConsole();
+    refuseWith(client, 'admin_mfa_required');
+    visible('visible');
+    document.dispatchEvent(new Event('visibilitychange'));
+    await flush();
+    expect(heading(root)).toBe('Verify it is you');
+    expect(root.querySelector('header')).toBeNull();
+  });
+
+  it('a session ended elsewhere shows the sign-in with the notice', async () => {
+    const { client, root } = await readyConsole();
+    refuseWith(client, 'admin_session_ended');
+    document.dispatchEvent(new Event('visibilitychange'));
+    await flush();
+    expect(heading(root)).toBe('Admin sign in');
+    expect(root.querySelector('.screen-feedback').textContent).toMatch(/session ended/);
+  });
+
+  it('a tab that is hidden is not asked, and a console that is still fine is left alone', async () => {
+    const { client, root } = await readyConsole();
+    const before = client.rpc.mock.calls.length;
+    visible('hidden');
+    document.dispatchEvent(new Event('visibilitychange'));
+    await flush();
+    expect(client.rpc.mock.calls.length).toBe(before);
+    visible('visible');
+    document.dispatchEvent(new Event('visibilitychange'));
+    await flush();
+    expect(client.rpc.mock.calls.length).toBeGreaterThan(before);
+    expect(root.querySelector('header')).not.toBeNull();
+    expect(root.querySelector('header')).toBe(root.querySelector('header'));
+  });
+
+  it('a recheck does not blank the console while it waits', async () => {
+    const { client, root } = await readyConsole();
+    const header = root.querySelector('header');
+    let answer;
+    client.auth.getSession = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    );
+    document.dispatchEvent(new Event('visibilitychange'));
+    await flush();
+    expect(root.querySelector('header')).toBe(header);
+    answer({ data: { session: { user: { email: 'ops@example.test' } } }, error: null });
+    await flush();
+    expect(root.querySelector('header')).toBe(header);
+  });
+
+  it('nothing is asked while no one is signed in', async () => {
+    const client = makeClient();
+    const root = boot(client);
+    await flush();
+    document.dispatchEvent(new Event('visibilitychange'));
+    await flush();
+    expect(client.rpc).not.toHaveBeenCalled();
+    expect(heading(root)).toBe('Admin sign in');
+  });
+
+  it('asks again every five minutes while open, and stops after unmount', async () => {
+    vi.useFakeTimers();
+    try {
+      const client = makeClient({ signedIn: true, aal: 'aal2' });
+      const root = boot(client);
+      await vi.advanceTimersByTimeAsync(10);
+      expect(root.querySelector('header')).not.toBeNull();
+      refuseWith(client, 'admin_mfa_required');
+      await vi.advanceTimersByTimeAsync(5 * 60 * 1000 + 10);
+      expect(heading(root)).toBe('Verify it is you');
+
+      const second = makeClient({ signedIn: true, aal: 'aal2' });
+      const other = boot(second);
+      await vi.advanceTimersByTimeAsync(10);
+      lastHandle().unmount();
+      const calls = second.rpc.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(20 * 60 * 1000);
+      expect(second.rpc.mock.calls.length).toBe(calls);
+      expect(other.childNodes).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('rechecks that overlap, and cleaning up after them', () => {
+  it('nothing at all is asked while the sign-in screen is showing (not even the session)', async () => {
+    const client = makeClient();
+    boot(client);
+    await flush();
+    const before = client.auth.getSession.mock.calls.length;
+    document.dispatchEvent(new Event('visibilitychange'));
+    await flush();
+    expect(client.auth.getSession.mock.calls.length).toBe(before);
+  });
+
+  it('two rechecks in flight at once do not repaint the sign-in over what the person is typing', async () => {
+    const client = makeClient({ signedIn: true, aal: 'aal2' });
+    const root = boot(client);
+    await flush();
+    const held = [];
+    client.auth.getSession = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          held.push(resolve);
+        }),
+    );
+    // The tab becomes visible and the five-minute timer fires together: two rechecks.
+    document.dispatchEvent(new Event('visibilitychange'));
+    document.dispatchEvent(new Event('visibilitychange'));
+    await flush();
+    expect(held).toHaveLength(2);
+    held[0]({ data: { session: null }, error: null });
+    await flush();
+    expect(heading(root)).toBe('Admin sign in');
+    await type(root, 'email', 'half.typed@example.test');
+    held[1]({ data: { session: null }, error: null });
+    await flush();
+    expect(field(root, 'email').value).toBe('half.typed@example.test');
+  });
+
+  it('unmounting stops the timer and removes the visibility listener (nothing is left running)', async () => {
+    const clearTimer = vi.spyOn(globalThis, 'clearInterval');
+    const removeListener = vi.spyOn(document, 'removeEventListener');
+    try {
+      boot(makeClient({ signedIn: true, aal: 'aal2' }));
+      await flush();
+      lastHandle().unmount();
+      expect(clearTimer).toHaveBeenCalled();
+      expect(removeListener.mock.calls.map((call) => call[0])).toContain('visibilitychange');
+      const hashListener = vi.spyOn(window, 'removeEventListener');
+      boot(makeClient({ signedIn: true, aal: 'aal2' }));
+      await flush();
+      lastHandle().unmount();
+      expect(hashListener.mock.calls.map((call) => call[0])).toContain('hashchange');
+      hashListener.mockRestore();
+    } finally {
+      clearTimer.mockRestore();
+      removeListener.mockRestore();
+    }
+  });
+});
+
+describe('where focus goes after a failure', () => {
+  it('a wrong code does not move focus to the message (the live region announces it; the field keeps focus)', async () => {
+    const client = makeClient({
+      signedIn: true,
+      verifyError: { code: 'mfa_verification_failed', message: 'Invalid TOTP code entered' },
+    });
+    const root = boot(client);
+    await flush();
+    const live = root.querySelector('.screen-feedback');
+    const focusSpy = vi.spyOn(live, 'focus');
+    await type(root, 'code', '000000');
+    await submit(root);
+    expect(focusSpy).not.toHaveBeenCalled();
+    expect(live.textContent).toMatch(/did not work/);
+    expect(document.activeElement).toBe(field(root, 'code'));
+  });
+
+  it('a refused sign-in DOES move focus to the message (nothing else to retype first)', async () => {
+    const client = makeClient({
+      signInError: { code: 'invalid_credentials', message: 'Invalid login credentials' },
+    });
+    const root = boot(client);
+    await flush();
+    const live = root.querySelector('.screen-feedback');
+    const focusSpy = vi.spyOn(live, 'focus');
+    await type(root, 'email', 'ops@example.test');
+    await type(root, 'password', 'wrong');
+    await submit(root);
+    expect(focusSpy).toHaveBeenCalled();
+  });
+
+  it('Retry on the "could not check" screen asks once per click', async () => {
+    const client = makeClient({ signedIn: true, aal: 'aal2' });
+    client.rpc = vi.fn(async () => ({ data: null, error: { message: 'down' }, status: 500 }));
+    const root = boot(client);
+    await flush();
+    expect(heading(root)).toBe('Could not check your access');
+    const before = client.auth.getSession.mock.calls.length;
+    const retry = button(root, 'Retry');
+    retry.click();
+    retry.click();
+    await flush();
+    expect(client.auth.getSession.mock.calls.length - before).toBe(1);
+  });
+});
+
+describe('ctx.callAdmin (what panels call admin functions through)', () => {
+  async function withPanel() {
+    let ctx;
+    const panels = [
+      {
+        id: 'p',
+        label: 'P',
+        route: 'p',
+        mount: (host, given) => {
+          ctx = given;
+          host.textContent = 'panel';
+          return { unmount() {} };
+        },
+      },
+    ];
+    const client = makeClient({ signedIn: true, aal: 'aal2' });
+    const root = boot(client, { panels });
+    await flush();
+    return { client, root, ctx };
+  }
+
+  it('passes the call and the answer through untouched', async () => {
+    const { client, ctx, root } = await withPanel();
+    client.rpc = vi.fn(async () => ({ data: [{ id: 1 }], error: null }));
+    const result = await ctx.callAdmin('admin_list_orgs', { p: 1 });
+    expect(client.rpc).toHaveBeenCalledWith('admin_list_orgs', { p: 1 });
+    expect(result).toEqual({ data: [{ id: 1 }], error: null });
+    expect(root.querySelector('header')).not.toBeNull();
+  });
+
+  it('a gate refusal in the answer runs the access check again, without the panel doing anything', async () => {
+    const { client, ctx, root } = await withPanel();
+    client.rpc = vi.fn(async (name) => {
+      if (name === 'admin_list_orgs') return { data: null, error: { hint: 'admin_mfa_required' } };
+      if (name === 'am_i_platform_admin')
+        return { data: { is_admin: true, aal: 'aal2' }, error: null };
+      return { data: null, error: { hint: 'admin_mfa_required' } };
+    });
+    const result = await ctx.callAdmin('admin_list_orgs', {});
+    expect(result.error.hint).toBe('admin_mfa_required');
+    await flush();
+    expect(heading(root)).toBe('Verify it is you');
+  });
+
+  it("an ordinary refusal is the panel's own business and does not touch the gate", async () => {
+    const { client, ctx, root } = await withPanel();
+    client.rpc = vi.fn(async () => ({ data: null, error: { hint: 'org_not_found' } }));
+    await ctx.callAdmin('admin_org_detail', {});
+    await flush();
+    expect(client.rpc).toHaveBeenCalledTimes(1);
+    expect(root.querySelector('header')).not.toBeNull();
   });
 });
 

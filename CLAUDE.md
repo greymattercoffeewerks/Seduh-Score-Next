@@ -224,6 +224,8 @@ app/index.html                  ← console SPA entry (moved out of root 2026-09
                                    router/screens as always, just served from /app/.
 android/guess-the-bean-widget/  ← native Android (Kotlin/Glance) widget, own Gradle build;
                                    not part of the web build. See its own CLAUDE.md.
+admin/index.html               ← the platform operator's console at /admin/ (noindex, unlinked,
+                                   MFA-gated). See src/admin/CLAUDE.md.
 tools/timer/index.html          ← standalone Timer tool entry. See src/tools/CLAUDE.md.
 tools/brew-planner/index.html   ← standalone Brew Planner wizard entry. See src/tools/CLAUDE.md.
 tools/random-selector/index.html ← standalone Random Selector (split-flap draw) entry, a free

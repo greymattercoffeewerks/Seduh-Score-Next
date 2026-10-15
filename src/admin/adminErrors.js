@@ -15,6 +15,8 @@ export const ADMIN_ERROR_COPY = Object.freeze({
   org_slug_taken: 'That link name is already used by another organisation.',
   org_owner_not_found: 'No active account matches that. Check the email.',
   member_user_not_found: 'No active account matches that. Check the email.',
+  email_ambiguous:
+    'More than one account matches that email. Look it up in the Supabase dashboard.',
   member_exists: 'That account is already in this organisation.',
   member_not_found: 'That person is not a member of this organisation.',
   member_role_invalid: 'Choose owner or organiser.',

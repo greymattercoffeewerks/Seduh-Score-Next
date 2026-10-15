@@ -1,3 +1,51 @@
+## T-ADM.D1: the admin console shell, sign-in and second-factor gate · 2026-10-15
+
+**Task:** T-ADM.D1 (Batch 8) of `Handoffs and Specs/ADMIN-CONSOLE-SPEC.md` (local, gitignored). Branch `admin/b7-console-shell`, worktree `C:\Dev\seduh-score-next-admin8`, built on T-ADM.B6. Commit `3d70201` plus review fixes left uncommitted in the working tree. **Status: batch-complete and reviewed; not committed, not merged, not pushed to the cloud project. Not final:** the cloud rollout and the production header check are owed (see below).
+
+**Why:** the first screen a platform admin actually uses. It must refuse anyone without a live, second-factor session. It must not share the organiser console's Supabase session, so an organiser signed in on the same browser gets no admin access and an admin session never reaches the organiser app.
+
+**What changed:**
+
+- `admin/index.html` (new): the console entry, `noindex, nofollow` and `referrer: no-referrer` in its own tags. Vite gets an `admin` entry in `vite.config.js`; served at `/admin/`.
+- `src/admin/` (new): `adminClient.js` is the console's own Supabase client (storage key `seduh-admin-auth`, `sessionStorage`, no URL session). `gate.js` decides readiness: `admin_can_provision()` must succeed. `am_i_platform_admin` is token-only and is never proof of a live session. `mfa.js` and `mfaScreens.js` cover TOTP enrolment and challenge. Enrolment refuses when a verified factor already exists, removes only unverified factors, and validates the QR code and secret before showing them. `console.js` re-asks the gate when the tab becomes visible and every 5 minutes; `ctx.callAdmin` sends any gate refusal back through the same check. `shell.js` carries Sign out and Sign out everywhere. `panels.js` is the panel registry (empty until Batch 9). Also `signInScreen.js`, `statusScreens.js`, `screenParts.js`, `adminErrors.js` (hint to words), `admin.css`, `main.js` and `CLAUDE.md`.
+- A sign-out that fails is retried against the server with the kept token. auth-js drops the local session on a failed logout, so without the retry the server-side session would survive. Found by security review and reproduced before fixing.
+- A token from a global sign-out shows sign-in with a "session ended" notice. A rate-limited sign-in has its own message.
+- `public/_headers`: `/admin` and `/admin/*` get `X-Robots-Tag: noindex, nofollow`, `Cache-Control: no-store`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, and a script-restricting CSP. The CSP's `connect-src` is `https://*.supabase.co`; the local stack is deliberately not allowed there, since this file governs production only.
+- `package.json` and `package-lock.json`: `otplib` 13.5.0 as a dev dependency (owner-approved; no install scripts; imported only by e2e support).
+- `playwright.config.js`: new `dev-admin` project. `tests/e2e/admin-console.spec.js` and `tests/e2e/support/admins.js`: the test admin is made by SQL through `docker exec psql`, never by the seed.
+- `CONVENTIONS.md`: a note on `public/_headers`. Root `CLAUDE.md`: pointers to `src/admin/CLAUDE.md`. `src/core/inputModality.js`: comment only.
+- `src/admin/boundary.test.js`: nothing outside `src/admin` imports the console, and it imports only `src/core`. The Supabase client is confined to `adminClient.js`.
+
+**Verification:**
+
+- Vitest, `src/admin`: 168 tests in 9 files, all passing (re-run for this entry). Whole repo: 150 files, 4332 tests, all passing.
+- Hand mutation testing: 109 mutants over `src/admin`, all killed. The first run left 8 survivors; each got a test. test-auditor's 19 further mutants are all covered.
+- Playwright `dev-admin`: 11 tests passing. They cover first TOTP enrolment, challenge, wrong code, reload, sign out, the admin session kept separate from the organiser console, "Sign out everywhere" from another tab (told "session ended"), 360px sign-in, enrolment and console with a long email, and the keyboard focus ring.
+- CSP: `wrangler dev` on the production build. The page boots and is styled, and an off-site fetch is refused. `_headers` checked locally for `/admin` and `/admin/` only.
+
+**Reviews** (all five run; every finding applied):
+
+- ui-accessibility-reviewer: busy-button contrast; notice announced and placed above the form; a shared busy guard on sign-out; control borders at 3:1; a `main` landmark; `novalidate` with a real label.
+- security-reviewer: failed sign-out revocation (above); CSP; factor-list guard; QR and secret validation; dead-session handling; e2e container guard; recovery runbook amended.
+- module-boundary-checker: `boundary.test.js` hardened (root-absolute paths, globs, `new URL`, computed imports, HTML entries).
+- test-auditor: 19 new mutants, all findings covered.
+- code-reviewer: unmount race, rate-limit message, `email_ambiguous` copy, dead code removed.
+
+**Accepted limits and known open items** (stated, not fixed):
+
+- `admin.css` restates generic `.btn`, `.card` and `.field-input` rules that also live in `heatsScreen.css` (a fourth copy). `gate.js` signOut and `signInScreen.js` parallel `core/signOut.js` and `core/loginScreen.js`. A cross-surface refactor is proposed as its own task.
+- Own small hash router rather than `core/router.js`.
+- No skip link until the first panel with controls exists.
+- A request that times out may still succeed afterwards. The next sign-in simply replaces the session.
+- First-enrolment window: closed by the rollout runbook, not by code.
+- Recovery runbook amended: end all sessions BEFORE removing a factor.
+
+**Not done / still open:**
+
+- Not committed, not merged, not pushed. Batches 9 to 13 and the cloud rollout remain. Migrations `20261014100000` to `20261014150000` are still unpushed to the cloud project.
+- Rollout checks owed: the production response headers for `/admin/` (only the local check is done); cloud TOTP availability and the factor cap; the CSP's `connect-src` must be amended first if the cloud project's API sits on a custom domain.
+- No footer version bump in this entry. `ROADMAP.md`, `state.json` and `CONVENTIONS.md` are not touched here.
+
 ## T-ADM.B6: MFA on, a live-session gate, the admin-accounts Edge Function, and the account-create audit writer · 2026-10-15
 
 **Task:** T-ADM.B6 (Batch 7) of `Handoffs and Specs/ADMIN-CONSOLE-SPEC.md` (local, gitignored). Branch `admin/b6-mfa-admin-accounts`, worktree `C:\Dev\seduh-score-next-admin`, built on T-ADM.B5. Two new migrations, one new Edge Function, one config change, and test changes. No `src/` change and no `package.json` change. **Status: batch-complete and reviewed; not committed, not merged, not pushed to the cloud project. Not final:** the cloud rollout is owed (see below).

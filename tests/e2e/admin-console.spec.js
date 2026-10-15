@@ -173,21 +173,76 @@ test.describe('the admin console (real page, real local Supabase)', () => {
   });
 });
 
+// 360px is the first width these screens are designed and checked at.
+async function expectFitsAndTappable(page) {
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
+  for (const control of await page.locator('button, input, a').all()) {
+    if (!(await control.isVisible())) continue;
+    const box = await control.boundingBox();
+    expect(box.height).toBeGreaterThanOrEqual(43.5);
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(360.5);
+  }
+}
+
 test.describe('the admin console at 360px', () => {
   test.use({ viewport: { width: 360, height: 740 } });
+  test.describe.configure({ mode: 'serial' });
+
+  let admin;
+
+  test.beforeAll(async () => {
+    test.setTimeout(60000);
+    // A long address: the header and the "signed in as" line must wrap it, not push the page sideways.
+    admin = await createPlatformAdmin('a-rather-long-label-to-stress-the-narrow-header-layout');
+  });
+
+  test.afterAll(() => {
+    if (admin) removePlatformAdmin(admin);
+  });
 
   test('the sign-in screen needs no sideways scrolling and its controls are tappable', async ({
     page,
   }) => {
     await page.goto('/admin/');
     await expect(heading(page)).toHaveText('Admin sign in');
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    );
-    expect(overflow).toBeLessThanOrEqual(0);
-    for (const control of await page.locator('button, input').all()) {
-      const box = await control.boundingBox();
-      expect(box.height).toBeGreaterThanOrEqual(43.5);
-    }
+    await expectFitsAndTappable(page);
+  });
+
+  test('keyboard users still get a visible focus ring (only pointer users lose it)', async ({
+    page,
+  }) => {
+    await page.goto('/admin/');
+    await expect(heading(page)).toHaveText('Admin sign in');
+    await page.keyboard.press('Tab');
+    await expect(page.locator('[data-field="email"]')).toBeFocused();
+    const outline = await page.evaluate(() => {
+      const style = getComputedStyle(document.activeElement);
+      return { style: style.outlineStyle, width: parseFloat(style.outlineWidth) };
+    });
+    expect(outline.style).not.toBe('none');
+    expect(outline.width).toBeGreaterThan(0);
+  });
+
+  test('the enrolment screen (QR code, key, code field) fits, and so does the console with a long email', async ({
+    page,
+  }) => {
+    await signIn(page, admin);
+    await expect(heading(page)).toHaveText('Set up your authenticator app');
+    await expect(page.locator('img.adm-qr')).toBeVisible();
+    await expectFitsAndTappable(page);
+
+    const secret = (await page.locator('[data-field="secret"]').textContent()).replace(/\s/g, '');
+    await page.locator('[data-field="code"]').fill(await nextCode(secret));
+    await page.getByRole('button', { name: 'Verify and continue' }).click();
+    await expect(page.locator('header')).toContainText('Verified (AAL2)');
+    await expectFitsAndTappable(page);
+    const headerOverflow = await page
+      .locator('header')
+      .evaluate((el) => el.scrollWidth - el.clientWidth);
+    expect(headerOverflow).toBeLessThanOrEqual(0);
   });
 });

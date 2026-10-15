@@ -17,26 +17,30 @@ export function mountShell(root, { panels, email, ctx, onSignOut, onSignOutEvery
   const nav = el('nav', { className: 'adm-nav', attrs: { 'aria-label': 'Admin console' } });
   const host = el('main', { className: 'adm-main', attrs: { id: 'admin-main', tabindex: '-1' } });
 
+  // One flag for the whole header: while either sign-out is in flight the other is out too (two overlapping
+  // sign-outs could each report on a feedback region the first one's success has already removed).
+  const signOutButtons = [];
+  let busy = false;
   function signOutButton(label, handler) {
     const button = el('button', {
       className: 'btn btn-outline tap-target',
       text: label,
       attrs: { type: 'button' },
     });
-    let busy = false;
     button.addEventListener('click', async () => {
       if (busy) return;
       busy = true;
-      setBusyDisabled(button, true);
+      for (const other of signOutButtons) setBusyDisabled(other, true);
       setFeedback(feedback, '');
       const result = await handler();
       // A successful sign-out replaces this whole console; only a failure comes back here.
       if (!result?.ok) {
         busy = false;
-        setBusyDisabled(button, false);
+        for (const other of signOutButtons) setBusyDisabled(other, false);
         setFeedback(feedback, SIGN_OUT_FAILED, 'error');
       }
     });
+    signOutButtons.push(button);
     return button;
   }
 

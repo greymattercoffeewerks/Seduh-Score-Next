@@ -17,7 +17,7 @@ function renderCodeForm({ idle, working, onSubmit, feedback }) {
       autocorrect: 'off',
       spellcheck: 'false',
       maxlength: '7',
-      'aria-label': '6-digit code',
+      id: 'adm-code',
       'data-field': 'code',
       required: 'required',
     },
@@ -27,12 +27,12 @@ function renderCodeForm({ idle, working, onSubmit, feedback }) {
     text: idle,
     attrs: { type: 'submit' },
   });
-  const form = el('form', { className: 'login-form' }, [
+  const form = el('form', { className: 'login-form', attrs: { novalidate: 'novalidate' } }, [
     el('div', { className: 'form-field' }, [
-      el('span', {
+      el('label', {
         className: 'form-field-label',
         text: '6-digit code',
-        attrs: { 'aria-hidden': 'true' },
+        attrs: { for: 'adm-code' },
       }),
       input,
     ]),
@@ -51,7 +51,7 @@ function renderCodeForm({ idle, working, onSubmit, feedback }) {
     if (!result?.ok) {
       busy = false;
       setFormBusy(form, false, { idle, working });
-      setFeedback(feedback, result?.message, 'error');
+      setFeedback(feedback, result?.message, 'error', { focus: false });
       input.select?.();
       input.focus();
     }
@@ -74,7 +74,6 @@ export function mountChallengeScreen(root, { client, factorId, email, onVerified
   container.append(
     el('p', { text: CODE_PROMPT }),
     el('div', { className: 'card' }, [form]),
-    feedback,
     signedInStrip({ email, onSignOut, feedback }),
   );
   root.appendChild(container);
@@ -89,17 +88,19 @@ export function mountEnrolScreen(root, { client, email, onVerified, onSignOut })
       text: 'The console needs a second step every time you sign in. Scan the code with an authenticator app, then enter the 6-digit code it shows.',
     }),
     body,
-    feedback,
     signedInStrip({ email, onSignOut, feedback }),
   );
   root.appendChild(container);
 
   let cancelled = false;
+  let firstAttempt = true;
 
   async function prepare() {
     body.replaceChildren(el('p', { className: 'adm-muted', text: 'Preparing your code…' }));
     const enrolment = await beginEnrol(client);
     if (cancelled) return;
+    const retried = !firstAttempt;
+    firstAttempt = false;
     if (!enrolment.ok) {
       const retry = el('button', {
         className: 'btn btn-primary tap-target',
@@ -145,6 +146,8 @@ export function mountEnrolScreen(root, { client, email, onVerified, onSignOut })
       ]),
       el('div', { className: 'card' }, [form]),
     );
+    // A retry removed the button that had focus; put it where the person types next.
+    if (retried) body.querySelector('[data-field="code"]')?.focus();
   }
 
   prepare();

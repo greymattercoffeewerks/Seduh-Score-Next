@@ -14,13 +14,14 @@ import {
   INVALID_CREDENTIALS_MESSAGE,
 } from '../core/loginScreen.js';
 import { el } from '../core/dom.js';
+import { RATE_LIMIT_MESSAGE } from './mfa.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../core/timeout.js';
 import { frame, setFeedback, setFormBusy } from './screenParts.js';
 
 const SLOW = 'This is taking longer than expected. Check your connection and try again.';
 const OFFLINE = 'Could not sign in. Check your connection and try again.';
 
-export function mountSignInScreen(root, { client, notice, onSignedIn, signal } = {}) {
+export function mountSignInScreen(root, { client, notice, onSignedIn } = {}) {
   const draft = { email: '', password: '' };
   let signingIn = false;
   let showPassword = false;
@@ -34,6 +35,8 @@ export function mountSignInScreen(root, { client, notice, onSignedIn, signal } =
     },
   });
 
+  // The page's own messages (in the live region) say what is missing, not the browser's bubble.
+  form.noValidate = true;
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     if (signingIn) return;
@@ -59,7 +62,6 @@ export function mountSignInScreen(root, { client, notice, onSignedIn, signal } =
     } catch (thrown) {
       error = { transport: true, timedOut: Boolean(thrown?.timedOut) };
     }
-    if (signal?.aborted) return;
     if (!error) {
       onSignedIn?.();
       return;
@@ -69,10 +71,12 @@ export function mountSignInScreen(root, { client, notice, onSignedIn, signal } =
     if (error.transport) setFeedback(feedback, error.timedOut ? SLOW : OFFLINE, 'error');
     else if (isInvalidCredentials(error))
       setFeedback(feedback, INVALID_CREDENTIALS_MESSAGE, 'error');
+    else if (error.code === 'over_request_rate_limit' || error.status === 429)
+      setFeedback(feedback, RATE_LIMIT_MESSAGE, 'error');
     else setFeedback(feedback, OFFLINE, 'error');
   });
 
-  container.append(el('div', { className: 'card' }, [form]), feedback);
+  container.append(el('div', { className: 'card' }, [form]));
   if (notice) setFeedback(feedback, notice, 'pending');
   root.appendChild(container);
   return { unmount() {} };

@@ -48,11 +48,46 @@ describe('tabStorage', () => {
       const storage = tabStorage();
       storage.setItem('a', 1);
       expect(storage.getItem('a')).toBe('1');
+      // Checked while the value is stored: it must be nowhere in localStorage (the organiser console's).
+      expect(window.localStorage.getItem('a')).toBeNull();
+      expect(window.localStorage).toHaveLength(0);
       storage.removeItem('a');
       expect(storage.getItem('a')).toBeNull();
-      expect(window.localStorage.getItem('a')).toBeNull();
     } finally {
       spy.mockRestore();
+    }
+  });
+});
+
+describe('createAdminClient keeps the session across reloads and refreshes it', () => {
+  it('persists the session and refreshes the token (a reload keeps the sign-in; an hour does not end it)', () => {
+    createAdminClient({ url: 'http://x.test', anonKey: 'k', storage: {} });
+    const { auth } = createClient.mock.calls[0][2];
+    expect(auth.persistSession).toBe(true);
+    expect(auth.autoRefreshToken).toBe(true);
+  });
+});
+
+describe('getAdminClient', () => {
+  it('builds one client from the build variables, in sessionStorage, and reuses it', async () => {
+    vi.resetModules();
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://example-ref.supabase.co');
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'anon-key-for-test');
+    try {
+      const fresh = await import('./adminClient.js');
+      createClient.mockClear();
+      const first = fresh.getAdminClient();
+      const second = fresh.getAdminClient();
+      expect(second).toBe(first);
+      expect(createClient).toHaveBeenCalledTimes(1);
+      const [url, key, options] = createClient.mock.calls[0];
+      expect(url).toBe('https://example-ref.supabase.co');
+      expect(key).toBe('anon-key-for-test');
+      expect(options.auth.storage).toBe(window.sessionStorage);
+      expect(options.auth.storage).not.toBe(window.localStorage);
+      expect(options.auth.storageKey).toBe('seduh-admin-auth');
+    } finally {
+      vi.unstubAllEnvs();
     }
   });
 });

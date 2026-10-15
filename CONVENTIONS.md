@@ -417,7 +417,8 @@ the repo public.
 
 Workers Static Assets reads `public/_headers` from the build output (Vite copies `public/` into `dist/`). It is
 used for **`/admin` and `/admin/*` only**: `X-Robots-Tag: noindex, nofollow`, `Cache-Control: no-store`,
-`X-Frame-Options: DENY`, `Content-Security-Policy: frame-ancestors 'none'`, `Referrer-Policy: no-referrer`.
+`X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` and a
+script-restricting `Content-Security-Policy` (see `src/admin/CLAUDE.md`; `src/admin/headers.test.js` pins it).
 It backs up, never replaces, the page's own tags (`admin/index.html` carries `<meta name="robots">` itself, so
 the page is safe if the headers file ever does not take effect). Do not add a rule for a path that is shared
 with other pages (the hashed `/assets/` files serve every entry), and do not use `_headers` to hide a path:

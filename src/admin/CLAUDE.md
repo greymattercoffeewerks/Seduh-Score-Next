@@ -34,12 +34,24 @@ all through `SECURITY DEFINER` admin functions that the database gates itself.
   (`app.require_platform_admin()`: aal2, a TOTP verification in the last 60 minutes, a live aal2 session row).
   The UI only translates (`adminErrors.js`: hint → words, never matching on a message).
 - Enrolment (`mfa.js`) first removes **unverified** factors (they count against `max_enrolled_factors`), and
-  only runs for a login with no verified factor: with one present an aal1 session may not unenrol anything.
+  only runs for a login with no verified factor (it refuses outright when one exists: with one present an aal1
+  session may not unenrol anything). What GoTrue returns is validated before it is drawn.
+- **`ready` is not a snapshot.** While the console is open the gate is asked again when the tab becomes visible
+  and every five minutes (`console.js`); a changed answer replaces the console, an unchanged one leaves it alone.
+- **Sign-out is retried against the server.** auth-js drops the local session even when its logout request
+  fails, so `gate.js signOut` keeps the token in memory after a failure and the next attempt revokes THAT token
+  on the server (`auth.admin.signOut(token, scope)`), never reporting success on its own. "Sign out everywhere"
+  is the stolen-token response; do not "simplify" this back to `auth.signOut()`.
 
 ## Adding a panel (Batches 9 to 11, and gating's "Plan" panel later)
 
 An entry in `panels.js` (`{ id, label, route, mount(host, ctx) }`) plus a screen module. `shell.js` draws the
-navigation from the registry and routes by hash; nothing in it changes. A panel that creates something must
+navigation from the registry and routes by hash; nothing in it changes. **A panel calls admin functions through
+`ctx.callAdmin(name, args)`, never `ctx.client.rpc`**: a gate refusal in the answer (stale second factor, ended
+session) then sends the whole console back through the access check, so no panel has to remember to look for it
+(an ordinary refusal such as `org_not_found` is the panel's own business, translated with `adminErrors.js`).
+Panels get their own screen module (the overview inline in `panels.js` is a placeholder, do not copy it). A
+panel with controls also needs a skip link first. A panel that creates something must
 **disable its submit control after the first click** and keep the result on screen (the Edge Function answers
 a double submit with `[500, 500, 201]`, and the 201 carries the one-time password, which is shown once).
 
@@ -52,6 +64,21 @@ local stack (`tests/e2e/admin-console.spec.js`, Playwright project `dev-admin`).
 ## Headers
 
 `public/_headers` (Workers Static Assets) gives `/admin` and `/admin/*` `X-Robots-Tag: noindex`, `no-store`,
-`frame-ancestors 'none'` and `Referrer-Policy: no-referrer`. `admin/index.html` carries the `robots` meta tag
+`X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `nosniff`, and a script-restricting
+`Content-Security-Policy` (scripts, styles and fonts from this site only, connections to this site and
+`*.supabase.co` only, no inline code: the admin session sits in sessionStorage, readable by any script that runs
+on the page). `headers.test.js` pins it. **A change that adds an inline style or script, an off-site resource, or
+a Supabase address that is not under `*.supabase.co` must change that policy in the same commit.** The Vite dev
+server does not apply the file, so local runs and Playwright never see the policy: check it with `npm run build`
+and `npx wrangler dev`. `admin/index.html` carries the `robots` meta tag
 too, which is the guarantee if the headers file ever does not take effect. `robots.txt` deliberately does NOT
 list `/admin/`: it would announce the path, and `noindex` is the control.
+
+## Known duplication (accepted, 2026-10-15)
+
+`admin.css` restates the generic `.card`, `.btn*`, `.form-field*`, `.field-input` and `.screen-feedback` rules
+that live in `src/formats/cup-taster/heatsScreen.css` (the fourth copy, after `btc/shared.css` and
+`guess-the-bean/shared.css`), and `gate.js signOut` / `signInScreen.js` parallel `core/signOut.js` (which also
+clears the organiser's outbox) and `core/loginScreen.js` (whose mount is wired to the shared client). Moving the
+shapes into `src/ui/tokens/` and extracting pure sign-in/sign-out primitives into `core/` is a cross-surface
+refactor and is its own task, not part of building this console.
