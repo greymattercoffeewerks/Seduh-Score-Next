@@ -190,3 +190,167 @@ describe('signing out with the real auth client when the network fails', () => {
     expect(await signOut(client, 'global', { timeoutMs: 2000 })).toEqual({ ok: false });
   });
 });
+
+// ---- signOut when the session cannot be read ----
+
+describe('signing out when the session cannot be read', () => {
+  const clientWithSession = (getSession) => ({
+    auth: {
+      getSession: vi.fn(getSession),
+      signOut: vi.fn(async () => ({ error: null })),
+      admin: { signOut: vi.fn(async () => ({ data: null, error: null })) },
+    },
+  });
+
+  it('a session lookup that throws does NOT sign out: nothing is lost, and the next attempt works', async () => {
+    let fail = true;
+    const client = clientWithSession(async () => {
+      if (fail) throw new TypeError('net');
+      return { data: { session: { access_token: 't' } } };
+    });
+    expect(await signOut(client, 'global', { timeoutMs: 50 })).toEqual({ ok: false });
+    // Signing out now would delete the local session (auth-js) with no token kept to revoke it with.
+    expect(client.auth.signOut).not.toHaveBeenCalled();
+    fail = false;
+    expect(await signOut(client, 'global', { timeoutMs: 50 })).toEqual({ ok: true });
+    expect(client.auth.signOut).toHaveBeenCalledTimes(1);
+    expect(client.auth.signOut).toHaveBeenCalledWith({ scope: 'global' });
+  });
+
+  it('a session lookup that never answers ends the attempt at the timeout, without signing out', async () => {
+    const client = clientWithSession(() => new Promise(() => {}));
+    expect(await signOut(client, 'local', { timeoutMs: 5 })).toEqual({ ok: false });
+    expect(client.auth.signOut).not.toHaveBeenCalled();
+  });
+
+  it('no session at all (signed out already) is an ordinary sign-out, not a failure', async () => {
+    const client = clientWithSession(async () => ({ data: { session: null } }));
+    expect(await signOut(client, 'local', { timeoutMs: 50 })).toEqual({ ok: true });
+    expect(client.auth.signOut).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('signing out when reading the session RESOLVES with an error (a refresh that failed)', () => {
+  const clientReading = (answer) => ({
+    auth: {
+      getSession: vi.fn(async () => answer),
+      signOut: vi.fn(async () => ({ error: null })),
+      admin: { signOut: vi.fn(async () => ({ data: null, error: null })) },
+    },
+  });
+
+  it('a transport error (no connection, a 5xx) does NOT sign out: the session is unknown, not gone', async () => {
+    for (const error of [
+      new TypeError('Failed to fetch'),
+      Object.assign(new Error('retryable'), { name: 'AuthRetryableFetchError', status: 0 }),
+      Object.assign(new Error('unavailable'), { status: 503 }),
+      { message: 'no status at all' },
+    ]) {
+      const client = clientReading({ data: { session: null }, error });
+      expect(await signOut(client, 'global', { timeoutMs: 50 })).toEqual({ ok: false });
+      expect(client.auth.signOut).not.toHaveBeenCalled();
+    }
+  });
+
+  it('a 4xx error (the refresh token is used up or unknown) means the session is gone: the dead copy is cleared and that is success', async () => {
+    for (const status of [400, 401, 403, 404]) {
+      const client = clientReading({
+        data: { session: null },
+        error: Object.assign(new Error('gone'), { status }),
+      });
+      expect(await signOut(client, 'global', { timeoutMs: 50 })).toEqual({ ok: true });
+      expect(client.auth.signOut).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('an error alongside a readable session does not stop the sign-out of that session either', async () => {
+    const client = clientReading({
+      data: { session: { access_token: 't' } },
+      error: Object.assign(new Error('gone'), { status: 401 }),
+    });
+    expect(await signOut(client, 'local', { timeoutMs: 50 })).toEqual({ ok: true });
+  });
+});
+
+describe('the server-side revocation, with the real auth client', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const json = (status) =>
+    new Response(JSON.stringify({ code: status, error_code: 'session_not_found', msg: 'gone' }), {
+      status,
+      headers: { 'content-type': 'application/json' },
+    });
+  const urls = (fetchMock) => fetchMock.mock.calls.map((call) => String(call[0]));
+
+  it('an answer of 401 (which auth-js reports as a missing session), 403 or 404 means the session is already gone: that is success, and nothing is left waiting', async () => {
+    for (const status of [401, 403, 404]) {
+      let down = true;
+      const fetchMock = vi.fn(async () => {
+        if (down) throw new TypeError('fetch failed');
+        return json(status);
+      });
+      vi.stubGlobal('fetch', fetchMock);
+      const { client } = signedInRealClient();
+      expect(await signOut(client, 'global', { timeoutMs: 2000 })).toEqual({ ok: false });
+      down = false;
+      expect(await signOut(client, 'global', { timeoutMs: 2000 }), String(status)).toEqual({
+        ok: true,
+      });
+      // Nothing is waiting any more: a later sign-out sends nothing.
+      const sent = fetchMock.mock.calls.length;
+      expect(await signOut(client, 'global', { timeoutMs: 2000 })).toEqual({ ok: true });
+      expect(fetchMock.mock.calls.length).toBe(sent);
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('any other refusal (a 500) keeps the sign-out failing and still waiting', async () => {
+    let down = true;
+    const fetchMock = vi.fn(async () => {
+      if (down) throw new TypeError('fetch failed');
+      return json(500);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { client } = signedInRealClient();
+    await signOut(client, 'global', { timeoutMs: 2000 });
+    down = false;
+    expect(await signOut(client, 'global', { timeoutMs: 2000 })).toEqual({ ok: false });
+    expect(await signOut(client, 'global', { timeoutMs: 2000 })).toEqual({ ok: false });
+  });
+
+  it('a retry asked for a narrower scope still revokes everywhere if the first attempt asked for everywhere', async () => {
+    let down = true;
+    const fetchMock = vi.fn(async () => {
+      if (down) throw new TypeError('fetch failed');
+      return new Response(null, { status: 204 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { client } = signedInRealClient();
+    await signOut(client, 'global', { timeoutMs: 2000 });
+    down = false;
+    const before = fetchMock.mock.calls.length;
+    expect(await signOut(client, 'local', { timeoutMs: 2000 })).toEqual({ ok: true });
+    const retried = urls(fetchMock).slice(before);
+    expect(retried.some((url) => url.includes('/logout?scope=global'))).toBe(true);
+    expect(retried.some((url) => url.includes('/logout?scope=local'))).toBe(false);
+  });
+
+  it('and the other way round: an "everywhere" retry widens an earlier "this tab" attempt', async () => {
+    let down = true;
+    const fetchMock = vi.fn(async () => {
+      if (down) throw new TypeError('fetch failed');
+      return new Response(null, { status: 204 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { client } = signedInRealClient();
+    await signOut(client, 'local', { timeoutMs: 2000 });
+    down = false;
+    const before = fetchMock.mock.calls.length;
+    expect(await signOut(client, 'global', { timeoutMs: 2000 })).toEqual({ ok: true });
+    expect(
+      urls(fetchMock)
+        .slice(before)
+        .some((url) => url.includes('/logout?scope=global')),
+    ).toBe(true);
+  });
+});

@@ -1,6 +1,6 @@
 /*
  * BTC's phone view (viewerBody.js): one scrolling column of cards in the paper theme, 360px first. Built on
- * shared.css's .card, .stage-meta and .btn (linked alongside this file); nothing here redefines them.
+ * components.css's .card and .btn and shared.css's .stage-meta (linked alongside this file); nothing here redefines them.
  * Token-only. Meaning is carried by words, never by colour alone (a tie says "(tied)", an outcome says who
  * went through); gold is a FILL (the champion label, with its contrast colour), never a text colour.
  */

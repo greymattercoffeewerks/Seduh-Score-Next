@@ -1,6 +1,6 @@
 /*
  * Timing surface, manual mode (T4.4) — built on src/ui/tokens, reusing
- * heatsScreen.css's .screen-container/.btn/.card/.field-input/.station-badge
+ * heatsScreen.css's .screen-container/.station-badge, components.css's .btn/.card/.field-input
  * and timingScreen.css's .timing-row/.timing-row-name/.timing-row-result
  * (all three stylesheets are loaded together; nothing here redefines them).
  * Adds only what's new to this screen: the minutes/seconds input pair.

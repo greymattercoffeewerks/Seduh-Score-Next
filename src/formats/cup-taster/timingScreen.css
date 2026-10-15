@@ -1,7 +1,7 @@
 /*
  * Timing surface, app mode (T4.3) — built on src/ui/tokens, reusing
- * heatsScreen.css's .btn/.card/.station-badge/.screen-feedback (both
- * stylesheets are loaded together; nothing here redefines them). Adds only
+ * heatsScreen.css's .station-badge and components.css's .btn/.card/.screen-feedback
+ * (loaded together with this file; nothing here redefines them). Adds only
  * what's new to this screen: the page container, the live countdown
  * display, and the per-cupper timing-row states (running/stopped/maxed).
  */
@@ -335,17 +335,6 @@
 /* `.btn` sets its own display, which beats the browser's [hidden] rule. */
 .take-over-cancel[hidden] {
   display: none;
-}
-
-/* The status line is a live region: it must already be in the page, rendered, before text is put into it, or a screen
-   reader may not announce it. heatsScreen.css hides an EMPTY one with display: none, which is exactly that failure
-   (the arming message and the "cancelled" message would be silent), so here it is collapsed instead: no space, no
-   box, still in the accessibility tree (the Brewers Cup scoring screen does the same). */
-.timing-screen .screen-feedback:empty {
-  display: block;
-  padding: 0;
-  border: 0;
-  min-height: 0;
 }
 
 /* An event name is typed by a person and appears in the arming message. */

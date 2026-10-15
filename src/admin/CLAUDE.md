@@ -74,11 +74,13 @@ and `npx wrangler dev`. `admin/index.html` carries the `robots` meta tag
 too, which is the guarantee if the headers file ever does not take effect. `robots.txt` deliberately does NOT
 list `/admin/`: it would announce the path, and `noindex` is the control.
 
-## Known duplication (accepted, 2026-10-15)
+## Duplication closed (was accepted at Batch 8; closed 2026-10-15)
 
-`admin.css` restates the generic `.card`, `.btn*`, `.form-field*`, `.field-input` and `.screen-feedback` rules
-that live in `src/formats/cup-taster/heatsScreen.css` (the fourth copy, after `btc/shared.css` and
-`guess-the-bean/shared.css`), and `gate.js signOut` / `signInScreen.js` parallel `core/signOut.js` (which also
-clears the organiser's outbox) and `core/loginScreen.js` (whose mount is wired to the shared client). Moving the
-shapes into `src/ui/tokens/` and extracting pure sign-in/sign-out primitives into `core/` is a cross-surface
-refactor and is its own task, not part of building this console.
+None left of the two that were accepted at Batch 8: the generic `.card`, `.btn*`, `.form-field*`, `.field-input`
+and `.screen-feedback` shapes now live once in `src/ui/tokens/components.css` (linked first by `admin/index.html`;
+`admin.css` keeps only the three places the console differs, see its "where the admin console differs" block), and
+the sign-in and sign-out requests are `src/core/signInRequest.js` and `src/core/signOutRequest.js`, shared with the
+organiser console. `gate.js signOut` still adds the server-side revocation retry on top of the shared request.
+Proposed for the shared shapes too, and held back so the organiser console does not change: a busy button that
+keeps its colour (the dimmed `opacity: 0.6` is about 3:1) and control borders at 3:1 or better (WCAG 1.4.11);
+raise it with the owner, then delete the overrides here.

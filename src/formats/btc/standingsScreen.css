@@ -1,7 +1,7 @@
 /*
  * BTC standings screen (Phase T-BTC.2, sub-step 4). The base screen-chrome shapes
- * (screen container, card, screen feedback) live in shared.css, loaded alongside this
- * file. The table shape below duplicates cup-taster/standingsScreen.css's own
+ * (screen container, card, screen feedback) live in src/ui/tokens/components.css, linked
+ * first by every page that loads this file. The table shape below duplicates cup-taster/standingsScreen.css's own
  * .standings-table — the module boundary rules out linking to another format's CSS
  * file directly (see src/formats/btc/CLAUDE.md's "Known debt" note on shared.css for
  * the same reasoning already applied there). No coin-toss/tiebreak styling here: this

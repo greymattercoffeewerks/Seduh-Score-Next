@@ -14,6 +14,7 @@
 //  - A refusal later, from any admin call, is the same signal as a refusal here. `isGateRefusal` names those
 //    hints so a screen can send the console back through this check instead of showing an error.
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../core/timeout.js';
+import { signOutRequest } from '../core/signOutRequest.js';
 
 export const GATE_STATE = Object.freeze({
   SIGNED_OUT: 'signedOut',
@@ -54,11 +55,7 @@ function isSessionGone(error) {
 // Drops a token the server no longer honours, so a reload does not find it again. Best effort: a failure here
 // changes nothing the person can act on.
 async function forgetDeadSession(client, ms) {
-  try {
-    await raceTimeout(client.auth.signOut({ scope: 'local' }), ms);
-  } catch {
-    // nothing to do
-  }
+  await signOutRequest(client, { scope: 'local', timeoutMs: ms });
 }
 
 async function signedOutWithNotice(client, ms) {
@@ -138,8 +135,17 @@ function strongest(a, b) {
   return a === 'global' || b === 'global' ? 'global' : a;
 }
 
+// The server saying "there is no such session" is the goal reached, not a failure. auth-js does not hand a 401
+// from the logout endpoint back as a 401: it becomes an AuthSessionMissingError (status 400), so that is matched
+// by name too. Proven against the real client in gateSessions.test.js; matching only on the status would leave a
+// sign-out whose response was lost, after the server had already revoked the session, failing for ever.
 function sessionAlreadyGone(error) {
-  return error?.status === 401 || error?.status === 403 || error?.status === 404;
+  return (
+    error?.name === 'AuthSessionMissingError' ||
+    error?.status === 401 ||
+    error?.status === 403 ||
+    error?.status === 404
+  );
 }
 
 async function revoke(client, { token, scope }, ms) {
@@ -148,7 +154,7 @@ async function revoke(client, { token, scope }, ms) {
     if (error && !sessionAlreadyGone(error)) return { ok: false };
     unrevoked.delete(client);
     // The local copy is normally gone already; make sure.
-    await raceTimeout(client.auth.signOut({ scope: 'local' }), ms).catch(() => {});
+    await signOutRequest(client, { scope: 'local', timeoutMs: ms });
     return { ok: true };
   } catch {
     return { ok: false };
@@ -170,13 +176,21 @@ export async function signOut(
   }
   let token = null;
   try {
-    const { data } = await raceTimeout(client.auth.getSession(), timeoutMs);
+    const { data, error } = await raceTimeout(client.auth.getSession(), timeoutMs);
+    // auth-js RESOLVES with an error (it does not throw) when it cannot refresh an expired token. A 4xx means
+    // the server has said the session is gone (refresh token used up or unknown): there is nothing to revoke
+    // and the sign-out below only has to clear the dead local copy. Anything else (no connection, a 5xx) means
+    // the session is unknown, not gone, and is treated like a lookup that threw.
+    if (error && !(error.status >= 400 && error.status < 500)) return { ok: false };
     token = data?.session?.access_token ?? null;
-    const { error } = await raceTimeout(client.auth.signOut({ scope }), timeoutMs);
-    if (!error) return { ok: true };
   } catch {
-    // fall through: a thrown request or a timeout is a failed sign-out
+    // The session could not be read, so there is no token to keep. Do NOT go on to sign out: a sign-out that
+    // then fails deletes the local session (auth-js) and the next attempt would find nothing to revoke and
+    // report success over a session the server still honours. Nothing is changed; the person tries again.
+    return { ok: false };
   }
+  // A failed or stalled request (or a throw) is a failed sign-out; the token is kept for the retry.
+  if ((await signOutRequest(client, { scope, timeoutMs })).ok) return { ok: true };
   if (token) unrevoked.set(client, { token, scope });
   return { ok: false };
 }

@@ -1,6 +1,6 @@
 /*
  * BTC Bracket screen (Phase T-BTC.2, sub-step 6). Base screen-chrome shapes live in
- * shared.css, loaded alongside this file. The judge-checkbox/fieldset shapes
+ * src/ui/tokens/components.css (and shared.css for the stage meta and roster list). The judge-checkbox/fieldset shapes
  * (.btc-judge-fieldset, .btc-judge-checkboxes, .btc-judge-checkbox-label) and
  * .btc-match-teams/.btc-field-error are already defined in matchesScreen.css, loaded
  * alongside this file too — this stylesheet only adds the bracket-tree layout and the

@@ -1,8 +1,7 @@
 /*
  * Timer — standalone free tool. Self-contained styles: this surface
  * intentionally does NOT reuse the console's own .btn/.card classes
- * (heatsScreen.css) since those live in a format directory this tool has no
- * business depending on — see src/tools/CLAUDE.md. It does reuse the generic
+ * (src/ui/tokens/components.css, which this page does not link) — see src/tools/CLAUDE.md. It does reuse the generic
  * design tokens (fonts/colors/typography/spacing/base) the same way
  * src/marketing/ does, since those are genuinely surface-agnostic.
  */
@@ -270,14 +269,14 @@ body {
 
 /* core/dom.js's labeledField() emits a generic .form-field/.form-field-label
    pair with no styling opinion of its own — every existing consumer
-   supplies its own CSS for these two classes (formats/cup-taster/
-   heatsScreen.css owns them for the console). This tool never loads that
-   file (correctly — src/tools/CLAUDE.md forbids reusing a format's CSS),
+   supplies its own CSS for these two classes (src/ui/tokens/components.css
+   owns them for the console). This tool never loads that
+   file (correctly — src/tools/CLAUDE.md keeps tools self-contained),
    which meant these two classes had NO styling here at all: the label
    (an inline <span>) rendered flush against its own input on the same
    line, with no gap — the cramped, run-together "Minutes8" layout found in
    user feedback (2026-09-12) — rather than stacked above it. Self-contained
-   fix, not a heatsScreen.css import. */
+   fix, not a components.css import. */
 .form-field {
   display: flex;
   flex-direction: column;
@@ -287,7 +286,7 @@ body {
 }
 
 /* Deliberately larger than the console's own --text-2xs/uppercase treatment
-   (heatsScreen.css) — user feedback asked for these labels a touch bigger,
+   (components.css) — user feedback asked for these labels a touch bigger,
    not to match that denser, badge-like console style. */
 .form-field-label {
   font-size: var(--text-md);

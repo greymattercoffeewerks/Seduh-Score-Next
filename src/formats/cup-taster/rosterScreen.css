@@ -1,8 +1,8 @@
 /*
- * Roster registration screen. Built on heatsScreen.css's shared
- * .screen-container / .card / .btn / .field-input / .form-field /
- * .screen-feedback / .roster-list component shapes — nothing here
- * redefines them. Stacks single-column from the smallest supported
+ * Roster registration screen. Built on the shared component shapes
+ * (src/ui/tokens/components.css: .card / .btn / .field-input / .form-field /
+ * .screen-feedback; heatsScreen.css: .screen-container / .roster-list) —
+ * nothing here redefines them. Stacks single-column from the smallest supported
  * viewport (360px) rather than needing a breakpoint, same reasoning as
  * setupScreen.css's own .stage-row-fields.
  */

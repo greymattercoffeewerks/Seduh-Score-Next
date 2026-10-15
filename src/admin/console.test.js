@@ -1028,3 +1028,21 @@ describe('what the console never does', () => {
     set.mockRestore();
   });
 });
+
+describe('the admin sign-in does not spend a second attempt on a trimmed password', () => {
+  it('a refused password with surrounding spaces is sent exactly once, as typed', async () => {
+    const client = makeClient({
+      signInError: { code: 'invalid_credentials', message: 'Invalid login credentials' },
+    });
+    const root = boot(client);
+    await flush();
+    await type(root, 'email', 'ops@example.test');
+    await type(root, 'password', ' pasted from a chat ');
+    await submit(root);
+    expect(client.auth.signInWithPassword).toHaveBeenCalledTimes(1);
+    expect(client.auth.signInWithPassword).toHaveBeenCalledWith({
+      email: 'ops@example.test',
+      password: ' pasted from a chat ',
+    });
+  });
+});

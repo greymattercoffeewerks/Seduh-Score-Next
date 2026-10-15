@@ -1,0 +1,226 @@
+/*
+ * Shared screen-chrome component shapes: .screen-container (and its headings), .card, .btn / .btn-primary /
+ * .btn-outline, .form-field / .form-field-label / .form-field-hint, .field-input, .screen-feedback (and its
+ * tones).
+ *
+ * One canonical copy. These used to live in src/formats/cup-taster/heatsScreen.css and be restated by
+ * src/formats/btc/shared.css and src/admin/admin.css (a format could not link another format's CSS, and the
+ * admin console must not load a format's at all). core/dom.js's labeledField() and core/loginScreen.js's
+ * renderLoginForm() emit these class names, so every surface that draws a form needs them.
+ *
+ * NOT part of tokens/index.css, on purpose: that file is loaded by EVERY page, including ones that define their
+ * own .form-field (src/tools/timer, src/community/guess-the-bean) or use the .screen-feedback class name with
+ * no styling of their own (src/marketing's results page: linking this file would restyle it). A page that
+ * wants these shapes links this file explicitly,
+ * after tokens/index.css and BEFORE its own screen CSS, so a screen's own rules still win on source order.
+ * Builds only on tokens: no value is invented here.
+ */
+
+/* Shared by every format-screen container (.heats-screen, .timing-screen,
+   ...) — extracted here on the 2nd verbatim occurrence rather than left
+   duplicated, since it's not merely similar CSS but byte-for-byte identical
+   rules. Screens keep their own class too (as a semantic/scoping hook for
+   screen-specific rules below), just add .screen-container alongside it. */
+.screen-container {
+  max-width: var(--max-width-content);
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.screen-container h1 {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  line-height: var(--leading-tight);
+  margin: 0;
+}
+
+.screen-container h2 {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  line-height: var(--leading-snug);
+  margin: 0 0 var(--space-3) 0;
+}
+
+/* Border bumped from --border-hairline/--color-border to --border-strong/
+   --color-border-strong (production UI/UX feedback, 2026-09-05) — the card
+   background (--color-surface, clay-50) sits only one step away from the
+   page canvas (--color-canvas, clay-100) on the clay ramp, which read as
+   "nearly invisible" against the page in review. A stronger edge does the
+   container-separation work without reaching for a shadow — DESIGN.md's
+   own no-shadow rule (flat borders/surface steps only, for a print-
+   scoresheet register over SaaS gloss) stays intact; this is still a
+   border, just a bolder one. Shared by every screen using `.card` —
+   intentional, a system-wide fix, not an eventsScreen-only patch. */
+.card {
+  background: var(--color-surface);
+  border: var(--border-strong) solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+}
+
+/* Found in review (ui-accessibility-reviewer): --color-focus-ring is
+   --color-border-strong in both surface modes (colors.css), and
+   --focus-ring-width now equals this card's own border-width (both
+   --border-strong, 2px) — so a focused .card (setupScreen.js's
+   `.card.stage-row`, tabindex="-1", focused after every Move up/down) would
+   otherwise show its own frame and its focus ring as one fused ~6px band
+   with no visible "focus moved here" signal, exactly the ambiguity the
+   pre-existing 1px-pale-border/2px-dark-ring pairing never had. Pushing the
+   ring out by the card's own border-width restores a real visible gap
+   between "this is the card" and "this is focus," without touching the
+   global --focus-ring-offset every other focusable element still uses. */
+.card:focus-visible {
+  outline-offset: calc(var(--focus-ring-offset) + var(--border-strong));
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tap-target-min);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-sm);
+  border: var(--border-hairline) solid transparent;
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+
+.btn:disabled,
+.btn[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.btn-primary {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+}
+
+.btn-primary:hover:not(:disabled):not([aria-disabled='true']) {
+  background: var(--color-accent-hover);
+}
+
+/* Ported from src/ui/tokens/preview.html's own documented `.btn-outline` —
+ * this project's first REAL usage of a secondary button variant (T4.8's
+ * report screen). Every `.btn` usage before this was paired with
+ * `.btn-primary`; `.btn` itself sets no background/color of its own, so a
+ * bare `.btn` falls through to un-tokenized browser/OS default button
+ * chrome — found in review. Belongs here, not in the format-specific
+ * screen that first needed it, matching this file's own stated role as
+ * where shared `.btn*` component shapes live.
+ */
+.btn-outline {
+  background: transparent;
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+}
+
+.btn-outline:hover:not(:disabled):not([aria-disabled='true']) {
+  background: var(--color-surface-sunken);
+}
+
+/* Shared "label above input" field wrapper — core/dom.js's labeledField()
+   renders these class names, so any screen's form fields (originally
+   setupScreen.js's stage rows; roster registration reuses it unedited)
+   look consistent without redefining the shapes per screen. */
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* --color-text-secondary, not -muted: this is the value the console has always rendered (btc/shared.css, linked
+   after this file's old copy, carried it and won on source order), and it is the higher-contrast of the two. */
+.form-field-label {
+  font-size: var(--text-2xs);
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+}
+
+/* A real, token-colored explanation line — not placeholder text alone
+   (found in review on setupScreen.js's terminal-cutoff hint: a disabled
+   field's placeholder falls back to browser/OS default color, right at the
+   AA floor in one engine and worse in others, and can drop out of some
+   assistive-tech read modes entirely). */
+.form-field-hint {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.field-input {
+  min-height: var(--tap-target-min);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-hairline) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+}
+
+/* A real, token-controlled color — not left to browser/OS default disabled
+   styling, which can render right at or below the AA floor in some
+   engines (found in review: the same contrast-reliability class of bug
+   this file's own .form-field-hint comment already documents, just not
+   yet extended to a disabled input's own foreground text). */
+.field-input:disabled,
+.field-input[aria-disabled='true'] {
+  color: var(--color-text-secondary);
+}
+
+.screen-feedback {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+
+.screen-feedback[data-tone='error'] {
+  background: var(--color-surface-sunken);
+  border: var(--border-hairline) solid var(--color-danger);
+  color: var(--color-danger);
+}
+
+.screen-feedback[data-tone='success'] {
+  background: var(--color-surface-sunken);
+  border: var(--border-hairline) solid var(--color-success);
+  color: var(--color-success);
+}
+
+/* Neutral, not an error: something is saved and still on its way (a correction
+   queued while offline). */
+.screen-feedback[data-tone='pending'] {
+  background: var(--color-surface-sunken);
+  border: var(--border-hairline) solid var(--color-border-strong);
+  color: var(--color-text);
+}
+
+.screen-feedback[data-tone='urgent'] {
+  background: var(--color-surface-sunken);
+  border: var(--border-hairline) solid var(--color-warning);
+  color: var(--color-warning);
+}
+
+/* Empty, the message region takes no room but stays in the accessibility tree. It used to be display:none, and
+   several screens create the region empty and write text into it later (the scoring screen's "scores may not
+   be saved" warning, the no-organisation sign-out failure): a node that is display:none while empty is not in
+   the tree, so a screen reader may not announce the first message put into it. Out of the flow and clipped to
+   1px it takes the same (no) space. */
+.screen-feedback:empty {
+  display: block;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}

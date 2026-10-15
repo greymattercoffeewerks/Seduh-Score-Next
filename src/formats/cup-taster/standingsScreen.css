@@ -1,7 +1,7 @@
 /*
  * Standings and advancement screen (T4.6) — built on src/ui/tokens, reusing
- * heatsScreen.css's .screen-container/.btn/.card/.field-input and its
- * .assignment-table responsive-stack pattern for this screen's own table
+ * heatsScreen.css's .screen-container and its .assignment-table responsive-stack
+ * pattern, and components.css's .btn/.card/.field-input, for this screen's own table
  * (both stylesheets load together; nothing here redefines them).
  */
 

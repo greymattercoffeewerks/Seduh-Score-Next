@@ -549,8 +549,8 @@ export async function mountEventsScreen(
     // an organiser working near the top — the scrollIntoView call below
     // compensated for error tone, but jumping the viewport is itself a
     // jarring way to surface a message someone should just see). `.card`'s
-    // own display: none-when-empty (heatsScreen.css's `.screen-feedback`
-    // rule) means this costs nothing when there's nothing to show.
+    // own take-no-room-when-empty rule (src/ui/tokens/components.css's
+    // `.screen-feedback:empty`) means this costs nothing when there's nothing to show.
     container.appendChild(feedback);
 
     container.appendChild(

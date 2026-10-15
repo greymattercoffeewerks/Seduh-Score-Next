@@ -339,6 +339,18 @@ section only records the conventions a new screen or token needs to follow.
   reserved-accent rules (violet, gold-as-fill-only) apply the same way: if no existing
   semantic token fits, that's a signal the token layer needs a new one, reasoned through
   and contrast-checked, not a hand-picked hex value in the consuming screen.
+- **The shared screen-chrome shapes live in `src/ui/tokens/components.css`, once**: `.screen-container` (and
+  its headings), `.card`, `.btn` /
+  `.btn-primary` / `.btn-outline`, `.form-field` / `.form-field-label` / `.form-field-hint`, `.field-input`,
+  `.screen-feedback` (and its tones). `core/dom.js` and `core/loginScreen.js` emit these class names, so a
+  page that draws a form links the file **by hand, after `tokens/index.css` and before its own screen CSS**
+  (`app/index.html`, `admin/index.html`, every `*.preview.html`). It is deliberately NOT imported by
+  `tokens/index.css`: every page loads that, including ones with their own `.form-field` (the timer, Guess
+  the Bean) or their own `.screen-feedback` styling (the public results page). A new surface restating one of
+  these in its own CSS is the duplication this removed (four copies had drifted: one label colour differed and
+  source order decided which rendered): `components.test.js` fails CI for it, and for a page that links a
+  stylesheet relying on the shapes without linking this one. A surface that needs a different look overrides
+  the specific property in its own CSS, after this file (see `src/admin/admin.css`), and says why.
 - `src/ui/tokens/preview.html` renders every token in both surface modes — open it
   (`npm run dev`, then `/src/ui/tokens/preview.html`) when changing any token value, and
   keep its demo copy format-agnostic (a leaked Cup-Taster-specific term here was

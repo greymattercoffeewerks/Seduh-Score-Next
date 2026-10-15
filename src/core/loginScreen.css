@@ -1,11 +1,12 @@
 /* Temporary login screen (2026-08-30). Reuses .screen-container/.card/
-   .btn/.tap-target/.field-input/.form-field/.screen-feedback from
-   eventsScreen.css's own established token-only styling — no new
-   one-off colors/spacing/shadows. */
+   .btn/.tap-target/.field-input/.form-field/.screen-feedback — the shapes
+   live in src/ui/tokens/components.css, which a page drawing this form links
+   first (app/index.html, admin/index.html) — no new one-off
+   colors/spacing/shadows. */
 
 /* Two classes, not one — beats .screen-container's own max-width rule on
    specificity regardless of <link> order between this file and
-   heatsScreen.css (where .screen-container's own rule lives). */
+   components.css (where .screen-container's own rule lives). */
 .screen-container.login-screen {
   max-width: 24rem;
 }
