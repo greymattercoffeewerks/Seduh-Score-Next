@@ -61,6 +61,9 @@ grant execute on function t047.session(uuid, text, int), t047.admin(uuid), t047.
 
 -- ============ fixtures (as postgres) ============
 
+-- rows left behind by an earlier run (the log cannot be emptied) must not confuse the counts: everything below looks only at ids above this
+create table t047.base as select coalesce(max(id), 0) as mid from app.admin_audit_log;
+
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000000b0001', 'audit-admin@test.seduh-next'),
   ('00000000-0000-0000-0000-0000000b0002', 'audit-admin-two@test.seduh-next'),
@@ -164,7 +167,7 @@ select t047.session('00000000-0000-0000-0000-0000000b0001', 'aal2');
 select is(t047.outcome($$select app.admin_audit('org.create')$$), '42501|admin_mfa_required', 'an admin with no TOTP proof cannot write');
 select t047.session(null, null);
 select is(t047.outcome($$select app.admin_audit('org.create')$$), '42501|admin_required', 'a session with no user cannot write');
-select is((select count(*)::int from app.admin_audit_log), 0, 'and none of those attempts left a row');
+select is((select count(*)::int from app.admin_audit_log where id > (select mid from t047.base)), 0, 'and none of those attempts left a row');
 
 select t047.admin('00000000-0000-0000-0000-0000000b0001');
 select lives_ok(
@@ -177,29 +180,29 @@ select lives_ok($$ select app.admin_audit('member.role_set', null, null, null) $
 select t047.session(null, null);
 
 select is(
-  (select actor_id from app.admin_audit_log where action = 'org.create'),
+  (select actor_id from app.admin_audit_log where id > (select mid from t047.base) and action = 'org.create'),
   '00000000-0000-0000-0000-0000000b0001'::uuid, 'the actor is the caller (auth.uid()), not something the caller chose');
 select is(
-  (select actor_id from app.admin_audit_log where action = 'member.role_set'),
+  (select actor_id from app.admin_audit_log where id > (select mid from t047.base) and action = 'member.role_set'),
   '00000000-0000-0000-0000-0000000b0002'::uuid, 'and it follows the caller: a second admin''s row names the second admin');
 select is(
-  (select target_org_id from app.admin_audit_log where action = 'org.create'),
+  (select target_org_id from app.admin_audit_log where id > (select mid from t047.base) and action = 'org.create'),
   '00000000-0000-0000-0000-0000000b00f1'::uuid, 'the org id lands in target_org_id (not swapped with the user)');
 select is(
-  (select target_user_id from app.admin_audit_log where action = 'org.create'),
+  (select target_user_id from app.admin_audit_log where id > (select mid from t047.base) and action = 'org.create'),
   '00000000-0000-0000-0000-0000000b0002'::uuid, 'and the user id lands in target_user_id');
 select is(
-  (select detail from app.admin_audit_log where action = 'member.add'), '{}'::jsonb, 'detail defaults to {}');
+  (select detail from app.admin_audit_log where id > (select mid from t047.base) and action = 'member.add'), '{}'::jsonb, 'detail defaults to {}');
 select is(
-  (select detail from app.admin_audit_log where action = 'member.role_set'), '{}'::jsonb, 'a null detail becomes {}');
+  (select detail from app.admin_audit_log where id > (select mid from t047.base) and action = 'member.role_set'), '{}'::jsonb, 'a null detail becomes {}');
 select is(
-  (select detail from app.admin_audit_log where action = 'org.create'),
+  (select detail from app.admin_audit_log where id > (select mid from t047.base) and action = 'org.create'),
   '{"slug":"audit-test","name":"Audit Test"}'::jsonb, 'a real detail is stored as given');
-select is((select count(*)::int from app.admin_audit_log), 3, 'three rows so far');
-select is((select count(distinct id)::int from app.admin_audit_log), 3, 'each with its own id');
+select is((select count(*)::int from app.admin_audit_log where id > (select mid from t047.base)), 3, 'three rows so far');
+select is((select count(distinct id)::int from app.admin_audit_log where id > (select mid from t047.base)), 3, 'each with its own id');
 
--- exactly one function writes to the table (a later batch adds the service-role account.create writer and
--- must add it here, deliberately)
+-- exactly one function WRITES to the table, and exactly one READS it (admin_list_audit, T-ADM.B3); a later batch
+-- adds the service-role account.create writer and must add it here, deliberately
 select is(
   (select coalesce(string_agg(n.nspname || '.' || p.proname, ', ' order by n.nspname, p.proname), 'none')
      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -207,7 +210,7 @@ select is(
       and p.prokind in ('f', 'p')
       and p.prorettype <> 'trigger'::regtype      -- the refusal trigger names the table in its message; it writes nothing
       and p.prosrc ~* 'admin_audit_log'),
-  'app.admin_audit', 'exactly one function in app or public mentions the table: the writer');
+  'app.admin_audit, public.admin_list_audit', 'exactly two functions in app or public mention the table: the writer and the one reader');
 
 -- ============ append-only, even for the owner (the role this test runs as) ============
 
@@ -215,7 +218,7 @@ select throws_ok($$ update app.admin_audit_log set action = 'org.delete' $$, '42
   'UPDATE is refused, even for the table owner');
 select throws_ok($$ update app.admin_audit_log set detail = '{}' where action = 'org.create' $$, '42501', 'admin_audit_log is append-only',
   'a targeted UPDATE is refused too (rewriting history one row at a time)');
-select throws_ok($$ delete from app.admin_audit_log where action = 'org.create' $$, '42501', 'admin_audit_log is append-only',
+select throws_ok($$ delete from app.admin_audit_log where id > (select mid from t047.base) and action = 'org.create' $$, '42501', 'admin_audit_log is append-only',
   'DELETE of one row is refused');
 select throws_ok($$ delete from app.admin_audit_log $$, '42501', 'admin_audit_log is append-only', 'DELETE of every row is refused');
 select throws_ok($$ truncate app.admin_audit_log $$, '42501', 'admin_audit_log is append-only', 'TRUNCATE is refused');
@@ -231,9 +234,9 @@ select throws_ok($$ delete from app.admin_audit_log $$, '42501', 'admin_audit_lo
 select throws_ok($$ truncate app.admin_audit_log $$, '42501', 'admin_audit_log is append-only', 'and so is TRUNCATE');
 set local session_replication_role = origin;
 
-select is((select count(*)::int from app.admin_audit_log), 3, 'after all those attempts the three rows are still there');
+select is((select count(*)::int from app.admin_audit_log where id > (select mid from t047.base)), 3, 'after all those attempts the three rows are still there');
 select is(
-  (select detail from app.admin_audit_log where action = 'org.create'),
+  (select detail from app.admin_audit_log where id > (select mid from t047.base) and action = 'org.create'),
   '{"slug":"audit-test","name":"Audit Test"}'::jsonb, 'and unchanged');
 
 -- ============ what a row may hold ============

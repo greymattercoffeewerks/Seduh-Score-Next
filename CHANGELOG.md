@@ -1,3 +1,51 @@
+## T-ADM.B3: admin read RPCs, the reads the console will show, each behind the platform-admin gate · 2026-10-15
+
+**Task:** T-ADM.B3 (Batch 4) of `Handoffs and Specs/ADMIN-CONSOLE-SPEC.md` (local, gitignored). Branch `admin/b3-read-rpcs`, built on T-ADM.B2 (B1 and B2 are on `dev` via PRs #271 and #272, not yet on `main`). One migration and one pgTAP file, plus two guard-list edits in existing tests; no application code. **Status: branch-complete and reviewed; not committed, not merged, not pushed to the cloud project. Not final:** the rollout and push steps below are owed.
+
+**Why:** the console's read screens (organisations, one organisation, find a person by email, the audit log) need data across every organisation. Access to tenant tables is `app.is_org_member(...)` only, and a platform admin is not a member of the organisations they read. So each read is a narrow `SECURITY DEFINER` RPC whose first statement is `app.require_platform_admin()`. Nothing here writes data, so existing behaviour does not change.
+
+**What changed:** migration `supabase/migrations/20261014120000_admin_read_rpcs.sql`, test `supabase/tests/048_admin_read_rpcs.sql` (95 assertions). Two guard-list edits in existing tests:
+
+- `041_cross_org_rpcs.sql`: the exemption list gains `admin_org_detail(uuid)` and `admin_list_audit(integer,bigint,uuid)`. Both take an organisation id as an argument and are protected by the platform-admin gate, not by membership.
+- `047_admin_audit_log.sql`: now expects exactly the writer and the one reader (`app.admin_audit`, `public.admin_list_audit`), and its assertions no longer assume an empty audit table (they use a baseline id).
+
+The migration adds four public `SECURITY DEFINER STABLE` RPCs. Each begins with `app.require_platform_admin()`, with nothing before it:
+
+- `admin_list_orgs()`: each organisation with its counts and last event date (UTC). Unbounded, because organisations are invite-only.
+- `admin_org_detail(org)`: a jsonb object with the organisation, its event count, its last event date, and its members with email, role and joined date. An unknown or null id gives 22023 `org_not_found`.
+- `admin_find_user(email)`: exact, case-insensitive match after trimming spaces, tabs and newlines. Null or blank input returns no rows. Two live accounts that differ only in case give 22023 `email_ambiguous`. Returns `user_id`, `email`, `banned`, `deleted`, `org_count`, `must_change_password` and `needs_attestation`.
+- `admin_list_audit(limit, before id, org)`: newest id first; limit clamped to 1..200, default 50. Emails and the org slug are resolved at read time. The org filter is a separate query branch so the per-org index is used.
+
+Also `app.account_needs_attestation(uuid)`: true when the account has any membership or any `team_removed_members` row. It is the one predicate shared by `admin_find_user` and the write RPCs to come. No API role can execute it.
+
+**Verification:**
+
+- Full pgTAP suite: 48 files, 2,165 tests passing. `033`, `040`, `042` and `045` untouched; `041` changed only in its exemption list.
+- `048`: 95 assertions. It pins the refusal matrix (six caller kinds by four RPCs, plus unknown or null ids and null or blank emails for refused callers, so a refused caller gets no existence oracle); result column lists; the exact JSON of an organisation's detail; the set of relations each body may mention; whole-row values; UTC dates under a non-UTC session timezone; and that every `public.admin_*` function the signed-in role can run starts with the gate.
+- Rollback block (5 statements) run inside a transaction.
+- Hand mutation testing: 54 mutants, all killed by `048`. They covered each admin check removed; the gate moved after the lookup or after an initialiser; wrong order; session-timezone dates; leaked event names, venues, person names or extra keys; case-sensitive, prefix, wildcard and space-only trim matching; a removed ambiguity check; the helper's rules; banned and deleted flags; clamps; paging; the org filter; swapped audit columns; grants. The first version of `048` let several survive; it was strengthened before this count.
+
+**Reviews:**
+
+- schema-guardian: no migration defect. Test gaps found and fixed in `048`.
+- security-reviewer: no Critical, High or Medium findings. Low items, all fixed: `needs_attestation` drift removed by using the shared helper; the ambiguity refusal; whitespace trim; gate first with no initialiser; the per-org index plan.
+
+**Decisions recorded:**
+
+- The console must call these RPCs with POST. They are `STABLE`, so PostgREST would allow GET, which would put an email in URLs and logs.
+- Soft-deleted logins still show their email in the audit read.
+- `last_event_date` counts all events, including drafts, tests and future-dated ones.
+- `admin_list_orgs` is unbounded (see above).
+
+**Not done / still open:**
+
+- Not committed or merged. Not pushed to the cloud project: that is a separate, owner-approved step after merge. Push in order `20261014100000`, `20261014110000`, `20261014120000`; compare with `list_migrations`; run the advisors. Advisor lint 0029 is expected on the four new functions, by design.
+- Write RPCs (Batch 5) are not started. They must not log no-op actions, and they must call `app.account_needs_attestation`.
+- Edge Function (Batch 7) and UI (Batches 8 to 11) not started.
+- Stale lines, to correct at close-out (this entry does not edit them): the T-ADM.B1 entry's "not merged" lines, and the T-ADM.B2 entry's "not committed, not merged" status. B1 and B2 are merged into `dev` via #271 and #272.
+- Branch state: `admin/b3-read-rpcs` is at `2c848ec` (B2), an ancestor of `origin/dev`; the B3 changes are uncommitted. This worktree's `CHANGELOG.md` matches `origin/dev`'s, so this entry is an insert at the top and rebases cleanly.
+- No footer version bump: no application code or `package.json` change. `ROADMAP.md` and `CONVENTIONS.md` not touched in this batch.
+
 ## T-ADM.B2: admin audit log, the append-only record of platform-admin actions · 2026-10-15
 
 **Task:** T-ADM.B2 (Batch 3) of `Handoffs and Specs/ADMIN-CONSOLE-SPEC.md` (local, gitignored). Branch `admin/b2-audit-log`, built on T-ADM.B1 (B1 is on `dev` via PR #271, not yet on `main`). One migration and one pgTAP file, no application code. **Status: branch-complete and reviewed; not committed, not merged, not pushed to the cloud project. Not final:** the rollout and push steps below are owed.
