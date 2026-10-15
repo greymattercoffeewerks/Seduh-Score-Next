@@ -1,3 +1,43 @@
+## T-ADM.B1: platform-admin identity, the authorisation layer for the admin console · 2026-10-15
+
+**Task:** T-ADM.B1 (Batch 2) of `Handoffs and Specs/ADMIN-CONSOLE-SPEC.md` (local, gitignored). Branch `admin/b1-platform-identity`: one migration and one pgTAP file, no application code. **Status: branch-complete and reviewed; not merged, not pushed to the cloud project. Not final:** the rollout checks listed below are owed.
+
+**Why:** provisioning an organisation is hand-written service-role SQL today. The admin console needs a way to say, in the database and never in the page, "this signed-in person is a platform admin, and this session has proved a second factor recently". Nothing in this batch makes anyone an admin or changes an organisation, member or login. The one change to existing behaviour is the Team gate below.
+
+**What changed:** migration `supabase/migrations/20261014100000_platform_admin_identity.sql`, test `supabase/tests/046_platform_admin_identity.sql`.
+
+- `app.platform_admins` lives in the `app` schema, not `public`. RLS is on with no policies, and every API role's privileges are revoked. Non-exposure is not the control (the cloud's exposed-schema setting is a dashboard value, and `anon`/`authenticated` hold USAGE on `app`); the revoke and RLS are. Rows are inserted only by SQL as the operator. Nothing is seeded. Because it is not in `public`, the tenant guards (033, 040, 042) need no exemption (D-A10).
+- `app.is_platform_admin()`: the caller is in the table AND the login is not deleted or banned. A banned admin is refused on the next call, not when the access token expires. It is for "am I an admin" only, with no second-factor check.
+- `app.require_platform_admin()` is the first statement of every admin function. It refuses with 42501 and hint `admin_required` unless the caller is an admin, then with `admin_mfa_required` unless the session is aal2 and has a TOTP `amr` entry whose timestamp is a JSON integer no older than 60 minutes and at most 5 minutes ahead (D-A5, D-A14). It fails closed on every NULL or malformed shape.
+- `public.am_i_platform_admin()` returns `{is_admin, aal}` for the caller and nothing else. It is the one door an aal1 admin session may use. `public.admin_can_provision()` returns true or refuses; the Edge Function will call it with the caller's own JWT, so the second factor is checked by the same code as every other admin call.
+- `public.team_can_manage` and `public.team_can_restore` gain one condition each: a platform admin is never the Team screen's to manage. Those two gate the team-accounts function's reset and restore, which set a password with the service role. Without the gate, an organisation owner could reset the password of a platform admin who is a non-owner member of that organisation (found by security review). Bodies are otherwise unchanged.
+
+**Why 60 minutes (D-A14):** a refresh token keeps `aal2` far past the access token's one-hour life, and the plan has no session time-box. So the TOTP verification itself has to be recent. Verified against real local GoTrue tokens: a refresh keeps the original TOTP timestamp, so an admin is asked for a code about hourly.
+
+**Verification:**
+
+- Full pgTAP suite: 46 files, 1,996 tests passing. `033`, `040`, `041`, `042` and `045` are untouched, which is the proof that platform tables in `app` need no guard exemption.
+- `046`: 66 assertions.
+- Rollback block run inside a transaction: drops everything the migration creates and restores the two Team gates. The rollback deletes `platform_admins` rows, so a re-apply needs the operator's row inserted again.
+- Real local GoTrue tokens: after TOTP, the access token carries `aal` and `amr=[{method:totp,timestamp:int},{method:password,timestamp:int}]`. Over PostgREST, an aal2 admin token passes; a password-only (aal1) token gets `admin_mfa_required`; anon is refused; the `app` schema is unreachable (PGRST106).
+- Hand mutation testing: 8 mutants of `require_platform_admin()`. Every meaningful one is killed by `046`. One redundant guard was removed as dead code.
+
+**Reviews:**
+
+- schema-guardian: no blocking defects. Its test-gap and ban/deleted suggestions were applied.
+- security-reviewer: no exploitable escalation in the migration. The `team_can_manage` exposure was fixed, and the surviving fail-open mutants were killed by tests. Residual risks are recorded in the spec.
+
+**Decisions in force (owner-approved 2026-10-15):** D-A9, the attestation rule (`p_attest_own_password`); D-A14, the 60-minute TOTP freshness above; D-A15, a separate admin Supabase client; `otplib` as a dev dependency, to be used from Batch 8 (not added in this batch: no `package.json` change). The reasoning for D-A9 and D-A15 is in the spec, not restated here.
+
+**Not done / still open:**
+
+- Not merged. Not pushed to the cloud project; that is a separate, owner-approved step after merge (CLAUDE.md's migration rule).
+- Cloud checks owed at rollout: that TOTP can be enabled on this plan (the `config.toml` template comment says Pro); that the exposed schemas exclude `app`; that `pg_default_acl` has no `app` entry.
+- Batch 7 exit gate, owed: an aal1 session must not be able to enrol a second factor when a verified one exists.
+- No UI, no Edge Function and no audit log yet (Batches 3 to 13).
+- Footer version not bumped: nothing deployable yet.
+- The admin-console decisions (D-A9, D-A14, D-A15) are recorded here, not in ROADMAP: ROADMAP has no admin-console tracker. `CONVENTIONS.md` does not yet describe the `app`-schema platform table or the `require_platform_admin()` gate; not updated in this batch.
+
 ## T-FIX.gtb-export-revoke: Guess the Bean's export no longer revokes its download link at the click · 2026-10-14
 
 **Task:** requested by the user, from the module-boundary reviewer's finding on the Random Selector round.
