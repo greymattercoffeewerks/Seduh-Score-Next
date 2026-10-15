@@ -97,6 +97,8 @@ export function makeClient({
         if (gate) return gate(state);
         return { data: true, error: null };
       }
+      // the default panel (Organisations) asks for the list when the console opens
+      if (name === 'admin_list_orgs') return { data: [], error: null };
       throw new Error(`unexpected rpc ${name}`);
     }),
   };

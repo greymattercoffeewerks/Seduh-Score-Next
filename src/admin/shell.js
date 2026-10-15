@@ -4,8 +4,12 @@
 import { el, brandLockup, setBusyDisabled } from '../core/dom.js';
 import { setFeedback, SIGN_OUT_FAILED } from './screenParts.js';
 
+// The panel a hash names: by its FIRST segment, so `#/orgs/<id>` is still the `orgs` panel (which then reads the
+// rest itself). Anything that names no panel is the first one.
 export function routeOf(hash, panels) {
-  const wanted = String(hash ?? '').replace(/^#\/?/, '');
+  const wanted = String(hash ?? '')
+    .replace(/^#\/?/, '')
+    .split('/')[0];
   return panels.find((panel) => panel.route === wanted) ?? panels[0];
 }
 
@@ -59,7 +63,16 @@ export function mountShell(root, { panels, email, ctx, onSignOut, onSignOutEvery
     ]),
   ]);
 
-  root.append(header, feedback, nav, host);
+  // A keyboard user reaches the page's content without tabbing through the header and the navigation each time. A
+  // button, not a link to #admin-main: this page routes by the URL hash, and a link to another hash would navigate.
+  const skip = el('button', {
+    className: 'adm-skip',
+    text: 'Skip to content',
+    attrs: { type: 'button' },
+  });
+  skip.addEventListener('click', () => host.focus());
+
+  root.append(skip, header, feedback, nav, host);
 
   let mounted = null;
   let mountedPanel = null;

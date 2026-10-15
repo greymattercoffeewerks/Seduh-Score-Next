@@ -200,7 +200,7 @@ describe('after sign-in', () => {
     await flush();
     expect(root.querySelector('header').textContent).toContain('ops@example.test');
     expect(root.querySelector('header').textContent).toContain('Verified (AAL2)');
-    expect(root.querySelector('nav a[aria-current="page"]').textContent).toBe('Overview');
+    expect(root.querySelector('nav a[aria-current="page"]').textContent).toBe('Organisations');
     expect(client.auth.mfa.challengeAndVerify).toHaveBeenCalledWith({
       factorId: 'factor-1',
       code: '123456',

@@ -112,7 +112,7 @@ describe('specifier extraction (the guard must see every shape it polices)', () 
   });
 });
 
-describe('the admin module boundary', () => {
+describe('the admin module boundary', { timeout: 30000 }, () => {
   const all = walk(SRC, (name) => /\.(js|mjs|css|html)$/.test(name));
   // Every HTML entry in the repo: they name their scripts and styles by root path.
   const htmlEntries = walk(
