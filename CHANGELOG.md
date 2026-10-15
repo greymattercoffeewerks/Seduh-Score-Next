@@ -20,7 +20,7 @@
 
 Layout of a container with an empty feedback node measured identical before and after. The built output defines each shape once for `/app/` and `/admin/`, and not at all for guess-the-bean, tools/timer or results.
 
-**One intended behavioural change on the live console:** `.screen-feedback:empty` was `display: none`. It is now out of the flow, 1px, clipped, but still in the accessibility tree. Text written into an empty live region later can therefore be announced, for example BTC scoring's "scores may not be saved" warning or the no-organisation sign-out failure. The per-screen workarounds for the same thing (timing, BTC scoring, admin) were removed. Not verified with a screen reader (T5.3 still owed).
+**One intended behavioural change on the live console:** `.screen-feedback:empty` was `display: none`. It is now out of the flow, 1px, clipped, but still in the accessibility tree. Text written into an empty live region later can therefore be announced, for example BTC scoring's "scores may not be saved" warning or the no-organisation sign-out failure. The per-screen workarounds for the same thing (timing, BTC scoring, admin) were removed. On the timing screen this has one visible consequence: its empty status line used to stay in the flow at height 0, so the container's flex gap was still spent on it; it now takes no gap, so the screen's content sits one gap higher while the line is empty. `tests/e2e/organiser-flow.spec.js` asserted `height === 0` for that line; it now asserts the intent (rendered, not `display: none`, at most one pixel and out of the flow). Not verified with a screen reader (T5.3 still owed).
 
 **Bugs the reviews found, fixed** (all in the admin sign-out added in Batch 8):
 
