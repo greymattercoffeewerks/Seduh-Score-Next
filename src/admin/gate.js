@@ -135,8 +135,17 @@ function strongest(a, b) {
   return a === 'global' || b === 'global' ? 'global' : a;
 }
 
+// The server saying "there is no such session" is the goal reached, not a failure. auth-js does not hand a 401
+// from the logout endpoint back as a 401: it becomes an AuthSessionMissingError (status 400), so that is matched
+// by name too. Proven against the real client in gateSessions.test.js; matching only on the status would leave a
+// sign-out whose response was lost, after the server had already revoked the session, failing for ever.
 function sessionAlreadyGone(error) {
-  return error?.status === 401 || error?.status === 403 || error?.status === 404;
+  return (
+    error?.name === 'AuthSessionMissingError' ||
+    error?.status === 401 ||
+    error?.status === 403 ||
+    error?.status === 404
+  );
 }
 
 async function revoke(client, { token, scope }, ms) {
@@ -167,7 +176,12 @@ export async function signOut(
   }
   let token = null;
   try {
-    const { data } = await raceTimeout(client.auth.getSession(), timeoutMs);
+    const { data, error } = await raceTimeout(client.auth.getSession(), timeoutMs);
+    // auth-js RESOLVES with an error (it does not throw) when it cannot refresh an expired token. A 4xx means
+    // the server has said the session is gone (refresh token used up or unknown): there is nothing to revoke
+    // and the sign-out below only has to clear the dead local copy. Anything else (no connection, a 5xx) means
+    // the session is unknown, not gone, and is treated like a lookup that threw.
+    if (error && !(error.status >= 400 && error.status < 500)) return { ok: false };
     token = data?.session?.access_token ?? null;
   } catch {
     // The session could not be read, so there is no token to keep. Do NOT go on to sign out: a sign-out that

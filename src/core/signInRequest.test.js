@@ -30,6 +30,10 @@ describe('isInvalidCredentials', () => {
       {},
       { code: 'over_request_rate_limit' },
       { message: 'x' },
+      // near misses: one word or one character away from the real thing
+      { message: 'Invalid login link' },
+      { code: 'invalid_grant' },
+      { code: 'invalid_credentials_extra' },
     ]) {
       expect(isInvalidCredentials(error)).toBe(false);
     }
@@ -152,6 +156,17 @@ describe('signInWithPasswordRequest', () => {
       );
       expect(result.kind).toBe('invalid');
       expect(client.auth.signInWithPassword).toHaveBeenCalledTimes(1);
+    });
+
+    it('a second try that never settles is "timeout"', async () => {
+      const client = clientWith(WRONG, () => new Promise(() => {}));
+      expect(
+        await signInWithPasswordRequest(
+          client,
+          { email: 'a', password: ' pw ' },
+          { retryTrimmed: true, timeoutMs: 5 },
+        ),
+      ).toEqual({ ok: false, kind: 'timeout' });
     });
 
     it('reports the SECOND answer when both tries are refused, and a transport failure in the second', async () => {
