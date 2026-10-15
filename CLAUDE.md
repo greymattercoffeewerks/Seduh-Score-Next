@@ -31,6 +31,9 @@ the context it actually touches:
   Guess the Bean, a free Community-tier tool with real auth+Supabase but no
   roster/scoring/advancement — a third kind of surface, neither `src/tools/` nor
   `src/formats/`.
+- [src/admin/CLAUDE.md](src/admin/CLAUDE.md) — the platform operator's console at `/admin/`
+  (MFA-gated, audited org provisioning): a fourth kind of surface with its own Supabase client
+  and session; nothing outside `src/admin/` may import it (a test fails CI if so).
 - [android/guess-the-bean-widget/CLAUDE.md](android/guess-the-bean-widget/CLAUDE.md) —
   native Kotlin/Glance Android home-screen widget for one public Guess the Bean session;
   outside `src/` entirely (own Gradle build, anonymous-only Supabase reads).

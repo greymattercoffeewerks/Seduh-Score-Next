@@ -1,0 +1,22 @@
+# Cloudflare Workers Static Assets reads this file from the build output (Vite copies public/ into dist/).
+# Only the admin console gets headers, and they back up what admin/index.html already says in its own tags:
+#  - X-Robots-Tag / noindex: keep the page out of search results (the meta tag is the guarantee if this file
+#    ever does not take effect, see spec section 2 R6);
+#  - Cache-Control: no-store: an admin screen is never cached by the browser or a shared cache;
+#  - frame-ancestors / X-Frame-Options: no other site may embed the console in a frame (clickjacking);
+#  - Referrer-Policy: nothing about where the operator came from is sent onward.
+# The console's hashed script and style files live under /assets/ and are shared with the other pages, so they
+# are deliberately not matched here.
+/admin
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-store
+  X-Frame-Options: DENY
+  Content-Security-Policy: frame-ancestors 'none'
+  Referrer-Policy: no-referrer
+
+/admin/*
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-store
+  X-Frame-Options: DENY
+  Content-Security-Policy: frame-ancestors 'none'
+  Referrer-Policy: no-referrer

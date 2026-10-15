@@ -8,7 +8,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   build: {
     rollupOptions: {
-      // Fourteen HTML entries: the marketing landing page at root (index.html),
+      // Fifteen HTML entries: the marketing landing page at root (index.html),
       // the console SPA at /app/ (app/index.html — moved out of root
       // 2026-09-07 so the bare domain serves the landing page instead of
       // booting straight into the console), the standalone Timer tool at
@@ -64,6 +64,9 @@ export default defineConfig({
         privacy: fileURLToPath(new URL('./privacy/index.html', import.meta.url)),
         terms: fileURLToPath(new URL('./terms/index.html', import.meta.url)),
         neutrality: fileURLToPath(new URL('./neutrality/index.html', import.meta.url)),
+        // /admin/ (T-ADM.D1): the platform operator's console. Unlinked, noindex, its own Supabase client — see
+        // src/admin/CLAUDE.md.
+        admin: fileURLToPath(new URL('./admin/index.html', import.meta.url)),
       },
     },
   },
