@@ -412,3 +412,17 @@ version/nameplate move tracks the code shipping to the repo, not the separate de
 `dev` is the working branch; `main` is protected (direct pushes rejected, `GH006`) and
 takes changes via PR only. See `CLAUDE.md`'s Git section for why this required making
 the repo public.
+
+### Response headers for one path: `public/_headers` (added with the admin console)
+
+Workers Static Assets reads `public/_headers` from the build output (Vite copies `public/` into `dist/`). It is
+used for **`/admin` and `/admin/*` only**: `X-Robots-Tag: noindex, nofollow`, `Cache-Control: no-store`,
+`X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` and a
+script-restricting `Content-Security-Policy` (see `src/admin/CLAUDE.md`; `src/admin/headers.test.js` pins it).
+It backs up, never replaces, the page's own tags (`admin/index.html` carries `<meta name="robots">` itself, so
+the page is safe if the headers file ever does not take effect). Do not add a rule for a path that is shared
+with other pages (the hashed `/assets/` files serve every entry), and do not use `_headers` to hide a path:
+`robots.txt` lists nothing under `/admin/` on purpose, because listing it would announce it. Verified
+locally 2026-10-15 with `wrangler dev` (headers present on `/admin/` and `/admin`, absent on `/community/`);
+the first production response is checked at rollout (spec section 8). The Vite dev server does not apply this
+file, so a dev-server run shows no such headers.

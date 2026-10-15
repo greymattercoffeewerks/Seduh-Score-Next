@@ -1,0 +1,317 @@
+/*
+ * The admin console's own styles. Self-contained, the same rule src/community/guess-the-bean/shared.css
+ * follows: it loads the surface-agnostic design tokens (src/ui/tokens) and core/loginScreen.css, and nothing
+ * from a format. The generic shapes below (.btn, .field-input, .form-field, .card, .screen-feedback) are the
+ * class names core/dom.js and core/loginScreen.js's renderLoginForm emit; their rules live in a format's
+ * stylesheet (heatsScreen.css) that this page must not load, so they are restated here from the same tokens.
+ * 360px first: everything stacks, nothing needs horizontal scrolling, every control is at least 44px tall.
+ */
+
+/* ---- shapes emitted by core/dom.js and core/loginScreen.js ---- */
+
+.card {
+  background: var(--color-surface);
+  border: var(--border-strong) solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tap-target-min);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-sm);
+  border: var(--border-hairline) solid transparent;
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+
+/* A busy button keeps its full colour: dimming white-on-teal to 0.6 drops it to about 3:1. The label
+   ("Signing in…") and the cursor say it is working. */
+.btn[aria-disabled='true'] {
+  cursor: progress;
+}
+
+.btn-primary {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+}
+
+.btn-primary:hover:not([aria-disabled='true']) {
+  background: var(--color-accent-hover);
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+}
+
+.btn-outline:hover:not([aria-disabled='true']) {
+  background: var(--color-surface-sunken);
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.form-field-label {
+  font-size: var(--text-2xs);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+}
+
+.field-input {
+  box-sizing: border-box;
+  min-height: var(--tap-target-min);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  /* A control's edge must reach 3:1 against what it sits on (WCAG 1.4.11); --color-border is for dividers. */
+  border: var(--border-hairline) solid var(--color-text-muted);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+}
+
+.field-input[aria-disabled='true'] {
+  color: var(--color-text-secondary);
+}
+
+.screen-feedback {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+
+.screen-feedback[data-tone='error'] {
+  background: var(--color-surface-sunken);
+  border: var(--border-hairline) solid var(--color-danger);
+  color: var(--color-danger);
+}
+
+.screen-feedback[data-tone='pending'] {
+  background: var(--color-surface-sunken);
+  border: var(--border-hairline) solid var(--color-border-strong);
+  color: var(--color-text);
+}
+
+/* Empty, it takes no room but stays in the accessibility tree (display:none can make a screen reader miss
+   the first message put into a live region). */
+.screen-feedback:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+/* ---- the admin screens ---- */
+
+.adm-screen {
+  box-sizing: border-box;
+  max-width: 28rem;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4) var(--space-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.adm-screen h1,
+.adm-main h1 {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  line-height: var(--leading-tight);
+  margin: 0;
+}
+
+.adm-screen p {
+  margin: 0;
+}
+
+.adm-muted {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+/* "Signed in as ..." and Sign out, on every screen between sign-in and the console. */
+.adm-strip {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  border-top: var(--border-hairline) solid var(--color-border);
+  padding-top: var(--space-4);
+}
+
+.adm-strip-who {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.adm-enrol-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.adm-enrol-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* A QR code is read by a camera: it sits on white whatever the surface colour, with a quiet border. This is
+   the one literal colour in this file on purpose (a scanner needs dark on light; there is no token for it). */
+.adm-qr {
+  width: 12.5rem;
+  max-width: 100%;
+  height: auto;
+  background: #ffffff;
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+}
+
+.adm-secret {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--text-md);
+  letter-spacing: 0.08em;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.adm-code-input {
+  font-size: var(--text-xl);
+  letter-spacing: 0.3em;
+  text-align: center;
+}
+
+/* ---- the console frame ---- */
+
+/* The header, notices, navigation and panel share one gutter: 16px on a phone, and on a wide screen
+   whatever centres a 60rem column, so their left edges line up. */
+:root {
+  --adm-gutter: max(var(--space-4), calc((100% - 60rem) / 2));
+}
+
+.adm-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--adm-gutter);
+  border-bottom: var(--border-strong) solid var(--color-border-strong);
+  background: var(--color-surface);
+}
+
+.adm-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.adm-brand-tag {
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  color: var(--color-text-secondary);
+}
+
+.adm-who {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+
+.adm-who-email {
+  overflow-wrap: anywhere;
+}
+
+.adm-badge {
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-success);
+}
+
+.adm-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.adm-header-feedback {
+  margin: var(--space-3) var(--adm-gutter) 0;
+}
+
+.adm-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--adm-gutter);
+}
+
+.adm-nav-link {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-sm);
+  border: var(--border-hairline) solid var(--color-text-muted);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.adm-nav-link[aria-current='page'] {
+  background: var(--color-surface-sunken);
+  border-color: var(--color-border-strong);
+  font-weight: var(--font-weight-bold);
+}
+
+.adm-main {
+  box-sizing: border-box;
+  padding: var(--space-4) var(--adm-gutter) var(--space-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.adm-main > p {
+  margin: 0;
+}
+
+@media (min-width: 48rem) {
+  .adm-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+
+  .adm-who {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
+  .adm-actions {
+    flex-direction: row;
+  }
+
+  .adm-strip {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
