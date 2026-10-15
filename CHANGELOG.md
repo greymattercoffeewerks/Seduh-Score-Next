@@ -1,3 +1,51 @@
+## Refactor: one copy of the shared screen shapes, and shared sign-in and sign-out requests · 2026-10-16
+
+**Task:** refactor (no task ID), branch `refactor/shared-ui-and-auth-primitives`, worktree `C:\Dev\seduh-score-next-refactor`. Three commits on top of `admin/b7-console-shell`: `497bed2`, `808a2dd`, `83013e0`. Stacked on PR #277 (Batch 8, T-ADM.D1), which is not merged. **Status: complete and reviewed; not merged, not pushed.** No migrations; nothing pushed to the cloud database.
+
+**Why:** the module-boundary review of Batch 8 found that `src/admin/admin.css` was the fourth copy of the generic `.card`, `.btn*`, `.form-field*`, `.field-input` and `.screen-feedback` rules (the others: `cup-taster/heatsScreen.css`, `btc/shared.css`, and the form-field variant in `guess-the-bean/shared.css`). Admin sign-in and sign-out also paralleled `core/loginScreen.js` and `core/signOut.js`. The copies had already drifted: BTC's `.form-field-label` colour differed, and source order decided which one rendered.
+
+**What changed:**
+
+- `src/ui/tokens/components.css` (new) is now the one copy of `.screen-container`, `.card`, `.btn`/`-primary`/`-outline`, `.form-field` (with label and hint), `.field-input` and `.screen-feedback` (with tones and `:empty`). The copies in `heatsScreen.css` and `btc/shared.css` were removed. `admin.css` keeps only two documented overrides: a busy button keeps full colour, and the control border uses `--color-text-muted`.
+- Linked by hand, first, from `app/index.html`, `admin/index.html` and all 22 `*.preview.html` pages (including `tokens/preview.html`, whose inline `.btn` copies drifted and were deleted). Deliberately not in `tokens/index.css`: the timer and Guess the Bean have their own `.form-field`, and the public `/results/` page uses the `.screen-feedback` class name with no styling of its own. Moving `.screen-container` also fixed a boundary violation: core CSS and JS depended on a cup-taster stylesheet.
+- `src/core/signInRequest.js` (new) and `src/core/signOutRequest.js` (new) hold the shared requests. Both are pure, with the client injected. `core/loginScreen.js` keeps its behaviour exactly (order, messages, the one trimmed-password retry, cancellation). `src/admin/signInScreen.js` has no trimmed retry. `core/signOut.js` still makes exactly `client.auth.signOut()`. `src/admin/gate.js` uses the same sign-out request.
+- About 12 stale comments across CSS, JS and docs corrected. `CONVENTIONS.md`, `src/admin/CLAUDE.md` and `src/formats/btc/CLAUDE.md` updated.
+- `src/ui/tokens/components.test.js` (new guard) fails CI if a copy of a shared selector appears in any stylesheet or inline `<style>` of a page that links the file. It reads nested at-rules, `:is()`/`:where()` lists, strings containing braces, unquoted attributes, commented-out links and `@import`, and fails closed on nested CSS. It also fails if a page that relies on the shapes does not link `components.css` first, if a public or self-contained page links it, or if the pinned set of 22 linking pages changes.
+
+**Proof of no visual change:** computed styles were dumped for every shape and state, before and after, on `/app/`, `/admin/`, the format previews and the surfaces that must not change. `/app/`, `/guess-the-bean/`, `/tools/timer/` and `/results/` had 0 differing properties, apart from the empty live region below. The intended differences:
+
+- `.form-field-label` is now `--color-text-secondary`. That is the value the live console always rendered (BTC's copy won on source order). Cup-taster previews and admin used `--color-text-muted`.
+- Some shapes and tones that the admin and BTC preview harnesses never used.
+- The live region below.
+
+Layout of a container with an empty feedback node measured identical before and after. The built output defines each shape once for `/app/` and `/admin/`, and not at all for guess-the-bean, tools/timer or results.
+
+**One intended behavioural change on the live console:** `.screen-feedback:empty` was `display: none`. It is now out of the flow, 1px, clipped, but still in the accessibility tree. Text written into an empty live region later can therefore be announced, for example BTC scoring's "scores may not be saved" warning or the no-organisation sign-out failure. The per-screen workarounds for the same thing (timing, BTC scoring, admin) were removed. Not verified with a screen reader (T5.3 still owed).
+
+**Bugs the reviews found, fixed** (all in the admin sign-out added in Batch 8):
+
+- A failed session lookup no longer lets sign-out run and lose the token (security and code review). A lookup that resolves with a transport error is treated the same way (test audit).
+- "Session already gone" now recognises auth-js's `AuthSessionMissingError`. auth-js reports a 401 from the logout endpoint as that error with status 400, so a sign-out whose response was lost after the server had revoked the session would have failed for ever. Found by the test audit and proven against the real auth client.
+
+**Verification:**
+
+- Whole repo: 153 files, 4387 tests, all passing. ESLint and Prettier clean.
+- Playwright: all 49 tests pass across every project (dev-app, dev-audience, dev-tenancy, dev-admin, built-app, dev-harnesses).
+- About 90 hand-written mutants over the new modules, their callers and the guard. All killed except documented equivalents: a commented-out `@import` being ignored, a re-export lint cannot see, and links written in a different but equivalent syntax.
+- Reviews run: module-boundary-checker, ui-accessibility-reviewer, code-reviewer, security-reviewer, test-auditor. The first test-auditor run died on an API rate limit and was retried on the final code. Findings applied.
+
+**Accepted limits and known open items** (stated, not fixed):
+
+1. Busy-button contrast (white on teal at 0.6 opacity is about 3:1) and control-border contrast (`--color-border` is about 2.1 to 2.5:1; WCAG 1.4.11 wants 3:1) are not changed in the shared shapes. Changing them would change the live organiser console: `setBusyDisabled` sets `aria-disabled` for "not ready" as well as "busy", so the dimmed look is the only cue on several screens. A separate busy signal is needed first. The admin overrides stay until decided.
+2. `/results/` renders `.screen-feedback` with no styling (pre-existing). It needs a marketing-owned class.
+3. `.stage-meta` and `.roster-list` are still restated in `btc/shared.css`. They are format-level, so left.
+4. Organiser sign-out uses auth-js's default `global` scope, which ends every session on every device. Pre-existing, unchanged, not mentioned in the UI.
+
+**Not done / still open:**
+
+- Not merged; stacked on PR #277, which is not merged. Not pushed.
+- No `package.json` change on this branch, so no footer version bump yet. `ROADMAP.md` and `state.json` are not touched.
+
 ## T-ADM.D1: the admin console shell, sign-in and second-factor gate · 2026-10-15
 
 **Task:** T-ADM.D1 (Batch 8) of `Handoffs and Specs/ADMIN-CONSOLE-SPEC.md` (local, gitignored). Branch `admin/b7-console-shell`, worktree `C:\Dev\seduh-score-next-admin8`, built on T-ADM.B6. Commit `3d70201` plus review fixes left uncommitted in the working tree. **Status: batch-complete and reviewed; not committed, not merged, not pushed to the cloud project. Not final:** the cloud rollout and the production header check are owed (see below).
