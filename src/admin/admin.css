@@ -38,6 +38,7 @@
 
 .adm-screen h1,
 .adm-main h1 {
+  overflow-wrap: anywhere;
   font-family: var(--font-display);
   font-size: var(--text-2xl);
   line-height: var(--leading-tight);
@@ -221,4 +222,163 @@
     align-items: center;
     justify-content: space-between;
   }
+}
+
+/* ---- skip link, organisations panel ---- */
+
+/* Out of sight until it takes focus, then the first thing on the page. */
+.adm-skip {
+  position: absolute;
+  left: var(--space-4);
+  top: var(--space-2);
+  z-index: 1;
+  transform: translateY(-300%);
+  min-height: var(--tap-target-min);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: var(--border-strong) solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+
+.adm-skip:focus {
+  transform: none;
+}
+
+.adm-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.adm-org-list,
+.adm-members,
+.adm-audit {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.adm-org {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.adm-org p,
+.adm-org-slug {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The organisation's name is the link; its whole line is the tap target. */
+.adm-org-name,
+.adm-back {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-target-min);
+  color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.adm-org-name {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+}
+
+.adm-back {
+  align-self: flex-start;
+}
+
+.adm-facts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.adm-fact {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.adm-fact dt {
+  font-size: var(--text-2xs);
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+}
+
+.adm-fact dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.adm-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.adm-section h2 {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  line-height: var(--leading-snug);
+  margin: 0;
+}
+
+.adm-member,
+.adm-audit-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: var(--border-hairline) solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+.adm-member-email,
+.adm-audit-what {
+  overflow-wrap: anywhere;
+}
+
+.adm-role {
+  font-weight: var(--font-weight-semibold);
+}
+
+@media (min-width: 48rem) {
+  .adm-facts {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* The panel's plain text sits in flex columns that have their own gap: the browser's default paragraph margins
+   would double it. */
+.adm-panel-body > p,
+.adm-section > p,
+.adm-changes > p {
+  margin: 0;
+}
+
+.adm-changes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+/* An address or a name with no space in it has nowhere to break unless it is told it may. */
+.adm-audit-item,
+.adm-member {
+  overflow-wrap: anywhere;
 }

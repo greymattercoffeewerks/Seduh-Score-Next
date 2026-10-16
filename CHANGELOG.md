@@ -1,3 +1,54 @@
+## T-ADM.D2: the organisation list and detail, read-only · 2026-10-16
+
+**Task:** T-ADM.D2 (Batch 9) of `Handoffs and Specs/ADMIN-CONSOLE-SPEC.md` (local, gitignored). Branch `admin/b8-org-list-detail` (the name says b8; the batch is 9), worktree `C:\Dev\seduh-score-next-admin9`, based on `origin/dev` after PR #278 (the shared-UI refactor) merged. Two commits: `8c4660d` (build) and a second one with the review fixes. **Status: complete and reviewed; pushed, PR into `dev` open, not merged.** No migrations; nothing pushed to the cloud project.
+
+**Why:** the first view of the tenants a platform admin can actually look at: which organisations exist, who belongs to each, when each last ran an event, and what changed recently. It is read-only on purpose. The panel draws named fields only (no event names, no scores, no people who are not members) and reads through the three admin RPCs, never a table.
+
+**What changed:**
+
+- `src/admin/orgsPanel.js` (new). `#/orgs` lists organisations: name (a link), link name, member and event counts, last event date, created date. `#/orgs/<uuid>` shows one organisation: link name, created, events, last event, members with their roles, and up to 20 recent audit entries described in words. The DOM is text-only; no HTML strings are built.
+- Reads go through `ctx.callAdmin` to `admin_list_orgs`, `admin_org_detail` and `admin_list_audit`. An auth failure (401, PGRST301, PGRST303; `isAuthFailure`, exported from `gate.js`) is sent back through the gate, the same way a gate refusal already was.
+- `src/admin/shell.js`: routes by the first hash segment; a hash that names no panel is rewritten to `#/orgs`; a "Skip to content" button. The skip link deferred in the D1 entry arrives with the first panel that has controls.
+- `src/admin/panels.js`: the `orgs` panel is registered (the registry was empty after Batch 8).
+- `src/admin/format.js`: UTC `formatDate` and `formatDateTime`, and `plural()`. Dates are UTC so a row reads the same on every machine.
+- `src/admin/screenParts.js`: one shared `feedbackRegion()`, used by the panel rather than restated.
+- `src/admin/admin.css`: panel styles, `overflow-wrap` for long names and emails, a paragraph margin reset inside the panel. `src/admin/CLAUDE.md`: one stale sentence corrected.
+- Tests: `tests/e2e/admin-console-orgs.spec.js` (new); `tests/e2e/support/adminUi.js` and `tests/e2e/support/tenants.js` (token `iat` margin 60 seconds); `consoleHarness.js` answers `admin_list_orgs`; `playwright.config.js` testMatch is `/admin-console.*\.spec\.js/`.
+
+**Reviews:** all five run (ui-accessibility-reviewer, security-reviewer, module-boundary-checker, test-auditor, code-reviewer). Every one found something. All findings were fixed in one pass, in the second commit:
+
+- Detail draws as soon as the organisation answers; the change log loads in its own region, with its own Retry and slow and failed messages. When exactly 20 entries come back it says "Showing the latest 20 changes."
+- A gate refusal clears the whole panel, so no data stays on screen behind a sign-in.
+- A draw that throws becomes a failure with Retry, not a blank page.
+- An error takes focus only if focus is on the panel or nowhere. Retry returns focus to the heading.
+- A polite, screen-reader-only status announces "N organisations loaded." and "<name> loaded."; the not-found text is static, with no live region.
+- Lists are `role="list"`; the back arrow is `aria-hidden`; each card's link is `aria-describedby` its link name.
+- Role lookup uses `Object.hasOwn`, so a role named `constructor` is not read off the prototype. `member.add` with no role reads "Member added".
+- A hash that names no panel is rewritten to `#/orgs`.
+- `plural()` lost an unused third parameter.
+
+**Verification:**
+
+- Prettier and ESLint clean. Build ok.
+- Vitest: 4457 passing. One unrelated wall-clock test in `src/core/appShell.test.js` ("still announces at the cap when the wall clock steps backwards") failed once under load and passed on rerun alone (200 of 200). See open items.
+- Admin unit tests: 250 passing.
+- Playwright: 54 passing in `dev-admin`. An earlier full run had 52 passing and one failure, a back-link locator; it now targets `a.adm-back`, because the arrow is `aria-hidden`.
+- Hand mutation check: 20 mutants against the new behaviour, all killed.
+
+**Accepted limits and known open items** (stated, not fixed here):
+
+1. Busy-button opacity 0.6 (about 3:1) and control-border contrast in the shared shapes. Carried over from the refactor entry; still the owner's decision.
+2. `/results/` `.screen-feedback` is still unstyled (pre-existing).
+3. `.stage-meta` and `.roster-list` are still restated in `btc/shared.css`.
+4. Cloud rollout checks still owed from D1: production `/admin` response headers, the CSP `connect-src https://*.supabase.co` against the real API host, and cloud TOTP availability.
+5. The `src/core/appShell.test.js` wall-clock test is timing-sensitive under load.
+
+**Not done / still open:**
+
+- Not merged and not pushed. The PR into `dev` is still to be opened; this entry is not final until it merges.
+- No migrations; nothing pushed to the cloud project.
+- No footer version bump in this entry. `ROADMAP.md`, `state.json` and `CONVENTIONS.md` are not touched here.
+
 ## Refactor: one copy of the shared screen shapes, and shared sign-in and sign-out requests · 2026-10-16
 
 **Task:** refactor (no task ID), branch `refactor/shared-ui-and-auth-primitives`, worktree `C:\Dev\seduh-score-next-refactor`. Three commits on top of `admin/b7-console-shell`: `497bed2`, `808a2dd`, `83013e0`. Stacked on PR #277 (Batch 8, T-ADM.D1), which is not merged. **Status: complete and reviewed; not merged, not pushed.** No migrations; nothing pushed to the cloud database.

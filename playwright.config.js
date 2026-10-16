@@ -98,7 +98,7 @@ export default defineConfig({
       // same shared-backend reason as the projects above; it also needs the local stack's TOTP switched on
       // (supabase/config.toml [auth.mfa.totp]).
       name: 'dev-admin',
-      testMatch: /admin-console\.spec\.js/,
+      testMatch: /admin-console.*\.spec\.js/,
       dependencies: ['dev-tenancy'],
       use: { baseURL: 'http://127.0.0.1:5273' },
     },

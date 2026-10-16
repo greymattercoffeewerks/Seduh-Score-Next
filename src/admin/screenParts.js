@@ -4,6 +4,16 @@ import { el, setBusyDisabled } from '../core/dom.js';
 
 export const SIGN_OUT_FAILED = 'Could not sign out. Check your connection and try again.';
 
+// The message region every screen and panel carries: a polite live region, focusable so an error can be announced
+// by moving focus to it, and styled by components.css (out of the flow and in the accessibility tree while
+// empty, so the first message put into it is announced). `extraClass` is for a surface's own placement.
+export function feedbackRegion(extraClass = '') {
+  return el('div', {
+    className: `screen-feedback${extraClass ? ` ${extraClass}` : ''}`,
+    attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
+  });
+}
+
 // One <main> with the screen's heading and its feedback region directly under it. The console moves focus to
 // the heading (or to the feedback, when the screen opens with a notice) when a screen replaces the last one: a
 // changed screen is announced, not silent. `feedback` is focusable so an error can be announced by moving
@@ -12,10 +22,7 @@ export const SIGN_OUT_FAILED = 'Could not sign out. Check your connection and tr
 // inside the shell's).
 export function frame(title) {
   const heading = el('h1', { text: title, attrs: { tabindex: '-1', 'data-heading': 'true' } });
-  const feedback = el('div', {
-    className: 'screen-feedback',
-    attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
-  });
+  const feedback = feedbackRegion();
   const container = el('main', { className: 'adm-screen' }, [heading, feedback]);
   return { container, feedback };
 }

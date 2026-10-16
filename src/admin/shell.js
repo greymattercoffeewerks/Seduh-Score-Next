@@ -1,19 +1,24 @@
 // The console frame once the gate says `ready`: header (who, "Verified (AAL2)", Sign out, Sign out
 // everywhere), navigation drawn from the panel registry, and the host the current panel mounts into. Panel
-// routes live in the URL hash (`#/overview`), one panel at a time.
+// routes live in the URL hash (`#/orgs`, `#/orgs/<id>`), one panel at a time.
 import { el, brandLockup, setBusyDisabled } from '../core/dom.js';
-import { setFeedback, SIGN_OUT_FAILED } from './screenParts.js';
+import { feedbackRegion, setFeedback, SIGN_OUT_FAILED } from './screenParts.js';
+
+// The panel a hash names: by its FIRST segment, so `#/orgs/<id>` is still the `orgs` panel (which then reads the
+// rest itself). Anything that names no panel is the first one.
+export function firstSegment(hash) {
+  return String(hash ?? '')
+    .replace(/^#\/?/, '')
+    .split('/')[0];
+}
 
 export function routeOf(hash, panels) {
-  const wanted = String(hash ?? '').replace(/^#\/?/, '');
+  const wanted = firstSegment(hash);
   return panels.find((panel) => panel.route === wanted) ?? panels[0];
 }
 
 export function mountShell(root, { panels, email, ctx, onSignOut, onSignOutEverywhere }) {
-  const feedback = el('div', {
-    className: 'screen-feedback adm-header-feedback',
-    attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
-  });
+  const feedback = feedbackRegion('adm-header-feedback');
   const nav = el('nav', { className: 'adm-nav', attrs: { 'aria-label': 'Admin console' } });
   const host = el('main', { className: 'adm-main', attrs: { id: 'admin-main', tabindex: '-1' } });
 
@@ -59,13 +64,27 @@ export function mountShell(root, { panels, email, ctx, onSignOut, onSignOutEvery
     ]),
   ]);
 
-  root.append(header, feedback, nav, host);
+  // A keyboard user reaches the page's content without tabbing through the header and the navigation each time. A
+  // button, not a link to #admin-main: this page routes by the URL hash, and a link to another hash would navigate.
+  const skip = el('button', {
+    className: 'adm-skip',
+    text: 'Skip to content',
+    attrs: { type: 'button' },
+  });
+  skip.addEventListener('click', () => host.focus());
+
+  root.append(skip, header, feedback, nav, host);
 
   let mounted = null;
   let mountedPanel = null;
 
   function showPanel() {
     const panel = routeOf(window.location.hash, panels);
+    // A hash that names no panel (empty after the Back button, or typed by hand) shows the first panel by fallback.
+    // Say so in the address, so the page and the URL agree: the replacement fires hashchange again, which a panel
+    // that keeps views of its own (orgsPanel.js) answers by showing the view that address means.
+    if (firstSegment(window.location.hash) !== panel.route)
+      window.location.replace(`#/${panel.route}`);
     if (panel === mountedPanel) return;
     mounted?.unmount?.();
     mountedPanel = panel;

@@ -16,10 +16,12 @@ function base64url(object) {
   return Buffer.from(JSON.stringify(object)).toString('base64url');
 }
 
+// `iat` is a minute in the past on purpose: the local stack runs in a Docker VM whose clock can lag the host's (after a
+// sleep or a restart), and PostgREST refuses a token issued in the future (PGRST303) with no tolerance at all.
 function signLocalKey(role) {
   const now = Math.floor(Date.now() / 1000);
   const head = base64url({ alg: 'HS256', typ: 'JWT' });
-  const body = base64url({ iss: 'supabase-demo', role, iat: now - 10, exp: now + 3600 });
+  const body = base64url({ iss: 'supabase-demo', role, iat: now - 60, exp: now + 3600 });
   const signature = createHmac('sha256', LOCAL_JWT_SECRET)
     .update(`${head}.${body}`)
     .digest('base64url');

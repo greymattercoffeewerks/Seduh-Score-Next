@@ -43,6 +43,24 @@ all through `SECURITY DEFINER` admin functions that the database gates itself.
   on the server (`auth.admin.signOut(token, scope)`), never reporting success on its own. "Sign out everywhere"
   is the stolen-token response; do not "simplify" this back to `auth.signOut()`.
 
+## The Organisations panel (`orgsPanel.js`, Batch 9)
+
+Read only. `#/orgs` is the list, `#/orgs/<organisation id>` one organisation (members, counts, its recent audit
+entries). The shell routes by the FIRST segment of the hash; this panel listens for hash changes itself to move
+between its two views and ignores a hash that does not change what it shows (a `hashchange` can arrive for a hash
+set just before it mounted). An id that is not a UUID is "not found" without asking the database.
+
+- It draws **only the fields it names** (name, link name, dates, counts, member email and role, audit action and
+  actor): never an event name, a score, or a person who is not a member (spec D-A4). The functions do not return
+  them (pgTAP 048); `tests/e2e/admin-console-orgs.spec.js` proves, against the real database, that an event the
+  organisation ran appears neither on the page nor in any admin response. Keep it that way: a new field is a
+  deliberate edit here, not something that appears because a function started returning it.
+- Every request goes through `ctx.callAdmin` and every failure is translated by `adminErrors.js`; a gate refusal
+  draws nothing of its own (the console is re-checking access and replaces the panel). A failed audit load does
+  not hide the organisation.
+- Text only (`el()`), never `innerHTML`; dates are UTC `YYYY-MM-DD` (`format.js`), so they read the same on every
+  machine.
+
 ## Adding a panel (Batches 9 to 11, and gating's "Plan" panel later)
 
 An entry in `panels.js` (`{ id, label, route, mount(host, ctx) }`) plus a screen module. `shell.js` draws the
@@ -50,8 +68,8 @@ navigation from the registry and routes by hash; nothing in it changes. **A pane
 `ctx.callAdmin(name, args)`, never `ctx.client.rpc`**: a gate refusal in the answer (stale second factor, ended
 session) then sends the whole console back through the access check, so no panel has to remember to look for it
 (an ordinary refusal such as `org_not_found` is the panel's own business, translated with `adminErrors.js`).
-Panels get their own screen module (the overview inline in `panels.js` is a placeholder, do not copy it). A
-panel with controls also needs a skip link first. A panel that creates something must
+Panels get their own screen module. The shell's skip button already takes a keyboard user to the content. A
+panel that creates something must
 **disable its submit control after the first click** and keep the result on screen (the Edge Function answers
 a double submit with `[500, 500, 201]`, and the 201 carries the one-time password, which is shown once).
 

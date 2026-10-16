@@ -200,7 +200,7 @@ describe('after sign-in', () => {
     await flush();
     expect(root.querySelector('header').textContent).toContain('ops@example.test');
     expect(root.querySelector('header').textContent).toContain('Verified (AAL2)');
-    expect(root.querySelector('nav a[aria-current="page"]').textContent).toBe('Overview');
+    expect(root.querySelector('nav a[aria-current="page"]').textContent).toBe('Organisations');
     expect(client.auth.mfa.challengeAndVerify).toHaveBeenCalledWith({
       factorId: 'factor-1',
       code: '123456',
@@ -1003,6 +1003,22 @@ describe('ctx.callAdmin (what panels call admin functions through)', () => {
     expect(result.error.hint).toBe('admin_mfa_required');
     await flush();
     expect(heading(root)).toBe('Verify it is you');
+  });
+
+  it('a rejected token (HTTP 401, no hint) also runs the access check again', async () => {
+    const { client, ctx } = await withPanel();
+    client.rpc = vi.fn(async () => ({
+      data: null,
+      error: { message: 'JWT expired' },
+      status: 401,
+    }));
+    await ctx.callAdmin('admin_list_orgs', {});
+    await flush();
+    // one call for the panel's own request, one more for the access check the 401 triggered
+    expect(client.rpc.mock.calls.map(([name]) => name)).toEqual([
+      'admin_list_orgs',
+      'am_i_platform_admin',
+    ]);
   });
 
   it("an ordinary refusal is the panel's own business and does not touch the gate", async () => {
