@@ -382,3 +382,147 @@
 .adm-member {
   overflow-wrap: anywhere;
 }
+
+/* ---- the New organisation panel ---- */
+
+.adm-form,
+.adm-owner,
+.adm-owner-pickers,
+.adm-existing,
+.adm-lookup,
+.adm-created {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* `hidden` must win over the display above: the owner section is built once and shown or hidden. */
+.adm-owner [hidden] {
+  display: none;
+}
+
+.adm-form p,
+.adm-lookup p,
+.adm-created p,
+.adm-password-card p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* A problem beside the field it is about, in words (the colour alone is never the message). */
+.adm-field-error {
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+}
+
+.adm-field-error:empty {
+  display: none;
+}
+
+.adm-fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.adm-fieldset legend {
+  padding: 0;
+  margin-bottom: var(--space-2);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* A checkbox or radio and its label. A native control renders well under the 44px floor, so the control itself
+   is made that size (the same rule the events screen's checkbox follows), and the label beside it is as tall. */
+.adm-check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.adm-check input {
+  flex: none;
+  width: var(--tap-target-min);
+  height: var(--tap-target-min);
+  margin: 0;
+}
+
+.adm-check label {
+  display: flex;
+  align-items: center;
+  min-height: var(--tap-target-min);
+  overflow-wrap: anywhere;
+}
+
+.adm-password-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  border: var(--border-strong) solid var(--color-border-strong);
+}
+
+.adm-password-card h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  line-height: var(--leading-tight);
+  overflow-wrap: anywhere;
+}
+
+/* The one-time password: large, monospaced, selected in one tap, and allowed to wrap at 360px. */
+.adm-password {
+  display: block;
+  padding: var(--space-3);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--text-xl);
+  letter-spacing: var(--tracking-wide);
+  background: var(--color-surface-sunken);
+  border: var(--border-hairline) solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  user-select: all;
+  overflow-wrap: anywhere;
+}
+
+.adm-warning {
+  font-weight: var(--font-weight-semibold);
+}
+
+/* A link that looks like a button needs the button's own box. */
+.adm-link-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+/* ---- review fixes, New organisation panel ---- */
+
+/* Plain text anywhere in the panel (a long name or an email with no space in it) wraps instead of widening the page. */
+.adm-main p {
+  overflow-wrap: anywhere;
+}
+
+/* The checked colour of a native radio or checkbox is the console's, not the browser's blue. */
+.adm-check input {
+  accent-color: var(--color-accent);
+}
+
+.field-input[aria-invalid='true'] {
+  border-color: var(--color-danger);
+}
+
+/* An empty paragraph (the link-name preview before there is anything to say) must not add a gap of its own. */
+.adm-muted:empty {
+  display: none;
+}
+
+/* Done throws the only copy of the password away: it sits apart from Copy, not beside it. */
+.adm-done {
+  margin-top: var(--space-4);
+}
+
+.adm-password {
+  -webkit-user-select: all;
+}

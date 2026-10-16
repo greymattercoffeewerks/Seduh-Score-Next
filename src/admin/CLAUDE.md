@@ -61,10 +61,51 @@ set just before it mounted). An id that is not a UUID is "not found" without ask
 - Text only (`el()`), never `innerHTML`; dates are UTC `YYYY-MM-DD` (`format.js`), so they read the same on every
   machine.
 
-## Adding a panel (Batches 9 to 11, and gating's "Plan" panel later)
+## The New organisation panel (`createOrgPanel.js`, Batch 10)
+
+`#/new-org`: a name, a link name and an owner, where the owner is a NEW login (the `admin-accounts` Edge Function,
+through `ctx.callFunction`) or an EXISTING account (`admin_find_user`, then a confirmation). It ends in
+`admin_create_org`. Things that must stay true:
+
+- **The database is the authority.** `orgRules.js` says what a name and link name look like while a person types
+  (`orgRules.test.js` reads the newest migration and fails when the reserved list drifts from `create_org`'s), but a
+  refusal is always shown by its stable hint through `adminErrors.js`, never by a message, and a value the page
+  called fine can still be refused (a taken link name, the operator's own account).
+- **A login is never made twice.** The login is made first, then the organisation. If the organisation step fails,
+  the login and its password stay on screen (`created`), the form stays editable, and the next press attaches THAT
+  login. A timeout or a dropped connection on either step is its own sentence ("may exist"), not "nothing was changed".
+- **The one-time password lives only in `created` / `done.login` and the node that shows it.** Not in storage, a URL,
+  an attribute or a log; dropped (memory and page) on `unmount`, on a gate refusal and on Done; not re-shown after a
+  reload. In the real console a gate refusal makes the console unmount the panel before the answer is read, so
+  `stepAside` is the same clean-up for when it has not. While the password is the only copy: the browser is asked
+  before the page is closed or reloaded (`beforeunload`), and the shell asks before another panel or a sign-out
+  replaces the panel (`leaveWarning()` on the mount handle, `shell.js`). If it is lost anyway (a gate refusal, or
+  the person said yes), the next opening of the panel says so once, naming the login (`lostPassword`, the email only).
+  A login whose organisation was never made is an orphan: attach it with "Use an existing account" and set a password
+  for it in the Supabase dashboard.
+- **A request that may have been carried out is never reported as "nothing changed".** An error with no hint (a
+  dropped connection, a timeout, a gateway error) at either step says the login or organisation MAY exist
+  (`loginFailureMessage`, `orgFailureMessage`); only an error the database raised (it has a hint) is "refused". The
+  login request waits 30 seconds, not the page-load 10 (`adminFunction.js`): giving up on a request that is still
+  running throws away the only copy of the password.
+- **Existing accounts:** `needs_attestation` (the SAME predicate the database enforces) decides whether the box to
+  tick is shown; the panel also handles the database refusing with `member_password_unset` for an account that gained
+  a membership after the lookup (it looks again, so the box appears). A lookup answers for the address it was asked
+  about: typing another address, or switching the owner kind, throws the answer (and a request still out) away.
+- The owner section is built once and its parts shown or hidden: rebuilding the radios would take keyboard focus away
+  from the radio being used.
+- `ctx.callFunction(name, body)` is what a panel uses for an Edge Function (`adminFunction.js`): same `{ data, error }`
+  shape as `callAdmin`, the error carries only `{ status, hint, userId, timedOut, offline }` (never the function's
+  text), and a gate refusal or HTTP 401 sends the whole console back through the access check.
+- `tests/e2e/admin-console-create-org.spec.js` runs the organisation step against the real database. CI does not
+  serve the Edge Function, so that spec answers `admin-accounts` at the network edge; the real function is covered by
+  `supabase/tests/manual/admin-accounts-e2e.mjs` before rollout.
+
+## Adding a panel (the audit log, and gating's "Plan" panel later)
 
 An entry in `panels.js` (`{ id, label, route, mount(host, ctx) }`) plus a screen module. `shell.js` draws the
-navigation from the registry and routes by hash; nothing in it changes. **A panel calls admin functions through
+navigation from the registry and routes by hash; nothing in it changes (`ctx` also carries `callFunction(name, body)`
+for an Edge Function; `panelRequest.js` `ask` wraps `callAdmin` so it never rejects and times out). **A panel calls admin functions through
 `ctx.callAdmin(name, args)`, never `ctx.client.rpc`**: a gate refusal in the answer (stale second factor, ended
 session) then sends the whole console back through the access check, so no panel has to remember to look for it
 (an ordinary refusal such as `org_not_found` is the panel's own business, translated with `adminErrors.js`).

@@ -4,6 +4,7 @@
 // list), so a test drives the whole flow with a fake client.
 import { trackInputModality } from '../core/inputModality.js';
 import { getAdminClient } from './adminClient.js';
+import { invokeAdminFunction } from './adminFunction.js';
 import { checkAccess, signOut, isGateRefusal, isAuthFailure, GATE_STATE } from './gate.js';
 import { PANELS } from './panels.js';
 import { mountShell } from './shell.js';
@@ -55,6 +56,15 @@ export function mountAdminConsole(root, { client = getAdminClient(), panels = PA
     return result;
   }
 
+  // The same for an Edge Function (a login can only be created by the Auth admin API). It answers like
+  // callAdmin: { data, error } with error { hint, status, userId, timedOut, offline }, and a gate refusal or a
+  // rejected token (HTTP 401) closes the gate here too.
+  async function callFunction(name, body) {
+    const result = await invokeAdminFunction(client, name, body);
+    if (isGateRefusal(result.error) || result.error?.status === 401) route();
+    return result;
+  }
+
   function show(access) {
     clear();
     ready = access.state === GATE_STATE.READY;
@@ -91,7 +101,7 @@ export function mountAdminConsole(root, { client = getAdminClient(), panels = PA
         current = mountShell(root, {
           panels,
           email: access.email,
-          ctx: { client, callAdmin, onGateRefused: () => route() },
+          ctx: { client, callAdmin, callFunction, onGateRefused: () => route() },
           onSignOut,
           onSignOutEverywhere,
         });

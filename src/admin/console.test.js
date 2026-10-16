@@ -1031,6 +1031,82 @@ describe('ctx.callAdmin (what panels call admin functions through)', () => {
   });
 });
 
+describe('ctx.callFunction (what panels call an Edge Function through)', () => {
+  async function withPanel() {
+    let ctx;
+    const panels = [
+      {
+        id: 'p',
+        label: 'P',
+        route: 'p',
+        mount: (host, given) => {
+          ctx = given;
+          host.textContent = 'panel';
+          return { unmount() {} };
+        },
+      },
+    ];
+    const client = makeClient({ signedIn: true, aal: 'aal2' });
+    client.functions = { invoke: vi.fn() };
+    const root = boot(client, { panels });
+    await flush();
+    return { client, root, ctx };
+  }
+
+  const refusal = (status, body) => ({
+    data: null,
+    error: { context: { status, json: async () => body } },
+  });
+
+  it('sends the body to the named function and returns { data, error } like callAdmin', async () => {
+    const { client, ctx, root } = await withPanel();
+    client.functions.invoke.mockResolvedValue({
+      data: { userId: 'u', password: 'pw' },
+      error: null,
+    });
+    const result = await ctx.callFunction('admin-accounts', { action: 'create_owner' });
+    expect(client.functions.invoke).toHaveBeenCalledWith('admin-accounts', {
+      body: { action: 'create_owner' },
+    });
+    expect(result).toEqual({ data: { userId: 'u', password: 'pw' }, error: null });
+    expect(root.querySelector('header')).not.toBeNull();
+  });
+
+  it('a gate refusal from the function runs the access check again', async () => {
+    const { client, ctx, root } = await withPanel();
+    client.functions.invoke.mockResolvedValue(refusal(403, { hint: 'admin_mfa_required' }));
+    client.rpc = vi.fn(async (name) =>
+      name === 'am_i_platform_admin'
+        ? { data: { is_admin: true, aal: 'aal2' }, error: null }
+        : { data: null, error: { hint: 'admin_mfa_required' } },
+    );
+    const result = await ctx.callFunction('admin-accounts', {});
+    expect(result.error.hint).toBe('admin_mfa_required');
+    await flush();
+    expect(heading(root)).toBe('Verify it is you');
+  });
+
+  it('a rejected token (HTTP 401, even with no hint) also runs the access check again', async () => {
+    const { client, ctx } = await withPanel();
+    client.functions.invoke.mockResolvedValue(refusal(401, { error: 'Sign in again.' }));
+    client.rpc = vi.fn(async () => ({ data: null, error: { hint: 'admin_session_ended' } }));
+    await ctx.callFunction('admin-accounts', {});
+    await flush();
+    expect(client.rpc.mock.calls.map(([name]) => name)).toContain('am_i_platform_admin');
+  });
+
+  it("an ordinary refusal (a taken email) is the panel's own business and does not touch the gate", async () => {
+    const { client, ctx, root } = await withPanel();
+    client.functions.invoke.mockResolvedValue(refusal(409, { hint: 'email_taken' }));
+    client.rpc = vi.fn();
+    const result = await ctx.callFunction('admin-accounts', {});
+    await flush();
+    expect(result.error).toEqual({ status: 409, hint: 'email_taken' });
+    expect(client.rpc).not.toHaveBeenCalled();
+    expect(root.querySelector('header')).not.toBeNull();
+  });
+});
+
 describe('what the console never does', () => {
   it('never reads or writes localStorage (the organiser session lives there)', async () => {
     const get = vi.spyOn(Storage.prototype, 'getItem');

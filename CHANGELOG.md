@@ -1,3 +1,68 @@
+## T-ADM.D3: create an organisation, with a new or existing owner · 2026-10-16
+
+**Task:** T-ADM.D3 (Batch 10) of `Handoffs and Specs/ADMIN-CONSOLE-SPEC.md` (local, gitignored). Branch `admin/b9-create-org` (the name says b9; the batch is 10), worktree `C:\Dev\seduh-score-next-admin10`, based on `origin/dev` after PR #279 (Batch 9) merged. Two commits: `a7c53b1` (build) and `8111ff2` (review fixes). **Status: complete and reviewed; pushed, PR into `dev` to be opened; not merged.** No migrations; nothing pushed to the cloud database.
+
+**Why:** the first write a platform admin can make from the console. Creating an organisation is `create_org` in the database, but the owner may have no account yet or may already have one, and each case needs different handling. The console must never create the same login twice, must never report a half-finished request as "nothing changed", and must not leave a one-time password on screen longer than the person needs it.
+
+**What changed:**
+
+- `src/admin/createOrgPanel.js` (new), route `#/new-org`, nav label "New organisation". The form takes the organisation name, its link name and an owner. The owner is either a new login, created through the Edge Function `admin-accounts` with a one-time password shown once, or an existing account, found by exact-email lookup (`admin_find_user`) and confirmed before anything is written. The attestation checkbox appears only when the lookup reports `needs_attestation`. The organisation is then created with `admin_create_org`.
+- `src/admin/orgRules.js` (new): a client mirror of `create_org`'s name, slug and reserved-word rules, used for inline hints only. The database stays the authority, and refusals are shown by hint. `orgRules.test.js` reads the newest migration that defines `create_org` and fails if the reserved list or the length and shape limits drift from it.
+- `src/admin/adminFunction.js` (new): the Edge Function wrapper. It returns `{data, error}` carrying only status, hint, `timedOut` and `offline`, with a 30-second timeout.
+- `src/admin/passwordCard.js` (new): the one-time password card, with Copy and Done.
+- `src/admin/panelRequest.js` (new: shared `ask` and `mayTakeFocus`) and `src/admin/ids.js` (new: shared UUID check), so panels stop restating them.
+- `src/admin/console.js`: `ctx.callFunction` for Edge Function calls. A gate refusal or an HTTP 401 re-runs the access check, as `ctx.callAdmin` already does.
+- `src/admin/shell.js`: an optional panel `leaveWarning()`. The shell asks for confirmation before another panel or a sign-out replaces a panel that is holding a one-time password.
+- `src/admin/panels.js` (registry entry), `src/admin/admin.css` (a block for the form and card), `src/admin/CLAUDE.md` (a section for the create-org flow).
+- Tests: `tests/e2e/admin-console-create-org.spec.js` (new, 9 tests, including 360px).
+
+Guarantees, as built:
+
+- A login is never created twice. After an organisation refusal the new login stays on screen with its password, and the next try attaches that login rather than creating another.
+- A request that may have been carried out is never reported as "nothing changed". Hint-less errors, timeouts and 5xx responses say the organisation or login may already exist.
+- The password lives only in memory and in its DOM node. It is dropped on unmount, on a gate refusal and on Done. Leaving the page is guarded by `beforeunload` and the shell's confirm. If it is lost, the next open of the panel says so once and points to email.
+- Submit is taken once: the form goes busy and its fields become read-only until the answer comes back.
+- Lookup answers that arrive after the form has been sent are discarded.
+
+**Reviews:** all five run (ui-accessibility-reviewer, security-reviewer, module-boundary-checker, test-auditor, code-reviewer). Every one found something. All fixed in the second commit:
+
+- **Blocking (code-reviewer):** after "Create another" the form stayed busy and did nothing.
+- **Blocking (ui-accessibility-reviewer):** a network failure during the organisation step said "Nothing was changed".
+- A hint-less 5xx on the login now says it may already exist.
+- A leave guard and the lost-password notice were added.
+- Unmount clears the panel host.
+- Lookup errors show at the email field, with focus moved there.
+- Stale lookup answers are ignored once the form is sent.
+- Read-only while busy; the owner radio buttons revert while busy.
+- `found.userId` is UUID-checked before use.
+- The name is sent with the database's trim applied.
+- Required marks added; accent colour, `aria-invalid` border, `overflow-wrap`, and Done separated from Copy.
+- The drift test is tightened: it reads the newest `create_org` definition and pins the limits.
+- Four tests found vacuous or overclaiming were rewritten.
+
+**Verification:**
+
+- Prettier and ESLint clean. Build ok.
+- Vitest: 4566 passing (159 files). Admin unit tests: 358 passing.
+- Playwright `dev-admin`: 27 passing against the local stack. The organisation step is real. The Edge Function is stubbed at the network edge, because CI does not serve it; the stub refuses any call without a bearer token or for another action. The real function is covered by `supabase/tests/manual/admin-accounts-e2e.mjs`, which must be run before rollout.
+- Hand mutation check: 35 mutants against the new code, all killed; a few equivalent ones were reasoned about rather than killed.
+- Flakes seen once and not reproduced: the dev-app organiser flow "Could not load your organisation" on a cold first run; two orgs-spec tests in one full admin run (both pass alone and on rerun).
+
+**Accepted limits and known open items** (stated, not fixed here):
+
+1. The boundary reviewer's duplication with `core/`, to be one follow-up refactor PR: the one-time password card and its CSS (`core/teamScreen.js` and `.team-password`), clipboard copy (five sites), the Edge Function transport (`core/team.js`), the email regex, and `labeledField` with hint and error slots.
+2. No post-build CI test yet that greps non-admin bundles for admin strings; today that check is manual.
+3. An in-app navigation that the person confirms still loses the password. The notice says so next time.
+4. `autocomplete="off"` is ignored by Chrome for email fields, so the operator's own address may be autofilled and refused with `admin_self_target`.
+5. After an organisation-step timeout the form stays editable, so a changed link name could create a second organisation for an owner who needed attestation. The message says to check the list first.
+6. Owner decisions still open from earlier batches: busy-button opacity and control-border contrast in shared shapes; `/results/` `.screen-feedback` unstyled; cloud rollout checks.
+
+**Not done / still open:**
+
+- Not merged. The PR into `dev` is still to be opened; this entry is not final until it merges.
+- No migrations; nothing pushed to the cloud project. The `admin-accounts` Edge Function rollout is still owed, after the manual e2e script above.
+- No footer version bump, and `ROADMAP.md`, `state.json` and `CONVENTIONS.md` are not touched in this entry.
+
 ## T-ADM.D2: the organisation list and detail, read-only · 2026-10-16
 
 **Task:** T-ADM.D2 (Batch 9) of `Handoffs and Specs/ADMIN-CONSOLE-SPEC.md` (local, gitignored). Branch `admin/b8-org-list-detail` (the name says b8; the batch is 9), worktree `C:\Dev\seduh-score-next-admin9`, based on `origin/dev` after PR #278 (the shared-UI refactor) merged. Two commits: `8c4660d` (build) and a second one with the review fixes. **Status: complete and reviewed; pushed, PR into `dev` open, not merged.** No migrations; nothing pushed to the cloud project.

@@ -13,13 +13,13 @@
 // ctx.callAdmin, so a gate refusal (second factor stale, session ended) sends the whole console back through
 // the access check instead of showing up here as an error.
 import { el, setBusyDisabled } from '../core/dom.js';
-import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../core/timeout.js';
 import { describeAdminError } from './adminErrors.js';
 import { isGateRefusal, SLOW_MESSAGE } from './gate.js';
 import { formatDate, formatDateTime, plural } from './format.js';
 import { feedbackRegion, setFeedback } from './screenParts.js';
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { UUID } from './ids.js';
+import { ask as askAdmin, mayTakeFocus as focusAllowed } from './panelRequest.js';
 const AUDIT_LIMIT = 20;
 
 const ROLE_LABEL = Object.freeze({ owner: 'Owner', organiser: 'Organiser' });
@@ -101,15 +101,7 @@ export function mountOrgsPanel(host, ctx) {
   let disposed = false;
   const isCurrent = (mine) => !disposed && mine === view;
 
-  // One admin call, never rejecting: { data } or { error } (`error.timedOut` when it never answered).
-  async function ask(name, args) {
-    try {
-      const { data, error } = await raceTimeout(ctx.callAdmin(name, args), DEFAULT_LOAD_TIMEOUT_MS);
-      return error ? { error } : { data };
-    } catch (thrown) {
-      return { error: { timedOut: Boolean(thrown?.timedOut) } };
-    }
-  }
+  const ask = (name, args) => askAdmin(ctx, name, args);
 
   const messageFor = (error) => (error?.timedOut ? SLOW_MESSAGE : describeAdminError(error));
 
@@ -119,13 +111,7 @@ export function mountOrgsPanel(host, ctx) {
     host.replaceChildren();
   }
 
-  // An error is announced by moving focus to it, but only when focus is still somewhere it makes sense: on the
-  // panel, or nowhere. An answer that arrives up to ten seconds later must not take focus from wherever the
-  // person has since moved.
-  const mayTakeFocus = () => {
-    const active = document.activeElement;
-    return !active || active === document.body || host.contains(active);
-  };
+  const mayTakeFocus = () => focusAllowed(host);
 
   // A failed load: the message, and a Retry that asks again (not offered when the organisation is gone). The
   // retried view takes focus back to its heading, because the button that had it is replaced.
