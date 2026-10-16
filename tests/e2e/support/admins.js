@@ -48,6 +48,11 @@ function sql(statement) {
   );
 }
 
+/** Runs one SQL statement as the database owner (local container only): for state no API door can make. */
+export function sqlAsOwner(statement) {
+  return sql(statement);
+}
+
 /** A new login with no organisation, made a platform admin. It has no second factor yet: its first sign-in enrols one. */
 export async function createPlatformAdmin(label = 'admin') {
   const person = await createLoneUser(label);

@@ -2,12 +2,12 @@
 // REST doors and the Auth API directly, never through the console's page. Used by the adversarial pass
 // (admin-console-adversarial.spec.js). Everything here only ever runs against the local stack (tenants.js checks).
 import { createHmac } from 'node:crypto';
-import { generate } from 'otplib';
-import { localStack } from './tenants.js';
+import { nextCode } from './admins.js';
+import { localStack, serviceRoleKey } from './tenants.js';
 
 const { api, anonKey } = localStack();
 
-async function send(path, { method = 'GET', token, body, headers = {} } = {}) {
+export async function send(path, { method = 'GET', token, body, headers = {} } = {}) {
   const response = await fetch(`${api}${path}`, {
     method,
     headers: {
@@ -35,7 +35,7 @@ export async function signInPassword({ email, password }) {
     body: { email, password },
   });
   if (status !== 200) throw new Error(`sign-in refused: ${status} ${JSON.stringify(body)}`);
-  return { token: body.access_token, userId: body.user.id };
+  return { token: body.access_token, refreshToken: body.refresh_token, userId: body.user.id };
 }
 
 /** Enrols a TOTP factor on the session and verifies it: the returned token is an `aal2` session. */
@@ -55,7 +55,7 @@ export async function enrolTotp(token) {
     body: {},
   });
   if (challenge.status !== 200) throw new Error(`challenge refused: ${challenge.status}`);
-  const code = await generate({ secret, epoch: Math.floor(Date.now() / 1000) });
+  const code = await nextCode(secret);
   const verify = await send(`/auth/v1/factors/${factorId}/verify`, {
     method: 'POST',
     token,
@@ -74,7 +74,7 @@ export async function elevate(token, { factorId, secret }) {
     body: {},
   });
   if (challenge.status !== 200) throw new Error(`challenge refused: ${challenge.status}`);
-  const code = await generate({ secret, epoch: Math.floor(Date.now() / 1000) });
+  const code = await nextCode(secret);
   const verify = await send(`/auth/v1/factors/${factorId}/verify`, {
     method: 'POST',
     token,
@@ -83,6 +83,26 @@ export async function elevate(token, { factorId, secret }) {
   if (verify.status !== 200)
     throw new Error(`verify refused: ${verify.status} ${JSON.stringify(verify.body)}`);
   return verify.body.access_token;
+}
+
+/** The Auth API's refresh door: a stolen refresh token is what threat 1 is about. */
+export function refreshSession(refreshToken) {
+  return send('/auth/v1/token?grant_type=refresh_token', {
+    method: 'POST',
+    token: null,
+    body: { refresh_token: refreshToken },
+  });
+}
+
+/** GraphQL, as whoever holds `token` (the schema `graphql_public` is exposed to the API roles). */
+export function graphql(query, { token } = {}) {
+  return send('/graphql/v1', { method: 'POST', token, body: { query } });
+}
+
+/** The Auth admin API with the service-role key: banning an account is the documented incident response. */
+export function authAdmin(path, { method = 'GET', body } = {}) {
+  const key = serviceRoleKey();
+  return send(`/auth/v1/admin/${path}`, { method, token: key, body, headers: { apikey: key } });
 }
 
 /** POST /rest/v1/rpc/<name>. `token: null` sends no Authorization header at all. */
