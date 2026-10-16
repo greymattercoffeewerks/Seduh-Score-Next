@@ -157,6 +157,11 @@ and the shared header's Pricing link. It is static like the Tour: no router, aut
   hand (a test checks it).
 - Rows only Cup Taster supports (report/CSV, analytics, public results) say "Cup Taster:" in their
   description; BTC's publishing is live display only.
+- **The archive rule is stated on every card, in the table and in the FAQ** (owner, 2026-10-17): Community
+  results are always published to the public archive; on Per-event and Annual publishing is optional. It is
+  tier policy ahead of the code: the compulsory publish is the archive phase, and until then publishing is
+  the organiser's choice on every tier. Privacy and Terms (`trustContent.js` and its `design/copy` source) must
+  say Community results are public before it is enforced.
 - **Known mismatch, owner's call:** the landing page's tier prose still says Per-event is "fully branded"
   and Annual has "persistent history across seasons", while this page marks both as Planned.
 

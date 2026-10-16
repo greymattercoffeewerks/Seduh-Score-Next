@@ -20,6 +20,10 @@ export const TIERS = [
     price: 'Free',
     suffix: null,
     summary: 'For organisers getting started and for small events.',
+    // The tier's archive rule (owner, 2026-10-17). Automatic enforcement is the archive
+    // phase (infrastructure plan, step 4); until then publishing is the organiser's choice
+    // on every tier, so this states the tier's policy ahead of the code.
+    note: 'Results are published to the public archive.',
     cta: { text: 'Get in touch', href: '/contact/' },
   },
   {
@@ -28,6 +32,7 @@ export const TIERS = [
     price: 'BND $18',
     suffix: 'one-time',
     summary: 'One competition, with reports. Pay once, run your event, done.',
+    note: 'Publishing results to the archive is optional.',
     cta: { text: 'Get in touch', href: '/contact/' },
     featured: true,
   },
@@ -37,6 +42,7 @@ export const TIERS = [
     price: 'BND $350',
     suffix: 'per year',
     summary: 'For organisers running events all year.',
+    note: 'Publishing results to the archive is optional.',
     cta: { text: 'Get in touch', href: '/contact/' },
   },
 ];
@@ -109,9 +115,9 @@ export const FEATURE_GROUPS = [
     title: 'Reports and results',
     rows: [
       [
-        'Public results page',
-        'Cup Taster: publish the podium or full standings to a page anyone can open.',
-        [yes, yes, yes],
+        'Public results archive',
+        'Cup Taster: the podium or full standings on a page anyone can open. Community results are published to the archive; on Per-event and Annual, publishing is your choice.',
+        [text('Always published'), text('Your choice'), text('Your choice')],
       ],
       // UNCONFIRMED: the landing page puts PDF reports on Per-event and Annual only.
       [
@@ -158,6 +164,11 @@ export const FAQ = [
     question: 'How do I get an account?',
     answer:
       'Organiser accounts are set up by us for now. Get in touch and tell us about your event. The free Community tools (Timer, Brew Planner and Random Selector) need no account, and Guess the Bean only asks you to sign in when you create a session.',
+  },
+  {
+    question: 'Do my results have to be public?',
+    answer:
+      'On Community, yes: results are published to the public archive. On Per-event and Annual, publishing is your choice.',
   },
   {
     question: 'What does "Planned" mean?',

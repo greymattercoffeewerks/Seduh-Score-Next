@@ -46,6 +46,7 @@ function tierCard(tier) {
       el('h3', { className: 'pricing-tier-name', id: headingId, text: tier.name }),
       el('p', { className: 'pricing-tier-price tabular-nums' }, priceLine),
       el('p', { className: 'pricing-tier-summary', text: tier.summary }),
+      el('p', { className: 'pricing-tier-note', text: tier.note }),
       el('a', { className: 'pricing-cta cut-sm', attrs: { href: tier.cta.href } }, [
         document.createTextNode(tier.cta.text),
         el('span', { className: 'sr-only', text: ` — ${tier.name}` }),

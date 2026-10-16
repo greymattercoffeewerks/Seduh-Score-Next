@@ -86,13 +86,37 @@ describe('mountPricingScreen', () => {
     );
   });
 
+  it('says on each card whether results go to the archive: always on Community, optional on the paid tiers', () => {
+    const notes = [...root.querySelectorAll('.pricing-card')].map(
+      (card) => card.querySelector('.pricing-tier-note').textContent,
+    );
+    expect(notes).toEqual([
+      'Results are published to the public archive.',
+      'Publishing results to the archive is optional.',
+      'Publishing results to the archive is optional.',
+    ]);
+  });
+
+  it('puts the same archive rule in the table and the FAQ', () => {
+    const [, description, cells] = ALL_ROWS.find(([name]) => name === 'Public results archive');
+    expect(cells.map((cell) => cell.text)).toEqual([
+      'Always published',
+      'Your choice',
+      'Your choice',
+    ]);
+    expect(description).toMatch(/Community results are published/);
+    const faq = FAQ.find((entry) => entry.question === 'Do my results have to be public?');
+    expect(faq.answer).toMatch(/^On Community, yes/);
+    expect(faq.answer).toMatch(/Per-event and Annual, publishing is your choice/);
+  });
+
   it('sends every tier to contact, never to a checkout or a sign-up we do not have', () => {
     expect(TIERS.map((tier) => tier.cta.href)).toEqual(['/contact/', '/contact/', '/contact/']);
   });
 
   it('does not name BTC on rows that only Cup Taster supports without saying Cup Taster', () => {
     for (const name of [
-      'Public results page',
+      'Public results archive',
       'Printable report and CSV export',
       'Per-cupper and per-set analytics',
     ]) {

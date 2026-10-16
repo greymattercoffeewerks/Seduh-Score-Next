@@ -100,8 +100,17 @@ body {
   font-weight: var(--font-weight-medium);
 }
 .pricing-tier-summary {
-  margin: var(--space-3) 0 var(--space-5);
+  margin: var(--space-3) 0 var(--space-4);
   color: var(--color-text-secondary);
+  line-height: var(--leading-relaxed);
+}
+/* The archive rule, set apart so it is read before the button. */
+.pricing-tier-note {
+  margin: 0 0 var(--space-5);
+  padding-left: var(--space-3);
+  border-left: 3px solid var(--color-accent);
+  color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
   line-height: var(--leading-relaxed);
 }
 .pricing-cta {
