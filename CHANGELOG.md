@@ -1,3 +1,86 @@
+## T-ADM.E1: the adversarial pass on the admin surface · 2026-10-16
+
+**Task:** T-ADM.E1 (the adversarial pass, Batch 12) of `Handoffs and Specs/ADMIN-CONSOLE-SPEC.md` (local, gitignored). Branch `admin/b11-adversarial` (the name says b11; the batch is 12), worktree `C:\Dev\seduh-score-next-admin12`, based on `origin/dev` after PR #282 merged. Two commits: `d44685a` (the attack list) and `aae393f` (review fixes). **Status: complete and reviewed; pushed, PR into `dev` to be opened; not merged.** No migrations; no application code changed; nothing pushed to the cloud database.
+
+**Why:** the earlier batches test the console's screens, which is one client of the admin surface. The surface itself is the database functions behind PostgREST, the `admin-accounts` Edge Function and the session checks, and anyone with the public key or a token can call it without the screens. The spec asks for a written attack list, each attack run against the local stack and each refused with the expected status and hint. Passing the list is the evidence, so every test names its attack and asserts the exact refusal, not merely that something failed.
+
+**What changed** (tests and test support only):
+
+- `tests/e2e/admin-console-adversarial.spec.js` (new, 20 tests, `dev-admin` project). The spec matches the existing project; no Playwright config change.
+- `tests/e2e/support/api.js` (new): hostile-client helpers that call PostgREST and the RPCs directly, with chosen headers and bodies, without the console.
+- `tests/e2e/support/tenants.js`: `signLocalToken` (signs a token with the local published secret, for forgeries and wrong-claim tokens), `serviceRoleKey`, and `createLoneUser` now takes user metadata.
+- `tests/e2e/support/admins.js`: `sqlAsOwner`.
+- `src/admin/CLAUDE.md`: a paragraph on the adversarial spec and what it covers.
+
+**Attack matrix** (observed against the PostgREST bundled with Supabase CLI 2.115.0, 2026-10-16):
+
+| Attack                                                                                                                             | Refused with                                                                                    |
+| ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Anonymous (no header, or the public key), every admin and inner function                                                           | 401 42501 `permission denied for function <name>`, before the function runs                     |
+| Organiser, not an admin: the eight admin functions                                                                                 | 403 42501 `admin_required`                                                                      |
+| Organiser: inner functions (`admin_record_account_create`, `create_org`, `org_add_existing_member`, `org_set_role`)                | 403 42501 `permission denied`                                                                   |
+| Organiser who enrols TOTP (aal2)                                                                                                   | still `admin_required`                                                                          |
+| Admin at aal1: every admin function                                                                                                | 403 42501 `admin_mfa_required`                                                                  |
+| Forged token: aal edited with signature kept; wrong secret; `alg none`; `sub` swapped; `exp` pushed out                            | 401 PGRST301 (bad signature)                                                                    |
+| Validly signed token, expired                                                                                                      | 401 PGRST303                                                                                    |
+| Validly signed, TOTP verification 3700 s old, in the future, absent, or no `amr`                                                   | 403 `admin_mfa_required` (3500 s old is accepted: the D-A14 window edge)                        |
+| Validly signed, `session_id` unknown, missing, or another user's                                                                   | `admin_session_ended`                                                                           |
+| Own aal1 session id with aal2 claims                                                                                               | `admin_mfa_required`                                                                            |
+| Role claim `anon` or `service_role`                                                                                                | 42501 `permission denied`                                                                       |
+| `app` schema, `platform_admins`, `admin_audit_log` by name (GET, POST, PATCH, DELETE, rpc): anonymous, organiser, aal2 admin       | 406 PGRST106 (schema not exposed) or 404 PGRST205 (no such public table)                        |
+| GraphQL                                                                                                                            | no admin field: `pg_graphql` is not enabled; the test fails if it is ever enabled               |
+| Inner service-role functions as aal2 admin; service role calling the admin wrappers                                                | 42501 `permission denied`                                                                       |
+| GET on a write RPC                                                                                                                 | 404 PGRST202                                                                                    |
+| Self-targeting: add, set role, create org owner                                                                                    | 403 42501 `admin_self_target`                                                                   |
+| Organiser: PATCH or POST on `org_members`; reading other organisations                                                             | `permission denied`; sees only own organisation's rows                                          |
+| Anonymous: GET `org_members`, `orgs`, `events`                                                                                     | 401 42501                                                                                       |
+| `admin_find_user` with `%`, `_`, SQL text, prefix or suffix                                                                        | `[]` (exact match only)                                                                         |
+| Bad role; unknown organisation; unknown user                                                                                       | `member_role_invalid`; `org_not_found`; `member_user_not_found`                                 |
+| Bad name; reserved slug; slash in slug                                                                                             | 400 22023 `org_name_invalid`; `org_slug_reserved`; `org_slug_invalid`                           |
+| Demote the last owner                                                                                                              | 400 P0001 `last_owner`                                                                          |
+| Two demotions of the last two owners at once                                                                                       | one 204, one `last_owner`, no deadlock                                                          |
+| Three identical adds at once                                                                                                       | one 204, two 409 `member_exists` (23505), one audit row                                         |
+| Replay after "sign out everywhere": old access token; refresh token                                                                | `admin_session_ended` for the access token; 400 `refresh_token_not_found` for the refresh token |
+| Admin removed from `platform_admins`                                                                                               | `admin_required` at aal2 and aal1                                                               |
+| Banned admin                                                                                                                       | `admin_required`; restored when the ban is lifted                                               |
+| Password-only session enrols a second factor; unenrols the verified one                                                            | 403 `insufficient_aal`; 422 `insufficient_aal`                                                  |
+| Unverified factor planted before the owner enrols                                                                                  | unusable once they verify (threat 8)                                                            |
+| Membership, or a `team_removed_members` row planted by psql, without attestation (`admin_add_member`, `admin_create_org` as owner) | 400 22023 `member_password_unset`                                                               |
+
+Guarantees, as built:
+
+- No refused call wrote an audit row, and no refused `create_org` left an organisation.
+- `must_change_password` is advisory (D-A9): a fresh login flagged for a change needs no attestation, a member whose flag is false still does. The audit row's `attested` means required AND given: true for the member and the removed member; false for the flagged login, and for a fresh login that was given it.
+
+**Reviews:** security-reviewer and test-auditor. Both found something; all fixed in `aae393f`.
+
+- **security-reviewer, missed attacks added:** GraphQL, refresh-token replay, validly signed tokens with wrong claims (both sides of the D-A14 window, and expired), a banned admin, the second-factor compensators, the `team_removed_members` branch, concurrency, the service role at the wrappers, GET on a write function, organiser table isolation, and the `create_org` hints pinned.
+- **test-auditor, weak assertions fixed:** the `app`-schema test now says it proves exposure only (privileges are pgTAP 050's job); vacuous limit-clamp checks removed (pgTAP 048 proves them); failures name the attack; forgeries pin their messages; audit counts are scoped to the organisation, not the shared newest 200; a revoked admin is checked at aal1 as well as aal2; an `admin_can_provision` positive case added; every admin is removed in `afterAll`, and the sign-out test re-elevates in a `finally`; `api.js` uses the shared current-period TOTP helper.
+
+**Verification:**
+
+- Prettier and ESLint clean.
+- Vitest: 4660 passing.
+- Playwright `dev-admin`: 53 passing with the new spec. The new spec (20 tests) was repeated 3 times in a row with no failure.
+- The spec was shown to bite. Four rights the local database must not grant were granted briefly, each made the spec fail, and each grant was then revoked: `org_set_role` to `authenticated`; insert on `org_members` to `authenticated`; `admin_list_orgs` to `anon`; `admin_record_account_create` to `authenticated`.
+- Granting select on `org_members` to `anon` opens nothing: three walls stand (the grant, the RLS helper function is not executable by `anon`, and the row policy). Granting a right on an `app` table alone does not open the API, because the schema is not exposed. Neither is a hole.
+
+**Known open items** (stated, not fixed here):
+
+1. The Edge Function has no attack list of its own beyond the manual script `supabase/tests/manual/admin-accounts-e2e.mjs`, and the function is not served in CI. The reviewer listed what that script lacks: a bearer set to the anon or service key; an expired, stale-TOTP or banned admin; 405 and OPTIONS; a bad or oversized email; an unknown action; a non-JSON body; a concurrent double submit; `Cache-Control: no-store` and the password absent from the 409 body; direct service-key abuse of `admin_record_account_create` (`account_not_new`, `already_recorded`, a banned actor).
+2. The first-enrolment window (threat 8) is mitigated, not closed.
+3. The D-A14 freshness window is tested with signed claims, not by waiting an hour.
+4. This spec cannot run against the cloud: it signs with the local published secret and creates users.
+5. ROLLOUT step 2, read-only, on the cloud project: `GET /rest/v1/platform_admins` with `Accept-Profile: app` must answer 406 PGRST106; `POST /graphql/v1` must not list admin fields; and the project must expose only `public` and `graphql_public` with `pg_graphql` off. `get_advisors` (security and performance) runs after the cloud push (owner-approved rollout). Lint 0029 is expected for each admin function, by design.
+6. `team_can_manage` and `team_can_restore` with a platform admin as a member were not probed (a minor oracle).
+7. Owner decisions still open from earlier batches: busy-button opacity and control-border contrast in shared shapes; `/results/` `.screen-feedback` unstyled; cloud rollout checks. Draft PR #281 (core sharing) is still open.
+
+**Not done / still open:**
+
+- Not merged. The PR into `dev` is still to be opened; this entry is not final until it merges.
+- No migrations; nothing pushed to the cloud project.
+- No footer version bump: the batch changes tests and test support only, with no shippable change. `ROADMAP.md`, `CONVENTIONS.md` and `state.json` are not touched in this entry.
+
 ## T-ADM.D4 and T-ADM.D5: organisation members, and the audit log screen · 2026-10-16
 
 **Task:** T-ADM.D4 (add a member, change a role) and T-ADM.D5 (the Audit log screen) of `Handoffs and Specs/ADMIN-CONSOLE-SPEC.md` (local, gitignored), Batch 11. Branch `admin/b10-member-role-audit` (the name says b10; the batch is 11), worktree `C:\Dev\seduh-score-next-admin11`, based on `origin/dev` after PR #280 (Batch 10) merged. Two commits: `0be7bea` (build) and `65dd39d` (review fixes). **Status: complete and reviewed; pushed, PR into `dev` to be opened; not merged.** No migrations; nothing pushed to the cloud database.
