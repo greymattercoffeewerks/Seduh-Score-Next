@@ -145,6 +145,20 @@ panel that creates something must
 **disable its submit control after the first click** and keep the result on screen (the Edge Function answers
 a double submit with `[500, 500, 201]`, and the 201 carries the one-time password, which is shown once).
 
+## The adversarial pass (`tests/e2e/admin-console-adversarial.spec.js`, T-ADM.E1)
+
+An attack list run over HTTP against the real local stack, with no browser: every admin and inner function called
+with no token, as an organiser (also one who enrolled an authenticator app), as an admin who has not answered the
+second factor, with edited, re-signed, unsigned and identity-swapped tokens, the admin tables and the `app` schema
+asked for by name, the inner service-role functions called directly, self-targeting, hostile inputs, a token replayed
+after "sign out everywhere", an admin revoked mid-session, and the D-A9 attestation. Each attempt is pinned to the
+refusal the database gives (status, SQLSTATE, hint). **Adding an admin function or opening any door means adding it
+to this list**: the function tables at the top of the file are the place. The Edge Function's own attack list is
+`supabase/tests/manual/admin-accounts-e2e.mjs` (the function is not served in CI). Checked to bite by briefly granting
+the local database a right it must not have (an inner function to `authenticated`, `insert` on `org_members` to
+`authenticated`, `admin_list_orgs` to `anon`): each made the spec fail. Granting a right on an `app` table alone does
+NOT open the API, because the schema is not exposed: that is the first wall and the privileges the second (D-A10).
+
 ## Tests
 
 Vitest with a fake client (`console.test.js`, `gate.test.js`, `mfa.test.js`) and a real browser against the real
