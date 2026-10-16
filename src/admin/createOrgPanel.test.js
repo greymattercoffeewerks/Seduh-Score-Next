@@ -12,6 +12,8 @@ const ORG_ID = '33333333-3333-4333-8333-333333333333';
 const USER_ID = '44444444-4444-4444-8444-444444444444';
 const OTHER_ID = '55555555-5555-4555-8555-555555555555';
 const PASSWORD = 'Pw-7Zk2-Qm9x-Lr4t';
+const PASSWORD_HELP =
+  'Send this to them now. They choose their own password when they first sign in. It cannot be looked up again.';
 
 const ok = (data) => ({ data, error: null });
 const refused = (hint, extra = {}) => ({ data: null, error: { hint, ...extra } });
@@ -260,6 +262,18 @@ describe('a new login as the owner', () => {
     expect($('#adm-issued-warning').textContent).toBe(
       'This is the only time this password is shown.',
     );
+    // the card's look and names: Copy is the main button, Done the quieter one and set apart
+    const card = $('#adm-issued-card');
+    expect(card.className).toBe('card one-time-card adm-password-card');
+    expect(card.getAttribute('aria-labelledby')).toBe('adm-issued-heading');
+    expect(card.getAttribute('aria-describedby')).toBe('adm-issued-password adm-issued-warning');
+    expect($('#adm-issued-password').className).toBe('one-time-password adm-password');
+    expect(buttonNamed('Copy').className).toBe('btn btn-primary tap-target');
+    expect(buttonNamed('Copy').getAttribute('aria-label')).toBe('Copy the one-time password');
+    expect(buttonNamed('Done').className).toBe('btn btn-outline tap-target adm-done');
+    expect(buttonNamed('Done').getAttribute('aria-label')).toBe('Done: hide the one-time password');
+    expect(card.querySelector('.adm-actions')).not.toBeNull();
+    expect(card.textContent).toContain(`${PASSWORD_HELP} Press Done when you have passed it on.`);
     // nothing else is offered until the password has been dealt with
     expect($('a[href^="#/orgs/"]')).toBeNull();
     expect(buttonNamed('Create another')).toBeUndefined();
@@ -287,7 +301,9 @@ describe('a new login as the owner', () => {
     writeText.mockRejectedValueOnce(new Error('denied'));
     buttonNamed('Copy').click();
     await flush();
-    expect($('#adm-issued-copy-status').textContent).toMatch(/Could not copy/);
+    expect($('#adm-issued-copy-status').textContent).toBe(
+      'Could not copy. Select the password and copy it yourself.',
+    );
   });
 
   it('Done removes the password from the page, and only then offers the way on', async () => {

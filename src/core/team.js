@@ -6,6 +6,7 @@
 // password, or putting back someone removed earlier, go through the Edge Function (only the Auth admin
 // API can); listing, removing and asking "may I" are plain RPCs.
 import { getSupabase } from './supabaseClient.js';
+import { invokeEdgeFunction } from './edgeFunction.js';
 
 // An error with a message the owner can be shown as it is.
 export class TeamError extends Error {
@@ -74,34 +75,16 @@ export async function removeTeamMember(orgId, userId, client = getSupabase()) {
   if (error) throw rpcFailure(error);
 }
 
-// Calls the Edge Function. supabase-js reports a non-2xx answer as an error whose `context` is the
-// Response; the function's own { error } text is what the owner should see.
+// Calls the Edge Function (core/edgeFunction.js does the transport). Unlike the admin console, which translates
+// the function's stable hint, this screen shows the function's own { error } text: it is written for the owner.
 async function callTeamFunction(client, body) {
-  let result;
-  try {
-    result = await client.functions.invoke('team-accounts', { body });
-  } catch {
-    // supabase-js usually reports a failed fetch as { error } rather than throwing; this covers
-    // anything it lets through.
-    throw new TeamError(OFFLINE_MESSAGE);
-  }
-  const { data, error } = result;
+  const { data, error } = await invokeEdgeFunction(client, 'team-accounts', body);
   if (!error) return data;
-
-  const response = error.context;
-  if (response && typeof response.json === 'function') {
-    let payload = null;
-    try {
-      payload = await response.json();
-    } catch {
-      // not JSON — fall through to the generic message
-    }
-    if (payload && typeof payload.error === 'string') {
-      throw new TeamError(payload.error, { status: response.status });
-    }
-    throw new TeamError(GENERIC_MESSAGE, { status: response.status });
+  if (error.offline) throw new TeamError(OFFLINE_MESSAGE);
+  if (typeof error.payload?.error === 'string') {
+    throw new TeamError(error.payload.error, { status: error.status });
   }
-  throw new TeamError(OFFLINE_MESSAGE);
+  throw new TeamError(GENERIC_MESSAGE, { status: error.status });
 }
 
 // Creates a login for `email` and puts it on the team. Resolves { userId, email, password }: the

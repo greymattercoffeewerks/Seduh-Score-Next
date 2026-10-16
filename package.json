@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build && npm run prerender:public",
     "prerender:public": "node tools/prerender-public-pages.mjs",
+    "check:admin-leak": "node tools/check-admin-bundle-leak.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",

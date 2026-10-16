@@ -107,7 +107,3 @@ export const slugMessage = (raw) => {
   const hint = slugProblem(raw);
   return hint ? ADMIN_ERROR_COPY[hint] : null;
 };
-
-// A plausible email, enough to catch a typo before a request. The server (Auth) decides what is deliverable.
-const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-export const isEmailShaped = (raw) => EMAIL_SHAPE.test(String(raw ?? '').trim());

@@ -19,6 +19,9 @@ all through `SECURITY DEFINER` admin functions that the database gates itself.
   `localStorage`. `fetchWithTimeout` from core is reused.
 - `core/loginScreen.js` supplies the sign-in **form** (`renderLoginForm`, `validateCredentials`,
   `isInvalidCredentials`). Its `mountLoginScreen` is not used (it is wired to the shared client).
+- The shipped build is checked too: `npm run check:admin-leak` (`tools/check-admin-bundle-leak.mjs`, run by CI after the
+  build) fails when any built file other than `assets/admin-<hash>.js` contains an admin-only string
+  (`admin-accounts`, `admin_create_org`, `New organisation`). A new admin-only call or heading belongs in its list.
 
 ## How the gate works (do not shortcut it)
 
@@ -94,9 +97,14 @@ through `ctx.callFunction`) or an EXISTING account (`admin_find_user`, then a co
   about: typing another address, or switching the owner kind, throws the answer (and a request still out) away.
 - The owner section is built once and its parts shown or hidden: rebuilding the radios would take keyboard focus away
   from the radio being used.
-- `ctx.callFunction(name, body)` is what a panel uses for an Edge Function (`adminFunction.js`): same `{ data, error }`
-  shape as `callAdmin`, the error carries only `{ status, hint, userId, timedOut, offline }` (never the function's
-  text), and a gate refusal or HTTP 401 sends the whole console back through the access check.
+- `ctx.callFunction(name, body)` is what a panel uses for an Edge Function (`adminFunction.js`, on `core/edgeFunction.js`):
+  same `{ data, error }` shape as `callAdmin`, the error carries only `{ status, hint, timedOut, offline }` (an allow-list:
+  never the function's text, which the transport also returns as `payload`), and a gate refusal or HTTP 401 sends the
+  whole console back through the access check.
+- The one-time password card is `core/oneTimePasswordCard.js` (shared with the organiser's Team screen); `passwordCard.js`
+  only binds this console's ids, classes and words to it. Copy is the main button here and Done the quieter one, set apart
+  from Copy; the Team screen has them the other way round, so the classes are parameters. Clipboard is
+  `core/clipboard.js`; the email check is `core/email.js`.
 - `tests/e2e/admin-console-create-org.spec.js` runs the organisation step against the real database. CI does not
   serve the Edge Function, so that spec answers `admin-accounts` at the network edge; the real function is covered by
   `supabase/tests/manual/admin-accounts-e2e.mjs` before rollout.
@@ -133,9 +141,13 @@ and `npx wrangler dev`. `admin/index.html` carries the `robots` meta tag
 too, which is the guarantee if the headers file ever does not take effect. `robots.txt` deliberately does NOT
 list `/admin/`: it would announce the path, and `noindex` is the control.
 
-## Duplication closed (was accepted at Batch 8; closed 2026-10-15)
+## Duplication closed (2026-10-15 and 2026-10-16)
 
-None left of the two that were accepted at Batch 8: the generic `.card`, `.btn*`, `.form-field*`, `.field-input`
+Batch 10 had forked four core primitives (the one-time password card, the clipboard write, the Edge Function transport,
+the email-shape check). They are now `src/core/oneTimePasswordCard.js`, `clipboard.js`, `edgeFunction.js` and `email.js`,
+used by both consoles (2026-10-16).
+
+None is left of the two that were accepted at Batch 8: the generic `.card`, `.btn*`, `.form-field*`, `.field-input`
 and `.screen-feedback` shapes now live once in `src/ui/tokens/components.css` (linked first by `admin/index.html`;
 `admin.css` keeps only the three places the console differs, see its "where the admin console differs" block), and
 the sign-in and sign-out requests are `src/core/signInRequest.js` and `src/core/signOutRequest.js`, shared with the

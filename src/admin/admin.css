@@ -456,11 +456,11 @@
   overflow-wrap: anywhere;
 }
 
+/* The frame and the password block are core/oneTimePasswordCard.css; this is the console's layout around them. */
 .adm-password-card {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  border: var(--border-strong) solid var(--color-border-strong);
 }
 
 .adm-password-card h2 {
@@ -468,20 +468,6 @@
   font-family: var(--font-display);
   font-size: var(--text-lg);
   line-height: var(--leading-tight);
-  overflow-wrap: anywhere;
-}
-
-/* The one-time password: large, monospaced, selected in one tap, and allowed to wrap at 360px. */
-.adm-password {
-  display: block;
-  padding: var(--space-3);
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: var(--text-xl);
-  letter-spacing: var(--tracking-wide);
-  background: var(--color-surface-sunken);
-  border: var(--border-hairline) solid var(--color-border-strong);
-  border-radius: var(--radius-sm);
-  user-select: all;
   overflow-wrap: anywhere;
 }
 
@@ -523,6 +509,7 @@
   margin-top: var(--space-4);
 }
 
+/* Safari needs the prefixed form for "selected in one tap" (the shared block has the unprefixed one). */
 .adm-password {
   -webkit-user-select: all;
 }

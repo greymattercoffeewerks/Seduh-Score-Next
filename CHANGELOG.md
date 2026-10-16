@@ -1,3 +1,53 @@
+## T-ADM.D3 follow-up: admin and organiser consoles share four core primitives (refactor, no behaviour change) · 2026-10-16
+
+**Task:** refactor (no task ID), follow-up to the module-boundary review of PR #280 (T-ADM.D3, Batch 10). Branch `refactor/admin-core-primitives`, worktree `C:\Dev\seduh-score-next\.claude\worktrees\friendly-antonelli-5d332b`, based on `origin/admin/b9-create-org`. **Status: built and reviewed; changes are in the working tree and not yet committed; not merged.** No migrations; nothing pushed to the cloud database.
+
+**Why:** the boundary review of PR #280 found that the admin console had forked four `src/core` primitives: the one-time password card, clipboard copy, the Edge Function transport and the email-shape regex. Each fork was a second copy to keep in step. The organiser console (the Team screen) is live, so the rule for this change was that nothing may change for it.
+
+**What changed:**
+
+- `src/core/oneTimePasswordCard.js` and `.css` (new). The card has a section, heading, "One-time password:" label, code block, caller paragraphs, Copy, optional Done, and a copy-status line. Ids are `idPrefix` plus per-id overrides, so the Team screen keeps `team-issued`, `team-password`, `team-copy` and `team-issued-done` exactly. Classes are set per part (Team: Copy `btn-outline`, Done `btn-primary`; admin: Copy `btn-primary`, Done `btn-outline` plus `adm-done`). Other parameters: `copyFailedText`, `doneLabel`, `focusable`, and `paragraphs` with `describes`, which needs an id. `isStillShown()` lets the card say whether it is still on screen. The Team screen answers `issued !== null`, so a Copy button left in the page after unmount copies nothing. The old code got this by reading `issued` at click time; an existing test caught that the first version of the primitive lost it.
+- `src/core/clipboard.js` (new): `copyText(text)` returns a boolean and never throws. Used by the card, `audienceLinksCard` (default copy), `src/tools/random-selector` (share link) and the guess-the-bean setup screen (URL Copy). Two deliberate behaviour details:
+  - random-selector's copied note is now set one microtask later even when there is no clipboard. One existing test ("drops UNDO ...") was made async to flush it; its assertion is unchanged.
+  - guess-the-bean: a refused copy shows nothing. It used to be an unhandled rejection.
+- `src/core/edgeFunction.js` (new): `invokeEdgeFunction(client, name, body, {timeoutMs})` returns `{ data, error: { status, hint, payload, timedOut, offline } }`. `core/team.js`'s `callTeamFunction` maps the payload's error text, offline and generic messages on top, with the same messages and statuses as before. `src/admin/adminFunction.js` takes `status`, `hint`, `timedOut` and `offline` from it by allow-list, and never the function's own text. The 30-second timeout is unchanged.
+- `src/core/email.js` (new): `isEmailShaped`, the same regex. `teamScreen.validateTeamEmail` and the admin `createOrgPanel` use it; `orgRules.js` no longer has its own copy.
+- `src/admin/passwordCard.js` is now a thin binding (`adminPasswordCard`) of the admin's ids, classes and words to the core card.
+- CSS: the shared password block moved to `core/oneTimePasswordCard.css`, linked in `app/index.html` and `admin/index.html` before `teamScreen.css` and `admin.css`. `.team-password` keeps only its margin. The `.team-issued` class and the duplicate frame border rules are gone (`.card` already supplies the border).
+- Deliberate non-change: `-webkit-user-select: all` stays admin-only, so the organiser's screen is unchanged.
+- Organiser markup: no visual or markup difference intended. Team card ids, ARIA, tabindex, order, classes and strings are identical. Admin Copy and Done buttons gained ids (`<prefix>-copy`, `<prefix>-done`); additive only.
+- Build-output check: `tools/check-admin-bundle-leak.mjs`, `npm run check:admin-leak`, and a CI step after the build in `.github/workflows/ci.yml`. It fails if any `dist/assets/*.js` other than the admin entry chunk (`admin-<8 char hash>.js`) contains one of seven admin-only strings (`admin-accounts`, `admin_create_org`, `admin_find_user`, `admin_list_orgs`, `admin_can_provision`, `am_i_platform_admin`, `New organisation`). A canary exits 2 if the admin chunk lacks any listed string or no admin chunk exists. This replaces the manual check named in `src/admin/boundary.test.js`'s header. `vite.config.js`'s vitest include gained `tools/*.test.js`.
+- Docs: `src/core/CLAUDE.md` and `src/admin/CLAUDE.md` updated.
+- Tests: new `oneTimePasswordCard.test.js`, `clipboard.test.js`, `edgeFunction.test.js`, `email.test.js` (the `isEmailShaped` tests moved here from `orgRules.test.js`) and `tools/check-admin-bundle-leak.test.js`. New Team and admin card assertions (classes, aria-labels, exact copy-failed text, help text), a random-selector success-note test, and a guess-the-bean Copy test.
+
+**Reviews:** four ran (module-boundary-checker, test-auditor, ui-accessibility-reviewer, code-reviewer). No schema, RLS, RPC or scoring change, so `security-reviewer` and `scoring-auditor` were not run. Every reviewer found something; all fixed:
+
+- **module-boundary-checker:** the boundary holds (the primitives take ids and words as parameters). Low: consumer names in core comments, trimmed. The leak-check list was too short; widened to seven strings.
+- **test-auditor:** unpinned Team and admin card classes, aria-labels, exact copy-failed text and admin help text; a loose `isAdminChunk` pattern; no canary; an untested CLI. All fixed with tests.
+- **ui-accessibility-reviewer:** no visual change at source level, reasoned at 360px (no browser pixel comparison). Low: a redundant border rule, removed. The Safari user-select point is noted as a follow-up.
+- **code-reviewer:** no blocking findings. Low: `describes` without an id put `undefined` into `aria-describedby`, now guarded; an unused export `oneTimePasswordIds` was unexported; `timeoutMs: 0` is documented; doc wording fixed.
+
+Hand mutation check: 26 mutants against the new primitives and their call sites, all killed. One survivor in guess-the-bean (the copy-success toast path) was killed by a new test.
+
+**Verification:**
+
+- Full vitest: 164 files, 4606 tests passing.
+- Prettier and ESLint clean. `npm run build` and `npm run check:admin-leak` clean.
+- Playwright `dev-app`, `dev-tenancy` and `dev-admin` (with their dependencies `dev-harnesses` and `dev-audience`): 63 passed. A first run was invalid because the dev server on 5273 died mid-run while reviewers were running; the re-run was clean.
+
+**Accepted limits and known open items** (stated, not fixed here):
+
+1. Four of the five items in open item 1 of the T-ADM.D3 entry are closed here (card and CSS, clipboard, Edge Function transport, email regex). `labeledField` with hint and error slots is still duplicated and still open.
+2. Open item 2 of the T-ADM.D3 entry (no post-build check of non-admin bundles) is closed by `check:admin-leak`.
+3. Safari one-tap select on the Team password (the admin keeps `-webkit-user-select: all`): the owner's call.
+
+**Not done / still open:**
+
+- Not merged, and not committed at the time of writing. The changes sit in the working tree on `refactor/admin-core-primitives`.
+- PR #280 has not merged. Until it does, a PR from this branch into `dev` will also show Batch 10's commits; merge #280 first or retarget this PR.
+- The organiser's Team one-time password card was not compared by pixel in a real browser. Worth one look on the live console after release (add a team member on a test org).
+- No migrations; nothing pushed to the cloud project. No footer version bump in this entry. `ROADMAP.md`, `state.json` and `CONVENTIONS.md` are not touched here; the new shared primitives may need a line in `CONVENTIONS.md`.
+
 ## T-ADM.D3: create an organisation, with a new or existing owner · 2026-10-16
 
 **Task:** T-ADM.D3 (Batch 10) of `Handoffs and Specs/ADMIN-CONSOLE-SPEC.md` (local, gitignored). Branch `admin/b9-create-org` (the name says b9; the batch is 10), worktree `C:\Dev\seduh-score-next-admin10`, based on `origin/dev` after PR #279 (Batch 9) merged. Two commits: `a7c53b1` (build) and `8111ff2` (review fixes). **Status: complete and reviewed; pushed, PR into `dev` to be opened; not merged.** No migrations; nothing pushed to the cloud database.

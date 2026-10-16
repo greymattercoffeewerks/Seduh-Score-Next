@@ -1,4 +1,5 @@
 import { brandLockup, el, withFocusPreservation } from '../../core/dom.js';
+import { copyText } from '../../core/clipboard.js';
 import { downloadCsv } from '../../core/export.js';
 import {
   decodeShare,
@@ -656,12 +657,11 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
     url.search = '';
     url.hash = '';
     url.searchParams.set('draw', encoded);
-    try {
-      await navigator.clipboard.writeText(url.toString());
-      setNote('Share link copied. Anyone opening it gets this list and setting.');
-    } catch {
-      setNote('Could not copy the link automatically. Please try again.');
-    }
+    setNote(
+      (await copyText(url.toString()))
+        ? 'Share link copied. Anyone opening it gets this list and setting.'
+        : 'Could not copy the link automatically. Please try again.',
+    );
     render();
   }
 
