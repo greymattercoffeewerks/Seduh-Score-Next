@@ -1,0 +1,556 @@
+/*
+ * The admin console's own styles. It loads the surface-agnostic design tokens (src/ui/tokens), the shared
+ * component shapes (src/ui/tokens/components.css: .btn, .field-input, .form-field, .card, .screen-feedback, the
+ * class names core/dom.js and core/loginScreen.js's renderLoginForm emit) and core/loginScreen.css, and nothing
+ * from a format. Below: the two places the console differs from those shapes, then its own screens. (Taking
+ * the shared shapes changed one thing the console used to restate: form labels are --color-text-secondary, the
+ * value the organiser console has always rendered, rather than --color-text-muted: darker, so a higher contrast.)
+ * 360px first: everything stacks, nothing needs horizontal scrolling, every control is at least 44px tall.
+ */
+
+/* ---- where the admin console differs from the shared shapes (src/ui/tokens/components.css) ---- */
+
+/* A busy button keeps its full colour: dimming white-on-teal to 0.6 drops it to about 3:1. The label
+   ("Signing in…") and the cursor say it is working. The console only ever marks a button busy with
+   aria-disabled; the shared shape's dimmed, not-allowed look stays for every other surface. */
+.btn[aria-disabled='true'] {
+  cursor: progress;
+  opacity: 1;
+}
+
+/* A control's edge must reach 3:1 against what it sits on (WCAG 1.4.11); the shared --color-border is for
+   dividers. Proposed for the shared shape too; held back here so the organiser console does not change. */
+.field-input {
+  border-color: var(--color-text-muted);
+}
+
+/* ---- the admin screens ---- */
+
+.adm-screen {
+  box-sizing: border-box;
+  max-width: 28rem;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4) var(--space-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.adm-screen h1,
+.adm-main h1 {
+  overflow-wrap: anywhere;
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  line-height: var(--leading-tight);
+  margin: 0;
+}
+
+.adm-screen p {
+  margin: 0;
+}
+
+.adm-muted {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+/* "Signed in as ..." and Sign out, on every screen between sign-in and the console. */
+.adm-strip {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  border-top: var(--border-hairline) solid var(--color-border);
+  padding-top: var(--space-4);
+}
+
+.adm-strip-who {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.adm-enrol-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.adm-enrol-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* A QR code is read by a camera: it sits on white whatever the surface colour, with a quiet border. This is
+   the one literal colour in this file on purpose (a scanner needs dark on light; there is no token for it). */
+.adm-qr {
+  width: 12.5rem;
+  max-width: 100%;
+  height: auto;
+  background: #ffffff;
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+}
+
+.adm-secret {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--text-md);
+  letter-spacing: 0.08em;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.adm-code-input {
+  font-size: var(--text-xl);
+  letter-spacing: 0.3em;
+  text-align: center;
+}
+
+/* ---- the console frame ---- */
+
+/* The header, notices, navigation and panel share one gutter: 16px on a phone, and on a wide screen
+   whatever centres a 60rem column, so their left edges line up. */
+:root {
+  --adm-gutter: max(var(--space-4), calc((100% - 60rem) / 2));
+}
+
+.adm-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--adm-gutter);
+  border-bottom: var(--border-strong) solid var(--color-border-strong);
+  background: var(--color-surface);
+}
+
+.adm-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.adm-brand-tag {
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  color: var(--color-text-secondary);
+}
+
+.adm-who {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+
+.adm-who-email {
+  overflow-wrap: anywhere;
+}
+
+.adm-badge {
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-success);
+}
+
+.adm-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.adm-header-feedback {
+  margin: var(--space-3) var(--adm-gutter) 0;
+}
+
+.adm-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--adm-gutter);
+}
+
+.adm-nav-link {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-sm);
+  border: var(--border-hairline) solid var(--color-text-muted);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.adm-nav-link[aria-current='page'] {
+  background: var(--color-surface-sunken);
+  border-color: var(--color-border-strong);
+  font-weight: var(--font-weight-bold);
+}
+
+.adm-main {
+  box-sizing: border-box;
+  padding: var(--space-4) var(--adm-gutter) var(--space-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.adm-main > p {
+  margin: 0;
+}
+
+@media (min-width: 48rem) {
+  .adm-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+
+  .adm-who {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
+  .adm-actions {
+    flex-direction: row;
+  }
+
+  .adm-strip {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+/* ---- skip link, organisations panel ---- */
+
+/* Out of sight until it takes focus, then the first thing on the page. */
+.adm-skip {
+  position: absolute;
+  left: var(--space-4);
+  top: var(--space-2);
+  z-index: 1;
+  transform: translateY(-300%);
+  min-height: var(--tap-target-min);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: var(--border-strong) solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+
+.adm-skip:focus {
+  transform: none;
+}
+
+.adm-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.adm-org-list,
+.adm-members,
+.adm-audit {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.adm-org {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.adm-org p,
+.adm-org-slug {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The organisation's name is the link; its whole line is the tap target. */
+.adm-org-name,
+.adm-back {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-target-min);
+  color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.adm-org-name {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+}
+
+.adm-back {
+  align-self: flex-start;
+}
+
+.adm-facts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.adm-fact {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.adm-fact dt {
+  font-size: var(--text-2xs);
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+}
+
+.adm-fact dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.adm-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.adm-section h2 {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  line-height: var(--leading-snug);
+  margin: 0;
+}
+
+.adm-member,
+.adm-audit-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: var(--border-hairline) solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+.adm-member-email,
+.adm-audit-what {
+  overflow-wrap: anywhere;
+}
+
+.adm-role {
+  font-weight: var(--font-weight-semibold);
+}
+
+@media (min-width: 48rem) {
+  .adm-facts {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* The panel's plain text sits in flex columns that have their own gap: the browser's default paragraph margins
+   would double it. */
+.adm-panel-body > p,
+.adm-section > p,
+.adm-changes > p {
+  margin: 0;
+}
+
+.adm-changes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+/* An address or a name with no space in it has nowhere to break unless it is told it may. */
+.adm-audit-item,
+.adm-member {
+  overflow-wrap: anywhere;
+}
+
+/* ---- the New organisation panel ---- */
+
+.adm-form,
+.adm-owner,
+.adm-owner-pickers,
+.adm-existing,
+.adm-lookup,
+.adm-created {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* `hidden` must win over the display above: the owner section is built once and shown or hidden. */
+.adm-owner [hidden] {
+  display: none;
+}
+
+.adm-form p,
+.adm-lookup p,
+.adm-created p,
+.adm-password-card p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* A problem beside the field it is about, in words (the colour alone is never the message). */
+.adm-field-error {
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+}
+
+.adm-field-error:empty {
+  /* Out of the flow but still in the accessibility tree: a live region that goes from display:none to text in one
+     step is often not announced (the same rule .screen-feedback:empty follows in components.css). */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.adm-fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.adm-fieldset legend {
+  padding: 0;
+  margin-bottom: var(--space-2);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* A checkbox or radio and its label. A native control renders well under the 44px floor, so the control itself
+   is made that size (the same rule the events screen's checkbox follows), and the label beside it is as tall. */
+.adm-check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.adm-check input {
+  flex: none;
+  width: var(--tap-target-min);
+  height: var(--tap-target-min);
+  margin: 0;
+}
+
+.adm-check label {
+  display: flex;
+  align-items: center;
+  min-height: var(--tap-target-min);
+  overflow-wrap: anywhere;
+}
+
+/* The frame and the password block are core/oneTimePasswordCard.css; this is the console's layout around them. */
+.adm-password-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.adm-password-card h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  line-height: var(--leading-tight);
+  overflow-wrap: anywhere;
+}
+
+.adm-warning {
+  font-weight: var(--font-weight-semibold);
+}
+
+/* A link that looks like a button needs the button's own box. */
+.adm-link-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+/* ---- review fixes, New organisation panel ---- */
+
+/* Plain text anywhere in the panel (a long name or an email with no space in it) wraps instead of widening the page. */
+.adm-main p {
+  overflow-wrap: anywhere;
+}
+
+/* The checked colour of a native radio or checkbox is the console's, not the browser's blue. */
+.adm-check input {
+  accent-color: var(--color-accent);
+}
+
+.field-input[aria-invalid='true'] {
+  border-color: var(--color-danger);
+}
+
+/* An empty paragraph (the link-name preview before there is anything to say) must not add a gap of its own. */
+.adm-muted:empty {
+  display: none;
+}
+
+/* Done throws the only copy of the password away: it sits apart from Copy, not beside it. */
+.adm-done {
+  margin-top: var(--space-4);
+}
+
+/* Safari needs the prefixed form for "selected in one tap" (the shared block has the unprefixed one). */
+.adm-password {
+  -webkit-user-select: all;
+}
+
+/* ---- members and the audit log (Batch 11) ---- */
+
+/* A member's role control sits under their line and takes the full width of the card on a phone. */
+.adm-role-control {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.adm-role-control p {
+  margin: 0;
+}
+
+/* A link inside a line of small text still has the full tap target. */
+.adm-link-inline {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-target-min);
+  color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
+  /* bold alone is not a signal (WCAG 1.4.1): it reads as a link by its underline */
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+
+.adm-audit-log {
+  gap: var(--space-4);
+}
+
+.adm-audit-item:focus {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}

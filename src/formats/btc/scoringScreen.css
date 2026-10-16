@@ -1,7 +1,7 @@
 /*
  * BTC match scoring screen (Phase T-BTC.2). The base screen-chrome shapes (screen
- * container, card, buttons, form fields, screen feedback) live in shared.css,
- * loaded alongside this file. Mobile-first: each cup is one row with a 4-button
+ * container, card, buttons, form fields, screen feedback) live in
+ * src/ui/tokens/components.css, linked first by every page that loads this file. Mobile-first: each cup is one row with a 4-button
  * 0/1/2/3 token selector, so it fits a 360px screen without any horizontal scrolling.
  * Nothing here needs a breakpoint.
  *
@@ -125,14 +125,9 @@
 }
 
 /* The live regions (save warning, notice, confirm feedback) are always in the page so a
-   screen reader announces text put into them. While empty they must take no space and
-   show no box, but they must stay in the accessibility tree, so they are collapsed here
-   instead of being hidden or display:none. */
-.btc-scoring-screen .screen-feedback:empty {
-  padding: 0;
-  border: 0;
-  min-height: 0;
-}
+   screen reader announces text put into them. While empty they take no space and show no
+   box but stay in the accessibility tree: that is the shared .screen-feedback:empty rule in
+   src/ui/tokens/components.css. */
 
 /* The UA default placeholder colour falls under 4.5:1 on some surfaces. */
 .btc-scoring-screen .field-input::placeholder {

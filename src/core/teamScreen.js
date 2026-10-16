@@ -22,6 +22,8 @@
 // element that should end up focused.
 import { getSupabase } from './supabaseClient.js';
 import { el, labeledField } from './dom.js';
+import { isEmailShaped } from './email.js';
+import { oneTimePasswordCard } from './oneTimePasswordCard.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
 import {
   listTeamMembers,
@@ -38,7 +40,7 @@ import {
 export function validateTeamEmail(email) {
   const trimmed = email.trim();
   if (!trimmed) return 'Enter the email address of the person to add.';
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return 'Enter a valid email address.';
+  if (!isEmailShaped(trimmed)) return 'Enter a valid email address.';
   if (trimmed.length > 254) return 'That email address is too long.';
   return null;
 }
@@ -337,65 +339,46 @@ export async function mountTeamScreen(
         : issued.kind === 'restore'
           ? `${issued.email} is back on the team — new one-time password`
           : `New one-time password for ${issued.email}`;
-    const copyStatus = el('span', {
-      id: 'team-copy-status',
-      className: 'stage-meta',
-      attrs: { role: 'status', 'aria-live': 'polite' },
-    });
-    const copyButton = el('button', {
-      className: 'btn btn-outline tap-target',
-      text: 'Copy',
-      id: 'team-copy',
-      attrs: { type: 'button', 'aria-label': 'Copy the one-time password' },
-    });
-    copyButton.addEventListener('click', async () => {
-      let message;
-      try {
-        await navigator.clipboard.writeText(issued.password);
-        message = 'Copied.';
-      } catch {
-        message = 'Could not copy — select the password and copy it yourself.';
-      }
-      copyStatus.textContent = message;
-    });
-    const doneButton = el('button', {
-      className: 'btn btn-primary tap-target',
-      text: 'Done',
-      id: 'team-issued-done',
-      attrs: { type: 'button', 'aria-label': 'Done — hide the one-time password' },
-    });
-    doneButton.addEventListener('click', () => {
-      issued = null;
-      focusAfterRender = '#team-email';
-      render();
-    });
-
-    return el(
-      'section',
-      {
-        id: 'team-issued',
-        className: 'card team-issued',
-        // Labelled by its heading and described by the password and the instructions, so arriving
-        // here reads all three instead of just a region name.
-        attrs: {
-          tabindex: '-1',
-          'aria-labelledby': 'team-issued-heading',
-          'aria-describedby': 'team-password team-issued-help',
-        },
+    return oneTimePasswordCard({
+      idPrefix: 'team',
+      ids: {
+        card: 'team-issued',
+        heading: 'team-issued-heading',
+        password: 'team-password',
+        copy: 'team-copy',
+        copyStatus: 'team-copy-status',
+        done: 'team-issued-done',
       },
-      [
-        el('h2', { id: 'team-issued-heading', text: heading }),
-        el('p', { className: 'stage-meta', text: 'One-time password:' }),
-        el('code', { id: 'team-password', className: 'team-password', text: issued.password }),
-        el('p', {
+      heading,
+      password: issued.password,
+      copyFailedText: 'Could not copy — select the password and copy it yourself.',
+      paragraphs: [
+        {
           id: 'team-issued-help',
           text: 'Send this to them now — it is shown once and cannot be looked up again. They choose their own password when they first sign in. Press Done when you have passed it on; adding or changing anyone else waits until then.',
-        }),
-        issued.note ? el('p', { id: 'team-issued-note', text: issued.note }) : null,
-        el('div', { className: 'team-actions' }, [copyButton, doneButton]),
-        copyStatus,
-      ].filter(Boolean),
-    );
+          describes: true,
+        },
+        ...(issued.note ? [{ id: 'team-issued-note', text: issued.note }] : []),
+      ],
+      // After unmount a button left in the page must not put the password on the clipboard.
+      isStillShown: () => issued !== null,
+      doneLabel: 'Done — hide the one-time password',
+      onDone: () => {
+        issued = null;
+        focusAfterRender = '#team-email';
+        render();
+      },
+      // Arriving here (focus moves to the card) reads the heading, the password and the instructions.
+      focusable: true,
+      classes: {
+        muted: 'stage-meta',
+        password: 'team-password',
+        actions: 'team-actions',
+        // Here Done is the main button and Copy the quieter one.
+        copy: 'btn btn-outline tap-target',
+        done: 'btn btn-primary tap-target',
+      },
+    });
   }
 
   function removedRow(person) {

@@ -465,8 +465,8 @@ describe('mountTeamScreen — adding someone', () => {
     await until(() => expect(q(root, '#team-copy')).not.toBeNull());
     q(root, '#team-copy').click();
     await until(() =>
-      expect(q(root, '#team-copy-status').textContent).toMatch(
-        /select the password and copy it yourself/,
+      expect(q(root, '#team-copy-status').textContent).toBe(
+        'Could not copy — select the password and copy it yourself.',
       ),
     );
   });
@@ -1112,6 +1112,21 @@ describe('mountTeamScreen — a one-time password on screen is never replaced', 
     expect(panel.getAttribute('aria-describedby')).toBe('team-password team-issued-help');
     expect(q(root, '#team-password')).not.toBeNull();
     expect(q(root, '#team-issued-help')).not.toBeNull();
+  });
+
+  it('keeps its look and its names: Done is the main button, Copy the quieter one, in the screen classes', async () => {
+    const { root } = await withPasswordShowing();
+    expect(q(root, '#team-issued').className).toBe('card one-time-card');
+    expect(q(root, '#team-password').className).toBe('one-time-password team-password');
+    expect(q(root, '#team-copy').className).toBe('btn btn-outline tap-target');
+    expect(q(root, '#team-issued-done').className).toBe('btn btn-primary tap-target');
+    expect(q(root, '#team-copy').getAttribute('aria-label')).toBe('Copy the one-time password');
+    expect(q(root, '#team-issued-done').getAttribute('aria-label')).toBe(
+      'Done — hide the one-time password',
+    );
+    expect(q(root, '#team-copy').parentElement.className).toBe('team-actions');
+    expect(q(root, '#team-copy-status').className).toBe('stage-meta');
+    expect(q(root, '#team-copy-status').getAttribute('role')).toBe('status');
   });
 });
 

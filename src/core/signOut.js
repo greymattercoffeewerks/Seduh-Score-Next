@@ -2,22 +2,21 @@
 // (noOrgScreen.js) both sign out and then have the router show the sign-in screen; they used to each
 // carry their own copy, and only one of them had a timeout.
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
+import { signOutRequest } from './signOutRequest.js';
 import { listAccountOperations } from './outbox.js';
 
 export const SIGN_OUT_FAILED_MESSAGE = 'Could not sign out — check your connection and try again.';
 export const SIGN_OUT_SLOW_MESSAGE =
   'Signing out is taking longer than expected — check your connection and try again.';
 
-// Signs out, racing the shared timeout so a stalled connection cannot leave the button stuck.
+// Signs out, racing the shared timeout (signOutRequest.js, shared with the admin console) so a stalled
+// connection cannot leave the button stuck.
 // Resolves to null on success, or to the message to show: a failure is an expected outcome over venue
 // wifi, so this never rejects.
 export async function signOutWithTimeout(client) {
-  try {
-    const { error } = await raceTimeout(client.auth.signOut(), DEFAULT_LOAD_TIMEOUT_MS);
-    return error ? SIGN_OUT_FAILED_MESSAGE : null;
-  } catch (err) {
-    return err?.timedOut ? SIGN_OUT_SLOW_MESSAGE : SIGN_OUT_FAILED_MESSAGE;
-  }
+  const result = await signOutRequest(client);
+  if (result.ok) return null;
+  return result.timedOut ? SIGN_OUT_SLOW_MESSAGE : SIGN_OUT_FAILED_MESSAGE;
 }
 
 // Signing out never removes what has not synced: it stays on this device for the account that made it and

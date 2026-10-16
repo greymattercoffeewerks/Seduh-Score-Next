@@ -412,6 +412,19 @@ describe('random selector share links and storage', () => {
     expect(root.querySelector('[role="status"]').textContent).toMatch(/too long to share/);
   });
 
+  it('says the share link was copied, once the clipboard has taken it', async () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    mount();
+    buttonByText('COPY SHARE LINK').click();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(writeText.mock.calls[0][0]).toContain('?draw=');
+    expect(root.querySelector('[role="status"]').textContent).toBe(
+      'Share link copied. Anyone opening it gets this list and setting.',
+    );
+  });
+
   it('reports a clipboard failure', async () => {
     vi.stubGlobal('navigator', { clipboard: { writeText: () => Promise.reject(new Error('no')) } });
     mount();
@@ -937,7 +950,7 @@ describe('random selector says what it did not use, and lets a replace be undone
     expect(board().getAttribute('aria-label')).toBe('Selected entry: Amir');
   });
 
-  it('drops UNDO when a weight is changed or another note replaces the one that offered it', () => {
+  it('drops UNDO when a weight is changed or another note replaces the one that offered it', async () => {
     mount();
     buttonByText('CLEAR SESSION').click();
     type('Amir | 2\nBella');
@@ -950,6 +963,9 @@ describe('random selector says what it did not use, and lets a replace be undone
     buttonByText('CLEAR SESSION').click();
     expect(buttonByText('UNDO')).toBeDefined();
     buttonByText('COPY SHARE LINK').click();
+    // The note is set once the copy has been attempted (core/clipboard.js answers asynchronously, even when
+    // there is no clipboard to try).
+    await vi.advanceTimersByTimeAsync(0);
     expect(buttonByText('UNDO')).toBeUndefined();
   });
 

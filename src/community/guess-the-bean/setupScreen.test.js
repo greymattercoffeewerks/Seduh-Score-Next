@@ -803,6 +803,53 @@ describe('mountSetupScreen', () => {
     }
   });
 
+  it('Copy on a URL says "Copied" only when the clipboard took it', async () => {
+    const mountWithOneSession = async () => {
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      await mountSetupScreen(root, {
+        client: fakeClient({
+          sessions: [
+            {
+              id: 's1',
+              name: 'One',
+              guess_enabled: true,
+              revealed: false,
+              orientation: 'landscape',
+            },
+          ],
+        }),
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      root.querySelector('.gtb-session-row').click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      return root;
+    };
+    const press = async (root) => {
+      [...root.querySelectorAll('button')].find((b) => b.textContent === 'Copy').click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    };
+
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: () => Promise.reject(new Error('denied')) },
+      configurable: true,
+    });
+    const refused = await mountWithOneSession();
+    await press(refused);
+    expect(refused.querySelector('.gtb-toast')).toBeNull();
+
+    const written = [];
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: (text) => (written.push(text), Promise.resolve()) },
+      configurable: true,
+    });
+    const accepted = await mountWithOneSession();
+    await press(accepted);
+    expect(accepted.querySelector('.gtb-toast').textContent).toBe('Copied to clipboard.');
+    expect(written).toHaveLength(1);
+    expect(written[0]).toBe(accepted.querySelector('.gtb-url-code').textContent);
+  });
+
   it('a failed initial load shows a toast (not a permanent banner) and does not crash', async () => {
     const root = document.createElement('div');
     document.body.appendChild(root);

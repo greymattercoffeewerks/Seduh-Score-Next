@@ -61,8 +61,8 @@
 // immediately, same as any other case.
 //
 // This default applies to EVERY app mount, not just the two target="_blank"
-// cases above — `trackInputModality()` is called exactly once, in
-// main.js's `mountApp()`, before any routing happens. Found in review
+// cases above — `trackInputModality()` is called once per surface that mounts, in
+// main.js's `mountApp()` (and in src/admin/console.js for the admin console), before any routing happens. Found in review
 // (code-reviewer): a cold load of the organiser dashboard itself (a typed
 // URL, a bookmark, an ordinary same-tab external link, an F5 refresh) hits
 // the identical "no interaction history yet" starting point a new tab

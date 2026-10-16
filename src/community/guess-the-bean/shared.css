@@ -94,8 +94,9 @@ input[type='checkbox'][aria-disabled='true'] {
 /* core/dom.js's labeledField() emits a generic .form-field/.form-field-label
    pair with no styling opinion of its own (same gap this tool's sibling,
    src/tools/timer/timer.css, already documents and fixes for itself) — this
-   tool never loads formats/cup-taster/heatsScreen.css, which owns that pair
-   for the console, so it needs its own copy here too. */
+   tool never loads src/ui/tokens/components.css (the console's copy of that
+   pair, deliberately not part of tokens/index.css so it cannot reach this
+   page), so it keeps its own, with its own look, here. */
 .form-field {
   display: flex;
   flex-direction: column;

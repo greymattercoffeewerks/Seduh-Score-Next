@@ -1,7 +1,7 @@
 /*
  * Cup Taster viewer body (T5.4, extended T5.3) — the content
  * core/viewer-shell.js mounts once real data exists. Built on
- * heatsScreen.css's shared .card/.stage-meta, standingsScreen.css's
+ * components.css's shared .card, heatsScreen.css's .stage-meta, standingsScreen.css's
  * .standings-table, and base.css's .font-mono-score (both stylesheets load
  * alongside this file); nothing here redefines them. Shared unedited by
  * T5.3's projector surface — every rule here is token-only so

@@ -366,10 +366,14 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     // is often not spoken), yet take no space.
     const statusBox = await page.locator('.timing-screen .screen-feedback').evaluate((el) => ({
       display: getComputedStyle(el).display,
+      position: getComputedStyle(el).position,
       height: el.getBoundingClientRect().height,
     }));
     expect(statusBox.display).not.toBe('none');
-    expect(statusBox.height).toBe(0);
+    // The shared empty-region rule (src/ui/tokens/components.css) takes the node out of the flow and clips it to one
+    // pixel, so it adds no room and no flex gap; an in-flow node of height 0 would be as good for this assertion.
+    expect(statusBox.height).toBeLessThanOrEqual(1);
+    expect(statusBox.position === 'absolute' || statusBox.height === 0).toBe(true);
     // First tap: asks, starts nothing, the other event stays live. Cancel is not on screen until then.
     const start = page.getByRole('button', { name: 'Start heat' });
     await expect(page.getByRole('button', { name: 'Cancel' })).toBeHidden();

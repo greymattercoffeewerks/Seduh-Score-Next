@@ -9,6 +9,7 @@
 // the link it encodes is shown beside it as selectable text with its own Copy and Open buttons, so nothing is
 // only reachable by scanning.
 import { el } from './dom.js';
+import { copyText } from './clipboard.js';
 
 const SURFACES = [
   {
@@ -62,10 +63,9 @@ export function buildAudienceLinksCard(
 ) {
   const writeToClipboard =
     copy ??
-    ((text) =>
-      navigator.clipboard?.writeText
-        ? navigator.clipboard.writeText(text)
-        : Promise.reject(new Error('no clipboard')));
+    (async (text) => {
+      if (!(await copyText(text))) throw new Error('no clipboard');
+    });
 
   // One polite status line for the whole card, kept in place (a live region that is replaced is not reliably
   // announced): "Phone view link copied." or the reason it was not.

@@ -92,5 +92,15 @@ export default defineConfig({
       dependencies: ['dev-audience'],
       use: { baseURL: 'http://127.0.0.1:5273' },
     },
+    {
+      // admin-console.spec.js (T-ADM.D1): the platform operator's console at /admin/ with a real platform admin
+      // (made by SQL, support/admins.js), real TOTP enrolment and challenge, and the database gate. Last, for the
+      // same shared-backend reason as the projects above; it also needs the local stack's TOTP switched on
+      // (supabase/config.toml [auth.mfa.totp]).
+      name: 'dev-admin',
+      testMatch: /admin-console.*\.spec\.js/,
+      dependencies: ['dev-tenancy'],
+      use: { baseURL: 'http://127.0.0.1:5273' },
+    },
   ],
 });

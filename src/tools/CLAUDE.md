@@ -21,7 +21,7 @@ A tool here MAY import from `src/core/` when a piece of it is genuinely format-a
 engine logic (e.g. `core/countdown.js`, `core/dom.js`, `core/duration.js`) — that's the
 same direction `src/marketing/` already imports in, and `core/` has no reverse
 dependency on either. A tool here must never import from `src/formats/` — pulling in a
-format's UI classes (e.g. Cup Taster's `.btn`/`.card` in `heatsScreen.css`) would tie a
+format's UI classes (e.g. Cup Taster's `.screen-container` in `heatsScreen.css`) would tie a
 supposedly standalone tool to one format's presentation, so each tool keeps its own
 self-contained CSS instead.
 
