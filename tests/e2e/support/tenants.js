@@ -74,14 +74,19 @@ export async function addMember(tenant, person, role = 'organiser') {
 }
 
 /** A signed-up person who belongs to NO organisation (an account made for something else, or someone removed). */
-export async function createLoneUser(label) {
+export async function createLoneUser(label, { userMetadata } = {}) {
   assertLocalStack();
   const unique = `${Date.now().toString(36)}${randomUUID().slice(0, 4)}`;
   const email = `d5-lone-${label}-${unique}@local.test`;
   const user = await call('/auth/v1/admin/users', {
     method: 'POST',
     key: signLocalKey('service_role'),
-    body: { email, password: PASSWORD, email_confirm: true },
+    body: {
+      email,
+      password: PASSWORD,
+      email_confirm: true,
+      ...(userMetadata ? { user_metadata: userMetadata } : {}),
+    },
   });
   return { userId: user.id, email, password: PASSWORD };
 }
