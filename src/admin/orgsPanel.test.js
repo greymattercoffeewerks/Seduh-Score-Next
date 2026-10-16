@@ -431,8 +431,8 @@ describe('one organisation', () => {
     expect(text()).toContain('Members (2)');
     const members = [...host.querySelectorAll('.adm-member')].map((m) => m.textContent);
     expect(members).toEqual([
-      'owner@alpha.testOwnerjoined 2026-10-01',
-      'staff@alpha.testOrganiserjoined 2026-10-03',
+      'owner@alpha.testOwnerjoined 2026-10-01Make organiser',
+      'staff@alpha.testOrganiserjoined 2026-10-03Make owner',
     ]);
     const changes = [...host.querySelectorAll('.adm-audit-item')].map((m) => m.textContent);
     expect(changes).toEqual([
@@ -925,5 +925,212 @@ describe('a detail still loading when the panel is closed', () => {
     await flush();
     expect(host.innerHTML).toBe(before);
     expect(text()).not.toContain('Closed Panel Org');
+  });
+});
+
+describe('changing an organisation from its detail (add a member, change a role)', () => {
+  const click = async (label) => {
+    buttons(label)[0].click();
+    await flush();
+  };
+  const detailCalls = (callAdmin) =>
+    callAdmin.mock.calls.filter(([name]) => name === 'admin_org_detail').length;
+
+  it('shows an Add a member section and a role button for each member, under the members', async () => {
+    window.location.hash = `#/orgs/${ID_A}`;
+    mount({ admin_org_detail: ok(detailOf()), admin_list_audit: ok([]) });
+    await flush();
+    expect([...host.querySelectorAll('h2')].map((h) => h.textContent)).toEqual([
+      'Members (2)',
+      'Add a member',
+      'Recent changes',
+    ]);
+    const roleButtons = [...host.querySelectorAll('.adm-member button')].map((b) => b.textContent);
+    expect(roleButtons).toEqual(['Make organiser', 'Make owner']);
+  });
+
+  it('after a role change the detail is drawn again from the database, with a notice and focus on the heading', async () => {
+    window.location.hash = `#/orgs/${ID_A}`;
+    let changed = false;
+    const { callAdmin } = mount({
+      admin_org_detail: () =>
+        ok(
+          detailOf({
+            members: [
+              {
+                user_id: '66666666-6666-4666-8666-666666666666',
+                email: 'staff@alpha.test',
+                role: changed ? 'owner' : 'organiser',
+                joined_at: '2026-10-03T08:00:00Z',
+              },
+            ],
+          }),
+        ),
+      admin_list_audit: ok([]),
+      admin_set_role: () => {
+        changed = true;
+        return ok(null);
+      },
+    });
+    await flush();
+    await click('Make owner');
+    await click('Confirm');
+    expect(callAdmin).toHaveBeenCalledWith('admin_set_role', {
+      p_org_id: ID_A,
+      p_user_id: '66666666-6666-4666-8666-666666666666',
+      p_role: 'owner',
+    });
+    expect(detailCalls(callAdmin)).toBe(2);
+    expect(host.querySelector('.adm-role').textContent).toBe('Owner');
+    expect(host.querySelector('.screen-feedback').textContent).toBe(
+      'staff@alpha.test is now Owner.',
+    );
+    expect(host.querySelector('.screen-feedback').dataset.tone).toBe('success');
+    expect(document.activeElement).toBe(host.querySelector('h1'));
+  });
+
+  it('a refused role change says why and leaves the detail as it was (no reload)', async () => {
+    window.location.hash = `#/orgs/${ID_A}`;
+    const { callAdmin } = mount({
+      admin_org_detail: ok(
+        detailOf({
+          members: [
+            {
+              user_id: '66666666-6666-4666-8666-666666666666',
+              email: 'only@alpha.test',
+              role: 'owner',
+              joined_at: null,
+            },
+          ],
+        }),
+      ),
+      admin_list_audit: ok([]),
+      admin_set_role: refused('last_owner'),
+    });
+    await flush();
+    await click('Make organiser');
+    await click('Confirm');
+    expect(text()).toContain('An organisation must keep at least one owner');
+    expect(detailCalls(callAdmin)).toBe(1);
+  });
+
+  it('after a member is added the detail is drawn again with a notice', async () => {
+    window.location.hash = `#/orgs/${ID_A}`;
+    let added = false;
+    const { callAdmin } = mount({
+      admin_org_detail: () =>
+        ok(
+          added
+            ? detailOf({
+                members: [
+                  ...detailOf().members,
+                  {
+                    user_id: '77777777-7777-4777-8777-777777777777',
+                    email: 'new@alpha.test',
+                    role: 'organiser',
+                    joined_at: '2026-10-16T08:00:00Z',
+                  },
+                ],
+              })
+            : detailOf(),
+        ),
+      admin_list_audit: ok([]),
+      admin_find_user: ok([
+        {
+          user_id: '77777777-7777-4777-8777-777777777777',
+          email: 'new@alpha.test',
+          banned: false,
+          deleted: false,
+          org_count: 0,
+          must_change_password: false,
+          needs_attestation: false,
+        },
+      ]),
+      admin_add_member: () => {
+        added = true;
+        return ok(null);
+      },
+    });
+    await flush();
+    const email = host.querySelector('#adm-member-email');
+    email.value = 'new@alpha.test';
+    email.dispatchEvent(new Event('input', { bubbles: true }));
+    await click('Look up account');
+    host.querySelector('#adm-member-role').value = 'organiser';
+    host
+      .querySelector('#adm-member-email')
+      .closest('form')
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await flush();
+    expect(callAdmin).toHaveBeenCalledWith('admin_add_member', {
+      p_org_id: ID_A,
+      p_user_id: '77777777-7777-4777-8777-777777777777',
+      p_role: 'organiser',
+      p_attest_own_password: false,
+    });
+    expect(text()).toContain('Members (3)');
+    expect(host.querySelector('.screen-feedback').textContent).toBe(
+      'new@alpha.test was added as Organiser.',
+    );
+  });
+
+  it('a gate refusal from a role change clears the panel', async () => {
+    window.location.hash = `#/orgs/${ID_A}`;
+    mount({
+      admin_org_detail: ok(detailOf()),
+      admin_list_audit: ok([]),
+      admin_set_role: refused('admin_mfa_required'),
+    });
+    await flush();
+    await click('Make owner');
+    await click('Confirm');
+    expect(host.innerHTML).toBe('');
+  });
+
+  it('a lookup refused after the person went back to the list does not clear the list it never belonged to', async () => {
+    window.location.hash = `#/orgs/${ID_A}`;
+    let answer;
+    mount({
+      admin_org_detail: ok(detailOf()),
+      admin_list_audit: ok([]),
+      admin_list_orgs: ok([orgRow({ name: 'The List' })]),
+      admin_find_user: () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    });
+    await flush();
+    const email = host.querySelector('#adm-member-email');
+    email.value = 'new@alpha.test';
+    email.dispatchEvent(new Event('input', { bubbles: true }));
+    buttons('Look up account')[0].click();
+    await goto('#/orgs');
+    answer(refused('admin_mfa_required'));
+    await flush();
+    expect(host.querySelector('.adm-org-name').textContent).toBe('The List');
+  });
+
+  it('a lookup still out when the person goes back to the list draws nothing', async () => {
+    window.location.hash = `#/orgs/${ID_A}`;
+    let answer;
+    mount({
+      admin_org_detail: ok(detailOf()),
+      admin_list_audit: ok([]),
+      admin_list_orgs: ok([orgRow()]),
+      admin_find_user: () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    });
+    await flush();
+    const email = host.querySelector('#adm-member-email');
+    email.value = 'new@alpha.test';
+    email.dispatchEvent(new Event('input', { bubbles: true }));
+    buttons('Look up account')[0].click();
+    await goto('#/orgs');
+    const before = host.innerHTML;
+    answer(ok([]));
+    await flush();
+    expect(host.innerHTML).toBe(before);
   });
 });

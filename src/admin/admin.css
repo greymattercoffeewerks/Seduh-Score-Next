@@ -526,3 +526,39 @@
 .adm-password {
   -webkit-user-select: all;
 }
+
+/* ---- members and the audit log (Batch 11) ---- */
+
+/* A member's role control sits under their line and takes the full width of the card on a phone. */
+.adm-role-control {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.adm-role-control p {
+  margin: 0;
+}
+
+.adm-role-control .adm-field-error:empty {
+  display: none;
+}
+
+/* A link inside a line of small text still has the full tap target. */
+.adm-link-inline {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-target-min);
+  color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.adm-audit-log {
+  gap: var(--space-4);
+}
+
+.adm-audit-item:focus {
+  outline: var(--border-strong) solid var(--color-border-strong);
+  outline-offset: var(--space-1);
+}

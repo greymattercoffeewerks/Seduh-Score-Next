@@ -21,6 +21,7 @@ import { plural } from './format.js';
 import { feedbackRegion, setFeedback } from './screenParts.js';
 import { oneTimePasswordCard } from './passwordCard.js';
 import { UUID } from './ids.js';
+import { field, textInput, showFieldError } from './formParts.js';
 import { ask as askAdmin, mayTakeFocus as focusAllowed } from './panelRequest.js';
 import { nameMessage, slugMessage, normalisedSlug, trimmed, isEmailShaped } from './orgRules.js';
 
@@ -111,51 +112,6 @@ export function mountCreateOrgPanel(host, ctx) {
     if (done) done.login = null;
     guardUnload(false);
     host.replaceChildren();
-  }
-
-  // ---- small builders ----
-
-  function field({ id, label, hint, input, live = false }) {
-    const errorLine = el('p', {
-      className: 'adm-field-error',
-      id: `${id}-error`,
-      attrs: { 'data-for': id, ...(live ? { 'aria-live': 'polite' } : {}) },
-    });
-    input.setAttribute('aria-required', 'true');
-    const describedBy = [hint ? `${id}-hint` : null, `${id}-error`].filter(Boolean).join(' ');
-    input.setAttribute('aria-describedby', describedBy);
-    const wrapper = el(
-      'div',
-      { className: 'form-field' },
-      [
-        el('label', { className: 'form-field-label', text: label, attrs: { for: id } }),
-        hint ? el('p', { className: 'form-field-hint', id: `${id}-hint`, text: hint }) : null,
-        input,
-        errorLine,
-      ].filter(Boolean),
-    );
-    return { wrapper, errorLine };
-  }
-
-  function textInput(id, extra = {}) {
-    return el('input', {
-      className: 'field-input',
-      id,
-      attrs: {
-        type: 'text',
-        autocomplete: 'off',
-        autocapitalize: 'none',
-        autocorrect: 'off',
-        spellcheck: 'false',
-        ...extra,
-      },
-    });
-  }
-
-  function showFieldError(input, errorLine, message) {
-    errorLine.textContent = message ?? '';
-    if (message) input.setAttribute('aria-invalid', 'true');
-    else input.removeAttribute('aria-invalid');
   }
 
   // ---- the form ----

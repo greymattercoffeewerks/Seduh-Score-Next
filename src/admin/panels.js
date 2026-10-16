@@ -1,5 +1,5 @@
 // The console's panel registry: the ONE list the shell renders its navigation and routes from. A new panel
-// (the audit log, and later gating's Plan panel) is an entry here plus a screen module; nothing in shell.js
+// (and later gating's Plan panel) is an entry here plus a screen module; nothing in shell.js
 // changes. Each entry is { id, label, route, mount(host, ctx) } and mount returns { unmount() }, and optionally
 // `leaveWarning()`: a sentence when the panel holds something that exists only on its screen (a one-time
 // password), which makes the shell ask before another panel or a sign-out replaces it. The shell routes by the FIRST segment of the URL hash (`#/orgs/<id>` is the `orgs` panel), and a
@@ -12,6 +12,7 @@
 // look for it. Translate any other refusal with describeAdminError (adminErrors.js).
 import { mountOrgsPanel } from './orgsPanel.js';
 import { mountCreateOrgPanel } from './createOrgPanel.js';
+import { mountAuditPanel } from './auditPanel.js';
 
 export const PANELS = Object.freeze([
   Object.freeze({
@@ -25,5 +26,11 @@ export const PANELS = Object.freeze([
     label: 'New organisation',
     route: 'new-org',
     mount: mountCreateOrgPanel,
+  }),
+  Object.freeze({
+    id: 'audit',
+    label: 'Audit log',
+    route: 'audit',
+    mount: mountAuditPanel,
   }),
 ]);

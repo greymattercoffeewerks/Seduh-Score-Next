@@ -1,6 +1,7 @@
-// The Organisations panel (spec section 5, D2): the list of every organisation, and one organisation's detail
-// with its members and its recent audit entries. READ ONLY: nothing here creates or changes anything (Batches
-// 10 and 11 add that).
+// The Organisations panel (spec section 5, D2 and D4): the list of every organisation, and one organisation's
+// detail with its members and its recent audit entries. Reading is all this file does itself; the two things that
+// CHANGE an organisation from here (attach an account, change a role) live in memberActions.js, and the detail is
+// drawn again from the database once either is done.
 //
 // What it shows is exactly what the database function returns and no more (spec D-A4): names, link names,
 // dates, member emails and roles, and counts of events. Never an event name, a score, an entry or a person
@@ -15,34 +16,16 @@
 import { el, setBusyDisabled } from '../core/dom.js';
 import { describeAdminError } from './adminErrors.js';
 import { isGateRefusal, SLOW_MESSAGE } from './gate.js';
-import { formatDate, formatDateTime, plural } from './format.js';
+import { formatDate, plural } from './format.js';
 import { feedbackRegion, setFeedback } from './screenParts.js';
-
 import { UUID } from './ids.js';
+import { roleLabel, describeAuditEntry, auditItem } from './auditView.js';
+import { addMemberSection, roleControl } from './memberActions.js';
 import { ask as askAdmin, mayTakeFocus as focusAllowed } from './panelRequest.js';
 const AUDIT_LIMIT = 20;
 
-const ROLE_LABEL = Object.freeze({ owner: 'Owner', organiser: 'Organiser' });
-const roleLabel = (role) =>
-  Object.hasOwn(ROLE_LABEL, role) ? ROLE_LABEL[role] : String(role ?? '');
-
-// One audit action in words. Only the keys each action is documented to carry (migration 20261014130000) are
-// read from `detail`; an action this panel does not know is shown by its name, never dropped.
-export function describeAuditEntry(entry) {
-  const detail = entry?.detail ?? {};
-  switch (entry?.action) {
-    case 'org.create':
-      return 'Organisation created';
-    case 'member.add':
-      return detail.role ? `Member added as ${roleLabel(detail.role)}` : 'Member added';
-    case 'member.role_set':
-      return `Role changed from ${roleLabel(detail.from)} to ${roleLabel(detail.to)}`;
-    case 'account.create':
-      return 'Login created';
-    default:
-      return String(entry?.action ?? 'Change');
-  }
-}
+// (Moved to auditView.js, shared with the Audit log screen; still exported from here for the callers that had it.)
+export { describeAuditEntry };
 
 // Where in the panel the URL points: the list, one organisation, an id that cannot be one, or another panel.
 export function parseOrgsRoute(hash) {
@@ -100,6 +83,12 @@ export function mountOrgsPanel(host, ctx) {
   let view = 0; // each render takes a number; an answer for an older view is thrown away
   let disposed = false;
   const isCurrent = (mine) => !disposed && mine === view;
+  // Whatever the detail on screen holds that must be told when it goes (a lookup still out).
+  let disposeAddMember = () => {};
+  const leaveDetail = () => {
+    disposeAddMember();
+    disposeAddMember = () => {};
+  };
 
   const ask = (name, args) => askAdmin(ctx, name, args);
 
@@ -141,6 +130,7 @@ export function mountOrgsPanel(host, ctx) {
   }
 
   async function showList({ focusHeading = false } = {}) {
+    leaveDetail();
     const mine = ++view;
     const title = heading('Organisations');
     const feedback = feedbackRegion();
@@ -179,22 +169,21 @@ export function mountOrgsPanel(host, ctx) {
 
   // ---- one organisation ----
 
-  function memberItem(member) {
+  // `reload(notice)` draws the detail again from the database with a one-line confirmation: the new member or the
+  // new role is whatever the database now says, not what this page believes it asked for.
+  function memberItem(member, orgId, reload) {
     return el('li', { className: 'adm-member' }, [
       el('span', { className: 'adm-member-email', text: String(member.email ?? '') }),
       el('span', { className: 'adm-role', text: roleLabel(member.role) }),
       el('span', { className: 'adm-muted', text: `joined ${formatDate(member.joined_at)}` }),
-    ]);
-  }
-
-  function auditItem(entry) {
-    const by = entry.actor_email
-      ? `by ${entry.actor_email}`
-      : 'by an account that no longer exists';
-    const target = entry.target_user_email ? ` · ${entry.target_user_email}` : '';
-    return el('li', { className: 'adm-audit-item' }, [
-      el('span', { className: 'adm-audit-what', text: describeAuditEntry(entry) }),
-      el('span', { className: 'adm-muted', text: `${formatDateTime(entry.at)} · ${by}${target}` }),
+      roleControl({
+        ctx,
+        orgId,
+        member,
+        mayTakeFocus,
+        onGateRefused: stepAside,
+        onChanged: ({ email, to }) => reload(`${email} is now ${roleLabel(to)}.`),
+      }),
     ]);
   }
 
@@ -245,7 +234,8 @@ export function mountOrgsPanel(host, ctx) {
     }
   }
 
-  async function showDetail(id, { focusHeading = false } = {}) {
+  async function showDetail(id, { focusHeading = false, notice = null } = {}) {
+    leaveDetail();
     const mine = ++view;
     const title = heading('Organisation');
     const feedback = feedbackRegion();
@@ -268,6 +258,15 @@ export function mountOrgsPanel(host, ctx) {
       return;
     }
     const changes = el('div', { className: 'adm-changes' });
+    const reload = (message) => showDetail(id, { focusHeading: true, notice: message });
+    const addMember = addMemberSection({
+      ctx,
+      orgId: id,
+      mayTakeFocus,
+      onGateRefused: stepAside,
+      onAdded: ({ email, role }) => reload(`${email} was added as ${roleLabel(role)}.`),
+    });
+    disposeAddMember = addMember.dispose;
     try {
       const org = detail.data?.org ?? {};
       const members = Array.isArray(detail.data?.members) ? detail.data.members : [];
@@ -286,15 +285,17 @@ export function mountOrgsPanel(host, ctx) {
             : el(
                 'ul',
                 { className: 'adm-members', attrs: { role: 'list' } },
-                members.map(memberItem),
+                members.map((member) => memberItem(member, id, reload)),
               ),
         ]),
+        addMember.node,
         el('section', { className: 'adm-section' }, [
           el('h2', { text: 'Recent changes' }),
           changes,
         ]),
       );
       status.textContent = `${title.textContent} loaded.`;
+      if (notice) setFeedback(feedback, notice, 'success', { focus: false });
     } catch {
       body.replaceChildren();
       title.textContent = 'Organisation';
@@ -305,6 +306,7 @@ export function mountOrgsPanel(host, ctx) {
   }
 
   function showMissing() {
+    leaveDetail();
     view += 1;
     // Static text, not a live region: focus is on the heading, so it is read next.
     host.replaceChildren(
@@ -348,6 +350,7 @@ export function mountOrgsPanel(host, ctx) {
   return {
     unmount() {
       disposed = true;
+      leaveDetail();
       window.removeEventListener('hashchange', onHashChange);
     },
   };
