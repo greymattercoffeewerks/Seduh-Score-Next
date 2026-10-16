@@ -54,6 +54,26 @@ async function call(path, { method = 'GET', key, token, body, headers = {} } = {
   return text ? JSON.parse(text) : null;
 }
 
+/**
+ * A token signed with the local stack's PUBLISHED secret and exactly the claims given: for tests that must hand the
+ * database a validly signed token with wrong or stale claims (the gateway accepts it; the database's own gate must not).
+ */
+export function signLocalToken(payload) {
+  assertLocalStack();
+  const head = base64url({ alg: 'HS256', typ: 'JWT' });
+  const body = base64url(payload);
+  const signature = createHmac('sha256', LOCAL_JWT_SECRET)
+    .update(`${head}.${body}`)
+    .digest('base64url');
+  return `${head}.${body}.${signature}`;
+}
+
+/** The local service-role key (the Auth admin API and the service-only functions). Local stack only. */
+export function serviceRoleKey() {
+  assertLocalStack();
+  return signLocalKey('service_role');
+}
+
 /** The public (anon) key and API address of the local stack, for tests that talk to the database directly. */
 export function localStack() {
   assertLocalStack();
@@ -74,14 +94,19 @@ export async function addMember(tenant, person, role = 'organiser') {
 }
 
 /** A signed-up person who belongs to NO organisation (an account made for something else, or someone removed). */
-export async function createLoneUser(label) {
+export async function createLoneUser(label, { userMetadata } = {}) {
   assertLocalStack();
   const unique = `${Date.now().toString(36)}${randomUUID().slice(0, 4)}`;
   const email = `d5-lone-${label}-${unique}@local.test`;
   const user = await call('/auth/v1/admin/users', {
     method: 'POST',
     key: signLocalKey('service_role'),
-    body: { email, password: PASSWORD, email_confirm: true },
+    body: {
+      email,
+      password: PASSWORD,
+      email_confirm: true,
+      ...(userMetadata ? { user_metadata: userMetadata } : {}),
+    },
   });
   return { userId: user.id, email, password: PASSWORD };
 }

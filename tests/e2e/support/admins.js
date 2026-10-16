@@ -48,6 +48,11 @@ function sql(statement) {
   );
 }
 
+/** Runs one SQL statement as the database owner (local container only): for state no API door can make. */
+export function sqlAsOwner(statement) {
+  return sql(statement);
+}
+
 /** A new login with no organisation, made a platform admin. It has no second factor yet: its first sign-in enrols one. */
 export async function createPlatformAdmin(label = 'admin') {
   const person = await createLoneUser(label);
@@ -64,26 +69,15 @@ export function removePlatformAdmin(person) {
   sql(`delete from app.platform_admins where user_id = '${person.userId}'`);
 }
 
-const used = new Map();
-
 /**
- * The six digits an authenticator app would show for `secret`. The server accepts the current 30-second
- * period's code and the one either side of it (probed 2026-10-15 against the local GoTrue: +-1 accepted, +-2
- * refused), and the local stack does not refuse a repeated code. So that a test never depends on that
- * leniency where it does not need to, this hands out a code it has not handed out before when one of the three
- * is free, and only otherwise repeats the current one.
+ * The six digits an authenticator app would show for `secret`, for the CURRENT 30-second period. The server accepts
+ * that period's code and the one either side of it, measured on ITS clock, and the local stack's clock can differ
+ * from this machine's by about a second (seen 2026-10-16). Near a period boundary a code for the next or previous
+ * period (by this clock) can therefore be two periods away on the server's and be refused, which failed a test now
+ * and then. The current period's code is within one period of the server's whichever way the clocks differ, and the
+ * local stack does not refuse a repeated code (probed 2026-10-15), so that is the only one handed out.
  */
 export async function nextCode(secret) {
-  const spent = used.get(secret) ?? new Set();
-  used.set(secret, spent);
   const now = Math.floor(Date.now() / 1000);
-  const current = await generate({ secret, epoch: now });
-  for (const step of [0, 1, -1]) {
-    const code = await generate({ secret, epoch: now + step * 30 });
-    if (!spent.has(code)) {
-      spent.add(code);
-      return code;
-    }
-  }
-  return current;
+  return generate({ secret, epoch: now });
 }

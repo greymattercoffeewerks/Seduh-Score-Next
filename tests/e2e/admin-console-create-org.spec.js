@@ -251,6 +251,8 @@ test.describe('the New organisation panel (real page, real local Supabase)', () 
     await page.getByLabel('Use an existing account').check();
     await fillOrg(page, `Again One ${uniq}`, `d10-${uniq}-again-1`);
     await lookUp(page, first.email);
+    // (wait for the answer: creating before it arrives is refused with "Look up the account first")
+    await expect(page.locator('.adm-lookup')).toContainText(`Found: ${first.email}`);
     await page.getByRole('button', { name: 'Create organisation' }).click();
     await expect(heading(page)).toHaveText('Organisation created');
 

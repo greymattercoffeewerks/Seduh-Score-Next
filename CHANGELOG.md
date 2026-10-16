@@ -43,10 +43,188 @@ Hand mutation check: 26 mutants against the new primitives and their call sites,
 
 **Not done / still open:**
 
-- Not merged, and not committed at the time of writing. The changes sit in the working tree on `refactor/admin-core-primitives`.
-- PR #280 has not merged. Until it does, a PR from this branch into `dev` will also show Batch 10's commits; merge #280 first or retarget this PR.
+- Written before the PR: the changes were then uncommitted on `refactor/admin-core-primitives`. They are PR #281 (draft), now merged with `dev` (2026-10-16) after Batches 11 to 13 landed.
+- PR #280 (Batch 10) has since merged, so this PR shows only its own changes. The merge with `dev` conflicted only in this file (two new top entries) and merged `createOrgPanel.js` without a conflict; the tests were rerun on the merged tree.
 - The organiser's Team one-time password card was not compared by pixel in a real browser. Worth one look on the live console after release (add a team member on a test org).
 - No migrations; nothing pushed to the cloud project. No footer version bump in this entry. `ROADMAP.md`, `state.json` and `CONVENTIONS.md` are not touched here; the new shared primitives may need a line in `CONVENTIONS.md`.
+
+## T-ADM.E2 and T-ADM.E4: the admin console's documentation close-out · 2026-10-16
+
+**Task:** T-ADM.E2 and T-ADM.E4 (Batch 13, the documentation close-out) of `Handoffs and Specs/ADMIN-CONSOLE-SPEC.md` (local, gitignored). Branch `admin/b12-docs-closeout` (the name says b12; the batch is 13), worktree `C:\Dev\seduh-score-next-admin13`, off `origin/dev` after PR #283. **Status: complete; docs only; PR into `dev` to be opened; not merged.**
+
+**Why:** the console's rules were spread across the batch entries, the spec and the adversarial matrix. The next operator, or the next agent, needs one place that says what exists, what the gate requires, how to recover a lost authenticator, and what is still owed before rollout. The provisioning runbook also still presented the SQL path as the only way to provision, which stops being true once the console is rolled out.
+
+**What changed:**
+
+- `CLAUDE.md`: a new section "Platform administration: the operator's console (T-ADM, built 2026-10-15 to 2026-10-16)". It covers what exists, the gate, metadata only and no impersonation, adding or removing an admin by SQL, the lost-authenticator order (end sessions, remove the factor, re-enrol), TOTP side effects, known limits, tests and rollout status. The provisioning runbook in the Repo section now says the console is the normal path once it is rolled out, with SQL as the fallback.
+- `ROADMAP.md`: a "Current state" row for T-ADM; an "Admin console v1 (T-ADM)" section with its phase table and next steps; a "Known open items from T-ADM.\*" section that consolidates every T-ADM entry's open items into groups.
+- `state.json` (local, gitignored): reset to idle, with gating named as next.
+
+**Verification:**
+
+- `npx prettier --check ROADMAP.md CHANGELOG.md` passes.
+- The docs were fact-checked against the code by a reviewer.
+
+**Known open items:** see "Known open items from T-ADM.\*" in `ROADMAP.md`. It consolidates the lists of every T-ADM entry above.
+
+**Not done / still open:**
+
+- Not merged. The PR into `dev` is still to be opened; this entry is not final until it merges.
+- Nothing is in the cloud project, and there is no code or migration change. The owner-approved rollout (the "Admin console v1" section of `ROADMAP.md`) is still owed.
+- No footer version bump: docs only, no shippable change. `package.json` is untouched.
+- The earlier T-ADM entries are not edited, so some of their status lines are stale: the B1 to B3 "not merged" and "not committed" lines, and the D1 to E1 "PR into `dev` to be opened" and "not merged" lines. Every batch from B1 to E1 is on `dev` (PRs #271 to #283). The `ROADMAP.md` section has the current status.
+
+## T-ADM.E1: the adversarial pass on the admin surface · 2026-10-16
+
+**Task:** T-ADM.E1 (the adversarial pass, Batch 12) of `Handoffs and Specs/ADMIN-CONSOLE-SPEC.md` (local, gitignored). Branch `admin/b11-adversarial` (the name says b11; the batch is 12), worktree `C:\Dev\seduh-score-next-admin12`, based on `origin/dev` after PR #282 merged. Two commits: `d44685a` (the attack list) and `aae393f` (review fixes). **Status: complete and reviewed; pushed, PR into `dev` to be opened; not merged.** No migrations; no application code changed; nothing pushed to the cloud database.
+
+**Why:** the earlier batches test the console's screens, which is one client of the admin surface. The surface itself is the database functions behind PostgREST, the `admin-accounts` Edge Function and the session checks, and anyone with the public key or a token can call it without the screens. The spec asks for a written attack list, each attack run against the local stack and each refused with the expected status and hint. Passing the list is the evidence, so every test names its attack and asserts the exact refusal, not merely that something failed.
+
+**What changed** (tests and test support only):
+
+- `tests/e2e/admin-console-adversarial.spec.js` (new, 20 tests, `dev-admin` project). The spec matches the existing project; no Playwright config change.
+- `tests/e2e/support/api.js` (new): hostile-client helpers that call PostgREST and the RPCs directly, with chosen headers and bodies, without the console.
+- `tests/e2e/support/tenants.js`: `signLocalToken` (signs a token with the local published secret, for forgeries and wrong-claim tokens), `serviceRoleKey`, and `createLoneUser` now takes user metadata.
+- `tests/e2e/support/admins.js`: `sqlAsOwner`.
+- `src/admin/CLAUDE.md`: a paragraph on the adversarial spec and what it covers.
+
+**Attack matrix** (observed against the PostgREST bundled with Supabase CLI 2.115.0, 2026-10-16):
+
+| Attack                                                                                                                             | Refused with                                                                                    |
+| ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Anonymous (no header, or the public key), every admin and inner function                                                           | 401 42501 `permission denied for function <name>`, before the function runs                     |
+| Organiser, not an admin: the eight admin functions                                                                                 | 403 42501 `admin_required`                                                                      |
+| Organiser: inner functions (`admin_record_account_create`, `create_org`, `org_add_existing_member`, `org_set_role`)                | 403 42501 `permission denied`                                                                   |
+| Organiser who enrols TOTP (aal2)                                                                                                   | still `admin_required`                                                                          |
+| Admin at aal1: every admin function                                                                                                | 403 42501 `admin_mfa_required`                                                                  |
+| Forged token: aal edited with signature kept; wrong secret; `alg none`; `sub` swapped; `exp` pushed out                            | 401 PGRST301 (bad signature)                                                                    |
+| Validly signed token, expired                                                                                                      | 401 PGRST303                                                                                    |
+| Validly signed, TOTP verification 3700 s old, in the future, absent, or no `amr`                                                   | 403 `admin_mfa_required` (3500 s old is accepted: the D-A14 window edge)                        |
+| Validly signed, `session_id` unknown, missing, or another user's                                                                   | `admin_session_ended`                                                                           |
+| Own aal1 session id with aal2 claims                                                                                               | `admin_mfa_required`                                                                            |
+| Role claim `anon` or `service_role`                                                                                                | 42501 `permission denied`                                                                       |
+| `app` schema, `platform_admins`, `admin_audit_log` by name (GET, POST, PATCH, DELETE, rpc): anonymous, organiser, aal2 admin       | 406 PGRST106 (schema not exposed) or 404 PGRST205 (no such public table)                        |
+| GraphQL                                                                                                                            | no admin field: `pg_graphql` is not enabled; the test fails if it is ever enabled               |
+| Inner service-role functions as aal2 admin; service role calling the admin wrappers                                                | 42501 `permission denied`                                                                       |
+| GET on a write RPC                                                                                                                 | 404 PGRST202                                                                                    |
+| Self-targeting: add, set role, create org owner                                                                                    | 403 42501 `admin_self_target`                                                                   |
+| Organiser: PATCH or POST on `org_members`; reading other organisations                                                             | `permission denied`; sees only own organisation's rows                                          |
+| Anonymous: GET `org_members`, `orgs`, `events`                                                                                     | 401 42501                                                                                       |
+| `admin_find_user` with `%`, `_`, SQL text, prefix or suffix                                                                        | `[]` (exact match only)                                                                         |
+| Bad role; unknown organisation; unknown user                                                                                       | `member_role_invalid`; `org_not_found`; `member_user_not_found`                                 |
+| Bad name; reserved slug; slash in slug                                                                                             | 400 22023 `org_name_invalid`; `org_slug_reserved`; `org_slug_invalid`                           |
+| Demote the last owner                                                                                                              | 400 P0001 `last_owner`                                                                          |
+| Two demotions of the last two owners at once                                                                                       | one 204, one `last_owner`, no deadlock                                                          |
+| Three identical adds at once                                                                                                       | one 204, two 409 `member_exists` (23505), one audit row                                         |
+| Replay after "sign out everywhere": old access token; refresh token                                                                | `admin_session_ended` for the access token; 400 `refresh_token_not_found` for the refresh token |
+| Admin removed from `platform_admins`                                                                                               | `admin_required` at aal2 and aal1                                                               |
+| Banned admin                                                                                                                       | `admin_required`; restored when the ban is lifted                                               |
+| Password-only session enrols a second factor; unenrols the verified one                                                            | 403 `insufficient_aal`; 422 `insufficient_aal`                                                  |
+| Unverified factor planted before the owner enrols                                                                                  | unusable once they verify (threat 8)                                                            |
+| Membership, or a `team_removed_members` row planted by psql, without attestation (`admin_add_member`, `admin_create_org` as owner) | 400 22023 `member_password_unset`                                                               |
+
+Guarantees, as built:
+
+- No refused call wrote an audit row, and no refused `create_org` left an organisation.
+- `must_change_password` is advisory (D-A9): a fresh login flagged for a change needs no attestation, a member whose flag is false still does. The audit row's `attested` means required AND given: true for the member and the removed member; false for the flagged login, and for a fresh login that was given it.
+
+**Reviews:** security-reviewer and test-auditor. Both found something; all fixed in `aae393f`.
+
+- **security-reviewer, missed attacks added:** GraphQL, refresh-token replay, validly signed tokens with wrong claims (both sides of the D-A14 window, and expired), a banned admin, the second-factor compensators, the `team_removed_members` branch, concurrency, the service role at the wrappers, GET on a write function, organiser table isolation, and the `create_org` hints pinned.
+- **test-auditor, weak assertions fixed:** the `app`-schema test now says it proves exposure only (privileges are pgTAP 050's job); vacuous limit-clamp checks removed (pgTAP 048 proves them); failures name the attack; forgeries pin their messages; audit counts are scoped to the organisation, not the shared newest 200; a revoked admin is checked at aal1 as well as aal2; an `admin_can_provision` positive case added; every admin is removed in `afterAll`, and the sign-out test re-elevates in a `finally`; `api.js` uses the shared current-period TOTP helper.
+
+**Verification:**
+
+- Prettier and ESLint clean.
+- Vitest: 4660 passing.
+- Playwright `dev-admin`: 53 passing with the new spec. The new spec (20 tests) was repeated 3 times in a row with no failure.
+- The spec was shown to bite. Four rights the local database must not grant were granted briefly, each made the spec fail, and each grant was then revoked: `org_set_role` to `authenticated`; insert on `org_members` to `authenticated`; `admin_list_orgs` to `anon`; `admin_record_account_create` to `authenticated`.
+- Granting select on `org_members` to `anon` opens nothing: three walls stand (the grant, the RLS helper function is not executable by `anon`, and the row policy). Granting a right on an `app` table alone does not open the API, because the schema is not exposed. Neither is a hole.
+
+**Known open items** (stated, not fixed here):
+
+1. The Edge Function has no attack list of its own beyond the manual script `supabase/tests/manual/admin-accounts-e2e.mjs`, and the function is not served in CI. The reviewer listed what that script lacks: a bearer set to the anon or service key; an expired, stale-TOTP or banned admin; 405 and OPTIONS; a bad or oversized email; an unknown action; a non-JSON body; a concurrent double submit; `Cache-Control: no-store` and the password absent from the 409 body; direct service-key abuse of `admin_record_account_create` (`account_not_new`, `already_recorded`, a banned actor).
+2. The first-enrolment window (threat 8) is mitigated, not closed.
+3. The D-A14 freshness window is tested with signed claims, not by waiting an hour.
+4. This spec cannot run against the cloud: it signs with the local published secret and creates users.
+5. ROLLOUT step 2, read-only, on the cloud project: `GET /rest/v1/platform_admins` with `Accept-Profile: app` must answer 406 PGRST106; `POST /graphql/v1` must not list admin fields; and the project must expose only `public` and `graphql_public` with `pg_graphql` off. `get_advisors` (security and performance) runs after the cloud push (owner-approved rollout). Lint 0029 is expected for each admin function, by design.
+6. `team_can_manage` and `team_can_restore` with a platform admin as a member were not probed (a minor oracle).
+7. Owner decisions still open from earlier batches: busy-button opacity and control-border contrast in shared shapes; `/results/` `.screen-feedback` unstyled; cloud rollout checks. Draft PR #281 (core sharing) is still open.
+
+**Not done / still open:**
+
+- Not merged. The PR into `dev` is still to be opened; this entry is not final until it merges.
+- No migrations; nothing pushed to the cloud project.
+- No footer version bump: the batch changes tests and test support only, with no shippable change. `ROADMAP.md`, `CONVENTIONS.md` and `state.json` are not touched in this entry.
+
+## T-ADM.D4 and T-ADM.D5: organisation members, and the audit log screen · 2026-10-16
+
+**Task:** T-ADM.D4 (add a member, change a role) and T-ADM.D5 (the Audit log screen) of `Handoffs and Specs/ADMIN-CONSOLE-SPEC.md` (local, gitignored), Batch 11. Branch `admin/b10-member-role-audit` (the name says b10; the batch is 11), worktree `C:\Dev\seduh-score-next-admin11`, based on `origin/dev` after PR #280 (Batch 10) merged. Two commits: `0be7bea` (build) and `65dd39d` (review fixes). **Status: complete and reviewed; pushed, PR into `dev` to be opened; not merged.** No migrations; nothing pushed to the cloud database.
+
+**Why:** a platform admin needs to add an existing account to an organisation, change a member's role, and see what changed and who changed it. Both writes are database functions (`admin_add_member`, `admin_set_role`), and the database refuses the cases that must not happen: the last owner, one's own row, a member whose password was never set, a duplicate. The console's job is to show each refusal in words, never to report a write that may have happened as "nothing changed", and to redraw the organisation from the database after a write rather than trust what the console assumed it did.
+
+**What changed:**
+
+- `src/admin/orgsPanel.js` (edited): on an organisation's detail, an "Add a member" section (`memberActions.js` `addMemberSection`). It does an exact-email lookup (`admin_find_user`), confirms what was found before anything is written, shows the attestation box only when the lookup reports `needs_attestation`, takes a role, then calls `admin_add_member`. Each member also gets a role button (`roleControl`): a "Change X from A to B?" confirmation, then `admin_set_role`. After either write the detail is redrawn from the database, with a success notice.
+- `src/admin/accountLookup.js` (new): the exact-email lookup and its confirmation step, shared with the create-org form's owner lookup. It also holds the four shared lookup messages.
+- `src/admin/memberActions.js` (new): the add-member section and the role control.
+- `src/admin/auditPanel.js` (new), route `#/audit`, nav "Audit log": newest first, 50 per page. "Show older changes" pages with `p_before` set to the smallest id shown. Each page has its own Retry.
+- `src/admin/auditView.js` (new): the one place an audit entry is worded and drawn, shared by the Audit log and the organisation detail. `member.add` reads "after confirming their own password" when `detail.attested === true`. The organisation name is a link only while its link name still resolves.
+- `src/admin/roles.js` (new): role lookups by own property only, so a role named `constructor` gets no button.
+- `src/admin/formParts.js` (new): `field`, `textInput` and `showFieldError`, extracted from `createOrgPanel.js`, which now imports them and the four shared lookup messages from `accountLookup.js`.
+- `src/admin/panels.js` (registry entry), `src/admin/admin.css` (a block for the members and audit screens), `src/admin/CLAUDE.md` (a section for the members and audit flow).
+- Tests: `tests/e2e/admin-console-members.spec.js` (new, 6 tests, including 360px; every refusal goes to the real database). `formParts.test.js` (new). `tests/e2e/support/admins.js` (the `nextCode` fix, see Verification). `tests/e2e/admin-console-orgs.spec.js` and `tests/e2e/admin-console-create-org.spec.js` (timing fixes, see Verification).
+
+Guarantees, as built:
+
+- The database decides every refusal (`last_owner`, `admin_self_target`, `member_password_unset`, `member_exists`, ...). The console only translates the hint into words.
+- An error with no hint, or with a hint it does not recognise, says the change MAY have happened (`ADD_STATE_UNKNOWN`, `ROLE_STATE_UNKNOWN`), never that nothing changed. If the redraw fails after a change that was made, the screen says so and keeps the success notice.
+- One change at a time per organisation detail (`writes.begin()`). A second attempt is told to wait.
+- A lookup answers only for the address that was asked. Its answer is discarded when the email changes, when the owner kind changes, or when the form is sent.
+- Ids that come from the server are UUID-checked before use, `roleControl` included.
+
+**Reviews:** all five run (ui-accessibility-reviewer, security-reviewer, module-boundary-checker, test-auditor, code-reviewer). Every one found something. The findings were fixed in the second commit (`65dd39d`):
+
+- **Blocking (ui-accessibility-reviewer):** a role button's accessible name did not contain its visible text (WCAG 2.5.3). The name now starts with the visible text: "Make owner: <email>".
+- Empty live error lines were `display:none`, so a later message could be missed. They are now clipped, which keeps them in the accessibility tree.
+- Focus fell to `body` after an Audit log Retry, and after an older page that came back with no rows. Focus now goes to the first new item, to the end line, or to the Retry button itself on failure.
+- An Audit log page with a malformed row had no Retry. A non-list answer and a row without a usable id are now the same failure: none of that page is drawn, the screen says so, and Retry is offered. Neither is ever shown as "that is everything".
+- "Recent changes could not be loaded" was silent. Its Retry now takes focus.
+- A refused role change moved focus to Confirm. Focus now goes to the refusal message.
+- Concurrent role changes could drop the second answer. The busy claim is now page-wide, not per button.
+- The organisation link has an underline and `aria-label "Organisation <slug>"`.
+- The role select is natively disabled while a request is out.
+- Enter in the email field runs the lookup. A double click on Look up asks once. An email problem has a single message channel.
+- Unmount clears the panel host. Unknown hints are treated as "may have happened".
+- A dead re-export and `reset()` were removed.
+- **Test auditor:** 14 surviving mutants were killed by new tests: a late gate refusal after unmount, route id against payload id, focus gating, `check()` focus targets, a silent autofill change, aria wiring, `formParts.test.js`, and unexpected-call tracking.
+
+**Verification:**
+
+- Prettier and ESLint clean. Build ok.
+- Vitest: 4660 passing (162 files). Admin unit tests: 452 passing.
+- Playwright `dev-admin`: 33 passing against the local stack, repeated 14 times in a row at the end with no failure.
+- Hand mutation check: 28 mutants, then 30 more against the fixed code. Survivors were judged equivalent (the `found.forEmail` check, the loading guard, the `Array.isArray` check, the hint-less guard) or killed by a late test.
+- E2E flakes fixed on the way. The TOTP helper `nextCode` (`tests/e2e/support/admins.js`) now returns only the current period's code: a code for the next or previous period was refused near a boundary when the stack's clock differed by about a second, which failed one test in about six runs. The Batch 9 test "an organisation that does not exist..." waits for networkidle before counting panel calls. The create-org "Create another" test waits for the lookup answer before creating. A first attempt, raising the local auth rate limits in `supabase/config.toml`, was not the cause and was reverted.
+
+**Known open items** (stated, not fixed here):
+
+1. `createOrgPanel.js` still has its own copy of the account-lookup logic (about 120 lines). Fold it onto `accountLookup.js` as a follow-up. The test ids differ (`#adm-attest` against `#adm-member-attest`), and the two differ on whether an error clears per keystroke.
+2. Small helpers are copied across screens (`retryButton`, `heading`, `stepAside`, `messageFor`). Move them to `screenParts.js`.
+3. `.adm-member` and `.adm-audit-item` restate the `.card` box.
+4. `formParts.js` is a fourth field-with-error builder. The guess-the-bean, btc and core `labeledField` versions differ in label semantics, so it is not shared with them yet.
+5. No confirmation step for adding someone as Owner. The role defaults to Organiser.
+6. The operator's own row in a member list still shows a role button. The database refuses it with `admin_self_target`.
+7. The Audit log has no filter by organisation or action.
+8. The e2e suite does not cover a 50-row page or the empty log. The unit tests do.
+9. Refactor PR #281 (core sharing of the password card and related pieces, separate session) is open as a draft and will touch `createOrgPanel.js`.
+10. Owner decisions still open from earlier batches: busy-button opacity and control-border contrast in shared shapes; `/results/` `.screen-feedback` unstyled; cloud rollout checks.
+
+**Not done / still open:**
+
+- Not merged. The PR into `dev` is still to be opened; this entry is not final until it merges.
+- No migrations; nothing pushed to the cloud project.
+- No footer version bump. `ROADMAP.md`, `state.json` and `CONVENTIONS.md` are not touched in this entry.
 
 ## T-ADM.D3: create an organisation, with a new or existing owner · 2026-10-16
 

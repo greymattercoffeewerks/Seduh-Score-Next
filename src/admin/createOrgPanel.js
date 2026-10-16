@@ -21,6 +21,8 @@ import { plural } from './format.js';
 import { feedbackRegion, setFeedback } from './screenParts.js';
 import { adminPasswordCard } from './passwordCard.js';
 import { UUID } from './ids.js';
+import { field, textInput, showFieldError } from './formParts.js';
+import { EMAIL_PROBLEM, NO_ACCOUNT, LOOKUP_FIRST, CONFIRM_PASSWORD } from './accountLookup.js';
 import { ask as askAdmin, mayTakeFocus as focusAllowed } from './panelRequest.js';
 import { nameMessage, slugMessage, normalisedSlug, trimmed } from './orgRules.js';
 import { isEmailShaped } from '../core/email.js';
@@ -28,10 +30,6 @@ import { isEmailShaped } from '../core/email.js';
 export const ORG_STATE_UNKNOWN =
   'We could not confirm whether the organisation was created. Check the Organisations list before trying again.';
 const CHECK_FIELDS = 'Check the highlighted fields and try again.';
-const LOOKUP_FIRST = 'Look up the account first.';
-const NO_ACCOUNT = 'No active account matches that. Check the email.';
-const EMAIL_PROBLEM = 'Enter a valid email address.';
-const CONFIRM_PASSWORD = 'Tick the box to confirm that this person set their own password.';
 const CANNOT_OWN = 'This account is disabled or deleted, so it cannot own an organisation.';
 const LEAVE_WARNING =
   'The one-time password on this screen is shown only here and will be lost if you leave. Leave anyway?';
@@ -112,51 +110,6 @@ export function mountCreateOrgPanel(host, ctx) {
     if (done) done.login = null;
     guardUnload(false);
     host.replaceChildren();
-  }
-
-  // ---- small builders ----
-
-  function field({ id, label, hint, input, live = false }) {
-    const errorLine = el('p', {
-      className: 'adm-field-error',
-      id: `${id}-error`,
-      attrs: { 'data-for': id, ...(live ? { 'aria-live': 'polite' } : {}) },
-    });
-    input.setAttribute('aria-required', 'true');
-    const describedBy = [hint ? `${id}-hint` : null, `${id}-error`].filter(Boolean).join(' ');
-    input.setAttribute('aria-describedby', describedBy);
-    const wrapper = el(
-      'div',
-      { className: 'form-field' },
-      [
-        el('label', { className: 'form-field-label', text: label, attrs: { for: id } }),
-        hint ? el('p', { className: 'form-field-hint', id: `${id}-hint`, text: hint }) : null,
-        input,
-        errorLine,
-      ].filter(Boolean),
-    );
-    return { wrapper, errorLine };
-  }
-
-  function textInput(id, extra = {}) {
-    return el('input', {
-      className: 'field-input',
-      id,
-      attrs: {
-        type: 'text',
-        autocomplete: 'off',
-        autocapitalize: 'none',
-        autocorrect: 'off',
-        spellcheck: 'false',
-        ...extra,
-      },
-    });
-  }
-
-  function showFieldError(input, errorLine, message) {
-    errorLine.textContent = message ?? '';
-    if (message) input.setAttribute('aria-invalid', 'true');
-    else input.removeAttribute('aria-invalid');
   }
 
   // ---- the form ----
