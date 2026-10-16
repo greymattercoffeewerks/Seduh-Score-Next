@@ -183,6 +183,85 @@ below are enforced by tests that fail CI, not by memory; the "how to add a tenan
 - **Every new tenant table or RPC is added to the cross-organisation matrices** (`040` tables, `041` RPCs). A guard in
   each fails when one is missing, so the fix is a matrix entry, not an exception.
 
+### Platform administration: the operator's console (T-ADM, built 2026-10-15 to 2026-10-16)
+
+The platform operator (today one person) provisions organisations from `/admin/` instead of by hand-written
+SQL. Not a tenant surface: it reads and writes **no organisation's participant data** (events, scores, entries,
+people); it reads memberships and, through the admin functions, writes them. Module-specific conventions are in
+[src/admin/CLAUDE.md](src/admin/CLAUDE.md); the database contract is `CONVENTIONS.md` ("Platform tables and admin
+functions"); the locked spec is `Handoffs and Specs/ADMIN-CONSOLE-SPEC.md` (local, not in git).
+
+- **What exists.** `app.platform_admins` and `app.admin_audit_log` (in the `app` schema, never `public`; the audit
+  log is append-only by trigger, for every API role and for its owner by default, but the owner could still drop the
+  triggers, and it has no purge and no tamper evidence), the `public.admin_*` `SECURITY DEFINER` functions (list and
+  detail organisations, find an account by exact email, list the audit log, create an organisation, add a member, set
+  a role, plus `am_i_platform_admin` and `admin_can_provision`), the `admin-accounts` Edge Function (makes a NEW login
+  with a one-time password), and `/admin/` (noindex, unlinked, its own Supabase client and `sessionStorage` so it can
+  never replace an organiser's session). Screens: Organisations (list, detail, add a member, change a role), New
+  organisation, Audit log. `admin_record_account_create` is the one `admin_*` function without the platform-admin
+  gate: it is service-role only (the Edge Function's audit writer) and carries its own checks.
+- **The gate is the database's.** Every other admin function opens with `app.require_platform_admin()`, which
+  needs all of: a row in `platform_admins` whose login is active (not banned or deleted); an `aal2` token; a TOTP
+  verification in the last **60 minutes** (`amr`); and a live `aal2` session row. It answers `admin_required`,
+  `admin_mfa_required` or `admin_session_ended`; the console only translates the hint. Never put an admin function
+  behind anything weaker, and never add one that skips it: `048`, `050` and the adversarial attack list fail CI for
+  the shapes they can see.
+- **Metadata only, and no impersonation, on purpose.** An admin sees organisation names, link names, members
+  (email, role, joined), counts and dates, and no participant data: no event, score, entry or person (D-A4). There
+  is no "sign in as": attaching a person to an organisation gives THAT person its data, which is why the operator
+  cannot target themselves (`admin_self_target`), why attaching an account whose one-time password someone else may
+  know needs a deliberate tick (`member_password_unset`, D-A9: a gate and an audit trail, not a proof), and why
+  each change is one transaction with its audit row (`org.create`, `member.add`, `member.role_set`).
+  `account.create` is recorded by the Edge Function in a second transaction.
+- **Add the first or another admin (the only way: no API, migration or seed makes one).** As the database owner (the
+  Supabase MCP's `execute_sql` or the SQL editor), in this order, so the window in which a password alone is enough is
+  as short as possible: (a) set a temporary random password on the person's login with the service key
+  (`PUT /auth/v1/admin/users/<id>` with `{ "password": ... }`; the old one stops working); (b)
+  `insert into app.platform_admins (user_id, note) values ('<auth.users.id>', '<who, why, when>');`; (c) they sign in
+  at `/admin/` with the temporary password and **enrol their authenticator app at once**; (d) they set their real
+  password (allowed at `aal2`). **If their first sign-in shows a CHALLENGE screen instead of the enrolment screen,
+  someone else has already enrolled a factor: the account is compromised.** Delete that factor in the dashboard,
+  rotate the password and start again. Until a factor is verified, anyone holding only the password could enrol
+  their own. To remove an admin: `delete from app.platform_admins where user_id = '<id>';` cuts a live session off on
+  its next call. Never reset an admin's password through the organiser Team screen (it refuses admins): use the Auth
+  admin API.
+- **Lost or stolen authenticator or session (the order matters).** (1) End every session of the login first: a
+  global sign-out through the Auth admin API (`POST /auth/v1/logout?scope=global` with a token, or the console's
+  "Sign out everywhere"), or a password reset (which deletes sessions). A ban only PAUSES the admin functions; it does
+  not end sessions, so lift it only after step 3. (2) Remove the factor in the dashboard (Authentication, Users).
+  (3) Enrol again yourself immediately. Reversed, a thief holding the old session is offered the enrolment screen the
+  moment the factor goes. Provisioning by the SQL runbook below keeps working throughout. While the console is open
+  it asks the database again whenever the tab becomes visible and every five minutes, so a revoked admin loses the
+  screen without a reload.
+- **TOTP is switched on for the whole project, so:** any signed-in user can enrol a factor on their own account;
+  a person with a verified factor cannot change their password from a password-only session (`insufficient_aal`);
+  and whoever knows a NEW login's one-time password could enrol a factor first and block the real owner's forced
+  password change. The blast radius is small (the creator is already trusted) and it is a ROADMAP open item.
+- **Known limits, accepted** (threat model, spec section 7): a stolen admin session is bounded by the 60-minute
+  window and "Sign out everywhere", not prevented; `account.create` is two transactions, so a crash can leave an
+  **orphan login** that nobody can sign in to (no function returns its password), belongs to no organisation and
+  has no audit row: it blocks that email (a retry answers "already has an account") until the operator resets its
+  password or removes it, and `admin_find_user` finds it (the console words these cases `account_state_unknown`,
+  `account_record_failed` and `account_stranded`); refused calls write no audit row; audit ids have gaps that do not
+  mean deletion; an admin who attaches someone to an organisation has given them its data.
+- **Tests that hold this.** pgTAP `046` to `051` (identity, audit, read and write RPCs, the platform-tables
+  contract, the audit writer); Playwright `dev-admin` (the console, plus `admin-console-adversarial.spec.js`: the
+  attack list over HTTP, which a new admin function or door must be added to); and, for the Edge Function (not
+  served in CI), `supabase/tests/manual/admin-accounts-e2e.mjs`, to run before every rollout.
+- **Rollout status (2026-10-16): merged to `dev`, NOT in the cloud.** The cloud steps (spec section 8) are the
+  owner's and in order: (1) confirm the exposed schemas exclude `app` (and that `pg_graphql` stays off), that
+  `pg_default_acl` has no entry for `app`, and that `select has_table_privilege('postgres', 'auth.sessions', 'select')`
+  is true (else the gate fails closed); (2) push the migrations, compare with `list_migrations`, run the advisors
+  (lint 0029 on the admin functions is expected); (3) in the dashboard, confirm the plan allows TOTP at all, enable
+  it, confirm `max_enrolled_factors` is 4 and the Site URL and redirect list, and confirm an organiser still signs
+  in; (4) deploy `admin-accounts` and confirm `verify_jwt` is true; (5) ship the frontend and check `/admin/` is
+  reachable, noindex and unlinked, the `_headers` rule took effect, and the CSP `connect-src` covers the cloud API
+  host (amend it first if that host is not under `*.supabase.co`); (6) add the first admin as above; (7) smoke test:
+  `admin_can_provision` first, then a throwaway organisation `console-smoke` (create it with a new login, add a
+  member, change a role, see all three in the audit log, remove the organisation and login by SQL, noting that a
+  deleted organisation's link name can be reused). If the console is not fully shipped by about 28 Oct 2026 it waits
+  until after the ~4 Nov BTC pitch; nothing goes to production in the last days before it.
+
 ### Definition of Done (handoff §11, restated)
 
 A task is done when: acceptance criteria are demonstrated, not asserted · tests pass
@@ -304,7 +383,10 @@ anywhere. Local dev still defaults to the local stack (`npm run supabase -- star
 Studio at `http://127.0.0.1:54423`) — nothing about local dev changed.
 
 **Provisioning an org (T-TEN.B4; invite-only — there is no signup and no API role can do this).**
-Run these as the service role (the Supabase MCP's `execute_sql`), never from the app:
+**Once the admin console is rolled out to the cloud (not yet, see "Platform administration"), `/admin/` is the
+normal path and this SQL is the fallback** (the console's New organisation screen is `create_org` plus an audit
+row and the same refusals, plus the admin gate, `admin_self_target` and `member_password_unset`). Until then, and whenever the console cannot be used (a lost authenticator), run these
+as the service role (the Supabase MCP's `execute_sql`), never from the app:
 
 1. Make sure the owner has an account (Auth → Add user in the dashboard) and that **they set their
    own password**. Note their user id.

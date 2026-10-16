@@ -1,3 +1,29 @@
+## T-ADM.E2 and T-ADM.E4: the admin console's documentation close-out · 2026-10-16
+
+**Task:** T-ADM.E2 and T-ADM.E4 (Batch 13, the documentation close-out) of `Handoffs and Specs/ADMIN-CONSOLE-SPEC.md` (local, gitignored). Branch `admin/b12-docs-closeout` (the name says b12; the batch is 13), worktree `C:\Dev\seduh-score-next-admin13`, off `origin/dev` after PR #283. **Status: complete; docs only; PR into `dev` to be opened; not merged.**
+
+**Why:** the console's rules were spread across the batch entries, the spec and the adversarial matrix. The next operator, or the next agent, needs one place that says what exists, what the gate requires, how to recover a lost authenticator, and what is still owed before rollout. The provisioning runbook also still presented the SQL path as the only way to provision, which stops being true once the console is rolled out.
+
+**What changed:**
+
+- `CLAUDE.md`: a new section "Platform administration: the operator's console (T-ADM, built 2026-10-15 to 2026-10-16)". It covers what exists, the gate, metadata only and no impersonation, adding or removing an admin by SQL, the lost-authenticator order (end sessions, remove the factor, re-enrol), TOTP side effects, known limits, tests and rollout status. The provisioning runbook in the Repo section now says the console is the normal path once it is rolled out, with SQL as the fallback.
+- `ROADMAP.md`: a "Current state" row for T-ADM; an "Admin console v1 (T-ADM)" section with its phase table and next steps; a "Known open items from T-ADM.\*" section that consolidates every T-ADM entry's open items into groups.
+- `state.json` (local, gitignored): reset to idle, with gating named as next.
+
+**Verification:**
+
+- `npx prettier --check ROADMAP.md CHANGELOG.md` passes.
+- The docs were fact-checked against the code by a reviewer.
+
+**Known open items:** see "Known open items from T-ADM.\*" in `ROADMAP.md`. It consolidates the lists of every T-ADM entry above.
+
+**Not done / still open:**
+
+- Not merged. The PR into `dev` is still to be opened; this entry is not final until it merges.
+- Nothing is in the cloud project, and there is no code or migration change. The owner-approved rollout (the "Admin console v1" section of `ROADMAP.md`) is still owed.
+- No footer version bump: docs only, no shippable change. `package.json` is untouched.
+- The earlier T-ADM entries are not edited, so some of their status lines are stale: the B1 to B3 "not merged" and "not committed" lines, and the D1 to E1 "PR into `dev` to be opened" and "not merged" lines. Every batch from B1 to E1 is on `dev` (PRs #271 to #283). The `ROADMAP.md` section has the current status.
+
 ## T-ADM.E1: the adversarial pass on the admin surface · 2026-10-16
 
 **Task:** T-ADM.E1 (the adversarial pass, Batch 12) of `Handoffs and Specs/ADMIN-CONSOLE-SPEC.md` (local, gitignored). Branch `admin/b11-adversarial` (the name says b11; the batch is 12), worktree `C:\Dev\seduh-score-next-admin12`, based on `origin/dev` after PR #282 merged. Two commits: `d44685a` (the attack list) and `aae393f` (review fixes). **Status: complete and reviewed; pushed, PR into `dev` to be opened; not merged.** No migrations; no application code changed; nothing pushed to the cloud database.
