@@ -12,7 +12,7 @@
   - guess-the-bean: a refused copy shows nothing. It used to be an unhandled rejection.
 - `src/core/edgeFunction.js` (new): `invokeEdgeFunction(client, name, body, {timeoutMs})` returns `{ data, error: { status, hint, payload, timedOut, offline } }`. `core/team.js`'s `callTeamFunction` maps the payload's error text, offline and generic messages on top, with the same messages and statuses as before. `src/admin/adminFunction.js` takes `status`, `hint`, `timedOut` and `offline` from it by allow-list, and never the function's own text. The 30-second timeout is unchanged.
 - `src/core/email.js` (new): `isEmailShaped`, the same regex. `teamScreen.validateTeamEmail` and the admin `createOrgPanel` use it; `orgRules.js` no longer has its own copy.
-- `src/admin/passwordCard.js` is now a thin binding (`adminPasswordCard`) of the admin's ids, classes and words to the core card.
+- `src/admin/passwordCard.js` is now a thin binding (`adminPasswordCard`) of the admin's ids, classes and words to the core card, and `src/admin/createOrgPanel.js` now gets its one-time password card from core through it (both call sites).
 - CSS: the shared password block moved to `core/oneTimePasswordCard.css`, linked in `app/index.html` and `admin/index.html` before `teamScreen.css` and `admin.css`. `.team-password` keeps only its margin. The `.team-issued` class and the duplicate frame border rules are gone (`.card` already supplies the border).
 - Deliberate non-change: `-webkit-user-select: all` stays admin-only, so the organiser's screen is unchanged.
 - Organiser markup: no visual or markup difference intended. Team card ids, ARIA, tabindex, order, classes and strings are identical. Admin Copy and Done buttons gained ids (`<prefix>-copy`, `<prefix>-done`); additive only.
