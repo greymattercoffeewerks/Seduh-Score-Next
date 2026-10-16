@@ -10,6 +10,7 @@
 // session ended) then sends the whole console back through the access check, so no panel has to remember to
 // look for it. Translate any other refusal with describeAdminError (adminErrors.js).
 import { mountOrgsPanel } from './orgsPanel.js';
+import { mountCreateOrgPanel } from './createOrgPanel.js';
 
 export const PANELS = Object.freeze([
   Object.freeze({
@@ -17,5 +18,11 @@ export const PANELS = Object.freeze([
     label: 'Organisations',
     route: 'orgs',
     mount: mountOrgsPanel,
+  }),
+  Object.freeze({
+    id: 'create-org',
+    label: 'New organisation',
+    route: 'new-org',
+    mount: mountCreateOrgPanel,
   }),
 ]);

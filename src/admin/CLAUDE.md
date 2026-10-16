@@ -61,6 +61,38 @@ set just before it mounted). An id that is not a UUID is "not found" without ask
 - Text only (`el()`), never `innerHTML`; dates are UTC `YYYY-MM-DD` (`format.js`), so they read the same on every
   machine.
 
+## The New organisation panel (`createOrgPanel.js`, Batch 10)
+
+`#/new-org`: a name, a link name and an owner, where the owner is a NEW login (the `admin-accounts` Edge Function,
+through `ctx.callFunction`) or an EXISTING account (`admin_find_user`, then a confirmation). It ends in
+`admin_create_org`. Things that must stay true:
+
+- **The database is the authority.** `orgRules.js` says what a name and link name look like while a person types
+  (`orgRules.test.js` reads the newest migration and fails when the reserved list drifts from `create_org`'s), but a
+  refusal is always shown by its stable hint through `adminErrors.js`, never by a message, and a value the page
+  called fine can still be refused (a taken link name, the operator's own account).
+- **A login is never made twice.** The login is made first, then the organisation. If the organisation step fails,
+  the login and its password stay on screen (`created`), the form stays editable, and the next press attaches THAT
+  login. A timeout or a dropped connection on either step is its own sentence ("may exist"), not "nothing was changed".
+- **The one-time password lives only in `created` / `done.login` and the node that shows it.** Not in storage, a URL,
+  an attribute or a log; dropped on `unmount`, on a gate refusal, and on Done; not re-shown after a reload. While it is
+  the only copy, the panel asks the browser to confirm before the page is closed or reloaded (`beforeunload`), but it
+  cannot stop an in-app navigation away: a login whose organisation step failed and whose operator then walks away
+  is an orphan with a lost password (accepted; `admin_find_user` shows it, and a one-time password can be reset in
+  the Auth dashboard).
+- **Existing accounts:** `needs_attestation` (the SAME predicate the database enforces) decides whether the box to
+  tick is shown; the panel also handles the database refusing with `member_password_unset` for an account that gained
+  a membership after the lookup (it looks again, so the box appears). A lookup answers for the address it was asked
+  about: typing another address, or switching the owner kind, throws the answer (and a request still out) away.
+- The owner section is built once and its parts shown or hidden: rebuilding the radios would take keyboard focus away
+  from the radio being used.
+- `ctx.callFunction(name, body)` is what a panel uses for an Edge Function (`adminFunction.js`): same `{ data, error }`
+  shape as `callAdmin`, the error carries only `{ status, hint, userId, timedOut, offline }` (never the function's
+  text), and a gate refusal or HTTP 401 sends the whole console back through the access check.
+- `tests/e2e/admin-console-create-org.spec.js` runs the organisation step against the real database. CI does not
+  serve the Edge Function, so that spec answers `admin-accounts` at the network edge; the real function is covered by
+  `supabase/tests/manual/admin-accounts-e2e.mjs` before rollout.
+
 ## Adding a panel (Batches 9 to 11, and gating's "Plan" panel later)
 
 An entry in `panels.js` (`{ id, label, route, mount(host, ctx) }`) plus a screen module. `shell.js` draws the
