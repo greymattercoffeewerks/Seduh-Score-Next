@@ -133,6 +133,33 @@ router, auth, Supabase, or a competition implementation. It uses the legacy tour
 historical reference while stating the current truth: Cup Taster and BTC are live;
 Throwdown and Liga Seduh are planned; Community is a separate final section.
 
+## Pricing page (2026-10-17)
+
+`pricing/index.html` is a public entry (`pricingMain.js`, `pricingScreen.js`, `pricingContent.js`,
+`pricing.css`), reached from the landing page's pricing section ("Learn more: compare every tier")
+and the shared header's Pricing link. It is static like the Tour: no router, auth or Supabase. It is in
+`vite.config.js`, `public/sitemap.xml`, `tools/prerender-public-pages.mjs` and `tests/e2e/smoke.spec.js`.
+
+- **All copy and the tier-by-feature matrix live in `pricingContent.js`** (a cell is `yes`, `no`, `soon`
+  or `text`). Prices are the landing page's. `soon` means not built yet and the page says "Planned" in
+  words; never mark a feature `yes` before it exists (the "Known placeholders" rule above).
+- **The matrix is a DRAFT until gating is decided.** Which tier gets which feature is
+  `Handoffs and Specs/GATING-SPEC.md` D-G2/D-G3; rows marked UNCONFIRMED in `pricingContent.js` are the
+  owner's call. When gating ships, the catalog (`supabase/entitlements.catalog.json`) should become the
+  source for this matrix, with a contract test, so the page and the database cannot disagree.
+- The table keeps its semantics at 360px: below 760px each row becomes a card (header row hidden, each cell
+  labelled by `data-label`), and explicit ARIA roles on the table elements survive the `display` change.
+- Billing is manual and organiser accounts are set up by hand (invite-only, no sign-up), so every tier's
+  button goes to `/contact/`, not to a checkout or to the console's sign-in. Do not add a purchase form or a
+  "Start free" button here until sign-up exists.
+- Tier names and prices come from `pricingContent.js`'s `TIERS`; the landing page's pricing section imports
+  them, so the two cannot drift. The search-result description in `pricing/index.html` repeats the prices by
+  hand (a test checks it).
+- Rows only Cup Taster supports (report/CSV, analytics, public results) say "Cup Taster:" in their
+  description; BTC's publishing is live display only.
+- **Known mismatch, owner's call:** the landing page's tier prose still says Per-event is "fully branded"
+  and Annual has "persistent history across seasons", while this page marks both as Planned.
+
 ## BTC goes live (2026-09-23)
 
 The BTC app-wiring pass (routing all 5 of BTC's organiser screens into `src/main.js`)
@@ -180,7 +207,7 @@ aria-hidden.
 ## Public-page prerendering (2026-09-16)
 
 `npm run build` runs Vite first, then `tools/prerender-public-pages.mjs`. It writes the
-already-rendered HTML into the production output for the landing page, Tour, Community hub,
+already-rendered HTML into the production output for the landing page, Tour, Pricing, Community hub,
 Timer, Brew Planner and Random Selector (the trust pages are prerendered too). These are the
 only routes in scope because their content is stable and public. A new public tool needs an
 entry in `ROUTES` there, in `public/sitemap.xml` and in `tests/e2e/smoke.spec.js` (all three
@@ -280,7 +307,7 @@ real links to `/tour/`; Community Tools links to `/community/`; and Cup Taster l
 **Update (2026-09-24, site critique pass):** "Start free" now points to `/app/#/events` and
 "Org login" to `/app/` — there is still no separate sign-up flow (`loginScreen.js` is
 sign-in only; D14's real access control is still a stub), so both land in the console.
-"Formats" and "Pricing" in the nav are real same-page anchors (`#formats`, `#pricing`);
+"Formats" and "Pricing" in the landing page's own nav are real same-page anchors (`#formats`, `#pricing`; the shared public header's Pricing link goes to `/pricing/`);
 "Timer" is a real link (`/tools/timer/`). Cup Taster's and BTC's own "Open X →" links (2026-09-23: BTC's row
 went live alongside Cup Taster's, once the app itself routed all 5 of BTC's screens —
 see "BTC goes live" above) both point at the same real authenticated-app destination

@@ -180,7 +180,8 @@
   justify-content: space-between;
   gap: 12px;
   padding: 22px 0;
-  color: var(--color-text-muted);
+  /* text-secondary, not muted: muted is 4.46:1 on the canvas, under AA for this size. */
+  color: var(--color-text-secondary);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
 }

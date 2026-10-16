@@ -21,6 +21,12 @@ const ROUTES = [
     marker: 'A better way to ',
   },
   {
+    output: 'pricing/index.html',
+    url: 'https://www.seduhscore.com/pricing/',
+    rootMarker: '<div class="pricing-page"',
+    marker: 'Pricing, stated ',
+  },
+  {
     output: 'community/index.html',
     url: 'https://www.seduhscore.com/community/',
     rootMarker: '<main class="community-hub"',

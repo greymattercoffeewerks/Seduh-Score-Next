@@ -38,6 +38,7 @@
 // for why).
 import { el, svgEl, brandLockup } from '../core/dom.js';
 import { revealOnScroll } from '../core/scrollReveal.js';
+import { TIERS } from './pricingContent.js';
 import { buildPublicFooter } from './publicFooter.js';
 
 function icon(children, { className = 'petrol-icon' } = {}) {
@@ -574,24 +575,24 @@ function pricingSection() {
     el('h2', { className: 'petrol-heading', text: 'Three tiers. Start free.' }),
     el('div', { className: 'petrol-plate' }, [
       pricingColumn(
-        'Community',
-        'Free',
-        null,
+        TIERS[0].name,
+        TIERS[0].price,
+        TIERS[0].suffix,
         'Every live format, unbranded, for organisers just getting started. No account ' +
           'needed to run a small event.',
       ),
       pricingColumn(
-        'Per-event',
-        'BND $18',
-        'one-time',
+        TIERS[1].name,
+        TIERS[1].price,
+        TIERS[1].suffix,
         'One competition, fully branded, PDF reports included. Pay once, run your event, ' +
           'done.',
         { featured: true },
       ),
       pricingColumn(
-        'Annual',
-        'BND $350',
-        'per year',
+        TIERS[2].name,
+        TIERS[2].price,
+        TIERS[2].suffix,
         'Every format, priced for organisers running events all year. ' +
           'Persistent history across seasons.',
       ),
@@ -600,6 +601,9 @@ function pricingSection() {
       className: 'petrol-footnote',
       text: 'All prices in Brunei dollars · billed through Grey Matter Coffee Werks.',
     }),
+    el('div', { className: 'petrol-pricing-more' }, [
+      actionLink('Learn more: compare every tier →', { outline: true, href: '/pricing/' }),
+    ]),
   ]);
   const section = el('section', { className: 'petrol-band', attrs: { id: 'pricing-band' } }, [
     inner,

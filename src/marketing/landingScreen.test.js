@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mountLandingScreen } from './landingScreen.js';
 
 describe('mountLandingScreen — format list', () => {
@@ -62,6 +62,24 @@ describe('mountLandingScreen — format list', () => {
     expect(root.querySelector('.petrol-live-indicator').textContent).toContain(
       'Live — Cup Taster, BTC',
     );
+  });
+});
+
+describe('mountLandingScreen — pricing', () => {
+  beforeEach(() => {
+    vi.stubGlobal('matchMedia', (query) => ({ matches: query.includes('reduce') }));
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('has a Learn more link in the pricing section that goes to the pricing page', () => {
+    const root = document.createElement('div');
+    mountLandingScreen(root);
+    const link = root.querySelector('#pricing .petrol-pricing-more a');
+    expect(link).not.toBeNull();
+    expect(link.getAttribute('href')).toBe('/pricing/');
+    expect(link.textContent).toMatch(/^Learn more/);
   });
 });
 
