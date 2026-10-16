@@ -443,23 +443,55 @@ test.describe('the admin surface under attack (HTTP, real local stack)', () => {
       ),
       { label: 'admin_create_org self', hint: 'admin_self_target' },
     );
-    // an organiser at the tables: no privilege on org_members for the API roles
-    refused(
-      await rest(`org_members?user_id=eq.${w.a.userId}`, {
-        method: 'PATCH',
-        token: organiserAal1,
-        body: { role: 'owner' },
-      }),
-      { label: 'PATCH org_members', message: /permission denied for table org_members/ },
+    // A MEMBER AT THE TABLE, trying to make themselves an owner (and to attach themselves to another organisation).
+    // There are two walls and this test does not care which one answers: the table privilege (the local stack and a
+    // fresh database give the API roles SELECT only, so the answer is "permission denied", 403) and, behind it, row
+    // security with no write policy (where a privilege exists, as on the stack CI starts, the answer is a silent
+    // no-op, 204). What must hold on either is that NOTHING CHANGED, which is read back from the admin's own view.
+    const staff = await createLoneUser('adv-staff');
+    await addMember(w.b, staff, 'organiser');
+    const staffToken = (await signInPassword(staff)).token;
+    const roleOf = async () =>
+      (
+        await rpc('admin_org_detail', { p_org_id: w.b.orgId }, { token: adminAal2 })
+      ).body.members.find((m) => m.user_id === staff.userId)?.role;
+    expect(await roleOf()).toBe('organiser');
+
+    const patch = await rest(`org_members?user_id=eq.${staff.userId}`, {
+      method: 'PATCH',
+      token: staffToken,
+      body: { role: 'owner' },
+    });
+    expect([204, 403], `PATCH org_members ${JSON.stringify(patch.body)}`).toContain(patch.status);
+    if (patch.status === 403) expect(patch.body.code).toBe('42501');
+    expect(await roleOf()).toBe('organiser');
+
+    const attach = await rest('org_members', {
+      method: 'POST',
+      token: organiserAal1,
+      body: { org_id: w.b.orgId, user_id: w.a.userId, role: 'owner' },
+    });
+    expect(attach.status, `POST org_members ${JSON.stringify(attach.body)}`).toBe(403);
+    expect(attach.body.code).toBe('42501');
+    const members = (await rpc('admin_org_detail', { p_org_id: w.b.orgId }, { token: adminAal2 }))
+      .body.members;
+    expect(members.map((m) => m.user_id)).not.toContain(w.a.userId);
+
+    // which wall answered, for the record (read from the database, not asserted: images differ in this)
+    const privileges = String(
+      sqlAsOwner(
+        "select coalesce(string_agg(privilege_type, ',' order by privilege_type), 'none') from information_schema.role_table_grants where table_schema = 'public' and table_name = 'org_members' and grantee = 'authenticated'",
+      ),
+    ).replace(/\s+/g, ' ');
+    console.log(
+      `org_members privileges for authenticated: ${privileges} (PATCH answered ${patch.status})`,
     );
-    refused(
-      await rest('org_members', {
-        method: 'POST',
-        token: organiserAal1,
-        body: { org_id: w.b.orgId, user_id: w.a.userId, role: 'owner' },
-      }),
-      { label: 'POST org_members', message: /permission denied for table org_members/ },
-    );
+    test
+      .info()
+      .annotations.push({
+        type: 'org_members privileges for authenticated',
+        description: privileges,
+      });
   });
 
   test('HOSTILE INPUTS to the admin functions: exact matching only, bad roles and unknown ids and a bad name refused with their hints', async () => {
