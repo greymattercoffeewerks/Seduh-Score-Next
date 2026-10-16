@@ -1,3 +1,72 @@
+## T-ADM.D4 and T-ADM.D5: organisation members, and the audit log screen · 2026-10-16
+
+**Task:** T-ADM.D4 (add a member, change a role) and T-ADM.D5 (the Audit log screen) of `Handoffs and Specs/ADMIN-CONSOLE-SPEC.md` (local, gitignored), Batch 11. Branch `admin/b10-member-role-audit` (the name says b10; the batch is 11), worktree `C:\Dev\seduh-score-next-admin11`, based on `origin/dev` after PR #280 (Batch 10) merged. Two commits: `0be7bea` (build) and `65dd39d` (review fixes). **Status: complete and reviewed; pushed, PR into `dev` to be opened; not merged.** No migrations; nothing pushed to the cloud database.
+
+**Why:** a platform admin needs to add an existing account to an organisation, change a member's role, and see what changed and who changed it. Both writes are database functions (`admin_add_member`, `admin_set_role`), and the database refuses the cases that must not happen: the last owner, one's own row, a member whose password was never set, a duplicate. The console's job is to show each refusal in words, never to report a write that may have happened as "nothing changed", and to redraw the organisation from the database after a write rather than trust what the console assumed it did.
+
+**What changed:**
+
+- `src/admin/orgsPanel.js` (edited): on an organisation's detail, an "Add a member" section (`memberActions.js` `addMemberSection`). It does an exact-email lookup (`admin_find_user`), confirms what was found before anything is written, shows the attestation box only when the lookup reports `needs_attestation`, takes a role, then calls `admin_add_member`. Each member also gets a role button (`roleControl`): a "Change X from A to B?" confirmation, then `admin_set_role`. After either write the detail is redrawn from the database, with a success notice.
+- `src/admin/accountLookup.js` (new): the exact-email lookup and its confirmation step, shared with the create-org form's owner lookup. It also holds the four shared lookup messages.
+- `src/admin/memberActions.js` (new): the add-member section and the role control.
+- `src/admin/auditPanel.js` (new), route `#/audit`, nav "Audit log": newest first, 50 per page. "Show older changes" pages with `p_before` set to the smallest id shown. Each page has its own Retry.
+- `src/admin/auditView.js` (new): the one place an audit entry is worded and drawn, shared by the Audit log and the organisation detail. `member.add` reads "after confirming their own password" when `detail.attested === true`. The organisation name is a link only while its link name still resolves.
+- `src/admin/roles.js` (new): role lookups by own property only, so a role named `constructor` gets no button.
+- `src/admin/formParts.js` (new): `field`, `textInput` and `showFieldError`, extracted from `createOrgPanel.js`, which now imports them and the four shared lookup messages from `accountLookup.js`.
+- `src/admin/panels.js` (registry entry), `src/admin/admin.css` (a block for the members and audit screens), `src/admin/CLAUDE.md` (a section for the members and audit flow).
+- Tests: `tests/e2e/admin-console-members.spec.js` (new, 6 tests, including 360px; every refusal goes to the real database). `formParts.test.js` (new). `tests/e2e/support/admins.js` (the `nextCode` fix, see Verification). `tests/e2e/admin-console-orgs.spec.js` and `tests/e2e/admin-console-create-org.spec.js` (timing fixes, see Verification).
+
+Guarantees, as built:
+
+- The database decides every refusal (`last_owner`, `admin_self_target`, `member_password_unset`, `member_exists`, ...). The console only translates the hint into words.
+- An error with no hint, or with a hint it does not recognise, says the change MAY have happened (`ADD_STATE_UNKNOWN`, `ROLE_STATE_UNKNOWN`), never that nothing changed. If the redraw fails after a change that was made, the screen says so and keeps the success notice.
+- One change at a time per organisation detail (`writes.begin()`). A second attempt is told to wait.
+- A lookup answers only for the address that was asked. Its answer is discarded when the email changes, when the owner kind changes, or when the form is sent.
+- Ids that come from the server are UUID-checked before use, `roleControl` included.
+
+**Reviews:** all five run (ui-accessibility-reviewer, security-reviewer, module-boundary-checker, test-auditor, code-reviewer). Every one found something. The findings were fixed in the second commit (`65dd39d`):
+
+- **Blocking (ui-accessibility-reviewer):** a role button's accessible name did not contain its visible text (WCAG 2.5.3). The name now starts with the visible text: "Make owner: <email>".
+- Empty live error lines were `display:none`, so a later message could be missed. They are now clipped, which keeps them in the accessibility tree.
+- Focus fell to `body` after an Audit log Retry, and after an older page that came back with no rows. Focus now goes to the first new item, to the end line, or to the Retry button itself on failure.
+- An Audit log page with a malformed row had no Retry. A non-list answer and a row without a usable id are now the same failure: none of that page is drawn, the screen says so, and Retry is offered. Neither is ever shown as "that is everything".
+- "Recent changes could not be loaded" was silent. Its Retry now takes focus.
+- A refused role change moved focus to Confirm. Focus now goes to the refusal message.
+- Concurrent role changes could drop the second answer. The busy claim is now page-wide, not per button.
+- The organisation link has an underline and `aria-label "Organisation <slug>"`.
+- The role select is natively disabled while a request is out.
+- Enter in the email field runs the lookup. A double click on Look up asks once. An email problem has a single message channel.
+- Unmount clears the panel host. Unknown hints are treated as "may have happened".
+- A dead re-export and `reset()` were removed.
+- **Test auditor:** 14 surviving mutants were killed by new tests: a late gate refusal after unmount, route id against payload id, focus gating, `check()` focus targets, a silent autofill change, aria wiring, `formParts.test.js`, and unexpected-call tracking.
+
+**Verification:**
+
+- Prettier and ESLint clean. Build ok.
+- Vitest: 4660 passing (162 files). Admin unit tests: 452 passing.
+- Playwright `dev-admin`: 33 passing against the local stack, repeated 14 times in a row at the end with no failure.
+- Hand mutation check: 28 mutants, then 30 more against the fixed code. Survivors were judged equivalent (the `found.forEmail` check, the loading guard, the `Array.isArray` check, the hint-less guard) or killed by a late test.
+- E2E flakes fixed on the way. The TOTP helper `nextCode` (`tests/e2e/support/admins.js`) now returns only the current period's code: a code for the next or previous period was refused near a boundary when the stack's clock differed by about a second, which failed one test in about six runs. The Batch 9 test "an organisation that does not exist..." waits for networkidle before counting panel calls. The create-org "Create another" test waits for the lookup answer before creating. A first attempt, raising the local auth rate limits in `supabase/config.toml`, was not the cause and was reverted.
+
+**Known open items** (stated, not fixed here):
+
+1. `createOrgPanel.js` still has its own copy of the account-lookup logic (about 120 lines). Fold it onto `accountLookup.js` as a follow-up. The test ids differ (`#adm-attest` against `#adm-member-attest`), and the two differ on whether an error clears per keystroke.
+2. Small helpers are copied across screens (`retryButton`, `heading`, `stepAside`, `messageFor`). Move them to `screenParts.js`.
+3. `.adm-member` and `.adm-audit-item` restate the `.card` box.
+4. `formParts.js` is a fourth field-with-error builder. The guess-the-bean, btc and core `labeledField` versions differ in label semantics, so it is not shared with them yet.
+5. No confirmation step for adding someone as Owner. The role defaults to Organiser.
+6. The operator's own row in a member list still shows a role button. The database refuses it with `admin_self_target`.
+7. The Audit log has no filter by organisation or action.
+8. The e2e suite does not cover a 50-row page or the empty log. The unit tests do.
+9. Refactor PR #281 (core sharing of the password card and related pieces, separate session) is open as a draft and will touch `createOrgPanel.js`.
+10. Owner decisions still open from earlier batches: busy-button opacity and control-border contrast in shared shapes; `/results/` `.screen-feedback` unstyled; cloud rollout checks.
+
+**Not done / still open:**
+
+- Not merged. The PR into `dev` is still to be opened; this entry is not final until it merges.
+- No migrations; nothing pushed to the cloud project.
+- No footer version bump. `ROADMAP.md`, `state.json` and `CONVENTIONS.md` are not touched in this entry.
+
 ## T-ADM.D3: create an organisation, with a new or existing owner · 2026-10-16
 
 **Task:** T-ADM.D3 (Batch 10) of `Handoffs and Specs/ADMIN-CONSOLE-SPEC.md` (local, gitignored). Branch `admin/b9-create-org` (the name says b9; the batch is 10), worktree `C:\Dev\seduh-score-next-admin10`, based on `origin/dev` after PR #279 (Batch 9) merged. Two commits: `a7c53b1` (build) and `8111ff2` (review fixes). **Status: complete and reviewed; pushed, PR into `dev` to be opened; not merged.** No migrations; nothing pushed to the cloud database.
