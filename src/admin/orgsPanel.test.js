@@ -128,9 +128,20 @@ describe('describeAuditEntry', () => {
 
   it('shows an action it does not know by its name, and survives a missing detail', () => {
     expect(describeAuditEntry({ action: 'plan.set' })).toBe('plan.set');
-    expect(describeAuditEntry({ action: 'member.add' })).toBe('Member added as ');
+    expect(describeAuditEntry({ action: 'member.add' })).toBe('Member added');
     expect(describeAuditEntry({})).toBe('Change');
     expect(describeAuditEntry(null)).toBe('Change');
+  });
+
+  it('shows a role it does not know as it came, and never reads a role off the prototype chain', () => {
+    expect(describeAuditEntry({ action: 'member.add', detail: { role: 'steward' } })).toBe(
+      'Member added as steward',
+    );
+    for (const role of ['constructor', 'toString', '__proto__']) {
+      expect(describeAuditEntry({ action: 'member.add', detail: { role } }), role).toBe(
+        `Member added as ${role}`,
+      );
+    }
   });
 });
 
@@ -284,15 +295,99 @@ describe('the list', () => {
     expect(buttons('Retry')).toHaveLength(1);
   });
 
-  it('a gate refusal draws nothing of its own: the console is re-checking access and will replace the panel', async () => {
+  it('a gate refusal draws nothing at all: the console is re-checking access and will replace the panel', async () => {
     for (const hint of ['admin_mfa_required', 'admin_session_ended', 'admin_required']) {
       mount({ admin_list_orgs: refused(hint) });
       await flush();
-      expect(host.querySelector('.screen-feedback').textContent, hint).toBe('');
-      expect(buttons('Retry'), hint).toHaveLength(0);
+      expect(host.innerHTML, hint).toBe('');
       handle.unmount();
       host.remove();
     }
+  });
+
+  it('a row that is not what the function documents is a failure with a Retry, not a blank page', async () => {
+    mount({
+      admin_list_orgs: ok([
+        orgRow({
+          name: {
+            toString() {
+              throw new Error('not a name');
+            },
+          },
+        }),
+      ]),
+    });
+    await flush();
+    expect(host.querySelector('li.adm-org')).toBeNull();
+    expect(host.querySelector('.screen-feedback').textContent).toBe(
+      'Something went wrong. Nothing was changed. Try again.',
+    );
+    expect(buttons('Retry')).toHaveLength(1);
+  });
+
+  it('after Retry the heading has focus again (the button that had it was replaced)', async () => {
+    let calls = 0;
+    mount({
+      admin_list_orgs: () => {
+        calls += 1;
+        return calls === 1 ? refused(undefined) : ok([orgRow()]);
+      },
+    });
+    await flush();
+    const [retry] = buttons('Retry');
+    retry.focus();
+    retry.click();
+    await flush();
+    expect(document.activeElement).toBe(host.querySelector('h1'));
+  });
+
+  it('an error that arrives late does not take focus from where the person has since moved', async () => {
+    let fail;
+    mount({
+      admin_list_orgs: () =>
+        new Promise((resolve) => {
+          fail = resolve;
+        }),
+    });
+    const elsewhere = document.createElement('button');
+    document.body.appendChild(elsewhere);
+    elsewhere.focus();
+    fail(refused(undefined));
+    await flush();
+    expect(host.querySelector('.screen-feedback').textContent).toMatch(/Something went wrong/);
+    expect(document.activeElement).toBe(elsewhere);
+    elsewhere.remove();
+  });
+
+  it('an error takes focus when focus is on the panel or nowhere', async () => {
+    mount({ admin_list_orgs: refused(undefined) });
+    await flush();
+    expect(document.activeElement).toBe(host.querySelector('.screen-feedback'));
+  });
+
+  it('says in a screen-reader-only status when the list has loaded, and how many there are', async () => {
+    mount({ admin_list_orgs: ok([orgRow(), orgRow({ org_id: ID_B, name: 'B' })]) });
+    expect(host.querySelector('.sr-only[role="status"]').textContent).toBe('');
+    await flush();
+    expect(host.querySelector('.sr-only[role="status"]').textContent).toBe(
+      '2 organisations loaded.',
+    );
+    handle.unmount();
+    host.remove();
+    mount({ admin_list_orgs: ok([]) });
+    await flush();
+    expect(host.querySelector('.sr-only[role="status"]').textContent).toBe(
+      'There are no organisations yet.',
+    );
+  });
+
+  it('marks its lists as lists (list-style none removes the role in Safari) and links each card to its link name', async () => {
+    mount({ admin_list_orgs: ok([orgRow()]) });
+    await flush();
+    expect(host.querySelector('ul.adm-org-list').getAttribute('role')).toBe('list');
+    const link = host.querySelector('a.adm-org-name');
+    const described = host.querySelector(`#${link.getAttribute('aria-describedby')}`);
+    expect(described.textContent).toBe('Link name: alpha-roasters');
   });
 });
 
@@ -498,12 +593,154 @@ describe('one organisation', () => {
     expect(text()).toContain('Recent changes could not be loaded.');
   });
 
-  it('a gate refusal on either request draws nothing of its own', async () => {
+  it('a gate refusal on either request clears the panel: nothing of the data stays on screen', async () => {
     window.location.hash = `#/orgs/${ID_A}`;
     mount({ admin_org_detail: ok(detailOf()), admin_list_audit: refused('admin_mfa_required') });
     await flush();
-    expect(text()).not.toContain('Recent changes could not be loaded');
-    expect(host.querySelector('.screen-feedback').textContent).toBe('');
+    expect(host.innerHTML).toBe('');
+    handle.unmount();
+    host.remove();
+    mount({ admin_org_detail: refused('admin_session_ended'), admin_list_audit: ok([]) });
+    await flush();
+    expect(host.innerHTML).toBe('');
+  });
+
+  it('draws the organisation as soon as ITS answer arrives, without waiting for the changes', async () => {
+    window.location.hash = `#/orgs/${ID_A}`;
+    let answerAudit;
+    mount({
+      admin_org_detail: ok(detailOf()),
+      admin_list_audit: () =>
+        new Promise((resolve) => {
+          answerAudit = resolve;
+        }),
+    });
+    await flush();
+    expect(host.querySelector('h1').textContent).toBe('Alpha Roasters');
+    expect(text()).toContain('Members (2)');
+    expect(text()).toContain('Loading recent changes…');
+    answerAudit(ok([auditRow()]));
+    await flush();
+    expect(text()).not.toContain('Loading recent changes');
+    expect(host.querySelectorAll('.adm-audit-item')).toHaveLength(1);
+  });
+
+  it('changes that never answer end in the slow message beside a Retry, and the organisation stays', async () => {
+    window.location.hash = `#/orgs/${ID_A}`;
+    vi.useFakeTimers();
+    mount({ admin_org_detail: ok(detailOf()), admin_list_audit: () => new Promise(() => {}) });
+    await vi.advanceTimersByTimeAsync(10001);
+    expect(text()).toMatch(/Recent changes could not be loaded\. .*longer than expected/);
+    expect(host.querySelector('h1').textContent).toBe('Alpha Roasters');
+    expect(buttons('Retry')).toHaveLength(1);
+  });
+
+  it('the changes have a Retry of their own that asks for the changes only', async () => {
+    window.location.hash = `#/orgs/${ID_A}`;
+    let calls = 0;
+    const { callAdmin } = mount({
+      admin_org_detail: ok(detailOf()),
+      admin_list_audit: () => {
+        calls += 1;
+        return calls === 1 ? refused(undefined) : ok([auditRow()]);
+      },
+    });
+    await flush();
+    const [retry] = buttons('Retry');
+    retry.click();
+    retry.click();
+    await flush();
+    expect(callAdmin.mock.calls.filter(([name]) => name === 'admin_list_audit')).toHaveLength(2);
+    expect(callAdmin.mock.calls.filter(([name]) => name === 'admin_org_detail')).toHaveLength(1);
+    expect(host.querySelectorAll('.adm-audit-item')).toHaveLength(1);
+    expect(text()).not.toContain('could not be loaded');
+  });
+
+  it('says the changes are cut when there are exactly as many as it asked for, and not when there are fewer', async () => {
+    window.location.hash = `#/orgs/${ID_A}`;
+    const rows = (n) => Array.from({ length: n }, (_, i) => auditRow({ id: i + 1 }));
+    mount({ admin_org_detail: ok(detailOf()), admin_list_audit: ok(rows(20)) });
+    await flush();
+    expect(text()).toContain('Showing the latest 20 changes.');
+    handle.unmount();
+    host.remove();
+    mount({ admin_org_detail: ok(detailOf()), admin_list_audit: ok(rows(19)) });
+    await flush();
+    expect(host.querySelectorAll('.adm-audit-item')).toHaveLength(19);
+    expect(text()).not.toContain('Showing the latest');
+  });
+
+  it('after Retry on the whole organisation the heading has focus again', async () => {
+    window.location.hash = `#/orgs/${ID_A}`;
+    let calls = 0;
+    mount({
+      admin_org_detail: () => {
+        calls += 1;
+        return calls === 1 ? refused(undefined) : ok(detailOf());
+      },
+      admin_list_audit: ok([]),
+    });
+    await flush();
+    buttons('Retry')[0].focus();
+    buttons('Retry')[0].click();
+    await flush();
+    expect(document.activeElement).toBe(host.querySelector('h1'));
+    expect(host.querySelector('h1').textContent).toBe('Alpha Roasters');
+  });
+
+  it('a body that is not what the function documents is a failure with a Retry, not a blank page', async () => {
+    window.location.hash = `#/orgs/${ID_A}`;
+    mount({
+      admin_org_detail: ok(
+        detailOf({
+          org: {
+            name: {
+              toString() {
+                throw new Error('not a name');
+              },
+            },
+          },
+        }),
+      ),
+      admin_list_audit: ok([]),
+    });
+    await flush();
+    expect(host.querySelector('h1').textContent).toBe('Organisation');
+    expect(host.querySelector('.screen-feedback').textContent).toMatch(/Something went wrong/);
+    expect(buttons('Retry')).toHaveLength(1);
+  });
+
+  it('says in a screen-reader-only status that the organisation has loaded, by name', async () => {
+    window.location.hash = `#/orgs/${ID_A}`;
+    mount(full());
+    await flush();
+    expect(host.querySelector('.sr-only[role="status"]').textContent).toBe(
+      'Alpha Roasters loaded.',
+    );
+  });
+
+  it('hides the back arrow from a screen reader, and marks its lists as lists', async () => {
+    window.location.hash = `#/orgs/${ID_A}`;
+    mount(full());
+    await flush();
+    expect(host.querySelector('a.adm-back [aria-hidden="true"]').textContent).toBe('←');
+    for (const selector of ['ul.adm-members', 'ol.adm-audit']) {
+      expect(host.querySelector(selector).getAttribute('role'), selector).toBe('list');
+    }
+  });
+
+  it('shows an unknown role by its own text even when it is named like something on the prototype chain', async () => {
+    window.location.hash = `#/orgs/${ID_A}`;
+    mount({
+      admin_org_detail: ok(
+        detailOf({
+          members: [{ user_id: 'u', email: 'a@b.test', role: 'constructor', joined_at: null }],
+        }),
+      ),
+      admin_list_audit: ok([]),
+    });
+    await flush();
+    expect(host.querySelector('.adm-role').textContent).toBe('constructor');
   });
 
   it('an id that cannot be one asks for nothing and says the organisation is not found', async () => {
@@ -512,9 +749,11 @@ describe('one organisation', () => {
     await flush();
     expect(callAdmin).not.toHaveBeenCalled();
     expect(host.querySelector('h1').textContent).toBe('Organisation not found');
-    expect(host.querySelector('.screen-feedback').textContent).toBe(
-      'That organisation no longer exists.',
-    );
+    // static text: focus is on the heading, so it is read next, and a live region would say it twice
+    const note = host.querySelector('.screen-feedback');
+    expect(note.textContent).toBe('That organisation no longer exists.');
+    expect(note.getAttribute('role')).toBeNull();
+    expect(host.querySelector('[role="status"], [aria-live]')).toBeNull();
     expect(host.querySelector('a.adm-back').getAttribute('href')).toBe('#/orgs');
   });
 });
@@ -580,6 +819,15 @@ describe('moving inside the panel', () => {
     await goto(`#/orgs/${ID_A}`);
     expect(callAdmin).toHaveBeenCalledTimes(1);
     expect(host.innerHTML).toBe(before);
+  });
+
+  it('opened on an address that names no panel it shows the list, and the shell correcting the address does not reload it', async () => {
+    window.location.hash = '';
+    const { callAdmin } = mount({ admin_list_orgs: ok([orgRow()]) });
+    await flush();
+    expect(host.querySelector('h1').textContent).toBe('Organisations');
+    await goto('#/orgs');
+    expect(callAdmin).toHaveBeenCalledTimes(1);
   });
 
   it('mounting does not move focus by itself (the shell moves it to the heading when the panel opens)', async () => {

@@ -4,24 +4,28 @@
 
 const MISSING = '—';
 
+// The instant as an ISO string, or null when there is none or it is not a date.
+function isoOf(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
 // A timestamp or a date ("2026-10-12" from a `date` column) as YYYY-MM-DD; an em dash when there is none.
 export function formatDate(value) {
-  if (value === null || value === undefined || value === '') return MISSING;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? MISSING : date.toISOString().slice(0, 10);
+  const iso = isoOf(value);
+  return iso === null ? MISSING : iso.slice(0, 10);
 }
 
 // A timestamp as "YYYY-MM-DD HH:mm UTC".
 export function formatDateTime(value) {
-  if (value === null || value === undefined || value === '') return MISSING;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return MISSING;
-  return `${date.toISOString().slice(0, 10)} ${date.toISOString().slice(11, 16)} UTC`;
+  const iso = isoOf(value);
+  return iso === null ? MISSING : `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`;
 }
 
-// "1 member", "3 members", "0 events". A count that is not a whole number reads as 0 (a missing count must
-// never print "undefined members").
-export function plural(count, singular, pluralForm = `${singular}s`) {
+// "1 member", "3 members", "0 events" (regular plurals only: add an `s`). A count that is not a whole number
+// reads as 0 (a missing count must never print "undefined members").
+export function plural(count, singular) {
   const n = Number.isInteger(count) && count > 0 ? count : 0;
-  return `${n} ${n === 1 ? singular : pluralForm}`;
+  return `${n} ${singular}${n === 1 ? '' : 's'}`;
 }

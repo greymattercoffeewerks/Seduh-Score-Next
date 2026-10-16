@@ -91,6 +91,23 @@ describe('the shell', () => {
     expect(root.querySelector('nav a[aria-current="page"]').dataset.route).toBe('audit');
   });
 
+  it('rewrites a hash that names no panel to the first panel, so the page and the address agree', () => {
+    for (const hash of ['', '#/', '#/nowhere', '#/orgsx/1']) {
+      window.location.hash = hash;
+      open([panel('orgs'), panel('audit')]);
+      expect(window.location.hash, hash).toBe('#/orgs');
+      shell.unmount();
+      root.remove();
+    }
+  });
+
+  it('leaves an address inside a panel exactly as it is', () => {
+    const detail = '#/orgs/11111111-1111-4111-8111-111111111111';
+    window.location.hash = detail;
+    open([panel('orgs'), panel('audit')]);
+    expect(window.location.hash).toBe(detail);
+  });
+
   it("draws one navigation link per panel, to that panel's route", () => {
     open([panel('orgs'), panel('audit')]);
     const links = [...root.querySelectorAll('nav a')];

@@ -4,7 +4,7 @@
 // list), so a test drives the whole flow with a fake client.
 import { trackInputModality } from '../core/inputModality.js';
 import { getAdminClient } from './adminClient.js';
-import { checkAccess, signOut, isGateRefusal, GATE_STATE } from './gate.js';
+import { checkAccess, signOut, isGateRefusal, isAuthFailure, GATE_STATE } from './gate.js';
 import { PANELS } from './panels.js';
 import { mountShell } from './shell.js';
 import { mountSignInScreen } from './signInScreen.js';
@@ -50,7 +50,8 @@ export function mountAdminConsole(root, { client = getAdminClient(), panels = PA
   // so no panel has to remember to look for it; the answer is still returned for the panel's own handling.
   async function callAdmin(name, args) {
     const result = await client.rpc(name, args);
-    if (isGateRefusal(result?.error)) route();
+    // A rejected token (HTTP 401) has no hint, but it closes the gate just the same: sign in again.
+    if (isGateRefusal(result?.error) || isAuthFailure(result)) route();
     return result;
   }
 

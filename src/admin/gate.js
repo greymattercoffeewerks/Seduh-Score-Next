@@ -37,7 +37,7 @@ export function isGateRefusal(error) {
 }
 
 // A rejected token (expired beyond refresh, person deleted) reaches us as an HTTP 401 from PostgREST.
-function isAuthFailure(result) {
+export function isAuthFailure(result) {
   const error = result?.error;
   return result?.status === 401 || error?.code === 'PGRST301' || error?.code === 'PGRST303';
 }

@@ -38,6 +38,7 @@
 
 .adm-screen h1,
 .adm-main h1 {
+  overflow-wrap: anywhere;
   font-family: var(--font-display);
   font-size: var(--text-2xl);
   line-height: var(--leading-tight);
@@ -279,7 +280,6 @@
 
 /* The organisation's name is the link; its whole line is the tap target. */
 .adm-org-name,
-.adm-link,
 .adm-back {
   display: inline-flex;
   align-items: center;
@@ -360,4 +360,25 @@
   .adm-facts {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
+}
+
+/* The panel's plain text sits in flex columns that have their own gap: the browser's default paragraph margins
+   would double it. */
+.adm-panel-body > p,
+.adm-section > p,
+.adm-changes > p {
+  margin: 0;
+}
+
+.adm-changes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+/* An address or a name with no space in it has nowhere to break unless it is told it may. */
+.adm-audit-item,
+.adm-member {
+  overflow-wrap: anywhere;
 }

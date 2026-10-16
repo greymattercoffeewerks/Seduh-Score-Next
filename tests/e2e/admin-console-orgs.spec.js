@@ -117,7 +117,7 @@ test.describe('the Organisations panel (real page, real local Supabase)', () => 
     await page.reload();
     // a reload keeps the session (this tab) and lands on the same organisation
     await expect(heading(page)).toHaveText(tenant.orgName);
-    await page.getByRole('link', { name: '← Organisations' }).click();
+    await page.locator('a.adm-back').click();
     await expect(heading(page)).toHaveText('Organisations');
     await page.goBack();
     await expect(heading(page)).toHaveText(tenant.orgName);
@@ -144,6 +144,16 @@ test.describe('the Organisations panel (real page, real local Supabase)', () => 
     await expect(heading(page)).toHaveText('Organisation not found');
     // nothing is asked of the database for an id that cannot be one
     expect(panelCalls()).toBe(before);
+  });
+
+  test('an address that names no panel is rewritten to the Organisations list, so Back does not strand the page', async ({
+    page,
+  }) => {
+    await open(page, { secret });
+    await page.goto('/admin/#/nowhere');
+    await page.reload();
+    await expect(heading(page)).toHaveText('Organisations');
+    await expect(page).toHaveURL(/\/admin\/#\/orgs$/);
   });
 
   test('the skip button takes the keyboard straight to the content', async ({ page }) => {

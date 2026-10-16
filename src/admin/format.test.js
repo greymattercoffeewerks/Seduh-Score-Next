@@ -36,9 +36,9 @@ describe('plural', () => {
     expect(plural(12, 'event')).toBe('12 events');
   });
 
-  it('takes an irregular plural', () => {
-    expect(plural(1, 'person', 'people')).toBe('1 person');
-    expect(plural(3, 'person', 'people')).toBe('3 people');
+  it('adds an s and nothing else (regular plurals only: the helper takes no irregular form)', () => {
+    expect(plural(3, 'organisation')).toBe('3 organisations');
+    expect(plural.length).toBe(2);
   });
 
   it('reads a missing or odd count as zero, never "undefined members"', () => {

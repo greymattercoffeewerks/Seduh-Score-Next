@@ -68,8 +68,8 @@ navigation from the registry and routes by hash; nothing in it changes. **A pane
 `ctx.callAdmin(name, args)`, never `ctx.client.rpc`**: a gate refusal in the answer (stale second factor, ended
 session) then sends the whole console back through the access check, so no panel has to remember to look for it
 (an ordinary refusal such as `org_not_found` is the panel's own business, translated with `adminErrors.js`).
-Panels get their own screen module (the overview inline in `panels.js` is a placeholder, do not copy it). A
-panel with controls also needs a skip link first. A panel that creates something must
+Panels get their own screen module. The shell's skip button already takes a keyboard user to the content. A
+panel that creates something must
 **disable its submit control after the first click** and keep the result on screen (the Edge Function answers
 a double submit with `[500, 500, 201]`, and the 201 carries the one-time password, which is shown once).
 

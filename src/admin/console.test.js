@@ -1005,6 +1005,22 @@ describe('ctx.callAdmin (what panels call admin functions through)', () => {
     expect(heading(root)).toBe('Verify it is you');
   });
 
+  it('a rejected token (HTTP 401, no hint) also runs the access check again', async () => {
+    const { client, ctx } = await withPanel();
+    client.rpc = vi.fn(async () => ({
+      data: null,
+      error: { message: 'JWT expired' },
+      status: 401,
+    }));
+    await ctx.callAdmin('admin_list_orgs', {});
+    await flush();
+    // one call for the panel's own request, one more for the access check the 401 triggered
+    expect(client.rpc.mock.calls.map(([name]) => name)).toEqual([
+      'admin_list_orgs',
+      'am_i_platform_admin',
+    ]);
+  });
+
   it("an ordinary refusal is the panel's own business and does not touch the gate", async () => {
     const { client, ctx, root } = await withPanel();
     client.rpc = vi.fn(async () => ({ data: null, error: { hint: 'org_not_found' } }));
