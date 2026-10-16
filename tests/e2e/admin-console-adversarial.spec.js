@@ -486,12 +486,10 @@ test.describe('the admin surface under attack (HTTP, real local stack)', () => {
     console.log(
       `org_members privileges for authenticated: ${privileges} (PATCH answered ${patch.status})`,
     );
-    test
-      .info()
-      .annotations.push({
-        type: 'org_members privileges for authenticated',
-        description: privileges,
-      });
+    test.info().annotations.push({
+      type: 'org_members privileges for authenticated',
+      description: privileges,
+    });
   });
 
   test('HOSTILE INPUTS to the admin functions: exact matching only, bad roles and unknown ids and a bad name refused with their hints', async () => {
