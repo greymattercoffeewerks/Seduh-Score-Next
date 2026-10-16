@@ -19,12 +19,13 @@ import { ADMIN_ERROR_COPY, describeAdminError } from './adminErrors.js';
 import { isGateRefusal, SLOW_MESSAGE } from './gate.js';
 import { plural } from './format.js';
 import { feedbackRegion, setFeedback } from './screenParts.js';
-import { oneTimePasswordCard } from './passwordCard.js';
+import { adminPasswordCard } from './passwordCard.js';
 import { UUID } from './ids.js';
 import { field, textInput, showFieldError } from './formParts.js';
 import { EMAIL_PROBLEM, NO_ACCOUNT, LOOKUP_FIRST, CONFIRM_PASSWORD } from './accountLookup.js';
 import { ask as askAdmin, mayTakeFocus as focusAllowed } from './panelRequest.js';
-import { nameMessage, slugMessage, normalisedSlug, trimmed, isEmailShaped } from './orgRules.js';
+import { nameMessage, slugMessage, normalisedSlug, trimmed } from './orgRules.js';
+import { isEmailShaped } from '../core/email.js';
 
 export const ORG_STATE_UNKNOWN =
   'We could not confirm whether the organisation was created. Check the Organisations list before trying again.';
@@ -394,7 +395,7 @@ export function mountCreateOrgPanel(host, ctx) {
           el('p', {
             text: `The login for ${created.email} was created. The organisation was not. Fix whatever it says above and press Create organisation again: this login will be attached, not made twice.`,
           }),
-          oneTimePasswordCard({
+          adminPasswordCard({
             idPrefix: 'adm-created',
             heading: `Login created for ${created.email}`,
             password: created.password,
@@ -645,7 +646,7 @@ export function mountCreateOrgPanel(host, ctx) {
     if (done.login) {
       children.push(
         el('p', { text: `${done.login.email} is its owner.` }),
-        oneTimePasswordCard({
+        adminPasswordCard({
           idPrefix: 'adm-issued',
           heading: `One-time password for ${done.login.email}`,
           password: done.login.password,

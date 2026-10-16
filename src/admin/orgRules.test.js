@@ -8,7 +8,6 @@ import {
   normalisedSlug,
   nameMessage,
   slugMessage,
-  isEmailShaped,
 } from './orgRules.js';
 
 // The page's rules are a copy of what create_org enforces. The database wins, so the copy must not drift.
@@ -160,18 +159,5 @@ describe('the messages', () => {
     expect(slugMessage('alpha')).toBeNull();
     expect(slugMessage('a')).toMatch(/3 to 40 letters and digits/);
     expect(slugMessage('admin')).toBe('That link name is reserved. Choose another.');
-  });
-});
-
-describe('isEmailShaped', () => {
-  it('accepts an address with an at sign and a dotted domain, ignoring surrounding space', () => {
-    expect(isEmailShaped('a@b.test')).toBe(true);
-    expect(isEmailShaped('  a.b+c@sub.example.test ')).toBe(true);
-  });
-
-  it('refuses what is clearly not one', () => {
-    for (const value of ['', 'a', 'a@b', '@b.test', 'a@.test', 'a b@c.test', 'a@b@c.test', null]) {
-      expect(isEmailShaped(value), String(value)).toBe(false);
-    }
   });
 });

@@ -16,7 +16,7 @@ import { plural } from './format.js';
 import { UUID } from './ids.js';
 import { ask } from './panelRequest.js';
 import { field, textInput, showFieldError } from './formParts.js';
-import { isEmailShaped } from './orgRules.js';
+import { isEmailShaped } from '../core/email.js';
 
 export const EMAIL_PROBLEM = 'Enter a valid email address.';
 export const NO_ACCOUNT = 'No active account matches that. Check the email.';

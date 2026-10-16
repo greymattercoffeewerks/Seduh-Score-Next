@@ -92,7 +92,13 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
-    include: ['src/**/*.test.js', 'supabase/functions/**/*.test.js', 'eslint-rules/**/*.test.js'],
+    include: [
+      'src/**/*.test.js',
+      'supabase/functions/**/*.test.js',
+      'eslint-rules/**/*.test.js',
+      // Build-output checks (tools/check-admin-bundle-leak.mjs): the scripts' own tests.
+      'tools/*.test.js',
+    ],
     setupFiles: ['./src/testSetup.js'],
   },
 });

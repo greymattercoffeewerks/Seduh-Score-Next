@@ -69,24 +69,9 @@
   margin: 0;
 }
 
-/* The one-time password: large, monospaced, selectable in one tap, and allowed to wrap rather than
-   overflow at 360px. */
+/* The one-time password's own spacing in this screen (the block itself is core/oneTimePasswordCard.css). */
 .team-password {
-  display: block;
   margin: var(--space-2) 0 var(--space-3);
-  padding: var(--space-3);
-  font-family: var(--font-mono);
-  font-size: var(--text-xl);
-  letter-spacing: var(--tracking-wide);
-  background: var(--color-surface-sunken);
-  border: var(--border-hairline) solid var(--color-border-strong);
-  border-radius: var(--radius-sm);
-  user-select: all;
-  overflow-wrap: anywhere;
-}
-
-.team-issued {
-  border: var(--border-strong) solid var(--color-border-strong);
 }
 
 /* A long email (or the password block) wraps inside its box instead of widening the page: found at

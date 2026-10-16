@@ -17,6 +17,7 @@
 import qrcode from 'qrcode-generator';
 import { getSupabase } from '../../core/supabaseClient.js';
 import { el, labeledField, setBusyDisabled, withFocusPreservation } from '../../core/dom.js';
+import { copyText } from '../../core/clipboard.js';
 import { describeError } from '../../core/errors.js';
 import { downloadJson } from '../../core/export.js';
 import {
@@ -409,8 +410,8 @@ export async function mountSetupScreen(root, { client = getSupabase(), signal } 
       text: 'Copy',
       attrs: { type: 'button' },
     });
-    copyButton.addEventListener('click', () => {
-      navigator.clipboard?.writeText(url).then(() => showToast('Copied to clipboard.'));
+    copyButton.addEventListener('click', async () => {
+      if (await copyText(url)) showToast('Copied to clipboard.');
     });
     return el('div', { className: 'gtb-field' }, [
       el('span', { className: 'form-field-label', text: label }),

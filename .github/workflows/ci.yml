@@ -29,6 +29,8 @@ jobs:
           # `npm run build` in CI representative of a real production bundle.
           VITE_SUPABASE_URL: http://127.0.0.1:54421
           VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
+      # No admin-console text in any bundle but the admin entry's own (src/admin/CLAUDE.md).
+      - run: npm run check:admin-leak
 
   # Closes the handoff's own cross-surface AC (§14, T5.3/T5.4): "Playwright
   # test driving organiser + projector + phone simultaneously, proving all
