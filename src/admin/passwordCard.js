@@ -3,7 +3,7 @@
 // and goes when the node does. Used by the create-organisation panel for a login the console has just made.
 import { el } from '../core/dom.js';
 
-export const ONLY_TIME_WARNING = 'This is the only time this password is shown.';
+const ONLY_TIME_WARNING = 'This is the only time this password is shown.';
 const COPIED = 'Copied.';
 const COPY_FAILED = 'Could not copy. Select the password and copy it yourself.';
 
@@ -15,8 +15,9 @@ export function oneTimePasswordCard({ idPrefix, heading, password, help, onDone 
     id: `${idPrefix}-copy-status`,
     attrs: { role: 'status', 'aria-live': 'polite' },
   });
+  // Copy is the main action; Done throws the only copy away, so it is the quieter button and sits apart from Copy.
   const copy = el('button', {
-    className: 'btn btn-outline tap-target',
+    className: 'btn btn-primary tap-target',
     text: 'Copy',
     attrs: { type: 'button', 'aria-label': 'Copy the one-time password' },
   });
@@ -31,7 +32,7 @@ export function oneTimePasswordCard({ idPrefix, heading, password, help, onDone 
   const actions = el('div', { className: 'adm-actions' }, [copy]);
   if (onDone) {
     const done = el('button', {
-      className: 'btn btn-primary tap-target',
+      className: 'btn btn-outline tap-target adm-done',
       text: 'Done',
       attrs: { type: 'button', 'aria-label': 'Done: hide the one-time password' },
     });
@@ -44,7 +45,6 @@ export function oneTimePasswordCard({ idPrefix, heading, password, help, onDone 
       className: 'card adm-password-card',
       id: `${idPrefix}-card`,
       attrs: {
-        tabindex: '-1',
         'aria-labelledby': `${idPrefix}-heading`,
         'aria-describedby': `${idPrefix}-password ${idPrefix}-warning`,
       },

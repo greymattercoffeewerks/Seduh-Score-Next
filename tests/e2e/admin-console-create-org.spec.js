@@ -24,11 +24,23 @@ function stubAdminAccounts(page, respond) {
       await route.fulfill({ status: 204, headers: cors });
       return;
     }
-    const { status, body } = respond(route.request().postDataJSON());
+    // The real function refuses a call with no bearer token (401) or any other action (400): so does this stand-in,
+    // so a panel that stopped sending either would fail here instead of passing against a forgiving fake.
+    const request = route.request();
+    const body = request.postDataJSON();
+    if (!/^Bearer \S+/.test(request.headers().authorization ?? '')) {
+      await route.fulfill({ status: 401, headers: cors, body: '{}' });
+      return;
+    }
+    if (body?.action !== 'create_owner') {
+      await route.fulfill({ status: 400, headers: cors, body: '{}' });
+      return;
+    }
+    const { status, body: answer } = respond(body);
     await route.fulfill({
       status,
       headers: { ...cors, 'content-type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify(answer),
     });
   });
 }
@@ -149,9 +161,11 @@ test.describe('the New organisation panel (real page, real local Supabase)', () 
     // an address with no account
     await page.getByLabel('Owner’s email').fill(`nobody-${uniq}@local.test`);
     await page.getByRole('button', { name: 'Look up account' }).click();
-    await expect(page.locator('#admin-main .screen-feedback')).toHaveText(
+    await expect(page.locator('#adm-owner-email-input-error')).toHaveText(
       'No active account matches that. Check the email.',
     );
+    // said at the field, with focus there
+    await expect(page.getByLabel('Owner’s email')).toBeFocused();
 
     // the operator's own account: the database refuses to make them an owner here
     await page.getByLabel('Link name').fill(`d10-${uniq}-self`);
@@ -228,6 +242,55 @@ test.describe('the New organisation panel (real page, real local Supabase)', () 
     expect(stored).not.toContain(NEW_PASSWORD);
   });
 
+  test('after Create another a second organisation can be made in the same visit', async ({
+    page,
+  }) => {
+    const first = await createLoneUser('create-org-again-1');
+    const second = await createLoneUser('create-org-again-2');
+    await openNewOrganisation(page, { secret, admin });
+    await page.getByLabel('Use an existing account').check();
+    await fillOrg(page, `Again One ${uniq}`, `d10-${uniq}-again-1`);
+    await lookUp(page, first.email);
+    await page.getByRole('button', { name: 'Create organisation' }).click();
+    await expect(heading(page)).toHaveText('Organisation created');
+
+    await page.getByRole('button', { name: 'Create another' }).click();
+    await expect(heading(page)).toHaveText('New organisation');
+    await fillOrg(page, `Again Two ${uniq}`, `d10-${uniq}-again-2`);
+    await page.getByLabel('Use an existing account').check();
+    await lookUp(page, second.email);
+    await expect(page.locator('.adm-lookup')).toContainText(`Found: ${second.email}`);
+    await page.getByRole('button', { name: 'Create organisation' }).click();
+    await expect(heading(page)).toHaveText('Organisation created');
+    await expect(page.locator('body')).toContainText(`Again Two ${uniq} was created.`);
+  });
+
+  test('leaving while a password is on screen asks first, and staying keeps the password', async ({
+    page,
+  }) => {
+    const login = await createLoneUser('create-org-leave');
+    await stubAdminAccounts(page, () => ({
+      status: 201,
+      body: { userId: login.userId, email: login.email, password: NEW_PASSWORD },
+    }));
+    await openNewOrganisation(page, { secret, admin });
+    await fillOrg(page, `Leave ${uniq}`, `d10-${uniq}-leave`);
+    await page.getByLabel('Owner’s email').fill(login.email);
+    await page.getByRole('button', { name: 'Create organisation' }).click();
+    await expect(page.locator('.adm-password')).toHaveText(NEW_PASSWORD);
+
+    const dialogs = [];
+    page.on('dialog', async (dialog) => {
+      dialogs.push(dialog.message());
+      await dialog.dismiss();
+    });
+    await page.locator('nav').getByRole('link', { name: 'Organisations' }).click();
+    await expect.poll(() => dialogs.length).toBe(1);
+    expect(dialogs[0]).toMatch(/one-time password/);
+    await expect(page.locator('.adm-password')).toHaveText(NEW_PASSWORD);
+    await expect(page).toHaveURL(/#\/new-org$/);
+  });
+
   test('a new login whose email already has an account says so and offers the existing-account path', async ({
     page,
   }) => {
@@ -264,8 +327,9 @@ test.describe('the New organisation panel (real page, real local Supabase)', () 
     await fillOrg(page, `Create Org E ${uniq}`, other.slug);
     await page.getByLabel('Owner’s email').fill(login.email);
     await page.getByRole('button', { name: 'Create organisation' }).click();
+    // the refusal, and the fact that matters after it: a login exists, and its password is below
     await expect(page.locator('#admin-main .screen-feedback')).toHaveText(
-      'That link name is already used by another organisation.',
+      `That link name is already used by another organisation. The login for ${login.email} was created and is kept below, with its password.`,
     );
     await expect(page.locator('.adm-password')).toHaveText(NEW_PASSWORD);
 

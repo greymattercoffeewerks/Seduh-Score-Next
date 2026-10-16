@@ -496,3 +496,33 @@
   justify-content: center;
   text-decoration: none;
 }
+
+/* ---- review fixes, New organisation panel ---- */
+
+/* Plain text anywhere in the panel (a long name or an email with no space in it) wraps instead of widening the page. */
+.adm-main p {
+  overflow-wrap: anywhere;
+}
+
+/* The checked colour of a native radio or checkbox is the console's, not the browser's blue. */
+.adm-check input {
+  accent-color: var(--color-accent);
+}
+
+.field-input[aria-invalid='true'] {
+  border-color: var(--color-danger);
+}
+
+/* An empty paragraph (the link-name preview before there is anything to say) must not add a gap of its own. */
+.adm-muted:empty {
+  display: none;
+}
+
+/* Done throws the only copy of the password away: it sits apart from Copy, not beside it. */
+.adm-done {
+  margin-top: var(--space-4);
+}
+
+.adm-password {
+  -webkit-user-select: all;
+}

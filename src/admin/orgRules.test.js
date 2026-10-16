@@ -12,37 +12,53 @@ import {
 } from './orgRules.js';
 
 // The page's rules are a copy of what create_org enforces. The database wins, so the copy must not drift.
-describe('the reserved link names', () => {
-  // The newest migration that defines the list is the one in force.
-  function listInForce() {
+describe('the rules the database enforces', () => {
+  // The newest migration that DEFINES create_org is the one in force. (The reserved list is inside that function.)
+  function definitionInForce() {
     const dir = join(process.cwd(), 'supabase', 'migrations');
     const files = readdirSync(dir)
       .filter((name) => name.endsWith('.sql'))
       .sort();
-    let words = null;
+    let found = null;
     for (const name of files) {
       const text = readFileSync(join(dir, name), 'utf8');
-      const match = text.match(/v_reserved\s+constant\s+text\[\]\s*:=\s*array\[([^\]]*)\]/);
-      if (match) words = [...match[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
+      if (/create\s+(or\s+replace\s+)?function\s+(public\.)?create_org\s*\(/i.test(text)) {
+        found = { name, text };
+      }
     }
-    return words;
+    return found;
   }
 
-  it('are exactly the words the database refuses, in the migration that is in force', () => {
-    const fromDatabase = listInForce();
-    expect(fromDatabase, 'the reserved list was not found in any migration').not.toBeNull();
+  it('the function in force still holds the list in the shape this test reads (else the test would go quiet)', () => {
+    const definition = definitionInForce();
+    expect(definition, 'no migration defines create_org').not.toBeNull();
+    expect(definition.text).toMatch(/v_reserved\s+(constant\s+)?text\[\]\s*:=\s*array\[/);
+  });
+
+  it('the reserved words are exactly the ones the database refuses', () => {
+    const { text } = definitionInForce();
+    const match = text.match(/v_reserved\s+(?:constant\s+)?text\[\]\s*:=\s*array\[([^\]]*)\]/);
+    const fromDatabase = [...match[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
     expect(fromDatabase.length).toBeGreaterThan(20);
     expect([...RESERVED_SLUGS].sort()).toEqual([...fromDatabase].sort());
   });
 
-  it('every one is refused as reserved, whatever its case or surrounding space', () => {
+  it('the length and shape limits are the ones the database checks', () => {
+    const { text } = definitionInForce();
+    // name: 1 to 80 characters; link name: 3 to 40, letters and digits with single hyphens between them
+    expect(text).toContain('char_length(v_name) > 80');
+    expect(text).toContain('char_length(v_slug_raw) < 3 or char_length(v_slug_raw) > 40');
+    expect(text).toContain("'^[A-Za-z0-9](-?[A-Za-z0-9])*$'");
+  });
+
+  it('every reserved word is refused as reserved, whatever its case or surrounding space', () => {
     for (const word of RESERVED_SLUGS) {
-      expect(slugProblem(word), word).toBe(
-        word.length >= 3 ? 'org_slug_reserved' : 'org_slug_invalid',
-      );
-      expect(slugProblem(` ${word.toUpperCase()}\n`), word).toBe(
-        word.length >= 3 ? 'org_slug_reserved' : 'org_slug_invalid',
-      );
+      expect(slugProblem(word), word).toBe('org_slug_reserved');
+      expect(
+        slugProblem(` ${word.toUpperCase()}
+`),
+        word,
+      ).toBe('org_slug_reserved');
     }
   });
 });

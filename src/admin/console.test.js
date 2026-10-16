@@ -1101,7 +1101,7 @@ describe('ctx.callFunction (what panels call an Edge Function through)', () => {
     client.rpc = vi.fn();
     const result = await ctx.callFunction('admin-accounts', {});
     await flush();
-    expect(result.error).toEqual({ status: 409, hint: 'email_taken', userId: undefined });
+    expect(result.error).toEqual({ status: 409, hint: 'email_taken' });
     expect(client.rpc).not.toHaveBeenCalled();
     expect(root.querySelector('header')).not.toBeNull();
   });

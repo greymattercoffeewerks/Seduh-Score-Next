@@ -9,19 +9,20 @@
 // - A login the console has made is never made twice. If the organisation step fails after it, the login (and its
 //   password, still on screen) stays: the form stays editable and the next try attaches THAT login.
 // - The one-time password exists only in this screen's memory and DOM: not in storage, a URL, a label or a log, and
-//   not after the screen is left. It is not shown a second time (a reload shows an empty form).
+//   not after the screen is left. It is not shown a second time (a reload shows an empty form). The shell asks
+//   before the panel is left while it is on screen (`leaveWarning`), the browser before the page is closed, and a
+//   password that was lost anyway is said so the next time this panel opens (`lostPassword`).
 // - A submit is taken once: the controls are marked busy and a second click while a request is out does nothing.
 // - Nothing here reads or draws more than the fields it names.
 import { el, setBusyDisabled } from '../core/dom.js';
-import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../core/timeout.js';
 import { ADMIN_ERROR_COPY, describeAdminError } from './adminErrors.js';
 import { isGateRefusal, SLOW_MESSAGE } from './gate.js';
 import { plural } from './format.js';
 import { feedbackRegion, setFeedback } from './screenParts.js';
 import { oneTimePasswordCard } from './passwordCard.js';
-import { nameMessage, slugMessage, normalisedSlug, isEmailShaped } from './orgRules.js';
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { UUID } from './ids.js';
+import { ask as askAdmin, mayTakeFocus as focusAllowed } from './panelRequest.js';
+import { nameMessage, slugMessage, normalisedSlug, trimmed, isEmailShaped } from './orgRules.js';
 
 export const ORG_STATE_UNKNOWN =
   'We could not confirm whether the organisation was created. Check the Organisations list before trying again.';
@@ -31,14 +32,38 @@ const NO_ACCOUNT = 'No active account matches that. Check the email.';
 const EMAIL_PROBLEM = 'Enter a valid email address.';
 const CONFIRM_PASSWORD = 'Tick the box to confirm that this person set their own password.';
 const CANNOT_OWN = 'This account is disabled or deleted, so it cannot own an organisation.';
+const LEAVE_WARNING =
+  'The one-time password on this screen is shown only here and will be lost if you leave. Leave anyway?';
 const PASSWORD_HELP =
   'Send this to them now. They choose their own password when they first sign in. It cannot be looked up again.';
 
-// What a refusal from the Edge Function says. A timeout or a dropped connection leaves it unknown whether the
-// login was made, which is its own sentence.
+// What a refusal from the Edge Function says. When the request got no answer, or the answer was a server error
+// that names nothing (a gateway timing out, a platform limit), it is unknown whether the login was made, which is
+// its own sentence; a 4xx with no hint (a malformed request) was refused before anything was done.
 function loginFailureMessage(error) {
-  if (error?.timedOut || error?.offline) return ADMIN_ERROR_COPY.account_state_unknown;
+  const serverSide = !error?.hint && (error?.status === undefined || error.status >= 500);
+  if (error?.timedOut || error?.offline || serverSide)
+    return ADMIN_ERROR_COPY.account_state_unknown;
   return describeAdminError(error);
+}
+
+// What a refusal of admin_create_org says. A refusal the database raised always carries its hint, and nothing was
+// changed; an error with NO hint (a dropped connection, a timeout, a server error) leaves it unknown.
+function orgFailureMessage(error) {
+  return error?.timedOut || !error?.hint ? ORG_STATE_UNKNOWN : describeAdminError(error);
+}
+
+// A one-time password that was on screen when the panel was left (by a gate refusal, a sign-out or a navigation
+// the person confirmed): said once, the next time the panel opens. Only the email is kept, never the password.
+let lostPassword = null;
+export const forgetLostPassword = () => {
+  lostPassword = null;
+};
+
+function lostPasswordNotice({ email, organisationCreated }) {
+  return organisationCreated
+    ? `The one-time password for ${email} was not passed on and has been lost. The organisation was created. Set a new password for that login in the Supabase dashboard (Authentication, Users).`
+    : `A login for ${email} was created earlier, but its organisation was not, and its password has been lost. Attach it with "Use an existing account", and set a new password for it in the Supabase dashboard (Authentication, Users).`;
 }
 
 export function mountCreateOrgPanel(host, ctx) {
@@ -48,7 +73,7 @@ export function mountCreateOrgPanel(host, ctx) {
   const draft = { name: '', slug: '', email: '', attest: false };
   let created = null; // { userId, email, password }: a login made here and not yet attached
   let found = null; // the account looked up for the existing path
-  let done = null; // { orgId, name, slug, login: { email, password } | null, passwordShown }
+  let done = null; // { orgId, name, slug, login: { email, password } | null }
   let lookupSeq = 0;
   let unloadGuard = null;
 
@@ -66,43 +91,37 @@ export function mountCreateOrgPanel(host, ctx) {
       unloadGuard = null;
     }
   }
-  const syncGuard = () =>
-    guardUnload(Boolean(created) || Boolean(done?.login && done.passwordShown));
+  const syncGuard = () => guardUnload(Boolean(created) || Boolean(done?.login));
 
-  // An error is announced by moving focus to it, but only while focus is on the panel or nowhere: an answer
-  // that arrives seconds later must not take focus from where the person has since moved.
-  const mayTakeFocus = () => {
-    const active = document.activeElement;
-    return !active || active === document.body || host.contains(active);
-  };
+  const mayTakeFocus = () => focusAllowed(host);
+  const ask = (name, args) => askAdmin(ctx, name, args);
 
-  // A refusal that means the gate is closed: the console is re-checking access and will replace the panel, so
-  // nothing of this form (or of a password) stays on screen meanwhile.
+  // Whatever password is on screen, remembered (the email only) so the panel can say it was lost, then dropped.
+  function rememberLostPassword() {
+    if (created) lostPassword = { email: created.email, organisationCreated: false };
+    else if (done?.login) lostPassword = { email: done.login.email, organisationCreated: true };
+  }
+
+  // A refusal that means the gate is closed. In the real console the access check starts in the same call and
+  // replaces the panel (its `unmount` below does all of this) before the answer is read; this is the same
+  // clean-up for the case where it has not been, so nothing of the form or a password stays on screen.
   function stepAside() {
+    rememberLostPassword();
     created = null;
+    if (done) done.login = null;
     guardUnload(false);
     host.replaceChildren();
   }
 
-  // ---- requests ----
-
-  async function ask(name, args) {
-    try {
-      const { data, error } = await raceTimeout(ctx.callAdmin(name, args), DEFAULT_LOAD_TIMEOUT_MS);
-      return error ? { error } : { data };
-    } catch (thrown) {
-      return { error: { timedOut: Boolean(thrown?.timedOut) } };
-    }
-  }
-
   // ---- small builders ----
 
-  function field({ id, label, hint, input }) {
+  function field({ id, label, hint, input, live = false }) {
     const errorLine = el('p', {
       className: 'adm-field-error',
       id: `${id}-error`,
-      attrs: { 'data-for': id },
+      attrs: { 'data-for': id, ...(live ? { 'aria-live': 'polite' } : {}) },
     });
+    input.setAttribute('aria-required', 'true');
     const describedBy = [hint ? `${id}-hint` : null, `${id}-error`].filter(Boolean).join(' ');
     input.setAttribute('aria-describedby', describedBy);
     const wrapper = el(
@@ -217,7 +236,6 @@ export function mountCreateOrgPanel(host, ctx) {
     const ownerHost = el('div', { className: 'adm-owner' });
     const emailInput = textInput('adm-owner-email-input', {
       type: 'email',
-      autocomplete: 'off',
       inputmode: 'email',
     });
     emailInput.value = draft.email;
@@ -225,6 +243,7 @@ export function mountCreateOrgPanel(host, ctx) {
       id: 'adm-owner-email-input',
       label: 'Owner’s email',
       input: emailInput,
+      live: true,
     });
     const checkEmail = () =>
       showFieldError(
@@ -299,8 +318,16 @@ export function mountCreateOrgPanel(host, ctx) {
       lookupButton.textContent = 'Look up account';
     }
 
+    // A lookup that cannot say yes is said at the email field it was about (and focus goes there while it is free
+    // to), not in the message region above the name field: that is out of sight at 360px and takes a keyboard user
+    // away from the control they were using.
+    function lookupProblem(message) {
+      showFieldError(emailInput, emailField.errorLine, message);
+      if (mayTakeFocus()) emailInput.focus();
+    }
+
     async function lookUp({ quiet = false } = {}) {
-      if (busy && !quiet) return;
+      if (busy) return;
       if (!isEmailShaped(emailInput.value)) {
         showFieldError(emailInput, emailField.errorLine, EMAIL_PROBLEM);
         emailInput.focus();
@@ -324,19 +351,25 @@ export function mountCreateOrgPanel(host, ctx) {
         if (isGateRefusal(result.error)) return stepAside();
         const message = result.error.timedOut ? SLOW_MESSAGE : describeAdminError(result.error);
         drawLookup();
-        setFeedback(feedback, message, 'error', { focus: mayTakeFocus() });
+        lookupProblem(message);
         return;
       }
       const row = Array.isArray(result.data) ? result.data[0] : null;
       if (!row) {
         drawLookup();
-        setFeedback(feedback, NO_ACCOUNT, 'error', { focus: mayTakeFocus() });
+        lookupProblem(NO_ACCOUNT);
+        return;
+      }
+      // An id that is not one is not sent back to the database as the owner.
+      if (!UUID.test(String(row.user_id ?? ''))) {
+        drawLookup();
+        lookupProblem(describeAdminError({}));
         return;
       }
       // (a quiet look, after a refusal, keeps the refusal on screen)
       if (!quiet) setFeedback(feedback, '');
       found = {
-        userId: String(row.user_id ?? ''),
+        userId: row.user_id,
         email: String(row.email ?? ''),
         banned: Boolean(row.banned),
         deleted: Boolean(row.deleted),
@@ -373,7 +406,8 @@ export function mountCreateOrgPanel(host, ctx) {
       radios[value] = input;
       input.addEventListener('change', () => {
         if (busy) {
-          input.checked = mode === value;
+          // Choosing one radio unchecked the other: put the chosen kind back.
+          radios[mode].checked = true;
           return;
         }
         mode = value;
@@ -440,10 +474,20 @@ export function mountCreateOrgPanel(host, ctx) {
       submit,
     ]);
 
+    // (Not screenParts' setFormBusy: that one leaves buttons alone, and here the lookup and the password card's
+    // buttons must stop too.) A text field is also made read-only, because aria-disabled does not stop typing,
+    // and what is typed while a request is out would be shown as if it had been sent.
     function setBusy(isBusy, message = '') {
       busy = isBusy;
-      for (const control of form.querySelectorAll('input, button'))
+      if (isBusy) {
+        // A lookup still out is for a form that is now being sent: its answer must change nothing.
+        lookupSeq += 1;
+        askedFor = null;
+      }
+      for (const control of form.querySelectorAll('input, button')) {
         setBusyDisabled(control, isBusy);
+        if (control.type === 'text' || control.type === 'email') control.readOnly = isBusy;
+      }
       lookupButton.textContent = 'Look up account';
       submit.textContent = isBusy ? 'Creating…' : 'Create organisation';
       progress.textContent = isBusy ? message : '';
@@ -507,7 +551,7 @@ export function mountCreateOrgPanel(host, ctx) {
     });
 
     async function create() {
-      const name = draft.name.trim();
+      const name = trimmed(draft.name);
       const slug = normalisedSlug(draft.slug);
       const email = draft.email.trim();
       const attest = mode === 'existing' ? draft.attest : false;
@@ -560,10 +604,11 @@ export function mountCreateOrgPanel(host, ctx) {
         setBusy(false);
         // A login made a moment ago stays, with its password, so the next try attaches it.
         if (created) drawOwner();
-        const message = result.error.timedOut
-          ? ORG_STATE_UNKNOWN
-          : describeAdminError(result.error);
-        setFeedback(feedback, message, 'error', { focus: mayTakeFocus() });
+        const message = orgFailureMessage(result.error);
+        const withLogin = created
+          ? `${message} The login for ${created.email} was created and is kept below, with its password.`
+          : message;
+        setFeedback(feedback, withLogin, 'error', { focus: mayTakeFocus() });
         // The account gained a membership since it was looked up: look again, so the box to tick appears.
         if (result.error.hint === 'member_password_unset' && mode === 'existing' && !created) {
           await lookUp({ quiet: true });
@@ -576,10 +621,11 @@ export function mountCreateOrgPanel(host, ctx) {
         name,
         slug,
         login: created ? { email: created.email, password: created.password } : null,
-        passwordShown: Boolean(created),
       };
       created = null;
       found = null;
+      // The form is being replaced, and it must not be left marked busy for the next one ("Create another").
+      setBusy(false);
       syncGuard();
       renderDone();
     }
@@ -613,10 +659,7 @@ export function mountCreateOrgPanel(host, ctx) {
     });
     const children = [
       title,
-      el('p', {
-        className: 'adm-created-line',
-        text: `${done.name} was created. Its link name is ${done.slug}.`,
-      }),
+      el('p', { text: `${done.name} was created. Its link name is ${done.slug}.` }),
     ];
     const actions = el('div', { className: 'adm-actions' });
     const showActions = () => {
@@ -646,7 +689,7 @@ export function mountCreateOrgPanel(host, ctx) {
       });
       actions.appendChild(another);
     };
-    if (done.login && done.passwordShown) {
+    if (done.login) {
       children.push(
         el('p', { text: `${done.login.email} is its owner.` }),
         oneTimePasswordCard({
@@ -657,7 +700,6 @@ export function mountCreateOrgPanel(host, ctx) {
           onDone: () => {
             // The password goes with the card: nothing keeps it.
             done.login = null;
-            done.passwordShown = false;
             syncGuard();
             renderDone();
           },
@@ -674,16 +716,31 @@ export function mountCreateOrgPanel(host, ctx) {
   // ---- mounting ----
 
   renderForm();
+  // A password lost the last time this panel was open is said once, without taking focus.
+  if (lostPassword) {
+    setFeedback(
+      host.querySelector('.screen-feedback'),
+      lostPasswordNotice(lostPassword),
+      'urgent',
+      { focus: false },
+    );
+    lostPassword = null;
+  }
 
   return {
+    // Something on screen that cannot be got back: the shell asks before leaving (see shell.js).
+    leaveWarning: () => (created || done?.login ? LEAVE_WARNING : null),
     unmount() {
       disposed = true;
       lookupSeq += 1;
-      // A one-time password must not outlive the screen it was shown on.
+      // A one-time password must not outlive the screen it was shown on: it is dropped from memory AND from the
+      // page (the host may stay in the document a moment), and the next opening says it was lost.
+      rememberLostPassword();
       created = null;
       if (done) done.login = null;
       done = null;
       guardUnload(false);
+      host.replaceChildren();
     },
   };
 }

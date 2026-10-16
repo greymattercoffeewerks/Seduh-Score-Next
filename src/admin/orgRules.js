@@ -45,7 +45,7 @@ export const RESERVED_SLUGS = Object.freeze([
 ]);
 
 // The database trims space, tab, carriage return and line feed (and nothing else) before it judges.
-const trimmed = (value) => String(value ?? '').replace(/^[ \t\r\n]+|[ \t\r\n]+$/g, '');
+export const trimmed = (value) => String(value ?? '').replace(/^[ \t\r\n]+|[ \t\r\n]+$/g, '');
 
 const NAME_MAX = 80;
 const SLUG_MIN = 3;
@@ -109,5 +109,5 @@ export const slugMessage = (raw) => {
 };
 
 // A plausible email, enough to catch a typo before a request. The server (Auth) decides what is deliverable.
-export const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const isEmailShaped = (raw) => EMAIL_SHAPE.test(String(raw ?? '').trim());

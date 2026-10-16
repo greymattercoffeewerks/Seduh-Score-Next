@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { mountCreateOrgPanel, ORG_STATE_UNKNOWN } from './createOrgPanel.js';
+import { mountCreateOrgPanel, ORG_STATE_UNKNOWN, forgetLostPassword } from './createOrgPanel.js';
+import { SLOW_MESSAGE } from './gate.js';
 import { ADMIN_ERROR_COPY, GENERIC_ERROR } from './adminErrors.js';
 import { flush } from './consoleHarness.js';
 
@@ -79,6 +80,7 @@ async function lookUp(email) {
 }
 
 beforeEach(() => {
+  forgetLostPassword();
   writeText = vi.fn(async () => {});
   Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
 });
@@ -126,6 +128,40 @@ describe('the form', () => {
     expect($('#adm-org-slug-input').hasAttribute('aria-invalid')).toBe(false);
     typeInto('adm-org-slug-input', 'admin');
     expect($('#adm-org-slug-input-error').textContent).toBe(ADMIN_ERROR_COPY.org_slug_reserved);
+  });
+
+  it('marks the three fields required and the name field invalid once it has a problem', () => {
+    mount();
+    for (const id of ['adm-org-name-input', 'adm-org-slug-input', 'adm-owner-email-input']) {
+      expect($(`#${id}`).getAttribute('aria-required'), id).toBe('true');
+    }
+    typeInto('adm-org-name-input', '');
+    leave('adm-org-name-input');
+    expect($('#adm-org-name-input').getAttribute('aria-invalid')).toBe('true');
+    expect($('#adm-org-slug-input').getAttribute('aria-describedby')).toContain(
+      'adm-org-slug-input-preview',
+    );
+  });
+
+  it('judges the owner email when it is left, and stops when it is fixed', () => {
+    mount();
+    typeInto('adm-owner-email-input', 'bad');
+    leave('adm-owner-email-input');
+    expect($('#adm-owner-email-input-error').textContent).toBe('Enter a valid email address.');
+    typeInto('adm-owner-email-input', 'good@alpha.test');
+    expect($('#adm-owner-email-input-error').textContent).toBe('');
+  });
+
+  it('sends what the form shows even when a field was filled without an input event (autofill)', async () => {
+    const { callAdmin } = mount({ admin: { admin_create_org: ok(ORG_ID) } });
+    $('#adm-org-name-input').value = 'Autofilled Roasters';
+    $('#adm-org-slug-input').value = 'autofilled';
+    $('#adm-owner-email-input').value = 'owner@alpha.test';
+    await submit();
+    expect(callAdmin).toHaveBeenCalledWith(
+      'admin_create_org',
+      expect.objectContaining({ p_name: 'Autofilled Roasters', p_slug: 'autofilled' }),
+    );
   });
 
   it('judges the name the same way', () => {
@@ -337,16 +373,28 @@ describe('a new login as the owner', () => {
     });
 
     it('says in words what each documented refusal means, and never creates an organisation after one', async () => {
-      for (const [hint, copy] of [
-        ['account_record_failed', ADMIN_ERROR_COPY.account_record_failed],
-        ['account_stranded', ADMIN_ERROR_COPY.account_stranded],
-        ['account_state_unknown', ADMIN_ERROR_COPY.account_state_unknown],
-        [undefined, GENERIC_ERROR],
-        ['something_new', GENERIC_ERROR],
+      for (const [error, copy] of [
+        [{ hint: 'account_record_failed', status: 500 }, ADMIN_ERROR_COPY.account_record_failed],
+        [{ hint: 'account_stranded', status: 500 }, ADMIN_ERROR_COPY.account_stranded],
+        [{ hint: 'account_state_unknown', status: 500 }, ADMIN_ERROR_COPY.account_state_unknown],
+        // a hint the console does not know: the database refused, so nothing was made
+        [{ hint: 'something_new', status: 400 }, GENERIC_ERROR],
+        // a request the function refused before doing anything
+        [{ status: 400 }, GENERIC_ERROR],
+        [{ status: 405 }, GENERIC_ERROR],
       ]) {
-        const { callAdmin } = await failWith(refused(hint, { status: 500 }));
-        expect(feedback(), String(hint)).toBe(copy);
-        expect(callAdmin, String(hint)).not.toHaveBeenCalled();
+        const { callAdmin } = await failWith({ data: null, error });
+        expect(feedback(), JSON.stringify(error)).toBe(copy);
+        expect(callAdmin, JSON.stringify(error)).not.toHaveBeenCalled();
+        handle.unmount();
+        host.remove();
+      }
+    });
+
+    it('a server error that names nothing (a gateway giving up) says the login may exist: it does not claim nothing changed', async () => {
+      for (const error of [{ status: 500 }, { status: 502 }, { status: 504 }, {}]) {
+        await failWith({ data: null, error });
+        expect(feedback(), JSON.stringify(error)).toBe(ADMIN_ERROR_COPY.account_state_unknown);
         handle.unmount();
         host.remove();
       }
@@ -362,9 +410,13 @@ describe('a new login as the owner', () => {
     });
 
     it('the form is usable again afterwards, with what was typed still in it', async () => {
-      await failWith(refused(undefined, { status: 500 }));
+      await failWith(refused('something_new', { status: 400 }));
       expect($('#adm-org-name-input').value).toBe('Alpha Roasters');
       expect(buttonNamed('Create organisation').getAttribute('aria-disabled')).not.toBe('true');
+      expect($('#adm-org-name-input').readOnly).toBe(false);
+      expect($('#adm-owner-email-input').readOnly).toBe(false);
+      // nothing is still "in progress" for a screen reader
+      expect($('.sr-only[role="status"]').textContent).toBe('');
       expect(document.activeElement).toBe($('.screen-feedback'));
     });
 
@@ -393,6 +445,9 @@ describe('a new login as the owner', () => {
   });
 
   describe('when the login was made but the organisation was refused', () => {
+    // The refusal is announced with the fact that matters most after it: a login now exists, and where it is.
+    const LOGIN_NOTE =
+      ' The login for owner@alpha.test was created and is kept below, with its password.';
     async function orgRefused(hint, extra = {}) {
       let first = true;
       const m = mount({
@@ -414,8 +469,10 @@ describe('a new login as the owner', () => {
 
     it('says why in words and keeps the login and its password on screen', async () => {
       await orgRefused('org_slug_taken');
-      expect(feedback()).toBe(ADMIN_ERROR_COPY.org_slug_taken);
+      expect(feedback()).toBe(ADMIN_ERROR_COPY.org_slug_taken + LOGIN_NOTE);
       expect($('#adm-created-password').textContent).toBe(PASSWORD);
+      // it is on screen, not merely in the DOM
+      expect($('#adm-created-password').closest('[hidden]')).toBeNull();
       expect(text()).toContain(
         'The login for owner@alpha.test was created. The organisation was not.',
       );
@@ -450,12 +507,17 @@ describe('a new login as the owner', () => {
         'member_password_unset',
       ]) {
         await orgRefused(hint);
-        expect(feedback(), hint).toBe(ADMIN_ERROR_COPY[hint]);
+        expect(feedback(), hint).toBe(ADMIN_ERROR_COPY[hint] + LOGIN_NOTE);
         handle.unmount();
         host.remove();
       }
       await orgRefused('something_new');
-      expect(feedback()).toBe(GENERIC_ERROR);
+      expect(feedback()).toBe(GENERIC_ERROR + LOGIN_NOTE);
+    });
+
+    it('an error with no hint (a dropped connection, a server error) says the organisation may exist, not that nothing changed', async () => {
+      await orgRefused(undefined, { message: 'Failed to fetch' });
+      expect(feedback()).toBe(ORG_STATE_UNKNOWN + LOGIN_NOTE);
     });
 
     it('a timeout says the organisation may exist, and still keeps the login', async () => {
@@ -466,7 +528,7 @@ describe('a new login as the owner', () => {
       // (the fake clock also stops the test helper's own wait, so the submit is sent and the clock advanced)
       $('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
       await vi.advanceTimersByTimeAsync(10001);
-      expect(feedback()).toBe(ORG_STATE_UNKNOWN);
+      expect(feedback()).toBe(ORG_STATE_UNKNOWN + LOGIN_NOTE);
       expect($('#adm-created-password').textContent).toBe(PASSWORD);
     });
 
@@ -495,6 +557,22 @@ describe('a new login as the owner', () => {
     });
   });
 
+  it('a call that throws at the organisation step says the organisation may exist, and frees the form', async () => {
+    const { callAdmin } = mount({
+      admin: {
+        admin_create_org: () => {
+          throw new Error('boom');
+        },
+      },
+    });
+    fillOrg();
+    typeInto('adm-owner-email-input', 'owner@alpha.test');
+    await submit();
+    expect(callAdmin).toHaveBeenCalledTimes(1);
+    expect(feedback()).toContain(ORG_STATE_UNKNOWN);
+    expect($('#adm-org-name-input').readOnly).toBe(false);
+  });
+
   it('does not ask the browser anything while there is no password to lose', async () => {
     mount();
     const event = new Event('beforeunload', { cancelable: true });
@@ -513,16 +591,93 @@ describe('a new login as the owner', () => {
     expect(event.defaultPrevented).toBe(false);
   });
 
-  it('leaving the screen drops the password with it', async () => {
+  it('leaving the screen drops the password from the page and from memory', async () => {
     await createWithNewLogin({ admin: { admin_create_org: ok(ORG_ID) } });
+    expect(host.innerHTML).toContain(PASSWORD);
     handle.unmount();
-    // a late answer must not draw into the dead panel
-    const before = host.innerHTML;
-    await flush();
-    expect(host.innerHTML).toBe(before);
+    expect(host.innerHTML).not.toContain(PASSWORD);
+    expect(host.innerHTML).toBe('');
     const event = new Event('beforeunload', { cancelable: true });
     window.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(false);
+  });
+
+  it('says the next time it opens that a password was lost, naming the login and never the password', async () => {
+    await createWithNewLogin({ admin: { admin_create_org: ok(ORG_ID) } });
+    handle.unmount();
+    host.remove();
+    mount();
+    expect(feedback()).toContain('owner@alpha.test');
+    expect(feedback()).toContain('has been lost');
+    expect(feedback()).toContain('The organisation was created');
+    expect(host.innerHTML).not.toContain(PASSWORD);
+    // said once
+    handle.unmount();
+    host.remove();
+    mount();
+    expect(feedback()).toBe('');
+  });
+
+  it('says a login that was never attached was lost, with how to attach it', async () => {
+    const { callAdmin } = mount({ admin: { admin_create_org: refused('org_slug_taken') } });
+    fillOrg();
+    typeInto('adm-owner-email-input', 'owner@alpha.test');
+    await submit();
+    expect(callAdmin).toHaveBeenCalledTimes(1);
+    handle.unmount();
+    host.remove();
+    mount();
+    expect(feedback()).toContain(
+      'A login for owner@alpha.test was created earlier, but its organisation was not',
+    );
+    expect(feedback()).toContain('Use an existing account');
+    expect(document.activeElement).not.toBe($('.screen-feedback'));
+  });
+
+  it('nothing is said when no password was on screen', async () => {
+    mount();
+    handle.unmount();
+    host.remove();
+    mount();
+    expect(feedback()).toBe('');
+  });
+
+  it('tells the shell there is something to lose while a password is on screen, and not otherwise', async () => {
+    mount({ admin: { admin_create_org: ok(ORG_ID) } });
+    expect(handle.leaveWarning()).toBeNull();
+    fillOrg();
+    typeInto('adm-owner-email-input', 'owner@alpha.test');
+    await submit();
+    expect(handle.leaveWarning()).toMatch(/one-time password/);
+    buttonNamed('Done').click();
+    expect(handle.leaveWarning()).toBeNull();
+  });
+
+  it('tells the shell while an unattached login and its password are on screen', async () => {
+    mount({ admin: { admin_create_org: refused('org_slug_taken') } });
+    fillOrg();
+    typeInto('adm-owner-email-input', 'owner@alpha.test');
+    await submit();
+    expect(handle.leaveWarning()).toMatch(/one-time password/);
+  });
+
+  it('a form that is submitted a second time after Create another works: nothing is left marked busy', async () => {
+    const { callFunction, callAdmin } = mount({ admin: { admin_create_org: ok(ORG_ID) } });
+    fillOrg();
+    typeInto('adm-owner-email-input', 'owner@alpha.test');
+    await submit();
+    buttonNamed('Done').click();
+    buttonNamed('Create another').click();
+    fillOrg('Second Roasters', 'second-roasters');
+    typeInto('adm-owner-email-input', 'second@alpha.test');
+    expect(buttonNamed('Create organisation').getAttribute('aria-disabled')).not.toBe('true');
+    await submit();
+    expect(callFunction).toHaveBeenCalledTimes(2);
+    expect(callAdmin).toHaveBeenLastCalledWith(
+      'admin_create_org',
+      expect.objectContaining({ p_name: 'Second Roasters', p_slug: 'second-roasters' }),
+    );
+    expect($('h1').textContent).toBe('Organisation created');
   });
 
   it('a late answer after the screen is left draws nothing', async () => {
@@ -578,7 +733,13 @@ describe('an existing account as the owner', () => {
     mount({ admin: { admin_find_user: ok([]) } });
     chooseExisting();
     await lookUp('nobody@alpha.test');
-    expect(feedback()).toBe('No active account matches that. Check the email.');
+    expect($('#adm-owner-email-input-error').textContent).toBe(
+      'No active account matches that. Check the email.',
+    );
+    expect($('#adm-owner-email-input').getAttribute('aria-invalid')).toBe('true');
+    // said where the person is working, with focus there: not in the region above the name field
+    expect(document.activeElement).toBe($('#adm-owner-email-input'));
+    expect(feedback()).toBe('');
     expect(text()).not.toContain('Found:');
   });
 
@@ -586,13 +747,115 @@ describe('an existing account as the owner', () => {
     mount({ admin: { admin_find_user: refused('email_ambiguous') } });
     chooseExisting();
     await lookUp('staff@alpha.test');
-    expect(feedback()).toBe(ADMIN_ERROR_COPY.email_ambiguous);
+    expect($('#adm-owner-email-input-error').textContent).toBe(ADMIN_ERROR_COPY.email_ambiguous);
     handle.unmount();
     host.remove();
     mount({ admin: { admin_find_user: refused(undefined) } });
     chooseExisting();
     await lookUp('staff@alpha.test');
-    expect(feedback()).toBe(GENERIC_ERROR);
+    expect($('#adm-owner-email-input-error').textContent).toBe(GENERIC_ERROR);
+  });
+
+  it('a lookup that never answers ends in the slow message, at the email field', async () => {
+    mount({
+      admin: {
+        admin_find_user: () => Promise.reject(Object.assign(new Error('t'), { timedOut: true })),
+      },
+    });
+    chooseExisting();
+    await lookUp('staff@alpha.test');
+    expect($('#adm-owner-email-input-error').textContent).toBe(SLOW_MESSAGE);
+  });
+
+  it('a lookup answer whose account id is not an id is not used', async () => {
+    mount({ admin: { admin_find_user: ok([accountRow({ user_id: 'not-an-id' })]) } });
+    chooseExisting();
+    await lookUp('staff@alpha.test');
+    expect(text()).not.toContain('Found:');
+    expect($('#adm-owner-email-input-error').textContent).toBe(GENERIC_ERROR);
+  });
+
+  it('an answer for an owner kind that is no longer chosen is thrown away', async () => {
+    let answer;
+    mount({
+      admin: {
+        admin_find_user: () =>
+          new Promise((resolve) => {
+            answer = resolve;
+          }),
+      },
+    });
+    chooseExisting();
+    typeInto('adm-owner-email-input', 'staff@alpha.test');
+    buttonNamed('Look up account').click();
+    const back = $('#adm-owner-new');
+    back.checked = true;
+    back.dispatchEvent(new Event('change', { bubbles: true }));
+    answer(ok([accountRow()]));
+    await flush();
+    chooseExisting();
+    expect(text()).not.toContain('Found:');
+    // and the button is not stuck on "Looking up…"
+    expect(buttonNamed('Look up account')).toBeDefined();
+  });
+
+  it('a lookup still out when the form is sent changes nothing when it answers: the ticked box stays ticked', async () => {
+    let answerSecond;
+    let lookups = 0;
+    let finishCreate;
+    mount({
+      admin: {
+        admin_find_user: () => {
+          lookups += 1;
+          if (lookups === 1) return ok([accountRow({ needs_attestation: true })]);
+          return new Promise((resolve) => {
+            answerSecond = resolve;
+          });
+        },
+        admin_create_org: () =>
+          new Promise((resolve) => {
+            finishCreate = resolve;
+          }),
+      },
+    });
+    chooseExisting();
+    fillOrg();
+    await lookUp('staff@alpha.test');
+    const box = $('#adm-attest');
+    box.checked = true;
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+    // a second look is asked for, and is still out when the form is sent
+    buttonNamed('Look up account').click();
+    await submit();
+    // it answers while the organisation is being made: it must not untick the box under the request
+    answerSecond(ok([accountRow({ needs_attestation: true })]));
+    await flush();
+    expect($('#adm-attest').checked).toBe(true);
+    expect(buttonNamed('Look up account').getAttribute('aria-disabled')).toBe('true');
+    finishCreate(ok(ORG_ID));
+    await flush();
+    expect($('h1').textContent).toBe('Organisation created');
+  });
+
+  it('while a request is out the lookup button and the radios do nothing, and the text fields cannot be typed in', async () => {
+    const { callAdmin } = mount({
+      login: () => new Promise(() => {}),
+      admin: { admin_find_user: ok([accountRow()]) },
+    });
+    fillOrg();
+    typeInto('adm-owner-email-input', 'owner@alpha.test');
+    await submit();
+    expect($('#adm-org-name-input').readOnly).toBe(true);
+    expect($('#adm-org-slug-input').readOnly).toBe(true);
+    expect($('#adm-owner-email-input').readOnly).toBe(true);
+    buttonNamed('Look up account').click();
+    await flush();
+    expect(callAdmin).not.toHaveBeenCalled();
+    const other = $('#adm-owner-existing');
+    other.checked = true;
+    other.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(other.checked).toBe(false);
+    expect($('#adm-owner-new').checked).toBe(true);
   });
 
   it('a gate refusal during a lookup clears the panel', async () => {
@@ -844,11 +1107,20 @@ describe('focus', () => {
     const elsewhere = document.createElement('button');
     document.body.appendChild(elsewhere);
     elsewhere.focus();
-    fail(refused(undefined));
+    fail(refused('something_new', { status: 400 }));
     await flush();
     expect(feedback()).toBe(GENERIC_ERROR);
     expect(document.activeElement).toBe(elsewhere);
     elsewhere.remove();
+  });
+
+  it('an error takes focus when focus is on the panel, so it is announced', async () => {
+    mount({ login: refused('something_new', { status: 400 }) });
+    fillOrg();
+    typeInto('adm-owner-email-input', 'owner@alpha.test');
+    $('#adm-org-name-input').focus();
+    await submit();
+    expect(document.activeElement).toBe($('.screen-feedback'));
   });
 
   it('mounting does not move focus by itself (the shell moves it to the heading when the panel opens)', () => {

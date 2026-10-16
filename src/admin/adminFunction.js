@@ -1,13 +1,15 @@
 // Calls an Edge Function as the signed-in operator and hands back the same shape `client.rpc` does:
-// { data, error }, where `error` is { hint?, status?, userId?, timedOut? } and is never an Error with text from
-// the server. supabase-js reports a non-2xx answer as an error whose `context` is the Response; the function's
-// own body carries a stable `hint` (spec section 4), which is all the console translates (adminErrors.js). The
-// function's `error` TEXT is deliberately not read: the words shown come from this console, by hint.
-import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../core/timeout.js';
+// { data, error }, where `error` is { hint?, status?, timedOut?, offline? } and is never an Error with text from the
+// server. supabase-js reports a non-2xx answer as an error whose `context` is the Response; the function's own body
+// carries a stable `hint` (spec section 4), which is all the console translates (adminErrors.js). The function's
+// `error` TEXT is deliberately not read: the words shown come from this console, by hint.
+import { raceTimeout } from '../core/timeout.js';
 
-// `userId` is read only when it looks like one: it names a stranded login and is shown to nobody, but a value the
-// server sent is never trusted to be what it says.
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// A call that CHANGES something and returns the only copy of what it made (a one-time password) gets longer than a
+// page load does: a cold function start can be slow, and giving up on a request that is still running (raceTimeout
+// does not cancel it) throws that answer away.
+export const FUNCTION_TIMEOUT_MS = 30000;
+
 const HINT = /^[a-z_]{1,40}$/;
 
 async function failureOf(error) {
@@ -22,10 +24,6 @@ async function failureOf(error) {
     return {
       status: typeof response.status === 'number' ? response.status : undefined,
       hint: typeof payload?.hint === 'string' && HINT.test(payload.hint) ? payload.hint : undefined,
-      userId:
-        typeof payload?.userId === 'string' && UUID.test(payload.userId)
-          ? payload.userId
-          : undefined,
     };
   }
   // No response at all: the request never got an answer (offline, blocked).
@@ -36,7 +34,7 @@ export async function invokeAdminFunction(
   client,
   name,
   body,
-  { timeoutMs = DEFAULT_LOAD_TIMEOUT_MS } = {},
+  { timeoutMs = FUNCTION_TIMEOUT_MS } = {},
 ) {
   let result;
   try {
