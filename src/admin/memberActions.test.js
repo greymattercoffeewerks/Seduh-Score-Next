@@ -4,6 +4,7 @@ import {
   roleControl,
   ADD_STATE_UNKNOWN,
   ROLE_STATE_UNKNOWN,
+  WRITE_IN_FLIGHT,
 } from './memberActions.js';
 import { ADMIN_ERROR_COPY, GENERIC_ERROR } from './adminErrors.js';
 import { SLOW_MESSAGE } from './gate.js';
@@ -33,11 +34,15 @@ const account = (over = {}) => ({
 let root;
 let handle;
 const calls = [];
+const unexpected = [];
 function ctxOf(answers) {
   const callAdmin = vi.fn(async (name, args) => {
     calls.push([name, args]);
     const answer = answers[name];
-    if (answer === undefined) throw new Error(`unexpected call ${name}`);
+    if (answer === undefined) {
+      unexpected.push(name);
+      throw new Error(`unexpected call ${name}`);
+    }
     return typeof answer === 'function' ? answer(args) : answer;
   });
   return { callAdmin };
@@ -68,6 +73,7 @@ const tick = (selector) => {
 };
 
 afterEach(() => {
+  expect(unexpected, 'a call the test did not expect').toEqual([]);
   handle?.dispose?.();
   root?.remove();
   root = handle = undefined;
@@ -145,7 +151,9 @@ describe('Add a member', () => {
     expect(ctx.callAdmin).not.toHaveBeenCalled();
     expect($('#adm-member-email-error').textContent).toBe('Enter a valid email address.');
     await submit();
-    expect($('.screen-feedback').textContent).toBe('Enter a valid email address.');
+    // said once, at the field (not again in the message region above it), and focus goes there
+    expect($('.screen-feedback').textContent).toBe('');
+    expect(document.activeElement).toBe($('#adm-member-email'));
   });
 
   it('no match is said at the email field, with focus there', async () => {
@@ -301,8 +309,9 @@ describe('Add a member', () => {
         handle.dispose();
         root.remove();
       }
+      // a hint this console has no words for: the database did raise it, but what it means is unknown
       await refuse(refused('something_new'));
-      expect($('.screen-feedback').textContent).toBe(GENERIC_ERROR);
+      expect($('.screen-feedback').textContent).toBe(ADD_STATE_UNKNOWN);
     });
 
     it('an error with no hint (a dropped connection, a server error) says the member may have been added', async () => {
@@ -352,7 +361,7 @@ describe('Add a member', () => {
     expect(ctx.callAdmin.mock.calls.filter(([n]) => n === 'admin_add_member')).toHaveLength(1);
     expect(buttonNamed('Adding…').getAttribute('aria-disabled')).toBe('true');
     expect($('#adm-member-email').readOnly).toBe(true);
-    expect($('#adm-member-role').getAttribute('aria-disabled')).toBe('true');
+    expect($('#adm-member-role').disabled).toBe(true);
     buttonNamed('Look up account').click();
     await flush();
     expect(ctx.callAdmin.mock.calls.filter(([n]) => n === 'admin_find_user')).toHaveLength(1);
@@ -442,11 +451,12 @@ describe('Change a role', () => {
   it('offers the other role, named for the member it is about', () => {
     mount({});
     const b = buttonNamed('Make owner');
-    expect(b.getAttribute('aria-label')).toBe('Make staff@alpha.test an owner');
+    // the visible words come first in the name (WCAG 2.5.3: "Make owner" said aloud reaches this button)
+    expect(b.getAttribute('aria-label')).toBe('Make owner: staff@alpha.test');
     root.remove();
     mount({}, member({ role: 'owner' }));
     const demote = buttonNamed('Make organiser');
-    expect(demote.getAttribute('aria-label')).toBe('Make staff@alpha.test an organiser');
+    expect(demote.getAttribute('aria-label')).toBe('Make organiser: staff@alpha.test');
   });
 
   it('offers nothing for a role it does not know, or a member with no id', () => {
@@ -527,7 +537,8 @@ describe('Change a role', () => {
     expect(onChanged).not.toHaveBeenCalled();
     // and it can be tried again, or cancelled
     expect(buttonNamed('Confirm').getAttribute('aria-disabled')).not.toBe('true');
-    expect(document.activeElement).toBe(buttonNamed('Confirm'));
+    // focus goes to the refusal itself, which is what the person needs to hear (not back to the button that failed)
+    expect(document.activeElement).toBe(root.querySelector('.adm-field-error'));
   });
 
   it('says each other documented refusal in words', async () => {
@@ -576,5 +587,295 @@ describe('Change a role', () => {
     mount({}, member({ email: '<img src=x>@a.test' }));
     buttonNamed('Make owner').click();
     expect(root.querySelector('img')).toBeNull();
+  });
+});
+
+describe('Add a member: more of what it promises', () => {
+  function mount(answers, extra = {}) {
+    const ctx = ctxOf(answers);
+    const onAdded = vi.fn();
+    handle = addMemberSection({
+      ctx,
+      orgId: ORG,
+      onAdded,
+      onGateRefused: vi.fn(),
+      mayTakeFocus: () => true,
+      ...extra,
+    });
+    root = document.createElement('div');
+    root.appendChild(handle.node);
+    document.body.appendChild(root);
+    return { ctx, onAdded };
+  }
+
+  it('pressing Enter in the email field looks the account up, and does not send the form', async () => {
+    const { ctx } = mount({ admin_find_user: ok([account()]), admin_add_member: ok() });
+    const input = $('#adm-member-email');
+    input.value = 'staff@alpha.test';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
+    );
+    await flush();
+    expect(ctx.callAdmin).toHaveBeenCalledWith('admin_find_user', { p_email: 'staff@alpha.test' });
+    expect(text()).toContain('Found: staff@alpha.test');
+    expect(ctx.callAdmin.mock.calls.some(([name]) => name === 'admin_add_member')).toBe(false);
+  });
+
+  it('a double click on Look up asks once', async () => {
+    const { ctx } = mount({ admin_find_user: ok([account()]) });
+    typeEmail('staff@alpha.test');
+    const look = buttonNamed('Look up account');
+    look.click();
+    look.click();
+    await flush();
+    expect(ctx.callAdmin.mock.calls.filter(([name]) => name === 'admin_find_user')).toHaveLength(1);
+  });
+
+  it('sends nothing for an address changed without an input event (autofill): the lookup was for another', async () => {
+    const { ctx } = mount({ admin_find_user: ok([account()]), admin_add_member: ok() });
+    await lookUp('staff@alpha.test');
+    $('#adm-member-email').value = 'other@alpha.test'; // no event
+    await submit();
+    expect(ctx.callAdmin.mock.calls.filter(([name]) => name === 'admin_add_member')).toHaveLength(
+      0,
+    );
+    expect($('.screen-feedback').textContent).toBe('Look up the account first.');
+  });
+
+  it('puts focus on the email field for a problem with the account', async () => {
+    mount({ admin_find_user: ok([account({ banned: true })]) });
+    await lookUp();
+    document.activeElement.blur();
+    await submit();
+    expect(document.activeElement).toBe($('#adm-member-email'));
+  });
+
+  it('does not take focus from where the person has moved when a refusal or a lookup problem arrives', async () => {
+    const elsewhere = document.createElement('button');
+    document.body.appendChild(elsewhere);
+    mount(
+      { admin_find_user: ok([account()]), admin_add_member: refused('member_exists') },
+      { mayTakeFocus: () => false },
+    );
+    await lookUp();
+    elsewhere.focus();
+    await submit();
+    expect($('.screen-feedback').textContent).toBe(ADMIN_ERROR_COPY.member_exists);
+    expect(document.activeElement).toBe(elsewhere);
+    handle.dispose();
+    root.remove();
+    mount({ admin_find_user: ok([]) }, { mayTakeFocus: () => false });
+    elsewhere.focus();
+    await lookUp('nobody@alpha.test');
+    expect(document.activeElement).toBe(elsewhere);
+    elsewhere.remove();
+  });
+
+  it('an error message is marked as an error, and the fields carry their required and described-by wiring', async () => {
+    mount({ admin_find_user: ok([account()]), admin_add_member: refused('member_exists') });
+    await lookUp();
+    await submit();
+    expect($('.screen-feedback').dataset.tone).toBe('error');
+    expect($('#adm-member-email').getAttribute('aria-required')).toBe('true');
+    expect($('#adm-member-email').getAttribute('aria-describedby')).toContain(
+      'adm-member-email-error',
+    );
+    expect($('#adm-member-role').getAttribute('aria-describedby')).toBe(
+      'adm-member-role-hint adm-member-role-error',
+    );
+  });
+
+  it('while another change on the page is under way it is told to wait, and sends nothing', async () => {
+    const writes = { begin: () => false, end: () => {} };
+    const { ctx } = mount({ admin_find_user: ok([account()]), admin_add_member: ok() }, { writes });
+    await lookUp();
+    await submit();
+    expect(ctx.callAdmin.mock.calls.filter(([name]) => name === 'admin_add_member')).toHaveLength(
+      0,
+    );
+    expect($('.screen-feedback').textContent).toBe(WRITE_IN_FLIGHT);
+  });
+
+  it('gives the page its claim back when it fails', async () => {
+    const writes = { begin: vi.fn(() => true), end: vi.fn() };
+    mount(
+      { admin_find_user: ok([account()]), admin_add_member: refused('member_exists') },
+      { writes },
+    );
+    await lookUp();
+    await submit();
+    expect(writes.begin).toHaveBeenCalledTimes(1);
+    expect(writes.end).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Change a role: more of what it promises', () => {
+  const member = (over = {}) => ({
+    user_id: USER,
+    email: 'staff@alpha.test',
+    role: 'organiser',
+    joined_at: null,
+    ...over,
+  });
+  function mount(answers, extra = {}, who = member()) {
+    const ctx = ctxOf(answers);
+    const onChanged = vi.fn();
+    root = document.createElement('div');
+    root.appendChild(
+      roleControl({
+        ctx,
+        orgId: ORG,
+        member: who,
+        onChanged,
+        onGateRefused: vi.fn(),
+        mayTakeFocus: () => true,
+        ...extra,
+      }),
+    );
+    document.body.appendChild(root);
+    return { ctx, onChanged };
+  }
+
+  it('offers no button for a member whose id is not an id', () => {
+    mount({}, {}, member({ user_id: 'not-an-id' }));
+    expect(root.querySelector('button')).toBeNull();
+  });
+
+  it('the message region is a live region that exists from the start, so a refusal is announced', () => {
+    mount({});
+    const message = root.querySelector('.adm-field-error');
+    expect(message.getAttribute('role')).toBe('status');
+    expect(message.getAttribute('aria-live')).toBe('polite');
+    expect(message.textContent).toBe('');
+  });
+
+  it('a hint this console has no words for says the role may have changed', async () => {
+    mount({ admin_set_role: refused('something_new') });
+    buttonNamed('Make owner').click();
+    buttonNamed('Confirm').click();
+    await flush();
+    expect(text()).toContain(ROLE_STATE_UNKNOWN);
+  });
+
+  it('Cancel stops too while the request is out', async () => {
+    mount({ admin_set_role: () => new Promise(() => {}) });
+    buttonNamed('Make owner').click();
+    buttonNamed('Confirm').click();
+    expect(buttonNamed('Cancel').getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('does not take focus from where the person has moved when a refusal arrives', async () => {
+    const elsewhere = document.createElement('button');
+    document.body.appendChild(elsewhere);
+    mount({ admin_set_role: refused('last_owner') }, { mayTakeFocus: () => false });
+    buttonNamed('Make owner').click();
+    buttonNamed('Confirm').click();
+    elsewhere.focus();
+    await flush();
+    expect(text()).toContain(ADMIN_ERROR_COPY.last_owner);
+    expect(document.activeElement).toBe(elsewhere);
+    elsewhere.remove();
+  });
+
+  it('while another change on the page is under way it is told to wait, and sends nothing', async () => {
+    const writes = { begin: () => false, end: () => {} };
+    const { ctx } = mount({ admin_set_role: ok() }, { writes });
+    buttonNamed('Make owner').click();
+    buttonNamed('Confirm').click();
+    await flush();
+    expect(ctx.callAdmin).not.toHaveBeenCalled();
+    expect(text()).toContain(WRITE_IN_FLIGHT);
+    // and it can try again once the other is done
+    expect(buttonNamed('Confirm').getAttribute('aria-disabled')).not.toBe('true');
+  });
+
+  it('two controls on one page share one write: the second waits for the first', async () => {
+    let writing = false;
+    const writes = {
+      begin: () => (writing ? false : (writing = true)),
+      end: () => {
+        writing = false;
+      },
+    };
+    let finish;
+    const ctx = ctxOf({
+      admin_set_role: () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    });
+    root = document.createElement('div');
+    for (const email of ['a@alpha.test', 'b@alpha.test']) {
+      root.appendChild(
+        roleControl({
+          ctx,
+          orgId: ORG,
+          member: member({ email, user_id: email === 'a@alpha.test' ? USER : OTHER }),
+          onChanged: vi.fn(),
+          onGateRefused: vi.fn(),
+          mayTakeFocus: () => true,
+          writes,
+        }),
+      );
+    }
+    document.body.appendChild(root);
+    const [first, second] = root.querySelectorAll('.adm-role-control');
+    first.querySelector('button').click();
+    first.querySelector('button.btn-primary').click();
+    second.querySelector('button').click();
+    second.querySelector('button.btn-primary').click();
+    await flush();
+    expect(ctx.callAdmin).toHaveBeenCalledTimes(1);
+    expect(second.textContent).toContain(WRITE_IN_FLIGHT);
+    finish(ok());
+    await flush();
+  });
+});
+
+describe('Change a role: the page-wide claim after a failure', () => {
+  it('a refused change gives the claim back, so another control can then make its change', async () => {
+    let writing = false;
+    const writes = {
+      begin: () => (writing ? false : (writing = true)),
+      end: () => {
+        writing = false;
+      },
+    };
+    let answers = 0;
+    const ctx = ctxOf({
+      admin_set_role: () => {
+        answers += 1;
+        return answers === 1 ? refused('last_owner') : ok();
+      },
+    });
+    root = document.createElement('div');
+    for (const [email, id] of [
+      ['a@alpha.test', USER],
+      ['b@alpha.test', OTHER],
+    ]) {
+      root.appendChild(
+        roleControl({
+          ctx,
+          orgId: ORG,
+          member: { user_id: id, email, role: 'owner', joined_at: null },
+          onChanged: vi.fn(),
+          onGateRefused: vi.fn(),
+          mayTakeFocus: () => true,
+          writes,
+        }),
+      );
+    }
+    document.body.appendChild(root);
+    const [first, second] = root.querySelectorAll('.adm-role-control');
+    first.querySelector('button').click();
+    first.querySelector('button.btn-primary').click();
+    await flush();
+    expect(first.textContent).toContain(ADMIN_ERROR_COPY.last_owner);
+    second.querySelector('button').click();
+    second.querySelector('button.btn-primary').click();
+    await flush();
+    expect(ctx.callAdmin).toHaveBeenCalledTimes(2);
+    expect(second.textContent).not.toContain(WRITE_IN_FLIGHT);
   });
 });

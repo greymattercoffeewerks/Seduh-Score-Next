@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { mountOrgsPanel, parseOrgsRoute, describeAuditEntry } from './orgsPanel.js';
+import { mountOrgsPanel, parseOrgsRoute } from './orgsPanel.js';
 import { flush } from './consoleHarness.js';
 
 // The Organisations panel against a fake ctx.callAdmin: what it asks for, what it draws, what it never draws, and
@@ -7,6 +7,8 @@ import { flush } from './consoleHarness.js';
 
 const ID_A = '11111111-1111-4111-8111-111111111111';
 const ID_B = '22222222-2222-4222-8222-222222222222';
+const U1 = '66666666-6666-4666-8666-666666666661';
+const U2 = '66666666-6666-4666-8666-666666666662';
 
 const orgRow = (over = {}) => ({
   org_id: ID_A,
@@ -29,9 +31,9 @@ const detailOf = (over = {}) => ({
   event_count: 1,
   last_event_date: '2026-10-12',
   members: [
-    { user_id: 'u1', email: 'owner@alpha.test', role: 'owner', joined_at: '2026-10-01T08:00:00Z' },
+    { user_id: U1, email: 'owner@alpha.test', role: 'owner', joined_at: '2026-10-01T08:00:00Z' },
     {
-      user_id: 'u2',
+      user_id: U2,
       email: 'staff@alpha.test',
       role: 'organiser',
       joined_at: '2026-10-03T08:00:00Z',
@@ -110,37 +112,6 @@ describe('parseOrgsRoute', () => {
     }
     for (const hash of ['', '#', '#/', '#/audit', '#/organisations', '#/orgsx', undefined]) {
       expect(parseOrgsRoute(hash), String(hash)).toEqual({ view: 'other' });
-    }
-  });
-});
-
-describe('describeAuditEntry', () => {
-  it('says each documented action in words, reading only the keys it is documented to carry', () => {
-    expect(describeAuditEntry({ action: 'org.create' })).toBe('Organisation created');
-    expect(describeAuditEntry({ action: 'member.add', detail: { role: 'organiser' } })).toBe(
-      'Member added as Organiser',
-    );
-    expect(
-      describeAuditEntry({ action: 'member.role_set', detail: { from: 'organiser', to: 'owner' } }),
-    ).toBe('Role changed from Organiser to Owner');
-    expect(describeAuditEntry({ action: 'account.create' })).toBe('Login created');
-  });
-
-  it('shows an action it does not know by its name, and survives a missing detail', () => {
-    expect(describeAuditEntry({ action: 'plan.set' })).toBe('plan.set');
-    expect(describeAuditEntry({ action: 'member.add' })).toBe('Member added');
-    expect(describeAuditEntry({})).toBe('Change');
-    expect(describeAuditEntry(null)).toBe('Change');
-  });
-
-  it('shows a role it does not know as it came, and never reads a role off the prototype chain', () => {
-    expect(describeAuditEntry({ action: 'member.add', detail: { role: 'steward' } })).toBe(
-      'Member added as steward',
-    );
-    for (const role of ['constructor', 'toString', '__proto__']) {
-      expect(describeAuditEntry({ action: 'member.add', detail: { role } }), role).toBe(
-        `Member added as ${role}`,
-      );
     }
   });
 });
@@ -1132,5 +1103,183 @@ describe('changing an organisation from its detail (add a member, change a role)
     answer(ok([]));
     await flush();
     expect(host.innerHTML).toBe(before);
+  });
+});
+
+describe('changing an organisation from its detail: the route decides, failures are honest', () => {
+  const click = async (label) => {
+    buttons(label)[0].click();
+    await flush();
+  };
+  const MEMBER = '66666666-6666-4666-8666-666666666666';
+  const single = (over = {}) =>
+    detailOf({
+      members: [{ user_id: MEMBER, email: 'staff@alpha.test', role: 'organiser', joined_at: null }],
+      ...over,
+    });
+
+  it('the organisation a change is made to is the one in the address, whatever the payload says', async () => {
+    window.location.hash = `#/orgs/${ID_A}`;
+    const { callAdmin } = mount({
+      // the payload names ANOTHER organisation: only the route may decide
+      admin_org_detail: ok(
+        single({ org: { id: ID_B, name: 'Mislabelled', slug: 'm', created_at: null } }),
+      ),
+      admin_list_audit: ok([]),
+      admin_set_role: ok(null),
+    });
+    await flush();
+    await click('Make owner');
+    await click('Confirm');
+    expect(callAdmin).toHaveBeenCalledWith('admin_set_role', {
+      p_org_id: ID_A,
+      p_user_id: MEMBER,
+      p_role: 'owner',
+    });
+  });
+
+  it('a page that fails to draw again after a change that WAS made says so, keeps the notice, and Retry brings it back', async () => {
+    window.location.hash = `#/orgs/${ID_A}`;
+    let detailCalls = 0;
+    mount({
+      admin_org_detail: () => {
+        detailCalls += 1;
+        return detailCalls === 2 ? refused(undefined) : ok(single());
+      },
+      admin_list_audit: ok([]),
+      admin_set_role: ok(null),
+    });
+    await flush();
+    await click('Make owner');
+    await click('Confirm');
+    const message = host.querySelector('.screen-feedback').textContent;
+    expect(message).toContain('staff@alpha.test is now Owner.');
+    expect(message).toContain('could not be loaded again');
+    expect(message).not.toContain('Nothing was changed');
+    await click('Retry');
+    expect(host.querySelector('.screen-feedback').textContent).toBe(
+      'staff@alpha.test is now Owner.',
+    );
+    expect(host.querySelector('h1').textContent).toBe('Alpha Roasters');
+  });
+
+  it('after a change the status line does not repeat what the notice says, and the heading has focus', async () => {
+    window.location.hash = `#/orgs/${ID_A}`;
+    mount({
+      admin_org_detail: ok(single()),
+      admin_list_audit: ok([]),
+      admin_set_role: ok(null),
+    });
+    await flush();
+    expect(host.querySelector('.sr-only[role="status"]').textContent).toBe(
+      'Alpha Roasters loaded.',
+    );
+    await click('Make owner');
+    await click('Confirm');
+    expect(host.querySelector('.sr-only[role="status"]').textContent).toBe('');
+    expect(document.activeElement).toBe(host.querySelector('h1'));
+  });
+
+  it('a second change while one is under way is told to wait, and only one request goes out', async () => {
+    window.location.hash = `#/orgs/${ID_A}`;
+    let finish;
+    const { callAdmin } = mount({
+      admin_org_detail: ok(
+        detailOf({
+          members: [
+            { user_id: MEMBER, email: 'a@alpha.test', role: 'organiser', joined_at: null },
+            {
+              user_id: '77777777-7777-4777-8777-777777777777',
+              email: 'b@alpha.test',
+              role: 'organiser',
+              joined_at: null,
+            },
+          ],
+        }),
+      ),
+      admin_list_audit: ok([]),
+      admin_set_role: () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    });
+    await flush();
+    const rows = host.querySelectorAll('.adm-member');
+    rows[0].querySelector('button').click();
+    rows[0].querySelector('button.btn-primary').click();
+    rows[1].querySelector('button').click();
+    rows[1].querySelector('button.btn-primary').click();
+    await flush();
+    expect(callAdmin.mock.calls.filter(([name]) => name === 'admin_set_role')).toHaveLength(1);
+    expect(rows[1].textContent).toContain('Another change is still being made');
+    finish(ok(null));
+    await flush();
+  });
+
+  it('a recent-changes failure is heard (focus goes to its Retry), and a row that is not what the function documents is that same failure', async () => {
+    window.location.hash = `#/orgs/${ID_A}`;
+    mount({ admin_org_detail: ok(single()), admin_list_audit: refused(undefined) });
+    await flush();
+    expect(document.activeElement).toBe(buttons('Retry')[0]);
+    handle.unmount();
+    host.remove();
+    mount({
+      admin_org_detail: ok(single()),
+      admin_list_audit: ok([
+        {
+          id: 1,
+          get action() {
+            throw new Error('boom');
+          },
+        },
+      ]),
+    });
+    await flush();
+    expect(text()).toContain('Recent changes could not be loaded.');
+    expect(host.querySelectorAll('.adm-audit-item')).toHaveLength(0);
+    expect(buttons('Retry')).toHaveLength(1);
+  });
+
+  it('the notice after an add is a success message', async () => {
+    window.location.hash = `#/orgs/${ID_A}`;
+    let added = false;
+    mount({
+      admin_org_detail: () => ok(added ? detailOf() : single()),
+      admin_list_audit: ok([]),
+      admin_find_user: ok([
+        {
+          user_id: '88888888-8888-4888-8888-888888888888',
+          email: 'new@alpha.test',
+          banned: false,
+          deleted: false,
+          org_count: 0,
+          must_change_password: false,
+          needs_attestation: false,
+        },
+      ]),
+      admin_add_member: () => {
+        added = true;
+        return ok(null);
+      },
+    });
+    await flush();
+    const email = host.querySelector('#adm-member-email');
+    email.value = 'new@alpha.test';
+    email.dispatchEvent(new Event('input', { bubbles: true }));
+    await click('Look up account');
+    email.closest('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await flush();
+    expect(host.querySelector('.screen-feedback').dataset.tone).toBe('success');
+  });
+});
+
+describe('leaving the organisations screen', () => {
+  it('unmounting clears what it drew, so a write still out cannot draw into a host another screen took', async () => {
+    window.location.hash = `#/orgs/${ID_A}`;
+    mount({ admin_org_detail: ok(detailOf()), admin_list_audit: ok([]) });
+    await flush();
+    expect(host.innerHTML).not.toBe('');
+    handle.unmount();
+    expect(host.innerHTML).toBe('');
   });
 });

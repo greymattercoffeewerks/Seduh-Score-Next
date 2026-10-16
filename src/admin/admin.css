@@ -416,7 +416,14 @@
 }
 
 .adm-field-error:empty {
-  display: none;
+  /* Out of the flow but still in the accessibility tree: a live region that goes from display:none to text in one
+     step is often not announced (the same rule .screen-feedback:empty follows in components.css). */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 .adm-fieldset {
@@ -540,10 +547,6 @@
   margin: 0;
 }
 
-.adm-role-control .adm-field-error:empty {
-  display: none;
-}
-
 /* A link inside a line of small text still has the full tap target. */
 .adm-link-inline {
   display: inline-flex;
@@ -551,6 +554,8 @@
   min-height: var(--tap-target-min);
   color: var(--color-text);
   font-weight: var(--font-weight-semibold);
+  /* bold alone is not a signal (WCAG 1.4.1): it reads as a link by its underline */
+  text-decoration: underline;
   overflow-wrap: anywhere;
 }
 
@@ -559,6 +564,6 @@
 }
 
 .adm-audit-item:focus {
-  outline: var(--border-strong) solid var(--color-border-strong);
-  outline-offset: var(--space-1);
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }

@@ -138,6 +138,8 @@ test.describe('the Organisations panel (real page, real local Supabase)', () => 
     const panelCalls = () =>
       adminResponses.filter(({ url }) => /admin_(org_detail|list_orgs|list_audit)/.test(url))
         .length;
+    // (let the requests of the page just shown finish: its change-log answer may still be on its way)
+    await page.waitForLoadState('networkidle');
     const before = panelCalls();
     await page.goto('/admin/#/orgs/not-an-id');
     await page.reload();

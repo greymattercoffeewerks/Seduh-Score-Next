@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { mountAuditPanel, PAGE_SIZE } from './auditPanel.js';
-import { describeAuditEntry, auditItem, roleLabel } from './auditView.js';
+import { mountAuditPanel, PAGE_SIZE, READ_FAILED } from './auditPanel.js';
+import { describeAuditEntry, auditItem } from './auditView.js';
+import { roleLabel } from './roles.js';
 import { GENERIC_ERROR } from './adminErrors.js';
 import { SLOW_MESSAGE } from './gate.js';
 import { flush } from './consoleHarness.js';
@@ -212,7 +213,7 @@ describe('the Audit log screen', () => {
     expect(host.innerHTML).toBe('');
   });
 
-  it('a row that is not what the function documents is a failure, not half a page', async () => {
+  it('a row that is not what the function documents draws none of the page, says so, and offers Retry', async () => {
     mount(
       ok([
         row(5),
@@ -225,14 +226,32 @@ describe('the Audit log screen', () => {
       ]),
     );
     await flush();
-    expect(host.querySelector('.screen-feedback').textContent).toBe(GENERIC_ERROR);
+    expect(host.querySelector('.screen-feedback').textContent).toBe(READ_FAILED);
+    expect(items()).toHaveLength(0);
+    expect(button('Retry')).toBeDefined();
+    expect(document.activeElement).toBe(button('Retry'));
+  });
+
+  it('a page that is not a list, or whose rows have no usable ids, is the same failure (never "that is everything")', async () => {
+    for (const data of [null, { rows: [] }, page(200, PAGE_SIZE).map((r) => ({ ...r, id: 'x' }))]) {
+      mount(ok(data));
+      await flush();
+      expect(host.querySelector('.screen-feedback').textContent).toBe(READ_FAILED);
+      expect(host.textContent).not.toContain('That is everything');
+      handle.unmount();
+      host.remove();
+    }
   });
 
   it('draws only what it names: a detail value with an email-looking key never appears', async () => {
-    mount(ok([row(5, { detail: { role: 'owner', email: 'leak@x.test', password: 'pw' } })]));
+    mount(
+      ok([
+        row(5, { detail: { role: 'owner', email: 'leak@x.test', password: 'Zq9-never-shown' } }),
+      ]),
+    );
     await flush();
     expect(host.textContent).not.toContain('leak@x.test');
-    expect(host.textContent).not.toContain('pw');
+    expect(host.textContent).not.toContain('Zq9-never-shown');
   });
 
   it('after unmount a late answer draws nothing', async () => {
@@ -247,5 +266,117 @@ describe('the Audit log screen', () => {
     answer(ok([row(2)]));
     await flush();
     expect(host.innerHTML).toBe('');
+  });
+});
+
+describe('describeAuditEntry (from the organisation detail tests)', () => {
+  it('says each documented action in words, reading only the keys it is documented to carry', () => {
+    expect(describeAuditEntry({ action: 'org.create' })).toBe('Organisation created');
+    expect(describeAuditEntry({ action: 'member.add', detail: { role: 'organiser' } })).toBe(
+      'Member added as Organiser',
+    );
+    expect(
+      describeAuditEntry({ action: 'member.role_set', detail: { from: 'organiser', to: 'owner' } }),
+    ).toBe('Role changed from Organiser to Owner');
+    expect(describeAuditEntry({ action: 'account.create' })).toBe('Login created');
+  });
+
+  it('shows an action it does not know by its name, and survives a missing detail', () => {
+    expect(describeAuditEntry({ action: 'plan.set' })).toBe('plan.set');
+    expect(describeAuditEntry({ action: 'member.add' })).toBe('Member added');
+    expect(describeAuditEntry({})).toBe('Change');
+    expect(describeAuditEntry(null)).toBe('Change');
+  });
+
+  it('shows a role it does not know as it came, and never reads a role off the prototype chain', () => {
+    expect(describeAuditEntry({ action: 'member.add', detail: { role: 'steward' } })).toBe(
+      'Member added as steward',
+    );
+    for (const role of ['constructor', 'toString', '__proto__']) {
+      expect(describeAuditEntry({ action: 'member.add', detail: { role } }), role).toBe(
+        `Member added as ${role}`,
+      );
+    }
+  });
+});
+
+describe('the Audit log screen: focus and the shared host', () => {
+  it('a late gate refusal for a screen that was left does not clear the screen that replaced it', async () => {
+    let answer;
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    const a = mountAuditPanel(host, {
+      callAdmin: () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    });
+    a.unmount();
+    // another screen takes the same host
+    host.replaceChildren(
+      Object.assign(document.createElement('h1'), { textContent: 'Newer screen' }),
+    );
+    answer(refused('admin_mfa_required'));
+    await flush();
+    expect(host.querySelector('h1').textContent).toBe('Newer screen');
+  });
+
+  it('on opening it does not take focus into the list (the shell puts it on the heading)', async () => {
+    mount(ok([row(3), row(2)]));
+    await flush();
+    expect(items().includes(document.activeElement)).toBe(false);
+  });
+
+  it('after older changes arrive the status says how many came and how many are shown', async () => {
+    mount((args) => ok(args.p_before === undefined ? page(100, PAGE_SIZE) : page(40, 3)));
+    await flush();
+    button('Show older changes').click();
+    await flush();
+    expect(host.querySelector('.sr-only[role="status"]').textContent).toBe(
+      '3 changes loaded. 53 changes shown.',
+    );
+  });
+
+  it('a failed first page puts focus on its Retry, and a successful Retry puts it on the first change', async () => {
+    let calls = 0;
+    mount(() => {
+      calls += 1;
+      return calls === 1 ? refused(undefined) : ok([row(9), row(8)]);
+    });
+    await flush();
+    expect(document.activeElement).toBe(button('Retry'));
+    button('Retry').click();
+    await flush();
+    expect(document.activeElement).toBe(items()[0]);
+  });
+
+  it('a failed older page puts focus on its Retry', async () => {
+    let older = 0;
+    mount((args) => {
+      if (args.p_before === undefined) return ok(page(100, PAGE_SIZE));
+      older += 1;
+      return older === 1 ? refused(undefined) : ok(page(40, 1));
+    });
+    await flush();
+    button('Show older changes').click();
+    await flush();
+    expect(document.activeElement).toBe(button('Retry'));
+  });
+
+  it('an older page with nothing in it moves focus to the line that says the log ends', async () => {
+    mount((args) => ok(args.p_before === undefined ? page(100, PAGE_SIZE) : []));
+    await flush();
+    button('Show older changes').click();
+    await flush();
+    const end = [...host.querySelectorAll('p')].find((p) =>
+      p.textContent.startsWith('That is everything'),
+    );
+    expect(end).toBeDefined();
+    expect(document.activeElement).toBe(end);
+  });
+
+  it('the organisation link has the organisation in its name', () => {
+    const item = auditItem(row(1), { withOrg: true });
+    expect(item.querySelector('a').getAttribute('aria-label')).toBe('Organisation alpha');
   });
 });

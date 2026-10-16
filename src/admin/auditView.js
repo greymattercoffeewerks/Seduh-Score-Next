@@ -4,10 +4,7 @@
 import { el } from '../core/dom.js';
 import { formatDateTime } from './format.js';
 import { UUID } from './ids.js';
-
-const ROLE_LABEL = Object.freeze({ owner: 'Owner', organiser: 'Organiser' });
-export const roleLabel = (role) =>
-  Object.hasOwn(ROLE_LABEL, role) ? ROLE_LABEL[role] : String(role ?? '');
+import { roleLabel } from './roles.js';
 
 // One audit action in words. Only the keys each action is documented to carry (migration 20261014130000) are
 // read from `detail`; an action this console does not know is shown by its name, never dropped.
@@ -54,7 +51,10 @@ export function auditItem(entry, { withOrg = false } = {}) {
             el('a', {
               className: 'adm-link-inline',
               text: String(entry.target_org_slug),
-              attrs: { href: `#/orgs/${entry.target_org_id}` },
+              attrs: {
+                href: `#/orgs/${entry.target_org_id}`,
+                'aria-label': `Organisation ${entry.target_org_slug}`,
+              },
             }),
           ])
         : el('span', { className: 'adm-muted', text: 'An organisation that no longer exists' }),

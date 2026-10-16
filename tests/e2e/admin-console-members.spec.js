@@ -79,7 +79,7 @@ test.describe('Members and the Audit log (real page, real local Supabase)', () =
 
     await addExisting(page, person.email);
     await page.getByRole('button', { name: 'Add member' }).click();
-    await expect(page.locator('#admin-main .screen-feedback').first()).toHaveText(
+    await expect(page.locator('#admin-main > .screen-feedback')).toHaveText(
       `${person.email} was added as Organiser.`,
     );
     await expect(page.locator('.adm-member')).toHaveCount(2);
@@ -154,17 +154,16 @@ test.describe('Members and the Audit log (real page, real local Supabase)', () =
   }) => {
     await openDetail(page, { admin, tenant, secret });
     const row = page.locator('.adm-member').filter({ hasText: 'members-added' });
-    await row.getByRole('button', { name: /^Make .* an owner$/ }).click();
+    await row.getByRole('button', { name: /^Make owner:/ }).click();
     await expect(row).toContainText('from Organiser to Owner?');
     // cancelling changes nothing
     await row.getByRole('button', { name: 'Cancel' }).click();
-    await expect(row).toContainText('Organiser');
-    await row.getByRole('button', { name: /^Make .* an owner$/ }).click();
+    await expect(row).not.toContainText('from Organiser to Owner?');
+    await expect(row.getByRole('button', { name: /^Make owner:/ })).toBeVisible();
+    await row.getByRole('button', { name: /^Make owner:/ }).click();
     await row.getByRole('button', { name: /^Confirm/ }).click();
 
-    await expect(page.locator('#admin-main .screen-feedback').first()).toContainText(
-      'is now Owner.',
-    );
+    await expect(page.locator('#admin-main > .screen-feedback')).toContainText('is now Owner.');
     await expect(page.locator('.adm-member').filter({ hasText: 'members-added' })).toContainText(
       'Owner',
     );
@@ -184,9 +183,10 @@ test.describe('Members and the Audit log (real page, real local Supabase)', () =
     await expect(page.locator('header')).toContainText('Verified (AAL2)');
     await page.goto(`/admin/#/orgs/${other.orgId}`);
     await expect(heading(page)).toHaveText(other.orgName);
-    // `other` has its owner and one organiser (added in the attestation test): the owner is the ONLY owner
+    // `other` has its owner and one organiser: the owner is the ONLY owner (this test needs the enrolment made in the
+    // first test of this serial group, so it is not run alone)
     const owner = page.locator('.adm-member').filter({ hasText: other.email });
-    await owner.getByRole('button', { name: /^Make .* an organiser$/ }).click();
+    await owner.getByRole('button', { name: /^Make organiser:/ }).click();
     await owner.getByRole('button', { name: /^Confirm/ }).click();
     await expect(owner).toContainText(
       'An organisation must keep at least one owner. Promote another member first.',
@@ -233,7 +233,7 @@ test.describe('Members and the Audit log at 360px', () => {
     await page
       .locator('.adm-member')
       .filter({ hasText: person.email })
-      .getByRole('button', { name: /an owner$/ })
+      .getByRole('button', { name: /^Make owner:/ })
       .click();
     await expect(page.getByRole('button', { name: /^Confirm/ })).toBeVisible();
     await expectFitsAndTappable(page);

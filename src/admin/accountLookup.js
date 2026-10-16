@@ -18,10 +18,10 @@ import { ask } from './panelRequest.js';
 import { field, textInput, showFieldError } from './formParts.js';
 import { isEmailShaped } from './orgRules.js';
 
-const EMAIL_PROBLEM = 'Enter a valid email address.';
-const NO_ACCOUNT = 'No active account matches that. Check the email.';
-const LOOKUP_FIRST = 'Look up the account first.';
-const CONFIRM_PASSWORD = 'Tick the box to confirm that this person set their own password.';
+export const EMAIL_PROBLEM = 'Enter a valid email address.';
+export const NO_ACCOUNT = 'No active account matches that. Check the email.';
+export const LOOKUP_FIRST = 'Look up the account first.';
+export const CONFIRM_PASSWORD = 'Tick the box to confirm that this person set their own password.';
 
 export function createAccountLookup({ ctx, idPrefix, cannotUse, mayTakeFocus, onGateRefused }) {
   let found = null;
@@ -109,7 +109,8 @@ export function createAccountLookup({ ctx, idPrefix, cannotUse, mayTakeFocus, on
   }
 
   async function lookUp({ quiet = false } = {}) {
-    if (locked) return;
+    // one request at a time for the address typed (a double click must not ask twice)
+    if (locked || askedFor !== null) return;
     if (!isEmailShaped(emailInput.value)) {
       showFieldError(emailInput, emailField.errorLine, EMAIL_PROBLEM);
       emailInput.focus();
@@ -166,6 +167,12 @@ export function createAccountLookup({ ctx, idPrefix, cannotUse, mayTakeFocus, on
     if ((found && now !== found.forEmail) || (askedFor !== null && now !== askedFor)) discard();
     if (touched) showFieldError(emailInput, emailField.errorLine, null);
   });
+  // Enter in the email field looks the account up (it would otherwise send the form, which asks for a lookup first).
+  emailInput.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    lookUp();
+  });
   emailInput.addEventListener('blur', () => {
     touched = true;
     if (emailInput.value.trim() && !isEmailShaped(emailInput.value)) {
@@ -175,13 +182,12 @@ export function createAccountLookup({ ctx, idPrefix, cannotUse, mayTakeFocus, on
 
   return {
     node,
-    emailInput,
-    lookupButton,
-    // What may be sent, or why not: { account: { userId, email, attest } } or { message, focus }.
+    // What may be sent, or why not: { account: { userId, email, attest } } or { message, focus, inField }, where
+    // `inField` says the email field already shows the problem (so it is not said a second time).
     check() {
       if (!isEmailShaped(emailInput.value)) {
         showFieldError(emailInput, emailField.errorLine, EMAIL_PROBLEM);
-        return { message: EMAIL_PROBLEM, focus: emailInput };
+        return { message: EMAIL_PROBLEM, focus: emailInput, inField: true };
       }
       if (!found || found.forEmail !== typed()) {
         return { message: LOOKUP_FIRST, focus: lookupButton };
@@ -211,11 +217,6 @@ export function createAccountLookup({ ctx, idPrefix, cannotUse, mayTakeFocus, on
     // The screen is gone: an answer still out must draw nothing.
     dispose() {
       seq += 1;
-    },
-    reset() {
-      emailInput.value = '';
-      showFieldError(emailInput, emailField.errorLine, null);
-      discard();
     },
   };
 }

@@ -19,13 +19,11 @@ import { isGateRefusal, SLOW_MESSAGE } from './gate.js';
 import { formatDate, plural } from './format.js';
 import { feedbackRegion, setFeedback } from './screenParts.js';
 import { UUID } from './ids.js';
-import { roleLabel, describeAuditEntry, auditItem } from './auditView.js';
+import { auditItem } from './auditView.js';
+import { roleLabel } from './roles.js';
 import { addMemberSection, roleControl } from './memberActions.js';
 import { ask as askAdmin, mayTakeFocus as focusAllowed } from './panelRequest.js';
 const AUDIT_LIMIT = 20;
-
-// (Moved to auditView.js, shared with the Audit log screen; still exported from here for the callers that had it.)
-export { describeAuditEntry };
 
 // Where in the panel the URL points: the list, one organisation, an id that cannot be one, or another panel.
 export function parseOrgsRoute(hash) {
@@ -85,9 +83,19 @@ export function mountOrgsPanel(host, ctx) {
   const isCurrent = (mine) => !disposed && mine === view;
   // Whatever the detail on screen holds that must be told when it goes (a lookup still out).
   let disposeAddMember = () => {};
+  // One change at a time on a detail (memberActions.js): a second one is told to wait, not dropped when the first
+  // redraws the page. Cleared whenever the detail is left or drawn again.
+  let writing = false;
+  const writes = {
+    begin: () => (writing ? false : (writing = true)),
+    end: () => {
+      writing = false;
+    },
+  };
   const leaveDetail = () => {
     disposeAddMember();
     disposeAddMember = () => {};
+    writing = false;
   };
 
   const ask = (name, args) => askAdmin(ctx, name, args);
@@ -104,8 +112,13 @@ export function mountOrgsPanel(host, ctx) {
 
   // A failed load: the message, and a Retry that asks again (not offered when the organisation is gone). The
   // retried view takes focus back to its heading, because the button that had it is replaced.
-  function showFailure(container, feedback, error, retry) {
-    setFeedback(feedback, messageFor(error), 'error', { focus: mayTakeFocus() });
+  // `done`, when given, is a change that WAS made and whose page then failed to draw: the failure must not say
+  // nothing changed, and Retry draws the page again with the same notice.
+  function showFailure(container, feedback, error, retry, done = null) {
+    const message = done
+      ? `${done} The page could not be loaded again, so it may not show it yet. Retry to see it.`
+      : messageFor(error);
+    setFeedback(feedback, message, 'error', { focus: mayTakeFocus() });
     if (error?.hint === 'org_not_found' || !retry) return;
     container.appendChild(retryButton(() => retry({ focusHeading: true })));
   }
@@ -182,6 +195,7 @@ export function mountOrgsPanel(host, ctx) {
         member,
         mayTakeFocus,
         onGateRefused: stepAside,
+        writes,
         onChanged: ({ email, to }) => reload(`${email} is now ${roleLabel(to)}.`),
       }),
     ]);
@@ -202,15 +216,18 @@ export function mountOrgsPanel(host, ctx) {
       ask('admin_list_audit', { p_limit: AUDIT_LIMIT, p_org_id: id }));
     if (!isCurrent(mine)) return;
     region.replaceChildren();
+    // Said, and Retry taken to: a failure of this part must be heard, and nothing else announces it.
+    const failed = (message) => {
+      const retry = retryButton(() => loadChanges(mine, region, id), 'btn btn-outline tap-target');
+      region.append(
+        el('p', { className: 'adm-muted', text: `Recent changes could not be loaded. ${message}` }),
+        retry,
+      );
+      if (mayTakeFocus()) retry.focus();
+    };
     if (audit.error) {
       if (isGateRefusal(audit.error)) return stepAside();
-      region.append(
-        el('p', {
-          className: 'adm-muted',
-          text: `Recent changes could not be loaded. ${messageFor(audit.error)}`,
-        }),
-        retryButton(() => loadChanges(mine, region, id), 'btn btn-outline tap-target'),
-      );
+      failed(messageFor(audit.error));
       return;
     }
     const rows = Array.isArray(audit.data) ? audit.data : [];
@@ -223,9 +240,15 @@ export function mountOrgsPanel(host, ctx) {
       );
       return;
     }
-    region.appendChild(
-      el('ol', { className: 'adm-audit', attrs: { role: 'list' } }, rows.map(auditItem)),
-    );
+    let items;
+    try {
+      items = rows.map((entry) => auditItem(entry));
+    } catch {
+      // a row that is not what the function documents: draw none of them rather than half
+      failed(describeAdminError({}));
+      return;
+    }
+    region.appendChild(el('ol', { className: 'adm-audit', attrs: { role: 'list' } }, items));
     // Said when the list is cut: at exactly the limit the operator cannot otherwise tell.
     if (rows.length >= AUDIT_LIMIT) {
       region.appendChild(
@@ -242,7 +265,9 @@ export function mountOrgsPanel(host, ctx) {
     const status = announcer();
     const body = el('div', { className: 'adm-panel-body' });
     host.replaceChildren(backLink(), title, feedback, status, body);
-    if (focusHeading) title.focus();
+    // After a change the heading is focused once the page is drawn again (not while it still says "Organisation"),
+    // so what is read is the organisation's name and the notice, once.
+    if (focusHeading && !notice) title.focus();
     body.appendChild(el('p', { className: 'adm-muted', text: 'Loading the organisation…' }));
 
     // Both requests go out together. The organisation is drawn as soon as ITS answer arrives; the changes follow
@@ -254,7 +279,13 @@ export function mountOrgsPanel(host, ctx) {
     body.replaceChildren();
     if (detail.error) {
       if (isGateRefusal(detail.error)) return stepAside();
-      showFailure(body, feedback, detail.error, (options) => showDetail(id, options));
+      showFailure(
+        body,
+        feedback,
+        detail.error,
+        (options) => showDetail(id, { ...options, notice }),
+        notice,
+      );
       return;
     }
     const changes = el('div', { className: 'adm-changes' });
@@ -264,6 +295,7 @@ export function mountOrgsPanel(host, ctx) {
       orgId: id,
       mayTakeFocus,
       onGateRefused: stepAside,
+      writes,
       onAdded: ({ email, role }) => reload(`${email} was added as ${roleLabel(role)}.`),
     });
     disposeAddMember = addMember.dispose;
@@ -294,12 +326,17 @@ export function mountOrgsPanel(host, ctx) {
           changes,
         ]),
       );
-      status.textContent = `${title.textContent} loaded.`;
-      if (notice) setFeedback(feedback, notice, 'success', { focus: false });
+      // After a change the notice is what is said; "<name> loaded." on top of it would say the same thing twice.
+      if (notice) {
+        setFeedback(feedback, notice, 'success', { focus: false });
+        title.focus();
+      } else {
+        status.textContent = `${title.textContent} loaded.`;
+      }
     } catch {
       body.replaceChildren();
       title.textContent = 'Organisation';
-      showFailure(body, feedback, {}, (options) => showDetail(id, options));
+      showFailure(body, feedback, {}, (options) => showDetail(id, { ...options, notice }), notice);
       return;
     }
     await loadChanges(mine, changes, id, auditRequest);
@@ -352,6 +389,8 @@ export function mountOrgsPanel(host, ctx) {
       disposed = true;
       leaveDetail();
       window.removeEventListener('hashchange', onHashChange);
+      // (the shell clears the host before the next panel, but a write still in flight must not draw here)
+      host.replaceChildren();
     },
   };
 }

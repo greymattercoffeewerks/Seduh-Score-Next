@@ -45,7 +45,7 @@ all through `SECURITY DEFINER` admin functions that the database gates itself.
 
 ## The Organisations panel (`orgsPanel.js`, Batch 9)
 
-Read only. `#/orgs` is the list, `#/orgs/<organisation id>` one organisation (members, counts, its recent audit
+`#/orgs` is the list, `#/orgs/<organisation id>` one organisation (members, counts, its recent audit
 entries). The shell routes by the FIRST segment of the hash; this panel listens for hash changes itself to move
 between its two views and ignores a hash that does not change what it shows (a `hashchange` can arrive for a hash
 set just before it mounted). An id that is not a UUID is "not found" without asking the database.
@@ -115,7 +115,15 @@ through `ctx.callFunction`) or an EXISTING account (`admin_find_user`, then a co
   changed": an error with no hint says the member may have been added / the role may have changed
   (`ADD_STATE_UNKNOWN`, `ROLE_STATE_UNKNOWN`).
 - **`accountLookup.js` is the lookup the Add member form uses.** The New organisation panel still has its own copy of
-  the same logic (a known duplication, to be folded into this module); change both together until it is.
+  the same logic (a known duplication, to be folded into this module in a follow-up: its tests refer to `#adm-attest`
+  where this module's box is `#adm-member-attest`, and the two differ on whether an error clears on every keystroke);
+  the four messages are shared, change the rest of both together until they are one.
+- **One change at a time on a detail**: `memberActions.js` takes a page-wide claim (`writes.begin()`) so two role
+  changes, or one and an add, never run at once; the second is told to wait instead of being dropped when the first
+  redraws the page. A failure frees the claim; a success leaves it to the redraw.
+- **Labels and focus (reviewed):** the role button's accessible name starts with its visible words ("Make owner:
+  <email>", WCAG 2.5.3); empty live error lines stay in the accessibility tree (clipped, never `display:none`); a
+  refusal moves focus to its own message, a failed page of the Audit log to its Retry.
 - **The Audit log** (`auditPanel.js`, route `#/audit`): newest first, 50 at a time, paged with `p_before` = the
   SMALLEST id shown. A failed page keeps what is shown and retries that same page. `auditView.js` is the one place an
   entry is worded and drawn (shared with the detail's recent changes); it draws only the documented fields (never a
@@ -124,7 +132,7 @@ through `ctx.callFunction`) or an EXISTING account (`admin_find_user`, then a co
 - A role this console does not know (`steward`, `constructor`) gets no role button; role lookups use own properties
   only (`Object.hasOwn`), because a role is data from a server.
 
-## Adding a panel (the audit log, and gating's "Plan" panel later)
+## Adding a panel (gating's "Plan" panel is the next)
 
 An entry in `panels.js` (`{ id, label, route, mount(host, ctx) }`) plus a screen module. `shell.js` draws the
 navigation from the registry and routes by hash; nothing in it changes (`ctx` also carries `callFunction(name, body)`

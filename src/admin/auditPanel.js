@@ -5,6 +5,11 @@
 //
 // Every request goes through ctx.callAdmin: a gate refusal draws nothing here (the console is checking access
 // again and will replace the panel). A page that fails offers Retry for THAT page and keeps what is already shown.
+//
+// Focus: on opening it stays where the shell put it (the heading). After the person asks for something (Show older
+// changes, Retry) the control they pressed is gone, so focus goes to the first change that arrived, or, when none
+// did, to the line that says where the log ends; a failed request takes focus to its Retry, which is otherwise
+// below up to fifty links.
 import { el, setBusyDisabled } from '../core/dom.js';
 import { describeAdminError } from './adminErrors.js';
 import { isGateRefusal, SLOW_MESSAGE } from './gate.js';
@@ -14,6 +19,7 @@ import { feedbackRegion, setFeedback } from './screenParts.js';
 import { auditItem } from './auditView.js';
 
 export const PAGE_SIZE = 50;
+export const READ_FAILED = 'The audit log could not be read. Try again.';
 
 export function mountAuditPanel(host, ctx) {
   let disposed = false;
@@ -44,7 +50,25 @@ export function mountAuditPanel(host, ctx) {
 
   const messageFor = (error) => (error?.timedOut ? SLOW_MESSAGE : describeAdminError(error));
 
-  async function loadPage({ first = false } = {}) {
+  function showRetry(message, { initial }) {
+    setFeedback(feedback, message, 'error', { focus: false });
+    const retry = el('button', {
+      className: 'btn btn-primary tap-target',
+      text: 'Retry',
+      attrs: { type: 'button' },
+    });
+    retry.addEventListener('click', () => {
+      setBusyDisabled(retry, true);
+      loadPage();
+    });
+    footer.replaceChildren(retry);
+    // The message is read by its live region; the Retry is what the person needs next, and it is below the list.
+    if (!initial || mayTakeFocus()) retry.focus();
+  }
+
+  // `initial` is the load the screen starts with; every other load was asked for by the person, who pressed a
+  // control that is now gone.
+  async function loadPage({ initial = false } = {}) {
     if (loading) return;
     loading = true;
     setFeedback(feedback, '');
@@ -57,66 +81,69 @@ export function mountAuditPanel(host, ctx) {
     footer.replaceChildren();
     if (answer.error) {
       if (isGateRefusal(answer.error)) return stepAside();
-      setFeedback(feedback, messageFor(answer.error), 'error', { focus: mayTakeFocus() });
-      const retry = el('button', {
-        className: 'btn btn-primary tap-target',
-        text: 'Retry',
-        attrs: { type: 'button' },
-      });
-      retry.addEventListener('click', () => {
-        setBusyDisabled(retry, true);
-        loadPage({ first });
-      });
-      footer.appendChild(retry);
+      showRetry(messageFor(answer.error), { initial });
       return;
     }
-    let rows;
+
+    // Everything is read and checked BEFORE anything is drawn: a page that is not what the function documents
+    // draws none of its rows, never half.
+    let items;
+    let ids;
     try {
-      rows = Array.isArray(answer.data) ? answer.data : [];
-      const items = rows.map((entry) => auditItem(entry, { withOrg: true }));
-      list.append(...items);
-      // The person asked for older changes: take them to the first of them (the button they pressed is gone).
-      if (!first && items[0] && mayTakeFocus()) {
-        items[0].setAttribute('tabindex', '-1');
-        items[0].focus();
-      }
+      if (!Array.isArray(answer.data)) throw new TypeError('not a list');
+      items = answer.data.map((entry) => auditItem(entry, { withOrg: true }));
+      ids = answer.data.map((entry) => entry.id);
+      if (!ids.every((id) => Number.isSafeInteger(id))) throw new TypeError('not an id');
     } catch {
-      // a row that is not what the function documents: say so rather than draw half a page
-      setFeedback(feedback, describeAdminError({}), 'error', { focus: mayTakeFocus() });
+      showRetry(READ_FAILED, { initial });
       return;
     }
-    shown += rows.length;
+
+    list.append(...items);
+    shown += items.length;
     // The ids are the database's own and only ever fall; the next page is asked for from the smallest seen.
-    const ids = rows.map((r) => r?.id).filter((id) => Number.isSafeInteger(id));
     if (ids.length) oldest = Math.min(...ids);
+
+    let end = null;
     if (shown === 0) {
-      footer.appendChild(el('p', { text: 'Nothing has been changed through the console yet.' }));
+      end = el('p', {
+        text: 'Nothing has been changed through the console yet.',
+        attrs: { tabindex: '-1' },
+      });
       status.textContent = 'Nothing has been changed through the console yet.';
-      return;
-    }
-    status.textContent = `${plural(rows.length, 'change')} loaded. ${plural(shown, 'change')} shown.`;
-    if (rows.length >= PAGE_SIZE && ids.length) {
-      const more = el('button', {
-        className: 'btn btn-outline tap-target',
-        text: 'Show older changes',
-        attrs: { type: 'button' },
-      });
-      more.addEventListener('click', () => {
-        setBusyDisabled(more, true);
-        loadPage();
-      });
-      footer.appendChild(more);
     } else {
-      footer.appendChild(
-        el('p', {
+      status.textContent = `${plural(items.length, 'change')} loaded. ${plural(shown, 'change')} shown.`;
+      if (items.length >= PAGE_SIZE) {
+        const more = el('button', {
+          className: 'btn btn-outline tap-target',
+          text: 'Show older changes',
+          attrs: { type: 'button' },
+        });
+        more.addEventListener('click', () => {
+          setBusyDisabled(more, true);
+          loadPage();
+        });
+        footer.appendChild(more);
+      } else {
+        end = el('p', {
           className: 'adm-muted',
           text: `That is everything: ${plural(shown, 'change')}.`,
-        }),
-      );
+          attrs: { tabindex: '-1' },
+        });
+      }
+    }
+    if (end) footer.appendChild(end);
+
+    if (!initial && mayTakeFocus()) {
+      const target = items[0] ?? end;
+      if (target) {
+        target.setAttribute('tabindex', '-1');
+        target.focus();
+      }
     }
   }
 
-  loadPage({ first: true });
+  loadPage({ initial: true });
 
   return {
     unmount() {
