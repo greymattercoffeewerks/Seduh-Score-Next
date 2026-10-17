@@ -70,3 +70,13 @@ Every finding needs a `file:line` citation and a concrete failing input or state
 about behaviour must cite the source that proves it, not an inference from a function or
 variable name. If you cannot trace a realistic path from a real caller to the failure,
 do not post it.
+
+## Summary and re-reviews
+
+Start the summary with a count per severity (for example "Important 1, Nit 2, Pre-existing
+0"). When there is nothing to fix, say so in one line and stop.
+
+After the second pass on a pull request, review only the new diff. Do not repeat a finding
+already posted. When you flag a bug, name its class so the author fixes every instance in
+one commit. After three rounds, ask the author to reconsider the approach rather than
+posting a fourth round of findings.

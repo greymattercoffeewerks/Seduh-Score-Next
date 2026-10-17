@@ -1,6 +1,6 @@
 ## Review workflow: REVIEW.md and a find, verify, rank protocol (docs and agent config, no code) · 2026-10-17
 
-**Task:** process change (no task ID), from a request to compare our review workflow with how Anthropic describes its own Code Review. The named article (claude.dev) was unreachable from the sandbox, so this follows Anthropic's Code Review announcement and the Code Review docs (customize, pull-requests) instead.
+**Task:** process change (no task ID), from a request to compare our review workflow with how Anthropic describes its own Code Review. The named article (claude.dev, "How the Claude Code team does code review", Osmani, Lunt and Wang, 2026-10-15) was unreachable from the sandbox, so the first pass followed Anthropic's Code Review announcement and docs. It was then checked against the article's text and corrected (see "Correction" below).
 
 **Why:** our specialist reviewers already match the "several agents in parallel" part. What we lacked was a verification step (reviewers could report unproven findings), one severity scale across reviewers, review depth scaled to the change, a way to calibrate the GitHub review service, and a stance on clean reviews: "expect to find something" pushes reviewers to pad.
 
@@ -9,6 +9,8 @@
 - `REVIEW.md` (new, repo root): what Important means for this repo (tenant isolation, admin gate, migrations, derived-vs-stored, outbox, `is_test`, module boundary), a five-nit cap, a pre-existing cap, a do-not-report list (whatever CI already enforces, generated files, frozen handoff), an always-check list, and an evidence rule. The service reads it from `main` only, so it takes effect once merged.
 - `CLAUDE.md`: "Every review should find something" replaced by a skeptical-but-honest line, plus a "Review protocol" section (find, verify, rank, deduplicate, scale depth, re-review scope, advisory only, record dropped findings). The mandatory reviewer triggers are unchanged and remain the floor.
 - The eight reviewer agents each gain a short "Reporting" pointer to the protocol and the 🔴/🟡/🟣 scale. 🔴 maps to `state.json` `severity: "blocking"`.
+
+**Correction, same day:** checked against the article itself. Verification is now an independent check of each 🔴 and gate finding by a fresh-context agent (the article has a group vote on every finding), not the author re-reading its own work. Added the convergence rules (new diff only, no repeats, name the bug class, stop and rethink after three rounds), the severity-count summary line in `REVIEW.md`, `.github/pull_request_template.md` (Summary, Testing, Risk, How to revert), and recording how each finding ended (fixed, wrong, intentional, did not matter). Removed a stale reference to the old "every review should find something" rule in the cost note.
 
 **Not adopted:** the managed Code Review service itself and its CI gate on the `bughunter-severity` check-run count (needs the Team/Enterprise service enabled by an Owner; revisit once it is on), and per-directory `REVIEW.md` files (add one when a subtree needs different severity).
 

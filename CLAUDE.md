@@ -110,10 +110,16 @@ service (it reads `REVIEW.md` from `main`; the local `/code-review` command read
 2. **Verify before reporting.** Every finding carries a `file:line` and a concrete failing
    input or state, and the reviewer has re-read the code (or run the test) to confirm it.
    Behaviour claims cite the source, never an inference from a name. A finding you cannot
-   trace from a real caller to a failure is dropped. A gate reviewer
-   (`security-reviewer`, `schema-guardian`, `scoring-auditor`, `offline-sync-auditor`)
-   that suspects a hole it cannot prove reports it as **unverified** with what would
-   prove it; it is never silently dropped.
+   trace from a real caller to a failure is dropped. Then every 🔴 Important finding, and
+   every finding from a gate reviewer (`security-reviewer`, `schema-guardian`,
+   `scoring-auditor`, `offline-sync-auditor`), gets an **independent check**: hand it to a
+   fresh-context agent that did not produce it, with only the finding and the diff, and
+   tell it to try to refute it. Report the finding only if it survives. (Anthropic has a
+   separate group of agents vote on each finding; one independent checker is the
+   proportionate version here, and the self-check above is not a substitute for it.) If
+   the checker can neither confirm nor refute a gate finding, report it as **unverified**
+   with what would prove it; it is never silently dropped. Nits skip the checker and are
+   capped instead.
 3. **Rank** with one scale across all reviewers (definitions in `REVIEW.md`):
    🔴 **Important** is the `state.json` severity `blocking` and holds the task open;
    🟡 **Nit** is non-blocking, at most five per review; 🟣 **Pre-existing** was not
@@ -126,20 +132,26 @@ service (it reads `REVIEW.md` from `main`; the local `/code-review` command read
    `code-reviewer` at most, and a large or cross-cutting change (many files, a
    shared `core/` primitive, anything tenant-facing) gets every reviewer that applies,
    run twice if the first pass finds a 🔴.
-6. **Re-review after fixes.** Re-run only the reviewers that raised 🔴 findings, scoped to
-   what changed. Run one full pass before `kb-sync` closes the task.
+6. **Re-review must converge.** Anthropic found one PR looping through 50+ review rounds,
+   most of it re-flagging code that was there from the first pass. So: after a fix, re-run
+   only the reviewers that raised 🔴 findings, on the new diff only; never repeat a finding
+   already reported; when you report a bug, name its class so the author fixes every
+   instance in one commit. After **three** rounds on one change, stop and ask the author to
+   step back and reconsider the approach instead of running a fourth. Run one full pass
+   before `kb-sync` closes the task.
 7. **Reviewers advise; people approve.** No reviewer's output stands in for a human
    merge decision, and a clean pass is not evidence the change is correct.
 8. **Record the outcome** in the CHANGELOG `Reviews` line: which reviewers ran, what each
-   found, and what was dropped at verification and why. A rising count of dropped
-   findings means a reviewer's prompt or `REVIEW.md` needs tightening.
+   found, and how each finding ended up (fixed, wrong, intentional, or did not matter).
+   A rising share of wrong findings means a reviewer's prompt or `REVIEW.md` needs
+   tightening; noise costs a round trip every time.
 
 **Cost note (2026-08-22, user decision):** `kb-sync` and `module-boundary-checker` run
 on a cheaper model (`model: haiku` in their `.claude/agents/*.md` frontmatter) — both are
 comparatively mechanical (session-log writing; import-path/grep-based boundary checks).
 `schema-guardian`, `security-reviewer`, `scoring-auditor`, `offline-sync-auditor`, and
 `code-reviewer` stay on the full model deliberately — these are the correctness/security
-gates the "every review should find something" discipline above depends on, and Phase 4's
+gates the skeptical-review discipline above depends on, and Phase 4's
 own review cycles (T4.1, T4.2) already surfaced real bugs on second and third passes that
 a weaker reviewer could plausibly have missed. `test-auditor` and `ui-accessibility-reviewer`
 were considered and kept on the full model too.
