@@ -1,0 +1,363 @@
+/* Public pricing page. Mobile-first (360px): the comparison table reflows into one
+   card per feature below 760px, and becomes a real grid above it. Only tokens and the
+   shared stage surface (data-surface="stage"), like the Tour. */
+body {
+  min-width: 320px;
+}
+.pricing-page {
+  min-height: 100vh;
+  /* clip, not hidden: the sticky header must stay pinned (see the Tour). */
+  overflow-x: clip;
+  background: var(--color-canvas);
+  color: var(--color-text);
+}
+.pricing-hero,
+.pricing-tiers,
+.pricing-compare,
+.pricing-faq,
+.pricing-closing {
+  width: min(100% - 2.5rem, 1160px);
+  margin-inline: auto;
+}
+.pricing-kicker {
+  margin: 0 0 var(--space-4);
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+.pricing-hero h1,
+.pricing-compare h2,
+.pricing-faq h2,
+.pricing-closing h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-tight);
+  line-height: var(--leading-tight);
+  text-transform: uppercase;
+}
+.pricing-hero {
+  padding-block: clamp(3.5rem, 9vw, 7rem) clamp(2rem, 5vw, 3.5rem);
+}
+.pricing-hero h1 {
+  max-width: 52rem;
+  font-size: clamp(2.75rem, 9vw, 6.5rem);
+}
+.pricing-hero h1 span {
+  color: var(--color-accent);
+}
+.pricing-hero-intro,
+.pricing-lede {
+  max-width: 40rem;
+  margin: var(--space-5) 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--text-lg);
+  line-height: var(--leading-relaxed);
+}
+
+/* ---- Tier cards ---- */
+.pricing-card-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+}
+.pricing-card {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-5);
+  border: var(--border-hairline) solid var(--color-border);
+  background: var(--color-surface);
+}
+.pricing-card-featured {
+  border-top: 3px solid var(--color-accent);
+}
+.pricing-tier-name {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+.pricing-card-featured .pricing-tier-name {
+  color: var(--color-accent);
+}
+.pricing-tier-price {
+  margin: var(--space-3) 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xl);
+  font-weight: var(--font-weight-semibold);
+}
+.pricing-price-suffix {
+  margin-left: var(--space-2);
+  color: var(--color-text-secondary);
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium);
+}
+.pricing-tier-summary {
+  margin: var(--space-3) 0 var(--space-4);
+  color: var(--color-text-secondary);
+  line-height: var(--leading-relaxed);
+}
+/* The archive rule, set apart so it is read before the button. */
+.pricing-tier-note {
+  margin: 0 0 var(--space-5);
+  padding-left: var(--space-3);
+  border-left: 3px solid var(--color-accent);
+  color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--leading-relaxed);
+}
+.pricing-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tap-target-min);
+  margin-top: auto;
+  padding: var(--space-3) var(--space-5);
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
+  text-decoration: none;
+  text-transform: uppercase;
+}
+.pricing-cta:hover {
+  background: var(--color-accent-hover);
+}
+/* .cut-sm clips the element, and clip-path clips the outside focus ring too, so the ring
+   is drawn inside the button in the dark text colour (10:1 on the teal). */
+.pricing-cta:focus-visible {
+  outline: 2px solid var(--color-accent-contrast);
+  outline-offset: -5px;
+}
+.pricing-footnote {
+  margin: var(--space-5) 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+}
+
+/* ---- Comparison ---- */
+.pricing-compare,
+.pricing-faq {
+  padding-block: clamp(3rem, 7vw, 6rem) 0;
+  border-top: var(--border-hairline) solid var(--color-border);
+  margin-top: clamp(3rem, 7vw, 6rem);
+}
+.pricing-compare h2,
+.pricing-faq h2,
+.pricing-closing h2 {
+  font-size: clamp(2.25rem, 5vw, 4.25rem);
+}
+.pricing-table-wrap {
+  margin-top: var(--space-6);
+}
+.pricing-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+/* Below 760px the header row is hidden visually (each cell carries its own tier
+   label) and every feature becomes a card. The explicit ARIA roles in
+   pricingScreen.js keep the table semantics when `display` is overridden. */
+.pricing-head-row {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.pricing-table,
+.pricing-table tbody,
+.pricing-table thead {
+  display: block;
+}
+.pricing-group-row,
+.pricing-row {
+  display: block;
+}
+.pricing-group-title {
+  display: block;
+  padding: var(--space-6) 0 var(--space-3);
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
+  text-align: left;
+  text-transform: uppercase;
+}
+.pricing-row {
+  margin-bottom: var(--space-3);
+  padding: var(--space-4);
+  border: var(--border-hairline) solid var(--color-border);
+  background: var(--color-surface);
+}
+.pricing-feature {
+  display: block;
+  margin-bottom: var(--space-3);
+  text-align: left;
+  font-weight: var(--font-weight-regular);
+}
+.pricing-feature-name {
+  display: block;
+  font-weight: var(--font-weight-semibold);
+}
+.pricing-feature-desc {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+.pricing-cell {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding-block: var(--space-2);
+  border-top: var(--border-hairline) solid var(--color-border);
+  font-size: var(--text-sm);
+}
+.pricing-cell::before {
+  content: attr(data-label);
+  flex: 0 0 6.5rem;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+.pricing-glyph {
+  display: inline-block;
+  min-width: 1.25rem;
+  font-weight: var(--font-weight-bold);
+}
+.pricing-cell-yes .pricing-glyph {
+  color: var(--color-accent);
+}
+.pricing-cell-no {
+  color: var(--color-text-secondary);
+}
+/* "Planned" is told apart by its dashed outline and its word, not by colour alone. */
+.pricing-cell-soon .pricing-cell-word {
+  padding: 0 var(--space-2);
+  border: var(--border-hairline) dashed var(--color-text-secondary);
+  color: var(--color-text-secondary);
+}
+
+@media (min-width: 760px) {
+  .pricing-card-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .pricing-table {
+    display: table;
+    table-layout: fixed;
+  }
+  .pricing-table thead {
+    display: table-header-group;
+  }
+  .pricing-table tbody {
+    display: table-row-group;
+  }
+  .pricing-head-row {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+    white-space: normal;
+  }
+  .pricing-group-row,
+  .pricing-row,
+  .pricing-head-row {
+    display: table-row;
+  }
+  .pricing-row {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+  }
+  .pricing-head-feature,
+  .pricing-head-tier {
+    padding: var(--space-3) var(--space-4);
+    border-bottom: var(--border-hairline) solid var(--color-border);
+    color: var(--color-text-secondary);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    letter-spacing: var(--tracking-wide);
+    text-align: left;
+    text-transform: uppercase;
+  }
+  .pricing-head-feature {
+    width: 40%;
+  }
+  .pricing-head-tier-featured {
+    color: var(--color-accent);
+  }
+  .pricing-group-title {
+    display: table-cell;
+    padding: var(--space-7) var(--space-4) var(--space-3);
+  }
+  .pricing-feature,
+  .pricing-cell {
+    display: table-cell;
+    padding: var(--space-4);
+    border-top: var(--border-hairline) solid var(--color-border);
+    vertical-align: top;
+  }
+  .pricing-feature {
+    margin: 0;
+  }
+  .pricing-cell::before {
+    content: none;
+  }
+  .pricing-cell > * + * {
+    margin-left: var(--space-2);
+  }
+}
+
+/* ---- FAQ and closing ---- */
+.pricing-faq-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-6);
+  margin-top: var(--space-6);
+}
+.pricing-faq-item h3 {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+.pricing-faq-item p {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-secondary);
+  line-height: var(--leading-relaxed);
+}
+.pricing-closing {
+  margin-top: clamp(3rem, 7vw, 6rem);
+  padding-block: clamp(3rem, 7vw, 6rem);
+  border-top: var(--border-hairline) solid var(--color-border);
+}
+.pricing-closing p {
+  max-width: 36rem;
+  margin: var(--space-4) 0 var(--space-6);
+  color: var(--color-text-secondary);
+  font-size: var(--text-lg);
+  line-height: var(--leading-relaxed);
+}
+.pricing-closing .pricing-cta {
+  margin-top: 0;
+}
+@media (min-width: 760px) {
+  .pricing-faq-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-6) var(--space-7);
+  }
+}

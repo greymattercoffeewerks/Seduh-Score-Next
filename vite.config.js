@@ -50,6 +50,7 @@ export default defineConfig({
         ),
         community: fileURLToPath(new URL('./community/index.html', import.meta.url)),
         tour: fileURLToPath(new URL('./tour/index.html', import.meta.url)),
+        pricing: fileURLToPath(new URL('./pricing/index.html', import.meta.url)),
         // /results/ (2026-09-17) — the public results archive. Reads real
         // data via core/publicResults.js (an organiser publishes via
         // src/formats/cup-taster/reportScreen.js's "Public results" card).

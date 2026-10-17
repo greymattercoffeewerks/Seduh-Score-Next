@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mountLandingScreen } from './landingScreen.js';
 
 describe('mountLandingScreen — format list', () => {
@@ -62,6 +62,50 @@ describe('mountLandingScreen — format list', () => {
     expect(root.querySelector('.petrol-live-indicator').textContent).toContain(
       'Live — Cup Taster, BTC',
     );
+  });
+});
+
+describe('mountLandingScreen — pricing', () => {
+  beforeEach(() => {
+    vi.stubGlobal('matchMedia', (query) => ({ matches: query.includes('reduce') }));
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('says Per-event is "branded", never "fully branded" (branding is Level 2, not a full theme)', () => {
+    const root = document.createElement('div');
+    mountLandingScreen(root);
+    const text = root.querySelector('#pricing').textContent;
+    expect(text).toMatch(/branded, with PDF reports/);
+    expect(text).not.toMatch(/fully branded/i);
+  });
+
+  it('states each tier as the owner confirmed it, and drops the claims that were not true', () => {
+    const root = document.createElement('div');
+    mountLandingScreen(root);
+    const [community, perEvent, annual] = [
+      ...root.querySelectorAll('#pricing .petrol-plate-col'),
+    ].map((column) => column.querySelector('.petrol-band-body').textContent);
+    expect(community).toMatch(/BTC with no limit, and other formats up to 8 competitors/);
+    expect(community).toMatch(/podium is published to the public archive when the event ends/);
+    expect(perEvent).toMatch(/One event, in the format you choose/);
+    expect(annual).toMatch(/Every format and feature, with no competitor limit/);
+
+    const everything = [community, perEvent, annual].join(' ');
+    expect(everything).not.toMatch(/no account needed/i);
+    expect(everything).not.toMatch(/every live format/i);
+    expect(everything).not.toMatch(/persistent history|across seasons/i);
+    expect(everything).not.toMatch(/unbranded/i);
+  });
+
+  it('has a Learn more link in the pricing section that goes to the pricing page', () => {
+    const root = document.createElement('div');
+    mountLandingScreen(root);
+    const link = root.querySelector('#pricing .petrol-pricing-more a');
+    expect(link).not.toBeNull();
+    expect(link.getAttribute('href')).toBe('/pricing/');
+    expect(link.textContent).toMatch(/^Learn more/);
   });
 });
 

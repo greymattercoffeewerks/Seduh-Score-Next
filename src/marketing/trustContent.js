@@ -243,7 +243,7 @@ export const TRUST_PAGES = [
       { type: 'h2', text: 'Pricing' },
       {
         type: 'p',
-        text: 'Pricing is set out in the [pricing section](/#pricing) and is not part of these terms.',
+        text: 'Pricing is set out on the [Pricing page](/pricing/) and is not part of these terms.',
       },
       { type: 'h2', text: 'Our responsibility' },
       {

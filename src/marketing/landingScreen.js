@@ -38,6 +38,7 @@
 // for why).
 import { el, svgEl, brandLockup } from '../core/dom.js';
 import { revealOnScroll } from '../core/scrollReveal.js';
+import { TIERS } from './pricingContent.js';
 import { buildPublicFooter } from './publicFooter.js';
 
 function icon(children, { className = 'petrol-icon' } = {}) {
@@ -574,32 +575,35 @@ function pricingSection() {
     el('h2', { className: 'petrol-heading', text: 'Three tiers. Start free.' }),
     el('div', { className: 'petrol-plate' }, [
       pricingColumn(
-        'Community',
-        'Free',
-        null,
-        'Every live format, unbranded, for organisers just getting started. No account ' +
-          'needed to run a small event.',
+        TIERS[0].name,
+        TIERS[0].price,
+        TIERS[0].suffix,
+        'For organisers getting started. BTC with no limit, and other formats up to 8 ' +
+          'competitors. The podium is published to the public archive when the event ends.',
       ),
       pricingColumn(
-        'Per-event',
-        'BND $18',
-        'one-time',
-        'One competition, fully branded, PDF reports included. Pay once, run your event, ' +
-          'done.',
+        TIERS[1].name,
+        TIERS[1].price,
+        TIERS[1].suffix,
+        'One event, in the format you choose, branded, with PDF reports. Pay once, run ' +
+          'your event, done.',
         { featured: true },
       ),
       pricingColumn(
-        'Annual',
-        'BND $350',
-        'per year',
-        'Every format, priced for organisers running events all year. ' +
-          'Persistent history across seasons.',
+        TIERS[2].name,
+        TIERS[2].price,
+        TIERS[2].suffix,
+        'For organisers running events all year. Every format and feature, with no ' +
+          'competitor limit.',
       ),
     ]),
     el('p', {
       className: 'petrol-footnote',
       text: 'All prices in Brunei dollars · billed through Grey Matter Coffee Werks.',
     }),
+    el('div', { className: 'petrol-pricing-more' }, [
+      actionLink('Learn more: compare every tier →', { outline: true, href: '/pricing/' }),
+    ]),
   ]);
   const section = el('section', { className: 'petrol-band', attrs: { id: 'pricing-band' } }, [
     inner,

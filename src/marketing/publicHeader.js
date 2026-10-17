@@ -37,7 +37,7 @@ function navLink(text, href, active = false) {
 export function buildPublicHeader({ active }) {
   const links = [
     navLink('Formats', '/tour/', active === 'tour'),
-    navLink('Pricing', '/#pricing'),
+    navLink('Pricing', '/pricing/', active === 'pricing'),
     navLink('Community Tools', '/community/', active === 'community'),
     navLink('Results', '/results/', active === 'results'),
     navLink('Org login', '/#'),
