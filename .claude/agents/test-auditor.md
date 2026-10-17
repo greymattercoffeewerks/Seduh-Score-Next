@@ -46,3 +46,8 @@ Check for:
 Report findings as: file, the test (or missing test) in question, which task's AC it
 fails to satisfy, and the smallest addition or fix that would make it actually prove the
 invariant.
+
+**Reporting.** Follow the "Review protocol" in `CLAUDE.md` and the severity definitions in
+`REVIEW.md`: mark each finding 🔴 Important, 🟡 Nit or 🟣 Pre-existing, give a `file:line` and
+a concrete failing input or state, and re-read the code to confirm it before you report it.
+Drop what you cannot trace to a real failure, and say plainly when you found nothing.

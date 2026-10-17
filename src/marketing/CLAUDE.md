@@ -133,6 +133,48 @@ router, auth, Supabase, or a competition implementation. It uses the legacy tour
 historical reference while stating the current truth: Cup Taster and BTC are live;
 Throwdown and Liga Seduh are planned; Community is a separate final section.
 
+## Pricing page (2026-10-17)
+
+`pricing/index.html` is a public entry (`pricingMain.js`, `pricingScreen.js`, `pricingContent.js`,
+`pricing.css`), reached from the landing page's pricing section ("Learn more: compare every tier")
+and the shared header's Pricing link. It is static like the Tour: no router, auth or Supabase. It is in
+`vite.config.js`, `public/sitemap.xml`, `tools/prerender-public-pages.mjs` and `tests/e2e/smoke.spec.js`.
+
+- **All copy and the tier-by-feature matrix live in `pricingContent.js`** (a cell is `yes`, `no`, `soon`
+  or `text`). Prices are the landing page's. `soon` means not built yet and the page says "Planned" in
+  words; never mark a feature `yes` before it exists (the "Known placeholders" rule above).
+- **The matrix is confirmed by the owner (2026-10-17) but not enforced by the product.** Community is
+  limited to 8 competitors for Cup Taster (and, when they ship, Throwdown and Liga Seduh) while BTC is
+  uncapped; Per-event is one event in one format; Annual has full access; "Result listing" is Compulsory /
+  Optional / Optional. The tentative 5-day Per-event window is deliberately not on the page. Gating (`Handoffs and Specs/GATING-SPEC.md`, D-G2/D-G3)
+  is what will enforce it, and the page says the limits are being switched on step by step. When gating ships, the catalog (`supabase/entitlements.catalog.json`) should become the
+  source for this matrix, with a contract test, so the page and the database cannot disagree.
+- The table keeps its semantics at 360px: below 760px each row becomes a card (header row hidden, each cell
+  labelled by `data-label`), and explicit ARIA roles on the table elements survive the `display` change.
+- Billing is manual and organiser accounts are set up by hand (invite-only, no sign-up), so every tier's
+  button goes to `/contact/`, not to a checkout or to the console's sign-in. Do not add a purchase form or a
+  "Start free" button here until sign-up exists.
+- Tier names and prices come from `pricingContent.js`'s `TIERS`; the landing page's pricing section imports
+  them, so the two cannot drift. The search-result description in `pricing/index.html` repeats the prices by
+  hand (a test checks it).
+- Rows only Cup Taster supports (report/CSV, analytics, public results) say "Cup Taster:" in their
+  description; BTC's publishing is live display only.
+- **The archive rule is stated on every card, in the table and in the FAQ** (owner, 2026-10-17): Community
+  the podium is published to the public archive automatically when the event ends; on Per-event and Annual
+  publishing is optional. It is tier policy ahead of the code: the compulsory publish is the archive phase,
+  and until then publishing is the organiser's choice on every tier. Privacy and Terms must say Community
+  results are public before it is enforced; the approved wording is held in
+  `design/copy/archive-rule-wording-HELD.md` and must NOT be applied until the enforcement ships.
+- **Branding wording (owner, 2026-10-17):** say "branded", never "fully branded". The offer is logo, accent
+  colour, name and banner images, and "Powered by Seduh Score" always stays. Branding is not built, so the
+  pricing page marks it Planned; the landing page's "branded" still describes it as a feature of the tier.
+- **The landing page's tier prose matches the confirmed tiers (owner approved the rewrite, 2026-10-17):**
+  Community "BTC with no limit, and other formats up to 8 competitors" with the podium published to the
+  archive; Per-event "one event, in the format you choose, branded, with PDF reports"; Annual "every format
+  and feature, with no competitor limit". The old claims (no account needed, every live format, persistent
+  history across seasons, unbranded) are gone and a test keeps them out. Change this prose and
+  `pricingContent.js` together.
+
 ## BTC goes live (2026-09-23)
 
 The BTC app-wiring pass (routing all 5 of BTC's organiser screens into `src/main.js`)
@@ -180,7 +222,7 @@ aria-hidden.
 ## Public-page prerendering (2026-09-16)
 
 `npm run build` runs Vite first, then `tools/prerender-public-pages.mjs`. It writes the
-already-rendered HTML into the production output for the landing page, Tour, Community hub,
+already-rendered HTML into the production output for the landing page, Tour, Pricing, Community hub,
 Timer, Brew Planner and Random Selector (the trust pages are prerendered too). These are the
 only routes in scope because their content is stable and public. A new public tool needs an
 entry in `ROUTES` there, in `public/sitemap.xml` and in `tests/e2e/smoke.spec.js` (all three
@@ -280,7 +322,7 @@ real links to `/tour/`; Community Tools links to `/community/`; and Cup Taster l
 **Update (2026-09-24, site critique pass):** "Start free" now points to `/app/#/events` and
 "Org login" to `/app/` — there is still no separate sign-up flow (`loginScreen.js` is
 sign-in only; D14's real access control is still a stub), so both land in the console.
-"Formats" and "Pricing" in the nav are real same-page anchors (`#formats`, `#pricing`);
+"Formats" and "Pricing" in the landing page's own nav are real same-page anchors (`#formats`, `#pricing`; the shared public header's Pricing link goes to `/pricing/`);
 "Timer" is a real link (`/tools/timer/`). Cup Taster's and BTC's own "Open X →" links (2026-09-23: BTC's row
 went live alongside Cup Taster's, once the app itself routed all 5 of BTC's screens —
 see "BTC goes live" above) both point at the same real authenticated-app destination

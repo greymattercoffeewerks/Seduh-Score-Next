@@ -173,7 +173,7 @@ no vote is attributed to a judge. Two new forward-only migrations (never editing
 above, per repo rule) supersede the vote-storage shape: `20260922100000_btc_cup_votes_per_cup_tokens.sql`
 (drops judge_id/team_id from btc_cup_votes, adds team1_tokens 0–3, recreates views) and
 `20260922101000_btc_confirm_match_rpc_per_cup_tokens.sql` (CREATE OR REPLACE confirm_btc_match
-with per-cup-token param shape, completeness check count(*) = cups instead of cups * 3).
+with per-cup-token param shape, completeness check `count(*) = cups` instead of `cups * 3`).
 `scoring.js` rewritten: `draft.votes[cup]` is now a single 0–3 number. `scoringScreen.js`
 rewritten: 4-button segmented control per cup (0/1/2/3) with live team2-balance text;
 judges listed once for record, non-interactive. `supabase/tests/012_btc_tables.sql` (plan 23,

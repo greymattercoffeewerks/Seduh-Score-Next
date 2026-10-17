@@ -763,6 +763,9 @@ a {
   font-size: var(--text-xs);
   color: var(--color-text-secondary);
 }
+.petrol-pricing-more {
+  margin-top: var(--space-5);
+}
 
 /* ---- CTA band ---- */
 .petrol-cta {

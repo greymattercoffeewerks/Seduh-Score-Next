@@ -41,3 +41,8 @@ timing-surface` (tap path) and the manual-entry path — never a second cap
 Report violations as: which module, which direction the boundary was crossed, and
 whether the fix is "move the code" or "add the missing `core/` primitive and call it from
 both sides."
+
+**Reporting.** Follow the "Review protocol" in `CLAUDE.md` and the severity definitions in
+`REVIEW.md`: mark each finding 🔴 Important, 🟡 Nit or 🟣 Pre-existing, give a `file:line` and
+a concrete failing input or state, and re-read the code to confirm it before you report it.
+Drop what you cannot trace to a real failure, and say plainly when you found nothing.

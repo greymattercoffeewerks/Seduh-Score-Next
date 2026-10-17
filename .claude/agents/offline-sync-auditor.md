@@ -38,3 +38,8 @@ Check for:
 `src/lib/storage.js`-style bare `catch (e) {}` blocks that swallow a write or quota
 failure are exactly the defect this project's design says the IndexedDB layer must not
 inherit (§15.1) — treat any silent catch on a persistence path as a fail.
+
+**Reporting.** Follow the "Review protocol" in `CLAUDE.md` and the severity definitions in
+`REVIEW.md`: mark each finding 🔴 Important, 🟡 Nit or 🟣 Pre-existing, give a `file:line` and
+a concrete failing input or state, and re-read the code to confirm it before you report it.
+Drop what you cannot trace to a real failure, and say plainly when you found nothing.

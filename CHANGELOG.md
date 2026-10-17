@@ -1,3 +1,139 @@
+## BR-D2: "Powered by Seduh Score" credit and the brand slot on the audience surfaces · 2026-10-17
+
+**Task:** BR-D2, Level 2 organiser branding (`Handoffs and Specs/BRANDING-SPEC.md` 3, 4.5; spec is local and gitignored, not in git). PR #291 (`feat/brand-attribution`), merged into `dev` 2026-10-17 (merge `15d21a1`); commits `5e79bdb` (feature) and `0ce38e5` (boundary-review fixes). Recorded 2026-10-18. **Status: built, reviewed, merged to dev. Not in production (no release PR yet). Nothing feeds a brand yet, so no audience sees one.** (`dev` also took PR #288, the public `/pricing/` page, on 2026-10-18; unrelated to this entry.)
+
+**Why:** a branded audience surface must carry exactly one visible "Powered by Seduh Score" credit, and the credit must never be hidden, faded or shrunk. Each surface building its own credit would let them drift, so the credit is decided and built in one module and every surface asks it. The brand itself (name, logo, accent) is drawn by one shared slot, applied only to the nodes a surface owns.
+
+**What changed:**
+
+- `src/core/poweredBy.js` (new): the one place the credit is built and decided. `shouldShowPoweredBy()` returns true; `poweredByText()` gives the splash pill's text.
+- `src/core/brandSlot.js` and `brandSlot.css` (new):
+  - `normaliseBrand` takes the untrusted brand. A logo address must be https (plain http only for loopback), carry no credentials, stay under a length cap, and not end `.svg`, `.svgz`, `.gif`, `.html` or `.htm` (BRANDING-SPEC D-BR6: no SVG, no animated formats). A name has its whitespace collapsed and its invisible format controls removed, is trimmed at the ends, and is capped in characters. It must contain something visible. ZWNJ and ZWJ are kept inside a name (Persian spelling, emoji sequences).
+  - `renderBrandIdentity` draws the logo and name with `dir="auto"`.
+  - `applyBrandColors` sets the BR-D1 accent variables on nodes the surface owns, never on the shared root.
+- Wired into `stageBand.js`, `stageDisplay.js`, `stageBody.js`, `viewer-shell.js` and `splashScreen.js`:
+  - phone: the brand sits in the h1, with a footer credit;
+  - projector shell: draws the same band above its holding cards while no display is live (the holding cards had no credit before the review);
+  - splash: the credit sits at the top, outside the pill and the live region, and scales with `vmin`.
+- Unbranded output is byte-for-byte unchanged (the eight unbranded inputs in the matrix change nothing).
+- `app/index.html`: one stylesheet link for `brandSlot.css`, placed after the splash, phone and stage sheets it builds on.
+- `src/ui/tokens/components.test.js`: the preview page is added to `PAGES_THAT_LINK_IT`, the list of pages that link `components.css`.
+- `src/core/brandSlot.preview.html` (new): a preview page for the slot.
+- `src/core/CLAUDE.md`: module entries (already committed with the code).
+- Tests:
+  - `brandSlot.test.js` (new, 421 lines).
+  - `brandAttribution.test.js` (new, 794 lines): runs every surface x state x 12 branded inputs and asserts exactly one visible credit; the 8 unbranded inputs change nothing; the stylesheet may not hide, fade or shrink the credit.
+
+**Decisions** (BRANDING-SPEC is local, so the reasoning is recorded here, not in the handoff's §12):
+
+- **One credit decision.** `shouldShowPoweredBy()` answers for every surface, and every credit text comes from `poweredBy.js`. Why: the splash's ordinary pill spelled the credit itself. The boundary review caught it, and `0ce38e5` moved it onto `poweredByText()`.
+- **Brand styling only on nodes a surface owns, never the shared root.** Why: the root is shared, so a brand set there would style everything under it, including the console's own tokens.
+- **Logo addresses ending `.svg`, `.svgz`, `.gif`, `.html` or `.htm` are refused** (D-BR6: no SVG, no animated formats). Why: the review found SVG addresses being accepted, and an SVG can carry script. The display refuses them too, so a bad object that reached Storage is not drawn.
+- **A brand that arrives late is not announced.** The brand region is `aria-live="off"`. Why: the review found a brand arriving mid-show read out as a live-region update.
+- **A brand with an accent colour and no name or logo counts as unbranded.** It changes nothing, not even the credit. Why: a bare colour is not an identity the credit can attribute.
+
+**Reviews:**
+
+- `code-reviewer`, `test-auditor`: the record does not itemise their findings. The fixes below are the ones recorded. Do not read this as "no findings".
+- `ui-accessibility-reviewer` found and fixed:
+  - RTL names cut at the wrong end (now `dir="auto"`);
+  - the splash short-screen guard was inert (now a viewport-length cap);
+  - the credit mark took the brand colour (now pinned);
+  - the projector holding cards had no credit (the band is now drawn);
+  - SVG, GIF and HTML logo addresses were accepted (now refused);
+  - a late brand was announced in the live region (now `aria-live` off);
+  - the splash credit was capped at 18px (now scales with `vmin`).
+- `module-boundary-checker`: no hard violation. Fixed in `0ce38e5`: the splash pill now obeys the single decision, and ZWNJ and ZWJ are kept inside names.
+- **360px first (DoD §11): done by `ui-accessibility-reviewer` in a real browser.** The phone at 360px had no horizontal overflow for any brand case, exactly one `h1` and two chrome children, a 60-character name truncated with an ellipsis, the credit at 12px and about 11:1 on the canvas. The stage credit measured 6.1:1 or better on all three stage surfaces, and 4.7:1 or better under the splash glow in its worst case. No interactive elements were added to any surface. Reduced motion and forced colours also passed. The reviewer's final pass happened before the projector holding band existed, so that band was verified by tests and by reusing the live band, not by a second browser pass.
+
+**Verification:** `brandSlot.test.js`, `brandAttribution.test.js` and `brandColor.test.js` pass on this branch: 319 tests across the three files (run 2026-10-18).
+
+**Accepted limits and open items** (also in ROADMAP's "Known open items from BR-D1 and BR-D2"):
+
+- No logo contrast check: a logo's own colours are not measured against the surface.
+- The splash short-screen fix is covered by a stylesheet test only. Check it at 1280x360 in BR-E1.
+- 4K was emulated, not checked on a TV.
+- Accent-only brands count as unbranded (see the decisions above).
+
+**Not done / still open:**
+
+- **Not wired (BR-E1).** Nothing feeds a brand. BR-E1 must pass the door's answer through `formatBody`, which rebuilds a body per event and would lose the brand; then `stageSurface`, `liveSurfaces.js` and `main.js`.
+- No release PR (`dev` to `main`) yet, so nothing is live.
+- `CONVENTIONS.md` carries the three brand rules (owned nodes only; one credit, from `poweredBy.js`; `--color-test` and the status colours unreachable by a brand), added 2026-10-18 in the Design tokens section.
+- No footer version bump in this entry: docs only, no shippable change.
+
+## BR-D1: brand accent colour engine, a pure core module · 2026-10-17
+
+**Task:** BR-D1, Level 2 organiser branding (BRANDING-SPEC 4.4; spec is local and gitignored, not in git). PR #289 (`feat/brand-color`), merged into `dev` 2026-10-17 (merge `ace6f22`), from commit `9db7d59`. Recorded 2026-10-18. **Status: built, reviewed, merged to dev. Not wired into any screen.** Not in production.
+
+**Why:** an organiser's accent colour is untrusted input that lands on a public screen. Without a single engine that decides what is allowed, each surface would make its own contrast call, and a brand could reach the reserved TEST colour or a status colour by accident. The engine decides once, in a pure function, and can return only three CSS properties.
+
+**What changed:**
+
+- `src/core/brandColor.js` (new, 260 lines):
+  - `brandCssVariables(hex, surface)` returns exactly three properties, `--color-accent`, `--color-accent-hover` and `--color-accent-contrast`, or `null` to leave the screen unbranded. `surface` is `'stage'` or `'paper'`.
+  - `deriveBrandColors` returns the fuller answer for a preview: the requested colour, whether it moved, and the ratios.
+  - A colour that already reads is returned unchanged. One that does not moves the smallest amount in OKLCH (lighter on the stage surfaces, darker on paper), keeps its hue, and keeps greys grey. The move is measured on the 8-bit colour actually returned.
+  - Surface colours are frozen and copied from `colors.css`. A test fails if they drift.
+  - Pure: no imports, DOM, clock or randomness.
+- `src/core/brandColor.test.js` (new, 502 lines, 45 tests): seeded property tests over about 3,500 colours per surface (readability, minimal movement, hue kept, exact boundaries on both surfaces, pinned outputs), a contract test against the CSS tokens, and purity checks.
+- `src/core/CLAUDE.md`: module entry (committed with the code).
+
+**Decisions** (BRANDING-SPEC is local, so the reasoning is recorded here):
+
+- **"Reads" means 4.5:1 against every surface of the mode, not the canvas alone.** Those surfaces are the canvas, the card and the sunken band; the accent text is 4.5:1 on the accent; hover is visibly different and still readable. This is stricter than the spec's canvas-only sketch. Why: paper's canvas is not white, and an accent also sits on the card and the sunken band, so a canvas-only check passes colours that fail where the accent is used.
+- **Only three properties can come out.** Why: the TEST colour is reserved for `is_test` indicators (D9), and no brand may reach a status colour.
+- **Smallest move, hue kept, greys kept grey.** Why: the organiser's colour should stay recognisably theirs. Only the lightness moves, and only as far as the readability bar needs.
+
+**Reviews:** `code-reviewer`, `test-auditor` and `module-boundary-checker` ran. The record holds no itemised findings from them. The commit states that 19 deliberate breakages of the module (mutation) were all caught. Do not read this as "no findings".
+
+**Verification:** `brandColor.test.js` passes on this branch, 45 tests (part of the 319 across the three brand test files, run 2026-10-18).
+
+**Not done / still open:**
+
+- **The Random Selector tool has its own copy of the WCAG contrast maths.** Extract it to a shared `core/contrast.js` on a later pass. Recorded in ROADMAP's "Known open items from BR-D1 and BR-D2".
+- Not wired into any screen (BR-E1, see BR-D2).
+- No footer version bump: docs only in this record; no shippable change in this entry.
+
+## T-ADM cloud rollout: the admin console goes live (v3.4.0) · 2026-10-17
+
+**Task:** the owner-approved cloud rollout of admin console v1 (CLAUDE.md "Platform administration", spec section 8). Done 2026-10-16/17 from a worktree off `origin/dev`. **Status: live in production; two paths are not yet exercised against the cloud (below).**
+
+**What was done, in order:**
+
+1. **Pre-checks (read only).** The exposed API schemas exclude `app` (PGRST106), `pg_graphql` is off, `pg_default_acl` has no `app` entry, and `postgres` can read `auth.sessions` (otherwise the gate fails closed).
+2. **Six migrations pushed** with the Supabase MCP's `apply_migration`, as cloud versions `20261016080210` to `20261016080352` (`platform_admin_identity`, `admin_audit_log`, `admin_read_rpcs`, `admin_write_rpcs`, `admin_record_account_create`, `admin_gate_requires_live_session`). `list_migrations` matches the repo by name and order. The cloud's old `team_can_manage` and `team_can_restore` bodies were checked against the migration's `create or replace` first. Catalog ACLs checked. Security and performance advisors run: only the expected new findings (`rls_enabled_no_policy` on the two `app` tables, lint 0029 on the admin functions, an unused index on `admin_audit_log`); the older findings are unchanged, including leaked-password protection, off on purpose.
+3. **TOTP.** The hosted dashboard had no TOTP switch to flip (Supabase documents TOTP as enabled by default, and an earlier instruction named dashboard labels that had not been confirmed). An organiser still signed in afterwards. TOTP was proven by the first admin's enrolment in step 6.
+4. **`admin-accounts` deployed** (version 1, entrypoint `index.ts`, `handler.js` alongside, `verify_jwt` true). The manual script `supabase/tests/manual/admin-accounts-e2e.mjs` passed 35 of 35 against the local stack first. Probes of the live function: no authorization header 401, the anon key as bearer 401, GET 405.
+5. **Release.** The version moves to **3.4.0** (`package.json` only, as for earlier releases) in a `chore: release` commit pushed to `dev`; release PR #285 (dev to main) merged with a merge commit after CI passed; back-merge PR #286 follows. Checked live on the production host: `/admin/` answers 200 with `Cache-Control: no-store`, `X-Robots-Tag: noindex, nofollow`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, the CSP with `connect-src 'self' https://*.supabase.co` (which covers the project's API host), and the meta robots tag; `/admin` redirects to `/admin/`; the page is not linked from `/`, `/app/`, `/tour/`, `/community/`, the sitemap or `robots.txt`; the admin bundle holds the project ref; `/app/` is unaffected.
+6. **First platform admin** (the only one): `greymatter.cw@outlook.com`, by the temporary-password procedure. It had no live session and no factor. A random temporary password was set with `extensions.crypt` (no service key is available to the MCP), the `app.platform_admins` row was inserted with a note, and the owner signed in at `/admin/` and enrolled an authenticator at once. Verified in the cloud: one TOTP factor in status `verified` and one `aal2` session.
+7. **Smoke test** on a throwaway organisation `console-smoke`. In the audit log: `org.create` (owner an existing account), then two `member.role_set` (an owner swapped between two accounts, keeping one owner throughout). The second account was made by the organiser Team screen, not the console. Then removed by SQL: the organisation (its rows cascade), and that second login; the audit rows stay (append-only, no foreign key to the organisation). Afterwards the cloud holds the two real organisations, three logins, one admin and audit rows 1 to 3.
+
+**Not done / still open:**
+
+- **`admin-accounts` creating a login (`account.create`) and `member.add` through the console have not been run against the cloud.** Run both with a throwaway organisation before the first real customer organisation is made from the console.
+- **The console has no change-password screen**, so the first admin's password is the random temporary one until it is rotated from the Supabase dashboard (a password change from a password-only session is refused once a factor is verified).
+- **The cloud project's factor cap (4) is unconfirmed**, because the dashboard showed no TOTP settings; `config.toml` is local only.
+- **This entry is documentation only:** no migration and no code change (the version bump was its own commit, in the release). `CLAUDE.md` ("Rollout status", the add-an-admin procedure and the provisioning runbook) and `ROADMAP.md` (the Admin console v1 section and its open items) now say the console is live. Earlier T-ADM entries are not edited, so their "not in the cloud" lines are stale.
+- Worktree and branch clean-up: the rollout worktree `C:\Dev\seduh-score-next-rollout` is removed when this PR merges.
+
+## Review workflow: REVIEW.md and a find, verify, rank protocol (docs and agent config, no code) · 2026-10-17
+
+**Task:** process change (no task ID), from a request to compare our review workflow with how Anthropic describes its own Code Review. The named article (claude.dev, "How the Claude Code team does code review", Osmani, Lunt and Wang, 2026-10-15) was unreachable from the sandbox, so the first pass followed Anthropic's Code Review announcement and docs. It was then checked against the article's text and corrected (see "Correction" below).
+
+**Why:** our specialist reviewers already match the "several agents in parallel" part. What we lacked was a verification step (reviewers could report unproven findings), one severity scale across reviewers, review depth scaled to the change, a way to calibrate the GitHub review service, and a stance on clean reviews: "expect to find something" pushes reviewers to pad.
+
+**What changed:**
+
+- `REVIEW.md` (new, repo root): what Important means for this repo (tenant isolation, admin gate, migrations, derived-vs-stored, outbox, `is_test`, module boundary), a five-nit cap, a pre-existing cap, a do-not-report list (whatever CI already enforces, generated files, frozen handoff), an always-check list, and an evidence rule. The service reads it from `main` only, so it takes effect once merged.
+- `CLAUDE.md`: "Every review should find something" replaced by a skeptical-but-honest line, plus a "Review protocol" section (find, verify, rank, deduplicate, scale depth, re-review scope, advisory only, record dropped findings). The mandatory reviewer triggers are unchanged and remain the floor.
+- The eight reviewer agents each gain a short "Reporting" pointer to the protocol and the 🔴/🟡/🟣 scale. 🔴 maps to `state.json` `severity: "blocking"`.
+- `src/formats/btc/CLAUDE.md`: put the SQL fragments `count(*) = cups` and `cups * 3` in code spans. `npm run format:check` (and so CI) was failing on that line before this branch: Prettier read the two asterisks as emphasis. Running `prettier --write` on it would have rewritten them to underscores and corrupted the text, so the fix is by hand.
+
+**Correction, same day:** checked against the article itself. Verification is now an independent check of each 🔴 and gate finding by a fresh-context agent (the article has a group vote on every finding), not the author re-reading its own work. Added the convergence rules (new diff only, no repeats, name the bug class, stop and rethink after three rounds), the severity-count summary line in `REVIEW.md`, `.github/pull_request_template.md` (Summary, Testing, Risk, How to revert), and recording how each finding ended (fixed, wrong, intentional, did not matter). Removed a stale reference to the old "every review should find something" rule in the cost note.
+
+**Not adopted:** the managed Code Review service itself and its CI gate on the `bughunter-severity` check-run count (needs the Team/Enterprise service enabled by an Owner; revisit once it is on), and per-directory `REVIEW.md` files (add one when a subtree needs different severity).
+
 ## T-ADM.D3 follow-up: admin and organiser consoles share four core primitives (refactor, no behaviour change) · 2026-10-16
 
 **Task:** refactor (no task ID), follow-up to the module-boundary review of PR #280 (T-ADM.D3, Batch 10). Branch `refactor/admin-core-primitives`, worktree `C:\Dev\seduh-score-next\.claude\worktrees\friendly-antonelli-5d332b`, based on `origin/admin/b9-create-org`. **Status: built and reviewed; changes are in the working tree and not yet committed; not merged.** No migrations; nothing pushed to the cloud database.
@@ -995,7 +1131,7 @@ Claude trailer (not rewritten). Commits from here on carry both trailers.
 - `ROADMAP.md`: the tenancy phase table (D done; E in progress, with step 7 named). Plan and spec documents (local, not tracked): E4 and E6 ticked, `HANDOFF-CORRECTION-002.md` and the scoping document carry a status line.
 - `state.json` reset to the one remaining step.
 
-**E6 checklist:** no blocking findings open (every security-reviewer run ended with none; the review outcomes are in the entries below); every deferred finding is in ROADMAP.md under its "Known open items from T-TEN.*" heading; counts at close-out: **3,989 unit tests in 138 files, 1,930 database assertions in 45 files**, lint and formatting clean, the Playwright projects green in CI.
+**E6 checklist:** no blocking findings open (every security-reviewer run ended with none; the review outcomes are in the entries below); every deferred finding is in ROADMAP.md under its "Known open items from T-TEN.\*" heading; counts at close-out: **3,989 unit tests in 138 files, 1,930 database assertions in 45 files**, lint and formatting clean, the Playwright projects green in CI.
 
 **Closed afterwards:** E5 step 7 passed, see the entry above it.
 
@@ -2331,7 +2467,7 @@ User request: a downloadable PDF on the public Results page. No PDF generator ex
 
 - Organiser side (`src/formats/cup-taster/reportScreen.js` + `.css`, `resultsPublishing.js`): the report's 'Public results' card gains a 'What to publish' fieldset — 'Podium only' (default) / 'Full standings' radios with aria-describedby hint that phone numbers, emails and set-by-set marks are never published, withdrawn/no-score competitors are left out of the full standings, and figures are those on the page so reload first. When published: first button stays 'Unpublish', then 'Update published results' (re-publishes at the chosen level; the publish RPC already upserts, NO migration). A role=status 'Not applied yet…' note appears when the radios disagree with what is live; success messages name the level; a 'View the public results sheet' link (new tab). The level is captured once at click (a change mid-publish cannot change what is reported); radios are truly disabled while busy; after Unpublish the choice resets to podium. What is published right now is read from the payload itself (standings present = full). Café lookups are chunked at 50 ids.
 - Payload (`resultsPublishing.js` `buildResultsPayload`): new `scope` ('podium' default; any unrecognised value = podium; only 'full' adds `standings`), `roundLabelByOrdinal`, `omitEntryIds`. `standings` rows built from seven fixed fields only (place, name, cafe, round, correct, total, timeSecs) — never a spread — so contact details/set marks cannot reach it. `place` = the stage resolution's decided placing (finalPosition) for the competitor's last round, null (shown as a dash) if none was recorded — NOT a stage-local rank. The podium is now the top three PLACES (`podiumRowsOf`): everyone who shares third place is on it; podium `rank` now uses the same decided placing as the standings (previously index+1, so a tie for 2nd showed 2,3 vs 2,2 in the table). Full standings omit anyone with no scores and anyone the caller lists as withdrawn — but never a podium finisher; no renumbering; `notListed` records how many were left out (only when >0, full scope only); `competitors` and the podium are unaffected.
-- Public side: new `src/marketing/resultsSheet.js` — `/results/?sheet=<event id>` (same results HTML entry; `resultsMain.js` picks by query string, so no new vite input/sitemap/prerender/smoke change) — reads only the published public_results row, rebuilds every field from known keys with type checks, textContent only. Table: Place, Competitor, Café, Score, Time, Reached (podium: Place, Competitor, Café, Score), caption and scroll-region label name the event; a white 'paper' page with its own ink colours (--sheet-* hex in results.css — a documented exception to tokens), A4 @page, print hides header/footer/toolbar; 'Print / Save as PDF' button (browser print dialog; help text covers iPhone/iPad); notes explain placings and say how many competitors are not listed; page title set to '<event> — Results' so the saved PDF is named for it. Persistent header/footer and a persistent sr-only live region; loading/error/not-available states each have an h1, focus moves to it, error states have a 'Try again' button that keeps focus on the heading; success focuses the sheet's h1. A 'Scroll sideways to see every column →' cue shows only while the table really overflows (measured, updated on resize/fonts). `resultsScreen.js`: each event links to its sheet ('Results sheet — print or save as PDF'; archive links name the event); it now exports `formatLabel`/`formatDate`/`scoreCell` for the sheet.
+- Public side: new `src/marketing/resultsSheet.js` — `/results/?sheet=<event id>` (same results HTML entry; `resultsMain.js` picks by query string, so no new vite input/sitemap/prerender/smoke change) — reads only the published public_results row, rebuilds every field from known keys with type checks, textContent only. Table: Place, Competitor, Café, Score, Time, Reached (podium: Place, Competitor, Café, Score), caption and scroll-region label name the event; a white 'paper' page with its own ink colours (--sheet-\* hex in results.css — a documented exception to tokens), A4 @page, print hides header/footer/toolbar; 'Print / Save as PDF' button (browser print dialog; help text covers iPhone/iPad); notes explain placings and say how many competitors are not listed; page title set to '<event> — Results' so the saved PDF is named for it. Persistent header/footer and a persistent sr-only live region; loading/error/not-available states each have an h1, focus moves to it, error states have a 'Try again' button that keeps focus on the heading; success focuses the sheet's h1. A 'Scroll sideways to see every column →' cue shows only while the table really overflows (measured, updated on resize/fonts). `resultsScreen.js`: each event links to its sheet ('Results sheet — print or save as PDF'; archive links name the event); it now exports `formatLabel`/`formatDate`/`scoreCell` for the sheet.
 - Privacy wording (`src/marketing/trustContent.js` + `design/copy/privacy-page-draft.md` source; PRIVACY_UPDATED → '6 October 2026'): states the organiser chooses the level (default top three; or full standings with the last-round score/time and round reached, withdrawn/no-score competitors left out), that every published event has a printable sheet, that phone numbers/emails/set-by-set marks are never published; 'Exact scores…' item renamed 'Set-by-set marks and the full change log…'; the 'never exact scores' sentence now refers to the score-change record only. `scoringRecord.js` header comment amended. `src/marketing/CLAUDE.md` gained a 'Results sheet (2026-10-06)' section. **Privacy wording needs owner approval before merge.**
 
 **Bugs found while building:**
@@ -3224,7 +3360,7 @@ optionally trimming `service_role` from the earlier privilege hardening.
 `TRUNCATE`, `REFERENCES`, `TRIGGER` and, on Postgres 17, `MAINTAIN`. Nothing in the app uses any of
 them. `TRUNCATE` is not subject to RLS, so it is a defence-in-depth gap rather than a live hole:
 PostgREST does not expose it and neither role has a direct connection (security-reviewer confirmed
-there was no API-reachable path). The same excess had already been stripped by hand from the btc_*
+there was no API-reachable path). The same excess had already been stripped by hand from the btc\_\*
 tables and the score-log tables.
 
 **Migration:** `20260925090000_revoke_excess_table_privileges.sql` — `revoke truncate, references,
@@ -3432,7 +3568,7 @@ parent/identity columns.
   (row_id, table_name, action, old_value, new_value, changed_by, reason, after_confirm, context,
   org_id, event_id, txid, created_at) plus 10 AFTER-trigger pairs logging writes to ct_heat_entries,
   ct_results, ct_heats, ct_stages, ct_stage_entries, btc_cup_votes, btc_match_bonuses, btc_matches,
-  btc_bracket_slots, and events. Parent/identity columns (id, *_id columns, org_id on every table,
+  btc_bracket_slots, and events. Parent/identity columns (id, \*\_id columns, org_id on every table,
   event_id on every child) immutable via `app.forbid_parent_change()` BEFORE UPDATE trigger. Log
   itself insert-only for every role via `app.forbid_score_change_log_mutation()` (rejects UPDATE/DELETE/TRUNCATE).
   is_test events skipped from logging, but is_test flips on any event ARE logged (closes bypass
@@ -3617,7 +3753,7 @@ signal, client)` dispatcher reading `event.format` and mounting either
   (btc/setupScreen.css, btc/matchesScreen.css, btc/bracketScreen.css, btc/scoringScreen.css,
   btc/standingsScreen.css, btc/eventDashboardScreen.css). These files were built and tested
   in isolation (preview.html loads them directly), but the real shipped app never linked
-  them, so every btc-* class rendered unstyled.
+  them, so every btc-\* class rendered unstyled.
 
 **Review cycle (5 subagents in parallel, 1 round — no migrations/RLS/scoring changes):**
 
@@ -4043,11 +4179,11 @@ instance only). CLAUDE.md moved and updated.
   `setup_organiser_id` transaction-level variable, set by the calling screen, to enforce
   org-scoped uniqueness at the DB level without trusting client-supplied `org_id` fields.
 - `setupScreen.js`/`.css` — organiser UI with `is_test` banner, add/remove forms for
-  both rosters, live count display. **Found and fixed during review (ui-accessibility-reviewer
+  both rosters, live count display. \*\*Found and fixed during review (ui-accessibility-reviewer
   - code-reviewer, two rounds)**: (1) aria-label/error-text mismatch on inputs; (2) missing
     `.card:focus-visible` CSS; (3) three blocking a11y gaps (no focus-preservation keys,
     no focus-move on load success, unassociated validation error regions); (4) **real
-    double-render bug** where `showToast()` rendered itself AND the caller's trailing
+    double-render bug\*\* where `showToast()` rendered itself AND the caller's trailing
     `render()` ran right after, stealing focus back — fixed by moving success feedback
     inline instead of calling `showToast()`, and adding a regression test asserting
     `document.activeElement` survives the rebuild.
@@ -4167,7 +4303,7 @@ match_id`, inconsistent ON DELETE on match FKs. **SECOND pass (after fix)**: PAS
   iterations).
 - `npm run db:test` passes 275/275 (23/23 new in `012_btc_tables.sql`).
 - Full 3-migration rollback chain run live inside `begin;...rollback;` via `docker exec`
-  psql, confirming zero remaining btc_* tables/views/app-schema functions before rollback, and
+  psql, confirming zero remaining btc\_\* tables/views/app-schema functions before rollback, and
   real local DB untouched afterward (run twice: once on original draft, once on fixed version).
 
 **Not done, carry forward to T-BTC.2+**:
@@ -5735,7 +5871,7 @@ ran in parallel; all found real issues and none were blockers once fixed. Commit
   Cabinet Grotesk/Switzer/JetBrains Mono → Cherry's Bricolage Grotesque/IBM Plex Sans/IBM
   Plex Mono (OFL-licensed, sourced from Google Fonts CDN then self-hosted alongside the
   originals). `fonts.css` rewritten with new `@font-face` rules; cabinet-grotesk/switzer/
-  jetbrains-mono font files deleted, new bricolage-grotesque/ibm-plex-* files added.
+  jetbrains-mono font files deleted, new bricolage-grotesque/ibm-plex-\* files added.
   Typography scale and weight assignments unchanged; only font names changed.
 - **`src/ui/tokens/DESIGN.md`** — References, palette visual, contrast table, Typeface
   sections rewritten to document the new identity, new colors, and new fonts. Contrast
@@ -6464,7 +6600,7 @@ event, AND the full-text "named other event" variant injected via DOM to confirm
 wrapping at 360px with no overflow (screenshot-verified at both desktop and 360px viewport).
 
 **Verifiers:** Three parallel reviewers (UI changed, core module boundary affected,
-src/** files changed):
+src/\*\* files changed):
 
 - `ui-accessibility-reviewer` (MEDIUM finding, fixed): identified that "Not currently live"
   originally collapsed two different situations (event never started vs. an event that WAS
@@ -6615,7 +6751,7 @@ screen-reader expansion, and favicon assets restored from the legacy repo.
 - `src/core/inputModality.js`/`.test.js`: `trackInputModality()` now calls `setModality('pointer')`
   on mount, before any real event, defaulting every fresh page load to the pointer assumption
   (brand-new tabs are far more likely mouse-opened than keyboard-opened); first real keydown
-  still flips to 'keyboard'. Fixes splash screen's focus ring persisting on fresh target="_blank"
+  still flips to 'keyboard'. Fixes splash screen's focus ring persisting on fresh target="\_blank"
   tabs, where the opener's interaction history is invisible.
 - `src/core/duration.js`/`.test.js`: added `formatDurationLong()` (spells out "2 minutes 0
   seconds" for screen readers); `formatDuration()` now powers M:SS display in standings/report
@@ -6648,7 +6784,7 @@ it isn't automated either (shared/version.js is identical hand-maintained consta
 alongside CHANGELOG.md" comment). Not yet decided whether to build real automation for this
 project — open question for the user.
 
-**Verifiers:** Four reviewers ran in parallel (UI touched multiple surfaces, tests added, src/**
+**Verifiers:** Four reviewers ran in parallel (UI touched multiple surfaces, tests added, src/\*\*
 files changed): `module-boundary-checker` (CLEAN), `ui-accessibility-reviewer` (no blocking
 findings; non-blocking: comment scope clarified for `trackInputModality`'s mount-default trade-off,
 SR expansion added to static tables, CSV Excel-autodetection bug fixed), `code-reviewer`
@@ -6987,7 +7123,7 @@ files), lint clean.
 
 **Verifiers' findings:**
 
-- **`ui-accessibility-reviewer`** — found and fixed 2 real gaps: (1) the three new `openInNewTab` links had no screen-reader signal they open a new tab (target=_blank alone only cues sighted mouse users) — fixed with an sr-only '(opens in a new tab)' suffix on the accessible name; (2) the new sticky header could occlude router.js's own post-navigation focus-move target on a long scrolled page (the exact scenario the sticky header itself was built for) — fixed with a new `--app-shell-header-height` custom property kept in sync by `syncHeaderHeightVar()`, driving `scroll-margin-top` on focus targets. Also added missing `main.test.js` coverage for nav-wiring. Contrast/tap-targets/reduced-motion/360px all verified clean.
+- **`ui-accessibility-reviewer`** — found and fixed 2 real gaps: (1) the three new `openInNewTab` links had no screen-reader signal they open a new tab (target=\_blank alone only cues sighted mouse users) — fixed with an sr-only '(opens in a new tab)' suffix on the accessible name; (2) the new sticky header could occlude router.js's own post-navigation focus-move target on a long scrolled page (the exact scenario the sticky header itself was built for) — fixed with a new `--app-shell-header-height` custom property kept in sync by `syncHeaderHeightVar()`, driving `scroll-margin-top` on focus targets. Also added missing `main.test.js` coverage for nav-wiring. Contrast/tap-targets/reduced-motion/360px all verified clean.
 
 - **`module-boundary-checker`** — clean. `brandMark()` is genuinely format-agnostic (zero imports, currentColor, static SVG); `openInNewTab` flag is generic mechanics with no format knowledge; `main.js`'s choice of WHICH links to add stays correctly in the composition root; `reportScreen.js`'s bar chart stays correctly confined to `formats/cup-taster/`.
 
@@ -7015,7 +7151,7 @@ files), lint clean.
 - Sync-on-reconnect in src/main.js — an 'online' event listener plus a mount-time attempt, both gated on a reactively-tracked session (client.auth.onAuthStateChange, not a fresh getSession() call — that would have raced requireAuth()'s own per-navigation check, a collision found and avoided while writing this).
 - A genuine Playwright E2E test (tests/e2e/organiser-flow.spec.js) using real browser network emulation (page.context().setOffline) against a real local Supabase stack, not a mock — this test is what actually FOUND the buildRpcHandler bug.
 
-**Files touched:** 12 across src/core/, src/formats/cup-taster/, src/main.js, and tests/e2e/ (appShell.js/.css/.test.js, outbox.js/.test.js, publish.test.js, timing*.test.js, main.js/.test.js, organiser-flow.spec.js). Test count: 871 → 895 (net +24, including new sync-panel and reconnect-flush unit coverage, plus the new E2E test).
+**Files touched:** 12 across src/core/, src/formats/cup-taster/, src/main.js, and tests/e2e/ (appShell.js/.css/.test.js, outbox.js/.test.js, publish.test.js, timing\*.test.js, main.js/.test.js, organiser-flow.spec.js). Test count: 871 → 895 (net +24, including new sync-panel and reconnect-flush unit coverage, plus the new E2E test).
 
 **Verifiers' findings:**
 
@@ -7488,6 +7624,7 @@ Pushed to both the local stack and the linked cloud project via the Supabase MCP
 `apply_migration`, same as the search_path migration — re-verified `has_function_privilege`
 directly against the cloud project afterward (`anon` → false, `authenticated` → true,
 `service_role` → true, all six).
+
 ---
 
 ## Migration: pin search_path on the six write RPCs · 2026-08-30

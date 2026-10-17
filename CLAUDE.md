@@ -93,15 +93,65 @@ Run the relevant reviewers in parallel (single message, multiple Agent calls) wh
 change touches more than one concern — e.g. a migration that's both schema and RLS gets
 `schema-guardian` + `security-reviewer` together.
 
-**Every review this project runs should be expected to find something** (handoff §13).
-Treat a clean review as the surprising outcome, not the expected one.
+**Review with skepticism** (handoff §13): reviews on this project have found real bugs on
+second and third passes, so don't wave a change through. But a clean result is a valid
+outcome. A reviewer states it plainly and never pads it with nits to look useful, and a
+finding that fails verification is dropped, not downgraded.
+
+### Review protocol (adopted 2026-10-17)
+
+Modelled on the process Anthropic describes for its own Code Review: several reviewers
+search in parallel, a verification step removes false positives, and what survives is
+deduplicated and ranked. `REVIEW.md` is the same calibration for the GitHub review
+service (it reads `REVIEW.md` from `main`; the local `/code-review` command reads only
+`CLAUDE.md`, which is why the rules everyone needs are here).
+
+1. **Find** in parallel, as above.
+2. **Verify before reporting.** Every finding carries a `file:line` and a concrete failing
+   input or state, and the reviewer has re-read the code (or run the test) to confirm it.
+   Behaviour claims cite the source, never an inference from a name. A finding you cannot
+   trace from a real caller to a failure is dropped. Then every 🔴 Important finding, and
+   every finding from a gate reviewer (`security-reviewer`, `schema-guardian`,
+   `scoring-auditor`, `offline-sync-auditor`), gets an **independent check**: hand it to a
+   fresh-context agent that did not produce it, with only the finding and the diff, and
+   tell it to try to refute it. Report the finding only if it survives. (Anthropic has a
+   separate group of agents vote on each finding; one independent checker is the
+   proportionate version here, and the self-check above is not a substitute for it.) If
+   the checker can neither confirm nor refute a gate finding, report it as **unverified**
+   with what would prove it; it is never silently dropped. Nits skip the checker and are
+   capped instead.
+3. **Rank** with one scale across all reviewers (definitions in `REVIEW.md`):
+   🔴 **Important** is the `state.json` severity `blocking` and holds the task open;
+   🟡 **Nit** is non-blocking, at most five per review; 🟣 **Pre-existing** was not
+   introduced by this change, so log it, don't fix it in this change.
+4. **Deduplicate.** When two reviewers find the same thing, the owning domain reports it
+   and the other points to them (each agent already names its owner).
+5. **Scale depth to the change.** The triggers in the list above are the floor and are
+   never skipped: RLS/RPC/Storage always gets `security-reviewer`, scoring code always
+   gets `scoring-auditor`. Above that floor, a docs- or comment-only change needs
+   `code-reviewer` at most, and a large or cross-cutting change (many files, a
+   shared `core/` primitive, anything tenant-facing) gets every reviewer that applies,
+   run twice if the first pass finds a 🔴.
+6. **Re-review must converge.** Anthropic found one PR looping through 50+ review rounds,
+   most of it re-flagging code that was there from the first pass. So: after a fix, re-run
+   only the reviewers that raised 🔴 findings, on the new diff only; never repeat a finding
+   already reported; when you report a bug, name its class so the author fixes every
+   instance in one commit. After **three** rounds on one change, stop and ask the author to
+   step back and reconsider the approach instead of running a fourth. Run one full pass
+   before `kb-sync` closes the task.
+7. **Reviewers advise; people approve.** No reviewer's output stands in for a human
+   merge decision, and a clean pass is not evidence the change is correct.
+8. **Record the outcome** in the CHANGELOG `Reviews` line: which reviewers ran, what each
+   found, and how each finding ended up (fixed, wrong, intentional, or did not matter).
+   A rising share of wrong findings means a reviewer's prompt or `REVIEW.md` needs
+   tightening; noise costs a round trip every time.
 
 **Cost note (2026-08-22, user decision):** `kb-sync` and `module-boundary-checker` run
 on a cheaper model (`model: haiku` in their `.claude/agents/*.md` frontmatter) — both are
 comparatively mechanical (session-log writing; import-path/grep-based boundary checks).
 `schema-guardian`, `security-reviewer`, `scoring-auditor`, `offline-sync-auditor`, and
 `code-reviewer` stay on the full model deliberately — these are the correctness/security
-gates the "every review should find something" discipline above depends on, and Phase 4's
+gates the skeptical-review discipline above depends on, and Phase 4's
 own review cycles (T4.1, T4.2) already surfaced real bugs on second and third passes that
 a weaker reviewer could plausibly have missed. `test-auditor` and `ui-accessibility-reviewer`
 were considered and kept on the full model too.
@@ -216,10 +266,16 @@ functions"); the locked spec is `Handoffs and Specs/ADMIN-CONSOLE-SPEC.md` (loca
 - **Add the first or another admin (the only way: no API, migration or seed makes one).** As the database owner (the
   Supabase MCP's `execute_sql` or the SQL editor), in this order, so the window in which a password alone is enough is
   as short as possible: (a) set a temporary random password on the person's login with the service key
-  (`PUT /auth/v1/admin/users/<id>` with `{ "password": ... }`; the old one stops working); (b)
+  (`PUT /auth/v1/admin/users/<id>` with `{ "password": ... }`; the old one stops working) or, from the Supabase MCP
+  (which holds no service key), `update auth.users set encrypted_password = extensions.crypt('<temp>',
+extensions.gen_salt('bf', 10)) where id = '<id>'` (the same bcrypt hash, and `encrypted_password =
+extensions.crypt('<temp>', encrypted_password)` proves it took; check first that the login has no live session and
+  no factor); (b)
   `insert into app.platform_admins (user_id, note) values ('<auth.users.id>', '<who, why, when>');`; (c) they sign in
-  at `/admin/` with the temporary password and **enrol their authenticator app at once**; (d) they set their real
-  password (allowed at `aal2`). **If their first sign-in shows a CHALLENGE screen instead of the enrolment screen,
+  at `/admin/` with the temporary password and **enrol their authenticator app at once**; (d) **the console has no change-password screen**, so the temporary password stays until it is rotated from
+  the Supabase dashboard (Authentication, Users, send a password recovery email); make it long and random and keep it in
+  a password manager (the first admin did; a password change from a password-only session is refused once a factor is
+  verified, `insufficient_aal`). **If their first sign-in shows a CHALLENGE screen instead of the enrolment screen,
   someone else has already enrolled a factor: the account is compromised.** Delete that factor in the dashboard,
   rotate the password and start again. Until a factor is verified, anyone holding only the password could enrol
   their own. To remove an admin: `delete from app.platform_admins where user_id = '<id>';` cuts a live session off on
@@ -248,19 +304,25 @@ functions"); the locked spec is `Handoffs and Specs/ADMIN-CONSOLE-SPEC.md` (loca
   contract, the audit writer); Playwright `dev-admin` (the console, plus `admin-console-adversarial.spec.js`: the
   attack list over HTTP, which a new admin function or door must be added to); and, for the Edge Function (not
   served in CI), `supabase/tests/manual/admin-accounts-e2e.mjs`, to run before every rollout.
-- **Rollout status (2026-10-16): merged to `dev`, NOT in the cloud.** The cloud steps (spec section 8) are the
-  owner's and in order: (1) confirm the exposed schemas exclude `app` (and that `pg_graphql` stays off), that
-  `pg_default_acl` has no entry for `app`, and that `select has_table_privilege('postgres', 'auth.sessions', 'select')`
-  is true (else the gate fails closed); (2) push the migrations, compare with `list_migrations`, run the advisors
-  (lint 0029 on the admin functions is expected); (3) in the dashboard, confirm the plan allows TOTP at all, enable
-  it, confirm `max_enrolled_factors` is 4 and the Site URL and redirect list, and confirm an organiser still signs
-  in; (4) deploy `admin-accounts` and confirm `verify_jwt` is true; (5) ship the frontend and check `/admin/` is
-  reachable, noindex and unlinked, the `_headers` rule took effect, and the CSP `connect-src` covers the cloud API
-  host (amend it first if that host is not under `*.supabase.co`); (6) add the first admin as above; (7) smoke test:
-  `admin_can_provision` first, then a throwaway organisation `console-smoke` (create it with a new login, add a
-  member, change a role, see all three in the audit log, remove the organisation and login by SQL, noting that a
-  deleted organisation's link name can be reused). If the console is not fully shipped by about 28 Oct 2026 it waits
-  until after the ~4 Nov BTC pitch; nothing goes to production in the last days before it.
+- **Rollout status (2026-10-17): in the cloud and live (v3.4.0).** Done in order on 2026-10-16/17, each by the owner's
+  approval: (1) the pre-checks (the exposed schemas exclude `app`, `pg_graphql` is off, `pg_default_acl` has no `app`
+  entry, `postgres` can read `auth.sessions`); (2) the six migrations pushed with the Supabase MCP (cloud versions
+  `20261016080210` to `20261016080352`, compared with `list_migrations`; advisors showed only the expected findings:
+  `rls_enabled_no_policy` on the two `app` tables, lint 0029 on the admin functions, one unused index); (3) TOTP: the
+  hosted dashboard had no switch to flip (Supabase documents TOTP as on by default), an organiser still signed in, and
+  it was proven at the first enrolment (step 6); (4) `admin-accounts` deployed (version 1, `verify_jwt` true; the manual
+  script had passed 35 of 35 against local first; probes: no auth 401, anon-key bearer 401, GET 405); (5) release PR
+  #285 merged and `/admin/` checked live: 200, `no-store`, `X-Robots-Tag: noindex, nofollow`, the CSP with `connect-src
+'self' https://*.supabase.co`, the meta robots tag, `/admin` redirecting to `/admin/`, and no link from `/`, `/app/`,
+  `/tour/`, `/community/`, the sitemap or `robots.txt`; (6) the first admin, by the temporary-password procedure above,
+  with the authenticator factor verified and one `aal2` session; (7) a smoke test on a throwaway organisation
+  `console-smoke`, removed afterwards by SQL (the organisation, then the login a Team-screen add had made; the audit rows
+  stay, by design).
+  **Not yet exercised against the cloud:** `admin-accounts` creating a login (`account.create`; only the local script
+  and the unauthenticated probes have run it) and `member.add` through the console. What the smoke test did prove:
+  `org.create` with an existing account, and `member.role_set` twice (an owner swapped between two accounts, which keeps
+  one owner throughout, so `last_owner` never fired). Run those two paths with a throwaway organisation before the first
+  real customer organisation is created from the console.
 
 ### Definition of Done (handoff §11, restated)
 
@@ -383,9 +445,9 @@ anywhere. Local dev still defaults to the local stack (`npm run supabase -- star
 Studio at `http://127.0.0.1:54423`) — nothing about local dev changed.
 
 **Provisioning an org (T-TEN.B4; invite-only — there is no signup and no API role can do this).**
-**Once the admin console is rolled out to the cloud (not yet, see "Platform administration"), `/admin/` is the
-normal path and this SQL is the fallback** (the console's New organisation screen is `create_org` plus an audit
-row and the same refusals, plus the admin gate, `admin_self_target` and `member_password_unset`). Until then, and whenever the console cannot be used (a lost authenticator), run these
+**The admin console is live in the cloud (rolled out 2026-10-17, see "Platform administration"), so `/admin/` is
+the normal path and this SQL is the fallback** (the console's New organisation screen is `create_org` plus an audit
+row and the same refusals, plus the admin gate, `admin_self_target` and `member_password_unset`). Whenever the console cannot be used (a lost authenticator, or the two paths above not yet exercised), run these
 as the service role (the Supabase MCP's `execute_sql`), never from the app:
 
 1. Make sure the owner has an account (Auth → Add user in the dashboard) and that **they set their
