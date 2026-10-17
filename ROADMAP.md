@@ -2367,4 +2367,3 @@ _Deferred findings and accepted limits from the BR-D1 and BR-D2 CHANGELOG entrie
 - **The splash short-screen fix is covered by a stylesheet test only.** Check it on a real or emulated 1280x360 screen in BR-E1. (BR-D2)
 - **4K was checked emulated, not on a TV.** A real 4K display check is still owed. (BR-D2)
 - **Accent-only brands count as unbranded.** A brand with an accent colour and no name or logo changes nothing, not even the credit. This is a decision, recorded here so it is not reopened by accident. (BR-D2)
-- **`CONVENTIONS.md` does not yet carry the brand rules.** The rules needing a line: brand styling only on nodes a surface owns, never the shared root; one "Powered by Seduh Score" credit, built only by `core/poweredBy.js`; a brand can never reach `--color-test` or a status colour. (BR-D1, BR-D2)

@@ -59,7 +59,7 @@
 
 - **Not wired (BR-E1).** Nothing feeds a brand. BR-E1 must pass the door's answer through `formatBody`, which rebuilds a body per event and would lose the brand; then `stageSurface`, `liveSurfaces.js` and `main.js`.
 - No release PR (`dev` to `main`) yet, so nothing is live.
-- `CONVENTIONS.md` does not yet carry the brand rules. Not edited in this entry (scope). The rules needing a line are: brand styling only on owned nodes; one credit, from `poweredBy.js`; `--color-test` and the status colours unreachable by a brand (see BR-D1).
+- `CONVENTIONS.md` carries the three brand rules (owned nodes only; one credit, from `poweredBy.js`; `--color-test` and the status colours unreachable by a brand), added 2026-10-18 in the Design tokens section.
 - No footer version bump in this entry: docs only, no shippable change.
 
 ## BR-D1: brand accent colour engine, a pure core module · 2026-10-17
