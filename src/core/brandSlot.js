@@ -26,14 +26,20 @@ const ACCENT_PROPERTIES = ['--color-accent', '--color-accent-hover', '--color-ac
 
 // Characters that draw nothing: every format control (zero-width space, joiners, word joiner, soft hyphen, bidi
 // marks) and the Hangul and Braille fillers that render as blanks. A name made only of these is not a name.
-const INVISIBLE = /[\p{Cf}ᅟᅠㅤﾠ⠀]/gu;
+// The zero-width non-joiner and joiner (U+200C, U+200D) are kept INSIDE a name, because they are spelling in Persian
+// and Dari (non-joiner) and in emoji sequences (joiner); they are still removed at either end, where they mean nothing.
+const INVISIBLE = /(?![‌‍])[\p{Cf}ᅟᅠㅤﾠ⠀]/gu;
+const EDGE_JOINERS = /^[‌‍\s]+|[‌‍\s]+$/gu;
 const VISIBLE = /[\p{L}\p{N}\p{P}\p{S}]/u;
 
 const text = (value, max) => {
   if (typeof value !== 'string') return '';
   // Whitespace runs collapse, so a name with line breaks or tabs sits on one line. cleanOrgName also strips the
   // invisible text-direction controls that can scramble the words around a name.
-  const cleaned = cleanOrgName(value).replace(INVISIBLE, '').replace(/\s+/g, ' ').trim();
+  const cleaned = cleanOrgName(value)
+    .replace(INVISIBLE, '')
+    .replace(/\s+/g, ' ')
+    .replace(EDGE_JOINERS, '');
   // Counted in characters, not UTF-16 units (an emoji is one), and it must contain something a person can see.
   return [...cleaned].length > max || !VISIBLE.test(cleaned) ? '' : cleaned;
 };

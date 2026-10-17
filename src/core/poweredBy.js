@@ -23,6 +23,14 @@ export function shouldShowPoweredBy() {
 }
 
 /**
+ * The credit's words as plain text, or '' when `shouldShowPoweredBy()` says no. For a surface that spells the credit
+ * inside its own wording (the splash's ordinary pill), so that surface obeys the same single decision.
+ */
+export function poweredByText() {
+  return shouldShowPoweredBy() ? POWERED_BY_TEXT : '';
+}
+
+/**
  * The credit: the words "Powered by" and the Seduh Score lockup. Static text, not a live region (it never changes,
  * so it must not be announced again). Returns null only if `shouldShowPoweredBy()` ever says no.
  * `extraClass` is a layout hook for the surface that places it (never a way to restyle the credit itself).

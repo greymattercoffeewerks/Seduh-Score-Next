@@ -8,6 +8,7 @@ import {
   renderBrandIdentity,
 } from './brandSlot.js';
 import { POWERED_BY_TEXT, renderPoweredBy, shouldShowPoweredBy } from './poweredBy.js';
+import { brandCssVariables } from './brandColor.js';
 
 // vitest runs from the repo root
 const read = (path) => readFileSync(join(process.cwd(), path), 'utf8');
@@ -180,6 +181,13 @@ describe('normaliseBrand', () => {
     );
   });
 
+  it('keeps the joiners that are spelling inside a name (Persian, emoji) and drops them at the ends', () => {
+    expect(normaliseBrand({ displayName: 'می‌خواهم' }).displayName).toBe('می‌خواهم');
+    expect(normaliseBrand({ displayName: '‍‌Brew‌' }).displayName).toBe('Brew');
+    const family = '👨‍👩‍👧';
+    expect(normaliseBrand({ displayName: `${family} Cafe` }).displayName).toBe(`${family} Cafe`);
+  });
+
   it('counts characters, not UTF-16 units: sixty emoji fit, sixty-one do not', () => {
     expect(normaliseBrand({ displayName: '☕'.repeat(60) }).displayName).toHaveLength(60);
     expect(normaliseBrand({ displayName: '🍵'.repeat(60) })).not.toBeNull();
@@ -309,6 +317,12 @@ describe('applyBrandColors', () => {
     expect(read('src/core/brandSlot.js')).toMatch(
       /for \(const name of ACCENT_PROPERTIES\)\s*\{\s*if \(Object\.hasOwn\(vars, name\)\)/,
     );
+  });
+
+  it('keeps its own list of the three names equal to what the colour engine returns, so neither can drift silently', () => {
+    for (const mode of ['stage', 'paper']) {
+      expect(Object.keys(brandCssVariables('#e91e63', mode)).sort()).toEqual(ACCENT.slice().sort());
+    }
   });
 
   it('never sets the TEST colour, a status colour, a surface or a border, whatever the accent is', () => {

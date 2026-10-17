@@ -21,7 +21,7 @@ import { el, brandMark } from './dom.js';
 import { findLatestEventForOrg } from './events.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
 import { applyBrandColors, normaliseBrand, renderBrandIdentity } from './brandSlot.js';
-import { POWERED_BY_TEXT, renderPoweredBy } from './poweredBy.js';
+import { poweredByText, renderPoweredBy } from './poweredBy.js';
 
 const APP_NAME = 'Seduh Score';
 
@@ -109,7 +109,7 @@ export function mountSplashScreen(
   // AT, the exact failure mode that comment warns about.
   const badgeDot = el('span', { className: 'status-live-dot', attrs: { 'aria-hidden': 'true' } });
   badgeDot.hidden = true;
-  const badgeText = el('span', { text: POWERED_BY_TEXT });
+  const badgeText = el('span', { text: poweredByText() });
   const badgeInner = el('div', { className: 'splash-badge splash-badge-generic' }, [
     badgeDot,
     badgeText,
@@ -150,12 +150,14 @@ export function mountSplashScreen(
       badgeHost.hidden = false;
       badgeInner.className = 'splash-badge splash-badge-live';
       badgeDot.hidden = false;
-      badgeText.textContent = brand ? 'Live' : `Live — ${POWERED_BY_TEXT}`;
+      // The words come through poweredByText(), so the pill obeys the same single decision as the credit element.
+      const credit = brand ? '' : poweredByText();
+      badgeText.textContent = credit ? `Live — ${credit}` : 'Live';
     } else {
       badgeInner.className = 'splash-badge splash-badge-generic';
       badgeDot.hidden = true;
-      badgeText.textContent = POWERED_BY_TEXT;
-      badgeHost.hidden = Boolean(brand);
+      badgeText.textContent = poweredByText();
+      badgeHost.hidden = Boolean(brand) || !badgeText.textContent;
     }
   }
 
