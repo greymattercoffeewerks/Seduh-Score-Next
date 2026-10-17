@@ -17,6 +17,7 @@ test('public pages ship meaningful HTML before client JavaScript runs', async ({
   const pages = [
     ['/', '<div class="petrol-page"', 'One tablet.'],
     ['/tour/', '<main class="tour-page"', 'A better way to '],
+    ['/pricing/', '<div class="pricing-page"', 'Pricing, stated '],
     ['/community/', '<main class="community-hub"', 'Useful on the '],
     ['/tools/timer/', '<main class="timer"', 'Seduh Timer'],
     ['/tools/brew-planner/', '<main class="bp"', 'Seduh Brew Planner'],

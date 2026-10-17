@@ -9,6 +9,7 @@ function desktopLinks(active) {
 describe('buildPublicHeader — active link', () => {
   it.each([
     ['tour', 'Formats'],
+    ['pricing', 'Pricing'],
     ['community', 'Community Tools'],
     ['results', 'Results'],
   ])('marks exactly one link, "%s" -> %s, as the current page', (active, label) => {
@@ -28,7 +29,16 @@ describe('buildPublicHeader — active link', () => {
     );
   });
 
-  it.each(['tour', 'community', 'results', 'trust-about'])(
+  it.each(['tour', 'pricing', 'community', 'results', 'trust-about'])(
+    'links Pricing to the pricing page on every page (%s)',
+    (active) => {
+      const pricing = desktopLinks(active).filter((link) => link.textContent === 'Pricing');
+      expect(pricing).toHaveLength(1);
+      expect(pricing[0].getAttribute('href')).toBe('/pricing/');
+    },
+  );
+
+  it.each(['tour', 'pricing', 'community', 'results', 'trust-about'])(
     'always links to the Results archive, even when it is not the current page (%s)',
     (active) => {
       const results = desktopLinks(active).filter((link) => link.textContent === 'Results');

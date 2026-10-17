@@ -41,7 +41,7 @@ Event data belongs to the organiser. What we hold and how to ask us to remove it
 
 ## Pricing
 
-Pricing is set out on the Pricing page and is not part of these terms. [LINK: Pricing page, once it exists]
+Pricing is set out on the [Pricing page](/pricing/) and is not part of these terms.
 
 ## Our responsibility
 

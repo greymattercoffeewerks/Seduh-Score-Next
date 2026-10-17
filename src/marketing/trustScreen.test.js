@@ -109,7 +109,7 @@ describe('mountTrustScreen', () => {
       ...TRUST_LINKS.map((link) => link.href),
       '/community/',
       '/bts/',
-      '/#pricing',
+      '/pricing/',
     ]);
     for (const { slug } of TRUST_PAGES) {
       const links = [...mount(slug).querySelectorAll('.trust-article a')];
