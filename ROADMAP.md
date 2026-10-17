@@ -85,17 +85,18 @@ about original design intent.
 
 ## Current state
 
-| Phase                          | Status                                                                  | What it covers                                                                                                                                            |
-| ------------------------------ | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Phase 0 — Foundation           | ✅ Done                                                                 | Scaffold, Claude Code tooling, Supabase local stack + CI, doc seed                                                                                        |
-| Phase 1 — Schema and security  | ✅ Done                                                                 | Core tables, Cup Taster tables, RLS, `WITH CHECK` gate                                                                                                    |
-| Phase 2 — Core libraries       | ✅ Done                                                                 | `partition`, `ranking`, `advancement`, `countdown`, `timeclamp`, `entitlements`                                                                           |
-| Phase 3 — Registry and offline | ✅ Done                                                                 | `registry`, IndexedDB mirror + outbox, sync state panel                                                                                                   |
-| Phase 4 — Cup Taster           | ✅ Done                                                                 | Setup, heat generation, timing (app + manual), scoring, standings/advancement, report, export                                                             |
-| Phase 5 — Live surfaces        | ✅ Done                                                                 | `publish`, `viewer-shell`, projector, phone summary, automatic publishing on heat actions                                                                 |
-| Phase 6 — Hardening            | ✅ Done                                                                 | Accessibility pass, offline soak, dry run (local + production)                                                                                            |
-| Tenancy core (A+B)             | ✅ Done 2026-10-14                                                      | Multi-org hardening, `my_orgs()`, org context + switcher, slug-addressed audience surfaces — see "Tenancy core" below                                     |
-| Admin console v1 (T-ADM)       | Live in the cloud 2026-10-17 (v3.4.0); two paths not yet exercised live | the platform operator's MFA-gated, audited console at /admin/ (create organisations, add members, change roles, audit log) — see "Admin console v1" below |
+| Phase                             | Status                                                                                                       | What it covers                                                                                                                                                                             |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Phase 0 — Foundation              | ✅ Done                                                                                                      | Scaffold, Claude Code tooling, Supabase local stack + CI, doc seed                                                                                                                         |
+| Phase 1 — Schema and security     | ✅ Done                                                                                                      | Core tables, Cup Taster tables, RLS, `WITH CHECK` gate                                                                                                                                     |
+| Phase 2 — Core libraries          | ✅ Done                                                                                                      | `partition`, `ranking`, `advancement`, `countdown`, `timeclamp`, `entitlements`                                                                                                            |
+| Phase 3 — Registry and offline    | ✅ Done                                                                                                      | `registry`, IndexedDB mirror + outbox, sync state panel                                                                                                                                    |
+| Phase 4 — Cup Taster              | ✅ Done                                                                                                      | Setup, heat generation, timing (app + manual), scoring, standings/advancement, report, export                                                                                              |
+| Phase 5 — Live surfaces           | ✅ Done                                                                                                      | `publish`, `viewer-shell`, projector, phone summary, automatic publishing on heat actions                                                                                                  |
+| Phase 6 — Hardening               | ✅ Done                                                                                                      | Accessibility pass, offline soak, dry run (local + production)                                                                                                                             |
+| Tenancy core (A+B)                | ✅ Done 2026-10-14                                                                                           | Multi-org hardening, `my_orgs()`, org context + switcher, slug-addressed audience surfaces — see "Tenancy core" below                                                                      |
+| Admin console v1 (T-ADM)          | Live in the cloud 2026-10-17 (v3.4.0); two paths not yet exercised live                                      | the platform operator's MFA-gated, audited console at /admin/ (create organisations, add members, change roles, audit log) — see "Admin console v1" below                                  |
+| Organiser branding (BR) (Level 2) | BR-D1 and BR-D2 merged to `dev` 2026-10-17; not in production (no release PR yet); nothing feeds a brand yet | the brand accent colour engine, the "Powered by Seduh Score" credit and the brand slot on the audience surfaces; BR-E1 wires a brand to the surfaces — see "Organiser branding (BR)" below |
 
 **Deadline: 4 October 2026, Cup Tasters event.**
 
@@ -2340,3 +2341,30 @@ _Consolidated from the "Known open items" of every T-ADM CHANGELOG entry (B1 to 
 - **Duplication: helpers and field builders.** `retryButton`, `heading`, `stepAside` and `messageFor` are copied across screens and should move to `screenParts.js`. `formParts.js` is a fourth field-with-error builder, not shared with the guess-the-bean, btc and core `labeledField` versions. (D4)
 - **Duplication: CSS.** `.adm-member` and `.adm-audit-item` restate the `.card` box. (D4)
 - **Duplication for one core refactor:** the one-time password card and its CSS (`core/teamScreen.js`, `.team-password`), clipboard copy (five sites), the Edge Function transport (`core/team.js`), the email regex, and `labeledField`'s hint and error slots. (D3)
+
+---
+
+## Organiser branding (BR), Level 2, started 2026-10-17
+
+Spec: `Handoffs and Specs/BRANDING-SPEC.md` (local, gitignored, not in git). Why: an organiser's own accent colour, name and logo on the audience surfaces (projector, phone, splash), with a fixed "Powered by Seduh Score" credit on every branded surface. Nothing is wired yet: no brand reaches a screen.
+
+| Phase | Tasks                                                                                                                                                                                                                 | Status                                                                                                                |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| D     | BR-D1, the brand accent colour engine (`core/brandColor.js`, PR #289). BR-D2, the credit and the brand slot on the audience surfaces (`core/poweredBy.js`, `brandSlot.js`, PR #291)                                   | Done, merged to `dev` 2026-10-17. Not in production: no release PR yet. 360px checked by `ui-accessibility-reviewer`. |
+| E     | BR-E1, the wiring: the door's answer through `formatBody`, `stageSurface`, `liveSurfaces.js` and `main.js` (`formatBody` rebuilds a body per event and would lose the brand, so the brand must be carried through it) | Next. Not started.                                                                                                    |
+
+**Next steps, in order:** (1) BR-E1, the wiring above, then check the splash at 1280x360 (its short-screen fix is covered by a stylesheet test only). (2) A release PR, `dev` to `main`, when the owner wants the brand live. The open items are in "Known open items from BR-D1 and BR-D2" below.
+
+---
+
+## Known open items from BR-D1 and BR-D2 (2026-10-17)
+
+_Deferred findings and accepted limits from the BR-D1 and BR-D2 CHANGELOG entries. Each is stated once, with its source in brackets._
+
+- **The Random Selector has its own copy of the WCAG contrast maths.** Extract a shared `core/contrast.js` and have both the brand engine and the Random Selector use it, on a later pass. The brand engine's copy is in `core/brandColor.js`. (BR-D1)
+- **Nothing is wired to a brand yet.** BR-E1 must pass the door's answer through `formatBody` (which rebuilds a body per event and would lose the brand), then `stageSurface`, `liveSurfaces.js` and `main.js`. Until then no audience surface shows a brand. (BR-D2)
+- **No logo contrast check.** A logo's own colours are not measured against the surface it sits on. (BR-D2)
+- **The splash short-screen fix is covered by a stylesheet test only.** Check it on a real or emulated 1280x360 screen in BR-E1. (BR-D2)
+- **4K was checked emulated, not on a TV.** A real 4K display check is still owed. (BR-D2)
+- **Accent-only brands count as unbranded.** A brand with an accent colour and no name or logo changes nothing, not even the credit. This is a decision, recorded here so it is not reopened by accident. (BR-D2)
+- **`CONVENTIONS.md` does not yet carry the brand rules.** The rules needing a line: brand styling only on nodes a surface owns, never the shared root; one "Powered by Seduh Score" credit, built only by `core/poweredBy.js`; a brand can never reach `--color-test` or a status colour. (BR-D1, BR-D2)
