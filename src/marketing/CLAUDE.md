@@ -168,9 +168,12 @@ and the shared header's Pricing link. It is static like the Tour: no router, aut
 - **Branding wording (owner, 2026-10-17):** say "branded", never "fully branded". The offer is logo, accent
   colour, name and banner images, and "Powered by Seduh Score" always stays. Branding is not built, so the
   pricing page marks it Planned; the landing page's "branded" still describes it as a feature of the tier.
-- **Known mismatches with the landing page, owner's call:** its Annual prose says "persistent history across
-  seasons" (Planned here), and its Community prose says "no account needed to run a small event" (accounts
-  are set up by hand) and "every live format" (Cup Taster is capped at 8 competitors there).
+- **The landing page's tier prose matches the confirmed tiers (owner approved the rewrite, 2026-10-17):**
+  Community "BTC with no limit, and other formats up to 8 competitors" with the podium published to the
+  archive; Per-event "one event, in the format you choose, branded, with PDF reports"; Annual "every format
+  and feature, with no competitor limit". The old claims (no account needed, every live format, persistent
+  history across seasons, unbranded) are gone and a test keeps them out. Change this prose and
+  `pricingContent.js` together.
 
 ## BTC goes live (2026-09-23)
 

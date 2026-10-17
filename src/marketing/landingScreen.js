@@ -578,22 +578,23 @@ function pricingSection() {
         TIERS[0].name,
         TIERS[0].price,
         TIERS[0].suffix,
-        'Every live format, unbranded, for organisers just getting started. No account ' +
-          'needed to run a small event.',
+        'For organisers getting started. BTC with no limit, and other formats up to 8 ' +
+          'competitors. The podium is published to the public archive when the event ends.',
       ),
       pricingColumn(
         TIERS[1].name,
         TIERS[1].price,
         TIERS[1].suffix,
-        'One competition, branded, PDF reports included. Pay once, run your event, ' + 'done.',
+        'One event, in the format you choose, branded, with PDF reports. Pay once, run ' +
+          'your event, done.',
         { featured: true },
       ),
       pricingColumn(
         TIERS[2].name,
         TIERS[2].price,
         TIERS[2].suffix,
-        'Every format, priced for organisers running events all year. ' +
-          'Persistent history across seasons.',
+        'For organisers running events all year. Every format and feature, with no ' +
+          'competitor limit.',
       ),
     ]),
     el('p', {
