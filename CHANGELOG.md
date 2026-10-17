@@ -1,3 +1,100 @@
+## BR-D2: "Powered by Seduh Score" credit and the brand slot on the audience surfaces · 2026-10-17
+
+**Task:** BR-D2, Level 2 organiser branding (`Handoffs and Specs/BRANDING-SPEC.md` 3, 4.5; spec is local and gitignored, not in git). PR #291 (`feat/brand-attribution`), merged into `dev` 2026-10-17 (merge `15d21a1`); commits `5e79bdb` (feature) and `0ce38e5` (boundary-review fixes). Recorded 2026-10-18. **Status: built, reviewed, merged to dev. Not in production (no release PR yet). Nothing feeds a brand yet, so no audience sees one.** (`dev` also took PR #288, the public `/pricing/` page, on 2026-10-18; unrelated to this entry.)
+
+**Why:** a branded audience surface must carry exactly one visible "Powered by Seduh Score" credit, and the credit must never be hidden, faded or shrunk. Each surface building its own credit would let them drift, so the credit is decided and built in one module and every surface asks it. The brand itself (name, logo, accent) is drawn by one shared slot, applied only to the nodes a surface owns.
+
+**What changed:**
+
+- `src/core/poweredBy.js` (new): the one place the credit is built and decided. `shouldShowPoweredBy()` returns true; `poweredByText()` gives the splash pill's text.
+- `src/core/brandSlot.js` and `brandSlot.css` (new):
+  - `normaliseBrand` takes the untrusted brand. A logo address must be https (plain http only for loopback), carry no credentials, stay under a length cap, and not end `.svg`, `.svgz`, `.gif`, `.html` or `.htm` (BRANDING-SPEC D-BR6: no SVG, no animated formats). A name has its whitespace collapsed and its invisible format controls removed, is trimmed at the ends, and is capped in characters. It must contain something visible. ZWNJ and ZWJ are kept inside a name (Persian spelling, emoji sequences).
+  - `renderBrandIdentity` draws the logo and name with `dir="auto"`.
+  - `applyBrandColors` sets the BR-D1 accent variables on nodes the surface owns, never on the shared root.
+- Wired into `stageBand.js`, `stageDisplay.js`, `stageBody.js`, `viewer-shell.js` and `splashScreen.js`:
+  - phone: the brand sits in the h1, with a footer credit;
+  - projector shell: draws the same band above its holding cards while no display is live (the holding cards had no credit before the review);
+  - splash: the credit sits at the top, outside the pill and the live region, and scales with `vmin`.
+- Unbranded output is byte-for-byte unchanged (the eight unbranded inputs in the matrix change nothing).
+- `app/index.html`: one stylesheet link for `brandSlot.css`, placed after the splash, phone and stage sheets it builds on.
+- `src/ui/tokens/components.test.js`: the preview page is added to `PAGES_THAT_LINK_IT`, the list of pages that link `components.css`.
+- `src/core/brandSlot.preview.html` (new): a preview page for the slot.
+- `src/core/CLAUDE.md`: module entries (already committed with the code).
+- Tests:
+  - `brandSlot.test.js` (new, 421 lines).
+  - `brandAttribution.test.js` (new, 794 lines): runs every surface x state x 12 branded inputs and asserts exactly one visible credit; the 8 unbranded inputs change nothing; the stylesheet may not hide, fade or shrink the credit.
+
+**Decisions** (BRANDING-SPEC is local, so the reasoning is recorded here, not in the handoff's §12):
+
+- **One credit decision.** `shouldShowPoweredBy()` answers for every surface, and every credit text comes from `poweredBy.js`. Why: the splash's ordinary pill spelled the credit itself. The boundary review caught it, and `0ce38e5` moved it onto `poweredByText()`.
+- **Brand styling only on nodes a surface owns, never the shared root.** Why: the root is shared, so a brand set there would style everything under it, including the console's own tokens.
+- **Logo addresses ending `.svg`, `.svgz`, `.gif`, `.html` or `.htm` are refused** (D-BR6: no SVG, no animated formats). Why: the review found SVG addresses being accepted, and an SVG can carry script. The display refuses them too, so a bad object that reached Storage is not drawn.
+- **A brand that arrives late is not announced.** The brand region is `aria-live="off"`. Why: the review found a brand arriving mid-show read out as a live-region update.
+- **A brand with an accent colour and no name or logo counts as unbranded.** It changes nothing, not even the credit. Why: a bare colour is not an identity the credit can attribute.
+
+**Reviews:**
+
+- `code-reviewer`, `test-auditor`: the record does not itemise their findings. The fixes below are the ones recorded. Do not read this as "no findings".
+- `ui-accessibility-reviewer` found and fixed:
+  - RTL names cut at the wrong end (now `dir="auto"`);
+  - the splash short-screen guard was inert (now a viewport-length cap);
+  - the credit mark took the brand colour (now pinned);
+  - the projector holding cards had no credit (the band is now drawn);
+  - SVG, GIF and HTML logo addresses were accepted (now refused);
+  - a late brand was announced in the live region (now `aria-live` off);
+  - the splash credit was capped at 18px (now scales with `vmin`).
+- `module-boundary-checker`: no hard violation. Fixed in `0ce38e5`: the splash pill now obeys the single decision, and ZWNJ and ZWJ are kept inside names.
+- **360px first (DoD §11): done by `ui-accessibility-reviewer` in a real browser.** The phone at 360px had no horizontal overflow for any brand case, exactly one `h1` and two chrome children, a 60-character name truncated with an ellipsis, the credit at 12px and about 11:1 on the canvas. The stage credit measured 6.1:1 or better on all three stage surfaces, and 4.7:1 or better under the splash glow in its worst case. No interactive elements were added to any surface. Reduced motion and forced colours also passed. The reviewer's final pass happened before the projector holding band existed, so that band was verified by tests and by reusing the live band, not by a second browser pass.
+
+**Verification:** `brandSlot.test.js`, `brandAttribution.test.js` and `brandColor.test.js` pass on this branch: 319 tests across the three files (run 2026-10-18).
+
+**Accepted limits and open items** (also in ROADMAP's "Known open items from BR-D1 and BR-D2"):
+
+- No logo contrast check: a logo's own colours are not measured against the surface.
+- The splash short-screen fix is covered by a stylesheet test only. Check it at 1280x360 in BR-E1.
+- 4K was emulated, not checked on a TV.
+- Accent-only brands count as unbranded (see the decisions above).
+
+**Not done / still open:**
+
+- **Not wired (BR-E1).** Nothing feeds a brand. BR-E1 must pass the door's answer through `formatBody`, which rebuilds a body per event and would lose the brand; then `stageSurface`, `liveSurfaces.js` and `main.js`.
+- No release PR (`dev` to `main`) yet, so nothing is live.
+- `CONVENTIONS.md` carries the three brand rules (owned nodes only; one credit, from `poweredBy.js`; `--color-test` and the status colours unreachable by a brand), added 2026-10-18 in the Design tokens section.
+- No footer version bump in this entry: docs only, no shippable change.
+
+## BR-D1: brand accent colour engine, a pure core module · 2026-10-17
+
+**Task:** BR-D1, Level 2 organiser branding (BRANDING-SPEC 4.4; spec is local and gitignored, not in git). PR #289 (`feat/brand-color`), merged into `dev` 2026-10-17 (merge `ace6f22`), from commit `9db7d59`. Recorded 2026-10-18. **Status: built, reviewed, merged to dev. Not wired into any screen.** Not in production.
+
+**Why:** an organiser's accent colour is untrusted input that lands on a public screen. Without a single engine that decides what is allowed, each surface would make its own contrast call, and a brand could reach the reserved TEST colour or a status colour by accident. The engine decides once, in a pure function, and can return only three CSS properties.
+
+**What changed:**
+
+- `src/core/brandColor.js` (new, 260 lines):
+  - `brandCssVariables(hex, surface)` returns exactly three properties, `--color-accent`, `--color-accent-hover` and `--color-accent-contrast`, or `null` to leave the screen unbranded. `surface` is `'stage'` or `'paper'`.
+  - `deriveBrandColors` returns the fuller answer for a preview: the requested colour, whether it moved, and the ratios.
+  - A colour that already reads is returned unchanged. One that does not moves the smallest amount in OKLCH (lighter on the stage surfaces, darker on paper), keeps its hue, and keeps greys grey. The move is measured on the 8-bit colour actually returned.
+  - Surface colours are frozen and copied from `colors.css`. A test fails if they drift.
+  - Pure: no imports, DOM, clock or randomness.
+- `src/core/brandColor.test.js` (new, 502 lines, 45 tests): seeded property tests over about 3,500 colours per surface (readability, minimal movement, hue kept, exact boundaries on both surfaces, pinned outputs), a contract test against the CSS tokens, and purity checks.
+- `src/core/CLAUDE.md`: module entry (committed with the code).
+
+**Decisions** (BRANDING-SPEC is local, so the reasoning is recorded here):
+
+- **"Reads" means 4.5:1 against every surface of the mode, not the canvas alone.** Those surfaces are the canvas, the card and the sunken band; the accent text is 4.5:1 on the accent; hover is visibly different and still readable. This is stricter than the spec's canvas-only sketch. Why: paper's canvas is not white, and an accent also sits on the card and the sunken band, so a canvas-only check passes colours that fail where the accent is used.
+- **Only three properties can come out.** Why: the TEST colour is reserved for `is_test` indicators (D9), and no brand may reach a status colour.
+- **Smallest move, hue kept, greys kept grey.** Why: the organiser's colour should stay recognisably theirs. Only the lightness moves, and only as far as the readability bar needs.
+
+**Reviews:** `code-reviewer`, `test-auditor` and `module-boundary-checker` ran. The record holds no itemised findings from them. The commit states that 19 deliberate breakages of the module (mutation) were all caught. Do not read this as "no findings".
+
+**Verification:** `brandColor.test.js` passes on this branch, 45 tests (part of the 319 across the three brand test files, run 2026-10-18).
+
+**Not done / still open:**
+
+- **The Random Selector tool has its own copy of the WCAG contrast maths.** Extract it to a shared `core/contrast.js` on a later pass. Recorded in ROADMAP's "Known open items from BR-D1 and BR-D2".
+- Not wired into any screen (BR-E1, see BR-D2).
+- No footer version bump: docs only in this record; no shippable change in this entry.
+
 ## T-ADM cloud rollout: the admin console goes live (v3.4.0) · 2026-10-17
 
 **Task:** the owner-approved cloud rollout of admin console v1 (CLAUDE.md "Platform administration", spec section 8). Done 2026-10-16/17 from a worktree off `origin/dev`. **Status: live in production; two paths are not yet exercised against the cloud (below).**

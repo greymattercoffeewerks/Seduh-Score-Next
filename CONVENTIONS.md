@@ -351,6 +351,16 @@ section only records the conventions a new screen or token needs to follow.
   source order decided which rendered): `components.test.js` fails CI for it, and for a page that links a
   stylesheet relying on the shapes without linking this one. A surface that needs a different look overrides
   the specific property in its own CSS, after this file (see `src/admin/admin.css`), and says why.
+- **An organiser's brand (BR-D1, BR-D2) follows three rules, each held by a test** (`brandColor.test.js`,
+  `brandSlot.test.js`, `brandAttribution.test.js`). (1) **Brand styling goes only on nodes a surface owns, never on
+  the shared audience root** (`applyBrandColors(node, brand, mode)` in `core/brandSlot.js`), because the root
+  outlives the screen and would leak the colours into whatever is mounted next. (2) **There is one credit,
+  "Powered by Seduh Score", built only by `core/poweredBy.js`** (`renderPoweredBy()`, and `poweredByText()` for a
+  surface that spells it inside its own wording); a surface never builds its own, and `brandAttribution.test.js`
+  requires exactly one visible credit on every branded surface in every state. (3) **A brand can set only
+  `--color-accent`, `--color-accent-hover` and `--color-accent-contrast`**, so it can never reach `--color-test`
+  or a status colour (`core/brandColor.js` returns only those three, and the colour is moved to stay at 4.5:1 on
+  every surface of the mode).
 - `src/ui/tokens/preview.html` renders every token in both surface modes — open it
   (`npm run dev`, then `/src/ui/tokens/preview.html`) when changing any token value, and
   keep its demo copy format-agnostic (a leaked Cup-Taster-specific term here was
