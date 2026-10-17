@@ -15,6 +15,7 @@ import { createScreenDirector } from './screenDirector.js';
 import { createMomentPlayer } from './momentPlayer.js';
 import { createProgressRing } from './progressRing.js';
 import { renderStageBand } from './stageBand.js';
+import { applyBrandColors, normaliseBrand } from './brandSlot.js';
 
 // Returns { el, main, footerStart, footerEnd }. Screens mount their own frame into the director's host.
 export function renderScreenFrame() {
@@ -45,11 +46,17 @@ export function mountFooterRing(
 // `detectMoments(previous, next)` (optional) turns a change between two snapshots into short "what just
 // happened" screens played before the ordinary one — see core/momentPlayer.js. Without it the display only ever
 // shows what `selectScreen` asks for. `maxQueuedMoments` caps how many wait their turn.
+//
+// `brand` (optional, core/brandSlot.js) is the organiser's identity and accent colour. With one, the band carries
+// their logo and name with "Powered by Seduh Score" beside it, and their accent colour is set on this display's root
+// (the stage mode's three accent properties only). `setBrand(brand)` changes or clears it later, which is how a
+// display picks up branding that arrives after it is shown; it never blocks or delays the display.
 export function createStageDisplay({
   selectScreen,
   bandFor,
   detectMoments,
   maxQueuedMoments,
+  brand: initialBrand = null,
   ...directorOptions
 }) {
   const bandHost = el('div', { className: 'stage-band-host' });
@@ -60,14 +67,23 @@ export function createStageDisplay({
   const root = el('div', { className: 'stage-display' }, [bandHost, screenHost]);
 
   let lastBandKey = null;
+  let shownPayload = null;
+  let destroyed = false;
+  let brand = normaliseBrand(initialBrand);
+  applyBrandColors(root, brand, 'stage');
   // The band says what the payload ON SCREEN says, not what the newest payload says: while the director is
   // holding a screen for its minimum dwell, a band that raced ahead would name the next stage over the last
-  // one's screen. It is only rebuilt when its words change — it is on screen the whole event.
+  // one's screen. It is only rebuilt when its words (or the brand) change — it is on screen the whole event.
   function showBand(payload) {
-    const band = payload ? bandFor(payload) : null;
-    const bandKey = band ? JSON.stringify(band) : '';
+    shownPayload = payload;
+    let band = payload ? bandFor(payload) : null;
+    // A branded display is credited even when the format published no band words: the brand and the credit still
+    // show, so "Powered by Seduh Score" is never missing from a branded screen. The format said it has no band
+    // words, so the band does not claim "Live" either.
+    if (!band && payload && brand) band = { live: false };
+    const bandKey = band ? JSON.stringify({ band, brand }) : '';
     if (bandKey !== lastBandKey) {
-      bandHost.replaceChildren(...(band ? [renderStageBand(band)] : []));
+      bandHost.replaceChildren(...(band ? [renderStageBand({ ...band, brand })] : []));
       lastBandKey = bandKey;
     }
   }
@@ -98,8 +114,16 @@ export function createStageDisplay({
       if (player) player.update(payload);
       else director.show(selectScreen(payload), payload);
     },
+    // Changes or clears the brand. The band is rebuilt only if something it shows actually changed.
+    setBrand(next) {
+      if (destroyed) return;
+      brand = normaliseBrand(next);
+      applyBrandColors(root, brand, 'stage');
+      if (shownPayload) showBand(shownPayload);
+    },
     currentKey: () => director.currentKey(),
     destroy() {
+      destroyed = true;
       player?.destroy();
       director.destroy();
     },

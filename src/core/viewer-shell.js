@@ -69,6 +69,9 @@ import { getSupabase } from './supabaseClient.js';
 import { el, brandLockup } from './dom.js';
 import { findLatestEventForOrg } from './events.js';
 import { raceTimeout } from './timeout.js';
+import { applyBrandColors, normaliseBrand, renderBrandIdentity } from './brandSlot.js';
+import { renderPoweredBy } from './poweredBy.js';
+import { renderStageBand } from './stageBand.js';
 
 // The one place this string is spelled out — both the chrome's visible <h1>
 // (renderChrome, showChrome:true) and mountViewerShell's own visually-hidden
@@ -154,7 +157,12 @@ export function renderHoldingState(phase) {
 // covers only the showChrome:true case — mountViewerShell's own setup
 // below adds the showChrome:false equivalent (a visually-hidden <h1>, for
 // the projector's chrome-less surface); see that declaration for why.
-export function renderChrome(session, connectionLost = false) {
+//
+// Branding (BR-D2): with a `brand` (core/brandSlot.js) the organiser's logo and display name go INSIDE that same
+// <h1>, in place of the Seduh Score lockup, so the chrome keeps exactly its two children and the heading is the
+// organiser's name. The "Powered by Seduh Score" credit is the shell's footer, not part of this chrome.
+export function renderChrome(session, connectionLost = false, brand = null) {
+  const branded = normaliseBrand(brand);
   let statusBadge;
   if (connectionLost) {
     statusBadge = el('span', {
@@ -182,11 +190,13 @@ export function renderChrome(session, connectionLost = false) {
   // audience-facing identity band) was text-only, no mark.
   return el('div', { className: 'viewer-chrome' }, [
     el('h1', { className: 'viewer-chrome-name' }, [
-      brandLockup({
-        name: APP_NAME,
-        markClass: 'viewer-chrome-mark',
-        nameClass: 'viewer-chrome-name-text',
-      }),
+      branded
+        ? renderBrandIdentity(branded, { className: 'viewer-chrome-brand' })
+        : brandLockup({
+            name: APP_NAME,
+            markClass: 'viewer-chrome-mark',
+            nameClass: 'viewer-chrome-name-text',
+          }),
     ]),
     statusBadge,
   ]);
@@ -230,6 +240,7 @@ export async function mountViewerShell(
     hasContent = defaultHasContent,
     onNoContent,
     showChrome,
+    brand: initialBrand = null,
     client = getSupabase(),
     signal,
   } = {},
@@ -238,6 +249,12 @@ export async function mountViewerShell(
     throw new TypeError('mountViewerShell: showChrome must be explicitly true or false');
   }
 
+  // The organiser's brand (core/brandSlot.js). The phone (showChrome:true): its logo and name in the chrome, its
+  // accent colour on the container, and "Powered by Seduh Score" in a footer. The projector (showChrome:false) is
+  // branded through its band while live (core/stageDisplay.js), and by a copy of that band above the shell's own
+  // holding cards (paintHoldingBand below). Branding is never awaited:
+  // a shell with no brand (or a brand that arrives late, through setBrand) is simply the ordinary shell.
+  let brand = normaliseBrand(initialBrand);
   let session = null;
   let phase = 'connecting';
   let connectionLost = false;
@@ -285,6 +302,59 @@ export async function mountViewerShell(
   container.append(...(hiddenHeading ? [hiddenHeading] : []), chromeHost, bannerHost, body);
   root.appendChild(container);
 
+  // The credit lives in its own footer, after the body, and exists only while the shell is branded.
+  const footerHost = el('footer', { className: 'viewer-footer' });
+  // After unmount the shell must touch nothing: a brand that arrives late (a slow door answer after navigating
+  // away) would otherwise re-attach a footer to a root another screen now owns.
+  let unmounted = false;
+  // The projector (showChrome:false) shows the brand through its display's band while a session is live. The shell's
+  // own holding cards (connecting, no event, not published yet, connection lost) have no band, so while one is on
+  // screen the shell draws the same band itself: the organiser's identity on the left, the credit on the right.
+  // Present only then (never beside a live display, whose band already carries both), so a screen is never credited
+  // twice and a branded venue screen is never without the credit.
+  const holdingBandHost = el('div', { className: 'viewer-holding-band' });
+  let holdingBandKey = null;
+  function paintHoldingBand() {
+    const holding = connectionLost || phase !== 'live';
+    if (brand && holding && !unmounted) {
+      // Rebuilt only when the brand changes: a card that repaints every few seconds must not re-request the logo.
+      const key = JSON.stringify(brand);
+      if (key !== holdingBandKey || !holdingBandHost.isConnected) {
+        holdingBandHost.replaceChildren(renderStageBand({ live: false, brand }));
+        holdingBandKey = key;
+      }
+      if (!holdingBandHost.isConnected) bannerHost.after(holdingBandHost);
+    } else {
+      holdingBandHost.remove();
+      holdingBandKey = null;
+    }
+  }
+
+  function paintBrand() {
+    if (unmounted) return;
+    if (!showChrome) {
+      paintHoldingBand();
+      return;
+    }
+    // On the shell's OWN container, never on `root`: the audience routes share one root that outlives this screen
+    // (main.js's bareRoot), so colours set there would leak into the next projector or splash. The container is
+    // removed on unmount, and the colours go with it.
+    applyBrandColors(container, brand, 'paper');
+    if (chromeEl) {
+      // Replace the heading's CHILDREN, never the heading: it may hold the screen reader's focus (see render()).
+      const fresh = renderChrome(session, connectionLost, brand);
+      chromeEl.firstElementChild.replaceChildren(...fresh.firstElementChild.childNodes);
+    }
+    const credit = brand ? renderPoweredBy('powered-by-footer') : null;
+    if (credit) {
+      footerHost.replaceChildren(credit);
+      if (!footerHost.isConnected) container.append(footerHost);
+    } else {
+      footerHost.remove();
+    }
+  }
+  if (brand) paintBrand();
+
   function render() {
     // Only the status badge — renderChrome()'s own SECOND child — is ever
     // rebuilt here; the h1 itself is appended once and never replaced
@@ -305,7 +375,9 @@ export async function mountViewerShell(
     // itself is untouched and still directly unit-tested as a pure
     // function — this only changes how THIS render loop uses its output.
     if (showChrome) {
-      const freshChrome = renderChrome(session, connectionLost);
+      // Only the badge is taken after the first build, so later updates ask for an unbranded chrome: building the
+      // brand's logo again on every live update would start a throwaway image request for a node nobody uses.
+      const freshChrome = renderChrome(session, connectionLost, chromeEl ? null : brand);
       if (!chromeEl) {
         chromeEl = freshChrome;
         chromeHost.appendChild(chromeEl);
@@ -343,6 +415,8 @@ export async function mountViewerShell(
       );
       lastIsTest = isTest;
     }
+
+    if (!showChrome && brand) paintHoldingBand();
 
     bodyCleanup?.();
     bodyCleanup = null;
@@ -515,8 +589,15 @@ export async function mountViewerShell(
   await refresh();
 
   return {
+    // Changes or clears the brand (see the comment where `brand` is declared). On the projector's shell it only
+    // affects the holding cards; a live display is branded through its own band.
+    setBrand(next) {
+      brand = normaliseBrand(next);
+      paintBrand();
+    },
     unmount() {
       mounted = false;
+      unmounted = true;
       bodyCleanup?.();
       bodyCleanup = null;
       // Removes only this shell's own container, NOT `root.innerHTML = ''`:

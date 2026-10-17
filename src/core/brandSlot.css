@@ -1,0 +1,165 @@
+/*
+ * The brand slot and the "Powered by Seduh Score" credit (BRANDING-SPEC 3 and 4.5, task BR-D2). Token-only, like
+ * every core stylesheet: assumes src/ui/tokens/index.css is already loaded, and works in both surface modes (the
+ * stage projector and splash, the paper phone) because every colour is a variable.
+ *
+ * THE CREDIT IS NOT AN ORGANISER SETTING. Nothing an organiser sets (a name, a logo address, one accent colour) can
+ * reach it: the brand only ever replaces the three accent custom properties (brandColor.js), and the credit uses
+ * --color-text-secondary, which a brand never touches. Keep it that way: no rule in this file may hide it, shrink it
+ * below the floor, move it off screen or lower its contrast, and brandSlot.test.js fails if one does.
+ */
+
+/* ---- the credit ---- */
+.powered-by {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  white-space: nowrap;
+  font-family: var(--font-body);
+  font-weight: var(--font-weight-medium);
+  /* 12px is the floor, however small the surface: on a TV the band's own size takes over (a fraction of it). */
+  font-size: max(var(--text-2xs), 0.62em);
+  /* text-secondary reads at 4.5:1 or better on every surface of both modes (colors.css, checked in DESIGN.md). */
+  color: var(--color-text-secondary);
+  --brand-lockup-size: 1.05em;
+}
+
+/* On the projector band it sits after the Live marker and never shrinks away. */
+.powered-by-band {
+  flex: none;
+}
+
+/* The credit's own Seduh Score mark is pinned to the same token as its words: the mark is accent-coloured
+   elsewhere, and the accent is exactly what an organiser's brand overrides. */
+.powered-by .brand-lockup-mark {
+  color: var(--color-text-secondary);
+}
+
+.powered-by-footer {
+  font-size: var(--text-2xs);
+}
+
+.powered-by-splash {
+  /* Scales with the screen's short side like the band's credit (about 1.7% of it), with no upper cap, so it is not
+     half the size on a 4K display; the 12px floor binds only on a very short screen. */
+  font-size: max(var(--text-2xs), 1.7vmin);
+}
+
+/* ---- the brand slot ---- */
+.brand-slot {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+  min-width: 0;
+}
+
+.brand-slot-logo {
+  display: block;
+  flex: none;
+  height: 1.9em;
+  width: auto;
+  max-width: 8em;
+  object-fit: contain;
+}
+
+/* Truncates, never wraps: a long display name must not grow the band or the phone header. */
+.brand-slot-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-display);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
+}
+
+/* Projector band: the slot replaces the Seduh Score lockup. It never shrinks (it would spill over the event name
+   beside it); instead it is capped, and a name longer than the cap is cut with an ellipsis, so the event name,
+   which truncates too, is what gives way first. */
+.stage-band-brand-custom {
+  flex: 0 0 auto;
+  max-width: 45vw;
+}
+
+.stage-band-brand-custom .brand-slot {
+  max-width: 100%;
+}
+
+/* Projector holding cards: the shell draws the band itself while no display is live (viewer-shell.js). */
+.viewer-holding-band {
+  flex: none;
+}
+
+/* Phone chrome: the slot sits inside the existing <h1> at the lockup's size. */
+.viewer-chrome-brand {
+  font-size: 1rem;
+}
+
+/* Phone footer: its own landmark after the page body, only while branded. */
+.viewer-footer {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-3) var(--space-4);
+  border-top: var(--border-hairline) solid var(--color-border);
+}
+
+/* ---- splash ---- */
+/* base.css and splashScreen.css give these elements their own `display`, which beats the browser's own [hidden]
+   rule at equal specificity, so each hidden state needs its rule. */
+.splash-mark[hidden],
+.splash-wordmark[hidden],
+.splash-brand[hidden] {
+  display: none;
+}
+
+.splash-brand-identity {
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.splash-brand-identity .brand-slot-logo {
+  height: clamp(3rem, 14vmin, 8rem);
+  max-width: min(70vw, 24rem);
+}
+
+/* The name is the page's heading here, so it may wrap, but never past two lines (a 60-character name would
+   otherwise grow past the screen and push the event line out, or into the credit above and the test banner below).
+   Sized from the screen's short side (vmin), so a wide, short projector does not get a name taller than the screen. */
+.splash-brand-identity .brand-slot-name {
+  margin: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+  font-size: clamp(var(--text-3xl), 6vmin, var(--text-6xl));
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  color: var(--color-text);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+/* Branded, the content column stays between the credit at the top and the pill or test banner at the bottom, so
+   nothing in it can ever cover either. (Keyed on the content node's own data-brand marker: the accent is set on the
+   splash's own nodes, never on the shared root.) */
+.splash-content[data-brand] {
+  /* A viewport length, not a percentage: the splash root has no definite height, so a percentage was ignored. */
+  max-height: calc(100vh - 2 * var(--space-9));
+  max-height: calc(100dvh - 2 * var(--space-9));
+  overflow: hidden;
+}
+
+/* The credit sits at the TOP of the splash: the bottom already holds the live pill and the full-width test banner
+   (D9), and neither may ever cover it. */
+.splash-credit-host {
+  position: absolute;
+  top: var(--space-5);
+  left: 0;
+  right: 0;
+  z-index: 1;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
