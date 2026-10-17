@@ -53,3 +53,8 @@ Report findings as: file:line, the concrete problem, and the smallest fix. Do no
 findings that belong to another subagent's domain (schema, security, accessibility,
 offline-sync, scoring, module-boundary, test quality) — flag that the relevant agent
 should look instead.
+
+**Reporting.** Follow the "Review protocol" in `CLAUDE.md` and the severity definitions in
+`REVIEW.md`: mark each finding 🔴 Important, 🟡 Nit or 🟣 Pre-existing, give a `file:line` and
+a concrete failing input or state, and re-read the code to confirm it before you report it.
+Drop what you cannot trace to a real failure, and say plainly when you found nothing.

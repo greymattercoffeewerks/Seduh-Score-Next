@@ -93,15 +93,65 @@ Run the relevant reviewers in parallel (single message, multiple Agent calls) wh
 change touches more than one concern — e.g. a migration that's both schema and RLS gets
 `schema-guardian` + `security-reviewer` together.
 
-**Every review this project runs should be expected to find something** (handoff §13).
-Treat a clean review as the surprising outcome, not the expected one.
+**Review with skepticism** (handoff §13): reviews on this project have found real bugs on
+second and third passes, so don't wave a change through. But a clean result is a valid
+outcome. A reviewer states it plainly and never pads it with nits to look useful, and a
+finding that fails verification is dropped, not downgraded.
+
+### Review protocol (adopted 2026-10-17)
+
+Modelled on the process Anthropic describes for its own Code Review: several reviewers
+search in parallel, a verification step removes false positives, and what survives is
+deduplicated and ranked. `REVIEW.md` is the same calibration for the GitHub review
+service (it reads `REVIEW.md` from `main`; the local `/code-review` command reads only
+`CLAUDE.md`, which is why the rules everyone needs are here).
+
+1. **Find** in parallel, as above.
+2. **Verify before reporting.** Every finding carries a `file:line` and a concrete failing
+   input or state, and the reviewer has re-read the code (or run the test) to confirm it.
+   Behaviour claims cite the source, never an inference from a name. A finding you cannot
+   trace from a real caller to a failure is dropped. Then every 🔴 Important finding, and
+   every finding from a gate reviewer (`security-reviewer`, `schema-guardian`,
+   `scoring-auditor`, `offline-sync-auditor`), gets an **independent check**: hand it to a
+   fresh-context agent that did not produce it, with only the finding and the diff, and
+   tell it to try to refute it. Report the finding only if it survives. (Anthropic has a
+   separate group of agents vote on each finding; one independent checker is the
+   proportionate version here, and the self-check above is not a substitute for it.) If
+   the checker can neither confirm nor refute a gate finding, report it as **unverified**
+   with what would prove it; it is never silently dropped. Nits skip the checker and are
+   capped instead.
+3. **Rank** with one scale across all reviewers (definitions in `REVIEW.md`):
+   🔴 **Important** is the `state.json` severity `blocking` and holds the task open;
+   🟡 **Nit** is non-blocking, at most five per review; 🟣 **Pre-existing** was not
+   introduced by this change, so log it, don't fix it in this change.
+4. **Deduplicate.** When two reviewers find the same thing, the owning domain reports it
+   and the other points to them (each agent already names its owner).
+5. **Scale depth to the change.** The triggers in the list above are the floor and are
+   never skipped: RLS/RPC/Storage always gets `security-reviewer`, scoring code always
+   gets `scoring-auditor`. Above that floor, a docs- or comment-only change needs
+   `code-reviewer` at most, and a large or cross-cutting change (many files, a
+   shared `core/` primitive, anything tenant-facing) gets every reviewer that applies,
+   run twice if the first pass finds a 🔴.
+6. **Re-review must converge.** Anthropic found one PR looping through 50+ review rounds,
+   most of it re-flagging code that was there from the first pass. So: after a fix, re-run
+   only the reviewers that raised 🔴 findings, on the new diff only; never repeat a finding
+   already reported; when you report a bug, name its class so the author fixes every
+   instance in one commit. After **three** rounds on one change, stop and ask the author to
+   step back and reconsider the approach instead of running a fourth. Run one full pass
+   before `kb-sync` closes the task.
+7. **Reviewers advise; people approve.** No reviewer's output stands in for a human
+   merge decision, and a clean pass is not evidence the change is correct.
+8. **Record the outcome** in the CHANGELOG `Reviews` line: which reviewers ran, what each
+   found, and how each finding ended up (fixed, wrong, intentional, or did not matter).
+   A rising share of wrong findings means a reviewer's prompt or `REVIEW.md` needs
+   tightening; noise costs a round trip every time.
 
 **Cost note (2026-08-22, user decision):** `kb-sync` and `module-boundary-checker` run
 on a cheaper model (`model: haiku` in their `.claude/agents/*.md` frontmatter) — both are
 comparatively mechanical (session-log writing; import-path/grep-based boundary checks).
 `schema-guardian`, `security-reviewer`, `scoring-auditor`, `offline-sync-auditor`, and
 `code-reviewer` stay on the full model deliberately — these are the correctness/security
-gates the "every review should find something" discipline above depends on, and Phase 4's
+gates the skeptical-review discipline above depends on, and Phase 4's
 own review cycles (T4.1, T4.2) already surfaced real bugs on second and third passes that
 a weaker reviewer could plausibly have missed. `test-auditor` and `ui-accessibility-reviewer`
 were considered and kept on the full model too.

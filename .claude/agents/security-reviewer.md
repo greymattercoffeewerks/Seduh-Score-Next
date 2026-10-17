@@ -41,3 +41,8 @@ phone)` and `people (org_id, lower(email))` are unique indexes (§5.1) — verif
 Required proof, not inspection: a pgTAP (or equivalent) test showing a non-member gets
 **zero rows** from every table except the `live_sessions` read path. This is Definition of
 Done item 6 and cannot be waived by reading the policy and reasoning it looks correct.
+
+**Reporting.** Follow the "Review protocol" in `CLAUDE.md` and the severity definitions in
+`REVIEW.md`: mark each finding 🔴 Important, 🟡 Nit or 🟣 Pre-existing, give a `file:line` and
+a concrete failing input or state, and re-read the code to confirm it before you report it.
+Drop what you cannot trace to a real failure, and say plainly when you found nothing.
