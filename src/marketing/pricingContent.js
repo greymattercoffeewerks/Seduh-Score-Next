@@ -1,14 +1,15 @@
 // The pricing page's copy and its tier-by-feature matrix, in one editable place.
 //
-// DRAFT ASSIGNMENTS (2026-10-17). Gating is not built yet (see Handoffs and Specs/
-// GATING-SPEC.md, decisions D-G1 to D-G3), so which tier gets which feature is not
-// locked. What IS grounded:
+// Tier assignments confirmed by the owner on 2026-10-17: the 8-participant limit on Community
+// (BTC exempt), Annual's full access, Per-event as one event in one format, the result listing
+// rule (Compulsory / Optional / Optional), and the other rows as drafted.
+// Gating is not built yet (Handoffs and Specs/GATING-SPEC.md), so nothing here is enforced
+// by the product; the page says the limits are being switched on step by step.
 //   - the three tiers and their prices come from the landing page's pricing section;
 //   - "Included" for every tier means it exists in the product today;
 //   - "Planned" means it is not built yet (the page says so in words).
-// The rows marked UNCONFIRMED below are the owner's call. Change the cells here and
-// nowhere else; pricingScreen.test.js checks the matrix is complete and every state
-// has a word, not just a symbol.
+// Change the cells here and nowhere else; pricingScreen.test.js checks the matrix is
+// complete and every state has a word, not just a symbol.
 //
 // Claims must stay true: this module's CLAUDE.md says not to add copy for a capability
 // that is not real product scope. A feature that is not built yet is `soon`, never `yes`.
@@ -19,7 +20,7 @@ export const TIERS = [
     name: 'Community',
     price: 'Free',
     suffix: null,
-    summary: 'For organisers getting started and for small events.',
+    summary: 'For getting started. BTC with no limit, and other formats up to 8 competitors.',
     // The tier's archive rule (owner, 2026-10-17). Automatic enforcement is the archive
     // phase (infrastructure plan, step 4); until then publishing is the organiser's choice
     // on every tier, so this states the tier's policy ahead of the code.
@@ -31,7 +32,7 @@ export const TIERS = [
     name: 'Per-event',
     price: 'BND $18',
     suffix: 'one-time',
-    summary: 'One competition, with reports. Pay once, run your event, done.',
+    summary: 'One event, in the format you choose, with reports. Pay once, run your event, done.',
     note: 'Publishing results to the archive is optional.',
     cta: { text: 'Get in touch', href: '/contact/' },
     featured: true,
@@ -41,7 +42,8 @@ export const TIERS = [
     name: 'Annual',
     price: 'BND $350',
     suffix: 'per year',
-    summary: 'For organisers running events all year.',
+    summary:
+      'For organisers running events all year, with full access to every format and feature.',
     note: 'Publishing results to the archive is optional.',
     cta: { text: 'Get in touch', href: '/contact/' },
   },
@@ -60,12 +62,12 @@ export const FEATURE_GROUPS = [
     rows: [
       [
         'Cup Taster',
-        'Blind-set sensory heats, scored for accuracy with time as the tiebreaker.',
+        'Blind-set sensory heats, scored for accuracy with time as the tiebreaker. Up to 8 competitors on Community.',
         [yes, yes, yes],
       ],
       [
         'BTC',
-        'Team head-to-head: round-robin prelims, a seeded bracket and automatic advancement.',
+        'Team head-to-head: round-robin prelims, a seeded bracket and automatic advancement. Open to every tier, with no competitor limit.',
         [yes, yes, yes],
       ],
     ],
@@ -84,16 +86,31 @@ export const FEATURE_GROUPS = [
         'Add competitors and teams, and edit them as the day changes.',
         [yes, yes, yes],
       ],
+      // Owner, 2026-10-17: Per-event and Annual only; Community organisers manage registration
+      // themselves. Not built (it is Seduh ID Layer 2), so Planned.
+      [
+        'Event registration page',
+        'A public page where competitors register for your event and join your roster. On Community, you manage registration yourself.',
+        [no, soon, soon],
+      ],
       [
         'Keeps scoring through wifi drops',
         'Entries queue on the device and sync when the connection returns.',
         [yes, yes, yes],
       ],
-      // UNCONFIRMED: the real caps are decision D-G3 in GATING-SPEC.md.
+      // Owner, 2026-10-17: on Community, Cup Taster, Throwdown and Liga Seduh are limited to 8
+      // participants and BTC is not; Annual has full access; Per-event covers one event in one
+      // format, with no cap. Nothing enforces any of it yet: caps are decision D-G3 in
+      // GATING-SPEC.md. The 5-day Per-event window (D-G15) is confirmed but deliberately not on
+      // the page yet: when it starts and the CSV email at its end are still open.
       [
         'Events you can run',
         null,
-        [text('Small events'), text('One competition'), text('Events all year')],
+        [
+          text('BTC without limit; other formats up to 8 competitors'),
+          text('One event, in one format'),
+          text('All formats, all year, no limit'),
+        ],
       ],
     ],
   },
@@ -106,7 +123,7 @@ export const FEATURE_GROUPS = [
         'Live standings for the room, on any screen, from a shared link or QR code.',
         [yes, yes, yes],
       ],
-      // UNCONFIRMED and not built: audience branding exists only as an intended feature.
+      // Not built: audience branding exists only as an intended feature.
       ['Your own branding on audience screens', null, [no, soon, soon]],
     ],
   },
@@ -115,23 +132,23 @@ export const FEATURE_GROUPS = [
     title: 'Reports and results',
     rows: [
       [
-        'Public results archive',
-        'Cup Taster: the podium or full standings on a page anyone can open. Community results are published to the archive; on Per-event and Annual, publishing is your choice.',
-        [text('Always published'), text('Your choice'), text('Your choice')],
+        'Result listing',
+        'Cup Taster: the podium or full standings on a page anyone can open. On Community, results are always listed in the public archive. On Per-event and Annual, listing is your choice.',
+        [text('Compulsory'), text('Optional'), text('Optional')],
       ],
-      // UNCONFIRMED: the landing page puts PDF reports on Per-event and Annual only.
+      // The landing page puts PDF reports on Per-event and Annual only.
       [
         'Printable report and CSV export',
         'Cup Taster: a report you can print or save as PDF, and the data as CSV.',
         [no, yes, yes],
       ],
-      // UNCONFIRMED: which tier gets analytics is not decided.
+      // Analytics is an Annual feature.
       [
         'Per-cupper and per-set analytics',
         'Cup Taster: see which sets caught people out, and how each cupper did.',
         [no, no, yes],
       ],
-      // UNCONFIRMED and not built: needs the results archive (infrastructure plan, step 4).
+      // Not built: needs the results archive (infrastructure plan, step 4).
       ['History across seasons', null, [no, no, soon]],
     ],
   },
@@ -177,6 +194,7 @@ export const FAQ = [
   },
   {
     question: 'What about Throwdown and Liga Seduh?',
-    answer: 'Both are planned formats. We will say which tiers they arrive on when they launch.',
+    answer:
+      'Both are planned formats. When they launch they follow the same rules as Cup Taster: up to 8 competitors on Community, one event at a time on Per-event, and included on Annual.',
   },
 ];

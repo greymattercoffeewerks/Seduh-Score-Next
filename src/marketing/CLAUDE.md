@@ -143,9 +143,11 @@ and the shared header's Pricing link. It is static like the Tour: no router, aut
 - **All copy and the tier-by-feature matrix live in `pricingContent.js`** (a cell is `yes`, `no`, `soon`
   or `text`). Prices are the landing page's. `soon` means not built yet and the page says "Planned" in
   words; never mark a feature `yes` before it exists (the "Known placeholders" rule above).
-- **The matrix is a DRAFT until gating is decided.** Which tier gets which feature is
-  `Handoffs and Specs/GATING-SPEC.md` D-G2/D-G3; rows marked UNCONFIRMED in `pricingContent.js` are the
-  owner's call. When gating ships, the catalog (`supabase/entitlements.catalog.json`) should become the
+- **The matrix is confirmed by the owner (2026-10-17) but not enforced by the product.** Community is
+  limited to 8 competitors for Cup Taster (and, when they ship, Throwdown and Liga Seduh) while BTC is
+  uncapped; Per-event is one event in one format; Annual has full access; "Result listing" is Compulsory /
+  Optional / Optional. The tentative 5-day Per-event window is deliberately not on the page. Gating (`Handoffs and Specs/GATING-SPEC.md`, D-G2/D-G3)
+  is what will enforce it, and the page says the limits are being switched on step by step. When gating ships, the catalog (`supabase/entitlements.catalog.json`) should become the
   source for this matrix, with a contract test, so the page and the database cannot disagree.
 - The table keeps its semantics at 360px: below 760px each row becomes a card (header row hidden, each cell
   labelled by `data-label`), and explicit ARIA roles on the table elements survive the `display` change.

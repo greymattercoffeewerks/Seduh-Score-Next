@@ -97,14 +97,47 @@ describe('mountPricingScreen', () => {
     ]);
   });
 
+  it('states the Community limit of 8 competitors on its card and in the table', () => {
+    const community = TIERS[0];
+    expect(community.summary).toMatch(/up to 8 competitors/);
+    const [, , cells] = ALL_ROWS.find(([name]) => name === 'Events you can run');
+    expect(cells[0].text).toMatch(/up to 8 competitors/);
+    expect(cells[1].text).not.toMatch(/\b8\b/);
+    expect(cells[2].text).not.toMatch(/\b8\b/);
+  });
+
+  it('says BTC has no competitor limit on Community, and that the 8 applies to the other formats', () => {
+    const [, , cells] = ALL_ROWS.find(([name]) => name === 'Events you can run');
+    expect(cells[0].text).toMatch(/^BTC without limit/);
+    const btc = ALL_ROWS.find(([name]) => name === 'BTC');
+    expect(btc[1]).toMatch(/no competitor limit/);
+    expect(btc[2].map((cell) => cell.state)).toEqual(['yes', 'yes', 'yes']);
+    expect(btc[1]).not.toMatch(/\b8\b/);
+  });
+
+  it('describes Per-event as one event in one format, and Annual as every format with no limit', () => {
+    const [, , cells] = ALL_ROWS.find(([name]) => name === 'Events you can run');
+    expect(cells[1].text).toBe('One event, in one format');
+    expect(cells[2].text).toMatch(/^All formats/);
+    expect(TIERS[1].summary).toMatch(/One event, in the format you choose/);
+    expect(TIERS[2].summary).toMatch(/full access to every format and feature/);
+  });
+
+  it('offers the registration page on Per-event and Annual only, and says it is planned', () => {
+    const [, description, cells] = ALL_ROWS.find(([name]) => name === 'Event registration page');
+    expect(cells.map((cell) => cell.state)).toEqual(['no', 'soon', 'soon']);
+    expect(description).toMatch(/On Community, you manage registration yourself/);
+  });
+
+  it('keeps the 5-day Per-event window off the public page until its start rule is settled', () => {
+    const everything = JSON.stringify({ TIERS, FEATURE_GROUPS, FAQ });
+    expect(everything).not.toMatch(/5[- ]day|five days/i);
+  });
+
   it('puts the same archive rule in the table and the FAQ', () => {
-    const [, description, cells] = ALL_ROWS.find(([name]) => name === 'Public results archive');
-    expect(cells.map((cell) => cell.text)).toEqual([
-      'Always published',
-      'Your choice',
-      'Your choice',
-    ]);
-    expect(description).toMatch(/Community results are published/);
+    const [, description, cells] = ALL_ROWS.find(([name]) => name === 'Result listing');
+    expect(cells.map((cell) => cell.text)).toEqual(['Compulsory', 'Optional', 'Optional']);
+    expect(description).toMatch(/On Community, results are always listed/);
     const faq = FAQ.find((entry) => entry.question === 'Do my results have to be public?');
     expect(faq.answer).toMatch(/^On Community, yes/);
     expect(faq.answer).toMatch(/Per-event and Annual, publishing is your choice/);
@@ -116,7 +149,7 @@ describe('mountPricingScreen', () => {
 
   it('does not name BTC on rows that only Cup Taster supports without saying Cup Taster', () => {
     for (const name of [
-      'Public results archive',
+      'Result listing',
       'Printable report and CSV export',
       'Per-cupper and per-set analytics',
     ]) {
