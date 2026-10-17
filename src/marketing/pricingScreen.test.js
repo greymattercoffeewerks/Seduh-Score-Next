@@ -123,6 +123,16 @@ describe('mountPricingScreen', () => {
     expect(TIERS[2].summary).toMatch(/full access to every format and feature/);
   });
 
+  it('describes branding as logo, colour, name and banners, keeps Powered by Seduh Score, and says it is planned', () => {
+    const [, description, cells] = ALL_ROWS.find(
+      ([name]) => name === 'Your own branding on audience screens',
+    );
+    expect(cells.map((cell) => cell.state)).toEqual(['no', 'soon', 'soon']);
+    expect(description).toMatch(/logo, accent colour and name, plus banner images/);
+    expect(description).toMatch(/"Powered by Seduh Score" stays on every branded screen/);
+    expect(JSON.stringify({ TIERS, FEATURE_GROUPS, FAQ })).not.toMatch(/fully branded/i);
+  });
+
   it('offers the registration page on Per-event and Annual only, and says it is planned', () => {
     const [, description, cells] = ALL_ROWS.find(([name]) => name === 'Event registration page');
     expect(cells.map((cell) => cell.state)).toEqual(['no', 'soon', 'soon']);

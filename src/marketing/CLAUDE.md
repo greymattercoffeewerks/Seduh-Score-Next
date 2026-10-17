@@ -165,8 +165,12 @@ and the shared header's Pricing link. It is static like the Tour: no router, aut
   and until then publishing is the organiser's choice on every tier. Privacy and Terms must say Community
   results are public before it is enforced; the approved wording is held in
   `design/copy/archive-rule-wording-HELD.md` and must NOT be applied until the enforcement ships.
-- **Known mismatch, owner's call:** the landing page's tier prose still says Per-event is "fully branded"
-  and Annual has "persistent history across seasons", while this page marks both as Planned.
+- **Branding wording (owner, 2026-10-17):** say "branded", never "fully branded". The offer is logo, accent
+  colour, name and banner images, and "Powered by Seduh Score" always stays. Branding is not built, so the
+  pricing page marks it Planned; the landing page's "branded" still describes it as a feature of the tier.
+- **Known mismatches with the landing page, owner's call:** its Annual prose says "persistent history across
+  seasons" (Planned here), and its Community prose says "no account needed to run a small event" (accounts
+  are set up by hand) and "every live format" (Cup Taster is capped at 8 competitors there).
 
 ## BTC goes live (2026-09-23)
 

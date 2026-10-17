@@ -585,8 +585,7 @@ function pricingSection() {
         TIERS[1].name,
         TIERS[1].price,
         TIERS[1].suffix,
-        'One competition, fully branded, PDF reports included. Pay once, run your event, ' +
-          'done.',
+        'One competition, branded, PDF reports included. Pay once, run your event, ' + 'done.',
         { featured: true },
       ),
       pricingColumn(

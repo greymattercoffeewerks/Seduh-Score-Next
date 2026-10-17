@@ -73,6 +73,14 @@ describe('mountLandingScreen — pricing', () => {
     vi.unstubAllGlobals();
   });
 
+  it('says Per-event is "branded", never "fully branded" (branding is Level 2, not a full theme)', () => {
+    const root = document.createElement('div');
+    mountLandingScreen(root);
+    const text = root.querySelector('#pricing').textContent;
+    expect(text).toMatch(/One competition, branded,/);
+    expect(text).not.toMatch(/fully branded/i);
+  });
+
   it('has a Learn more link in the pricing section that goes to the pricing page', () => {
     const root = document.createElement('div');
     mountLandingScreen(root);

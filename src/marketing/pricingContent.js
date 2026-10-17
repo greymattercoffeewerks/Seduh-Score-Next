@@ -123,8 +123,14 @@ export const FEATURE_GROUPS = [
         'Live standings for the room, on any screen, from a shared link or QR code.',
         [yes, yes, yes],
       ],
-      // Not built: audience branding exists only as an intended feature.
-      ['Your own branding on audience screens', null, [no, soon, soon]],
+      // Not built: audience branding exists only as an intended feature. Owner, 2026-10-17: the
+      // offer is Level 2 (logo, accent colour, name, banner images), worded "Branded", with
+      // "Powered by Seduh Score" always kept (GATING-SPEC section 6c, D-G17).
+      [
+        'Your own branding on audience screens',
+        'Your logo, accent colour and name, plus banner images, on the projector, phone and splash screens. "Powered by Seduh Score" stays on every branded screen.',
+        [no, soon, soon],
+      ],
     ],
   },
   {
