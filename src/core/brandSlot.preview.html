@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Brand slot and credit — preview</title>
+    <link rel="stylesheet" href="/src/ui/tokens/index.css" />
+    <link rel="stylesheet" href="/src/ui/tokens/components.css" />
+    <link rel="stylesheet" href="/src/core/splashScreen.css" />
+    <link rel="stylesheet" href="/src/core/viewer-shell.css" />
+    <link rel="stylesheet" href="/src/core/stageDisplay.css" />
+    <link rel="stylesheet" href="/src/core/stageSurface.css" />
+    <link rel="stylesheet" href="/src/core/brandSlot.css" />
+    <style>
+      /* Demo-harness-only layout — not part of the shipped module graph. */
+      .demo-controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 12px 16px;
+        border-bottom: 2px solid var(--color-border-strong);
+        background: var(--color-surface);
+      }
+      .demo-controls button {
+        min-height: 44px;
+        padding: 8px 14px;
+        border: 1px solid var(--color-border-strong);
+        background: var(--color-surface);
+        color: var(--color-text);
+        font-family: var(--font-body);
+        cursor: pointer;
+      }
+      .demo-surfaces {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        padding: 16px;
+        align-items: flex-start;
+      }
+      .demo-surface h2 {
+        font-family: var(--font-display);
+        margin: 0 0 8px 0;
+        font-size: 1rem;
+      }
+      .demo-frame {
+        border: 2px solid var(--color-border-strong);
+        overflow: hidden;
+      }
+      #projector-frame {
+        width: 960px;
+        height: 540px;
+        position: relative;
+      }
+      /* the stage sizes are in viewport units; the harness frame is a fixed 960 by 540 box */
+      #projector-frame .stage-surface,
+      #projector-frame .stage-display {
+        height: 100%;
+      }
+      /* the real surface's root gets this from the shared stage mode; the harness frame needs it spelled out */
+      #projector-frame .stage-surface {
+        display: flex;
+        flex-direction: column;
+        background: var(--color-canvas);
+        color: var(--color-text);
+      }
+      #phone-frame {
+        width: 360px;
+        height: 640px;
+        overflow-y: auto;
+      }
+      #splash-frame {
+        width: 960px;
+        height: 540px;
+        position: relative;
+        transform: translateZ(0);
+      }
+      #splash-frame .splash-screen {
+        min-height: 100%;
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      Demo-only harness for BR-D2 — not part of the shipped module graph, same role as every other *.preview.html
+      file. Mounts the REAL stage display (the projector band), the REAL phone shell and the REAL splash against a
+      fake live source, and a button per kind of brand an organiser might set. Each button calls setBrand on all
+      three, so the same brand is seen on every surface at once. "Powered by Seduh Score" must be visible on all
+      three whenever a brand is set, and nothing must change when the brand is cleared.
+    -->
+    <div class="demo-controls">
+      <button id="btn-none">No brand</button>
+      <button id="btn-pink">Brew Lab: logo, name, pink</button>
+      <button id="btn-navy">Deep navy accent</button>
+      <button id="btn-yellow">Bright yellow accent</button>
+      <button id="btn-long">Longest name (60)</button>
+      <button id="btn-broken">Logo that fails to load</button>
+      <button id="btn-logo-only">Logo only</button>
+      <button id="btn-hostile">Hostile name</button>
+      <button id="btn-test">Splash as TEST event</button>
+      <button id="btn-live">Splash as live event</button>
+    </div>
+    <div class="demo-surfaces">
+      <div class="demo-surface">
+        <h2>Projector (stage)</h2>
+        <div id="projector-frame" class="demo-frame"></div>
+      </div>
+      <div class="demo-surface">
+        <h2>Phone (paper), 360 wide</h2>
+        <div id="phone-frame" class="demo-frame"></div>
+      </div>
+      <div class="demo-surface">
+        <h2>Splash (stage)</h2>
+        <div id="splash-frame" class="demo-frame"></div>
+      </div>
+    </div>
+    <script type="module">
+      import { createStageDisplay, renderScreenFrame } from './stageDisplay.js';
+      import { mountViewerShell } from './viewer-shell.js';
+      import { mountSplashScreen } from './splashScreen.js';
+
+      const origin = location.origin;
+      const BRANDS = {
+        none: null,
+        pink: {
+          displayName: 'Brew Lab',
+          logoUrl: `${origin}/favicon-32.png`,
+          accentHex: '#e91e63',
+        },
+        navy: {
+          displayName: 'Harbour Roasters',
+          logoUrl: `${origin}/favicon-32.png`,
+          accentHex: '#1a237e',
+        },
+        yellow: {
+          displayName: 'Sunrise Coffee',
+          logoUrl: `${origin}/favicon-32.png`,
+          accentHex: '#ffeb3b',
+        },
+        long: {
+          displayName: 'W'.repeat(60),
+          logoUrl: `${origin}/favicon-32.png`,
+          accentHex: '#2dd4c0',
+        },
+        broken: {
+          displayName: 'Brew Lab',
+          logoUrl: `${origin}/missing-logo.png`,
+          accentHex: '#e91e63',
+        },
+        logoOnly: { logoUrl: `${origin}/favicon-32.png`, accentHex: '#e91e63' },
+        hostile: { displayName: '<img src=x onerror=alert(1)>', accentHex: '#e91e63' },
+      };
+
+      // ---- projector: the real stage display with one simple screen ----
+      const projectorFrame = document.getElementById('projector-frame');
+      const stageRoot = document.createElement('div');
+      stageRoot.className = 'stage-surface';
+      stageRoot.setAttribute('data-surface', 'stage');
+      projectorFrame.append(stageRoot);
+      const screen = {
+        key: 'demo',
+        mount(host) {
+          const frame = renderScreenFrame();
+          frame.main.textContent = 'Standings would be here';
+          frame.main.style.cssText = 'display:grid;place-items:center;font-size:3vh;';
+          host.append(frame.el);
+          return { update() {}, destroy() {} };
+        },
+      };
+      const display = createStageDisplay({
+        selectScreen: () => screen,
+        bandFor: () => ({
+          eventName: 'Grey Matter Cup Taster Competition 2026',
+          sectionLabel: 'Final',
+          live: true,
+        }),
+      });
+      stageRoot.append(display.el);
+      display.update({ n: 1 });
+
+      // ---- phone: the real viewer shell against a one-session fake ----
+      const row = {
+        id: 's1',
+        org_id: 'o1',
+        event_id: 'e1',
+        format: 'cup_taster',
+        active: true,
+        is_test: false,
+        payload: { n: 1 },
+      };
+      const channel = {
+        on: () => channel,
+        subscribe: (cb) => {
+          Promise.resolve().then(() => cb('SUBSCRIBED'));
+          return channel;
+        },
+      };
+      const builder = {
+        select: () => builder,
+        eq: () => builder,
+        order: () => builder,
+        limit: () => builder,
+        maybeSingle: () => Promise.resolve({ data: row, error: null }),
+      };
+      const phoneClient = {
+        from: () => builder,
+        rpc: () => Promise.resolve({ data: [], error: null }),
+        channel: () => channel,
+        removeChannel() {},
+      };
+      const phone = await mountViewerShell(document.getElementById('phone-frame'), {
+        orgId: 'o1',
+        showChrome: true,
+        client: phoneClient,
+        renderBody(body) {
+          body.textContent = 'Standings would be here';
+        },
+      });
+
+      // ---- splash: the real splash against a fake event ----
+      let splash = null;
+      async function mountSplash(event) {
+        splash?.unmount();
+        const frame = document.getElementById('splash-frame');
+        frame.replaceChildren();
+        splash = mountSplashScreen(frame, {
+          orgId: 'o1',
+          client: {
+            rpc: () => Promise.resolve({ data: [event], error: null }),
+            from() {
+              throw new Error('no tables');
+            },
+          },
+          brand: current,
+        });
+      }
+      const LIVE = {
+        id: 'e1',
+        name: 'Grey Matter Cup Taster Competition 2026',
+        event_date: '2026-10-04',
+        is_test: false,
+      };
+      const TEST = { id: 'e2', name: 'Rehearsal', event_date: null, is_test: true };
+      let current = null;
+      await mountSplash(LIVE);
+
+      function setBrand(key) {
+        current = BRANDS[key];
+        display.setBrand(current);
+        phone.setBrand(current);
+        splash.setBrand(current);
+      }
+      for (const [id, key] of [
+        ['btn-none', 'none'],
+        ['btn-pink', 'pink'],
+        ['btn-navy', 'navy'],
+        ['btn-yellow', 'yellow'],
+        ['btn-long', 'long'],
+        ['btn-broken', 'broken'],
+        ['btn-logo-only', 'logoOnly'],
+        ['btn-hostile', 'hostile'],
+      ]) {
+        document.getElementById(id).addEventListener('click', () => setBrand(key));
+      }
+      document.getElementById('btn-test').addEventListener('click', () => mountSplash(TEST));
+      document.getElementById('btn-live').addEventListener('click', () => mountSplash(LIVE));
+      window.__setBrand = setBrand;
+    </script>
+  </body>
+</html>

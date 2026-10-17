@@ -14,9 +14,18 @@
 // the surface unmounts.
 import { createStageDisplay } from './stageDisplay.js';
 
-export function createStageBody({ selectScreen, bandFor, hasContent, ...displayOptions }) {
+export function createStageBody({
+  selectScreen,
+  bandFor,
+  hasContent,
+  brand: initialBrand = null,
+  ...displayOptions
+}) {
   let display = null;
   let destroyed = false;
+  // The brand outlives the display (which is built on first use and rebuilt after a release), so a display
+  // created later starts with whatever the brand is by then. See core/stageDisplay.js.
+  let brand = initialBrand;
 
   function release() {
     display?.destroy();
@@ -26,11 +35,15 @@ export function createStageBody({ selectScreen, bandFor, hasContent, ...displayO
   return {
     renderBody(body, payload) {
       if (destroyed) return;
-      display ??= createStageDisplay({ selectScreen, bandFor, ...displayOptions });
+      display ??= createStageDisplay({ selectScreen, bandFor, brand, ...displayOptions });
       display.update(payload);
       body.appendChild(display.el);
     },
     hasContent,
+    setBrand(next) {
+      brand = next;
+      display?.setBrand(next);
+    },
     release,
     destroy() {
       destroyed = true;
