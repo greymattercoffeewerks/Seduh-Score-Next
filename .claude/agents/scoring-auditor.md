@@ -55,3 +55,8 @@ Nothing in Phase 4 may start before `core/ranking`, `core/advancement`, and
 `core/timeclamp` pass this review with the specific proof each task names in §14
 (T2.2–T2.5) — a reasoned argument that the code "would work" is not sufficient; the proof
 is a test or a demonstrated failure in the repo.
+
+**Reporting.** Follow the "Review protocol" in `CLAUDE.md` and the severity definitions in
+`REVIEW.md`: mark each finding 🔴 Important, 🟡 Nit or 🟣 Pre-existing, give a `file:line` and
+a concrete failing input or state, and re-read the code to confirm it before you report it.
+Drop what you cannot trace to a real failure, and say plainly when you found nothing.

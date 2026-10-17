@@ -44,3 +44,8 @@ Check every UI change for:
 Screen-reader and keyboard-only traversal checks belong here once there are interactive
 screens to traverse (§14 T5.3) — note explicitly when a check could not be performed
 because no built UI exists yet.
+
+**Reporting.** Follow the "Review protocol" in `CLAUDE.md` and the severity definitions in
+`REVIEW.md`: mark each finding 🔴 Important, 🟡 Nit or 🟣 Pre-existing, give a `file:line` and
+a concrete failing input or state, and re-read the code to confirm it before you report it.
+Drop what you cannot trace to a real failure, and say plainly when you found nothing.
