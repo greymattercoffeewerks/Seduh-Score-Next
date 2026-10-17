@@ -93,8 +93,46 @@ Run the relevant reviewers in parallel (single message, multiple Agent calls) wh
 change touches more than one concern — e.g. a migration that's both schema and RLS gets
 `schema-guardian` + `security-reviewer` together.
 
-**Every review this project runs should be expected to find something** (handoff §13).
-Treat a clean review as the surprising outcome, not the expected one.
+**Review with skepticism** (handoff §13): reviews on this project have found real bugs on
+second and third passes, so don't wave a change through. But a clean result is a valid
+outcome. A reviewer states it plainly and never pads it with nits to look useful, and a
+finding that fails verification is dropped, not downgraded.
+
+### Review protocol (adopted 2026-10-17)
+
+Modelled on the process Anthropic describes for its own Code Review: several reviewers
+search in parallel, a verification step removes false positives, and what survives is
+deduplicated and ranked. `REVIEW.md` is the same calibration for the GitHub review
+service (it reads `REVIEW.md` from `main`; the local `/code-review` command reads only
+`CLAUDE.md`, which is why the rules everyone needs are here).
+
+1. **Find** in parallel, as above.
+2. **Verify before reporting.** Every finding carries a `file:line` and a concrete failing
+   input or state, and the reviewer has re-read the code (or run the test) to confirm it.
+   Behaviour claims cite the source, never an inference from a name. A finding you cannot
+   trace from a real caller to a failure is dropped. A gate reviewer
+   (`security-reviewer`, `schema-guardian`, `scoring-auditor`, `offline-sync-auditor`)
+   that suspects a hole it cannot prove reports it as **unverified** with what would
+   prove it; it is never silently dropped.
+3. **Rank** with one scale across all reviewers (definitions in `REVIEW.md`):
+   🔴 **Important** is the `state.json` severity `blocking` and holds the task open;
+   🟡 **Nit** is non-blocking, at most five per review; 🟣 **Pre-existing** was not
+   introduced by this change, so log it, don't fix it in this change.
+4. **Deduplicate.** When two reviewers find the same thing, the owning domain reports it
+   and the other points to them (each agent already names its owner).
+5. **Scale depth to the change.** The triggers in the list above are the floor and are
+   never skipped: RLS/RPC/Storage always gets `security-reviewer`, scoring code always
+   gets `scoring-auditor`. Above that floor, a docs- or comment-only change needs
+   `code-reviewer` at most, and a large or cross-cutting change (many files, a
+   shared `core/` primitive, anything tenant-facing) gets every reviewer that applies,
+   run twice if the first pass finds a 🔴.
+6. **Re-review after fixes.** Re-run only the reviewers that raised 🔴 findings, scoped to
+   what changed. Run one full pass before `kb-sync` closes the task.
+7. **Reviewers advise; people approve.** No reviewer's output stands in for a human
+   merge decision, and a clean pass is not evidence the change is correct.
+8. **Record the outcome** in the CHANGELOG `Reviews` line: which reviewers ran, what each
+   found, and what was dropped at verification and why. A rising count of dropped
+   findings means a reviewer's prompt or `REVIEW.md` needs tightening.
 
 **Cost note (2026-08-22, user decision):** `kb-sync` and `module-boundary-checker` run
 on a cheaper model (`model: haiku` in their `.claude/agents/*.md` frontmatter) — both are

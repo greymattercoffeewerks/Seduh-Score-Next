@@ -48,3 +48,8 @@ Check every migration for:
 A recursive RLS policy appearing inside a migration is a schema-guardian concern only
 insofar as it's present in the file — full RLS review belongs to `security-reviewer`;
 flag it there rather than reviewing it here.
+
+**Reporting.** Follow the "Review protocol" in `CLAUDE.md` and the severity definitions in
+`REVIEW.md`: mark each finding 🔴 Important, 🟡 Nit or 🟣 Pre-existing, give a `file:line` and
+a concrete failing input or state, and re-read the code to confirm it before you report it.
+Drop what you cannot trace to a real failure, and say plainly when you found nothing.
