@@ -91,7 +91,7 @@ describe('mountPricingScreen', () => {
       (card) => card.querySelector('.pricing-tier-note').textContent,
     );
     expect(notes).toEqual([
-      'Results are published to the public archive.',
+      'The podium is published to the public archive automatically when the event ends.',
       'Publishing results to the archive is optional.',
       'Publishing results to the archive is optional.',
     ]);
@@ -136,10 +136,18 @@ describe('mountPricingScreen', () => {
 
   it('puts the same archive rule in the table and the FAQ', () => {
     const [, description, cells] = ALL_ROWS.find(([name]) => name === 'Result listing');
-    expect(cells.map((cell) => cell.text)).toEqual(['Compulsory', 'Optional', 'Optional']);
-    expect(description).toMatch(/On Community, results are always listed/);
+    expect(cells.map((cell) => cell.text)).toEqual([
+      'Compulsory: podium only, published when the event ends',
+      'Optional',
+      'Optional',
+    ]);
+    expect(description).toMatch(
+      /On Community, the podium is listed in the public archive automatically when the event ends/,
+    );
     const faq = FAQ.find((entry) => entry.question === 'Do my results have to be public?');
-    expect(faq.answer).toMatch(/^On Community, yes/);
+    expect(faq.answer).toMatch(
+      /^On Community, yes: the podium is published .* when the event ends/,
+    );
     expect(faq.answer).toMatch(/Per-event and Annual, publishing is your choice/);
   });
 

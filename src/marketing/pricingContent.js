@@ -24,7 +24,7 @@ export const TIERS = [
     // The tier's archive rule (owner, 2026-10-17). Automatic enforcement is the archive
     // phase (infrastructure plan, step 4); until then publishing is the organiser's choice
     // on every tier, so this states the tier's policy ahead of the code.
-    note: 'Results are published to the public archive.',
+    note: 'The podium is published to the public archive automatically when the event ends.',
     cta: { text: 'Get in touch', href: '/contact/' },
   },
   {
@@ -133,8 +133,12 @@ export const FEATURE_GROUPS = [
     rows: [
       [
         'Result listing',
-        'Cup Taster: the podium or full standings on a page anyone can open. On Community, results are always listed in the public archive. On Per-event and Annual, listing is your choice.',
-        [text('Compulsory'), text('Optional'), text('Optional')],
+        'Cup Taster: the podium or full standings on a page anyone can open. On Community, the podium is listed in the public archive automatically when the event ends. On Per-event and Annual, listing is your choice.',
+        [
+          text('Compulsory: podium only, published when the event ends'),
+          text('Optional'),
+          text('Optional'),
+        ],
       ],
       // The landing page puts PDF reports on Per-event and Annual only.
       [
@@ -185,7 +189,7 @@ export const FAQ = [
   {
     question: 'Do my results have to be public?',
     answer:
-      'On Community, yes: results are published to the public archive. On Per-event and Annual, publishing is your choice.',
+      'On Community, yes: the podium is published to the public archive automatically when the event ends. On Per-event and Annual, publishing is your choice.',
   },
   {
     question: 'What does "Planned" mean?',
