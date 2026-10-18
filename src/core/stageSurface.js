@@ -15,7 +15,7 @@ import { mountViewerShell } from './viewer-shell.js';
 
 export async function mountStageSurface(
   root,
-  { body, surfaceClass = '', orgId, client, signal } = {},
+  { body, surfaceClass = '', orgId, client, signal, onEventChange } = {},
 ) {
   root.classList.add('stage-surface');
   if (surfaceClass) root.classList.add(surfaceClass);
@@ -30,6 +30,7 @@ export async function mountStageSurface(
       // A session that ends releases the body's display, if the body can (core/formatBody.js), so its timers
       // stop and the next session starts clean.
       onNoContent: () => body.release?.(),
+      onEventChange,
       showChrome: false,
       client,
       signal,

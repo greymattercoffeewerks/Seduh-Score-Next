@@ -1343,6 +1343,68 @@ describe('mountViewerShell', () => {
   });
 });
 
+describe('mountViewerShell: onEventChange', () => {
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const mount = (client, onEventChange) =>
+    mountViewerShell(document.createElement('div'), {
+      orgId: 'org1',
+      renderBody: vi.fn(),
+      onEventChange,
+      showChrome: false,
+      client,
+    });
+
+  it('is told the live session event id on the first render and again only when it changes', async () => {
+    const onEventChange = vi.fn();
+    const client = fakeClient([session({ event_id: 'ev1', payload: { standings: [1] } })]);
+    await mount(client, onEventChange);
+    expect(onEventChange.mock.calls).toEqual([[null], ['ev1']]);
+    client._triggerChange();
+    await settle();
+    expect(onEventChange).toHaveBeenCalledTimes(2); // the same event: not told again
+    client.db.live_sessions[0].event_id = 'ev2';
+    client._triggerChange();
+    await settle();
+    expect(onEventChange.mock.calls.at(-1)).toEqual(['ev2']);
+  });
+
+  it('is told null again when the live session goes away', async () => {
+    const onEventChange = vi.fn();
+    const client = fakeClient([session({ event_id: 'ev1', payload: { standings: [1] } })]);
+    await mount(client, onEventChange);
+    client.db.live_sessions.length = 0;
+    client._triggerChange();
+    await settle();
+    expect(onEventChange.mock.calls.at(-1)).toEqual([null]);
+    expect(onEventChange.mock.calls).toEqual([[null], ['ev1'], [null]]);
+  });
+
+  it('is told null when there is no live session', async () => {
+    const onEventChange = vi.fn();
+    await mount(fakeClient([]), onEventChange);
+    expect(onEventChange.mock.calls).toEqual([[null]]);
+  });
+
+  it('never lets a callback that throws break the screen', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const root = document.createElement('div');
+    await mountViewerShell(root, {
+      orgId: 'org1',
+      renderBody: (body) => {
+        body.textContent = 'standings';
+      },
+      onEventChange: () => {
+        throw new Error('boom');
+      },
+      showChrome: false,
+      client: fakeClient([session({ event_id: 'ev1', payload: { standings: [1] } })]),
+    });
+    expect(root.textContent).toContain('standings');
+    expect(error).toHaveBeenCalled();
+    error.mockRestore();
+  });
+});
+
 describe('mountViewerShell: onNoContent', () => {
   const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
   const mount = (client, onNoContent, extra = {}) =>
