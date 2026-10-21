@@ -175,7 +175,13 @@ refusal.
    for the leaf tables). Do this in the same migration that adds the column.
 4. **Base grants** (a separate layer from RLS) kept narrow: no privilege `anon` or
    `authenticated` does not use (`020`; production has narrow privileges, CI's database
-   broad ones, so a test must hold in both).
+   broad ones, so a test must hold in both). **Grant explicitly, in the same migration that
+   creates the table.** From 2026-10-30 Supabase stops auto-granting new `public` tables to the
+   API roles, so a table with no `grant` answers "permission denied" (also on `db reset`, CI and
+   preview branches). Grant only what each role uses (usually `authenticated`; `service_role`
+   holds no table privileges in production and our functions are `SECURITY DEFINER`, so do not
+   add it by reflex). A table closed to every role on purpose goes in `DENY_ALL` in
+   `supabase/migrationGrants.test.js` with the reason; that test fails otherwise.
 5. **Two ids that must agree** (a child and a parent from two directions): a
    cross-reference trigger that opens with `refuse_non_member` (above).
 6. **Views** are `security_invoker`. Anything anonymous people need is a narrow
