@@ -96,6 +96,8 @@ export default defineConfig({
     include: [
       'src/**/*.test.js',
       'supabase/functions/**/*.test.js',
+      // Reads the migration files themselves (explicit table grants).
+      'supabase/*.test.js',
       'eslint-rules/**/*.test.js',
       // Build-output checks (tools/check-admin-bundle-leak.mjs): the scripts' own tests.
       'tools/*.test.js',
