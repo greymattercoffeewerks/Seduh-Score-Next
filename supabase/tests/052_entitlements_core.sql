@@ -16,7 +16,7 @@
 --     anon are all refused the same way (no oracle on other tenants); while dark every key is allowed and no cap shows.
 -- The functions are run as the owner with an explicit clock (p_at); the API surface is exercised as the real roles.
 begin;
-select plan(90);
+select plan(101);
 
 create schema t052;
 grant usage on schema t052 to anon, authenticated;
@@ -55,14 +55,15 @@ insert into auth.users (id, email) values
   (t052.u(1), 'x-member@test.seduh-next'),
   (t052.u(2), 'y-member@test.seduh-next'),
   (t052.u(3), 'nobody@test.seduh-next');
-insert into orgs (id, name, slug) values (t052.u(100), 'Org X', 'org-x-052'), (t052.u(200), 'Org Y', 'org-y-052');
+insert into orgs (id, name, slug) values (t052.u(100), 'Org X', 'org-x-052'), (t052.u(200), 'Org Y', 'org-y-052'), (t052.u(300), 'Org Z', 'org-z-052');
 insert into org_members (org_id, user_id, role) values
   (t052.u(100), t052.u(1), 'owner'),
   (t052.u(200), t052.u(2), 'owner');
 insert into events (id, org_id, format, name) values
   (t052.u(101), t052.u(100), 'cup_taster', 'X event one'),
   (t052.u(102), t052.u(100), 'cup_taster', 'X event two'),
-  (t052.u(201), t052.u(200), 'cup_taster', 'Y event one');
+  (t052.u(201), t052.u(200), 'cup_taster', 'Y event one'),
+  (t052.u(301), t052.u(300), 'cup_taster', 'Z event one');
 
 -- ============ the seed ============
 select is((select count(*)::int from app.entitlement_tiers), 3, 'three tiers are seeded');
@@ -131,6 +132,7 @@ insert into entitlement_grants (id, org_id, tier, valid_from, source, note) valu
   (t052.u(1001), t052.u(100), 'per_event', t052.t(0), 'manual', 'org grant');
 select is(app.effective_tier(t052.u(100), null, t052.t(1)), 'per_event', 'an open-ended organisation grant counts after valid_from');
 select is(app.effective_tier(t052.u(100), null, t052.t(-1)), 'community', 'a grant that has not started does not count');
+select is(app.effective_tier(t052.u(100), null, t052.t(0)), 'per_event', 'a grant counts from its valid_from exactly (inclusive)');
 select is(app.effective_tier(t052.u(200), null, t052.t(1)), 'community', 'and it does not leak to another organisation');
 
 -- an event grant on event one only: annual for 5 days
@@ -188,7 +190,16 @@ update app.entitlement_keys set enforced = true where key = 'guess_the_bean_crea
 select is(app.has_entitlement(gen_random_uuid(), 'guess_the_bean_create', null, t052.t(0)), true, 'enforced with min_tier null: open to every tier');
 
 -- window_bound = false (registration page): an expired, unrevoked event grant still counts
-update app.entitlement_keys set enforced = true where key = 'registration_page';
+-- Org Z has NO open-ended grant: only an event grant that ended at day 2 and was never revoked
+insert into entitlement_grants (org_id, event_id, tier, valid_from, valid_until, source) values
+  (t052.u(300), t052.u(301), 'per_event', t052.t(0), t052.t(2), 'manual');
+update app.entitlement_keys set enforced = true where key in ('registration_page', 'cup_taster_report');
+select is(app.has_entitlement(t052.u(300), 'registration_page', t052.u(301), t052.t(10)), true,
+  'registration_page: an expired, unrevoked event grant is the only thing granting, and it still counts');
+select is(app.has_entitlement(t052.u(300), 'cup_taster_report', t052.u(301), t052.t(10)), false,
+  'while a window-bound key refuses the same expired grant');
+select is(app.has_entitlement(t052.u(300), 'cup_taster_report', t052.u(301), t052.t(1)), true,
+  'and allows it inside the window');
 select is(app.has_entitlement(t052.u(100), 'registration_page', t052.u(101), t052.t(10)), true,
   'registration_page: an expired but unrevoked grant still counts (not bound by the window)');
 select is(app.has_entitlement(t052.u(100), 'registration_page', t052.u(102), t052.t(10)), true,
@@ -223,10 +234,16 @@ select is(t052.refusal($$ update entitlement_grants set valid_until = t052.t(30)
 select is(t052.refusal($$ update entitlement_grants set org_id = t052.u(200) where id = t052.u(1001) $$), '23001|', 'org_id is frozen');
 select is(t052.refusal($$ update entitlement_grants set event_id = t052.u(102) where id = t052.u(1002) $$), '23001|', 'event_id is frozen');
 select is(t052.refusal($$ update entitlement_grants set note = 'edited' where id = t052.u(1001) $$), '23001|', 'note is frozen');
+select is(t052.refusal($$ update entitlement_grants set id = gen_random_uuid() where id = t052.u(1001) $$), '23001|', 'id is frozen');
+select is(t052.refusal($$ update entitlement_grants set valid_from = t052.t(-5) where id = t052.u(1001) $$), '23001|', 'valid_from is frozen');
+select is(t052.refusal($$ update entitlement_grants set source = 'payment' where id = t052.u(1001) $$), '23001|', 'source is frozen');
+select is(t052.refusal($$ update entitlement_grants set granted_by = t052.u(1) where id = t052.u(1001) $$), '23001|', 'granted_by is frozen');
+select is(t052.refusal($$ update entitlement_grants set extends_grant_id = t052.u(1002) where id = t052.u(1001) $$), '23001|', 'extends_grant_id is frozen');
+select is(t052.refusal($$ update entitlement_grants set created_at = now() - interval '1 day' where id = t052.u(1001) $$), '23001|', 'created_at is frozen');
 select is(t052.refusal($$ update entitlement_grants set revoked_at = t052.t(4) where id = t052.u(1002) $$), 'ok', 'but revoked_at can be set');
 select is(t052.refusal($$ delete from entitlement_grants where id = t052.u(1003) $$), 'ok', 'the owner can delete (the table is not append-only; the admin functions never do)');
 
--- the child org of a deleted organisation goes with it (the audit log is separate and survives)
+-- (the delete above ran in a rolled-back sub-transaction: the grant is still there)
 select is(
   (select count(*)::int from pg_trigger t where t.tgrelid = 'public.entitlement_grants'::regclass and not t.tgisinternal
       and t.tgenabled = 'O' and (t.tgtype & 2) > 0 and (t.tgtype & 16) > 0 and (t.tgtype & 1) > 0 and t.tgqual is null),
@@ -246,11 +263,12 @@ select is((select count(*)::int from entitlement_grants), 0, 'a signed-in person
 reset role;
 set local role anon;
 select is(t052.affected($$ select 1 from entitlement_grants $$), -1, 'anon cannot read the table at all');
+select is(has_table_privilege('anon', 'public.entitlement_grants', 'select'), false, 'anon holds no select privilege on the table itself');
 reset role;
 
 -- ============ my_entitlements ============
 -- reset the keys this file flipped, then check the dark answer
-update app.entitlement_keys set enforced = false where key in ('btc_format', 'guess_the_bean_create', 'registration_page', 'cup_taster_participants');
+update app.entitlement_keys set enforced = false where key in ('cup_taster_report', 'btc_format', 'guess_the_bean_create', 'registration_page', 'cup_taster_participants');
 update app.entitlement_keys set min_tier = 'per_event' where key = 'btc_format';
 update app.entitlement_caps set cap_limit = 8 where key = 'cup_taster_participants' and tier = 'community';
 -- my_entitlements reads the real clock: an annual grant on X's first event that started yesterday
@@ -270,7 +288,7 @@ select is(t052.refusal($$ select public.my_entitlements(t052.u(100), t052.u(201)
 select is(t052.refusal($$ select public.my_entitlements(gen_random_uuid()) $$), '42501|', 'an organisation that does not exist: the same 42501');
 select is(
   public.my_entitlements(t052.u(100), t052.u(102)) ->> 'tier',
-  'community', 'the second event has no grant left (its only one was deleted): community');
+  'community', 'the second event has no current grant (its only one was revoked at t0): community');
 reset role;
 -- enforced, the cap shows its number
 update app.entitlement_keys set enforced = true where key = 'cup_taster_participants';
