@@ -318,12 +318,14 @@ extensions.crypt('<temp>', encrypted_password)` proves it took; check first that
   with the authenticator factor verified and one `aal2` session; (7) a smoke test on a throwaway organisation
   `console-smoke`, removed afterwards by SQL (the organisation, then the login a Team-screen add had made; the audit rows
   stay, by design).
-  **Exercised against the cloud since:** `account.create` (2026-10-22: the owner created the organisation "Noice Test"
-  from the console with a NEW login, audit rows 4 and 5, `org.create` and `account.create` both recorded). **Still not
-  exercised against the cloud:** `member.add` through the console. What the first smoke test (2026-10-17) proved:
-  `org.create` with an existing account, and `member.role_set` twice (an owner swapped between two accounts, which keeps
-  one owner throughout, so `last_owner` never fired). Run `member.add` with a throwaway organisation before the first
-  real customer organisation is created from the console. **The console cannot disable or delete anything**
+  **Every console write path has now run against the cloud.** The first smoke test (2026-10-17) proved `org.create`
+  with an existing account and `member.role_set` twice (an owner swapped between two accounts, which keeps one owner
+  throughout, so `last_owner` never fired). On 2026-10-22 the owner proved the rest with throwaway organisations
+  "Noice Test" and "Noice 2 Test": `account.create` with a NEW login (audit rows 4 and 5), `member.role_set` again
+  (rows 6 and 7), `org.create` with an existing account and the attestation ticked (row 8) and `member.add` of an
+  account whose one-time password was still unset, attestation ticked (row 9, `attested: true`). The two throwaway
+  organisations and their two logins are still in the cloud and are removed by SQL on the owner's say-so.
+  **The console cannot disable or delete anything**
   (organisation, member or login): a throwaway is removed by SQL, and a requested admin function for it is logged in
   ROADMAP.md ("Admin console: disable or delete", 2026-10-22).
 
@@ -450,7 +452,7 @@ Studio at `http://127.0.0.1:54423`) — nothing about local dev changed.
 **Provisioning an org (T-TEN.B4; invite-only — there is no signup and no API role can do this).**
 **The admin console is live in the cloud (rolled out 2026-10-17, see "Platform administration"), so `/admin/` is
 the normal path and this SQL is the fallback** (the console's New organisation screen is `create_org` plus an audit
-row and the same refusals, plus the admin gate, `admin_self_target` and `member_password_unset`). Whenever the console cannot be used (a lost authenticator, or `member.add` not yet exercised), run these
+row and the same refusals, plus the admin gate, `admin_self_target` and `member_password_unset`). Whenever the console cannot be used (a lost authenticator, for example), run these
 as the service role (the Supabase MCP's `execute_sql`), never from the app:
 
 1. Make sure the owner has an account (Auth → Add user in the dashboard) and that **they set their
