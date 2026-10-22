@@ -18,7 +18,7 @@
 -- is shown to list exactly the caller's own organisations, and a new RPC that takes one of these ids fails here
 -- until it is added to the matrix (or consciously exempted).
 begin;
-select plan(64);
+select plan(66);
 
 create schema e1;
 grant usage on schema e1 to anon, authenticated;
@@ -111,6 +111,7 @@ insert into e1.rpc (name, sql, org_only) values
   ('create_btc_match', 'select public.create_btc_match(e1.u(''%'',1), ''preliminary'', e1.u(''%'',9), e1.u(''%'',10), array[e1.u(''%'',11), e1.u(''%'',21), e1.u(''%'',22)])', false),
   ('team_list_members', 'select * from public.team_list_members(e1.u(''@'',100))', true),
   ('team_list_removed_members', 'select * from public.team_list_removed_members(e1.u(''@'',100))', true),
+  ('my_entitlements', 'select public.my_entitlements(e1.u(''@'',100), e1.u(''%'',1))', false),
   ('team_remove_member', 'select public.team_remove_member(e1.u(''@'',100), ''00000000-0000-0000-0000-000000000003''::uuid)', true);
 
 update e1.rpc set org_arg = false where name = 'create_btc_match';
@@ -127,7 +128,7 @@ update e1.rpc set own_expect = case name
   when 'record_btc_tiebreak'         then 'P0001: record_btc_tiebreak: a tie-break applies to knockout matches only'
   when 'record_heat_time'            then 'P0002: CONFLICT: heat .* is pending now, expected timing'
   else 'ok' end;
-select is((select count(*)::int from e1.rpc), 23, 'the matrix covers 23 RPCs');
+select is((select count(*)::int from e1.rpc), 24, 'the matrix covers 24 RPCs');
 select is(
   (select coalesce(string_agg(r.name, ', '), 'none') from e1.rpc r
     where not exists (select 1 from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = r.name)),
