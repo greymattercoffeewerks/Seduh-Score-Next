@@ -21,9 +21,15 @@
 // that throws may wedge the surface: both are logged and the format simply has no content until it recovers.
 // `destroy()` is final. A shell whose mount failed can still receive a late realtime event, and that must not
 // build a new display (with timers) behind a surface nobody will unmount.
+//
+// The organiser's brand (core/brandSlot.js, BR-D2) outlives any one body: a body is rebuilt for every event and
+// after every release, and a rebuilt body must not come back unbranded. So this keeps the latest brand, hands it to
+// each factory as `{ brand }`, and passes a later `setBrand(brand)` on to the live body (a body without one is
+// simply not branded this way).
 export function createFormatBody(factories) {
   let current = null; // { format, eventId, body }
   let destroyed = false;
+  let brand = null;
 
   function releaseCurrent() {
     const previous = current;
@@ -41,7 +47,7 @@ export function createFormatBody(factories) {
     releaseCurrent();
     if (!Object.hasOwn(factories, format)) return null;
     try {
-      current = { format, eventId, body: factories[format]() };
+      current = { format, eventId, body: factories[format]({ brand }) };
     } catch (err) {
       console.error(`formatBody: could not build the "${format}" body`, err);
       return null;
@@ -57,6 +63,16 @@ export function createFormatBody(factories) {
     renderBody(container, payload, meta = {}) {
       const body = select(meta.format, meta.eventId);
       return body ? body.renderBody(container, payload, meta) : undefined;
+    },
+    // Changes or clears the brand for the live body and every body built after it. A body whose setBrand throws is
+    // logged and left as it is; the brand is still remembered for the next one.
+    setBrand(next) {
+      brand = next ?? null;
+      try {
+        current?.body.setBrand?.(brand);
+      } catch (err) {
+        console.error('formatBody: a format body could not take the brand', err);
+      }
     },
     // The live session ended (or has nothing to show): drop the body, destroying it, so its timers stop and the
     // next session starts from a fresh one with no memory of the last snapshot. Unlike destroy() this is not

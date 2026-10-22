@@ -47,6 +47,8 @@
 // `onNoContent(phase)` (optional) is called each time the shell paints a holding state that means "no live
 // session any more" (noEvent, notStarted), so a caller can release what it built for the session that ended;
 // it may be called repeatedly while that state lasts, so it must be idempotent.
+// `onEventChange(eventId)` (optional) is called with the live session's event id each time it changes (null when
+// there is no session), starting with the first render, so a caller can ask for that event's brand.
 //
 // The DOM is built ONCE at mount and mutated in place on every render, not
 // torn down and rebuilt via innerHTML — found in review: a screen reader
@@ -239,6 +241,7 @@ export async function mountViewerShell(
     renderBody,
     hasContent = defaultHasContent,
     onNoContent,
+    onEventChange,
     showChrome,
     brand: initialBrand = null,
     client = getSupabase(),
@@ -355,7 +358,23 @@ export async function mountViewerShell(
   }
   if (brand) paintBrand();
 
+  // Which event the live session is for (null when there is none), told to the caller each time it changes. The
+  // caller uses it to ask for that event's brand (core/brandDoor.js); a callback that throws is logged, never
+  // allowed to leave a refresh half-done.
+  let lastEventId;
+  function reportEvent() {
+    const eventId = session?.event_id ?? null;
+    if (eventId === lastEventId) return;
+    lastEventId = eventId;
+    try {
+      onEventChange?.(eventId);
+    } catch (err) {
+      console.error('viewer-shell: onEventChange failed', err);
+    }
+  }
+
   function render() {
+    reportEvent();
     // Only the status badge — renderChrome()'s own SECOND child — is ever
     // rebuilt here; the h1 itself is appended once and never replaced
     // afterward. Found in review (cross-screen consistency pass): this

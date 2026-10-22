@@ -29,9 +29,10 @@ const APP_NAME = 'Seduh Score';
 // shows their identity in place of the Seduh Score mark and wordmark, uses their accent for the glow and the live
 // badge, and carries "Powered by Seduh Score" in its own element at the top (outside the badge, which is hidden on a
 // test event, so the credit is never lost). `setBrand(brand)` changes or clears it later; it is never awaited.
+// `onEvent(event)` (optional) is called once the event line is filled, with the event the screen shows.
 export function mountSplashScreen(
   root,
-  { orgId, client = getSupabase(), signal, brand: initialBrand = null } = {},
+  { orgId, client = getSupabase(), signal, brand: initialBrand = null, onEvent } = {},
 ) {
   root.innerHTML = '';
   // This route shares its outlet (bareRoot, main.js) with #/live/projector
@@ -222,6 +223,12 @@ export function mountSplashScreen(
       latestEvent = event;
       fillEvent(eventLine, subLine, testBannerHost, event);
       paintBadge();
+      // Told which event this is, so a caller can ask for that event's brand. Never allowed to break the screen.
+      try {
+        onEvent?.(event);
+      } catch (err) {
+        console.error('splashScreen: onEvent failed', err);
+      }
     })
     .catch((err) => {
       // Non-critical: this is exactly the same "log it, stay on the
