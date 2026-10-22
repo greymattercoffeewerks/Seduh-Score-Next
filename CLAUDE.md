@@ -324,7 +324,8 @@ extensions.crypt('<temp>', encrypted_password)` proves it took; check first that
   "Noice Test" and "Noice 2 Test": `account.create` with a NEW login (audit rows 4 and 5), `member.role_set` again
   (rows 6 and 7), `org.create` with an existing account and the attestation ticked (row 8) and `member.add` of an
   account whose one-time password was still unset, attestation ticked (row 9, `attested: true`). The two throwaway
-  organisations and their two logins are still in the cloud and are removed by SQL on the owner's say-so.
+  organisations and their two logins were then removed by SQL the same day (with the owner's old "Grey Matter
+  Rehearsal" organisation, which held no events); the audit rows stay, by design.
   **The console cannot disable or delete anything**
   (organisation, member or login): a throwaway is removed by SQL, and a requested admin function for it is logged in
   ROADMAP.md ("Admin console: disable or delete", 2026-10-22).
