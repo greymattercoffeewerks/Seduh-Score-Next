@@ -18,7 +18,8 @@
 --     Read-only through the API to the organisation's members; nobody writes through the API at all (no write
 --     policy, no write privilege): rows come from the admin functions of a later migration. A grant is never
 --     edited in place: every column except `revoked_at` is frozen by app.forbid_parent_change, so the history is the
---     table. Tier names are rows, not an enum, so a tier is a seed row.
+--     table. (Deleting an event or an organisation cascades to its grants, on purpose: a test event must stay
+--     deletable; the durable history is the admin audit log, which has no foreign keys.) Tier names are rows, not an enum, so a tier is a seed row.
 --   * app.effective_tier / app.has_entitlement / app.entitlement_limit: SECURITY DEFINER resolvers in `app`, not
 --     executable by any API role (the triggers and RPCs of later migrations are definers and reach them).
 --   * public.my_entitlements(p_org, p_event): what the browser reads once per session to hide or explain things.
@@ -220,6 +221,7 @@ create table public.entitlement_grants (
 );
 
 create index entitlement_grants_org_idx on public.entitlement_grants (org_id, event_id);
+create index entitlement_grants_event_idx on public.entitlement_grants (event_id);   -- serves the cascade from events
 
 alter table public.entitlement_grants enable row level security;
 
@@ -238,7 +240,9 @@ create trigger trg_entitlement_grants_parent_immutable
 -- The API roles may read (RLS narrows that to the organisation's members) and do nothing else. Revoke first:
 -- a database built from scratch by a newer Supabase CLI hands every API role ALL privileges on a new table.
 revoke all on public.entitlement_grants from public, anon, authenticated, service_role;
-grant select on public.entitlement_grants to authenticated;
+-- Column-level: operator metadata (granted_by, note) is not for tenants; members read the plan through my_entitlements.
+grant select (id, org_id, event_id, tier, valid_from, valid_until, source, extends_grant_id, revoked_at, created_at)
+  on public.entitlement_grants to authenticated;
 
 -- ============ resolvers (SECURITY DEFINER, closed to the API roles) ============
 

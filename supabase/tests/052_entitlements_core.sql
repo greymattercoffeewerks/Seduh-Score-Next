@@ -16,7 +16,7 @@
 --     anon are all refused the same way (no oracle on other tenants); while dark every key is allowed and no cap shows.
 -- The functions are run as the owner with an explicit clock (p_at); the API surface is exercised as the real roles.
 begin;
-select plan(89);
+select plan(90);
 
 create schema t052;
 grant usage on schema t052 to anon, authenticated;
@@ -237,6 +237,7 @@ set local role authenticated;
 set local request.jwt.claim.sub = '00000000-0000-0000-0520-000000000001';
 select is((select count(*)::int from entitlement_grants where org_id = t052.u(100)), 3, 'a member of X reads X''s grants');
 select is((select count(*)::int from entitlement_grants where org_id = t052.u(200)), 0, 'and none of Y''s');
+select is(t052.affected($$ select granted_by, note from entitlement_grants $$), -1, 'but not the operator metadata columns (granted_by, note): column privilege');
 select is(t052.affected($$ insert into entitlement_grants (org_id, tier, source) values (t052.u(100), 'annual', 'manual') $$), -1, 'a member cannot grant themselves a tier (no insert)');
 select is(t052.affected($$ update entitlement_grants set revoked_at = now() where org_id = t052.u(100) $$), -1, 'a member cannot revoke (no update)');
 select is(t052.affected($$ delete from entitlement_grants where org_id = t052.u(100) $$), -1, 'or delete');
