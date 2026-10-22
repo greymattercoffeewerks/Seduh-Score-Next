@@ -87,7 +87,8 @@ describe('mountLandingScreen — pricing', () => {
     const [community, perEvent, annual] = [
       ...root.querySelectorAll('#pricing .petrol-plate-col'),
     ].map((column) => column.querySelector('.petrol-band-body').textContent);
-    expect(community).toMatch(/BTC with no limit, and other formats up to 8 competitors/);
+    expect(community).toMatch(/Up to 8 competitors, and one active event at a time/);
+    expect(community).not.toMatch(/BTC/);
     expect(community).toMatch(/podium is published to the public archive when the event ends/);
     expect(perEvent).toMatch(/One event, in the format you choose/);
     expect(annual).toMatch(/Every format and feature, with no competitor limit/);
