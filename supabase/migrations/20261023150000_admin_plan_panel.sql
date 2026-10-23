@@ -9,11 +9,12 @@
 --   * public.admin_list_keys() -> jsonb: every key (kind, minimum tier, enforced, window_bound, note, caps by tier).
 --   * public.admin_plan_orgs() -> jsonb: every organisation with its current organisation-level tier and counts.
 --   * public.admin_plan_org(p_org_id) -> jsonb: one organisation's plan: its tier now, every grant (organisation and event
---     scoped), its events as METADATA (name, date, format, state: open / ended / released, the tier its go-live snapshot
---     froze, when its Per-event window ends and whether that window has ended) and, per key, whether the organisation would
---     pass the key if it were enforced (and its limit). OPEN DECISION recorded in the PR: D-A4 says the console shows "no
---     event"; choosing the event for a Per-event grant needs the event's name, date and format, so they are returned HERE
---     and only here (admin_org_detail and the audit views are unchanged). No score, entry, person, phone or e-mail.
+--     scoped), its events as METADATA (a label made of format, date and the first characters of the id, the date, format,
+--     state: open / ended / released, the tier its go-live snapshot froze, when its Per-event window ends and whether that
+--     window has ended) and, per key, whether the organisation would
+--     pass the key if it were enforced (and its limit). D-A4 says the console shows no event NAMES, so none is returned: the operator
+--     picks an event by format, date and a short id (an event name can carry a person or a sponsor). Restoring the name is a
+--     one-line change here plus an amendment of D-A4; it is the owner's call. No score, entry, person, phone or e-mail.
 --   * public.admin_payment_confirm(p_org_id, p_tier, p_event_id, p_start_offset_days, p_valid_until, p_amount_note) -> uuid:
 --     creates the grant with source 'payment' (the same rules as admin_grant_create: an event grant is a per_event
 --     five-Brunei-day window containing the event date; an organisation grant is per_event or annual) and requires a
@@ -372,7 +373,7 @@ begin
     -- the organisation's events as metadata only, newest first, at most 200
     'events', coalesce((
       select jsonb_agg(jsonb_build_object(
-               'id', e.id, 'name', e.name, 'format', e.format, 'event_date', e.event_date, 'is_test', e.is_test,
+               'id', e.id, 'label', e.format || ' · ' || coalesce(e.event_date::text, 'no date') || ' · ' || left(e.id::text, 8), 'format', e.format, 'event_date', e.event_date, 'is_test', e.is_test,
                'ended_via', e.ended_via, 'ended_at', e.ended_at,
                'snapshot_tier', e.entitlements_snapshot ->> 'tier',
                'window_ends_at', (select max(g.valid_until) from public.entitlement_grants g

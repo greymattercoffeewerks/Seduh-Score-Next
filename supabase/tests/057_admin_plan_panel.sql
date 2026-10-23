@@ -12,7 +12,7 @@
 --   * the refactor behind it (app.grant_insert) left admin_grant_create alone (pgTAP 053 is the proof; this file adds the
 --     'payment' refusal).
 begin;
-select plan(83);
+select plan(85);
 
 create schema t057;
 grant usage on schema t057 to anon, authenticated, service_role;
@@ -166,14 +166,20 @@ select is((select string_agg(k, ',' order by k) from jsonb_object_keys(public.ad
 select is(public.admin_plan_org(t057.u(100)) ->> 'tier', 'community', 'tier: community');
 select is(public.admin_plan_org(t057.u(200)) ->> 'tier', 'annual', 'tier: annual');
 select is((select string_agg(k, ',' order by k) from jsonb_object_keys(public.admin_plan_org(t057.u(100)) -> 'events' -> 0) k),
-  'ended_at,ended_via,event_date,format,has_window,id,is_test,name,snapshot_tier,window_ended,window_ends_at',
-  'events: event metadata only (name, date, format, state): no entry, person, score, phone or e-mail');
+  'ended_at,ended_via,event_date,format,has_window,id,is_test,label,snapshot_tier,window_ended,window_ends_at',
+  'events: event metadata only (a label of format, date and short id; no name, entry, person, score, phone or e-mail)');
+select is(position('C Cup' in public.admin_plan_org(t057.u(100))::text), 0, 'and no event name anywhere in the answer (D-A4)');
+select is(
+  (select coalesce(string_agg(p.proname, ', '), 'none') from pg_proc p
+    where p.pronamespace = 'public'::regnamespace and p.proname in ('admin_list_keys', 'admin_plan_orgs', 'admin_plan_org', 'admin_payment_confirm')
+      and p.prosrc ~* '(event_entries|people|person_merges|\yct_[a-z]|\ybtc_[a-z]|live_sessions|public_results|score_change|org_members|auth\.users)'),
+  'none', 'none of the four reads a participant, roster, score, live or membership table (the relations they use are pinned by what they must not touch)');
 select is(position('SECRET' in public.admin_plan_org(t057.u(100))::text), 0, 'no participant text anywhere in the answer (the seeded cupper, cafe and bib)');
 select is(position('SECRET' in public.admin_plan_orgs()::text), 0, 'nor in the organisation list');
 select is(
-  (select e ->> 'name' || ':' || (e ->> 'has_window') || ':' || (e ->> 'window_ended') || ':' || coalesce(e ->> 'ended_via', '-')
+  (select e ->> 'label' || ':' || (e ->> 'has_window') || ':' || (e ->> 'window_ended') || ':' || coalesce(e ->> 'ended_via', '-')
      from jsonb_array_elements(public.admin_plan_org(t057.u(100)) -> 'events') e where e ->> 'id' = t057.u(103)::text),
-  'C Past:true:true:organiser', 'the event whose window ended says so, and that it was finished by the organiser');
+  'cup_taster · 2026-10-10 · 00000000:true:true:organiser', 'the event whose window ended says so, and that it was finished by the organiser');
 select is(
   (select e ->> 'has_window' || ':' || (e ->> 'window_ended') from jsonb_array_elements(public.admin_plan_org(t057.u(100)) -> 'events') e where e ->> 'id' = t057.u(101)::text),
   'false:false', 'an event with no grant has no window');

@@ -21,6 +21,8 @@ export const ADMIN_ONLY_STRINGS = Object.freeze([
   'admin_can_provision',
   'am_i_platform_admin',
   'New organisation',
+  'admin_plan_org',
+  'admin_payment_confirm',
 ]);
 
 // The admin entry's own chunk and nothing else: Vite names it after the `admin` input (vite.config.js), with an

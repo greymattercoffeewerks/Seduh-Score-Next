@@ -23,6 +23,22 @@ export function describeAuditEntry(entry) {
       return `Role changed from ${roleLabel(detail.from)} to ${roleLabel(detail.to)}`;
     case 'account.create':
       return 'Login created';
+    case 'grant.create':
+      return 'Plan given';
+    case 'grant.extend':
+      return 'Plan extended';
+    case 'grant.revoke':
+      return 'Plan revoked';
+    case 'payment.confirm':
+      return 'Payment confirmed, plan given';
+    case 'gating.key_enforced':
+      return 'Key turned on';
+    case 'gating.key_relaxed':
+      return 'Key turned off';
+    case 'event.resnapshot':
+      return 'Frozen plan of an event raised';
+    case 'event.release':
+      return 'Open event released';
     default:
       return String(entry?.action ?? 'Change');
   }
