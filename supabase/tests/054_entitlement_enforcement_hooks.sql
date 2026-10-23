@@ -224,7 +224,7 @@ select is(t054.as_user(t054.u(11), (select string_agg(t054.entry(110, n), '; ') 
 select is(t054.as_user(t054.u(11), t054.entry(110, 9)), '42501|entitlement_cap_reached|cup_taster_participants|entitlement_cap_reached', 'and refuses the ninth: an unknown format is not a way round the cap');
 select is(t054.as_user(t054.u(11), (select string_agg(t054.entry(111, n), '; ') from generate_series(1, 9) n)),
   '42501|entitlement_cap_reached|cup_taster_participants|entitlement_cap_reached', 'same for a format with a trailing space');
-select is(t054.as_user(t054.u(11), (select string_agg(t054.entry(112, n), '; ') from generate_series(1, 12) n)), 'ok', 'a guess_the_bean event is exempt (no registered participants)');
+select is(t054.as_user(t054.u(11), (select string_agg(t054.entry(112, n), '; ') from generate_series(1, 9) n)), '42501|entitlement_cap_reached|cup_taster_participants|entitlement_cap_reached', 'and so is a guess_the_bean one: the app opens every non-btc event in the Cup Taster screens, so only btc is exempt');
 
 -- ============ the go-live snapshot ============
 -- E3 goes live as Community

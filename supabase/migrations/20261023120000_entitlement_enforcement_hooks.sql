@@ -366,10 +366,10 @@ begin
 
   select e.format into v_format from public.events e where e.id = new.event_id;
   -- events.format is free text, and the app treats every format it does not know as Cup Taster (main.js sends only
-  -- 'btc' to the BTC screens), so the cap is keyed the other way round: only the formats that are KNOWN not to have
-  -- registered participants are exempt; anything else (a typo, another case, a future format that has not yet declared
+  -- 'btc' to the BTC screens), so the cap is keyed the other way round: only the one format whose screens do not use
+  -- event_entries ('btc', routed by exact match in main.js) is exempt (guess_the_bean has its own tables and no events rows); anything else (a typo, another case, a future format that has not yet declared
   -- its own key) is capped as Cup Taster. A new format adds its own key and its own branch here in its first commit.
-  v_key := case when v_format in ('btc', 'guess_the_bean') then null else 'cup_taster_participants' end;
+  v_key := case when v_format = 'btc' then null else 'cup_taster_participants' end;
   if v_key is null then
     return new;
   end if;
