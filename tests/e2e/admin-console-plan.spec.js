@@ -37,9 +37,14 @@ test.describe('the Plan panel (real page, real local Supabase)', () => {
   }) => {
     test.setTimeout(90000);
     responses = [];
-    page.on('response', async (response) => {
+    page.on('response', (response) => {
       if (!response.url().includes('/rest/v1/rpc/admin_')) return;
-      responses.push({ url: response.url(), body: await response.text().catch(() => '') });
+      responses.push(
+        response.text().then(
+          (body) => ({ url: response.url(), body }),
+          () => ({ url: response.url(), body: '' }),
+        ),
+      );
     });
     await signIn(page, admin);
     await enrol(page);
@@ -89,6 +94,8 @@ test.describe('the Plan panel (real page, real local Supabase)', () => {
     await expect(page.locator('ol.adm-audit')).toContainText('Plan revoked');
 
     // the event the organisation ran appears in no admin response and not on any page seen
-    for (const r of responses) expect(r.body).not.toContain(EVENT_NAME);
+    const bodies = await Promise.all(responses);
+    expect(bodies.some((r) => r.url.includes('admin_plan_org'))).toBe(true);
+    for (const r of bodies) expect(r.body).not.toContain(EVENT_NAME);
   });
 });

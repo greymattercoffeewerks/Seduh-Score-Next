@@ -263,6 +263,36 @@ describe('the overview', () => {
     for (const [visible, name] of names) expect(name.startsWith(visible)).toBe(true);
   });
 
+  it('a preview with no count never offers to turn the key on (the UI invents no number)', async () => {
+    mount(
+      overview({
+        admin_gating_preview: ok({ organisations: [] }),
+        admin_set_key_enforced: ok(null),
+      }),
+    );
+    await flush();
+    await click('Preview turning it on');
+    expect(button('Turn on')).toBeUndefined();
+    expect(calls('admin_set_key_enforced')).toHaveLength(0);
+    expect(text()).toContain('Something went wrong');
+  });
+
+  it('a confirm is taken once: a double click on Turn off or Revoke sends one request', async () => {
+    let resolve;
+    mount({
+      ...overview(),
+      admin_set_key_enforced: () => new Promise((r) => (resolve = r)),
+    });
+    await flush();
+    await click('Turn off');
+    const confirm = button('Turn off');
+    confirm.click();
+    confirm.click();
+    await flush();
+    expect(calls('admin_set_key_enforced')).toHaveLength(1);
+    resolve(ok(null));
+  });
+
   it('a failed list says so and offers Retry', async () => {
     mount({ admin_list_keys: refused('boom'), admin_plan_orgs: refused('boom') });
     await flush();
@@ -298,8 +328,11 @@ describe('one organisation', () => {
     expect(text()).toContain('cup_taster · 2026-12-10 · 33333333');
     expect(text()).toContain('Finished by the organiser');
     expect(text()).toContain('Plan frozen at go-live: Per-event');
-    expect(text()).toContain('Would NOT pass if enforced');
-    expect(text()).toContain('limit 1');
+    const rows = [...host.querySelectorAll('.adm-members li')].map((li) => li.textContent);
+    expect(rows.find((r) => r.startsWith('btc_format'))).toContain('Would NOT pass if enforced');
+    const events = rows.find((r) => r.startsWith('events_open'));
+    expect(events).toContain('Would pass if enforced');
+    expect(events).toContain('limit 1');
   });
 
   it('draws only the fields it names (a field the function started returning later does not appear)', async () => {
@@ -311,6 +344,25 @@ describe('one organisation', () => {
     await flush();
     expect(text()).not.toContain('SECRET');
     expect(text()).not.toContain('secret@example.test');
+  });
+
+  it('a gate refusal on the organisation page draws nothing, whichever refusal it is', async () => {
+    for (const hint of ['admin_required', 'admin_session_ended', 'admin_mfa_required']) {
+      mount({ admin_plan_org: refused(hint) });
+      await flush();
+      expect(host.textContent).toBe('');
+      handle.unmount();
+      host.remove();
+    }
+  });
+
+  it('a gate refusal from a form draws nothing either', async () => {
+    mount({ admin_plan_org: ok(PLAN), admin_event_release: refused('admin_session_ended') });
+    await flush();
+    const d = open('Release this event…');
+    d.querySelector('input').value = 'x';
+    await submitForm(d.querySelector('form'));
+    expect(host.textContent).toBe('');
   });
 
   it('an unknown organisation says so without a Retry', async () => {

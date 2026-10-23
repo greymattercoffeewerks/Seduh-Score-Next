@@ -12,7 +12,7 @@
 --   * the refactor behind it (app.grant_insert) left admin_grant_create alone (pgTAP 053 is the proof; this file adds the
 --     'payment' refusal).
 begin;
-select plan(85);
+select plan(89);
 
 create schema t057;
 grant usage on schema t057 to anon, authenticated, service_role;
@@ -121,6 +121,8 @@ select is((select count(*)::int from pg_proc p where p.pronamespace = 'app'::reg
   0, 'the shared inner insert is executable by no API role');
 
 -- ============ the gate, for each function and caller ============
+-- (admin_payment_confirm's gate is proven by the garbage-argument cases below: in the loop its audit call would refuse a
+-- non-admin anyway, after the grant, which the rollback undoes)
 select is(
   t057.run_as(c.kind, r.stmt),
   c.expected,
@@ -237,6 +239,10 @@ select is(t057.run_as('admin_ok', $$select public.admin_payment_confirm(t057.u(1
 select is(t057.run_as('admin_ok', $$select public.admin_payment_confirm(t057.u(100), 'per_event', t057.u(201), -2, null, 'x')$$), '22023|event_not_found', 'another organisation''s event is refused');
 select is(t057.run_as('admin_ok', $$select public.admin_payment_confirm(t057.u(100), 'per_event', t057.u(101), 1, null, 'x')$$), '22023|window_invalid', 'an offset outside -4..0 is refused');
 select is(t057.run_as('admin_ok', $$select public.admin_payment_confirm(t057.u(100), 'per_event', t057.u(102), -2, null, 'x')$$), '22023|grant_exists', 'a second live window for the same event is refused');
+select is(t057.run_as('admin_ok', $$select public.admin_payment_confirm(t057.u(100), 'per_event', t057.u(101), null, null, 'x')$$), '22023|window_invalid', 'an event payment without an offset is refused');
+select is(t057.run_as('admin_ok', $$select public.admin_payment_confirm(t057.u(100), 'annual', null, -2, null, 'x')$$), '22023|window_invalid', 'an organisation payment with a window offset is refused');
+select is(t057.run_as('admin_ok', $$select public.admin_payment_confirm(t057.u(100), 'annual', null, null, now() - interval '1 day', 'x')$$), '22023|window_invalid', 'an organisation payment ending in the past is refused');
+select is(t057.run_as('admin_ok', $$select public.admin_payment_confirm(t057.u(100), 'per_event', gen_random_uuid(), -2, null, 'x')$$), '22023|event_not_found', 'an unknown event is refused');
 select is(t057.run_as('admin_ok', $$select public.admin_grant_create(t057.u(100), 'annual', null, null, null, 'payment', 'x')$$), '22023|source_invalid',
   'admin_grant_create still refuses source payment: a payment is recorded only through the confirmation');
 select is((select count(*)::int from entitlement_grants where source = 'payment'), 3, 'three payment grants exist (the two above and the 200 character one)');
