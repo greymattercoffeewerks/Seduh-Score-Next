@@ -38,6 +38,23 @@ const NOT_FOR_THE_CONSOLE = {
   already_recorded: 'logged by admin-accounts, surfaced as account_record_failed',
   // The anonymous public-results door.
   payload_too_large: 'public results publishing, not the console',
+  // The entitlement grant functions (T-GATE.B2): called through SQL by the operator until a Plan panel exists.
+  tier_invalid: 'entitlement admin functions, no console screen yet',
+  source_invalid: 'entitlement admin functions, no console screen yet',
+  note_invalid: 'entitlement admin functions, no console screen yet',
+  window_invalid: 'entitlement admin functions, no console screen yet',
+  event_grant_tier_invalid: 'entitlement admin functions, no console screen yet',
+  event_not_found: 'entitlement admin functions, no console screen yet',
+  event_date_required: 'entitlement admin functions, no console screen yet',
+  grant_exists: 'entitlement admin functions, no console screen yet',
+  reason_required: 'entitlement admin functions, no console screen yet',
+  reason_too_long: 'entitlement admin functions, no console screen yet',
+  grant_not_found: 'entitlement admin functions, no console screen yet',
+  grant_revoked: 'entitlement admin functions, no console screen yet',
+  grant_open_ended: 'entitlement admin functions, no console screen yet',
+  already_extended: 'entitlement admin functions, no console screen yet',
+  enforced_invalid: 'entitlement admin functions, no console screen yet',
+  confirm_mismatch: 'entitlement admin functions, no console screen yet',
   // The entitlement resolvers (internal to the database; a caller never reaches them).
   entitlement_key_unknown: 'entitlement resolvers, not the console',
   entitlement_key_not_cap: 'entitlement resolvers, not the console',

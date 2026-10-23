@@ -61,6 +61,18 @@ const ADMIN_FUNCTIONS = {
     p_user_id: w.a.userId,
     p_role: 'organiser',
   }),
+  // The entitlement grant functions (T-GATE.B2). The organiser's own organisation is the target on purpose: an
+  // organiser granting their own organisation a plan is the self-grant the gating threat model names.
+  admin_grant_create: (w) => ({ p_org_id: w.a.orgId, p_tier: 'annual' }),
+  admin_grant_extend: (w) => ({
+    p_grant_id: w.a.orgId,
+    p_new_valid_until: '2099-01-01T00:00:00Z',
+    p_reason: 'attack',
+  }),
+  admin_grant_revoke: (w) => ({ p_grant_id: w.a.orgId }),
+  admin_list_grants: (w) => ({ p_org_id: w.a.orgId }),
+  admin_gating_preview: () => ({ p_key: 'btc_format' }),
+  admin_set_key_enforced: () => ({ p_key: 'btc_format', p_enforced: true, p_confirm: 0 }),
 };
 // Callable by the service role only: nobody holding a user token may run these, an admin at aal2 included.
 const SERVICE_ONLY = {

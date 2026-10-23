@@ -1,3 +1,48 @@
+## T-GATE.B2: the audited admin grant writers and the key switch, still dark · 2026-10-23
+
+**Task:** T-GATE.B2, gating and entitlements (`Handoffs and Specs/GATING-SPEC.md`, local and gitignored; the M2 step). Branch `feat/gating-b2`, stacked on `claude/feat-gating-5cab26` (PR #300, B1). Commits `88841c2`, `eeac239`, `63e55fa`. **Status: built and reviewed, local only. Nothing pushed (no PR, no cloud project; D-G13). Not final until the PR's CI run (`db reset`, full pgTAP, the Playwright admin attack list) is seen green.** Still dark: no key is flipped, no hook exists, and the browser does not call the new functions yet.
+
+**Why:** B1 made the entitlement tables readable but nothing could write a grant except service-role SQL. Grants have to be created, extended and revoked through audited, admin-gated functions (the same gate and audit shape as T-ADM), so that every grant has an actor, a reason and an audit row. The enforcement switch (`enforced`) is also a write that must be audited and must say what it would lose before it is flipped.
+
+**What changed:**
+
+- `supabase/migrations/20261023110000_entitlement_admin_writers.sql` (new, with a rollback block):
+  - `public.admin_grant_create`, `admin_grant_extend`, `admin_grant_revoke`: the only writers of `entitlement_grants`. Each opens with `app.require_platform_admin()`, writes its audit row in the same transaction, and refuses with a stable hint. Create locks the event row `FOR UPDATE` so two concurrent creates for one event serialise and the loser gets a hint, not a raw 23505.
+  - `public.admin_list_grants(p_org_id)`: grants for one organisation, admin-gated, metadata only.
+  - `public.admin_gating_preview(p_key)`: says what turning a key on would take away from which organisations, before anything is flipped.
+  - `public.admin_set_key_enforced(p_key, p_enforced, p_confirm)`: flips a key's `enforced` flag. The caller must echo the exact count of organisations the preview reports (`p_confirm`); a mismatch is refused.
+  - `app.gating_would_lose(p_key)`: the shared count behind the preview and the switch, so they cannot disagree.
+  - Two partial unique indexes: `entitlement_grants_one_window_per_event` (one live window grant per event) and `entitlement_grants_one_extension_per_grant` (one live extension per grant). These make the one-open-event rule hold under concurrency, not just in the function body.
+- Extensions count as a live window (`eeac239`): a live extension of a grant keeps the window open for the purposes of the one-window rule and the preview.
+- Grants remain append-only: revoke sets `revoked_at` and nothing else; the frozen-column triggers from B1 still apply.
+- `supabase/tests/053_entitlement_admin_writers.sql` (new, 167 assertions) covers the gate (non-admin, `aal1`, missing or stale TOTP), each refusal hint, the one-window and one-extension indexes, the exact confirm count, the five offsets of the window, newest-first listing, and the audit row of every write.
+- Guard edits: `041_cross_org_rpcs.sql` gains the six new RPCs in the cross-organisation matrix; `050_platform_tables_contract.sql` gains the new functions in the platform contract; `052_entitlements_core.sql` gets a one-line fix to its fixture.
+- `src/admin/adminErrors.test.js`: the gating hints are classified. They are listed in `NOT_FOR_THE_CONSOLE` because the console has no grant UI yet; the test fails if one of them gains copy before its screen exists.
+- `tests/e2e/admin-console-adversarial.spec.js`: the six functions are added to the attack list (a new admin function must be added there, per CLAUDE.md).
+
+**Verification (this session):**
+
+- All 53 pgTAP files pass after `db reset`.
+- The rollback block of `20261023110000` was run inside a transaction and rolled back; it left nothing behind.
+- `npx playwright test --project=dev-admin --no-deps` (admin attack list included): 20 of 20 pass locally.
+
+**Reviews:**
+
+- `schema-guardian`: clean. Nit fixed (`eeac239`): concurrent create returned a raw 23505; now serialised by the event row lock.
+- `security-reviewer`: clean. Nits left, both intentional: a platform admin who is also a member of an organisation can grant that organisation (audited, and the same person already has its data); the free-text `note` is stored verbatim in the audit row, so an admin should not paste participant data into it.
+- `code-reviewer`: clean. Nit fixed (`eeac239`): a live extension did not count as a live window. Nit left: `admin_grant_extend` does not require the new end to be later than `now()`; doing so would make the fixed-date tests time-bomb, and an already-expired extension is harmless because the resolver checks the window.
+- `test-auditor`: four Important test gaps, all fixed (`63e55fa`): the event-two fixture for the cross-event foreign key in 052, an exact confirm count in the switch, all five window offsets, and newest-first ordering in the listing. Filler assertions removed.
+
+**Not done / still open** (also in ROADMAP's "Known open items from T-GATE.B2"):
+
+- **PR and CI.** Not opened. The entry is final only when the PR's CI run is green.
+- **B3 (migration 054): the enforcement hooks.** The `events` and `event_entries` triggers (D-G8, D-G19), snapshot-at-first-publish (D-G4), and the Per-event window lock. No key may be flipped before these exist.
+- **No grant UI.** The gating hints are not in the console's copy map yet; the admin screen for grants comes after B3.
+- **Cloud.** Migrations `20261023100000` and `20261023110000` are local only (D-G13); they go to the cloud after the BTC pitch, through the Supabase MCP, after the usual `list_migrations` check.
+- **Version:** not bumped in this entry. `package.json` stays at 3.4.1, bumped by B1 for the dark gating core; the user asked that B2 not bump again. The footer step is recorded here rather than silently skipped.
+
+---
+
 ## T-GATE.B1: the entitlement core, shipped dark · 2026-10-23
 
 **Task:** T-GATE.B1, gating and entitlements (`Handoffs and Specs/GATING-SPEC.md`, local and gitignored, not in git; sections 3.1 to 3.3, 3.6 and 3.7, owner decisions 6d and 6e of 2026-10-23). Branch `claude/feat-gating-5cab26`, commits `1257b31`, `844baf2`, `23b93e4`. **Status: built and reviewed, local only. Nothing pushed (no PR, no cloud project; D-G13 keeps gating out of the cloud before the BTC pitch). Every key is seeded `enforced = false` and nothing calls the new functions, so behaviour is unchanged.** Not final until the PR's CI run (`db reset`, full pgTAP) is seen green.
