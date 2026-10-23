@@ -16,7 +16,7 @@
 --     live; admin_event_resnapshot lifts it upward only, with a required reason, an audit row with pinned keys, and the
 --     usual gate; the same tier is a no-op; a lower tier is refused.
 begin;
-select plan(72);
+select plan(78);
 
 create schema t054;
 grant usage on schema t054 to anon, authenticated, service_role;
@@ -144,6 +144,12 @@ select is(t054.as_user(t054.u(11), (select string_agg(t054.entry(101, n), '; ') 
   'dark: and registers TEN active Cup Taster entries (the cap of 8 is not enforced)');
 select is(t054.active_n(101), 10, 'ten are there');
 delete from event_entries where event_id = t054.u(101);
+-- the go-live stamp is a no-op while no key is enforced (an event published in the dark phase must not be frozen at community)
+insert into events (id, org_id, format, name) values (t054.u(113), t054.u(100), 'cup_taster', 'published while dark');
+select is(t054.as_user(t054.u(11), format($$insert into live_sessions (org_id, event_id, format, active) values (%L, %L, 'cup_taster', true)$$, t054.u(100), t054.u(113))), 'ok',
+  'dark: an event goes live');
+select is((select entitlements_snapshot is null and entitlements_snapshot_at is null from events where id = t054.u(113)), true, 'and no snapshot is stamped while nothing is enforced');
+delete from live_sessions where event_id = t054.u(113);
 
 -- ============ events: the BTC gate ============
 update app.entitlement_keys set enforced = true where key = 'btc_format';
@@ -209,6 +215,16 @@ select is(app.entitlement_limit(t054.u(100), 'cup_taster_participants', t054.u(1
 -- a BTC event is not capped (BTC has no participant key); registration on it is not gated
 select is(t054.as_user(t054.u(11), format($$insert into event_entries (event_id, display_name) select %L, 'b' || n from generate_series(1, 12) n$$, t054.u(105))), 'ok',
   'a BTC event''s entries are not capped (no participant key for BTC)');
+
+-- an off-list format is capped like Cup Taster (the app opens it in the Cup Taster screens), never exempt
+insert into events (id, org_id, format, name) values
+  (t054.u(110), t054.u(100), 'Cup_Taster', 'odd case'), (t054.u(111), t054.u(100), 'cup_taster ', 'trailing space'),
+  (t054.u(112), t054.u(100), 'guess_the_bean', 'gtb');
+select is(t054.as_user(t054.u(11), (select string_agg(t054.entry(110, n), '; ') from generate_series(1, 8) n)), 'ok', 'an event whose format is Cup_Taster (wrong case) takes eight');
+select is(t054.as_user(t054.u(11), t054.entry(110, 9)), '42501|entitlement_cap_reached|cup_taster_participants|entitlement_cap_reached', 'and refuses the ninth: an unknown format is not a way round the cap');
+select is(t054.as_user(t054.u(11), (select string_agg(t054.entry(111, n), '; ') from generate_series(1, 9) n)),
+  '42501|entitlement_cap_reached|cup_taster_participants|entitlement_cap_reached', 'same for a format with a trailing space');
+select is(t054.as_user(t054.u(11), (select string_agg(t054.entry(112, n), '; ') from generate_series(1, 12) n)), 'ok', 'a guess_the_bean event is exempt (no registered participants)');
 
 -- ============ the go-live snapshot ============
 -- E3 goes live as Community

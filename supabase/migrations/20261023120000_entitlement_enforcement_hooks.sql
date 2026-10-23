@@ -23,7 +23,7 @@
 --     (the registration page) ignores the snapshot. The keys' ENFORCED flags and the caps table are still read live.
 --   * event_entries BEFORE INSERT and BEFORE UPDATE OF withdrawn (app.check_event_entry_cap, D-G19): a Cup Taster
 --     event may not hold more active (non-withdrawn) entries than cup_taster_participants allows for its tier. It
---     runs under a per-event advisory lock (the roster can be open on several devices), counts only entries that are
+--     (keyed so that an unknown format is capped as Cup Taster, never exempt: fail closed) runs under a per-event advisory lock (the roster can be open on several devices), counts only entries that are
 --     not withdrawn, and applies to a new entry and to a REINSTATE (withdrawn true to false, a direct UPDATE that adds
 --     a participant with no insert). A withdrawn row inserted withdrawn, and any update that does not reinstate, are not
 --     gated. Refusal: 42501, message entitlement_cap_reached, hint entitlement_cap_reached, detail = the key.
@@ -32,6 +32,12 @@
 --     only (a grant bought after go-live; spec D-G4 "a platform admin can re-snapshot upward, audited"); a lower tier
 --     is refused (snapshot_downgrade), the same tier is a no-op, an event with no snapshot is refused (snapshot_absent).
 --
+-- WHAT CHANGES WHILE DARK: the hooks that ask about entitlements are no-ops, and so is the go-live stamp (it writes
+-- nothing until at least one key is enforced). The two things that apply immediately are the freeze of events.format
+-- and the protection of the snapshot columns. Rollout notes: after the backfill and before enforcing a key, nothing needs
+-- re-stamping; an event that went live when a key was already enforced but BEFORE its organisation's grant existed (or
+-- before a future-dated Per-event window opened) keeps a lower tier until an admin runs admin_event_resnapshot.
+
 -- A refusal by a hook is 42501 with a stable hint (entitlement_required, entitlement_cap_reached) and the key in the
 -- DETAIL; the UI reads the hint, never the text.
 --
@@ -311,7 +317,11 @@ security definer
 set search_path = ''
 as $$
 begin
-  if new.active and (tg_op = 'INSERT' or not old.active) then
+  -- While NO key is enforced the stamp is a no-op: an event that goes live in the dark phase (before the backfill has
+  -- given existing organisations their plan) would otherwise be frozen at 'community' for good, and the first flip
+  -- would cap it. Such an event resolves live until a key is enforced and it next goes live.
+  if new.active and (tg_op = 'INSERT' or not old.active)
+     and exists (select 1 from app.entitlement_keys k where k.enforced) then
     update public.events e
        set entitlements_snapshot = jsonb_build_object('tier', app.effective_tier(e.org_id, e.id, now())),
            entitlements_snapshot_at = now()
@@ -355,7 +365,11 @@ begin
   end if;
 
   select e.format into v_format from public.events e where e.id = new.event_id;
-  v_key := case v_format when 'cup_taster' then 'cup_taster_participants' else null end;
+  -- events.format is free text, and the app treats every format it does not know as Cup Taster (main.js sends only
+  -- 'btc' to the BTC screens), so the cap is keyed the other way round: only the formats that are KNOWN not to have
+  -- registered participants are exempt; anything else (a typo, another case, a future format that has not yet declared
+  -- its own key) is capped as Cup Taster. A new format adds its own key and its own branch here in its first commit.
+  v_key := case when v_format in ('btc', 'guess_the_bean') then null else 'cup_taster_participants' end;
   if v_key is null then
     return new;
   end if;
