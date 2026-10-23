@@ -17,7 +17,7 @@
 --     failure of the audit insert rolls the change back), and nothing a refused call did survives.
 -- Callers run as the real roles through t053.run_as; successes are also run that way ('admin_ok').
 begin;
-select plan(163);
+select plan(164);
 
 create schema t053;
 grant usage on schema t053 to anon, authenticated, service_role;
@@ -315,6 +315,11 @@ select is(t053.run_as('admin_ok', $$select public.admin_grant_revoke(gen_random_
 select is(t053.run_as('admin_ok', $$select public.admin_grant_revoke(null)$$), '22023|grant_not_found', 'revoke: a null id is refused');
 select is(t053.run_as('admin_ok', format($$select public.admin_grant_revoke(%L, %L)$$, (select id from t053.made where k = 'ev4'), repeat('n', 501))), '22023|note_invalid', 'revoke: a 501 character note is refused');
 select is(t053.audit_n(), (select n from t053.n1), 'and those refusals logged nothing');
+-- revoking a BASE window leaves its live extension: the event still has a live window, so a new base is refused
+select t053.admin();
+select public.admin_grant_revoke((select id from t053.made where k = 'zev'), 'base revoked, extension stays');
+select is(t053.run_as('admin_ok', $$select public.admin_grant_create(t053.u(300), 'per_event', t053.u(301), -2)$$), '22023|grant_exists',
+  'create: a base window whose extension is still live is not replaced (the event has a live window)');
 -- a revoked event window frees the event for a new one (the unique index is partial on live roots)
 select is(t053.run_as('admin_ok', $$select public.admin_grant_create(t053.u(100), 'per_event', t053.u(103), -1)$$), 'ok', 'a revoked window does not block a new one for the same event');
 
@@ -328,7 +333,7 @@ select is((select string_agg(k, ',' order by k) from jsonb_object_keys(public.ad
 select is(public.admin_list_grants(t053.u(100)) -> 0 ->> 'id', (select id::text from entitlement_grants where org_id = t053.u(100) order by created_at desc, id limit 1), 'newest first');
 select is(public.admin_list_grants(t053.u(200)), '[]'::jsonb, 'an organisation with no grants: an empty array');
 select is(t053.run_as('admin_ok', $$select public.admin_list_grants(gen_random_uuid())$$), '22023|org_not_found', 'list: an unknown organisation is refused');
-select is(t053.audit_n(), (select n + 1 from t053.n1), 'reading logs nothing (only the one create after the baseline)');
+select is(t053.audit_n(), (select n + 2 from t053.n1), 'reading logs nothing (only the base-window revoke and the one create after the baseline)');
 
 -- ============ admin_gating_preview and admin_set_key_enforced ============
 -- a CURRENT event grant for Z (the ones made above sit in the future relative to the real clock)

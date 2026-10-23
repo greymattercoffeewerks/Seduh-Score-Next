@@ -187,7 +187,8 @@ begin
         using errcode = '22023', hint = 'event_grant_tier_invalid';
     end if;
     select e.event_date into v_date
-      from public.events e where e.id = p_event_id and e.org_id = p_org_id for share;
+      from public.events e where e.id = p_event_id and e.org_id = p_org_id
+       for update;   -- serialises two creates for one event: the loser gets grant_exists, not a raw 23505
     if not found then
       raise exception 'admin_grant_create: no such event in that organisation'
         using errcode = '22023', hint = 'event_not_found';
@@ -200,8 +201,9 @@ begin
       raise exception 'admin_grant_create: the window is five days containing the event date (offset -4 to 0, no end given)'
         using errcode = '22023', hint = 'window_invalid';
     end if;
+    -- any live row for the event counts, an extension included (revoking a base window leaves its extension live)
     if exists (select 1 from public.entitlement_grants g
-                where g.event_id = p_event_id and g.extends_grant_id is null and g.revoked_at is null) then
+                where g.event_id = p_event_id and g.revoked_at is null) then
       raise exception 'admin_grant_create: that event already has a live window'
         using errcode = '22023', hint = 'grant_exists';
     end if;
