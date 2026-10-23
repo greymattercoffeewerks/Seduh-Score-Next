@@ -29,6 +29,32 @@ export const ADMIN_ERROR_COPY = Object.freeze({
     'The login could not be recorded, so it was removed. Nothing was changed. Try again.',
   account_stranded:
     'The login was created but could not be recorded or removed. Note the email and ask the operator to look at it.',
+  tier_invalid: 'Choose Per-event or Annual. The Community plan needs no grant.',
+  source_invalid: 'That kind of grant is not allowed here.',
+  note_invalid: 'The note is too long (500 characters at most).',
+  window_invalid:
+    'The dates do not work. A Per-event plan is five days in Brunei time that include the competition date, and an end must be in the future.',
+  event_grant_tier_invalid: 'A plan for one event is always a Per-event plan.',
+  event_not_found: 'That event is not in this organisation any more.',
+  event_date_required:
+    'This event has no date, so a five-day plan cannot be placed around it. Set its date first.',
+  grant_exists: 'That event already has a plan that is still running.',
+  reason_required: 'Give a reason. It is logged.',
+  reason_too_long: 'The reason is too long (500 characters at most).',
+  grant_not_found: 'That plan no longer exists.',
+  grant_revoked: 'That plan was revoked, so it cannot be extended.',
+  grant_open_ended: 'That plan has no end, so there is nothing to extend.',
+  already_extended: 'That plan was already extended. Extend the latest one.',
+  enforced_invalid: 'Say whether the key is on or off.',
+  confirm_mismatch:
+    'The number of affected organisations changed since the preview. Preview again before turning the key on.',
+  entitlement_key_unknown: 'That key does not exist.',
+  entitlement_key_not_cap: 'That key has no limit.',
+  snapshot_absent: 'That event has not gone live yet, so it has no frozen plan to raise.',
+  snapshot_downgrade:
+    'A frozen plan only goes up. The event’s plan is already as high as it can be.',
+  amount_required: 'Write the amount and reference of the payment.',
+  amount_too_long: 'The payment note is too long (200 characters at most).',
   account_state_unknown:
     'We could not confirm whether the login was created. Look the email up before trying again.',
 });
