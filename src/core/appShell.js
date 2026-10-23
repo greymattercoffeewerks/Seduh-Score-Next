@@ -513,8 +513,21 @@ export function mountAppShell(
       // the same hash fires no hashchange; goToHash() (navigation.js) dispatches one in that case.
       goToHash('#/events');
     });
+    // The rest of the account area (D-PW1): choosing a new password. A plain link to a console route, so it
+    // goes through the same sign-in gate as every other one; like a nav link it closes the open menu and
+    // gives up focus so the router's own focus move (to the new screen's heading) can happen.
+    const changePasswordLink = el('a', {
+      className: 'app-shell-auth-link',
+      text: 'Change password',
+      attrs: { href: '#/account/password' },
+    });
+    changePasswordLink.addEventListener('click', () => {
+      changePasswordLink.blur();
+      closeMenu();
+    });
     authEl.append(
       el('span', { className: 'app-shell-auth-email', text: session.user.email }),
+      changePasswordLink,
       signOutButton,
       authStatus,
     );

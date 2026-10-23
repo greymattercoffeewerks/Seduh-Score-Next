@@ -22,6 +22,10 @@ import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './core/timeout.js';
 import { mountEventsScreen } from './core/eventsScreen.js';
 import { mountLoginScreen } from './core/loginScreen.js';
 import { mountSetPasswordScreen } from './core/setPasswordScreen.js';
+import { mountForgotPasswordScreen } from './core/forgotPasswordScreen.js';
+import { mountRecoveryScreen } from './core/recoveryScreen.js';
+import { mountChangePasswordScreen } from './core/changePasswordScreen.js';
+import { createRecoveryFlow, takeRecoveryArrival } from './core/passwordRecovery.js';
 import { mountTeamScreen } from './core/teamScreen.js';
 import { mountNoOrgScreen } from './core/noOrgScreen.js';
 import { loadWindowState, windowWarningText } from './core/eventWindow.js';
@@ -387,6 +391,7 @@ function requireAuth(
     switchOrgForRoute,
     showRouteNotice,
     clearEventContext,
+    getRecoveryFlow = () => null,
   },
 ) {
   return async (outlet, params) => {
@@ -399,6 +404,18 @@ function requireAuth(
     function resolveCurrentPath() {
       // null once the app is unmounted: a late Retry or sign-in must not mount into a dead outlet.
       routerRef.current?.resolve(location.hash.replace(/^#/, '') || '/events');
+    }
+
+    // A password-recovery link was opened (D-PW1): nothing else is reachable until the person has chosen a
+    // new password, or left the flow. Before the session lookup below: the flow establishes the link's
+    // session itself, and an expired link has no session to look up.
+    const recoveryFlow = getRecoveryFlow();
+    if (recoveryFlow?.isOpen()) {
+      return mountRecoveryScreen(outlet, {
+        flow: recoveryFlow,
+        onFinished: resolveCurrentPath,
+        signal: params.signal,
+      });
     }
 
     let session;
@@ -779,6 +796,7 @@ export function buildRoutes({
     ok: false,
     message: 'This event belongs to another of your organisations, which could not be opened.',
   }),
+  getRecoveryFlow = () => null,
 }) {
   const auth = {
     routerRef,
@@ -787,8 +805,22 @@ export function buildRoutes({
     switchOrgForRoute,
     showRouteNotice,
     clearEventContext,
+    getRecoveryFlow,
   };
   return [
+    {
+      // Asks for a password-recovery link. Deliberately NOT wrapped in requireAuth: the person cannot sign
+      // in, which is why they are here.
+      pattern: '/forgot-password',
+      mount: (outlet, { client, signal }) => mountForgotPasswordScreen(outlet, { client, signal }),
+    },
+    {
+      pattern: '/account/password',
+      mount: requireAuth(
+        (outlet, { client, signal }) => mountChangePasswordScreen(outlet, { client, signal }),
+        auth,
+      ),
+    },
     {
       pattern: '/events',
       mount: requireAuth(
@@ -1037,6 +1069,9 @@ function attemptReconnectFlush(client) {
 
 const PENDING_RETRY_MS = 15000;
 
+// Console routes that are not the Events list (so the Events link is not marked current on them).
+const NON_EVENTS_PATTERNS = new Set(['/team', '/account/password', '/forgot-password']);
+
 function unsyncedSwitchMessage(count) {
   const noun = count === 1 ? 'change on this device has' : 'changes on this device have';
   return `${count} ${noun} not synced yet. Wait for ${count === 1 ? 'it' : 'them'} to sync before switching organisation.`;
@@ -1054,12 +1089,23 @@ const SWITCH_TEAM_OPEN_MESSAGE =
 export function mountApp(
   root,
   {
-    client = getSupabase(),
+    client: injectedClient,
+    // A password-recovery link that arrived with this page load (see below). Undefined: read the address
+    // bar. A test, or a caller that has already read it, passes the arrival itself (or null for none).
+    recoveryArrival: injectedRecoveryArrival,
     orgContext: injectedOrgContext,
     legacyAudienceOrgId = getLegacyAudienceOrgId(),
     legacyAudienceOrgSlug = getLegacyAudienceOrgSlug(),
   } = {},
 ) {
+  // FIRST, before the Supabase client is built (it would read the same hash and keep a session out of it)
+  // and before the router starts (it would try to route `#access_token=…&type=recovery` as a console route
+  // and show "Page not found" with the token still in the address bar): a password-recovery link carries
+  // its session in the hash. Taking it removes it from the address bar at once (core/passwordRecovery.js).
+  const arrival =
+    injectedRecoveryArrival !== undefined ? injectedRecoveryArrival : takeRecoveryArrival();
+  const client = injectedClient ?? getSupabase();
+  let recoveryFlow = arrival ? createRecoveryFlow({ client, arrival }) : null;
   root.innerHTML = '';
   const orgContext = injectedOrgContext ?? createOrgContext({ client });
 
@@ -1188,7 +1234,13 @@ export function mountApp(
 
   const {
     data: { subscription: reconnectAuthSubscription },
-  } = client.auth.onAuthStateChange((_event, session) => {
+  } = client.auth.onAuthStateChange((event, session) => {
+    // The session behind a password-recovery form ended (Sign out, or another tab): the form could only
+    // fail now, so the flow is over and the front door (sign-in) takes its place. Re-resolved a tick
+    // later, outside the auth lock, like every other reaction to an auth event in this handler.
+    if (event === 'SIGNED_OUT' && recoveryFlow?.sessionEnded()) {
+      setTimeout(() => routerRef.current?.resolve(currentRoutePath()), 0);
+    }
     hasSession = Boolean(session);
     currentSession = session;
     syncOutboxOwner();
@@ -1263,6 +1315,7 @@ export function mountApp(
     switchOrgForRoute,
     showRouteNotice,
     clearEventContext: () => shell.clearEventContext(),
+    getRecoveryFlow: () => recoveryFlow,
   });
 
   // When the person or the organisation the console was built for is no longer the one in force (a
@@ -1346,7 +1399,11 @@ export function mountApp(
 
   function renderNav(route, params) {
     const links = [
-      { label: 'Events', href: '#/events', active: !params.eventId && route.pattern !== '/team' },
+      {
+        label: 'Events',
+        href: '#/events',
+        active: !params.eventId && !NON_EVENTS_PATTERNS.has(route.pattern),
+      },
     ];
     if (params.eventId) {
       // "Overview" — found ambiguous in production feedback (organisers
@@ -1399,6 +1456,17 @@ export function mountApp(
     onNavigate: updateChrome,
   });
   routerRef.current = router;
+
+  // A recovery link opened INTO an already-running console (the hash changes, the page does not reload, so
+  // the take above never saw it). Registered before the router's own listener so it runs first: it takes
+  // the token out of the address bar and points the hash at the console, whose gate then shows the flow.
+  function onRecoveryHashChange() {
+    const next = takeRecoveryArrival();
+    if (!next) return;
+    recoveryFlow = createRecoveryFlow({ client, arrival: next });
+    history.replaceState(history.state, '', '#/events');
+  }
+  window.addEventListener('hashchange', onRecoveryHashChange);
 
   const started = router.start(shell.outlet, { fallbackPath: '/events' });
 
@@ -1479,6 +1547,7 @@ export function mountApp(
       setOutboxOwner(null);
       await router.stop();
       shell.unmount();
+      window.removeEventListener('hashchange', onRecoveryHashChange);
       window.removeEventListener('online', onOnline);
       clearInterval(retryIntervalId);
       reconnectAuthSubscription.unsubscribe();
