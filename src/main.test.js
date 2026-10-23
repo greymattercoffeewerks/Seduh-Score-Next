@@ -188,8 +188,13 @@ const { DEFAULT_LOAD_TIMEOUT_MS } = await import('./core/timeout.js');
 const ORG_ONE = { org_id: 'org1', name: 'Org One', slug: 'org-one', role: 'owner' };
 const ORG_TWO = { org_id: 'org2', name: 'Org Two', slug: 'org-two', role: 'organiser' };
 const myOrgs = vi.fn(() => Promise.resolve({ data: [ORG_ONE], error: null }));
-function fakeRpc(name) {
+// The event's plan window (my_entitlements); an error by default, which the console treats as "no window" (fail-open).
+const myEntitlements = vi.fn(() =>
+  Promise.resolve({ data: null, error: { code: 'unexpected rpc' } }),
+);
+function fakeRpc(name, args) {
   if (name === 'my_orgs') return myOrgs();
+  if (name === 'my_entitlements') return myEntitlements(args);
   return Promise.resolve({ data: null, error: { code: 'unexpected rpc: ' + name } });
 }
 
@@ -1228,6 +1233,76 @@ describe('mountApp routing', () => {
     activeApp = null; // already unmounted directly — afterEach shouldn't unmount again
 
     expect(root.querySelector('.app-shell-header')).toBeNull();
+  });
+});
+
+describe('the Per-event window on an event route (requireAuth)', () => {
+  afterEach(() => {
+    myEntitlements.mockReset();
+    myEntitlements.mockImplementation(() =>
+      Promise.resolve({ data: null, error: { code: 'unexpected rpc' } }),
+    );
+  });
+  const windowSnapshot = (win) => ({ tier: 'community', keys: {}, window: win });
+  const open = async (eventId) => {
+    stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
+    stubScreen(mountEventDashboardScreen, 'DASHBOARD_SCREEN');
+    const { root } = await startApp();
+    location.hash = `#/events/${eventId}`;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    return root;
+  };
+
+  it('a locked event shows the locked screen instead of the event screen', async () => {
+    myEntitlements.mockResolvedValue({
+      data: windowSnapshot({
+        ends_at: new Date(Date.now() - 3600 * 1000).toISOString(),
+        locked: true,
+        enforced: true,
+      }),
+      error: null,
+    });
+    const root = await open('ev-win-locked');
+    expect(root.textContent).toContain("This event's Per-event plan has ended");
+    expect(mountEventDashboardScreen).not.toHaveBeenCalled();
+    expect(myEntitlements).toHaveBeenCalledWith({ p_org: 'org1', p_event: 'ev-win-locked' });
+  });
+
+  it('an event whose window ends within two days opens normally and says so in the notice', async () => {
+    myEntitlements.mockResolvedValue({
+      data: windowSnapshot({
+        ends_at: new Date(Date.now() + 10 * 3600 * 1000).toISOString(),
+        locked: false,
+        enforced: true,
+      }),
+      error: null,
+    });
+    const root = await open('ev-win-ending');
+    expect(root.textContent).toContain('DASHBOARD_SCREEN');
+    expect(root.querySelector('#app-shell-org-notice').textContent).toContain(
+      'Per-event plan ends at',
+    );
+  });
+
+  it('a window that ends later, or a key that is switched off, says nothing', async () => {
+    myEntitlements.mockResolvedValue({
+      data: windowSnapshot({
+        ends_at: new Date(Date.now() + 10 * 3600 * 1000).toISOString(),
+        locked: false,
+        enforced: false,
+      }),
+      error: null,
+    });
+    const root = await open('ev-win-dark');
+    expect(root.textContent).toContain('DASHBOARD_SCREEN');
+    expect(root.querySelector('#app-shell-org-notice').textContent).not.toContain('Per-event plan');
+  });
+
+  it('fails open: when the window cannot be read the event screen mounts as it always did', async () => {
+    myEntitlements.mockRejectedValue(new Error('offline'));
+    const root = await open('ev-win-offline');
+    expect(root.textContent).toContain('DASHBOARD_SCREEN');
+    expect(root.textContent).not.toContain('Per-event plan has ended');
   });
 });
 

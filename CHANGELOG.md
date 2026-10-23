@@ -1,3 +1,66 @@
+## T-GATE.B5: the Per-event 5-day window lock, shipped dark · 2026-10-23
+
+**Task:** T-GATE.B5 (G-B5, D-G15), the last gating task before the flip. Spec: `Handoffs and Specs/GATING-SPEC.md` (local and gitignored, 6b "The Per-event window", 6d, 6e). Branch `feat/gating-b5`, cut from `dev` after B1 to B4 merged (#300, #301, #304, #305). Commits `a24062a` (migration, RLS, RPCs, pgTAP), `1c50ac5` (window UI and review fixes), `e063354` (review fixes: enforced flag, answer cache, dark short-circuit), `354f864` (test-audit fixes). **Status: built and reviewed, local only. NOT FINAL:** the PR's CI run (`db reset`, full pgTAP, the Playwright admin attack list, dev-app e2e) has not been seen green, and `module-boundary-checker` has not been run on the `src/` change set (see open items). Still dark: no key is flipped, and nothing is pushed to the cloud (D-G13).
+
+**Why:** A Per-event purchase gives one event a 5-day window (5 Brunei calendar days containing the event date). Once it ends, the owner's rule is that the event's workspace (setup, roster, heats, timing, scoring, standings, report) and its live displays (projector, phone, splash) are gone; only the public archive page still shows results, and an admin extension re-opens the event. This deliberately overrides "a lapse never bricks a live competition", for Per-event only. It is enforced in the database, not in the client, because a client-only lock is bypassed by any direct API call.
+
+**What changed:**
+
+- `supabase/migrations/20261023140000_entitlement_window_lock.sql` (new, with a rollback block):
+  - Key `event_window_lock` (the third embedded `$catalog_add$` block, and `supabase/entitlements.catalog.json`), seeded off.
+  - `app.event_window_ended` / `event_window_locked` / `window_lock_on` and the `event_id_for_*` resolvers. An event is locked iff the key is enforced AND the organisation's OWN tier is the lowest (an Annual or organisation-level Per-event organisation is never locked) AND the event has a non-revoked event grant whose window has ended AND no non-revoked event grant is current. A revoked grant does not lock; a window that has not started does not lock; a grant on another event never counts.
+  - `app.window_locked_events()`: the locked event ids as a hashed set, argument-less (replaces an earlier `event_window_locked(p_at)` that anon could call with an arbitrary time).
+  - RESTRICTIVE RLS policies, reads and writes, ANDed with the existing policies, on `event_entries`, the 6 `ct_*` tables, the 8 `btc_*` tables (15 in all), `live_sessions` (all commands for signed-in users, SELECT for anon, so the projector, phone and splash stop serving the event) and `score_change_log` (SELECT). Each policy is `not (select app.window_lock_on()) or not coalesce(<event> in (select app.window_locked_events()), false)`: while the key is off it short-circuits with no per-row work.
+  - Deliberately NOT locked: the `events` row (the organiser still sees the event and can delete it), `people`, `person_merges` (organisation-level), `public_results` (the archive; publish and unpublish stay fail-open), `get_scoring_record` (it exists only for a published result), the org-level ledgers and the entitlement tables. The `btc_*` views are `security_invoker`, so they follow their tables.
+  - `app.btc_delete_event_children` made SECURITY DEFINER with a guard (see Reviews, security-reviewer).
+  - `app.gating_would_lose` REPLACED: for `event_window_lock`, lists the organisations with a locked event now (detail `locked_events`).
+  - `public.my_entitlements` REPLACED: returns `window: {ends_at, locked, enforced}` for a named event, so the UI can warn before the end and show the locked state. `enforced` says whether the key is on, so no closure is announced while it is off.
+  - `public.public_event_summary` REPLACED: skips a locked event (the anonymous door no longer offers it as "the live event").
+- `supabase/tests/056_entitlement_window_lock.sql` (new, 76 assertions): dark neutrality; every locked table swept; the hazard case (a live event loses its displays); a grant on another event never unlocks; a revoked, future, annual or org-level event is not locked; extension re-opens and revoke re-closes; window boundaries; preview and the flip; a locked BTC event can still be deleted.
+- Guard edits (lists, not relaxed checks): `037` (anon expand), `040` (cross-organisation matrix), `052` (eleven keys seeded, was ten).
+- `src/core/eventWindow.js` (new): `windowStateOf`, the short Brunei-time warning 48 hours before the end, `describeWindowEnd`, the locked copy, a 30-second answer cache, a 2.5-second fail-open lookup, and the `enforced` flag (the warning is never announced while the key is off).
+- `src/core/eventWindowScreen.js` / `.css` (new): the locked screen, with Contact and Back to events.
+- `src/main.js`: `requireAuth` shows the locked screen instead of the event screen; the notice is joined with the organisation-switch notice.
+- `src/core/eventWindow.test.js`, `src/core/eventWindowScreen.test.js`, `src/main.test.js` (four wiring tests): tests.
+- `app/index.html` (one stylesheet link for `eventWindowScreen.css`), `supabase/entitlements.catalog.json` (the lock key), `supabase/tests/037_anon_expand.sql`, `040_cross_org_matrix.sql`, `052_entitlements_core.sql`, `ROADMAP.md`, `CONVENTIONS.md` (new rule 10, restrictive-policy locks and definer paths), this entry.
+
+**Verification (this session):**
+
+- All 56 pgTAP files pass after `db reset`, including 056 (76 assertions).
+- Rollback block run inside a transaction and rolled back.
+- Full vitest: 5165 passing.
+- dev-app Playwright e2e: 22 of 22.
+- Admin adversarial attack list: 20 of 20.
+- Not seen: the PR's CI run.
+
+**Reviews:**
+
+- `schema-guardian`: clean. **Nits, fixed:** per-row cost of the policies (now a hashed set plus the dark short-circuit). **Accepted:** publishing after the lock writes an empty payload from the browser. The locked screen blocks that UI, so nothing reaches a user.
+- `security-reviewer`: **1 Important, fixed and independently checked:** `app.btc_delete_event_children` ran as the invoker, so under the lock it saw zero bracket and match rows, and a locked BTC event with a fastest-team bonus could not be deleted. Fixed by making it SECURITY DEFINER, refusing anything but the BEFORE DELETE trigger on `events` (`tg_op`, `tg_table_name`). The checker confirmed the bug and the fix. **Nits:** the anon-callable `event_window_locked(p_at)` replaced by the argument-less `window_locked_events()` (fixed); a realtime client keeps its last frame until reload (open, below); `public_event_summary` falls through to the organisation's next unlocked event (open, below); a Community organisation can register 8 competitors on a fresh event after a lock (by design, the Community cap is per event).
+- `code-reviewer`: clean. **Nits, fixed:** the warning was announced while the key was dark (now behind the `enforced` flag); a 2.5-second lookup on every navigation (now a 30-second cache). The lookup cost is a flip precondition (below).
+- `ui-accessibility-reviewer`: **0 Important.** **Nits:** a notice can cover the focused heading at 360px (the text was shortened; the real fix belongs to the shared `appShell` notice, open below); a touch scroll dismisses the informational notice (`appShell` shared behaviour, open below); wording polish and the outline button (fixed).
+- `test-auditor`: **3 Important, all fixed:** the seeding-tiebreak read sweep, the `enforced` assertion, and the `main.js` wiring tests. Nits fixed.
+- `module-boundary-checker`: **not run.** The `src/` change set includes `src/core/eventWindow*`, `src/core/eventWindowScreen*`, `src/core/entitlements.js` and `src/main.js`. Run before the PR.
+
+**Decisions (not in the handoff's §12 record):**
+
+- **The lock is a RESTRICTIVE RLS policy, not a client check.** A client check is bypassed by a direct API call. A restrictive policy is ANDed with the existing ones, so it can only remove rows, never grant them, and every invoker RPC inherits it with no change to the RPC.
+- **The organiser's own `events` row is not locked.** The organiser must still see that the event exists, its state, and be able to delete it. Locking the row would strand a locked event with no way to clear it.
+- **The lock applies to the organisation's own lowest tier only.** An organisation-level plan (Annual, or an organisation-level Per-event) is never locked, and a per-event grant on another event never counts toward this event.
+- **Revoke re-closes, extension re-opens, and "current" is a fact about now.** A revoked grant is a Community event again; an expired window locks. An extension is a new grant row that starts where the old one ended, so it is current at once.
+- **The security fix is a definer function with a guard.** The trigger is reachable only after the caller's own `events` delete has passed row-level security (or as the cascade of an organisation's deletion by its owner), so it reaches nothing the caller could not already delete (the function's own comment). The class is recorded as CONVENTIONS rule 10.
+
+**Not done / still open** (also in ROADMAP's "Known open items from T-GATE.B5"):
+
+- Flip preconditions: measure the read cost of `ct_results` and the `btc_*` tables with the key on; run `admin_gating_preview('event_window_lock')` and extend or accept the orgs it lists; announce to Per-event customers.
+- The `appShell` notice height at 360px and the touch-scroll dismissal of the informational notice (shared behaviour; needs a check on the Honor phone).
+- The realtime stale frame until reload, and `public_event_summary` falling through to the organisation's next unlocked event.
+- No automatic CSV email at window end (G-F1): the organiser has no copy except the archive.
+- The D-G22 24-hour podium publish is still not built.
+- `events.status` and `events.is_test` are member-writable (carried).
+- The first-flip precondition list from B4 (`events_open`, `btc_format`) still applies.
+- Cloud: migrations `20261023100000` to `20261023140000` are local only; push after the BTC pitch via the Supabase MCP, after the `list_migrations` check.
+
 ## T-GATE.B4: the Community one-open-event rule, finish and release, and BTC gated at first go-live, still dark · 2026-10-23
 
 **Task:** T-GATE.B4, gating and entitlements (`Handoffs and Specs/GATING-SPEC.md`, local and gitignored; spec 6d D-G20, D-G22, D-G23, and the owner's BTC decision of 2026-10-23). Branch `feat/gating-b4`, stacked on B3 (PR #304; retarget to `dev` once #304 merges). Commits `257f7d6` (the rule, finish, release) and `dafdb17` (BTC moved to first go-live; review fixes). **Status: built and reviewed, local only. Nothing pushed (no PR, no cloud project; D-G13). NOT FINAL:** the PR's CI run (`db reset`, full pgTAP, the Playwright admin attack list, dev-app e2e) has not been seen green, and `module-boundary-checker` has not been run on the one `src/` test change (see open items). Still dark: no key is flipped.
