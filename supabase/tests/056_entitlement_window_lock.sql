@@ -15,7 +15,7 @@
 --   * the preview lists the organisations with a locked event, the flip needs its count, my_entitlements carries the window
 --     for the UI, and a stranger learns nothing (standard refusals).
 begin;
-select plan(75);
+select plan(76);
 
 create schema t056;
 grant usage on schema t056 to anon, authenticated, service_role;
@@ -140,6 +140,7 @@ begin
   insert into btc_match_judges (match_id, judge_id) values (t056.u(b + 11), t056.u(b + 10));
   insert into btc_cup_votes (id, match_id, cup_number, team1_tokens) values (t056.u(b + 12), t056.u(b + 11), 1, 1);
   insert into btc_match_bonuses (match_id) values (t056.u(b + 11));
+  insert into btc_seeding_tiebreaks (event_id, team_id, total_points, wins, group_size, tiebreak_rank, reason) values (t056.u(ev), t056.u(b + 8), 10, 1, 2, 1, 'reason ' || ev);
   insert into btc_bracket_slots (id, event_id, round, slot_label) values (t056.u(b + 13), t056.u(ev), 'final', 'Final ' || ev);
   insert into live_sessions (id, org_id, event_id, format, active) values (t056.u(b + 14), t056.u(org), t056.u(ev), 'cup_taster', ev in (101, 201));
 end $$;
@@ -181,6 +182,7 @@ insert into t056.spec values
   ('btc_cup_votes', 'team1_tokens', 'id = t056.u(% + 12)'),
   ('btc_match_bonuses', 'match_id', 'match_id = t056.u(% + 11)'),
   ('btc_bracket_slots', 'slot_label', 'id = t056.u(% + 13)'),
+  ('btc_seeding_tiebreaks', 'reason', 'team_id = t056.u(% + 8)'),
   ('live_sessions', 'format', 'id = t056.u(% + 14)');
 grant select on t056.spec to anon, authenticated;
 create function t056.f(tbl text, b int) returns text language sql as $$
@@ -188,8 +190,11 @@ create function t056.f(tbl text, b int) returns text language sql as $$
 grant execute on all functions in schema t056 to anon, authenticated, service_role;
 create function t056.sum_cnt(uid uuid, b int) returns text language sql as $$
   select string_agg(s.tbl || '=' || t056.cnt(uid, s.tbl, t056.f(s.tbl, b)), ',' order by s.tbl) from t056.spec s $$;
+-- (btc_seeding_tiebreaks is read-only once a bracket exists, whoever asks, so the write sweep leaves it out; its READ is swept)
 create function t056.sum_upd(uid uuid, b int) returns text language sql as $$
-  select string_agg(s.tbl || '=' || t056.upd(uid, s.tbl, s.setcol, t056.f(s.tbl, b)), ',' order by s.tbl) from t056.spec s $$;
+  select string_agg(s.tbl || '=' || t056.upd(uid, s.tbl, s.setcol, t056.f(s.tbl, b)), ',' order by s.tbl) from t056.spec s where s.tbl <> 'btc_seeding_tiebreaks' $$;
+create function t056.expect_w(v text) returns text language sql as $$
+  select string_agg(s.tbl || '=' || v, ',' order by s.tbl) from t056.spec s where s.tbl <> 'btc_seeding_tiebreaks' $$;
 create function t056.expect(v text) returns text language sql as $$
   select string_agg(s.tbl || '=' || v, ',' order by s.tbl) from t056.spec s $$;
 grant execute on all functions in schema t056 to anon, authenticated, service_role;
@@ -217,16 +222,16 @@ select is(
   'none', 'the lock functions are SECURITY DEFINER with search_path pinned');
 select is(
   (select coalesce(string_agg(p.proname || '/' || r, ', ' order by p.proname, r), 'none') from pg_proc p, unnest(array['anon', 'authenticated', 'service_role']) r
-    where p.pronamespace = 'app'::regnamespace and p.proname in ('event_window_ended', 'event_window_locked', 'window_lock_on', 'window_locked_events', 'event_id_for_stage_internal')
+    where p.pronamespace = 'app'::regnamespace and p.proname in ('event_window_ended', 'event_window_locked', 'window_lock_on', 'window_locked_events', 'event_id_for_stage_internal', 'event_id_for_heat_internal', 'event_id_for_heat_entry_internal', 'event_id_for_btc_match_internal')
       and has_function_privilege(r, p.oid, 'execute')),
-  'event_id_for_stage_internal/authenticated, window_lock_on/anon, window_lock_on/authenticated, window_locked_events/anon, window_locked_events/authenticated',
+  'event_id_for_btc_match_internal/authenticated, event_id_for_heat_entry_internal/authenticated, event_id_for_heat_internal/authenticated, event_id_for_stage_internal/authenticated, window_lock_on/anon, window_lock_on/authenticated, window_locked_events/anon, window_locked_events/authenticated',
   'who can run them: the policies need window_locked_events (no argument: it answers only "which events are locked now") as anon and authenticated and the resolvers as authenticated; the rest, and the service role: nobody');
 
 -- ============ DARK ============
 select is(app.event_window_ended(t056.u(101)), true, 'the engine says E101''s window has ended');
 select is(app.event_window_locked(t056.u(101)), false, 'but the lock is not on: not locked');
 select is(t056.sum_cnt(t056.u(11), 1000), t056.expect('1'), 'dark: an ended Community event reads in full for its organiser, table by table');
-select is(t056.sum_upd(t056.u(11), 1000), t056.expect('1'), 'and writes in full');
+select is(t056.sum_upd(t056.u(11), 1000), t056.expect_w('1'), 'and writes in full');
 select is(t056.cnt(null, 'live_sessions', format('id = %L', t056.u(1014))), 1, 'and its live session is served to the audience');
 select is((select count(*)::int from public.public_event_summary(t056.u(100)) r where r.id = t056.u(101)), 1, 'and public_event_summary offers it as the live event');
 
@@ -234,7 +239,7 @@ select is((select count(*)::int from public.public_event_summary(t056.u(100)) r 
 update app.entitlement_keys set enforced = true where key = 'event_window_lock';
 select is(app.event_window_locked(t056.u(101)), true, 'enforced: E101 (ended window, Community) is locked');
 select is(t056.sum_cnt(t056.u(11), 1000), t056.expect('0'), 'its organiser reads NOTHING from any workspace table or the live session');
-select is(t056.sum_upd(t056.u(11), 1000), t056.expect('0'), 'and updates nothing');
+select is(t056.sum_upd(t056.u(11), 1000), t056.expect_w('0'), 'and updates nothing');
 select is(t056.cnt(null, 'live_sessions', format('id = %L', t056.u(1014))), 0, 'the audience (anon) is no longer served the running live session: the hazard the spec names');
 select is(t056.cnt(t056.u(11), 'events', format('id = %L', t056.u(101))), 1, 'the event row itself is still visible, so the organiser sees what happened');
 select is(t056.as_user(t056.u(11), format($$insert into event_entries (event_id, display_name) values (%L, 'late cupper')$$, t056.u(101))), '42501||new row violates row-level security policy "event_entries_window_lock" for table "event_entries"',
@@ -244,10 +249,13 @@ select is(t056.as_user(t056.u(11), format($$insert into ct_stages (event_id, kin
 select is(t056.as_user(t056.u(11), format($$insert into btc_teams (event_id, name) values (%L, 'late team')$$, t056.u(101))), '42501||new row violates row-level security policy "btc_teams_window_lock" for table "btc_teams"', 'a BTC team is refused');
 select is(t056.as_user(t056.u(11), format($$insert into live_sessions (org_id, event_id, format, active) values (%L, %L, 'cup_taster', true)$$, t056.u(100), t056.u(101))), '42501||new row violates row-level security policy "live_sessions_window_lock" for table "live_sessions"',
   'and so is going live again');
-select isnt(t056.as_user(t056.u(11), format($$select public.start_heat(gen_random_uuid(), %L, %L, now())$$, t056.u(100), t056.u(1005))), 'ok', 'a workspace RPC (start_heat) is refused on the locked event: the RPCs are invoker functions, so the same policies bind them');
-select isnt(t056.as_user(t056.u(11), format($$select public.record_heat_time(gen_random_uuid(), %L, %L, 'timing', 10, 10, false, 'tap', now(), 'reject')$$, t056.u(100), t056.u(1006))), 'ok',
-  'scoring (record_heat_time) too');
-select is((select status from ct_heats where id = t056.u(1005)), (select status from ct_heats where id = t056.u(2005)), 'and the locked event''s heat did not change state');
+create function t056.rpc_refused(stmt text) returns boolean language sql as $$
+  -- refused by the database (not ok), and not because the call itself was malformed (undefined function, bad argument)
+  select r <> 'ok' and r not like '42883%' and r not like '22P02%' from (select t056.as_user(t056.u(11), stmt) as r) x $$;
+grant execute on function t056.rpc_refused(text) to authenticated;
+select ok(t056.rpc_refused(format($$select public.start_heat(gen_random_uuid(), %L, %L, now())$$, t056.u(100), t056.u(1005))), 'a workspace RPC (start_heat) is refused on the locked event: the RPCs are invoker functions, so the same policies bind them');
+select ok(t056.rpc_refused(format($$select public.record_heat_time(gen_random_uuid(), %L, %L, 'timing', 10, 10, false, 'tap', now(), 'reject')$$, t056.u(100), t056.u(1006))), 'scoring (record_heat_time) too');
+select is((select status from ct_heats where id = t056.u(1005)), 'pending', 'and the locked event''s heat did not change state');
 select is(t056.as_user(t056.u(11), format($$delete from event_entries where id = %L$$, t056.u(1001))), 'ok', 'a delete is a silent zero-row (row-level security filters it)...');
 select is((select count(*)::int from event_entries where id = t056.u(1001)), 1, '...and the row is still there');
 select is(t056.cnt(t056.u(11), 'score_change_log', format('event_id = %L', t056.u(101))), 0, 'the change log of the locked event is closed to the organiser');
@@ -255,7 +263,7 @@ select is(t056.cnt(t056.u(11), 'btc_standings', format('event_id = %L', t056.u(1
 
 -- not locked
 select is(t056.sum_cnt(t056.u(11), 2000), t056.expect('1'), 'E102 (a CURRENT window in the same organisation) reads in full: a grant on one event does not unlock another, and does not lock this one');
-select is(t056.sum_upd(t056.u(11), 2000), t056.expect('1'), 'and writes in full');
+select is(t056.sum_upd(t056.u(11), 2000), t056.expect_w('1'), 'and writes in full');
 select is(t056.cnt(null, 'live_sessions', format('id = %L', t056.u(7014))), 1, 'an Annual organisation''s live session is served to the audience (not locked)');
 select is(t056.sum_cnt(t056.u(11), 3000), t056.expect('1'), 'E103 (a Community event with no grant at all) is untouched');
 select is(t056.sum_cnt(t056.u(11), 4000), t056.expect('1'), 'E104 (its only grant was REVOKED) is a plain Community event again: not locked');
@@ -312,6 +320,7 @@ select is((t056.win(100, 101) ->> 'locked')::boolean, true, 'my_entitlements: th
 select ok((t056.win(100, 101) ->> 'ends_at')::timestamptz < now(), 'and when its window ended');
 select is((t056.win(100, 102) ->> 'locked')::boolean, false, 'the current-window event is not locked');
 select ok((t056.win(100, 102) ->> 'ends_at')::timestamptz > now(), 'and carries when it ends, for the warning');
+select is((t056.win(100, 102) ->> 'enforced')::boolean, true, 'my_entitlements: the window says whether the lock is on (the UI announces nothing while it is off)');
 select is(t056.win(100, 103), 'null'::jsonb, 'an event with no window says null');
 select is(t056.win(100, 104), 'null'::jsonb, 'an event whose only grant was revoked says null too');
 
@@ -320,7 +329,7 @@ select t056.claims(t056.u(1), 'aal2', 10);
 select public.admin_grant_extend(t056.u(901), now() + interval '2 days', 'venue postponed the final');
 select is(app.event_window_locked(t056.u(101)), false, 'an extension (a new row starting where the old one ended, current now) unlocks E101 at once');
 select is(t056.sum_cnt(t056.u(11), 1000), t056.expect('1'), 'every table reads again');
-select is(t056.sum_upd(t056.u(11), 1000), t056.expect('1'), 'and writes again');
+select is(t056.sum_upd(t056.u(11), 1000), t056.expect_w('1'), 'and writes again');
 select is(t056.cnt(null, 'live_sessions', format('id = %L', t056.u(1014))), 1, 'and the audience is served the live session again');
 select is(app.event_window_locked(t056.u(401)), true, 'the other organisation''s event stays locked (an extension is per grant)');
 -- the extension is revoked: closed again (a window that ended is still an ended window)
