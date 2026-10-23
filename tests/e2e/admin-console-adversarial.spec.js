@@ -71,6 +71,8 @@ const ADMIN_FUNCTIONS = {
   }),
   admin_grant_revoke: (w) => ({ p_grant_id: w.a.orgId }),
   admin_list_grants: (w) => ({ p_org_id: w.a.orgId }),
+  admin_event_release: (w) => ({ p_event_id: w.a.orgId, p_reason: 'attack' }),
+  admin_event_resnapshot: (w) => ({ p_event_id: w.a.orgId, p_reason: 'attack' }),
   admin_gating_preview: () => ({ p_key: 'btc_format' }),
   admin_set_key_enforced: () => ({ p_key: 'btc_format', p_enforced: true, p_confirm: 0 }),
 };

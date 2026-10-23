@@ -71,7 +71,7 @@ select is((select count(*)::int from app.entitlement_tiers), 3, 'three tiers are
 select is(
   (select string_agg(tier || '=' || rank, ',' order by rank) from app.entitlement_tiers),
   'community=0,per_event=1,annual=2', 'in the order community < per_event < annual');
-select is((select count(*)::int from app.entitlement_keys), 9, 'nine keys are seeded');
+select is((select count(*)::int from app.entitlement_keys), 10, 'ten keys are seeded (nine at the first seed, events_open added by B4)');
 select is((select count(*)::int from app.entitlement_keys where enforced), 0, 'and EVERY key is seeded unenforced (dark, D-G11)');
 select is(
   (select string_agg(tier || '=' || coalesce(cap_limit::text, 'unlimited'), ',' order by tier)
@@ -276,12 +276,12 @@ update app.entitlement_caps set cap_limit = 8 where key = 'cup_taster_participan
 insert into entitlement_grants (org_id, event_id, tier, valid_from, source) values (t052.u(100), t052.u(101), 'annual', now() - interval '1 day', 'manual');
 set local role authenticated;
 set local request.jwt.claim.sub = '00000000-0000-0000-0520-000000000001';
-select is((select jsonb_object_keys_count from (select count(*)::int as jsonb_object_keys_count from jsonb_object_keys(public.my_entitlements(t052.u(100)) -> 'keys')) x), 9, 'a member gets one entry per key');
+select is((select jsonb_object_keys_count from (select count(*)::int as jsonb_object_keys_count from jsonb_object_keys(public.my_entitlements(t052.u(100)) -> 'keys')) x), 10, 'a member gets one entry per key');
 select is(public.my_entitlements(t052.u(100)) ->> 'tier', 'community', 'X''s only live grant was revoked above: community');
 select is(public.my_entitlements(t052.u(100), t052.u(101)) ->> 'tier', 'annual', 'with an event named the event grant counts (annual here)');
 select is(
   (select count(*)::int from jsonb_each(public.my_entitlements(t052.u(100)) -> 'keys') e where (e.value ->> 'allowed')::boolean),
-  9, 'while dark every key is allowed');
+  10, 'while dark every key is allowed');
 select is(public.my_entitlements(t052.u(100)) -> 'keys' -> 'cup_taster_participants' -> 'limit', 'null'::jsonb, 'and a cap shows no limit while dark');
 select is(public.my_entitlements(t052.u(100)) -> 'keys' -> 'btc_format' -> 'limit', null, 'a flag key has no limit field');
 select is(t052.refusal($$ select public.my_entitlements(t052.u(200)) $$), '42501|', 'a member of X asking for Y: 42501');

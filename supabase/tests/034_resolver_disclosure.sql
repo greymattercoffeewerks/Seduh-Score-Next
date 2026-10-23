@@ -458,22 +458,22 @@ reset role;
 
 -- ============ every RPC that checks p_org_id against a resolver carries the NULL guard ============
 -- A behavioural test cannot see the guard in the RPCs whose later row-level-security step throws the
--- same message, so count it in the source: all eighteen, none left on the bare form.
+-- same message, so count it in the source: all nineteen, none left on the bare form.
 
 select is(
   (select count(*)::int from pg_proc p
     where p.pronamespace = 'public'::regnamespace
       and 'p_org_id' = any (p.proargnames)
       and p.prosrc ~ 'app\.org_id_for_'),
-  18,
-  'eighteen public RPCs take p_org_id and check it against a resolver'
+  19,
+  'nineteen public RPCs take p_org_id and check it against a resolver'
 );
 select is(
   (select count(*)::int from pg_proc p
     where p.pronamespace = 'public'::regnamespace
       and 'p_org_id' = any (p.proargnames)
       and p.prosrc ~ 'p_org_id is null or p_org_id is distinct from app\.org_id_for_'),
-  18,
+  19,
   'and every one of them carries the p_org_id NULL guard'
 );
 

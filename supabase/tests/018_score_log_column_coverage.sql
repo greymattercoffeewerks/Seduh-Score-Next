@@ -76,9 +76,11 @@ insert into _buckets values
   ('btc_bracket_slots', 'feeder_slot_1', 'metadata'), ('btc_bracket_slots', 'feeder_slot_2', 'metadata'),
   ('btc_bracket_slots', 'created_at', 'metadata'), ('btc_bracket_slots', 'updated_at', 'metadata'),
   -- events (only the is_test flag and org ownership matter to the trail)
-  ('events', 'id', 'immutable'), ('events', 'org_id', 'immutable'),
+  ('events', 'id', 'immutable'), ('events', 'org_id', 'immutable'), ('events', 'format', 'immutable'),
   ('events', 'is_test', 'logged'),
-  ('events', 'format', 'metadata'), ('events', 'name', 'metadata'),
+  ('events', 'ended_at', 'metadata'), ('events', 'ended_by', 'metadata'), ('events', 'ended_via', 'metadata'),
+  ('events', 'entitlements_snapshot', 'metadata'), ('events', 'entitlements_snapshot_at', 'metadata'),
+  ('events', 'name', 'metadata'),
   ('events', 'event_date', 'metadata'), ('events', 'venue', 'metadata'),
   ('events', 'status', 'metadata'), ('events', 'config', 'metadata'),
   ('events', 'created_at', 'metadata'), ('events', 'updated_at', 'metadata'),
