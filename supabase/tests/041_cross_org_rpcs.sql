@@ -254,7 +254,7 @@ select is(
       -- Guess the Bean functions (010), and the platform-admin console's RPCs (048 reads, 049 writes): their
       -- authorisation is "a platform admin at aal2 with a fresh TOTP" (app.require_platform_admin), not membership
       -- of an organisation; the reads return aggregates and identity metadata only (048 pins their column lists), the
-      -- writes wrap the service-role-only provisioning functions and audit every change (049 refuses anyone else); the entitlement grant functions are the same kind (053)
+      -- writes wrap the service-role-only provisioning functions and audit every change (049 refuses anyone else); the entitlement grant functions are the same kind (053; admin_event_resnapshot: 054)
       and p.oid::regprocedure::text not in (
         'public_event_summary(uuid)', 'team_can_manage(uuid,uuid)', 'team_can_restore(uuid,uuid)', 'get_scoring_record(uuid)',
         'reset_guess_session_data(uuid)', 'session_bean_count(uuid)', 'session_display_guesses(uuid)',
@@ -262,7 +262,7 @@ select is(
         'admin_org_detail(uuid)', 'admin_list_audit(integer,bigint,uuid)',
         'admin_create_org(text,text,uuid,boolean)', 'admin_add_member(uuid,uuid,text,boolean)', 'admin_set_role(uuid,uuid,text)',
         'admin_grant_create(uuid,text,uuid,integer,timestamp with time zone,text,text)', 'admin_grant_extend(uuid,timestamp with time zone,text)',
-        'admin_grant_revoke(uuid,text)', 'admin_list_grants(uuid)')),
+        'admin_grant_revoke(uuid,text)', 'admin_list_grants(uuid)', 'admin_event_resnapshot(uuid,text)')),
   'none',
   'every function or procedure a signed-in or anonymous caller can run that takes a uuid (an organisation, event, heat, match, stage, slot, entry, person or user id) is in this matrix or on the short, named exemption list: a new one fails here until it is added to e1.rpc');
 

@@ -55,6 +55,12 @@ const NOT_FOR_THE_CONSOLE = {
   already_extended: 'entitlement admin functions, no console screen yet',
   enforced_invalid: 'entitlement admin functions, no console screen yet',
   confirm_mismatch: 'entitlement admin functions, no console screen yet',
+  entitlement_required:
+    'entitlement hooks refuse an organiser write; the organiser surface has no copy for them yet (G-C2)',
+  entitlement_cap_reached:
+    'entitlement hooks, raised to the organiser console users, not the admin console',
+  snapshot_absent: 'entitlement admin functions, no console screen yet',
+  snapshot_downgrade: 'entitlement admin functions, no console screen yet',
   // The entitlement resolvers (internal to the database; a caller never reaches them).
   entitlement_key_unknown: 'entitlement resolvers, not the console',
   entitlement_key_not_cap: 'entitlement resolvers, not the console',
