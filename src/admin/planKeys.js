@@ -98,7 +98,7 @@ export function keysSection({ ctx, onGateRefused, mayTakeFocus, reload, writes =
       actions.appendChild(
         confirmAction({
           label: 'Turn off',
-          ariaLabel: `Turn off ${key.key}`,
+          subject: key.key,
           question: `Turn ${key.key} off? Everyone keeps today’s behaviour again at once.`,
           confirmLabel: 'Turn off',
           workingLabel: 'Turning off…',
@@ -117,7 +117,7 @@ export function keysSection({ ctx, onGateRefused, mayTakeFocus, reload, writes =
     const previewButton = el('button', {
       className: 'btn btn-outline tap-target',
       text: 'Preview turning it on',
-      attrs: { type: 'button', 'aria-label': `Preview turning on ${key.key}` },
+      attrs: { type: 'button', 'aria-label': `Preview turning it on: ${key.key}` },
     });
     let busy = false;
     previewButton.addEventListener('click', async () => {
@@ -125,11 +125,13 @@ export function keysSection({ ctx, onGateRefused, mayTakeFocus, reload, writes =
       busy = true;
       setBusyDisabled(previewButton, true);
       previewButton.textContent = 'Checking…';
+      previewButton.setAttribute('aria-label', `Checking: ${key.key}`);
       const answer = await ask(ctx, 'admin_gating_preview', { p_key: key.key });
       if (!card.isConnected) return;
       busy = false;
       setBusyDisabled(previewButton, false);
       previewButton.textContent = 'Preview turning it on';
+      previewButton.setAttribute('aria-label', `Preview turning it on: ${key.key}`);
       if (answer.error) {
         if (isGateRefusal(answer.error)) return onGateRefused();
         preview.replaceChildren(
@@ -155,9 +157,9 @@ export function keysSection({ ctx, onGateRefused, mayTakeFocus, reload, writes =
         attrs: { tabindex: '-1' },
       });
       const turnOn = confirmAction({
-        label: 'Turn on…',
-        ariaLabel: `Turn on ${key.key}`,
-        question: `Turn ${key.key} on now? ${count === 0 ? 'No organisation loses it today.' : `${plural(count, 'organisation')} lose it today.`}`,
+        label: 'Turn on',
+        subject: key.key,
+        question: `Turn ${key.key} on now? ${count === 0 ? 'No organisation loses it today.' : `${plural(count, 'organisation')} would lose it today.`}`,
         confirmLabel: 'Turn on',
         workingLabel: 'Turning on…',
         unknown: FLIP_UNKNOWN,
@@ -175,7 +177,7 @@ export function keysSection({ ctx, onGateRefused, mayTakeFocus, reload, writes =
         previewList(answer.data) ?? document.createDocumentFragment(),
         turnOn,
       );
-      summary.focus();
+      if (mayTakeFocus()) summary.focus();
     });
     actions.appendChild(previewButton);
     return card;

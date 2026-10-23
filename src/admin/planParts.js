@@ -138,7 +138,7 @@ export function writeForm({
 // with Confirm and Cancel. `run()` returns the answer of `ask`; `onDone(message)` runs on success.
 export function confirmAction({
   label,
-  ariaLabel,
+  subject,
   question,
   confirmLabel = 'Confirm',
   workingLabel = 'Working…',
@@ -162,7 +162,7 @@ export function confirmAction({
     const button = el('button', {
       className,
       text: label,
-      attrs: { type: 'button', ...(ariaLabel ? { 'aria-label': ariaLabel } : {}) },
+      attrs: { type: 'button', ...(subject ? { 'aria-label': `${label}: ${subject}` } : {}) },
     });
     button.addEventListener('click', showQuestion);
     holder.replaceChildren(button, message);
@@ -171,10 +171,14 @@ export function confirmAction({
 
   function showQuestion() {
     const q = el('p', { text: question, attrs: { tabindex: '-1' } });
+    // the visible words come first, and the name says which of several identical buttons this is (WCAG 2.5.3)
     const confirm = el('button', {
       className: 'btn btn-primary tap-target',
       text: confirmLabel,
-      attrs: { type: 'button' },
+      attrs: {
+        type: 'button',
+        ...(subject ? { 'aria-label': `${confirmLabel}: ${subject}` } : {}),
+      },
     });
     const cancel = el('button', {
       className: 'btn btn-outline tap-target',

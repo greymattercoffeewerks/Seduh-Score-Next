@@ -270,7 +270,7 @@ export function orgPlanView({ ctx, data, onGateRefused, mayTakeFocus, reload, wr
       confirmAction({
         ...common,
         label: 'Revoke',
-        ariaLabel: `Revoke the ${tierLabel(grant.tier)} plan`,
+        subject: `${tierLabel(grant.tier)} plan for ${scope.replace(/^Event: /, '')}`,
         question: `Revoke this ${tierLabel(grant.tier)} plan? The organisation falls back to what its other plans give.`,
         confirmLabel: 'Revoke',
         workingLabel: 'Revoking…',

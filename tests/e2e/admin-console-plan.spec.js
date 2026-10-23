@@ -51,8 +51,8 @@ test.describe('the Plan panel (real page, real local Supabase)', () => {
     await expect(page.locator('li.adm-key').first()).toBeVisible();
     expect(await page.locator('li.adm-key .adm-badge', { hasText: /^Enforced$/ }).count()).toBe(0);
     const first = page.locator('li.adm-key').first();
-    await first.getByRole('button', { name: /^Preview turning on/ }).click();
-    await expect(first.locator('.adm-key-preview')).toContainText('Turn on…');
+    await first.getByRole('button', { name: /^Preview turning it on/ }).click();
+    await expect(first.locator('.adm-key-preview')).toContainText('Turn on');
     await expect(first.locator('.adm-key-preview')).toContainText('would take it away from');
     expect(await page.locator('li.adm-key .adm-badge', { hasText: /^Enforced$/ }).count()).toBe(0);
     await expectFitsAndTappable(page);

@@ -207,13 +207,13 @@ describe('the overview', () => {
       }),
     );
     await flush();
-    expect(button('Turn on…')).toBeUndefined();
+    expect(button('Turn on')).toBeUndefined();
     await click('Preview turning it on');
     expect(calls('admin_gating_preview')[0][1]).toEqual({ p_key: 'btc_format' });
     expect(text()).toContain('take it away from 2 organisations today');
     expect(text()).toContain('Beta');
     expect(calls('admin_set_key_enforced')).toHaveLength(0);
-    await click('Turn on…');
+    await click('Turn on');
     expect(text()).toContain('Turn btc_format on now?');
     expect(calls('admin_set_key_enforced')).toHaveLength(0);
     await click('Turn on');
@@ -233,7 +233,7 @@ describe('the overview', () => {
     );
     await flush();
     await click('Preview turning it on');
-    await click('Turn on…');
+    await click('Turn on');
     await click('Turn on');
     expect(text()).toContain('changed since the preview');
   });
@@ -249,6 +249,18 @@ describe('the overview', () => {
       p_enforced: false,
       p_confirm: null,
     });
+  });
+
+  it('the buttons start their names with their visible words and say which key or plan they act on', async () => {
+    mount(overview());
+    await flush();
+    const names = [...host.querySelectorAll('li.adm-key button')].map((b) => [
+      b.textContent,
+      b.getAttribute('aria-label'),
+    ]);
+    expect(names).toContainEqual(['Preview turning it on', 'Preview turning it on: btc_format']);
+    expect(names).toContainEqual(['Turn off', 'Turn off: cup_taster_participants']);
+    for (const [visible, name] of names) expect(name.startsWith(visible)).toBe(true);
   });
 
   it('a failed list says so and offers Retry', async () => {
@@ -435,7 +447,7 @@ describe('one organisation', () => {
   it('a revoked plan offers no actions; a live one offers revoke after a question', async () => {
     mount({ admin_plan_org: ok(PLAN), admin_grant_revoke: ok(null) });
     await flush();
-    expect(host.querySelectorAll('button[aria-label^="Revoke the"]')).toHaveLength(1);
+    expect(host.querySelectorAll('button[aria-label^="Revoke:"]')).toHaveLength(1);
     await click('Revoke');
     expect(calls('admin_grant_revoke')).toHaveLength(0);
     expect(text()).toContain('Revoke this Per-event plan?');
