@@ -578,8 +578,8 @@ function pricingSection() {
         TIERS[0].name,
         TIERS[0].price,
         TIERS[0].suffix,
-        'For organisers getting started. BTC with no limit, and other formats up to 8 ' +
-          'competitors. The podium is published to the public archive when the event ends.',
+        'For organisers getting started. Up to 8 competitors, and one active event at a ' +
+          'time. The podium is published to the public archive when the event ends.',
       ),
       pricingColumn(
         TIERS[1].name,

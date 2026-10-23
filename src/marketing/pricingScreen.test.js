@@ -99,20 +99,23 @@ describe('mountPricingScreen', () => {
 
   it('states the Community limit of 8 competitors on its card and in the table', () => {
     const community = TIERS[0];
-    expect(community.summary).toMatch(/up to 8 competitors/);
+    expect(community.summary).toMatch(/up to 8 competitors/i);
     const [, , cells] = ALL_ROWS.find(([name]) => name === 'Events you can run');
-    expect(cells[0].text).toMatch(/up to 8 competitors/);
+    expect(cells[0].text).toMatch(/up to 8 competitors/i);
     expect(cells[1].text).not.toMatch(/\b8\b/);
     expect(cells[2].text).not.toMatch(/\b8\b/);
   });
 
-  it('says BTC has no competitor limit on Community, and that the 8 applies to the other formats', () => {
+  it('keeps BTC off Community: Per-event and Annual only, uncapped, and Community says one active event', () => {
     const [, , cells] = ALL_ROWS.find(([name]) => name === 'Events you can run');
-    expect(cells[0].text).toMatch(/^BTC without limit/);
+    expect(cells[0].text).toBe('Up to 8 competitors, one active event at a time');
     const btc = ALL_ROWS.find(([name]) => name === 'BTC');
-    expect(btc[1]).toMatch(/no competitor limit/);
-    expect(btc[2].map((cell) => cell.state)).toEqual(['yes', 'yes', 'yes']);
+    expect(btc[1]).toMatch(/Per-event and Annual only, with no competitor limit/);
+    expect(btc[2].map((cell) => cell.state)).toEqual(['no', 'yes', 'yes']);
     expect(btc[1]).not.toMatch(/\b8\b/);
+    // The Community card and cells never offer BTC.
+    expect(TIERS[0].summary).not.toMatch(/BTC/);
+    expect(cells[0].text).not.toMatch(/BTC/);
   });
 
   it('describes Per-event as one event in one format, and Annual as every format with no limit', () => {
