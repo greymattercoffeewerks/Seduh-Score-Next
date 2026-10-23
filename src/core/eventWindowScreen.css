@@ -1,0 +1,7 @@
+/* "This event's Per-event plan has ended" (eventWindowScreen.js). Reuses .screen-container and .btn from the existing
+   token-only styling; margin 0 because .screen-container is a flex column with its own gap, overflow-wrap so a long
+   word cannot scroll the page sideways at 360px. */
+.event-window-message {
+  margin: 0;
+  overflow-wrap: anywhere;
+}

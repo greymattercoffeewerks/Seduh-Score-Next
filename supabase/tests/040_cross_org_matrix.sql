@@ -528,8 +528,8 @@ select cmp_ok((select count(*)::int from pg_class c join pg_namespace n on n.oid
 select is(
   (select string_agg(p.tablename || '.' || p.policyname, ', ' order by p.tablename, p.policyname)
      from pg_policies p where p.schemaname = 'public' and 'anon' = any (p.roles)),
-  'contacts.contacts_insert, guesses.guesses_insert, guesses.guesses_select_anon_feed, live_sessions.live_sessions_read, public_results.public_results_read_public, sessions.sessions_select',
-  'the policies that name anon are exactly: the Guess the Bean participant doors, the active live sessions and the public archive'
+  'contacts.contacts_insert, guesses.guesses_insert, guesses.guesses_select_anon_feed, live_sessions.live_sessions_read, live_sessions.live_sessions_window_lock_anon, public_results.public_results_read_public, sessions.sessions_select',
+  'the policies that name anon are exactly: the Guess the Bean participant doors, the active live sessions (and the Per-event window lock on them) and the public archive'
 );
 select is(
   (select coalesce(string_agg(p.tablename || '.' || p.policyname, ', ' order by p.tablename, p.policyname), 'none')

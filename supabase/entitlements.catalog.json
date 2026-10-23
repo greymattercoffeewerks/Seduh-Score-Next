@@ -93,6 +93,13 @@
         "per_event": null,
         "annual": null
       }
+    },
+    {
+      "key": "event_window_lock",
+      "kind": "flag",
+      "min_tier": null,
+      "window_bound": true,
+      "note": "The Per-event window lock: after a Per-event event grant's 5-day window ends, the event workspace and live displays are closed until an admin extends it (G-B5, D-G15). Community and Annual are unaffected."
     }
   ]
 }

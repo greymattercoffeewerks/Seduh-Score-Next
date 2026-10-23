@@ -288,6 +288,14 @@ pattern is in `20261023120000_entitlement_enforcement_hooks.sql`; the spec is `G
    parent's creation.** A Per-event grant is scoped to an event, and an event does not exist until it is created, so
    B3's creation-time `btc_format` check refused the very buyer it was for. B4 moved it to first go-live (where the
    event exists and the snapshot is taken).
+10. **A restrictive-policy lock binds every invoker path too, so a lock must be read by the definer paths it must leave
+    open.** The Per-event window lock (T-GATE.B5, 056) is a RESTRICTIVE row-level-security policy on the event's child
+    tables. Every invoker trigger and function that reads or deletes those rows then sees zero of them while the event
+    is locked, and does nothing silently. B5's `app.btc_delete_event_children` (a BEFORE DELETE trigger on `events`) would
+    have left a locked BTC event undeletable, with its bracket and match rows still in place; it is now SECURITY DEFINER,
+    and refuses anything but that trigger (`tg_op`, `tg_table_name`). Rule: when a lock is added, list every invoker
+    trigger or function that touches the locked tables, and for each one the lock must NOT close (here, the organiser's
+    own delete of an event), run it as definer with a guard that refuses any other caller. Test 056 holds the delete case.
 
 ## Testing
 

@@ -24,6 +24,8 @@ import { mountLoginScreen } from './core/loginScreen.js';
 import { mountSetPasswordScreen } from './core/setPasswordScreen.js';
 import { mountTeamScreen } from './core/teamScreen.js';
 import { mountNoOrgScreen } from './core/noOrgScreen.js';
+import { loadWindowState, windowWarningText } from './core/eventWindow.js';
+import { mountEventWindowLockedScreen } from './core/eventWindowScreen.js';
 import { canManageTeam } from './core/team.js';
 import { mountEventDashboardScreen } from './formats/cup-taster/eventDashboardScreen.js';
 import { mountSetupScreen } from './formats/cup-taster/setupScreen.js';
@@ -488,6 +490,19 @@ function requireAuth(
     });
     if ('screen' in placed) return placed.screen;
     org = placed.org;
+    // An event on a Per-event plan whose window has ended is closed by the database (its tables read empty and
+    // refuse writes); say so in words instead of mounting screens that would come up empty. UX only, and it fails
+    // open: a slow or failed lookup opens the screen as it always did (the database decides either way).
+    let windowState = { kind: 'none', endsAt: null };
+    if (params.eventId) {
+      windowState = await loadWindowState(org.activeOrgId, params.eventId, params.client);
+      if (params.signal?.aborted) return undefined;
+      if (windowState.kind === 'locked') {
+        clearEventContext();
+        onConsoleMounted(`${org.userId}:${org.activeOrgId}`);
+        return mountEventWindowLockedScreen(outlet, { state: windowState });
+      }
+    }
     // The organisation the console works in is handed to the screen at mount, from the person's own
     // memberships; a change of person or organisation re-mounts the console (mountApp) rather than
     // mutating a screen in place. Remember who and which org this screen was built for.
@@ -503,7 +518,9 @@ function requireAuth(
       // For the links an organiser hands to the audience.
       orgSlug: activeOrg?.slug ?? null,
     });
-    if (placed.notice && !params.signal?.aborted) showRouteNotice(placed.notice);
+    // What to say once the screen is on show: why the organisation changed, and that the Per-event plan is about to end.
+    const notice = [placed.notice, windowWarningText(windowState)].filter(Boolean).join(' ');
+    if (notice && !params.signal?.aborted) showRouteNotice(notice);
     return screen;
   };
 }
