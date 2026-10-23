@@ -27,7 +27,11 @@ export function mountEventWindowLockedScreen(outlet, { state, contactHref = '/co
     }),
   );
   container.appendChild(
-    el('a', { className: 'btn tap-target', text: 'Back to events', attrs: { href: '#/events' } }),
+    el('a', {
+      className: 'btn btn-outline tap-target',
+      text: 'Back to events',
+      attrs: { href: '#/events' },
+    }),
   );
   outlet.appendChild(container);
   return { unmount() {} };

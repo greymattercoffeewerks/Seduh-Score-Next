@@ -219,7 +219,7 @@ select is(
   (select coalesce(string_agg(p.proname || '/' || r, ', ' order by p.proname, r), 'none') from pg_proc p, unnest(array['anon', 'authenticated', 'service_role']) r
     where p.pronamespace = 'app'::regnamespace and p.proname in ('event_window_ended', 'event_window_locked', 'window_lock_on', 'window_locked_events', 'event_id_for_stage_internal')
       and has_function_privilege(r, p.oid, 'execute')),
-  'event_id_for_stage_internal/authenticated, window_locked_events/anon, window_locked_events/authenticated',
+  'event_id_for_stage_internal/authenticated, window_lock_on/anon, window_lock_on/authenticated, window_locked_events/anon, window_locked_events/authenticated',
   'who can run them: the policies need window_locked_events (no argument: it answers only "which events are locked now") as anon and authenticated and the resolvers as authenticated; the rest, and the service role: nobody');
 
 -- ============ DARK ============

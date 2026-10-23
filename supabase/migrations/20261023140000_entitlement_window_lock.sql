@@ -29,14 +29,14 @@
 --   plan), org-level ledgers, the entitlement tables. get_scoring_record stays: it exists only for a published result, so it
 --   is part of the archive. The views (btc_standings and friends) are security_invoker, so they follow their tables.
 --   The anonymous door public_event_summary no longer offers a locked event as "the live event".
--- Each policy is `not coalesce(<the row's event> in (select app.window_locked_events()), false)`: the set of locked events is
--- an uncorrelated subquery (computed once per statement, then a hash probe per row), and it is EMPTY while the key is
--- unenforced, so the dark phase is behaviour-neutral. The event of a chain table (ct_results, btc_cup_votes ...) is found by
+-- Each policy is `not (select app.window_lock_on()) or not coalesce(<the row's event> in (select app.window_locked_events()), false)`:
+-- the key is read once per statement and, while it is unenforced, short-circuits everything else (no per-row work at all); when
+-- enforced, the set of locked events is an uncorrelated subquery (computed once per statement, then a hash probe per row). The event of a chain table (ct_results, btc_cup_votes ...) is found by
 -- the event_id_for_* resolvers.
 --
 -- ALSO: app.gating_would_lose (REPLACED) lists, for event_window_lock, the organisations that have a locked event now
 -- (detail locked_events); public.my_entitlements (REPLACED) adds {window: {ends_at, locked}} for a named event so the UI can
--- warn before the end and show the locked state; public.public_event_summary (REPLACED) skips locked events.
+-- warn before the end and show the locked state (`enforced` says whether the key is on, so no closure is announced while it is off); public.public_event_summary (REPLACED) skips locked events.
 --
 -- NOT HERE: the automatic CSV email at window end (G-F1), the 24-hour podium publish (D-G22).
 --
@@ -290,8 +290,8 @@ as $$
 $$;
 revoke all on function app.window_locked_events() from public, anon, authenticated, service_role;
 -- the policies call it as the signed-in AND the anonymous role (live_sessions is read by the audience); it takes no argument,
--- so it answers only "which events are locked now"
-grant execute on function app.window_locked_events() to anon, authenticated;
+-- so it answers only "which events are locked now"; window_lock_on() (whether the key is on) is read by the same policies
+grant execute on function app.window_locked_events(), app.window_lock_on() to anon, authenticated;
 
 -- ============ the restrictive policies ============
 
@@ -318,7 +318,7 @@ begin
     ('live_sessions',        'event_id')
   ) as v(tbl, ev) loop
     execute format(
-      'create policy %I on public.%I as restrictive for all to authenticated using (not coalesce((%s) in (select app.window_locked_events()), false)) with check (not coalesce((%s) in (select app.window_locked_events()), false))',
+      'create policy %I on public.%I as restrictive for all to authenticated using (not (select app.window_lock_on()) or not coalesce((%s) in (select app.window_locked_events()), false)) with check (not (select app.window_lock_on()) or not coalesce((%s) in (select app.window_locked_events()), false))',
       s.tbl || '_window_lock', s.tbl, s.ev, s.ev);
   end loop;
 end
@@ -326,11 +326,11 @@ $pol$;
 
 -- the audience (anon) reads live sessions: a locked event stops being served
 create policy live_sessions_window_lock_anon on public.live_sessions as restrictive for select to anon
-  using (not coalesce(event_id in (select app.window_locked_events()), false));
+  using (not (select app.window_lock_on()) or not coalesce(event_id in (select app.window_locked_events()), false));
 
 -- the score change log is read-only to members; the trail of a locked event is part of the closed workspace
 create policy score_change_log_window_lock on public.score_change_log as restrictive for select to authenticated
-  using (not coalesce(event_id in (select app.window_locked_events()), false));
+  using (not (select app.window_lock_on()) or not coalesce(event_id in (select app.window_locked_events()), false));
 
 -- ============ the anonymous door ============
 
@@ -481,7 +481,7 @@ begin
     'keys', v_keys,
     -- the Per-event window of the named event (null when it has none): when it ends, and whether the lock is in force now
     'window', case when p_event is null then null else (
-      select jsonb_build_object('ends_at', max(g.valid_until), 'locked', app.event_window_locked(p_event))
+      select jsonb_build_object('ends_at', max(g.valid_until), 'locked', app.event_window_locked(p_event), 'enforced', app.window_lock_on())
         from public.entitlement_grants g
        where g.event_id = p_event and g.revoked_at is null and g.valid_until is not null
          and app.effective_tier(p_org, null) = (select t.tier from app.entitlement_tiers t order by t.rank asc limit 1)

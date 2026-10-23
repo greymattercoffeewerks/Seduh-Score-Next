@@ -21,6 +21,8 @@ export function windowStateOf(snapshot, now = Date.now()) {
   const endsAt = win.ends_at ? new Date(win.ends_at) : null;
   if (endsAt && Number.isNaN(endsAt.getTime())) return { kind: 'none', endsAt: null };
   if (win.locked === true) return { kind: 'locked', endsAt };
+  // The key is switched off: nothing will close, so nothing is announced.
+  if (win.enforced !== true) return { kind: 'open', endsAt };
   if (!endsAt) return { kind: 'none', endsAt: null };
   const msLeft = endsAt.getTime() - now;
   if (msLeft > 0 && msLeft <= WINDOW_WARNING_HOURS * 3600 * 1000) return { kind: 'ending', endsAt };
@@ -47,10 +49,10 @@ export function describeWindowEnd(endsAt) {
 // The sentence for the notice shown while the window is about to end; null when there is nothing to say.
 export function windowWarningText(state) {
   if (state?.kind !== 'ending' || !state.endsAt) return null;
+  // Short on purpose: the notice overlays the top of the screen, and on a 360px phone every line hides more of it.
   return (
-    `This event's Per-event plan ends at ${describeWindowEnd(state.endsAt)} (Brunei time). ` +
-    'After that the setup, roster, scoring and live screens close and only the published results page stays. ' +
-    'To keep the event open, ask Grey Matter Coffee Werks to extend it before then.'
+    `This event's Per-event plan ends at ${describeWindowEnd(state.endsAt)} (Brunei time); after that its screens close. ` +
+    'Ask Grey Matter Coffee Werks to extend it.'
   );
 }
 
@@ -67,16 +69,26 @@ export function windowLockedText(state) {
   );
 }
 
+// A moment's memory per organisation and event, so moving between an event's screens does not ask again each time (on bad
+// venue wifi every question can cost the full timeout). Short on purpose: a lock or an extension shows within the minute.
+export const WINDOW_CACHE_MS = 30000;
+const windowCache = new Map();
+
 // Asks the database for the event's window. Resolves to a state, or to { kind: 'none' } when the answer cannot be
 // had in time: a plan problem must never keep an organiser out of a screen, and the database refuses what it must.
+// A failed or timed-out answer is not remembered.
 export async function loadWindowState(
   orgId,
   eventId,
   client,
-  { now = Date.now(), timeoutMs = WINDOW_LOOKUP_TIMEOUT_MS } = {},
+  { now = Date.now(), timeoutMs = WINDOW_LOOKUP_TIMEOUT_MS, cache = windowCache } = {},
 ) {
+  const key = `${orgId}:${eventId}`;
+  const hit = cache.get(key);
+  if (hit && now - hit.at < WINDOW_CACHE_MS) return windowStateOf(hit.snapshot, now);
   try {
     const snapshot = await raceTimeout(loadEntitlements(orgId, eventId, client), timeoutMs);
+    if (snapshot) cache.set(key, { snapshot, at: now });
     return windowStateOf(snapshot, now);
   } catch {
     return { kind: 'none', endsAt: null };

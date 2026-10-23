@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  WINDOW_CACHE_MS,
   WINDOW_WARNING_HOURS,
   describeWindowEnd,
   loadWindowState,
@@ -27,13 +28,26 @@ describe('windowStateOf', () => {
 
   it('is open well before the end and ending inside the warning period', () => {
     const edge = WINDOW_WARNING_HOURS;
-    expect(windowStateOf(snap({ ends_at: hours(edge + 1), locked: false }), NOW).kind).toBe('open');
-    expect(windowStateOf(snap({ ends_at: hours(edge), locked: false }), NOW).kind).toBe('ending');
-    expect(windowStateOf(snap({ ends_at: hours(1), locked: false }), NOW).kind).toBe('ending');
+    expect(
+      windowStateOf(snap({ ends_at: hours(edge + 1), locked: false, enforced: true }), NOW).kind,
+    ).toBe('open');
+    expect(
+      windowStateOf(snap({ ends_at: hours(edge), locked: false, enforced: true }), NOW).kind,
+    ).toBe('ending');
+    expect(
+      windowStateOf(snap({ ends_at: hours(1), locked: false, enforced: true }), NOW).kind,
+    ).toBe('ending');
   });
 
   it('shows nothing for a window that has passed while the database says it is not locked (key off)', () => {
     expect(windowStateOf(snap({ ends_at: hours(-5), locked: false }), NOW).kind).toBe('open');
+  });
+
+  it('announces nothing while the key is switched off (enforced false or absent)', () => {
+    expect(
+      windowStateOf(snap({ ends_at: hours(1), locked: false, enforced: false }), NOW).kind,
+    ).toBe('open');
+    expect(windowStateOf(snap({ ends_at: hours(1), locked: false }), NOW).kind).toBe('open');
   });
 
   it('ignores a malformed end date', () => {
@@ -79,16 +93,48 @@ describe('loadWindowState', () => {
   });
 
   it('reads the window from my_entitlements', async () => {
-    const c = client({ data: snap({ ends_at: hours(10), locked: false }), error: null });
-    expect((await loadWindowState('o', 'e', c, { now: NOW })).kind).toBe('ending');
+    const c = client({
+      data: snap({ ends_at: hours(10), locked: false, enforced: true }),
+      error: null,
+    });
+    expect((await loadWindowState('o', 'e', c, { now: NOW, cache: new Map() })).kind).toBe(
+      'ending',
+    );
+  });
+
+  it('remembers an answer for a moment, then asks again, and never remembers a failure', async () => {
+    let calls = 0;
+    const c = {
+      rpc: () => {
+        calls += 1;
+        return Promise.resolve({
+          data: snap({ ends_at: hours(10), locked: false, enforced: true }),
+          error: null,
+        });
+      },
+    };
+    const cache = new Map();
+    await loadWindowState('o', 'e', c, { now: NOW, cache });
+    await loadWindowState('o', 'e', c, { now: NOW + 1000, cache });
+    expect(calls).toBe(1);
+    await loadWindowState('o', 'e2', c, { now: NOW + 1000, cache });
+    expect(calls).toBe(2);
+    await loadWindowState('o', 'e', c, { now: NOW + WINDOW_CACHE_MS + 1, cache });
+    expect(calls).toBe(3);
+    const failing = { rpc: () => Promise.reject(new Error('offline')) };
+    const cache2 = new Map();
+    await loadWindowState('o', 'e', failing, { now: NOW, cache: cache2 });
+    expect(cache2.size).toBe(0);
   });
 
   it('fails open: a refusal, an error or a hang is no window', async () => {
-    expect(
-      (await loadWindowState('o', 'e', client({ data: null, error: { code: '42501' } }))).kind,
-    ).toBe('none');
-    expect((await loadWindowState('o', 'e', client(new Error('offline')))).kind).toBe('none');
+    const refused = client({ data: null, error: { code: '42501' } });
+    expect((await loadWindowState('o', 'e', refused, { cache: new Map() })).kind).toBe('none');
+    const offline = client(new Error('offline'));
+    expect((await loadWindowState('o', 'e', offline, { cache: new Map() })).kind).toBe('none');
     const hang = { rpc: () => new Promise(() => {}) };
-    expect((await loadWindowState('o', 'e', hang, { timeoutMs: 20 })).kind).toBe('none');
+    expect((await loadWindowState('o', 'e', hang, { timeoutMs: 20, cache: new Map() })).kind).toBe(
+      'none',
+    );
   });
 });
