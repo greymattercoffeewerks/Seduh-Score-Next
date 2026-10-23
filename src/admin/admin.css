@@ -554,3 +554,65 @@
   outline: var(--focus-ring-width) solid var(--color-focus-ring);
   outline-offset: var(--focus-ring-offset);
 }
+
+/* ---- the Plan panel (planPanel.js, planKeys.js, planOrg.js) ---- */
+
+.adm-key,
+.adm-grant,
+.adm-event {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.adm-key h3,
+.adm-grant p,
+.adm-event p,
+.adm-key p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.adm-key-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.adm-key-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.adm-grant-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.adm-details {
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-2);
+}
+
+.adm-details > summary {
+  display: flex;
+  align-items: center;
+  min-height: var(--tap-target-min);
+  cursor: pointer;
+  font-weight: var(--font-weight-semibold);
+}
+
+.adm-plan-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.adm-plan-form h3 {
+  margin: 0;
+  font-size: var(--text-md);
+}

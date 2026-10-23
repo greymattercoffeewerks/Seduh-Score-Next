@@ -13,6 +13,7 @@
 import { mountOrgsPanel } from './orgsPanel.js';
 import { mountCreateOrgPanel } from './createOrgPanel.js';
 import { mountAuditPanel } from './auditPanel.js';
+import { mountPlanPanel } from './planPanel.js';
 
 export const PANELS = Object.freeze([
   Object.freeze({
@@ -26,6 +27,12 @@ export const PANELS = Object.freeze([
     label: 'New organisation',
     route: 'new-org',
     mount: mountCreateOrgPanel,
+  }),
+  Object.freeze({
+    id: 'plan',
+    label: 'Plans and keys',
+    route: 'plan',
+    mount: mountPlanPanel,
   }),
   Object.freeze({
     id: 'audit',
