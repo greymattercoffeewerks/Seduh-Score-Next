@@ -263,7 +263,8 @@ select is(
         'admin_org_detail(uuid)', 'admin_list_audit(integer,bigint,uuid)',
         'admin_create_org(text,text,uuid,boolean)', 'admin_add_member(uuid,uuid,text,boolean)', 'admin_set_role(uuid,uuid,text)',
         'admin_grant_create(uuid,text,uuid,integer,timestamp with time zone,text,text)', 'admin_grant_extend(uuid,timestamp with time zone,text)',
-        'admin_grant_revoke(uuid,text)', 'admin_list_grants(uuid)', 'admin_event_resnapshot(uuid,text)', 'admin_event_release(uuid,text)')),
+        'admin_grant_revoke(uuid,text)', 'admin_list_grants(uuid)', 'admin_event_resnapshot(uuid,text)', 'admin_event_release(uuid,text)',
+        'admin_plan_org(uuid)', 'admin_payment_confirm(uuid,text,uuid,integer,timestamp with time zone,text)')),
   'none',
   'every function or procedure a signed-in or anonymous caller can run that takes a uuid (an organisation, event, heat, match, stage, slot, entry, person or user id) is in this matrix or on the short, named exemption list: a new one fails here until it is added to e1.rpc');
 
