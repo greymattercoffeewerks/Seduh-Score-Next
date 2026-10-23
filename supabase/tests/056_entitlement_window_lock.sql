@@ -15,7 +15,7 @@
 --   * the preview lists the organisations with a locked event, the flip needs its count, my_entitlements carries the window
 --     for the UI, and a stranger learns nothing (standard refusals).
 begin;
-select plan(69);
+select plan(75);
 
 create schema t056;
 grant usage on schema t056 to anon, authenticated, service_role;
@@ -217,10 +217,10 @@ select is(
   'none', 'the lock functions are SECURITY DEFINER with search_path pinned');
 select is(
   (select coalesce(string_agg(p.proname || '/' || r, ', ' order by p.proname, r), 'none') from pg_proc p, unnest(array['anon', 'authenticated', 'service_role']) r
-    where p.pronamespace = 'app'::regnamespace and p.proname in ('event_window_ended', 'event_window_locked', 'window_lock_on', 'event_id_for_stage_internal')
+    where p.pronamespace = 'app'::regnamespace and p.proname in ('event_window_ended', 'event_window_locked', 'window_lock_on', 'window_locked_events', 'event_id_for_stage_internal')
       and has_function_privilege(r, p.oid, 'execute')),
-  'event_id_for_stage_internal/authenticated, event_window_locked/anon, event_window_locked/authenticated, window_lock_on/anon, window_lock_on/authenticated',
-  'who can run them: the policies need event_window_locked and window_lock_on as anon and authenticated, the resolvers as authenticated; event_window_ended and the service role: nobody');
+  'event_id_for_stage_internal/authenticated, window_locked_events/anon, window_locked_events/authenticated',
+  'who can run them: the policies need window_locked_events (no argument: it answers only "which events are locked now") as anon and authenticated and the resolvers as authenticated; the rest, and the service role: nobody');
 
 -- ============ DARK ============
 select is(app.event_window_ended(t056.u(101)), true, 'the engine says E101''s window has ended');
@@ -269,6 +269,18 @@ select is(t056.cnt(t056.u(12), 'event_entries', format('id = %L', t056.u(1001)))
 -- the audience door
 select is((select count(*)::int from public.public_event_summary(t056.u(100)) r where r.id = t056.u(101)), 0, 'public_event_summary never offers the locked E101 as the live event');
 select is((select count(*)::int from public.public_event_summary(t056.u(100))), 1, 'but still offers an event of the organisation (an unlocked one)');
+
+-- deleting a locked event must still work (the BTC delete cleanup is a definer function, so the locked policies do not blind it)
+select t056.tree(400, 402, 9500);
+insert into entitlement_grants (org_id, event_id, tier, valid_from, valid_until, source)
+  values (t056.u(400), t056.u(402), 'per_event', now() - interval '8 days', now() - interval '3 days', 'manual');
+update btc_match_bonuses set fastest_team_id = t056.u(9508) where match_id = t056.u(9511);
+select is(app.event_window_locked(t056.u(402)), true, 'a second locked BTC event of X, with a fastest-team bonus');
+select is(t056.as_user(t056.u(14), format($$delete from events where id = %L$$, t056.u(402))), 'ok', 'its organiser can still DELETE it (the cleanup trigger runs with definer rights)');
+select is((select count(*)::int from events where id = t056.u(402)), 0, 'the event is gone');
+select is((select count(*)::int from btc_matches where event_id = t056.u(402)), 0, 'with its matches');
+select is(t056.as_user(t056.u(11), format($$delete from events where id = %L$$, t056.u(401))), 'ok', 'a member of another organisation deleting X''s locked event changes nothing...');
+select is((select count(*)::int from events where id = t056.u(401)), 1, '...it is still there');
 
 -- ============ the preview, the snapshot, and the flip ============
 select is(app.window_lock_on(), true, 'sanity: the lock is on');

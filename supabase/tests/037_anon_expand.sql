@@ -188,7 +188,7 @@ select is(
      from pg_proc p
     where p.pronamespace = 'app'::regnamespace and p.prokind = 'f' and has_function_privilege('anon', p.oid, 'execute')
       and p.prorettype not in ('trigger'::regtype, 'event_trigger'::regtype)),
-  'event_window_locked, session_bean_count, session_display_guesses, session_id_for_guess, session_is_creator, session_is_open, window_lock_on',
+  'session_bean_count, session_display_guesses, session_id_for_guess, session_is_creator, session_is_open, window_locked_events',
   'and the internal functions anon can execute are only the Guess the Bean helpers its policies need'
 );
 

@@ -29,8 +29,10 @@
 --   plan), org-level ledgers, the entitlement tables. get_scoring_record stays: it exists only for a published result, so it
 --   is part of the archive. The views (btc_standings and friends) are security_invoker, so they follow their tables.
 --   The anonymous door public_event_summary no longer offers a locked event as "the live event".
--- While the key is unenforced, each policy costs one InitPlan evaluation per statement (the flag is read once, then the
--- per-row function is short-circuited), so the dark phase is behaviour- and cost-neutral.
+-- Each policy is `not coalesce(<the row's event> in (select app.window_locked_events()), false)`: the set of locked events is
+-- an uncorrelated subquery (computed once per statement, then a hash probe per row), and it is EMPTY while the key is
+-- unenforced, so the dark phase is behaviour-neutral. The event of a chain table (ct_results, btc_cup_votes ...) is found by
+-- the event_id_for_* resolvers.
 --
 -- ALSO: app.gating_would_lose (REPLACED) lists, for event_window_lock, the organisations that have a locked event now
 -- (detail locked_events); public.my_entitlements (REPLACED) adds {window: {ends_at, locked}} for a named event so the UI can
@@ -157,6 +159,18 @@
 --     end if;
 --   end;
 --   $function$;
+--   create or replace function app.btc_delete_event_children()
+--   returns trigger
+--   language plpgsql
+--   set search_path = ''
+--   as $$
+--   begin
+--     delete from public.btc_bracket_slots where event_id = old.id;
+--     delete from public.btc_matches where event_id = old.id;
+--     return old;
+--   end;
+--   $$;
+--   drop function if exists app.window_locked_events();
 --   drop function if exists app.event_window_locked(uuid, timestamptz);
 --   drop function if exists app.event_window_ended(uuid, timestamptz);
 --   drop function if exists app.window_lock_on();
@@ -256,8 +270,28 @@ as $$ select app.window_lock_on() and app.event_window_ended(p_event, p_at); $$;
 
 revoke all on function app.window_lock_on(), app.event_window_ended(uuid, timestamptz), app.event_window_locked(uuid, timestamptz)
   from public, anon, authenticated, service_role;
--- the policies call these as the signed-in AND the anonymous role (live_sessions is read by the audience)
-grant execute on function app.window_lock_on(), app.event_window_locked(uuid, timestamptz) to anon, authenticated;
+
+-- The set of locked events, as ONE uncorrelated subquery per statement (a hashed lookup), so a policy costs a hash probe per row
+-- rather than a full evaluation per row. Narrowed to events that carry an ended event grant (the grants table is small).
+create or replace function app.window_locked_events()
+returns setof uuid
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select g.event_id
+    from public.entitlement_grants g
+   where app.window_lock_on()
+     and g.event_id is not null and g.valid_until is not null and g.valid_until <= now()
+     and (g.revoked_at is null or g.revoked_at > now())
+     and app.event_window_ended(g.event_id, now())
+   group by g.event_id;
+$$;
+revoke all on function app.window_locked_events() from public, anon, authenticated, service_role;
+-- the policies call it as the signed-in AND the anonymous role (live_sessions is read by the audience); it takes no argument,
+-- so it answers only "which events are locked now"
+grant execute on function app.window_locked_events() to anon, authenticated;
 
 -- ============ the restrictive policies ============
 
@@ -284,7 +318,7 @@ begin
     ('live_sessions',        'event_id')
   ) as v(tbl, ev) loop
     execute format(
-      'create policy %I on public.%I as restrictive for all to authenticated using (not (select app.window_lock_on()) or not app.event_window_locked(%s)) with check (not (select app.window_lock_on()) or not app.event_window_locked(%s))',
+      'create policy %I on public.%I as restrictive for all to authenticated using (not coalesce((%s) in (select app.window_locked_events()), false)) with check (not coalesce((%s) in (select app.window_locked_events()), false))',
       s.tbl || '_window_lock', s.tbl, s.ev, s.ev);
   end loop;
 end
@@ -292,11 +326,11 @@ $pol$;
 
 -- the audience (anon) reads live sessions: a locked event stops being served
 create policy live_sessions_window_lock_anon on public.live_sessions as restrictive for select to anon
-  using (not (select app.window_lock_on()) or not app.event_window_locked(event_id));
+  using (not coalesce(event_id in (select app.window_locked_events()), false));
 
 -- the score change log is read-only to members; the trail of a locked event is part of the closed workspace
 create policy score_change_log_window_lock on public.score_change_log as restrictive for select to authenticated
-  using (not (select app.window_lock_on()) or not app.event_window_locked(event_id));
+  using (not coalesce(event_id in (select app.window_locked_events()), false));
 
 -- ============ the anonymous door ============
 
@@ -314,6 +348,32 @@ AS $function$
   order by (ls.id is not null) desc, e.is_test asc, e.created_at desc, e.id desc
   limit 1;
 $function$;
+
+-- ============ deleting a locked event ============
+-- The BTC delete cleanup (20260927090000) ran as the caller, so on a locked event its deletes of matches and bracket slots
+-- were filtered to nothing by the new policies and the event's own cascade then hit the fastest-team foreign key. It is now a
+-- definer function: it is reachable only after the caller's DELETE of the events row has passed row-level security (or as the
+-- cascade of an organisation's deletion), and it refuses to run as anything but that delete trigger (which also satisfies the
+-- trigger-gate guard, test 045).
+
+create or replace function app.btc_delete_event_children()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  -- Only ever a BEFORE DELETE row trigger on events (anything else is refused). It deletes the children of the event that is
+  -- being deleted, and is reached only after that delete has passed row-level security (or as the cascade of an organisation's
+  -- deletion by its owner), so it discloses and reaches nothing the caller could not already delete.
+  if tg_op <> 'DELETE' or tg_table_name <> 'events' then
+    raise exception 'btc_delete_event_children: only for deleting an event' using errcode = '42501';
+  end if;
+  delete from public.btc_bracket_slots where event_id = old.id;
+  delete from public.btc_matches where event_id = old.id;
+  return old;
+end;
+$$;
 
 -- ============ the preview ============
 
