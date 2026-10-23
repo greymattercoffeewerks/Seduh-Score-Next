@@ -161,7 +161,7 @@ select is(
   'the Community organisation has one event grant and one event whose window ended; the Annual one is annual');
 
 -- ============ admin_plan_org ============
-select is((select string_agg(k, ',' order by k) from jsonb_object_keys(public.admin_plan_org(t057.u(100))) k), 'events,grants,keys,org,tier', 'plan_org: exactly the pinned top-level keys');
+select is((select string_agg(k, ',' order by k) from jsonb_object_keys(public.admin_plan_org(t057.u(100))) k), 'events,events_total,grants,keys,org,tier', 'plan_org: exactly the pinned top-level keys');
 select is((select string_agg(k, ',' order by k) from jsonb_object_keys(public.admin_plan_org(t057.u(100)) -> 'org') k), 'id,name,slug', 'org: id, name, slug');
 select is(public.admin_plan_org(t057.u(100)) ->> 'tier', 'community', 'tier: community');
 select is(public.admin_plan_org(t057.u(200)) ->> 'tier', 'annual', 'tier: annual');

@@ -98,7 +98,8 @@ export function writeForm({
     setBusyDisabled(submit, true);
     submit.textContent = workingLabel;
     const answer = await run(collected.args);
-    if (!form.isConnected) return;
+    // the page moved on while the request was out: its claim ends with its answer
+    if (!form.isConnected) return writes.end();
     if (answer.error) {
       if (isGateRefusal(answer.error)) return onGateRefused();
       busy = false;
@@ -196,7 +197,7 @@ export function confirmAction({
       for (const control of [confirm, cancel]) setBusyDisabled(control, true);
       confirm.textContent = workingLabel;
       const answer = await run();
-      if (!holder.isConnected) return;
+      if (!holder.isConnected) return writes.end();
       if (answer.error) {
         if (isGateRefusal(answer.error)) return onGateRefused();
         busy = false;

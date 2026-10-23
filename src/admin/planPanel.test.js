@@ -393,6 +393,45 @@ describe('one organisation', () => {
     });
   });
 
+  it('an extension that ends on or before the current end is refused before it is sent', async () => {
+    mount({ admin_plan_org: ok(PLAN), admin_grant_extend: ok('g') });
+    await flush();
+    const d = open('Extend…');
+    const form = d.querySelector('form');
+    form.querySelector('input[type="date"]').value = '2026-12-12'; // ends 2026-12-13 00:00 Brunei = the current end
+    form.querySelector('input[id$="-reason"]').value = 'why';
+    await submitForm(form);
+    expect(calls('admin_grant_extend')).toHaveLength(0);
+    expect(d.textContent).toContain('The new end must be later than the current end.');
+  });
+
+  it('says when only the newest events are listed', async () => {
+    mount({ admin_plan_org: ok({ ...PLAN, events_total: 350 }) });
+    await flush();
+    expect(text()).toContain('Showing the newest 2 of 350 events.');
+  });
+
+  it('a write still out when the person moves on does not leave the page locked', async () => {
+    let resolve;
+    mount({
+      ...overview(),
+      admin_plan_org: ok(PLAN),
+      admin_event_release: () => new Promise((r) => (resolve = r)),
+    });
+    await flush();
+    const d = open('Release this event…');
+    d.querySelector('input').value = 'x';
+    await submitForm(d.querySelector('form'));
+    await goto('#/plan');
+    await goto(`#/plan/${ORG}`);
+    resolve(ok(null)); // the first answer arrives for a form that is gone
+    await flush();
+    const again = open('Release this event…');
+    again.querySelector('input').value = 'y';
+    await submitForm(again.querySelector('form'));
+    expect(calls('admin_event_release')).toHaveLength(2);
+  });
+
   it('a revoked plan offers no actions; a live one offers revoke after a question', async () => {
     mount({ admin_plan_org: ok(PLAN), admin_grant_revoke: ok(null) });
     await flush();

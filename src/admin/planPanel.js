@@ -103,7 +103,6 @@ export function mountPlanPanel(host, ctx) {
 
   async function showOverview({ focusHeading = false, notice = null } = {}) {
     const mine = ++view;
-    writing = false;
     const title = heading('Plans and keys');
     const feedback = feedbackRegion();
     const status = announcer();
@@ -112,7 +111,10 @@ export function mountPlanPanel(host, ctx) {
       onGateRefused: stepAside,
       mayTakeFocus,
       writes,
-      reload: (message) => showOverview({ focusHeading: true, notice: message }),
+      reload: (message) => {
+        writes.end();
+        showOverview({ focusHeading: true, notice: message });
+      },
     });
     const orgsBody = el('div', { className: 'adm-panel-body' });
     host.replaceChildren(
@@ -158,7 +160,6 @@ export function mountPlanPanel(host, ctx) {
 
   async function showOrg(id, { focusHeading = false, notice = null } = {}) {
     const mine = ++view;
-    writing = false;
     const title = heading('Plan');
     const feedback = feedbackRegion();
     const status = announcer();
@@ -188,7 +189,10 @@ export function mountPlanPanel(host, ctx) {
           onGateRefused: stepAside,
           mayTakeFocus,
           writes,
-          reload: (message) => showOrg(id, { focusHeading: true, notice: message }),
+          reload: (message) => {
+            writes.end();
+            showOrg(id, { focusHeading: true, notice: message });
+          },
         }),
       );
       if (notice) {

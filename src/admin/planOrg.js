@@ -216,6 +216,8 @@ export function orgPlanView({ ctx, data, onGateRefused, mayTakeFocus, reload, wr
       collect: () => {
         const end = endOfBruneiDay(until.value);
         if (!end) return { problem: 'Choose the new end date.', focus: until };
+        if (Date.parse(end) <= Date.parse(grant.valid_until))
+          return { problem: 'The new end must be later than the current end.', focus: until };
         if (!reason.value.trim())
           return { problem: 'Give a reason for the extension.', focus: reason };
         return { args: { end, reason: reason.value.trim() } };
@@ -418,12 +420,22 @@ export function orgPlanView({ ctx, data, onGateRefused, mayTakeFocus, reload, wr
         : el('ul', { className: 'adm-org-list', attrs: { role: 'list' } }, grants.map(grantItem)),
       orgGrantForm().node,
     ]),
-    el('section', { className: 'adm-section' }, [
-      el('h2', { text: `Events (${events.length})` }),
-      events.length === 0
-        ? el('p', { className: 'adm-muted', text: 'This organisation has no events.' })
-        : el('ul', { className: 'adm-org-list', attrs: { role: 'list' } }, events.map(eventItem)),
-    ]),
+    el(
+      'section',
+      { className: 'adm-section' },
+      [
+        el('h2', { text: `Events (${events.length})` }),
+        Number.isInteger(data?.events_total) && data.events_total > events.length
+          ? el('p', {
+              className: 'adm-muted',
+              text: `Showing the newest ${events.length} of ${data.events_total} events.`,
+            })
+          : null,
+        events.length === 0
+          ? el('p', { className: 'adm-muted', text: 'This organisation has no events.' })
+          : el('ul', { className: 'adm-org-list', attrs: { role: 'list' } }, events.map(eventItem)),
+      ].filter(Boolean),
+    ),
     el('section', { className: 'adm-section' }, [
       el('h2', { text: 'Keys for this organisation' }),
       el('p', {

@@ -363,6 +363,7 @@ begin
   return jsonb_build_object(
     'org', jsonb_build_object('id', v_org.id, 'name', v_org.name, 'slug', v_org.slug),
     'tier', v_tier,
+    'events_total', (select count(*)::int from public.events x where x.org_id = v_org.id),
     'grants', coalesce((
       select jsonb_agg(jsonb_build_object(
                'id', g.id, 'event_id', g.event_id, 'tier', g.tier, 'valid_from', g.valid_from,
