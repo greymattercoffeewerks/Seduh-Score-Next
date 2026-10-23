@@ -24,11 +24,18 @@
 --   * the key itself is added to the catalog (supabase/entitlements.catalog.json) and seeded here from a second embedded
 --     block (tagged catalog_add); the contract test checks base seed + additions == the catalog file.
 --
+--   * the btc_format check MOVES from event creation to first go-live (owner decision 2026-10-23, option A): the trigger
+--     app.check_live_session_btc_golive refuses an activation of a BTC event without btc_format (42501, hint
+--     entitlement_required, detail btc_format), counting the event's own Per-event grant. B3's creation-time check is
+--     removed here (its rollback restores it). An event inserted already concluded is ended at once and takes no slot.
+--
 -- NOT HERE: the automatic podium publish 24 hours after an event ends (D-G22), the Per-event window lock (G-B5), and the
 -- Per-event BTC creation-gate question (owner deciding).
 --
 -- rollback: (drops the key and the columns; restores the B3 body of check_event_create and the B2 body of gating_would_lose)
 --   drop function if exists public.admin_event_release(uuid, text);
+--   drop trigger if exists trg_live_sessions_btc_golive on public.live_sessions;
+--   drop function if exists app.check_live_session_btc_golive();
 --   drop function if exists public.finish_event(uuid, uuid);
 --   drop trigger if exists trg_events_ended_guard on public.events;
 --   drop function if exists app.guard_event_ended();
@@ -214,9 +221,14 @@ begin
     new.ended_at := null;
     new.ended_by := null;
     new.ended_via := null;
-    if new.format = 'btc' and not app.has_entitlement(new.org_id, 'btc_format') then
-      raise exception 'entitlement_required'
-        using errcode = '42501', hint = 'entitlement_required', detail = 'btc_format';
+    -- (A BTC event may be CREATED on any tier: the btc_format check moved to the first go-live, where an event-scoped
+    -- Per-event grant exists and counts. See trg_live_sessions_btc_golive below. Owner decision, 2026-10-23, option A.)
+    -- An event inserted already concluded is ended and takes no slot.
+    if new.status = 'concluded' then
+      new.ended_at := now();
+      new.ended_by := auth.uid();
+      new.ended_via := 'concluded';
+      return new;
     end if;
     -- Community runs one open event at a time (D-G20): decided under one lock per organisation, so two devices
     -- creating at once cannot both pass. Test events count (events.is_test is member-writable, 7a risk 2).
@@ -296,6 +308,39 @@ begin
   end if;
 end;
 $$;
+
+-- ============ BTC is gated at the first go-live, not at creation ============
+-- A Per-event buyer's grant is scoped to an event, and an event grant needs the event to exist, so creation cannot ask for
+-- it. Any organisation may create and set up a BTC event; going live needs btc_format, resolved over the organisation's
+-- grants AND the event's own (the higher tier wins), and once the first activation stamps the snapshot the event keeps it.
+-- Dark by default (has_entitlement answers true while the key is unenforced). Opens with refuse_non_member (BEFORE row
+-- trigger, definer: test 045); a row whose event is not that organisation's is left to trg_live_sessions_org_check.
+
+create or replace function app.check_live_session_btc_golive()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_format text;
+begin
+  perform app.refuse_non_member(new.org_id, 'live_sessions');
+  if new.active and (tg_op = 'INSERT' or not old.active) and app.entitlement_api_caller() then
+    select e.format into v_format from public.events e where e.id = new.event_id and e.org_id = new.org_id;
+    if v_format = 'btc' and not app.has_entitlement(new.org_id, 'btc_format', new.event_id) then
+      raise exception 'entitlement_required'
+        using errcode = '42501', hint = 'entitlement_required', detail = 'btc_format';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+revoke all on function app.check_live_session_btc_golive() from public, anon, authenticated, service_role;
+
+create trigger trg_live_sessions_btc_golive
+  before insert or update on public.live_sessions
+  for each row execute function app.check_live_session_btc_golive();
 
 -- ============ finish an event (the organiser) ============
 
