@@ -140,7 +140,7 @@ through `ctx.callFunction`) or an EXISTING account (`admin_find_user`, then a co
 - A role this console does not know (`steward`, `constructor`) gets no role button; role lookups use own properties
   only (`Object.hasOwn`), because a role is data from a server.
 
-## Adding a panel (gating's "Plan" panel is the next)
+## Adding a panel
 
 An entry in `panels.js` (`{ id, label, route, mount(host, ctx) }`) plus a screen module. `shell.js` draws the
 navigation from the registry and routes by hash; nothing in it changes (`ctx` also carries `callFunction(name, body)`
@@ -152,6 +152,49 @@ Panels get their own screen module. The shell's skip button already takes a keyb
 panel that creates something must
 **disable its submit control after the first click** and keep the result on screen (the Edge Function answers
 a double submit with `[500, 500, 201]`, and the 201 carries the one-time password, which is shown once).
+
+## The Plan panel (gating step 3, T-GATE.C; `planPanel.js`, `planKeys.js`, `planOrg.js`, `planParts.js`, `planFormat.js`)
+
+The operator's view of gating: the Keys section (`#/plan`: every capability, dark or enforced, and the flip) and one
+organisation's plan (`#/plan/<organisation id>`: tier now, grants, events, the keys it would pass). Migration
+`20261023150000` (057) and `supabase/tests/057_admin_plan_panel.sql` are its database half; the spec is
+`Handoffs and Specs/GATING-SPEC.md` (local). The rules, each one a judgement the code and the e2e spec hold:
+
+- **Only existing audited functions, plus the Plan reads and one payment write.** The panel calls the grant
+  writers (`admin_grant_create`, extend, revoke), the key preview and flip (`admin_gating_preview`,
+  `admin_set_key_enforced`), and the event re-snapshot and release, all through `ctx.callAdmin`. Its own database
+  additions are the three reads (`admin_list_keys`, `admin_plan_orgs`, `admin_plan_org`) and `admin_payment_confirm`.
+  Nothing else is a write. A new Plan write is a new audited function with the admin gate, not a new branch here.
+- **Metadata only, and no event names (D-A4).** An event is drawn as a label (format, date, first characters of its
+  id), with its date, format and state. `admin_plan_org` returns no name, and `admin_payment_confirm` returns no
+  participant data. Restoring a name is a one-line change in the function plus a D-A4 amendment: the owner's call,
+  not a UI change. The e2e spec asserts that no event name appears in any admin response.
+- **Preview before flip, and the count is the one previewed.** A key is turned on only after its preview is shown
+  (`admin_gating_preview`), and the flip sends the count the operator saw, so a count that moved since the preview
+  is visible, not silent. Turning a key off is one confirmed step. **The panel never flips a key on its own**; the
+  flip is by hand, after the cloud push and the backfill, under the preconditions in the ROADMAP.
+- **Payment is recorded, not processed.** "Payment received" is a grant with source `'payment'` and a required
+  amount note of at most 200 characters (hints `amount_required`, `amount_too_long`), written with one `payment.confirm`
+  audit row. There is no billing code. The database refuses `source 'payment'` on `admin_grant_create`, so a payment
+  is recorded only through `admin_payment_confirm`.
+- **The grant rules have one home: `app.grant_insert`.** `admin_grant_create` and `admin_payment_confirm` both call it;
+  do not copy the validation into either function.
+- **One change at a time, page-wide, and the claim survives navigation.** `planParts.js` takes the same claim as
+  `memberActions.js` (`writes.begin()`): a second change is told to wait, and the claim is kept when the operator moves
+  between the Keys section and an organisation's plan, so a change in flight cannot be raced by a new page. A failure
+  frees it; a success leaves it to the redraw. A form's submit control is taken once.
+- **Times: Brunei for a window, UTC elsewhere.** A Per-event window is counted in Brunei days, so `planFormat.js` shows
+  its start and end in Asia/Brunei (`endOfBruneiDay`, `windowDays`). Every other date in the console stays UTC
+  (`format.js`).
+- **Hints are translated in `adminErrors.js`, and the gating hints are no longer in `NOT_FOR_THE_CONSOLE`.** All
+  gating hints (the key, window, amount and cap hints) have copy in the map. A hint with no copy stays unknown and the
+  panel says so, as any other unknown refusal.
+- **Accessibility and wording** follow the rest of the console: accessible names start with the visible words and say
+  which key or plan they act on; a failed keys load has a Retry; a refusal moves focus to its own message. Raw key ids
+  and the jargon "frozen plan" are known wording debts (ROADMAP, "Known open items from the Plan panel").
+- **Tests:** `planFormat.test.js`, `planPanel.test.js` (vitest, fake client), `tests/e2e/admin-console-plan.spec.js`
+  (real page at 360px: a preview changes nothing; give and revoke an Annual plan; no event name in any response), and
+  the adversarial attack list (the Plan functions were added to it).
 
 ## The adversarial pass (`tests/e2e/admin-console-adversarial.spec.js`, T-ADM.E1)
 

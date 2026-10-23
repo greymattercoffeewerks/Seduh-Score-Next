@@ -1,3 +1,57 @@
+## T-GATE.C: the admin Plan panel (gating step 3), still dark · 2026-10-23
+
+**Task:** T-GATE.C (gating step 3, "Plan panel and payment confirmation"). Spec: `Handoffs and Specs/GATING-SPEC.md` (local and gitignored; D-G9, D-G10, D-G14, 3.5, 6b to 6e). Branch `feat/gating-plan-panel`, cut from `dev` after B5 (#307) merged. Commits `1f9414d` (migration and pgTAP), `4d59930` (console panel), `1b53376` and `0b3225e` (review fixes), `b1ddc2c` (test-audit fixes). **Status: built and reviewed, local only. NOT FINAL:** the PR's CI run (`db reset`, full pgTAP, the admin Playwright attack list and the Plan e2e at 360px) has not been seen green. Still dark: no key is flipped, and nothing is pushed to the cloud (D-G13). Migration `20261023150000` is local only.
+
+**Why:** The operator needs one place in `/admin/` to see what each organisation may do, to give or revoke a plan, to record that a payment was received, and to flip a capability on. The flip is the dangerous step, so the panel never flips a key by itself, and it shows what a flip would do before it can be made. Everything the panel does is an existing audited admin function, or one of the reads or the payment write added here. Nothing in the panel invents a new path to a write.
+
+**What changed:**
+
+- `supabase/migrations/20261023150000_admin_plan_panel.sql` (new, with a rollback block):
+  - Reads: `admin_list_keys()` (every key: kind, minimum tier, enforced, window-bound, note, caps by tier), `admin_plan_orgs()` (every organisation with its organisation-level tier and counts), `admin_plan_org(p_org_id)` (one organisation's tier now, every grant, its events as metadata, and per key whether it would pass if enforced, with its limit).
+  - Write: `admin_payment_confirm(...)`, the one new write. It creates a grant with source `'payment'` (reserved since D-G10), requires a non-blank amount note of at most 200 characters (hints `amount_required`, `amount_too_long`), and writes one `payment.confirm` audit row whose detail holds `grant_id`, `tier`, `event_id`, `valid_from`, `valid_until`, `payment_note`.
+  - Refactor: the grant validation and insert move out of `admin_grant_create` into `app.grant_insert`, so the payment path cannot drift from it. No behaviour change; `053` is untouched and green.
+- `supabase/tests/057_admin_plan_panel.sql` (new, 89 assertions): the reads' result shapes, the gate on every new function, the payment write's refusals and audit row, and the grant rules through the shared helper. Guards `041` (uuid-taking public functions) and `050` (platform-touching functions) list the new functions, and the admin attack list (`tests/e2e/admin-console-adversarial.spec.js`) has the new entries.
+- Console (`src/admin/`, and nothing outside it):
+  - `planPanel.js` (route `#/plan`, and `#/plan/<organisation id>`), mounted from `panels.js` as "Plans and keys".
+  - `planKeys.js`: the Keys section. Each key says dark or enforced in words. Turning a key on is offered only after its preview (`admin_gating_preview`), and the flip sends the PREVIEWED count, so a count that moved since the preview is visible. Turning a key off is one confirmed step.
+  - `planOrg.js`: one organisation's plan now, its grants (Brunei times, source, who granted), its events as label, date and state, and the keys it would pass. Forms: organisation plan; a Per-event plan with an applicant offset (T-4 to T); a payment note, which switches the form to `admin_payment_confirm`; extend with a required reason; revoke with confirm; raise a frozen plan; release an open event.
+  - `planParts.js`: the write form and confirm action shared by the forms. One change at a time, page-wide, with the claim kept across navigation (so a second change started after moving between organisation pages is refused, not raced).
+  - `planFormat.js`: pure functions for Brunei formatting, `windowDays`, `endOfBruneiDay`, tier and state wording.
+  - `admin.css`, `adminErrors.js` (copy for every gating hint, moved out of `NOT_FOR_THE_CONSOLE`), `auditView.js` (wording for the new `payment.confirm` action and the gating actions).
+- `tools/check-admin-bundle-leak.mjs`: names the new admin functions it must not find in the organiser bundle.
+- Tests: `planFormat.test.js`, `planPanel.test.js` (about 28), and `tests/e2e/admin-console-plan.spec.js` (the real page at 360px; a preview changes nothing; give, then revoke, an Annual plan; an event name never appears in any admin response).
+
+**Decisions (not in the handoff's §12 record):**
+
+- **Event names are not shown.** The events are returned as a LABEL (format, date and the first characters of the id), with no event name. D-A4 says the console shows no participant data, and an event name can carry a person or a sponsor. The security reviewer's ruling. Restoring the name is a one-line change in `admin_plan_org` plus a D-A4 amendment, and it is the owner's call (ROADMAP item 4).
+- **The panel never flips a key on its own.** The owner flips by hand, after the cloud push and the backfill, with the flip preconditions already listed under B4 and B5. The preview is the gate: a flip needs a previewed count, so it cannot be done blind.
+- **Payment is recorded, not processed.** `admin_payment_confirm` is "this was paid", written as a grant with source `'payment'` and a short amount note. There is no billing code. Annual payments on the operator's word are by design (D-G10, D-G14).
+- **The grant rules have one home.** `app.grant_insert` holds the validation and insert, so `admin_grant_create` and the payment path cannot disagree. The pgTAP file for the old function is the no-behaviour-change proof (see CONVENTIONS, platform admin functions, rule 10).
+
+**Verification (as reported for this task):**
+
+- All 57 pgTAP files pass after `db reset`, including 057 (89 assertions). The rollback block is verified by `schema-guardian`.
+- Full vitest: 5228 passing.
+- Admin Playwright: 54 of 54 (the Plan e2e at 360px included).
+- Not seen: the PR's CI run.
+
+**Reviews:**
+
+- `schema-guardian`: clean. **Nit, left:** the `grant_insert` error prefix still says `admin_grant_create` (cosmetic; the hint is unchanged).
+- `security-reviewer`: clean. **Decision:** event names narrowed out to keep D-A4 (above). **Nit, fixed:** the pinned relations are checked by a `prosrc` test in 057. **Observations, no change:** annual payment on the operator's word is by design (D-G10, D-G14); there is no self-target refusal, consistent with `admin_grant_create`; a double-submitted organisation grant creates two rows, which the page-wide claim prevents in the UI but the database does not.
+- `code-reviewer`: clean. **Nits, fixed:** the write claim is kept across navigation; the `events_total` note; the extend end check. **Left (logged):** a release of an already-ended event succeeds silently (ROADMAP item 3); `admin_plan_orgs` is unbounded (ROADMAP item 2). Also covers the `module-boundary-checker` pass: `boundary.test.js` and the admin leak check are green.
+- `ui-accessibility-reviewer`: **0 Important.** **Nits, fixed:** accessible names start with the visible words and say which key or plan; Retry for a failed keys load; focus on the refusal; grammar. **Left as wording observations:** raw key ids are shown (ROADMAP item 1); "frozen plan" is jargon; the Dark and Revoked badges are green; empty field error lines.
+- `test-auditor`: **2 Important, fixed:** no invented count (the preview's count is the one shown); the confirm is taken once. **Nits, fixed.**
+
+**Not done / still open** (also in ROADMAP's "Known open items from the Plan panel"):
+
+- Raw key ids on the Keys screen (human labels needed).
+- `admin_plan_orgs` paging at scale.
+- Release of an already-ended event reports success.
+- Restoring event names in the picker (owner's call; D-A4 amendment).
+- The flip itself is manual (above). The preconditions are in the B4 and B5 lists.
+- Cloud: migration `20261023150000` is local only; push after the B5 push, via the Supabase MCP, after the `list_migrations` check.
+
 ## T-GATE.B5: the Per-event 5-day window lock, shipped dark · 2026-10-23
 
 **Task:** T-GATE.B5 (G-B5, D-G15), the last gating task before the flip. Spec: `Handoffs and Specs/GATING-SPEC.md` (local and gitignored, 6b "The Per-event window", 6d, 6e). Branch `feat/gating-b5`, cut from `dev` after B1 to B4 merged (#300, #301, #304, #305). Commits `a24062a` (migration, RLS, RPCs, pgTAP), `1c50ac5` (window UI and review fixes), `e063354` (review fixes: enforced flag, answer cache, dark short-circuit), `354f864` (test-audit fixes). **Status: built and reviewed, local only. NOT FINAL:** the PR's CI run (`db reset`, full pgTAP, the Playwright admin attack list, dev-app e2e) has not been seen green, and `module-boundary-checker` has not been run on the `src/` change set (see open items). Still dark: no key is flipped, and nothing is pushed to the cloud (D-G13).

@@ -253,6 +253,11 @@ innocuous name, roles other than `anon`/`authenticated`/`service_role`), and tho
    own inside its transaction; a local admin is inserted by hand, as `postgres`): do not add one to
    `supabase/seed.sql`, whose own header warns that `db reset --linked` would apply it to a linked
    project. Confirm the cloud's exposed schemas do not include `app` before pushing.
+10. **A second writer of an existing rule shares its body, it does not copy it.** When a new admin function must
+    apply the same rules as an existing one (T-GATE.C: `admin_payment_confirm` and `admin_grant_create`), move the
+    validation and insert into an `app.*` helper that both call (`app.grant_insert`), and keep the public function's
+    gate, its hints and its audit row in its own body. The existing pgTAP file for the original function, left
+    untouched and green, is the proof that the refactor changed no behaviour. A copied rule drifts; the helper cannot.
 
 ---
 
