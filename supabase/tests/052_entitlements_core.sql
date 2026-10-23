@@ -63,6 +63,7 @@ insert into events (id, org_id, format, name) values
   (t052.u(101), t052.u(100), 'cup_taster', 'X event one'),
   (t052.u(102), t052.u(100), 'cup_taster', 'X event two'),
   (t052.u(201), t052.u(200), 'cup_taster', 'Y event one'),
+  (t052.u(202), t052.u(200), 'cup_taster', 'Y event two'),
   (t052.u(301), t052.u(300), 'cup_taster', 'Z event one');
 
 -- ============ the seed ============
@@ -221,7 +222,7 @@ select is(t052.refusal($$ insert into app.entitlement_keys (key, kind, min_tier)
 select is(t052.refusal($$ insert into app.entitlement_keys (key, kind) values ('Bad Key', 'flag') $$), '23514|', 'and a key name outside [a-z0-9_] is refused');
 
 -- ============ entitlement_grants: the table ============
-select is(t052.refusal($$ insert into entitlement_grants (org_id, event_id, tier, source) values (t052.u(100), t052.u(201), 'annual', 'manual') $$),
+select is(t052.refusal($$ insert into entitlement_grants (org_id, event_id, tier, source) values (t052.u(100), t052.u(202), 'annual', 'manual') $$),
   '23503|', 'an event grant naming ANOTHER organisation''s event is refused (composite foreign key)');
 select is(t052.refusal($$ insert into entitlement_grants (org_id, tier, source) values (t052.u(100), 'gold', 'manual') $$), '23503|', 'an unknown tier is refused');
 select is(t052.refusal($$ insert into entitlement_grants (org_id, tier, source) values (t052.u(100), 'annual', 'free') $$), '23514|', 'an unknown source is refused');
