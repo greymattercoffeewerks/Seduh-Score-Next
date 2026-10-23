@@ -603,6 +603,8 @@
    divider direction below follows that same layout change, mobile-first. */
 .app-shell-auth {
   display: flex;
+  /* Wraps: the email, Change password and Sign out do not fit one row at 360px. */
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-3);
   /* Lets this flex item shrink below its content's own intrinsic width —
@@ -611,6 +613,15 @@
      realistic-length organiser email forced the WHOLE persistent header to
      overflow horizontally rather than wrap. */
   min-width: 0;
+}
+
+/* Change password, beside the email it belongs to: a text link with the same tap target as a nav link. */
+.app-shell-auth-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-target-min);
+  color: var(--color-text);
+  text-decoration: underline;
 }
 
 .app-shell-auth-email {

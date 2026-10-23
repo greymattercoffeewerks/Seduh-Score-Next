@@ -425,3 +425,19 @@ describe('mountSetPasswordScreen — edges the first pass missed', () => {
     release();
   });
 });
+
+describe('describePasswordError — the shared words', () => {
+  it('names the current password, not a one-time one, when asked for that context', () => {
+    expect(describePasswordError({ code: 'same_password' }, { context: 'current' })).toBe(
+      'Choose a different password from your current one.',
+    );
+    // The default context is unchanged (the Team screen's one-time-password flow).
+    expect(describePasswordError({ code: 'same_password' })).toMatch(/one-time password/);
+  });
+
+  it('turns the refusal for a missing authenticator code into words', () => {
+    expect(describePasswordError({ code: 'insufficient_aal', message: 'raw' })).toMatch(
+      /authenticator app/,
+    );
+  });
+});

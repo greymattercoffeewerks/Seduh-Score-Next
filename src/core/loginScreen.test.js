@@ -743,3 +743,17 @@ describe('mountLoginScreen — retry and attribute contracts', () => {
     expect(draft).toEqual({ email: 'a@b.com', password: 'pw' });
   });
 });
+
+describe('mountLoginScreen — forgot password (D-PW1)', () => {
+  it('offers a Forgot password? link to the request screen, outside the form so it cannot submit it', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    await mountLoginScreen(root, {
+      client: { auth: { signInWithPassword: () => Promise.resolve({ error: null }) } },
+    });
+    const link = root.querySelector('a[href="#/forgot-password"]');
+    expect(link.textContent).toBe('Forgot password?');
+    expect(link.closest('form')).toBeNull();
+    expect(link.classList.contains('tap-target')).toBe(true);
+  });
+});

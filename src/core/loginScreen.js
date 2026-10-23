@@ -1,6 +1,6 @@
 // Temporary login screen (2026-08-30) — a plain sign-in form against the
-// existing auth.signInWithPassword, nothing more. No sign-up, no password
-// reset, no tier/role gating: real access control (D14 entitlements,
+// existing auth.signInWithPassword, nothing more. No sign-up, no tier/role gating (a "Forgot password?"
+// link leads to core/forgotPasswordScreen.js, 2026-10-23): real access control (D14 entitlements,
 // currently a permissive stub) is future work this screen deliberately
 // does not anticipate. Account provisioning stays exactly as already
 // decided elsewhere (ROADMAP.md: the single org's organiser is provisioned
@@ -207,6 +207,15 @@ export async function mountLoginScreen(root, { client = getSupabase(), onSignedI
 
       container.appendChild(el('div', { className: 'card' }, [form]));
       container.appendChild(feedback);
+      // The way back in for someone who has lost their password (D-PW1): a link, not a button, because it
+      // goes to a screen of its own. Always offered; the request screen answers the same for any address.
+      container.appendChild(
+        el('a', {
+          className: 'login-secondary-link tap-target',
+          text: 'Forgot password?',
+          attrs: { href: '#/forgot-password' },
+        }),
+      );
       root.appendChild(container);
 
       if (feedback.dataset.tone === 'error') {
