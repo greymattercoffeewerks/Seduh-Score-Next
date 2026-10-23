@@ -1,3 +1,52 @@
+## T-GATE.B3: the enforcement hooks (events gate, format freeze, participant cap, go-live snapshot), still dark · 2026-10-23
+
+**Task:** T-GATE.B3, gating and entitlements (`Handoffs and Specs/GATING-SPEC.md`, local and gitignored; spec 3.4, D-G4, D-G8, D-G19, D-G29, 7a risks). Branch `feat/gating-b3`, stacked on `dev`, which holds B1 (PR #300) and B2 (PR #301). Commits `a0c717e`, `700a9cf`, `871f85d`, `171d486`, merge `b339792`. **Status: built and reviewed, local only. Nothing pushed (no PR, no cloud project; D-G13). Not final until the PR's CI run (`db reset`, full pgTAP, the Playwright admin attack list, dev-app) is seen green.** Still dark: no key is flipped, and the browser does not call anything new.
+
+**Why:** B1 and B2 built the data model and the audited writers, but nothing consulted them. The gate has to live in the database (a client check is bypassable), so the checkpoints are triggers and definer functions that ask `app.has_entitlement` / `app.entitlement_limit`. While every key is unenforced (the seed) each checkpoint is a no-op, so behaviour is unchanged until a key is flipped. The two things that apply immediately are the format freeze and the snapshot protection, because they close holes that exist today regardless of any key.
+
+**What changed:**
+
+- `supabase/migrations/20261023120000_entitlement_enforcement_hooks.sql` (new, with a rollback block):
+  - `events` BEFORE INSERT (`app.check_event_create`): opens with `app.refuse_non_member(...)` (test 045 needs the standard refusal first). For API callers, a `btc` event needs `btc_format` at organisation level. Snapshot columns are nulled for API callers.
+  - `events.format` joins the immutable-parent trigger (7a risk 1): a Community organisation cannot create a `cup_taster` event and flip it to `btc` to dodge the cap, or the reverse.
+  - `events.entitlements_snapshot` / `entitlements_snapshot_at` (D-G4): the tier an event resolved to at first go-live, stamped ONCE by a trigger on `live_sessions` (not by editing `publish_session`, which a direct insert bypasses). Only database definer functions may write these (a `current_user` check in the trigger, so a member is refused 23001 even for their own organisation). `app.resolved_tier` answers from the snapshot, so a lapsing grant cannot strip a running event of people already registered (D-G6). A key with `window_bound = false` (the registration page) ignores the snapshot.
+  - `event_entries` BEFORE INSERT and BEFORE UPDATE OF `withdrawn` (`app.check_event_entry_cap`, D-G19): a Cup Taster event may not hold more non-withdrawn entries than `cup_taster_participants` allows. Runs under a per-event advisory lock (the roster can be open on several devices). Applies to a new entry and to a reinstate. **Only `btc` is exempt**; any other value, including an unknown `events.format`, is capped as Cup Taster (fail closed). Refusal 42501, hint `entitlement_cap_reached`, detail = the key.
+  - `app.resolved_tier` added; `has_entitlement`, `entitlement_limit` and `my_entitlements` re-pointed at it.
+  - `public.admin_event_resnapshot(p_event_id, p_reason)`: audited (`event.resnapshot`), **upward only**. A lower tier is refused (`snapshot_downgrade`), the same tier is a no-op, and an event with no snapshot is refused (`snapshot_absent`).
+  - Go-live stamp is a no-op while no key is enforced, so events that go live during the dark phase are not frozen at `community`.
+- `supabase/tests/054_entitlement_enforcement_hooks.sql` (new, 89 assertions): the non-member refusal on create, the format freeze, the snapshot columns refused to a member, stamp-once (strengthened after the test-auditor finding, see below), the cap on insert and reinstate, the window-bound exception, and the resnapshot refusals and audit row.
+- Guard edits (list entries, not relaxed checks): `018_score_log_column_coverage.sql` (the `events.format` freeze and the snapshot columns added to the column-coverage lists); `041_cross_org_rpcs.sql` (`admin_event_resnapshot` in the exemption list, the admin-door count is now sixteen); `050_platform_tables_contract.sql` (`admin_event_resnapshot` in the exact admin-function list).
+- `src/admin/adminErrors.test.js`: the four new hints (`entitlement_required`, `entitlement_cap_reached`, `snapshot_absent`, `snapshot_downgrade`) are classified as not-for-the-console (no screen yet).
+- `tests/e2e/admin-console-adversarial.spec.js`: `admin_event_resnapshot` added to the attack list.
+
+**Verification (this session):**
+
+- All 54 pgTAP files pass after `db reset` and the dev merge.
+- The rollback block of `20261023120000` was run inside a transaction and rolled back; nothing left behind.
+- Earlier in the session (before the last review-fix commits, not re-run since): `npx playwright test --project=dev-admin` 20 of 20 (attack list included), dev-app e2e 22 of 22. Re-run is part of the PR's CI.
+
+**Reviews:**
+
+- `schema-guardian`: clean.
+- `security-reviewer`: **1 Important** (cap skipped for an off-list `events.format`, so a Cup Taster event could be made uncapped by writing an unexpected value). Confirmed by an independent checker, which found the first fix (exempt `guess_the_bean` as well as `btc`) still let one value through. Final fix (`871f85d`) exempts only `btc`. Class: any exemption must be an explicit allow-list of one, never a deny-list of known values.
+- `code-reviewer`: clean. Nit fixed (`700a9cf`): the go-live stamp is a no-op while dark, so dark-phase events are not frozen at `community`.
+- `test-auditor`: **1 Important** (the stamp-once assertion was vacuous: it passed without exercising the second stamp) plus nits, all fixed (`171d486`). Count now 89.
+- `module-boundary-checker`: **not run** on this branch. The only `src/` change is a test file under `src/admin/`. Run it before the PR (see open items).
+
+**Not done / still open** (also in ROADMAP's "Known open items from T-GATE.B3"):
+
+- **The Community one-active-event-at-a-time rule** (D-G20/D-G23) is NOT built. It needs the owner's database definition of "ended" (`events.status` is member-writable and BTC has no status), the organiser "Finish this event" and the admin release functions, and a catalog extension mechanism (the contract test requires the catalog to be seeded by exactly one migration).
+- **BTC per-event buyer chicken-and-egg.** `btc_format` is checked at creation at organisation level, but a Per-event grant needs the event to exist first. Switching `btc_format` on would stop a Per-event BTC buyer creating their event. Options: the operator holds a short organisation grant while the event is made, or BTC is gated at first go-live (where the snapshot already exists). Needs the owner's decision before the key is flipped. Dark, so nothing is stranded today.
+- **`events.status` and `events.is_test` are member-writable** (7a risk 2). Not addressed, and so no rule exempts test events.
+- **No CHECK on `events.format`.** Unknown values are capped as Cup Taster (fail closed).
+- **`tests/e2e/support/tenants.js` `createTenant`** inserts BTC events as the organiser. It needs a grant before `btc_format` is first enforced in CI.
+- **`listEventsForOrg` `select('*')`** now returns the snapshot columns to the client. Narrow the select when the client reads them.
+- **`service_role`** is in the snapshot-edit refusal list but that path is untested.
+- **Re-snapshot:** a per-event window that opens after go-live, or a grant bought after go-live, needs `admin_event_resnapshot` (rollout note in the migration header).
+- **Per-event 5-day window lock (G-B5)** not started.
+- **Organiser copy** for `entitlement_required` / `entitlement_cap_reached` (G-C2) not written.
+- **`module-boundary-checker`** to run before the PR (see Reviews).
+
 ## T-GATE.B2: the audited admin grant writers and the key switch, still dark · 2026-10-23
 
 **Task:** T-GATE.B2, gating and entitlements (`Handoffs and Specs/GATING-SPEC.md`, local and gitignored; the M2 step). Branch `feat/gating-b2`, stacked on `claude/feat-gating-5cab26` (PR #300, B1). Commits `88841c2`, `eeac239`, `63e55fa`. **Status: built and reviewed, local only. Nothing pushed (no PR, no cloud project; D-G13). Not final until the PR's CI run (`db reset`, full pgTAP, the Playwright admin attack list) is seen green.** Still dark: no key is flipped, no hook exists, and the browser does not call the new functions yet.

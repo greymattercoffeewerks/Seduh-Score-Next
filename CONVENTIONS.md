@@ -256,6 +256,30 @@ innocuous name, roles other than `anon`/`authenticated`/`service_role`), and tho
 
 ---
 
+### Entitlement hooks (database checkpoints; T-GATE.B3, 054)
+
+Gating is enforced in the database, never only in the client. The rules a new hook or cap must follow (the
+pattern is in `20261023120000_entitlement_enforcement_hooks.sql`; the spec is `GATING-SPEC.md`, local only):
+
+1. **Ask `app.has_entitlement` / `app.entitlement_limit` and nothing else.** A hook is a no-op while its key is
+   unenforced (the seed), so it can ship dark and behaviour is unchanged until a key is flipped. A new key is
+   seeded off.
+2. **A tenant write's hook opens with `app.refuse_non_member(...)`** (a `BEFORE` row trigger runs before row-level
+   security, so the standard refusal must come first; test `045`). A refusal is 42501 with a stable hint
+   (`entitlement_required`, `entitlement_cap_reached`, ...) and the key in the DETAIL; the UI reads the hint.
+3. **An exemption is an explicit allow-list of one, never a list of known values.** An unknown enum value (a
+   format the database does not know) is capped or gated as the strictest branch (fail closed). B3's draft skipped
+   the cap for any value off the known list; the first fix exempted `btc` and `guess_the_bean`, and an independent
+   check found an off-list value still getting through; the final fix exempts `btc` alone.
+4. **A cap is counted under a per-parent advisory lock**, over the rows that count (non-withdrawn), and applies to
+   the insert AND to every path that adds a counted row back (a reinstate is an UPDATE, not an insert).
+5. **A snapshot column is written only by a database definer function.** The trigger checks `current_user`, so a
+   member's direct UPDATE is refused even for their own organisation (23001); the stamp itself is set once.
+6. **A snapshot is a no-op until a key is enforced**, so events that go live while dark are not frozen at the
+   lowest tier. A change of tier after go-live goes through an audited, upward-only admin function.
+7. **A column that decides which cap or gate applies** (`events.format`) joins the immutable-parent trigger,
+   or a Community organisation can change it to dodge the cap.
+
 ## Testing
 
 - **JS**: Vitest, `*.test.js` next to the file it tests. `npm test` runs everything
