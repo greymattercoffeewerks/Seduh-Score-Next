@@ -279,6 +279,15 @@ pattern is in `20261023120000_entitlement_enforcement_hooks.sql`; the spec is `G
    lowest tier. A change of tier after go-live goes through an audited, upward-only admin function.
 7. **A column that decides which cap or gate applies** (`events.format`) joins the immutable-parent trigger,
    or a Community organisation can change it to dodge the cap.
+8. **A fact the database owns (T-GATE.B4, `events.ended_at`) is written by named definer functions only.** Three parts,
+   all needed: the column is nulled on an API insert (a client cannot pre-set it), an API UPDATE of it is refused 23001
+   (a `BEFORE UPDATE OF` trigger with a `current_user` check), and the definer functions that may set it are the
+   only writers. A status change the client can also make (`concluded`) is accepted as the trigger's own stamp only
+   when the organiser can already do the same thing through a definer function (the migration header says why).
+9. **A gate that needs a child row is checked at the first transition that creates the child's state, not at the
+   parent's creation.** A Per-event grant is scoped to an event, and an event does not exist until it is created, so
+   B3's creation-time `btc_format` check refused the very buyer it was for. B4 moved it to first go-live (where the
+   event exists and the snapshot is taken).
 
 ## Testing
 
