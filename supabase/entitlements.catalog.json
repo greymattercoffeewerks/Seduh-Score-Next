@@ -1,8 +1,17 @@
 {
   "tiers": [
-    { "tier": "community", "rank": 0 },
-    { "tier": "per_event", "rank": 1 },
-    { "tier": "annual", "rank": 2 }
+    {
+      "tier": "community",
+      "rank": 0
+    },
+    {
+      "tier": "per_event",
+      "rank": 1
+    },
+    {
+      "tier": "annual",
+      "rank": 2
+    }
   ],
   "keys": [
     {
@@ -11,7 +20,11 @@
       "min_tier": null,
       "window_bound": true,
       "note": "Active (non-withdrawn) roster entries per Cup Taster event. Community 8; Per-event and Annual unlimited (D-G3, D-G19). First key to be switched on (D-G27).",
-      "caps": { "community": 8, "per_event": null, "annual": null }
+      "caps": {
+        "community": 8,
+        "per_event": null,
+        "annual": null
+      }
     },
     {
       "key": "btc_format",
@@ -68,6 +81,18 @@
       "min_tier": null,
       "window_bound": true,
       "note": "Creating a Guess the Bean session. Open to every tier (D-G5): registered, not gated."
+    },
+    {
+      "key": "events_open",
+      "kind": "cap",
+      "min_tier": null,
+      "window_bound": true,
+      "note": "Open (not yet ended) events per organisation at a time. Community 1; Per-event and Annual unlimited (D-G20, D-G23). Checked at event creation.",
+      "caps": {
+        "community": 1,
+        "per_event": null,
+        "annual": null
+      }
     }
   ]
 }

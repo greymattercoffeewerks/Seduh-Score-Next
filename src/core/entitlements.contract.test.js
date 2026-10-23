@@ -22,11 +22,30 @@ function seededCatalogs() {
   return found;
 }
 
+// Keys added after the first seed sit in later migrations, each in a $catalog_add$ block ({ "keys": [...] }).
+function seededAdditions() {
+  const found = [];
+  for (const f of readdirSync(MIGRATIONS)
+    .filter((n) => n.endsWith('.sql'))
+    .sort()) {
+    const sql = readFileSync(join(MIGRATIONS, f), 'utf8');
+    for (const m of sql.matchAll(/\$catalog_add\$([\s\S]*?)\$catalog_add\$/g)) {
+      found.push({ file: f, keys: JSON.parse(m[1]).keys });
+    }
+  }
+  return found;
+}
+
 describe('the entitlement catalog', () => {
   it('is seeded by exactly one migration, and that seed equals the catalog file', () => {
     const seeds = seededCatalogs();
     expect(seeds.map((s) => s.file)).toEqual(['20261023100000_entitlements_core.sql']);
-    expect(seeds[0].catalog).toEqual(catalog);
+    // the catalog file is the base seed plus every later addition, in migration order
+    const merged = {
+      ...seeds[0].catalog,
+      keys: [...seeds[0].catalog.keys, ...seededAdditions().flatMap((a) => a.keys)],
+    };
+    expect(merged).toEqual(catalog);
   });
 
   it('is exactly the list src/core/entitlements.js knows', () => {
