@@ -63,6 +63,7 @@ insert into events (id, org_id, format, name) values
   (t052.u(101), t052.u(100), 'cup_taster', 'X event one'),
   (t052.u(102), t052.u(100), 'cup_taster', 'X event two'),
   (t052.u(201), t052.u(200), 'cup_taster', 'Y event one'),
+  (t052.u(202), t052.u(200), 'cup_taster', 'Y event two'),
   (t052.u(301), t052.u(300), 'cup_taster', 'Z event one');
 
 -- ============ the seed ============

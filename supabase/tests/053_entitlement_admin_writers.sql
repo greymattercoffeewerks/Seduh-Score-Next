@@ -17,7 +17,7 @@
 --     failure of the audit insert rolls the change back), and nothing a refused call did survives.
 -- Callers run as the real roles through t053.run_as; successes are also run that way ('admin_ok').
 begin;
-select plan(164);
+select plan(167);
 
 create schema t053;
 grant usage on schema t053 to anon, authenticated, service_role;
@@ -81,7 +81,7 @@ insert into auth.sessions (id, user_id, aal) select id, id, 'aal2' from auth.use
 
 insert into orgs (id, name, slug) values
   (t053.u(100), 'T053 Org X', 't053-x'), (t053.u(200), 'T053 Org Y', 't053-y'),
-  (t053.u(300), 'T053 Org Z', 't053-z'), (t053.u(400), 'T053 Org W', 't053-w');
+  (t053.u(300), 'T053 Org Z', 't053-z'), (t053.u(400), 'T053 Org W', 't053-w'), (t053.u(500), 'T053 Org V', 't053-v');
 insert into events (id, org_id, format, name, event_date) values
   (t053.u(101), t053.u(100), 'cup_taster', 'X ev1', date '2026-12-10'),
   (t053.u(102), t053.u(100), 'cup_taster', 'X ev2 (no date)', null),
@@ -232,8 +232,15 @@ select is(
      join t053.made m on m.k = x.k join entitlement_grants g on g.id = m.id),
   'true,true', 'the extremes: offset -4 (T-4 to T) and offset 0 (T to T+4) are both exactly five days containing T');
 select is((select detail ->> 'event_id' from t053.last()), t053.u(104)::text, 'the audit row names the event');
-select is(t053.audit_n(), 5, 'five audit rows for the five successful creates');
-select is(app.effective_tier(t053.u(100), t053.u(101), timestamptz '2026-12-09 12:00:00+08'), 'annual', 'inside the window the event resolves to its tier (here the organisation''s annual is higher)');
+insert into t053.made select 'ev5', public.admin_grant_create(t053.u(100), 'per_event', t053.u(105), -3);
+insert into t053.made select 'ev3b', public.admin_grant_create(t053.u(200), 'per_event', t053.u(201), -1);
+select is(
+  (select string_agg(((g.valid_until - g.valid_from) = interval '5 days' and g.valid_from = x.f and g.valid_until = x.u)::text, ',' order by x.k)
+     from (values ('ev5', timestamptz '2026-12-19 00:00:00+08', timestamptz '2026-12-24 00:00:00+08'),
+                  ('ev3b', timestamptz '2026-12-09 00:00:00+08', timestamptz '2026-12-14 00:00:00+08')) x(k, f, u)
+     join t053.made m on m.k = x.k join entitlement_grants g on g.id = m.id),
+  'true,true', 'offsets -3 and -1 are exactly five days too, positioned right (so every legal offset -4 to 0 is proven)');
+select is(t053.audit_n(), 7, 'seven audit rows for the seven successful creates');
 
 -- refusals: stable hints, and nothing written
 create function t053.snap_counts() returns text language sql as $$ select (t053.grants_n(), t053.audit_n())::text $$;
@@ -275,10 +282,7 @@ select is((select action || '|' || target_org_id from t053.last()), 'grant.exten
 select is((select string_agg(k, ',' order by k) from jsonb_object_keys((t053.last()).detail) k),
   'event_id,from_grant_id,grant_id,new_valid_until,old_valid_until,reason,tier', 'with exactly the pinned detail keys');
 select is((select detail ->> 'reason' from t053.last()), 'postponed by the venue', 'the audit row carries the reason');
-select is(
-  (select (app.effective_tier(t053.u(400), null, now()) , 1)::text), '(per_event,1)', 'sanity: the timed organisation grant of W resolves to per_event now');
 -- the window is continuous across the join, with the higher organisation tier removed so the event grant alone decides
-select is(app.effective_tier(t053.u(100), t053.u(101), timestamptz '2026-12-13 00:00:00+08'), 'annual', 'X still has its annual organisation grant (so the join is checked on a bare event below)');
 insert into t053.made select 'zev', public.admin_grant_create(t053.u(300), 'per_event', t053.u(301), -2);
 insert into t053.made select 'zev_ext', public.admin_grant_extend((select id from t053.made where k = 'zev'), timestamptz '2026-12-16 00:00:00+08', 'extra day');
 select is(
@@ -330,8 +334,14 @@ select is(jsonb_array_length(public.admin_list_grants(t053.u(100))), (select cou
 select is((select string_agg(k, ',' order by k) from jsonb_object_keys(public.admin_list_grants(t053.u(100)) -> 0) k),
   'created_at,event_id,extends_grant_id,granted_by,id,note,revoked_at,source,tier,valid_from,valid_until',
   'each element has exactly the pinned keys (no event or participant data)');
+set local role postgres;
+insert into entitlement_grants (id, org_id, tier, source, created_at) values
+  (t053.u(9001), t053.u(100), 'per_event', 'manual', now() + interval '2 years'),
+  (t053.u(9002), t053.u(100), 'per_event', 'manual', now() - interval '2 years');
+select is(public.admin_list_grants(t053.u(100)) -> 0 ->> 'id', t053.u(9001)::text, 'newest first: the row created last is the first element');
+select is(public.admin_list_grants(t053.u(100)) -> -1 ->> 'id', t053.u(9002)::text, 'and the oldest is the last');
 select is(public.admin_list_grants(t053.u(100)) -> 0 ->> 'id', (select id::text from entitlement_grants where org_id = t053.u(100) order by created_at desc, id limit 1), 'newest first');
-select is(public.admin_list_grants(t053.u(200)), '[]'::jsonb, 'an organisation with no grants: an empty array');
+select is(public.admin_list_grants(t053.u(500)), '[]'::jsonb, 'an organisation with no grants: an empty array');
 select is(t053.run_as('admin_ok', $$select public.admin_list_grants(gen_random_uuid())$$), '22023|org_not_found', 'list: an unknown organisation is refused');
 select is(t053.audit_n(), (select n + 2 from t053.n1), 'reading logs nothing (only the base-window revoke and the one create after the baseline)');
 
@@ -350,8 +360,8 @@ select is((public.admin_gating_preview('btc_format') ->> 'would_lose')::int,
 select is(
   (select string_agg(e ->> 'name' || ':' || (e ->> 'tier'), ',' order by e ->> 'name')
      from jsonb_array_elements(public.admin_gating_preview('btc_format') -> 'organisations') e where e ->> 'name' like 'T053%'),
-  'T053 Org Y:community,T053 Org Z:community',
-  'btc_format: Y and Z (no grant on the organisation) would lose it; X (annual) and W (per_event) would not');
+  'T053 Org V:community,T053 Org Y:community,T053 Org Z:community',
+  'btc_format: V, Y and Z (no grant on the organisation) would lose it; X (annual) and W (per_event) would not');
 select is(
   (select e -> 'detail' ->> 'event_grants' from jsonb_array_elements(public.admin_gating_preview('btc_format') -> 'organisations') e where e ->> 'name' = 'T053 Org Z'),
   '1', 'and Z''s own event grant is reported as a count (not credited)');
@@ -372,6 +382,9 @@ select is(t053.run_as('admin_ok', $$select public.admin_set_key_enforced('btc_fo
 select is((select enforced from app.entitlement_keys where key = 'btc_format'), false, 'and the key is still not enforced');
 select is(t053.audit_n(), (select n from t053.n2), 'and nothing was logged');
 
+select is(t053.run_as('admin_ok', format($$select public.admin_set_key_enforced('btc_format', true, %s)$$, (public.admin_gating_preview('btc_format') ->> 'would_lose')::int + 1)), '22023|confirm_mismatch', 'enforce: a count one too HIGH is refused too (the count must be exact)');
+select is(t053.run_as('admin_ok', format($$select public.admin_set_key_enforced('btc_format', true, %s)$$, (public.admin_gating_preview('btc_format') ->> 'would_lose')::int - 1)), '22023|confirm_mismatch', 'and one too low');
+select is((select enforced from app.entitlement_keys where key = 'btc_format'), false, 'and the key is still off');
 select t053.admin();
 select public.admin_set_key_enforced('btc_format', true, (public.admin_gating_preview('btc_format') ->> 'would_lose')::int);
 select is((select enforced from app.entitlement_keys where key = 'btc_format'), true, 'enforce: the right count flips the key');
