@@ -1,0 +1,73 @@
+{
+  "tiers": [
+    { "tier": "community", "rank": 0 },
+    { "tier": "per_event", "rank": 1 },
+    { "tier": "annual", "rank": 2 }
+  ],
+  "keys": [
+    {
+      "key": "cup_taster_participants",
+      "kind": "cap",
+      "min_tier": null,
+      "window_bound": true,
+      "note": "Active (non-withdrawn) roster entries per Cup Taster event. Community 8; Per-event and Annual unlimited (D-G3, D-G19). First key to be switched on (D-G27).",
+      "caps": { "community": 8, "per_event": null, "annual": null }
+    },
+    {
+      "key": "btc_format",
+      "kind": "flag",
+      "min_tier": "per_event",
+      "window_bound": true,
+      "note": "Creating a BTC (Barista Team Championship) event. Not on Community (owner, 2026-10-23)."
+    },
+    {
+      "key": "cup_taster_report",
+      "kind": "flag",
+      "min_tier": "per_event",
+      "window_bound": true,
+      "note": "Printable report and CSV export (Cup Taster)."
+    },
+    {
+      "key": "cup_taster_analytics",
+      "kind": "flag",
+      "min_tier": "annual",
+      "window_bound": true,
+      "note": "Per-cupper and per-set analytics (Cup Taster)."
+    },
+    {
+      "key": "audience_branding",
+      "kind": "flag",
+      "min_tier": "per_event",
+      "window_bound": true,
+      "note": "Own branding on audience screens (Level 2, D-G17). Planned; the key only reserves the gate."
+    },
+    {
+      "key": "results_archive_optional",
+      "kind": "flag",
+      "min_tier": "per_event",
+      "window_bound": true,
+      "note": "May choose not to list results in the public archive (Community listing is compulsory)."
+    },
+    {
+      "key": "season_history",
+      "kind": "flag",
+      "min_tier": "annual",
+      "window_bound": true,
+      "note": "History across seasons. Planned (needs the archive)."
+    },
+    {
+      "key": "registration_page",
+      "kind": "flag",
+      "min_tier": "per_event",
+      "window_bound": false,
+      "note": "Public registration page per event (Seduh ID layer 2). Not bound by the Per-event window (D-G16)."
+    },
+    {
+      "key": "guess_the_bean_create",
+      "kind": "flag",
+      "min_tier": null,
+      "window_bound": true,
+      "note": "Creating a Guess the Bean session. Open to every tier (D-G5): registered, not gated."
+    }
+  ]
+}

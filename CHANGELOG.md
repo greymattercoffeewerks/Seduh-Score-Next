@@ -1,3 +1,49 @@
+## T-GATE.B1: the entitlement core, shipped dark · 2026-10-23
+
+**Task:** T-GATE.B1, gating and entitlements (`Handoffs and Specs/GATING-SPEC.md`, local and gitignored, not in git; sections 3.1 to 3.3, 3.6 and 3.7, owner decisions 6d and 6e of 2026-10-23). Branch `claude/feat-gating-5cab26`, commits `1257b31`, `844baf2`, `23b93e4`. **Status: built and reviewed, local only. Nothing pushed (no PR, no cloud project; D-G13 keeps gating out of the cloud before the BTC pitch). Every key is seeded `enforced = false` and nothing calls the new functions, so behaviour is unchanged.** Not final until the PR's CI run (`db reset`, full pgTAP) is seen green.
+
+**Why:** D14 has been a permissive stub since the start. Gating has to be a database boundary, not a client check, so the tiers, the keys and the resolution rules are fixed in SQL first. Shipping the data model dark lets it be reviewed and tested on its own, before any write path or enforcement hook depends on it.
+
+**What changed:**
+
+- `supabase/migrations/20261023100000_entitlements_core.sql` (new, with a rollback block):
+  - `app.entitlement_tiers`, `app.entitlement_keys`, `app.entitlement_caps`: platform reference data in `app`, RLS on with no policy, every API role revoked. Seeded from the catalog, embedded verbatim in the migration.
+  - `public.entitlement_grants`: a tenant table (D-G18). A composite foreign key to `events(id, org_id)` (new `events_id_org_id_key`) means an event grant can only name an event of the same organisation. Members read it; no API role writes it. Every column except `revoked_at` is frozen by `app.forbid_parent_change`; a grant is never edited in place.
+  - `app.effective_tier`, `app.has_entitlement`, `app.entitlement_limit`: `SECURITY DEFINER`, not executable by any API role.
+  - `public.my_entitlements(p_org, p_event)`: the member-gated read the browser makes once per session. A non-member, or an event that is not the organisation's, gets 42501.
+- `supabase/entitlements.catalog.json` (new): tiers `community` (0), `per_event` (1), `annual` (2); the keys, with a minimum tier for each flag and a limit per tier for `cup_taster_participants` (Community 8, the others unlimited).
+- `src/core/entitlements.js`: rewritten from the stub into a snapshot reader. `loadEntitlements` reads `my_entitlements`; `canAccess` and `limitFor` answer from the snapshot. With no snapshot every known key reads as allowed (fail-open, so a bad read cannot brick a screen mid-event). The database still decides.
+- Tests: pgTAP `052_entitlements_core.sql` (101 assertions); `040` and `041` matrices gain the new tenant table and RPC; `src/core/entitlements.test.js` rewritten; `src/core/entitlements.contract.test.js` (new) fails if the catalog file, the migration seed or the JS view of them disagree; `src/admin/adminErrors.test.js` gains three lines.
+
+**Decisions:**
+
+- **Highest tier wins, never summed** (spec 3.1): the default, the organisation's current grants and, for one event, that event's grants. "Current" means not revoked and `valid_from <= now < valid_until`, with null open-ended.
+- **A key can be exempt from the window.** `window_bound = false` (the registration page, D-G16) resolves from any non-revoked grant whatever its dates.
+- **Tiers are rows, not an enum,** so adding a tier is a seed row, not a migration to a type.
+- **A missing caps row reads as unlimited,** so the seed carries one row per capped key and tier, and two tests check it does.
+- **Keys are seeded `enforced = false`.** `has_entitlement` answers true for everyone until an audited admin function flips a key (a later migration). The switch-on is a separate, logged step (D-G11, D-G27).
+- **Grants cascade on delete of their event or organisation, on purpose.** A test event must stay deletable. The durable history is the admin audit log, which has no foreign keys.
+- **Operator metadata is hidden from members.** `granted_by` and `note` are excluded from the members' column grant (found by `security-reviewer`; fixed in `844baf2`).
+- **Time is compared in the database only.** An optional `p_at` lets tests pass a clock (threat model 4.6); the API never reaches these functions.
+
+**Reviews:** `schema-guardian`, `security-reviewer`, `code-reviewer` with `module-boundary-checker`, and `test-auditor` all ran. No blocking findings from any of them.
+
+- `schema-guardian`: clean. Nits: an index on `entitlement_grants.event_id` added (`844baf2`); the cascade documented as intentional (above).
+- `security-reviewer`: clean. Nit fixed: `granted_by` and `note` hidden by a column-level grant (`844baf2`).
+- `code-reviewer` and `module-boundary-checker`: clean. Nit deferred: the catalog's `note` text ships inside the client bundle once the client reads it; to revisit when the first call site lands (ROADMAP, "Known open items from T-GATE.B1").
+- `test-auditor`: no blocking. Five test-gap nits, all closed in pgTAP 052 (`23b93e4`; the commit names window wiring, inclusive start, every frozen column and the anon privilege).
+- The rollback block was run inside a transaction and rolled back; it left nothing behind.
+- This session ran `vitest` on `entitlements`, its contract test and `adminErrors`: 49 of 49 pass.
+
+**Not done / still open** (also in ROADMAP's "Known open items from T-GATE.B1"):
+
+- **B2 (migration 053): the admin writers.** The audited functions that create and revoke grants, and the one-open-event rule. Grants are written only through them.
+- **B3 (migration 054): the enforcement hooks.** The `events` and `event_entries` triggers (D-G8, D-G19), snapshot-at-first-publish (D-G4), and the Per-event window lock.
+- **`CLAUDE.md`'s "Entitlements are a stub" non-negotiable** is still true in the file and must be rewritten when the first call site lands, not before.
+- **Version:** `package.json` is bumped as the footer step for this shippable (dark) change.
+
+---
+
 ## BR-E1: the organiser brand reaches the projector, phone and splash · 2026-10-18
 
 **Task:** BR-E1, Level 2 organiser branding (`Handoffs and Specs/BRANDING-SPEC.md` 4.3; spec is local and gitignored, not in git). PR #297 (`feat/brand-wiring`, commit `d908349`), into `dev`. **Status: built and reviewed. Not released, and it must not reach `main` before the database door exists (BR-B1) and the BTC pitch (about 4 November): until then every audience page load sends one failing request. Nothing shows a brand yet.**
