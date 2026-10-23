@@ -16,7 +16,7 @@
 --     live; admin_event_resnapshot lifts it upward only, with a required reason, an audit row with pinned keys, and the
 --     usual gate; the same tier is a no-op; a lower tier is refused.
 begin;
-select plan(78);
+select plan(89);
 
 create schema t054;
 grant usage on schema t054 to anon, authenticated, service_role;
@@ -149,6 +149,7 @@ insert into events (id, org_id, format, name) values (t054.u(113), t054.u(100), 
 select is(t054.as_user(t054.u(11), format($$insert into live_sessions (org_id, event_id, format, active) values (%L, %L, 'cup_taster', true)$$, t054.u(100), t054.u(113))), 'ok',
   'dark: an event goes live');
 select is((select entitlements_snapshot is null and entitlements_snapshot_at is null from events where id = t054.u(113)), true, 'and no snapshot is stamped while nothing is enforced');
+select is(t054.as_user(t054.u(12), format($$insert into live_sessions (org_id, event_id, format, active) values (%L, %L, 'cup_taster', true)$$, t054.u(200), t054.u(201))), 'ok', 'V: dark: the annual org goes live');
 delete from live_sessions where event_id = t054.u(113);
 
 -- ============ events: the BTC gate ============
@@ -208,6 +209,8 @@ insert into event_entries (id, event_id, display_name) values ('00000000-0000-00
 select is(t054.active_n(101), 9, 'the table owner (a fixture) is not capped');
 delete from event_entries where id = '00000000-0000-0000-0540-000000010112';
 select is(t054.as_user(t054.u(12), (select string_agg(t054.entry(201, n), '; ') from generate_series(1, 12) n)), 'ok', 'an annual organisation registers twelve (no cap)');
+select is(t054.as_user(t054.u(12), format($$update live_sessions set active = true where event_id = %L$$, t054.u(201))), 'ok', 'V: after enforcement, an update of that dark-phase live session');
+select is((select entitlements_snapshot is null from events where id = t054.u(201)), true, 'V: it is not stamped by the update (the dark activation resolves live until its next activation)');
 select is(t054.as_user(t054.u(11), (select string_agg(t054.entry(102, n), '; ') from generate_series(1, 10) n)), 'ok',
   'an event with a per_event EVENT grant is not capped, in an organisation that is otherwise Community');
 select is(app.entitlement_limit(t054.u(100), 'cup_taster_participants', t054.u(101)), 8, 'the limit the trigger reads for the Community event');
@@ -226,6 +229,12 @@ select is(t054.as_user(t054.u(11), (select string_agg(t054.entry(111, n), '; ') 
   '42501|entitlement_cap_reached|cup_taster_participants|entitlement_cap_reached', 'same for a format with a trailing space');
 select is(t054.as_user(t054.u(11), (select string_agg(t054.entry(112, n), '; ') from generate_series(1, 9) n)), '42501|entitlement_cap_reached|cup_taster_participants|entitlement_cap_reached', 'and so is a guess_the_bean one: the app opens every non-btc event in the Cup Taster screens, so only btc is exempt');
 
+-- the creation gate names btc only: any other format is not gated by btc_format
+update app.entitlement_keys set enforced = true where key = 'btc_format';
+select is(t054.as_user(t054.u(11), $$insert into events (id, org_id, format, name) values (gen_random_uuid(), t054.u(100), 'throwdown', 'future format')$$), 'ok',
+  'the btc gate names btc only: another format is not refused by btc_format');
+update app.entitlement_keys set enforced = false where key = 'btc_format';
+
 -- ============ the go-live snapshot ============
 -- E3 goes live as Community
 select is(t054.as_user(t054.u(11), format($$insert into live_sessions (org_id, event_id, format, active) values (%L, %L, 'cup_taster', true)$$, t054.u(100), t054.u(103))), 'ok',
@@ -233,6 +242,8 @@ select is(t054.as_user(t054.u(11), format($$insert into live_sessions (org_id, e
 select is((select entitlements_snapshot::text from events where id = t054.u(103)), '{"tier": "community"}', 'the first activation stamped the tier the event resolved to');
 select ok((select entitlements_snapshot_at is not null from events where id = t054.u(103)), 'and when');
 select is((select entitlements_snapshot is null from events where id = t054.u(104)), true, 'an event that never went live has no snapshot (it resolves live)');
+select is(t054.as_user(t054.u(11), format($$insert into live_sessions (org_id, event_id, format, active) values (%L, %L, 'cup_taster', false)$$, t054.u(100), t054.u(104))), 'ok', 'V: an INACTIVE session is inserted');
+select is((select entitlements_snapshot is null from events where id = t054.u(104)), true, 'V: an inactive session does not stamp');
 select is(t054.as_user(t054.u(11), format($$update events set entitlements_snapshot = '{"tier":"annual"}' where id = %L$$, t054.u(103))),
   '23001|||events.entitlements_snapshot is written by the database only',
   'a member cannot edit the snapshot (23001)');
@@ -244,12 +255,18 @@ select is((select entitlements_snapshot::text from events where id = t054.u(103)
 -- off and on again does not re-stamp
 create table t054.stamp as select entitlements_snapshot_at as at from events where id = t054.u(103);
 select is(t054.as_user(t054.u(11), format($$update live_sessions set active = false where event_id = %L$$, t054.u(103))), 'ok', 'the session is ended');
+insert into entitlement_grants (id, org_id, tier, source) values (t054.u(900), t054.u(100), 'annual', 'manual');
 select is(t054.as_user(t054.u(11), format($$update live_sessions set active = true where event_id = %L$$, t054.u(103))), 'ok', 'and started again');
+select is(t054.as_user(t054.u(11), format($$update live_sessions set active = true where event_id = %L$$, t054.u(103))), 'ok', 'V: an update of an already-active session');
+select is((select entitlements_snapshot::text from events where id = t054.u(103)), '{"tier": "community"}', 'V: still community after a grant and two activations and an update');
 select is((select entitlements_snapshot_at = (select at from t054.stamp) from events where id = t054.u(103)), true, 'the stamp is set once: a second activation does not move it');
 -- an annual grant arrives later: the live event keeps its tier, an unpublished one resolves live
-insert into entitlement_grants (id, org_id, tier, source) values (t054.u(900), t054.u(100), 'annual', 'manual');
 select is(app.entitlement_limit(t054.u(100), 'cup_taster_participants', t054.u(103)), 8, 'a grant bought after go-live does not lift the live event (it keeps its snapshot tier)');
 select is(app.entitlement_limit(t054.u(100), 'cup_taster_participants', t054.u(104)), null, 'while an event that is not live yet resolves live (annual: no cap)');
+update app.entitlement_keys set enforced = true where key in ('registration_page', 'cup_taster_report');
+select is(app.has_entitlement(t054.u(100), 'registration_page', t054.u(103)), true, 'V: a window_bound=false key ignores the snapshot (annual org now: live tier)');
+select is(app.has_entitlement(t054.u(100), 'cup_taster_report', t054.u(103)), false, 'V: a window_bound key holds the snapshot (community < per_event)');
+update app.entitlement_keys set enforced = false where key in ('registration_page', 'cup_taster_report');
 select is(t054.as_user(t054.u(11), 'select public.my_entitlements(' || quote_literal(t054.u(100)) || ', ' || quote_literal(t054.u(103)) || ')'), 'ok', 'for a member');
 -- the 8 participants of E3 are capped, a ninth refused, even though the organisation is now annual
 select is(t054.as_user(t054.u(11), (select string_agg(t054.entry(103, n), '; ') from generate_series(1, 8) n)), 'ok', 'E3 takes eight');
@@ -258,6 +275,7 @@ select is(t054.as_user(t054.u(11), t054.entry(103, 9)), '42501|entitlement_cap_r
 
 -- ============ admin_event_resnapshot ============
 select is(t054.as_admin('nonadmin', format($$select public.admin_event_resnapshot(%L, 'why')$$, t054.u(103))), '42501|admin_required', 'resnapshot: a non-admin is refused');
+select is(t054.as_admin('nonadmin', format($$select public.admin_event_resnapshot(%L, 'why')$$, t054.u(104))), '42501|admin_required', 'V: the gate comes first (a non-admin on an event with no snapshot is refused as non-admin)');
 select is(t054.as_admin('admin', 'select public.admin_event_resnapshot(null, null)'), '22023|reason_required', 'a blank reason is refused');
 select is(t054.as_admin('admin', format($$select public.admin_event_resnapshot(%L, repeat('r', 501))$$, t054.u(103))), '22023|reason_too_long', 'a 501 character reason is refused');
 select is(t054.as_admin('admin', $$select public.admin_event_resnapshot(gen_random_uuid(), 'why')$$), '22023|event_not_found', 'an unknown event is refused');

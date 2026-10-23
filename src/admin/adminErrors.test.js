@@ -56,7 +56,7 @@ const NOT_FOR_THE_CONSOLE = {
   enforced_invalid: 'entitlement admin functions, no console screen yet',
   confirm_mismatch: 'entitlement admin functions, no console screen yet',
   entitlement_required:
-    'entitlement hooks, raised to the organiser console users, not the admin console',
+    'entitlement hooks refuse an organiser write; the organiser surface has no copy for them yet (G-C2)',
   entitlement_cap_reached:
     'entitlement hooks, raised to the organiser console users, not the admin console',
   snapshot_absent: 'entitlement admin functions, no console screen yet',
