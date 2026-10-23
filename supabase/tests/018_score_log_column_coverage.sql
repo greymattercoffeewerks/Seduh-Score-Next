@@ -78,6 +78,7 @@ insert into _buckets values
   -- events (only the is_test flag and org ownership matter to the trail)
   ('events', 'id', 'immutable'), ('events', 'org_id', 'immutable'), ('events', 'format', 'immutable'),
   ('events', 'is_test', 'logged'),
+  ('events', 'ended_at', 'metadata'), ('events', 'ended_by', 'metadata'), ('events', 'ended_via', 'metadata'),
   ('events', 'entitlements_snapshot', 'metadata'), ('events', 'entitlements_snapshot_at', 'metadata'),
   ('events', 'name', 'metadata'),
   ('events', 'event_date', 'metadata'), ('events', 'venue', 'metadata'),

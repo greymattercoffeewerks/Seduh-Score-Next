@@ -2,9 +2,7 @@
 -- Proves, as the REAL roles through RLS:
 --   * DARK: with every key unenforced (the seed) a Community organisation creates a BTC event and registers ten Cup Taster
 --     entries exactly as before;
---   * events insert (btc_format): refused for a Community organisation with 42501 / entitlement_required and the key in the
---     detail, allowed for an annual organisation and for an organisation-level per_event grant, a CUP TASTER event is never
---     refused; a non-member gets the STANDARD row-level-security refusal (never the entitlement one: no oracle); the table
+--   * events insert: any tier may create a BTC event (btc_format is checked at go-live, see 055); a non-member gets the STANDARD row-level-security refusal (never the entitlement one: no oracle); the table
 --     owner is not gated; a client cannot insert the snapshot columns (they are nulled);
 --   * events.format is frozen for everyone (a Community organisation cannot turn a cup_taster event into a BTC one or back);
 --   * the participant cap (cup_taster_participants, Community 8): the ninth ACTIVE entry is refused with 42501 /
@@ -155,7 +153,7 @@ delete from live_sessions where event_id = t054.u(113);
 -- ============ events: the BTC gate ============
 update app.entitlement_keys set enforced = true where key = 'btc_format';
 select is(t054.as_user(t054.u(11), $$insert into events (id, org_id, format, name) values (gen_random_uuid(), t054.u(100), 'btc', 'gated btc')$$),
-  '42501|entitlement_required|btc_format|entitlement_required', 'enforced: a Community member is refused a BTC event: 42501, hint entitlement_required, the key in the detail');
+  'ok', 'enforced: a Community member may still CREATE a BTC event (the btc_format check moved to go-live: 055)');
 select is(t054.as_user(t054.u(11), $$insert into events (id, org_id, format, name) values (gen_random_uuid(), t054.u(100), 'cup_taster', 'cup taster still fine')$$), 'ok',
   'a Cup Taster event is not gated');
 select is(t054.as_user(t054.u(12), $$insert into events (id, org_id, format, name) values (gen_random_uuid(), t054.u(200), 'btc', 'annual btc')$$), 'ok',
@@ -167,7 +165,7 @@ select is(t054.as_user(t054.u(12), $$insert into events (id, org_id, format, nam
   'a NON-member naming the Community organisation gets the standard row-level-security refusal (not the entitlement one: no oracle)');
 select is(t054.as_user(t054.u(12), $$insert into events (id, org_id, format, name) values (gen_random_uuid(), t054.u(100), 'cup_taster', 'not my org either')$$),
   '42501||' || '|new row violates row-level security policy for table "events"', 'and the same for a Cup Taster event: the answer does not depend on the entitlement');
-select is((select count(*)::int from (select 1 from events where org_id = t054.u(100) and name = 'gated btc') x), 0, 'the refused event does not exist');
+select is((select count(*)::int from (select 1 from events where org_id = t054.u(100) and name = 'gated btc') x), 1, 'and it exists');
 insert into events (id, org_id, format, name) values (t054.u(106), t054.u(100), 'btc', 'owner btc');
 select is((select count(*)::int from events where id = t054.u(106)), 1, 'the table owner (a seed, a fixture) is not gated');
 select is(t054.as_user(t054.u(11), format($$insert into events (id, org_id, format, name, entitlements_snapshot, entitlements_snapshot_at)
@@ -232,7 +230,7 @@ select is(t054.as_user(t054.u(11), (select string_agg(t054.entry(112, n), '; ') 
 -- the creation gate names btc only: any other format is not gated by btc_format
 update app.entitlement_keys set enforced = true where key = 'btc_format';
 select is(t054.as_user(t054.u(11), $$insert into events (id, org_id, format, name) values (gen_random_uuid(), t054.u(100), 'throwdown', 'future format')$$), 'ok',
-  'the btc gate names btc only: another format is not refused by btc_format');
+  'btc_format does not gate the creation of any format any more');
 update app.entitlement_keys set enforced = false where key = 'btc_format';
 
 -- ============ the go-live snapshot ============

@@ -109,12 +109,12 @@ on conflict (org_id, user_id) do nothing;
 -- trigger enforces, not a full stage/heat/result tree behind it. Real,
 -- low-numbered UUIDs avoided for the same reason this file's own header
 -- comment already gives for orgs/auth.users.
-insert into events (id, org_id, format, name, city, venue, event_date, status, is_test)
+insert into events (id, org_id, format, name, city, venue, event_date, status, is_test, ended_at, ended_via)
 values
   ('7c2b6a2a-2f3a-4b6e-9b0a-2e6b4a1c9d01', '10c8c375-afe6-41c7-a54e-ffaa15429612',
-   'cup_taster', 'Jakarta Cup Tasters #09', 'Jakarta', 'Ambang Coffee Lab', '2026-09-14', 'concluded', false),
+   'cup_taster', 'Jakarta Cup Tasters #09', 'Jakarta', 'Ambang Coffee Lab', '2026-09-14', 'concluded', false, now(), 'concluded'),
   ('7c2b6a2a-2f3a-4b6e-9b0a-2e6b4a1c9d02', '10c8c375-afe6-41c7-a54e-ffaa15429612',
-   'cup_taster', 'Bandung Coffee Week', 'Bandung', 'Serumpun Coffee House', '2026-08-31', 'concluded', false)
+   'cup_taster', 'Bandung Coffee Week', 'Bandung', 'Serumpun Coffee House', '2026-08-31', 'concluded', false, now(), 'concluded')
 on conflict (id) do nothing;
 
 insert into public_results (org_id, event_id, payload)

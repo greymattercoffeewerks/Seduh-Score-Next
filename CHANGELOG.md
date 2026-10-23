@@ -1,3 +1,57 @@
+## T-GATE.B4: the Community one-open-event rule, finish and release, and BTC gated at first go-live, still dark · 2026-10-23
+
+**Task:** T-GATE.B4, gating and entitlements (`Handoffs and Specs/GATING-SPEC.md`, local and gitignored; spec 6d D-G20, D-G22, D-G23, and the owner's BTC decision of 2026-10-23). Branch `feat/gating-b4`, stacked on B3 (PR #304; retarget to `dev` once #304 merges). Commits `257f7d6` (the rule, finish, release) and `dafdb17` (BTC moved to first go-live; review fixes). **Status: built and reviewed, local only. Nothing pushed (no PR, no cloud project; D-G13). NOT FINAL:** the PR's CI run (`db reset`, full pgTAP, the Playwright admin attack list, dev-app e2e) has not been seen green, and `module-boundary-checker` has not been run on the one `src/` test change (see open items). Still dark: no key is flipped.
+
+**Why:** The owner decided that a Community organisation runs one open event at a time. That needs "ended" to be a fact the database owns: `events.status` is member-writable and BTC has no status, so an end cannot be read from status alone. The same decision moved the BTC `btc_format` check. B3 checked it at event creation, but a Per-event BTC buyer's grant is scoped to an event that does not exist until it is created, so the check refused the very buyer it was meant for. Option A (owner, 2026-10-23): any tier may create a BTC event; `btc_format` is checked at first go-live, where the event exists, its own grant counts, and the snapshot is taken.
+
+**What changed:**
+
+- `supabase/migrations/20261023130000_entitlement_open_events.sql` (new, with a rollback block):
+  - `events.ended_at` / `ended_by` / `ended_via` (open = `ended_at` is null), with `events_ended_consistent`. Backfill: every event already `concluded` is ended, `ended_via = 'concluded'` (the `updated_at` trigger is suppressed for those historic rows).
+  - `app.guard_event_ended` (`trg_events_ended_guard`, BEFORE UPDATE OF status and the three columns): a member's write of the ended columns is refused 23001. A member's move of `status` to `concluded` stamps the event ended (`concluded`). Only the definer functions below write these columns otherwise.
+  - `public.finish_event(p_org_id, p_event_id)`: the organiser's "Finish this event". Granted to `authenticated`, but a member of that organisation only; anyone else, or a wrong event id, gets one uniform 42501 `finish_event: event not found`. One-way and idempotent (the first `ended_by` / `ended_at` is kept).
+  - `app.check_event_create` REPLACED: for API callers it nulls the snapshot and ended columns; an insert already `concluded` is stamped ended and takes no slot; otherwise, when `events_open` is not null, it takes `pg_advisory_xact_lock(hashtext('events_open:' || org))`, counts the organisation's open events and refuses 42501 `entitlement_cap_reached`, detail `events_open`.
+  - Key `events_open` (cap, `window_bound`, seeded off): community 1, per_event and annual unlimited. Added to `supabase/entitlements.catalog.json` and seeded from a second embedded block tagged `$catalog_add$`.
+  - `public.admin_event_release(p_event_id, p_reason)`: `app.require_platform_admin()` first, reason required (500 characters at most), audited as `event.release`. Already ended is a silent no-op that logs nothing.
+  - `app.gating_would_lose` REPLACED: for `events_open` it lists the organisations at or over the limit, with `open_events` in the detail.
+  - `app.check_live_session_btc_golive` + `trg_live_sessions_btc_golive` (BEFORE INSERT OR UPDATE on `live_sessions`): on an activation (insert, or inactive to active) of a BTC event, for API callers, `btc_format` must resolve over the organisation's grants AND the event's own grant (higher tier wins). Refused 42501 `entitlement_required`, detail `btc_format`. Opens with `app.refuse_non_member`. B3's creation-time check is removed (its rollback restores it).
+- `supabase/tests/055_entitlement_open_events.sql` (new, 99 assertions).
+- Guard edits (counts and lists, not relaxed checks): `018` (the three ended columns added to the column-coverage list as metadata); `034` (nineteen `p_org_id` RPCs, was eighteen, `finish_event` added); `041` (`finish_event` in the matrix, 25 RPCs, `admin_event_release` in the admin-door exemption list); `050` (`admin_event_release` in the exact admin-function list, seventeen admin doors); `052` (ten keys seeded, was nine).
+- `supabase/seed.sql`: the two seeded `concluded` events carry `ended_at` / `ended_via` (the CHECK requires them to agree with status).
+- `src/core/entitlements.contract.test.js`: the contract test now checks base seed + `$catalog_add$` block == `entitlements.catalog.json`, so the catalog may be extended by a later migration without editing the test.
+- `tests/e2e/admin-console-adversarial.spec.js`: `admin_event_release` added to the attack list.
+
+**Verification (this session):**
+
+- All 55 pgTAP files pass after `db reset`, including 055 (99 assertions).
+- The rollback block was run inside a transaction and rolled back: the trigger is gone, and the B3 `check_event_create` and B2 `gating_would_lose` bodies are restored byte-identical (schema-guardian).
+- Admin adversarial attack list: 20 of 20 locally.
+- dev-app e2e and the full CI run: not yet seen (see NOT FINAL above).
+
+**Reviews:**
+
+- `schema-guardian`: clean. **Nit, fixed** (`dafdb17`): an insert with status `concluded` was left open. `check_event_create` now stamps it ended and it takes no slot.
+- `security-reviewer`: clean on both passes. **Nit, recorded:** a BTC event that went live before `btc_format` was enforced has no snapshot, so its next `publish_session` is refused mid-event. Flip runbook: do not enforce `btc_format` while a BTC event is live, and check `admin_gating_preview` first. **Pre-existing, recorded:** `btc_format` is not tied to `events.format` for `btc_*` table writes, so it is a soft commercial gate only.
+- `code-reviewer`: clean. **Nit, fixed:** the seed's concluded events now carry `ended_at`.
+- `test-auditor`: **2 Important, both fixed:** the insert-nulling of the ended columns was not proven, and stamp-once was not proven. Both now have assertions in 055. Nits, fixed: the confirm count (+1) and a 500-character reason test.
+- `module-boundary-checker`: **not run.** The `src/` change is `src/core/entitlements.contract.test.js`. Run before the PR.
+
+**Decisions (not in the handoff's §12 record):**
+
+- **"Ended" is `events.ended_at`, set by one of three paths:** the organiser's Finish, a status change to `concluded`, or an admin release. The database owns it. The alternative (deriving "ended" from status) fails for BTC, which has no status.
+- **Test events count toward the open-event limit.** `events.is_test` is member-writable (7a risk 2), so exempting test events would let a member bypass the cap by flagging an event as a test. A rehearsal is ended with Finish.
+- **A `concluded` status is accepted as an end without a separate check.** The organiser can finish an event at any moment, so forging `concluded` gains nothing Finish does not already give. Row-level security keeps it inside the member's own organisation.
+- **BTC is gated at first go-live, not creation (owner option A, 2026-10-23).** A Per-event grant needs the event to exist, so the creation check could never pass for the buyer it was meant for. Going live is also where the snapshot is taken, so the grant that counts is the one held then. This resolves the B3 chicken-and-egg item; see "Known open items from T-GATE.B4".
+
+**Not done / still open** (also in ROADMAP's "Known open items from T-GATE.B4"):
+
+- The automatic podium publish 24 hours after an event ends (D-G22) is not built. Nothing reads `ended_at` to publish yet (the preview reads it).
+- The Per-event 5-day window lock (G-B5) is not started.
+- `events.status` and `events.is_test` are still member-writable (7a risk 2).
+- Organiser copy for `entitlement_required` / `entitlement_cap_reached` (G-C2) is not written.
+- Flip runbook preconditions: old open events (see ROADMAP) and the live-BTC nit above.
+- Cloud: migrations `20261023100000` to `20261023130000` are local only; push after the BTC pitch via the Supabase MCP, after the `list_migrations` check.
+
 ## T-GATE.B3: the enforcement hooks (events gate, format freeze, participant cap, go-live snapshot), still dark · 2026-10-23
 
 **Task:** T-GATE.B3, gating and entitlements (`Handoffs and Specs/GATING-SPEC.md`, local and gitignored; spec 3.4, D-G4, D-G8, D-G19, D-G29, 7a risks). Branch `feat/gating-b3`, stacked on `dev`, which holds B1 (PR #300) and B2 (PR #301). Commits `a0c717e`, `700a9cf`, `871f85d`, `171d486`, merge `b339792`. **Status: built and reviewed, local only. Nothing pushed (no PR, no cloud project; D-G13). Not final until the PR's CI run (`db reset`, full pgTAP, the Playwright admin attack list, dev-app) is seen green.** Still dark: no key is flipped, and the browser does not call anything new.
