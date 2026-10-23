@@ -753,6 +753,41 @@ describe('mountAppShell', () => {
       expect(signOutButton).not.toBeUndefined();
     });
 
+    it('puts a Change password link in the account area, next to the email, only while signed in (D-PW1)', () => {
+      const root = document.createElement('div');
+      const { auth, trigger } = fakeAuthWithTrigger();
+      mountAppShell(root, { client: { auth, from: () => ({}) } });
+      expect(root.querySelector('a[href="#/account/password"]')).toBeNull();
+
+      trigger({ user: { email: 'organiser@local.test' } });
+
+      const link = root.querySelector('.app-shell-auth a[href="#/account/password"]');
+      expect(link.textContent).toBe('Change password');
+      expect(link.className).toBe('app-shell-auth-link');
+      // A nav link would be counted among the console's navigation; this is the account area.
+      expect(root.querySelector('.app-shell-nav a[href="#/account/password"]')).toBeNull();
+
+      trigger(null);
+      expect(root.querySelector('a[href="#/account/password"]')).toBeNull();
+    });
+
+    it('tapping Change password closes the open menu and gives up focus', () => {
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      const { auth, trigger } = fakeAuthWithTrigger();
+      mountAppShell(root, { client: { auth, from: () => ({}) } });
+      trigger({ user: { email: 'organiser@local.test' } });
+      const toggle = root.querySelector('.app-shell-nav-toggle');
+      toggle.click();
+      expect(toggle.getAttribute('aria-expanded')).toBe('true');
+      const link = root.querySelector('a[href="#/account/password"]');
+      link.addEventListener('click', (event) => event.preventDefault());
+      link.focus();
+      link.click();
+      expect(toggle.getAttribute('aria-expanded')).toBe('false');
+      expect(document.activeElement).not.toBe(link);
+    });
+
     it('clicking Sign out calls client.auth.signOut() and navigates to #/events', async () => {
       const root = document.createElement('div');
       document.body.appendChild(root);

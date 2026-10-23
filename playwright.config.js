@@ -102,5 +102,15 @@ export default defineConfig({
       dependencies: ['dev-tenancy'],
       use: { baseURL: 'http://127.0.0.1:5273' },
     },
+    {
+      // password-recovery.spec.js (D-PW1): the organiser's forgot-password flow through the local stack's mail
+      // catcher (Mailpit, port 54424, `[local_smtp]` in supabase/config.toml, which `supabase start` brings up
+      // by default). Run it alone with `npx playwright test --project=dev-recovery`. Last, for the same
+      // shared-backend reason as the projects above.
+      name: 'dev-recovery',
+      testMatch: /password-recovery\.spec\.js/,
+      dependencies: ['dev-admin'],
+      use: { baseURL: 'http://127.0.0.1:5273' },
+    },
   ],
 });
