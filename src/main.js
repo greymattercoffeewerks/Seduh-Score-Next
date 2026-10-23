@@ -25,7 +25,6 @@ import { mountSetPasswordScreen } from './core/setPasswordScreen.js';
 import { mountTeamScreen } from './core/teamScreen.js';
 import { mountNoOrgScreen } from './core/noOrgScreen.js';
 import { canManageTeam } from './core/team.js';
-import { mountSplashScreen } from './core/splashScreen.js';
 import { mountEventDashboardScreen } from './formats/cup-taster/eventDashboardScreen.js';
 import { mountSetupScreen } from './formats/cup-taster/setupScreen.js';
 import { mountRosterScreen } from './formats/cup-taster/rosterScreen.js';
@@ -34,7 +33,7 @@ import { mountHeatGenerationScreen } from './formats/cup-taster/heatsScreen.js';
 import { mountStandingsScreen } from './formats/cup-taster/standingsScreen.js';
 import { mountTimingRouteScreen } from './formats/cup-taster/timingRouteScreen.js';
 import { mountScoringScreen } from './formats/cup-taster/scoringScreen.js';
-import { mountProjector, mountPhone } from './liveSurfaces.js';
+import { mountProjector, mountPhone, mountSplash } from './liveSurfaces.js';
 import { mountBtcEventDashboardScreen } from './formats/btc/eventDashboardScreen.js';
 import { mountSetupScreen as mountBtcSetupScreen } from './formats/btc/setupScreen.js';
 import { mountMatchesScreen as mountBtcMatchesScreen } from './formats/btc/matchesScreen.js';
@@ -718,7 +717,7 @@ function focusFirstHeading(root) {
 const AUDIENCE_SURFACES = {
   projector: { stage: true, mountSurface: mountProjector },
   phone: { stage: false, mountSurface: mountPhone },
-  splash: { stage: true, mountSurface: mountSplashScreen },
+  splash: { stage: true, mountSurface: mountSplash },
 };
 
 function mountNotFoundScreen(root) {

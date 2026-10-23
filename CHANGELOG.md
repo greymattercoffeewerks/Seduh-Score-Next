@@ -1,3 +1,90 @@
+## T-GATE.B1: the entitlement core, shipped dark · 2026-10-23
+
+**Task:** T-GATE.B1, gating and entitlements (`Handoffs and Specs/GATING-SPEC.md`, local and gitignored, not in git; sections 3.1 to 3.3, 3.6 and 3.7, owner decisions 6d and 6e of 2026-10-23). Branch `claude/feat-gating-5cab26`, commits `1257b31`, `844baf2`, `23b93e4`. **Status: built and reviewed, local only. Nothing pushed (no PR, no cloud project; D-G13 keeps gating out of the cloud before the BTC pitch). Every key is seeded `enforced = false` and nothing calls the new functions, so behaviour is unchanged.** Not final until the PR's CI run (`db reset`, full pgTAP) is seen green.
+
+**Why:** D14 has been a permissive stub since the start. Gating has to be a database boundary, not a client check, so the tiers, the keys and the resolution rules are fixed in SQL first. Shipping the data model dark lets it be reviewed and tested on its own, before any write path or enforcement hook depends on it.
+
+**What changed:**
+
+- `supabase/migrations/20261023100000_entitlements_core.sql` (new, with a rollback block):
+  - `app.entitlement_tiers`, `app.entitlement_keys`, `app.entitlement_caps`: platform reference data in `app`, RLS on with no policy, every API role revoked. Seeded from the catalog, embedded verbatim in the migration.
+  - `public.entitlement_grants`: a tenant table (D-G18). A composite foreign key to `events(id, org_id)` (new `events_id_org_id_key`) means an event grant can only name an event of the same organisation. Members read it; no API role writes it. Every column except `revoked_at` is frozen by `app.forbid_parent_change`; a grant is never edited in place.
+  - `app.effective_tier`, `app.has_entitlement`, `app.entitlement_limit`: `SECURITY DEFINER`, not executable by any API role.
+  - `public.my_entitlements(p_org, p_event)`: the member-gated read the browser makes once per session. A non-member, or an event that is not the organisation's, gets 42501.
+- `supabase/entitlements.catalog.json` (new): tiers `community` (0), `per_event` (1), `annual` (2); the keys, with a minimum tier for each flag and a limit per tier for `cup_taster_participants` (Community 8, the others unlimited).
+- `src/core/entitlements.js`: rewritten from the stub into a snapshot reader. `loadEntitlements` reads `my_entitlements`; `canAccess` and `limitFor` answer from the snapshot. With no snapshot every known key reads as allowed (fail-open, so a bad read cannot brick a screen mid-event). The database still decides.
+- Tests: pgTAP `052_entitlements_core.sql` (101 assertions); `040` and `041` matrices gain the new tenant table and RPC; `src/core/entitlements.test.js` rewritten; `src/core/entitlements.contract.test.js` (new) fails if the catalog file, the migration seed or the JS view of them disagree; `src/admin/adminErrors.test.js` gains three lines.
+
+**Decisions:**
+
+- **Highest tier wins, never summed** (spec 3.1): the default, the organisation's current grants and, for one event, that event's grants. "Current" means not revoked and `valid_from <= now < valid_until`, with null open-ended.
+- **A key can be exempt from the window.** `window_bound = false` (the registration page, D-G16) resolves from any non-revoked grant whatever its dates.
+- **Tiers are rows, not an enum,** so adding a tier is a seed row, not a migration to a type.
+- **A missing caps row reads as unlimited,** so the seed carries one row per capped key and tier, and two tests check it does.
+- **Keys are seeded `enforced = false`.** `has_entitlement` answers true for everyone until an audited admin function flips a key (a later migration). The switch-on is a separate, logged step (D-G11, D-G27).
+- **Grants cascade on delete of their event or organisation, on purpose.** A test event must stay deletable. The durable history is the admin audit log, which has no foreign keys.
+- **Operator metadata is hidden from members.** `granted_by` and `note` are excluded from the members' column grant (found by `security-reviewer`; fixed in `844baf2`).
+- **Time is compared in the database only.** An optional `p_at` lets tests pass a clock (threat model 4.6); the API never reaches these functions.
+
+**Reviews:** `schema-guardian`, `security-reviewer`, `code-reviewer` with `module-boundary-checker`, and `test-auditor` all ran. No blocking findings from any of them.
+
+- `schema-guardian`: clean. Nits: an index on `entitlement_grants.event_id` added (`844baf2`); the cascade documented as intentional (above).
+- `security-reviewer`: clean. Nit fixed: `granted_by` and `note` hidden by a column-level grant (`844baf2`).
+- `code-reviewer` and `module-boundary-checker`: clean. Nit deferred: the catalog's `note` text ships inside the client bundle once the client reads it; to revisit when the first call site lands (ROADMAP, "Known open items from T-GATE.B1").
+- `test-auditor`: no blocking. Five test-gap nits, all closed in pgTAP 052 (`23b93e4`; the commit names window wiring, inclusive start, every frozen column and the anon privilege).
+- The rollback block was run inside a transaction and rolled back; it left nothing behind.
+- This session ran `vitest` on `entitlements`, its contract test and `adminErrors`: 49 of 49 pass.
+
+**Not done / still open** (also in ROADMAP's "Known open items from T-GATE.B1"):
+
+- **B2 (migration 053): the admin writers.** The audited functions that create and revoke grants, and the one-open-event rule. Grants are written only through them.
+- **B3 (migration 054): the enforcement hooks.** The `events` and `event_entries` triggers (D-G8, D-G19), snapshot-at-first-publish (D-G4), and the Per-event window lock.
+- **`CLAUDE.md`'s "Entitlements are a stub" non-negotiable** is still true in the file and must be rewritten when the first call site lands, not before.
+- **Version:** `package.json` is bumped as the footer step for this shippable (dark) change.
+
+---
+
+## BR-E1: the organiser brand reaches the projector, phone and splash · 2026-10-18
+
+**Task:** BR-E1, Level 2 organiser branding (`Handoffs and Specs/BRANDING-SPEC.md` 4.3; spec is local and gitignored, not in git). PR #297 (`feat/brand-wiring`, commit `d908349`), into `dev`. **Status: built and reviewed. Not released, and it must not reach `main` before the database door exists (BR-B1) and the BTC pitch (about 4 November): until then every audience page load sends one failing request. Nothing shows a brand yet.**
+
+**Why:** BR-D2 built the brand slot and the credit but nothing fed them. The audience screens need the organiser's brand, and it must never cost a screen anything: the venue display is what the room is looking at, on unreliable wifi. So the brand is asked for beside the screen, after it is up, and every failure leaves the screen as it was.
+
+**What changed:**
+
+- `src/core/brandDoor.js` (new):
+  - `askBrandDoor(client, { orgId, eventId })` asks the narrow database door `public_event_branding(p_org_id, p_event_id)` and answers `brand`, `none`, `absent`, `invalid` or `error`, never throwing. It always sends both arguments (the event null when there is none). The row (`display_name`, `accent_hex`, `logo_url`, `logo_alt`) goes through `normaliseBrand` like every brand.
+  - `createBrandSource({ client, orgId, onBrand })` is what a surface runs beside itself: one question at a time, asked again when the event changes and every 10 minutes, `onBrand(brand | null)` called only when the brand really changed. The logo is loaded before the brand is shown.
+- `src/liveSurfaces.js` composes it: `mountProjector`, `mountPhone` and a new `mountSplash` (mounted by `main.js` for the splash). Each applies a brand that arrived while it was still mounting, and stops asking on unmount or when the navigation is aborted. The projector's holding cards are branded too (the shell draws the BR-D2 band).
+- `viewer-shell.js` and `stageSurface.js` gain `onEventChange(eventId)`, `splashScreen.js` gains `onEvent(event)`, and `formatBody.js` keeps the brand, hands every factory `{ brand }`, and has `setBrand`. That is how a display rebuilt for the next event starts branded (BR-D2 had warned that a rebuild would lose it).
+- Tests: `brandDoor.test.js` (39), `brandWiring.test.js` (the real surfaces over a fake database that answers the door), and added blocks in `formatBody.test.js` and `viewer-shell.test.js`. `main.test.js`'s mock now stubs `mountSplash`.
+- `src/core/CLAUDE.md`: the `brandDoor` entry.
+
+**Decisions:**
+
+- **Branding never blocks or delays a screen.** Asked after mount and never awaited; the screen is the ordinary one until the answer arrives. Why: a projector must work with a dead door, and the published live payload is unchanged (no brand in the snapshot), so the realtime path and the offline queue are untouched.
+- **Only the door saying "nothing is set" takes a brand away.** A failed question, a timeout, a missing door or a logo that will not load never does. Why: a dropped connection mid-event must not strip an organiser's name off the projector. A logo that will not load shows the name and colour without it, and is tried again on the next question.
+- **A missing door is quiet and retried on the slow timer, not given up on for good.** Why (code-reviewer): a projector opened before the migration was pushed would otherwise stay unbranded for hours.
+- **Both arguments are always sent, the event null when there is none.** Why (code-reviewer): a call that leaves one out only matches a function declared with a default for it, and "no such function" would then be read as "no door", permanently unbranding every screen. The BR-B1 migration must declare `p_event_id`.
+- **One question at a time; an answer about an event that is no longer current is dropped.** Why: answers land in the order asked, and an answer about an older event can never land after a newer one. An answer to a question that named no event is still delivered at once, so a brand is not held back for a second round trip.
+- **A late brand that throws is logged, never allowed to fail a mount.** Why (code-reviewer): a mount that rejects after the surface is up would leave its source running and make the router mount a second surface on top.
+
+**Reviews:** `code-reviewer`, `test-auditor` and `module-boundary-checker` ran (the first three attempts stalled with no output and were restarted narrower).
+
+- `module-boundary-checker`: no violation. Notes, all non-blocking and logged in ROADMAP: the "call a door with a timeout" skeleton is now in three places in core, the UUID pattern is duplicated with the admin console, and a new projector body factory must forward its options (now checked by a test).
+- `code-reviewer`: no blocking bug. Fixed: the door call shape (above), the late-brand fault, a stale-event answer, a logo-only brand removed by a logo that would not load, a fault inside a question escaping. Accepted: the connecting card can show unbranded for a few seconds on a bad connection (the brand reaches the shell only after its first read).
+- `test-auditor`: found one real bug (a failed logo later removed by the organiser handed the same brand over twice, now fixed with a test), two survivors (the projector's late apply, and `stop()` clearing the armed timer), a vacuous comparison and weak accent assertions, all fixed; missing cases added.
+- 34 deliberate breakages of the new code were each caught by a named test.
+
+**Verification:** the full suite (5,129 tests in 173 files), lint and Prettier on the repository pass. Not checked in a browser: the splash at 1280x360, and 4K, are still owed (nothing can show a brand to look at until the door exists).
+
+**Not done / still open** (also in ROADMAP's "Known open items from BR-E1"):
+
+- The database door does not exist (BR-B1, which needs gating's `audience_branding` key first). Every branding task after this is KIV (owner, 2026-10-18).
+- If the organisation-level answer is a brand and the event-level answer is "nothing", the brand shows and then goes; to settle in BR-B1.
+- Banners (the splash's full-bleed banner, the projector's idle banner screen) and the logo on the printed results sheet.
+- No footer version bump: nothing shippable changes until the door exists.
+
 ## BR-D2: "Powered by Seduh Score" credit and the brand slot on the audience surfaces · 2026-10-17
 
 **Task:** BR-D2, Level 2 organiser branding (`Handoffs and Specs/BRANDING-SPEC.md` 3, 4.5; spec is local and gitignored, not in git). PR #291 (`feat/brand-attribution`), merged into `dev` 2026-10-17 (merge `15d21a1`); commits `5e79bdb` (feature) and `0ce38e5` (boundary-review fixes). Recorded 2026-10-18. **Status: built, reviewed, merged to dev. Not in production (no release PR yet). Nothing feeds a brand yet, so no audience sees one.** (`dev` also took PR #288, the public `/pricing/` page, on 2026-10-18; unrelated to this entry.)

@@ -1,8 +1,9 @@
 // The pricing page's copy and its tier-by-feature matrix, in one editable place.
 //
-// Tier assignments confirmed by the owner on 2026-10-17: the 8-participant limit on Community
-// (BTC exempt), Annual's full access, Per-event as one event in one format, the result listing
-// rule (Compulsory / Optional / Optional), and the other rows as drafted.
+// Tier assignments confirmed by the owner on 2026-10-17: the 8-participant limit on Community,
+// Annual's full access, Per-event as one event in one format, the result listing rule
+// (Compulsory / Optional / Optional), and the other rows as drafted. Changed 2026-10-23: BTC is
+// Per-event and Annual only (not on Community), and Community runs one active event at a time.
 // Gating is not built yet (Handoffs and Specs/GATING-SPEC.md), so nothing here is enforced
 // by the product; the page says the limits are being switched on step by step.
 //   - the three tiers and their prices come from the landing page's pricing section;
@@ -20,7 +21,7 @@ export const TIERS = [
     name: 'Community',
     price: 'Free',
     suffix: null,
-    summary: 'For getting started. BTC with no limit, and other formats up to 8 competitors.',
+    summary: 'For getting started. Up to 8 competitors, and one active event at a time.',
     // The tier's archive rule (owner, 2026-10-17). Automatic enforcement is the archive
     // phase (infrastructure plan, step 4); until then publishing is the organiser's choice
     // on every tier, so this states the tier's policy ahead of the code.
@@ -67,8 +68,8 @@ export const FEATURE_GROUPS = [
       ],
       [
         'BTC',
-        'Team head-to-head: round-robin prelims, a seeded bracket and automatic advancement. Open to every tier, with no competitor limit.',
-        [yes, yes, yes],
+        'Team head-to-head: round-robin prelims, a seeded bracket and automatic advancement. Per-event and Annual only, with no competitor limit.',
+        [no, yes, yes],
       ],
     ],
   },
@@ -98,16 +99,17 @@ export const FEATURE_GROUPS = [
         'Entries queue on the device and sync when the connection returns.',
         [yes, yes, yes],
       ],
-      // Owner, 2026-10-17: on Community, Cup Taster, Throwdown and Liga Seduh are limited to 8
-      // participants and BTC is not; Annual has full access; Per-event covers one event in one
-      // format, with no cap. Nothing enforces any of it yet: caps are decision D-G3 in
+      // Owner, 2026-10-17 and 2026-10-23: Community has Cup Taster (and Throwdown and Liga Seduh
+      // when they ship) limited to 8 participants, one active event at a time, and no BTC;
+      // Annual has full access; Per-event covers one event in one format, with no cap, BTC
+      // included. Nothing enforces any of it yet: caps are decision D-G3 in
       // GATING-SPEC.md. The 5-day Per-event window (D-G15) is confirmed but deliberately not on
       // the page yet: when it starts and the CSV email at its end are still open.
       [
         'Events you can run',
         null,
         [
-          text('BTC without limit; other formats up to 8 competitors'),
+          text('Up to 8 competitors, one active event at a time'),
           text('One event, in one format'),
           text('All formats, all year, no limit'),
         ],

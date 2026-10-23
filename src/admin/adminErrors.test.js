@@ -38,6 +38,9 @@ const NOT_FOR_THE_CONSOLE = {
   already_recorded: 'logged by admin-accounts, surfaced as account_record_failed',
   // The anonymous public-results door.
   payload_too_large: 'public results publishing, not the console',
+  // The entitlement resolvers (internal to the database; a caller never reaches them).
+  entitlement_key_unknown: 'entitlement resolvers, not the console',
+  entitlement_key_not_cap: 'entitlement resolvers, not the console',
   // The BTC format's own RPCs.
   bracket_advanced: 'BTC format',
   demo_event_not_found: 'BTC format',

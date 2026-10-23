@@ -256,3 +256,92 @@ describe('createFormatBody', () => {
     expect(error).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('createFormatBody: the organiser brand', () => {
+  const BRAND = { displayName: 'Brew Lab', logoUrl: null, logoAlt: '', accentHex: null };
+
+  function brandedSetup() {
+    const made = [];
+    const formatBody = createFormatBody({
+      a: (options) => {
+        const body = { ...fakeBody('a'), setBrand: vi.fn(), options };
+        made.push(body);
+        return body;
+      },
+    });
+    return { formatBody, made };
+  }
+
+  it('hands every body it builds the brand it has, null before one arrives', () => {
+    const { formatBody, made } = brandedSetup();
+    formatBody.hasContent(ok, { format: 'a', eventId: 'e1' });
+    expect(made[0].options).toEqual({ brand: null });
+    formatBody.setBrand(BRAND);
+    formatBody.hasContent(ok, { format: 'a', eventId: 'e1' });
+    expect(made).toHaveLength(1);
+  });
+
+  it('passes a brand that arrives later on to the live body', () => {
+    const { formatBody, made } = brandedSetup();
+    formatBody.hasContent(ok, { format: 'a', eventId: 'e1' });
+    formatBody.setBrand(BRAND);
+    expect(made[0].setBrand).toHaveBeenCalledWith(BRAND);
+    formatBody.setBrand(null);
+    expect(made[0].setBrand).toHaveBeenLastCalledWith(null);
+  });
+
+  it('keeps the brand across a rebuild: the next event and the next session start branded', () => {
+    const { formatBody, made } = brandedSetup();
+    formatBody.hasContent(ok, { format: 'a', eventId: 'e1' });
+    formatBody.setBrand(BRAND);
+    formatBody.hasContent(ok, { format: 'a', eventId: 'e2' }); // another event: a new body
+    expect(made).toHaveLength(2);
+    expect(made[1].options).toEqual({ brand: BRAND });
+    formatBody.release(); // the session ended
+    formatBody.hasContent(ok, { format: 'a', eventId: 'e2' });
+    expect(made[2].options).toEqual({ brand: BRAND });
+  });
+
+  it('forgets a cleared brand: the body built after it starts unbranded', () => {
+    const { formatBody, made } = brandedSetup();
+    formatBody.hasContent(ok, { format: 'a', eventId: 'e1' });
+    formatBody.setBrand(BRAND);
+    formatBody.setBrand(null);
+    formatBody.hasContent(ok, { format: 'a', eventId: 'e2' });
+    expect(made[1].options).toEqual({ brand: null });
+  });
+
+  it('remembers a brand told while no body exists, for the one built next', () => {
+    const { formatBody, made } = brandedSetup();
+    formatBody.setBrand(BRAND);
+    expect(made).toHaveLength(0);
+    formatBody.hasContent(ok, { format: 'a', eventId: 'e1' });
+    expect(made[0].options).toEqual({ brand: BRAND });
+  });
+
+  it('is fine with a body that has no setBrand, and with one whose setBrand throws', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const plain = fakeBody('plain');
+    const throwing = {
+      ...fakeBody('throwing'),
+      setBrand: () => {
+        throw new Error('boom');
+      },
+    };
+    const a = createFormatBody({ a: () => plain });
+    a.hasContent(ok, { format: 'a' });
+    expect(() => a.setBrand(BRAND)).not.toThrow();
+    const b = createFormatBody({ b: () => throwing });
+    b.hasContent(ok, { format: 'b' });
+    expect(() => b.setBrand(BRAND)).not.toThrow();
+    expect(error).toHaveBeenCalledTimes(1);
+  });
+
+  it('builds nothing for a brand told after it is destroyed', () => {
+    const { formatBody, made } = brandedSetup();
+    formatBody.destroy();
+    formatBody.setBrand(BRAND);
+    formatBody.hasContent(ok, { format: 'a', eventId: 'e1' });
+    expect(made).toHaveLength(0);
+  });
+});

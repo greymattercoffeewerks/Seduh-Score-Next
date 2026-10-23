@@ -144,8 +144,9 @@ and the shared header's Pricing link. It is static like the Tour: no router, aut
   or `text`). Prices are the landing page's. `soon` means not built yet and the page says "Planned" in
   words; never mark a feature `yes` before it exists (the "Known placeholders" rule above).
 - **The matrix is confirmed by the owner (2026-10-17) but not enforced by the product.** Community is
-  limited to 8 competitors for Cup Taster (and, when they ship, Throwdown and Liga Seduh) while BTC is
-  uncapped; Per-event is one event in one format; Annual has full access; "Result listing" is Compulsory /
+  limited to 8 competitors for Cup Taster (and, when they ship, Throwdown and Liga Seduh), one active event
+  at a time, and has **no BTC** (owner, 2026-10-23, reversing the first confirmation: BTC is Per-event and
+  Annual only, uncapped; the spec is GATING-SPEC section 6d, key `btc_format`, min tier `per_event`); Per-event is one event in one format; Annual has full access; "Result listing" is Compulsory /
   Optional / Optional. The tentative 5-day Per-event window is deliberately not on the page. Gating (`Handoffs and Specs/GATING-SPEC.md`, D-G2/D-G3)
   is what will enforce it, and the page says the limits are being switched on step by step. When gating ships, the catalog (`supabase/entitlements.catalog.json`) should become the
   source for this matrix, with a contract test, so the page and the database cannot disagree.
@@ -169,8 +170,8 @@ and the shared header's Pricing link. It is static like the Tour: no router, aut
   colour, name and banner images, and "Powered by Seduh Score" always stays. Branding is not built, so the
   pricing page marks it Planned; the landing page's "branded" still describes it as a feature of the tier.
 - **The landing page's tier prose matches the confirmed tiers (owner approved the rewrite, 2026-10-17):**
-  Community "BTC with no limit, and other formats up to 8 competitors" with the podium published to the
-  archive; Per-event "one event, in the format you choose, branded, with PDF reports"; Annual "every format
+  Community "Up to 8 competitors, and one active event at a time" (no BTC, 2026-10-23) with the podium
+  published to the archive; Per-event "one event, in the format you choose, branded, with PDF reports"; Annual "every format
   and feature, with no competitor limit". The old claims (no account needed, every live format, persistent
   history across seasons, unbranded) are gone and a test keeps them out. Change this prose and
   `pricingContent.js` together.

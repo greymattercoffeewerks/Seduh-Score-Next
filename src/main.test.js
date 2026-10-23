@@ -55,6 +55,8 @@ vi.mock('./formats/cup-taster/scoringScreen.js', () => ({
 vi.mock('./liveSurfaces.js', () => ({
   mountProjector: (...args) => mountProjectorSurface(...args),
   mountPhone: (...args) => mountPhoneSummary(...args),
+  // The splash is branded from liveSurfaces.js too (BR-E1); the stub keeps its original name.
+  mountSplash: (...args) => mountSplashScreen(...args),
 }));
 vi.mock('./core/setPasswordScreen.js', () => ({
   mountSetPasswordScreen: (...args) => mountSetPasswordScreen(...args),
@@ -64,9 +66,6 @@ vi.mock('./core/teamScreen.js', () => ({
 }));
 vi.mock('./core/team.js', () => ({
   canManageTeam: (...args) => canManageTeam(...args),
-}));
-vi.mock('./core/splashScreen.js', () => ({
-  mountSplashScreen: (...args) => mountSplashScreen(...args),
 }));
 vi.mock('./core/loginScreen.js', () => ({
   mountLoginScreen: (...args) => mountLoginScreen(...args),
