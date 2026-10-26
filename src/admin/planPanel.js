@@ -96,7 +96,7 @@ export function mountPlanPanel(host, ctx) {
       ]),
       el('p', {
         className: 'adm-muted',
-        text: `${plural(org.event_grants, 'event plan')} · ${plural(org.locked_events, 'event')} past ${org.locked_events === 1 ? 'its' : 'their'} Per-event window`,
+        text: `${plural(org.event_grants, 'single-event plan')} · ${plural(org.locked_events, 'event')} past ${org.locked_events === 1 ? 'its' : 'their'} Per-event window`,
       }),
     ]);
   }

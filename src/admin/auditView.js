@@ -36,7 +36,7 @@ export function describeAuditEntry(entry) {
     case 'gating.key_relaxed':
       return 'Key turned off';
     case 'event.resnapshot':
-      return 'Frozen plan of an event raised';
+      return 'Event’s plan raised';
     case 'event.release':
       return 'Open event released';
     default:

@@ -16,7 +16,7 @@ const keyRow = (over = {}) => ({
   min_tier: 'per_event',
   enforced: false,
   window_bound: true,
-  note: 'Creating a BTC event',
+  note: 'Creating a BTC event (D-G17).',
   caps: null,
   ...over,
 });
@@ -104,6 +104,20 @@ const PLAN = {
   keys: [
     { key: 'btc_format', kind: 'flag', enforced: false, allowed_if_enforced: false, limit: null },
     { key: 'events_open', kind: 'cap', enforced: false, allowed_if_enforced: true, limit: 1 },
+    {
+      key: 'cup_taster_report',
+      kind: 'flag',
+      enforced: true,
+      allowed_if_enforced: false,
+      limit: null,
+    },
+    {
+      key: 'cup_taster_analytics',
+      kind: 'flag',
+      enforced: true,
+      allowed_if_enforced: true,
+      limit: null,
+    },
   ],
 };
 
@@ -185,9 +199,16 @@ describe('the overview', () => {
     mount(overview());
     await flush();
     expect(host.querySelector('h1').textContent).toBe('Plans and keys');
-    expect(text()).toContain('btc_format');
-    expect(text()).toContain('Dark (not enforced)');
-    expect(text()).toContain('Enforced');
+    expect(text()).toContain('Barista Team Championship (BTC) events');
+    expect(text()).toContain('Participants per Cup Taster event');
+    // the id stays, small, for the operator who needs to name the key
+    expect(host.querySelector('.adm-key-id').textContent).toBe('btc_format');
+    expect(text()).toContain('Off: nobody is restricted yet');
+    expect(text()).toContain('On: in force');
+    // the note keeps its words and drops the decision code
+    expect(text()).toContain('Creating a BTC event.');
+    expect(text()).not.toContain('D-G17');
+    for (const jargon of ['Dark', 'Enforced', 'frozen']) expect(text()).not.toContain(jargon);
     expect(text()).toContain('Needs Per-event or above');
     expect(text()).toContain('Limit: Community 8, Per-event no limit, Annual no limit');
     expect(text()).toContain('Alpha Roasters');
@@ -210,11 +231,14 @@ describe('the overview', () => {
     expect(button('Turn on')).toBeUndefined();
     await click('Preview turning it on');
     expect(calls('admin_gating_preview')[0][1]).toEqual({ p_key: 'btc_format' });
-    expect(text()).toContain('take it away from 2 organisations today');
+    expect(text()).toContain('If you turned this on now, 2 organisations would lose access.');
     expect(text()).toContain('Beta');
+    expect(text()).toContain('1 single-event plan (not counted here)');
     expect(calls('admin_set_key_enforced')).toHaveLength(0);
     await click('Turn on');
-    expect(text()).toContain('Turn btc_format on now?');
+    expect(text()).toContain('Turn on “Barista Team Championship (BTC) events” now?');
+    expect(text()).toContain('Needs Per-event or above');
+    expect(text()).toContain('2 organisations would lose access today.');
     expect(calls('admin_set_key_enforced')).toHaveLength(0);
     await click('Turn on');
     expect(calls('admin_set_key_enforced')[0][1]).toEqual({
@@ -222,6 +246,48 @@ describe('the overview', () => {
       p_enforced: true,
       p_confirm: 2,
     });
+  });
+
+  it('a limit key says an organisation would hit the limit, a feature key says it would lose access, and zero says nobody', async () => {
+    const dark = keyRow({
+      key: 'events_open',
+      kind: 'cap',
+      min_tier: null,
+      caps: { community: 1, per_event: null, annual: null },
+    });
+    mount({
+      admin_list_keys: ok([dark]),
+      admin_plan_orgs: ok(ORGS),
+      admin_gating_preview: ok({ would_lose: 1, organisations: [] }),
+    });
+    await flush();
+    expect(host.querySelector('h3').textContent).toBe('One open event at a time');
+    await click('Preview turning it on');
+    expect(text()).toContain(
+      'If you turned this on now, 1 organisation would be held to the limit.',
+    );
+    await click('Turn on');
+    expect(text()).toContain('1 organisation would be held to the limit today.');
+    handle.unmount();
+    host.remove();
+    mount({
+      admin_list_keys: ok([dark]),
+      admin_plan_orgs: ok(ORGS),
+      admin_gating_preview: ok({ would_lose: 0, organisations: [] }),
+    });
+    await flush();
+    await click('Preview turning it on');
+    expect(text()).toContain('If you turned this on now, nobody would lose anything.');
+  });
+
+  it('a key this console has no name for is still drawn, by its id', async () => {
+    mount({
+      admin_list_keys: ok([keyRow({ key: 'a_new_key', note: null })]),
+      admin_plan_orgs: ok(ORGS),
+    });
+    await flush();
+    expect(host.querySelector('h3').textContent).toBe('a_new_key');
+    expect(host.querySelector('.adm-key-id')).toBeNull();
   });
 
   it('a stale count is refused by the database and said in words', async () => {
@@ -258,8 +324,11 @@ describe('the overview', () => {
       b.textContent,
       b.getAttribute('aria-label'),
     ]);
-    expect(names).toContainEqual(['Preview turning it on', 'Preview turning it on: btc_format']);
-    expect(names).toContainEqual(['Turn off', 'Turn off: cup_taster_participants']);
+    expect(names).toContainEqual([
+      'Preview turning it on',
+      'Preview turning it on: Barista Team Championship (BTC) events',
+    ]);
+    expect(names).toContainEqual(['Turn off', 'Turn off: Participants per Cup Taster event']);
     for (const [visible, name] of names) expect(name.startsWith(visible)).toBe(true);
   });
 
@@ -327,12 +396,22 @@ describe('one organisation', () => {
     expect(text()).toContain('by 99999999');
     expect(text()).toContain('cup_taster · 2026-12-10 · 33333333');
     expect(text()).toContain('Finished by the organiser');
-    expect(text()).toContain('Plan frozen at go-live: Per-event');
+    expect(text()).toContain('Plan fixed when the event went live: Per-event');
+    expect(text()).toContain('Cup Taster · 2026-12-10');
+    expect(text()).not.toContain('frozen');
     const rows = [...host.querySelectorAll('.adm-members li')].map((li) => li.textContent);
-    expect(rows.find((r) => r.startsWith('btc_format'))).toContain('Would NOT pass if enforced');
-    const events = rows.find((r) => r.startsWith('events_open'));
-    expect(events).toContain('Would pass if enforced');
+    expect(rows.find((r) => r.startsWith('Barista Team Championship (BTC) events'))).toContain(
+      'Would be blocked once this is on',
+    );
+    const events = rows.find((r) => r.startsWith('One open event at a time'));
+    expect(events).toContain('Allowed once this is on');
     expect(events).toContain('limit 1');
+    // a key that is already on says what is happening now, not what would
+    const report = rows.find((r) => r.startsWith('Cup Taster report and CSV export'));
+    expect(report).toContain('On');
+    expect(report).toContain('Blocked');
+    expect(report).not.toContain('once this is on');
+    expect(rows.find((r) => r.startsWith('Cup Taster analytics'))).toContain('Allowed');
   });
 
   it('draws only the fields it names (a field the function started returning later does not appear)', async () => {
@@ -507,7 +586,7 @@ describe('one organisation', () => {
     expect(calls('admin_grant_revoke')[0][1]).toEqual({ p_grant_id: GRANT_A, p_note: null });
   });
 
-  it('releasing an open event and raising a frozen plan each need a reason', async () => {
+  it('releasing an open event and raising an event’s plan each need a reason', async () => {
     mount({
       admin_plan_org: ok(PLAN),
       admin_event_release: ok(null),
@@ -525,10 +604,10 @@ describe('one organisation', () => {
     });
   });
 
-  it('raising a frozen plan sends the reason', async () => {
+  it('raising an event’s plan sends the reason', async () => {
     mount({ admin_plan_org: ok(PLAN), admin_event_resnapshot: ok(null) });
     await flush();
-    const raise = open('Raise the frozen plan…');
+    const raise = open('Raise this event’s plan…');
     raise.querySelector('input').value = 'annual bought after go-live';
     await submitForm(raise.querySelector('form'));
     expect(calls('admin_event_resnapshot')[0][1]).toEqual({

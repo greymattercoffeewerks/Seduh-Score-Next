@@ -3,7 +3,7 @@ import { createTenant } from './support/tenants.js';
 import { createPlatformAdmin, removePlatformAdmin } from './support/admins.js';
 import { expect, heading, signIn, enrol, expectFitsAndTappable } from './support/adminUi.js';
 
-// The Plan panel against the real page and a real local Supabase stack: the keys are listed (all dark), a key can be
+// The Plan panel against the real page and a real local Supabase stack: the keys are listed (all off), a key can be
 // PREVIEWED (and is never turned on here), an organisation's plan is drawn, a plan is given and revoked through the
 // real audited functions, and the event the organisation ran is never named on the page or in any admin response (D-A4).
 
@@ -32,7 +32,7 @@ test.describe('the Plan panel (real page, real local Supabase)', () => {
     await tenant?.cleanUp();
   });
 
-  test('keys are dark, a preview changes nothing, and the organisation plan can be given and revoked', async ({
+  test('keys are off, a preview changes nothing, and the organisation plan can be given and revoked', async ({
     page,
   }) => {
     test.setTimeout(90000);
@@ -52,14 +52,23 @@ test.describe('the Plan panel (real page, real local Supabase)', () => {
 
     await page.getByRole('link', { name: 'Plans and keys' }).click();
     await expect(heading(page)).toHaveText('Plans and keys');
-    // every key is dark in a fresh stack, and none is turned on by looking
+    // every key is off in a fresh stack, and none is turned on by looking
     await expect(page.locator('li.adm-key').first()).toBeVisible();
-    expect(await page.locator('li.adm-key .adm-badge', { hasText: /^Enforced$/ }).count()).toBe(0);
+    await expect(
+      page.locator('li.adm-key .adm-badge', { hasText: /^Off: nobody is restricted yet$/ }).first(),
+    ).toBeVisible();
+    expect(await page.locator('li.adm-key .adm-badge', { hasText: /^On: in force$/ }).count()).toBe(
+      0,
+    );
     const first = page.locator('li.adm-key').first();
     await first.getByRole('button', { name: /^Preview turning it on/ }).click();
     await expect(first.locator('.adm-key-preview')).toContainText('Turn on');
-    await expect(first.locator('.adm-key-preview')).toContainText('would take it away from');
-    expect(await page.locator('li.adm-key .adm-badge', { hasText: /^Enforced$/ }).count()).toBe(0);
+    await expect(first.locator('.adm-key-preview')).toContainText(
+      /would lose access|would be held to the limit|nobody would lose anything/,
+    );
+    expect(await page.locator('li.adm-key .adm-badge', { hasText: /^On: in force$/ }).count()).toBe(
+      0,
+    );
     await expectFitsAndTappable(page);
 
     // the organisation, found by its own link name

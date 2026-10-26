@@ -50,9 +50,9 @@ export const ADMIN_ERROR_COPY = Object.freeze({
     'The number of affected organisations changed since the preview. Preview again before turning the key on.',
   entitlement_key_unknown: 'That key does not exist.',
   entitlement_key_not_cap: 'That key has no limit.',
-  snapshot_absent: 'That event has not gone live yet, so it has no frozen plan to raise.',
-  snapshot_downgrade:
-    'A frozen plan only goes up. The event’s plan is already as high as it can be.',
+  snapshot_absent:
+    'That event has not gone live yet, so its plan has not been fixed and there is nothing to raise.',
+  snapshot_downgrade: 'An event’s plan only goes up. Its plan is already as high as it can be.',
   amount_required: 'Write the amount and reference of the payment.',
   amount_too_long: 'The payment note is too long (200 characters at most).',
   account_state_unknown:
