@@ -1935,6 +1935,25 @@ Each D task is re-confirmed with the product owner before it starts (2026-10-10)
 
 ---
 
+## Seduh ID (pillar C) — planned, not started
+
+Plan and open questions: `Handoffs and Specs/MULTI-TENANCY-AND-SEDUHID-SCOPING.md` (pillar C; §6 open questions; §10 added 2026-10-26 from a review of a reference site). Sequence: tenancy (done) → gating (shipped dark) → admin console → archive + Seduh ID Layer 1 → Throwdown → Liga. No Seduh ID schema or code exists yet: `people.global_person_id` is still the unconstrained reserved hook (see "Known open items from T-TEN.B1/B2/B5"). Any Seduh ID schema near `seduh_links` or the BNCC pricing and lock needs the owner's sign-off.
+
+| Layer | Scope                                                                                                         | Status                                      |
+| ----- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| 1     | Directory (names only), staff/affiliate roster (C3); E.164 phone check first                                  | Not started; follows the archive pipeline   |
+| 2     | Competitor login and claim, cross-org RLS, registration page (D-G16), self-attested entries, provenance label | Not started; its own spec and security pass |
+| 3     | Professional profile, exportable competition CV, cafe directory (legacy v6.2)                                 | Not started                                 |
+
+**Proposed adoptions from the 2026-10-26 reference review (specialtycoffeecommunity.com, a pre-launch concept).** Each needs the owner's decision; none changes Layer 1 scope or pulls Layer 2 forward.
+
+- **Layer 1, no extra build:** a provenance marker reserved in the identity design (A1); founding numbers, if adopted, assigned on claim and never at passive creation (A3); the affiliation `relationship` text kept extensible (A6); a short public statement of purpose as copy with the directory (A8).
+- **Layer 2 candidates, KIV:** provenance label shown (A1), a completeness bar (A2), founding numbers (A3), role breadth (A6), privacy defaults decided before the spec is written (A7). Open questions §6.6 to §6.8.
+- **Layer 3 candidates, KIV:** the exportable one-page competition CV (A4) and an "open to opportunities" flag (A5).
+- **Considered, not adopted:** employer reviews, a jobs board, ticketing and crowdfunding, and an open-to-all assessor programme (scoping doc §10.3).
+
+---
+
 ## Known open items from T-TEN.B1/B2/B5 (2026-10-11)
 
 _Three migrations (`20261011100000_tenancy_org_id_immutable`, `20261011110000_tenancy_cross_org_references`, `20261011120000_tenancy_last_owner`) reviewed by schema-guardian, security-reviewer and test-auditor (no blocking findings; every non-blocking one fixed except the items below). **Pushed to the cloud project 2026-10-11 and verified there** (cloud versions `20261010164114`, `20261010164146`, `20261010164214`, applied in order): all triggers enabled, the new functions `SECURITY DEFINER` with `search_path` pinned and no API-role execute, `service_role` TRUNCATE on `org_members` and `orgs` revoked, and a rolled-back live probe confirmed the last owner cannot be demoted. **Still true: no two-org user may exist there until B6 is also pushed.**_
