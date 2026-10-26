@@ -190,8 +190,10 @@ organisation's plan (`#/plan/<organisation id>`: tier now, grants, events, the k
   gating hints (the key, window, amount and cap hints) have copy in the map. A hint with no copy stays unknown and the
   panel says so, as any other unknown refusal.
 - **Accessibility and wording** follow the rest of the console: accessible names start with the visible words and say
-  which key or plan they act on; a failed keys load has a Retry; a refusal moves focus to its own message. Raw key ids
-  and the jargon "frozen plan" are known wording debts (ROADMAP, "Known open items from the Plan panel").
+  which key or plan they act on; a failed keys load has a Retry; a refusal moves focus to its own message. Keys
+  are drawn by plain name (`planFormat.js` `keyName`, with the id as small text; a catalog test fails when a key has no
+  name), key notes are shown without their decision codes (`keyNote`), and "frozen plan" is "plan fixed when the event
+  went live". A new key needs a name in `KEY_NAMES`.
 - **Tests:** `planFormat.test.js`, `planPanel.test.js` (vitest, fake client), `tests/e2e/admin-console-plan.spec.js`
   (real page at 360px: a preview changes nothing; give and revoke an Annual plan; no event name in any response), and
   the adversarial attack list (the Plan functions were added to it).
