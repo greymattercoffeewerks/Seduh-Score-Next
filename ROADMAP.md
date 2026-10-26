@@ -2311,7 +2311,7 @@ _Source: CHANGELOG `T-GATE.C`. Migration `20261023150000` (057) merged as #309 a
 4. **Restoring event names in the picker** is a one-line change in `admin_plan_org` plus a D-A4 amendment. The owner's call (security-reviewer's decision: names narrowed out).
 5. **The panel never flips a key on its own.** The owner flips by hand, after the cloud push and the backfill, with the flip preconditions already listed under B4 and B5 (`events_open`, `btc_format`, `event_window_lock`). The preview is the gate.
 6. **A double-submitted organisation grant creates two rows** (security-reviewer observation). The page-wide claim prevents it in the UI; the database does not. Left as is; a uniqueness rule would need the owner's decision on overlapping grants.
-7. **Wording observations, left** (ui-accessibility-reviewer): "frozen plan" is jargon; the Dark and Revoked badges are green; empty field error lines. A copy pass is owed before the panel is used with a second operator.
+7. **Wording observations, left** (ui-accessibility-reviewer): **Copy pass done (2026-10-26):** plain key names, Off/On wording, "frozen plan" replaced, decision codes hidden from key notes. Still open: the Off and Revoked badges are green; empty field error lines.
 8. **Schema-guardian nit, left:** the `app.grant_insert` error prefix still says `admin_grant_create`. Cosmetic; the hint is unchanged.
 9. **`module-boundary-checker` was not run as its own agent.** The code-reviewer pass covered it (`boundary.test.js` and the admin leak check are green). Run the dedicated agent before the PR if the owner wants the separate sign-off.
 10. **Cloud:** migration `20261023150000` is local only. Push after the B5 push, via the Supabase MCP, after the `list_migrations` check.

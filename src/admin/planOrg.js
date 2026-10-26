@@ -12,6 +12,8 @@ import {
   endOfBruneiDay,
   eventStateText,
   eventWindowText,
+  formatName,
+  keyName,
   offsetLabel,
   shortId,
   sourceLabel,
@@ -320,7 +322,7 @@ export function orgPlanView({ ctx, data, onGateRefused, mayTakeFocus, reload, wr
             el('strong', { text: text(event.label) }),
             el('span', {
               className: 'adm-muted',
-              text: ` · ${text(event.format)} · ${formatDate(event.event_date)}`,
+              text: ` · ${formatName(event.format)} · ${formatDate(event.event_date)}`,
             }),
             event.is_test ? el('span', { className: 'adm-badge', text: 'Test event' }) : null,
           ].filter(Boolean),
@@ -332,7 +334,7 @@ export function orgPlanView({ ctx, data, onGateRefused, mayTakeFocus, reload, wr
         event.snapshot_tier
           ? el('p', {
               className: 'adm-muted',
-              text: `Plan frozen at go-live: ${tierLabel(event.snapshot_tier)}`,
+              text: `Plan fixed when the event went live: ${tierLabel(event.snapshot_tier)}`,
             })
           : null,
       ].filter(Boolean),
@@ -342,17 +344,17 @@ export function orgPlanView({ ctx, data, onGateRefused, mayTakeFocus, reload, wr
     if (event.snapshot_tier) {
       item.appendChild(
         details(
-          'Raise the frozen plan…',
+          'Raise this event’s plan…',
           reasonForm({
-            title: 'Raise the plan this event froze at go-live',
+            title: 'Raise this event’s plan',
             intro:
-              'Use this when a better plan was bought after the event went live. It only ever goes up.',
-            submitLabel: 'Raise the frozen plan',
+              'An event keeps the plan it had when it went live. Use this when a better plan was bought after that. It only ever goes up.',
+            submitLabel: 'Raise the plan',
             workingLabel: 'Raising…',
             fn: 'admin_event_resnapshot',
             arg: 'p_event_id',
             id: text(event.id),
-            success: `The frozen plan of ${text(event.label)} was raised.`,
+            success: `The plan of ${text(event.label)} was raised.`,
           }).node,
         ),
       );
@@ -383,11 +385,19 @@ export function orgPlanView({ ctx, data, onGateRefused, mayTakeFocus, reload, wr
   function keyRow(key) {
     const would = key.allowed_if_enforced === true;
     return el('li', { className: 'adm-member' }, [
-      el('span', { className: 'adm-member-email', text: text(key.key) }),
-      el('span', { className: 'adm-role', text: key.enforced === true ? 'Enforced' : 'Dark' }),
+      el('span', { className: 'adm-member-email', text: keyName(key.key) }),
+      el('span', { className: 'adm-role', text: key.enforced === true ? 'On' : 'Off' }),
       el('span', {
         className: 'adm-muted',
-        text: `${would ? 'Would pass' : 'Would NOT pass'} if enforced${
+        text: `${
+          key.enforced === true
+            ? would
+              ? 'Allowed'
+              : 'Blocked'
+            : would
+              ? 'Allowed once this is on'
+              : 'Would be blocked once this is on'
+        }${
           key.kind === 'cap'
             ? ` · ${key.limit === null || key.limit === undefined ? 'no limit' : `limit ${key.limit}`}`
             : ''
@@ -440,7 +450,7 @@ export function orgPlanView({ ctx, data, onGateRefused, mayTakeFocus, reload, wr
       el('h2', { text: 'Keys for this organisation' }),
       el('p', {
         className: 'adm-muted',
-        text: 'Whether this organisation, at its plan now, would pass each key if it were enforced. Event plans are not counted.',
+        text: 'What this organisation can do, or would be able to do once each key is on, using its plan today. Single-event plans are not counted.',
       }),
       el('ul', { className: 'adm-members', attrs: { role: 'list' } }, keys.map(keyRow)),
     ]),

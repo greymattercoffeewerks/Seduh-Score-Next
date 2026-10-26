@@ -15,6 +15,44 @@ const SOURCE_LABELS = Object.freeze({
   payment: 'Payment confirmed',
 });
 
+// Plain names for the keys, so the console never asks the operator to read an id. A key this file does not know is shown
+// by its id: a new key still appears, and a name is added here.
+const KEY_NAMES = Object.freeze({
+  cup_taster_participants: 'Participants per Cup Taster event',
+  btc_format: 'Barista Team Championship (BTC) events',
+  cup_taster_report: 'Cup Taster report and CSV export',
+  cup_taster_analytics: 'Cup Taster analytics',
+  audience_branding: 'Own branding on audience screens',
+  results_archive_optional: 'Opting out of the public results archive',
+  season_history: 'History across seasons',
+  registration_page: 'Public registration page',
+  guess_the_bean_create: 'Creating Guess the Bean sessions',
+  events_open: 'One open event at a time',
+  event_window_lock: 'Closing events after the Per-event window ends',
+});
+const FORMAT_NAMES = Object.freeze({ cup_taster: 'Cup Taster', btc: 'BTC' });
+
+export function keyName(key) {
+  return typeof key === 'string' && Object.hasOwn(KEY_NAMES, key)
+    ? KEY_NAMES[key]
+    : String(key ?? MISSING);
+}
+
+export function formatName(format) {
+  return typeof format === 'string' && Object.hasOwn(FORMAT_NAMES, format)
+    ? FORMAT_NAMES[format]
+    : String(format ?? MISSING);
+}
+
+// A key's note comes from the database seed, which cites the decisions behind it ("(D-G17)", "(G-B5, D-G15)"). Those codes
+// mean nothing to the operator, so a bracket that holds one is dropped (a note is never edited in a migration once pushed).
+export function keyNote(note) {
+  return String(note ?? '')
+    .replace(/\s*\([^()]*\b[DG]-[A-Z]?\d[^()]*\)/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 export function tierLabel(tier) {
   return typeof tier === 'string' && Object.hasOwn(TIER_LABELS, tier)
     ? TIER_LABELS[tier]

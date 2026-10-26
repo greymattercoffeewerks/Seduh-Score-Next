@@ -7,7 +7,7 @@ import { isGateRefusal } from './gate.js';
 import { SLOW_MESSAGE } from './gate.js';
 import { describeAdminError } from './adminErrors.js';
 import { plural } from './format.js';
-import { tierLabel, keyRuleText } from './planFormat.js';
+import { tierLabel, keyRuleText, keyName, keyNote } from './planFormat.js';
 import { ask, confirmAction, failureMessage, ALWAYS } from './planParts.js';
 import { feedbackRegion, setFeedback } from './screenParts.js';
 
@@ -44,13 +44,13 @@ function previewList(preview) {
 function detailText(detail) {
   const bits = [];
   if (Number.isInteger(detail?.event_grants) && detail.event_grants > 0)
-    bits.push(`${plural(detail.event_grants, 'event plan')}, not counted`);
+    bits.push(`${plural(detail.event_grants, 'single-event plan')} (not counted here)`);
   if (Number.isInteger(detail?.over_limit_events) && detail.over_limit_events > 0)
-    bits.push(`${plural(detail.over_limit_events, 'event')} over the limit`);
+    bits.push(`${plural(detail.over_limit_events, 'event')} already over the limit`);
   if (Number.isInteger(detail?.open_events))
-    bits.push(`${plural(detail.open_events, 'open event')}`);
+    bits.push(`${plural(detail.open_events, 'event')} still open`);
   if (Number.isInteger(detail?.locked_events))
-    bits.push(`${plural(detail.locked_events, 'locked event')}`);
+    bits.push(`${plural(detail.locked_events, 'event')} past the end of the Per-event window`);
   return bits.join(' · ');
 }
 
@@ -61,7 +61,7 @@ export function keysSection({ ctx, onGateRefused, mayTakeFocus, reload, writes =
     el('h2', { text: 'Keys' }),
     el('p', {
       className: 'adm-muted',
-      text: 'A key is dark until you turn it on: while it is dark everyone keeps today’s behaviour. Preview first, then turn it on.',
+      text: 'Each key is off until you turn it on. While it is off, everyone keeps today’s behaviour. Preview first, then turn it on.',
     }),
     feedback,
     body,
@@ -69,8 +69,14 @@ export function keysSection({ ctx, onGateRefused, mayTakeFocus, reload, writes =
 
   function keyCard(key) {
     const enforced = key.enforced === true;
+    const name = keyName(key.key);
+    // what a preview row costs an organisation: a limit it would hit, or access it would lose
+    const costWords = key.kind === 'cap' ? 'be held to the limit' : 'lose access';
     const status = el('p', { className: 'adm-key-status' }, [
-      el('span', { className: 'adm-badge', text: enforced ? 'Enforced' : 'Dark (not enforced)' }),
+      el('span', {
+        className: 'adm-badge',
+        text: enforced ? 'On: in force' : 'Off: nobody is restricted yet',
+      }),
       el('span', { className: 'adm-muted', text: keyRuleText(key) }),
     ]);
     const preview = el('div', { className: 'adm-key-preview', attrs: { 'aria-live': 'polite' } });
@@ -79,9 +85,12 @@ export function keysSection({ ctx, onGateRefused, mayTakeFocus, reload, writes =
       'li',
       { className: 'card adm-key' },
       [
-        el('h3', { text: String(key.key ?? '') }),
+        el('h3', { text: name }),
+        name === String(key.key ?? '')
+          ? null
+          : el('p', { className: 'adm-muted adm-key-id', text: String(key.key ?? '') }),
         status,
-        key.note ? el('p', { className: 'adm-muted', text: String(key.note) }) : null,
+        key.note ? el('p', { className: 'adm-muted', text: keyNote(key.note) }) : null,
         actions,
         preview,
       ].filter(Boolean),
@@ -98,8 +107,8 @@ export function keysSection({ ctx, onGateRefused, mayTakeFocus, reload, writes =
       actions.appendChild(
         confirmAction({
           label: 'Turn off',
-          subject: key.key,
-          question: `Turn ${key.key} off? Everyone keeps today’s behaviour again at once.`,
+          subject: name,
+          question: `Turn off “${name}”? Everyone keeps today’s behaviour again at once.`,
           confirmLabel: 'Turn off',
           workingLabel: 'Turning off…',
           unknown: FLIP_UNKNOWN,
@@ -108,7 +117,7 @@ export function keysSection({ ctx, onGateRefused, mayTakeFocus, reload, writes =
           onGateRefused,
           mayTakeFocus,
           writes,
-          successMessage: `${key.key} is turned off.`,
+          successMessage: `“${name}” is turned off.`,
         }),
       );
       return card;
@@ -117,7 +126,7 @@ export function keysSection({ ctx, onGateRefused, mayTakeFocus, reload, writes =
     const previewButton = el('button', {
       className: 'btn btn-outline tap-target',
       text: 'Preview turning it on',
-      attrs: { type: 'button', 'aria-label': `Preview turning it on: ${key.key}` },
+      attrs: { type: 'button', 'aria-label': `Preview turning it on: ${name}` },
     });
     let busy = false;
     previewButton.addEventListener('click', async () => {
@@ -125,13 +134,13 @@ export function keysSection({ ctx, onGateRefused, mayTakeFocus, reload, writes =
       busy = true;
       setBusyDisabled(previewButton, true);
       previewButton.textContent = 'Checking…';
-      previewButton.setAttribute('aria-label', `Checking: ${key.key}`);
+      previewButton.setAttribute('aria-label', `Checking: ${name}`);
       const answer = await ask(ctx, 'admin_gating_preview', { p_key: key.key });
       if (!card.isConnected) return;
       busy = false;
       setBusyDisabled(previewButton, false);
       previewButton.textContent = 'Preview turning it on';
-      previewButton.setAttribute('aria-label', `Preview turning it on: ${key.key}`);
+      previewButton.setAttribute('aria-label', `Preview turning it on: ${name}`);
       if (answer.error) {
         if (isGateRefusal(answer.error)) return onGateRefused();
         preview.replaceChildren(
@@ -152,14 +161,14 @@ export function keysSection({ ctx, onGateRefused, mayTakeFocus, reload, writes =
       const summary = el('p', {
         text:
           count === 0
-            ? `Turning ${key.key} on would take it away from no organisation today.`
-            : `Turning ${key.key} on would take it away from ${plural(count, 'organisation')} today.`,
+            ? 'If you turned this on now, nobody would lose anything.'
+            : `If you turned this on now, ${plural(count, 'organisation')} would ${costWords}.`,
         attrs: { tabindex: '-1' },
       });
       const turnOn = confirmAction({
         label: 'Turn on',
-        subject: key.key,
-        question: `Turn ${key.key} on now? ${count === 0 ? 'No organisation loses it today.' : `${plural(count, 'organisation')} would lose it today.`}`,
+        subject: name,
+        question: `Turn on “${name}” now? ${keyRuleText(key)}. ${count === 0 ? 'Nobody loses anything today.' : `${plural(count, 'organisation')} would ${costWords} today.`}`,
         confirmLabel: 'Turn on',
         workingLabel: 'Turning on…',
         unknown: FLIP_UNKNOWN,
@@ -169,7 +178,7 @@ export function keysSection({ ctx, onGateRefused, mayTakeFocus, reload, writes =
         onGateRefused,
         mayTakeFocus,
         writes,
-        successMessage: `${key.key} is turned on.`,
+        successMessage: `“${name}” is turned on.`,
         className: 'btn btn-primary tap-target',
       });
       preview.replaceChildren(

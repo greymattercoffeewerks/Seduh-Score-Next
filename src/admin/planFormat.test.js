@@ -1,10 +1,15 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   bruneiDateTime,
   bruneiDay,
   endOfBruneiDay,
   eventStateText,
   eventWindowText,
+  formatName,
+  keyName,
+  keyNote,
   keyRuleText,
   offsetLabel,
   shortId,
@@ -13,6 +18,11 @@ import {
   windowDays,
   windowText,
 } from './planFormat.js';
+
+// Read from the repository root, not imported: src/admin/ may import only itself and src/core/ (boundary.test.js).
+const catalog = JSON.parse(
+  readFileSync(join(process.cwd(), 'supabase', 'entitlements.catalog.json'), 'utf8'),
+);
 
 describe('labels', () => {
   it('names the tiers and sources, and shows an unknown one as it is (never undefined)', () => {
@@ -114,6 +124,38 @@ describe('events and keys', () => {
     expect(
       keyRuleText({ kind: 'cap', caps: { community: 8, per_event: null, annual: null } }),
     ).toBe('Limit: Community 8, Per-event no limit, Annual no limit');
+  });
+
+  it('gives every key in the catalog a plain name, so a new key cannot ship showing only its id', () => {
+    for (const { key } of catalog.keys) expect(keyName(key), key).not.toBe(key);
+    expect(keyName('a_new_key')).toBe('a_new_key');
+    expect(keyName(undefined)).toBe('—');
+  });
+
+  it('names a format, and shows one it does not know as it is', () => {
+    expect(formatName('cup_taster')).toBe('Cup Taster');
+    expect(formatName('btc')).toBe('BTC');
+    expect(formatName('liga_seduh')).toBe('liga_seduh');
+    expect(formatName(null)).toBe('—');
+  });
+
+  it('drops a bracket that cites a decision, and nothing else', () => {
+    expect(keyNote('Own branding on audience screens (Level 2, D-G17). Planned.')).toBe(
+      'Own branding on audience screens. Planned.',
+    );
+    expect(keyNote('Unlimited (D-G3, D-G19). First key to be switched on (D-G27).')).toBe(
+      'Unlimited. First key to be switched on.',
+    );
+    expect(keyNote('After the window (G-B5, D-G15) ends.')).toBe('After the window ends.');
+    expect(keyNote('Thing happens (G-B5).')).toBe('Thing happens.');
+    // a bracket with no decision code is words the operator can read
+    expect(keyNote('Not on Community (owner, 2026-10-23).')).toBe(
+      'Not on Community (owner, 2026-10-23).',
+    );
+    expect(keyNote(null)).toBe('');
+  });
+  it('never shows a decision code for any note in the catalog', () => {
+    for (const { note } of catalog.keys) expect(keyNote(note)).not.toMatch(/[DG]-[A-Z]?\d/);
   });
 
   it('shortens an id, or shows a dash', () => {
