@@ -1,10 +1,16 @@
-export const SEDUH_SCORE_CONTACT = 'Contact the Seduh Score team for help.';
+// Where an organiser who hits a plan limit can reach the people who can change their plan. The email is also
+// CONTACT_EMAIL in src/marketing/trustContent.js (core may not import marketing): change both together.
+// Non-breaking spaces keep the number on one line at 360px.
+export const SEDUH_SCORE_PHONE = '+673\u00a0835\u00a01231';
+export const SEDUH_SCORE_EMAIL = 'greymatter.cw@outlook.com';
+// No full stop after the email: a phone's tap-to-select takes a trailing '.' into the copied address.
+export const SEDUH_SCORE_CONTACT = `Contact the Seduh Score team on ${SEDUH_SCORE_PHONE} or ${SEDUH_SCORE_EMAIL}`;
 
 const GATING_HINTS = new Set(['entitlement_required', 'entitlement_cap_reached']);
 
 const GATING_MESSAGES = {
   cup_taster_participants: `This event has reached its entry limit. Nothing already saved has been lost. ${SEDUH_SCORE_CONTACT}`,
-  events_open: `You already have an open event. Finish it first, then try again. Nothing already saved has been lost. ${SEDUH_SCORE_CONTACT}`,
+  events_open: `You already have an open event, and your plan allows one at a time. If it is a test event, delete it to make room. Nothing already saved has been lost. ${SEDUH_SCORE_CONTACT}`,
   btc_format: `This format needs a plan that includes it. Nothing already saved has been lost. ${SEDUH_SCORE_CONTACT}`,
 };
 

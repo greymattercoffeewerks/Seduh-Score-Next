@@ -238,7 +238,7 @@ describe('mountEventsScreen', () => {
       .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     await vi.waitFor(() =>
       expect(root.querySelector('.screen-feedback').textContent).toContain(
-        'You already have an open event. Finish it first, then try again.',
+        'You already have an open event, and your plan allows one at a time. If it is a test event, delete it to make room.',
       ),
     );
     const feedback = root.querySelector('.screen-feedback');

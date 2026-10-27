@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { SEDUH_SCORE_EMAIL } from '../core/errors.js';
 import { mountTourScreen } from './tourScreen.js';
 import { CONTACT_EMAIL, TRUST_LINKS, TRUST_PAGES } from './trustContent.js';
 import { mountTrustScreen, renderInline } from './trustScreen.js';
@@ -83,7 +84,8 @@ describe('mountTrustScreen', () => {
     }
   });
 
-  it('uses the one contact address everywhere, as a working mailto link', () => {
+  it('uses the one contact address everywhere, as a working mailto link, and the organiser plan-limit copy names the same one', () => {
+    expect(SEDUH_SCORE_EMAIL).toBe(CONTACT_EMAIL);
     const contact = mount('contact');
     const mail = contact.querySelector('a[href^="mailto:"]');
     expect(mail.getAttribute('href')).toBe(`mailto:${CONTACT_EMAIL}`);
