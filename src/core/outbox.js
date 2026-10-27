@@ -255,6 +255,7 @@ export function buildRpcHandler(client, type) {
       const err = new Error(error.message);
       err.code = error.code;
       err.details = error.details;
+      err.hint = error.hint;
       err.permanent = !isTransientFailure({ status, code: error.code });
       throw err;
     }

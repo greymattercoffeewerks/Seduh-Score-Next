@@ -220,6 +220,60 @@ describe('mountEventsScreen', () => {
     expect(insertCall[2].format).toBe('guess_the_bean');
   });
 
+  it('shows the open-event refusal in the focused live feedback panel', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const client = fakeClient({
+      insertResult: {
+        data: null,
+        error: { code: '42501', hint: 'entitlement_cap_reached', details: 'events_open' },
+      },
+    });
+    await mountEventsScreen(root, { orgId: 'org1', client, defaultFormat: 'cup_taster' });
+    const name = root.querySelector('[data-field="name"]');
+    name.value = 'November Cup';
+    name.dispatchEvent(new Event('input', { bubbles: true }));
+    root
+      .querySelector('form')
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() =>
+      expect(root.querySelector('.screen-feedback').textContent).toContain(
+        'You already have an open event. Finish it first, then try again.',
+      ),
+    );
+    const feedback = root.querySelector('.screen-feedback');
+    expect(feedback.getAttribute('role')).toBe('status');
+    expect(document.activeElement).toBe(feedback);
+    document.body.removeChild(root);
+  });
+
+  it('shows the format plan message in the same focused live feedback panel', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const client = fakeClient({
+      insertResult: {
+        data: null,
+        error: { code: '42501', hint: 'entitlement_required', details: 'btc_format' },
+      },
+    });
+    await mountEventsScreen(root, { orgId: 'org1', client, defaultFormat: 'btc' });
+    const name = root.querySelector('[data-field="name"]');
+    name.value = 'November Brew Team Challenge';
+    name.dispatchEvent(new Event('input', { bubbles: true }));
+    root
+      .querySelector('form')
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() =>
+      expect(root.querySelector('.screen-feedback').textContent).toContain(
+        'This format needs a plan that includes it.',
+      ),
+    );
+    const feedback = root.querySelector('.screen-feedback');
+    expect(feedback.getAttribute('role')).toBe('status');
+    expect(document.activeElement).toBe(feedback);
+    document.body.removeChild(root);
+  });
+
   it('renders no format selector when formatOptions is omitted — every existing single-format caller keeps its exact prior form shape', async () => {
     const root = document.createElement('div');
     const client = fakeClient({});
