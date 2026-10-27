@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { AuthApiError, AuthRetryableFetchError, AuthUnknownError } from '@supabase/supabase-js';
 import {
   RESET_REQUESTED_MESSAGE,
   MIN_RESET_ANSWER_MS,
@@ -135,6 +136,22 @@ describe('classifyResetError', () => {
       expect(classifyResetError(error), JSON.stringify(error)).toBe('requested');
     }
     expect(classifyResetError(null)).toBe('requested');
+  });
+
+  it('classifies the REAL supabase-js error classes the same way as the hand-written fixtures', () => {
+    expect(classifyResetError(new AuthRetryableFetchError('Failed to fetch', 0))).toBe(
+      'unreachable',
+    );
+    expect(classifyResetError(new AuthRetryableFetchError('Bad gateway', 503))).toBe('unreachable');
+    expect(classifyResetError(new AuthApiError('slow down', 429, 'over_request_rate_limit'))).toBe(
+      'busy',
+    );
+    expect(classifyResetError(new AuthApiError('no such user', 404, 'user_not_found'))).toBe(
+      'requested',
+    );
+    expect(classifyResetError(new AuthUnknownError('CDN page', new Error('x')))).toBe(
+      'unreachable',
+    );
   });
 
   it('only outcomes that say nothing about the address are different', () => {

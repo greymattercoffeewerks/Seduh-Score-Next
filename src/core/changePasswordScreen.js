@@ -12,18 +12,19 @@ import {
   mountPasswordFormScreen,
   describePasswordError,
   AUTHENTICATOR_REQUIRED_MESSAGE,
-  OTHERS_NOT_SIGNED_OUT_MESSAGE,
+  savedMessage,
 } from './passwordForm.js';
 import {
   savePasswordAndEndOtherSessions,
   passwordChangeBlockedByAuthenticator,
 } from './passwordChange.js';
+import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
 
 export async function mountChangePasswordScreen(root, { client = getSupabase(), signal } = {}) {
   let unmounted = false;
   const alive = () => !unmounted && !signal?.aborted;
 
-  function renderCard({ heading, message, role }) {
+  function renderCard({ heading, message, role, focusMessage = false }) {
     withFocusPreservation(root, () => {
       root.innerHTML = '';
       const container = el('section', { className: 'screen-container login-screen' });
@@ -32,13 +33,14 @@ export async function mountChangePasswordScreen(root, { client = getSupabase(), 
         text: heading,
         attrs: { tabindex: '-1' },
       });
+      const messageNode = el('p', {
+        className: 'stage-meta',
+        text: message,
+        attrs: role ? { role, 'aria-live': 'polite', tabindex: '-1' } : {},
+      });
       container.append(
         headingNode,
-        el('p', {
-          className: 'stage-meta',
-          text: message,
-          attrs: role ? { role, 'aria-live': 'polite' } : {},
-        }),
+        messageNode,
         el('a', {
           className: 'btn btn-outline tap-target',
           text: 'Back to events',
@@ -46,14 +48,25 @@ export async function mountChangePasswordScreen(root, { client = getSupabase(), 
         }),
       );
       root.appendChild(container);
-      headingNode.focus();
+      (focusMessage ? messageNode : headingNode).focus();
       return true;
     });
   }
 
-  // Asked before the form is drawn; the screen is blank for the moment it takes (no request: it reads the
-  // session the client already holds).
-  const blocked = await passwordChangeBlockedByAuthenticator(client);
+  // Asked before the form is drawn. It reads the session the client holds, which can mean refreshing an expired
+  // token over the network, so the heading is up first and the wait is bounded: past the timeout the form is
+  // shown and the server's own refusal is the backstop.
+  if (!alive()) return { unmount() {} };
+  renderCard({ heading: 'Change password', message: 'One moment…', role: 'status' });
+  let blocked = false;
+  try {
+    blocked = await raceTimeout(
+      passwordChangeBlockedByAuthenticator(client),
+      DEFAULT_LOAD_TIMEOUT_MS,
+    );
+  } catch {
+    blocked = false;
+  }
   if (!alive()) return { unmount() {} };
 
   if (blocked) {
@@ -70,10 +83,9 @@ export async function mountChangePasswordScreen(root, { client = getSupabase(), 
         if (!alive()) return;
         renderCard({
           heading: 'Password changed',
-          message: result.othersSignedOut
-            ? 'Your new password is saved and your other devices were signed out.'
-            : `Your new password is saved. ${OTHERS_NOT_SIGNED_OUT_MESSAGE}`,
+          message: savedMessage(result.othersSignedOut),
           role: 'status',
+          focusMessage: true,
         });
       },
       footer: () => [

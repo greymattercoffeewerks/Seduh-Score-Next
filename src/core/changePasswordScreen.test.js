@@ -47,6 +47,17 @@ describe('mountChangePasswordScreen', () => {
     expect(root.querySelector('a[href="#/events"]').textContent).toBe('Cancel');
   });
 
+  it('every field’s accessible name contains its visible label (speech input says what it sees)', async () => {
+    const { root } = await mount(fakeClient());
+    const fields = [...root.querySelectorAll('.form-field')];
+    expect(fields.length).toBeGreaterThanOrEqual(2);
+    for (const field of fields) {
+      const visible = field.querySelector('.form-field-label').textContent;
+      const name = field.querySelector('input').getAttribute('aria-label');
+      expect(name, visible).toContain(visible);
+    }
+  });
+
   it('does not ask for the current password', async () => {
     const { root } = await mount(fakeClient());
     expect(root.querySelector('[autocomplete="current-password"]')).toBeNull();
@@ -68,6 +79,8 @@ describe('mountChangePasswordScreen', () => {
     expect(root.textContent).toContain('your other devices were signed out');
     expect(root.querySelector('form')).toBeNull();
     expect(root.querySelector('[role="status"]')).not.toBeNull();
+    // the result's words take focus, so a screen reader reads them and not just the heading
+    expect(document.activeElement).toBe(root.querySelector('[role="status"]'));
     expect(root.querySelector('a[href="#/events"]').textContent).toBe('Back to events');
   });
 
@@ -167,6 +180,26 @@ describe('mountChangePasswordScreen', () => {
         .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
       await vi.advanceTimersByTimeAsync(10001);
       expect(feedback(root).textContent).toMatch(/taking longer than expected/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a stalled authenticator check does not leave the screen blank: the heading is up at once and the form follows the timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      const client = fakeClient();
+      client.auth.mfa.getAuthenticatorAssuranceLevel = vi.fn(() => new Promise(() => {}));
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      const mounting = mountChangePasswordScreen(root, { client });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(root.querySelector('h1').textContent).toBe('Change password');
+      expect(root.querySelector('form')).toBeNull();
+      await vi.advanceTimersByTimeAsync(10001);
+      await mounting;
+      expect(root.querySelector('h1').textContent).toBe('Change password');
+      expect(root.querySelector('form')).not.toBeNull();
     } finally {
       vi.useRealTimers();
     }

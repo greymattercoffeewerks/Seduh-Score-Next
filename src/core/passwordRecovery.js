@@ -13,6 +13,7 @@
 //    password, "done". Held outside the screen because the screen is rebuilt whenever the router resolves
 //    again (an auth event, a Retry), and a rebuilt screen must not forget that the password was just saved.
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
+import { signOutRequest } from './signOutRequest.js';
 import {
   savePasswordAndEndOtherSessions,
   passwordChangeBlockedByAuthenticator,
@@ -174,13 +175,11 @@ export function createRecoveryFlow({ client, arrival, timeoutMs = DEFAULT_LOAD_T
     if (phase === 'closed') return;
     if (blocked) {
       // The link proved control of the mailbox, not of the second factor: it gets nothing here. Ended
-      // locally so a link alone is never a way into the console for an account that has an authenticator.
+      // locally so the level-1 session is not left behind. If that sign-out fails the message is the same and the
+      // session stays stored until it expires or they sign out; the server still refuses a password change and
+      // every admin function from it (a level-1 session), so this is hygiene, not the lock.
       phase = 'mfa';
-      try {
-        await raceTimeout(client.auth.signOut({ scope: 'local' }), timeoutMs);
-      } catch {
-        // The message is the same; the session simply stays until it expires or they sign out.
-      }
+      await signOutRequest(client, { scope: 'local', timeoutMs });
       return;
     }
     phase = 'ready';

@@ -1102,6 +1102,8 @@ export function mountApp(
   // and before the router starts (it would try to route `#access_token=…&type=recovery` as a console route
   // and show "Page not found" with the token still in the address bar): a password-recovery link carries
   // its session in the hash. Taking it removes it from the address bar at once (core/passwordRecovery.js).
+  // This order is load-bearing: the organiser client reads the same hash by default, so building it first (an eager
+  // getSupabase() added above this line later) would consume the link's token before it is taken.
   const arrival =
     injectedRecoveryArrival !== undefined ? injectedRecoveryArrival : takeRecoveryArrival();
   const client = injectedClient ?? getSupabase();

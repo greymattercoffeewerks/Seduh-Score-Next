@@ -380,6 +380,18 @@
   }
 }
 
+/* From 640px up to 1439px the account cluster is two lines, the email above Change password and Sign out, instead of
+   one line of three. One line is 373px wide, which no longer fits: at 900px it dropped below the five links and the
+   open hamburger panel grew past its compact layout, and at 1366px (inline nav) it squeezed the organisation name to
+   17px (organiser-flow.spec.js, both tests). Two lines are about as wide as the old email + Sign out pair. From
+   1440px (the width the header-height test runs at) there is room for the one-line cluster. */
+@media (min-width: 640px) and (max-width: 1439px) {
+  .app-shell-auth {
+    max-width: 15rem;
+    justify-content: flex-end;
+  }
+}
+
 /* 1366px: keep in sync with INLINE_NAV_QUERY in appShell.js (media queries can't
    read a variable, so the value is written in both places). */
 @media (min-width: 1366px) {

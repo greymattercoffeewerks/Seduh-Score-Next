@@ -10,7 +10,7 @@ import {
   mountPasswordFormScreen,
   describePasswordError,
   AUTHENTICATOR_REQUIRED_MESSAGE,
-  OTHERS_NOT_SIGNED_OUT_MESSAGE,
+  savedMessage,
 } from './passwordForm.js';
 
 export const LINK_INVALID_MESSAGE =
@@ -24,7 +24,14 @@ export function mountRecoveryScreen(root, { flow, onFinished, signal }) {
   const alive = () => !unmounted && !signal?.aborted;
 
   // A card for the states that are only words: a heading (focused), a paragraph, and the ways on.
-  function renderCard({ heading, headingId, message, actions, status = false }) {
+  function renderCard({
+    heading,
+    headingId,
+    message,
+    actions,
+    status = false,
+    focusMessage = false,
+  }) {
     withFocusPreservation(root, () => {
       root.innerHTML = '';
       const container = el('section', { className: 'screen-container login-screen' });
@@ -35,23 +42,24 @@ export function mountRecoveryScreen(root, { flow, onFinished, signal }) {
       });
       container.appendChild(headingNode);
       // `status`: the words are a progress or an error line, so they sit in a polite live region.
-      container.appendChild(
-        el(
-          'p',
-          status
-            ? {
-                className: 'stage-meta',
-                text: message,
-                attrs: { role: 'status', 'aria-live': 'polite' },
-              }
-            : { className: 'stage-meta', text: message },
-        ),
+      const messageNode = el(
+        'p',
+        status
+          ? {
+              className: 'stage-meta',
+              text: message,
+              attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
+            }
+          : { className: 'stage-meta', text: message },
       );
+      container.appendChild(messageNode);
       if (actions.length) {
         container.appendChild(el('div', { className: 'login-form' }, actions));
       }
       root.appendChild(container);
-      headingNode.focus();
+      // The words of a result (a saved password, and the warning that other devices stayed signed in) are the
+      // point of the screen: focus them, not just the heading, so a screen reader reads them.
+      (focusMessage ? messageNode : headingNode).focus();
       return true;
     });
   }
@@ -112,11 +120,10 @@ export function mountRecoveryScreen(root, { flow, onFinished, signal }) {
       renderCard({
         heading: 'Password changed',
         headingId: 'recovery-heading',
-        message: othersSignedOut
-          ? 'Your new password is saved and your other devices were signed out.'
-          : `Your new password is saved. ${OTHERS_NOT_SIGNED_OUT_MESSAGE}`,
+        message: savedMessage(othersSignedOut),
         actions: [buttonAction('Continue', finish)],
         status: true,
+        focusMessage: true,
       });
       return;
     }

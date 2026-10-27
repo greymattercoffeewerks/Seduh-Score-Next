@@ -82,6 +82,8 @@ describe('mountRecoveryScreen — a link that works', () => {
     expect(client.auth.signOut).toHaveBeenCalledWith({ scope: 'others' });
     expect(heading(root)).toBe('Password changed');
     expect(root.textContent).toContain('your other devices were signed out');
+    // the words of the result take focus (a screen reader reads them, including a warning that other devices stayed signed in)
+    expect(document.activeElement).toBe(root.querySelector('[role="status"]'));
     expect(root.querySelector('form')).toBeNull();
     expect(onFinished).not.toHaveBeenCalled();
     button(root, 'Continue').click();
@@ -217,7 +219,7 @@ describe('mountRecoveryScreen — an account with an authenticator app', () => {
     await settle();
     expect(heading(root)).toBe('This account has an authenticator app');
     expect(root.textContent).toContain(AUTHENTICATOR_REQUIRED_MESSAGE);
-    expect(root.textContent).toMatch(/operator/);
+    expect(root.textContent).toMatch(/Seduh Score team/);
     expect(root.querySelector('form')).toBeNull();
     expect(root.querySelector('input')).toBeNull();
     expect(client.auth.signOut).toHaveBeenCalledWith({ scope: 'local' });

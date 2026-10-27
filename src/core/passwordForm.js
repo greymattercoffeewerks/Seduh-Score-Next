@@ -43,18 +43,26 @@ export function describePasswordError(error, { context = 'one-time' } = {}) {
   }
   // A person with an authenticator app cannot change the password from a password-only session.
   if (error?.code === 'insufficient_aal') return AUTHENTICATOR_REQUIRED_MESSAGE;
-  return error?.message || 'Could not save your password. Try again.';
+  // Never the server's own words: they are English API text ("Auth session missing!"), not something to show a barista.
+  return 'Could not save your password. Try again.';
 }
 
 // What to say to someone whose account has an authenticator app and who cannot use it here: Supabase
 // refuses a password change from a session that has not passed the second factor (`insufficient_aal`),
 // and this screen has no code step (that is the operator's console). Said BEFORE a form that would fail.
 export const AUTHENTICATOR_REQUIRED_MESSAGE =
-  'This account is protected by an authenticator app, so its password cannot be changed here. Ask the Seduh Score operator to help you.';
+  'This account is protected by an authenticator app, so its password cannot be changed here. Ask the Seduh Score team to help you.';
 
 // After a save whose sign-out of the OTHER sessions failed (the password IS changed).
 export const OTHERS_NOT_SIGNED_OUT_MESSAGE =
   'We could not sign out your other devices. If you think someone else has your old password, sign out on those devices yourself.';
+
+// What the confirmation after a saved password says (recovery and Change password share it).
+export function savedMessage(othersSignedOut) {
+  return othersSignedOut
+    ? 'Your new password is saved and your other devices were signed out.'
+    : `Your new password is saved. ${OTHERS_NOT_SIGNED_OUT_MESSAGE}`;
+}
 
 export function renderSetPasswordForm(
   draft,
@@ -85,7 +93,7 @@ export function renderSetPasswordForm(
   }
 
   const newInput = passwordInput('password', 'New password');
-  const confirmInput = passwordInput('confirmation', 'Confirm new password');
+  const confirmInput = passwordInput('confirmation', 'Confirm password');
   // One toggle for both boxes: seeing them side by side is how a typo is spotted.
   const [toggleButton, toggleStatus] = passwordToggle([newInput, confirmInput], {
     shown: showPassword,

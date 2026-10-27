@@ -119,7 +119,7 @@ test.describe('password recovery (D-PW1)', () => {
 
     // 4. Choose the password; the console follows Continue.
     await page.getByLabel('New password', { exact: true }).fill(NEW_PASSWORD);
-    await page.getByLabel('Confirm new password').fill(NEW_PASSWORD);
+    await page.getByLabel('Confirm password').fill(NEW_PASSWORD);
     await page.getByRole('button', { name: 'Save password' }).click();
     await expect(page.getByRole('heading', { name: 'Password changed' })).toBeVisible();
     await page.getByRole('button', { name: 'Continue' }).click();

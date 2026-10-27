@@ -7,6 +7,7 @@
 // out whoever was holding the old password. The "your password was changed" email (D-PW7) is a separate,
 // later task.
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
+import { signOutRequest } from './signOutRequest.js';
 
 // `must_change_password` is cleared by the same call (see setPasswordScreen.js): a person who chose
 // their own password is no longer on a one-time one, whichever screen they chose it on.
@@ -27,23 +28,15 @@ export async function savePasswordAndEndOtherSessions(client, password) {
 
 // `scope: 'others'` keeps this session and ends every other one of the same login. Never throws.
 export async function endOtherSessions(client) {
-  try {
-    const { error } = await raceTimeout(
-      client.auth.signOut({ scope: 'others' }),
-      DEFAULT_LOAD_TIMEOUT_MS,
-    );
-    return !error;
-  } catch {
-    return false;
-  }
+  return (await signOutRequest(client, { scope: 'others' })).ok;
 }
 
 // Whether this session can change the password at all. A login with a verified authenticator app is
 // refused a password change from a session that has not passed the second factor (`insufficient_aal`);
 // that is exactly "signed in at level 1 while level 2 is available". Asked BEFORE the form is shown, so a
-// form that is bound to fail is never put in front of anyone. This reads the session's own token and the
-// login's factor list; it makes no request of its own. If it cannot be answered, the form is shown and
-// the server's own refusal (worded by passwordForm.js) is the backstop.
+// form that is bound to fail is never put in front of anyone. This reads the session's own token (the client
+// may refresh an expired one over the network first, so callers bound the wait). If it cannot be answered, the
+// form is shown and the server's own refusal (worded by passwordForm.js) is the backstop.
 export async function passwordChangeBlockedByAuthenticator(client) {
   try {
     const { data } = await client.auth.mfa.getAuthenticatorAssuranceLevel();

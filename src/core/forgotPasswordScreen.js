@@ -115,7 +115,7 @@ export async function mountForgotPasswordScreen(
       feedback,
       el('p', {
         className: 'stage-meta',
-        text: 'The link works once and for a short time. If nothing arrives in a few minutes, check your spam folder, then ask the owner of your organisation or the Seduh Score operator.',
+        text: 'The link works once and for a short time. If nothing arrives in a few minutes, check your spam folder, then ask the owner of your organisation or the Seduh Score team.',
       }),
       another,
       backToSignIn(),

@@ -323,7 +323,7 @@ describe('mountForgotPasswordScreen', () => {
     it('says what to do if nothing arrives, without saying anything about the account', async () => {
       const { root } = await sent();
       expect(root.textContent).toMatch(/spam folder/);
-      expect(root.textContent).toMatch(/owner of your organisation or the Seduh Score operator/);
+      expect(root.textContent).toMatch(/owner of your organisation or the Seduh Score team/);
       expect(root.querySelector('a[href="#/events"]').textContent).toBe('Back to sign in');
     });
 

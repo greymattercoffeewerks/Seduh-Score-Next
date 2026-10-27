@@ -46,8 +46,13 @@ describe('describePasswordError', () => {
     );
   });
 
-  it('shows any other API message as it is, and has a fallback', () => {
-    expect(describePasswordError({ message: 'Some other API words' })).toBe('Some other API words');
+  it('never shows a server message as it is: any other refusal gets the fixed fallback', () => {
+    expect(describePasswordError({ message: 'Some other API words' })).toBe(
+      'Could not save your password. Try again.',
+    );
+    expect(
+      describePasswordError({ code: 'session_not_found', message: 'Auth session missing!' }),
+    ).toBe('Could not save your password. Try again.');
     expect(describePasswordError({})).toBe('Could not save your password. Try again.');
     expect(describePasswordError(null)).toBe('Could not save your password. Try again.');
   });
