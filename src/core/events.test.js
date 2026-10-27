@@ -207,6 +207,11 @@ describe('listEventsForOrg', () => {
     ];
     const client = fakeClient({ data: events, error: null });
     expect(await listEventsForOrg('org1', client)).toEqual(events);
+    expect(client.calls).toContainEqual([
+      'select',
+      'events',
+      'id, format, name, event_date, venue, city, is_test, ended_at',
+    ]);
     expect(client.calls).toContainEqual(['eq', 'org_id', 'org1']);
     expect(client.calls).toContainEqual(['order', 'created_at', { ascending: false }]);
     // Unlike findLatestEventForOrg, no .limit(1) — this is the "give me
