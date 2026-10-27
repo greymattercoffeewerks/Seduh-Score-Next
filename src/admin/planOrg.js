@@ -252,7 +252,9 @@ export function orgPlanView({ ctx, data, onGateRefused, mayTakeFocus, reload, wr
           [
             el('strong', { text: tierLabel(grant.tier) }),
             el('span', { className: 'adm-muted', text: ` · ${scope}` }),
-            revoked ? el('span', { className: 'adm-badge', text: 'Revoked' }) : null,
+            revoked
+              ? el('span', { className: 'adm-badge adm-badge--revoked', text: 'Revoked' })
+              : null,
           ].filter(Boolean),
         ),
         el('p', { className: 'adm-muted', text: windowText(grant) }),
@@ -324,7 +326,9 @@ export function orgPlanView({ ctx, data, onGateRefused, mayTakeFocus, reload, wr
               className: 'adm-muted',
               text: ` · ${formatName(event.format)} · ${formatDate(event.event_date)}`,
             }),
-            event.is_test ? el('span', { className: 'adm-badge', text: 'Test event' }) : null,
+            event.is_test
+              ? el('span', { className: 'adm-badge adm-badge--test', text: 'Test event' })
+              : null,
           ].filter(Boolean),
         ),
         el('p', {
