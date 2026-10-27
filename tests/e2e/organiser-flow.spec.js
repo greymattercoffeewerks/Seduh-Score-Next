@@ -744,11 +744,23 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
         linkHeight: rects[0].height,
         topSpread: Math.max(...tops) - Math.min(...tops),
         panelHeight: document.querySelector('.app-shell-nav-panel').getBoundingClientRect().height,
+        // The account cluster (email, Change password, Sign out): two lines at tablet widths, beside the links.
+        auth: (() => {
+          const a = document.querySelector('.app-shell-auth').getBoundingClientRect();
+          return { width: a.width, top: a.top, bottom: a.bottom };
+        })(),
+        linkTop: rects[0].top,
+        linkBottom: rects[0].bottom,
       };
     });
     expect(layout.linkCount).toBeGreaterThan(1);
     expect(layout.topSpread).toBeLessThan(layout.linkHeight / 2);
     expect(layout.panelHeight).toBeLessThan(layout.linkHeight * 3);
+    // The account cluster sits BESIDE the links, not on a row of its own below them (that was the layout that
+    // made the panel too tall once Change password joined it), and stays within its 15rem (240px) cap.
+    expect(layout.auth.width).toBeLessThanOrEqual(241);
+    expect(layout.auth.top).toBeLessThan(layout.linkBottom);
+    expect(layout.auth.bottom).toBeGreaterThan(layout.linkTop);
     await toggle.click();
 
     // Focus on the toggle when the nav goes inline lands on the first link…

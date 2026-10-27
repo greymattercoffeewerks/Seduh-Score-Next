@@ -28,15 +28,27 @@ export const RESET_REQUESTED_MESSAGE = 'If that address has an account, we sent 
 // The Supabase endpoint answers an address that has no account exactly like one that has, but several of its
 // REFUSALS only ever happen for a real account: the once-a-minute limit per address
 // (`over_email_send_rate_limit`) is checked against the account's own row, and a mail server that rejects
-// the message (a 5xx `unexpected_failure`) is only reached for an address that exists. Showing either would
-// let anyone test addresses against the form. So only an outcome that carries no information about the
-// ADDRESS is reported as different: no answer at all (nobody learned anything), a gateway error that never
-// reached the account lookup, and the limit that counts requests from this connection whatever they ask
-// about (`over_request_rate_limit`). Everything else gets the same answer as success.
+// the message (GoTrue answers HTTP 500 `unexpected_failure`) is only reached for an address that exists.
+// Showing either would let anyone test addresses against the form. So only an outcome that carries no
+// information about the ADDRESS is reported as different: no answer at all (nobody learned anything), a
+// gateway error that never reached the account lookup, and the limit that counts requests from this
+// connection whatever they ask about (`over_request_rate_limit`). Everything else gets the same answer as
+// success.
+//
+// The REAL client erases the code of every HTTP 500 (auth-js turns 500-504 and 520-530 into an
+// `AuthRetryableFetchError` that carries only a name and a status, before it reads the body), so a mail
+// failure for a real address and any other 500 look the same here. All 500s are therefore treated as
+// 'sent': a user told 'if that address has an account, we sent a link' during a database fault waits for mail
+// that never comes and can try again, which is the lesser harm than a form that tells addresses apart.
+// Accepted limit: a mail relay that HANGS surfaces as a 504 or a client timeout, which is 'unreachable' (and
+// not held to the minimum time below) while an unknown address answers at once; the client cannot tell that
+// 504 from a real gateway one, and anyone can call the Supabase endpoint directly anyway.
 export function classifyResetError(error) {
   if (!error) return 'requested';
   // No verdict from the server: a dropped connection or a gateway (502 to 504), or an answer that was not
   // Auth's at all (a CDN error page), which never reached the account lookup.
+  // HTTP 500 is GoTrue's own failure (the mail send of a real account among them), not a gateway: see above.
+  if (error.name === 'AuthRetryableFetchError' && error.status === 500) return 'requested';
   if (error.name === 'AuthRetryableFetchError' || error.name === 'AuthUnknownError') {
     return 'unreachable';
   }

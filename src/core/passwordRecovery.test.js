@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { AuthApiError, AuthRetryableFetchError, AuthUnknownError } from '@supabase/supabase-js';
+import {
+  AuthApiError,
+  AuthRetryableFetchError,
+  AuthUnknownError,
+  createClient,
+} from '@supabase/supabase-js';
 import {
   RESET_REQUESTED_MESSAGE,
   MIN_RESET_ANSWER_MS,
@@ -143,6 +148,12 @@ describe('classifyResetError', () => {
       'unreachable',
     );
     expect(classifyResetError(new AuthRetryableFetchError('Bad gateway', 503))).toBe('unreachable');
+    expect(classifyResetError(new AuthRetryableFetchError('Bad gateway', 502))).toBe('unreachable');
+    // GoTrue's own failure (a mail relay rejecting the message of a REAL account) is HTTP 500, which the real
+    // client turns into this class with its code erased: it must read as 'sent', like an unknown address.
+    expect(
+      classifyResetError(new AuthRetryableFetchError('Error sending recovery email', 500)),
+    ).toBe('requested');
     expect(classifyResetError(new AuthApiError('slow down', 429, 'over_request_rate_limit'))).toBe(
       'busy',
     );
@@ -152,6 +163,32 @@ describe('classifyResetError', () => {
     expect(classifyResetError(new AuthUnknownError('CDN page', new Error('x')))).toBe(
       'unreachable',
     );
+  });
+
+  it('through the REAL client: an HTTP 500 with a JSON body reads as sent, a 502 as unreachable', async () => {
+    const answer = (status, body) => async () =>
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    const resetWith = async (fetchImpl) => {
+      const client = createClient('http://localhost:54321', 'anon-key', {
+        global: { fetch: fetchImpl },
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      });
+      return (await client.auth.resetPasswordForEmail('x@y.co')).error;
+    };
+    const mailFailure = await resetWith(
+      answer(500, { code: 'unexpected_failure', message: 'Error sending recovery email' }),
+    );
+    expect(mailFailure.name).toBe('AuthRetryableFetchError');
+    expect(classifyResetError(mailFailure)).toBe('requested');
+    const gateway = await resetWith(answer(502, { message: 'Bad gateway' }));
+    expect(classifyResetError(gateway)).toBe('unreachable');
+    const perAddressLimit = await resetWith(
+      answer(429, { code: 'over_email_send_rate_limit', message: 'wait 56 seconds' }),
+    );
+    expect(classifyResetError(perAddressLimit)).toBe('requested');
   });
 
   it('only outcomes that say nothing about the address are different', () => {
@@ -200,6 +237,8 @@ describe('requestPasswordReset', () => {
       { data: null, error: { code: 'over_email_send_rate_limit', status: 429, message: 'wait' } },
       { data: null, error: { code: 'unexpected_failure', status: 500, message: 'Error sending' } },
       { data: null, error: { code: 'user_not_found', status: 404, message: 'nope' } },
+      // what the real client gives for that same mail failure: its code is erased, only name and status remain
+      { data: null, error: new AuthRetryableFetchError('Error sending recovery email', 500) },
     ];
     const results = [];
     for (const answer of answers) {

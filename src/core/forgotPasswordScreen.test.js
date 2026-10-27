@@ -5,6 +5,7 @@ import {
   FORGOT_UNREACHABLE_MESSAGE,
   FORGOT_BUSY_MESSAGE,
 } from './forgotPasswordScreen.js';
+import { AuthRetryableFetchError } from '@supabase/supabase-js';
 import { RESET_REQUESTED_MESSAGE } from './passwordRecovery.js';
 
 const NO_WAIT = { minAnswerMs: 0 };
@@ -102,6 +103,10 @@ describe('mountForgotPasswordScreen', () => {
     const equalOutcomes = [
       ['an address with an account', OK],
       ['an address with no account (the server says the same)', OK],
+      [
+        'the mail failure of a real account, as the REAL client reports it (HTTP 500, code erased)',
+        { data: null, error: new AuthRetryableFetchError('Error sending recovery email', 500) },
+      ],
       [
         'the once-a-minute limit per address',
         {
