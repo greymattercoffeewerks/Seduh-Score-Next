@@ -74,7 +74,7 @@ export async function findLatestEventForOrg(orgId, client = getSupabase()) {
 export async function listEventsForOrg(orgId, client = getSupabase()) {
   const { data, error } = await client
     .from('events')
-    .select('*')
+    .select('id, format, name, event_date, venue, city, is_test, ended_at')
     .eq('org_id', orgId)
     .order('created_at', { ascending: false });
   if (error) throw error;
@@ -93,6 +93,17 @@ export async function listEventsForOrg(orgId, client = getSupabase()) {
 // time-pressure write.
 export async function deleteTestEvent(orgId, eventId, client = getSupabase()) {
   const { error } = await client.rpc('delete_test_event', {
+    p_org_id: orgId,
+    p_event_id: eventId,
+  });
+  if (error) throw error;
+}
+
+// Ends an event through the database-owned, one-way finish path. This is a
+// direct organiser action rather than an outbox write: ending an event changes
+// its availability immediately and must not be queued behind live scoring.
+export async function finishEvent(orgId, eventId, client = getSupabase()) {
+  const { error } = await client.rpc('finish_event', {
     p_org_id: orgId,
     p_event_id: eventId,
   });

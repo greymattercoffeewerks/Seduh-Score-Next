@@ -81,7 +81,8 @@ describe('renderEventsList', () => {
     const list = renderEventsList(events);
     const rows = [...list.querySelectorAll('li')];
     expect(rows[0].querySelector('#delete-event-ev1')).not.toBeNull();
-    expect(rows[1].querySelector('button')).toBeNull();
+    expect(rows[1].querySelector('#delete-event-ev2')).toBeNull();
+    expect(rows[1].querySelector('#finish-event-ev2')).not.toBeNull();
   });
 
   it('shows the two-step confirm, not the bare Delete button, once deleteStates marks that event as confirming', () => {
@@ -99,7 +100,8 @@ describe('renderEventsList', () => {
     const events = [{ id: 'ev1', name: 'Test Run', is_test: true }];
     const list = renderEventsList(events, { deleteStates: { ev1: 'deleting' } });
     expect(list.querySelector('li').textContent).toContain('Deleting…');
-    expect(list.querySelector('button')).toBeNull();
+    expect(list.querySelector('#confirm-delete-ev1')).toBeNull();
+    expect(list.querySelector('#finish-event-ev1')).not.toBeNull();
   });
 
   it("wires Delete/Confirm delete/Cancel to their own distinct handlers, each passed the clicked event's id", () => {
@@ -119,6 +121,20 @@ describe('renderEventsList', () => {
     confirming.querySelector('#cancel-delete-ev1').click();
     expect(onConfirmDelete).toHaveBeenCalledWith('ev1');
     expect(onCancelDelete).toHaveBeenCalledWith('ev1');
+  });
+
+  it('offers Finish only for an open event, with its required two-step copy', () => {
+    const events = [
+      { id: 'open', name: 'Open Cup', is_test: false, ended_at: null },
+      { id: 'done', name: 'Done Cup', is_test: false, ended_at: '2026-10-27T00:00:00Z' },
+    ];
+    const list = renderEventsList(events, { finishStates: { open: 'confirming' } });
+    expect(list.querySelector('#confirm-finish-open')).not.toBeNull();
+    expect(list.textContent).toContain('stops counting as open');
+    expect(list.textContent).toContain('Results and audience links stay available');
+    expect(list.textContent).toContain('cannot reopen');
+    expect(list.querySelector('#finish-event-done')).toBeNull();
+    expect([...list.querySelectorAll('li')][1].textContent).toContain('Finished');
   });
 });
 
@@ -201,6 +217,50 @@ describe('mountEventsScreen', () => {
     await mountEventsScreen(root, { orgId: 'org1', client, defaultFormat: 'cup_taster' });
     expect(root.textContent).toContain('October Cup');
     expect(root.querySelector('form.create-event-form')).not.toBeNull();
+  });
+
+  it('requires a confirmation before finishing, then calls the scoped RPC and preserves an announced focus target', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const client = fakeClient({
+      events: [{ id: 'ev1', org_id: 'org1', name: 'October Cup', is_test: false, ended_at: null }],
+    });
+    await mountEventsScreen(root, { orgId: 'org1', client, defaultFormat: 'cup_taster' });
+    root.querySelector('#finish-event-ev1').click();
+    expect(client.calls.some(([action]) => action === 'rpc')).toBe(false);
+    const confirm = root.querySelector('#confirm-finish-ev1');
+    expect(document.activeElement).toBe(confirm);
+    confirm.click();
+    await vi.waitFor(() =>
+      expect(client.calls).toContainEqual([
+        'rpc',
+        'finish_event',
+        { p_org_id: 'org1', p_event_id: 'ev1' },
+      ]),
+    );
+    await vi.waitFor(() => expect(root.textContent).toContain('Finished'));
+    expect(document.activeElement).toBe(root.querySelector('#events-heading'));
+    root.remove();
+  });
+
+  it('keeps a generic refused-finish error in an alert and restores focus to Finish', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const client = fakeClient({
+      events: [{ id: 'ev1', org_id: 'org1', name: 'October Cup', is_test: false, ended_at: null }],
+      rpcResult: { data: null, error: new Error('finish_event: event not found') },
+    });
+    await mountEventsScreen(root, { orgId: 'org1', client, defaultFormat: 'cup_taster' });
+    root.querySelector('#finish-event-ev1').click();
+    root.querySelector('#confirm-finish-ev1').click();
+    await vi.waitFor(() =>
+      expect(root.querySelector('[role="alert"]')?.textContent).toBe(
+        "Couldn't finish this event. Please try again.",
+      ),
+    );
+    expect(root.textContent).not.toContain('event not found');
+    expect(document.activeElement).toBe(root.querySelector('#finish-event-ev1'));
+    root.remove();
   });
 
   it('never hardcodes a format — the create call uses whatever defaultFormat was passed in', async () => {

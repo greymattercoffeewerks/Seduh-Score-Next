@@ -6,6 +6,7 @@ import {
   findLatestEventForOrg,
   listEventsForOrg,
   deleteTestEvent,
+  finishEvent,
 } from './events.js';
 
 function fakeClient(response) {
@@ -207,6 +208,11 @@ describe('listEventsForOrg', () => {
     ];
     const client = fakeClient({ data: events, error: null });
     expect(await listEventsForOrg('org1', client)).toEqual(events);
+    expect(client.calls).toContainEqual([
+      'select',
+      'events',
+      'id, format, name, event_date, venue, city, is_test, ended_at',
+    ]);
     expect(client.calls).toContainEqual(['eq', 'org_id', 'org1']);
     expect(client.calls).toContainEqual(['order', 'created_at', { ascending: false }]);
     // Unlike findLatestEventForOrg, no .limit(1) — this is the "give me
@@ -251,6 +257,23 @@ describe('deleteTestEvent', () => {
     await expect(deleteTestEvent('org1', 'ev2', client)).rejects.toThrow(
       'refusing to delete a non-test event',
     );
+  });
+});
+
+describe('finishEvent', () => {
+  it('calls finish_event with the organisation and event ids', async () => {
+    const calls = [];
+    const client = {
+      rpc: (name, payload) => (calls.push([name, payload]), Promise.resolve({ error: null })),
+    };
+    await finishEvent('org1', 'ev1', client);
+    expect(calls).toEqual([['finish_event', { p_org_id: 'org1', p_event_id: 'ev1' }]]);
+  });
+
+  it('throws an RPC error', async () => {
+    await expect(
+      finishEvent('org1', 'ev1', { rpc: () => Promise.resolve({ error: new Error('no') }) }),
+    ).rejects.toThrow('no');
   });
 });
 
