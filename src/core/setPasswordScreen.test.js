@@ -46,8 +46,13 @@ describe('describePasswordError', () => {
     );
   });
 
-  it('shows any other API message as it is, and has a fallback', () => {
-    expect(describePasswordError({ message: 'Some other API words' })).toBe('Some other API words');
+  it('never shows a server message as it is: any other refusal gets the fixed fallback', () => {
+    expect(describePasswordError({ message: 'Some other API words' })).toBe(
+      'Could not save your password. Try again.',
+    );
+    expect(
+      describePasswordError({ code: 'session_not_found', message: 'Auth session missing!' }),
+    ).toBe('Could not save your password. Try again.');
     expect(describePasswordError({})).toBe('Could not save your password. Try again.');
     expect(describePasswordError(null)).toBe('Could not save your password. Try again.');
   });
@@ -423,5 +428,21 @@ describe('mountSetPasswordScreen — edges the first pass missed', () => {
     await submit(root); // the "Saving…" re-render
     expect(document.activeElement).not.toBe(root.querySelector('#set-password-heading'));
     release();
+  });
+});
+
+describe('describePasswordError — the shared words', () => {
+  it('names the current password, not a one-time one, when asked for that context', () => {
+    expect(describePasswordError({ code: 'same_password' }, { context: 'current' })).toBe(
+      'Choose a different password from your current one.',
+    );
+    // The default context is unchanged (the Team screen's one-time-password flow).
+    expect(describePasswordError({ code: 'same_password' })).toMatch(/one-time password/);
+  });
+
+  it('turns the refusal for a missing authenticator code into words', () => {
+    expect(describePasswordError({ code: 'insufficient_aal', message: 'raw' })).toMatch(
+      /authenticator app/,
+    );
   });
 });

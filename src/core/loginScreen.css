@@ -23,3 +23,23 @@
   align-self: flex-start;
   margin-top: var(--space-2);
 }
+
+/* A text link under a form ("Forgot password?", "Back to sign in"): the whole row is the tap target, the
+   words are underlined so they read as a link without relying on colour. */
+.login-secondary-link {
+  display: flex;
+  align-items: center;
+  min-height: var(--tap-target-min);
+  color: var(--color-text);
+  text-decoration: underline;
+}
+
+/* A routed link drawn as a button (the recovery screens' "Request a new link"). */
+.login-screen a.btn {
+  text-decoration: none;
+}
+
+/* The recovery screens' ways on, stacked as full-width buttons. */
+.login-screen .login-form > .btn {
+  width: 100%;
+}
