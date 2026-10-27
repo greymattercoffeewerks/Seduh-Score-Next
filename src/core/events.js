@@ -4,6 +4,7 @@
 // as plain input rather than assuming one. A future format calls this
 // unedited, same as Cup Taster does.
 import { getSupabase } from './supabaseClient.js';
+import { callDoor } from './doorCall.js';
 
 export async function createEvent(orgId, event, client = getSupabase()) {
   const { data, error } = await client
@@ -47,8 +48,8 @@ export async function findEventOrgId(eventId, client = getSupabase()) {
 // Distinguishes "this org has no event scheduled" from "this org has an
 // event but nothing's been published yet" (viewer-shell.js's own two
 // separately-named holding states, handoff §8.4). Deliberately existence-
-// only — `events.status` (draft/running/concluded) exists in the schema but
-// nothing anywhere writes it yet, so it isn't a reliable "started" signal;
+// only — `resolve_stage` writes `events.status` to `concluded` when a terminal
+// stage resolves, but it still is not a reliable "started" signal;
 // any event row at all is treated as "there's an event for tonight," full
 // stop. Zero events for an org is a normal, expected outcome here (null), not an error.
 export async function findLatestEventForOrg(orgId, client = getSupabase()) {
@@ -57,8 +58,9 @@ export async function findLatestEventForOrg(orgId, client = getSupabase()) {
   // they show (id, name, event_date, is_test) for exactly the organisation they were opened for, without
   // `anon` needing any read of the `events` table at all (T-TEN.D6 removes that read). The row has no
   // org_id or created_at: nothing here uses them. A function that returns a table answers with an array.
-  const { data, error } = await client.rpc('public_event_summary', { p_org_id: orgId });
-  if (error) throw error;
+  const response = await callDoor(client, 'public_event_summary', { p_org_id: orgId });
+  if (response.status !== 'ok') throw response.error;
+  const { data } = response;
   // Anything but a list of rows is a failure to ask, never "no event": the callers show an event-less
   // holding state for null.
   if (!Array.isArray(data)) throw new Error('public_event_summary: unexpected response');

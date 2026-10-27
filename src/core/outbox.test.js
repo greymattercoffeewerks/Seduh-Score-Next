@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describeError } from './errors.js';
 import {
   enqueueOperation,
   countPendingOperations,
@@ -63,6 +64,31 @@ describe('buildRpcHandler', () => {
     };
     await buildRpcHandler(client, 'start_heat')({ p_heat_id: 'h1' });
     expect(calls).toEqual([['start_heat', { p_heat_id: 'h1' }]]);
+  });
+
+  it('keeps an entitlement hint on a permanent refusal so the screen can explain it', async () => {
+    const client = {
+      rpc: () =>
+        Promise.resolve({
+          data: null,
+          error: {
+            message: 'entitlement_cap_reached',
+            code: '42501',
+            hint: 'entitlement_cap_reached',
+            details: 'cup_taster_participants',
+          },
+          status: 403,
+        }),
+    };
+    const caught = await buildRpcHandler(client, 'confirm_heat')({}).catch((error) => error);
+    expect(caught).toMatchObject({
+      code: '42501',
+      hint: 'entitlement_cap_reached',
+      details: 'cup_taster_participants',
+      permanent: true,
+    });
+    // and the screens that call describeError on a dropped operation's error get the plan explanation, not the generic text
+    expect(describeError(caught)).toContain('This event has reached its entry limit.');
   });
 
   it('wraps a GENUINE server-side rejection (a real HTTP response came back) as a permanent outbox failure, preserving code/details/message', async () => {

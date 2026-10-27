@@ -17,7 +17,7 @@ import { DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
 // a hand-ordered call queue can't express it cleanly for a whole-screen
 // integration test). `errorOn` injects a write failure for one specific
 // `table.method` combination, for the write-time-error test.
-function fakeClient(initialDb, { errorOn } = {}) {
+function fakeClient(initialDb, { errorOn, writeError = null } = {}) {
   const db = {};
   for (const [table, rows] of Object.entries(initialDb)) {
     db[table] = rows.map((row) => ({ ...row }));
@@ -57,7 +57,8 @@ function fakeClient(initialDb, { errorOn } = {}) {
         if (fails(table, 'insert')) {
           return {
             select: () => ({
-              single: () => Promise.resolve({ data: null, error: new Error('insert failed') }),
+              single: () =>
+                Promise.resolve({ data: null, error: writeError ?? new Error('insert failed') }),
             }),
           };
         }
@@ -672,6 +673,37 @@ describe('mountRosterScreen', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(document.activeElement).toBe(root.querySelector('.screen-feedback'));
+    document.body.removeChild(root);
+  });
+
+  it('shows an entry-limit refusal in the focused live feedback panel', async () => {
+    const client = fakeClient(
+      { events: [baseEvent], people: [], event_entries: [] },
+      {
+        errorOn: 'event_entries.insert',
+        writeError: {
+          code: '42501',
+          hint: 'entitlement_cap_reached',
+          details: 'cup_taster_participants',
+        },
+      },
+    );
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    await mountRosterScreen(root, { eventId: 'ev1', client });
+    root.querySelector('[aria-label="Name"]').value = 'New Cupper';
+    root.querySelector('[aria-label="Name"]').dispatchEvent(new Event('input'));
+    root.querySelector('[aria-label="Phone"]').value = '+6738001111';
+    root.querySelector('[aria-label="Phone"]').dispatchEvent(new Event('input'));
+    root.querySelector('form').dispatchEvent(new Event('submit', { cancelable: true }));
+    await vi.waitFor(() =>
+      expect(root.querySelector('.screen-feedback').textContent).toContain(
+        'This event has reached its entry limit.',
+      ),
+    );
+    const feedback = root.querySelector('.screen-feedback');
+    expect(feedback.getAttribute('role')).toBe('status');
+    expect(document.activeElement).toBe(feedback);
     document.body.removeChild(root);
   });
 

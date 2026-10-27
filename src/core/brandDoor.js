@@ -12,7 +12,7 @@
 // cleared brand), so a dropped connection mid-event does not strip an organiser's name off the projector.
 //
 // The published live payload is not involved (no brand in the snapshot), so the realtime path is untouched.
-import { raceTimeout } from './timeout.js';
+import { callDoor } from './doorCall.js';
 import { normaliseBrand } from './brandSlot.js';
 
 export const BRAND_DOOR = 'public_event_branding';
@@ -27,9 +27,6 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // PostgREST says a function it does not have with PGRST202 (and a 404 over HTTP). That is "this database has no
 // door yet" (a front end shipped ahead of its migration): quiet, and tried again on the slow timer, so a screen that
 // was opened before the migration was pushed finds the door once it exists.
-const isDoorAbsent = (error) =>
-  error?.code === 'PGRST202' || error?.code === '42883' || error?.status === 404;
-
 /**
  * Asks the door once. Answers, never throws:
  *   { status: 'brand', brand }   a usable brand (normalised: name, logo address, alt, accent)
@@ -49,18 +46,10 @@ export async function askBrandDoor(client, { orgId, eventId = null, timeoutMs = 
     p_org_id: orgId,
     p_event_id: typeof eventId === 'string' && UUID.test(eventId) ? eventId : null,
   };
-  let response;
-  try {
-    response = await raceTimeout(client.rpc(BRAND_DOOR, args), timeoutMs);
-  } catch (error) {
-    return { status: 'error', error };
-  }
-  if (response?.error) {
-    return isDoorAbsent(response.error)
-      ? { status: 'absent' }
-      : { status: 'error', error: response.error };
-  }
-  const data = response?.data;
+  const response = await callDoor(client, BRAND_DOOR, args, { timeoutMs });
+  if (response.status === 'absent') return { status: 'absent' };
+  if (response.status === 'error') return response;
+  const { data } = response;
   // A function that returns a table answers with a list; one that returns a single record with an object.
   const row = Array.isArray(data) ? data[0] : data;
   if (row === null || typeof row !== 'object') return { status: 'none' };

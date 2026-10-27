@@ -44,7 +44,8 @@ harness's `renderBody` stays a stub, deliberately — that harness proves the sh
 not the real content.
 
 `events` gained `findLatestEventForOrg` in that same 2026-08-28 follow-up —
-existence-only, since `events.status` exists in the schema but nothing writes it yet.
+existence-only; `resolve_stage` now writes `events.status` to `concluded` when a terminal
+stage resolves, but it remains unsuitable as a "started" signal.
 `renderChrome()`'s identity name is a real `<h1>`, not a `<span>`, 2026-08-28
 heading-hierarchy follow-up — a visually-hidden equivalent `<h1>` covers
 `showChrome:false` (the projector), which has no chrome band to host a visible one in;
