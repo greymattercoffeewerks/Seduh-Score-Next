@@ -14,7 +14,8 @@
 // A found answer is remembered for the rest of the page's life (a slug does not move between organisations
 // within a session, and the projector asks again on every surface it shows). "Not found" and errors are never
 // remembered: a link that did not work a moment ago may work now.
-import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
+import { callDoor } from './doorCall.js';
+import { DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
 
 const found = new Map();
 
@@ -33,14 +34,9 @@ export async function resolveOrgBySlug(slug, client, { timeoutMs = DEFAULT_LOAD_
   const key = normalise(slug);
   if (key === null) return { status: 'not_found' };
   if (found.has(key)) return { status: 'found', org: { ...found.get(key) } };
-  let response;
-  try {
-    response = await raceTimeout(client.rpc('public_org_by_slug', { p_slug: slug }), timeoutMs);
-  } catch (error) {
-    return { status: 'error', error };
-  }
-  if (response?.error) return { status: 'error', error: response.error };
-  const row = Array.isArray(response?.data) ? response.data[0] : null;
+  const response = await callDoor(client, 'public_org_by_slug', { p_slug: slug }, { timeoutMs });
+  if (response.status !== 'ok') return { status: 'error', error: response.error };
+  const row = Array.isArray(response.data) ? response.data[0] : null;
   if (!row?.id) return { status: 'not_found' };
   const org = { id: row.id, name: row.name ?? null, slug: row.slug ?? key };
   found.set(key, org);

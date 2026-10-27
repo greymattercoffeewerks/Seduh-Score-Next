@@ -4,6 +4,7 @@
 // as plain input rather than assuming one. A future format calls this
 // unedited, same as Cup Taster does.
 import { getSupabase } from './supabaseClient.js';
+import { callDoor } from './doorCall.js';
 
 export async function createEvent(orgId, event, client = getSupabase()) {
   const { data, error } = await client
@@ -57,8 +58,9 @@ export async function findLatestEventForOrg(orgId, client = getSupabase()) {
   // they show (id, name, event_date, is_test) for exactly the organisation they were opened for, without
   // `anon` needing any read of the `events` table at all (T-TEN.D6 removes that read). The row has no
   // org_id or created_at: nothing here uses them. A function that returns a table answers with an array.
-  const { data, error } = await client.rpc('public_event_summary', { p_org_id: orgId });
-  if (error) throw error;
+  const response = await callDoor(client, 'public_event_summary', { p_org_id: orgId });
+  if (response.status !== 'ok') throw response.error;
+  const { data } = response;
   // Anything but a list of rows is a failure to ask, never "no event": the callers show an event-less
   // holding state for null.
   if (!Array.isArray(data)) throw new Error('public_event_summary: unexpected response');
