@@ -380,6 +380,18 @@
   }
 }
 
+/* From 640px up to 1439px the account cluster is two lines, the email above Change password and Sign out, instead of
+   one line of three. One line is 373px wide, which no longer fits: at 900px it dropped below the five links and the
+   open hamburger panel grew past its compact layout, and at 1366px (inline nav) it squeezed the organisation name to
+   17px (organiser-flow.spec.js, both tests). Two lines are about as wide as the old email + Sign out pair. From
+   1440px (the width the header-height test runs at) there is room for the one-line cluster. */
+@media (min-width: 640px) and (max-width: 1439px) {
+  .app-shell-auth {
+    max-width: 15rem;
+    justify-content: flex-end;
+  }
+}
+
 /* 1366px: keep in sync with INLINE_NAV_QUERY in appShell.js (media queries can't
    read a variable, so the value is written in both places). */
 @media (min-width: 1366px) {
@@ -603,6 +615,8 @@
    divider direction below follows that same layout change, mobile-first. */
 .app-shell-auth {
   display: flex;
+  /* Wraps: the email, Change password and Sign out do not fit one row at 360px. */
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-3);
   /* Lets this flex item shrink below its content's own intrinsic width —
@@ -611,6 +625,15 @@
      realistic-length organiser email forced the WHOLE persistent header to
      overflow horizontally rather than wrap. */
   min-width: 0;
+}
+
+/* Change password, beside the email it belongs to: a text link with the same tap target as a nav link. */
+.app-shell-auth-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-target-min);
+  color: var(--color-text);
+  text-decoration: underline;
 }
 
 .app-shell-auth-email {

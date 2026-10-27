@@ -167,6 +167,15 @@ export function withFocusPreservation(root, renderFn) {
   if (!focusHandled && selector) root.querySelector(selector)?.focus();
 }
 
+// Puts a message (or clears it) in a screen's `.screen-feedback` line and sets its tone (`data-tone`:
+// error, success, ...). Extracted when the password screens became the third and fourth to carry this
+// same body; the older copies (loginScreen.js, eventsScreen.js) can move to it when next touched.
+export function setFeedback(feedback, message, tone) {
+  feedback.textContent = message ?? '';
+  if (tone) feedback.dataset.tone = tone;
+  else delete feedback.dataset.tone;
+}
+
 // Shared "label above input" wrapper for a screen's own form fields —
 // extracted here on its 2nd verbatim use (setupScreen.js's stage rows
 // originally; roster registration next) per CONVENTIONS.md's own rule,
