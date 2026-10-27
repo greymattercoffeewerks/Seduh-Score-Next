@@ -67,7 +67,7 @@ export function mountShell(root, { panels, email, ctx, onSignOut, onSignOutEvery
     ]),
     el('div', { className: 'adm-who' }, [
       el('span', { className: 'adm-who-email', text: email }),
-      el('span', { className: 'adm-badge', text: 'Verified (AAL2)' }),
+      el('span', { className: 'adm-badge adm-badge--on', text: 'Verified (AAL2)' }),
     ]),
     el('div', { className: 'adm-actions' }, [
       signOutButton('Sign out', () => onSignOut()),

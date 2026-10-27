@@ -151,7 +151,23 @@
 .adm-badge {
   font-size: var(--text-sm);
   font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+}
+
+.adm-badge--on {
   color: var(--color-success);
+}
+
+.adm-badge--off {
+  color: var(--color-text-muted);
+}
+
+.adm-badge--revoked {
+  color: var(--color-danger);
+}
+
+.adm-badge--test {
+  color: var(--color-test);
 }
 
 .adm-actions {

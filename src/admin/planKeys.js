@@ -74,7 +74,7 @@ export function keysSection({ ctx, onGateRefused, mayTakeFocus, reload, writes =
     const costWords = key.kind === 'cap' ? 'be held to the limit' : 'lose access';
     const status = el('p', { className: 'adm-key-status' }, [
       el('span', {
-        className: 'adm-badge',
+        className: `adm-badge adm-badge--${enforced ? 'on' : 'off'}`,
         text: enforced ? 'On: in force' : 'Off: nobody is restricted yet',
       }),
       el('span', { className: 'adm-muted', text: keyRuleText(key) }),
