@@ -146,6 +146,7 @@ function renderFinishAction(
     return finishingButton;
   }
   if (finishState === 'confirming') {
+    const copyId = `finish-copy-${event.id}`;
     const confirmButton = el('button', {
       className: 'btn btn-outline tap-target',
       id: `confirm-finish-${event.id}`,
@@ -153,6 +154,8 @@ function renderFinishAction(
       attrs: {
         type: 'button',
         'aria-label': `Confirm finishing "${event.name}"`,
+        // Focus lands here, so the irreversible consequence must reach it too.
+        'aria-describedby': copyId,
         'data-focus-key': `confirm-finish-${event.id}`,
       },
     });
@@ -166,6 +169,7 @@ function renderFinishAction(
     cancelButton.addEventListener('click', () => onCancelFinish(event.id));
     return el('span', { className: 'event-finish-confirm' }, [
       el('span', {
+        id: copyId,
         text: 'Finish this event? It stops counting as open. Results and audience links stay available, but organisers cannot reopen it.',
       }),
       confirmButton,
@@ -178,12 +182,13 @@ function renderFinishAction(
     text: 'Finish event',
     attrs: {
       type: 'button',
-      'aria-label': `Finish "${event.name}"`,
+      // The accessible name must contain the visible label (WCAG 2.5.3).
+      'aria-label': `Finish event "${event.name}"`,
       'data-focus-key': `finish-event-${event.id}`,
     },
   });
   finishButton.addEventListener('click', () => onFinishClick(event.id));
-  return el('span', {}, [
+  return el('span', { className: 'event-finish-action' }, [
     finishButton,
     ...(finishError ? [el('span', { text: finishError, attrs: { role: 'alert' } })] : []),
   ]);
