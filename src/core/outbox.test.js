@@ -65,6 +65,27 @@ describe('buildRpcHandler', () => {
     expect(calls).toEqual([['start_heat', { p_heat_id: 'h1' }]]);
   });
 
+  it('keeps an entitlement hint on a permanent refusal so the screen can explain it', async () => {
+    const client = {
+      rpc: () =>
+        Promise.resolve({
+          data: null,
+          error: {
+            message: 'entitlement_cap_reached',
+            code: '42501',
+            hint: 'entitlement_cap_reached',
+            details: 'cup_taster_participants',
+          },
+          status: 403,
+        }),
+    };
+    await expect(buildRpcHandler(client, 'confirm_heat')({})).rejects.toMatchObject({
+      hint: 'entitlement_cap_reached',
+      details: 'cup_taster_participants',
+      permanent: true,
+    });
+  });
+
   it('wraps a GENUINE server-side rejection (a real HTTP response came back) as a permanent outbox failure, preserving code/details/message', async () => {
     // status: 500 — what PostgREST actually sends for P0002 (it maps P0001
     // to 400 but every other P0*** to 500; see isTransientFailure's own

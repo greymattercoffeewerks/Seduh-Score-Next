@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { describeError } from './errors.js';
+import { describeError, describeGatingError, SEDUH_SCORE_CONTACT } from './errors.js';
 
 describe('describeError', () => {
   it("returns the message verbatim for a module's own thrown errors (a plain Error, no .code)", () => {
@@ -17,5 +17,50 @@ describe('describeError', () => {
     expect(describeError({ message: 'weird raw failure', code: '55000' })).toBe(
       'Something went wrong saving that — try again.',
     );
+  });
+});
+
+describe('describeGatingError', () => {
+  it.each([
+    [
+      'entitlement_cap_reached',
+      'cup_taster_participants',
+      'This event has reached its entry limit.',
+    ],
+    [
+      'entitlement_cap_reached',
+      'events_open',
+      'You already have an open event. Finish it first, then try again.',
+    ],
+    ['entitlement_required', 'btc_format', 'This format needs a plan that includes it.'],
+  ])('describes %s for %s without exposing database vocabulary', (hint, key, expected) => {
+    const result = describeGatingError({ code: '42501', hint, details: key });
+    expect(result).toEqual({
+      hint,
+      key,
+      message: `${expected} Nothing already saved has been lost. ${SEDUH_SCORE_CONTACT}`,
+    });
+  });
+
+  it('uses calm fallback copy for an unknown gated key', () => {
+    expect(
+      describeGatingError({ code: '42501', hint: 'entitlement_required', detail: 'future_key' }),
+    ).toEqual({
+      hint: 'entitlement_required',
+      key: 'future_key',
+      message: `This action is not available with this plan. Nothing already saved has been lost. ${SEDUH_SCORE_CONTACT}`,
+    });
+  });
+
+  it('leaves unknown errors on the existing generic path', () => {
+    const error = { code: '42501', hint: 'org_member_required', details: 'anything' };
+    expect(describeGatingError(error)).toBeNull();
+    expect(describeError(error)).toBe('Something went wrong saving that — try again.');
+  });
+
+  it('does not treat non-42501 errors as plan gating', () => {
+    expect(
+      describeError({ code: '23505', hint: 'entitlement_required', details: 'btc_format' }),
+    ).toMatch(/^Something went wrong saving that/);
   });
 });
