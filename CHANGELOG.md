@@ -1,3 +1,30 @@
+## Codex Addendum A: Finish button, narrower events select, admin badges, service_role guard test · 2026-10-27
+
+**Task:** Five small tasks handed to Codex (`Handoffs and Specs/CODEX-HANDOFF-2026-10-27.md`, Addendum A): A1 organiser Finish button for `events_open`, A3 narrow `listEventsForOrg`, A4 admin badge colours, A5 pgTAP `service_role` guard; A2 dropped. Codex's work merged as #332 (straight to `main`, not `dev` as instructed); reviewed afterwards; fixes merged as #333 into `dev`. No migration, no cloud change, every gating key still off.
+
+**What changed:**
+
+- `core/events.js`: `finishEvent(orgId, eventId, client)` wraps `public.finish_event`; `listEventsForOrg` selects `id, format, name, event_date, venue, city, is_test, ended_at` (the entitlement snapshot columns no longer reach the browser).
+- `core/eventsScreen.js` + `.css`: a "Finish event" action with a two-step confirm (hidden once `ended_at` is set, "Finished" in words), generic failure text that does not say which condition refused.
+- `src/admin/*`: badge modifier classes (`--on`, `--off`, `--revoked`, `--test`) on tokens, so Off and Revoked no longer look like good news; a stylesheet test forbids colour literals and now checks each token exists.
+- `supabase/tests/054`: `service_role` snapshot-edit refusal cases (plan 89 to 92).
+- ROADMAP: the BTC fixture grant boundary (the only grant writer is `admin_grant_create`, revoked from `service_role`, platform admin with fresh MFA). A2 was dropped for this reason; Claude Code builds an admin-session fixture before `btc_format` is flipped.
+
+**Reviews (post-merge, on #332):**
+
+- `code-reviewer`: 0 Important; nits (missing `.event-finish-confirm` CSS: fixed; client-clock `ended_at`: left).
+- `module-boundary-checker`: clean; nit (a second per-row confirm state machine beside Delete: left, extract a core primitive if a third appears).
+- `security-reviewer`: 0 Important; read only, pgTAP not run. Pre-existing: `findEvent` still `select('*')`.
+- `ui-accessibility-reviewer`: **2 Important, both confirmed by an independent checker and fixed in #333:** the idle Finish button's aria-label did not contain its visible text (WCAG 2.5.3; the checker narrowed it: in-flight and Confirm names passed), and Confirm did not carry the irreversible-consequence copy (now `aria-describedby`). Pre-existing, logged: violet TEST colour fails contrast on dark stage surfaces; "Event finished." live region inserted with its text.
+- `test-auditor`: **Important (shown by mutation), fixed:** Cancel path untested; on re-audit, the in-flight Finishing guard untested; both now have tests that fail when the behaviour is removed. Nits fixed: double-confirm guard, Finishing state, Cancel in the label-in-name test, token existence. Left: pgTAP read-back at `054:280` (pgTAP not run), no test for the header "Verified (AAL2)" badge class.
+- `ui-accessibility-reviewer` and `test-auditor` re-run on #333: a11y clean; auditor's one Important fixed in the same PR.
+
+**Not verified:** nothing rendered at 360px or with a real screen reader; pgTAP not run in this session (CI green). Pre-existing, unrelated: `src/ui/tokens/components.test.js` has one failing test and `npm run lint` has one error in a gitignored recon script; both also fail on clean `dev`.
+
+**Process note:** Codex opened #332 into `main` and it was merged without the review the protocol requires. Future Codex PRs: base `dev`, no merge until reviewers have run.
+
+---
+
 ## D-PW1: organiser password recovery and Change password · 2026-10-23
 
 **Task:** D-PW1 of `Handoffs and Specs/PASSWORD-RECOVERY-SPEC.md` (local, gitignored; all of D-PW1 to D-PW8 accepted by the owner on 2026-10-23, only D-PW1 built). Branch `feat/password-recovery-organiser`, cut from `dev` at #309, PR into `dev` (not merged).
