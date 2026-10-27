@@ -74,7 +74,7 @@ export async function findLatestEventForOrg(orgId, client = getSupabase()) {
 export async function listEventsForOrg(orgId, client = getSupabase()) {
   const { data, error } = await client
     .from('events')
-    .select('*')
+    .select('id, format, name, event_date, venue, city, is_test, ended_at')
     .eq('org_id', orgId)
     .order('created_at', { ascending: false });
   if (error) throw error;
