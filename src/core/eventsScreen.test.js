@@ -142,6 +142,7 @@ describe('renderEventsList', () => {
     for (const [state, visible] of [
       [undefined, 'Finish event'],
       ['confirming', 'Confirm finish'],
+      ['confirming', 'Cancel'],
       ['finishing', 'Finishing'],
     ]) {
       const list = renderEventsList(events, { finishStates: state ? { e1: state } : {} });
@@ -290,6 +291,29 @@ describe('mountEventsScreen', () => {
     const finish = root.querySelector('#finish-event-ev1');
     expect(finish).not.toBeNull();
     expect(document.activeElement).toBe(finish);
+    root.remove();
+  });
+
+  it('clicking the in-flight Finishing button does not reopen Confirm or send a second call', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const client = fakeClient({
+      events: [{ id: 'ev1', org_id: 'org1', name: 'October Cup', is_test: false, ended_at: null }],
+    });
+    // never settles, so the in-flight window is real and not timing-dependent
+    client.rpc = (name, payload) => {
+      client.calls.push(['rpc', name, payload]);
+      return new Promise(() => {});
+    };
+    await mountEventsScreen(root, { orgId: 'org1', client, defaultFormat: 'cup_taster' });
+    root.querySelector('#finish-event-ev1').click();
+    root.querySelector('#confirm-finish-ev1').click();
+    root.querySelector('#finish-event-ev1').click();
+    expect(root.querySelector('#confirm-finish-ev1')).toBeNull();
+    expect(root.querySelector('#finish-event-ev1').textContent).toBe('Finishing…');
+    expect(
+      client.calls.filter(([action, name]) => action === 'rpc' && name === 'finish_event'),
+    ).toHaveLength(1);
     root.remove();
   });
 

@@ -188,7 +188,7 @@ function renderFinishAction(
     },
   });
   finishButton.addEventListener('click', () => onFinishClick(event.id));
-  return el('span', { className: 'event-finish-confirm' }, [
+  return el('span', { className: 'event-finish-action' }, [
     finishButton,
     ...(finishError ? [el('span', { text: finishError, attrs: { role: 'alert' } })] : []),
   ]);

@@ -103,7 +103,8 @@
    state — laid out the same way its parent <li> already is (flex, wrap,
    token gap) so it never depends on being the last child in the row. */
 .event-delete-confirm,
-.event-finish-confirm {
+.event-finish-confirm,
+.event-finish-action {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
