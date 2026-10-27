@@ -98,3 +98,14 @@ export async function deleteTestEvent(orgId, eventId, client = getSupabase()) {
   });
   if (error) throw error;
 }
+
+// Ends an event through the database-owned, one-way finish path. This is a
+// direct organiser action rather than an outbox write: ending an event changes
+// its availability immediately and must not be queued behind live scoring.
+export async function finishEvent(orgId, eventId, client = getSupabase()) {
+  const { error } = await client.rpc('finish_event', {
+    p_org_id: orgId,
+    p_event_id: eventId,
+  });
+  if (error) throw error;
+}
