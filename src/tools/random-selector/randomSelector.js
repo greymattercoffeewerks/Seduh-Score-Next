@@ -1,4 +1,7 @@
 import { buildCsv } from '../../core/export.js';
+import { contrastRatio } from '../../core/brandColor.js';
+
+export { contrastRatio };
 
 export const STORAGE_KEY = 'seduh-random-selector-v1';
 export const DEMO_ENTRIES = ['Amir', 'Bella', 'Chin', 'Dina', 'Evan', 'Fatin', 'Gareth', 'Hana'];
@@ -157,20 +160,6 @@ export function insertDraftLine(draft, index, entry) {
   }
   lines.splice(indexes[index] ?? lines.length, 0, line);
   return lines.join('\n');
-}
-
-// WCAG 2.x relative luminance and contrast ratio for a #rrggbb colour.
-function luminance(color) {
-  const [red, green, blue] = [1, 3, 5].map((start) => {
-    const channel = Number.parseInt(color.slice(start, start + 2), 16) / 255;
-    return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
-  });
-  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
-}
-
-export function contrastRatio(first, second) {
-  const [lighter, darker] = [luminance(first), luminance(second)].sort((a, b) => b - a);
-  return (lighter + 0.05) / (darker + 0.05);
 }
 
 // The text colour to put on a user-chosen accent: whichever of black or white contrasts more.
