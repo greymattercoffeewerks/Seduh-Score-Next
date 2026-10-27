@@ -42,6 +42,21 @@ describe('describeGatingError', () => {
     });
   });
 
+  it('tells the organiser how to reach the team: the phone number and the email, in every gating message', () => {
+    expect(SEDUH_SCORE_CONTACT).toBe(
+      'Contact the Seduh Score team on +673 835 1231 or greymatter.cw@outlook.com.',
+    );
+    for (const key of ['cup_taster_participants', 'events_open', 'btc_format', 'future_key']) {
+      const { message } = describeGatingError({
+        code: '42501',
+        hint: 'entitlement_required',
+        detail: key,
+      });
+      expect(message, key).toContain('+673 835 1231');
+      expect(message, key).toContain('greymatter.cw@outlook.com');
+    }
+  });
+
   it('uses calm fallback copy for an unknown gated key', () => {
     expect(
       describeGatingError({ code: '42501', hint: 'entitlement_required', detail: 'future_key' }),

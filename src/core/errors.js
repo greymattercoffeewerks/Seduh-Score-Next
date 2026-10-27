@@ -1,4 +1,8 @@
-export const SEDUH_SCORE_CONTACT = 'Contact the Seduh Score team for help.';
+// Where an organiser who hits a plan limit can reach the people who can change their plan. The email is also
+// CONTACT_EMAIL in src/marketing/trustContent.js (core may not import marketing): change both together.
+export const SEDUH_SCORE_PHONE = '+673 835 1231';
+export const SEDUH_SCORE_EMAIL = 'greymatter.cw@outlook.com';
+export const SEDUH_SCORE_CONTACT = `Contact the Seduh Score team on ${SEDUH_SCORE_PHONE} or ${SEDUH_SCORE_EMAIL}.`;
 
 const GATING_HINTS = new Set(['entitlement_required', 'entitlement_cap_reached']);
 
