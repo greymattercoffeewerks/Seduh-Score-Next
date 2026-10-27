@@ -14,10 +14,10 @@
 // passes it in), keeping that literal in the one composition-root file
 // already allowed to know about Cup Taster.
 import { getSupabase } from './supabaseClient.js';
-import { el, labeledField } from './dom.js';
+import { el, labeledField, setBusyDisabled } from './dom.js';
 import { describeError } from './errors.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
-import { createEvent, listEventsForOrg, deleteTestEvent } from './events.js';
+import { createEvent, listEventsForOrg, deleteTestEvent, finishEvent } from './events.js';
 import { countOperationsInOrg } from './outbox.js';
 import { buildAudienceLinksCard } from './audienceLinksCard.js';
 
@@ -123,9 +123,83 @@ function renderDeleteAction(
   return deleteButton;
 }
 
+function renderFinishAction(
+  event,
+  finishState,
+  finishError,
+  { onFinishClick, onConfirmFinish, onCancelFinish },
+) {
+  if (event.ended_at) return el('span', { className: 'stage-meta', text: 'Finished' });
+  if (finishState === 'finishing') {
+    const finishingButton = el('button', {
+      className: 'btn btn-outline tap-target',
+      id: `finish-event-${event.id}`,
+      text: 'Finishing…',
+      attrs: {
+        type: 'button',
+        'aria-label': `Finishing "${event.name}"`,
+        'data-focus-key': `finish-event-${event.id}`,
+      },
+    });
+    setBusyDisabled(finishingButton, true);
+    finishingButton.addEventListener('click', () => onFinishClick(event.id));
+    return finishingButton;
+  }
+  if (finishState === 'confirming') {
+    const confirmButton = el('button', {
+      className: 'btn btn-outline tap-target',
+      id: `confirm-finish-${event.id}`,
+      text: 'Confirm finish',
+      attrs: {
+        type: 'button',
+        'aria-label': `Confirm finishing "${event.name}"`,
+        'data-focus-key': `confirm-finish-${event.id}`,
+      },
+    });
+    confirmButton.addEventListener('click', () => onConfirmFinish(event.id));
+    const cancelButton = el('button', {
+      className: 'btn btn-outline tap-target',
+      id: `cancel-finish-${event.id}`,
+      text: 'Cancel',
+      attrs: { type: 'button', 'aria-label': `Cancel finishing "${event.name}"` },
+    });
+    cancelButton.addEventListener('click', () => onCancelFinish(event.id));
+    return el('span', { className: 'event-finish-confirm' }, [
+      el('span', {
+        text: 'Finish this event? It stops counting as open. Results and audience links stay available, but organisers cannot reopen it.',
+      }),
+      confirmButton,
+      cancelButton,
+    ]);
+  }
+  const finishButton = el('button', {
+    className: 'btn btn-outline tap-target',
+    id: `finish-event-${event.id}`,
+    text: 'Finish event',
+    attrs: {
+      type: 'button',
+      'aria-label': `Finish "${event.name}"`,
+      'data-focus-key': `finish-event-${event.id}`,
+    },
+  });
+  finishButton.addEventListener('click', () => onFinishClick(event.id));
+  return el('span', {}, [
+    finishButton,
+    ...(finishError ? [el('span', { text: finishError, attrs: { role: 'alert' } })] : []),
+  ]);
+}
+
 export function renderEventsList(
   events,
-  { deleteStates = {}, deleteHandlers = {}, formatOptions, unsyncedWrites } = {},
+  {
+    deleteStates = {},
+    deleteHandlers = {},
+    finishStates = {},
+    finishErrors = {},
+    finishHandlers = {},
+    formatOptions,
+    unsyncedWrites,
+  } = {},
 ) {
   if (events.length === 0) {
     return el('p', { className: 'stage-meta', text: 'No events yet — create one below.' });
@@ -157,6 +231,9 @@ export function renderEventsList(
       unsyncedWrites,
     );
     if (deleteAction) children.push(deleteAction);
+    children.push(
+      renderFinishAction(event, finishStates[event.id], finishErrors[event.id], finishHandlers),
+    );
     return el('li', {}, children);
   });
   return el('ul', { className: 'events-list' }, items);
@@ -322,6 +399,8 @@ export async function mountEventsScreen(
   // see renderEventsList's own comment for why this is keyed by id rather
   // than a single shared value.
   let deleteStates = {};
+  let finishStates = {};
+  let finishErrors = {};
   // How many queued changes on this device are for THIS organisation (any account's), as of the last
   // Delete click — see unsyncedWritesWarning. Deliberately one value, not per row: it counts the
   // organisation's whole queue, so the latest read is the right one for any row.
@@ -511,6 +590,43 @@ export async function mountEventsScreen(
     render();
   }
 
+  function handleFinishClick(eventId) {
+    if (finishStates[eventId]) return;
+    finishErrors = { ...finishErrors, [eventId]: undefined };
+    finishStates = { ...finishStates, [eventId]: 'confirming' };
+    focusAfterRender = `#confirm-finish-${eventId}`;
+    render();
+  }
+
+  function handleCancelFinish(eventId) {
+    finishStates = { ...finishStates, [eventId]: undefined };
+    focusAfterRender = `#finish-event-${eventId}`;
+    render();
+  }
+
+  async function handleConfirmFinish(eventId) {
+    if (signal?.aborted || finishStates[eventId] === 'finishing') return;
+    finishStates = { ...finishStates, [eventId]: 'finishing' };
+    focusAfterRender = '#events-heading';
+    render();
+    try {
+      await finishEvent(orgId, eventId, client);
+      events = events.map((event) =>
+        event.id === eventId ? { ...event, ended_at: new Date().toISOString() } : event,
+      );
+      pendingSuccess = 'Event finished.';
+      focusAfterRender = '#events-heading';
+    } catch {
+      finishErrors = {
+        ...finishErrors,
+        [eventId]: "Couldn't finish this event. Please try again.",
+      };
+      focusAfterRender = `#finish-event-${eventId}`;
+    }
+    finishStates = { ...finishStates, [eventId]: undefined };
+    render();
+  }
+
   function render() {
     // A discarded-but-still-in-flight mount (this screen's OWN attemptLoad
     // or a post-await handler like handleCreate, still resolving after the
@@ -562,6 +678,13 @@ export async function mountEventsScreen(
             onDeleteClick: handleDeleteClick,
             onConfirmDelete: handleConfirmDelete,
             onCancelDelete: handleCancelDelete,
+          },
+          finishStates,
+          finishErrors,
+          finishHandlers: {
+            onFinishClick: handleFinishClick,
+            onConfirmFinish: handleConfirmFinish,
+            onCancelFinish: handleCancelFinish,
           },
           formatOptions,
           unsyncedWrites,
