@@ -14,7 +14,7 @@
 --     live; admin_event_resnapshot lifts it upward only, with a required reason, an audit row with pinned keys, and the
 --     usual gate; the same tier is a no-op; a lower tier is refused.
 begin;
-select plan(89);
+select plan(92);
 
 create schema t054;
 grant usage on schema t054 to anon, authenticated, service_role;
@@ -74,7 +74,29 @@ begin
   perform set_config('request.jwt.claim.sub', '', true);
   return res;
 end $$;
+-- This deliberately sets the API's service role rather than running as the
+-- table owner: service_role bypasses RLS, but must still be caught by the
+-- database-owned snapshot trigger.
+create function t054.as_service(stmt text) returns text language plpgsql as $$
+declare res text; h text; d text; m text;
+begin
+  perform set_config('role', 'service_role', true);
+  begin
+    execute stmt;
+    res := 'ok';
+  exception when others then
+    get stacked diagnostics h = pg_exception_hint, d = pg_exception_detail, m = message_text;
+    res := sqlstate || '|' || coalesce(h, '') || '|' || coalesce(d, '') || '|' || m;
+  end;
+  perform set_config('role', 'none', true);
+  return res;
+end $$;
 grant execute on all functions in schema t054 to anon, authenticated, service_role;
+
+-- The production service role has no table privilege. Grant it only inside
+-- this rolled-back test transaction so the snapshot trigger itself is tested
+-- (rather than merely the table GRANT boundary).
+grant select, update on public.events to service_role;
 
 -- ============ fixtures (as the owner) ============
 insert into auth.users (id, email) values
@@ -249,6 +271,14 @@ select is(t054.as_user(t054.u(11), format($$update events set entitlements_snaps
   '23001|||events.entitlements_snapshot is written by the database only', 'nor its time');
 select is(t054.as_user(t054.u(11), format($$update events set entitlements_snapshot = null where id = %L$$, t054.u(103))),
   '23001|||events.entitlements_snapshot is written by the database only', 'nor clear it so that it is stamped afresh');
+select is(t054.as_service(format($$update events set entitlements_snapshot = '{"tier":"annual"}' where id = %L$$, t054.u(103))),
+  '23001|||events.entitlements_snapshot is written by the database only',
+  'service_role cannot edit the snapshot either');
+select is(t054.as_service(format($$update events set entitlements_snapshot_at = now() + interval '1 day' where id = %L$$, t054.u(103))),
+  '23001|||events.entitlements_snapshot is written by the database only',
+  'nor can service_role edit the snapshot time');
+select is(t054.as_service(format($$update events set name = 'service role renamed' where id = %L$$, t054.u(103))), 'ok',
+  'service_role may still make an ordinary event update');
 select is((select entitlements_snapshot::text from events where id = t054.u(103)), '{"tier": "community"}', 'it is unchanged');
 -- off and on again does not re-stamp
 create table t054.stamp as select entitlements_snapshot_at as at from events where id = t054.u(103);
