@@ -30,7 +30,7 @@ describe('describeGatingError', () => {
     [
       'entitlement_cap_reached',
       'events_open',
-      'You already have an open event. Finish it first, then try again.',
+      'You already have an open event, and your plan allows one at a time. If it is a test event, delete it to make room.',
     ],
     ['entitlement_required', 'btc_format', 'This format needs a plan that includes it.'],
   ])('describes %s for %s without exposing database vocabulary', (hint, key, expected) => {
@@ -44,15 +44,15 @@ describe('describeGatingError', () => {
 
   it('tells the organiser how to reach the team: the phone number and the email, in every gating message', () => {
     expect(SEDUH_SCORE_CONTACT).toBe(
-      'Contact the Seduh Score team on +673 835 1231 or greymatter.cw@outlook.com.',
+      'Contact the Seduh Score team on +673\u00a0835\u00a01231 or greymatter.cw@outlook.com',
     );
     for (const key of ['cup_taster_participants', 'events_open', 'btc_format', 'future_key']) {
       const { message } = describeGatingError({
         code: '42501',
         hint: 'entitlement_required',
-        detail: key,
+        details: key,
       });
-      expect(message, key).toContain('+673 835 1231');
+      expect(message, key).toContain('+673\u00a0835\u00a01231');
       expect(message, key).toContain('greymatter.cw@outlook.com');
     }
   });
@@ -71,6 +71,22 @@ describe('describeGatingError', () => {
     const error = { code: '42501', hint: 'org_member_required', details: 'anything' };
     expect(describeGatingError(error)).toBeNull();
     expect(describeError(error)).toBe('Something went wrong saving that — try again.');
+  });
+
+  it('leaves an ordinary 42501 with no hint (a row-level-security denial, finish_event refusing) on the generic path', () => {
+    for (const error of [
+      {
+        code: '42501',
+        hint: null,
+        details: null,
+        message: 'new row violates row-level security policy',
+      },
+      { code: '42501', message: 'finish_event: event not found' },
+      { code: '42501', hint: '', details: 'cup_taster_participants' },
+    ]) {
+      expect(describeGatingError(error)).toBeNull();
+      expect(describeError(error)).toBe('Something went wrong saving that — try again.');
+    }
   });
 
   it('does not treat non-42501 errors as plan gating', () => {
