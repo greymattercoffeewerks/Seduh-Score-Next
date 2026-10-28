@@ -2317,7 +2317,7 @@ _Source: CHANGELOG `T-GATE.C`. Migration `20261023150000` (057) merged as #309 a
 7. **Wording observations, left** (ui-accessibility-reviewer): **Copy pass done (2026-10-26):** plain key names, Off/On wording, "frozen plan" replaced, decision codes hidden from key notes. Still open: the Off and Revoked badges are green; empty field error lines.
 8. **Schema-guardian nit, left:** the `app.grant_insert` error prefix still says `admin_grant_create`. Cosmetic; the hint is unchanged.
 9. **`module-boundary-checker` was not run as its own agent.** The code-reviewer pass covered it (`boundary.test.js` and the admin leak check are green). Run the dedicated agent before the PR if the owner wants the separate sign-off.
-10. **Cloud:** migration `20261023150000` is local only. Push after the B5 push, via the Supabase MCP, after the `list_migrations` check.
+10. **Cloud:** RESOLVED 2026-10-26: migration `20261023150000` was pushed to the cloud project with the other five (cloud versions `20261026151252` to `20261026151547`), keys all off.
 
 ## Known open items from T-GATE.B5 (Per-event 5-day window lock; shipped dark, 2026-10-23)
 
@@ -2335,12 +2335,12 @@ _Source: CHANGELOG `T-GATE.B5`. Migration `20261023140000` (056) merged as #307 
 10. **Pre-existing, carried:** `events.status` and `events.is_test` are member-writable (7a risk 2, as in B3 item 4 and B4 item 5).
 11. **Not run before the PR:** `module-boundary-checker` on the `src/` change set (`src/core/eventWindow.js`, `src/core/eventWindowScreen.js`/`.css`, `src/main.js`, and the tests). Run it before the PR.
 12. **The first-flip precondition list from B4 still applies** (`events_open` and `btc_format`, items 1 and 2 of "Known open items from T-GATE.B4").
-13. **Cloud:** migrations `20261023100000` to `20261023140000` are local only; push after the BTC pitch via the Supabase MCP, after the `list_migrations` check.
+13. **Cloud:** RESOLVED 2026-10-26: migrations `20261023100000` to `20261023140000` were pushed to the cloud project (cloud versions `20261026151252` to `20261026151547`), keys all off.
 14. **Rule recorded in CONVENTIONS (rule 10):** a restrictive-policy lock binds every invoker path, so each invoker trigger or function that must stay open runs as definer with a guard. The B5 instance (`app.btc_delete_event_children`) is fixed and tested in 056.
 
 ## Known open items from T-GATE.B4 (one open event, finish and release, BTC at go-live; shipped dark, 2026-10-23)
 
-_Source: CHANGELOG `T-GATE.B4`. Nothing here is pushed (D-G13). Migration `20261023130000` (055). Status: NOT FINAL until the B4 PR's CI is seen green and item 6 is done._
+_Source: CHANGELOG `T-GATE.B4`. Pushed to the cloud 2026-10-26 (D-G13 satisfied). Migration `20261023130000` (055). Status: NOT FINAL until the B4 PR's CI is seen green and item 6 is done._
 
 1. **Flip runbook: old open events block the first flip of `events_open`.** A Community organisation with a forgotten, never-finished event is at its limit of 1, so its next event creation is refused the moment the key is enforced. Before flipping: run `select * from app.gating_would_lose('events_open')` (or `admin_gating_preview('events_open')`), then either release the stuck events deliberately (`admin_event_release`, each with a reason) or backfill the Annual tier first. Do not flip it blind.
 2. **Flip runbook: `btc_format` and live BTC events.** A BTC event that went live before `btc_format` is enforced has no snapshot, so its next `publish_session` is refused mid-event (B4 security-reviewer nit). Do not enforce `btc_format` while a BTC event is live; check `admin_gating_preview('btc_format')` first. The only grant writer is `admin_grant_create`: it requires a platform admin with fresh MFA and is revoked from `service_role`. A CI fixture for this key therefore needs an admin-session helper. **RESOLVED 2026-10-28 (PR #336):** `createTenant` grants an Annual plan through `admin_grant_create` with a real platform-admin session (admin made by SQL as the local database owner, TOTP factor enrolled, `aal2` token computed in `tests/e2e/support/grants.js`); no grant-boundary change. Proved by `btc-entitlement.spec.js` (project `dev-gating`). The cloud precondition (no BTC event live when `btc_format` is flipped) still stands; the runbook re-checks it on the day.
@@ -2350,11 +2350,11 @@ _Source: CHANGELOG `T-GATE.B4`. Nothing here is pushed (D-G13). Migration `20261
 6. **Not run before the PR:** `module-boundary-checker` on `src/core/entitlements.contract.test.js` (the one `src/` change).
 7. **Organiser copy for `entitlement_required` and `entitlement_cap_reached`** (G-C2), as in B3 item 10. A Finish button and its copy are the organiser's side of `events_open`.
 8. **Pre-existing, recorded (security-reviewer):** `btc_format` is not tied to `events.format` for `btc_*` table writes. It is a soft commercial gate only.
-9. **Cloud:** migrations `20261023100000` to `20261023130000` are local only; push after the BTC pitch via the Supabase MCP, after the `list_migrations` check.
+9. **Cloud:** RESOLVED 2026-10-26: migrations `20261023100000` to `20261023130000` were pushed to the cloud project (see item above), keys all off.
 
 ## Known open items from T-GATE.B3 (enforcement hooks, shipped dark, 2026-10-23)
 
-_Source: CHANGELOG `T-GATE.B3`. Nothing here is pushed (D-G13). Migration `20261023120000` (054). No key may be flipped until items 1 to 3 are settled._
+_Source: CHANGELOG `T-GATE.B3`. Pushed to the cloud 2026-10-26 (D-G13 satisfied). Migration `20261023120000` (054). No key may be flipped until items 1 to 3 are settled._
 
 1. **RESOLVED in T-GATE.B4:** the Community one-open-event rule (D-G20/D-G23) is built, dark: `events_open`, `finish_event`, `admin_event_release`, with "ended" as the database-owned `events.ended_at`. See "Known open items from T-GATE.B4".
 2. **RESOLVED in T-GATE.B4 (owner option A, 2026-10-23):** BTC is gated at first go-live, not creation. Any tier may create a BTC event; `btc_format` is checked when it first goes live, counting the event's own Per-event grant. The chicken-and-egg is gone, so switching `btc_format` on no longer stops a Per-event buyer. See "Known open items from T-GATE.B4" for the flip preconditions.
@@ -2367,18 +2367,18 @@ _Source: CHANGELOG `T-GATE.B3`. Nothing here is pushed (D-G13). Migration `20261
 9. **Re-snapshot:** a per-event window that opens after go-live, or a grant bought after go-live, needs `admin_event_resnapshot` (rollout note in the 054 header).
 10. **Organiser copy for `entitlement_required` / `entitlement_cap_reached`** (G-C2) not written. The admin copy for the four gating hints is in `NOT_FOR_THE_CONSOLE` (`src/admin/adminErrors.test.js`).
 11. **Not run before PR:** `module-boundary-checker` on the one `src/` change (a test file under `src/admin/`).
-12. **Cloud:** migrations `20261023100000`, `20261023110000` and `20261023120000` are local only; push after the BTC pitch via the Supabase MCP, after the `list_migrations` check.
+12. **Cloud:** RESOLVED 2026-10-26: migrations `20261023100000`, `20261023110000` and `20261023120000` were pushed to the cloud project (see above), keys all off.
 
 ## Known open items from T-GATE.B2 (admin grant writers and key switch, 2026-10-23)
 
-_Source: CHANGELOG `T-GATE.B2`. Nothing here is pushed (D-G13)._
+_Source: CHANGELOG `T-GATE.B2`. Pushed to the cloud 2026-10-26 (D-G13 satisfied)._
 
 - **PR #301 merged to `dev`** (stacked on #300). Its CI result is recorded on the PR, not re-checked here.
 - **Done locally in T-GATE.B3 (migration 054): the enforcement hooks** (events gate, format freeze, participant cap, snapshot, resnapshot). The Per-event window lock is built in T-GATE.B5 (migration 056), dark.
 - **No grant UI yet.** The gating hints are in `NOT_FOR_THE_CONSOLE` (`src/admin/adminErrors.test.js`); move them into the copy map when the grant screen lands.
 - **Intentional, recorded nits (security-reviewer):** a platform admin who is also a member can grant their own organisation (audited); the free-text grant `note` is stored verbatim in the audit row, so the screen should warn against participant data.
 - **Intentional, recorded nit (code-reviewer):** `admin_grant_extend` does not require the new end to be after `now()`. Revisit if the fixed-date tests are ever made clock-independent.
-- **Cloud:** migrations `20261023100000` and `20261023110000` are local only; push after the BTC pitch via the Supabase MCP, after the `list_migrations` check.
+- **Cloud:** RESOLVED 2026-10-26: migrations `20261023100000` and `20261023110000` were pushed to the cloud project (see above), keys all off.
 
 ## Known open items from T-GATE.B1 (entitlement core, 2026-10-23)
 
@@ -2388,7 +2388,7 @@ _Source: CHANGELOG `T-GATE.B1`. Gating's own spec is `Handoffs and Specs/GATING-
 - **Done locally in T-GATE.B3 (migration 054): the enforcement hooks** (D-G8, D-G19, D-G4). Nothing is enforced until a key is flipped, and no key is flipped before the hooks it depends on. The Per-event window lock is built in T-GATE.B5 (migration 056), dark.
 - **Deferred nit (code-reviewer, module-boundary-checker):** the catalog's `note` text ships inside the client bundle once `entitlements.js` reads it. Revisit when the first call site lands; the notes may need to move out of the bundle.
 - **`CLAUDE.md` "Entitlements are a stub" (Non-negotiables)** is still accurate for the client. Rewrite it when the first call site lands, not before.
-- **Not pushed:** migration `20261023100000` is local only. Per D-G13 it goes to the cloud after the BTC pitch, through the Supabase MCP, after the usual check against `list_migrations`.
+- **RESOLVED 2026-10-26:** migration `20261023100000` was pushed to the cloud project after the BTC pitch, through the Supabase MCP, after the `list_migrations` check.
 
 ## Known open items from T-ADM.\* (admin console v1, 2026-10-16)
 
