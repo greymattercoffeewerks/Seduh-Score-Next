@@ -252,6 +252,10 @@ describe('U-5 the save', () => {
     });
     expect(client.auth.signOut).toHaveBeenCalledTimes(1);
     expect(client.auth.signOut).toHaveBeenCalledWith({ scope: 'others' });
+    // the order matters: a refused save must never end the other sessions
+    expect(client.auth.updateUser.mock.invocationCallOrder[0]).toBeLessThan(
+      client.auth.signOut.mock.invocationCallOrder[0],
+    );
     expect(host.querySelector('h1').textContent).toBe('Password changed');
     expect(host.textContent).toContain(SAVED_MESSAGE);
   });

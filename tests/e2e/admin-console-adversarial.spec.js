@@ -893,7 +893,9 @@ test.describe('the admin surface under attack (HTTP, real local stack)', () => {
     expect((await signInPassword(pw)).token).toBeTruthy();
     await expect(signInPassword({ email: pw.email, password: PW_NEW })).rejects.toThrow();
     // and the same login at aal2 is allowed (the rule is about the level, not the account)
-    expect(factor.token).toBeTruthy();
+    expect((await putPassword(factor.token, pw.password)).body?.error_code).not.toBe(
+      'insufficient_aal',
+    );
   });
 
   test('X2 KNOWN GAP (documented behaviour, not a guarantee): a stale-TOTP aal2 session CAN change the password, because the 60-minute window lives in our database gate and GoTrue only asks for aal2; every admin function still refuses it', async () => {

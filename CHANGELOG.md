@@ -15,7 +15,7 @@
 
 **Verified:** full vitest, eslint and prettier clean; `npm run check:admin-leak` clean; the whole `dev-admin` Playwright project (66 tests) against the shared local stack. **Not verified:** the cloud GoTrue version and settings (design U1 to U3), a real device, the Edge Function (untouched).
 
-**Reviews:** recorded in the PR description.
+**Reviews:** `code-reviewer`, `module-boundary-checker` and `security-reviewer`: clean. `test-auditor`: no Important, 4 nits (2 applied: call order in U-5, a real aal2 probe in X1; 2 left: U-8 saving-render snapshot, 43.5px tolerance shared with the helper). `ui-accessibility-reviewer`: no Important, 4 nits left as known (native `required` bubble pre-empts the empty-field copy, the intro uses an unstyled `stage-meta`, Show/Hide does not cover the current-password box, no `aria-invalid`). No Important finding, so no independent refutation check was needed.
 
 ---
 
