@@ -26,6 +26,8 @@ test.describe('the Organisations panel (real page, real local Supabase)', () => 
     admin = await createPlatformAdmin('orgs-admin');
     tenant = await createTenant({
       label: 'orgs-panel',
+      // this spec asserts the organisation's own plan (Community) and an empty change log, so it is given no grant
+      grant: false,
       format: 'cup_taster',
       payload: {},
       eventName: EVENT_NAME,
