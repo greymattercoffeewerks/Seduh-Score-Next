@@ -1,30 +1,17 @@
-// Giving a test organisation a plan, and switching a gating key, the only way production can: through the audited
-// `admin_*` functions, called over the API with a REAL platform-admin session. `admin_grant_create` and
-// `admin_set_key_enforced` are revoked from service_role, so there is no shortcut (no local-only route, no direct
-// insert into the grant tables) and this file adds none: it signs in as an admin made the way the runbook makes one
-// (support/admins.js: an SQL insert as the local database owner), enrols a TOTP factor on that login, and answers
-// the factor with a code computed here (support/api.js) so the session is `aal2` with a TOTP verified seconds ago.
-//
-// Local stack only, enforced twice: tenants.js refuses a non-local API address before anything is signed, and
-// admins.js refuses a database container or Docker host that is not this machine's. Both run before the admin is
-// made, and `assertLocalAdminPath` below runs them again so a future caller cannot skip them. No credential in this
-// file is real: the admin's password is the local-dev one every helper here uses, and the TOTP secret is generated
-// by the local GoTrue for this run and kept in memory.
+// Giving a test organisation a plan, and switching a gating key, through the audited `admin_*` functions with a REAL
+// platform-admin session. `admin_grant_create` and `admin_set_key_enforced` are revoked from service_role, so there is
+// no shortcut and this file adds none: the admin is made by SQL as the local database owner (support/admins.js), a TOTP
+// factor is enrolled on it, and the code is computed here (support/api.js) so the session is `aal2`.
+// Local stack only: localStack() refuses a non-local API address and admins.js refuses a non-local database.
 import { createPlatformAdmin, removePlatformAdmin } from './admins.js';
 import { elevate, enrolTotp, rpc, signInPassword } from './api.js';
 import { localStack } from './tenants.js';
-
-function assertLocalAdminPath() {
-  // localStack() throws unless the API address is this machine's; the database guard lives in admins.js and runs
-  // inside createPlatformAdmin/removePlatformAdmin, so the admin cannot be made against anything else.
-  localStack();
-}
 
 let adminOnce;
 
 // One admin per test process (Playwright runs each worker as its own process), made on first use.
 function grantAdmin() {
-  assertLocalAdminPath();
+  localStack();
   adminOnce ??= (async () => {
     const person = await createPlatformAdmin('grant-admin');
     const { token } = await signInPassword(person);
@@ -91,6 +78,7 @@ export async function withKeyEnforced(key, body) {
   try {
     return await body();
   } finally {
-    await setKeyEnforced(key, false);
+    // a failed restore must not hide the body's own failure
+    await setKeyEnforced(key, false).catch(() => {});
   }
 }

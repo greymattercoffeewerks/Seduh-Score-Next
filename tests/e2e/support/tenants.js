@@ -152,8 +152,8 @@ export async function createTenant({
   });
   const token = session.access_token;
 
-  // The plan is given before the first event or go-live, so a gating key that is enforced already sees it. Imported
-  // here, not at the top, because grants.js imports this file.
+  // The plan is given before the first event or go-live, so a gating key that is enforced already sees it. grants.js imports this
+  // file, so it is imported here.
   let grantId = null;
   if (grant) {
     const { grantPlan } = await import('./grants.js');
@@ -207,8 +207,8 @@ export async function createTenant({
     userId: user.id,
     email,
     password: PASSWORD,
-    eventId: event?.id,
-    liveId: live?.id,
+    eventId: event?.id ?? null,
+    liveId: live?.id ?? null,
     grantId,
     createEvent,
     goLive,
