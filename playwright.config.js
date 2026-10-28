@@ -93,13 +93,19 @@ export default defineConfig({
       use: { baseURL: 'http://127.0.0.1:5273' },
     },
     {
+      // Puts btc_format back off if an earlier run was killed with it on (see gating-reset.setup.js). Before dev-admin.
+      name: 'gating-reset',
+      testMatch: /gating-reset\.setup\.js/,
+      dependencies: ['dev-tenancy'],
+    },
+    {
       // admin-console.spec.js (T-ADM.D1): the platform operator's console at /admin/ with a real platform admin
       // (made by SQL, support/admins.js), real TOTP enrolment and challenge, and the database gate. Last, for the
       // same shared-backend reason as the projects above; it also needs the local stack's TOTP switched on
       // (supabase/config.toml [auth.mfa.totp]).
       name: 'dev-admin',
       testMatch: /admin-console.*\.spec\.js/,
-      dependencies: ['dev-tenancy'],
+      dependencies: ['dev-tenancy', 'gating-reset'],
       use: { baseURL: 'http://127.0.0.1:5273' },
     },
     {
@@ -110,6 +116,15 @@ export default defineConfig({
       name: 'dev-recovery',
       testMatch: /password-recovery\.spec\.js/,
       dependencies: ['dev-admin'],
+      use: { baseURL: 'http://127.0.0.1:5273' },
+    },
+    {
+      // btc-entitlement.spec.js (T-GATE, the first-flip fixture): btc_format switched on locally through the audited
+      // admin key switch with a real platform-admin session (support/grants.js). While the key is on, a BTC go-live for
+      // an organisation without a plan is refused, so this runs last and alone; the spec puts the key back off.
+      name: 'dev-gating',
+      testMatch: /btc-entitlement\.spec\.js/,
+      dependencies: ['dev-recovery'],
       use: { baseURL: 'http://127.0.0.1:5273' },
     },
   ],
