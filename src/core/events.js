@@ -25,8 +25,18 @@ export async function createEvent(orgId, event, client = getSupabase()) {
   return data;
 }
 
+// The columns the callers actually read, and no more (the report screen hands the row whole to
+// buildResultsPayload, which publishes name, format, event_date, venue and city): `select('*')` would
+// also hand the browser the entitlement snapshot (entitlements_snapshot, entitlements_snapshot_at) and the raw
+// `config`, which no screen shows. Add a column here only when a caller needs it (events.test.js holds the list).
+export const FIND_EVENT_COLUMNS = 'id, org_id, format, name, is_test, event_date, venue, city';
+
 export async function findEvent(eventId, client = getSupabase()) {
-  const { data, error } = await client.from('events').select('*').eq('id', eventId).single();
+  const { data, error } = await client
+    .from('events')
+    .select(FIND_EVENT_COLUMNS)
+    .eq('id', eventId)
+    .single();
   if (error) throw error;
   return data;
 }

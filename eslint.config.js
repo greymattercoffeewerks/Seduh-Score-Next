@@ -10,6 +10,8 @@ export default [
       'node_modules/**',
       // Local scratch output (never committed); not part of the app.
       'brag-output/**',
+      // Specs (markdown) plus gitignored local recon scripts; no tracked source in here, nothing to lint.
+      'Handoffs and Specs/**',
       'eslint-rules/**',
       // The config wires up 'seduh-next/no-trio-vocabulary' by name, which
       // trips its own rule (\btrio\b matches inside the kebab-case id).
