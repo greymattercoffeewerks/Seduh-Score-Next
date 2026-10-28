@@ -112,5 +112,14 @@ export default defineConfig({
       dependencies: ['dev-admin'],
       use: { baseURL: 'http://127.0.0.1:5273' },
     },
+    {
+      // btc-entitlement.spec.js (T-GATE, the first-flip fixture): btc_format switched on locally through the audited
+      // admin key switch with a real platform-admin session (support/grants.js). While the key is on, a BTC go-live for
+      // an organisation without a plan is refused, so this runs last and alone; the spec puts the key back off.
+      name: 'dev-gating',
+      testMatch: /btc-entitlement\.spec\.js/,
+      dependencies: ['dev-recovery'],
+      use: { baseURL: 'http://127.0.0.1:5273' },
+    },
   ],
 });

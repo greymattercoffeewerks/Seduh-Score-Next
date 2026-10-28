@@ -114,8 +114,20 @@ export async function createLoneUser(label, { userMetadata } = {}) {
 /**
  * Creates one organisation with its own organiser, one event and one ACTIVE live session carrying `payload`.
  * Slugs and emails are unique per run, so a persistent local stack is never collided with.
+ *
+ * `grant` is the plan the organisation is given through `admin_grant_create` with a real platform-admin session
+ * (support/grants.js; the only grant writer there is): 'annual' by default, so a spec passes whether or not a gating
+ * key is enforced. `grant: false` leaves the organisation on Community (the negative case). `live: false` makes the
+ * organisation and its organiser only: no event and no live session (use `createEvent` and `goLive` below).
  */
-export async function createTenant({ label, format, payload, eventName }) {
+export async function createTenant({
+  label,
+  format,
+  payload,
+  eventName,
+  grant = 'annual',
+  live: withLive = true,
+}) {
   assertLocalStack();
   const serviceKey = signLocalKey('service_role');
   const anonKey = process.env.VITE_SUPABASE_ANON_KEY || signLocalKey('anon');
@@ -140,28 +152,54 @@ export async function createTenant({ label, format, payload, eventName }) {
   });
   const token = session.access_token;
 
-  const [event] = await call('/rest/v1/events', {
-    method: 'POST',
-    key: anonKey,
-    token,
-    headers: { prefer: 'return=representation' },
-    body: {
-      org_id: orgId,
-      format,
-      name: eventName,
-      city: 'Testville',
-      event_date: '2026-10-12',
-      status: 'active',
-      is_test: false,
-    },
-  });
-  const [live] = await call('/rest/v1/live_sessions', {
-    method: 'POST',
-    key: anonKey,
-    token,
-    headers: { prefer: 'return=representation' },
-    body: { org_id: orgId, event_id: event.id, format, active: true, payload },
-  });
+  // The plan is given before the first event or go-live, so a gating key that is enforced already sees it. Imported
+  // here, not at the top, because grants.js imports this file.
+  let grantId = null;
+  if (grant) {
+    const { grantPlan } = await import('./grants.js');
+    grantId = await grantPlan(orgId, grant);
+  }
+
+  const liveIds = [];
+  const createEvent = async ({ format: eventFormat, name }) => {
+    const [row] = await call('/rest/v1/events', {
+      method: 'POST',
+      key: anonKey,
+      token,
+      headers: { prefer: 'return=representation' },
+      body: {
+        org_id: orgId,
+        format: eventFormat,
+        name,
+        city: 'Testville',
+        event_date: '2026-10-12',
+        status: 'active',
+        is_test: false,
+      },
+    });
+    return row;
+  };
+  // Takes an event live. Throws (message carries the status and the database's answer) when the database refuses.
+  const goLive = async ({ eventId: forEvent, format: liveFormat, payload: livePayload }) => {
+    const [row] = await call('/rest/v1/live_sessions', {
+      method: 'POST',
+      key: anonKey,
+      token,
+      headers: { prefer: 'return=representation' },
+      body: {
+        org_id: orgId,
+        event_id: forEvent,
+        format: liveFormat,
+        active: true,
+        payload: livePayload,
+      },
+    });
+    liveIds.push(row.id);
+    return row;
+  };
+
+  const event = withLive ? await createEvent({ format, name: eventName }) : null;
+  const live = withLive ? await goLive({ eventId: event.id, format, payload }) : null;
 
   return {
     slug,
@@ -169,8 +207,11 @@ export async function createTenant({ label, format, payload, eventName }) {
     userId: user.id,
     email,
     password: PASSWORD,
-    eventId: event.id,
-    liveId: live.id,
+    eventId: event?.id,
+    liveId: live?.id,
+    grantId,
+    createEvent,
+    goLive,
     orgName: `D5 ${label} ${unique}`,
     /** The organiser publishes a new live payload (what a heat starting or finishing does). */
     async publish(nextPayload) {
@@ -187,15 +228,17 @@ export async function createTenant({ label, format, payload, eventName }) {
      * delete the organisation. Slugs and emails are unique per run, so leftovers never collide.
      */
     async cleanUp() {
-      try {
-        await call(`/rest/v1/live_sessions?id=eq.${live.id}`, {
-          method: 'PATCH',
-          key: anonKey,
-          token,
-          body: { active: false },
-        });
-      } catch {
-        // the stack may already be gone
+      for (const id of liveIds) {
+        try {
+          await call(`/rest/v1/live_sessions?id=eq.${id}`, {
+            method: 'PATCH',
+            key: anonKey,
+            token,
+            body: { active: false },
+          });
+        } catch {
+          // the stack may already be gone
+        }
       }
     },
   };
