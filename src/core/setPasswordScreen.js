@@ -28,8 +28,7 @@ export async function mountSetPasswordScreen(
   return mountPasswordFormScreen(root, {
     heading: 'Choose your password',
     headingId: 'set-password-heading',
-    intro:
-      'Type the one-time password you were given, then choose your own password to continue.',
+    intro: 'Type the one-time password you were given, then choose your own password to continue.',
     signal,
     // The project requires the current password to set a new one (GoTrue skips that only for a recovery
     // session), and here the current password is the one-time password they signed in with.
