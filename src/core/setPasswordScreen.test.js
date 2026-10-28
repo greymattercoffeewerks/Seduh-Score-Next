@@ -13,9 +13,9 @@ describe('validateNewPassword', () => {
   });
 
   it('needs the minimum length, and counts exactly at it as long enough', () => {
-    expect(MIN_PASSWORD_LENGTH).toBe(8);
-    expect(validateNewPassword('1234567', '1234567')).toBe('Use at least 8 characters.');
-    expect(validateNewPassword('12345678', '12345678')).toBeNull();
+    expect(MIN_PASSWORD_LENGTH).toBe(12);
+    expect(validateNewPassword('12345678901', '12345678901')).toBe('Use at least 12 characters.');
+    expect(validateNewPassword('123456789012', '123456789012')).toBeNull();
   });
 
   it('needs both boxes to agree, exactly', () => {
@@ -152,7 +152,11 @@ function typeInto(root, field, value) {
   input.value = value;
   input.dispatchEvent(new Event('input', { bubbles: true }));
 }
-async function submit(root) {
+const CURRENT = 'current-pass-1';
+// Fills the current-password box (the project requires it) unless a test is about that box being empty.
+async function submit(root, { fillCurrent = true } = {}) {
+  const box = root.querySelector('[data-field="current"]');
+  if (fillCurrent && box && !box.value) typeInto(root, 'current', CURRENT);
   root
     .querySelector('form')
     .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
@@ -161,10 +165,46 @@ async function submit(root) {
 const feedback = (root) => root.querySelector('.screen-feedback');
 
 describe('mountSetPasswordScreen', () => {
+  it('asks for the one-time password first, labelled as such, and sends it as current_password', async () => {
+    const client = updateClient(['ok']);
+    const { root } = await mount(client);
+    const inputs = [...root.querySelectorAll('input')];
+    expect(inputs.map((i) => i.dataset.field)).toEqual(['current', 'password', 'confirmation']);
+    expect(inputs[0].getAttribute('aria-label')).toBe('One-time password');
+    expect(inputs[0].getAttribute('autocomplete')).toBe('current-password');
+    expect(root.textContent).toContain('Type the one-time password you were given');
+  });
+
+  it('an empty one-time password is said before any request', async () => {
+    const client = updateClient(['ok']);
+    const { root } = await mount(client);
+    typeInto(root, 'password', 'correct-horse');
+    typeInto(root, 'confirmation', 'correct-horse');
+    await submit(root, { fillCurrent: false });
+    expect(root.querySelector('.screen-feedback').textContent).toBe(
+      'Enter your one-time password.',
+    );
+    expect(client.calls).toHaveLength(0);
+  });
+
+  it.each(['current_password_required', 'current_password_mismatch'])(
+    '%s is worded as a wrong one-time password, not "try again"',
+    async (code) => {
+      const client = updateClient([{ code, message: 'raw' }]);
+      const { root } = await mount(client);
+      typeInto(root, 'password', 'correct-horse');
+      typeInto(root, 'confirmation', 'correct-horse');
+      await submit(root);
+      expect(root.querySelector('.screen-feedback').textContent).toBe(
+        'That is not the one-time password you were given. Check it and try again.',
+      );
+    },
+  );
+
   it('explains why it is here, with a heading', async () => {
     const { root } = await mount(updateClient(['ok']));
     expect(root.querySelector('h1').textContent).toBe('Choose your password');
-    expect(root.textContent).toMatch(/signed in with a one-time password/);
+    expect(root.textContent).toMatch(/Type the one-time password you were given/);
   });
 
   it('saves the password and clears the must-change flag in the same call, then reports done once', async () => {
@@ -174,7 +214,11 @@ describe('mountSetPasswordScreen', () => {
     typeInto(root, 'confirmation', 'correct-horse');
     await submit(root);
     expect(client.calls).toEqual([
-      { password: 'correct-horse', data: { must_change_password: false } },
+      {
+        password: 'correct-horse',
+        current_password: CURRENT,
+        data: { must_change_password: false },
+      },
     ]);
     expect(onDone).toHaveBeenCalledTimes(1);
   });
@@ -191,7 +235,7 @@ describe('mountSetPasswordScreen', () => {
 
   it.each([
     ['nothing typed', '', '', 'Choose a password.'],
-    ['too short', 'short', 'short', 'Use at least 8 characters.'],
+    ['too short', 'short', 'short', 'Use at least 12 characters.'],
     [
       'two different passwords',
       'correct-horse',
@@ -249,6 +293,7 @@ describe('mountSetPasswordScreen', () => {
     try {
       const client = { auth: { updateUser: () => new Promise(() => {}) } };
       const { root } = await mount(client);
+      typeInto(root, 'current', CURRENT);
       typeInto(root, 'password', 'correct-horse');
       typeInto(root, 'confirmation', 'correct-horse');
       root
@@ -407,7 +452,7 @@ describe('mountSetPasswordScreen — edges the first pass missed', () => {
   });
 
   it('which message wins when several things are wrong', () => {
-    expect(validateNewPassword('abc', 'xyz')).toBe('Use at least 8 characters.');
+    expect(validateNewPassword('abc', 'xyz')).toBe('Use at least 12 characters.');
     expect(validateNewPassword('', 'x')).toBe('Choose a password.');
   });
 

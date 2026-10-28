@@ -17,10 +17,12 @@ import {
   withFocusPreservation,
 } from './dom.js';
 
-export const MIN_PASSWORD_LENGTH = 8;
+// 12 since 2026-10-29: the cloud project's minimum password length is 12, and a shorter one is refused as
+// `weak_password` (worded as "too easy to guess"), so the form says it before the request is made.
+export const MIN_PASSWORD_LENGTH = 12;
 
 // `minLength` is optional: a console that wants a longer password than the default (the admin console asks for
-// 12) passes its own; everyone else keeps 8.
+// 12) passes its own; everyone else keeps the project minimum.
 export function validateNewPassword(password, confirmation, minLength = MIN_PASSWORD_LENGTH) {
   if (!password) return 'Choose a password.';
   if (password.length < minLength) {
@@ -42,6 +44,13 @@ export function describePasswordError(error, { context = 'one-time' } = {}) {
   }
   if (error?.code === 'weak_password') {
     return 'That password is too easy to guess. Choose a longer or less common one.';
+  }
+  // The project requires the current password to set a new one (a recovery link is the exception). Retrying the
+  // same thing cannot help, so say which password it wants.
+  if (error?.code === 'current_password_required' || error?.code === 'current_password_mismatch') {
+    return context === 'current'
+      ? 'That is not your current password.'
+      : 'That is not the one-time password you were given. Check it and try again.';
   }
   // A person with an authenticator app cannot change the password from a password-only session.
   if (error?.code === 'insufficient_aal') return AUTHENTICATOR_REQUIRED_MESSAGE;
@@ -76,6 +85,7 @@ export function renderSetPasswordForm(
     onTogglePassword,
     focusKey = 'set-password-submit',
     askCurrent = false,
+    currentLabel = 'Current password',
   },
 ) {
   function passwordInput(key, label, autocomplete = 'new-password') {
@@ -103,7 +113,7 @@ export function renderSetPasswordForm(
   }
 
   const currentInput = askCurrent
-    ? passwordInput('current', 'Current password', 'current-password')
+    ? passwordInput('current', currentLabel, 'current-password')
     : null;
   const newInput = passwordInput('password', 'New password');
   const confirmInput = passwordInput('confirmation', 'Confirm password');
@@ -123,7 +133,7 @@ export function renderSetPasswordForm(
   setBusyDisabled(submitButton, disabled);
 
   return el('form', { className: 'login-form' }, [
-    ...(currentInput ? [labeledField('Current password', currentInput)] : []),
+    ...(currentInput ? [labeledField(currentLabel, currentInput)] : []),
     labeledField('New password', newInput),
     // After BOTH boxes: it flips both, and sitting between them read as controlling only the first.
     labeledField('Confirm password', confirmInput, [toggleButton, toggleStatus]),
@@ -148,6 +158,8 @@ export function mountPasswordFormScreen(
     minLength = MIN_PASSWORD_LENGTH,
     // Ask for the current password too; `save(password, currentPassword)` then receives it.
     askCurrent = false,
+    // What the extra box is called ("Current password", or "One-time password" on the screen that follows one).
+    currentLabel = 'Current password',
   },
 ) {
   const draft = { current: '', password: '', confirmation: '' };
@@ -167,7 +179,7 @@ export function mountPasswordFormScreen(
 
     const invalid =
       askCurrent && !draft.current
-        ? 'Enter your current password.'
+        ? `Enter your ${currentLabel.toLowerCase()}.`
         : validateNewPassword(draft.password, draft.confirmation, minLength);
     if (invalid) {
       pendingError = invalid;
@@ -229,6 +241,7 @@ export function mountPasswordFormScreen(
         disabled: saving,
         showPassword,
         askCurrent,
+        currentLabel,
         onTogglePassword: (isShown) => {
           showPassword = isShown;
         },
