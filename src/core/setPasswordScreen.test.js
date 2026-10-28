@@ -172,7 +172,7 @@ describe('mountSetPasswordScreen', () => {
     expect(inputs.map((i) => i.dataset.field)).toEqual(['current', 'password', 'confirmation']);
     expect(inputs[0].getAttribute('aria-label')).toBe('One-time password');
     expect(inputs[0].getAttribute('autocomplete')).toBe('current-password');
-    expect(root.textContent).toContain('Enter it again');
+    expect(root.textContent).toContain('Type the one-time password you were given');
   });
 
   it('an empty one-time password is said before any request', async () => {
@@ -204,7 +204,7 @@ describe('mountSetPasswordScreen', () => {
   it('explains why it is here, with a heading', async () => {
     const { root } = await mount(updateClient(['ok']));
     expect(root.querySelector('h1').textContent).toBe('Choose your password');
-    expect(root.textContent).toMatch(/signed in with a one-time password/);
+    expect(root.textContent).toMatch(/Type the one-time password you were given/);
   });
 
   it('saves the password and clears the must-change flag in the same call, then reports done once', async () => {
