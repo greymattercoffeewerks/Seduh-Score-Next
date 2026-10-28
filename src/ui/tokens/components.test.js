@@ -28,6 +28,9 @@ const SKIP_DIRS = [
   'android',
   'supabase',
   'test-results',
+  // Gitignored local scratch, never in CI: rendered films/scenes that link the app's stylesheets in their own
+  // order. Scanned, they fail the "links components.css first" check on any machine that has run them.
+  'brag-output',
 ];
 
 function walk(dir, accept) {

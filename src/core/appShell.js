@@ -840,7 +840,11 @@ export function mountAppShell(
     }
   }
 
+  // Set by unmount(): a refresh already awaiting the outbox must not paint once the shell is gone.
+  let unmounted = false;
+
   async function refreshSync() {
+    if (unmounted) return;
     // Held while a drop is unannounced — see the drop listener above.
     if (hasUnannouncedDrops()) return;
     // A failed IndexedDB read keeps the panel's last state rather than
@@ -866,6 +870,7 @@ export function mountAppShell(
       }
       operations = [];
     }
+    if (unmounted) return;
     // The organisation is not known yet (the page has only just loaded): this person's own changes in
     // it would read as "waiting in another organisation", which is not true, and "Synced" would not be
     // either. Say nothing this tick; the next one, once it is known, tells the truth.
@@ -1259,6 +1264,7 @@ export function mountAppShell(
       refreshSync();
     },
     unmount() {
+      unmounted = true;
       headerResizeObserver?.disconnect();
       if (inlineNavQuery) {
         document.removeEventListener('focusin', trackHeaderFocus);

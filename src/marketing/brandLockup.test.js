@@ -151,11 +151,13 @@ describe('every surface that shows the mark and the wordmark builds one shared l
         signOut() {},
       },
     };
-    mountAppShell(root, { client });
+    const shell = mountAppShell(root, { client });
     expectOneLockup(root, root.querySelector('a.app-shell-brand'), [
       '.app-shell-mark',
       '.app-shell-name',
     ]);
+    // Stops the shell's sync poll, which would otherwise outlive this file's jsdom.
+    shell.unmount();
   });
 
   it('the public / marketing header (a single home link)', () => {
