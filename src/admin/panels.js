@@ -14,6 +14,7 @@ import { mountOrgsPanel } from './orgsPanel.js';
 import { mountCreateOrgPanel } from './createOrgPanel.js';
 import { mountAuditPanel } from './auditPanel.js';
 import { mountPlanPanel } from './planPanel.js';
+import { mountPasswordPanel } from './passwordPanel.js';
 
 export const PANELS = Object.freeze([
   Object.freeze({
@@ -39,5 +40,11 @@ export const PANELS = Object.freeze([
     label: 'Audit log',
     route: 'audit',
     mount: mountAuditPanel,
+  }),
+  Object.freeze({
+    id: 'password',
+    label: 'Change password',
+    route: 'password',
+    mount: mountPasswordPanel,
   }),
 ]);

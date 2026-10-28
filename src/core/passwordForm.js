@@ -19,10 +19,12 @@ import {
 
 export const MIN_PASSWORD_LENGTH = 8;
 
-export function validateNewPassword(password, confirmation) {
+// `minLength` is optional: a console that wants a longer password than the default (the admin console asks for
+// 12) passes its own; everyone else keeps 8.
+export function validateNewPassword(password, confirmation, minLength = MIN_PASSWORD_LENGTH) {
   if (!password) return 'Choose a password.';
-  if (password.length < MIN_PASSWORD_LENGTH) {
-    return `Use at least ${MIN_PASSWORD_LENGTH} characters.`;
+  if (password.length < minLength) {
+    return `Use at least ${minLength} characters.`;
   }
   if (password !== confirmation) return 'The two passwords do not match.';
   return null;
@@ -64,16 +66,24 @@ export function savedMessage(othersSignedOut) {
     : `Your new password is saved. ${OTHERS_NOT_SIGNED_OUT_MESSAGE}`;
 }
 
+// With `askCurrent`, a "Current password" box comes first (autocomplete `current-password`); the caller decides
+// what to do with it. Off for every existing screen.
 export function renderSetPasswordForm(
   draft,
-  { disabled, showPassword = false, onTogglePassword, focusKey = 'set-password-submit' },
+  {
+    disabled,
+    showPassword = false,
+    onTogglePassword,
+    focusKey = 'set-password-submit',
+    askCurrent = false,
+  },
 ) {
-  function passwordInput(key, label) {
+  function passwordInput(key, label, autocomplete = 'new-password') {
     const input = el('input', {
       className: 'field-input',
       attrs: {
         type: 'password',
-        autocomplete: 'new-password',
+        autocomplete,
         autocapitalize: 'none',
         autocorrect: 'off',
         spellcheck: 'false',
@@ -92,9 +102,12 @@ export function renderSetPasswordForm(
     return input;
   }
 
+  const currentInput = askCurrent
+    ? passwordInput('current', 'Current password', 'current-password')
+    : null;
   const newInput = passwordInput('password', 'New password');
   const confirmInput = passwordInput('confirmation', 'Confirm password');
-  // One toggle for both boxes: seeing them side by side is how a typo is spotted.
+  // One toggle for the new-password boxes: seeing them side by side is how a typo is spotted.
   const [toggleButton, toggleStatus] = passwordToggle([newInput, confirmInput], {
     shown: showPassword,
     onToggle: onTogglePassword,
@@ -110,6 +123,7 @@ export function renderSetPasswordForm(
   setBusyDisabled(submitButton, disabled);
 
   return el('form', { className: 'login-form' }, [
+    ...(currentInput ? [labeledField('Current password', currentInput)] : []),
     labeledField('New password', newInput),
     // After BOTH boxes: it flips both, and sitting between them read as controlling only the first.
     labeledField('Confirm password', confirmInput, [toggleButton, toggleStatus]),
@@ -131,9 +145,12 @@ export function mountPasswordFormScreen(
     signal,
     describeError = describePasswordError,
     footer = () => [],
+    minLength = MIN_PASSWORD_LENGTH,
+    // Ask for the current password too; `save(password, currentPassword)` then receives it.
+    askCurrent = false,
   },
 ) {
-  const draft = { password: '', confirmation: '' };
+  const draft = { current: '', password: '', confirmation: '' };
   let saving = false;
   let pendingError = null;
   let showPassword = false;
@@ -146,8 +163,12 @@ export function mountPasswordFormScreen(
     const form = event.currentTarget;
     draft.password = form.querySelector('[data-field="password"]').value;
     draft.confirmation = form.querySelector('[data-field="confirmation"]').value;
+    if (askCurrent) draft.current = form.querySelector('[data-field="current"]').value;
 
-    const invalid = validateNewPassword(draft.password, draft.confirmation);
+    const invalid =
+      askCurrent && !draft.current
+        ? 'Enter your current password.'
+        : validateNewPassword(draft.password, draft.confirmation, minLength);
     if (invalid) {
       pendingError = invalid;
       render();
@@ -157,9 +178,10 @@ export function mountPasswordFormScreen(
     saving = true;
     render();
     const password = draft.password;
+    const current = draft.current;
     let result;
     try {
-      result = await save(password);
+      result = await save(password, current);
     } catch (err) {
       pendingError = err?.timedOut
         ? 'This is taking longer than expected — check your connection and try again.'
@@ -206,6 +228,7 @@ export function mountPasswordFormScreen(
       const form = renderSetPasswordForm(draft, {
         disabled: saving,
         showPassword,
+        askCurrent,
         onTogglePassword: (isShown) => {
           showPassword = isShown;
         },

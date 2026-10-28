@@ -198,6 +198,33 @@ organisation's plan (`#/plan/<organisation id>`: tier now, grants, events, the k
   (real page at 360px: a preview changes nothing; give and revoke an Annual plan; no event name in any response), and
   the adversarial attack list (the Plan functions were added to it).
 
+## The Change password panel (`passwordPanel.js`, `currentPassword.js`; route `#/password`)
+
+The operator replaces their own password inside the console (design: `Handoffs and Specs/ADMIN-PASSWORD-DESIGN.md`,
+option a; recovery by email, option b, is deliberately not built). **Not an admin function:** the change goes to GoTrue
+(`PUT /auth/v1/user` through `ctx.client`), so it adds no server capability, writes no audit row (the Auth log is the
+record) and the gate is untouched (the session stays `aal2`, so the gate stays `ready`; `admin-console-password.spec.js` A3).
+
+- **Built on core**: `mountPasswordFormScreen` (with the optional `minLength: 12` and `askCurrent: true`; defaults 8 and off,
+  so the organiser console is unchanged) and `savePasswordAndEndOtherSessions` (optional `{ currentPassword }`). The shared
+  save still writes `must_change_password: false` (harmless here). `describePasswordPanelError` words every code;
+  `insufficient_aal` never says "ask the team" (the operator is the team).
+- **Current password: two checks, only one is the server's.** `current_password` goes to `updateUser` (GoTrue enforces it only
+  if the dashboard setting "require current password" is on). The form ALSO checks it with a throwaway client
+  (`adminClient.js createCheckClient`: `persistSession: false`, its own storage key, `signInWithPassword`, then
+  `signOut({ scope: 'local' })`). **That second check is UI-only**: anyone with an `aal2` token can call `PUT /auth/v1/user`
+  themselves. It stops a walk-up at an unlocked console, nothing else. Do not describe it as more.
+- **Failure wording**: a timeout or dropped connection while CHECKING says nothing changed; while SAVING it says the password
+  may be saved, and a later "not your current password" / "same password" answer then adds that the earlier attempt may
+  already be in effect. A failed sign-out of the other sessions says so and points at "Sign out everywhere".
+- **Stays signed in** after a save (`scope: 'others'` keeps this tab's session, proven with the real auth client in
+  `passwordPanel.test.js` U-7). A `session_not_found`-style answer calls `ctx.onGateRefused()`.
+- **Known gap, pinned by test X2:** GoTrue's rule is "is the session aal2", not our 60-minute TOTP window, so a stale-TOTP
+  session can still change the password (and `insufficient_aal` is HTTP 401 here, not 403). See ROADMAP.
+- **Tests:** `passwordPanel.test.js` (U-1 to U-10), `core/passwordForm.test.js`, `tests/e2e/admin-console-password.spec.js`
+  (A1 to A6, 360px, a second browser context) and adversarial rows X1 to X4. The admin-only strings `seduh-admin-check` and
+  `Sign out everywhere` are in the leak list.
+
 ## The adversarial pass (`tests/e2e/admin-console-adversarial.spec.js`, T-ADM.E1)
 
 An attack list run over HTTP against the real local stack, with no browser: every admin and inner function called

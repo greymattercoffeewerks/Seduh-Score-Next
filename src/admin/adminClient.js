@@ -54,6 +54,24 @@ export function createAdminClient({ url, anonKey, storage = tabStorage() }) {
   });
 }
 
+export const CHECK_STORAGE_KEY = 'seduh-admin-check';
+
+// A throwaway client for ONE job: checking that a typed password is the login's current one (the Change password
+// panel, currentPassword.js). It keeps nothing (`persistSession: false`, so the session lives only in this object
+// and is never written to storage), refreshes nothing and reads nothing from the URL. It never shares the console
+// client's storage key, so signing in with it cannot replace the operator's real session.
+export function createCheckClient({ url, anonKey }) {
+  return createClient(url, anonKey, {
+    auth: {
+      storageKey: CHECK_STORAGE_KEY,
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+    global: { fetch: (input, init) => fetchWithTimeout(input, init) },
+  });
+}
+
 let client;
 
 export function getAdminClient() {
@@ -64,4 +82,11 @@ export function getAdminClient() {
     });
   }
   return client;
+}
+
+export function getCheckClient() {
+  return createCheckClient({
+    url: import.meta.env.VITE_SUPABASE_URL,
+    anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+  });
 }
