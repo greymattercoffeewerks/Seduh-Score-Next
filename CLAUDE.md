@@ -272,10 +272,13 @@ extensions.gen_salt('bf', 10)) where id = '<id>'` (the same bcrypt hash, and `en
 extensions.crypt('<temp>', encrypted_password)` proves it took; check first that the login has no live session and
   no factor); (b)
   `insert into app.platform_admins (user_id, note) values ('<auth.users.id>', '<who, why, when>');`; (c) they sign in
-  at `/admin/` with the temporary password and **enrol their authenticator app at once**; (d) **the console has no change-password screen**, so the temporary password stays until it is rotated from
-  the Supabase dashboard (Authentication, Users, send a password recovery email); make it long and random and keep it in
-  a password manager (the first admin did; a password change from a password-only session is refused once a factor is
-  verified, `insufficient_aal`). **If their first sign-in shows a CHALLENGE screen instead of the enrolment screen,
+  at `/admin/` with the temporary password and **enrol their authenticator app at once**; (d) **replace the temporary password at once through the console's "Change password" panel** (`#/password`, needs
+  the `aal2` session they just reached; asks for the current password, minimum 12 characters, ends their other
+  sessions); make it long and random and keep it in a password manager. **Do NOT use the dashboard's "send a password
+  recovery email" for an admin with an authenticator:** that link signs in at `aal1`, GoTrue refuses a password change
+  from a password-only session once a factor is verified (`insufficient_aal`), and the link lands on a page with
+  nothing listening. Rotation by someone else is by the Auth admin API with the service key or by SQL (step a), which
+  leaves the value known to the operator's tooling, so follow it with the panel and then "Sign out everywhere". **If their first sign-in shows a CHALLENGE screen instead of the enrolment screen,
   someone else has already enrolled a factor: the account is compromised.** Delete that factor in the dashboard,
   rotate the password and start again. Until a factor is verified, anyone holding only the password could enrol
   their own. To remove an admin: `delete from app.platform_admins where user_id = '<id>';` cuts a live session off on

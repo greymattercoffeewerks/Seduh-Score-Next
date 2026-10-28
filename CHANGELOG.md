@@ -1,3 +1,24 @@
+## Admin console: Change password panel · 2026-10-28
+
+**Task:** Option (a) of `Handoffs and Specs/ADMIN-PASSWORD-DESIGN.md` (owner decisions D1 yes, D3 current password asked, D4 stay signed in, D5 minimum 12, D6 no audit row, D8 docs). PR into `dev`; not merged, nothing pushed to the cloud, no migration, no dashboard change; the gate and the Edge Function are untouched.
+
+**What changed:**
+
+- `src/admin/passwordPanel.js` (new) and its registry entry (`#/password`, "Change password"): the core form with the admin client, admin wording for every code, the current password asked, minimum 12, other sessions ended, this session kept.
+- `src/admin/currentPassword.js` and `adminClient.js createCheckClient`: the form's UI-only current-password check with a throwaway client (the server's check is `current_password` on `updateUser`, enforced only if the dashboard setting is on).
+- `core/passwordForm.js`: optional `minLength` (default 8) and `askCurrent` (default off); `core/passwordChange.js`: optional `{ currentPassword }`. The organiser console is unchanged.
+- `tools/check-admin-bundle-leak.mjs`: `seduh-admin-check` and `Sign out everywhere` listed.
+- Docs (D8): CLAUDE.md and ROADMAP no longer give the dashboard recovery email as the admin rotation route (it cannot work for an admin with an authenticator); `src/admin/CLAUDE.md` describes the panel.
+- Tests: vitest `passwordPanel.test.js` (U-1 to U-10), `core/passwordForm.test.js`, a `passwordChange` case; Playwright `admin-console-password.spec.js` (A1 to A6, 360px, a second browser context); adversarial X1 to X4.
+
+**Found while building:** `insufficient_aal` on a password change is HTTP 401 on this GoTrue (the design note guessed 403). X2 pins the known gap: a stale-TOTP `aal2` session can change the password; it is in ROADMAP as an owner decision.
+
+**Verified:** full vitest, eslint and prettier clean; `npm run check:admin-leak` clean; the whole `dev-admin` Playwright project (66 tests) against the shared local stack. **Not verified:** the cloud GoTrue version and settings (design U1 to U3), a real device, the Edge Function (untouched).
+
+**Reviews:** `code-reviewer`, `module-boundary-checker` and `security-reviewer`: clean. `test-auditor`: no Important, 4 nits (2 applied: call order in U-5, a real aal2 probe in X1; 2 left: U-8 saving-render snapshot, 43.5px tolerance shared with the helper). `ui-accessibility-reviewer`: no Important, 4 nits left as known (native `required` bubble pre-empts the empty-field copy, the intro uses an unstyled `stage-meta`, Show/Hide does not cover the current-password box, no `aria-invalid`). No Important finding, so no independent refutation check was needed.
+
+---
+
 ## First-flip preparation: admin-session grant fixture, runbook, announcement draft · 2026-10-28
 
 **Task:** Preparing the first gating key flip (all keys still OFF). Code PR #336 (`feat/gating-ci-grant-fixture`) and docs PR #337 (`docs/first-flip-prep`), both into `dev`; released to `main` as #335 and #338. No migration, nothing run against the cloud beyond read-only aggregate queries for the runbook, no key flipped.
