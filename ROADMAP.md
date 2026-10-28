@@ -2361,7 +2361,7 @@ _Source: CHANGELOG `T-GATE.B3`. Nothing here is pushed (D-G13). Migration `20261
 5. **No CHECK on `events.format`.** Unknown values are capped as Cup Taster (fail closed). Add a CHECK when the format list is final.
 6. **`tests/e2e/support/tenants.js` `createTenant`** takes BTC events live as the organiser. It needs a grant before `btc_format` is first enforced in CI. The only grant writer is `admin_grant_create`: it requires a platform admin with fresh MFA and is revoked from `service_role`. A CI fixture for this key therefore needs an admin-session helper; Claude Code will build that when the key is about to be flipped.
 7. **`listEventsForOrg` `select('*')`** now returns the snapshot columns to the client. Narrow the select when the client reads them.
-8. **`service_role` is in the snapshot-edit refusal list but untested** (054 covers the member and definer paths only).
+8. **RESOLVED 2026-10-27 (PR #332):** `service_role` snapshot-edit refusal is now covered in `054` (two refusals and a control update; plan 92). Not yet confirmed by a mutation run of pgTAP (reviewed on reading, CI green).
 9. **Re-snapshot:** a per-event window that opens after go-live, or a grant bought after go-live, needs `admin_event_resnapshot` (rollout note in the 054 header).
 10. **Organiser copy for `entitlement_required` / `entitlement_cap_reached`** (G-C2) not written. The admin copy for the four gating hints is in `NOT_FOR_THE_CONSOLE` (`src/admin/adminErrors.test.js`).
 11. **Not run before PR:** `module-boundary-checker` on the one `src/` change (a test file under `src/admin/`).

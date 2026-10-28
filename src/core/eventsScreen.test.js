@@ -136,6 +136,40 @@ describe('renderEventsList', () => {
     expect(list.querySelector('#finish-event-done')).toBeNull();
     expect([...list.querySelectorAll('li')][1].textContent).toContain('Finished');
   });
+
+  it('keeps the visible label inside every Finish control name (WCAG 2.5.3)', () => {
+    const events = [{ id: 'e1', name: 'October Cup', is_test: false, ended_at: null }];
+    for (const [state, visible] of [
+      [undefined, 'Finish event'],
+      ['confirming', 'Confirm finish'],
+      ['confirming', 'Cancel'],
+      ['finishing', 'Finishing'],
+    ]) {
+      const list = renderEventsList(events, { finishStates: state ? { e1: state } : {} });
+      const button = [...list.querySelectorAll('button')].find((b) =>
+        b.textContent.startsWith(visible),
+      );
+      expect(button, state ?? 'idle').toBeTruthy();
+      expect(button.getAttribute('aria-label'), state ?? 'idle').toContain(visible);
+    }
+  });
+
+  it('links the irreversible consequence to the Confirm finish button', () => {
+    const events = [{ id: 'e1', name: 'October Cup', is_test: false, ended_at: null }];
+    const list = renderEventsList(events, { finishStates: { e1: 'confirming' } });
+    const confirm = list.querySelector('#confirm-finish-e1');
+    const copy = list.querySelector(`#${confirm.getAttribute('aria-describedby')}`);
+    expect(copy).not.toBeNull();
+    expect(copy.textContent).toContain('cannot reopen');
+  });
+
+  it('shows the in-flight Finishing state as a disabled, named button', () => {
+    const events = [{ id: 'e1', name: 'October Cup', is_test: false, ended_at: null }];
+    const list = renderEventsList(events, { finishStates: { e1: 'finishing' } });
+    const button = list.querySelector('#finish-event-e1');
+    expect(button.textContent).toBe('Finishing…');
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+  });
 });
 
 describe('renderCreateForm', () => {
@@ -240,6 +274,64 @@ describe('mountEventsScreen', () => {
     );
     await vi.waitFor(() => expect(root.textContent).toContain('Finished'));
     expect(document.activeElement).toBe(root.querySelector('#events-heading'));
+    root.remove();
+  });
+
+  it('Cancel sends no finish call and returns to a focused Finish button', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const client = fakeClient({
+      events: [{ id: 'ev1', org_id: 'org1', name: 'October Cup', is_test: false, ended_at: null }],
+    });
+    await mountEventsScreen(root, { orgId: 'org1', client, defaultFormat: 'cup_taster' });
+    root.querySelector('#finish-event-ev1').click();
+    root.querySelector('#cancel-finish-ev1').click();
+    expect(client.calls.some(([action]) => action === 'rpc')).toBe(false);
+    expect(root.querySelector('#confirm-finish-ev1')).toBeNull();
+    const finish = root.querySelector('#finish-event-ev1');
+    expect(finish).not.toBeNull();
+    expect(document.activeElement).toBe(finish);
+    root.remove();
+  });
+
+  it('clicking the in-flight Finishing button does not reopen Confirm or send a second call', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const client = fakeClient({
+      events: [{ id: 'ev1', org_id: 'org1', name: 'October Cup', is_test: false, ended_at: null }],
+    });
+    // never settles, so the in-flight window is real and not timing-dependent
+    client.rpc = (name, payload) => {
+      client.calls.push(['rpc', name, payload]);
+      return new Promise(() => {});
+    };
+    await mountEventsScreen(root, { orgId: 'org1', client, defaultFormat: 'cup_taster' });
+    root.querySelector('#finish-event-ev1').click();
+    root.querySelector('#confirm-finish-ev1').click();
+    root.querySelector('#finish-event-ev1').click();
+    expect(root.querySelector('#confirm-finish-ev1')).toBeNull();
+    expect(root.querySelector('#finish-event-ev1').textContent).toBe('Finishing…');
+    expect(
+      client.calls.filter(([action, name]) => action === 'rpc' && name === 'finish_event'),
+    ).toHaveLength(1);
+    root.remove();
+  });
+
+  it('a second click on a stale Confirm button sends only one finish call', async () => {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const client = fakeClient({
+      events: [{ id: 'ev1', org_id: 'org1', name: 'October Cup', is_test: false, ended_at: null }],
+    });
+    await mountEventsScreen(root, { orgId: 'org1', client, defaultFormat: 'cup_taster' });
+    root.querySelector('#finish-event-ev1').click();
+    const confirm = root.querySelector('#confirm-finish-ev1');
+    confirm.click();
+    confirm.click();
+    await vi.waitFor(() => expect(root.textContent).toContain('Finished'));
+    expect(
+      client.calls.filter(([action, name]) => action === 'rpc' && name === 'finish_event'),
+    ).toHaveLength(1);
     root.remove();
   });
 
