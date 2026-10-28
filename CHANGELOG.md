@@ -1,3 +1,20 @@
+## Password screens follow the cloud's new password settings · 2026-10-29
+
+**Task:** On 2026-10-29 the owner switched on "require current password when changing password" and set the minimum length to 12 on the LIVE project. GoTrue then refuses `updateUser({ password })` without `current_password` unless the session is a recovery session (`internal/api/user.go`, read, not run), which would have left every NEW login stuck at the one-time-password gate and broken the organiser Change password screen, with only "Could not save your password. Try again." on screen. PR into `dev`; no migration, no cloud change, no gate change, `config.toml` untouched.
+
+**What changed:**
+
+- `core/setPasswordScreen.js`: a "One-time password" box first (sent as `current_password`); intro says to enter it again.
+- `core/changePasswordScreen.js`: a "Current password" box first (`askCurrent`), sent as `current_password`.
+- `core/passwordForm.js`: `MIN_PASSWORD_LENGTH` 8 to 12 (`weak_password` was being shown for 8 to 11 characters as "too easy to guess"); `currentLabel` option; `current_password_required` / `current_password_mismatch` are worded ("That is not your current password." / "...the one-time password you were given...") instead of the generic retry line. The recovery link screens are unchanged (a recovery session is exempt).
+- Tests: the unit tests that asserted 8 now assert 12; new cases for the extra box, the empty box and both error codes on both screens; a Playwright test for the organiser Change password screen (also proves GoTrue ignores `current_password` while the setting is off).
+
+**Not verified:** the setting-ON refusal itself (the local stack has no switch for it, and a throwaway GoTrue was not run); the exact error code GoTrue returns for a too-short password; that a recovery link still works with the setting on (read from source only). Manual check on the live project is in the PR.
+
+**Reviews:** recorded in the PR description.
+
+---
+
 ## Admin console: Change password panel · 2026-10-28
 
 **Task:** Option (a) of `Handoffs and Specs/ADMIN-PASSWORD-DESIGN.md` (owner decisions D1 yes, D3 current password asked, D4 stay signed in, D5 minimum 12, D6 no audit row, D8 docs). PR into `dev`; not merged, nothing pushed to the cloud, no migration, no dashboard change; the gate and the Edge Function are untouched.

@@ -28,7 +28,11 @@ function typeInto(root, field, value) {
   input.value = value;
   input.dispatchEvent(new Event('input', { bubbles: true }));
 }
-async function submit(root) {
+const CURRENT = 'current-pass-1';
+// Fills the current-password box (the project requires it) unless a test is about that box being empty.
+async function submit(root, { fillCurrent = true } = {}) {
+  const box = root.querySelector('[data-field="current"]');
+  if (fillCurrent && box && !box.value) typeInto(root, 'current', CURRENT);
   root
     .querySelector('form')
     .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
@@ -58,11 +62,38 @@ describe('mountChangePasswordScreen', () => {
     }
   });
 
-  it('does not ask for the current password', async () => {
+  it('asks for the current password first (the project requires it), twice-confirming the new one', async () => {
     const { root } = await mount(fakeClient());
-    expect(root.querySelector('[autocomplete="current-password"]')).toBeNull();
-    expect(root.querySelectorAll('input')).toHaveLength(2);
+    const inputs = [...root.querySelectorAll('input')];
+    expect(inputs.map((i) => i.dataset.field)).toEqual(['current', 'password', 'confirmation']);
+    expect(inputs[0].getAttribute('autocomplete')).toBe('current-password');
+    expect(inputs[0].getAttribute('aria-label')).toBe('Current password');
   });
+
+  it('an empty current password is said before any request', async () => {
+    const client = fakeClient();
+    const { root } = await mount(client);
+    typeInto(root, 'password', 'correct-horse');
+    typeInto(root, 'confirmation', 'correct-horse');
+    await submit(root, { fillCurrent: false });
+    expect(feedback(root).textContent).toBe('Enter your current password.');
+    expect(client.auth.updateUser).not.toHaveBeenCalled();
+  });
+
+  it.each(['current_password_required', 'current_password_mismatch'])(
+    '%s is worded as a wrong current password, not "try again"',
+    async (code) => {
+      const client = fakeClient({
+        updateUser: () => Promise.resolve({ data: null, error: { code, message: 'raw' } }),
+      });
+      const { root } = await mount(client);
+      typeInto(root, 'password', 'correct-horse');
+      typeInto(root, 'confirmation', 'correct-horse');
+      await submit(root);
+      expect(feedback(root).textContent).toBe('That is not your current password.');
+      expect(client.auth.signOut).not.toHaveBeenCalled();
+    },
+  );
 
   it('saves, clears the one-time flag in the same call, signs out the OTHER sessions, and says so', async () => {
     const client = fakeClient();
@@ -72,6 +103,7 @@ describe('mountChangePasswordScreen', () => {
     await submit(root);
     expect(client.auth.updateUser).toHaveBeenCalledWith({
       password: 'correct-horse',
+      current_password: CURRENT,
       data: { must_change_password: false },
     });
     expect(client.auth.signOut).toHaveBeenCalledWith({ scope: 'others' });
@@ -97,7 +129,7 @@ describe('mountChangePasswordScreen', () => {
 
   it.each([
     ['nothing typed', '', '', 'Choose a password.'],
-    ['too short', 'short', 'short', 'Use at least 8 characters.'],
+    ['too short', 'short', 'short', 'Use at least 12 characters.'],
     [
       'two different passwords',
       'correct-horse',
@@ -173,6 +205,7 @@ describe('mountChangePasswordScreen', () => {
     try {
       const client = fakeClient({ updateUser: () => new Promise(() => {}) });
       const { root } = await mount(client);
+      typeInto(root, 'current', CURRENT);
       typeInto(root, 'password', 'correct-horse');
       typeInto(root, 'confirmation', 'correct-horse');
       root

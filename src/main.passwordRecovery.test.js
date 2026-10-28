@@ -151,6 +151,8 @@ function typeInto(root, field, value) {
   input.dispatchEvent(new Event('input', { bubbles: true }));
 }
 async function submitPasswords(root, password = 'correct-horse') {
+  // the project requires the current (or one-time) password; a recovery screen has no such box
+  if (root.querySelector('[data-field="current"]')) typeInto(root, 'current', 'current-pass-1');
   typeInto(root, 'password', password);
   typeInto(root, 'confirmation', password);
   root
@@ -401,7 +403,11 @@ describe('change password', () => {
     await vi.waitFor(() => expect(h1(root)).toBe('Change password'));
     await submitPasswords(root, 'another-password');
     expect(client.calls.updateUser).toEqual([
-      { password: 'another-password', data: { must_change_password: false } },
+      {
+        password: 'another-password',
+        current_password: 'current-pass-1',
+        data: { must_change_password: false },
+      },
     ]);
     expect(client.calls.signOut).toEqual([{ scope: 'others' }]);
     expect(h1(root)).toBe('Password changed');
