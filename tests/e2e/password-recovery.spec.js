@@ -156,4 +156,48 @@ test.describe('password recovery (D-PW1)', () => {
     await page.getByRole('link', { name: 'Request a new link' }).click();
     await expect(page.getByRole('heading', { name: 'Forgot your password?' })).toBeVisible();
   });
+
+  // The cloud project requires the current password to set a new one; the local stack does not, so this proves
+  // the screen works with the field filled and that GoTrue ignores `current_password` when the setting is off
+  // (the case before the cloud setting was switched on). It does NOT prove the setting-on refusal: that needs a
+  // GoTrue with the option on (see the PR's manual check list).
+  test('Change password asks for the current password and changes it', async ({ page }) => {
+    test.setTimeout(120000);
+    const own = await createTenant({
+      label: 'change-password',
+      format: 'cup_taster',
+      eventName: 'Change password e2e event',
+      payload: { stage: null, standings: [], eventName: 'Change password e2e event' },
+    });
+    try {
+      const NEXT = 'another-new-password-2';
+      await page.goto('/app/');
+      await page.getByLabel('Email').fill(own.email);
+      await page.getByLabel('Password', { exact: true }).fill(own.password);
+      await page.getByRole('button', { name: 'Sign in' }).click();
+      await page.goto('/app/#/account/password');
+      await expect(page.getByRole('heading', { name: 'Change password' })).toBeVisible();
+      await page.getByLabel('Current password').fill(own.password);
+      await page.getByLabel('New password', { exact: true }).fill('too-short-1');
+      await page.getByLabel('Confirm password').fill('too-short-1');
+      await page.getByRole('button', { name: 'Save password' }).click();
+      await expect(page.getByRole('status').filter({ hasText: 'at least 12' })).toBeVisible();
+      await page.getByLabel('New password', { exact: true }).fill(NEXT);
+      await page.getByLabel('Confirm password').fill(NEXT);
+      await page.getByRole('button', { name: 'Save password' }).click();
+      await expect(page.getByRole('heading', { name: 'Password changed' })).toBeVisible();
+      const old = await authCall('/auth/v1/token?grant_type=password', {
+        email: own.email,
+        password: own.password,
+      });
+      expect(old.status).toBe(400);
+      const fresh = await authCall('/auth/v1/token?grant_type=password', {
+        email: own.email,
+        password: NEXT,
+      });
+      expect(fresh.status).toBe(200);
+    } finally {
+      await own.cleanUp();
+    }
+  });
 });

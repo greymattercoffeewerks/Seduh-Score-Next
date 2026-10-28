@@ -75,9 +75,13 @@ export async function mountChangePasswordScreen(root, { client = getSupabase(), 
     mountPasswordFormScreen(root, {
       heading: 'Change password',
       headingId: 'change-password-heading',
-      intro: 'Choose a new password. Your other devices will be signed out.',
+      intro:
+        'Enter your current password, then choose a new one. Your other devices will be signed out.',
       signal,
-      save: (password) => savePasswordAndEndOtherSessions(client, password),
+      // The project requires the current password to set a new one.
+      askCurrent: true,
+      save: (password, currentPassword) =>
+        savePasswordAndEndOtherSessions(client, password, { currentPassword }),
       describeError: (error) => describePasswordError(error, { context: 'current' }),
       onSaved: (result) => {
         if (!alive()) return;

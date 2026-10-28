@@ -2,8 +2,9 @@
 // signed-in Change password screen and the screen a recovery link opens. Format-agnostic, no DOM, the
 // client is injected, and every request races the shared timeout (core/timeout.js).
 //
-// Supabase does not ask for the current password on `updateUser`, so what protects a stolen, unlocked
-// session is what happens after: every OTHER session of the login is ended (D-PW6), which also signs
+// The live project requires the current password on `updateUser` (setting switched on 2026-10-29; GoTrue skips
+// it only for a recovery session), so the screens that call this pass `currentPassword`: do not remove it as dead.
+// Besides that, what protects a stolen, unlocked session is what happens after: every OTHER session of the login is ended (D-PW6), which also signs
 // out whoever was holding the old password. The "your password was changed" email (D-PW7) is a separate,
 // later task.
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
@@ -18,8 +19,8 @@ import { signOutRequest } from './signOutRequest.js';
 // that never settles, or a dropped connection, THROWS (a `timedOut` error from raceTimeout), exactly as
 // the form helper (passwordForm.js) expects.
 //
-// `currentPassword` is optional (the admin console sends it): GoTrue checks it only when the project's "require
-// current password" setting is on and ignores it otherwise, so it is never the only protection.
+// `currentPassword` is optional (the recovery path sends none): GoTrue checks it only when the project's "require
+// current password" setting is on and ignores it otherwise.
 export async function savePasswordAndEndOtherSessions(client, password, { currentPassword } = {}) {
   const { error } = await raceTimeout(
     client.auth.updateUser({

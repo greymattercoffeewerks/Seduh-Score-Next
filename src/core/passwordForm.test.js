@@ -6,15 +6,18 @@ import {
 } from './passwordForm.js';
 
 describe('validateNewPassword minLength', () => {
-  it('defaults to 8, so every existing screen is unchanged', () => {
-    expect(MIN_PASSWORD_LENGTH).toBe(8);
-    expect(validateNewPassword('1234567', '1234567')).toBe('Use at least 8 characters.');
-    expect(validateNewPassword('12345678', '12345678')).toBeNull();
+  it('defaults to 12 (the project minimum), and a caller can still pass its own', () => {
+    expect(MIN_PASSWORD_LENGTH).toBe(12);
+    expect(validateNewPassword('12345678901', '12345678901')).toBe('Use at least 12 characters.');
+    expect(validateNewPassword('123456789012', '123456789012')).toBeNull();
   });
 
   it('takes a longer minimum from the caller and names it', () => {
-    expect(validateNewPassword('12345678', '12345678', 12)).toBe('Use at least 12 characters.');
-    expect(validateNewPassword('123456789012', '123456789012', 12)).toBeNull();
+    expect(validateNewPassword('12345678', '12345678', 8)).toBeNull();
+    expect(validateNewPassword('1234567', '1234567', 8)).toBe('Use at least 8 characters.');
+    expect(validateNewPassword('123456789012', '123456789012', 14)).toBe(
+      'Use at least 14 characters.',
+    );
   });
 });
 

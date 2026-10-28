@@ -205,8 +205,8 @@ option a; recovery by email, option b, is deliberately not built). **Not an admi
 (`PUT /auth/v1/user` through `ctx.client`), so it adds no server capability, writes no audit row (the Auth log is the
 record) and the gate is untouched (the session stays `aal2`, so the gate stays `ready`; `admin-console-password.spec.js` A3).
 
-- **Built on core**: `mountPasswordFormScreen` (with the optional `minLength: 12` and `askCurrent: true`; defaults 8 and off,
-  so the organiser console is unchanged) and `savePasswordAndEndOtherSessions` (optional `{ currentPassword }`). The shared
+- **Built on core**: `mountPasswordFormScreen` (with the optional `minLength: 12` and `askCurrent: true`; the defaults are 12 and off;
+  the organiser screens ask for the current password too since 2026-10-29) and `savePasswordAndEndOtherSessions` (optional `{ currentPassword }`). The shared
   save still writes `must_change_password: false` (harmless here). `describePasswordPanelError` words every code;
   `insufficient_aal` never says "ask the team" (the operator is the team).
 - **Current password: two checks, only one is the server's.** `current_password` goes to `updateUser` (GoTrue enforces it only

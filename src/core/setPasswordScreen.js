@@ -4,6 +4,7 @@
 // have chosen their own. The form, its checks and the screen skeleton are shared with the recovery and
 // Change password screens (passwordForm.js); this file is only this screen's words and its save.
 //
+// The one-time password is sent as `current_password` (the project requires it, see save below).
 // The flag is cleared by the same call that changes the password (`updateUser({ password, data })`).
 // It lives in user_metadata, which the person can edit themselves, so it is a prompt, not a lock:
 // what actually protects the org is that the one-time password is single-use by convention and the
@@ -27,11 +28,19 @@ export async function mountSetPasswordScreen(
   return mountPasswordFormScreen(root, {
     heading: 'Choose your password',
     headingId: 'set-password-heading',
-    intro: 'You signed in with a one-time password. Choose your own to continue.',
+    intro: 'Type the one-time password you were given, then choose your own password to continue.',
     signal,
-    save: (password) =>
+    // The project requires the current password to set a new one (GoTrue skips that only for a recovery
+    // session), and here the current password is the one-time password they signed in with.
+    askCurrent: true,
+    currentLabel: 'One-time password',
+    save: (password, oneTimePassword) =>
       raceTimeout(
-        client.auth.updateUser({ password, data: { must_change_password: false } }),
+        client.auth.updateUser({
+          password,
+          current_password: oneTimePassword,
+          data: { must_change_password: false },
+        }),
         DEFAULT_LOAD_TIMEOUT_MS,
       ),
     onSaved: () => onDone?.(),
