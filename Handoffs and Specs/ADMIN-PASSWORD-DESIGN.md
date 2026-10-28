@@ -72,7 +72,7 @@ Legend: **[V]** verified against code or a cited source in this session; **[U]**
 **Tests.**
 - Vitest, fake client: panel mounts only at `ready`; wording for each error code; the others-sign-out failure message; double submit; no password in any DOM attribute, log or storage; the real-auth-js check in the style of `gateSessions.test.js` that `scope: 'others'` keeps the local session on success and on failure.
 - `boundary.test.js` keeps passing (core imports only).
-- Playwright `dev-admin`: see the acceptance list (section 9). The attack list (`admin-console-adversarial.spec.js`) gains these rows: (1) an `aal1` session of an admin with a verified factor calling `PUT /auth/v1/user {password}` gets 403 `insufficient_aal` and the password is unchanged (not pinned today: only enrol and unenrol are); (2) a stale-TOTP `aal2` session (older than 60 minutes) calling the same endpoint **succeeds**, recorded as documented behaviour so nobody mistakes the D-A14 window for covering it; (3) after the change the old password no longer signs in and a second session of the same login is refused on its next call.
+- Playwright `dev-admin`: see the acceptance list (section 9). The attack list (`admin-console-adversarial.spec.js`) gains these rows: (1) an `aal1` session of an admin with a verified factor calling `PUT /auth/v1/user {password}` gets 401 `insufficient_aal` and the password is unchanged (not pinned today: only enrol and unenrol are); (2) a stale-TOTP `aal2` session (older than 60 minutes) calling the same endpoint **succeeds**, recorded as documented behaviour so nobody mistakes the D-A14 window for covering it; (3) after the change the old password no longer signs in and a second session of the same login is refused on its next call.
 - `admin-accounts` Edge Function manual script: not touched, no re-run needed.
 - pgTAP: none (no function or policy changes).
 - `npm run check:admin-leak`: "Change password" already exists in the organiser bundle, so it is not an admin-only string and needs no entry in the leak list; any admin-only string introduced (for example an admin-specific heading) gets one.
@@ -212,7 +212,7 @@ End to end (Playwright `dev-admin`, real local stack, TOTP from `otplib`):
 - A6 (D3 variant) the wrong current password is refused and the password is unchanged.
 
 Adversarial list (`admin-console-adversarial.spec.js`, over HTTP):
-- X1 `aal1` admin with a verified factor: `PUT /auth/v1/user {password}` returns 403 `insufficient_aal`; password unchanged.
+- X1 `aal1` admin with a verified factor: `PUT /auth/v1/user {password}` returns 401 `insufficient_aal` (HTTP 401 on the local stack, found by the D1 build; the earlier draft said 403); password unchanged.
 - X2 (a clearly named **known-gap** test, not a passing guarantee) `aal2` session with a stale TOTP (over 60 minutes): the same request succeeds today; the test records this and asserts every admin function still refuses that session. The gap itself belongs in ROADMAP.md as an open risk with an owner decision (finding 3, and D6's missing audit row makes it worse: a locked-out admin has no in-console record).
 - X3 No token / anon key / organiser token: refused; an organiser changing their own password does not touch an admin's.
 - X4 After a change, a token replayed from before the change on another session is refused once `scope: 'others'` has run.
