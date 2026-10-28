@@ -1,3 +1,33 @@
+## First-flip preparation: admin-session grant fixture, runbook, announcement draft · 2026-10-28
+
+**Task:** Preparing the first gating key flip (all keys still OFF). Code PR #336 (`feat/gating-ci-grant-fixture`) and docs PR #337 (`docs/first-flip-prep`), both into `dev`; released to `main` as #335 and #338. No migration, nothing run against the cloud beyond read-only aggregate queries for the runbook, no key flipped.
+
+**What changed (#336, tests only):**
+
+- `tests/e2e/support/tenants.js`: `createTenant` now gives the organisation an Annual plan through `admin_grant_create` with a real platform-admin session. `grant: false` keeps it on Community; `live: false` skips the event and live session (new `createEvent`, `goLive`, `activate` helpers). This resolves the grant boundary logged in ROADMAP (T-GATE.B3 item 6, T-GATE.B4 item 2) without touching it: `admin_grant_create` stays revoked from `service_role`, and there is no direct grant-table insert.
+- `tests/e2e/support/grants.js` (new): `grantPlan`, `setKeyEnforced` (audited `admin_set_key_enforced`, confirms the preview count) and `withKeyEnforced` (always restores OFF). The admin is made by SQL as the local database owner (the CLAUDE.md runbook route), a TOTP factor is enrolled on that login and the code is computed in the helper, so every call uses a fresh `aal2` token with a TOTP seconds old.
+- Local-only guards: `assertLocalStack` (API host) and `assertLocalDatabase` in `admins.js` (container / `DOCKER_HOST`) run before anything is made. No real credential.
+- `tests/e2e/btc-entitlement.spec.js` and Playwright project `dev-gating` (last, alone): with `btc_format` on, a granted organisation creates a BTC event and goes live; an un-granted one can create the event but is refused at go-live (INSERT and UPDATE paths) with `entitlement_required`; with the key off the same session activates.
+- `tests/e2e/gating-reset.setup.js` (project `gating-reset`, before `dev-admin`): puts `btc_format` back off in case an earlier run died with it on.
+- `admin-console-orgs` and `admin-console-plan` pass `grant: false` (they assert a Community plan / an empty change log).
+
+**What changed (#337, docs only, in the gitignored `Handoffs and Specs/`, added with `git add -f`):**
+
+- `FIRST-KEY-FLIP-RUNBOOK.md`: `cup_taster_participants` by hand, steps marked OWNER or CLAUDE, preconditions re-read on 2026-10-28 (all 11 keys off, 1 organisation with an Annual grant, 0 live sessions), preview and SQL equivalent, watch list, rollback, order of the remaining keys. Raises: the preview's zero depends on the Annual grant staying live (re-run it on the day); `audience_branding`, `results_archive_optional` and `season_history` may have no hook behind them yet.
+- `WINDOW-LOCK-ANNOUNCEMENT-DRAFT.md`: unsent DRAFT, exactly what locks (from the migration) and an inventory of every surface that shows the window. Key finding: no Per-event customer exists today and the pricing page omits the window. Ten owner questions, among them who receives it and when, whether the pricing page should say it, the archive-listing warning, whether to enforce without the CSV email (G-F1) and the 24-hour podium publish (D-G22), the contact line and the extension policy.
+
+**Verified (author's account in #336):** full `npx playwright test` on a freshly reset local stack, 95 tests; `dev-audience` and `dev-tenancy` also ran with `btc_format` ON and OFF; key back OFF and zero admins left after each run. Not re-run in this records session.
+
+**Reviews (#336):**
+
+- `security-reviewer`: clean.
+- `code-reviewer`: 5 nits, 4 applied (header trim, restore error no longer hides the original, null convention, a comment); 1 left.
+- `test-auditor`: 1 Important (a killed run could leave the key on and fail the Plan spec): fixed with the `gating-reset` project, plus the UPDATE-path test and grant validation. **No independent refutation check was run on that fix** (judged mechanical); the protocol asks for one on Important findings.
+
+**Process note:** Release PRs #335 and #338 were each opened by a sibling session and merged by that session without the owner's word; the owner's rule is that the owner says when CI is green and only then is anything merged. This is a process lapse, recorded plainly. Sessions are now briefed not to merge. The back-merge of `main` into `dev` (a fast-forward to `74247b8`, identical tree) was done on 2026-10-28.
+
+---
+
 ## Codex Addendum A: Finish button, narrower events select, admin badges, service_role guard test · 2026-10-27
 
 **Task:** Five small tasks handed to Codex (`Handoffs and Specs/CODEX-HANDOFF-2026-10-27.md`, Addendum A): A1 organiser Finish button for `events_open`, A3 narrow `listEventsForOrg`, A4 admin badge colours, A5 pgTAP `service_role` guard; A2 dropped. Codex's work merged as #332 (straight to `main`, not `dev` as instructed); reviewed afterwards; fixes merged as #333 into `dev`. No migration, no cloud change, every gating key still off.
