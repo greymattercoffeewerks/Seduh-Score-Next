@@ -31,6 +31,8 @@ export const ADMIN_ONLY_STRINGS = Object.freeze([
   'admin_grant_revoke',
   'admin_event_release',
   'admin_event_resnapshot',
+  'seduh-admin-check',
+  'Sign out everywhere',
 ]);
 
 // The admin entry's own chunk and nothing else: Vite names it after the `admin` input (vite.config.js), with an

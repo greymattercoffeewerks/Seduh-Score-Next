@@ -871,4 +871,103 @@ test.describe('the admin surface under attack (HTTP, real local stack)', () => {
     expect(attestedOf[flagged.userId]).toBe(false);
     expect(attestedOf[fresh.userId]).toBe(false); // attested means "the database required it AND it was given"
   });
+
+  // ---- Change password (ADMIN-PASSWORD-DESIGN section 9, X1 to X4). The change goes to GoTrue's `PUT /auth/v1/user`,
+  // not to a database function, so these are attacks on the Auth API's own rules; none of them is an admin function.
+  // A dedicated admin, so changing its password disturbs no other test.
+  const PW_OLD = 'adversarial-password-0001';
+  const PW_NEW = 'adversarial-password-0002';
+  const putPassword = (token, password) =>
+    send('/auth/v1/user', { method: 'PUT', token, body: { password } });
+
+  test('X1 PASSWORD CHANGE FROM A PASSWORD-ONLY SESSION: an admin with a verified factor at aal1 is refused with insufficient_aal, and the password is unchanged', async () => {
+    const pw = await makeAdmin('adv-pw-x1');
+    const factor = await enrolTotp((await signInPassword(pw)).token);
+    const aal1 = (await signInPassword(pw)).token;
+    expect(decodeToken(aal1).payload.aal).toBe('aal1');
+    const attempt = await putPassword(aal1, PW_NEW);
+    // (401, not the 403 the design note guessed: this GoTrue answers insufficient_aal on a password change with 401)
+    expect(attempt.status, JSON.stringify(attempt.body)).toBe(401);
+    expect(attempt.body.error_code).toBe('insufficient_aal');
+    // unchanged: the old password still signs in, the attempted one does not
+    expect((await signInPassword(pw)).token).toBeTruthy();
+    await expect(signInPassword({ email: pw.email, password: PW_NEW })).rejects.toThrow();
+    // and the same login at aal2 is allowed (the rule is about the level, not the account)
+    expect((await putPassword(factor.token, pw.password)).body?.error_code).not.toBe(
+      'insufficient_aal',
+    );
+  });
+
+  test('X2 KNOWN GAP (documented behaviour, not a guarantee): a stale-TOTP aal2 session CAN change the password, because the 60-minute window lives in our database gate and GoTrue only asks for aal2; every admin function still refuses it', async () => {
+    const pw = await makeAdmin('adv-pw-x2');
+    const session = await enrolTotp((await signInPassword(pw)).token);
+    const real = decodeToken(session.token).payload;
+    const now = Math.floor(Date.now() / 1000);
+    const stale = signLocalToken({ ...real, amr: [{ method: 'totp', timestamp: now - 7200 }] });
+    // the admin gate refuses the stale token, claim by claim, on every admin function
+    for (const [name, make] of Object.entries(ADMIN_FUNCTIONS)) {
+      refused(await rpc(name, make(w), { token: stale }), {
+        label: `${name} with a stale TOTP`,
+        hint: 'admin_mfa_required',
+      });
+    }
+    // ... but the Auth API does not know the window: this succeeds today. If it ever starts to answer 403, the gap
+    // has closed: update ROADMAP.md ("Admin password change: stale-TOTP session") and this test.
+    const attempt = await putPassword(stale, PW_NEW);
+    expect(attempt.status, JSON.stringify(attempt.body)).toBe(200);
+    await expect(signInPassword({ email: pw.email, password: PW_NEW })).resolves.toBeTruthy();
+  });
+
+  test('X3 WHO MAY CHANGE WHOSE PASSWORD: no token, the public key and a forged token are refused, and an organiser changing their own password does not touch an admin’s', async () => {
+    const pw = await makeAdmin('adv-pw-x3');
+    const { token: aal2 } = await enrolTotp((await signInPassword(pw)).token);
+    for (const [what, token] of Object.entries({
+      'no token': null,
+      'only the public key': undefined,
+      'a token signed with another secret': signedWithWrongSecret(aal2),
+      'an unsigned token': unsigned(aal2),
+    })) {
+      const attempt = await putPassword(token, PW_NEW);
+      expect(attempt.status, what).toBeGreaterThanOrEqual(400);
+      expect(attempt.status, what).toBeLessThan(500);
+    }
+    await expect(signInPassword({ email: pw.email, password: PW_NEW })).rejects.toThrow();
+
+    // an organiser (no factor, so a password-only session may change their own password) changes theirs
+    const organiser = await createLoneUser('adv-pw-org');
+    const organiserToken = (await signInPassword(organiser)).token;
+    expect((await putPassword(organiserToken, PW_NEW)).status).toBe(200);
+    await expect(
+      signInPassword({ email: organiser.email, password: PW_NEW }),
+    ).resolves.toBeTruthy();
+    // the admin's password and session are untouched
+    expect((await signInPassword(pw)).token).toBeTruthy();
+    expect((await rpc('admin_can_provision', {}, { token: aal2 })).body).toBe(true);
+  });
+
+  test('X4 A TOKEN FROM BEFORE THE CHANGE, on another session, is dead once the changing session has ended the others (scope: others); the changing session stays ready', async () => {
+    const pw = await makeAdmin('adv-pw-x4');
+    const factor = await enrolTotp((await signInPassword(pw)).token);
+    const changer = factor.token;
+    const other = await elevate((await signInPassword(pw)).token, factor);
+    expect((await rpc('admin_list_orgs', {}, { token: other })).status).toBe(200);
+
+    expect((await putPassword(changer, PW_NEW)).status).toBe(200);
+    // exactly what the console does next (core/passwordChange.js endOtherSessions)
+    expect(
+      (await send('/auth/v1/logout?scope=others', { method: 'POST', token: changer, body: {} }))
+        .status,
+    ).toBe(204);
+
+    refused(await rpc('admin_list_orgs', {}, { token: other }), {
+      label: 'the other session',
+      hint: 'admin_session_ended',
+    });
+    expect((await putPassword(other, PW_OLD)).status).toBeGreaterThanOrEqual(400);
+    // the changing session is untouched and the gate still says yes
+    expect((await rpc('admin_list_orgs', {}, { token: changer })).status).toBe(200);
+    expect((await rpc('admin_can_provision', {}, { token: changer })).body).toBe(true);
+    await expect(signInPassword({ email: pw.email, password: pw.password })).rejects.toThrow();
+    await expect(signInPassword({ email: pw.email, password: PW_NEW })).resolves.toBeTruthy();
+  });
 });

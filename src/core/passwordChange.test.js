@@ -32,6 +32,21 @@ describe('savePasswordAndEndOtherSessions', () => {
     expect(c.auth.signOut).toHaveBeenCalledWith({ scope: 'others' });
   });
 
+  it('sends current_password only when one is given', async () => {
+    const withCurrent = client();
+    await savePasswordAndEndOtherSessions(withCurrent, 'new-password-1', {
+      currentPassword: 'old',
+    });
+    expect(withCurrent.auth.updateUser).toHaveBeenCalledWith({
+      password: 'new-password-1',
+      current_password: 'old',
+      data: { must_change_password: false },
+    });
+    const without = client();
+    await savePasswordAndEndOtherSessions(without, 'new-password-1', { currentPassword: '' });
+    expect(without.auth.updateUser.mock.calls[0][0]).not.toHaveProperty('current_password');
+  });
+
   it('a refusal is returned and ends no session', async () => {
     const c = client({
       updateUser: () => Promise.resolve({ data: null, error: { code: 'weak_password' } }),

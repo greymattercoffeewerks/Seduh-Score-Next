@@ -133,6 +133,18 @@
       CHANGELOG.md; test counts are the E6 close-out figures. BTC remains a
       format shown to prospective organisers, not yet a live event, and the
       copy does not claim otherwise.
+
+      Progress update, 2026-10-28: v3.4.1, still Gadong — no cycle bump. v3.4.0
+      is the operator's console (live 2026-10-17); v3.4.1 is the plans and
+      limits groundwork, shipped switched off (package.json moved with the
+      dark gating core; the gating migrations are in the cloud, 2026-10-23 to
+      2026-10-27, and every key is still OFF, so the copy says "built, not
+      enforced" and names no limits or prices). Also: organiser password
+      recovery and Change password (live), the Finish event button, and the
+      Random Selector community tool (a fourth, hence "4 community tools").
+      Organiser branding is built but not released, so it is deliberately not
+      mentioned. Facts follow CHANGELOG.md; the admin console's URL is left
+      off the page on purpose (it is unlinked).
     -->
     <style>
       @font-face {
@@ -1126,13 +1138,14 @@
           </div>
           <div class="ledger-row reveal">
             <span class="ledger-place">Gadong</span>
-            <span class="ledger-version">v3.3.0</span>
+            <span class="ledger-version">v3.4.1</span>
             <span class="ledger-status current"><span class="pulse-dot"></span>Current</span>
             <span class="ledger-note"
               >BTC (Barista Team Championship) — the second real competition format — then a trust
               pass, the first live Cup Taster event on 4 October 2026 and the fixes it prompted,
-              BTC's own projector and phone screens, and now the platform's first multi-organisation
-              release.</span
+              BTC's own projector and phone screens, the platform's first multi-organisation
+              release, and now an operator's console, password recovery and plans built and switched
+              off.</span
             >
           </div>
           <div class="ledger-row reveal">
@@ -1163,11 +1176,11 @@
 
         <div class="stat-row reveal">
           <span><b>3</b> cycles</span>
-          <span><b>v3.3.0</b> now</span>
+          <span><b>v3.4.1</b> now</span>
           <span><b>2 / 4</b> formats</span>
           <span><b>1</b> live event</span>
           <span><b>2</b> organisations in production</span>
-          <span><b>3</b> community tools</span>
+          <span><b>4</b> community tools</span>
         </div>
       </section>
 
@@ -1179,18 +1192,176 @@
           Then <strong>Berakas</strong> — a front door nobody had planned for, followed by a public
           shelf for the useful extras. Now <strong>Gadong</strong> — the second real competition
           format, the first live event run on the platform, BTC's own screens for the room, and room
-          for more than one organiser. Newest first, one open at a time — open a milestone to read
-          it.
+          for more than one organiser, and the tools to run it as a platform. Newest first, one open
+          at a time — open a milestone to read it.
         </p>
 
         <div class="milestones">
-          <div class="milestone reveal is-open" id="ms-gadong-tenancy">
+          <div class="milestone reveal is-open" id="ms-gadong-operator">
+            <h3 class="milestone-head">
+              <button
+                type="button"
+                class="milestone-toggle"
+                id="ms-gadong-operator-btn"
+                aria-expanded="true"
+                aria-controls="ms-gadong-operator-panel"
+              >
+                <span class="ms-text">
+                  <span class="ms-meta"
+                    >Gadong · 14 to 28 October 2026 · v3.4.0 to v3.4.1 · 4 entries</span
+                  >
+                  <span class="ms-title">Running it as a platform</span>
+                  <span class="ms-sum"
+                    >The operator's console · Password recovery · Plans and limits, built and
+                    switched off · Random Selector</span
+                  >
+                </span>
+                <span class="ms-chev" aria-hidden="true"></span>
+              </button>
+            </h3>
+            <div
+              class="milestone-panel"
+              id="ms-gadong-operator-panel"
+              role="region"
+              aria-labelledby="ms-gadong-operator-btn"
+            >
+              <div class="milestone-inner">
+                <div class="log" data-stagger>
+                  <div class="log-item current reveal">
+                    <div class="log-phase">Gadong</div>
+                    <div>
+                      <div class="log-head">
+                        <span class="log-name">The operator's console</span>
+                        <span class="log-ver">v3.4.0</span>
+                        <span class="log-now"><span class="pulse-dot"></span>Live now</span>
+                      </div>
+                      <div class="log-line shipped">
+                        <span class="k">Shipped</span
+                        ><span class="v"
+                          >Setting up a new organisation used to be hand-written database commands.
+                          There is now a separate console for the person who runs the platform: it
+                          creates an organisation, attaches its owner (a new login or an existing
+                          one), adds members and changes roles. It is deliberately narrow. It shows
+                          organisation names, members and dates, never an event, a score or a
+                          competitor, and there is no "sign in as" button. Every change is written
+                          to an append-only audit log, and the database itself, not the page, checks
+                          that the person is an administrator and has proved a second factor in the
+                          last hour. An organiser signed in on the same browser gets nothing from
+                          it. Built over 15 and 16 October with an adversarial test pass against the
+                          database functions behind it, and rolled out on 17 October as v3.4.0.
+                          Every action it offers has since been run against the real project.</span
+                        >
+                      </div>
+                      <div class="log-line felt">
+                        <span class="k">Felt like</span
+                        ><span class="v"
+                          >making the person who can add an organisation provable, not just
+                          trusted.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="log-item current reveal">
+                    <div class="log-phase">Gadong</div>
+                    <div>
+                      <div class="log-head">
+                        <span class="log-name">Password recovery</span>
+                        <span class="log-ver">v3.4.x</span>
+                        <span class="log-now"><span class="pulse-dot"></span>Live now</span>
+                      </div>
+                      <div class="log-line shipped">
+                        <span class="k">Shipped</span
+                        ><span class="v"
+                          >On 22 October a recovery link sent from the dashboard worked once, landed
+                          on the public home page where nothing was listening, and the second click
+                          said "expired". The product had no forgot-password screen and no
+                          change-password screen at all. Now the sign-in page has "Forgot
+                          password?", the emailed link opens a screen that asks for a new password,
+                          and a signed-in organiser can change theirs from the account area. The
+                          form answers the same way whether or not the address exists, so it can't
+                          be used to test who has an account, and a new password signs the other
+                          devices out. A login protected by an authenticator app is not let in by an
+                          emailed link; it is sent to the operator.</span
+                        >
+                      </div>
+                      <div class="log-line felt">
+                        <span class="k">Felt like</span
+                        ><span class="v">a locked door finally having a bell next to it.</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="log-item current reveal">
+                    <div class="log-phase">Gadong</div>
+                    <div>
+                      <div class="log-head">
+                        <span class="log-name">Plans and limits, built and switched off</span>
+                        <span class="log-ver">v3.4.1</span>
+                      </div>
+                      <div class="log-line shipped">
+                        <span class="k">Shipped</span
+                        ><span class="v"
+                          >Between 23 and 27 October the database learned what a plan is. An
+                          organisation can be given one, the operator can record a payment and see
+                          what each organisation may do, and the checks (how many events can be open
+                          at once, how large an event can be, when a paid event's window closes)
+                          live in the database, where a browser can't skip them. Every check ships
+                          off. Today nothing limits anyone, and each one is turned on separately,
+                          after the operator has seen who it would affect. Alongside it: organisers
+                          get a "Finish event" button, with a confirmation, so a finished event
+                          stops counting as open.</span
+                        >
+                      </div>
+                      <div class="log-line felt">
+                        <span class="k">Felt like</span
+                        ><span class="v"
+                          >building the fence before telling anyone where it goes, so that putting
+                          it up is a switch and not a surprise.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="log-item current reveal">
+                    <div class="log-phase">Gadong</div>
+                    <div>
+                      <div class="log-head">
+                        <span class="log-name">Random Selector</span>
+                        <span class="log-ver">v3.3.x</span>
+                        <span class="log-now"><span class="pulse-dot"></span>Live now</span>
+                      </div>
+                      <div class="log-line shipped">
+                        <span class="k">Shipped</span
+                        ><span class="v"
+                          >A fourth free tool on the Community shelf, for running orders, prizes and
+                          lucky draws: a split-flap board that picks one entry from a list. It takes
+                          weights, imports and exports a list as CSV, makes a share link, has a
+                          full-screen Present mode and keeps a draw history. No account, and nothing
+                          leaves the browser.</span
+                        >
+                      </div>
+                      <div class="log-line felt">
+                        <span class="k">Felt like</span
+                        ><span class="v"
+                          >the raffle board at the end of the night, but one nobody can argue
+                          with.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="milestone reveal" id="ms-gadong-tenancy">
             <h3 class="milestone-head">
               <button
                 type="button"
                 class="milestone-toggle"
                 id="ms-gadong-tenancy-btn"
-                aria-expanded="true"
+                aria-expanded="false"
                 aria-controls="ms-gadong-tenancy-panel"
               >
                 <span class="ms-text">

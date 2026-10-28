@@ -17,9 +17,16 @@ import { signOutRequest } from './signOutRequest.js';
 // sessions failed is still a saved password, so that is reported, not turned into a failure. A request
 // that never settles, or a dropped connection, THROWS (a `timedOut` error from raceTimeout), exactly as
 // the form helper (passwordForm.js) expects.
-export async function savePasswordAndEndOtherSessions(client, password) {
+//
+// `currentPassword` is optional (the admin console sends it): GoTrue checks it only when the project's "require
+// current password" setting is on and ignores it otherwise, so it is never the only protection.
+export async function savePasswordAndEndOtherSessions(client, password, { currentPassword } = {}) {
   const { error } = await raceTimeout(
-    client.auth.updateUser({ password, data: { must_change_password: false } }),
+    client.auth.updateUser({
+      password,
+      ...(currentPassword ? { current_password: currentPassword } : {}),
+      data: { must_change_password: false },
+    }),
     DEFAULT_LOAD_TIMEOUT_MS,
   );
   if (error) return { error };
