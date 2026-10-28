@@ -74,8 +74,8 @@ export async function setKeyEnforced(key, enforced) {
 
 /** Runs `body` with `key` enforced and always puts the key back OFF afterwards (every key is off on a fresh stack). */
 export async function withKeyEnforced(key, body) {
-  await setKeyEnforced(key, true);
   try {
+    await setKeyEnforced(key, true);
     return await body();
   } finally {
     // a failed restore must not hide the body's own failure

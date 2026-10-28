@@ -118,7 +118,9 @@ export async function createLoneUser(label, { userMetadata } = {}) {
  * `grant` is the plan the organisation is given through `admin_grant_create` with a real platform-admin session
  * (support/grants.js; the only grant writer there is): 'annual' by default, so a spec passes whether or not a gating
  * key is enforced. `grant: false` leaves the organisation on Community (the negative case). `live: false` makes the
- * organisation and its organiser only: no event and no live session (use `createEvent` and `goLive` below).
+ * organisation and its organiser only: no event and no live session (use `createEvent` and `goLive` below; `eventName`
+ * and `payload` are then unused). Any spec that ENFORCES a gating key must pass `grant: false` for the organisation it
+ * wants refused, or it is silently granted.
  */
 export async function createTenant({
   label,
@@ -155,7 +157,8 @@ export async function createTenant({
   // The plan is given before the first event or go-live, so a gating key that is enforced already sees it. grants.js imports this
   // file, so it is imported here.
   let grantId = null;
-  if (grant) {
+  if (grant !== false) {
+    if (typeof grant !== 'string') throw new Error('createTenant: grant is a tier name or false');
     const { grantPlan } = await import('./grants.js');
     grantId = await grantPlan(orgId, grant);
   }
@@ -180,7 +183,12 @@ export async function createTenant({
     return row;
   };
   // Takes an event live. Throws (message carries the status and the database's answer) when the database refuses.
-  const goLive = async ({ eventId: forEvent, format: liveFormat, payload: livePayload }) => {
+  const goLive = async ({
+    eventId: forEvent,
+    format: liveFormat,
+    payload: livePayload,
+    active = true,
+  }) => {
     const [row] = await call('/rest/v1/live_sessions', {
       method: 'POST',
       key: anonKey,
@@ -190,7 +198,7 @@ export async function createTenant({
         org_id: orgId,
         event_id: forEvent,
         format: liveFormat,
-        active: true,
+        active,
         payload: livePayload,
       },
     });
@@ -212,6 +220,16 @@ export async function createTenant({
     grantId,
     createEvent,
     goLive,
+    /** Sets a live session active (the UPDATE path of the go-live check). Throws when the database refuses. */
+    async activate(id) {
+      await call(`/rest/v1/live_sessions?id=eq.${id}`, {
+        method: 'PATCH',
+        key: anonKey,
+        token,
+        body: { active: true },
+      });
+      liveIds.push(id);
+    },
     orgName: `D5 ${label} ${unique}`,
     /** The organiser publishes a new live payload (what a heat starting or finishing does). */
     async publish(nextPayload) {

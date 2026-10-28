@@ -31,7 +31,7 @@ test.describe('btc_format enforced, locally (real admin session, real database)'
   test('a granted organisation creates a BTC event and takes it live; an un-granted one is refused at go-live', async () => {
     test.setTimeout(120000);
     let refusedOrg;
-    let refusedEventId;
+    let dormantId;
 
     await withKeyEnforced('btc_format', async () => {
       // the default createTenant: an Annual grant given through admin_grant_create, then a BTC event taken live
@@ -69,15 +69,24 @@ test.describe('btc_format enforced, locally (real admin session, real database)'
       expect(refusal).toContain('entitlement_required');
       expect(refusal).toContain('btc_format');
 
-      refusedEventId = event.id;
+      // the UPDATE path of the same check: a session made inactive can not be switched on either
+      const dormant = await refusedOrg.goLive({
+        eventId: event.id,
+        format: 'btc',
+        payload: { kind: 'btc' },
+        active: false,
+      });
+      dormantId = dormant.id;
+      const activation = await refusedOrg.activate(dormant.id).then(
+        () => null,
+        (error) => error.message,
+      );
+      expect(activation, 'activating an un-granted BTC session must be refused').toContain(
+        'entitlement_required',
+      );
     });
 
-    // the key is OFF again, and the very same organisation and event now go live: the refusal came from the key
-    const live = await refusedOrg.goLive({
-      eventId: refusedEventId,
-      format: 'btc',
-      payload: { kind: 'btc' },
-    });
-    expect(live.active).toBe(true);
+    // the key is OFF again, and the very same organisation and session now go live: the refusal came from the key
+    await refusedOrg.activate(dormantId);
   });
 });
