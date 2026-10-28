@@ -22,7 +22,7 @@ import {
 export const MIN_PASSWORD_LENGTH = 12;
 
 // `minLength` is optional: a console that wants a longer password than the default (the admin console asks for
-// 12) passes its own; everyone else keeps 8.
+// 12) passes its own; everyone else keeps the project minimum.
 export function validateNewPassword(password, confirmation, minLength = MIN_PASSWORD_LENGTH) {
   if (!password) return 'Choose a password.';
   if (password.length < minLength) {
