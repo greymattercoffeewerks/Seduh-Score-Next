@@ -14,7 +14,7 @@
 --     live; admin_event_resnapshot lifts it upward only, with a required reason, an audit row with pinned keys, and the
 --     usual gate; the same tier is a no-op; a lower tier is refused.
 begin;
-select plan(92);
+select plan(93);
 
 create schema t054;
 grant usage on schema t054 to anon, authenticated, service_role;
@@ -279,6 +279,7 @@ select is(t054.as_service(format($$update events set entitlements_snapshot_at = 
   'nor can service_role edit the snapshot time');
 select is(t054.as_service(format($$update events set name = 'service role renamed' where id = %L$$, t054.u(103))), 'ok',
   'service_role may still make an ordinary event update');
+select is((select name from events where id = t054.u(103)), 'service role renamed', 'and it took effect: the new name reads back (an "ok" alone also holds for an update that matched no row)');
 select is((select entitlements_snapshot::text from events where id = t054.u(103)), '{"tier": "community"}', 'it is unchanged');
 -- off and on again does not re-stamp
 create table t054.stamp as select entitlements_snapshot_at as at from events where id = t054.u(103);

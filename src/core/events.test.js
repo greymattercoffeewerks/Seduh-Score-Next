@@ -117,6 +117,21 @@ describe('findEvent', () => {
     expect(client.calls).toContainEqual(['eq', 'id', 'ev1']);
   });
 
+  // The browser gets exactly what the callers read (org_id: scoping; format: main.js picks the dashboard;
+  // name: breadcrumb and take-over warnings; is_test: the test banner; id) and none of the snapshot columns.
+  it('selects exactly the columns its callers read, never the entitlement snapshot or config', async () => {
+    const client = fakeClient({ data: { id: 'ev1' }, error: null });
+    await findEvent('ev1', client);
+    const select = client.calls.find(([action]) => action === 'select');
+    expect(select[1]).toBe('events');
+    const columns = select[2].split(',').map((c) => c.trim());
+    expect(columns.sort()).toEqual(['format', 'id', 'is_test', 'name', 'org_id']);
+    for (const secret of ['entitlements_snapshot', 'entitlements_snapshot_at', 'config']) {
+      expect(columns).not.toContain(secret);
+    }
+    expect(select[2]).not.toContain('*');
+  });
+
   it('throws on a query error', async () => {
     const client = fakeClient({ data: null, error: new Error('not found') });
     await expect(findEvent('missing', client)).rejects.toThrow('not found');
