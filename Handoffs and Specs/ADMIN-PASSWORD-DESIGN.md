@@ -6,6 +6,15 @@ Companions: `ADMIN-CONSOLE-SPEC.md` (gate, D-A5, D-A14, D-A15; local), `PASSWORD
 
 Legend: **[V]** verified against code or a cited source in this session; **[U]** unverified, with what would verify it.
 
+
+## Outcome so far (2026-10-29, appended after the design; the sections below are the original proposal)
+
+- **D1 built and live**: admin Change password panel (PRs #347/#348), minimum 12, current password asked, other sessions ended. **D2 (recovery) deferred.** **D5** shipped with D1. **D8** (docs wording) shipped. **D6**: no audit row, unchanged.
+- **D3 / U2 (owner, dashboard)**: "require current password" is available and switched ON; minimum password length set to 12; the "require reauthentication" option is not shown on this project (behaviour unknown, unverified); the built-in sender limit is reported by the owner as 2 emails an hour (consistent with the local config, not read from the project).
+- **Consequence found afterwards**: both settings are project-wide, so the one-time-password screen and organiser Change password had to send `current_password` and use a 12 minimum (PRs #350/#351). Owner's live check: team first login and organiser Change password fine.
+- **Corrections to this document**: `insufficient_aal` on a password change is HTTP 401 (fixed above). The stale-TOTP `aal2` gap is now closed only by the server setting for a token holder who must supply the current password; see ROADMAP.
+- **Still open**: recovery email redirect (the apex host `seduhscore.com` is not on the Redirect URLs list; the owner's fix), the exact GoTrue error codes for a wrong current password on the live project, and the button-gated recovery link (D-PW4).
+
 ---
 
 ## 1. The current gap and its real risk
