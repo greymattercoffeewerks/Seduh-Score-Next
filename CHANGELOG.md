@@ -1,3 +1,52 @@
+## Landing page cleanup, stage 3 of 3: the live now bar · 2026-10-30
+
+**Task:** Stage 3 of the three-stage landing page cleanup: a "live now" bar on the landing page, listing events an organiser has opted in to publish. Stages 1 and 2 are in the entries below. Not a handoff §14 task. Migration `20261029100000_homepage_live_listing.sql` written and tested locally; NOT pushed to the cloud project (the main session pushes it after merge, `apply_migration`, version `20261029100000`). No package version bump, no release.
+
+**What changed:**
+
+- **Opt-in:** `events.list_on_homepage boolean not null default false`. It sits on `events`, not `live_sessions`, because `events` is closed to anon and `live_sessions` is anon-readable: the flag must not be readable by anon through a table.
+- **Door:** `public.public_live_now()` is `SECURITY DEFINER` with an empty `search_path`, executable by anon and authenticated only. It returns typed rows (`kind = 'live'`, `event_name`, `org_name`, `org_slug`, `format`, `last_activity_at`, `listed_count`), at most 3, and only when: the event is opted in, `events.is_test` is false, the session is not `is_test`, `events.ended_at` is null, `app.event_window_locked` is false, and the `live_sessions` row is active with `updated_at` within 12 hours. There is no heartbeat, so the 12 hour window is the stand-in for "still running": `publish_session` advances `updated_at` on every publish (trigger `set_updated_at`), and without a window an organisation's last session would stay active, and listed, forever. The typed `kind` leaves room for a registration row later.
+- **Organiser card:** `src/core/homepageListingCard.js` on BOTH the Cup Taster and BTC event dashboards: an opt-in toggle. It reads the flag itself, not through `findEvent`'s shared column list. Adding the column to the shared list would break about 20 screens if the frontend deployed before the migration. The card hides on any failure, uses `aria-disabled` (not `disabled`, which drops keyboard focus) with a busy guard, and has timeouts.
+- **Bar:** `src/core/publicLiveNow.js` (`findLiveNow`, `liveNowRow`, `liveAudienceHref`, which builds `/app/#/live/<slug>/phone`: the phone view, since people open it on their own devices). `src/marketing/landingScreen.js` gains `liveBar()` and `mountLandingScreen({ loadLive })`. `main.js` loads it by lazy dynamic import under a 6 s `raceTimeout`, skipped under the prerender (same guard as stage 2). The bar is absent, and the page identical, when nothing is listed or the request fails. "N more" is a disclosure button. Nothing on the bar claims registration.
+- **Styles and docs:** `landing.css` (bar block), `src/marketing/CLAUDE.md` (the landing page now makes one more anonymous read, the bar, through the door above).
+- **Tests:** new `supabase/tests/059_public_live_now.sql` (25 assertions: default off; anon cannot read or write the flag; each hiding condition, including the window lock; the 12 hour boundary; the cap of 3 with `listed_count`; a non-member's update changes zero rows; privileges and `search_path`). `018` classifies the column as `metadata`; `037` adds `public_live_now` to the anon door list. No new table, so the `040`/`041` matrices need no entry (`041`'s guard covers only uuid-argument functions). Vitest: `publicLiveNow.test.js`, `homepageListingCard.test.js`, `landingScreen.test.js`.
+- **Rollback:** a `-- rollback:` block drops the function, then the column. Run inside a transaction and checked.
+
+**Verified:**
+
+- vitest: 193 files, 5535 tests passing. ESLint and Prettier clean.
+- pgTAP: full suite passing after `db:reset`.
+- Rollback: run in a transaction.
+- Browser at 360px, dev server from this worktree on port 5391 against the local stack with seeded listed events: bar about 103px tall; controls 44px; no horizontal overflow; disclosure works; bar absent and page identical with nothing listed; exactly one `public_live_now` request per page view.
+- `dist/index.html` (prerender) has no bar markup.
+
+**Not verified, so this entry is not final:**
+
+- The organiser opt-in card was not rendered in a real browser, nor traversed by keyboard or screen reader. Unit tests only. This is a Definition-of-Done item.
+- Real data against the cloud project: the migration is not pushed yet.
+- Insertion shifts the page down about 103px if the answer arrives late. Accepted as a design call.
+- Privacy page wording was not updated. The bar publishes only what an organiser opted in (event name and organiser name). Follow-up below.
+
+**Reviews:**
+
+- `security-reviewer`: no Important. Nits, not changed: the per-row `app.event_window_locked` call costs a little (fine at one active session per org; a `window_locked_events` set would avoid it); organiser-controlled names appear on a public homepage (rendered as text, capped, no moderation: see ROADMAP); the 12 hour window is keyed on `updated_at`, so an organisation touching its own session keeps its bar up (its own org only).
+- `schema-guardian`: clean. Verified that `updated_at` advances on publish, the rollback order, and the `018`/`037` changes.
+- `code-reviewer`: one Important, fixed (the shared `FIND_EVENT_COLUMNS` change described above; the card now reads the flag itself). Nits: late-insertion layout shift (accepted); dead hook classes (kept, harmless).
+- `module-boundary-checker`: clean. Nit, not extracted: `tidy()` resembles the `text()` helper in brandSlot. A third caller would justify extracting it. Suggestion: a test that walks marketing's static imports to keep the Supabase client out (ROADMAP).
+- `test-auditor`: its Important #1 (dashboards not receiving the flag) was against a mid-edit snapshot and is resolved by the self-loading card. Important #2 (the window-lock condition was untested) FIXED with two assertions. Nits fixed: the `059` header claim about other rows (the door caps at 3 before the test filter, so the test assumes no other opted-in live events); `toEqual` on the update payload. Not done, logged: failed unlist, `orgName` null wording, a loader that never resolves, `main.js` passing `loadLive`.
+- `ui-accessibility-reviewer`: 2 Important, both FIXED: the card had no timeouts; native `disabled` dropped keyboard focus (now `aria-disabled` with a busy guard). Nits fixed: `role="list"` on the panel; the toggle is named "+N more live". Not done, logged: the raw rgba border has no token; clamped long names have no visible full text.
+
+**Open follow-up:**
+
+- Browser check of the organiser toggle (both dashboards), and a Playwright test that mounts both. ROADMAP.
+- Privacy page wording for the homepage listing. ROADMAP.
+- Cloud push of `20261029100000` after merge, then a real-data check of the bar against the cloud.
+- Package version bump (CLAUDE.md step 8) not done: this session's edit scope was CHANGELOG.md and ROADMAP.md only. Owed before release.
+- `CONVENTIONS.md` not updated: the self-loading card (a card reads its own column instead of the shared `findEvent` list, so the frontend can deploy before the migration) is a pattern that should generalise. Owed.
+- Registration rows on the bar, admin moderation of listed names, and the other deferred items: see ROADMAP "Known open items from the landing page cleanup (stage 3, 2026-10-30)".
+
+---
+
 ## Landing page cleanup, stage 2 of 3 · 2026-10-29
 
 **Task:** Stage 2 of the three-stage landing page cleanup: a latest-event proof card on the landing page, read from the published-results archive. Stage 3 (a live info bar behind a per-event opt-in) is NOT started. No migration, no RLS change, no cloud change, no data, no package version bump, no release. Not a handoff §14 task.

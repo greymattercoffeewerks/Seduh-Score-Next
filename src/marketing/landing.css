@@ -839,3 +839,76 @@ a {
   color: var(--color-accent);
   font-weight: 600;
 }
+
+/* ---- Live now bar (2026-10-29) ----
+   Inserted above the nav only when a listed competition is live (landingScreen.js liveBar). Wraps at 360px, never
+   animates; every interactive part is at least 44px tall. */
+.petrol-live-bar {
+  background: var(--clr-petrol-700, var(--clr-petrol-800));
+  border-bottom: var(--border-hairline) solid rgba(255, 255, 255, 0.12);
+  padding: 4px clamp(20px, 4vw, 40px);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+.petrol-live-bar-main {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0 12px;
+  max-width: 1360px;
+  margin: 0 auto;
+}
+.petrol-live-bar-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--color-accent);
+  flex: none;
+}
+.petrol-live-bar-text {
+  flex: 1 1 calc(100% - 24px);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin: 8px 0 0;
+  overflow-wrap: anywhere;
+}
+.petrol-live-bar-label {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  color: var(--color-accent);
+}
+.petrol-live-bar-link,
+.petrol-live-bar-more-toggle {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 4px;
+  color: var(--color-accent);
+  font: inherit;
+  font-weight: 600;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+.petrol-live-bar-link:focus-visible,
+.petrol-live-bar-more-toggle:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+.petrol-live-bar-more {
+  list-style: none;
+  margin: 0 auto;
+  padding: 0;
+  max-width: 1360px;
+}
+.petrol-live-bar-more[hidden] {
+  display: none;
+}
+.petrol-live-bar-rest {
+  padding: 8px 4px;
+}
