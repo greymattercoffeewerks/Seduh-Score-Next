@@ -9,12 +9,44 @@ leak assumptions between things that shouldn't share them) as binding; the lette
 
 ## What this is, and isn't
 
-One static page (`index.html` at the repo root) with no router, no auth, no Supabase
-calls, no live-event state. Its whole job is to sell the idea before someone signs in —
-the console (`app/index.html`, `src/main.js`, everything under `src/core`/
-`src/formats`) is a completely separate app that happens to live in the same repo and
-deploy to the same Cloudflare project. Nothing in `src/marketing/` is reachable from
-the console, and nothing in the console imports from here.
+One static page (`index.html` at the repo root) with no router, no auth, no live-event state.
+Its whole job is to sell the idea before someone signs in — the console (`app/index.html`,
+`src/main.js`, everything under `src/core`/`src/formats`) is a completely separate app that happens
+to live in the same repo and deploy to the same Cloudflare project. Nothing in `src/marketing/` is
+reachable from the console, and nothing in the console imports from here.
+
+**One anonymous read (2026-10-29).** The proof card shows the latest published event. `main.js`
+(not `landingScreen.js`, so tests and the build-time prerender never ask) calls
+`findLatestPublishedResult()` (`core/publicResults.js`: `public_results`, newest `published_at`, limit 1,
+columns `event_id, payload, published_at`; anon-readable by design, test events cannot be in it)
+through a dynamic `import()` with a 6 s `raceTimeout`, so the shared Supabase client chunk stays off the
+page's critical path (verified: not in the built page's `modulepreload` list). Only `eventName`,
+`eventDate`, `org_name` (cleaned like `publishedOrgName`) and the event id are read; no competitor or
+score. The static card is the complete page: a slow, failed, empty or malformed answer changes nothing,
+and a good one inserts a block under the heading, linking to `/results/?sheet=<event id>`. The client is
+the same `getSupabase()` the Results page uses (supabase-js's own auth module is in that chunk; no
+console auth, session or router code is imported). `landingScreen.js` imports `core/orgLabel.js`, never
+`core/publicResults.js`, so the client stays out of its static imports. Do not widen what is read here
+without checking the Privacy page.
+
+**A second anonymous read: the "live now" bar (2026-10-30).** `main.js` also calls `findLiveNow()`
+(`core/publicLiveNow.js`) through a dynamic `import()` with its own 6 s `raceTimeout`, never under the prerender
+(`loadLive` is `undefined` there), so it is one more request per page view and the page is complete without
+it. The door is `public.public_live_now()` (migration `20261029100000`): it returns typed rows (`kind`,
+today only `'live'`; the page skips any kind it does not know, which is how a registration row can be added
+later) for events whose organiser ticked "List this event on the Seduh Score homepage while it is live"
+(`events.list_on_homepage`, default OFF, set from both formats' event dashboards through
+`core/homepageListingCard.js`), that are not test, not ended, not window-locked, with an ACTIVE session whose
+`updated_at` is within 12 hours (an organisation's last session otherwise stays active for ever), capped at 3
+with the true count beside them. Only event name, organiser name and slug, format and counts leave the database;
+`liveNowRow` cleans and length-caps the names (80/60 characters, controls and bidi removed) and builds the link from
+the slug only: `/app/#/live/<slug>/phone`, the phone view being the one made for people watching on their own
+devices (projector is a venue display, splash a pre-event welcome). `liveBar()` in `landingScreen.js` inserts a
+labelled `section` ABOVE the nav only when a row arrives; a slow, failed, empty or malformed answer changes nothing.
+No animation; "+N more" is a disclosure (button, `aria-expanded`), not a link. Do not claim anything about
+registration in it. Do not widen what is read without checking the Privacy page. Caching: the RPC is a POST, so
+nothing is edge-cached today; the cost is bounded by one cheap query per page view (see the migration header);
+add a short Cloudflare cache only if traffic ever calls for it.
 
 ## Identity history — four attempts, real lessons each time
 
@@ -191,7 +223,7 @@ Fixed together:
   its description rewritten to describe what's actually shipped (round-robin prelims,
   bracket generation, automatic advancement) rather than an aspirational "branded PDF
   reporting" claim BTC doesn't have (only Cup Taster's `reportScreen.js` does). The
-  proof section's "N formats live today" stat and the pricing section's format mention
+  proof section's "N formats live today" stat (removed 2026-10-29: the hero stat strip carries it) and the pricing section's format mention
   both updated to match.
 - `tourScreen.js`: BTC moved out of `buildPlannedFormats()`'s "Coming soon" grid into
   its own live-format section (`buildBtc()`), positioned right after Cup Taster's. It
