@@ -2053,6 +2053,14 @@ describe('mountAppShell — sync panel', () => {
     });
     await setNav({ eventId: 'ev1', links: [] });
     const syncEl = root.querySelector('.app-shell-sync');
+    // The cap is timed on the monotonic clock, so hold that clock still: with real time the
+    // 100ms hold could end before the 20ms polling below ever saw it (about 1 run in 6).
+    // Moving it past the cap is what ends the hold.
+    const monotonicStart = performance.now();
+    let elapsed = 0;
+    const monotonic = vi
+      .spyOn(performance, 'now')
+      .mockImplementation(() => monotonicStart + elapsed);
     await enqueueOperation('doomed_op', {});
     await enqueueOperation('slow_op', {});
     let release;
@@ -2067,19 +2075,25 @@ describe('mountAppShell — sync panel', () => {
     });
     let clockBack;
     try {
+      // Held, not yet announced. A poll that ran between the enqueues and the drop has already
+      // rendered "Not synced (N pending)", and the hold keeps that text, so either wording is the hold.
       await flush(() => {
-        expect(syncEl.textContent).toBe('Not synced');
+        expect(syncEl.textContent).toMatch(/^Not synced( \(\d+ pending\))?$/);
       });
       const realNow = Date.now();
       clockBack = vi.spyOn(Date, 'now').mockReturnValue(realNow - 60 * 60 * 1000);
       await flush(
         () => {
+          // Each poll moves the monotonic clock past dropMaxWaitMs (100). Not once up front: the
+          // drop can land after this point, and the hold is timed from the drop.
+          elapsed += 200;
           expect(syncEl.textContent).toBe('1 write lost — not saved and not retried');
         },
         { timeout: 3000 },
       );
     } finally {
       clockBack?.mockRestore();
+      monotonic.mockRestore();
       release();
       await running;
     }
