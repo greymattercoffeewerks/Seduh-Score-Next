@@ -1,0 +1,603 @@
+{
+  "_comment": "One source for the phone checker (Handoffs and Specs/PHONE-CHECKER-DESIGN.md section 5). src/core/phone.test.js reads it; npm run fixtures:phone generates supabase/tests/fixtures/phone_cases.sql from it. Each case: id; input (what a person typed); country (ISO region chosen in the form, or null); expect (canonical + E.164, or null when refused); error (the exact code when refused, else null); db ('canonical' = the input is already canonical and the database stores it unchanged, 'refuse' = the database must answer phone_invalid for this raw input, 'skip' = not a database case).",
+  "cases": [
+    {
+      "id": "row01-sg-bare-no-country",
+      "input": "8123 4567",
+      "country": null,
+      "expect": null,
+      "error": "needs_country_code",
+      "db": "refuse"
+    },
+    {
+      "id": "row01-sg-bare-sg",
+      "input": "8123 4567",
+      "country": "SG",
+      "expect": "+6581234567",
+      "error": null,
+      "db": "refuse"
+    },
+    {
+      "id": "row02-sg-code-no-plus-no-country",
+      "input": "65 8123 4567",
+      "country": null,
+      "expect": null,
+      "error": "needs_country_code",
+      "db": "refuse"
+    },
+    {
+      "id": "row02-sg-code-no-plus-sg",
+      "input": "65 8123 4567",
+      "country": "SG",
+      "expect": "+6581234567",
+      "error": null,
+      "db": "refuse"
+    },
+    {
+      "id": "row02-sg-code-no-plus-brunei-chosen",
+      "input": "65 8123 4567",
+      "country": "BN",
+      "expect": null,
+      "error": "invalid_number",
+      "db": "refuse"
+    },
+    {
+      "id": "row03-my-trunk-no-country",
+      "input": "012-345 6789",
+      "country": null,
+      "expect": null,
+      "error": "needs_country_code",
+      "db": "refuse"
+    },
+    {
+      "id": "row03-my-trunk-my",
+      "input": "012-345 6789",
+      "country": "MY",
+      "expect": "+60123456789",
+      "error": null,
+      "db": "refuse"
+    },
+    {
+      "id": "row04-my-plus-and-trunk",
+      "input": "+60 012-345 6789",
+      "country": null,
+      "expect": "+60123456789",
+      "error": null,
+      "db": "refuse"
+    },
+    {
+      "id": "row05-id-domestic-no-country",
+      "input": "0812 3456 7890",
+      "country": null,
+      "expect": null,
+      "error": "needs_country_code",
+      "db": "refuse"
+    },
+    {
+      "id": "row05-id-domestic-id",
+      "input": "0812 3456 7890",
+      "country": "ID",
+      "expect": "+6281234567890",
+      "error": null,
+      "db": "refuse"
+    },
+    {
+      "id": "row06-id-idd-001",
+      "input": "001 62 812 3456 7890",
+      "country": null,
+      "expect": null,
+      "error": "invalid_number",
+      "db": "refuse"
+    },
+    {
+      "id": "row07-ph-domestic-no-country",
+      "input": "0917 123 4567",
+      "country": null,
+      "expect": null,
+      "error": "needs_country_code",
+      "db": "refuse"
+    },
+    {
+      "id": "row07-ph-domestic-ph",
+      "input": "0917 123 4567",
+      "country": "PH",
+      "expect": "+639171234567",
+      "error": null,
+      "db": "refuse"
+    },
+    {
+      "id": "row08-uk-domestic-no-country",
+      "input": "07911 123456",
+      "country": null,
+      "expect": null,
+      "error": "needs_country_code",
+      "db": "refuse"
+    },
+    {
+      "id": "row08-uk-domestic-gb",
+      "input": "07911 123456",
+      "country": "GB",
+      "expect": "+447911123456",
+      "error": null,
+      "db": "refuse"
+    },
+    {
+      "id": "row09-uk-plus-zero-in-brackets",
+      "input": "+44 (0)7911 123456",
+      "country": null,
+      "expect": "+447911123456",
+      "error": null,
+      "db": "refuse"
+    },
+    {
+      "id": "row10-uk-0044",
+      "input": "0044 7911 123456",
+      "country": null,
+      "expect": "+447911123456",
+      "error": null,
+      "db": "refuse"
+    },
+    {
+      "id": "row11-us-bare-no-country",
+      "input": "(415) 555-2671",
+      "country": null,
+      "expect": null,
+      "error": "needs_country_code",
+      "db": "refuse"
+    },
+    {
+      "id": "row11-us-bare-us",
+      "input": "(415) 555-2671",
+      "country": "US",
+      "expect": "+14155552671",
+      "error": null,
+      "db": "refuse"
+    },
+    {
+      "id": "row11-ca-bare-ca",
+      "input": "(416) 555-0199",
+      "country": "CA",
+      "expect": "+14165550199",
+      "error": null,
+      "db": "refuse"
+    },
+    {
+      "id": "row12-us-exit-code-no-country",
+      "input": "011 44 7911 123456",
+      "country": null,
+      "expect": null,
+      "error": "needs_country_code",
+      "db": "refuse"
+    },
+    {
+      "id": "row12-us-exit-code-us-chosen",
+      "input": "011 44 7911 123456",
+      "country": "US",
+      "expect": null,
+      "error": "needs_country_code",
+      "db": "refuse"
+    },
+    {
+      "id": "row13-au-exit-code-no-country",
+      "input": "0011 61 412 345 678",
+      "country": null,
+      "expect": null,
+      "error": "invalid_number",
+      "db": "refuse"
+    },
+    {
+      "id": "row13-au-exit-code-au-chosen",
+      "input": "0011 61 412 345 678",
+      "country": "AU",
+      "expect": null,
+      "error": "invalid_number",
+      "db": "refuse"
+    },
+    {
+      "id": "row14-brunei-code-no-plus",
+      "input": "673 7123456",
+      "country": null,
+      "expect": "+6737123456",
+      "error": null,
+      "db": "refuse"
+    },
+    {
+      "id": "row15-two-numbers-slash",
+      "input": "7123456 / 8123456",
+      "country": null,
+      "expect": null,
+      "error": "multiple_numbers",
+      "db": "refuse"
+    },
+    {
+      "id": "row15-two-numbers-comma-plus",
+      "input": "+673 7123456, +65 8123 4567",
+      "country": null,
+      "expect": null,
+      "error": "multiple_numbers",
+      "db": "refuse"
+    },
+    {
+      "id": "row15-two-numbers-or",
+      "input": "7123456 or 8123456",
+      "country": null,
+      "expect": null,
+      "error": "multiple_numbers",
+      "db": "refuse"
+    },
+    {
+      "id": "row16-arabic-indic-digits-brunei",
+      "input": "٧١٢٣٤٥٦",
+      "country": null,
+      "expect": "+6737123456",
+      "error": null,
+      "db": "refuse"
+    },
+    {
+      "id": "row16-arabic-indic-digits-plus",
+      "input": "+٦٧٣ ٧١٢ ٣٤٥٦",
+      "country": null,
+      "expect": "+6737123456",
+      "error": null,
+      "db": "refuse"
+    },
+    {
+      "id": "row16-fullwidth-digits-sg",
+      "input": "８１２３　４５６７",
+      "country": "SG",
+      "expect": "+6581234567",
+      "error": null,
+      "db": "refuse"
+    },
+    {
+      "id": "row16-fullwidth-plus",
+      "input": "＋６５ ８１２３ ４５６７",
+      "country": null,
+      "expect": "+6581234567",
+      "error": null,
+      "db": "refuse"
+    },
+    {
+      "id": "row17-extension-ext",
+      "input": "7123456 ext. 12",
+      "country": null,
+      "expect": null,
+      "error": "extension_not_supported",
+      "db": "refuse"
+    },
+    {
+      "id": "row17-extension-x",
+      "input": "+65 8123 4567 x123",
+      "country": null,
+      "expect": null,
+      "error": "extension_not_supported",
+      "db": "refuse"
+    },
+    {
+      "id": "row17-extension-hash",
+      "input": "+65 8123 4567 #12",
+      "country": null,
+      "expect": null,
+      "error": "extension_not_supported",
+      "db": "refuse"
+    },
+
+    {
+      "id": "bn-bare",
+      "input": "7123456",
+      "country": null,
+      "expect": "+6737123456",
+      "error": null,
+      "db": "refuse"
+    },
+    {
+      "id": "bn-bare-dash",
+      "input": "712-3456",
+      "country": null,
+      "expect": "+6737123456",
+      "error": null,
+      "db": "refuse"
+    },
+    {
+      "id": "bn-bare-brackets",
+      "input": "(712) 3456",
+      "country": null,
+      "expect": "+6737123456",
+      "error": null,
+      "db": "refuse"
+    },
+    {
+      "id": "bn-bare-dots",
+      "input": "712.3456",
+      "country": null,
+      "expect": "+6737123456",
+      "error": null,
+      "db": "refuse"
+    },
+    {
+      "id": "bn-bare-bn-chosen",
+      "input": "7123456",
+      "country": "BN",
+      "expect": "+6737123456",
+      "error": null,
+      "db": "refuse"
+    },
+    {
+      "id": "bn-plus-spaced",
+      "input": "+673 712 3456",
+      "country": null,
+      "expect": "+6737123456",
+      "error": null,
+      "db": "refuse"
+    },
+    {
+      "id": "bn-00-prefix",
+      "input": "00673 7123456",
+      "country": null,
+      "expect": "+6737123456",
+      "error": null,
+      "db": "refuse"
+    },
+    {
+      "id": "bn-canonical",
+      "input": "+6737123456",
+      "country": null,
+      "expect": "+6737123456",
+      "error": null,
+      "db": "canonical"
+    },
+    {
+      "id": "bn-first-digit-2",
+      "input": "2123456",
+      "country": null,
+      "expect": "+6732123456",
+      "error": null,
+      "db": "refuse"
+    },
+    {
+      "id": "bn-first-digit-8",
+      "input": "8123456",
+      "country": null,
+      "expect": "+6738123456",
+      "error": null,
+      "db": "refuse"
+    },
+    {
+      "id": "bn-eight-digits",
+      "input": "81234567",
+      "country": null,
+      "expect": null,
+      "error": "needs_country_code",
+      "db": "refuse"
+    },
+    {
+      "id": "bn-eight-digits-bn-chosen",
+      "input": "81234567",
+      "country": "BN",
+      "expect": null,
+      "error": "invalid_number",
+      "db": "refuse"
+    },
+    {
+      "id": "bn-leading-zero",
+      "input": "0712345",
+      "country": null,
+      "expect": null,
+      "error": "needs_country_code",
+      "db": "refuse"
+    },
+    {
+      "id": "bn-leading-zero-bn-chosen",
+      "input": "08123456",
+      "country": "BN",
+      "expect": null,
+      "error": "invalid_number",
+      "db": "refuse"
+    },
+    {
+      "id": "bn-starts-1",
+      "input": "1123456",
+      "country": null,
+      "expect": null,
+      "error": "needs_country_code",
+      "db": "refuse"
+    },
+    {
+      "id": "bn-starts-6",
+      "input": "6123456",
+      "country": null,
+      "expect": null,
+      "error": "needs_country_code",
+      "db": "refuse"
+    },
+    {
+      "id": "bn-starts-9",
+      "input": "9123456",
+      "country": null,
+      "expect": null,
+      "error": "needs_country_code",
+      "db": "refuse"
+    },
+    {
+      "id": "bn-six-digits",
+      "input": "712345",
+      "country": null,
+      "expect": null,
+      "error": "needs_country_code",
+      "db": "refuse"
+    },
+    {
+      "id": "bn-plus-too-long",
+      "input": "+673 7123 45678",
+      "country": null,
+      "expect": null,
+      "error": "invalid_number",
+      "db": "refuse"
+    },
+
+    {
+      "id": "it-leading-zero-kept",
+      "input": "+39 06 1234 5678",
+      "country": null,
+      "expect": "+390612345678",
+      "error": null,
+      "db": "refuse"
+    },
+    {
+      "id": "it-leading-zero-kept-it-chosen",
+      "input": "06 1234 5678",
+      "country": "IT",
+      "expect": "+390612345678",
+      "error": null,
+      "db": "refuse"
+    },
+    {
+      "id": "us-plus",
+      "input": "+1 (415) 555-2671",
+      "country": null,
+      "expect": "+14155552671",
+      "error": null,
+      "db": "refuse"
+    },
+    {
+      "id": "us-canonical",
+      "input": "+14155552671",
+      "country": null,
+      "expect": "+14155552671",
+      "error": null,
+      "db": "canonical"
+    },
+    {
+      "id": "us-national-prefix-1",
+      "input": "1 415 555 2671",
+      "country": "US",
+      "expect": "+14155552671",
+      "error": null,
+      "db": "refuse"
+    },
+
+    {
+      "id": "blank-empty",
+      "input": "",
+      "country": null,
+      "expect": null,
+      "error": "blank",
+      "db": "skip"
+    },
+    {
+      "id": "blank-spaces",
+      "input": "   ",
+      "country": null,
+      "expect": null,
+      "error": "blank",
+      "db": "skip"
+    },
+    {
+      "id": "letters-only",
+      "input": "n/a",
+      "country": null,
+      "expect": null,
+      "error": "not_a_number",
+      "db": "skip"
+    },
+    {
+      "id": "letters-in-number",
+      "input": "712abc3456",
+      "country": null,
+      "expect": null,
+      "error": "not_a_number",
+      "db": "refuse"
+    },
+    {
+      "id": "only-plus",
+      "input": "+",
+      "country": null,
+      "expect": null,
+      "error": "not_a_number",
+      "db": "skip"
+    },
+    {
+      "id": "plus-too-short",
+      "input": "+1",
+      "country": null,
+      "expect": null,
+      "error": "too_short",
+      "db": "refuse"
+    },
+    {
+      "id": "plus-too-long",
+      "input": "+1234567890123456",
+      "country": null,
+      "expect": null,
+      "error": "invalid_number",
+      "db": "refuse"
+    },
+    {
+      "id": "plus-way-too-long",
+      "input": "+673 7123456 7123456 7123456",
+      "country": null,
+      "expect": null,
+      "error": "too_long",
+      "db": "refuse"
+    },
+    {
+      "id": "plus-zero-code",
+      "input": "+0737123456",
+      "country": null,
+      "expect": null,
+      "error": "invalid_country",
+      "db": "refuse"
+    },
+    {
+      "id": "plus-in-middle",
+      "input": "673+7123456",
+      "country": null,
+      "expect": null,
+      "error": "multiple_numbers",
+      "db": "refuse"
+    },
+    {
+      "id": "unknown-country",
+      "input": "7123456",
+      "country": "ZZ",
+      "expect": null,
+      "error": "invalid_country",
+      "db": "skip"
+    }
+  ],
+
+  "libraryBumpSnapshot": [
+    { "country": "BN", "input": "+673 712 3456", "expect": "+6737123456" },
+    { "country": "BN", "input": "+673 812 3456", "expect": "+6738123456" },
+    { "country": "BN", "input": "+673 222 1234", "expect": "+6732221234" },
+    { "country": "SG", "input": "+65 8123 4567", "expect": "+6581234567" },
+    { "country": "SG", "input": "+65 9123 4567", "expect": "+6591234567" },
+    { "country": "MY", "input": "+60 12-345 6789", "expect": "+60123456789" },
+    { "country": "MY", "input": "+60 3-2161 1234", "expect": "+60321611234" },
+    { "country": "ID", "input": "+62 812 3456 7890", "expect": "+6281234567890" },
+    { "country": "ID", "input": "+62 21 555 1234", "expect": "+62215551234" },
+    { "country": "PH", "input": "+63 917 123 4567", "expect": "+639171234567" },
+    { "country": "TH", "input": "+66 81 234 5678", "expect": "+66812345678" },
+    { "country": "VN", "input": "+84 91 234 56 78", "expect": "+84912345678" },
+    { "country": "KH", "input": "+855 12 345 678", "expect": "+85512345678" },
+    { "country": "LA", "input": "+856 20 2312 3456", "expect": "+8562023123456" },
+    { "country": "AU", "input": "+61 412 345 678", "expect": "+61412345678" },
+    { "country": "NZ", "input": "+64 21 123 4567", "expect": "+64211234567" },
+    { "country": "GB", "input": "+44 7911 123456", "expect": "+447911123456" },
+    { "country": "GB", "input": "+44 (0)7911 123456", "expect": "+447911123456" },
+    { "country": "IE", "input": "+353 85 123 4567", "expect": "+353851234567" },
+    { "country": "IT", "input": "+39 06 1234 5678", "expect": "+390612345678" },
+    { "country": "IT", "input": "+39 312 345 6789", "expect": "+393123456789" },
+    { "country": "FR", "input": "+33 6 12 34 56 78", "expect": "+33612345678" },
+    { "country": "DE", "input": "+49 151 2345 6789", "expect": "+4915123456789" },
+    { "country": "US", "input": "+1 415 555 2671", "expect": "+14155552671" },
+    { "country": "CA", "input": "+1 416 555 0199", "expect": "+14165550199" },
+    { "country": "IN", "input": "+91 98765 43210", "expect": "+919876543210" },
+    { "country": "JP", "input": "+81 90 1234 5678", "expect": "+819012345678" },
+    { "country": "KR", "input": "+82 10 1234 5678", "expect": "+821012345678" },
+    { "country": "CN", "input": "+86 138 0013 8000", "expect": "+8613800138000" },
+    { "country": "HK", "input": "+852 5123 4567", "expect": "+85251234567" },
+    { "country": "TW", "input": "+886 912 345 678", "expect": "+886912345678" },
+    { "country": "AE", "input": "+971 50 123 4567", "expect": "+971501234567" }
+  ]
+}

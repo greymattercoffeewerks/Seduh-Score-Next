@@ -11,7 +11,7 @@ import {
   mountRosterScreen,
 } from './rosterScreen.js';
 import { DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
-import { validatePhoneShape } from '../../core/phone.js';
+import { phoneErrorMessage } from '../../core/phone.js';
 
 // Table-based in-memory fake client, mirroring setupScreen.test.js's own
 // (registerEntry's control flow varies by whether a phone match exists, so
@@ -237,26 +237,43 @@ function entry(overrides = {}) {
 }
 
 describe('buildCupperFromDraft', () => {
-  it('trims every field and normalizes phone to E.164', () => {
+  it('trims every field and sends the phone as typed with its country: core/registry interprets it', () => {
     const draft = {
       displayName: '  Cupper One  ',
       phone: ' 7123456 ',
+      phoneCountry: 'BN',
       email: '',
       cafe: '',
       bib: '',
     };
     expect(buildCupperFromDraft(draft)).toEqual({
       displayName: 'Cupper One',
-      phone: '+6737123456',
+      phone: '7123456',
+      phoneCountry: 'BN',
       email: null,
       cafe: null,
       bib: null,
     });
   });
 
-  it('keeps an already-international phone number as typed', () => {
+  it('keeps an international phone number as typed, and defaults the country to Brunei', () => {
     const draft = { displayName: 'A', phone: '+65 8123 4567', email: '', cafe: '', bib: '' };
-    expect(buildCupperFromDraft(draft).phone).toBe('+6581234567');
+    expect(buildCupperFromDraft(draft)).toMatchObject({
+      phone: '+65 8123 4567',
+      phoneCountry: 'BN',
+    });
+  });
+
+  it('carries the chosen country', () => {
+    const draft = {
+      displayName: 'A',
+      phone: '8123 4567',
+      phoneCountry: 'SG',
+      email: '',
+      cafe: '',
+      bib: '',
+    };
+    expect(buildCupperFromDraft(draft)).toMatchObject({ phone: '8123 4567', phoneCountry: 'SG' });
   });
 
   it('collapses a blank optional field to null rather than an empty string', () => {
@@ -297,8 +314,16 @@ describe('validateDraft', () => {
 
   it('rejects a phone that is too short to be a real number', () => {
     expect(validateDraft({ ...BASE_DRAFT, displayName: 'A', phone: '+1' })).toBe(
-      'Phone must be a valid international number, starting with your country code — e.g. +673 7123456 for Brunei.',
+      phoneErrorMessage('too_short'),
     );
+  });
+
+  it('reads a bare number in the country chosen beside it, with the code in the words when none fits', () => {
+    const draft = { ...BASE_DRAFT, displayName: 'A', phone: '8123 4567' };
+    expect(validateDraft({ ...draft, phoneCountry: 'SG' })).toBeNull();
+    // Brunei is the default and 8123 4567 is not a Brunei number.
+    expect(validateDraft(draft)).toBe(phoneErrorMessage('invalid_number'));
+    expect(validateDraft({ ...draft, phone: '+65 8123 4567' })).toBeNull();
   });
 
   it('refuses a value longer than the database accepts, naming the field', () => {
@@ -631,6 +656,60 @@ describe('mountRosterScreen', () => {
     expect(root.textContent).toContain('2 cuppers registered');
   });
 
+  it('offers a country select beside the phone, Brunei first and chosen, with its own accessible name', async () => {
+    const client = fakeClient({ events: [baseEvent], people: [], event_entries: [] });
+    const root = document.createElement('div');
+    await mountRosterScreen(root, { eventId: 'ev1', client });
+    const select = root.querySelector('select[aria-label="Phone country"]');
+    expect(select).not.toBeNull();
+    expect(select.value).toBe('BN');
+    expect(select.options[0].textContent).toBe('Brunei (+673)');
+    expect(select.options.length).toBeGreaterThan(200);
+    // The phone box keeps its own name, and the two sit in one row.
+    expect(root.querySelector('[aria-label="Phone"]').parentElement).toBe(select.parentElement);
+  });
+
+  it('reads a bare number in the chosen country and stores the canonical number, in the chosen country', async () => {
+    const client = fakeClient({ events: [baseEvent], people: [], event_entries: [] });
+    const root = document.createElement('div');
+    await mountRosterScreen(root, { eventId: 'ev1', client });
+
+    root.querySelector('[aria-label="Name"]').value = 'Sing Cupper';
+    root.querySelector('[aria-label="Name"]').dispatchEvent(new Event('input'));
+    root.querySelector('[aria-label="Phone"]').value = '8123 4567';
+    root.querySelector('[aria-label="Phone"]').dispatchEvent(new Event('input'));
+    const select = root.querySelector('select[aria-label="Phone country"]');
+    select.value = 'SG';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+
+    root.querySelector('form').dispatchEvent(new Event('submit', { cancelable: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(client.db.people).toHaveLength(1);
+    expect(client.db.people[0].phone).toBe('+6581234567');
+    expect(root.querySelector('.screen-feedback').textContent).toBe('Sing Cupper registered.');
+  });
+
+  it('refuses the same bare number while Brunei is chosen, writing nothing', async () => {
+    const client = fakeClient({ events: [baseEvent], people: [], event_entries: [] });
+    const root = document.createElement('div');
+    await mountRosterScreen(root, { eventId: 'ev1', client });
+
+    root.querySelector('[aria-label="Name"]').value = 'Sing Cupper';
+    root.querySelector('[aria-label="Name"]').dispatchEvent(new Event('input'));
+    root.querySelector('[aria-label="Phone"]').value = '8123 4567';
+    root.querySelector('[aria-label="Phone"]').dispatchEvent(new Event('input'));
+
+    root.querySelector('form').dispatchEvent(new Event('submit', { cancelable: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(root.querySelector('.screen-feedback').textContent).toBe(
+      phoneErrorMessage('invalid_number'),
+    );
+    expect(client.db.people ?? []).toHaveLength(0);
+  });
+
   it('registers a new cupper, clears the form, and shows a success message', async () => {
     const client = fakeClient({ events: [baseEvent], people: [], event_entries: [] });
     const root = document.createElement('div');
@@ -735,7 +814,7 @@ describe('mountRosterScreen', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     const feedback = root.querySelector('.screen-feedback');
-    expect(feedback.textContent).toContain('valid international number');
+    expect(feedback.textContent).toBe(phoneErrorMessage('too_short'));
     expect(feedback.dataset.tone).toBe('error');
     expect(feedback.getAttribute('aria-live')).toBe('polite');
     expect(document.activeElement).toBe(feedback);
@@ -872,6 +951,7 @@ describe('initialEditDraft', () => {
     expect(initialEditDraft(entry(), person())).toEqual({
       displayName: 'Cupper One',
       phone: '+6737000001',
+      phoneCountry: 'BN',
       email: 'one@example.com',
       cafe: 'Grey Matter',
       bib: '7',
@@ -959,10 +1039,12 @@ describe('buildEditFields', () => {
     bib: ' 9 ',
   };
 
-  it('trims, normalizes the phone to E.164 and turns blanks into null', () => {
-    expect(buildEditFields(draft, { linked: true })).toEqual({
+  it('trims, hands the phone on as typed with its country and the value on file, and turns blanks into null', () => {
+    expect(buildEditFields(draft, { linked: true, storedPhone: '+6737000001' })).toEqual({
       displayName: 'Alicia',
-      phone: '+6737000009',
+      phone: '7000009',
+      phoneCountry: 'BN',
+      storedPhone: '+6737000001',
       email: 'a@example.com',
       cafe: null,
       bib: '9',
@@ -970,7 +1052,12 @@ describe('buildEditFields', () => {
   });
 
   it('sends no phone or email for a walk-up entry, whatever the draft holds', () => {
-    expect(buildEditFields(draft, { linked: false })).toMatchObject({ phone: null, email: null });
+    expect(buildEditFields(draft, { linked: false, storedPhone: '+6737000001' })).toMatchObject({
+      phone: null,
+      phoneCountry: null,
+      storedPhone: null,
+      email: null,
+    });
   });
 });
 
@@ -1015,17 +1102,15 @@ describe('describeRosterEditError', () => {
     };
     expect(describeRosterEditError(dbRefusal)).toEqual({
       field: 'phone',
-      message: validatePhoneShape(''),
+      message: phoneErrorMessage('invalid_shape'),
     });
-    // Same text the client-side check shows for a bad phone.
-    expect(
-      validateEditDraft(
-        { displayName: 'A', phone: 'abc', email: '', cafe: '', bib: '' },
-        { linked: true },
-      ),
-    ).toEqual({
+  });
+
+  it('maps core/registry’s PhoneError, by its hint, to the phone field with that code’s words', () => {
+    const refusal = Object.assign(new Error('words'), { hint: 'needs_country_code' });
+    expect(describeRosterEditError(refusal)).toEqual({
       field: 'phone',
-      message: describeRosterEditError(dbRefusal).message,
+      message: phoneErrorMessage('needs_country_code'),
     });
   });
 
@@ -1253,10 +1338,68 @@ describe('mountRosterScreen — editing a cupper', () => {
     type(field(root, 'e1', 'displayName'), 'Cupper One');
     type(field(root, 'e1', 'phone'), '12');
     save(root).click();
-    expect(q(root, '.roster-edit-error').textContent).toContain('valid international number');
+    expect(q(root, '.roster-edit-error').textContent).toBe(phoneErrorMessage('invalid_number'));
     expect(document.activeElement).toBe(field(root, 'e1', 'phone'));
 
     expect(client.rpcCalls).toHaveLength(0);
+  });
+
+  it('puts a country select beside the phone in the edit form, Brunei chosen, and none for a walk-up', async () => {
+    const { root } = await mount(twoCuppers());
+    q(root, '#roster-edit-btn-e1').click();
+    const select = field(root, 'e1', 'phoneCountry');
+    expect(select.getAttribute('aria-label')).toBe('Phone country for Cupper One');
+    expect(select.value).toBe('BN');
+    expect(select.parentElement).toBe(field(root, 'e1', 'phone').parentElement);
+
+    const walk = await mount(walkUp());
+    q(walk.root, '#roster-edit-btn-e3').click();
+    expect(field(walk.root, 'e3', 'phoneCountry')).toBeNull();
+  });
+
+  it('an UNCHANGED stored phone that fails today’s country rules never blocks saving another field', async () => {
+    // +673 then 8 digits: shape-valid (the database accepts it) but not a Brunei number.
+    const old = '+67381234567';
+    const client = fakeClient({
+      events: [eventRow],
+      people: [person({ phone: old })],
+      event_entries: [entry()],
+    });
+    const { root } = await mount(client);
+    q(root, '#roster-edit-btn-e1').click();
+    type(field(root, 'e1', 'cafe'), 'New Cafe');
+    save(root).click();
+    await vi.waitFor(() => expect(q(root, '.roster-edit-form')).toBeNull());
+    expect(client.rpcCalls).toHaveLength(1);
+    expect(client.rpcCalls[0][1]).toMatchObject({ p_phone: old, p_cafe: 'New Cafe' });
+  });
+
+  it('…but a CHANGED phone gets the full rules, shown beside the phone field, and nothing is sent', async () => {
+    const old = '+67381234567';
+    const client = fakeClient({
+      events: [eventRow],
+      people: [person({ phone: old })],
+      event_entries: [entry()],
+    });
+    const { root } = await mount(client);
+    q(root, '#roster-edit-btn-e1').click();
+    type(field(root, 'e1', 'phone'), '+67381234568');
+    save(root).click();
+    expect(q(root, '.roster-edit-error').textContent).toBe(phoneErrorMessage('invalid_number'));
+    expect(field(root, 'e1', 'phone').getAttribute('aria-invalid')).toBe('true');
+    expect(document.activeElement).toBe(field(root, 'e1', 'phone'));
+    expect(client.rpcCalls).toHaveLength(0);
+  });
+
+  it('reads a retyped bare number in the country chosen beside it, and sends the canonical one', async () => {
+    const client = twoCuppers();
+    const { root } = await mount(client);
+    q(root, '#roster-edit-btn-e1').click();
+    type(field(root, 'e1', 'phone'), '012-345 6789');
+    type(field(root, 'e1', 'phoneCountry'), 'MY');
+    save(root).click();
+    await vi.waitFor(() => expect(q(root, '.roster-edit-form')).toBeNull());
+    expect(client.rpcCalls[0][1].p_phone).toBe('+60123456789');
   });
 
   it('typing clears the complaint — the message and the aria attributes — without re-rendering the form', async () => {

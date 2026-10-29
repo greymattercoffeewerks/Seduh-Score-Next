@@ -11,6 +11,19 @@
   margin-bottom: var(--space-3);
 }
 
+/* The phone box with its country select beside it. A fixed-ish country column and a flexible phone
+   column from 360px up: "Brunei (+673)" fits, a long name ends in an ellipsis (the closed select
+   clips it) and the open list is the browser's own. */
+.roster-phone-row {
+  display: grid;
+  grid-template-columns: minmax(0, 9.5rem) minmax(0, 1fr);
+  gap: var(--space-2);
+}
+
+.roster-phone-country {
+  text-overflow: ellipsis;
+}
+
 .roster-form-fields {
   display: flex;
   flex-direction: column;

@@ -4,17 +4,31 @@
 // fake client never triggers real Supabase construction.
 import { getSupabase } from './supabaseClient.js';
 import { UNIQUE_VIOLATION } from './errors.js';
-import { validatePhoneShape } from './phone.js';
+import { parsePhone, phoneErrorMessage } from './phone.js';
+
+// A refused phone. `hint` is the stable phone error code (core/phone.js PHONE_ERROR_CODES), the
+// same place a database refusal carries its own, so a screen reads `hint`, never the words. The
+// message is the code's words; the Error has no `.code`, so `describeError` shows it verbatim.
+export class PhoneError extends Error {
+  constructor(code) {
+    super(phoneErrorMessage(code));
+    this.name = 'PhoneError';
+    this.hint = code;
+  }
+}
 
 // Every path that writes `people.phone` goes through this first (Seduh ID: the phone is the
-// cross-organisation matching key, so a non-E.164 value must never reach the database). Callers
-// still normalize (core/phone.js `normalizePhone`) — this only refuses, it never rewrites. A
-// null/undefined phone is a walk-up with no profile yet (D16) and passes. The thrown Error has no
-// `.code`, so `describeError` shows its message verbatim.
-function assertPhoneShape(phone) {
-  if (phone === null || phone === undefined) return;
-  const message = typeof phone === 'string' ? validatePhoneShape(phone) : validatePhoneShape('');
-  if (message) throw new Error(message);
+// cross-organisation matching key, so a value that is not a canonical E.164 number must never reach
+// the database), so a second caller cannot skip the check. It takes what a person TYPED plus an
+// optional `country` (ISO region chosen next to the phone box), interprets it once through
+// core/phone.js and returns the canonical number; callers pass that on. `storedPhone` is the edit
+// rule: an unchanged stored value is checked for shape only. A null/undefined phone is a walk-up with
+// no profile yet (D16) and passes as null. A blank or non-string value is refused ('blank').
+function resolvePhone(phone, { country = null, storedPhone = null } = {}) {
+  if (phone === null || phone === undefined) return null;
+  const result = parsePhone(phone, { country, storedPhone });
+  if (!result.ok) throw new PhoneError(result.code);
+  return result.phone;
 }
 
 export async function findPersonByPhone(orgId, phone, client = getSupabase()) {
@@ -48,16 +62,17 @@ export async function findPersonByEmail(orgId, email, client = getSupabase()) {
   return data;
 }
 
-// Refuses a non-E.164 phone (assertPhoneShape) rather than normalising it: normalising here would
-// make the stored value differ from the one registerPerson's dedup lookup just searched for.
+// `person.phone` is what was typed (or already canonical: parsing is idempotent), with an optional
+// `person.phoneCountry`; the stored value is always the canonical number (resolvePhone). registerPerson
+// resolves it first and looks up by that same value, so the row stored is the row searched for.
 export async function createPerson(orgId, person, client = getSupabase()) {
-  assertPhoneShape(person.phone);
+  const phone = resolvePhone(person.phone, { country: person.phoneCountry });
   const { data, error } = await client
     .from('people')
     .insert({
       org_id: orgId,
       display_name: person.displayName,
-      phone: person.phone,
+      phone,
       email: person.email ?? null,
       cafe: person.cafe ?? null,
       country: person.country ?? null,
@@ -77,8 +92,8 @@ export async function createPerson(orgId, person, client = getSupabase()) {
 // sharing an email under a different phone, surfacing a raw constraint
 // violation instead of the existing person.
 export async function registerPerson(orgId, person, client = getSupabase()) {
-  assertPhoneShape(person.phone);
-  const existingByPhone = await findPersonByPhone(orgId, person.phone, client);
+  const phone = resolvePhone(person.phone, { country: person.phoneCountry });
+  const existingByPhone = await findPersonByPhone(orgId, phone, client);
   if (existingByPhone) return existingByPhone;
 
   if (person.email) {
@@ -86,7 +101,7 @@ export async function registerPerson(orgId, person, client = getSupabase()) {
     if (existingByEmail) return existingByEmail;
   }
 
-  return createPerson(orgId, person, client);
+  return createPerson(orgId, { ...person, phone, phoneCountry: null }, client);
 }
 
 // A registered entry (personId given) snapshots the person's CURRENT
@@ -183,17 +198,22 @@ export async function listPeopleByIds(personIds, client = getSupabase()) {
 // client-side pair of updates: the person's shared profile (name, phone, email, cafe) AND this
 // event's entry (name, cafe, bib) change together or not at all. Other events' entries for the
 // same person are snapshots and are deliberately left alone (handoff §5.1). `fields` are the
-// raw values — the RPC trims them, turns blanks into null and enforces uniqueness; `phone`
-// must already be normalized (core/phone.js). A walk-up entry with no profile takes
+// raw values — the RPC trims them, turns blanks into null and enforces uniqueness; `phone` is what
+// was typed (with an optional `phoneCountry`) and is interpreted here (core/phone.js), so the RPC only
+// ever receives a canonical number. `storedPhone` is the value on file: left unchanged, it is checked
+// for shape only (the edit rule), so an old number never blocks saving another field. A walk-up entry with no profile takes
 // `phone: null, email: null`. A phone/email clash comes back as a P0002 error whose details name
 // the field and the person who has it.
 export async function updateRosterEntry(orgId, entryId, fields, client = getSupabase()) {
-  assertPhoneShape(fields.phone);
+  const phone = resolvePhone(fields.phone, {
+    country: fields.phoneCountry,
+    storedPhone: fields.storedPhone,
+  });
   const { error } = await client.rpc('update_roster_entry', {
     p_org_id: orgId,
     p_entry_id: entryId,
     p_display_name: fields.displayName,
-    p_phone: fields.phone ?? null,
+    p_phone: phone,
     p_email: fields.email ?? null,
     p_cafe: fields.cafe ?? null,
     p_bib: fields.bib ?? null,
