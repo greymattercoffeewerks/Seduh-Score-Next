@@ -4,7 +4,7 @@
 -- row ids. It never selects, prints or computes anything shown from a phone VALUE: only the class, the id and the
 -- digit count (a length, to help the organiser find the row) leave the database.
 --
--- Needs migration 20261029100000_phone_e164_shape.sql (app.is_e164, app.phone_repair_class).
+-- Needs migration 20261030100000_phone_e164_shape.sql (app.is_e164, app.phone_repair_class).
 -- Run as the database owner (the SQL editor, or the Supabase MCP's execute_sql). Safe to run any number of times.
 --
 -- Classes (one home for the rules: app.phone_repair_class):
@@ -18,7 +18,7 @@
 --                               never repaired
 --   null_phone                  no value (people.phone is NOT NULL today, so expect 0)
 --
--- Done when every row is 'valid': then, and only then, push 20261029110000_people_phone_e164_check.sql.
+-- Done when every row is 'valid': then, and only then, push 20261030110000_people_phone_e164_check.sql.
 
 with classified as (
   select

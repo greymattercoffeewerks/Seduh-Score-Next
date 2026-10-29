@@ -114,11 +114,11 @@
 
 **What changed:**
 
-- `20261029100000_phone_e164_shape.sql`: `app.is_e164` (the shape `^\+[1-9][0-9]{7,14}$`) and `app.phone_repair_class` (valid / repairable_default_country / null_phone / ambiguous; only an exact 7-digit Brunei number `^[2-578][0-9]{6}$` is repairable with +673; 8 digits, a leading 0 and everything else is ambiguous). `update_roster_entry` (from the 20261011140000 body, null-org guard kept) trims, then REQUIRES canonical E.164 and otherwise refuses with hint `phone_invalid`; no normalisation, no default country. Changes no row; safe to push at any time.
-- `20261029110000_people_phone_e164_check.sql`: the `people_phone_e164` CHECK, added VALID (a NOT VALID check still blocks updates of legacy rows), behind a guard that refuses with a row count if any non-E.164 row remains. Push only after the stored phones are valid; the 2026-10-29 cloud re-audit showed 24 people, all valid.
+- `20261030100000_phone_e164_shape.sql`: `app.is_e164` (the shape `^\+[1-9][0-9]{7,14}$`) and `app.phone_repair_class` (valid / repairable_default_country / null_phone / ambiguous; only an exact 7-digit Brunei number `^[2-578][0-9]{6}$` is repairable with +673; 8 digits, a leading 0 and everything else is ambiguous). `update_roster_entry` (from the 20261011140000 body, null-org guard kept) trims, then REQUIRES canonical E.164 and otherwise refuses with hint `phone_invalid`; no normalisation, no default country. Changes no row; safe to push at any time.
+- `20261030110000_people_phone_e164_check.sql`: the `people_phone_e164` CHECK, added VALID (a NOT VALID check still blocks updates of legacy rows), behind a guard that refuses with a row count if any non-E.164 row remains. Push only after the stored phones are valid; the 2026-10-29 cloud re-audit showed 24 people, all valid.
 - `supabase/scripts/people_phone_audit.sql` (read-only: class, row ids, digit counts, never a value) and `people_phone_repair.sql` (owner-run, repairs only the exact 7-digit Brunei rows with a unique target, never deletes, ends in ROLLBACK).
 - `src/core/phone.js`: `E164_PATTERN` now uses `[0-9]` (same behaviour) so the client, `app.is_e164` and the CHECK are the same string; `supabase/phonePattern.test.js` fails if they drift.
-- pgTAP: new `059_phone_e164.sql`; fixtures in 040/041 use `e1.phone`; 024's phone-cap case uses a padded canonical value.
+- pgTAP: new `060_phone_e164.sql`; fixtures in 040/041 use `e1.phone`; 024's phone-cap case uses a padded canonical value.
 
 **Reviews:** first pass: security-reviewer and schema-guardian found no Important; code-reviewer none; test-auditor two Important (length bounds untested), fixed with boundary tests (its independent check was not run: test-only fix). After the shape-only amendment: schema-guardian and security-reviewer re-run on the new diff only, no Important findings; doc-drift nits fixed.
 

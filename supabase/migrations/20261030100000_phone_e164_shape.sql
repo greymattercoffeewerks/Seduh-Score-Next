@@ -17,7 +17,7 @@
 -- THIS MIGRATION IS SAFE TO PUSH BEFORE ANY DATA REPAIR: it changes no row and adds no constraint. The only
 -- behaviour change is that update_roster_entry now rejects a phone that is not canonical E.164. The client must send
 -- canonical values (it does today: rosterScreen.js normalises first).
--- The people_phone_e164 CHECK is the NEXT migration (20261029110000) and MUST NOT be pushed until the stored phones
+-- The people_phone_e164 CHECK is the NEXT migration (20261030110000) and MUST NOT be pushed until the stored phones
 -- are all valid (supabase/scripts/people_phone_audit.sql shows only 'valid').
 --
 -- rollback: (restores the exact 20261011140000 body of update_roster_entry, then drops the two functions)

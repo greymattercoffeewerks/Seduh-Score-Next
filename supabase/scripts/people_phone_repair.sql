@@ -13,7 +13,7 @@
 -- would change: read the counts, then change the last line to COMMIT and run it again.
 --
 -- Effects of an UPDATE on people: updated_at moves (trigger); org_id is not touched (it is frozen anyway).
--- Needs migration 20261029100000_phone_e164_shape.sql (app.phone_repair_class, app.is_e164). Run as the database owner, in a runner that shows EVERY
+-- Needs migration 20261030100000_phone_e164_shape.sql (app.phone_repair_class, app.is_e164). Run as the database owner, in a runner that shows EVERY
 -- statement's result (the Supabase SQL editor or psql). A runner that returns only the last statement (the
 -- ROLLBACK) would hide the counts.
 
