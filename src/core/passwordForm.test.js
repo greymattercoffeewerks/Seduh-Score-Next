@@ -63,3 +63,90 @@ describe('mountPasswordFormScreen askCurrent', () => {
     expect(save).toHaveBeenCalledWith('long-enough-pass', 'the-old-one');
   });
 });
+
+describe('mountPasswordFormScreen inlineErrors / toggleCurrent (opt-in)', () => {
+  function mount(options) {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    mountPasswordFormScreen(root, {
+      heading: 'H',
+      headingId: 'pf',
+      intro: 'i',
+      save: vi.fn(async () => ({ error: null })),
+      askCurrent: true,
+      ...options,
+    });
+    return root;
+  }
+  const set = (root, name, value) => {
+    const input = root.querySelector(`[data-field="${name}"]`);
+    input.value = value;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  const send = async (root) => {
+    root
+      .querySelector('form')
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  };
+  const field = (root, name) => root.querySelector(`[data-field="${name}"]`);
+
+  it('default: native validation stays, nothing is marked invalid, toggle skips the current box, focus goes to the message', async () => {
+    const root = mount({});
+    expect(root.querySelector('form').hasAttribute('novalidate')).toBe(false);
+    set(root, 'password', 'long-enough-pass');
+    set(root, 'confirmation', 'long-enough-pass');
+    await send(root);
+    expect(root.querySelector('[aria-invalid]')).toBeNull();
+    expect(root.querySelector('.screen-feedback').hasAttribute('id')).toBe(false);
+    expect(document.activeElement).toBe(root.querySelector('.screen-feedback'));
+    root.querySelector('.password-toggle').click();
+    expect(field(root, 'password').type).toBe('text');
+    expect(field(root, 'current').type).toBe('password');
+  });
+
+  it('inlineErrors: novalidate, and the box at fault is aria-invalid, described by the message, focused', async () => {
+    const root = mount({ inlineErrors: true });
+    expect(root.querySelector('form').hasAttribute('novalidate')).toBe(true);
+    // required stays for assistive technology
+    expect(field(root, 'current').required).toBe(true);
+
+    await send(root);
+    const message = root.querySelector('.screen-feedback');
+    expect(message.textContent).toBe('Enter your current password.');
+    expect(field(root, 'current').getAttribute('aria-invalid')).toBe('true');
+    expect(field(root, 'current').getAttribute('aria-describedby')).toBe(message.id);
+    expect(field(root, 'password').hasAttribute('aria-invalid')).toBe(false);
+    expect(document.activeElement).toBe(field(root, 'current'));
+
+    set(root, 'current', 'old');
+    expect(field(root, 'current').hasAttribute('aria-invalid')).toBe(false);
+    expect(field(root, 'current').hasAttribute('aria-describedby')).toBe(false);
+
+    set(root, 'password', 'short');
+    set(root, 'confirmation', 'short');
+    await send(root);
+    expect(field(root, 'password').getAttribute('aria-invalid')).toBe('true');
+    expect(document.activeElement).toBe(field(root, 'password'));
+
+    set(root, 'password', 'long-enough-pass');
+    set(root, 'confirmation', 'different-pass-x');
+    await send(root);
+    expect(field(root, 'confirmation').getAttribute('aria-invalid')).toBe('true');
+    expect(field(root, 'password').hasAttribute('aria-invalid')).toBe(false);
+  });
+
+  it('toggleCurrent: one toggle shows and hides all three boxes', () => {
+    const root = mount({ toggleCurrent: true });
+    const toggle = root.querySelector('.password-toggle');
+    toggle.click();
+    for (const name of ['current', 'password', 'confirmation']) {
+      expect(field(root, name).type).toBe('text');
+    }
+    expect(toggle.textContent).toBe('Hide');
+    toggle.click();
+    for (const name of ['current', 'password', 'confirmation']) {
+      expect(field(root, name).type).toBe('password');
+    }
+  });
+});

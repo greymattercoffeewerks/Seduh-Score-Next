@@ -73,6 +73,34 @@ test.describe('the admin console: Change password (real page, real local Supabas
     await expect(page.getByRole('button', { name: 'Save password' })).toBeVisible();
   });
 
+  test('A7: empty boxes get its own message, not the native bubble, the box at fault is invalid and focused; one toggle shows all three', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 740 });
+    await open(page);
+    await page.goto('/admin/#/password');
+    await expect(heading(page)).toHaveText('Change password');
+    await page.getByRole('button', { name: 'Save password' }).click();
+    await expect(page.locator('main .screen-feedback')).toHaveText('Enter your current password.');
+    const current = page.locator('[data-field="current"]');
+    await expect(current).toHaveAttribute('aria-invalid', 'true');
+    await expect(current).toBeFocused();
+    await current.fill('x');
+    await expect(current).not.toHaveAttribute('aria-invalid', 'true');
+    await page.locator('.password-toggle').click();
+    for (const name of ['current', 'password', 'confirmation']) {
+      await expect(page.locator(`[data-field="${name}"]`)).toHaveAttribute('type', 'text');
+    }
+    await expect(page.locator('.password-toggle')).toBeFocused();
+    // the intro is styled (--text-sm), not left at body size
+    const size = (selector) =>
+      page
+        .locator(selector)
+        .first()
+        .evaluate((n) => parseFloat(getComputedStyle(n).fontSize));
+    expect(await size('.stage-meta')).toBeLessThan(await size('[data-field="password"]'));
+  });
+
   test('A6: a wrong current password is refused, nothing changes, and the old one still signs in', async ({
     page,
   }) => {

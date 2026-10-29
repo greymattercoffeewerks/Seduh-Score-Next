@@ -421,3 +421,22 @@ describe('U-10 the current password', () => {
     expect(client.auth.updateUser).not.toHaveBeenCalled();
   });
 });
+
+describe('U-11 the panel uses its own messages and covers every password box', () => {
+  it('novalidate, aria-invalid on the box at fault, and one toggle for all three', async () => {
+    mount();
+    await fill({ current: '' });
+    await send();
+    const form = host.querySelector('form');
+    expect(form.hasAttribute('novalidate')).toBe(true);
+    const current = host.querySelector('[data-field="current"]');
+    expect(current.getAttribute('aria-invalid')).toBe('true');
+    expect(host.querySelector(`#${current.getAttribute('aria-describedby')}`).textContent).toBe(
+      'Enter your current password.',
+    );
+    host.querySelector('.password-toggle').click();
+    for (const name of ['current', 'password', 'confirmation']) {
+      expect(host.querySelector(`[data-field="${name}"]`).type).toBe('text');
+    }
+  });
+});

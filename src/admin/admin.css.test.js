@@ -21,3 +21,13 @@ describe('admin badges', () => {
     }
   });
 });
+
+describe('admin .stage-meta', () => {
+  it('is styled with tokens (core/passwordForm.js emits it and the console loads no stylesheet that defines it)', () => {
+    const rule = css.match(/(?:^|\n)\.stage-meta\s*\{([^}]*)\}/)?.[1];
+    expect(rule).toBeTruthy();
+    expect(rule).toMatch(/color:\s*var\(--color-text-secondary\)/);
+    expect(rule).toMatch(/font-size:\s*var\(--text-sm\)/);
+    expect(rule).not.toMatch(/#[0-9a-f]{3,8}\b/i);
+  });
+});
