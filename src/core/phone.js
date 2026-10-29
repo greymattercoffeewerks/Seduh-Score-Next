@@ -29,7 +29,7 @@ export const DEFAULT_COUNTRY = 'BN';
 
 // E.164's own bounds: '+' followed by 8-15 digits total, first digit non-zero. Textually equal to
 // the pattern in the database's `app.is_e164` and `people` CHECK (a pgTAP test compares them).
-export const E164_PATTERN = /^\+[1-9]\d{7,14}$/;
+export const E164_PATTERN = /^\+[1-9][0-9]{7,14}$/;
 
 // Brunei (libphonenumber metadata): calling code 673, exactly 7 digits starting 2, 3, 4, 5, 7 or 8,
 // no trunk prefix.

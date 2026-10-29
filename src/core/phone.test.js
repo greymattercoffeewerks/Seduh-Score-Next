@@ -76,8 +76,8 @@ describe('idempotence and shape', () => {
     }
   });
 
-  it('keeps E164_PATTERN textually ^\\+[1-9]\\d{7,14}$ (pins the literal the database CHECK must match)', () => {
-    expect(E164_PATTERN.source).toBe('^\\+[1-9]\\d{7,14}$');
+  it('keeps E164_PATTERN textually ^\\+[1-9][0-9]{7,14}$ (pins the literal the database CHECK must match)', () => {
+    expect(E164_PATTERN.source).toBe('^\\+[1-9][0-9]{7,14}$');
     expect(E164_PATTERN.flags).toBe('');
   });
 });

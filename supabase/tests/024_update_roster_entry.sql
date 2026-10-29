@@ -9,7 +9,7 @@
 -- changes nothing; resubmitting a person's own values is not a collision; withdrawal is preserved;
 -- anon cannot execute it. Runs under a real `authenticated` role with RLS in force.
 begin;
-select plan(54);
+select plan(55);
 
 -- ============ fixtures ============
 
@@ -319,8 +319,13 @@ select is(
 
 select lives_ok(
   $$ select update_roster_entry('00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000f4',
-       repeat('n', 200), '+' || repeat('2', 31), repeat('y', 242) || '@example.com', repeat('c', 200), repeat('b', 50)) $$,
-  'values exactly at every cap (name 200, phone 32, email 254, cafe 200, bib 50) are accepted'
+       repeat('n', 200), repeat(' ', 21) || '+6737000055', repeat('y', 242) || '@example.com', repeat('c', 200), repeat('b', 50)) $$,
+  'values exactly at every cap (name 200, phone 32 as typed, padded, email 254, cafe 200, bib 50) are accepted'
+);
+select is(
+  (select phone from people where id = '00000000-0000-0000-0000-0000000000d3'),
+  '+6737000055',
+  'and the at-cap phone, typed with padding, is stored normalised'
 );
 select throws_ok(
   $$ select update_roster_entry('00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000f4',
