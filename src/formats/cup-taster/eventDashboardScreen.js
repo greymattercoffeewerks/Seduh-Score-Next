@@ -10,6 +10,7 @@ import { getSupabase } from '../../core/supabaseClient.js';
 import { el } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
 import { findEvent } from '../../core/events.js';
+import { buildHomepageListingCard } from '../../core/homepageListingCard.js';
 import { findActiveLiveEventId } from '../../core/publish.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
 import { listStagesForEvent, stageHasHeats, stageKindLabel } from './setup.js';
@@ -226,6 +227,8 @@ export async function mountEventDashboardScreen(
         }),
       ]),
     );
+
+    container.appendChild(buildHomepageListingCard(data.event, { client }));
 
     if (data.stages.length === 0) {
       container.appendChild(

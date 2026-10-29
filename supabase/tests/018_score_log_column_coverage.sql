@@ -84,7 +84,7 @@ insert into _buckets values
   ('events', 'event_date', 'metadata'), ('events', 'venue', 'metadata'),
   ('events', 'status', 'metadata'), ('events', 'config', 'metadata'),
   ('events', 'created_at', 'metadata'), ('events', 'updated_at', 'metadata'),
-  ('events', 'city', 'metadata');
+  ('events', 'city', 'metadata'), ('events', 'list_on_homepage', 'metadata');
 
 -- 1. every real column is classified
 select is(

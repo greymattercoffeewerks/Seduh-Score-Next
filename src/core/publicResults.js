@@ -31,6 +31,20 @@ export async function listPublishedResults(client = getSupabase()) {
   return data;
 }
 
+// Anon-safe, ONE row: the newest published event (the landing page's "latest event" card). Same select as
+// the archive, limited to one row so the landing page never downloads every payload. Test events cannot
+// be here (the publish trigger rejects them), so no is_test filter is needed. null when the archive is empty.
+export async function findLatestPublishedResult(client = getSupabase()) {
+  const { data, error } = await client
+    .from('public_results')
+    .select('event_id, payload, published_at')
+    .order('published_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 // Org-scoped: does THIS event already have a published row? Used by the
 // organiser's own "Public results" card (reportScreen.js) to render its
 // current state without going through the anon-only read path.

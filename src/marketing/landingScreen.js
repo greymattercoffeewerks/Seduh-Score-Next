@@ -38,6 +38,7 @@
 // for why).
 import { el, svgEl, brandLockup } from '../core/dom.js';
 import { revealOnScroll } from '../core/scrollReveal.js';
+import { cleanOrgName } from '../core/orgLabel.js';
 import { TIERS } from './pricingContent.js';
 import { buildPublicFooter } from './publicFooter.js';
 
@@ -450,13 +451,12 @@ function formatRow(index, name, body, { live = false, dimmed = false, href } = {
 
   const cells = [
     el('span', { className: 'petrol-format-index petrol-mono', text: index }),
-    el('div', {}, children),
-    live
-      ? el('span', { className: 'petrol-format-status' }, [
-          liveDot(),
-          tag('Basic free', { solid: true }),
-        ])
-      : tag('Soon'),
+    el('div', { className: 'petrol-format-main' }, children),
+    el(
+      'span',
+      { className: 'petrol-format-status' },
+      live ? [liveDot(), tag('Basic free', { solid: true })] : [tag('Soon')],
+    ),
   ];
 
   const tagName = live ? 'a' : 'div';
@@ -509,21 +509,57 @@ function formatsSection() {
   return section;
 }
 
-function fact(value, copy, accent = false) {
-  return el('article', { className: `petrol-fact${accent ? ' petrol-fact-accent' : ''}` }, [
-    el('b', { className: 'petrol-mono tabular-nums', text: value }),
-    el('p', { text: copy }),
+const EVENT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const LATEST_DATE_FORMAT = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+});
+
+// Reduces a public_results row to the three public facts the landing card shows, or null if the row
+// is unusable. The payload is unvalidated jsonb, so every field is type-checked; nothing else (no
+// competitor, no score) is read.
+function latestEventFacts(row) {
+  const payload = row?.payload;
+  const name = typeof payload?.eventName === 'string' ? payload.eventName.trim() : '';
+  if (!name || typeof row?.event_id !== 'string' || !EVENT_ID_PATTERN.test(row.event_id))
+    return null;
+  let date = null;
+  if (typeof payload.eventDate === 'string' && ISO_DATE_PATTERN.test(payload.eventDate)) {
+    const parsed = new Date(`${payload.eventDate}T00:00:00`);
+    // A real calendar day only: `2026-02-30` would roll over to 2 March.
+    const [y, m, d] = payload.eventDate.split('-').map(Number);
+    if (parsed.getFullYear() === y && parsed.getMonth() + 1 === m && parsed.getDate() === d)
+      date = LATEST_DATE_FORMAT.format(parsed);
+  }
+  return {
+    name,
+    date,
+    // The same cleaning publishedOrgName (core/publicResults.js) applies; imported from orgLabel so the
+    // landing bundle does not statically pull in the Supabase client.
+    org: cleanOrgName(payload.org_name) || null,
+    eventId: row.event_id,
+  };
+}
+
+function latestEventBlock(facts) {
+  const meta = [facts.date, facts.org ? `Organised by ${facts.org}` : null].filter(Boolean);
+  return el('div', { className: 'petrol-story-latest' }, [
+    el('p', { className: 'petrol-story-latest-label', text: 'Latest published result' }),
+    el('p', { className: 'petrol-story-latest-name', text: facts.name }),
+    ...(meta.length
+      ? [el('p', { className: 'petrol-story-latest-meta', text: meta.join(' · ') })]
+      : []),
+    el('a', {
+      className: 'petrol-story-latest-link',
+      text: 'View results →',
+      attrs: { href: `/results/?sheet=${encodeURIComponent(facts.eventId)}` },
+    }),
   ]);
 }
 
-function proofSection() {
-  const facts = el('div', { className: 'petrol-proof-facts' }, [
-    fact('0', 'installs. Pure web, open it on the day.'),
-    fact('1', 'event flow: setup, roster, stages, then heats.'),
-    fact('3', 'live surfaces: splash screen, projector, and phone.'),
-    fact('2', 'formats live today: Cup Taster, BTC. More are coming.', true),
-  ]);
-
+function proofSection(loadLatest) {
   const story = el('div', { className: 'petrol-story' }, [
     el('img', {
       className: 'petrol-story-photo',
@@ -546,10 +582,89 @@ function proofSection() {
     ]),
   ]);
 
-  const inner = el('div', { className: 'petrol-wrap petrol-proof-inner' }, [facts, story]);
+  // The static story above is the whole card until (and unless) the newest published event arrives.
+  // A slow, failed or empty answer changes nothing; a good one adds a block under the heading.
+  if (loadLatest) {
+    const copy = story.querySelector('.petrol-story-copy');
+    loadLatest().then(
+      (row) => {
+        const facts = latestEventFacts(row);
+        if (facts) copy.querySelector('.petrol-heading').after(latestEventBlock(facts));
+      },
+      () => {},
+    );
+  }
+
+  const inner = el('div', { className: 'petrol-wrap petrol-proof-inner' }, [story]);
   const section = el('section', { className: 'petrol-proof' }, [inner]);
   revealOnScroll(inner);
   return section;
+}
+
+// The "live now" bar (2026-10-29). Absent from the static page and from the build-time prerender: it exists only
+// when `loadLive` resolves with at least one listed live event, and is inserted ABOVE the nav, so a slow, failed
+// or empty answer changes nothing at all. Rows come tidy and typed from core/publicLiveNow.js (the Supabase client
+// stays out of this file's static imports); a row of a kind this page does not know is skipped, which is how a
+// registration row can be added later. It does not auto-rotate, animate or flash: one sentence and one link.
+function liveBar({ rows, total }) {
+  const live = rows.filter((row) => row.kind === 'live');
+  if (!live.length) return null;
+  const [first, ...others] = live;
+  const named = (row) => (row.orgName ? `${row.eventName} by ${row.orgName}` : row.eventName);
+  const main = el('div', { className: 'petrol-live-bar-main' }, [
+    el('span', { className: 'petrol-live-bar-dot', attrs: { 'aria-hidden': 'true' } }),
+    el('p', { className: 'petrol-live-bar-text' }, [
+      el('strong', { className: 'petrol-live-bar-label', text: 'Live now:' }),
+      document.createTextNode(` ${named(first)}`),
+    ]),
+    el('a', {
+      className: 'petrol-live-bar-link',
+      text: 'Watch →',
+      attrs: { href: first.href, 'aria-label': `Watch ${named(first)} live` },
+    }),
+  ]);
+  const children = [main];
+  // Everything past the first sits behind a disclosure so the bar stays one slim row.
+  const all = Math.max(total, live.length);
+  if (all > 1) {
+    const panelId = 'petrol-live-bar-more';
+    const toggle = el('button', {
+      className: 'petrol-live-bar-more-toggle',
+      text: `+${all - 1} more live`,
+      attrs: { type: 'button', 'aria-expanded': 'false', 'aria-controls': panelId },
+    });
+    const unseen = all - live.length;
+    const items = others.map((row) =>
+      el('li', {}, [
+        el('a', {
+          className: 'petrol-live-bar-link',
+          text: named(row),
+          attrs: { href: row.href, 'aria-label': `Watch ${named(row)} live` },
+        }),
+      ]),
+    );
+    if (unseen > 0)
+      items.push(
+        el('li', { className: 'petrol-live-bar-rest', text: `and ${unseen} more live now` }),
+      );
+    const panel = el(
+      'ul',
+      { className: 'petrol-live-bar-more', id: panelId, attrs: { hidden: '' } },
+      items,
+    );
+    toggle.addEventListener('click', () => {
+      const open = toggle.getAttribute('aria-expanded') === 'true';
+      toggle.setAttribute('aria-expanded', String(!open));
+      panel.hidden = open;
+    });
+    main.appendChild(toggle);
+    children.push(panel);
+  }
+  return el(
+    'section',
+    { className: 'petrol-live-bar', attrs: { 'aria-label': 'Live now' } },
+    children,
+  );
 }
 
 function pricingColumn(label, price, suffix, body, { featured = false } = {}) {
@@ -634,22 +749,33 @@ function ctaBand() {
   return inner;
 }
 
-export function mountLandingScreen(root) {
-  root.replaceChildren(
-    el('div', { className: 'petrol-page', attrs: { 'data-surface': 'stage' } }, [
-      buildNav(),
-      buildHero(),
-      ticker(),
-      problemSection(),
-      formatsSection(),
-      ticker(),
-      proofSection(),
-      pricingSection(),
-      ctaBand(),
-      buildPublicFooter({
-        companionHref: '/community/',
-        companionText: 'Community Tools →',
-      }),
-    ]),
-  );
+// `loadLatest` (optional) resolves the newest public_results row or null; `loadLive` (optional) resolves
+// `{ rows, total }` from core/publicLiveNow.js. Omitted, the page makes no request at all (tests, the
+// build-time prerender).
+export function mountLandingScreen(root, { loadLatest, loadLive } = {}) {
+  const page = el('div', { className: 'petrol-page', attrs: { 'data-surface': 'stage' } }, [
+    buildNav(),
+    buildHero(),
+    ticker(),
+    problemSection(),
+    formatsSection(),
+    ticker(),
+    proofSection(loadLatest),
+    pricingSection(),
+    ctaBand(),
+    buildPublicFooter({
+      companionHref: '/community/',
+      companionText: 'Community Tools →',
+    }),
+  ]);
+  root.replaceChildren(page);
+  if (loadLive) {
+    loadLive().then(
+      (answer) => {
+        const bar = liveBar(answer ?? { rows: [], total: 0 });
+        if (bar && root.contains(page)) page.prepend(bar);
+      },
+      () => {},
+    );
+  }
 }
