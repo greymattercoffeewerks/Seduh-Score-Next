@@ -180,7 +180,7 @@ select is(
     where p.pronamespace = 'public'::regnamespace and p.prokind = 'f' and has_function_privilege('anon', p.oid, 'execute')
       and p.prorettype not in ('trigger'::regtype, 'event_trigger'::regtype)
       and not exists (select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e')),
-  'get_scoring_record, public_event_summary, public_org_by_slug, session_bean_count, session_display_guesses, submit_guess',
+  'get_scoring_record, public_event_summary, public_live_now, public_org_by_slug, session_bean_count, session_display_guesses, submit_guess',
   'the public functions anon can execute are exactly this list (a new anonymous door must be added here on purpose)'
 );
 select is(

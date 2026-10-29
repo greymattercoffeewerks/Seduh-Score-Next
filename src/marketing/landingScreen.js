@@ -601,6 +601,72 @@ function proofSection(loadLatest) {
   return section;
 }
 
+// The "live now" bar (2026-10-29). Absent from the static page and from the build-time prerender: it exists only
+// when `loadLive` resolves with at least one listed live event, and is inserted ABOVE the nav, so a slow, failed
+// or empty answer changes nothing at all. Rows come tidy and typed from core/publicLiveNow.js (the Supabase client
+// stays out of this file's static imports); a row of a kind this page does not know is skipped, which is how a
+// registration row can be added later. It does not auto-rotate, animate or flash: one sentence and one link.
+function liveBar({ rows, total }) {
+  const live = rows.filter((row) => row.kind === 'live');
+  if (!live.length) return null;
+  const [first, ...others] = live;
+  const named = (row) => (row.orgName ? `${row.eventName} by ${row.orgName}` : row.eventName);
+  const main = el('div', { className: 'petrol-live-bar-main' }, [
+    el('span', { className: 'petrol-live-bar-dot', attrs: { 'aria-hidden': 'true' } }),
+    el('p', { className: 'petrol-live-bar-text' }, [
+      el('strong', { className: 'petrol-live-bar-label', text: 'Live now:' }),
+      document.createTextNode(` ${named(first)}`),
+    ]),
+    el('a', {
+      className: 'petrol-live-bar-link',
+      text: 'Watch →',
+      attrs: { href: first.href, 'aria-label': `Watch ${named(first)} live` },
+    }),
+  ]);
+  const children = [main];
+  // Everything past the first sits behind a disclosure so the bar stays one slim row.
+  const all = Math.max(total, live.length);
+  if (all > 1) {
+    const panelId = 'petrol-live-bar-more';
+    const toggle = el('button', {
+      className: 'petrol-live-bar-more-toggle',
+      text: `+${all - 1} more live`,
+      attrs: { type: 'button', 'aria-expanded': 'false', 'aria-controls': panelId },
+    });
+    const unseen = all - live.length;
+    const items = others.map((row) =>
+      el('li', {}, [
+        el('a', {
+          className: 'petrol-live-bar-link',
+          text: named(row),
+          attrs: { href: row.href, 'aria-label': `Watch ${named(row)} live` },
+        }),
+      ]),
+    );
+    if (unseen > 0)
+      items.push(
+        el('li', { className: 'petrol-live-bar-rest', text: `and ${unseen} more live now` }),
+      );
+    const panel = el(
+      'ul',
+      { className: 'petrol-live-bar-more', id: panelId, attrs: { hidden: '' } },
+      items,
+    );
+    toggle.addEventListener('click', () => {
+      const open = toggle.getAttribute('aria-expanded') === 'true';
+      toggle.setAttribute('aria-expanded', String(!open));
+      panel.hidden = open;
+    });
+    main.appendChild(toggle);
+    children.push(panel);
+  }
+  return el(
+    'section',
+    { className: 'petrol-live-bar', attrs: { 'aria-label': 'Live now' } },
+    children,
+  );
+}
+
 function pricingColumn(label, price, suffix, body, { featured = false } = {}) {
   const priceLine = [document.createTextNode(price)];
   if (suffix) priceLine.push(el('span', { className: 'petrol-price-suffix', text: suffix }));
@@ -683,24 +749,33 @@ function ctaBand() {
   return inner;
 }
 
-// `loadLatest` (optional) resolves the newest public_results row or null; omitted, the page makes
-// no request at all (tests, the build-time prerender).
-export function mountLandingScreen(root, { loadLatest } = {}) {
-  root.replaceChildren(
-    el('div', { className: 'petrol-page', attrs: { 'data-surface': 'stage' } }, [
-      buildNav(),
-      buildHero(),
-      ticker(),
-      problemSection(),
-      formatsSection(),
-      ticker(),
-      proofSection(loadLatest),
-      pricingSection(),
-      ctaBand(),
-      buildPublicFooter({
-        companionHref: '/community/',
-        companionText: 'Community Tools →',
-      }),
-    ]),
-  );
+// `loadLatest` (optional) resolves the newest public_results row or null; `loadLive` (optional) resolves
+// `{ rows, total }` from core/publicLiveNow.js. Omitted, the page makes no request at all (tests, the
+// build-time prerender).
+export function mountLandingScreen(root, { loadLatest, loadLive } = {}) {
+  const page = el('div', { className: 'petrol-page', attrs: { 'data-surface': 'stage' } }, [
+    buildNav(),
+    buildHero(),
+    ticker(),
+    problemSection(),
+    formatsSection(),
+    ticker(),
+    proofSection(loadLatest),
+    pricingSection(),
+    ctaBand(),
+    buildPublicFooter({
+      companionHref: '/community/',
+      companionText: 'Community Tools →',
+    }),
+  ]);
+  root.replaceChildren(page);
+  if (loadLive) {
+    loadLive().then(
+      (answer) => {
+        const bar = liveBar(answer ?? { rows: [], total: 0 });
+        if (bar && root.contains(page)) page.prepend(bar);
+      },
+      () => {},
+    );
+  }
 }

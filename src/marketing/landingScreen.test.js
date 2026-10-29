@@ -251,3 +251,77 @@ describe('latest event card — impossible dates and markup in the organiser nam
     expect(meta.querySelector('b')).toBeNull();
   });
 });
+
+describe('mountLandingScreen — live now bar', () => {
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const r = (n, over = {}) => ({
+    kind: 'live',
+    eventName: `Event ${n}`,
+    orgName: `Org ${n}`,
+    format: 'cup_taster',
+    href: `/app/#/live/org-${n}/phone`,
+    ...over,
+  });
+  beforeEach(() => vi.stubGlobal('matchMedia', () => ({ matches: true })));
+
+  function mount(loadLive) {
+    const root = document.createElement('div');
+    mountLandingScreen(root, { loadLive });
+    return root;
+  }
+
+  it('renders nothing without a loader (tests, the prerender)', () => {
+    expect(mount(undefined).querySelector('.petrol-live-bar')).toBeNull();
+  });
+
+  it.each([
+    ['nothing live', async () => ({ rows: [], total: 0 })],
+    ['a failed request', async () => Promise.reject(new Error('down'))],
+    ['a malformed answer', async () => null],
+    ['only unknown kinds', async () => ({ rows: [r(1, { kind: 'registration' })], total: 1 })],
+  ])('leaves the page exactly as it was on %s', async (_l, loader) => {
+    const before = mount(undefined).innerHTML;
+    const root = mount(loader);
+    await settle();
+    expect(root.innerHTML).toBe(before);
+  });
+
+  it('puts a labelled region ABOVE the nav with a named link to the live page', async () => {
+    const root = mount(async () => ({ rows: [r(1)], total: 1 }));
+    await settle();
+    const bar = root.querySelector('.petrol-live-bar');
+    expect(bar.tagName).toBe('SECTION');
+    expect(bar.getAttribute('aria-label')).toBe('Live now');
+    expect(bar.nextElementSibling.classList.contains('petrol-nav')).toBe(true);
+    expect(bar.textContent).toContain('Live now: Event 1 by Org 1');
+    const link = bar.querySelector('a');
+    expect(link.getAttribute('href')).toBe('/app/#/live/org-1/phone');
+    expect(link.getAttribute('aria-label')).toBe('Watch Event 1 by Org 1 live');
+    expect(bar.querySelector('.petrol-live-bar-more-toggle')).toBeNull();
+  });
+
+  it('shows names as text, never markup', async () => {
+    const root = mount(async () => ({ rows: [r(1, { eventName: '<b>x</b>' })], total: 1 }));
+    await settle();
+    expect(root.querySelector('.petrol-live-bar b')).toBeNull();
+    expect(root.querySelector('.petrol-live-bar').textContent).toContain('<b>x</b>');
+  });
+
+  it('puts the rest behind a "+N more" disclosure', async () => {
+    const root = mount(async () => ({ rows: [r(1), r(2), r(3)], total: 5 }));
+    await settle();
+    const toggle = root.querySelector('.petrol-live-bar-more-toggle');
+    const panel = root.querySelector('#petrol-live-bar-more');
+    expect(toggle.textContent).toBe('+4 more live');
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(panel.hidden).toBe(true);
+    toggle.click();
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(panel.hidden).toBe(false);
+    expect([...panel.querySelectorAll('a')].map((a) => a.getAttribute('href'))).toEqual([
+      '/app/#/live/org-2/phone',
+      '/app/#/live/org-3/phone',
+    ]);
+    expect(panel.textContent).toContain('and 2 more live now');
+  });
+});
