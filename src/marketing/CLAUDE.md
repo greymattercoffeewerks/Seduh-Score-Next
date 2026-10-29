@@ -191,7 +191,7 @@ Fixed together:
   its description rewritten to describe what's actually shipped (round-robin prelims,
   bracket generation, automatic advancement) rather than an aspirational "branded PDF
   reporting" claim BTC doesn't have (only Cup Taster's `reportScreen.js` does). The
-  proof section's "N formats live today" stat and the pricing section's format mention
+  proof section's "N formats live today" stat (removed 2026-10-29: the hero stat strip carries it) and the pricing section's format mention
   both updated to match.
 - `tourScreen.js`: BTC moved out of `buildPlannedFormats()`'s "Coming soon" grid into
   its own live-format section (`buildBtc()`), positioned right after Cup Taster's. It

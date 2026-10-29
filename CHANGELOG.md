@@ -1,3 +1,26 @@
+## Landing page cleanup, stage 1 of 3 · 2026-10-29
+
+**Task:** Stage 1 of a three-stage landing page cleanup. Stage 1 is layout and repetition only: the format rows read better on a phone, and the proof cards that repeated the hero stat strip are gone. Stage 2 (latest-event card wired to the published-results archive) and stage 3 (a live info bar behind a per-event opt-in) are NOT started. No migration, no cloud change, no data, no package version bump, no release.
+
+**What changed:**
+
+- `landing.css` and `landingScreen.js`: at 640px and below each format row is a two-column grid (`index status` / `main main`). The tier pill (Basic free / Soon) now sits beside the row number and the name and description use the full row width. Live rows went from 350px and 387px to 196px and 217px wide at 360px. The Soon tag is wrapped in `.petrol-format-status`; the text div carries `.petrol-format-main`.
+- The four proof cards (`.petrol-fact`: 0 installs, 1 event flow, 3 live surfaces, 2 formats live) are removed, because the hero stat strip already repeats them. Dead `.petrol-proof-facts` CSS and an empty "Responsive" header are removed too. The page is about 575px shorter on a phone (5641px to 5066px).
+- Copy lost on purpose: the "event flow" and "live surfaces" claims no longer appear on the landing page. The ticker still says 0 installs and 3 tiers; it is decorative and `aria-hidden`, and it is left as it was.
+- `src/marketing/CLAUDE.md`: the removal is noted beside the proof-section line it changes.
+
+**Verified:** the two reviews below. The row widths and page heights are the figures recorded when the change was made; this entry did not re-measure them, and no test asserts them.
+
+**Reviews:**
+
+- `code-reviewer`: no Important. Two nits, both fixed: the empty CSS header, and the CLAUDE.md prose.
+- `ui-accessibility-reviewer`: no Important. Nits: (a) DOM order is index, main, status, but the mobile visual order puts the tier pill first, so a screen reader hears the tier last. Left: fixing it means reordering the DOM, which also changes the desktop grid; sequencing only, not a missing name or state. (b) The empty header: fixed. (c) Copy-claim loss: deliberate, see above.
+- Pre-existing, logged not fixed: `.petrol-format-index` uses `--clr-petrol-500` (#4a5a57), 2.67:1 on the stage canvas. That fails 4.5:1 for the number at normal size, and 3:1 for the large-text size on desktop. See ROADMAP "Known open items from the landing page cleanup".
+
+**Open follow-up:** stage 2 and stage 3 (above); the screen-reader order nit (a); the contrast item in ROADMAP.
+
+---
+
 ## Password screens follow the cloud's new password settings · 2026-10-29
 
 **Task:** On 2026-10-29 the owner switched on "require current password when changing password" and set the minimum length to 12 on the LIVE project. GoTrue then refuses `updateUser({ password })` without `current_password` unless the session is a recovery session (`internal/api/user.go`, read, not run), which would have left every NEW login stuck at the one-time-password gate and broken the organiser Change password screen, with only "Could not save your password. Try again." on screen. PR into `dev`; no migration, no cloud change, no gate change, `config.toml` untouched.
