@@ -101,6 +101,12 @@ exception when insufficient_privilege then
   return 0;
 end $$;
 
+-- A valid E.164 phone for a fixture person (people.phone has been CHECKed since T-ID.A3): '+67390', the sequence
+-- number, and two digits taken from the org tag so the two orgs differ. Never use a bare string such as '555-1'.
+create function e1.phone(t text, n int) returns text language sql immutable as $$
+  select '+67390' || lpad(n::text, 2, '0') || lpad((ascii(left(t, 1)) % 100)::text, 2, '0')
+$$;
+
 -- ============ fixtures (as postgres, which bypasses row-level security) ============
 
 insert into auth.users (id, email) values
@@ -124,7 +130,7 @@ begin
     insert into events (id, org_id, format, name) values (e1.u(t, 1), e1.u(t, 100), 'cup_taster', 'Event ' || t);
     insert into event_entries (id, event_id, display_name) values (e1.u(t, 2), e1.u(t, 1), 'Cupper ' || t);
     insert into people (id, org_id, display_name, phone) values
-      (e1.u(t, 17), e1.u(t, 100), 'Person ' || t, '555-' || t);
+      (e1.u(t, 17), e1.u(t, 100), 'Person ' || t, e1.phone(t, 1));
     insert into person_merges (id, org_id, kept_id, merged_id, merged_name) values
       (e1.u(t, 18), e1.u(t, 100), e1.u(t, 17), e1.u(t, 99), 'Merged away ' || t);
     insert into ct_stages (id, event_id, kind, ordinal, set_count, duration_secs) values

@@ -42,6 +42,10 @@ const NOT_FOR_THE_CONSOLE = {
     'entitlement hooks refuse an organiser write; the organiser surface has no copy for them yet (G-C2)',
   entitlement_cap_reached:
     'entitlement hooks, raised to the organiser console users, not the admin console',
+  // The roster edit RPC (update_roster_entry) and the owner-run phone migration guard.
+  phone_invalid: 'update_roster_entry, the organiser roster edit; not an admin console call',
+  people_phone_not_repaired:
+    'raised only by the owner-run people_phone_e164 migration guard, never over the API',
   // The BTC format's own RPCs.
   bracket_advanced: 'BTC format',
   demo_event_not_found: 'BTC format',

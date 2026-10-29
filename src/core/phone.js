@@ -12,7 +12,7 @@
 export const DEFAULT_COUNTRY_CODE = '+673';
 
 // E.164's own bounds: '+' followed by 8-15 digits total, first digit non-zero.
-const E164_PATTERN = /^\+[1-9]\d{7,14}$/;
+const E164_PATTERN = /^\+[1-9][0-9]{7,14}$/;
 
 // Pure. Strips everything but digits (and a leading '+'), then assumes
 // `defaultCountryCode` when no country code was typed. A leading '00' (the
