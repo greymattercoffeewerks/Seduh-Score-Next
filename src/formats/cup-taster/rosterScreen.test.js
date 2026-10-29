@@ -11,6 +11,7 @@ import {
   mountRosterScreen,
 } from './rosterScreen.js';
 import { DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
+import { validatePhoneShape } from '../../core/phone.js';
 
 // Table-based in-memory fake client, mirroring setupScreen.test.js's own
 // (registerEntry's control flow varies by whether a phone match exists, so
@@ -1004,6 +1005,33 @@ describe('describeRosterEditError', () => {
     );
     expect(describeRosterEditError(conflict({ field: null }))).toMatchObject({ field: null });
     expect(describeRosterEditError({ code: 'P0002', details: '{not json' }).field).toBeNull();
+  });
+
+  it('maps the database phone_invalid refusal to the phone field with the client shape message', () => {
+    const dbRefusal = {
+      code: 'P0001',
+      message: 'update_roster_entry: that phone number is not valid',
+      hint: 'phone_invalid',
+    };
+    expect(describeRosterEditError(dbRefusal)).toEqual({
+      field: 'phone',
+      message: validatePhoneShape(''),
+    });
+    // Same text the client-side check shows for a bad phone.
+    expect(
+      validateEditDraft(
+        { displayName: 'A', phone: 'abc', email: '', cafe: '', bib: '' },
+        { linked: true },
+      ),
+    ).toEqual({
+      field: 'phone',
+      message: describeRosterEditError(dbRefusal).message,
+    });
+  });
+
+  it('does not treat a different P0001 refusal as a phone problem', () => {
+    const result = describeRosterEditError({ code: 'P0001', message: 'a name is required' });
+    expect(result.field).toBeNull();
   });
 
   it('describes anything that is not a conflict generically, pointing at no field', () => {
