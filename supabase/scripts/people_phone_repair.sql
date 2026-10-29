@@ -3,9 +3,9 @@
 -- What it does: for each row the audit classes as repairable_default_country (exactly a 7-digit Brunei number,
 -- ^[2-578][0-9]{6}$ once spaces, dashes, dots and brackets are removed), and whose repaired number would NOT equal
 -- any other number in the same organisation, it sets people.phone to '+673' plus those digits. That is all.
--- What it never does: delete a row; touch an ambiguous, not_a_phone or repair_collision row; change a row that is
+-- What it never does: delete a row; touch an ambiguous or repair_collision row; change a row that is
 -- already valid; repair an 8-digit value, a leading-0 value or a country code typed without '+' (all 'ambiguous').
--- Whatever it leaves (ambiguous, not_a_phone, repair_collision) is for the owner and the organiser to fix or remove
+-- Whatever it leaves (ambiguous, repair_collision) is for the owner and the organiser to fix or remove
 -- by hand; the audit must show only 'valid' before the CHECK migration is pushed. (On the cloud project this is a
 -- no-op: the 2026-10-29 re-audit showed 24 people, all valid.)
 --

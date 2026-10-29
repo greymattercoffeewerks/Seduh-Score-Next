@@ -7,7 +7,7 @@
 --   1. push 20261029100000_phone_e164_shape.sql  (safe at any time; changes no row)
 --   2. run supabase/scripts/people_phone_audit.sql   (read-only; prints counts and row ids, never phone values)
 --   3. run supabase/scripts/people_phone_repair.sql  (owner-run; repairs only the unambiguous rows)
---   4. deal with every row the audit still lists (ambiguous, not_a_phone, repair_collision): the organiser fixes or
+--   4. deal with every row the audit still lists (ambiguous, repair_collision): the organiser fixes or
 --      the owner removes them. No script here deletes or guesses.
 --   5. only when the audit shows nothing but 'valid': push THIS migration.
 -- The constraint is added VALID, not NOT VALID, deliberately: Postgres still evaluates a NOT VALID check on every

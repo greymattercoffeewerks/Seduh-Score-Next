@@ -1,17 +1,18 @@
-## T-ID.A3: people.phone is E.164 in the database (not pushed to the cloud) · 2026-10-29
+## T-ID.A3: people.phone is E.164 in the database, shape only (not pushed to the cloud) · 2026-10-29
 
-**Task:** Seduh ID Layer 1 keys a person on a validated E.164 phone (`SEDUH-ID-LAYER1-SPEC-DRAFT.md` 3.3, 4.2, T-ID.A3; owner decisions in HANDOFF-CORRECTION-004: default `+673`, repair first then CHECK, ambiguous rows reported never guessed).
+**Task:** Seduh ID Layer 1 keys a person on a validated E.164 phone (`SEDUH-ID-LAYER1-SPEC-DRAFT.md` 3.3, 4.2, T-ID.A3; owner decisions in HANDOFF-CORRECTION-004 and `PHONE-CHECKER-DESIGN.md` 7, answered 2026-10-29). The first version put a SQL port of `normalizePhone` in the database; the owner then decided the database is **shape-only** and all interpretation lives in the client, so the PR was amended in place (nothing had been pushed).
 
 **What changed:**
 
-- `20261029100000_phone_e164_normalise.sql`: `app.normalize_phone` (port of `src/core/phone.js`), `app.is_e164`, `app.phone_repair_class`; `update_roster_entry` (from the 20261011140000 body, null-org guard kept) now normalises and refuses a `not_a_phone` or non-E.164 value with hint `phone_invalid`. Changes no row; safe to push at any time.
-- `20261029110000_people_phone_e164_check.sql`: the `people_phone_e164` CHECK, added VALID (a NOT VALID check still blocks updates of legacy rows), behind a guard that refuses with a row count if any non-E.164 row remains. Push only after the repair; the cloud re-audit on 2026-10-29 showed 24 people, all valid.
-- `supabase/scripts/people_phone_audit.sql` (read-only: class, row ids, digit counts, never a value) and `people_phone_repair.sql` (owner-run, repairs only the unambiguous rows, never deletes, ends in ROLLBACK).
-- pgTAP: new `059_phone_e164.sql`; fixtures in 040/041 use `e1.phone`; 024's phone-cap case uses a value that is valid once normalised.
+- `20261029100000_phone_e164_shape.sql`: `app.is_e164` (the shape `^\+[1-9][0-9]{7,14}$`) and `app.phone_repair_class` (valid / repairable_default_country / null_phone / ambiguous; only an exact 7-digit Brunei number `^[2-578][0-9]{6}$` is repairable with +673; 8 digits, a leading 0 and everything else is ambiguous). `update_roster_entry` (from the 20261011140000 body, null-org guard kept) trims, then REQUIRES canonical E.164 and otherwise refuses with hint `phone_invalid`; no normalisation, no default country. Changes no row; safe to push at any time.
+- `20261029110000_people_phone_e164_check.sql`: the `people_phone_e164` CHECK, added VALID (a NOT VALID check still blocks updates of legacy rows), behind a guard that refuses with a row count if any non-E.164 row remains. Push only after the stored phones are valid; the 2026-10-29 cloud re-audit showed 24 people, all valid.
+- `supabase/scripts/people_phone_audit.sql` (read-only: class, row ids, digit counts, never a value) and `people_phone_repair.sql` (owner-run, repairs only the exact 7-digit Brunei rows with a unique target, never deletes, ends in ROLLBACK).
+- `src/core/phone.js`: `E164_PATTERN` now uses `[0-9]` (same behaviour) so the client, `app.is_e164` and the CHECK are the same string; `supabase/phonePattern.test.js` fails if they drift.
+- pgTAP: new `059_phone_e164.sql`; fixtures in 040/041 use `e1.phone`; 024's phone-cap case uses a padded canonical value.
 
-**Reviews:** security-reviewer: no Important; nit (ambiguous input accepted by the RPC) kept deliberately and pinned by a test, owner to confirm. schema-guardian: no Important; same nit; I ran the rollback block in a rolled-back transaction (restores the exact old body, drops the three functions) and the guard, audit and repair against dirty fixtures. code-reviewer: no Important; comment and runner-note nits fixed. test-auditor: two Important (classifier and CHECK length bounds untested): fixed with boundary tests (the independent checker was not run: the fix is test-only and the mutations are plain from the source); NULL, entry-unchanged and at-cap nits fixed.
+**Reviews:** first pass: security-reviewer and schema-guardian found no Important; code-reviewer none; test-auditor two Important (length bounds untested), fixed with boundary tests (its independent check was not run: test-only fix). After the shape-only amendment: schema-guardian and security-reviewer re-run on the new diff only, no Important findings; doc-drift nits fixed.
 
-**Not done / owner decides:** the roster client does not map `phone_invalid` to a message and `createPerson` does not normalise itself (T-ID.A2); whether the RPC should refuse bare 9 to 15 digit input; bare 8-digit numbers count as repairable by `+673`; a leading-0 local number would become `+67308...` (check the audit).
+**Not done:** the client rewrite (`phone.js` interpretation, `registry.js` calling it, the `phone_invalid` message, the country select, the shared fixture) is the next task; until it lands the roster UI still normalises with +673 itself and sends canonical values, which the RPC accepts.
 
 ## Password screens follow the cloud's new password settings · 2026-10-29
 
