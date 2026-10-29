@@ -660,7 +660,7 @@ describe('mountRosterScreen', () => {
     const client = fakeClient({ events: [baseEvent], people: [], event_entries: [] });
     const root = document.createElement('div');
     await mountRosterScreen(root, { eventId: 'ev1', client });
-    const select = root.querySelector('select[aria-label="Phone country"]');
+    const select = root.querySelector('select[aria-label="Country code"]');
     expect(select).not.toBeNull();
     expect(select.value).toBe('BN');
     expect(select.options[0].textContent).toBe('+673 Brunei');
@@ -678,7 +678,7 @@ describe('mountRosterScreen', () => {
     root.querySelector('[aria-label="Name"]').dispatchEvent(new Event('input'));
     root.querySelector('[aria-label="Phone"]').value = '8123 4567';
     root.querySelector('[aria-label="Phone"]').dispatchEvent(new Event('input'));
-    const select = root.querySelector('select[aria-label="Phone country"]');
+    const select = root.querySelector('select[aria-label="Country code"]');
     select.value = 'SG';
     select.dispatchEvent(new Event('change', { bubbles: true }));
 
@@ -1348,7 +1348,7 @@ describe('mountRosterScreen — editing a cupper', () => {
     const { root } = await mount(twoCuppers());
     q(root, '#roster-edit-btn-e1').click();
     const select = field(root, 'e1', 'phoneCountry');
-    expect(select.getAttribute('aria-label')).toBe('Phone country for Cupper One');
+    expect(select.getAttribute('aria-label')).toBe('Country code for Cupper One');
     expect(select.value).toBe('BN');
     expect(select.parentElement).toBe(field(root, 'e1', 'phone').parentElement);
 

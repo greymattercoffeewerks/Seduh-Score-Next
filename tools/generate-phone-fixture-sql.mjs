@@ -1,4 +1,4 @@
-// Generates supabase/tests/fixtures/phone_cases.sql from tests/fixtures/phone-cases.json, so the
+// Generates tests/fixtures/phone_cases.sql from tests/fixtures/phone-cases.json, so the
 // database tests read the SAME cases the client tests do without pgTAP having to read JSON
 // (Handoffs and Specs/PHONE-CHECKER-DESIGN.md section 5). The JSON is the source; never edit the
 // SQL by hand. src/core/phone.test.js fails when the committed file is stale.
@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const FIXTURE_JSON = resolve(ROOT, 'tests/fixtures/phone-cases.json');
-export const FIXTURE_SQL = resolve(ROOT, 'supabase/tests/fixtures/phone_cases.sql');
+export const FIXTURE_SQL = resolve(ROOT, 'tests/fixtures/phone_cases.sql');
 
 const literal = (value) => (value === null ? 'null' : `'${String(value).replaceAll("'", "''")}'`);
 

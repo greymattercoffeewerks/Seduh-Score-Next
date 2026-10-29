@@ -165,11 +165,12 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     // pre-existing person from an earlier run of this exact test rather
     // than registering a fresh one, so a fixed "Offline Soak Cupper
     // One"/"555-2001" pair across reruns doesn't reliably produce two new
-    // roster entries.
+    // roster entries. Phones are complete 7-digit Brunei numbers (core/phone.js accepts nothing shorter), so
+    // the unique part is zero-padded to four digits.
     const uniq = Date.now();
     for (const [name, phone] of [
-      [`Offline Soak Cupper One ${uniq}`, `555-${uniq % 10000}`],
-      [`Offline Soak Cupper Two ${uniq}`, `555-${(uniq + 1) % 10000}`],
+      [`Offline Soak Cupper One ${uniq}`, `555-${String(uniq % 10000).padStart(4, '0')}`],
+      [`Offline Soak Cupper Two ${uniq}`, `555-${String((uniq + 1) % 10000).padStart(4, '0')}`],
     ]) {
       await page.getByLabel('Name').fill(name);
       await page.getByLabel('Phone').fill(phone);
@@ -341,8 +342,8 @@ test.describe('organiser flow (real app, real local Supabase)', () => {
     await page.getByRole('link', { name: 'Event home' }).click();
     await page.getByRole('link', { name: 'Roster' }).click();
     for (const [name, phone] of [
-      [`Take Over Cupper One ${uniq}`, `556-${uniq % 10000}`],
-      [`Take Over Cupper Two ${uniq}`, `556-${(uniq + 1) % 10000}`],
+      [`Take Over Cupper One ${uniq}`, `556-${String(uniq % 10000).padStart(4, '0')}`],
+      [`Take Over Cupper Two ${uniq}`, `556-${String((uniq + 1) % 10000).padStart(4, '0')}`],
     ]) {
       await page.getByLabel('Name').fill(name);
       await page.getByLabel('Phone').fill(phone);

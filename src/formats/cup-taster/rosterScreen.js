@@ -249,7 +249,7 @@ export function renderRegistrationForm(draft, { disabled }) {
     draft.phone = phoneInput.value;
   });
   const phoneCountry = phoneCountrySelect({
-    label: 'Phone country',
+    label: 'Country code',
     value: draft.phoneCountry,
     disabled,
     onChange: (value) => {
@@ -360,7 +360,7 @@ function renderEditForm(entry, editing, { disabled, onEditInput, onSaveEdit, onC
   // checked for shape only, so leaving this alone never changes what is saved.
   const phoneCountryInput = phoneInput
     ? phoneCountrySelect({
-        label: `Phone country for ${entry.display_name}`,
+        label: `Country code for ${entry.display_name}`,
         value: editing.draft.phoneCountry,
         disabled,
         id: `roster-edit-${entry.id}-phoneCountry`,
