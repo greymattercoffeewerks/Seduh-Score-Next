@@ -47,10 +47,23 @@ import {
   setEntryWithdrawn,
   updateRosterEntry,
 } from '../../core/registry.js';
-import { normalizePhone, validatePhoneShape } from '../../core/phone.js';
+import {
+  parsePhone,
+  phoneErrorMessage,
+  isPhoneErrorCode,
+  phoneCountryOptions,
+  DEFAULT_COUNTRY,
+} from '../../core/phone.js';
 
 function blankDraft() {
-  return { displayName: '', phone: '', email: '', cafe: '', bib: '' };
+  return {
+    displayName: '',
+    phone: '',
+    phoneCountry: DEFAULT_COUNTRY,
+    email: '',
+    cafe: '',
+    bib: '',
+  };
 }
 
 // The RPC's caps (migration 20261007100000), enforced in the registration form as well so a value
@@ -73,14 +86,15 @@ function findTooLong(draft) {
 
 // Pure. Trims every field; blank optional fields collapse to null rather
 // than an empty string, matching registerPerson/createEntry's own `?? null`
-// convention for optional columns. Phone is normalized to E.164
-// (core/phone.js) — the sole point this happens, so every entry reaching
-// core/registry.js's phone-based dedup, and later any Seduh ID backfill, is
-// already in one consistent shape.
+// convention for optional columns. The phone goes on as TYPED, with the country chosen beside it:
+// core/registry.js interprets it (core/phone.js), the one place that happens, so every entry reaching
+// the phone-based dedup, and later any Seduh ID backfill, is in one canonical shape and no second
+// caller can skip the check. validateDraft below only gives the organiser the same answer early.
 export function buildCupperFromDraft(draft) {
   return {
     displayName: draft.displayName.trim(),
-    phone: normalizePhone(draft.phone),
+    phone: draft.phone.trim(),
+    phoneCountry: draft.phoneCountry ?? DEFAULT_COUNTRY,
     email: draft.email.trim() || null,
     cafe: draft.cafe.trim() || null,
     bib: draft.bib.trim() || null,
@@ -95,7 +109,8 @@ export function validateDraft(draft) {
   if (!draft.phone.trim()) return 'Phone is required.';
   const tooLong = findTooLong(draft);
   if (tooLong) return tooLong.message;
-  return validatePhoneShape(normalizePhone(draft.phone));
+  const phone = parsePhone(draft.phone, { country: draft.phoneCountry ?? DEFAULT_COUNTRY });
+  return phone.ok ? null : phoneErrorMessage(phone.code);
 }
 
 // The edit form's starting values: this event's entry for name/cafe/bib, the person's profile for
@@ -104,6 +119,7 @@ export function initialEditDraft(entry, person) {
   return {
     displayName: entry.display_name ?? '',
     phone: person?.phone ?? '',
+    phoneCountry: DEFAULT_COUNTRY,
     email: person?.email ?? '',
     cafe: entry.cafe ?? '',
     bib: entry.bib ?? '',
@@ -111,22 +127,29 @@ export function initialEditDraft(entry, person) {
 }
 
 // Pure. `linked` is whether the entry has a profile to carry a phone/email. Returns
-// { field, message } for the first problem, or null.
-export function validateEditDraft(draft, { linked }) {
+// { field, message } for the first problem, or null. `storedPhone` is the value on file: left
+// unchanged it is checked for shape only, so an old number never blocks saving another field.
+export function validateEditDraft(draft, { linked, storedPhone = null }) {
   if (!draft.displayName.trim()) return { field: 'displayName', message: 'Name is required.' };
   if (linked) {
     if (!draft.phone.trim()) return { field: 'phone', message: 'Phone is required.' };
-    const shape = validatePhoneShape(normalizePhone(draft.phone));
-    if (shape) return { field: 'phone', message: shape };
+    const phone = parsePhone(draft.phone, {
+      country: draft.phoneCountry ?? DEFAULT_COUNTRY,
+      storedPhone,
+    });
+    if (!phone.ok) return { field: 'phone', message: phoneErrorMessage(phone.code) };
   }
   return findTooLong(draft);
 }
 
-// Pure. What core/registry.updateRosterEntry takes: trimmed, blanks as null, phone normalized.
-export function buildEditFields(draft, { linked }) {
+// Pure. What core/registry.updateRosterEntry takes: trimmed, blanks as null; the phone as typed
+// with its country and the value on file (registry interprets it, applying the edit rule).
+export function buildEditFields(draft, { linked, storedPhone = null }) {
   return {
     displayName: draft.displayName.trim(),
-    phone: linked ? normalizePhone(draft.phone) : null,
+    phone: linked ? draft.phone.trim() : null,
+    phoneCountry: linked ? (draft.phoneCountry ?? DEFAULT_COUNTRY) : null,
+    storedPhone: linked ? storedPhone : null,
     email: linked ? draft.email.trim() || null : null,
     cafe: draft.cafe.trim() || null,
     bib: draft.bib.trim() || null,
@@ -136,10 +159,11 @@ export function buildEditFields(draft, { linked }) {
 // Pure. A phone/email clash arrives as a P0002 whose details name the field and the person who
 // already has it; anything else is described generically. `field` says which input to point at.
 export function describeRosterEditError(err) {
-  // update_roster_entry refuses a phone it cannot normalise to E.164 as a plain P0001 exception
-  // carrying hint 'phone_invalid' (read the hint, not the text). Same words as the client check.
-  if (err?.hint === 'phone_invalid') {
-    return { field: 'phone', message: validatePhoneShape('') };
+  // A phone refusal carries a stable code in `hint`: core/registry's PhoneError (a core/phone.js
+  // code) or the database's own 'phone_invalid' for a value that is not canonical E.164. Read the
+  // hint, not the text; the words come from the one map in core/phone.js.
+  if (isPhoneErrorCode(err?.hint)) {
+    return { field: 'phone', message: phoneErrorMessage(err.hint) };
   }
   if (err?.code === 'P0002') {
     let detail = null;
@@ -170,6 +194,40 @@ export function describeRosterEditError(err) {
   return { field: null, message: describeError(err) };
 }
 
+// The country a phone number typed without + is read in. Brunei first, then every country by name
+// (core/phone.js phoneCountryOptions). One native select: no custom widget to make accessible, and
+// the phone's own aria-label stays "Phone". Built once, copied per use.
+let countryOptionNodes = null;
+function countryChoices() {
+  if (!countryOptionNodes) {
+    countryOptionNodes = phoneCountryOptions().map((c) =>
+      el('option', { text: `+${c.callingCode} ${c.name}`, attrs: { value: c.iso } }),
+    );
+  }
+  return countryOptionNodes.map((node) => node.cloneNode(true));
+}
+
+export function phoneCountrySelect({ label, value, disabled, id, onChange }) {
+  const select = el('select', {
+    className: 'field-input roster-phone-country',
+    id,
+    attrs: { 'aria-label': label, 'data-field': 'phoneCountry' },
+  });
+  select.append(...countryChoices());
+  select.value = value ?? DEFAULT_COUNTRY;
+  select.disabled = disabled;
+  // `input` and `change` both fire for a select in current browsers; either one records the choice.
+  for (const type of ['input', 'change']) {
+    select.addEventListener(type, () => onChange(select.value));
+  }
+  return select;
+}
+
+// The phone box with its country beside it, as ONE labelled field.
+function phoneRow(countrySelect, phoneInput) {
+  return el('div', { className: 'roster-phone-row' }, [countrySelect, phoneInput]);
+}
+
 export function renderRegistrationForm(draft, { disabled }) {
   const nameInput = el('input', {
     className: 'field-input',
@@ -189,6 +247,14 @@ export function renderRegistrationForm(draft, { disabled }) {
   phoneInput.disabled = disabled;
   phoneInput.addEventListener('input', () => {
     draft.phone = phoneInput.value;
+  });
+  const phoneCountry = phoneCountrySelect({
+    label: 'Country code',
+    value: draft.phoneCountry,
+    disabled,
+    onChange: (value) => {
+      draft.phoneCountry = value;
+    },
   });
 
   const emailInput = el('input', {
@@ -245,7 +311,7 @@ export function renderRegistrationForm(draft, { disabled }) {
       el('h2', { id: 'roster-form-heading', text: 'Register a cupper' }),
       el('div', { className: 'roster-form-fields' }, [
         labeledField('Name', nameInput),
-        labeledField('Phone', phoneInput),
+        labeledField('Phone', phoneRow(phoneCountry, phoneInput)),
         labeledField('Email', emailInput),
         labeledField('Cafe', cafeInput),
         labeledField('Bib', bibInput),
@@ -289,6 +355,19 @@ function renderEditForm(entry, editing, { disabled, onEditInput, onSaveEdit, onC
   const phoneInput = editing.linked
     ? field('phone', `Phone for ${entry.display_name}`, { type: 'tel' })
     : null;
+  // Beside the phone: the country a number typed without + is read in. Joins `inputs` so the
+  // same input handler records it and clears the last error; an unchanged stored phone is
+  // checked for shape only, so leaving this alone never changes what is saved.
+  const phoneCountryInput = phoneInput
+    ? phoneCountrySelect({
+        label: `Country code for ${entry.display_name}`,
+        value: editing.draft.phoneCountry,
+        disabled,
+        id: `roster-edit-${entry.id}-phoneCountry`,
+        onChange: () => {},
+      })
+    : null;
+  if (phoneCountryInput) inputs.phoneCountry = phoneCountryInput;
   const emailInput = editing.linked
     ? field('email', `Email for ${entry.display_name} (optional)`, { type: 'email' })
     : null;
@@ -345,7 +424,7 @@ function renderEditForm(entry, editing, { disabled, onEditInput, onSaveEdit, onC
         { className: 'roster-form-fields' },
         [
           labeledField('Name', nameInput),
-          phoneInput ? labeledField('Phone', phoneInput) : null,
+          phoneInput ? labeledField('Phone', phoneRow(phoneCountryInput, phoneInput)) : null,
           emailInput ? labeledField('Email', emailInput) : null,
           labeledField('Cafe', cafeInput),
           labeledField('Bib', bibInput),
@@ -779,6 +858,7 @@ export async function mountRosterScreen(root, { eventId, client = getSupabase(),
     editing = {
       entryId: entry.id,
       linked: Boolean(entry.person_id),
+      storedPhone: person?.phone ?? null,
       draft: initialEditDraft(entry, person),
       error: null,
       errorField: null,
@@ -806,7 +886,10 @@ export async function mountRosterScreen(root, { eventId, client = getSupabase(),
   async function handleSaveEdit(entry) {
     if (busy || !editing) return;
 
-    const invalid = validateEditDraft(editing.draft, { linked: editing.linked });
+    const invalid = validateEditDraft(editing.draft, {
+      linked: editing.linked,
+      storedPhone: editing.storedPhone,
+    });
     if (invalid) {
       editing.error = invalid.message;
       editing.errorField = invalid.field;
@@ -819,7 +902,10 @@ export async function mountRosterScreen(root, { eventId, client = getSupabase(),
     busy = true;
     render();
 
-    const fields = buildEditFields(editing.draft, { linked: editing.linked });
+    const fields = buildEditFields(editing.draft, {
+      linked: editing.linked,
+      storedPhone: editing.storedPhone,
+    });
     const detailsChanged =
       fields.displayName !== entry.display_name || fields.cafe !== (entry.cafe ?? null);
 

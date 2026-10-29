@@ -11,6 +11,26 @@
   margin-bottom: var(--space-3);
 }
 
+/* The phone box with its country select. Stacked from 360px (the select above, the phone box on its own
+   full-width line: beside it the phone box was about 116px wide and clipped what was typed), side by side
+   once there is room. The code comes first in each option ("+673 Brunei"), so a long country name is
+   what the closed select clips, never the code. */
+.roster-phone-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+}
+
+@media (min-width: 480px) {
+  .roster-phone-row {
+    grid-template-columns: minmax(0, 12rem) minmax(0, 1fr);
+  }
+}
+
+.roster-phone-country {
+  text-overflow: ellipsis;
+}
+
 .roster-form-fields {
   display: flex;
   flex-direction: column;

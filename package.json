@@ -17,10 +17,12 @@
     "format:check": "prettier --check .",
     "supabase": "supabase",
     "db:reset": "supabase db reset",
+    "fixtures:phone": "node tools/generate-phone-fixture-sql.mjs",
     "db:test": "supabase test db --local supabase/tests"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.47.10",
+    "libphonenumber-js": "1.13.15",
     "qrcode-generator": "^2.0.4"
   },
   "devDependencies": {
