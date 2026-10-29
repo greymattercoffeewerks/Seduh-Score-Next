@@ -1,3 +1,41 @@
+## Landing page cleanup, stage 2 of 3 · 2026-10-29
+
+**Task:** Stage 2 of the three-stage landing page cleanup: a latest-event proof card on the landing page, read from the published-results archive. Stage 3 (a live info bar behind a per-event opt-in) is NOT started. No migration, no RLS change, no cloud change, no data, no package version bump, no release. Not a handoff §14 task.
+
+**What changed:**
+
+- `core/publicResults.js`: `findLatestPublishedResult()` reads `public_results` as anon, newest by `published_at`, limit 1, three columns (`event_id`, `payload`, `published_at`). The card uses only the event name, date and organiser from the payload; competitor and score data is never rendered.
+- `src/marketing/main.js`: loads it by dynamic import, so the Supabase chunk stays off the page's modulepreload list, inside a 6 s `raceTimeout`. The load is skipped under the build-time prerender, detected from the jsdom user agent on `window.navigator`. `globalThis.navigator` is Node's and never matched, which is the bug code review caught. The prerendered page therefore makes no request.
+- `landingScreen.js`: `mountLandingScreen(root, { loadLatest })` inserts a block under the heading, linking to `/results/?sheet=<id>`. On a failed load, an empty archive, or a malformed row the static card stays byte-for-byte unchanged. The event id must be a uuid, the date must be a real calendar date (2026-02-30 is rejected), and all text is set through `el()`.
+- `landing.css`: block styles. The link is 44px tall at 360px.
+- `src/marketing/CLAUDE.md`: the landing page now makes one anonymous read; the prerender skip is noted.
+- Tests: `landingScreen.test.js` (loaded state, fallbacks, markup as text, no competitor data, impossible dates), `publicResults.test.js`, and a new `main.test.js` (the prerender makes no request).
+- Test events cannot reach `public_results`: the publish trigger rejects `is_test`, so the card cannot show a demo event.
+
+**Verified:**
+
+- vitest `src/marketing src/core`: 2339 passing. ESLint and Prettier clean.
+- `npm run build` and prerender: `dist/index.html` has the static card, no latest block, and no Supabase preload.
+- Browser at 360px, fallback and loaded states: no horizontal overflow; link 44px tall.
+- **Not verified, so this entry is not final:** a real-data render against the cloud archive (no `VITE_SUPABASE` env locally); reduced-motion emulation; a screen reader pass; live behaviour on a production build.
+
+**Reviews:**
+
+- `code-reviewer`: one Important, fixed. The prerender guard used `globalThis.navigator`, so it never fired; changed to `window.navigator` and a test added. One nit (comment placement), fixed.
+- `module-boundary-checker`: found the same prerender issue (duplicate, fixed). Boundary clean: no `core/` import from a format, no format logic in `core/`.
+- `ui-accessibility-reviewer`: no Important. Nit (`overflow-wrap` on the meta line), fixed. Layout shift on insertion accepted: the card sits below the fold.
+- `test-auditor`: the same prerender finding (fixed); a weak competitor fixture (fixed, now populated standings, so the no-competitor-data assertion means something); date rollover on 2026-02-30 (code fixed, test added).
+
+**Open follow-up:**
+
+- Stage 3 (above).
+- Definition-of-Done items still open: the real-data check against the cloud archive, the screen reader pass, reduced-motion emulation and the production-build check. Until these are done the task is not closed.
+- Package version bump (CLAUDE.md step 8) is not done: this session's edit scope was CHANGELOG.md and state.json only. Owed before release.
+- `ROADMAP.md` "Known open items from the landing page cleanup" still says stage 2 is not started. Not edited this session for the same scope reason; it needs updating with this entry.
+- The stage 1 screen-reader order nit is still open.
+
+---
+
 ## Landing page cleanup, stage 1 of 3 · 2026-10-29
 
 **Task:** Stage 1 of a three-stage landing page cleanup. Stage 1 is layout and repetition only: the format rows read better on a phone, and the proof cards that repeated the hero stat strip are gone. Stage 2 (latest-event card wired to the published-results archive) and stage 3 (a live info bar behind a per-event opt-in) are NOT started. No migration, no cloud change, no data, no package version bump, no release.

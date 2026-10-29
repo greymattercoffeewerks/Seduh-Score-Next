@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   listPublishedResults,
+  findLatestPublishedResult,
   publishedOrgName,
   findPublishedResultForEvent,
   publishEventResults,
@@ -23,6 +24,10 @@ function fakeQueryClient(response) {
         },
         order: (...args) => {
           calls.push(['order', table, ...args]);
+          return builder;
+        },
+        limit: (...args) => {
+          calls.push(['limit', table, ...args]);
           return builder;
         },
         maybeSingle: () => Promise.resolve(response),
@@ -59,6 +64,28 @@ describe('listPublishedResults', () => {
   it('throws on a query error rather than silently returning nothing', async () => {
     const client = fakeQueryClient({ data: null, error: new Error('network error') });
     await expect(listPublishedResults(client)).rejects.toThrow('network error');
+  });
+});
+
+describe('findLatestPublishedResult', () => {
+  it('asks for only the newest row, with only the three public columns', async () => {
+    const row = { event_id: 'ev1', payload: {}, published_at: '2026-10-05' };
+    const client = fakeQueryClient({ data: row, error: null });
+    expect(await findLatestPublishedResult(client)).toEqual(row);
+    expect(client.calls).toEqual([
+      ['select', 'public_results', 'event_id, payload, published_at'],
+      ['order', 'public_results', 'published_at', { ascending: false }],
+      ['limit', 'public_results', 1],
+    ]);
+  });
+
+  it('returns null for an empty archive and throws on an error', async () => {
+    expect(
+      await findLatestPublishedResult(fakeQueryClient({ data: null, error: null })),
+    ).toBeNull();
+    await expect(
+      findLatestPublishedResult(fakeQueryClient({ data: null, error: new Error('down') })),
+    ).rejects.toThrow('down');
   });
 });
 
