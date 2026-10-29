@@ -188,8 +188,10 @@ export function mountPasswordFormScreen(
     currentLabel = 'Current password',
     // Opt-in, default off so the organiser console is unchanged: the Show/Hide toggle also covers the current-password
     // box; and `inlineErrors` swaps the browser's native required bubble for the screen's own message, marks the box
-    // at fault `aria-invalid` (linked to the message with `aria-describedby`, cleared once typed in) and moves focus
-    // to it instead of to the message line (the link makes the message read from there, so it is not said twice).
+    // that this form's own checks name `aria-invalid` (linked to the message with `aria-describedby`, cleared once typed
+    // in) and moves focus to it, scrolling the message into view, instead of to the message line (the link makes the
+    // message read from there, so it is not said twice). A refusal from `save` (a wrong current password) still
+    // focuses the message line and marks no box.
     toggleCurrent = false,
     inlineErrors = false,
   },
@@ -299,7 +301,9 @@ export function mountPasswordFormScreen(
         inlineErrors && invalidField && form.querySelector(`[data-field="${invalidField}"]`);
       if (fieldAtFault) {
         firstRender = false;
-        fieldAtFault.focus();
+        // The message sits under Save, which can be below the fold on a short phone: bring it in view too.
+        feedback.scrollIntoView?.({ block: 'nearest' });
+        fieldAtFault.focus({ preventScroll: true });
         return true;
       }
       if (feedback.dataset.tone === 'error') {

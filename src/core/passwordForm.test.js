@@ -121,6 +121,11 @@ describe('mountPasswordFormScreen inlineErrors / toggleCurrent (opt-in)', () => 
 
     set(root, 'current', 'old');
     expect(field(root, 'current').hasAttribute('aria-invalid')).toBe(false);
+
+    // empty new-password boxes: the new-password box is the one at fault
+    await send(root);
+    expect(field(root, 'password').getAttribute('aria-invalid')).toBe('true');
+    expect(document.activeElement).toBe(field(root, 'password'));
     expect(field(root, 'current').hasAttribute('aria-describedby')).toBe(false);
 
     set(root, 'password', 'short');

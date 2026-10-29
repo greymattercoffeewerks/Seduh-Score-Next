@@ -422,7 +422,7 @@ describe('U-10 the current password', () => {
   });
 });
 
-describe('U-11 the panel uses its own messages and covers every password box', () => {
+describe('U-11 no native bubble, the box at fault is marked, one toggle covers every password box', () => {
   it('novalidate, aria-invalid on the box at fault, and one toggle for all three', async () => {
     mount();
     await fill({ current: '' });
