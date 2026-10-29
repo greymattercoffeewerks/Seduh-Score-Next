@@ -4,6 +4,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 // painted into a torn-down jsdom ("document is not defined" at setChip, reported against whichever test file
 // ran last). The outbox is mocked so the read can be held open (see appShell.orgSelect.test.js for why).
 let releaseRead;
+let outboxReads = 0;
 vi.mock('./outbox.js', () => ({
   listPendingOperations: () => Promise.resolve([]),
   listOtherOperations: () => Promise.resolve({ otherOrg: [], otherAccount: [] }),
@@ -11,6 +12,7 @@ vi.mock('./outbox.js', () => ({
   payloadOrgId: () => null,
   partitionOperations: () =>
     new Promise((resolve) => {
+      outboxReads += 1;
       releaseRead = () => resolve({ own: [], otherOrg: [], otherAccount: [] });
     }),
   getOutboxOwner: () => undefined,
@@ -38,6 +40,25 @@ describe('unmounting the shell while a sync refresh is reading the outbox', () =
     const touched = vi.spyOn(document, 'activeElement', 'get');
     releaseRead();
     await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(touched).not.toHaveBeenCalled();
+  });
+
+  // The entry guard: a call that arrives after unmount (a screen that outlives the shell calling
+  // clearEventContext) must not start a read at all, let alone paint.
+  it('starts no outbox read and paints nothing when a refresh is asked for after unmount', async () => {
+    const root = document.createElement('div');
+    const shell = mountAppShell(root, {
+      client: {
+        auth: { onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }) },
+        from: () => ({}),
+      },
+    });
+    shell.unmount();
+    outboxReads = 0;
+    const touched = vi.spyOn(document, 'activeElement', 'get');
+    shell.clearEventContext(); // reaches refreshSync
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(outboxReads).toBe(0);
     expect(touched).not.toHaveBeenCalled();
   });
 });
