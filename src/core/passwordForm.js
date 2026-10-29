@@ -24,11 +24,18 @@ export const MIN_PASSWORD_LENGTH = 12;
 // `minLength` is optional: a console that wants a longer password than the default (the admin console asks for
 // 12) passes its own; everyone else keeps the project minimum.
 export function validateNewPassword(password, confirmation, minLength = MIN_PASSWORD_LENGTH) {
-  if (!password) return 'Choose a password.';
+  return checkNewPassword(password, confirmation, minLength)?.message ?? null;
+}
+
+// The same checks, naming the box at fault (`data-field`) so a screen can mark it: `{ message, field }` or null.
+function checkNewPassword(password, confirmation, minLength) {
+  if (!password) return { message: 'Choose a password.', field: 'password' };
   if (password.length < minLength) {
-    return `Use at least ${minLength} characters.`;
+    return { message: `Use at least ${minLength} characters.`, field: 'password' };
   }
-  if (password !== confirmation) return 'The two passwords do not match.';
+  if (password !== confirmation) {
+    return { message: 'The two passwords do not match.', field: 'confirmation' };
+  }
   return null;
 }
 
@@ -86,6 +93,11 @@ export function renderSetPasswordForm(
     focusKey = 'set-password-submit',
     askCurrent = false,
     currentLabel = 'Current password',
+    // Opt-in (the admin console): see mountPasswordFormScreen.
+    toggleCurrent = false,
+    inlineErrors = false,
+    invalidField = null,
+    errorId = null,
   },
 ) {
   function passwordInput(key, label, autocomplete = 'new-password') {
@@ -104,9 +116,16 @@ export function renderSetPasswordForm(
     });
     input.value = draft[key];
     setBusyDisabled(input, disabled);
+    if (inlineErrors && invalidField === key) {
+      input.setAttribute('aria-invalid', 'true');
+      if (errorId) input.setAttribute('aria-describedby', errorId);
+    }
     for (const type of ['input', 'change']) {
       input.addEventListener(type, () => {
         draft[key] = input.value;
+        // The person is fixing it: the mark goes (the message line stays until the next submit).
+        input.removeAttribute('aria-invalid');
+        input.removeAttribute('aria-describedby');
       });
     }
     return input;
@@ -117,8 +136,13 @@ export function renderSetPasswordForm(
     : null;
   const newInput = passwordInput('password', 'New password');
   const confirmInput = passwordInput('confirmation', 'Confirm password');
-  // One toggle for the new-password boxes: seeing them side by side is how a typo is spotted.
-  const [toggleButton, toggleStatus] = passwordToggle([newInput, confirmInput], {
+  // One toggle for the new-password boxes: seeing them side by side is how a typo is spotted. With `toggleCurrent`
+  // it flips the current-password box too, so one control shows or hides every password in the form.
+  const toggled =
+    toggleCurrent && currentInput
+      ? [currentInput, newInput, confirmInput]
+      : [newInput, confirmInput];
+  const [toggleButton, toggleStatus] = passwordToggle(toggled, {
     shown: showPassword,
     onToggle: onTogglePassword,
   });
@@ -132,7 +156,9 @@ export function renderSetPasswordForm(
   });
   setBusyDisabled(submitButton, disabled);
 
-  return el('form', { className: 'login-form' }, [
+  // `novalidate`: the browser's own "Please fill out this field" bubble would pre-empt the screen's worded
+  // message (and is not worded for this product). `required` stays, for assistive technology.
+  return el('form', { className: 'login-form', attrs: inlineErrors ? { novalidate: '' } : {} }, [
     ...(currentInput ? [labeledField(currentLabel, currentInput)] : []),
     labeledField('New password', newInput),
     // After BOTH boxes: it flips both, and sitting between them read as controlling only the first.
@@ -160,11 +186,21 @@ export function mountPasswordFormScreen(
     askCurrent = false,
     // What the extra box is called ("Current password", or "One-time password" on the screen that follows one).
     currentLabel = 'Current password',
+    // Opt-in, default off so the organiser console is unchanged: the Show/Hide toggle also covers the current-password
+    // box; and `inlineErrors` swaps the browser's native required bubble for the screen's own message, marks the box
+    // that this form's own checks name `aria-invalid` (linked to the message with `aria-describedby`, cleared once typed
+    // in) and moves focus to it, scrolling the message into view, instead of to the message line (the link makes the
+    // message read from there, so it is not said twice). A refusal from `save` (a wrong current password) still
+    // focuses the message line and marks no box.
+    toggleCurrent = false,
+    inlineErrors = false,
   },
 ) {
   const draft = { current: '', password: '', confirmation: '' };
   let saving = false;
   let pendingError = null;
+  let pendingField = null;
+  const errorId = `${headingId ?? 'password-form'}-error`;
   let showPassword = false;
   let firstRender = true;
 
@@ -179,10 +215,11 @@ export function mountPasswordFormScreen(
 
     const invalid =
       askCurrent && !draft.current
-        ? `Enter your ${currentLabel.toLowerCase()}.`
-        : validateNewPassword(draft.password, draft.confirmation, minLength);
+        ? { message: `Enter your ${currentLabel.toLowerCase()}.`, field: 'current' }
+        : checkNewPassword(draft.password, draft.confirmation, minLength);
     if (invalid) {
-      pendingError = invalid;
+      pendingError = invalid.message;
+      pendingField = invalid.field;
       render();
       return;
     }
@@ -229,6 +266,7 @@ export function mountPasswordFormScreen(
       if (intro) container.appendChild(el('p', { className: 'stage-meta', text: intro }));
 
       const feedback = el('div', {
+        id: inlineErrors ? errorId : undefined,
         className: 'screen-feedback',
         attrs: { role: 'status', 'aria-live': 'polite', tabindex: '-1' },
       });
@@ -236,12 +274,18 @@ export function mountPasswordFormScreen(
         setFeedback(feedback, pendingError, 'error');
         pendingError = null;
       }
+      const invalidField = pendingField;
+      pendingField = null;
 
       const form = renderSetPasswordForm(draft, {
         disabled: saving,
         showPassword,
         askCurrent,
         currentLabel,
+        toggleCurrent,
+        inlineErrors,
+        invalidField,
+        errorId,
         onTogglePassword: (isShown) => {
           showPassword = isShown;
         },
@@ -253,6 +297,15 @@ export function mountPasswordFormScreen(
       for (const node of footer()) container.appendChild(node);
       root.appendChild(container);
 
+      const fieldAtFault =
+        inlineErrors && invalidField && form.querySelector(`[data-field="${invalidField}"]`);
+      if (fieldAtFault) {
+        firstRender = false;
+        // The message sits under Save, which can be below the fold on a short phone: bring it in view too.
+        feedback.scrollIntoView?.({ block: 'nearest' });
+        fieldAtFault.focus({ preventScroll: true });
+        return true;
+      }
       if (feedback.dataset.tone === 'error') {
         firstRender = false;
         feedback.scrollIntoView?.({ block: 'nearest' });

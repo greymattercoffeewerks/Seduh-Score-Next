@@ -54,6 +54,13 @@
   font-size: var(--text-sm);
 }
 
+/* core/passwordForm.js's introduction line carries the shared `.stage-meta` class; the organiser and format
+   stylesheets define it, the console does not load them, so without this it renders as body text. Same values. */
+.stage-meta {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
 /* "Signed in as ..." and Sign out, on every screen between sign-in and the console. */
 .adm-strip {
   display: flex;

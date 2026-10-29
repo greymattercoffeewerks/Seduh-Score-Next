@@ -111,7 +111,7 @@ export function mountPasswordPanel(host, ctx) {
           attrs: { tabindex: '-1', 'data-heading': '' },
         }),
         el('p', {
-          className: 'stage-meta',
+          className: 'adm-muted',
           text: othersSignedOut ? SAVED_MESSAGE : OTHERS_NOT_ENDED_MESSAGE,
           attrs: { role: 'status', 'aria-live': 'polite' },
         }),
@@ -127,6 +127,8 @@ export function mountPasswordPanel(host, ctx) {
     signal: controller.signal,
     minLength: ADMIN_MIN_PASSWORD_LENGTH,
     askCurrent: true,
+    toggleCurrent: true,
+    inlineErrors: true,
     save,
     describeError: (error) => describePasswordPanelError(error, { maybeSaved }),
     onSaved: (result) => {
