@@ -2522,3 +2522,10 @@ Built: the "Forgot password?" request screen, the screen a recovery link opens, 
 - **No "your password was changed" email** (D-PW7), so a takeover through a borrowed session is not announced; signing out the other sessions is the only mitigation.
 - **Local mail catcher e2e** (`tests/e2e/password-recovery.spec.js`, project `dev-recovery`) follows the link itself because the local redirect allow-list holds only the site root (config.toml is not touched): run `npx playwright test --project=dev-recovery --no-deps` with the local stack up. It is in the CI chain after `dev-admin`; its first CI run is the proof that CI's `supabase start` delivers to Mailpit.
 - **Pre-existing, logged only:** the footer version link measures 32x16 px at 360px (under the 44px target); `setFeedback` still has verbatim copies in `loginScreen.js` and `eventsScreen.js` (the shared one is now `core/dom.js`); a full vitest run prints a jsdom "Not implemented: navigation" error from a test outside this change.
+
+## Known open items from the landing page cleanup (stage 1, 2026-10-29)
+
+Stage 1 (format rows on a phone, the proof cards removed) is in the CHANGELOG entry of the same date. Stages 2 and 3 are NOT started: stage 2 is a latest-event card wired to the published-results archive; stage 3 is a live info bar behind a per-event opt-in.
+
+- **Contrast fails on the format numbers.** `.petrol-format-index` uses `--clr-petrol-500` (#4a5a57), 2.67:1 on the stage canvas. That fails 4.5:1 for the number at normal size, and 3:1 for the large-text size on desktop. Pre-existing, found by `ui-accessibility-reviewer`; not changed in stage 1. (landing page cleanup)
+- **Screen readers hear the tier last on a phone.** The DOM order is index, main, status, but at 640px and below the tier pill is visually first. Fixing it means reordering the DOM, which also changes the desktop grid. Sequencing only, raised by `ui-accessibility-reviewer`; not changed in stage 1. (landing page cleanup)

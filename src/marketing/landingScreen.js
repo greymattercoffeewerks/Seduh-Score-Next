@@ -450,13 +450,12 @@ function formatRow(index, name, body, { live = false, dimmed = false, href } = {
 
   const cells = [
     el('span', { className: 'petrol-format-index petrol-mono', text: index }),
-    el('div', {}, children),
-    live
-      ? el('span', { className: 'petrol-format-status' }, [
-          liveDot(),
-          tag('Basic free', { solid: true }),
-        ])
-      : tag('Soon'),
+    el('div', { className: 'petrol-format-main' }, children),
+    el(
+      'span',
+      { className: 'petrol-format-status' },
+      live ? [liveDot(), tag('Basic free', { solid: true })] : [tag('Soon')],
+    ),
   ];
 
   const tagName = live ? 'a' : 'div';
@@ -509,21 +508,7 @@ function formatsSection() {
   return section;
 }
 
-function fact(value, copy, accent = false) {
-  return el('article', { className: `petrol-fact${accent ? ' petrol-fact-accent' : ''}` }, [
-    el('b', { className: 'petrol-mono tabular-nums', text: value }),
-    el('p', { text: copy }),
-  ]);
-}
-
 function proofSection() {
-  const facts = el('div', { className: 'petrol-proof-facts' }, [
-    fact('0', 'installs. Pure web, open it on the day.'),
-    fact('1', 'event flow: setup, roster, stages, then heats.'),
-    fact('3', 'live surfaces: splash screen, projector, and phone.'),
-    fact('2', 'formats live today: Cup Taster, BTC. More are coming.', true),
-  ]);
-
   const story = el('div', { className: 'petrol-story' }, [
     el('img', {
       className: 'petrol-story-photo',
@@ -546,7 +531,7 @@ function proofSection() {
     ]),
   ]);
 
-  const inner = el('div', { className: 'petrol-wrap petrol-proof-inner' }, [facts, story]);
+  const inner = el('div', { className: 'petrol-wrap petrol-proof-inner' }, [story]);
   const section = el('section', { className: 'petrol-proof' }, [inner]);
   revealOnScroll(inner);
   return section;

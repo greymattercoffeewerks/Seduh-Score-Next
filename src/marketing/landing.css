@@ -612,6 +612,30 @@ a {
   background: var(--color-accent);
   color: var(--color-accent-contrast);
 }
+/* Phones: the tier pill moves up beside the row number instead of taking its
+   own column, so the name and description get the full row width (at 360px the
+   old third column squeezed the body copy into a ~125px strip). */
+@media (max-width: 640px) {
+  .petrol-format-row {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      'index status'
+      'main main';
+    gap: 10px 14px;
+    padding: 16px 12px;
+  }
+  .petrol-format-index {
+    grid-area: index;
+    font-size: var(--text-lg);
+  }
+  .petrol-format-status {
+    grid-area: status;
+    justify-self: start;
+  }
+  .petrol-format-main {
+    grid-area: main;
+  }
+}
 
 /* ---- Proof ---- */
 .petrol-proof {
@@ -621,37 +645,6 @@ a {
   display: flex;
   flex-direction: column;
   gap: clamp(24px, 4vw, 40px);
-}
-.petrol-proof-facts {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-}
-.petrol-fact {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  min-height: 160px;
-  padding: 24px;
-  background: var(--clr-petrol-800);
-  border: var(--border-hairline) solid rgba(255, 255, 255, 0.1);
-}
-.petrol-fact-accent {
-  border-color: var(--color-accent);
-}
-.petrol-fact b {
-  display: block;
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 56px;
-  line-height: 0.95;
-  color: var(--color-accent);
-}
-.petrol-fact p {
-  margin: 0;
-  font-size: var(--text-sm);
-  line-height: 1.35;
-  color: var(--color-text-secondary);
 }
 .petrol-story {
   position: relative;
@@ -810,15 +803,3 @@ a {
 /* Footer styles now come from publicHeader.css's shared .public-footer-*
    rules (buildPublicFooter(), src/marketing/publicFooter.js) — landing.css
    no longer defines its own .petrol-footer* block. */
-
-/* ---- Responsive ---- */
-@media (max-width: 860px) {
-  .petrol-proof-facts {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-@media (max-width: 480px) {
-  .petrol-proof-facts {
-    grid-template-columns: 1fr;
-  }
-}
