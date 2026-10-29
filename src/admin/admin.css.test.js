@@ -29,5 +29,12 @@ describe('admin .stage-meta', () => {
     expect(rule).toMatch(/color:\s*var\(--color-text-secondary\)/);
     expect(rule).toMatch(/font-size:\s*var\(--text-sm\)/);
     expect(rule).not.toMatch(/#[0-9a-f]{3,8}\b/i);
+    // a typo'd token would silently inherit
+    const typography = readFileSync(
+      join(process.cwd(), 'src', 'ui', 'tokens', 'typography.css'),
+      'utf8',
+    );
+    expect(tokens).toContain('--color-text-secondary:');
+    expect(typography).toContain('--text-sm:');
   });
 });
