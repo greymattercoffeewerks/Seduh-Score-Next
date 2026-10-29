@@ -48,6 +48,8 @@ export async function findPersonByEmail(orgId, email, client = getSupabase()) {
   return data;
 }
 
+// Refuses a non-E.164 phone (assertPhoneShape) rather than normalising it: normalising here would
+// make the stored value differ from the one registerPerson's dedup lookup just searched for.
 export async function createPerson(orgId, person, client = getSupabase()) {
   assertPhoneShape(person.phone);
   const { data, error } = await client

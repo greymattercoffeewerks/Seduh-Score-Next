@@ -136,6 +136,11 @@ export function buildEditFields(draft, { linked }) {
 // Pure. A phone/email clash arrives as a P0002 whose details name the field and the person who
 // already has it; anything else is described generically. `field` says which input to point at.
 export function describeRosterEditError(err) {
+  // update_roster_entry refuses a phone it cannot normalise to E.164 as a plain P0001 exception
+  // carrying hint 'phone_invalid' (read the hint, not the text). Same words as the client check.
+  if (err?.hint === 'phone_invalid') {
+    return { field: 'phone', message: validatePhoneShape('') };
+  }
   if (err?.code === 'P0002') {
     let detail = null;
     try {
