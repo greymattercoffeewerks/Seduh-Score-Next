@@ -14,6 +14,7 @@ import {
   updateRosterEntry,
   mergePeople,
 } from './registry.js';
+import { describeError } from './errors.js';
 
 // A minimal fake matching supabase-js's fluent query-builder shape. `tables`
 // maps a table name to either one `{data, error}` response, or an array
@@ -554,5 +555,129 @@ describe('updateRosterEntry', () => {
     });
     const client = fakeClient({ rpcResult: { data: null, error } });
     await expect(updateRosterEntry('org1', 'entry1', fields, client)).rejects.toBe(error);
+  });
+});
+
+// Seduh ID: `people.phone` is the cross-organisation key, so core refuses a non-E.164 shape
+// before any database call. Callers normalize; registry only refuses (it never rewrites).
+describe('phone shape guard', () => {
+  const BAD_PHONES = [
+    ['a local number with no country code', '7123456'],
+    ['a number with spaces (not normalized)', '+673 7123456'],
+    ['text', 'not a phone'],
+    ['too short', '+12345'],
+    ['an empty string (not the same as null)', ''],
+    ['a number, not a string', 6737123456],
+  ];
+
+  function untouched(client) {
+    return { from: vi.spyOn(client, 'from'), rpc: client.rpc };
+  }
+
+  describe.each(BAD_PHONES)('with %s', (_label, phone) => {
+    it('createPerson refuses it and makes no insert', async () => {
+      const client = fakeClient();
+      const spies = untouched(client);
+      await expect(createPerson('org1', { displayName: 'X', phone }, client)).rejects.toThrow(
+        /valid international number/,
+      );
+      expect(spies.from).not.toHaveBeenCalled();
+      expect(client.calls.filter((c) => c[0] === 'insert')).toEqual([]);
+    });
+
+    it('registerPerson refuses it before even the dedup lookup', async () => {
+      const client = fakeClient();
+      const spies = untouched(client);
+      await expect(registerPerson('org1', { displayName: 'X', phone }, client)).rejects.toThrow(
+        /valid international number/,
+      );
+      expect(spies.from).not.toHaveBeenCalled();
+    });
+
+    it('registerEntry refuses it and touches nothing', async () => {
+      const client = fakeClient();
+      const spies = untouched(client);
+      await expect(
+        registerEntry('org1', 'ev1', { displayName: 'X', phone }, client),
+      ).rejects.toThrow(/valid international number/);
+      expect(spies.from).not.toHaveBeenCalled();
+      expect(spies.rpc).not.toHaveBeenCalled();
+    });
+
+    it('updateRosterEntry refuses it and makes no RPC call', async () => {
+      const client = fakeClient();
+      await expect(
+        updateRosterEntry('org1', 'entry1', { displayName: 'X', phone }, client),
+      ).rejects.toThrow(/valid international number/);
+      expect(client.rpc).not.toHaveBeenCalled();
+    });
+  });
+
+  it('the refusal is a plain Error with no .code, so describeError shows its message', async () => {
+    const client = fakeClient();
+    const error = await createPerson('org1', { displayName: 'X', phone: 'abc' }, client).catch(
+      (e) => e,
+    );
+    expect(error).toBeInstanceOf(Error);
+    expect(error.code).toBeUndefined();
+    expect(describeError(error)).toBe(error.message);
+  });
+
+  it('does not rewrite a valid phone: it reaches the insert exactly as given', async () => {
+    const client = fakeClient({ tables: { people: { data: { id: 'p1' }, error: null } } });
+    await createPerson('org1', { displayName: 'X', phone: '+6737123456' }, client);
+    expect(client.calls.find((c) => c[0] === 'insert')[2].phone).toBe('+6737123456');
+  });
+
+  it('updateRosterEntry still sends a valid phone, and null for a walk-up', async () => {
+    const client = fakeClient();
+    await updateRosterEntry('org1', 'e1', { displayName: 'X', phone: '+6737123456' }, client);
+    await updateRosterEntry('org1', 'e1', { displayName: 'Y', phone: null }, client);
+    await updateRosterEntry('org1', 'e1', { displayName: 'Z' }, client);
+    expect(client.rpc.mock.calls.map((c) => c[1].p_phone)).toEqual(['+6737123456', null, null]);
+  });
+
+  it('createPerson with a null phone is not refused (walk-up with no profile phone)', async () => {
+    const client = fakeClient({ tables: { people: { data: { id: 'p1' }, error: null } } });
+    await expect(createPerson('org1', { displayName: 'X', phone: null }, client)).resolves.toEqual({
+      id: 'p1',
+    });
+  });
+});
+
+describe('phone shape guard: null phone through the registering paths', () => {
+  it('registerPerson with a null phone is not refused and inserts phone null', async () => {
+    const created = { id: 'p9', display_name: 'Walk Up', phone: null };
+    const client = fakeClient({
+      tables: {
+        people: [
+          { data: null, error: null },
+          { data: created, error: null },
+        ],
+      },
+    });
+    await expect(
+      registerPerson('org1', { displayName: 'Walk Up', phone: null }, client),
+    ).resolves.toEqual(created);
+    expect(client.calls.find((c) => c[0] === 'insert' && c[1] === 'people')[2].phone).toBeNull();
+  });
+
+  it('registerEntry with a null phone is not refused', async () => {
+    const entry = { id: 'e9', person_id: 'p9' };
+    const client = fakeClient({
+      tables: {
+        people: [
+          { data: null, error: null },
+          { data: { id: 'p9', display_name: 'Walk Up', cafe: null }, error: null },
+        ],
+        event_entries: [
+          { data: null, error: null },
+          { data: entry, error: null },
+        ],
+      },
+    });
+    await expect(
+      registerEntry('org1', 'ev1', { displayName: 'Walk Up', phone: null }, client),
+    ).resolves.toEqual(entry);
   });
 });
