@@ -37,6 +37,12 @@ exception when others then
   return sqlstate || ': ' || sqlerrm;
 end $$;
 
+-- A valid E.164 phone for a fixture person (people.phone has been CHECKed since T-ID.A3): '+67390', the sequence
+-- number, and two digits taken from the org tag so the two orgs differ. Never use a bare string such as '555-1'.
+create function e1.phone(t text, n int) returns text language sql immutable as $$
+  select '+67390' || lpad(n::text, 2, '0') || lpad((ascii(left(t, 1)) % 100)::text, 2, '0')
+$$;
+
 -- ============ fixtures (as postgres) ============
 
 insert into auth.users (id, email) values
@@ -60,8 +66,8 @@ begin
     insert into events (id, org_id, format, name, is_test) values (e1.u(t, 50), e1.u(t, 100), 'btc', 'Brewers event ' || t, true);
     insert into event_entries (id, event_id, display_name) values (e1.u(t, 2), e1.u(t, 1), 'Cupper ' || t);
     insert into people (id, org_id, display_name, phone) values
-      (e1.u(t, 17), e1.u(t, 100), 'Person ' || t, '555-1' || t),
-      (e1.u(t, 18), e1.u(t, 100), 'Other person ' || t, '555-2' || t);
+      (e1.u(t, 17), e1.u(t, 100), 'Person ' || t, e1.phone(t, 1)),
+      (e1.u(t, 18), e1.u(t, 100), 'Other person ' || t, e1.phone(t, 2));
     insert into ct_stages (id, event_id, kind, ordinal, set_count, duration_secs) values (e1.u(t, 3), e1.u(t, 1), 'prelims', 1, 1, 480);
     insert into ct_sets (id, stage_id, position) values (e1.u(t, 4), e1.u(t, 3), 1);
     insert into ct_stage_entries (id, stage_id, entry_id) values (e1.u(t, 5), e1.u(t, 3), e1.u(t, 2));
