@@ -38,6 +38,7 @@
 // for why).
 import { el, svgEl, brandLockup } from '../core/dom.js';
 import { revealOnScroll } from '../core/scrollReveal.js';
+import { cleanOrgName } from '../core/orgLabel.js';
 import { TIERS } from './pricingContent.js';
 import { buildPublicFooter } from './publicFooter.js';
 
@@ -508,7 +509,57 @@ function formatsSection() {
   return section;
 }
 
-function proofSection() {
+const EVENT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const LATEST_DATE_FORMAT = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+});
+
+// Reduces a public_results row to the three public facts the landing card shows, or null if the row
+// is unusable. The payload is unvalidated jsonb, so every field is type-checked; nothing else (no
+// competitor, no score) is read.
+function latestEventFacts(row) {
+  const payload = row?.payload;
+  const name = typeof payload?.eventName === 'string' ? payload.eventName.trim() : '';
+  if (!name || typeof row?.event_id !== 'string' || !EVENT_ID_PATTERN.test(row.event_id))
+    return null;
+  let date = null;
+  if (typeof payload.eventDate === 'string' && ISO_DATE_PATTERN.test(payload.eventDate)) {
+    const parsed = new Date(`${payload.eventDate}T00:00:00`);
+    // A real calendar day only: `2026-02-30` would roll over to 2 March.
+    const [y, m, d] = payload.eventDate.split('-').map(Number);
+    if (parsed.getFullYear() === y && parsed.getMonth() + 1 === m && parsed.getDate() === d)
+      date = LATEST_DATE_FORMAT.format(parsed);
+  }
+  return {
+    name,
+    date,
+    // The same cleaning publishedOrgName (core/publicResults.js) applies; imported from orgLabel so the
+    // landing bundle does not statically pull in the Supabase client.
+    org: cleanOrgName(payload.org_name) || null,
+    eventId: row.event_id,
+  };
+}
+
+function latestEventBlock(facts) {
+  const meta = [facts.date, facts.org ? `Organised by ${facts.org}` : null].filter(Boolean);
+  return el('div', { className: 'petrol-story-latest' }, [
+    el('p', { className: 'petrol-story-latest-label', text: 'Latest published result' }),
+    el('p', { className: 'petrol-story-latest-name', text: facts.name }),
+    ...(meta.length
+      ? [el('p', { className: 'petrol-story-latest-meta', text: meta.join(' · ') })]
+      : []),
+    el('a', {
+      className: 'petrol-story-latest-link',
+      text: 'View results →',
+      attrs: { href: `/results/?sheet=${encodeURIComponent(facts.eventId)}` },
+    }),
+  ]);
+}
+
+function proofSection(loadLatest) {
   const story = el('div', { className: 'petrol-story' }, [
     el('img', {
       className: 'petrol-story-photo',
@@ -530,6 +581,19 @@ function proofSection() {
       el('p', { className: 'petrol-story-next', text: 'Next event — date to be announced.' }),
     ]),
   ]);
+
+  // The static story above is the whole card until (and unless) the newest published event arrives.
+  // A slow, failed or empty answer changes nothing; a good one adds a block under the heading.
+  if (loadLatest) {
+    const copy = story.querySelector('.petrol-story-copy');
+    loadLatest().then(
+      (row) => {
+        const facts = latestEventFacts(row);
+        if (facts) copy.querySelector('.petrol-heading').after(latestEventBlock(facts));
+      },
+      () => {},
+    );
+  }
 
   const inner = el('div', { className: 'petrol-wrap petrol-proof-inner' }, [story]);
   const section = el('section', { className: 'petrol-proof' }, [inner]);
@@ -619,7 +683,9 @@ function ctaBand() {
   return inner;
 }
 
-export function mountLandingScreen(root) {
+// `loadLatest` (optional) resolves the newest public_results row or null; omitted, the page makes
+// no request at all (tests, the build-time prerender).
+export function mountLandingScreen(root, { loadLatest } = {}) {
   root.replaceChildren(
     el('div', { className: 'petrol-page', attrs: { 'data-surface': 'stage' } }, [
       buildNav(),
@@ -628,7 +694,7 @@ export function mountLandingScreen(root) {
       problemSection(),
       formatsSection(),
       ticker(),
-      proofSection(),
+      proofSection(loadLatest),
       pricingSection(),
       ctaBand(),
       buildPublicFooter({
