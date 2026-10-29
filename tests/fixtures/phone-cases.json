@@ -281,7 +281,6 @@
       "error": "extension_not_supported",
       "db": "refuse"
     },
-
     {
       "id": "bn-bare",
       "input": "7123456",
@@ -434,7 +433,6 @@
       "error": "invalid_number",
       "db": "refuse"
     },
-
     {
       "id": "it-leading-zero-kept",
       "input": "+39 06 1234 5678",
@@ -475,7 +473,6 @@
       "error": null,
       "db": "refuse"
     },
-
     {
       "id": "blank-empty",
       "input": "",
@@ -563,41 +560,216 @@
       "expect": null,
       "error": "invalid_country",
       "db": "skip"
+    },
+    {
+      "id": "brackets-around-plus",
+      "input": "(+65) 8123 4567",
+      "country": null,
+      "expect": "+6581234567",
+      "error": null,
+      "db": "refuse"
+    },
+    {
+      "id": "pasted-bidi-marks",
+      "input": "‪+673 7123456‬",
+      "country": null,
+      "expect": "+6737123456",
+      "error": null,
+      "db": "refuse"
+    },
+    {
+      "id": "pasted-rtl-mark-bare",
+      "input": "‏7123456",
+      "country": null,
+      "expect": "+6737123456",
+      "error": null,
+      "db": "refuse"
+    },
+    {
+      "id": "plus-after-digits",
+      "input": "65+81234567",
+      "country": null,
+      "expect": null,
+      "error": "multiple_numbers",
+      "db": "refuse"
+    },
+    {
+      "id": "exit-001-reads-as-00-plus-1",
+      "input": "001 415 555 2671",
+      "country": null,
+      "expect": "+14155552671",
+      "error": null,
+      "db": "refuse"
+    },
+    {
+      "id": "exit-0011-valid-remainder-reads-as-00-plus-11",
+      "input": "0011 415 555 2671",
+      "country": null,
+      "expect": "+14155552671",
+      "error": null,
+      "db": "refuse"
     }
   ],
-
   "libraryBumpSnapshot": [
-    { "country": "BN", "input": "+673 712 3456", "expect": "+6737123456" },
-    { "country": "BN", "input": "+673 812 3456", "expect": "+6738123456" },
-    { "country": "BN", "input": "+673 222 1234", "expect": "+6732221234" },
-    { "country": "SG", "input": "+65 8123 4567", "expect": "+6581234567" },
-    { "country": "SG", "input": "+65 9123 4567", "expect": "+6591234567" },
-    { "country": "MY", "input": "+60 12-345 6789", "expect": "+60123456789" },
-    { "country": "MY", "input": "+60 3-2161 1234", "expect": "+60321611234" },
-    { "country": "ID", "input": "+62 812 3456 7890", "expect": "+6281234567890" },
-    { "country": "ID", "input": "+62 21 555 1234", "expect": "+62215551234" },
-    { "country": "PH", "input": "+63 917 123 4567", "expect": "+639171234567" },
-    { "country": "TH", "input": "+66 81 234 5678", "expect": "+66812345678" },
-    { "country": "VN", "input": "+84 91 234 56 78", "expect": "+84912345678" },
-    { "country": "KH", "input": "+855 12 345 678", "expect": "+85512345678" },
-    { "country": "LA", "input": "+856 20 2312 3456", "expect": "+8562023123456" },
-    { "country": "AU", "input": "+61 412 345 678", "expect": "+61412345678" },
-    { "country": "NZ", "input": "+64 21 123 4567", "expect": "+64211234567" },
-    { "country": "GB", "input": "+44 7911 123456", "expect": "+447911123456" },
-    { "country": "GB", "input": "+44 (0)7911 123456", "expect": "+447911123456" },
-    { "country": "IE", "input": "+353 85 123 4567", "expect": "+353851234567" },
-    { "country": "IT", "input": "+39 06 1234 5678", "expect": "+390612345678" },
-    { "country": "IT", "input": "+39 312 345 6789", "expect": "+393123456789" },
-    { "country": "FR", "input": "+33 6 12 34 56 78", "expect": "+33612345678" },
-    { "country": "DE", "input": "+49 151 2345 6789", "expect": "+4915123456789" },
-    { "country": "US", "input": "+1 415 555 2671", "expect": "+14155552671" },
-    { "country": "CA", "input": "+1 416 555 0199", "expect": "+14165550199" },
-    { "country": "IN", "input": "+91 98765 43210", "expect": "+919876543210" },
-    { "country": "JP", "input": "+81 90 1234 5678", "expect": "+819012345678" },
-    { "country": "KR", "input": "+82 10 1234 5678", "expect": "+821012345678" },
-    { "country": "CN", "input": "+86 138 0013 8000", "expect": "+8613800138000" },
-    { "country": "HK", "input": "+852 5123 4567", "expect": "+85251234567" },
-    { "country": "TW", "input": "+886 912 345 678", "expect": "+886912345678" },
-    { "country": "AE", "input": "+971 50 123 4567", "expect": "+971501234567" }
+    {
+      "country": "BN",
+      "input": "+673 712 3456",
+      "expect": "+6737123456"
+    },
+    {
+      "country": "BN",
+      "input": "+673 812 3456",
+      "expect": "+6738123456"
+    },
+    {
+      "country": "BN",
+      "input": "+673 222 1234",
+      "expect": "+6732221234"
+    },
+    {
+      "country": "SG",
+      "input": "+65 8123 4567",
+      "expect": "+6581234567"
+    },
+    {
+      "country": "SG",
+      "input": "+65 9123 4567",
+      "expect": "+6591234567"
+    },
+    {
+      "country": "MY",
+      "input": "+60 12-345 6789",
+      "expect": "+60123456789"
+    },
+    {
+      "country": "MY",
+      "input": "+60 3-2161 1234",
+      "expect": "+60321611234"
+    },
+    {
+      "country": "ID",
+      "input": "+62 812 3456 7890",
+      "expect": "+6281234567890"
+    },
+    {
+      "country": "ID",
+      "input": "+62 21 555 1234",
+      "expect": "+62215551234"
+    },
+    {
+      "country": "PH",
+      "input": "+63 917 123 4567",
+      "expect": "+639171234567"
+    },
+    {
+      "country": "TH",
+      "input": "+66 81 234 5678",
+      "expect": "+66812345678"
+    },
+    {
+      "country": "VN",
+      "input": "+84 91 234 56 78",
+      "expect": "+84912345678"
+    },
+    {
+      "country": "KH",
+      "input": "+855 12 345 678",
+      "expect": "+85512345678"
+    },
+    {
+      "country": "LA",
+      "input": "+856 20 2312 3456",
+      "expect": "+8562023123456"
+    },
+    {
+      "country": "AU",
+      "input": "+61 412 345 678",
+      "expect": "+61412345678"
+    },
+    {
+      "country": "NZ",
+      "input": "+64 21 123 4567",
+      "expect": "+64211234567"
+    },
+    {
+      "country": "GB",
+      "input": "+44 7911 123456",
+      "expect": "+447911123456"
+    },
+    {
+      "country": "GB",
+      "input": "+44 (0)7911 123456",
+      "expect": "+447911123456"
+    },
+    {
+      "country": "IE",
+      "input": "+353 85 123 4567",
+      "expect": "+353851234567"
+    },
+    {
+      "country": "IT",
+      "input": "+39 06 1234 5678",
+      "expect": "+390612345678"
+    },
+    {
+      "country": "IT",
+      "input": "+39 312 345 6789",
+      "expect": "+393123456789"
+    },
+    {
+      "country": "FR",
+      "input": "+33 6 12 34 56 78",
+      "expect": "+33612345678"
+    },
+    {
+      "country": "DE",
+      "input": "+49 151 2345 6789",
+      "expect": "+4915123456789"
+    },
+    {
+      "country": "US",
+      "input": "+1 415 555 2671",
+      "expect": "+14155552671"
+    },
+    {
+      "country": "CA",
+      "input": "+1 416 555 0199",
+      "expect": "+14165550199"
+    },
+    {
+      "country": "IN",
+      "input": "+91 98765 43210",
+      "expect": "+919876543210"
+    },
+    {
+      "country": "JP",
+      "input": "+81 90 1234 5678",
+      "expect": "+819012345678"
+    },
+    {
+      "country": "KR",
+      "input": "+82 10 1234 5678",
+      "expect": "+821012345678"
+    },
+    {
+      "country": "CN",
+      "input": "+86 138 0013 8000",
+      "expect": "+8613800138000"
+    },
+    {
+      "country": "HK",
+      "input": "+852 5123 4567",
+      "expect": "+85251234567"
+    },
+    {
+      "country": "TW",
+      "input": "+886 912 345 678",
+      "expect": "+886912345678"
+    },
+    {
+      "country": "AE",
+      "input": "+971 50 123 4567",
+      "expect": "+971501234567"
+    }
   ]
 }

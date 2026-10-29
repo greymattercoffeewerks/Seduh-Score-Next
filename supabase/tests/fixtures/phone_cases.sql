@@ -78,4 +78,10 @@ insert into phone_cases (id, input, country, expect, error, db) values
   ('plus-way-too-long', '+673 7123456 7123456 7123456', null, null, 'too_long', 'refuse'),
   ('plus-zero-code', '+0737123456', null, null, 'invalid_country', 'refuse'),
   ('plus-in-middle', '673+7123456', null, null, 'multiple_numbers', 'refuse'),
-  ('unknown-country', '7123456', 'ZZ', null, 'invalid_country', 'skip');
+  ('unknown-country', '7123456', 'ZZ', null, 'invalid_country', 'skip'),
+  ('brackets-around-plus', '(+65) 8123 4567', null, '+6581234567', null, 'refuse'),
+  ('pasted-bidi-marks', '‪+673 7123456‬', null, '+6737123456', null, 'refuse'),
+  ('pasted-rtl-mark-bare', '‏7123456', null, '+6737123456', null, 'refuse'),
+  ('plus-after-digits', '65+81234567', null, null, 'multiple_numbers', 'refuse'),
+  ('exit-001-reads-as-00-plus-1', '001 415 555 2671', null, '+14155552671', null, 'refuse'),
+  ('exit-0011-valid-remainder-reads-as-00-plus-11', '0011 415 555 2671', null, '+14155552671', null, 'refuse');

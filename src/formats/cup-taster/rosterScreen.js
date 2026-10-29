@@ -201,7 +201,7 @@ let countryOptionNodes = null;
 function countryChoices() {
   if (!countryOptionNodes) {
     countryOptionNodes = phoneCountryOptions().map((c) =>
-      el('option', { text: `${c.name} (+${c.callingCode})`, attrs: { value: c.iso } }),
+      el('option', { text: `+${c.callingCode} ${c.name}`, attrs: { value: c.iso } }),
     );
   }
   return countryOptionNodes.map((node) => node.cloneNode(true));

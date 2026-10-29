@@ -11,7 +11,9 @@
 //   - This file owns the POLICY: Brunei first, and a bare number is never guessed into a country.
 //     With no country chosen a bare number is accepted only as a complete Brunei number; with one
 //     chosen it is read in that country. Only `+` and `00` mean "international"; other exit codes
-//     (011, 0011, 001) are refused, never stripped.
+//     (011, 0011, 001) are never stripped: a number typed with one is read as `00` plus what follows
+//     and accepted only if THAT is a valid number (`0011 61 ...` is not; `001 415 555 2671` reads as
+//     +1 415 ..., because `00 1 415` and `001 415` cannot be told apart by digits).
 // Pure: no DOM, no clock, no network. Callers map the codes to words (`phoneErrorMessage`).
 import {
   parsePhoneNumberWithError,
@@ -106,6 +108,7 @@ function parseWithLibrary(text, country) {
 // Anything other than digits (any script), `+`, spaces and the usual separators is not part of one
 // phone number. Letters are dealt with first (an extension, or junk).
 const EXTENSION = /(?:ext(?:ension)?|x|#|;)\s*\.?\s*\p{Nd}+\s*$/iu;
+const INVISIBLE = /[\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/gu;
 const NUMBER_SEPARATORS = /[/,;&\n\r|]|\bor\b|\band\b/iu;
 const FORMATTING = /^[\p{Nd}+\s\-.()\u00a0\u2010-\u2015\u2212\uff0b\uff0d]*$/u;
 
@@ -128,7 +131,9 @@ function looksLikeSeveralNumbers(text) {
 // Answers { ok: true, phone } with a canonical `+` E.164 string, or { ok: false, code } with a code
 // from PHONE_ERROR_CODES. Idempotent: parsing its own output returns it unchanged.
 export function parsePhone(raw, { country = null, storedPhone = null } = {}) {
-  const text = typeof raw === 'string' ? raw.trim() : '';
+  // Invisible direction marks and zero-width characters ride along when a number is pasted from a
+  // contact card or chat; they carry no digits, so they are dropped, not refused.
+  const text = typeof raw === 'string' ? raw.replace(INVISIBLE, '').trim() : '';
   if (!text) return fail('blank');
 
   if (typeof storedPhone === 'string' && storedPhone && text === storedPhone) {
@@ -138,12 +143,16 @@ export function parsePhone(raw, { country = null, storedPhone = null } = {}) {
   if (EXTENSION.test(text) && /\p{L}|#/u.test(text)) return fail('extension_not_supported');
   if (looksLikeSeveralNumbers(text)) return fail('multiple_numbers');
   if (!FORMATTING.test(text)) return fail('not_a_number');
-  // `+` only counts at the very start (full-width plus included).
-  const leading = /^[+\uff0b]/u.test(text);
-  if (/[+\uff0b]/u.test(leading ? text.slice(1) : text)) return fail('multiple_numbers');
+  // `+` marks an international number when only brackets or spaces precede it (`(+65) 8123 4567`);
+  // a `+` after digits (`673+7123456`), or a second `+`, is another number.
+  const firstPlus = text.search(/[+\uff0b]/u);
+  const leading = firstPlus !== -1 && !/\p{Nd}/u.test(text.slice(0, firstPlus));
+  if (firstPlus !== -1 && (!leading || /[+\uff0b]/u.test(text.slice(firstPlus + 1)))) {
+    return fail('multiple_numbers');
+  }
 
   // Digits of any script to ASCII; `parseIncompletePhoneNumber` also keeps a leading '+'.
-  const digits = parseIncompletePhoneNumber(text.replace(/\uff0b/u, '+')).replace(/\D/g, '');
+  const digits = parseIncompletePhoneNumber(text.replace(/\uff0b/gu, '+')).replace(/\D/g, '');
   if (!digits) return fail('not_a_number');
 
   if (leading) return fromInternational(digits);

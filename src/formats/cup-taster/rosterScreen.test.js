@@ -663,7 +663,7 @@ describe('mountRosterScreen', () => {
     const select = root.querySelector('select[aria-label="Phone country"]');
     expect(select).not.toBeNull();
     expect(select.value).toBe('BN');
-    expect(select.options[0].textContent).toBe('Brunei (+673)');
+    expect(select.options[0].textContent).toBe('+673 Brunei');
     expect(select.options.length).toBeGreaterThan(200);
     // The phone box keeps its own name, and the two sit in one row.
     expect(root.querySelector('[aria-label="Phone"]').parentElement).toBe(select.parentElement);

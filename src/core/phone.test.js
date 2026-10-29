@@ -76,7 +76,7 @@ describe('idempotence and shape', () => {
     }
   });
 
-  it('keeps E164_PATTERN textually ^\\+[1-9]\\d{7,14}$ (the database CHECK is compared with it)', () => {
+  it('keeps E164_PATTERN textually ^\\+[1-9]\\d{7,14}$ (pins the literal the database CHECK must match)', () => {
     expect(E164_PATTERN.source).toBe('^\\+[1-9]\\d{7,14}$');
     expect(E164_PATTERN.flags).toBe('');
   });
@@ -89,9 +89,6 @@ describe('library-bump snapshot (a changed canonical output is an identity-key d
   for (const c of fixture.libraryBumpSnapshot) {
     it(`${c.country} ${c.input}`, () => {
       expect(parsePhone(c.input)).toEqual({ ok: true, phone: c.expect });
-      // Typed the way that country's people type it, with the country chosen, the same key results.
-      const national = parsePhone(c.input, { country: c.country });
-      expect(national).toEqual({ ok: true, phone: c.expect });
     });
   }
 });

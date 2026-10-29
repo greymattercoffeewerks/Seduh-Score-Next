@@ -1,7 +1,7 @@
 // Generates supabase/tests/fixtures/phone_cases.sql from tests/fixtures/phone-cases.json, so the
 // database tests read the SAME cases the client tests do without pgTAP having to read JSON
 // (Handoffs and Specs/PHONE-CHECKER-DESIGN.md section 5). The JSON is the source; never edit the
-// SQL by hand. phone.fixture.test.js fails when the committed file is stale.
+// SQL by hand. src/core/phone.test.js fails when the committed file is stale.
 //
 //   npm run fixtures:phone
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
