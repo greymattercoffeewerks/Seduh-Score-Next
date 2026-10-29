@@ -9,7 +9,7 @@
 -- people are never merged, both rows are untouched), still refuses a NULL org (the B6 guard kept), and the helper
 -- functions have the right ACLs. Fixtures use only valid +673 numbers.
 begin;
-select plan(54);
+select plan(66);
 
 -- ============ fixtures (as postgres) ============
 
@@ -58,7 +58,14 @@ select ok(not app.is_e164('6737123456'), 'is_e164: rejects a value with no leadi
 select ok(not app.is_e164('+0737123456'), 'is_e164: rejects a leading-zero country code');
 select ok(not app.is_e164(null) and not app.is_e164(E'+6737123456\n'), 'is_e164: NULL and a trailing newline are not E.164');
 
+select ok(app.is_e164('+12345678') and app.is_e164('+123456789012345'), 'is_e164: accepts exactly 8 and exactly 15 digits (both bounds)');
+
 -- ============ app.phone_repair_class: reports, never guesses ============
+
+select is(app.phone_repair_class(null), 'null_phone', 'class: NULL is null_phone');
+select is(app.phone_repair_class('123456'), 'not_a_phone', 'class: 6 bare digits are not a phone (lower bound)');
+select is(app.phone_repair_class('1234567'), 'repairable_default_country', 'class: 7 bare digits are repairable (lower bound)');
+select is(app.phone_repair_class('1234567890123456'), 'not_a_phone', 'class: 16 bare digits are not a phone (upper bound)');
 
 select is(app.phone_repair_class('+6738123456'), 'valid', 'class: an E.164 number is valid');
 select is(app.phone_repair_class('8123456'), 'repairable_default_country', 'class: 7 bare digits are repairable by +673');
@@ -86,6 +93,22 @@ select throws_ok(
 select lives_ok(
   $$ insert into people (org_id, display_name, phone) values ('00000000-0000-0000-0000-0000000059a0', 'Good', '+6739000099') $$,
   'CHECK: a valid E.164 phone is accepted');
+select throws_ok(
+  $$ insert into people (org_id, display_name, phone) values ('00000000-0000-0000-0000-0000000059a0', 'Too short', '+1234567') $$,
+  '23514', null, 'CHECK: 7 digits after + is one too few (lower bound)');
+select throws_ok(
+  $$ insert into people (org_id, display_name, phone) values ('00000000-0000-0000-0000-0000000059a0', 'Too long', '+1234567890123456') $$,
+  '23514', null, 'CHECK: 16 digits is one too many (upper bound)');
+select throws_ok(
+  $$ insert into people (org_id, display_name, phone) values ('00000000-0000-0000-0000-0000000059a0', 'Newline', E'+6739000098
+') $$,
+  '23514', null, 'CHECK: a trailing newline is refused');
+select lives_ok(
+  $$ insert into people (org_id, display_name, phone) values ('00000000-0000-0000-0000-0000000059a0', 'Min', '+12345678') $$,
+  'CHECK: exactly 8 digits is accepted (lower bound)');
+select lives_ok(
+  $$ insert into people (org_id, display_name, phone) values ('00000000-0000-0000-0000-0000000059a0', 'Max', '+123456789012345') $$,
+  'CHECK: exactly 15 digits is accepted (upper bound)');
 select throws_ok(
   $$ insert into people (org_id, display_name, phone) values ('00000000-0000-0000-0000-0000000059a0', 'No phone', null) $$,
   '23502', null, 'CHECK: NULL is stopped by NOT NULL (23502), not by the shape check (the CHECK does not reject NULL itself)');
@@ -147,7 +170,7 @@ select is(
 
 select is(
   pg_temp.hint_of($$ select update_roster_entry('00000000-0000-0000-0000-0000000059a0', '00000000-0000-0000-0000-0000000059f2',
-       'Budi', '12345', null, null, null) $$),
+       'Budi X', '12345', null, null, null) $$),
   'phone_invalid',
   'a phone that cannot be normalised to E.164 is refused with the hint phone_invalid');
 select is(
@@ -204,6 +227,18 @@ select throws_ok(
   null,
   'update_roster_entry: entry 00000000-0000-0000-0000-0000000059f1 not found',
   'a NULL org id is still refused like any wrong org id');
+
+-- DELIBERATE and owner-to-confirm (see the migration header): a bare 9-15 digit input is NOT refused by the RPC;
+-- it is normalised with +673 exactly as the client does. This pins the current behaviour; if the owner decides to
+-- refuse the 'ambiguous' class on the write path, this test flips to a phone_invalid expectation.
+select lives_ok(
+  $$ select update_roster_entry('00000000-0000-0000-0000-0000000059a0', '00000000-0000-0000-0000-0000000059f2',
+       'Budi', '6738123456', null, null, null) $$,
+  'an ambiguous bare number is accepted by the RPC (deliberate, owner to confirm)');
+select is(
+  (select phone from people where id = '00000000-0000-0000-0000-0000000059d2'),
+  '+6736738123456',
+  'and it is stored with +673 prefixed, as the client would');
 
 select * from finish();
 rollback;

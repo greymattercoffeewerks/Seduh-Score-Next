@@ -12,7 +12,12 @@
 --   * makes update_roster_entry normalise the phone it is given and refuse one that is not a phone (class
 --     not_a_phone: under 7 digits, over 15, or not phone characters) or is still not E.164 (hint 'phone_invalid').
 --     The extra not_a_phone test matters: normalizePhone() prefixes +673 to ANY digits, so '12345' would become
---     '+67312345', which has a valid E.164 SHAPE but is junk. It starts from the CURRENT body (20261011140000, which carries the null-org guard), not
+--     '+67312345', which has a valid E.164 SHAPE but is junk. It checks the argument as received, so it guards
+--     direct callers; a client that normalises first (the roster UI does) sends '+67312345' and is not caught
+--     (T-ID.A2 closes that in the client).
+--     DELIBERATE, owner to confirm: a bare 9-15 digit input (class 'ambiguous', e.g. '6738123456') is NOT refused
+--     here; it is normalised with +673 exactly as the client does. The audit and repair scripts never guess these
+--     for LEGACY rows; refusing them for new input would need the client to tell the user to type the '+'. It starts from the CURRENT body (20261011140000, which carries the null-org guard), not
 --     20261007100000. The unique(org_id, phone) lookup therefore compares the normalised value: a local-format
 --     number that collides with a stored +673 number is reported as the same CONFLICT, never silently merged.
 --

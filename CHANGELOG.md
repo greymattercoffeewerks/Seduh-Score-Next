@@ -1,3 +1,18 @@
+## T-ID.A3: people.phone is E.164 in the database (not pushed to the cloud) · 2026-10-29
+
+**Task:** Seduh ID Layer 1 keys a person on a validated E.164 phone (`SEDUH-ID-LAYER1-SPEC-DRAFT.md` 3.3, 4.2, T-ID.A3; owner decisions in HANDOFF-CORRECTION-004: default `+673`, repair first then CHECK, ambiguous rows reported never guessed).
+
+**What changed:**
+
+- `20261029100000_phone_e164_normalise.sql`: `app.normalize_phone` (port of `src/core/phone.js`), `app.is_e164`, `app.phone_repair_class`; `update_roster_entry` (from the 20261011140000 body, null-org guard kept) now normalises and refuses a `not_a_phone` or non-E.164 value with hint `phone_invalid`. Changes no row; safe to push at any time.
+- `20261029110000_people_phone_e164_check.sql`: the `people_phone_e164` CHECK, added VALID (a NOT VALID check still blocks updates of legacy rows), behind a guard that refuses with a row count if any non-E.164 row remains. Push only after the repair; the cloud re-audit on 2026-10-29 showed 24 people, all valid.
+- `supabase/scripts/people_phone_audit.sql` (read-only: class, row ids, digit counts, never a value) and `people_phone_repair.sql` (owner-run, repairs only the unambiguous rows, never deletes, ends in ROLLBACK).
+- pgTAP: new `059_phone_e164.sql`; fixtures in 040/041 use `e1.phone`; 024's phone-cap case uses a value that is valid once normalised.
+
+**Reviews:** security-reviewer: no Important; nit (ambiguous input accepted by the RPC) kept deliberately and pinned by a test, owner to confirm. schema-guardian: no Important; same nit; I ran the rollback block in a rolled-back transaction (restores the exact old body, drops the three functions) and the guard, audit and repair against dirty fixtures. code-reviewer: no Important; comment and runner-note nits fixed. test-auditor: two Important (classifier and CHECK length bounds untested): fixed with boundary tests (the independent checker was not run: the fix is test-only and the mutations are plain from the source); NULL, entry-unchanged and at-cap nits fixed.
+
+**Not done / owner decides:** the roster client does not map `phone_invalid` to a message and `createPerson` does not normalise itself (T-ID.A2); whether the RPC should refuse bare 9 to 15 digit input; bare 8-digit numbers count as repairable by `+673`; a leading-0 local number would become `+67308...` (check the audit).
+
 ## Password screens follow the cloud's new password settings · 2026-10-29
 
 **Task:** On 2026-10-29 the owner switched on "require current password when changing password" and set the minimum length to 12 on the LIVE project. GoTrue then refuses `updateUser({ password })` without `current_password` unless the session is a recovery session (`internal/api/user.go`, read, not run), which would have left every NEW login stuck at the one-time-password gate and broken the organiser Change password screen, with only "Could not save your password. Try again." on screen. PR into `dev`; no migration, no cloud change, no gate change, `config.toml` untouched.
