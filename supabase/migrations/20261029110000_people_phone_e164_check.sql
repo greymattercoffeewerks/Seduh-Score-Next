@@ -4,7 +4,7 @@
 -- shape in the database, where no caller can skip it.
 --
 -- ORDER MATTERS, and it is enforced here: DO NOT PUSH THIS MIGRATION UNTIL THE STORED PHONES HAVE BEEN REPAIRED.
---   1. push 20261029100000_phone_e164_normalise.sql  (safe at any time; changes no row)
+--   1. push 20261029100000_phone_e164_shape.sql  (safe at any time; changes no row)
 --   2. run supabase/scripts/people_phone_audit.sql   (read-only; prints counts and row ids, never phone values)
 --   3. run supabase/scripts/people_phone_repair.sql  (owner-run; repairs only the unambiguous rows)
 --   4. deal with every row the audit still lists (ambiguous, not_a_phone, repair_collision): the organiser fixes or

@@ -319,8 +319,8 @@ select is(
 
 select lives_ok(
   $$ select update_roster_entry('00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0000-0000000000f4',
-       repeat('n', 200), '+673' || repeat(' ', 21) || '7000055', repeat('y', 242) || '@example.com', repeat('c', 200), repeat('b', 50)) $$,
-  'values exactly at every cap (name 200, phone 32 as typed, email 254, cafe 200, bib 50) are accepted'
+       repeat('n', 200), repeat(' ', 21) || '+6737000055', repeat('y', 242) || '@example.com', repeat('c', 200), repeat('b', 50)) $$,
+  'values exactly at every cap (name 200, phone 32 as typed, padded, email 254, cafe 200, bib 50) are accepted'
 );
 select is(
   (select phone from people where id = '00000000-0000-0000-0000-0000000000d3'),
