@@ -4,6 +4,18 @@
 // fake client never triggers real Supabase construction.
 import { getSupabase } from './supabaseClient.js';
 import { UNIQUE_VIOLATION } from './errors.js';
+import { validatePhoneShape } from './phone.js';
+
+// Every path that writes `people.phone` goes through this first (Seduh ID: the phone is the
+// cross-organisation matching key, so a non-E.164 value must never reach the database). Callers
+// still normalize (core/phone.js `normalizePhone`) — this only refuses, it never rewrites. A
+// null/undefined phone is a walk-up with no profile yet (D16) and passes. The thrown Error has no
+// `.code`, so `describeError` shows its message verbatim.
+function assertPhoneShape(phone) {
+  if (phone === null || phone === undefined) return;
+  const message = typeof phone === 'string' ? validatePhoneShape(phone) : validatePhoneShape('');
+  if (message) throw new Error(message);
+}
 
 export async function findPersonByPhone(orgId, phone, client = getSupabase()) {
   const { data, error } = await client
@@ -37,6 +49,7 @@ export async function findPersonByEmail(orgId, email, client = getSupabase()) {
 }
 
 export async function createPerson(orgId, person, client = getSupabase()) {
+  assertPhoneShape(person.phone);
   const { data, error } = await client
     .from('people')
     .insert({
@@ -62,6 +75,7 @@ export async function createPerson(orgId, person, client = getSupabase()) {
 // sharing an email under a different phone, surfacing a raw constraint
 // violation instead of the existing person.
 export async function registerPerson(orgId, person, client = getSupabase()) {
+  assertPhoneShape(person.phone);
   const existingByPhone = await findPersonByPhone(orgId, person.phone, client);
   if (existingByPhone) return existingByPhone;
 
@@ -172,6 +186,7 @@ export async function listPeopleByIds(personIds, client = getSupabase()) {
 // `phone: null, email: null`. A phone/email clash comes back as a P0002 error whose details name
 // the field and the person who has it.
 export async function updateRosterEntry(orgId, entryId, fields, client = getSupabase()) {
+  assertPhoneShape(fields.phone);
   const { error } = await client.rpc('update_roster_entry', {
     p_org_id: orgId,
     p_entry_id: entryId,
