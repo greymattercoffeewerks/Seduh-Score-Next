@@ -9,12 +9,25 @@ leak assumptions between things that shouldn't share them) as binding; the lette
 
 ## What this is, and isn't
 
-One static page (`index.html` at the repo root) with no router, no auth, no Supabase
-calls, no live-event state. Its whole job is to sell the idea before someone signs in —
-the console (`app/index.html`, `src/main.js`, everything under `src/core`/
-`src/formats`) is a completely separate app that happens to live in the same repo and
-deploy to the same Cloudflare project. Nothing in `src/marketing/` is reachable from
-the console, and nothing in the console imports from here.
+One static page (`index.html` at the repo root) with no router, no auth, no live-event state.
+Its whole job is to sell the idea before someone signs in — the console (`app/index.html`,
+`src/main.js`, everything under `src/core`/`src/formats`) is a completely separate app that happens
+to live in the same repo and deploy to the same Cloudflare project. Nothing in `src/marketing/` is
+reachable from the console, and nothing in the console imports from here.
+
+**One anonymous read (2026-10-29).** The proof card shows the latest published event. `main.js`
+(not `landingScreen.js`, so tests and the build-time prerender never ask) calls
+`findLatestPublishedResult()` (`core/publicResults.js`: `public_results`, newest `published_at`, limit 1,
+columns `event_id, payload, published_at`; anon-readable by design, test events cannot be in it)
+through a dynamic `import()` with a 6 s `raceTimeout`, so the shared Supabase client chunk stays off the
+page's critical path (verified: not in the built page's `modulepreload` list). Only `eventName`,
+`eventDate`, `org_name` (cleaned like `publishedOrgName`) and the event id are read; no competitor or
+score. The static card is the complete page: a slow, failed, empty or malformed answer changes nothing,
+and a good one inserts a block under the heading, linking to `/results/?sheet=<event id>`. The client is
+the same `getSupabase()` the Results page uses (supabase-js's own auth module is in that chunk; no
+console auth, session or router code is imported). `landingScreen.js` imports `core/orgLabel.js`, never
+`core/publicResults.js`, so the client stays out of its static imports. Do not widen what is read here
+without checking the Privacy page.
 
 ## Identity history — four attempts, real lessons each time
 

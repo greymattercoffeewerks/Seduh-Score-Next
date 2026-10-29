@@ -2525,7 +2525,7 @@ Built: the "Forgot password?" request screen, the screen a recovery link opens, 
 
 ## Known open items from the landing page cleanup (stage 1, 2026-10-29)
 
-Stage 1 (format rows on a phone, the proof cards removed) is in the CHANGELOG entry of the same date. Stages 2 and 3 are NOT started: stage 2 is a latest-event card wired to the published-results archive; stage 3 is a live info bar behind a per-event opt-in.
+Stage 1 (format rows on a phone, the proof cards removed) is in the CHANGELOG entry of the same date. Stage 2 (the latest-event card wired to the published-results archive) is built, see its CHANGELOG entry of the same date; stage 3 (a live info bar behind a per-event opt-in) is NOT started.
 
 - **Contrast fails on the format numbers.** `.petrol-format-index` uses `--clr-petrol-500` (#4a5a57), 2.67:1 on the stage canvas. That fails 4.5:1 for the number at normal size, and 3:1 for the large-text size on desktop. Pre-existing, found by `ui-accessibility-reviewer`; not changed in stage 1. (landing page cleanup)
 - **Screen readers hear the tier last on a phone.** The DOM order is index, main, status, but at 640px and below the tier pill is visually first. Fixing it means reordering the DOM, which also changes the desktop grid. Sequencing only, raised by `ui-accessibility-reviewer`; not changed in stage 1. (landing page cleanup)

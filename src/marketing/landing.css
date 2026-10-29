@@ -803,3 +803,39 @@ a {
 /* Footer styles now come from publicHeader.css's shared .public-footer-*
    rules (buildPublicFooter(), src/marketing/publicFooter.js) — landing.css
    no longer defines its own .petrol-footer* block. */
+
+/* ---- Proof: latest published event (added after load; absent when the archive is unreachable) ---- */
+.petrol-story-latest {
+  margin: 14px 0 0;
+  padding: 4px 0 4px 14px;
+  border-left: 3px solid var(--color-accent);
+}
+.petrol-story-latest p {
+  margin: 0;
+}
+.petrol-story-latest-label {
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+.petrol-story-latest-name {
+  margin-top: 4px;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  overflow-wrap: anywhere;
+}
+.petrol-story-latest-meta {
+  margin-top: 2px;
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+.petrol-story-latest-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-top: 4px;
+  color: var(--color-accent);
+  font-weight: 600;
+}
