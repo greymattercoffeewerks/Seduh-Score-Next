@@ -261,6 +261,31 @@ innocuous name, roles other than `anon`/`authenticated`/`service_role`), and tho
 
 ---
 
+### Seduh ID link: the owner's runbook (T-ID.B2, 20261030140000)
+
+`people.global_person_id` is written by the database only: `public.link_person_identity(p_org_id, p_person_id)` (members, own
+organisation's person, finds an identity for the person's phone, never creates one, returns nothing) and the owner. The guard
+trigger lets a change through only when the transaction-local flag `app.seduh_link_write` is `'on'` and the role is not an
+API role; a change of `phone` sets the link to NULL. A new function that must write the column sets the flag itself, and
+`062` fails until it is added to its "only writers" list. There is no admin function or console screen for any of the
+following (owner decision 7: counts only); each is owner SQL, in ONE transaction. Never put a phone or a name in a note.
+
+- **Unlink one organisation's person (durable).** The block lapses by itself if the person's phone changes.
+  `begin; select set_config('app.seduh_link_write','on',true); update public.people set global_person_id = null where id = '<person>'; insert into app.person_link_blocks (person_id, phone_e164) select id, phone from public.people where id = '<person>' on conflict (person_id) do update set phone_e164 = excluded.phone_e164; commit;`
+  To lift it: delete the `person_link_blocks` row.
+- **Merge identity X into Y (duplicate identities).** Check first: X is not `opted_out` (merging turns it into `merged` and loses
+  the opt-out; refuse), Y is not X, and Y does not resolve through `merged_into` back to X (no cycle). Then, in ONE transaction that starts `begin; select set_config('app.seduh_link_write','on',true);` (the flag; Y should be `active`, not a tombstone):
+  `update public.people set global_person_id = Y where global_person_id = X;` `update app.seduh_identities set status='merged', merged_into=Y where id=X;`
+  `insert into app.seduh_identity_merges (kept_id, merged_id, merged_by, reason_code) values (Y, X, '<operator user id>', '<duplicate_person|phone_changed|recycled_number|other>');`
+  The tombstone keeps its `display_name` as is. **A name is blanked only on an erasure or objection request for that person**,
+  as a separate step (`update app.seduh_identities set display_name = null where id = X;`, allowed for a tombstone and for opted_out);
+  it is never a side effect of a merge.
+- **Opt out (erasure/objection, E1).** `update app.seduh_identities set status='opted_out', display_name=null where id = '<id>';` The
+  phone stays as the suppression record. The link function still links an opted-out identity (inert), on purpose, so the
+  readable link cannot tell a member which phones objected.
+- **Accepted signals (spec 3.3):** a member can learn that an identity exists for a phone they type in (a published non-test
+  result exists); a member of two organisations sees the same uuid for the same person.
+
 ### Entitlement hooks (database checkpoints; T-GATE.B3, 054)
 
 Gating is enforced in the database, never only in the client. The rules a new hook or cap must follow (the

@@ -46,6 +46,11 @@ const NOT_FOR_THE_CONSOLE = {
   phone_invalid: 'update_roster_entry, the organiser roster edit; not an admin console call',
   people_phone_not_repaired:
     'raised only by the owner-run people_phone_e164 migration guard, never over the API',
+  // Seduh ID link (T-ID.B2): the guard on people.global_person_id (organiser roster writes) and the owner-run FK guard.
+  global_person_id_database_only:
+    'people guard trigger, raised to an organiser writing the roster; not an admin console call',
+  people_global_person_id_unknown:
+    'raised only by the owner-run people_global_person_id_fkey migration guard, never over the API',
   // The BTC format's own RPCs.
   bracket_advanced: 'BTC format',
   demo_event_not_found: 'BTC format',
