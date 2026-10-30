@@ -2550,7 +2550,7 @@ describe('organisation context wiring (T-TEN.C2)', () => {
           link.textContent.replace(/\s*\(.*\)$/, ''),
         );
       const { root } = await startApp({ client: orgClient() });
-      expect(labels(root)).toEqual(['Events']);
+      expect(labels(root)).toEqual(['Events', 'People']);
     });
 
     it('the audience links no longer depend on the legacy settings: any organisation has them, whatever the old links are set to', async () => {
@@ -2564,7 +2564,13 @@ describe('organisation context wiring (T-TEN.C2)', () => {
         { legacyAudienceOrgId: 'some-other-org', legacyAudienceOrgSlug: 'someone-else' },
       ]) {
         const { root } = await startApp({ client: orgClient(), ...legacy });
-        expect(labels(root)).toEqual(['Events', 'Splash screen', 'Projector view', 'Phone view']);
+        expect(labels(root)).toEqual([
+          'Events',
+          'People',
+          'Splash screen',
+          'Projector view',
+          'Phone view',
+        ]);
         await activeApp.unmount();
         activeApp = null;
       }

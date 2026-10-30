@@ -27,6 +27,7 @@ import { mountRecoveryScreen } from './core/recoveryScreen.js';
 import { mountChangePasswordScreen } from './core/changePasswordScreen.js';
 import { createRecoveryFlow, takeRecoveryArrival } from './core/passwordRecovery.js';
 import { mountTeamScreen } from './core/teamScreen.js';
+import { mountPeopleScreen } from './core/peopleScreen.js';
 import { mountNoOrgScreen } from './core/noOrgScreen.js';
 import { loadWindowState, windowWarningText } from './core/eventWindow.js';
 import { mountEventWindowLockedScreen } from './core/eventWindowScreen.js';
@@ -852,6 +853,14 @@ export function buildRoutes({
       ),
     },
     {
+      pattern: '/people',
+      mount: requireAuth(
+        (outlet, { client, signal, orgId, orgName }) =>
+          mountPeopleScreen(outlet, { orgId, orgName, client, signal }),
+        auth,
+      ),
+    },
+    {
       pattern: '/events/:eventId',
       mount: requireAuth(
         (outlet, { eventId, client, signal }) =>
@@ -1070,7 +1079,7 @@ function attemptReconnectFlush(client) {
 const PENDING_RETRY_MS = 15000;
 
 // Console routes that are not the Events list (so the Events link is not marked current on them).
-const NON_EVENTS_PATTERNS = new Set(['/team', '/account/password', '/forgot-password']);
+const NON_EVENTS_PATTERNS = new Set(['/team', '/people', '/account/password', '/forgot-password']);
 
 function unsyncedSwitchMessage(count) {
   const noun = count === 1 ? 'change on this device has' : 'changes on this device have';
@@ -1429,6 +1438,7 @@ export function mountApp(
     // labels describing the ROUTE, not user-facing ones describing what an
     // organiser gets when they click. "Projector view"/"Phone view" name
     // the destination the same way "Splash screen" already does.
+    links.push({ label: 'People', href: '#/people', active: route.pattern === '/people' });
     if (isTeamOwner) {
       links.push({ label: 'Team', href: '#/team', active: route.pattern === '/team' });
     }

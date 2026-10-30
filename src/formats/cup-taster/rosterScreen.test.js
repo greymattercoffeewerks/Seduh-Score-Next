@@ -1447,6 +1447,8 @@ describe('mountRosterScreen — editing a cupper', () => {
           p_bib: '12',
         },
       ],
+      // The phone changed, so the best-effort Seduh ID link is asked for again (T-ID.C1).
+      ['link_person_identity', { p_org_id: 'org1', p_person_id: 'p1' }],
     ]);
     const row = q(root, '#roster-row-e1').textContent;
     expect(row).toContain('Alicia Tan');
@@ -1810,5 +1812,167 @@ describe('mountRosterScreen — editing a cupper', () => {
     await vi.waitFor(() => expect(q(root, '#roster-saved-e1')).not.toBeNull());
     expect(client.db.event_entries[0].bib).toBe('8');
     expect(client.db.people[0]).toMatchObject({ display_name: 'Renamed One', cafe: 'Newer Cafe' });
+  });
+});
+
+describe('Seduh ID on the roster (T-ID.C1)', () => {
+  const GLOBAL_ID = '9b1f0c52-7a44-4c8e-9d3e-5d0e6c1f2a77';
+  const eventRow = { id: 'ev1', org_id: 'org1', name: 'October Cup', is_test: false };
+  const person = (overrides = {}) => ({
+    id: 'p1',
+    org_id: 'org1',
+    display_name: 'Cupper One',
+    phone: '+6737000001',
+    email: null,
+    cafe: null,
+    global_person_id: null,
+    ...overrides,
+  });
+  const linkCalls = (client) => client.rpcCalls.filter(([name]) => name === 'link_person_identity');
+  const q = (root, selector) => root.querySelector(selector);
+  const type = (input, value) => {
+    input.value = value;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  const flush = async () => {
+    for (let i = 0; i < 4; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+  };
+  async function mount(client) {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    await mountRosterScreen(root, { eventId: 'ev1', client });
+    return root;
+  }
+
+  it('says "Linked to a Seduh ID" in words for a linked person, and never renders the id', async () => {
+    const client = fakeClient({
+      events: [eventRow],
+      people: [person({ global_person_id: GLOBAL_ID }), person({ id: 'p2', phone: '+6737000002' })],
+      event_entries: [entry(), entry({ id: 'e2', person_id: 'p2', display_name: 'Two' })],
+    });
+    const root = await mount(client);
+    expect(q(root, '#roster-row-e1').textContent).toContain('Linked to a Seduh ID');
+    expect(q(root, '#roster-row-e2').textContent).not.toContain('Linked');
+    expect(root.innerHTML).not.toContain(GLOBAL_ID);
+  });
+
+  it('registering asks for a link once, after the person exists, and does not wait for it', async () => {
+    const client = fakeClient({ events: [eventRow], people: [], event_entries: [] });
+    let release;
+    const gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    const baseRpc = client.rpc;
+    client.rpc = (name, args) =>
+      name === 'link_person_identity'
+        ? gate.then(() => {
+            baseRpc(name, args);
+            return { data: null, error: null };
+          })
+        : baseRpc(name, args);
+    const root = await mount(client);
+    type(q(root, '[aria-label="Name"]'), 'New Cupper');
+    type(q(root, '[aria-label="Phone"]'), '+6738001111');
+    q(root, 'form').dispatchEvent(new Event('submit', { cancelable: true }));
+    await flush();
+    // The link call is still hanging, and the registration has finished and said so.
+    expect(root.querySelector('.screen-feedback').textContent).toBe('New Cupper registered.');
+    release();
+    await flush();
+    const calls = linkCalls(client);
+    expect(calls).toHaveLength(1);
+    expect(calls[0][1]).toEqual({ p_org_id: 'org1', p_person_id: client.db.people[0].id });
+  });
+
+  it('a refused or failing link call changes nothing the organiser sees', async () => {
+    const client = fakeClient({ events: [eventRow], people: [], event_entries: [] });
+    const baseRpc = client.rpc;
+    client.rpc = (name, args) =>
+      name === 'link_person_identity'
+        ? Promise.resolve({ data: null, error: { code: '42501', message: 'refused' } })
+        : baseRpc(name, args);
+    const root = await mount(client);
+    type(q(root, '[aria-label="Name"]'), 'New Cupper');
+    type(q(root, '[aria-label="Phone"]'), '+6738001111');
+    q(root, 'form').dispatchEvent(new Event('submit', { cancelable: true }));
+    await flush();
+    expect(root.querySelector('.screen-feedback').textContent).toBe('New Cupper registered.');
+    expect(root.textContent).not.toContain('Linked');
+  });
+
+  it('a thrown link call is swallowed too (no unhandled rejection)', async () => {
+    const client = fakeClient({ events: [eventRow], people: [], event_entries: [] });
+    const baseRpc = client.rpc;
+    client.rpc = (name, args) => {
+      if (name === 'link_person_identity') throw new Error('socket closed');
+      return baseRpc(name, args);
+    };
+    const root = await mount(client);
+    type(q(root, '[aria-label="Name"]'), 'New Cupper');
+    type(q(root, '[aria-label="Phone"]'), '+6738001111');
+    q(root, 'form').dispatchEvent(new Event('submit', { cancelable: true }));
+    await flush();
+    expect(root.querySelector('.screen-feedback').textContent).toBe('New Cupper registered.');
+  });
+
+  it('does not ask for a link while the device is offline', async () => {
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    try {
+      const client = fakeClient({ events: [eventRow], people: [], event_entries: [] });
+      const root = await mount(client);
+      type(q(root, '[aria-label="Name"]'), 'New Cupper');
+      type(q(root, '[aria-label="Phone"]'), '+6738001111');
+      q(root, 'form').dispatchEvent(new Event('submit', { cancelable: true }));
+      await flush();
+      expect(root.querySelector('.screen-feedback').textContent).toBe('New Cupper registered.');
+      expect(linkCalls(client)).toHaveLength(0);
+    } finally {
+      online.mockRestore();
+    }
+  });
+
+  async function openEdit(client) {
+    const root = await mount(client);
+    q(root, '#roster-edit-btn-e1').click();
+    return root;
+  }
+  const oneLinkedPerson = () =>
+    fakeClient({
+      events: [eventRow],
+      people: [person({ global_person_id: GLOBAL_ID })],
+      event_entries: [entry()],
+    });
+
+  it('changing the phone in Edit asks for a link again', async () => {
+    const client = oneLinkedPerson();
+    const root = await openEdit(client);
+    type(q(root, '#roster-edit-e1-phone'), '+6737000009');
+    q(root, '.roster-edit-form button[type="submit"]').click();
+    await vi.waitFor(() => expect(q(root, '#roster-saved-e1')).not.toBeNull());
+    await flush();
+    expect(linkCalls(client)).toHaveLength(1);
+    expect(linkCalls(client)[0][1]).toEqual({ p_org_id: 'org1', p_person_id: 'p1' });
+  });
+
+  it('saving Edit without touching the phone does not ask for a link', async () => {
+    const client = oneLinkedPerson();
+    const root = await openEdit(client);
+    type(q(root, '#roster-edit-e1-bib'), '12');
+    q(root, '.roster-edit-form button[type="submit"]').click();
+    await vi.waitFor(() => expect(q(root, '#roster-saved-e1')).not.toBeNull());
+    await flush();
+    expect(linkCalls(client)).toHaveLength(0);
+  });
+
+  it('a failed save asks for no link', async () => {
+    const client = fakeClient(
+      { events: [eventRow], people: [person()], event_entries: [entry()] },
+      { errorOn: 'rpc.update_roster_entry' },
+    );
+    const root = await openEdit(client);
+    type(q(root, '#roster-edit-e1-phone'), '+6737000009');
+    q(root, '.roster-edit-form button[type="submit"]').click();
+    await flush();
+    expect(linkCalls(client)).toHaveLength(0);
   });
 });

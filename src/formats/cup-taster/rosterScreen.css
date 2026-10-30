@@ -157,3 +157,12 @@
   font-size: var(--text-sm);
   overflow-wrap: anywhere;
 }
+
+/* A person matched to a Seduh ID: said in words (never colour alone), quieter than "Withdrawn". */
+.roster-linked-tag {
+  align-self: flex-start;
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  color: var(--color-text-muted);
+}

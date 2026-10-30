@@ -36,6 +36,7 @@
 // the registration form from whatever the organiser has typed so far,
 // rather than wiping it blank mid-entry.
 import { getSupabase } from '../../core/supabaseClient.js';
+import { isPersonLinked, requestPersonLink, LINKED_LABEL } from '../../core/identity.js';
 import { el, labeledField } from '../../core/dom.js';
 import { describeError } from '../../core/errors.js';
 import { findEvent } from '../../core/events.js';
@@ -226,6 +227,16 @@ export function phoneCountrySelect({ label, value, disabled, id, onChange }) {
 // The phone box with its country beside it, as ONE labelled field.
 function phoneRow(countrySelect, phoneInput) {
   return el('div', { className: 'roster-phone-row' }, [countrySelect, phoneInput]);
+}
+
+// Pure. Whether saving these edit fields changes the stored phone (read the way registry reads it).
+export function phoneChanged(fields) {
+  if (fields.phone === null || fields.phone === undefined) return false;
+  const parsed = parsePhone(fields.phone, {
+    country: fields.phoneCountry,
+    storedPhone: fields.storedPhone,
+  });
+  return parsed.ok && parsed.phone !== fields.storedPhone;
 }
 
 export function renderRegistrationForm(draft, { disabled }) {
@@ -531,6 +542,9 @@ export function renderRosterEntries(
             entry.withdrawn
               ? el('span', { className: 'roster-withdrawn-tag', text: 'Withdrawn' })
               : null,
+            isPersonLinked(person)
+              ? el('span', { className: 'roster-linked-tag', text: LINKED_LABEL })
+              : null,
           ].filter(Boolean),
         ),
         el(
@@ -787,6 +801,8 @@ export async function mountRosterScreen(root, { eventId, client = getSupabase(),
     try {
       const cupper = buildCupperFromDraft(draft);
       const result = await registerEntry(event.org_id, eventId, cupper, client);
+      // Best-effort Seduh ID link: online only, never awaited, silent on failure, not in the outbox.
+      if (result.person_id) requestPersonLink(event.org_id, result.person_id, client);
       try {
         applyPersisted(await loadPersisted());
         // result.display_name in both branches — the canonical stored name,
@@ -911,6 +927,11 @@ export async function mountRosterScreen(root, { eventId, client = getSupabase(),
 
     try {
       await updateRosterEntry(event.org_id, entry.id, fields, client);
+      // A phone change clears the database link and nothing re-links on its own, so ask again (same
+      // best-effort rules as registration). Compared canonically: an unchanged number is not a change.
+      if (editing.linked && entry.person_id && phoneChanged(fields)) {
+        requestPersonLink(event.org_id, entry.person_id, client);
+      }
       let refreshed = true;
       try {
         applyPersisted(await loadPersisted());
