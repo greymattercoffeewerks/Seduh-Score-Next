@@ -195,15 +195,16 @@ call e1.run_as('user_c');
 reset role;
 
 -- the function's own guard speaking (and not an argument error, a missing row of the fixture, or success)
-create function e1.is_guard(code text) returns boolean language sql immutable as $$
-  select code ~ '^(42501|P0001): ' and code ~* '(not found|does not belong|only an owner|row-level security policy)'
+create function e1.is_guard(code text, rpc text) returns boolean language sql immutable as $$
+  select code ~ '^(42501|P0001): ' and code ~* ('(not found|does not belong|only an owner'
+    || case when rpc = 'link_person_identity' then '|row-level security policy for table "people"' else '' end || ')')
 $$;
 
 -- ============ every cross-organisation attempt is refused by the guard ============
 
 select is(
   (select coalesce(string_agg(r.caller || ' ' || r.kind || ' -> ' || left(r.code, 90), E'\n' order by r.kind, r.caller), 'none')
-     from e1.results r where r.rpc = q.name and r.kind like 'attack%' and not e1.is_guard(r.code)),
+     from e1.results r where r.rpc = q.name and r.kind like 'attack%' and not e1.is_guard(r.code, r.rpc)),
   'none',
   q.name || ': every cross-organisation attempt is refused by its own guard'
 ) from e1.rpc q order by q.name;

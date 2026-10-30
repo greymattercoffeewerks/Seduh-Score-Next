@@ -23,7 +23,7 @@ const GUARD = { code: '42501', message: 'people.global_person_id is written by t
 
 const tag = Date.now().toString(36);
 // valid E.164 numbers, unique per run (a persistent local stack keeps earlier runs' identities)
-const digits = (n) => String(Number.parseInt(tag, 36) % 100000).padStart(5, '0') + n;
+const digits = (n) => String(Math.floor(Math.random() * 1e5)).padStart(5, '0') + n;
 const PHONE_LINK = `+673961${digits(1)}`;
 const PHONE_OPTED_OUT = `+673961${digits(2)}`;
 const PHONE_NONE = `+673961${digits(3)}`;

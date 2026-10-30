@@ -50,6 +50,9 @@
 -- as it does the link, with no trigger needed. It cascades with the person row. The runbook is in CONVENTIONS.md
 -- ("Seduh ID link: the owner's runbook"). Nothing reads it but the link function. If the owner later wants an
 -- audited admin function, it is a new migration on top of this table.
+--   The block is for that organisation's person ROW: one of its own members can delete and re-create the person and
+--   the next link call re-links it (opted_out is the number-wide control). It has no org_id column on purpose: it is a
+--   platform table in `app` (no API role can read it), reached by the person's id, and cascades with the person.
 --   merge_people interaction (spec 3.6): it deletes the merged people row, so that row's link (and block) go with
 --   it. The kept row is re-linked by phone on its next link call. B3's merge_people is NOT changed here: nothing in
 --   this migration needs it, and a block on a deleted row is moot (two rows of one organisation never share a phone,
@@ -193,7 +196,12 @@ begin
     raise exception 'new row violates row-level security policy for table "people"' using errcode = '42501';
   end if;
 
-  select phone into v_phone from public.people where id = p_person_id;
+  -- the person row is locked while we decide, and the final update re-checks the phone, so a number changed by a
+  -- concurrent writer (update_roster_entry on another device) cannot be left linked to the OLD number's identity
+  select phone into v_phone from public.people where id = p_person_id for update;
+
+  -- a block written for an earlier number no longer applies (and must not revive if the number comes back)
+  delete from app.person_link_blocks where person_id = p_person_id and phone_e164 <> v_phone;
 
   -- an owner-set block (unlink) holds while the person still has the phone it was written for
   if exists (select 1 from app.person_link_blocks b where b.person_id = p_person_id and b.phone_e164 = v_phone) then
@@ -221,7 +229,7 @@ begin
   -- opted_out is linked too (inert): the readable link must not tell a member which phones objected
   perform set_config('app.seduh_link_write', 'on', true);
   update public.people set global_person_id = v_id
-   where id = p_person_id and global_person_id is distinct from v_id;
+   where id = p_person_id and phone = v_phone and global_person_id is distinct from v_id;
   perform set_config('app.seduh_link_write', '', true);
 end;
 $$;

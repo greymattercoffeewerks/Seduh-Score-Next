@@ -19,7 +19,7 @@
 --     global_person_id are exactly the guard and the link function (no other writer); the trigger and the FK are as
 --     specified; merge_people deleting the merged row loses its link and the kept row re-links by phone.
 begin;
-select plan(61);
+select plan(66);
 
 create schema t062;
 grant usage on schema t062 to anon, authenticated;
@@ -69,7 +69,8 @@ insert into app.seduh_identities (id, phone_e164, display_name, source, status) 
   (t062.u(6306), '+6739620006', 'T062 Blocked', 'archive', 'active'),
   (t062.u(6307), '+6739620007', 'T062 After Phone Change', 'archive', 'active'),
   (t062.u(6308), '+6739620010', 'T062 Merged Row', 'archive', 'active'),
-  (t062.u(6309), '+6739620011', 'T062 Kept Row', 'archive', 'active');
+  (t062.u(6309), '+6739620011', 'T062 Kept Row', 'archive', 'active'),
+  (t062.u(6311), '+6739620012', 'T062 Block Revival', 'archive', 'active');
 insert into app.seduh_identities (id, phone_e164, display_name, source, status, merged_into) values
   (t062.u(6303), '+6739620003', null, 'archive', 'merged', t062.u(6301));
 update app.seduh_identities set status = 'merged', merged_into = t062.u(6305), display_name = null where id = t062.u(6304);
@@ -127,6 +128,19 @@ select is(t062.attempt($$ select set_config('app.seduh_link_write', 'on', true);
     update people set global_person_id = '00000000-0000-0000-0000-000000006301' where id = '00000000-0000-0000-0000-000000006405' $$),
   '42501: people.global_person_id is written by the database only', 'an API caller who sets the flag themselves is still refused (the role backstop)');
 
+-- the other API roles: the flag does not help service_role either (anon has no UPDATE on people at all)
+reset role;
+select is(t062.attempt($$ set local role service_role; select set_config('app.seduh_link_write', 'on', true);
+    update people set global_person_id = '00000000-0000-0000-0000-000000006301' where id = '00000000-0000-0000-0000-000000006405' $$),
+  '42501: permission denied for table people', 'service_role cannot update people at all, flag or not (the guard''s role list is a second wall, not the first)');
+select is(t062.attempt($$ set local role anon; select set_config('app.seduh_link_write', 'on', true);
+    update people set global_person_id = '00000000-0000-0000-0000-000000006301' where id = '00000000-0000-0000-0000-000000006405' $$),
+  '42501: permission denied for table people', 'anon cannot update people at all');
+-- the owner clearing a link WITHOUT the flag at depth 1 is refused (the FK carve-out needs a nested call)
+select is(t062.attempt($$ update people set global_person_id = null where id = '00000000-0000-0000-0000-000000006410' $$),
+  '42501: people.global_person_id is written by the database only', 'the owner clearing a link without the flag is refused (the nested-depth carve-out does not apply at depth 1)');
+set local role authenticated;
+set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000006201';
 -- a member of TWO organisations
 set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000006203';
 select is(t062.attempt($$ update people set global_person_id = '00000000-0000-0000-0000-000000006301' where id = '00000000-0000-0000-0000-000000006405' $$),
@@ -172,6 +186,7 @@ select is((select phone from people where id = t062.u(6407)), '+6739620098', '..
 select is((select prorettype::regtype::text from pg_proc where oid = 'public.link_person_identity(uuid,uuid)'::regprocedure), 'void',
   'link_person_identity returns nothing (found / not found is not revealed by the return)');
 
+create temp table identity_count on commit drop as select count(*)::int as n from app.seduh_identities;
 set local role authenticated;
 set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000006201';
 select public.link_person_identity(t062.u(6210), t062.u(6401));
@@ -187,7 +202,9 @@ select is(t062.gpi(6403), t062.u(6301), 'a merged tombstone resolves through mer
 select is(t062.gpi(6404), null, 'a merged_into CYCLE links nothing and raises nothing (bounded)');
 select is(t062.gpi(6405), null, 'a phone with no identity stays unlinked');
 select is((select count(*)::int from app.seduh_identities where phone_e164 = '+6739620099'), 0, '...and the function created NO identity for it');
-select is((select count(*)::int from app.seduh_identities), 8, '...nor anywhere (the nine fixture identities, less the one deleted above)');
+select is((select count(*)::int from app.seduh_identities), (select n from identity_count), '...and no link call created an identity anywhere (count unchanged)');
+-- the write flag is not left on by the link function: read it straight after the calls above, with nothing resetting it
+select is(coalesce(current_setting('app.seduh_link_write', true), ''), '', 'the link function does not leave the write flag on in the caller''s transaction');
 select is(t062.gpi(6406), null, 'an owner-blocked person is left unlinked');
 
 -- idempotent
@@ -195,8 +212,6 @@ set local role authenticated;
 select public.link_person_identity(t062.u(6210), t062.u(6401));
 reset role;
 select is(t062.gpi(6401), t062.u(6301), 'calling it again changes nothing (idempotent)');
-select is(t062.attempt($$ select set_config('app.seduh_link_write', '', true) $$), 'ok', 'fixture: flag reset works');
-select is(coalesce(current_setting('app.seduh_link_write', true), ''), '', 'the link function does not leave the write flag on in the caller''s transaction');
 select is(t062.attempt($$ update people set global_person_id = '00000000-0000-0000-0000-000000006301' where id = '00000000-0000-0000-0000-000000006405' $$),
   '42501: people.global_person_id is written by the database only', 'so a later write in the same transaction is refused again');
 
@@ -212,6 +227,19 @@ set local role authenticated;
 select public.link_person_identity(t062.u(6210), t062.u(6406));
 reset role;
 select is(t062.gpi(6406), t062.u(6307), 'the old block (for the old phone) no longer applies once the phone changed');
+
+-- a block for an old number does not revive when the number comes back
+insert into app.person_link_blocks (person_id, phone_e164) values (t062.u(6410), '+6739620095');
+set local role authenticated;
+set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000006201';
+update people set phone = '+6739620012' where id = t062.u(6410);
+select public.link_person_identity(t062.u(6210), t062.u(6410));   -- phone differs from the block's: the block is dropped, and the link is made
+reset role;
+select is((select count(*)::int from app.person_link_blocks where person_id = t062.u(6410)), 0, 'a link call drops a block written for an earlier number');
+select is(t062.gpi(6410), t062.u(6311), '...and links the person by the number they now hold');
+-- the race: the function locks the person row and re-checks the phone in its update (two sessions cannot be driven from pgTAP)
+select ok((select prosrc ~* 'for update' and prosrc ~* 'phone = v_phone' from pg_proc where oid = 'public.link_person_identity(uuid,uuid)'::regprocedure),
+  'link_person_identity locks the person row and re-checks the phone in its update (a concurrent number change cannot leave a stale link)');
 
 -- two organisations: the stated correlation
 set local request.jwt.claim.sub = '00000000-0000-0000-0000-000000006203';

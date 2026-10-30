@@ -274,13 +274,13 @@ following (owner decision 7: counts only); each is owner SQL, in ONE transaction
   `begin; select set_config('app.seduh_link_write','on',true); update public.people set global_person_id = null where id = '<person>'; insert into app.person_link_blocks (person_id, phone_e164) select id, phone from public.people where id = '<person>' on conflict (person_id) do update set phone_e164 = excluded.phone_e164; commit;`
   To lift it: delete the `person_link_blocks` row.
 - **Merge identity X into Y (duplicate identities).** Check first: X is not `opted_out` (merging turns it into `merged` and loses
-  the opt-out; refuse), Y is not X, and Y does not resolve through `merged_into` back to X (no cycle). Then, with the flag on:
+  the opt-out; refuse), Y is not X, and Y does not resolve through `merged_into` back to X (no cycle). Then, in ONE transaction that starts `begin; select set_config('app.seduh_link_write','on',true);` (the flag; Y should be `active`, not a tombstone):
   `update public.people set global_person_id = Y where global_person_id = X;` `update app.seduh_identities set status='merged', merged_into=Y where id=X;`
   `insert into app.seduh_identity_merges (kept_id, merged_id, merged_by, reason_code) values (Y, X, '<operator user id>', '<duplicate_person|phone_changed|recycled_number|other>');`
   The tombstone keeps its `display_name` as is. **A name is blanked only on an erasure or objection request for that person**,
   as a separate step (`update app.seduh_identities set display_name = null where id = X;`, allowed for a tombstone and for opted_out);
   it is never a side effect of a merge.
-- **Opt out (erasure/objection, E1).** `update app.seduh_identities set status='opted_out', display_name=null where id=<id>;` The
+- **Opt out (erasure/objection, E1).** `update app.seduh_identities set status='opted_out', display_name=null where id = '<id>';` The
   phone stays as the suppression record. The link function still links an opted-out identity (inert), on purpose, so the
   readable link cannot tell a member which phones objected.
 - **Accepted signals (spec 3.3):** a member can learn that an identity exists for a phone they type in (a published non-test
