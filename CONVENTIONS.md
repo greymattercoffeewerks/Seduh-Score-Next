@@ -325,6 +325,18 @@ pattern is in `20261023120000_entitlement_enforcement_hooks.sql`; the spec is `G
   between runs. Fixtures insert `auth.users` rows directly, then simulate a specific
   user via `set local role authenticated; set local request.jwt.claim.sub = '<uuid>';`
   — reset both after each block.
+- **A pgTAP assertion on a `limit N` result needs distinct sort keys.** Inside one test
+  transaction `now()` is frozen, so every row inserted with a default `updated_at` ties,
+  and a tie-break on a random `gen_random_uuid()` id makes the test pass or fail by
+  chance (`059_public_live_now.sql` test 22 failed about 4 runs in 10). Give the rows
+  the test cares about explicit, different timestamps.
+- **Phone numbers (T-ID.A3, database and client).** `src/core/phone.js` is the only place a typed phone
+  is interpreted; the database only checks the E.164 shape (`app.is_e164`), so a new
+  country rule or a library bump is a client change plus a case in
+  `tests/fixtures/phone-cases.json`. Run `npm run fixtures:phone` to regenerate
+  `supabase/tests/060b_phone_fixture_cases.sql` (the database is held to the same cases;
+  a vitest test fails when it is stale). Never edit the generated SQL by hand. See
+  `src/core/CLAUDE.md` (`phone`).
 - **E2E**: Playwright, `tests/e2e/*.spec.js`. `test:e2e` runs against a production build
   served by `vite preview`. This is a real project dependency (D25, diverging from
   Kira-Kira's ad-hoc use) because three live surfaces — organiser, projector, phone —
