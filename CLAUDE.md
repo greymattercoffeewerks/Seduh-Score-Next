@@ -231,7 +231,11 @@ below are enforced by tests that fail CI, not by memory; the "how to add a tenan
 - **Organisations are provisioned only by the service role** (runbook in the Repo section); there is no signup. The
   interim rule "no two-organisation user in the cloud" was lifted 2026-10-11 (B1, B2 and B6 are there).
 - **Every new tenant table or RPC is added to the cross-organisation matrices** (`040` tables, `041` RPCs). A guard in
-  each fails when one is missing, so the fix is a matrix entry, not an exception.
+  each fails when one is missing, so the fix is a matrix entry, not an exception. (Latest: `org_person_affiliations`,
+  T-ID.B3, in `040`; `link_person_identity`, T-ID.B2, in `041`.)
+- **`people.global_person_id` is written by the database only** (Seduh ID, T-ID.B2): a guard trigger refuses every API
+  caller, and the identity tables in `app` have no policy and no API grant. Link through `public.link_person_identity`;
+  unlink and merge are owner SQL (runbook in `CONVENTIONS.md`). Never add a path that lets a client set the column.
 
 ### Platform administration: the operator's console (T-ADM, built 2026-10-15 to 2026-10-16)
 
