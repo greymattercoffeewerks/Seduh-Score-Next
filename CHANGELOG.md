@@ -1,3 +1,13 @@
+## 059 test 22 flake fixed (test only) · 2026-10-30
+
+**Task:** `059_public_live_now.sql` test 22 ("an event whose grant ended is still listed") failed about 4 runs in 10 (7 of 20 locally; once in CI on #360). `public_live_now()` orders by `updated_at desc, id limit 3`; in one transaction `now()` is frozen, so the locked event's session tied with the four cap sessions and the random `live_sessions.id` decided whether it was in the top 3. Not a clock or day-boundary problem: nothing in the migration or the window-lock functions depends on a date.
+
+**What changed:** the locked session now gets `updated_at = now() + interval '1 second'`, strictly newest. Test only; no migration, no app code. Test 23 (expects 0 once the lock is enforced) now proves the lock rather than the limit.
+
+**Verified:** 50 consecutive local runs of the file after the change: 48 passed in a first batch of 25 (2 failures not attributed: the shared local database was being reset by another session at the time) and 25 of 25 in a second batch.
+
+**Reviews:** test-only change; test-auditor not run.
+
 ## Seduh ID phone work closed out: client checker, cloud push, database checked against the shared cases · 2026-10-30
 
 **Task:** Close the Seduh ID phone work (T-ID.A0 to A4 done; the client phone checker is the client half of T-ID.A3; its commits were first labelled `T-ID.B1`, relabelled here so B1 means only the identity tables). One records PR for the four merged PRs and the cloud push, plus one test addition. No migration, no app code.
