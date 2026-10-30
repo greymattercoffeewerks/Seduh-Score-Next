@@ -1,5 +1,5 @@
 {
-  "_comment": "One source for the phone checker (Handoffs and Specs/PHONE-CHECKER-DESIGN.md section 5). src/core/phone.test.js reads it; npm run fixtures:phone generates tests/fixtures/phone_cases.sql from it. Each case: id; input (what a person typed); country (ISO region chosen in the form, or null); expect (canonical + E.164, or null when refused); error (the exact code when refused, else null); db ('canonical' = the input is already canonical and the database stores it unchanged, 'refuse' = the database must answer phone_invalid for this raw input, 'skip' = not a database case).",
+  "_comment": "One source for the phone checker (Handoffs and Specs/PHONE-CHECKER-DESIGN.md section 5). src/core/phone.test.js reads it; npm run fixtures:phone generates supabase/tests/060b_phone_fixture_cases.sql (the pgTAP test, cases embedded) from it. Each case: id; input (what a person typed); country (ISO region chosen in the form, or null); expect (canonical + E.164, or null when refused); error (the exact code when refused, else null); db ('canonical' = the input is already canonical and the database stores it unchanged, 'refuse' = the database must answer phone_invalid for this raw input, 'skip' = not a database case).",
   "cases": [
     {
       "id": "row01-sg-bare-no-country",

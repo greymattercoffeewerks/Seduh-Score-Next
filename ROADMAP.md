@@ -1936,15 +1936,17 @@ Each D task is re-confirmed with the product owner before it starts (2026-10-10)
 
 ---
 
-## Seduh ID (pillar C) — planned, not started
+## Seduh ID (pillar C) — Layer 1 in progress
 
-Plan and open questions: `Handoffs and Specs/MULTI-TENANCY-AND-SEDUHID-SCOPING.md` (pillar C; §6 open questions; §10 added 2026-10-26 from a review of a reference site). Sequence: tenancy (done) → gating (shipped dark) → admin console → archive + Seduh ID Layer 1 → Throwdown → Liga. No Seduh ID schema or code exists yet: `people.global_person_id` is still the unconstrained reserved hook (see "Known open items from T-TEN.B1/B2/B5"). Any Seduh ID schema near `seduh_links` or the BNCC pricing and lock needs the owner's sign-off.
+Plan and open questions: `Handoffs and Specs/MULTI-TENANCY-AND-SEDUHID-SCOPING.md` (pillar C; §6 open questions; §10 added 2026-10-26 from a review of a reference site). Sequence: tenancy (done) → gating (shipped dark) → admin console → archive + Seduh ID Layer 1 → Throwdown → Liga. Layer 1 task status (specs are local only): **T-ID.A0, A1, A2, A3 and A4 are done** (A3 and the client phone checker are the E.164 work below); **next is B1, the identity tables**, split 1a / 1b per the draft spec. The identity tables do not exist yet: `people.global_person_id` is still the unconstrained reserved hook (see "Known open items from T-TEN.B1/B2/B5"). Any Seduh ID schema near `seduh_links` or the BNCC pricing and lock needs the owner's sign-off.
 
-| Layer | Scope                                                                                                         | Status                                      |
-| ----- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| 1     | Directory (names only), staff/affiliate roster (C3); E.164 phone check first                                  | Not started; follows the archive pipeline   |
-| 2     | Competitor login and claim, cross-org RLS, registration page (D-G16), self-attested entries, provenance label | Not started; its own spec and security pass |
-| 3     | Professional profile, exportable competition CV, cafe directory (legacy v6.2)                                 | Not started                                 |
+| Layer | Scope                                                                                                         | Status                                                         |
+| ----- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| 1     | Directory (names only), staff/affiliate roster (C3); E.164 phone check first                                  | In progress: phone check done (below); B1 identity tables next |
+| 2     | Competitor login and claim, cross-org RLS, registration page (D-G16), self-attested entries, provenance label | Not started; its own spec and security pass                    |
+| 3     | Professional profile, exportable competition CV, cafe directory (legacy v6.2)                                 | Not started                                                    |
+
+**E.164 phone check (done 2026-10-30; PRs #357, #358, #359, #360, all in `dev`).** `core/phone.js` owns all phone interpretation (libphonenumber-js, Brunei-first policy); `core/registry.js` refuses anything else; the database is shape-only (`app.is_e164`, `update_roster_entry` requires canonical E.164 with hint `phone_invalid`, CHECK `people_phone_e164`) and `supabase/tests/060b_phone_fixture_cases.sql` holds it to the same cases as the client. **Cloud:** the two migrations were pushed 2026-10-30 with `apply_migration` (owner-approved) as cloud versions `20261030005330` and `20261030005349`; the repo files are `20261030100000` and `20261030110000` (the push stamps its own time, as in earlier pushes; same SQL). 23 of 23 people hold a valid E.164 phone and the CHECK is validated. Open: `059_public_live_now.sql` test 22 is flaky (a tie on `updated_at` under `limit 3`; fix is a distinct `updated_at` in the test, not yet made).
 
 **Proposed adoptions from the 2026-10-26 reference review (specialtycoffeecommunity.com, a pre-launch concept).** Each needs the owner's decision; none changes Layer 1 scope or pulls Layer 2 forward.
 
