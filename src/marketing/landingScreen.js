@@ -559,26 +559,35 @@ function latestEventBlock(facts) {
   ]);
 }
 
+// The proof card's full-bleed background. Any image dropped in here is cropped with object-fit: cover, so
+// `position` (CSS object-position) is the focal point that stays in frame, same idea as HERO_PHOTOS.
+const STORY_PHOTO = {
+  src: '/marketing/hero-cupping-bowls.jpg',
+  alt: 'Cupping bowls lined up at Girls Got Drip Vol. 0',
+  position: '50% 50%',
+};
+
 function proofSection(loadLatest) {
-  const story = el('div', { className: 'petrol-story' }, [
-    el('img', {
-      className: 'petrol-story-photo',
-      attrs: {
-        src: '/marketing/hero-cupping-bowls.jpg',
-        alt: 'Cupping bowls lined up at Girls Got Drip Vol. 0',
-        loading: 'lazy',
-      },
-    }),
-    el('div', { className: 'petrol-story-copy' }, [
-      tag('Completed', { solid: true }),
-      el('h2', { className: 'petrol-heading', text: 'Not a demo. Real events, real brackets.' }),
-      el('p', {
-        className: 'petrol-band-body',
-        text:
-          'Girls Got Drip Vol. 0 — &Coffee Bandar, June 2026. The first parallel test on a ' +
-          'single Android tablet. What broke got fixed; what survived became the product.',
-      }),
-      el('p', { className: 'petrol-story-next', text: 'Next event — date to be announced.' }),
+  const photo = el('img', {
+    className: 'petrol-story-photo',
+    attrs: { src: STORY_PHOTO.src, alt: STORY_PHOTO.alt, loading: 'lazy' },
+  });
+  photo.style.objectPosition = STORY_PHOTO.position;
+  // The story spans the whole viewport (the photo is full bleed); the copy sits in the usual content wrap.
+  const story = el('div', { className: 'petrol-story petrol-proof-inner' }, [
+    photo,
+    el('div', { className: 'petrol-wrap petrol-story-wrap' }, [
+      el('div', { className: 'petrol-story-copy' }, [
+        tag('Completed', { solid: true }),
+        el('h2', { className: 'petrol-heading', text: 'Not a demo. Real events, real brackets.' }),
+        el('p', {
+          className: 'petrol-band-body',
+          text:
+            'Girls Got Drip Vol. 0 — &Coffee Bandar, June 2026. The first parallel test on a ' +
+            'single Android tablet. What broke got fixed; what survived became the product.',
+        }),
+        el('p', { className: 'petrol-story-next', text: 'Next event — date to be announced.' }),
+      ]),
     ]),
   ]);
 
@@ -595,9 +604,8 @@ function proofSection(loadLatest) {
     );
   }
 
-  const inner = el('div', { className: 'petrol-wrap petrol-proof-inner' }, [story]);
-  const section = el('section', { className: 'petrol-proof' }, [inner]);
-  revealOnScroll(inner);
+  const section = el('section', { className: 'petrol-proof' }, [story]);
+  revealOnScroll(story);
   return section;
 }
 
