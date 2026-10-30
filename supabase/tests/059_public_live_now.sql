@@ -212,8 +212,11 @@ reset role;
 insert into orgs (id, name, slug) values (pg_temp.fx('5960', 1), 'Org locked', 'live59-locked');
 insert into events (id, org_id, format, name, list_on_homepage)
   values (pg_temp.fx('5960', 2), pg_temp.fx('5960', 1), 'cup_taster', 'Locked Event', true);
-insert into live_sessions (org_id, event_id, format, active)
-  values (pg_temp.fx('5960', 1), pg_temp.fx('5960', 2), 'cup_taster', true);
+-- updated_at is set explicitly and strictly newer than every other row: now() is frozen inside this transaction, so a
+-- default would tie with the four cap sessions above, and the door's `limit 3` would then keep or cut this row by the
+-- random live_sessions.id (the test failed about 4 runs in 10)
+insert into live_sessions (org_id, event_id, format, active, updated_at)
+  values (pg_temp.fx('5960', 1), pg_temp.fx('5960', 2), 'cup_taster', true, now() + interval '1 second');
 insert into entitlement_grants (org_id, event_id, tier, valid_from, valid_until, source)
   values (pg_temp.fx('5960', 1), pg_temp.fx('5960', 2), 'per_event', now() - interval '10 days', now() - interval '1 day', 'manual');
 

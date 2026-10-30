@@ -58,7 +58,7 @@ describe('shared fixture (tests/fixtures/phone-cases.json)', () => {
     }
   });
 
-  it('keeps the generated database fixture in step with the JSON', () => {
+  it('keeps the generated database test in step with the JSON', () => {
     expect(readFileSync(FIXTURE_SQL, 'utf8')).toBe(renderPhoneCasesSql(fixture));
   });
 });
