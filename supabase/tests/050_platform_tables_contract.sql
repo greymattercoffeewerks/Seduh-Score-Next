@@ -24,10 +24,14 @@
 begin;
 select plan(16);
 
--- the guard sees the two tables it is about (a guard over any two tables, or none, would pass vacuously)
-select ok(
-  to_regclass('app.platform_admins') is not null and to_regclass('app.admin_audit_log') is not null,
-  'app.platform_admins and app.admin_audit_log both exist');
+-- the guard sees the tables it is about (a guard over any other tables, or none, would pass vacuously). The two
+-- Seduh ID tables (T-ID.B1) follow the same pattern, so every check below covers them too; 061 pins their shape.
+select is(
+  (select string_agg(c.relname, ', ' order by c.relname)
+     from pg_class c
+    where c.relnamespace = 'app'::regnamespace and c.relkind in ('r', 'p', 'f')),
+  'admin_audit_log, entitlement_caps, entitlement_keys, entitlement_tiers, platform_admins, seduh_identities, seduh_identity_merges',
+  'the tables in app are exactly the admin console''s two, the three entitlement tables and the two Seduh ID tables, so every check below covers each of them (a new table must be added here on purpose)');
 
 select is(
   (select coalesce(string_agg(c.relname, ', ' order by c.relname), 'none')
