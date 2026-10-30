@@ -638,20 +638,21 @@ a {
 }
 
 /* ---- Proof ---- */
+/* Full bleed: the section has no padding and the story spans the viewport, so the photo reaches every edge
+   (any image works: object-fit: cover, focal point from the inline object-position). The copy sits in a
+   .petrol-wrap inside it, so it still lines up with the rest of the page. */
 .petrol-proof {
-  padding: clamp(48px, 7vw, 88px) 0;
-}
-.petrol-proof-inner {
-  display: flex;
-  flex-direction: column;
-  gap: clamp(24px, 4vw, 40px);
+  padding: 0;
 }
 .petrol-story {
+  /* Where the content wrap starts: the scrim below is anchored to the text, not to the viewport edge. */
+  --story-gutter: max(0px, calc((100% - 1360px) / 2));
   position: relative;
   min-height: 320px;
   overflow: hidden;
   display: flex;
   align-items: center;
+  padding: clamp(40px, 7vw, 88px) 0;
 }
 .petrol-story-photo {
   position: absolute;
@@ -669,15 +670,19 @@ a {
   inset: 0;
   background: linear-gradient(
     90deg,
-    var(--clr-petrol-950) 0px,
-    var(--clr-petrol-950) 480px,
-    rgba(11, 14, 16, 0.75) 620px,
-    rgba(11, 14, 16, 0.1) 900px
+    rgba(11, 14, 16, 0.6) 0px,
+    rgba(11, 14, 16, 0.94) var(--story-gutter),
+    var(--clr-petrol-950) calc(var(--story-gutter) + 560px),
+    rgba(11, 14, 16, 0.75) calc(var(--story-gutter) + 700px),
+    rgba(11, 14, 16, 0.1) calc(var(--story-gutter) + 980px)
   );
 }
-.petrol-story-copy {
+.petrol-story-wrap {
   position: relative;
   z-index: 2;
+  width: 100%;
+}
+.petrol-story-copy {
   max-width: 460px;
   padding: clamp(28px, 4vw, 44px);
 }
@@ -693,10 +698,14 @@ a {
   .petrol-story {
     align-items: flex-end;
     min-height: 420px;
-    padding: 16px;
+    padding: 0;
   }
   .petrol-story::before {
     content: none;
+  }
+  .petrol-story-wrap {
+    padding-top: 16px;
+    padding-bottom: 16px;
   }
   .petrol-story-copy {
     max-width: none;

@@ -8,6 +8,37 @@
 
 **Reviews:** test-only change; test-auditor not run.
 
+## Landing page: proof photo full bleed · 2026-10-30
+
+**Task:** The landing proof section (the "Completed" / "Not a demo. Real events, real brackets." card) now uses a full-bleed photo: the story spans the viewport edge to edge, and the copy sits in the usual content wrap. Visual only. Not a handoff §14 task. No migration, no cloud change, no data, no release.
+
+**What changed:**
+
+- `landing.css`: `.petrol-proof` loses its vertical padding and `.petrol-story` takes it instead, so the photo reaches every edge. The copy sits in a new `.petrol-story-wrap` (`petrol-wrap`), so it still lines up with the rest of the page. The scrim gradient is anchored to `--story-gutter` (where the content wrap starts), not the viewport edge: the text side stays dark at every width and the photo shows on the right on wide screens. Phone (640px and below) padding moved from the story to the wrap.
+- `landingScreen.js`: `STORY_PHOTO` constant (`src`, `alt`, `position`). `position` is set as inline `object-position`, the focal-point hook for the `object-fit: cover` crop, same idea as `HERO_PHOTOS`. The default `50% 50%` is a no-op on purpose; it is there to be changed. `proofSection()` builds the story and the copy wrap. The reveal observer now watches the story. `alt`, `loading="lazy"`, the copy text and the latest-event block logic are unchanged.
+
+**Verified:**
+
+- Browser at 360, 768, 1280 and 1830px, with and without the latest-result block: no horizontal overflow; the card grows with its text.
+- ESLint and Prettier clean. `vitest src/marketing`: 199 passing.
+
+**Reviews:**
+
+- `code-reviewer`: no findings. One nit: the default `object-position` is a no-op hook. Intentional.
+- `ui-accessibility-reviewer`: no blocking findings. Nits, none fixed:
+  - Descriptive alt on a photo that reads as near-decorative. Kept on purpose: it is a genuine event photo, and the brief said keep the alt.
+  - The photo is 1100px wide, so it upscales about 1.7x on 1830px screens and is soft on large desktops. A wider source fixes it (ROADMAP).
+  - The raw rgba scrim values are undocumented. Intentional.
+
+**Open follow-up:**
+
+- Phone (640px and below): the opaque copy card covers the photo's subject, so the photo is barely visible. Pre-existing (the phone rule already set the card's background before this change); owner design decision. ROADMAP "Known open items from the landing proof photo".
+- Wider source for the full-bleed slot (`hero-cupping-bowls.jpg`, also used by the Tour page). ROADMAP, same section.
+- Package version bump (CLAUDE.md step 8) NOT done: this session's edit scope was CHANGELOG.md and ROADMAP.md only. Run `npm version patch --no-git-tag-version` before the release that carries this.
+- `state.json` not touched: it is not in this worktree, and its reset is `kb-sync`'s job.
+
+---
+
 ## Landing page cleanup, stage 3 of 3: the live now bar · 2026-10-30
 
 **Task:** Stage 3 of the three-stage landing page cleanup: a "live now" bar on the landing page, listing events an organiser has opted in to publish. Stages 1 and 2 are in the entries below. Not a handoff §14 task. Migration `20261029100000_homepage_live_listing.sql` written and tested locally; NOT pushed to the cloud project (the main session pushes it after merge, `apply_migration`, version `20261029100000`). No package version bump, no release.

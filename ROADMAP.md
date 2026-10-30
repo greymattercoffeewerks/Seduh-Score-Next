@@ -2545,3 +2545,10 @@ Stage 3 (the live now bar behind a per-event opt-in) is in the CHANGELOG entry o
 - **Test gaps, logged not fixed** (`test-auditor`): a failed unlist; `orgName` null wording; a loader that never resolves; `main.js` passing `loadLive`. (landing page cleanup, stage 3)
 - **Accessibility nits, logged not fixed** (`ui-accessibility-reviewer`): the raw rgba border on the card has no design token; clamped long names have no visible full text. (landing page cleanup, stage 3)
 - **Pre-existing, logged only:** `tidy()` in `src/core/publicLiveNow.js` resembles the `text()` helper in brandSlot. Not extracted; a third caller would justify it. (landing page cleanup, stage 3; `module-boundary-checker`)
+
+## Known open items from the landing proof photo (full bleed, 2026-10-30)
+
+The proof section's photo now runs edge to edge (CHANGELOG entry of the same date). Two items came out of it.
+
+- **Phone copy card covers the photo's subject.** On phones (640px and below) the proof copy card is opaque, so it covers the bowls the photo is of, and the photo is barely visible. Pre-existing: the card's opacity on phones predates the full-bleed change. Owner design decision: make the card translucent, move the copy so the photo shows, or accept it. (landing page; `ui-accessibility-reviewer` finding, not fixed)
+- **Wider source for the full-bleed slot.** `public/marketing/hero-cupping-bowls.jpg` is 1100px wide, so it upscales about 1.7x on 1830px screens and looks soft on large desktops. Replace it with a source at least 1830px wide for the full-bleed proof slot. The file is also used by the Tour page (`tourScreen.js`), so check that page when swapping it. (landing page; `ui-accessibility-reviewer` nit)
