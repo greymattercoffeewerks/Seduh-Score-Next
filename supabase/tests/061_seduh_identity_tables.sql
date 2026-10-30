@@ -4,14 +4,16 @@
 -- service_role for select, insert, update, delete and truncate (and the ledger's sequence); the columns are exactly the
 -- spec's; every CHECK, the unique phone, the self reference and the NOT NULLs refuse a bad row with the right SQLSTATE
 -- (run as the table owner, each in its own sub-transaction) and the boundary values just inside each limit are accepted;
--- display_name is conditional on status (an opted-out identity holds no name, an active one holds 1 to 120 characters);
+-- display_name is conditional on status (an opted-out identity holds no name, an active one holds 1 to 120 characters,
+-- a merged tombstone holds none or 1 to 120: a DELIBERATE relaxation of spec 3.2 so a merge or an erasure can blank a
+-- tombstone's name; recorded in the migration header and the PR for the owner);
 -- merged_into is set if and only if the status is 'merged', never to itself, and its target cannot be deleted; the
 -- updated_at trigger overwrites a hand-set value; the ledger accepts exactly the four reason codes, holds no phone or
 -- name column, and is append-only for the owner too (update, delete, truncate, also under session_replication_role =
 -- replica), through triggers that are BEFORE and ENABLE ALWAYS.
 -- Not claimed (documented in the migration): the owner can still disable or drop the ledger's triggers.
 begin;
-select plan(66);
+select plan(70);
 
 create schema t061;
 
@@ -219,7 +221,16 @@ select is(t061.accepts($$insert into app.seduh_identities (phone_e164, display_n
 select is(t061.state($$update app.seduh_identities set status = 'opted_out' where id = '00000000-0000-0000-0000-000000006101'$$),
   '23514', 'opting out without blanking the name is refused on update too');
 
+select is(t061.accepts($$insert into app.seduh_identities (phone_e164, display_name, source) values ('+6738000623', 'x', 'archive')$$),
+  'ok', 'a name of 1 character is accepted (the lower bound)');
+select is(t061.state(format($$insert into app.seduh_identities (phone_e164, display_name, source, status, merged_into) values ('+6738000623', %L, 'archive', 'merged', '00000000-0000-0000-0000-000000006101')$$, repeat('n', 121))),
+  '23514', 'a merged tombstone''s name of 121 characters is refused');
+
 -- country
+select is(t061.accepts($$insert into app.seduh_identities (phone_e164, display_name, source, country) values ('+6738000624', 'x', 'archive', 'x')$$),
+  'ok', 'a country of 1 character is accepted (the lower bound)');
+select is(t061.accepts(format($$insert into app.seduh_identities (phone_e164, display_name, source, country) values ('+6738000624', 'x', 'archive', %L)$$, repeat('c', 60))),
+  'ok', 'a country of 60 characters is accepted (the upper bound)');
 select is(t061.state($$insert into app.seduh_identities (phone_e164, display_name, source, country) values ('+6738000624', 'x', 'archive', '')$$),
   '23514', 'an empty country is refused');
 select is(t061.state(format($$insert into app.seduh_identities (phone_e164, display_name, source, country) values ('+6738000624', 'x', 'archive', %L)$$, repeat('c', 61))),
