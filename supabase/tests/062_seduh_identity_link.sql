@@ -130,12 +130,16 @@ select is(t062.attempt($$ select set_config('app.seduh_link_write', 'on', true);
 
 -- the other API roles: the flag does not help service_role either (anon has no UPDATE on people at all)
 reset role;
-select is(t062.attempt($$ set local role service_role; select set_config('app.seduh_link_write', 'on', true);
+-- whichever wall answers first (the guard, a table privilege or the row-level-security helper; this differs between a
+-- local reset and a fresh CI build), the write is refused with 42501 and the row is unchanged
+select matches(t062.attempt($$ set local role service_role; select set_config('app.seduh_link_write', 'on', true);
     update people set global_person_id = '00000000-0000-0000-0000-000000006301' where id = '00000000-0000-0000-0000-000000006405' $$),
-  '42501: permission denied for table people', 'service_role cannot update people at all, flag or not (the guard''s role list is a second wall, not the first)');
-select is(t062.attempt($$ set local role anon; select set_config('app.seduh_link_write', 'on', true);
+  '^42501: (people\.global_person_id is written by the database only|permission denied for .*)$',
+  'service_role with the flag set is refused with 42501');
+select matches(t062.attempt($$ set local role anon; select set_config('app.seduh_link_write', 'on', true);
     update people set global_person_id = '00000000-0000-0000-0000-000000006301' where id = '00000000-0000-0000-0000-000000006405' $$),
-  '42501: permission denied for table people', 'anon cannot update people at all');
+  '^42501: (people\.global_person_id is written by the database only|permission denied for .*)$',
+  'anon with the flag set is refused with 42501');
 -- the owner clearing a link WITHOUT the flag at depth 1 is refused (the FK carve-out needs a nested call)
 select is(t062.attempt($$ update people set global_person_id = null where id = '00000000-0000-0000-0000-000000006410' $$),
   '42501: people.global_person_id is written by the database only', 'the owner clearing a link without the flag is refused (the nested-depth carve-out does not apply at depth 1)');
