@@ -32,7 +32,7 @@
 --   * the privileges `anon` holds on tables and columns are exactly the pinned list below.
 -- (org_id immutability on every table that carries the column is pinned separately by 033.)
 begin;
-select plan(163);
+select plan(168);
 
 -- ============ helpers (rolled back with the rest) ============
 
@@ -101,6 +101,12 @@ exception when insufficient_privilege then
   return 0;
 end $$;
 
+-- A valid E.164 phone for a fixture person (people.phone has been CHECKed since T-ID.A3): '+67390', the sequence
+-- number, and two digits taken from the org tag so the two orgs differ. Never use a bare string such as '555-1'.
+create function e1.phone(t text, n int) returns text language sql immutable as $$
+  select '+67390' || lpad(n::text, 2, '0') || lpad((ascii(left(t, 1)) % 100)::text, 2, '0')
+$$;
+
 -- ============ fixtures (as postgres, which bypasses row-level security) ============
 
 insert into auth.users (id, email) values
@@ -124,7 +130,7 @@ begin
     insert into events (id, org_id, format, name) values (e1.u(t, 1), e1.u(t, 100), 'cup_taster', 'Event ' || t);
     insert into event_entries (id, event_id, display_name) values (e1.u(t, 2), e1.u(t, 1), 'Cupper ' || t);
     insert into people (id, org_id, display_name, phone) values
-      (e1.u(t, 17), e1.u(t, 100), 'Person ' || t, '555-' || t);
+      (e1.u(t, 17), e1.u(t, 100), 'Person ' || t, e1.phone(t, 1));
     insert into person_merges (id, org_id, kept_id, merged_id, merged_name) values
       (e1.u(t, 18), e1.u(t, 100), e1.u(t, 17), e1.u(t, 99), 'Merged away ' || t);
     insert into ct_stages (id, event_id, kind, ordinal, set_count, duration_secs) values
@@ -161,6 +167,9 @@ begin
     insert into processed_operations (id, org_id, kind) values (e1.u(t, 19), e1.u(t, 100), 'confirm_heat');
     -- an entitlement grant (members read it; only the admin functions write it)
     insert into entitlement_grants (id, org_id, tier, source) values (e1.u(t, 50), e1.u(t, 100), 'annual', 'manual');
+    -- a roster row (the staff/affiliate roster of the organisation's own person)
+    insert into org_person_affiliations (id, org_id, person_id, relationship) values
+      (e1.u(t, 21), e1.u(t, 100), e1.u(t, 17), 'staff');
     -- a removed team member (the table is only ever read and written through the team RPCs)
     insert into team_removed_members (org_id, user_id) values (e1.u(t, 100), '00000000-0000-0000-0000-000000000004');
     -- the per-event audit counters (kept by the definer functions; no member can touch them)
@@ -220,7 +229,8 @@ insert into e1.spec (tbl, filter, set_col, member_read, member_update, read_rule
   ('processed_operations',  'id = e1.u(''@'', 19)',         'id',            true,  false,  'members', 'update public.processed_operations set org_id = e1.u(''#'', 100) where id = e1.u(''@'', 19)'),
   ('score_change_log',      'org_id = e1.u(''@'', 100)',    'reason',        true,  false, 'members', 'update public.score_change_log set org_id = e1.u(''#'', 100) where org_id = e1.u(''@'', 100)'),
   ('score_change_counts',   'event_id = e1.u(''@'', 1)',    'event_id',      false, false, 'members', 'update public.score_change_counts set event_id = e1.u(''#'', 1) where event_id = e1.u(''@'', 1)'),
-  ('entitlement_grants',    'id = e1.u(''@'', 50)',         'id',            true,  false, 'members', 'update public.entitlement_grants set org_id = e1.u(''#'', 100) where id = e1.u(''@'', 50)');
+  ('entitlement_grants',    'id = e1.u(''@'', 50)',         'id',            true,  false, 'members', 'update public.entitlement_grants set org_id = e1.u(''#'', 100) where id = e1.u(''@'', 50)'),
+  ('org_person_affiliations', 'id = e1.u(''@'', 21)',        'id',            true,  true,  'members', 'update public.org_person_affiliations set org_id = e1.u(''#'', 100) where id = e1.u(''@'', 21)');
 
 -- a caller may insert only these columns of this table (recorded_by / recorded_at are set by the database), so a copy
 -- of the row is built from them; with the others included the refusal would be a column privilege, not row-level security
@@ -231,7 +241,7 @@ update e1.spec set insert_cols = 'event_id, team_id, total_points, wins, group_s
 -- an update where default privileges grant one; either way only the owning organisation's members may
 update e1.spec set update_env = true where tbl = 'processed_operations';
 
-select is((select count(*)::int from e1.spec), 27, 'the matrix covers 27 tenant tables');
+select is((select count(*)::int from e1.spec), 28, 'the matrix covers 28 tenant tables');
 
 -- one captured row per table and organisation, so a copy of it can be INSERTed by someone it does not belong to
 create table e1.fx (tbl text, org text, doc jsonb);
@@ -380,7 +390,7 @@ select is(
   s.tbl || ': nobody INSERTS into an organisation without belonging to it (every attempt refused with 42501)'
 ) from e1.spec s order by s.tbl;
 
--- the moves: 27 tables, 26 with something to move, both directions
+-- the moves: 28 tables, 27 with something to move, both directions
 select is(
   (select coalesce(string_agg(r.caller || '/' || r.org || '=' || r.code, ' ' order by r.caller, r.org), 'none')
      from e1.results r

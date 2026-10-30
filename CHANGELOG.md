@@ -1,3 +1,32 @@
+## 059 test 22 flake fixed (test only) · 2026-10-30
+
+**Task:** `059_public_live_now.sql` test 22 ("an event whose grant ended is still listed") failed about 4 runs in 10 (7 of 20 locally; once in CI on #360). `public_live_now()` orders by `updated_at desc, id limit 3`; in one transaction `now()` is frozen, so the locked event's session tied with the four cap sessions and the random `live_sessions.id` decided whether it was in the top 3. Not a clock or day-boundary problem: nothing in the migration or the window-lock functions depends on a date.
+
+**What changed:** the locked session now gets `updated_at = now() + interval '1 second'`, strictly newest. Test only; no migration, no app code. Test 23 (expects 0 once the lock is enforced) now proves the lock rather than the limit.
+
+**Verified:** 50 consecutive local runs of the file after the change: 48 passed in a first batch of 25 (2 failures not attributed: the shared local database was being reset by another session at the time) and 25 of 25 in a second batch.
+
+**Reviews:** test-only change; test-auditor not run.
+
+## Seduh ID phone work closed out: client checker, cloud push, database checked against the shared cases · 2026-10-30
+
+**Task:** Close the Seduh ID phone work (T-ID.A0 to A4 done; the client phone checker is the client half of T-ID.A3; its commits were first labelled `T-ID.B1`, relabelled here so B1 means only the identity tables). One records PR for the four merged PRs and the cloud push, plus one test addition. No migration, no app code.
+
+**What shipped, in order (all merged into `dev`):**
+
+- #357: `core/registry.js` refuses a non-E.164 phone before it reaches the database.
+- #359: `createPerson` stays refuse-only (no silent repair); the roster maps `phone_invalid` to a message.
+- #358 (T-ID.A3): the two migrations, shape-only database, `update_roster_entry` needs canonical E.164 (hint `phone_invalid`), CHECK `people_phone_e164`. Entry above.
+- #360: `src/core/phone.js` rewritten on libphonenumber-js (Brunei-first policy), a country select in the roster form, the shared fixture `tests/fixtures/phone-cases.json`.
+- **Cloud (2026-10-30, owner-approved, `apply_migration`):** the two migrations were pushed as cloud versions `20261030005330` (`phone_e164_shape`) and `20261030005349` (`people_phone_e164_check`). The repo files are `20261030100000` and `20261030110000`: the number differs because `apply_migration` stamps the push time, as in earlier pushes; the SQL is the same. Verified: the CHECK is validated and 23 of 23 people hold a valid E.164 phone. On 2026-10-29 the owner had approved deleting 17 test rows from the cloud `people` table (16 junk phones and one test person); no entry referenced them.
+- Owner decisions accepted: 001 and 0011 handling as built; every recommendation in `PHONE-CHECKER-DESIGN.md` section 7.
+
+**This PR:** the generator `tools/generate-phone-fixture-sql.mjs` now writes a pgTAP test, `supabase/tests/060b_phone_fixture_cases.sql`, with the shared cases embedded (the old `tests/fixtures/phone_cases.sql` is gone: `supabase test db` runs pg_prove in a container that sees only `supabase/tests`, so a test could not `\i` a file outside it, and a fixture inside it would be run as a test). It checks, for every case with an expected value (the client output), that `app.is_e164` accepts it and `update_roster_entry` stores it unchanged, and for the 69 `refuse` cases that the raw input is not E.164 and `update_roster_entry` answers `phone_invalid`, with the person unchanged afterwards (214 assertions). It also asserts minimum counts, so an empty fixture cannot pass. The vitest stale-file guard in `phone.test.js` stays and now compares against the generated test. Fixture ids use the `b60` block. Checked by mutation: changing the expected hint failed 69 of 214.
+
+**Reviews:** #357 to #360 (their own entries and PRs): the A3 test-auditor found two Important gaps (length bounds untested), fixed with boundary tests; the `adminErrors.test.js` hint-classification CI failure (two new hints not classified) was fixed; the #360 CI failures were a fixture file inside the pg_prove glob (moved out), and a Playwright failure on the Phone label (the country select is now labelled "Country code" and the e2e phones are complete Brunei numbers), both fixed; `059_public_live_now.sql` test 22 failed once in CI on #360 and passed on the next run (see below). This PR: code-reviewer found nothing; test-auditor found one Nit (the database was only given the 2 already-canonical cases, not every expected output), fixed by feeding every `expect` value to the database. Full pgTAP after `db:reset`: 3344 tests, only `059` test 22 failed (the flake below, not this change).
+
+**Found, not fixed (the owner decides):** `059_public_live_now.sql` test 22 is flaky, about 40% locally (7 of 20 runs failed). It is not a clock or day-boundary problem. `public_live_now()` ends `order by ls.updated_at desc, ls.id limit 3`; in the test the four "cap" sessions and the "locked" session all take `updated_at = now()` (frozen inside the transaction), so five rows tie and the random `ls.id` decides whether the locked event is in the top 3 (3 in 5). Test 23 (expects 0) passes either way, so it can pass without proving the lock. Fix: give the locked session an `updated_at` strictly newer than the cap rows. Evidence in the side-session notes (`059-test22-flake.md`).
+
 ## Landing page: proof photo full bleed · 2026-10-30
 
 **Task:** The landing proof section (the "Completed" / "Not a demo. Real events, real brackets." card) now uses a full-bleed photo: the story spans the viewport edge to edge, and the copy sits in the usual content wrap. Visual only. Not a handoff §14 task. No migration, no cloud change, no data, no release.
@@ -138,6 +167,22 @@
 **Open follow-up:** stage 2 and stage 3 (above); the screen-reader order nit (a); the contrast item in ROADMAP.
 
 ---
+
+## T-ID.A3: people.phone is E.164 in the database, shape only (not pushed to the cloud) · 2026-10-29
+
+**Task:** Seduh ID Layer 1 keys a person on a validated E.164 phone (`SEDUH-ID-LAYER1-SPEC-DRAFT.md` 3.3, 4.2, T-ID.A3; owner decisions in HANDOFF-CORRECTION-004 and `PHONE-CHECKER-DESIGN.md` 7, answered 2026-10-29). The first version put a SQL port of `normalizePhone` in the database; the owner then decided the database is **shape-only** and all interpretation lives in the client, so the PR was amended in place (nothing had been pushed).
+
+**What changed:**
+
+- `20261030100000_phone_e164_shape.sql`: `app.is_e164` (the shape `^\+[1-9][0-9]{7,14}$`) and `app.phone_repair_class` (valid / repairable_default_country / null_phone / ambiguous; only an exact 7-digit Brunei number `^[2-578][0-9]{6}$` is repairable with +673; 8 digits, a leading 0 and everything else is ambiguous). `update_roster_entry` (from the 20261011140000 body, null-org guard kept) trims, then REQUIRES canonical E.164 and otherwise refuses with hint `phone_invalid`; no normalisation, no default country. Changes no row; safe to push at any time.
+- `20261030110000_people_phone_e164_check.sql`: the `people_phone_e164` CHECK, added VALID (a NOT VALID check still blocks updates of legacy rows), behind a guard that refuses with a row count if any non-E.164 row remains. Push only after the stored phones are valid; the 2026-10-29 cloud re-audit showed 24 people, all valid.
+- `supabase/scripts/people_phone_audit.sql` (read-only: class, row ids, digit counts, never a value) and `people_phone_repair.sql` (owner-run, repairs only the exact 7-digit Brunei rows with a unique target, never deletes, ends in ROLLBACK).
+- `src/core/phone.js`: `E164_PATTERN` now uses `[0-9]` (same behaviour) so the client, `app.is_e164` and the CHECK are the same string; `supabase/phonePattern.test.js` fails if they drift.
+- pgTAP: new `060_phone_e164.sql`; fixtures in 040/041 use `e1.phone`; 024's phone-cap case uses a padded canonical value.
+
+**Reviews:** first pass: security-reviewer and schema-guardian found no Important; code-reviewer none; test-auditor two Important (length bounds untested), fixed with boundary tests (its independent check was not run: test-only fix). After the shape-only amendment: schema-guardian and security-reviewer re-run on the new diff only, no Important findings; doc-drift nits fixed.
+
+**Not done:** the client rewrite (`phone.js` interpretation, `registry.js` calling it, the `phone_invalid` message, the country select, the shared fixture) is the next task; until it lands the roster UI still normalises with +673 itself and sends canonical values, which the RPC accepts.
 
 ## Password screens follow the cloud's new password settings · 2026-10-29
 

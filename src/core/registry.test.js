@@ -13,6 +13,7 @@ import {
   listPeopleByIds,
   updateRosterEntry,
   mergePeople,
+  PhoneError,
 } from './registry.js';
 import { describeError } from './errors.js';
 
@@ -558,28 +559,35 @@ describe('updateRosterEntry', () => {
   });
 });
 
-// Seduh ID: `people.phone` is the cross-organisation key, so core refuses a non-E.164 shape
-// before any database call. Callers normalize; registry only refuses (it never rewrites).
-describe('phone shape guard', () => {
+// Seduh ID: `people.phone` is the cross-organisation key, so core interprets what was typed
+// (core/phone.js) and refuses anything that is not a number, with a stable code in `.hint`, before
+// any database call. A second caller of these functions cannot skip the check.
+describe('phone guard', () => {
   const BAD_PHONES = [
-    ['a local number with no country code', '7123456'],
-    ['a number with spaces (not normalized)', '+673 7123456'],
-    ['text', 'not a phone'],
-    ['too short', '+12345'],
-    ['an empty string (not the same as null)', ''],
-    ['a number, not a string', 6737123456],
+    ['a bare foreign number with no country', '8123 4567', 'needs_country_code'],
+    ['a bare 8-digit number that is not Brunei', '81234567', 'needs_country_code'],
+    ['text', 'not a phone', 'not_a_number'],
+    ['an invalid short number', '+12345', 'invalid_number'],
+    ['too short to be a number at all', '+1', 'too_short'],
+    ['an empty string (not the same as null)', '', 'blank'],
+    ['a number, not a string', 6737123456, 'blank'],
+    ['two numbers', '7123456 / 8123456', 'multiple_numbers'],
+    ['an extension', '7123456 ext 12', 'extension_not_supported'],
   ];
 
   function untouched(client) {
     return { from: vi.spyOn(client, 'from'), rpc: client.rpc };
   }
 
-  describe.each(BAD_PHONES)('with %s', (_label, phone) => {
+  describe.each(BAD_PHONES)('with %s', (_label, phone, code) => {
     it('createPerson refuses it and makes no insert', async () => {
       const client = fakeClient();
       const spies = untouched(client);
-      await expect(createPerson('org1', { displayName: 'X', phone }, client)).rejects.toThrow(
-        /valid international number/,
+      await expect(createPerson('org1', { displayName: 'X', phone }, client)).rejects.toMatchObject(
+        {
+          name: 'PhoneError',
+          hint: code,
+        },
       );
       expect(spies.from).not.toHaveBeenCalled();
       expect(client.calls.filter((c) => c[0] === 'insert')).toEqual([]);
@@ -588,9 +596,11 @@ describe('phone shape guard', () => {
     it('registerPerson refuses it before even the dedup lookup', async () => {
       const client = fakeClient();
       const spies = untouched(client);
-      await expect(registerPerson('org1', { displayName: 'X', phone }, client)).rejects.toThrow(
-        /valid international number/,
-      );
+      await expect(
+        registerPerson('org1', { displayName: 'X', phone }, client),
+      ).rejects.toMatchObject({
+        hint: code,
+      });
       expect(spies.from).not.toHaveBeenCalled();
     });
 
@@ -599,7 +609,7 @@ describe('phone shape guard', () => {
       const spies = untouched(client);
       await expect(
         registerEntry('org1', 'ev1', { displayName: 'X', phone }, client),
-      ).rejects.toThrow(/valid international number/);
+      ).rejects.toMatchObject({ hint: code });
       expect(spies.from).not.toHaveBeenCalled();
       expect(spies.rpc).not.toHaveBeenCalled();
     });
@@ -608,28 +618,62 @@ describe('phone shape guard', () => {
       const client = fakeClient();
       await expect(
         updateRosterEntry('org1', 'entry1', { displayName: 'X', phone }, client),
-      ).rejects.toThrow(/valid international number/);
+      ).rejects.toMatchObject({ hint: code });
       expect(client.rpc).not.toHaveBeenCalled();
     });
   });
 
-  it('the refusal is a plain Error with no .code, so describeError shows its message', async () => {
+  it('the refusal is a PhoneError with a .hint and no .code, so describeError shows its message', async () => {
     const client = fakeClient();
     const error = await createPerson('org1', { displayName: 'X', phone: 'abc' }, client).catch(
       (e) => e,
     );
-    expect(error).toBeInstanceOf(Error);
+    expect(error).toBeInstanceOf(PhoneError);
+    expect(error.hint).toBe('not_a_number');
     expect(error.code).toBeUndefined();
     expect(describeError(error)).toBe(error.message);
   });
 
-  it('does not rewrite a valid phone: it reaches the insert exactly as given', async () => {
+  it('stores the canonical number: what was typed is interpreted once, here', async () => {
     const client = fakeClient({ tables: { people: { data: { id: 'p1' }, error: null } } });
-    await createPerson('org1', { displayName: 'X', phone: '+6737123456' }, client);
-    expect(client.calls.find((c) => c[0] === 'insert')[2].phone).toBe('+6737123456');
+    await createPerson('org1', { displayName: 'X', phone: '+673 712 3456' }, client);
+    await createPerson('org1', { displayName: 'X', phone: '7123456' }, client);
+    await createPerson(
+      'org1',
+      { displayName: 'X', phone: '8123 4567', phoneCountry: 'SG' },
+      client,
+    );
+    expect(client.calls.filter((c) => c[0] === 'insert').map((c) => c[2].phone)).toEqual([
+      '+6737123456',
+      '+6737123456',
+      '+6581234567',
+    ]);
   });
 
-  it('updateRosterEntry still sends a valid phone, and null for a walk-up', async () => {
+  it('registerPerson looks up by the canonical number it will store, so typing it two ways finds one person', async () => {
+    const eqCalls = [];
+    const client = fakeClient({ tables: { people: { data: { id: 'p1' }, error: null } } });
+    const from = client.from.bind(client);
+    client.from = (table) => {
+      const builder = from(table);
+      const eq = builder.eq;
+      builder.eq = (...args) => {
+        eqCalls.push(args);
+        return eq(...args);
+      };
+      return builder;
+    };
+    await registerPerson(
+      'org1',
+      { displayName: 'X', phone: '07911 123456', phoneCountry: 'GB' },
+      client,
+    );
+    await registerPerson('org1', { displayName: 'X', phone: '+44 (0)7911 123456' }, client);
+    const phones = eqCalls.filter((c) => c[0] === 'phone').map((c) => c[1]);
+    expect(phones).toEqual(['+447911123456', '+447911123456']);
+  });
+
+  it('updateRosterEntry sends a valid phone, and null for a walk-up', async () => {
     const client = fakeClient();
     await updateRosterEntry('org1', 'e1', { displayName: 'X', phone: '+6737123456' }, client);
     await updateRosterEntry('org1', 'e1', { displayName: 'Y', phone: null }, client);
@@ -645,7 +689,49 @@ describe('phone shape guard', () => {
   });
 });
 
-describe('phone shape guard: null phone through the registering paths', () => {
+describe('phone guard: the edit rule through updateRosterEntry', () => {
+  const STORED = '+67381234567'; // shape-valid, not a Brunei number: an old row
+
+  it('sends an unchanged stored phone as it is, so an old number never blocks another edit', async () => {
+    const client = fakeClient();
+    await updateRosterEntry(
+      'org1',
+      'e1',
+      { displayName: 'New name', phone: STORED, storedPhone: STORED },
+      client,
+    );
+    expect(client.rpc.mock.calls[0][1].p_phone).toBe(STORED);
+  });
+
+  it('applies the full rules to a changed value, and to any value when no stored phone is given', async () => {
+    const client = fakeClient();
+    await expect(
+      updateRosterEntry('org1', 'e1', { displayName: 'X', phone: STORED }, client),
+    ).rejects.toMatchObject({ hint: 'invalid_number' });
+    await expect(
+      updateRosterEntry(
+        'org1',
+        'e1',
+        { displayName: 'X', phone: '+67381234568', storedPhone: STORED },
+        client,
+      ),
+    ).rejects.toMatchObject({ hint: 'invalid_number' });
+    expect(client.rpc).not.toHaveBeenCalled();
+  });
+
+  it('sends the canonical number for a typed one, in the chosen country', async () => {
+    const client = fakeClient();
+    await updateRosterEntry(
+      'org1',
+      'e1',
+      { displayName: 'X', phone: '012-345 6789', phoneCountry: 'MY', storedPhone: STORED },
+      client,
+    );
+    expect(client.rpc.mock.calls[0][1].p_phone).toBe('+60123456789');
+  });
+});
+
+describe('phone guard: null phone through the registering paths', () => {
   it('registerPerson with a null phone is not refused and inserts phone null', async () => {
     const created = { id: 'p9', display_name: 'Walk Up', phone: null };
     const client = fakeClient({

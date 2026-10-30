@@ -18,7 +18,7 @@
 -- is shown to list exactly the caller's own organisations, and a new RPC that takes one of these ids fails here
 -- until it is added to the matrix (or consciously exempted).
 begin;
-select plan(68);
+select plan(70);
 
 create schema e1;
 grant usage on schema e1 to anon, authenticated;
@@ -36,6 +36,12 @@ exception when others then
   if sqlstate = 'P9999' then return 'ok'; end if;
   return sqlstate || ': ' || sqlerrm;
 end $$;
+
+-- A valid E.164 phone for a fixture person (people.phone has been CHECKed since T-ID.A3): '+67390', the sequence
+-- number, and two digits taken from the org tag so the two orgs differ. Never use a bare string such as '555-1'.
+create function e1.phone(t text, n int) returns text language sql immutable as $$
+  select '+67390' || lpad(n::text, 2, '0') || lpad((ascii(left(t, 1)) % 100)::text, 2, '0')
+$$;
 
 -- ============ fixtures (as postgres) ============
 
@@ -60,8 +66,8 @@ begin
     insert into events (id, org_id, format, name, is_test) values (e1.u(t, 50), e1.u(t, 100), 'btc', 'Brewers event ' || t, true);
     insert into event_entries (id, event_id, display_name) values (e1.u(t, 2), e1.u(t, 1), 'Cupper ' || t);
     insert into people (id, org_id, display_name, phone) values
-      (e1.u(t, 17), e1.u(t, 100), 'Person ' || t, '555-1' || t),
-      (e1.u(t, 18), e1.u(t, 100), 'Other person ' || t, '555-2' || t);
+      (e1.u(t, 17), e1.u(t, 100), 'Person ' || t, e1.phone(t, 1)),
+      (e1.u(t, 18), e1.u(t, 100), 'Other person ' || t, e1.phone(t, 2));
     insert into ct_stages (id, event_id, kind, ordinal, set_count, duration_secs) values (e1.u(t, 3), e1.u(t, 1), 'prelims', 1, 1, 480);
     insert into ct_sets (id, stage_id, position) values (e1.u(t, 4), e1.u(t, 3), 1);
     insert into ct_stage_entries (id, stage_id, entry_id) values (e1.u(t, 5), e1.u(t, 3), e1.u(t, 2));
@@ -113,7 +119,8 @@ insert into e1.rpc (name, sql, org_only) values
   ('team_list_removed_members', 'select * from public.team_list_removed_members(e1.u(''@'',100))', true),
   ('finish_event', 'select public.finish_event(e1.u(''@'',100), e1.u(''%'',1))', false),
   ('my_entitlements', 'select public.my_entitlements(e1.u(''@'',100), e1.u(''%'',1))', false),
-  ('team_remove_member', 'select public.team_remove_member(e1.u(''@'',100), ''00000000-0000-0000-0000-000000000003''::uuid)', true);
+  ('team_remove_member', 'select public.team_remove_member(e1.u(''@'',100), ''00000000-0000-0000-0000-000000000003''::uuid)', true),
+  ('link_person_identity', 'select public.link_person_identity(e1.u(''@'',100), e1.u(''%'',17))', false);
 
 update e1.rpc set org_arg = false where name = 'create_btc_match';
 -- Where the organisation's own call is stopped by a LATER rule of the function (the fixture is a pending heat, an
@@ -129,7 +136,7 @@ update e1.rpc set own_expect = case name
   when 'record_btc_tiebreak'         then 'P0001: record_btc_tiebreak: a tie-break applies to knockout matches only'
   when 'record_heat_time'            then 'P0002: CONFLICT: heat .* is pending now, expected timing'
   else 'ok' end;
-select is((select count(*)::int from e1.rpc), 25, 'the matrix covers 25 RPCs');
+select is((select count(*)::int from e1.rpc), 26, 'the matrix covers 26 RPCs');
 select is(
   (select coalesce(string_agg(r.name, ', '), 'none') from e1.rpc r
     where not exists (select 1 from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = r.name)),
@@ -188,15 +195,16 @@ call e1.run_as('user_c');
 reset role;
 
 -- the function's own guard speaking (and not an argument error, a missing row of the fixture, or success)
-create function e1.is_guard(code text) returns boolean language sql immutable as $$
-  select code ~ '^(42501|P0001): ' and code ~* '(not found|does not belong|only an owner)'
+create function e1.is_guard(code text, rpc text) returns boolean language sql immutable as $$
+  select code ~ '^(42501|P0001): ' and code ~* ('(not found|does not belong|only an owner'
+    || case when rpc = 'link_person_identity' then '|row-level security policy for table "people"' else '' end || ')')
 $$;
 
 -- ============ every cross-organisation attempt is refused by the guard ============
 
 select is(
   (select coalesce(string_agg(r.caller || ' ' || r.kind || ' -> ' || left(r.code, 90), E'\n' order by r.kind, r.caller), 'none')
-     from e1.results r where r.rpc = q.name and r.kind like 'attack%' and not e1.is_guard(r.code)),
+     from e1.results r where r.rpc = q.name and r.kind like 'attack%' and not e1.is_guard(r.code, r.rpc)),
   'none',
   q.name || ': every cross-organisation attempt is refused by its own guard'
 ) from e1.rpc q order by q.name;

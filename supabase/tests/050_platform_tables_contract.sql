@@ -5,7 +5,8 @@
 -- the `app` schema (not exposed by the API) PLUS the rules below. This file pins those rules for EVERY relation in `app`
 -- and for the complete set of functions that touch the platform tables, so the next platform table or admin function
 -- cannot forget one:
---   * both known platform tables exist in app; every table (and foreign table) in `app` has row-level security on, no
+--   * the exact set of tables in app is pinned (the admin console's two, the entitlement tables and the Seduh ID
+--     tables, T-ID.B1); every table (and foreign table) in `app` has row-level security on, no
 --     policy, an ACL that names only its owner (table, column and sequence level, PUBLIC included), no privilege for
 --     anon, authenticated or service_role at table or column level, an owner that is the schema's own owner and not an API role, and no default
 --     privilege is configured for the schema (it would hand a FUTURE table to the API roles);
@@ -24,10 +25,14 @@
 begin;
 select plan(16);
 
--- the guard sees the two tables it is about (a guard over any two tables, or none, would pass vacuously)
-select ok(
-  to_regclass('app.platform_admins') is not null and to_regclass('app.admin_audit_log') is not null,
-  'app.platform_admins and app.admin_audit_log both exist');
+-- the guard sees the tables it is about (a guard over any other tables, or none, would pass vacuously). The two
+-- Seduh ID tables (T-ID.B1) follow the same pattern, so every check below covers them too; 061 pins their shape.
+select is(
+  (select string_agg(c.relname, ', ' order by c.relname)
+     from pg_class c
+    where c.relnamespace = 'app'::regnamespace and c.relkind in ('r', 'p', 'f')),
+  'admin_audit_log, entitlement_caps, entitlement_keys, entitlement_tiers, person_link_blocks, platform_admins, seduh_identities, seduh_identity_merges',
+  'the tables in app are exactly the admin console''s two, the three entitlement tables and the three Seduh ID tables (the identities, their merge ledger and the per-person link block), so every check below covers each of them (a new table must be added here on purpose)');
 
 select is(
   (select coalesce(string_agg(c.relname, ', ' order by c.relname), 'none')
