@@ -317,8 +317,8 @@ select is(
       and not has_function_privilege('service_role', p.oid, 'execute')
       and p.prosecdef
       and coalesce(p.proconfig @> array['search_path=""'], false)),
-  5,
-  'all five internal resolvers exist, are SECURITY DEFINER with a pinned search_path, and no API role can execute them'
+  6,
+  'all six internal resolvers exist (the five of T-TEN.B6 and org_id_for_person_internal, T-ID.B2), are SECURITY DEFINER with a pinned search_path, and no API role can execute them'
 );
 
 -- ============ the NULL trap: with no user, a mismatch is still refused ============
@@ -465,8 +465,8 @@ select is(
     where p.pronamespace = 'public'::regnamespace
       and 'p_org_id' = any (p.proargnames)
       and p.prosrc ~ 'app\.org_id_for_'),
-  19,
-  'nineteen public RPCs take p_org_id and check it against a resolver'
+  20,
+  'twenty public RPCs take p_org_id and check it against a resolver (the nineteen of T-TEN.B6 and link_person_identity, T-ID.B2)'
 );
 select is(
   (select count(*)::int from pg_proc p
@@ -474,7 +474,7 @@ select is(
       and 'p_org_id' = any (p.proargnames)
       and p.prosrc ~ 'p_org_id is null or p_org_id is distinct from app\.org_id_for_'),
   19,
-  'and every one of them carries the p_org_id NULL guard'
+  'and the nineteen of them that predate T-ID.B2 carry the p_org_id NULL guard (link_person_identity opens with app.refuse_non_member instead, which refuses a NULL organisation as a non-member: 062 pins it)'
 );
 
 -- ============ the public resolvers keep their shape ============
