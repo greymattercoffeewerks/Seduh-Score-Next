@@ -128,10 +128,10 @@ export default defineConfig({
       use: { baseURL: 'http://127.0.0.1:5273' },
     },
     {
-      // identity-link-live.spec.js (T-ID.B2): the Seduh ID link over the real local PostgREST with real JWTs (no
+      // identity-link-live.spec.js (T-ID.B2) , affiliations-live.spec.js and people-screen-live.spec.js (T-ID.C2): the Seduh ID link, the staff/affiliate roster and the People screen over the real local PostgREST with real JWTs (no
       // browser). Last, for the same shared-backend reason; it creates its own organisations and identities.
       name: 'dev-identity',
-      testMatch: /identity-link-live\.spec\.js/,
+      testMatch: /(identity-link-live|affiliations-live|people-screen-live)\.spec\.js/,
       dependencies: ['dev-gating'],
       use: { baseURL: 'http://127.0.0.1:5273' },
     },
