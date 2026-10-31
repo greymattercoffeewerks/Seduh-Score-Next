@@ -24,6 +24,7 @@ export const ADMIN_ONLY_STRINGS = Object.freeze([
   'admin_plan_org',
   'admin_payment_confirm',
   'admin_list_keys',
+  'admin_seduh_id_counts',
   'admin_gating_preview',
   'admin_set_key_enforced',
   'admin_grant_create',

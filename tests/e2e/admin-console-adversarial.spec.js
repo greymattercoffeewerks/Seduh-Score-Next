@@ -72,6 +72,8 @@ const ADMIN_FUNCTIONS = {
   admin_grant_revoke: (w) => ({ p_grant_id: w.a.orgId }),
   admin_list_grants: (w) => ({ p_org_id: w.a.orgId }),
   admin_list_keys: () => ({}),
+  // T-ID.C3: the counts-only Seduh ID read (no arguments, integers back, nothing for anyone but an admin at aal2)
+  admin_seduh_id_counts: () => ({}),
   admin_plan_orgs: () => ({}),
   admin_plan_org: (w) => ({ p_org_id: w.a.orgId }),
   admin_payment_confirm: (w) => ({
@@ -596,6 +598,33 @@ test.describe('the admin surface under attack (HTTP, real local stack)', () => {
     // and the refused create_org calls left no organisation behind
     const orgs = await rpc('admin_list_orgs', {}, { token: adminAal2 });
     expect(orgs.body.filter((org) => org.slug.startsWith(`adv-${w.tag}`))).toEqual([]);
+  });
+
+  test('SEDUH ID COUNTS (T-ID.C3): an admin at aal2 gets exactly one row of ten whole numbers and nothing else, and an organiser gets the plain admin refusal', async () => {
+    const got = await rpc('admin_seduh_id_counts', {}, { token: adminAal2 });
+    expect(got.status).toBe(200);
+    expect(got.body).toHaveLength(1);
+    expect(Object.keys(got.body[0]).sort()).toEqual(
+      [
+        'identities_active',
+        'identities_from_archive',
+        'identities_from_roster',
+        'identities_merged',
+        'identities_opted_out',
+        'identities_orphan',
+        'identities_total',
+        'people_blocked',
+        'people_linked',
+        'people_total',
+      ].sort(),
+    );
+    for (const value of Object.values(got.body[0])) expect(Number.isSafeInteger(value)).toBe(true);
+    // no phone, name, email or uuid anywhere in the answer
+    expect(JSON.stringify(got.body)).not.toMatch(/\+\d{6}|@|[0-9a-f]{8}-[0-9a-f]{4}-/i);
+    refused(await rpc('admin_seduh_id_counts', {}, { token: organiserAal1 }), {
+      label: 'organiser asking for the counts',
+      hint: 'admin_required',
+    });
   });
 
   test('TWO REQUESTS AT ONCE: two demotions of the last two owners leave exactly one owner (one refused with last_owner, no deadlock), and a double add makes one member and one row', async () => {

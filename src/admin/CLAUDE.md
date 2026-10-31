@@ -198,6 +198,24 @@ organisation's plan (`#/plan/<organisation id>`: tier now, grants, events, the k
   (real page at 360px: a preview changes nothing; give and revoke an Annual plan; no event name in any response), and
   the adversarial attack list (the Plan functions were added to it).
 
+## The Seduh ID screen (T-ID.C3; `seduhIdPanel.js`, route `#/seduh-id`)
+
+The operator's **counts-only** view of the Seduh ID directory (owner decision 7a, `SEDUH-ID-LAYER1-SPEC-DRAFT.md` 3.7).
+One read-only function, `admin_seduh_id_counts()` (migration `20261031110000`, pgTAP `065`), returns ONE row of ten
+integers: identities total, by status, by source, identities with no linked person (tombstones excluded, as the B4 list),
+people total, linked and blocked. The rules:
+
+- **Numbers only, on purpose.** No name, phone, id, email, lookup or per-organisation figure (a per-organisation count
+  could identify who is in the directory), and no merge or unlink: those stay owner SQL. The only control is Refresh.
+  Adding anything else is a D-A4 amendment, the owner's call. pgTAP 065 pins the column list and that no other admin
+  function touches the identity tables; `readCounts` draws only the ten named keys and refuses a row that is not ten
+  whole non-negative numbers (nothing half-drawn).
+- **No audit row**: like every admin read, it writes nothing (STABLE); a count returns no identity.
+- States: loading, the empty directory ("There are no Seduh ID identities yet", people figures still shown), and a
+  failure with Retry, worded from the hint by `adminErrors.js`; a gate refusal is the console's to handle.
+- Tests: `seduhIdPanel.test.js`, `tests/e2e/admin-console-seduh-id.spec.js` (360px; a row added behind the page shows on
+  Refresh; no name or phone in the page or any response) and a row in the adversarial attack list.
+
 ## The Change password panel (`passwordPanel.js`, `currentPassword.js`; route `#/password`)
 
 The operator replaces their own password inside the console (design: `Handoffs and Specs/ADMIN-PASSWORD-DESIGN.md`,
