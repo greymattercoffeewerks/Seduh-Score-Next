@@ -31,6 +31,18 @@ function resolvePhone(phone, { country = null, storedPhone = null } = {}) {
   return result.phone;
 }
 
+// Whether saving `fields` (as updateRosterEntry takes them) changes the stored phone, read the way
+// updateRosterEntry reads it. A change clears the Seduh ID link in the database, so a caller uses this to
+// know when to ask for a link again. Never throws.
+export function phoneWillChange(fields) {
+  if (fields.phone === null || fields.phone === undefined) return false;
+  const parsed = parsePhone(fields.phone, {
+    country: fields.phoneCountry,
+    storedPhone: fields.storedPhone,
+  });
+  return parsed.ok && parsed.phone !== fields.storedPhone;
+}
+
 export async function findPersonByPhone(orgId, phone, client = getSupabase()) {
   const { data, error } = await client
     .from('people')

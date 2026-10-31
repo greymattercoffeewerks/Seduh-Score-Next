@@ -207,7 +207,7 @@ describe('mountPeopleScreen', () => {
     const client = fakeClient({ people: [person('p1', 'Amy Tan')] });
     const { root } = await mount(client);
     const add = q(root, '#people-add-p1-affiliate');
-    expect(add.getAttribute('aria-label')).toBe('Mark Amy Tan as affiliate');
+    expect(add.getAttribute('aria-label')).toBe('Mark as affiliate, Amy Tan');
     expect(add.classList.contains('tap-target')).toBe(true);
   });
 
@@ -216,6 +216,9 @@ describe('mountPeopleScreen', () => {
     const { root } = await mount(client);
     const add = q(root, '#people-add-p1-staff');
     add.click();
+    expect(q(root, '#people-add-p1-staff').disabled).toBe(true);
+    expect(q(root, '#people-add-p1-affiliate').disabled).toBe(true);
+    expect(q(root, '#people-feedback').textContent).toBe('Saving…');
     add.click();
     await flush();
     expect(client.writes.filter(([k]) => k === 'insert')).toHaveLength(1);

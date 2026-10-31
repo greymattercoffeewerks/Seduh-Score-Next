@@ -118,14 +118,19 @@ describe('listOrgPeople', () => {
     expect(c.builder.eq).toHaveBeenCalledWith('org_id', 'org1');
   });
 
-  it('says when the list was cut off at the limit', async () => {
-    const rows = Array.from({ length: PEOPLE_LIST_LIMIT }, (_, i) => ({
-      id: `p${i}`,
-      display_name: `N${i}`,
-      cafe: null,
-      global_person_id: null,
-    }));
-    expect((await listOrgPeople('org1', client(rows))).truncated).toBe(true);
+  it('says when the list was cut off, but not when it is exactly full', async () => {
+    const make = (n) =>
+      Array.from({ length: n }, (_, i) => ({
+        id: `p${i}`,
+        display_name: `N${i}`,
+        cafe: null,
+        global_person_id: null,
+      }));
+    const over = await listOrgPeople('org1', client(make(PEOPLE_LIST_LIMIT + 1)));
+    expect(over.truncated).toBe(true);
+    expect(over.people).toHaveLength(PEOPLE_LIST_LIMIT);
+    const exact = await listOrgPeople('org1', client(make(PEOPLE_LIST_LIMIT)));
+    expect(exact.truncated).toBe(false);
   });
 
   it('throws on a read error', async () => {

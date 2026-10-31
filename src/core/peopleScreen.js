@@ -153,7 +153,7 @@ export async function mountPeopleScreen(
       attrs: {
         type: 'button',
         id: `people-add-${person.id}-${relationship}`,
-        'aria-label': `Mark ${person.displayName} as ${word}`,
+        'aria-label': `Mark as ${word}, ${person.displayName}`,
       },
     });
     button.disabled = busy;
@@ -169,7 +169,7 @@ export async function mountPeopleScreen(
       attrs: {
         type: 'button',
         id: `people-end-${role.id}`,
-        'aria-label': `End ${word} role for ${person.displayName}`,
+        'aria-label': `End ${word} role, ${person.displayName}`,
       },
     });
     button.disabled = busy;
@@ -230,6 +230,8 @@ export async function mountPeopleScreen(
       feedback.textContent = pendingError;
       feedback.dataset.tone = 'error';
       pendingError = null;
+    } else if (busy) {
+      feedback.textContent = 'Saving…';
     } else if (pendingSuccess) {
       feedback.textContent = pendingSuccess;
       feedback.dataset.tone = 'success';

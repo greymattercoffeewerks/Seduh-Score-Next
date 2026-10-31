@@ -1889,13 +1889,15 @@ describe('Seduh ID on the roster (T-ID.C1)', () => {
     const baseRpc = client.rpc;
     client.rpc = (name, args) =>
       name === 'link_person_identity'
-        ? Promise.resolve({ data: null, error: { code: '42501', message: 'refused' } })
+        ? (client.rpcCalls.push([name, args]),
+          Promise.resolve({ data: null, error: { code: '42501', message: 'refused' } }))
         : baseRpc(name, args);
     const root = await mount(client);
     type(q(root, '[aria-label="Name"]'), 'New Cupper');
     type(q(root, '[aria-label="Phone"]'), '+6738001111');
     q(root, 'form').dispatchEvent(new Event('submit', { cancelable: true }));
     await flush();
+    expect(linkCalls(client)).toHaveLength(1); // it WAS attempted, and refused
     expect(root.querySelector('.screen-feedback').textContent).toBe('New Cupper registered.');
     expect(root.textContent).not.toContain('Linked');
   });
@@ -1904,7 +1906,10 @@ describe('Seduh ID on the roster (T-ID.C1)', () => {
     const client = fakeClient({ events: [eventRow], people: [], event_entries: [] });
     const baseRpc = client.rpc;
     client.rpc = (name, args) => {
-      if (name === 'link_person_identity') throw new Error('socket closed');
+      if (name === 'link_person_identity') {
+        client.rpcCalls.push([name, args]);
+        throw new Error('socket closed');
+      }
       return baseRpc(name, args);
     };
     const root = await mount(client);
@@ -1912,6 +1917,7 @@ describe('Seduh ID on the roster (T-ID.C1)', () => {
     type(q(root, '[aria-label="Phone"]'), '+6738001111');
     q(root, 'form').dispatchEvent(new Event('submit', { cancelable: true }));
     await flush();
+    expect(linkCalls(client)).toHaveLength(1);
     expect(root.querySelector('.screen-feedback').textContent).toBe('New Cupper registered.');
   });
 
@@ -1952,6 +1958,16 @@ describe('Seduh ID on the roster (T-ID.C1)', () => {
     await flush();
     expect(linkCalls(client)).toHaveLength(1);
     expect(linkCalls(client)[0][1]).toEqual({ p_org_id: 'org1', p_person_id: 'p1' });
+  });
+
+  it('retyping the same number in another format is not a phone change: no link call', async () => {
+    const client = oneLinkedPerson();
+    const root = await openEdit(client);
+    type(q(root, '#roster-edit-e1-phone'), '700 0001');
+    q(root, '.roster-edit-form button[type="submit"]').click();
+    await vi.waitFor(() => expect(q(root, '#roster-saved-e1')).not.toBeNull());
+    await flush();
+    expect(linkCalls(client)).toHaveLength(0);
   });
 
   it('saving Edit without touching the phone does not ask for a link', async () => {

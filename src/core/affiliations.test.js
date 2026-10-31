@@ -16,6 +16,7 @@ function table(result) {
     eq: vi.fn((...a) => (calls.push(['eq', ...a]), builder)),
     is: vi.fn((...a) => (calls.push(['is', ...a]), builder)),
     insert: vi.fn((p) => (calls.push(['insert', p]), Promise.resolve(result))),
+    delete: vi.fn(() => builder),
     update: vi.fn((p) => (calls.push(['update', p]), builder)),
     then: (resolve, reject) => Promise.resolve(result).then(resolve, reject),
   };
@@ -107,7 +108,7 @@ describe('endAffiliation', () => {
     expect(Number.isNaN(Date.parse(update[1].ended_at))).toBe(false);
     expect(t.calls).toContainEqual(['eq', 'id', 'a1']);
     expect(t.calls).toContainEqual(['is', 'ended_at', null]);
-    expect(t.builder.delete).toBeUndefined();
+    expect(t.builder.delete).not.toHaveBeenCalled();
   });
 
   it('throws on failure', async () => {

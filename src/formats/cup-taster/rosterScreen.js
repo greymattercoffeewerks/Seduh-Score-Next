@@ -47,6 +47,7 @@ import {
   registerEntry,
   setEntryWithdrawn,
   updateRosterEntry,
+  phoneWillChange,
 } from '../../core/registry.js';
 import {
   parsePhone,
@@ -227,16 +228,6 @@ export function phoneCountrySelect({ label, value, disabled, id, onChange }) {
 // The phone box with its country beside it, as ONE labelled field.
 function phoneRow(countrySelect, phoneInput) {
   return el('div', { className: 'roster-phone-row' }, [countrySelect, phoneInput]);
-}
-
-// Pure. Whether saving these edit fields changes the stored phone (read the way registry reads it).
-export function phoneChanged(fields) {
-  if (fields.phone === null || fields.phone === undefined) return false;
-  const parsed = parsePhone(fields.phone, {
-    country: fields.phoneCountry,
-    storedPhone: fields.storedPhone,
-  });
-  return parsed.ok && parsed.phone !== fields.storedPhone;
 }
 
 export function renderRegistrationForm(draft, { disabled }) {
@@ -929,7 +920,7 @@ export async function mountRosterScreen(root, { eventId, client = getSupabase(),
       await updateRosterEntry(event.org_id, entry.id, fields, client);
       // A phone change clears the database link and nothing re-links on its own, so ask again (same
       // best-effort rules as registration). Compared canonically: an unchanged number is not a change.
-      if (editing.linked && entry.person_id && phoneChanged(fields)) {
+      if (editing.linked /* has a profile */ && entry.person_id && phoneWillChange(fields)) {
         requestPersonLink(event.org_id, entry.person_id, client);
       }
       let refreshed = true;

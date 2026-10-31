@@ -38,25 +38,26 @@ export function isPersonLinked(person) {
   return Boolean(person && person.global_person_id);
 }
 
-// The organisation's people for a list screen, as { id, displayName, cafe, linked }. The identity id is
-// reduced to the boolean here, so it never reaches a screen. Capped at one page of rows; `truncated`
-// tells the screen to say so rather than imply the list is complete.
 export const PEOPLE_LIST_LIMIT = 1000;
 
 // The words shown wherever a person is linked. Plain, and claims nothing beyond the fact.
 export const LINKED_LABEL = 'Linked to a Seduh ID';
 
+// The organisation's people for a list screen, as { id, displayName, cafe, linked }. The identity id is
+// reduced to the boolean here, so it never reaches a screen. Capped at one page of rows; `truncated`
+// tells the screen to say so rather than imply the list is complete.
 export async function listOrgPeople(orgId, client = getSupabase()) {
   const { data, error } = await client
     .from('people')
     .select('id, display_name, cafe, global_person_id')
     .eq('org_id', orgId)
     .order('display_name', { ascending: true })
-    .limit(PEOPLE_LIST_LIMIT);
+    .limit(PEOPLE_LIST_LIMIT + 1);
   if (error) throw error;
-  const rows = data ?? [];
+  const all = data ?? [];
+  const rows = all.slice(0, PEOPLE_LIST_LIMIT);
   return {
-    truncated: rows.length >= PEOPLE_LIST_LIMIT,
+    truncated: all.length > PEOPLE_LIST_LIMIT,
     people: rows.map((row) => ({
       id: row.id,
       displayName: row.display_name,
