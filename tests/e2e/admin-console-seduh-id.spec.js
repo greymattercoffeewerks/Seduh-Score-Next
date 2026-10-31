@@ -32,7 +32,7 @@ test.describe('the Seduh ID screen (real page, real local Supabase)', () => {
     const responses = [];
     page.on('response', (response) => {
       if (!response.url().includes('/rest/v1/rpc/admin_')) return;
-      responses.push(response.text().catch(() => ''));
+      responses.push(response.text());
     });
     await signIn(page, admin);
     await enrol(page);
@@ -62,6 +62,7 @@ test.describe('the Seduh ID screen (real page, real local Supabase)', () => {
     const body = await page.locator('body').innerText();
     expect(body).not.toContain(NAME);
     expect(body).not.toContain(PHONE);
+    expect(responses.length).toBeGreaterThan(0);
     for (const text of await Promise.all(responses)) {
       expect(text).not.toContain(NAME);
       expect(text).not.toContain(PHONE);

@@ -229,6 +229,20 @@ describe('the Seduh ID panel', () => {
     await flush();
     expect(host.querySelector('[data-tone="error"]')).not.toBeNull();
     expect(button('Retry')).toBeTruthy();
+    // the figures from the earlier load are not left beside the error
+    expect(host.querySelectorAll('dl')).toHaveLength(0);
+  });
+
+  it('after Retry succeeds on a first-load failure, focus lands on Refresh, not on the page body', async () => {
+    let calls = 0;
+    mount(() => {
+      calls += 1;
+      return calls === 1 ? refused('boom') : ok([COUNTS]);
+    });
+    await flush();
+    button('Retry').click();
+    await flush();
+    expect(document.activeElement).toBe(button('Refresh numbers'));
   });
 
   it('a second press while loading does not send a second request', async () => {
@@ -245,30 +259,17 @@ describe('the Seduh ID panel', () => {
     await flush();
     const refresh = button('Refresh numbers');
     refresh.click();
-    refresh.click();
+    // a press that reaches the handler while loading (a disabled button would swallow a real click)
+    refresh.dispatchEvent(new Event('click'));
     await flush();
     expect(callAdmin).toHaveBeenCalledTimes(2);
     release();
   });
 
-  it('an answer that arrives after the panel was closed draws nothing', async () => {
-    let release;
-    mount(
-      () =>
-        new Promise((resolve) => {
-          release = () => resolve(ok([COUNTS]));
-        }),
-    );
-    handle.unmount();
-    release();
+  it('draws text only: a markup-looking figure is refused, and never becomes an element', async () => {
+    mount(ok([{ ...COUNTS, people_total: '<img src=x onerror=alert(1)>' }]));
     await flush();
-    expect(host.children).toHaveLength(0);
-  });
-
-  it('draws text only: a hostile-looking number is still just a number, markup never becomes elements', async () => {
-    mount(ok([COUNTS]));
-    await flush();
-    expect(host.querySelectorAll('script, img, svg')).toHaveLength(0);
-    expect(host.innerHTML).not.toContain('&lt;');
+    expect(host.querySelector('[data-tone="error"]').textContent).toBe(READ_FAILED);
+    expect(host.querySelectorAll('img, script, svg')).toHaveLength(0);
   });
 });

@@ -94,7 +94,7 @@ export function countGroups(counts) {
     group('People in organisations', [
       ['People in all organisations', counts.people_total],
       ['Linked to an identity', counts.people_linked],
-      ['Not linked', Math.max(0, counts.people_total - counts.people_linked)],
+      ['Not linked', counts.people_total - counts.people_linked],
       ['Blocked from linking by the owner', counts.people_blocked],
     ]),
   );
@@ -104,7 +104,7 @@ export function countGroups(counts) {
 export function mountSeduhIdPanel(host, ctx) {
   let disposed = false;
   let loading = false;
-  let loadedOnce = false;
+  let asked = false; // the person pressed Refresh or Retry: the control they used is gone after the load
 
   const title = el('h1', {
     text: 'Seduh ID',
@@ -124,7 +124,10 @@ export function mountSeduhIdPanel(host, ctx) {
     text: 'Refresh numbers',
     attrs: { type: 'button' },
   });
-  refresh.addEventListener('click', () => load());
+  refresh.addEventListener('click', () => {
+    asked = true;
+    load();
+  });
   const body = el('div', { className: 'adm-panel-body' }, [content, footer]);
   host.replaceChildren(title, intro, feedback, status, body);
 
@@ -136,6 +139,8 @@ export function mountSeduhIdPanel(host, ctx) {
   }
 
   function showFailure(message) {
+    // Figures from an earlier load are not left beside an error: they would read as current.
+    content.replaceChildren();
     setFeedback(feedback, message, 'error', { focus: false });
     const retry = el('button', {
       className: 'btn btn-primary tap-target',
@@ -144,11 +149,12 @@ export function mountSeduhIdPanel(host, ctx) {
     });
     retry.addEventListener('click', () => {
       setBusyDisabled(retry, true);
+      asked = true;
       load();
     });
     footer.replaceChildren(retry);
     // The message is read by its live region; the Retry is what the person needs next.
-    if (!loadedOnce || mayTakeFocus()) retry.focus();
+    if (mayTakeFocus()) retry.focus();
   }
 
   async function load() {
@@ -156,7 +162,7 @@ export function mountSeduhIdPanel(host, ctx) {
     loading = true;
     setFeedback(feedback, '');
     setBusyDisabled(refresh, true);
-    // Numbers already on screen stay until the new ones arrive, and are said to be old while they do.
+    // Numbers already on screen stay until the new ones arrive.
     footer.replaceChildren(el('p', { className: 'adm-muted', text: 'Loading…' }));
     const answer = await askAdmin(ctx, 'admin_seduh_id_counts', {});
     if (disposed) return;
@@ -179,9 +185,9 @@ export function mountSeduhIdPanel(host, ctx) {
       refresh,
     );
     status.textContent = `Seduh ID numbers loaded: ${counts.identities_total} identities, ${counts.people_total} people.`;
-    // After a Refresh press the control the person used is the one they are on; a first load leaves focus on the heading.
-    if (loadedOnce && mayTakeFocus()) refresh.focus();
-    loadedOnce = true;
+    // After a Refresh or Retry press the control the person used is gone, so focus goes to Refresh; a first load leaves focus on the heading.
+    if (asked && mayTakeFocus()) refresh.focus();
+    asked = false;
   }
 
   load();
