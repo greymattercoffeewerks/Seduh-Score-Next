@@ -16,7 +16,7 @@
 --     member mixing the two) is ONE 42501 with ONE message, and none of them changes any row.
 --   * ACL AND CATALOG: only authenticated may execute it; the resolver, the guard and the new table are reachable by no API
 --     role; the functions that touch the identity tables are exactly the link function; the functions that mention
---     global_person_id are exactly the guard and the link function (no other writer); the trigger and the FK are as
+--     global_person_id are exactly the guard, the link function and the owner-run backfill of T-ID.B4 (no other writer); the trigger and the FK are as
 --     specified; merge_people deleting the merged row loses its link and the kept row re-links by phone.
 begin;
 select plan(66);
@@ -311,8 +311,8 @@ select is(
      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname not in ('pg_catalog', 'information_schema', 't062') and p.prokind in ('f', 'p')
       and p.prosrc ~* 'global_person_id'),
-  'app.guard_people_global_person_id(), link_person_identity(uuid,uuid)',
-  'NO OTHER function mentions people.global_person_id: the guard and the link function are its only writers');
+  'app.guard_people_global_person_id(), app.seduh_backfill_plan_internal(uuid[]), app.seduh_identity_backfill(boolean,uuid[]), link_person_identity(uuid,uuid)',
+  'NO OTHER function mentions people.global_person_id: the guard, the link function and the owner-run backfill (064) write it; its read-only plan helper only reads it');
 select is(
   (select coalesce(string_agg(p.oid::regprocedure::text || '/' || r, ', ' order by p.oid::regprocedure::text collate "C"), 'none')
      from pg_proc p, unnest(array['anon', 'authenticated', 'service_role', 'public']) r

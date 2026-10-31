@@ -286,6 +286,32 @@ following (owner decision 7: counts only); each is owner SQL, in ONE transaction
 - **Accepted signals (spec 3.3):** a member can learn that an identity exists for a phone they type in (a published non-test
   result exists); a member of two organisations sees the same uuid for the same person.
 
+### Seduh ID backfill: the owner's runbook (T-ID.B4, 20261031100000)
+
+The one-time step that creates identities. `app.seduh_identity_backfill(p_apply boolean)` (owner only: no API role, `service_role`
+included, can execute it, and it refuses one by name) reads the published, non-test results and answers with counts and uuids only
+(never a phone or a name). `false` is a dry run that writes nothing; `true` creates and links. Three scripts in `supabase/scripts/`:
+`seduh_identity_backfill_dry_run.sql` (read only), `seduh_identity_backfill.sql` (ends in ROLLBACK until you change it to COMMIT) and
+`seduh_identity_backfill_undo.sql` (same). **"Named in a published result"** means: the payload's `podium` (or full `standings`, when
+published) holds a name and cafe that exactly ONE entry of that non-test event matches (trimmed; payloads carry no ids and must not
+start to), and that entry has a person of the event's organisation. Roster-only people, entries the payload does not name, walk-ups,
+test and unpublished events create nothing; a slot that matches several entries, or none, is counted and skipped, never guessed.
+Per named person: non-E.164 phone skipped and listed; an owner-blocked person left unlinked (no identity made for them); an existing
+identity for the phone (any status, a tombstone resolved through `merged_into`) is reused and never overwritten; otherwise one is created
+(`archive`, `active`, the earliest published record's name cut to 120). A person already linked to a different identity is left alone and
+listed. A new function that writes `people.global_person_id` must be added to the "only writers" list in test `062`.
+
+1. Push the migration (owner approval; compare `list_migrations`), then run the dry run and read it. Expected skips are listed by person id.
+   **Vet the results first:** organisation members write payloads, entries and people, so a forged "published result" can name any phone
+   (security review, confirmed). `creates_by_result` lists each result with its organisation, event and identities it would create; check them
+   against events you know are real and pass only those result ids as the second argument (`array['<id>']::uuid[]`) in the dry run and the run.
+2. Run `seduh_identity_backfill.sql` with ROLLBACK first; read both reports (the second must say 0 to create, 0 to link). **Save
+   `created_identity_ids` and `linked_person_ids` from the first report** outside the repo, then change the last line to COMMIT and run again.
+3. **Undo a committed run:** paste the two lists into `seduh_identity_backfill_undo.sql`. It unlinks only those people (and only if still linked
+   to one of those identities) and deletes only those identities, and only while they are still `archive`/`active`, have no linked person and
+   no tombstone points at them; an identity that gained a person since (the link function is legitimate) is kept and counted. Identities that
+   existed before the run, and links made by anyone else, are never touched. Deleting an identity is irreversible.
+
 ### Entitlement hooks (database checkpoints; T-GATE.B3, 054)
 
 Gating is enforced in the database, never only in the client. The rules a new hook or cap must follow (the
