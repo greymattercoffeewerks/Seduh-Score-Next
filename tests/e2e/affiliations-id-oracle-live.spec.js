@@ -189,6 +189,39 @@ test('a PATCH of id, created_by or created_at on the member’s own row is refus
   });
 });
 
+test('a PATCH naming id, filtered by another organisation’s row id or an unused one, and an array upsert, answer identically', async () => {
+  const refused = { status: 403, code: '42501', message: `permission denied for table ${TABLE}` };
+  for (const filterId of [w.target.id, crypto.randomUUID()]) {
+    const r = await rest(`${TABLE}?id=eq.${filterId}`, {
+      method: 'PATCH',
+      token: w.tokenB,
+      body: { id: crypto.randomUUID() },
+      headers: REP,
+    });
+    expect(answer(r), `PATCH filter ${filterId}`).toEqual(refused);
+  }
+  for (const id of [w.target.id, crypto.randomUUID()]) {
+    const r = await rest(`${TABLE}?on_conflict=id`, {
+      method: 'POST',
+      token: w.tokenB,
+      body: [probeBody(id)],
+      headers: { prefer: 'return=representation,resolution=merge-duplicates' },
+    });
+    expect(answer(r), `array upsert ${id}`).toEqual(refused);
+  }
+  // merge-duplicates with no on_conflict (PostgREST defaults to the primary key)
+  for (const id of [w.target.id, crypto.randomUUID()]) {
+    const r = await rest(TABLE, {
+      method: 'POST',
+      token: w.tokenB,
+      body: probeBody(id),
+      headers: { prefer: 'return=representation,resolution=merge-duplicates' },
+    });
+    expect(answer(r), `merge-duplicates without on_conflict ${id}`).toEqual(refused);
+  }
+  expect(await rowAsOwner(w.target.id)).toEqual(w.target);
+});
+
 test('PATCH and DELETE by another organisation’s row id are indistinguishable from a missing id: 200 with zero rows', async () => {
   const outcomes = [];
   for (const [label, id] of [

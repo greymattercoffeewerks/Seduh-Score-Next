@@ -265,15 +265,15 @@ select is((select created_by from public.org_person_affiliations where person_id
 
 -- a client can never NAME id, created_at or created_by (insert, update, upsert): one 42501, identical for an id that
 -- exists in another organisation and one that does not (the row-id existence oracle, closed by 20261031120000)
-select is(t063.state('63000000-0000-0000-0000-000000000001', 'authenticated',
+select is(t063.msg('63000000-0000-0000-0000-000000000001', 'authenticated',
   $$insert into public.org_person_affiliations (id, org_id, person_id, relationship) values ('63000000-0000-0000-2000-0000000000b1', '63000000-0000-0000-0000-0000000000a0', '63000000-0000-0000-1000-000000000001', 'oracle')$$),
-  '42501', 'naming the id of ANOTHER organisation''s row on insert is refused 42501 (not 23505)');
-select is(t063.state('63000000-0000-0000-0000-000000000001', 'authenticated',
+  'permission denied for table org_person_affiliations', 'naming the id of ANOTHER organisation''s row on insert is refused 42501 (not 23505)');
+select is(t063.msg('63000000-0000-0000-0000-000000000001', 'authenticated',
   $$insert into public.org_person_affiliations (id, org_id, person_id, relationship) values ('63000000-0000-0000-2000-00000000ffff', '63000000-0000-0000-0000-0000000000a0', '63000000-0000-0000-1000-000000000001', 'oracle')$$),
-  '42501', 'naming an UNUSED id is refused with the same 42501');
-select is(t063.state('63000000-0000-0000-0000-000000000001', 'authenticated',
+  'permission denied for table org_person_affiliations', 'naming an UNUSED id is refused with the same 42501');
+select is(t063.msg('63000000-0000-0000-0000-000000000001', 'authenticated',
   $$insert into public.org_person_affiliations (id, org_id, person_id, relationship) values ('63000000-0000-0000-2000-0000000000b1', '63000000-0000-0000-0000-0000000000a0', '63000000-0000-0000-1000-000000000001', 'oracle') on conflict (id) do update set relationship = excluded.relationship$$),
-  '42501', 'an upsert naming another organisation''s row id is refused 42501 as well (no USING-expression answer)');
+  'permission denied for table org_person_affiliations', 'an upsert naming another organisation''s row id is refused 42501 as well (no USING-expression answer)');
 select is(t063.state('63000000-0000-0000-0000-000000000001', 'authenticated',
   $$insert into public.org_person_affiliations (org_id, person_id, relationship, created_by) values ('63000000-0000-0000-0000-0000000000a0', '63000000-0000-0000-1000-000000000001', 'forged', '63000000-0000-0000-0000-000000000002')$$),
   '42501', 'created_by cannot be sent on insert');
