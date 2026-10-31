@@ -398,3 +398,70 @@ test('a row cannot be created in A for B’s person, and a missing person is the
   const notMember = await insertRole(w.tokenA, w.b.orgId, w.personB, 'crossed');
   expect(answer(notMember)).toEqual(RLS_REFUSED);
 });
+
+test('other hostile shapes: an upsert onto A’s row id, a mixed bulk insert, a missing org_id and an embed change nothing in A', async () => {
+  const target = (await insertRole(w.tokenA, w.a.orgId, w.personA3, 'upsert_target')).body[0];
+
+  // An upsert by a member of B naming A's row id: the existing row is never touched. KNOWN, accepted for now and
+  // reported with this task: the ANSWER differs between an existing id (403, USING expression) and an unused id
+  // (201), so a member of any organisation can tell whether a random uuid is a row id of some other organisation.
+  // If that is ever closed, this is the assertion that should change.
+  const upsert = (id, resolution) =>
+    rest(`${TABLE}?on_conflict=id`, {
+      method: 'POST',
+      token: w.tokenB,
+      body: { id, org_id: w.b.orgId, person_id: w.personB, relationship: 'upsert_probe' },
+      headers: { prefer: `return=representation,resolution=${resolution}` },
+    });
+  const existing = await upsert(target.id, 'merge-duplicates');
+  expect(answer(existing)).toEqual({
+    status: 403,
+    code: '42501',
+    message: `new row violates row-level security policy (USING expression) for table "${TABLE}"`,
+  });
+  const fresh = await upsert(crypto.randomUUID(), 'merge-duplicates');
+  expect(fresh.status).toBe(201);
+  const ignored = await upsert(target.id, 'ignore-duplicates');
+  expect({ status: ignored.status, body: ignored.body }).toEqual({ status: 201, body: [] });
+  expect(await rowAsOwner(target.id)).toEqual(target);
+
+  // a bulk insert with one good row and one row for another organisation is all-or-nothing
+  const bulk = await rest(TABLE, {
+    method: 'POST',
+    token: w.tokenA,
+    body: [
+      { org_id: w.a.orgId, person_id: w.personA3, relationship: 'bulk_ok' },
+      { org_id: w.b.orgId, person_id: w.personB, relationship: 'bulk_foreign' },
+    ],
+    headers: REP,
+  });
+  expect(answer(bulk)).toEqual(RLS_REFUSED);
+  const left = await rest(`${TABLE}?relationship=like.bulk_*&select=id`, { token: w.tokenA });
+  expect(left.body).toEqual([]);
+
+  // no org_id, and a null one, are the standard refusal, not a distinguishable NOT NULL error
+  for (const body of [
+    { person_id: w.personA3, relationship: 'no_org' },
+    { org_id: null, person_id: w.personA3, relationship: 'no_org' },
+  ]) {
+    expect(
+      answer(await rest(TABLE, { method: 'POST', token: w.tokenA, body, headers: REP })),
+    ).toEqual(RLS_REFUSED);
+  }
+
+  // embedding the roster in a people read: B sees nothing of A's people, A sees its own roles
+  const asB = await rest(`people?id=eq.${w.personA3}&select=id,${TABLE}(id)`, { token: w.tokenB });
+  expect({ status: asB.status, body: asB.body }).toEqual({ status: 200, body: [] });
+  const asA = await rest(`people?id=eq.${w.personA3}&select=id,${TABLE}(id)`, { token: w.tokenA });
+  expect(asA.body[0][TABLE].map((r) => r.id)).toContain(target.id);
+  const strangerEmbed = await rest(`people?select=id,${TABLE}(org_id)`, { token: w.tokenNobody });
+  expect(strangerEmbed.body).toEqual([]);
+
+  // the trigger function is not callable as an RPC
+  const rpcCall = await send('/rest/v1/rpc/check_affiliation_person_org', {
+    method: 'POST',
+    token: w.tokenA,
+    body: {},
+  });
+  expect(rpcCall.status).toBe(404);
+});
