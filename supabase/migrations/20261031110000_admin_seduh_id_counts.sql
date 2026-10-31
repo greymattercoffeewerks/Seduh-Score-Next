@@ -11,7 +11,9 @@
 --                               pins that for every public.admin_* function). Columns:
 --       identities_total, identities_active, identities_opted_out, identities_merged   (the three statuses add up)
 --       identities_from_roster, identities_from_archive                                (the two sources add up)
---       people_total, people_linked (global_person_id is not null), people_blocked (app.person_link_blocks)
+--       people_total, people_linked (global_person_id is not null), people_blocked (a block that still applies:
+--       app.person_link_blocks joined to the person on person_id AND phone_e164 = people.phone, the rule B4 and
+--       link_person_identity use, so a block that lapsed after a phone change is not counted)
 --       identities_orphan           an identity that is not a tombstone (status <> 'merged') and that no person links to:
 --                                   the SAME definition as the orphan list in app.seduh_identity_backfill (B4), minus its
 --                                   "the run would still link it" dry-run clause.
@@ -62,7 +64,8 @@ begin
              and not exists (select 1 from public.people p where p.global_person_id = i.id)),
          (select count(*)::integer from public.people),
          (select count(*)::integer from public.people p where p.global_person_id is not null),
-         (select count(*)::integer from app.person_link_blocks);
+         (select count(*)::integer from app.person_link_blocks b
+           join public.people p on p.id = b.person_id and p.phone = b.phone_e164);
 end;
 $$;
 

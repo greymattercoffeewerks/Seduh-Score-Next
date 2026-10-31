@@ -8,13 +8,14 @@
 --     pinned (a name, phone, id, email or per-organisation figure added later fails here), and the body mentions only the
 --     two identity relations, people and the gate;
 --   * the counts are right on fixtures that include a merged tombstone, orphans (one opted out), two people sharing one
---     identity and a blocked person. The local database is shared with other sessions, so every figure is a DELTA against
+--     identity, a blocked person (a live block counts; a block that lapsed after a phone change, and a person with no
+--     block, do not). The local database is shared with other sessions, so every figure is a DELTA against
 --     a baseline read as the owner before the fixtures; the whole row is also compared with the same questions asked directly;
 --   * the statuses add up to the total and so do the sources, and a tombstone is never counted as an orphan;
 --   * a call changes and logs nothing (no audit row), it is STABLE, SECURITY DEFINER with search_path '', and only
 --     `authenticated` may execute it (anon, service_role and PUBLIC may not).
 begin;
-select plan(41);
+select plan(43);
 
 create schema t065;
 grant usage on schema t065 to anon, authenticated, service_role;
@@ -89,7 +90,7 @@ create table t065.base as
             and not exists (select 1 from public.people p where p.global_person_id = i.id)) as orphan,
          (select count(*) from public.people) as people,
          (select count(*) from public.people where global_person_id is not null) as linked,
-         (select count(*) from app.person_link_blocks) as blocked,
+         (select count(*) from app.person_link_blocks b join public.people p on p.id = b.person_id and p.phone = b.phone_e164) as blocked,
          (select coalesce(max(id), 0) from app.admin_audit_log) as mid;
 
 insert into orgs (id, name, slug) values (t065.u(100), 'T065 A', 't065-a'), (t065.u(101), 'T065 B', 't065-b');
@@ -103,20 +104,22 @@ insert into app.seduh_identities (id, phone_e164, display_name, source, status) 
   (t065.u(206), '+6739650006', 'T065 Six', 'archive', 'active');
 insert into app.seduh_identities (id, phone_e164, display_name, source, status, merged_into) values
   (t065.u(205), '+6739650005', null, 'archive', 'merged', t065.u(201));
--- six people: p1 -> i1, p2 -> i3, p3 and p4 (two organisations) -> i6, p5 unlinked, p6 unlinked and blocked
+-- seven people: p1 -> i1, p2 -> i3, p3 and p4 (two organisations) -> i6, p5 unlinked and never blocked, p6 unlinked and
+-- blocked (live block), p7 unlinked with a LAPSED block (blocked while holding another phone)
 insert into people (id, org_id, display_name, phone) values
   (t065.u(301), t065.u(100), 'P1', '+6739650001'),
   (t065.u(302), t065.u(100), 'P2', '+6739650003'),
   (t065.u(303), t065.u(100), 'P3', '+6739650006'),
   (t065.u(304), t065.u(101), 'P4', '+6739650006'),
   (t065.u(305), t065.u(100), 'P5', '+6739650090'),
-  (t065.u(306), t065.u(101), 'P6', '+6739650091');
+  (t065.u(306), t065.u(101), 'P6', '+6739650091'),
+  (t065.u(307), t065.u(101), 'P7', '+6739650093');
 select set_config('app.seduh_link_write', 'on', true);
 update people set global_person_id = t065.u(201) where id = t065.u(301);
 update people set global_person_id = t065.u(203) where id = t065.u(302);
 update people set global_person_id = t065.u(206) where id in (t065.u(303), t065.u(304));
 select set_config('app.seduh_link_write', '', true);
-insert into app.person_link_blocks (person_id, phone_e164) values (t065.u(306), '+6739650091');
+insert into app.person_link_blocks (person_id, phone_e164) values (t065.u(306), '+6739650091'), (t065.u(307), '+6739650092');
 
 -- ============ who may execute it ============
 select is(
@@ -186,10 +189,13 @@ select is((select identities_from_roster::bigint - b.roster from got, t065.base 
 select is((select identities_from_archive::bigint - b.archive from got, t065.base b), 4::bigint, 'identities_from_archive: +4');
 select is((select identities_orphan::bigint - b.orphan from got, t065.base b), 2::bigint,
   'identities_orphan: +2 (two and four; an opted-out one counts, as in the B4 list; the tombstone does NOT)');
-select is((select people_total::bigint - b.people from got, t065.base b), 6::bigint, 'people_total: +6');
+select is((select people_total::bigint - b.people from got, t065.base b), 7::bigint, 'people_total: +7');
 select is((select people_linked::bigint - b.linked from got, t065.base b), 4::bigint,
   'people_linked: +4 (two people share one identity: people are counted, not identities)');
-select is((select people_blocked::bigint - b.blocked from got, t065.base b), 1::bigint, 'people_blocked: +1');
+select is((select people_blocked::bigint - b.blocked from got, t065.base b), 1::bigint,
+  'people_blocked: +1 (the live block counts; the lapsed block and the never-blocked person do not)');
+select is((select count(*)::int from app.person_link_blocks where person_id in (t065.u(306), t065.u(307))), 2,
+  'the lapsed block really is in the table (so the +1 above is the join at work, not a missing row)');
 
 select is((select identities_active + identities_opted_out + identities_merged = identities_total from got), true,
   'the three statuses add up to the total');
@@ -202,7 +208,7 @@ select is((select (identities_total, identities_active, identities_opted_out, id
            count(*) filter (where source = 'archive'),
            count(*) filter (where status <> 'merged' and not exists (select 1 from public.people p where p.global_person_id = i.id)),
            (select count(*) from public.people), (select count(*) from public.people where global_person_id is not null),
-           (select count(*) from app.person_link_blocks))::text
+           (select count(*) from app.person_link_blocks b join public.people p on p.id = b.person_id and p.phone = b.phone_e164))::text
      from app.seduh_identities i),
   'every figure equals the same question asked directly');
 select is((select (identities_total is not null and identities_orphan is not null and people_blocked is not null) from got), true,
@@ -240,8 +246,13 @@ select is(
   'admin_seduh_id_counts()',
   'the only admin function that touches the Seduh ID tables is the counts function (no merge, no unlink, no lookup from the console)');
 select is(
-  (select p.prosrc ~* '(phone|display_name|email|name)' from pg_proc p where p.oid = 'public.admin_seduh_id_counts()'::regprocedure),
-  false, 'the counts function never names a phone, a display name, an email or any name column');
+  (select p.prosrc ~* '(display_name|email|name)' from pg_proc p where p.oid = 'public.admin_seduh_id_counts()'::regprocedure),
+  false, 'the counts function never names a display name, an email or any name column');
+select is(
+  (select array(select m[1] from pg_proc p, regexp_matches(p.prosrc, '[a-z_.]*phone[a-z_0-9]*', 'gi') m
+                 where p.oid = 'public.admin_seduh_id_counts()'::regprocedure)),
+  array['p.phone', 'b.phone_e164'],
+  'a phone is named only in the join that tells a live block from a lapsed one, never selected or returned');
 
 select * from finish();
 rollback;
