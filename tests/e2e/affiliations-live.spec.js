@@ -167,6 +167,11 @@ test('a relationship that breaks the format is 400 / 23514 and writes nothing', 
     const r = await insertRole(w.tokenA, w.a.orgId, w.personA3, bad);
     expect(answer(r), `relationship ${JSON.stringify(bad)}`).toEqual(check);
   }
+  const bad = await rest(`${TABLE}?person_id=eq.${w.personA3}&select=relationship`, {
+    token: w.tokenA,
+  });
+  const badWords = ['Staff', 'x', 'staff member', '1staff', ''];
+  expect(bad.body.filter((r) => badWords.includes(r.relationship))).toEqual([]);
   // the edge that IS allowed: 2 and 40 characters
   for (const good of ['ab', 'a'.repeat(40), 'head_judge']) {
     const r = await insertRole(w.tokenA, w.a.orgId, w.personA3, good);
@@ -184,6 +189,7 @@ test('a relationship that breaks the format is 400 / 23514 and writes nothing', 
     body: { relationship: 'NOT OK' },
   });
   expect(answer(patch)).toEqual(check);
+  expect((await rowAsOwner(row.id)).relationship).toBe('ab');
 });
 
 test('a stranger and a member of organisation B read zero rows of A and cannot write: one 403 answer for an insert, zero rows for update and delete', async () => {
