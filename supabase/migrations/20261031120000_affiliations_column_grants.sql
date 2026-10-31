@@ -12,7 +12,7 @@
 --
 -- The fix is a COLUMN-LEVEL GRANT. The table-level INSERT and UPDATE privileges are revoked from `authenticated` and
 -- re-granted on the columns a client legitimately writes. `id`, `created_at` and `created_by` are in neither list, so a
--- request that NAMES one of them is refused by the privilege check (42501 "permission denied for column ...") before
+-- request that NAMES one of them is refused by the privilege check (42501 "permission denied for table org_person_affiliations") before
 -- any row is looked at: the answer is the same for an id that exists elsewhere and one that does not. A request that
 -- does not name them is unaffected (the column defaults `gen_random_uuid()`, `now()` and `auth.uid()` still fill them;
 -- a column default needs no privilege on the column).

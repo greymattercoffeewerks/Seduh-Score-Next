@@ -195,7 +195,9 @@ grant insert (a, b, c) ...; grant update (a, b, c) ...`), leaving out `id`, `cre
    `tests/e2e/affiliations-id-oracle-live.spec.js` hold it). A function that must write a column
    the client may not (for example `merge_people` copying `created_by`) calls a narrow
    `SECURITY DEFINER` helper that opens with `app.refuse_non_member`. Tables that predate this
-   rule still grant every column; see the PR that introduced it for the list.
+   rule still grant every column (24 other tables as of 2026-10-31, among them `people`, `events`,
+   `event_entries`, the `ct_*` and `btc_*` tables, `sessions`, `person_merges`); the owner decides
+   if and when each is narrowed, one migration per table.
 5. **Two ids that must agree** (a child and a parent from two directions): a
    cross-reference trigger that opens with `refuse_non_member` (above).
 6. **Views** are `security_invoker`. Anything anonymous people need is a narrow
