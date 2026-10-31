@@ -51,6 +51,9 @@ const NOT_FOR_THE_CONSOLE = {
     'people guard trigger, raised to an organiser writing the roster; not an admin console call',
   people_global_person_id_unknown:
     'raised only by the owner-run people_global_person_id_fkey migration guard, never over the API',
+  // Seduh ID backfill (T-ID.B4): owner-run function, refuses an API role.
+  seduh_backfill_owner_only:
+    'raised only to an API role calling the owner-run identity backfill; never an admin console call',
   // The BTC format's own RPCs.
   bracket_advanced: 'BTC format',
   demo_event_not_found: 'BTC format',
