@@ -182,6 +182,20 @@ refusal.
    holds no table privileges in production and our functions are `SECURITY DEFINER`, so do not
    add it by reflex). A table closed to every role on purpose goes in `DENY_ALL` in
    `supabase/migrationGrants.test.js` with the reason; that test fails otherwise.
+   **Column-level insert and update grants: a client never chooses `id` or an audit column.**
+   Grant `authenticated` INSERT and UPDATE on the listed columns only (`revoke insert, update ...;
+grant insert (a, b, c) ...; grant update (a, b, c) ...`), leaving out `id`, `created_at` and
+   `created_by` (let the column defaults fill them). Otherwise a client can name a primary key,
+   and the answer to a conflict (`23505` on a plain insert, `403 ... (USING expression)` on an
+   upsert, against `201` for an unused id) tells a member of any organisation whether a uuid is a
+   row of another one. With the column grant, naming the column is refused by the privilege check
+   (`403 / 42501`) before any row is looked at, identically for every id. Keep `org_id` and the
+   parent ids in the UPDATE list so the freeze trigger (item 3) stays the answer for a move.
+   First done for `org_person_affiliations` (`20261031120000`; `063` and
+   `tests/e2e/affiliations-id-oracle-live.spec.js` hold it). A function that must write a column
+   the client may not (for example `merge_people` copying `created_by`) calls a narrow
+   `SECURITY DEFINER` helper that opens with `app.refuse_non_member`. Tables that predate this
+   rule still grant every column; see the PR that introduced it for the list.
 5. **Two ids that must agree** (a child and a parent from two directions): a
    cross-reference trigger that opens with `refuse_non_member` (above).
 6. **Views** are `security_invoker`. Anything anonymous people need is a narrow

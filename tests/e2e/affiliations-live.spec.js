@@ -408,10 +408,10 @@ test('a row cannot be created in A for B’s person, and a missing person is the
 test('other hostile shapes: an upsert onto A’s row id, a mixed bulk insert, a missing org_id and an embed change nothing in A', async () => {
   const target = (await insertRole(w.tokenA, w.a.orgId, w.personA3, 'upsert_target')).body[0];
 
-  // An upsert by a member of B naming A's row id: the existing row is never touched. KNOWN, accepted for now and
-  // reported with this task: the ANSWER differs between an existing id (403, USING expression) and an unused id
-  // (201), so a member of any organisation can tell whether a random uuid is a row id of some other organisation.
-  // If that is ever closed, this is the assertion that should change.
+  // An upsert by a member of B naming A's row id: the existing row is never touched, and (since migration
+  // 20261031120000_affiliations_column_grants) the answer no longer depends on whether the id exists anywhere: a client
+  // may not name `id` at all, so the existing id and an unused id are refused identically by the column privilege check.
+  // The full matrix of routes is pinned in affiliations-id-oracle-live.spec.js.
   const upsert = (id, resolution) =>
     rest(`${TABLE}?on_conflict=id`, {
       method: 'POST',
@@ -419,16 +419,10 @@ test('other hostile shapes: an upsert onto A’s row id, a mixed bulk insert, a 
       body: { id, org_id: w.b.orgId, person_id: w.personB, relationship: 'upsert_probe' },
       headers: { prefer: `return=representation,resolution=${resolution}` },
     });
-  const existing = await upsert(target.id, 'merge-duplicates');
-  expect(answer(existing)).toEqual({
-    status: 403,
-    code: '42501',
-    message: `new row violates row-level security policy (USING expression) for table "${TABLE}"`,
-  });
-  const fresh = await upsert(crypto.randomUUID(), 'merge-duplicates');
-  expect(fresh.status).toBe(201);
-  const ignored = await upsert(target.id, 'ignore-duplicates');
-  expect({ status: ignored.status, body: ignored.body }).toEqual({ status: 201, body: [] });
+  const NO_ID = { status: 403, code: '42501', message: `permission denied for table ${TABLE}` };
+  expect(answer(await upsert(target.id, 'merge-duplicates'))).toEqual(NO_ID);
+  expect(answer(await upsert(crypto.randomUUID(), 'merge-duplicates'))).toEqual(NO_ID);
+  expect(answer(await upsert(target.id, 'ignore-duplicates'))).toEqual(NO_ID);
   expect(await rowAsOwner(target.id)).toEqual(target);
 
   // a bulk insert with one good row and one row for another organisation is all-or-nothing
