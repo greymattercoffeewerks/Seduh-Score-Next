@@ -14,6 +14,7 @@ import {
   updateRosterEntry,
   mergePeople,
   PhoneError,
+  phoneWillChange,
 } from './registry.js';
 import { describeError } from './errors.js';
 
@@ -765,5 +766,21 @@ describe('phone guard: null phone through the registering paths', () => {
     await expect(
       registerEntry('org1', 'ev1', { displayName: 'Walk Up', phone: null }, client),
     ).resolves.toEqual(entry);
+  });
+});
+
+describe('phoneWillChange', () => {
+  const base = { phoneCountry: 'BN', storedPhone: '+6737000001' };
+  it('is true only when the canonical number differs from the one on file', () => {
+    expect(phoneWillChange({ ...base, phone: '+6737000009' })).toBe(true);
+    expect(phoneWillChange({ ...base, phone: '7000009' })).toBe(true);
+  });
+  it('is false for the same number however it is typed, and for no phone at all', () => {
+    expect(phoneWillChange({ ...base, phone: '+6737000001' })).toBe(false);
+    expect(phoneWillChange({ ...base, phone: '7000001' })).toBe(false);
+    expect(phoneWillChange({ ...base, phone: null })).toBe(false);
+  });
+  it('is false (and does not throw) for a phone that cannot be read', () => {
+    expect(phoneWillChange({ ...base, phone: 'abc' })).toBe(false);
   });
 });
