@@ -383,6 +383,9 @@ export async function mountEventsScreen(
     // The audience links for this organisation ({ phone, projector, splash }: absolute, slug-qualified), or
     // null when there are none to show. Built by the caller, which knows the routes.
     audienceLinks = null,
+    // Where the People screen is (a hash link), or null to leave the link out. The header has no room for
+    // another link (it must stay one row), so the Events screen is the organisation-level way in.
+    peopleHref = null,
     client = getSupabase(),
     defaultFormat,
     formatOptions,
@@ -709,6 +712,23 @@ export async function mountEventsScreen(
     );
 
     if (audienceCard) container.appendChild(audienceCard);
+
+    if (peopleHref) {
+      container.appendChild(
+        el('div', { className: 'card events-people-card' }, [
+          el('h2', { text: 'People' }),
+          el('p', {
+            className: 'stage-meta',
+            text: 'Mark the people in your organisation as staff or affiliates.',
+          }),
+          el('a', {
+            className: 'btn btn-outline tap-target',
+            text: 'Open People',
+            attrs: { href: peopleHref },
+          }),
+        ]),
+      );
+    }
 
     root.appendChild(container);
 

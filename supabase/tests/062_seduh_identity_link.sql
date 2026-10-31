@@ -297,8 +297,8 @@ select is(
      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname not in ('pg_catalog', 'information_schema', 'app') and p.prokind in ('f', 'p')
       and p.prosrc ~* '(seduh_identities|seduh_identity_merges|person_link_blocks)'),
-  'link_person_identity(uuid,uuid)',
-  'the functions outside app that touch the Seduh ID tables are exactly the link function (a second writer or reader must be added here on purpose)');
+  'admin_seduh_id_counts(), link_person_identity(uuid,uuid)',
+  'the functions outside app that touch the Seduh ID tables are exactly the link function and the console''s read-only counts function (T-ID.C3, pgTAP 065); a second writer or reader must be added here on purpose');
 select is(
   (select coalesce(string_agg(p.oid::regprocedure::text, ', ' order by p.oid::regprocedure::text collate "C"), 'none')
      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -311,8 +311,8 @@ select is(
      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname not in ('pg_catalog', 'information_schema', 't062') and p.prokind in ('f', 'p')
       and p.prosrc ~* 'global_person_id'),
-  'app.guard_people_global_person_id(), app.seduh_backfill_plan_internal(uuid[]), app.seduh_identity_backfill(boolean,uuid[]), link_person_identity(uuid,uuid)',
-  'NO OTHER function mentions people.global_person_id: the guard, the link function and the owner-run backfill (064) write it; its read-only plan helper only reads it');
+  'admin_seduh_id_counts(), app.guard_people_global_person_id(), app.seduh_backfill_plan_internal(uuid[]), app.seduh_identity_backfill(boolean,uuid[]), link_person_identity(uuid,uuid)',
+  'NO OTHER function mentions people.global_person_id: the guard, the link function and the owner-run backfill (064) write it; its read-only plan helper and the console''s counts function (T-ID.C3, 065) only read it');
 select is(
   (select coalesce(string_agg(p.oid::regprocedure::text || '/' || r, ', ' order by p.oid::regprocedure::text collate "C"), 'none')
      from pg_proc p, unnest(array['anon', 'authenticated', 'service_role', 'public']) r

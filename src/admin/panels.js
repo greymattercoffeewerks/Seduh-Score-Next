@@ -14,6 +14,7 @@ import { mountOrgsPanel } from './orgsPanel.js';
 import { mountCreateOrgPanel } from './createOrgPanel.js';
 import { mountAuditPanel } from './auditPanel.js';
 import { mountPlanPanel } from './planPanel.js';
+import { mountSeduhIdPanel } from './seduhIdPanel.js';
 import { mountPasswordPanel } from './passwordPanel.js';
 
 export const PANELS = Object.freeze([
@@ -34,6 +35,12 @@ export const PANELS = Object.freeze([
     label: 'Plans and keys',
     route: 'plan',
     mount: mountPlanPanel,
+  }),
+  Object.freeze({
+    id: 'seduh-id',
+    label: 'Seduh ID',
+    route: 'seduh-id',
+    mount: mountSeduhIdPanel,
   }),
   Object.freeze({
     id: 'audit',

@@ -17,7 +17,7 @@
 --   * merge_people repoints the merged person's roster (spec 3.6) with the defined collision rule, and is still
 --     refused to a non-member.
 begin;
-select plan(67);
+select plan(85);
 
 create schema t063;
 
@@ -162,7 +162,26 @@ select is(
 select is(
   (select string_agg(p, ',' order by p) from unnest(array['select','insert','update','delete','truncate','references','trigger']) p
     where has_table_privilege('authenticated', 'public.org_person_affiliations', p)),
-  'delete,insert,select,update', 'authenticated holds select, insert, update and delete, nothing else');
+  'delete,select', 'authenticated holds table-level select and delete only: insert and update are column grants (20261031120000)');
+select is(
+  (select string_agg(column_name, ',' order by column_name) from information_schema.columns
+    where table_schema = 'public' and table_name = 'org_person_affiliations'
+      and has_column_privilege('authenticated', 'public.org_person_affiliations', column_name, 'insert')),
+  'ended_at,org_id,person_id,relationship,started_on', 'authenticated may insert exactly the five client columns (never id, created_at, created_by)');
+select is(
+  (select string_agg(column_name, ',' order by column_name) from information_schema.columns
+    where table_schema = 'public' and table_name = 'org_person_affiliations'
+      and has_column_privilege('authenticated', 'public.org_person_affiliations', column_name, 'update')),
+  'ended_at,org_id,person_id,relationship,started_on', 'authenticated may update exactly the same five (org_id and person_id so the freeze trigger stays the answer)');
+select is(
+  (select count(*)::int from information_schema.columns c, unnest(array['anon', 'service_role']) r, unnest(array['select', 'insert', 'update', 'references']) p
+    where c.table_schema = 'public' and c.table_name = 'org_person_affiliations'
+      and has_column_privilege(r, 'public.org_person_affiliations', c.column_name, p)),
+  0, 'anon and service_role hold no column privilege either');
+select ok(has_function_privilege('authenticated', 'app.move_person_affiliations(uuid, uuid, uuid)', 'execute')
+      and not has_function_privilege('anon', 'app.move_person_affiliations(uuid, uuid, uuid)', 'execute')
+      and not has_function_privilege('service_role', 'app.move_person_affiliations(uuid, uuid, uuid)', 'execute'),
+  'the carry-over helper is executable by authenticated only (merge_people runs as the caller)');
 select ok(not has_function_privilege('authenticated', 'app.check_affiliation_person_org()', 'execute')
       and not has_function_privilege('anon', 'app.check_affiliation_person_org()', 'execute')
       and not has_function_privilege('service_role', 'app.check_affiliation_person_org()', 'execute'),
@@ -238,11 +257,60 @@ insert into public.org_person_affiliations (id, org_id, person_id, relationship)
   ('63000000-0000-0000-2000-000000000002', '63000000-0000-0000-0000-0000000000a0', '63000000-0000-0000-1000-000000000001', 'volunteer');
 set local role authenticated;
 set local request.jwt.claim.sub = '63000000-0000-0000-0000-000000000001';
-insert into public.org_person_affiliations (id, org_id, person_id, relationship) values
-  ('63000000-0000-0000-2000-000000000003', '63000000-0000-0000-0000-0000000000a0', '63000000-0000-0000-1000-000000000001', 'judge');
+insert into public.org_person_affiliations (org_id, person_id, relationship) values
+  ('63000000-0000-0000-0000-0000000000a0', '63000000-0000-0000-1000-000000000001', 'caller_stamp');
 reset role;
-select is((select created_by from public.org_person_affiliations where id = '63000000-0000-0000-2000-000000000003'),
+select is((select created_by from public.org_person_affiliations where person_id = '63000000-0000-0000-1000-000000000001' and relationship = 'caller_stamp'),
   '63000000-0000-0000-0000-000000000001'::uuid, 'created_by defaults to the signed-in caller');
+
+-- a client can never NAME id, created_at or created_by (insert, update, upsert): one 42501, identical for an id that
+-- exists in another organisation and one that does not (the row-id existence oracle, closed by 20261031120000)
+select is(t063.msg('63000000-0000-0000-0000-000000000001', 'authenticated',
+  $$insert into public.org_person_affiliations (id, org_id, person_id, relationship) values ('63000000-0000-0000-2000-0000000000b1', '63000000-0000-0000-0000-0000000000a0', '63000000-0000-0000-1000-000000000001', 'oracle')$$),
+  'permission denied for table org_person_affiliations', 'naming the id of ANOTHER organisation''s row on insert is refused 42501 (not 23505)');
+select is(t063.msg('63000000-0000-0000-0000-000000000001', 'authenticated',
+  $$insert into public.org_person_affiliations (id, org_id, person_id, relationship) values ('63000000-0000-0000-2000-00000000ffff', '63000000-0000-0000-0000-0000000000a0', '63000000-0000-0000-1000-000000000001', 'oracle')$$),
+  'permission denied for table org_person_affiliations', 'naming an UNUSED id is refused with the same 42501');
+select is(t063.msg('63000000-0000-0000-0000-000000000001', 'authenticated',
+  $$insert into public.org_person_affiliations (id, org_id, person_id, relationship) values ('63000000-0000-0000-2000-0000000000b1', '63000000-0000-0000-0000-0000000000a0', '63000000-0000-0000-1000-000000000001', 'oracle') on conflict (id) do update set relationship = excluded.relationship$$),
+  'permission denied for table org_person_affiliations', 'an upsert naming another organisation''s row id is refused 42501 as well (no USING-expression answer)');
+select is(t063.state('63000000-0000-0000-0000-000000000001', 'authenticated',
+  $$insert into public.org_person_affiliations (org_id, person_id, relationship, created_by) values ('63000000-0000-0000-0000-0000000000a0', '63000000-0000-0000-1000-000000000001', 'forged', '63000000-0000-0000-0000-000000000002')$$),
+  '42501', 'created_by cannot be sent on insert');
+select is(t063.state('63000000-0000-0000-0000-000000000001', 'authenticated',
+  $$insert into public.org_person_affiliations (org_id, person_id, relationship, created_at) values ('63000000-0000-0000-0000-0000000000a0', '63000000-0000-0000-1000-000000000001', 'forged', '2001-01-01')$$),
+  '42501', 'created_at cannot be sent on insert');
+select is(t063.state('63000000-0000-0000-0000-000000000001', 'authenticated',
+  $$update public.org_person_affiliations set created_by = '63000000-0000-0000-0000-000000000002' where person_id = '63000000-0000-0000-1000-000000000001'$$),
+  '42501', 'created_by cannot be updated');
+select is(t063.state('63000000-0000-0000-0000-000000000001', 'authenticated',
+  $$update public.org_person_affiliations set created_at = '2001-01-01' where person_id = '63000000-0000-0000-1000-000000000001'$$),
+  '42501', 'created_at cannot be updated');
+select is(t063.state('63000000-0000-0000-0000-000000000001', 'authenticated',
+  $$update public.org_person_affiliations set id = gen_random_uuid() where person_id = '63000000-0000-0000-1000-000000000001'$$),
+  '42501', 'id cannot be updated');
+select ok(t063.changed('63000000-0000-0000-0000-000000000001',
+  $$update public.org_person_affiliations set relationship = relationship where person_id = '63000000-0000-0000-1000-000000000001'$$) > 0,
+  'control: the client columns can still be updated');
+select is(t063.changed('63000000-0000-0000-0000-000000000001',
+  $$update public.org_person_affiliations set relationship = 'x' where id = '63000000-0000-0000-2000-0000000000b1'$$)
+  + t063.changed('63000000-0000-0000-0000-000000000001',
+  $$delete from public.org_person_affiliations where id = '63000000-0000-0000-2000-00000000ffff'$$),
+  0, 'update/delete by another organisation''s row id and by a missing id both touch zero rows');
+
+-- the carry-over helper refuses whoever is not allowed to call it, with the standard answers
+select is(t063.state('63000000-0000-0000-0000-000000000004', 'authenticated',
+  $$select app.move_person_affiliations('63000000-0000-0000-0000-0000000000a0', '63000000-0000-0000-1000-000000000001', '63000000-0000-0000-1000-000000000002')$$),
+  '42501', 'a stranger calling the helper directly is refused 42501');
+select is(t063.state('63000000-0000-0000-0000-000000000001', 'authenticated',
+  $$select app.move_person_affiliations('63000000-0000-0000-0000-0000000000a0', '63000000-0000-0000-1000-000000000001', '63000000-0000-0000-1000-000000000001')$$),
+  'P0001', 'the helper refuses a person merged into themselves');
+select is(t063.state('63000000-0000-0000-0000-000000000001', 'authenticated',
+  $$select app.move_person_affiliations('63000000-0000-0000-0000-0000000000a0', '63000000-0000-0000-1000-000000000001', '63000000-0000-0000-1000-0000000000b1')$$),
+  'P0001', 'the helper refuses a person of another organisation');
+select is(t063.state('63000000-0000-0000-0000-000000000004', 'anon',
+  $$select app.move_person_affiliations('63000000-0000-0000-0000-0000000000a0', '63000000-0000-0000-1000-000000000001', '63000000-0000-0000-1000-000000000002')$$),
+  '42501', 'anon cannot execute the helper');
 
 -- ============ 5. the two-organisation member (uab): frozen parents and the cross-reference check (8) ============
 

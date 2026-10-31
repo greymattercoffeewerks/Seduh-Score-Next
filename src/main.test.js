@@ -21,6 +21,7 @@ const mountSplashScreen = vi.fn();
 const mountLoginScreen = vi.fn();
 const mountSetPasswordScreen = vi.fn();
 const mountTeamScreen = vi.fn();
+const mountPeopleScreen = vi.fn();
 const canManageTeam = vi.fn(() => Promise.resolve(false));
 
 vi.mock('./core/eventsScreen.js', () => ({
@@ -60,6 +61,9 @@ vi.mock('./liveSurfaces.js', () => ({
 }));
 vi.mock('./core/setPasswordScreen.js', () => ({
   mountSetPasswordScreen: (...args) => mountSetPasswordScreen(...args),
+}));
+vi.mock('./core/peopleScreen.js', () => ({
+  mountPeopleScreen: (...args) => mountPeopleScreen(...args),
 }));
 vi.mock('./core/teamScreen.js', () => ({
   mountTeamScreen: (...args) => mountTeamScreen(...args),
@@ -2071,6 +2075,27 @@ describe('team accounts wiring', () => {
     const { root } = await startApp({ client: fakeClient({ session: null }) });
     expect(root.textContent).toContain('LOGIN_SCREEN');
     expect(mountTeamScreen).not.toHaveBeenCalled();
+  });
+
+  it('#/people mounts the people screen with the org, the client and a real signal', async () => {
+    stubScreen(mountPeopleScreen, 'PEOPLE_SCREEN');
+    location.hash = '#/people';
+    const client = fakeClient();
+    const { root } = await startApp({ client });
+    expect(root.textContent).toContain('PEOPLE_SCREEN');
+    const args = mountPeopleScreen.mock.calls[0][1];
+    expect(args.orgId).toBe('org1');
+    expect(args.client).toBe(client);
+    expect(args.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('#/people is behind the sign-in gate', async () => {
+    stubScreen(mountLoginScreen, 'LOGIN_SCREEN');
+    stubScreen(mountPeopleScreen, 'PEOPLE_SCREEN');
+    location.hash = '#/people';
+    const { root } = await startApp({ client: fakeClient({ session: null }) });
+    expect(root.textContent).toContain('LOGIN_SCREEN');
+    expect(mountPeopleScreen).not.toHaveBeenCalled();
   });
 
   it('shows a Team link to an owner, once the database says so', async () => {

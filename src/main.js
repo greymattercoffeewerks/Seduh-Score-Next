@@ -27,6 +27,7 @@ import { mountRecoveryScreen } from './core/recoveryScreen.js';
 import { mountChangePasswordScreen } from './core/changePasswordScreen.js';
 import { createRecoveryFlow, takeRecoveryArrival } from './core/passwordRecovery.js';
 import { mountTeamScreen } from './core/teamScreen.js';
+import { mountPeopleScreen } from './core/peopleScreen.js';
 import { mountNoOrgScreen } from './core/noOrgScreen.js';
 import { loadWindowState, windowWarningText } from './core/eventWindow.js';
 import { mountEventWindowLockedScreen } from './core/eventWindowScreen.js';
@@ -829,6 +830,7 @@ export function buildRoutes({
             orgId,
             orgName,
             audienceLinks: audienceLinksFor(orgSlug),
+            peopleHref: '#/people',
             client,
             defaultFormat: 'cup_taster',
             formatOptions: FORMAT_OPTIONS,
@@ -848,6 +850,14 @@ export function buildRoutes({
             signal,
             onLeaveGuard: (active) => setTeamHoldsSecret(active),
           }),
+        auth,
+      ),
+    },
+    {
+      pattern: '/people',
+      mount: requireAuth(
+        (outlet, { client, signal, orgId, orgName }) =>
+          mountPeopleScreen(outlet, { orgId, orgName, client, signal }),
         auth,
       ),
     },

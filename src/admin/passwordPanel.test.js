@@ -85,7 +85,14 @@ afterEach(() => {
 
 describe('U-1 the registry', () => {
   it('has the panel at route password, labelled Change password, after the existing four', () => {
-    expect(PANELS.map((p) => p.route)).toEqual(['orgs', 'new-org', 'plan', 'audit', 'password']);
+    expect(PANELS.map((p) => p.route)).toEqual([
+      'orgs',
+      'new-org',
+      'plan',
+      'seduh-id',
+      'audit',
+      'password',
+    ]);
     const entry = PANELS.find((p) => p.id === 'password');
     expect(entry.label).toBe('Change password');
     expect(entry.route).toBe('password');

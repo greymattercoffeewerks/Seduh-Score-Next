@@ -1262,6 +1262,28 @@ describe('the audience links card on the Events screen (T-TEN.D4)', () => {
     ]);
   });
 
+  it('offers a link to the People screen only when the caller gives one', async () => {
+    const withLink = document.createElement('div');
+    await mountEventsScreen(withLink, {
+      orgId: 'org1',
+      peopleHref: '#/people',
+      client: fakeClient({ events: [] }),
+      defaultFormat: 'cup_taster',
+    });
+    const link = withLink.querySelector('.events-people-card a');
+    expect(link.getAttribute('href')).toBe('#/people');
+    expect(link.textContent).toBe('Open People');
+    expect(link.classList.contains('tap-target')).toBe(true);
+
+    const without = document.createElement('div');
+    await mountEventsScreen(without, {
+      orgId: 'org1',
+      client: fakeClient({ events: [] }),
+      defaultFormat: 'cup_taster',
+    });
+    expect(without.querySelector('.events-people-card')).toBeNull();
+  });
+
   it('shows no card when there are no links to give', async () => {
     const root = document.createElement('div');
     await mountEventsScreen(root, {

@@ -1,0 +1,63 @@
+/* People screen (T-ID.C1). Reuses .screen-container / .btn / .tap-target / .field-input /
+   .screen-feedback from the shared token-only styling; only what this screen needs is here. Single column
+   from 360px up, so no breakpoint. Linked and role tags carry their meaning in words, never in colour
+   alone. */
+
+.people-list {
+  list-style: none;
+  margin: var(--space-3) 0 var(--space-4);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.people-list li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: var(--border-hairline) solid var(--color-border);
+}
+
+.people-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  /* Lets a long name wrap inside the row instead of pushing the buttons off a 360px screen. */
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.people-name {
+  font-weight: var(--font-weight-semibold);
+}
+
+.people-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.people-tag {
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  color: var(--color-text-muted);
+}
+
+.people-tag-role {
+  color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
+}
+
+.people-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+#people-filter {
+  margin-top: var(--space-3);
+}
