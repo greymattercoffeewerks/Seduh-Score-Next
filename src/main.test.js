@@ -2098,18 +2098,6 @@ describe('team accounts wiring', () => {
     expect(mountPeopleScreen).not.toHaveBeenCalled();
   });
 
-  it('marks only People as the current page on #/people, not Events as well', async () => {
-    stubScreen(mountPeopleScreen, 'PEOPLE_SCREEN');
-    location.hash = '#/people';
-    const { root } = await startApp({ client: reactiveClient(signedIn()) });
-    await settle();
-    await settle();
-    const current = [...root.querySelectorAll('.app-shell-link[aria-current="page"]')].map(
-      (a) => a.textContent,
-    );
-    expect(current).toEqual(['People']);
-  });
-
   it('shows a Team link to an owner, once the database says so', async () => {
     stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
     canManageTeam.mockResolvedValue(true);
@@ -2587,7 +2575,7 @@ describe('organisation context wiring (T-TEN.C2)', () => {
           link.textContent.replace(/\s*\(.*\)$/, ''),
         );
       const { root } = await startApp({ client: orgClient() });
-      expect(labels(root)).toEqual(['Events', 'People']);
+      expect(labels(root)).toEqual(['Events']);
     });
 
     it('the audience links no longer depend on the legacy settings: any organisation has them, whatever the old links are set to', async () => {
@@ -2601,13 +2589,7 @@ describe('organisation context wiring (T-TEN.C2)', () => {
         { legacyAudienceOrgId: 'some-other-org', legacyAudienceOrgSlug: 'someone-else' },
       ]) {
         const { root } = await startApp({ client: orgClient(), ...legacy });
-        expect(labels(root)).toEqual([
-          'Events',
-          'People',
-          'Splash screen',
-          'Projector view',
-          'Phone view',
-        ]);
+        expect(labels(root)).toEqual(['Events', 'Splash screen', 'Projector view', 'Phone view']);
         await activeApp.unmount();
         activeApp = null;
       }

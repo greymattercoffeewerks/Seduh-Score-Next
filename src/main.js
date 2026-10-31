@@ -830,6 +830,7 @@ export function buildRoutes({
             orgId,
             orgName,
             audienceLinks: audienceLinksFor(orgSlug),
+            peopleHref: '#/people',
             client,
             defaultFormat: 'cup_taster',
             formatOptions: FORMAT_OPTIONS,
@@ -1079,7 +1080,7 @@ function attemptReconnectFlush(client) {
 const PENDING_RETRY_MS = 15000;
 
 // Console routes that are not the Events list (so the Events link is not marked current on them).
-const NON_EVENTS_PATTERNS = new Set(['/team', '/people', '/account/password', '/forgot-password']);
+const NON_EVENTS_PATTERNS = new Set(['/team', '/account/password', '/forgot-password']);
 
 function unsyncedSwitchMessage(count) {
   const noun = count === 1 ? 'change on this device has' : 'changes on this device have';
@@ -1438,7 +1439,6 @@ export function mountApp(
     // labels describing the ROUTE, not user-facing ones describing what an
     // organiser gets when they click. "Projector view"/"Phone view" name
     // the destination the same way "Splash screen" already does.
-    links.push({ label: 'People', href: '#/people', active: route.pattern === '/people' });
     if (isTeamOwner) {
       links.push({ label: 'Team', href: '#/team', active: route.pattern === '/team' });
     }
