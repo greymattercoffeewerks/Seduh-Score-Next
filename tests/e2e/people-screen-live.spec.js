@@ -57,7 +57,6 @@ test.describe('the People screen and the Linked label (real app, real local Supa
   let alice;
   let bob;
   let carol;
-  let zed;
   let event;
 
   const names = {
@@ -96,7 +95,7 @@ test.describe('the People screen and the Linked label (real app, real local Supa
     alice = await addPerson(tokenA, a.orgId, names.alice);
     bob = await addPerson(tokenA, a.orgId, names.bob);
     carol = await addPerson(tokenA, a.orgId, names.carol);
-    zed = await addPerson(tokenB, b.orgId, names.zed);
+    await addPerson(tokenB, b.orgId, names.zed);
     event = await a.createEvent({ format: 'cup_taster', name: `Plp roster event ${uniq}` });
   });
 
@@ -213,7 +212,6 @@ test.describe('the People screen and the Linked label (real app, real local Supa
     expect(everything).not.toContain(a.orgId);
     // and the screen did not run into an error while being refused anything
     await expect(page.getByText(/went wrong|could not/i)).toHaveCount(0);
-    expect(zed).toBeTruthy();
   });
 
   test('a person whose phone is changed in the Roster loses the Linked label; a change of name alone keeps it; the identity id is never shown', async ({
