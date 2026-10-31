@@ -133,7 +133,8 @@ export default defineConfig({
       // roster in a browser on the dev server. Last, for the same shared-backend reason; each creates its own
       // organisations and identities.
       name: 'dev-identity',
-      testMatch: /(identity-link-live|affiliations-live|people-screen-live)\.spec\.js/,
+      testMatch:
+        /(identity-link-live|affiliations-live|affiliations-id-oracle-live|people-screen-live)\.spec\.js/,
       dependencies: ['dev-gating'],
       use: { baseURL: 'http://127.0.0.1:5273' },
     },

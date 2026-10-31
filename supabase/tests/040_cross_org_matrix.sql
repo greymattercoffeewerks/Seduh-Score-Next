@@ -230,12 +230,17 @@ insert into e1.spec (tbl, filter, set_col, member_read, member_update, read_rule
   ('score_change_log',      'org_id = e1.u(''@'', 100)',    'reason',        true,  false, 'members', 'update public.score_change_log set org_id = e1.u(''#'', 100) where org_id = e1.u(''@'', 100)'),
   ('score_change_counts',   'event_id = e1.u(''@'', 1)',    'event_id',      false, false, 'members', 'update public.score_change_counts set event_id = e1.u(''#'', 1) where event_id = e1.u(''@'', 1)'),
   ('entitlement_grants',    'id = e1.u(''@'', 50)',         'id',            true,  false, 'members', 'update public.entitlement_grants set org_id = e1.u(''#'', 100) where id = e1.u(''@'', 50)'),
-  ('org_person_affiliations', 'id = e1.u(''@'', 21)',        'id',            true,  true,  'members', 'update public.org_person_affiliations set org_id = e1.u(''#'', 100) where id = e1.u(''@'', 21)');
+  ('org_person_affiliations', 'id = e1.u(''@'', 21)',        'relationship',  true,  true,  'members', 'update public.org_person_affiliations set org_id = e1.u(''#'', 100) where id = e1.u(''@'', 21)');
 
 -- a caller may insert only these columns of this table (recorded_by / recorded_at are set by the database), so a copy
 -- of the row is built from them; with the others included the refusal would be a column privilege, not row-level security
 update e1.spec set insert_cols = 'event_id, team_id, total_points, wins, group_size, tiebreak_rank, reason'
  where tbl = 'btc_seeding_tiebreaks';
+
+-- same for the roster (20261031120000): a caller may not name id, created_at or created_by, so the copy is built from the
+-- columns the grant allows, and the update probe sets a column the grant allows (relationship)
+update e1.spec set insert_cols = 'org_id, person_id, relationship, started_on, ended_at'
+ where tbl = 'org_person_affiliations';
 
 -- the ledger of processed operations is insert-only in production (no UPDATE privilege) but its policy would allow
 -- an update where default privileges grant one; either way only the owning organisation's members may
