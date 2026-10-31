@@ -1938,13 +1938,13 @@ Each D task is re-confirmed with the product owner before it starts (2026-10-10)
 
 ## Seduh ID (pillar C) — Layer 1 in progress
 
-Plan and open questions: `Handoffs and Specs/MULTI-TENANCY-AND-SEDUHID-SCOPING.md` (pillar C; §6 open questions; §10 added 2026-10-26 from a review of a reference site). Sequence: tenancy (done) → gating (shipped dark) → admin console → archive + Seduh ID Layer 1 → Throwdown → Liga. Layer 1 task status (specs are local only): **T-ID.A0 to A4 are done**, the **phone checker is done**, and **B1 (identity tables), B3 (staff/affiliate roster) and B2 (the link) are done, pushed to the cloud and released to main** (2026-10-30/31, PRs #370, #372, #373, release #374). **Next: B4** (owner-run backfill of identities), **C1** to **C4**, then the closing task Z; **1b waits on the Community auto-publish and the legal read.** `people.global_person_id` is now written only by the database (guard trigger, FK to `app.seduh_identities`, `link_person_identity`). Any Seduh ID schema near `seduh_links` or the BNCC pricing and lock needs the owner's sign-off.
+Plan and open questions: `Handoffs and Specs/MULTI-TENANCY-AND-SEDUHID-SCOPING.md` (pillar C; §6 open questions; §10 added 2026-10-26 from a review of a reference site). Sequence: tenancy (done) → gating (shipped dark) → admin console → archive + Seduh ID Layer 1 → Throwdown → Liga. Layer 1 task status (specs are local only): **T-ID.A0 to A4 are done**, the **phone checker is done**, and **B1 (identity tables), B3 (staff/affiliate roster) and B2 (the link) are done, pushed to the cloud and released to main** (2026-10-30/31, PRs #370, #372, #373, release #374). **B4 (backfill: 17 identities, 17 links), C1 (People screen), C2 (live proof) and C3 (admin counts) are done and in the cloud where they touch it (#376 to #381, release #378 and #382). Next: C4**, then the closing task Z; **1b waits on the Community auto-publish and the legal read.** `people.global_person_id` is now written only by the database (guard trigger, FK to `app.seduh_identities`, `link_person_identity`). Any Seduh ID schema near `seduh_links` or the BNCC pricing and lock needs the owner's sign-off.
 
-| Layer | Scope                                                                                                         | Status                                                                |
-| ----- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| 1     | Directory (names only), staff/affiliate roster (C3); E.164 phone check first                                  | In progress: phone check, B1, B2, B3 done and live; B4, C1 to C4 next |
-| 2     | Competitor login and claim, cross-org RLS, registration page (D-G16), self-attested entries, provenance label | Not started; its own spec and security pass                           |
-| 3     | Professional profile, exportable competition CV, cafe directory (legacy v6.2)                                 | Not started                                                           |
+| Layer | Scope                                                                                                         | Status                                                           |
+| ----- | ------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| 1     | Directory (names only), staff/affiliate roster (C3); E.164 phone check first                                  | In progress: phone check, B1 to B4, C1 to C3 done; C4 and Z next |
+| 2     | Competitor login and claim, cross-org RLS, registration page (D-G16), self-attested entries, provenance label | Not started; its own spec and security pass                      |
+| 3     | Professional profile, exportable competition CV, cafe directory (legacy v6.2)                                 | Not started                                                      |
 
 **E.164 phone check (done 2026-10-30; PRs #357, #358, #359, #360, all in `dev`).** `core/phone.js` owns all phone interpretation (libphonenumber-js, Brunei-first policy); `core/registry.js` refuses anything else; the database is shape-only (`app.is_e164`, `update_roster_entry` requires canonical E.164 with hint `phone_invalid`, CHECK `people_phone_e164`) and `supabase/tests/060b_phone_fixture_cases.sql` holds it to the same cases as the client. **Cloud:** the two migrations were pushed 2026-10-30 with `apply_migration` (owner-approved) as cloud versions `20261030005330` and `20261030005349`; the repo files are `20261030100000` and `20261030110000` (the push stamps its own time, as in earlier pushes; same SQL). 23 of 23 people hold a valid E.164 phone and the CHECK is validated. The `059_public_live_now.sql` test 22 flake was fixed 2026-10-30 (test only; see CHANGELOG).
 
@@ -1953,11 +1953,13 @@ Plan and open questions: `Handoffs and Specs/MULTI-TENANCY-AND-SEDUHID-SCOPING.m
 **Seduh ID Layer 1, still open (next steps; none started):**
 
 - **Owner check:** in the Supabase dashboard, confirm the exposed schemas do not list `app` (the identity tables rely on it).
-- **T-ID.B4:** owner-run backfill of identities from published non-test results. Must raise `app.seduh_link_write` and create identities as the owner only.
-- **T-ID.C1:** roster screen with a linked indicator; call `link_person_identity` after registering a person or changing a phone (a phone change clears the link; nothing re-links automatically).
-- **T-ID.C2:** Playwright. **C3:** counts-only admin panel. **C4:** Privacy and Terms drafts (the owner publishes). **Z:** the closing task.
+- **T-ID.B4:** DONE (#376): backfill run in the cloud, 17 identities and 17 links.
+- **T-ID.C1:** DONE (#377), roster screen with a linked indicator; call `link_person_identity` after registering a person or changing a phone (a phone change clears the link; nothing re-links automatically).
+- **T-ID.C2:** DONE (#380). **C3:** DONE (#379). **C4:** Privacy and Terms drafts (the owner publishes). **Z:** the closing task.
 - **1b** waits on the Community auto-publish and the legal read.
-- **Real-device check** of the roster country select at 360px.
+- **Real-device check** of the roster country select at 360px, the Linked label and the People filter box's visible label (browser-pane check done 2026-10-31).
+- **Row-id existence oracle on 24 other tenant tables** (pre-existing, low): the owner's instruction is held in the session "Seduh ID: close row-id existence leak"; `org_person_affiliations` is fixed (#381).
+- **Navigation redesign (hamburger at all widths):** logged as a design item; not scheduled.
 
 **Proposed adoptions from the 2026-10-26 reference review (specialtycoffeecommunity.com, a pre-launch concept).** Each needs the owner's decision; none changes Layer 1 scope or pulls Layer 2 forward.
 
