@@ -1,3 +1,23 @@
+## Seduh ID Layer 1 stage C closed out: People screen, live proof, admin counts, affiliations leak fix · 2026-10-31
+
+**Task:** Close T-ID.B4 and T-ID.C1 to C3 and the affiliations leak fix in one records PR. Docs only: no migration, no app code, no cloud write. Specs are local only.
+
+**What shipped, in order:**
+
+- **#376, T-ID.B4** (`20261031100000_seduh_identity_backfill.sql`): owner-run backfill of identities from published non-test results (dry-run, apply and undo scripts, pgTAP 064, runbook). Pushed to the cloud, and the backfill was run there by the owner: 17 identities, 17 links. Released by #378.
+- **#377, T-ID.C1:** Seduh ID client wrappers, the People screen (staff/affiliate, filter box) and the Linked indicator on the roster form. The People entry point sits on the Events screen (the header had no room left).
+- **#380, T-ID.C2:** Playwright proof over real HTTP (project `dev-identity`) for the staff/affiliate roster and the People screen, including refused format writes read back.
+- **#379, T-ID.C3** (`20261031110000_admin_seduh_id_counts.sql`): `public.admin_seduh_id_counts()`, one row of integers behind `app.require_platform_admin()` (counts only, D-A4). `people_blocked` counts only blocks that still apply (join on person and phone). Needs an admin session to run, so it was not executed against the cloud.
+- **#381, leak fix** (`20261031120000_affiliations_column_grants.sql`): BUG CLASS row-id existence oracle. A tenant table that lets a client choose its primary key answers a conflicting insert differently for another tenant's row. On `org_person_affiliations`, insert and update are now granted to `authenticated` only on `org_id`, `person_id`, `relationship`, `started_on` and `ended_at`; `id`, `created_at` and `created_by` are refused with 42501 before any row is looked at. `merge_people` moves affiliations through the narrow definer helper `app.move_person_affiliations`.
+- **Cloud (project `wxzwanprluqmgoagbkpv`, owner-approved, `apply_migration`):** C3 as cloud version `20261031060834` (`admin_seduh_id_counts`), the leak fix as `20261031071141` (`affiliations_column_grants`). A privilege query confirmed the five-column grant; names match the repo, versions differ (the push stamps its own time).
+- **Release:** `dev` to `main` by PR #382 (frontend only; both migrations were already in the cloud).
+
+**Owner checks:** the People screen and the roster form at 360px in the built-in browser (renders, roster form works); the owner then asked for the release.
+
+**Open:** the 24 other tenant tables with the same oracle (`people`, `events`, `event_entries`, `public_results` and others; pre-existing, low) are the owner's instruction, tracked in the session "Seduh ID: close row-id existence leak". The Linked label, the People filter box's visible label and the real Honor device are not yet checked. C4 (Privacy and Terms drafts) and Z (close-out) remain; 1b waits on the Community auto-publish and the legal read.
+
+**Reviews:** per the PR bodies; this PR is docs only.
+
 ## Seduh ID Layer 1 stage B closed out: identity tables, roster, link; cloud push and release · 2026-10-31
 
 **Task:** Close T-ID.B1, T-ID.B2 and T-ID.B3 and the release in one records PR. Docs only: no migration, no app code, no cloud write. Specs are local only (`Handoffs and Specs/SEDUH-ID-LAYER1-SPEC-DRAFT.md`, `HANDOFF-CORRECTION-004.md`, `PHONE-CHECKER-DESIGN.md`).
