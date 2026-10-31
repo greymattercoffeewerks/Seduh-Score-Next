@@ -121,13 +121,10 @@ dependent on the later archive-feed work.
 > - A match is made on the phone number only. It does not prove who a person is, and a number that has
 >   been reused or shared can match the wrong person. If a record is wrong, email us and we will correct
 >   it.
-> - Seduh ID is free. It does not affect which plan an organiser is on, what an organiser can do, or what
->   anyone pays.
 > - You can ask us to stop using your record at any time (see the [Privacy page](/privacy/)).
 
-`[OWNER]` "Seduh ID is free ... does not affect which plan ..." is a pricing statement, not a description of
-the code (nothing in the entitlement catalog mentions it, and entitlements are a stub). It binds you if
-you later want a paid profile. Keep it only if you mean it.
+`[OWNER]` Decided 2026-10-31: no "free" or pricing statement is published for now (it would bind you if you later
+want a paid profile). Add one only if you decide to mean it.
 `[OWNER]` Confirm "no ranking" is a promise you want to make before any later layer is designed.
 
 ### 2c. "Your data" (existing)
@@ -150,19 +147,16 @@ Placement is the owner's: a new page needs the route wiring listed at the top.
 > Seduh ID is a private record that joins them, using a phone number. That is all it does today. It is
 > not public, it has no sign-in, and only the members of an organiser can see that organiser's records.
 >
-> - **Your record belongs to you.** `[OWNER]` See the note below before keeping this line.
+> - **You can ask what we hold.** Email us to ask what is on your record, or to ask us to stop using it.
 > - **Results are recorded by the platform, and decided by the organiser.** Seduh Score works out the
 >   standings from the scores an organiser enters; we do not change a result.
-> - **Payments stay manual.** Seduh Score does not take payment for Seduh ID, and does not take payment
->   from competitors on an organiser's behalf. `[OWNER]` confirm the exact claim you want to make about
+> - **Payments stay manual.** Seduh Score does not collect payment from competitors on an organiser's
+>   behalf. `[OWNER]` confirm the exact claim you want to make about
 >   competitors' payments; today billing is manual for organisers.
-> - **It is free.** `[OWNER]` pricing statement, same note as in the Terms.
 >
 > You can ask us to stop using your record at any time. See the [Privacy page](/privacy/).
 
-`[OWNER]` "Your record belongs to you" is ahead of the code: at Layer 1 a person cannot log in, see,
-claim or correct their record themselves; they can only ask by email. Either soften it ("You can ask us
-what we hold and to stop using it") or keep it as a statement of intent and say so.
+`[OWNER]` Decided 2026-10-31: the spec's "Your record belongs to you" is NOT used. At Layer 1 a person cannot log in, see, claim or correct their record; they can only ask by email, so the line is ahead of the code. The softened line above is what the code supports.
 `[OWNER]` Sign-off items on the public statement (conflict-of-interest safeguards and what the page may
 imply about pricing or other bodies) are pending and listed in the local checklist. Do not publish this
 section until they are answered.
@@ -183,8 +177,7 @@ section until they are answered.
 | Opt-out is done by the operator by hand (no screen, no self-service)                                       | `CONVENTIONS.md` runbook ("There is no admin function or console screen for any of the following")                                                                                                 |
 | No public surface in Layer 1                                                                               | no `anon` grant, no anonymous door, `public_results` payload gains no field (B1, B2, B3 headers)                                                                                                   |
 | Operator view is counts only                                                                               | `20261031110000_admin_seduh_id_counts.sql` (`admin_seduh_id_counts()`, "COUNTS ONLY ... no names, no phones, no ids")                                                                              |
-| Free, never an entitlement key                                                                             | **Not in code.** Spec decision 10 / `HANDOFF-CORRECTION-004.md` (local); the entitlement catalog has no Seduh ID key. A pricing statement: owner's.                                                |
-| "Your record belongs to you", "payments stay manual"                                                       | **Not in code.** Spec A8 (local): wording the statement must carry; see the `[OWNER]` notes above                                                                                                  |
+| "Payments stay manual"                                                                                     | **Not in code.** Spec A8 (local): wording the statement must carry; see the `[OWNER]` notes above                                                                                                  |
 
 ## 5. Deliberately not said
 
