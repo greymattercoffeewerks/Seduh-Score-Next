@@ -1,3 +1,15 @@
+## T-ARC.6 section 3: pricing-page archive wording (public copy; live only when `dev` is released to `main`) · 2026-11-02
+
+**Task:** Applied section 3 (items 3a to 3c) of `design/copy/archive-wording-DRAFT.md` to `src/marketing/pricingContent.js`, owner-approved to land with the Privacy and Terms PR (#397): the three tier notes, the "Result listing" description and its three cells, and the FAQ "Do my results have to be public?". The draft's "current" texts matched the file (no mismatch). New wording says "about 24 hours", no opt-out for Community, no price claim, no Seduh ID, no new use of "free". Also in the draft: item 1f's two sentences about keeping ledger rows for 12 months are marked HELD (owner, 2026-11-01: no purge job exists, so no purge promise).
+
+**Tests:** `pricingScreen.test.js` updated to the new strings (not loosened) plus one test over the changed strings: no "free", no Seduh ID, no opt-out, no tighter timing than "about 24 hours".
+
+**Still owed at the flip (item 3d):** remove the code comment in `TIERS[0]` ("until then publishing is the organiser's choice on every tier ..."), left untouched here. Also not in scope and still says "when the event ends": the landing page's Community prose (`landingScreen.js` line 705, pinned by `landingScreen.test.js:92`); change it with the owner's say-so, together with this copy.
+
+**Verified:** 360px in the built-in browser: no horizontal scroll (scrollWidth 360), the three notes and the Result listing card fit with nothing truncated.
+
+**Reviews:** ui-accessibility-reviewer (360px): clean. code-reviewer: clean, one nit (stale line in `src/marketing/CLAUDE.md`), fixed. test-auditor: tests pin the invariant (10 mutations all caught); one Important outside the audited file (the landing page's Community prose still says "when the event ends"), intentionally out of scope and left for the owner, listed above under Still owed (not independently re-checked, a scope question not a defect); one nit (the negative test's timing regex does not itself catch "about 12 hours", the exact-string pins do), left, the title now accurate enough. An earlier full `npm test` run showed one failure while test-auditor was mutating `pricingContent.js` in the same tree; the rerun was 5856 of 5856.
+
 ## T-ARC.5: live proof of the archive pipeline, API level and browser level (tests only, nothing in the cloud) · 2026-11-02
 
 **Task:** Two Playwright projects, no migration, RPC or app change. `dev-archive` (`archive-pipeline-live.spec.js`, PR #393, 19 tests): real sign-ins over PostgREST; the tick is run as the database owner through the local container (`support/archive.js`) because `app.archive_tick` is executable by no API role; the dark gate is passed by switching `results_archive_optional` on through the audited admin switch and back off (no tick path ignores it). `dev-archive-ui` (`archive-panel-live.spec.js`, 13 tests, 360px first, one test at 1280px): the organiser panel against the real local stack.
