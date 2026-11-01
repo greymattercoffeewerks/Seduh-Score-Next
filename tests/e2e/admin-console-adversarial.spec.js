@@ -74,6 +74,8 @@ const ADMIN_FUNCTIONS = {
   admin_list_keys: () => ({}),
   // T-ID.C3: the counts-only Seduh ID read (no arguments, integers back, nothing for anyone but an admin at aal2)
   admin_seduh_id_counts: () => ({}),
+  // T-ARC.3: the counts-only archive pipeline read (no arguments, one boolean and whole numbers back, nothing for anyone but an admin at aal2)
+  admin_archive_status: () => ({}),
   admin_plan_orgs: () => ({}),
   admin_plan_org: (w) => ({ p_org_id: w.a.orgId }),
   admin_payment_confirm: (w) => ({
@@ -623,6 +625,44 @@ test.describe('the admin surface under attack (HTTP, real local stack)', () => {
     expect(JSON.stringify(got.body)).not.toMatch(/\+\d{6}|@|[0-9a-f]{8}-[0-9a-f]{4}-/i);
     refused(await rpc('admin_seduh_id_counts', {}, { token: organiserAal1 }), {
       label: 'organiser asking for the counts',
+      hint: 'admin_required',
+    });
+  });
+
+  test('ARCHIVE STATUS (T-ARC.3): an admin at aal2 gets exactly one row of one boolean and eighteen whole numbers and nothing else, and an organiser gets the plain admin refusal', async () => {
+    const got = await rpc('admin_archive_status', {}, { token: adminAal2 });
+    expect(got.status).toBe(200);
+    expect(got.body).toHaveLength(1);
+    expect(Object.keys(got.body[0]).sort()).toEqual(
+      [
+        'events_failed',
+        'events_pending',
+        'events_pending_overdue',
+        'events_published',
+        'events_removed',
+        'events_skipped',
+        'events_stubbed',
+        'events_total',
+        'listing_list',
+        'listing_named_only',
+        'pipeline_live',
+        'published_by_organiser',
+        'published_by_pipeline',
+        'removed_after_pipeline',
+        'removed_unpublished',
+        'stubbed_by_pipeline',
+        'stubbed_invalid_snapshot',
+        'stubbed_no_snapshot',
+        'stubbed_stale_snapshot',
+      ].sort(),
+    );
+    const { pipeline_live: live, ...counts } = got.body[0];
+    expect(typeof live).toBe('boolean');
+    for (const value of Object.values(counts)) expect(Number.isSafeInteger(value)).toBe(true);
+    // no event name, organisation, payload, email or uuid anywhere in the answer
+    expect(JSON.stringify(got.body)).not.toMatch(/@|[0-9a-f]{8}-[0-9a-f]{4}-/i);
+    refused(await rpc('admin_archive_status', {}, { token: organiserAal1 }), {
+      label: 'organiser asking for the archive counts',
       hint: 'admin_required',
     });
   });
