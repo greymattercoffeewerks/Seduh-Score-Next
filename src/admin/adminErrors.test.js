@@ -56,6 +56,11 @@ const NOT_FOR_THE_CONSOLE = {
     'raised only to an API role calling the owner-run identity backfill; never an admin console call',
   archive_tick_owner_only:
     'raised only to an API role calling the owner-run archive tick; never an admin console call',
+  // The archive snapshot staging door (T-ARC.2): the organiser's browser, through the outbox; no copy is shown, the call is silent.
+  archive_payload_invalid:
+    'stage_archive_payload refusing a snapshot that can never be valid; the organiser client never builds one, never an admin console call',
+  archive_payload_too_large:
+    'stage_archive_payload refusing a snapshot over 64 KB; the organiser client never builds one, never an admin console call',
   // The BTC format's own RPCs.
   bracket_advanced: 'BTC format',
   demo_event_not_found: 'BTC format',

@@ -32,6 +32,7 @@ import { listHeatsForStage } from './heats.js';
 import { stageKindLabel, findStageById } from './setup.js';
 import { cupTasterOutboxHandlers } from './outboxHandlers.js';
 import { publishLiveSession } from './liveSession.js';
+import { stageArchiveSnapshot } from './archiveSnapshot.js';
 import {
   fetchStandingsForStage,
   resolveAdvancement,
@@ -395,6 +396,12 @@ export async function mountStandingsScreen(
           // outbox announces an enqueue it couldn't persist (so the panel
           // reports the lost champion publish), but a code bug would
           // otherwise vanish.
+        }
+        // The champion is declared: stage the podium snapshot the archive tick publishes 24 hours after the event ends
+        // (T-ARC.2). Queued behind the resolve_stage above and built at flush time, so it reads the finished result.
+        // Best-effort and silent (stageArchiveSnapshot never throws); only the terminal stage declares a champion.
+        if (data.stage.cutoff == null) {
+          await stageArchiveSnapshot(data.event, cupTasterOutboxHandlers(client));
         }
       } else if (flushResult.error) {
         pendingError = describeError(flushResult.error);

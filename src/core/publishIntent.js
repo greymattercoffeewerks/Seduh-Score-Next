@@ -47,7 +47,7 @@ function isTransientReadFailure(error) {
 
 // `cause` keeps the original stack: the permanent branch exists mostly to catch a bug in our own payload
 // building, which needs it to debug.
-function classifyReadFailure(error) {
+export function classifyReadFailure(error) {
   const err = new Error(error?.message ?? String(error), { cause: error });
   err.code = error?.code;
   err.details = error?.details;
