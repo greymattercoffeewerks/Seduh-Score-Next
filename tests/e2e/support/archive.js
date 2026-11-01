@@ -57,3 +57,16 @@ export function resultCount(eventId) {
     scalar(`select count(*) from public.public_results where event_id = '${id(eventId)}'`),
   );
 }
+
+/**
+ * Forces a ledger row into a state no API door can reach (a failure the tick recorded), as the owner. `lastError` must be
+ * shaped like the table's own check (letters, digits, underscore), exactly as the tick would store a SQLSTATE.
+ */
+export function forceLedger(eventId, { state = 'pending', attempts = 0, lastError = null }) {
+  if (!/^[A-Za-z0-9_]{1,40}$/.test(lastError ?? 'x')) throw new Error('last_error shape');
+  if (!['pending', 'failed'].includes(state)) throw new Error('state');
+  const error = lastError === null ? 'null' : `'${lastError}'`;
+  sqlAsOwner(
+    `update app.archive_events set state = '${state}', attempts = ${Number(attempts)}, last_error = ${error} where event_id = '${id(eventId)}'`,
+  );
+}

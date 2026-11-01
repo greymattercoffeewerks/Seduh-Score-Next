@@ -147,5 +147,13 @@ export default defineConfig({
       dependencies: ['dev-identity'],
       use: { baseURL: 'http://127.0.0.1:5273' },
     },
+    {
+      // archive-panel-live.spec.js (T-ARC.5 phase 2): the organiser's archive panel in a real browser at 360px. Switches the
+      // same global key on as 'dev-archive' and back off, so it runs after it, alone.
+      name: 'dev-archive-ui',
+      testMatch: /archive-panel-live\.spec\.js/,
+      dependencies: ['dev-archive'],
+      use: { baseURL: 'http://127.0.0.1:5273' },
+    },
   ],
 });
