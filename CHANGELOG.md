@@ -10,7 +10,7 @@
 - `events_open` at 01:12:56, audit row 21, `would_lose` 0.
 - `results_archive_optional` at 01:13:56.149318 (`2026-11-01 17:13:56.149318+00`), audit row 22, `would_lose` 1: Throwaway Org, Community, no events, so nothing real was lost. The confirm value typed was therefore 1.
 
-These are the first gating keys enforced in the cloud for real. The only earlier flip was a rehearsal on 2026-10-27: `cup_taster_participants` enforced (row 16, `gating.key_enforced`, `would_lose` 1) and relaxed again about six minutes later (row 17, `gating.key_relaxed`), on the test organisation "Gating Rehearsal". The other eight keys are still `enforced = false`.
+These are the first gating keys enforced in the cloud for real. The only earlier flip was a rehearsal on 2026-10-27: `cup_taster_participants` enforced (row 16, `gating.key_enforced`, `would_lose` 1) and relaxed again 6 minutes 34 seconds later (row 17, `gating.key_relaxed`), on the test organisation "Gating Rehearsal". The other eight keys are still `enforced = false`.
 
 **The floor:** `pg_cron` job 1 `archive-tick` (`*/5 * * * *`, as `postgres`) now runs `select app.archive_tick('2026-11-01 17:13:56.149318+00')`, the third flip's moment, instead of `select app.archive_tick(null)`, so only events that end at or after it are ever tracked (migration `20261023130000` backfilled `ended_at` for every already-concluded event, and an unbounded finder would have published the history). The 17:30 UTC run succeeded. The rescheduling at 17:15 UTC and the direct tick call (`dark: false`, enqueued 0, published 0, stubbed 0, skipped 0, errored 0) are as reported by the main session; this task read the job, the ledger and the audit log, and did not call the tick.
 
