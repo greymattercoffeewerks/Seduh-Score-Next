@@ -335,7 +335,7 @@ reset role;
 select is(
   (select string_agg(tgname::text, ',' order by tgname) from pg_trigger
     where tgrelid = 'public.public_results'::regclass and not tgisinternal),
-  'trg_public_results_org_check,trg_public_results_org_immutable,trg_public_results_stamp_org',
+  'trg_public_results_archive_note,trg_public_results_org_check,trg_public_results_org_immutable,trg_public_results_stamp_org',
   'the triggers on public_results fire in this order (the org check runs before the payload checks)'
 );
 set local role authenticated;
