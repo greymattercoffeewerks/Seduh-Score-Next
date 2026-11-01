@@ -90,10 +90,12 @@ describe('mountPricingScreen', () => {
     const notes = [...root.querySelectorAll('.pricing-card')].map(
       (card) => card.querySelector('.pricing-tier-note').textContent,
     );
+    const unlisted =
+      'You choose whether to publish results to the public archive. If you do not, the event is still named there, with no results.';
     expect(notes).toEqual([
-      'The podium is published to the public archive automatically when the event ends.',
-      'Publishing results to the archive is optional.',
-      'Publishing results to the archive is optional.',
+      'The podium is published to the public archive automatically, about 24 hours after the event ends. You can publish sooner.',
+      unlisted,
+      unlisted,
     ]);
   });
 
@@ -150,18 +152,38 @@ describe('mountPricingScreen', () => {
   it('puts the same archive rule in the table and the FAQ', () => {
     const [, description, cells] = ALL_ROWS.find(([name]) => name === 'Result listing');
     expect(cells.map((cell) => cell.text)).toEqual([
-      'Compulsory: podium only, published when the event ends',
-      'Optional',
-      'Optional',
+      'Compulsory: podium only, published about 24 hours after the event ends',
+      'Optional (the event is always named)',
+      'Optional (the event is always named)',
     ]);
     expect(description).toMatch(
-      /On Community, the podium is listed in the public archive automatically when the event ends/,
+      /On Community, the podium is published to the public archive automatically, about 24 hours after the event ends/,
     );
+    expect(description).toMatch(/an event that is not listed is still named in the archive/);
     const faq = FAQ.find((entry) => entry.question === 'Do my results have to be public?');
     expect(faq.answer).toMatch(
-      /^On Community, yes: the podium is published .* when the event ends/,
+      /^On Community, yes: the podium is published .* about 24 hours after the event ends, and you can publish it sooner/,
     );
+    expect(faq.answer).toMatch(/an unlisted event is still named in the archive with no results/);
     expect(faq.answer).toMatch(/Per-event and Annual, publishing is your choice/);
+  });
+
+  it('promises nothing tighter than about 24 hours, no opt-out, no Seduh ID, and adds no new "free" in the archive wording', () => {
+    const [, description, cells] = ALL_ROWS.find(([name]) => name === 'Result listing');
+    const faq = FAQ.find((entry) => entry.question === 'Do my results have to be public?');
+    const archiveStrings = [
+      ...TIERS.map((tier) => tier.note),
+      description,
+      ...cells.map((cell) => cell.text),
+      faq.answer,
+    ];
+    for (const string of archiveStrings) {
+      expect(string).not.toMatch(/free/i);
+      expect(string).not.toMatch(/seduh id/i);
+      expect(string).not.toMatch(/opt[- ]out/i);
+      expect(string).not.toMatch(/within|exactly|\b\d+ (minutes|hours? and)/i);
+    }
+    expect(archiveStrings.join(' ')).toMatch(/about 24 hours/);
   });
 
   it('sends every tier to contact, never to a checkout or a sign-up we do not have', () => {

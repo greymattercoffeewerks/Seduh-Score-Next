@@ -193,8 +193,9 @@ and the shared header's Pricing link. It is static like the Tour: no router, aut
 - Rows only Cup Taster supports (report/CSV, analytics, public results) say "Cup Taster:" in their
   description; BTC's publishing is live display only.
 - **The archive rule is stated on every card, in the table and in the FAQ** (owner, 2026-10-17): Community
-  the podium is published to the public archive automatically when the event ends; on Per-event and Annual
-  publishing is optional. It is tier policy ahead of the code: the compulsory publish is the archive phase,
+  the podium is published to the public archive automatically, about 24 hours after the event ends; on
+  Per-event and Annual publishing is optional and an unlisted event is still named in the archive (wording
+  of 2026-11-02, `design/copy/archive-wording-DRAFT.md` section 3). It is tier policy ahead of the code: the compulsory publish is the archive phase,
   and until then publishing is the organiser's choice on every tier. Privacy and Terms must say Community
   results are public before it is enforced; the approved wording is held in
   `design/copy/archive-rule-wording-HELD.md` and must NOT be applied until the enforcement ships.

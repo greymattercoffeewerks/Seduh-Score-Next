@@ -281,7 +281,8 @@ select is((select count(*)::int from public_results where event_id in (select t0
 delete from public_results where event_id = t066.u(1001);
 select is(app.archive_tick(now() - interval '3 days') ->> 'published', '0', 'E1 unpublished after the tick: the next tick does not publish it again');
 select is((select count(*)::int from public_results where event_id = t066.u(1001)), 0, 'E1 stays unpublished (soft unpublish is not undone)');
-select is(t066.arch(1001, 'state'), 'published', 'E1 keeps its terminal state');
+-- T-ARC.3 (migration 20261101130000): the removal is now recorded; 'removed' is as terminal as the state it replaced
+select is(t066.arch(1001, 'state'), 'removed', 'E1 is recorded as removed (T-ARC.3) and stays terminal');
 
 -- ============ retry, backoff, give up ============
 update app.archive_events set next_try_at = now() - interval '1 minute' where event_id = t066.u(1007);

@@ -43,6 +43,14 @@ export function canAccess(key) {
   return entry ? entry.allowed !== false : true;
 }
 
+// Is this key switched on for the platform, as far as the database last said? `allowed` alone cannot tell: it reads true
+// for every key that is off. The database reports `enforced` for the keys a screen must be able to tell apart (today only
+// results_archive_optional); for any other key, or with no snapshot, this is false ("not known to be on"), never a guess.
+export function isEnforced(key) {
+  known(key);
+  return snapshot?.keys?.[key]?.enforced === true;
+}
+
 // The cap for a capped key (a number), or null for "no limit known". Never decides anything on its own.
 export function limitFor(key) {
   const meta = known(key);

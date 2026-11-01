@@ -138,5 +138,22 @@ export default defineConfig({
       dependencies: ['dev-gating'],
       use: { baseURL: 'http://127.0.0.1:5273' },
     },
+    {
+      // archive-pipeline-live.spec.js (T-ARC.5): the archive pipeline over the real local PostgREST with real sign-ins and
+      // no browser. results_archive_optional is switched ON locally (the pipeline is dark otherwise) through the audited
+      // admin key switch and put back OFF afterwards, so it runs last and alone, like 'dev-gating'.
+      name: 'dev-archive',
+      testMatch: /archive-pipeline-live\.spec\.js/,
+      dependencies: ['dev-identity'],
+      use: { baseURL: 'http://127.0.0.1:5273' },
+    },
+    {
+      // archive-panel-live.spec.js (T-ARC.5 phase 2): the organiser's archive panel in a real browser at 360px. Switches the
+      // same global key on as 'dev-archive' and back off, so it runs after it, alone.
+      name: 'dev-archive-ui',
+      testMatch: /archive-panel-live\.spec\.js/,
+      dependencies: ['dev-archive'],
+      use: { baseURL: 'http://127.0.0.1:5273' },
+    },
   ],
 });

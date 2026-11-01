@@ -25,7 +25,7 @@ export const TIERS = [
     // The tier's archive rule (owner, 2026-10-17). Automatic enforcement is the archive
     // phase (infrastructure plan, step 4); until then publishing is the organiser's choice
     // on every tier, so this states the tier's policy ahead of the code.
-    note: 'The podium is published to the public archive automatically when the event ends.',
+    note: 'The podium is published to the public archive automatically, about 24 hours after the event ends. You can publish sooner.',
     cta: { text: 'Get in touch', href: '/contact/' },
   },
   {
@@ -34,7 +34,7 @@ export const TIERS = [
     price: 'BND $18',
     suffix: 'one-time',
     summary: 'One event, in the format you choose, with reports. Pay once, run your event, done.',
-    note: 'Publishing results to the archive is optional.',
+    note: 'You choose whether to publish results to the public archive. If you do not, the event is still named there, with no results.',
     cta: { text: 'Get in touch', href: '/contact/' },
     featured: true,
   },
@@ -45,7 +45,7 @@ export const TIERS = [
     suffix: 'per year',
     summary:
       'For organisers running events all year, with full access to every format and feature.',
-    note: 'Publishing results to the archive is optional.',
+    note: 'You choose whether to publish results to the public archive. If you do not, the event is still named there, with no results.',
     cta: { text: 'Get in touch', href: '/contact/' },
   },
 ];
@@ -141,11 +141,11 @@ export const FEATURE_GROUPS = [
     rows: [
       [
         'Result listing',
-        'Cup Taster: the podium or full standings on a page anyone can open. On Community, the podium is listed in the public archive automatically when the event ends. On Per-event and Annual, listing is your choice.',
+        'Cup Taster: the podium or full standings on a page anyone can open. On Community, the podium is published to the public archive automatically, about 24 hours after the event ends. On Per-event and Annual, listing is your choice, and an event that is not listed is still named in the archive.',
         [
-          text('Compulsory: podium only, published when the event ends'),
-          text('Optional'),
-          text('Optional'),
+          text('Compulsory: podium only, published about 24 hours after the event ends'),
+          text('Optional (the event is always named)'),
+          text('Optional (the event is always named)'),
         ],
       ],
       // The landing page puts PDF reports on Per-event and Annual only.
@@ -197,7 +197,7 @@ export const FAQ = [
   {
     question: 'Do my results have to be public?',
     answer:
-      'On Community, yes: the podium is published to the public archive automatically when the event ends. On Per-event and Annual, publishing is your choice.',
+      'On Community, yes: the podium is published to the public archive automatically, about 24 hours after the event ends, and you can publish it sooner. Tell your competitors before the event. On Per-event and Annual, publishing is your choice, and an unlisted event is still named in the archive with no results.',
   },
   {
     question: 'What does "Planned" mean?',

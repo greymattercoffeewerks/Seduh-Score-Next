@@ -54,8 +54,24 @@ const NOT_FOR_THE_CONSOLE = {
   // Seduh ID backfill (T-ID.B4): owner-run function, refuses an API role.
   seduh_backfill_owner_only:
     'raised only to an API role calling the owner-run identity backfill; never an admin console call',
+  // Archive tick box (T-ARC.3): the organiser's own RPC, never an admin console call.
+  archive_listing_invalid:
+    'raised to an organiser calling set_archive_listing with a null choice; not an admin console call',
+  archive_listing_closed:
+    'raised to an organiser whose event archive entry is already decided; not an admin console call',
+  archive_event_is_test:
+    'raised to an organiser choosing the archive listing of a test event; not an admin console call',
+  archive_status_invalid:
+    'archive_event_status refusing a NULL event list; the organiser panel never sends one, never an admin console call',
+  archive_status_too_many:
+    'archive_event_status refusing more than 200 ids; the organiser panel caps its list, never an admin console call',
   archive_tick_owner_only:
     'raised only to an API role calling the owner-run archive tick; never an admin console call',
+  // The archive snapshot staging door (T-ARC.2): the organiser's browser, through the outbox; no copy is shown, the call is silent.
+  archive_payload_invalid:
+    'stage_archive_payload refusing a snapshot that can never be valid; the organiser client never builds one, never an admin console call',
+  archive_payload_too_large:
+    'stage_archive_payload refusing a snapshot over 64 KB; the organiser client never builds one, never an admin console call',
   // The BTC format's own RPCs.
   bracket_advanced: 'BTC format',
   demo_event_not_found: 'BTC format',
