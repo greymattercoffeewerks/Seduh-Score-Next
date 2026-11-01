@@ -71,8 +71,9 @@ describe('buildArchiveSnapshot', () => {
 describe('stageArchiveSnapshot', () => {
   it('never throws: the archive is fail-open and must not break the organiser own work', async () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    // an empty handler map makes the flush throw "no handler": the wrapper logs it and swallows it
-    await expect(stageArchiveSnapshot({ id: 'e', org_id: 'o' }, {})).resolves.toBeUndefined();
+    // a missing event makes reading its organisation throw inside the wrapper; it must be logged, not escape
+    await expect(stageArchiveSnapshot(null, {})).resolves.toBeUndefined();
+    expect(spy).toHaveBeenCalledTimes(1);
     spy.mockRestore();
   });
 });

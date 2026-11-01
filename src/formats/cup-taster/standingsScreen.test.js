@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderStandingsTable, mountStandingsScreen } from './standingsScreen.js';
 import { _clearAllForTests } from '../../core/db.js';
+import { stageArchiveSnapshot } from './archiveSnapshot.js';
+
+// The archive staging call sites (T-ARC.2) are asserted below; the builder itself is tested in archiveSnapshot.test.js.
+vi.mock('./archiveSnapshot.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  stageArchiveSnapshot: vi.fn(async () => {}),
+}));
 
 // Same fakeClient shape as standings.test.js/scoringScreen.test.js — queues
 // consumed strictly in call order per table. `rpc`, when passed, matches
@@ -160,6 +167,7 @@ describe('renderStandingsTable', () => {
 
 describe('mountStandingsScreen', () => {
   beforeEach(async () => {
+    stageArchiveSnapshot.mockClear();
     await _clearAllForTests();
   });
 
@@ -249,6 +257,8 @@ describe('mountStandingsScreen', () => {
     button.click();
     await vi.waitFor(() => {
       expect(root.textContent).toContain('Advanced to the next stage.');
+      // advancing to a next stage declares no champion, so nothing is staged for the archive
+      expect(stageArchiveSnapshot).not.toHaveBeenCalled();
     });
 
     // Advancement is now committed atomically via the resolve_stage RPC
@@ -458,6 +468,9 @@ describe('mountStandingsScreen', () => {
     expect(publishPayload.p_event_id).toBe('ev1');
     expect(publishPayload.p_format).toBe('cup_taster');
     expect(publishPayload.p_is_test).toBe(false);
+    // the champion is declared: the archive snapshot is staged, once, for this event (T-ARC.2)
+    expect(stageArchiveSnapshot).toHaveBeenCalledTimes(1);
+    expect(stageArchiveSnapshot.mock.calls[0][0]).toMatchObject({ id: 'ev1', org_id: 'org1' });
     document.body.removeChild(root);
   });
 
