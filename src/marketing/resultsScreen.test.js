@@ -466,4 +466,60 @@ describe('mountResultsScreen', () => {
       expect(root.querySelector('.results-archive-organiser')).toBeNull();
     });
   });
+
+  // T-ARC.4: the archive pipeline writes a named-only stub (no podium) for an event whose organiser did not list results.
+  describe('a named-only stub entry', () => {
+    const stub = (overrides = {}) => ({
+      format: 'cup_taster',
+      eventName: 'Unlisted Cup',
+      city: 'Kuala Belait',
+      eventDate: '2026-10-30',
+      listing: 'named_only',
+      ...overrides,
+    });
+
+    it('lists the stub by name with no winner, and still features the newest event that has a podium', async () => {
+      const rows = [
+        { event_id: 'stub1', payload: stub(), published_at: '2026-11-02T10:00:00Z' },
+        { event_id: 'ev1', payload: samplePayload(), published_at: '2026-10-01T10:00:00Z' },
+      ];
+      await mountResultsScreen(root, { client: fakeClient({ data: rows, error: null }) });
+      expect(root.querySelector('#latest-title').textContent).toBe('Jakarta Cup Tasters #09');
+      const archiveRows = [...root.querySelectorAll('.results-archive-row')];
+      expect(archiveRows).toHaveLength(1);
+      expect(archiveRows[0].textContent).toContain('Unlisted Cup');
+      expect(archiveRows[0].textContent).toContain('Results not published');
+      expect(archiveRows[0].querySelector('.results-score')).toBeNull();
+      // only the podium event has a results sheet link
+      expect(root.querySelectorAll('.results-sheet-link-row')).toHaveLength(1);
+    });
+
+    it('renders when EVERY row is a stub: no latest card, the archive names them all, nothing throws', async () => {
+      const rows = [
+        { event_id: 's1', payload: stub(), published_at: '2026-11-02T10:00:00Z' },
+        {
+          event_id: 's2',
+          payload: stub({ eventName: 'Second' }),
+          published_at: '2026-11-01T10:00:00Z',
+        },
+      ];
+      await mountResultsScreen(root, { client: fakeClient({ data: rows, error: null }) });
+      expect(root.querySelector('#latest-title')).toBeNull();
+      expect(root.querySelectorAll('.results-archive-row')).toHaveLength(2);
+      expect(root.querySelector('.results-hero')).not.toBeNull();
+    });
+
+    it('still skips a row with neither a podium nor the stub marker', async () => {
+      const rows = [
+        { event_id: 'ev1', payload: samplePayload(), published_at: '2026-10-01T10:00:00Z' },
+        {
+          event_id: 'odd',
+          payload: { eventName: 'Odd', podium: [] },
+          published_at: '2026-09-01T10:00:00Z',
+        },
+      ];
+      await mountResultsScreen(root, { client: fakeClient({ data: rows, error: null }) });
+      expect(root.querySelectorAll('.results-archive-row')).toHaveLength(0);
+    });
+  });
 });

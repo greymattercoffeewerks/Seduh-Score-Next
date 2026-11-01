@@ -834,6 +834,9 @@ export function buildRoutes({
             client,
             defaultFormat: 'cup_taster',
             formatOptions: FORMAT_OPTIONS,
+            // Only Cup Taster has a manual publish (its report screen); other formats get no "Publish now" link.
+            archivePublishHrefFor: (event) =>
+              event.format === 'cup_taster' ? `#/events/${event.id}/report` : null,
             signal,
           }),
         auth,

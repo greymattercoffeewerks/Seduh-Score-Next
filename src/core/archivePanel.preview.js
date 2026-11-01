@@ -1,0 +1,73 @@
+// Demo harness only: mounts the real Events screen against an in-memory client so every archive state can be seen.
+import { mountEventsScreen } from './eventsScreen.js';
+
+const mode = new URLSearchParams(location.search).get('mode') ?? 'compulsory';
+const hoursAgo = (h) => new Date(Date.now() - h * 3600 * 1000).toISOString();
+const row = (id, name, extra) => ({
+  id,
+  org_id: 'org1',
+  format: 'cup_taster',
+  name,
+  event_date: '2026-11-01',
+  venue: 'Grey Matter',
+  city: 'Bandar',
+  is_test: false,
+  ended_at: null,
+  ...extra,
+});
+const events = [
+  row('scheduled', 'Scheduled Cup', { ended_at: hoursAgo(1) }),
+  row('overdue', 'Overdue Cup', { ended_at: hoursAgo(30) }),
+  row('published', 'Published Cup', { ended_at: hoursAgo(40) }),
+  row('stub', 'Named Only Cup', { ended_at: hoursAgo(40) }),
+  row('running', 'Running Cup'),
+  row('test', 'Test Cup', { ended_at: hoursAgo(2), is_test: true }),
+];
+let results = [
+  { event_id: 'published', payload: { podium: [{ name: 'A' }] }, published_at: hoursAgo(10) },
+  { event_id: 'stub', payload: { listing: 'named_only' }, published_at: hoursAgo(10) },
+];
+const entry = mode === 'off' ? { allowed: true } : { allowed: mode === 'choice', enforced: true };
+
+const client = {
+  rpc(name, args) {
+    if (name === 'my_entitlements') {
+      return Promise.resolve({ data: { keys: { results_archive_optional: entry } }, error: null });
+    }
+    if (name === 'set_archive_listing') {
+      if (args.p_event_id === 'overdue') {
+        return Promise.resolve({
+          data: null,
+          error: { code: 'P0001', hint: 'archive_listing_closed' },
+        });
+      }
+      return new Promise((resolve) => setTimeout(() => resolve({ data: {}, error: null }), 400));
+    }
+    if (name === 'unpublish_event_results') {
+      results = results.filter((r) => r.event_id !== args.p_event_id);
+      return Promise.resolve({ data: null, error: null });
+    }
+    return Promise.resolve({ data: null, error: null });
+  },
+  from(table) {
+    const builder = {
+      select: () => builder,
+      in: () => builder,
+      eq: () => builder,
+      order: () => builder,
+      then: (resolve, reject) =>
+        Promise.resolve({ data: table === 'events' ? events : results, error: null }).then(
+          resolve,
+          reject,
+        ),
+    };
+    return builder;
+  },
+};
+
+mountEventsScreen(document.getElementById('root'), {
+  orgId: 'org1',
+  client,
+  defaultFormat: 'cup_taster',
+  archivePublishHrefFor: (event) => `#/events/${event.id}/report`,
+});
