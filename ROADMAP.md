@@ -1375,7 +1375,7 @@ Cup Taster event._
   Migration pending cloud-project push via Supabase MCP. See CHANGELOG.md for full account.
   Flagged by: `schema-guardian`, `security-reviewer`, `test-auditor`, `code-reviewer`.
 
-- **`delete_test_event` leaks which org owns an event (pre-existing, found by
+- **CLOSED 2026-10-11 by T-TEN.B6** (`20261011130000_tenancy_resolver_disclosure`, in the cloud; `app.org_id_for_event` returns NULL for a non-member and `034_resolver_disclosure.sql` asserts a stranger gets the same 'not found' whether the org id is true or wrong; checked again 2026-11-02). Original finding: **`delete_test_event` leaks which org owns an event (pre-existing, found by
   `security-reviewer` during T-HARDEN.btc-event-delete-fk).** Not an RLS bypass — nothing is
   deleted or read. A non-member passing an event's true org_id gets a silent success (RLS
   hides the row, so the is_test refusal never fires and the DELETE matches 0 rows), while a
