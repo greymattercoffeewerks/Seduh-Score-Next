@@ -30,12 +30,13 @@
 --      record cannot be bypassed. It writes ONE ledger row to state 'removed' (made if absent), remembering what it was
 --      (removed_from) and when (removed_at), and clears the staged snapshot. 'removed' is terminal, so a tick that finds it
 --      does nothing: a result the organiser took down is never put back. It records nothing:
---        - while results_archive_optional is unenforced (the pipeline is dark, T-ARC.1 header: not even a row is made);
+--        - while results_archive_optional is unenforced (the pipeline is dark): the trigger makes no row (set_archive_listing may);
 --        - for a test event, or when the event is gone (a delete_test_event or an event/organisation delete cascades here).
 --      It is SECURITY DEFINER, search_path '', an AFTER trigger that reads nothing from the caller, and FAIL-OPEN: every
---      error is swallowed, so an unpublish can never fail because of the ledger. (It may briefly WAIT for a tick that holds
+--      error but a cancel or statement timeout is swallowed, so an unpublish does not fail because of the ledger. (It may briefly WAIT for a tick that holds
 --      the same ledger row: the same caveat T-ARC.1 states.) Test 045's guard covers BEFORE ROW definer triggers; this is AFTER.
---      Accepted: a result published and unpublished while the pipeline is dark is not recorded.
+--      Accepted: a result published and unpublished while the pipeline is dark is not recorded, so if its event ends at or after
+--      the floor the first live tick publishes it again (T-ARC.7: set the floor at the flip moment, flip after such unpublishes).
 --
 --   3. public.admin_archive_status()  ONE row of counts for the platform operator, gate app.require_platform_admin() first (the
 --      shape of admin_seduh_id_counts: STABLE, SECURITY DEFINER, search_path '', granted to authenticated only, the gate
