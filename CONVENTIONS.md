@@ -328,6 +328,19 @@ listed. A new function that writes `people.global_person_id` must be added to th
    no tombstone points at them; an identity that gained a person since (the link function is legitimate) is kept and counted. Identities that
    existed before the run, and links made by anyone else, are never touched. Deleting an identity is irreversible.
 
+### Archive pipeline: the tick (T-ARC.1, 20261101100000)
+
+`app.archive_events` (one row per event, bare uuids, no foreign key) and `app.archive_tick(p_enqueue_from)` are database-owned: no API role,
+`service_role` included, can read, write or call anything here, and the tick refuses an API session by name. The tick is the scheduler's one
+entry point and is **dark** (does nothing) while `results_archive_optional` is unenforced. It is meant to be called by `pg_cron` every five
+minutes as the database owner: `select cron.schedule('archive-tick', '*/5 * * * *', $$select app.archive_tick('<flip moment>')$$)`. The
+**floor** argument matters: without it the tick makes no new rows (it only works existing ones), and with it too early the tick would publish
+events that ended long before organisers were told. `pg_cron` is NOT created by any migration; creating it in the cloud is a separate,
+owner-approved rollout step (T-ARC.7). Operating it: `select state, count(*) from app.archive_events group by 1` (owner SQL); a `failed` row
+(five errors, `last_error` holds the SQLSTATE) is reset by `update app.archive_events set state = 'pending', attempts = 0, next_try_at = null`
+after the cause is fixed. Every state but `pending` is terminal and never revisited, which is what makes a Community organiser's unpublish
+stick. Tests call the tick directly (`066`); the skip-locked behaviour between two sessions is `supabase/tests/manual/archive-tick-concurrency.sh`.
+
 ### Entitlement hooks (database checkpoints; T-GATE.B3, 054)
 
 Gating is enforced in the database, never only in the client. The rules a new hook or cap must follow (the
