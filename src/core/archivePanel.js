@@ -32,6 +32,7 @@ const PUBLISH_NOW_STATES = [
   'scheduled',
   'scheduled_named_only',
   'overdue',
+  'unscheduled',
   'retrying',
   'failed',
   'listed_named_only',
@@ -45,6 +46,7 @@ const NO_LISTING_STATES = [
   'listed_named_only',
   'taken_down',
   'overdue',
+  'unscheduled',
   'failed',
 ];
 

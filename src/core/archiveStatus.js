@@ -5,7 +5,8 @@
 // What the panel reads (T-ARC.4c): `events.ended_at`, the event's own `public_results` row (the payload tells a podium
 // from a named-only entry) and, for everything the pipeline decided, `public.archive_event_status` (the member-readable
 // door onto the owner-only ledger): state, due time, saved tick box, taken-down, retrying and a safe reason code. Nothing is
-// remembered per device any more. The one thing still derived here is the "scheduled" line before the pipeline has a row.
+// remembered per device any more. Still derived here: the "scheduled" line before the pipeline has a row, and "not in the
+// schedule" for an event past its due time that the pipeline never took.
 //
 // DARK. `archiveModeOf` answers 'off' unless the snapshot says the key is ENFORCED. While the key is unenforced the
 // database answers `allowed: true` for everyone (a Community organisation included), so `allowed` alone cannot tell dark from
@@ -37,7 +38,8 @@ export function isNamedOnly(payload) {
 // The ledger states and the stub/failure reasons the database may send (public.archive_event_status). Anything else is
 // read as "no row" / "no reason", so a future value cannot put raw text on the screen.
 const LEDGER_STATES = ['none', 'pending', 'published', 'stubbed', 'skipped', 'failed', 'removed'];
-export const STUB_REASONS = ['no_snapshot', 'invalid_snapshot', 'stale_snapshot'];
+const STUB_REASONS = ['no_snapshot', 'invalid_snapshot', 'stale_snapshot'];
+const OVERDUE_GRACE_MS = 3600 * 1000;
 const REASONS = [...STUB_REASONS, 'processing_error'];
 
 // One answer row of archive_event_status, trusted only for its whitelisted shape. null when it is not a row.
@@ -65,6 +67,7 @@ export function normalizeArchiveStatus(row) {
 //   scheduled              finished, due not reached, the podium will be published
 //   scheduled_named_only   finished, due not reached, only the name will be listed
 //   overdue                due time passed and nothing is published, no failure recorded (the schedule is late)
+//   unscheduled            due time passed and the pipeline will not publish it (no row, or already settled with no result)
 //   retrying               the last automatic attempt failed; it will be tried again
 //   failed                 the automatic attempts gave up
 //   published              a podium is public
@@ -86,7 +89,14 @@ export function archiveStateOf({ mode, event, result = null, status = null, now 
   if (!event?.ended_at || !dueAt) return { kind: 'open', dueAt: null };
   if (status.state === 'failed') return { kind: 'failed', dueAt };
   if (status.retrying) return { kind: 'retrying', dueAt };
-  if (now >= dueAt.getTime()) return { kind: 'overdue', dueAt };
+  if (now >= dueAt.getTime()) {
+    // Late only while the pipeline still holds the event (pending) or has not had a tick since it fell due. A row the
+    // pipeline never made (an event from before its floor) or one it already settled with no result is not "running
+    // late": nothing will publish it, so say so and offer the manual publish.
+    const holding = status.state === 'pending';
+    const justDue = status.state === 'none' && now - dueAt.getTime() < OVERDUE_GRACE_MS;
+    return { kind: holding || justDue ? 'overdue' : 'unscheduled', dueAt };
+  }
   const podium = mode === 'compulsory' || status.listingChoice === 'list';
   return { kind: podium ? 'scheduled' : 'scheduled_named_only', dueAt };
 }
@@ -175,6 +185,8 @@ export function statusText(state) {
         `Nothing is published yet. It was due at about ${describeArchiveTime(state.dueAt)}, so the automatic publish is running late. ` +
         'You can publish it now.'
       );
+    case 'unscheduled':
+      return 'This event is not in the automatic public archive schedule, so nothing is published. You can publish the results yourself.';
     case 'retrying':
       return 'The automatic publish hit a problem and will be tried again shortly. You can also publish it now.';
     case 'failed':

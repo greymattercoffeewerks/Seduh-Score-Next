@@ -158,6 +158,10 @@ describe('archive controller: Community (compulsory)', () => {
   });
 
   it('says overdue honestly when nothing is published after the due time', async () => {
+    client = fakeClient({
+      entry: { allowed: false, enforced: true },
+      status: { e1: { state: 'pending' } },
+    });
     const { controller } = make(client, { now: () => new Date('2026-11-05T00:00:00Z').getTime() });
     await controller.load([ev()]);
     const panel = controller.renderFor(ev());
@@ -328,6 +332,14 @@ describe('archive controller: what the database decided (archive_event_status)',
     const panel = controller.renderFor(ev());
     expect(panel.dataset.archiveState).toBe('overdue');
     expect(panel.textContent).toContain('running late');
+  });
+
+  it('an event the pipeline never took (no row, long past due) is not "running late"', async () => {
+    const { controller } = await load({}, LATE);
+    const panel = controller.renderFor(ev());
+    expect(panel.dataset.archiveState).toBe('unscheduled');
+    expect(panel.textContent).not.toContain('running late');
+    expect(panel.querySelector('#archive-publish-now-e1')).not.toBeNull();
   });
 
   it("uses the database's due time, not a recomputed one", async () => {
@@ -502,6 +514,10 @@ describe('archive controller: Per-event / Annual (choice)', () => {
   });
 
   it('does not offer the tick box once the due time has passed (the choice would be closed)', async () => {
+    client = fakeClient({
+      entry: { allowed: true, enforced: true },
+      status: { e1: { state: 'pending' } },
+    });
     const { controller } = make(client, { now: () => new Date('2026-11-05T00:00:00Z').getTime() });
     await controller.load([ev()]);
     const panel = controller.renderFor(ev());

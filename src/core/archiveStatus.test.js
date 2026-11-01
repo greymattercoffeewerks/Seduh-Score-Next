@@ -147,6 +147,15 @@ describe('archiveStateOf', () => {
       'taken_down',
     );
   });
+  it('no row long past due is unscheduled, not late; just past due is still late; a settled row with no result is unscheduled', () => {
+    const due = T('2026-11-03T10:00:00Z');
+    expect(archiveStateOf({ ...base, now: due + 1800 * 1000 }).kind).toBe('overdue');
+    expect(archiveStateOf({ ...base, now: due + 3 * 86400 * 1000 }).kind).toBe('unscheduled');
+    const skipped = withStatus({ state: 'skipped' });
+    expect(archiveStateOf({ ...base, status: skipped, now: due + 7200 * 1000 }).kind).toBe(
+      'unscheduled',
+    );
+  });
   it('failed and retrying are told apart from a late schedule', () => {
     const now = T('2026-12-01T00:00:00Z');
     expect(archiveStateOf({ ...base, status: withStatus({ state: 'failed' }), now }).kind).toBe(
@@ -188,6 +197,7 @@ describe('copy', () => {
       'scheduled',
       'scheduled_named_only',
       'overdue',
+      'unscheduled',
       'retrying',
       'failed',
       'published',
