@@ -546,6 +546,16 @@ feature release, `patch` otherwise, `--no-git-tag-version`), checks that `packag
 followed, and says in its CHANGELOG entry what the number covers. A release PR (`dev` to
 `main`) must name the version it ships, so the footer is checked against the PR title.
 
+**The release gate (2026-11-02).** CI's `Version bump` job (`tools/check-version-bump.mjs`) runs only on
+pull requests whose base is `main`; PRs into `dev` are untouched. It fails when (1) any file the deployed app is built
+from changed (`src/**` except notes and `*.test.js`, `public/**`, any `*.html`, `supabase/migrations/**`,
+`supabase/functions/**`, `vite.config.js`, `wrangler.jsonc`) and `package.json`'s `version` is not strictly higher than
+`main`'s, or (2) `package-lock.json` disagrees with `package.json` (`npm version ... --no-git-tag-version` updates
+both). A docs-, test-, tooling- or CI-only release passes with no action. It cannot tell a comment-only change in
+`src/` from a real one, so for that (or any case where no bump is right) add the **`skip-version-check`** label to the
+PR and re-run the `Version bump` job (it reads the label live; the lock-agreement rule still applies). Locally:
+`node tools/check-version-bump.mjs --base origin/main`.
+
 **Nameplate**: each build cycle takes a place name spiralling outward from Kiulap — the
 same convention the legacy site used (Kiulap → Gadong → Kiarong → Menglait → Berakas →
 Jerudong → Seria, v1.0 → v5.x, see seduhscore.com/bts/). This is a **separate, fresh

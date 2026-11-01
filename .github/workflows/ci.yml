@@ -6,6 +6,36 @@ on:
   pull_request:
 
 jobs:
+  # Release gate (tools/check-version-bump.mjs, CONVENTIONS.md "Versioning"): a PR into `main` that ships code must
+  # raise package.json's version, and package-lock.json must agree with it. Skipped for every other PR. Add the
+  # `skip-version-check` label and re-run this job to waive the bump (the label is read live, so a re-run sees it).
+  version:
+    name: Version bump
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+      # The base the PR's merge commit was built from, not main's live tip (which may have moved since).
+      - run: git fetch --no-tags --depth=1 origin "$BASE_SHA"
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      - name: Read the PR's labels
+        id: labels
+        run: |
+          if gh pr view "$PR" --json labels --jq '.labels[].name' | grep -qx 'skip-version-check'; then
+            echo "bypass=1" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+      - run: node tools/check-version-bump.mjs --base "$BASE_SHA"
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          VERSION_CHECK_BYPASS: ${{ steps.labels.outputs.bypass }}
+
   app:
     name: Lint, test, build
     runs-on: ubuntu-latest
