@@ -538,6 +538,14 @@ problem — see CHANGELOG.md's dated entry). The legacy repo's version is otherw
 same shape (a single hardcoded constant `index.html` reads on load), just without
 `package.json` as the source of truth, since that codebase predates any real build step.
 
+**The bump is owed at the close of every task, and it was missed (2026-11-02).** Build
+sessions that stop at a PR do not run `kb-sync`, so `package.json` sat at 3.4.1 from
+2026-10-23 through Seduh ID Layer 1 and the whole archive pipeline until T-ARC.Z took it to
+3.5.0. So the **closing (Z) task of a phase runs `npm version` itself** (`minor` for a
+feature release, `patch` otherwise, `--no-git-tag-version`), checks that `package-lock.json`
+followed, and says in its CHANGELOG entry what the number covers. A release PR (`dev` to
+`main`) must name the version it ships, so the footer is checked against the PR title.
+
 **Nameplate**: each build cycle takes a place name spiralling outward from Kiulap — the
 same convention the legacy site used (Kiulap → Gadong → Kiarong → Menglait → Berakas →
 Jerudong → Seria, v1.0 → v5.x, see seduhscore.com/bts/). This is a **separate, fresh
