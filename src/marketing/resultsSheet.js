@@ -217,7 +217,10 @@ export function buildResultsSheet(event) {
           )
         : el('p', {
             className: 'results-sheet-note',
-            text: 'No placings were published for this event.',
+            text:
+              event.listing === 'named_only'
+                ? 'This event is listed by name only. Its organiser has not published the results.'
+                : 'No placings were published for this event.',
           }),
       // Sighted phone users only: the region above is already announced as scrollable to a screen reader.
       content.rows.length > 0
@@ -237,13 +240,15 @@ export function buildResultsSheet(event) {
               'listed — they withdrew or did not take part.',
           })
         : null,
-      el('p', {
-        className: 'results-sheet-note',
-        text:
-          'Placings follow how far each competitor advanced and their result in the last round they ' +
-          'reached. Score is correct answers out of the sets scored in that round' +
-          (content.kind === 'standings' ? '; time is their total time in it.' : '.'),
-      }),
+      content.rows.length === 0
+        ? null
+        : el('p', {
+            className: 'results-sheet-note',
+            text:
+              'Placings follow how far each competitor advanced and their result in the last round they ' +
+              'reached. Score is correct answers out of the sets scored in that round' +
+              (content.kind === 'standings' ? '; time is their total time in it.' : '.'),
+          }),
       el('p', {
         className: 'results-sheet-note results-sheet-published',
         text:

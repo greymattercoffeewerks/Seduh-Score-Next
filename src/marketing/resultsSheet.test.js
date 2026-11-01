@@ -655,3 +655,25 @@ describe('mountResultsSheet', () => {
     );
   });
 });
+
+describe('buildResultsSheet for a named-only stub (T-ARC.4)', () => {
+  const stub = {
+    eventName: 'Unlisted Cup',
+    format: 'cup_taster',
+    eventDate: '2026-10-30',
+    listing: 'named_only',
+  };
+
+  it('says the event is listed by name only, with no table and no placings note', () => {
+    const sheet = buildResultsSheet(stub);
+    expect(sheet.textContent).toContain('Unlisted Cup');
+    expect(sheet.textContent).toContain('listed by name only');
+    expect(sheet.querySelector('table')).toBeNull();
+    expect(sheet.textContent).not.toContain('Placings follow');
+  });
+
+  it('keeps the old wording for a podium-less payload that is not a stub', () => {
+    const sheet = buildResultsSheet({ eventName: 'X', format: 'cup_taster' });
+    expect(sheet.textContent).toContain('No placings were published for this event.');
+  });
+});

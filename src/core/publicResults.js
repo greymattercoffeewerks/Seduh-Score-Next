@@ -72,6 +72,30 @@ export async function publishEventResults(orgId, eventId, payload, client = getS
   if (error) throw error;
 }
 
+// Org-scoped: which of these events already have a published row (a podium or a named-only entry). One read for a whole
+// events list (the archive panel). An event with none is absent from the answer.
+export async function listPublishedResultsForEvents(eventIds, client = getSupabase()) {
+  if (eventIds.length === 0) return [];
+  const { data, error } = await client
+    .from('public_results')
+    .select('event_id, payload, published_at')
+    .in('event_id', eventIds);
+  if (error) throw error;
+  return data;
+}
+
+// The D-G21 tick box (public.set_archive_listing, T-ARC.3). Answers { listing, recorded, due_at? }; a refusal carries a
+// stable hint (archive_listing_closed, archive_event_is_test, entitlement_required).
+export async function setArchiveListing(orgId, eventId, list, client = getSupabase()) {
+  const { data, error } = await client.rpc('set_archive_listing', {
+    p_org_id: orgId,
+    p_event_id: eventId,
+    p_list: list,
+  });
+  if (error) throw error;
+  return data;
+}
+
 export async function unpublishEventResults(orgId, eventId, client = getSupabase()) {
   const { error } = await client.rpc('unpublish_event_results', {
     p_org_id: orgId,

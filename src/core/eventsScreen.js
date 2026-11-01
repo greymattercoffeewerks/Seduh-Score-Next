@@ -20,6 +20,7 @@ import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from './timeout.js';
 import { createEvent, listEventsForOrg, deleteTestEvent, finishEvent } from './events.js';
 import { countOperationsInOrg } from './outbox.js';
 import { buildAudienceLinksCard } from './audienceLinksCard.js';
+import { createArchiveController } from './archivePanel.js';
 
 export function blankDraft(defaultFormat) {
   return { name: '', eventDate: '', venue: '', city: '', isTest: false, format: defaultFormat };
@@ -128,6 +129,7 @@ function renderFinishAction(
   finishState,
   finishError,
   { onFinishClick, onConfirmFinish, onCancelFinish },
+  finishNote = null,
 ) {
   if (event.ended_at) return el('span', { className: 'stage-meta', text: 'Finished' });
   if (finishState === 'finishing') {
@@ -170,7 +172,9 @@ function renderFinishAction(
     return el('span', { className: 'event-finish-confirm' }, [
       el('span', {
         id: copyId,
-        text: 'Finish this event? It stops counting as open. Results and audience links stay available, but organisers cannot reopen it.',
+        text:
+          'Finish this event? It stops counting as open. Results and audience links stay available, but organisers cannot reopen it.' +
+          (event.is_test || !finishNote ? '' : ` ${finishNote}`),
       }),
       confirmButton,
       cancelButton,
@@ -202,6 +206,9 @@ export function renderEventsList(
     finishStates = {},
     finishErrors = {},
     finishHandlers = {},
+    // T-ARC.4: the archive sentence for the Finish confirmation, and the panel under a row (both null while dark).
+    archiveFinishNote = null,
+    archivePanelFor = () => null,
     formatOptions,
     unsyncedWrites,
   } = {},
@@ -237,8 +244,16 @@ export function renderEventsList(
     );
     if (deleteAction) children.push(deleteAction);
     children.push(
-      renderFinishAction(event, finishStates[event.id], finishErrors[event.id], finishHandlers),
+      renderFinishAction(
+        event,
+        finishStates[event.id],
+        finishErrors[event.id],
+        finishHandlers,
+        archiveFinishNote,
+      ),
     );
+    const archivePanel = archivePanelFor(event);
+    if (archivePanel) children.push(archivePanel);
     return el('li', {}, children);
   });
   return el('ul', { className: 'events-list' }, items);
@@ -393,6 +408,8 @@ export async function mountEventsScreen(
     // How long Delete waits for the unsynced-writes count before falling
     // back to "Couldn't check" — overridable for tests.
     unsyncedCheckTimeoutMs = UNSYNCED_CHECK_TIMEOUT_MS,
+    // Where an event's manual publish lives (a hash link), or null. The format owns that screen, so the caller says.
+    archivePublishHrefFor = () => null,
   } = {},
 ) {
   let events = [];
@@ -413,6 +430,18 @@ export async function mountEventsScreen(
   // Delete click — see unsyncedWritesWarning. Deliberately one value, not per row: it counts the
   // organisation's whole queue, so the latest read is the right one for any row.
   let unsyncedWrites;
+  // T-ARC.4: the public-archive panel. Inert (no markup, no request beyond the plan snapshot) until the database says the
+  // key is enforced. Re-renders the screen and moves focus to the element the controller names.
+  const archive = createArchiveController({
+    orgId,
+    client,
+    signal,
+    publishHrefFor: archivePublishHrefFor,
+    onChange(focus) {
+      if (focus) focusAfterRender = focus;
+      render();
+    },
+  });
   // Built once: the card keeps its QR code and its "copied" line across the screen's own re-renders.
   const audienceCard = audienceLinks ? buildAudienceLinksCard(audienceLinks, { orgName }) : null;
 
@@ -482,6 +511,12 @@ export async function mountEventsScreen(
     }
     loading = false;
     render();
+    // After the list is on screen, never before: the archive panel must not delay the organiser's landing page.
+    if (!loadFailedMessage && !signal?.aborted) {
+      archive.load(events).then(() => {
+        if (archive.mode() !== 'off' && !signal?.aborted) render();
+      });
+    }
   }
 
   async function handleCreate(event) {
@@ -622,7 +657,9 @@ export async function mountEventsScreen(
       events = events.map((event) =>
         event.id === eventId ? { ...event, ended_at: new Date().toISOString() } : event,
       );
-      pendingSuccess = 'Event finished.';
+      const finished = events.find((event) => event.id === eventId);
+      const archiveNote = finished && !finished.is_test ? archive.finishedNote(finished) : null;
+      pendingSuccess = archiveNote ? `Event finished. ${archiveNote}` : 'Event finished.';
       focusAfterRender = '#events-heading';
     } catch {
       finishErrors = {
@@ -694,6 +731,8 @@ export async function mountEventsScreen(
             onConfirmFinish: handleConfirmFinish,
             onCancelFinish: handleCancelFinish,
           },
+          archiveFinishNote: archive.finishNote(),
+          archivePanelFor: (event) => archive.renderFor(event),
           formatOptions,
           unsyncedWrites,
         }),

@@ -207,6 +207,9 @@ function fakeClient({ events = [], insertResult, rpcResult } = {}) {
     calls,
     db,
     rpc: (name, payload) => {
+      // T-ARC.4: the screen asks for the plan snapshot after the list is on screen (the archive panel, dark here). It is a
+      // read, not one of the writes these tests count, and archivePanel.test.js covers it.
+      if (name === 'my_entitlements') return Promise.resolve({ data: null, error: null });
       calls.push(['rpc', name, payload]);
       if (name === 'delete_test_event' && !rpcResult?.error) {
         db.events = db.events.filter((event) => event.id !== payload.p_event_id);
@@ -275,6 +278,64 @@ describe('mountEventsScreen', () => {
     await vi.waitFor(() => expect(root.textContent).toContain('Finished'));
     expect(document.activeElement).toBe(root.querySelector('#events-heading'));
     root.remove();
+  });
+
+  describe('the public-archive panel (T-ARC.4)', () => {
+    const ENDED = new Date(Date.now() - 3600 * 1000).toISOString();
+    function archiveClient(entry) {
+      const client = fakeClient({
+        events: [
+          { id: 'ev1', org_id: 'org1', name: 'October Cup', is_test: false, ended_at: ENDED },
+          { id: 'ev2', org_id: 'org1', name: 'Running Cup', is_test: false, ended_at: null },
+        ],
+      });
+      client.db.public_results = [];
+      const baseFrom = client.from;
+      client.from = (table) => {
+        const builder = baseFrom(table);
+        builder.in = () => builder;
+        return builder;
+      };
+      const baseRpc = client.rpc;
+      client.rpc = (name, payload) =>
+        name === 'my_entitlements'
+          ? Promise.resolve({ data: { keys: { results_archive_optional: entry } }, error: null })
+          : baseRpc(name, payload);
+      return client;
+    }
+    async function mount(client) {
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      await mountEventsScreen(root, {
+        orgId: 'org1',
+        client,
+        defaultFormat: 'cup_taster',
+        archivePublishHrefFor: (event) => `#/events/${event.id}/report`,
+      });
+      return root;
+    }
+
+    it('draws nothing while the key is not enforced, and the Finish copy is unchanged', async () => {
+      const root = await mount(archiveClient({ allowed: true }));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(root.querySelector('.archive-panel')).toBeNull();
+      root.querySelector('#finish-event-ev2').click();
+      expect(root.querySelector('#finish-copy-ev2').textContent).not.toContain('archive');
+      root.remove();
+    });
+
+    it('once enforced, shows the panel under the ended event only, and the archive sentence in the Finish step', async () => {
+      const root = await mount(archiveClient({ allowed: false, enforced: true }));
+      await vi.waitFor(() => expect(root.querySelector('#archive-panel-ev1')).not.toBeNull());
+      expect(root.querySelector('#archive-panel-ev1').dataset.archiveState).toBe('scheduled');
+      expect(root.querySelector('#archive-panel-ev2')).toBeNull();
+      expect(root.querySelector('#archive-publish-now-ev1').getAttribute('href')).toBe(
+        '#/events/ev1/report',
+      );
+      root.querySelector('#finish-event-ev2').click();
+      expect(root.querySelector('#finish-copy-ev2').textContent).toContain('podium is published');
+      root.remove();
+    });
   });
 
   it('Cancel sends no finish call and returns to a focused Finish button', async () => {
@@ -1014,6 +1075,8 @@ describe('which organisation an event belongs to (T-TEN.C5)', () => {
         insertGate = gate;
       },
       rpc: (name, payload) => {
+        // The archive panel's plan read (T-ARC.4) is not one of the writes counted here.
+        if (name === 'my_entitlements') return Promise.resolve({ data: null, error: null });
         calls.push(['rpc', name, payload]);
         if (name === 'delete_test_event') {
           db.events = db.events.filter(
