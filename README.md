@@ -4,21 +4,22 @@ Competition-management tooling for specialty-coffee events, rebuilt from scratch
 than iterated from the legacy Seduh Score app. Live at
 [www.seduhscore.com](https://www.seduhscore.com/).
 
-**Current release:** v3.0.x, the "Gadong" cycle. **Next real event:** Cup Tasters,
-4 October 2026.
+**Current release:** v3.4.1 (see [`CHANGELOG.md`](CHANGELOG.md) for what each release
+shipped). Cup Taster has run a real event (4 October 2026).
 
 ## What's in it
 
-| Surface                             | Status                | Where                                                                         |
-| ----------------------------------- | --------------------- | ----------------------------------------------------------------------------- |
-| **Cup Taster**                      | Live                  | `src/formats/cup-taster/`: roster to champion, timing, scoring, live surfaces |
-| **BTC** (Barista Team Championship) | Live (2026-09-23)     | `src/formats/btc/`: setup, matches, standings, bracket                        |
-| Throwdown, Liga Seduh               | Planned, not started  | `src/formats/throwdown/`, `src/formats/liga-seduh/`                           |
-| **Guess the Bean**                  | Live (Community tool) | `src/community/guess-the-bean/`, plus an Android widget in `android/`         |
-| **Competition Timer**               | Live (Community tool) | `src/tools/timer/`: no auth, no Supabase                                      |
-| **Brew Planner**                    | Live (Community tool) | `src/tools/brew-planner/`: batch-brew run-sheet, no auth, no Supabase         |
-| **Random Selector**                 | Live (Community tool) | `src/tools/random-selector/`: split-flap draw tool, no auth, no Supabase      |
-| Marketing & trust pages             | Live                  | `src/marketing/`: landing, Tour, About, Contact, Privacy, Terms, Neutrality   |
+| Surface                             | Status                | Where                                                                                |
+| ----------------------------------- | --------------------- | ------------------------------------------------------------------------------------ |
+| **Cup Taster**                      | Live                  | `src/formats/cup-taster/`: roster to champion, timing, scoring, live surfaces        |
+| **BTC** (Barista Team Championship) | Live (2026-09-23)     | `src/formats/btc/`: setup, matches, standings, bracket                               |
+| Throwdown, Liga Seduh               | Planned, not started  | `src/formats/throwdown/`, `src/formats/liga-seduh/`                                  |
+| **Guess the Bean**                  | Live (Community tool) | `src/community/guess-the-bean/`, plus an Android widget in `android/`                |
+| **Competition Timer**               | Live (Community tool) | `src/tools/timer/`: no auth, no Supabase                                             |
+| **Brew Planner**                    | Live (Community tool) | `src/tools/brew-planner/`: batch-brew run-sheet, no auth, no Supabase                |
+| **Random Selector**                 | Live (Community tool) | `src/tools/random-selector/`: split-flap draw tool, no auth, no Supabase             |
+| Marketing & trust pages             | Live                  | `src/marketing/`: landing, Tour, Pricing, About, Contact, Privacy, Terms, Neutrality |
+| Operator console                    | Live, unlinked        | `src/admin/`: MFA-gated, audited organisation provisioning (see its `CLAUDE.md`)     |
 
 Every format shares the format-agnostic modules in `src/core/`, including ranking,
 advancement, time clamping, the registry, the offline outbox and IndexedDB mirror, live
@@ -39,6 +40,7 @@ append-only scoring record.
 | `/tools/brew-planner/`                                         | Brew Planner (batch-brew run-sheet and Cambro cheat sheet)  |
 | `/tools/random-selector/`                                      | Random Selector (split-flap draw tool)                      |
 | `/guess-the-bean/`                                             | Guess the Bean (plus `play/` and `display/`)                |
+| `/pricing/`                                                    | Pricing and plans                                           |
 | `/about/`, `/contact/`, `/privacy/`, `/terms/`, `/neutrality/` | Trust pages                                                 |
 
 ## Stack
@@ -47,8 +49,9 @@ Vite with vanilla ES modules (no framework), and Supabase for Postgres, Auth, Re
 and Storage. Every table sits behind RLS, and schema changes go through forward-only
 migrations. The project uses ESLint (with four custom rules in `eslint-rules/`) and
 Prettier, Vitest for unit tests, pgTAP for database tests, and Playwright for end-to-end
-tests. Cloudflare Workers with Static Assets deploys automatically on every merge to
-`main`.
+tests. Two Supabase Edge Functions (`team-accounts`, `admin-accounts`) live in
+`supabase/functions/`. Cloudflare Workers with Static Assets deploys automatically on
+every merge to `main`.
 
 ## Getting started
 
@@ -71,27 +74,31 @@ npm run db:test    # pgTAP suite
 
 ## Scripts
 
-| Command                           | Does                                                         |
-| --------------------------------- | ------------------------------------------------------------ |
-| `npm run dev`                     | Vite dev server (`127.0.0.1:5273`)                           |
-| `npm run build`                   | Production build; prerenders stable public pages             |
-| `npm run preview`                 | Serve the production build locally (`127.0.0.1:4173`)        |
-| `npm run prerender:public`        | Prerender the landing, Tour, Community, and tool pages       |
-| `npm test`                        | Vitest unit tests                                            |
-| `npm run test:watch`              | Vitest in watch mode                                         |
-| `npm run test:e2e`                | Playwright: `built-app`, `dev-harnesses`, `dev-app` projects |
-| `npm run lint`                    | ESLint                                                       |
-| `npm run format` / `format:check` | Prettier                                                     |
-| `npm run db:reset`                | Reset the local Supabase database from migrations            |
-| `npm run db:test`                 | Run the pgTAP suite against the local database               |
+| Command                           | Does                                                     |
+| --------------------------------- | -------------------------------------------------------- |
+| `npm run dev`                     | Vite dev server (`127.0.0.1:5273`)                       |
+| `npm run build`                   | Production build; prerenders stable public pages         |
+| `npm run preview`                 | Serve the production build locally (`127.0.0.1:4173`)    |
+| `npm run prerender:public`        | Prerender the landing, Tour, Community, and tool pages   |
+| `npm test`                        | Vitest unit tests                                        |
+| `npm run test:watch`              | Vitest in watch mode                                     |
+| `npm run test:e2e`                | Playwright (projects in `playwright.config.js`)          |
+| `npm run check:admin-leak`        | Fail if the operator console leaked into a public bundle |
+| `npm run lint`                    | ESLint                                                   |
+| `npm run format` / `format:check` | Prettier                                                 |
+| `npm run db:reset`                | Reset the local Supabase database from migrations        |
+| `npm run db:test`                 | Run the pgTAP suite against the local database           |
 
-The `dev-app` Playwright project drives the real organiser app, so it needs the local
-Supabase stack running with the seed applied.
+Every `dev-*` Playwright project (`dev-app`, `dev-audience`, `dev-tenancy`, `dev-admin`,
+`dev-recovery`, `dev-gating`) drives the real app against the local Supabase stack, so
+that stack must be running with the seed applied. `built-app` and `dev-harnesses` do not
+need it.
 
 ## Workflow
 
-- `dev` is the working branch. `main` is protected, so changes reach it through pull
-  requests.
+- `dev` is the working branch. `main` is protected (direct pushes are rejected), so
+  changes reach it through pull requests; after each `dev` to `main` release,
+  fast-forward `dev` to match.
 - **Merging to `main` deploys only the frontend. It never touches the cloud database.**
   After merging a PR that adds a migration, push that migration to the cloud Supabase
   project as a separate step.
