@@ -324,6 +324,40 @@ describe('mountEventsScreen', () => {
       root.remove();
     });
 
+    it('keeps keyboard focus on the same control when the panel arrives and the list is redrawn', async () => {
+      const client = archiveClient({ allowed: false, enforced: true });
+      const gate = new Promise((resolve) => setTimeout(resolve, 30));
+      const baseRpc = client.rpc;
+      client.rpc = (name, payload) =>
+        name === 'my_entitlements'
+          ? gate.then(() => baseRpc(name, payload))
+          : baseRpc(name, payload);
+      const root = await mount(client);
+      root.querySelector('#finish-event-ev2').focus();
+      await vi.waitFor(() => expect(root.querySelector('#archive-panel-ev1')).not.toBeNull());
+      expect(document.activeElement.id).toBe('finish-event-ev2');
+      root.remove();
+    });
+
+    it('a test event never gets the archive sentence in its Finish step or its success line', async () => {
+      const client = archiveClient({ allowed: true, enforced: true });
+      client.db.events.push({
+        id: 'ev3',
+        org_id: 'org1',
+        name: 'Test Cup',
+        is_test: true,
+        ended_at: null,
+      });
+      const root = await mount(client);
+      await vi.waitFor(() => expect(root.querySelector('#archive-panel-ev1')).not.toBeNull());
+      root.querySelector('#finish-event-ev3').click();
+      expect(root.querySelector('#finish-copy-ev3').textContent).not.toContain('archive');
+      root.querySelector('#confirm-finish-ev3').click();
+      await vi.waitFor(() => expect(root.textContent).toContain('Event finished.'));
+      expect(root.querySelector('.screen-feedback').textContent).toBe('Event finished.');
+      root.remove();
+    });
+
     it('once enforced, shows the panel under the ended event only, and the archive sentence in the Finish step', async () => {
       const root = await mount(archiveClient({ allowed: false, enforced: true }));
       await vi.waitFor(() => expect(root.querySelector('#archive-panel-ev1')).not.toBeNull());

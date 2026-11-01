@@ -207,7 +207,7 @@ export function renderEventsList(
     finishErrors = {},
     finishHandlers = {},
     // T-ARC.4: the archive sentence for the Finish confirmation, and the panel under a row (both null while dark).
-    archiveFinishNote = null,
+    archiveFinishNoteFor = () => null,
     archivePanelFor = () => null,
     formatOptions,
     unsyncedWrites,
@@ -249,7 +249,7 @@ export function renderEventsList(
         finishStates[event.id],
         finishErrors[event.id],
         finishHandlers,
-        archiveFinishNote,
+        archiveFinishNoteFor(event),
       ),
     );
     const archivePanel = archivePanelFor(event);
@@ -514,7 +514,13 @@ export async function mountEventsScreen(
     // After the list is on screen, never before: the archive panel must not delay the organiser's landing page.
     if (!loadFailedMessage && !signal?.aborted) {
       archive.load(events).then(() => {
-        if (archive.mode() !== 'off' && !signal?.aborted) render();
+        if (archive.mode() === 'off' || signal?.aborted) return;
+        // The panel arrives after the list is on screen: keep a keyboard user's place across the redraw.
+        const active = document.activeElement;
+        if (!focusAfterRender && active?.id && root.contains(active)) {
+          focusAfterRender = `[id="${active.id.replace(/["\\]/g, '\\$&')}"]`;
+        }
+        render();
       });
     }
   }
@@ -731,7 +737,7 @@ export async function mountEventsScreen(
             onConfirmFinish: handleConfirmFinish,
             onCancelFinish: handleCancelFinish,
           },
-          archiveFinishNote: archive.finishNote(),
+          archiveFinishNoteFor: (event) => archive.finishNote(event),
           archivePanelFor: (event) => archive.renderFor(event),
           formatOptions,
           unsyncedWrites,

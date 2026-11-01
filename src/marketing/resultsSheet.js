@@ -219,7 +219,7 @@ export function buildResultsSheet(event) {
             className: 'results-sheet-note',
             text:
               event.listing === 'named_only'
-                ? 'This event is listed by name only. Its organiser has not published the results.'
+                ? 'Only the event name is listed; no results are published.'
                 : 'No placings were published for this event.',
           }),
       // Sighted phone users only: the region above is already announced as scrollable to a screen reader.

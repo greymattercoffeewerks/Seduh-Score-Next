@@ -24,6 +24,8 @@ import {
 
 export const ARCHIVE_LOOKUP_TIMEOUT_MS = 2500;
 const CHOICE_KEY = (eventId) => `seduh.archiveListing.${eventId}`;
+const TAKEN_DOWN_KEY = (eventId) => `seduh.archiveTakenDown.${eventId}`;
+const PER_EVENT_LOOKUPS = 10;
 const PUBLISH_NOW_STATES = [
   'scheduled',
   'scheduled_named_only',
@@ -31,7 +33,7 @@ const PUBLISH_NOW_STATES = [
   'listed_named_only',
   'taken_down',
 ];
-const NO_LISTING_STATES = ['test', 'published', 'listed_named_only', 'taken_down'];
+const NO_LISTING_STATES = ['test', 'published', 'listed_named_only', 'taken_down', 'overdue'];
 
 export function createArchiveController({
   orgId,
@@ -44,6 +46,10 @@ export function createArchiveController({
   now = () => Date.now(),
 }) {
   let mode = 'off';
+  // The database decides per EVENT (an event grant makes one event optional on a Community organisation), so when the
+  // organisation reads as compulsory the newest events are asked about individually.
+  const eventModes = new Map();
+  const modeFor = (event) => eventModes.get(event.id) ?? mode;
   const results = new Map();
   const choices = new Map();
   const saving = new Set();
@@ -69,6 +75,23 @@ export function createArchiveController({
     }
   }
 
+  // A take-down is remembered on this device the same way, so a reload does not go back to promising a publish the
+  // database will not make (a taken-down result is never republished). Another device cannot know: logged as a finding.
+  function rememberedTakenDown(eventId) {
+    try {
+      return storage?.getItem(TAKEN_DOWN_KEY(eventId)) === '1';
+    } catch {
+      return false;
+    }
+  }
+  function rememberTakenDown(eventId) {
+    try {
+      storage?.setItem(TAKEN_DOWN_KEY(eventId), '1');
+    } catch {
+      /* the in-memory mark still holds for this visit */
+    }
+  }
+
   // Fail-open for the UI: any failure to find out leaves the mode 'off' and the screen as it always was.
   async function load(events) {
     mode = 'off';
@@ -76,11 +99,27 @@ export function createArchiveController({
       const snapshot = await raceTimeout(loadEntitlements(orgId, null, client), timeoutMs);
       const next = archiveModeOf(snapshot);
       if (next === 'off') return;
+      eventModes.clear();
+      if (next === 'compulsory') {
+        await Promise.all(
+          events
+            .filter((e) => !e.is_test)
+            .slice(0, PER_EVENT_LOOKUPS)
+            .map(async (e) => {
+              const one = await raceTimeout(loadEntitlements(orgId, e.id, client), timeoutMs);
+              const eventMode = archiveModeOf(one);
+              if (eventMode !== 'off') eventModes.set(e.id, eventMode);
+            }),
+        );
+      }
       const ids = events.filter((e) => e.ended_at && !e.is_test).map((e) => e.id);
       const rows = await raceTimeout(listPublishedResultsForEvents(ids, client), timeoutMs);
       results.clear();
       for (const row of rows) results.set(row.event_id, row);
-      for (const event of events) choices.set(event.id, remembered(event.id));
+      for (const event of events) {
+        choices.set(event.id, remembered(event.id));
+        if (rememberedTakenDown(event.id)) takenDown.add(event.id);
+      }
       mode = next;
     } catch {
       mode = 'off';
@@ -89,7 +128,7 @@ export function createArchiveController({
 
   function stateOf(event) {
     return archiveStateOf({
-      mode,
+      mode: modeFor(event),
       event,
       result: results.get(event.id) ?? null,
       listed: choices.get(event.id) === true,
@@ -123,6 +162,7 @@ export function createArchiveController({
       await unpublishEventResults(orgId, event.id, client);
       results.delete(event.id);
       takenDown.add(event.id);
+      rememberTakenDown(event.id);
     } catch {
       errors.set(event.id, "Couldn't take it down. Please try again.");
     }
@@ -147,6 +187,10 @@ export function createArchiveController({
         el('label', { text: LISTING_LABEL, attrs: { for: input.id } }),
       ]),
       el('p', { id: helpId, className: 'stage-meta', text: listingHelpText(listed) }),
+      el('p', {
+        className: 'stage-meta',
+        text: 'This shows the last choice made on this device.',
+      }),
     ]);
   }
 
@@ -160,7 +204,7 @@ export function createArchiveController({
       attrs: {
         type: 'button',
         'aria-describedby': copyId,
-        'aria-label': busy ? 'Taking down' : `Take down the results of "${event.name}"`,
+        'aria-label': busy ? 'Taking down…' : `Take it down: results of "${event.name}"`,
       },
     });
     setBusyDisabled(confirm, busy);
@@ -188,7 +232,7 @@ export function createArchiveController({
       id: `archive-unpublish-${event.id}`,
       className: 'btn btn-outline tap-target',
       text: 'Take down results',
-      attrs: { type: 'button', 'aria-label': `Take down the results of "${event.name}"` },
+      attrs: { type: 'button', 'aria-label': `Take down results: "${event.name}"` },
     });
     button.addEventListener('click', () => {
       confirming.add(event.id);
@@ -202,11 +246,12 @@ export function createArchiveController({
     const state = stateOf(event);
     if (state.kind === 'off') return null;
     // Community's running event needs no panel: the Finish step says what follows.
-    if (state.kind === 'open' && mode === 'compulsory') return null;
+    const eventMode = modeFor(event);
+    if (state.kind === 'open' && eventMode === 'compulsory') return null;
     const children = [];
     const text = statusText(state);
     if (text) children.push(el('p', { className: 'archive-status', text }));
-    if (mode === 'choice' && !NO_LISTING_STATES.includes(state.kind)) {
+    if (eventMode === 'choice' && !NO_LISTING_STATES.includes(state.kind)) {
       children.push(listingControl(event));
     }
     const publishHref = publishHrefFor(event);
@@ -217,11 +262,11 @@ export function createArchiveController({
           id: `archive-publish-now-${event.id}`,
           className: 'btn btn-outline tap-target',
           text: 'Publish now',
-          attrs: { href: publishHref, 'aria-label': `Publish the results of "${event.name}" now` },
+          attrs: { href: publishHref, 'aria-label': `Publish now: results of "${event.name}"` },
         }),
       );
     }
-    const canTakeDown = mode === 'compulsory' && state.kind === 'published';
+    const canTakeDown = eventMode === 'compulsory' && state.kind === 'published';
     if (canTakeDown && !confirming.has(event.id)) actions.push(unpublishButton(event));
     if (actions.length > 0) children.push(el('div', { className: 'archive-actions' }, actions));
     if (canTakeDown && confirming.has(event.id)) children.push(confirmUnpublish(event));
@@ -244,7 +289,7 @@ export function createArchiveController({
           tabindex: '-1',
           'aria-label': `Public archive for "${event.name}"`,
           'data-archive-state': state.kind,
-          'data-archive-mode': mode,
+          'data-archive-mode': eventMode,
         },
       },
       children,
@@ -255,7 +300,7 @@ export function createArchiveController({
     load,
     renderFor,
     mode: () => mode,
-    finishNote: () => finishArchiveNote(mode),
-    finishedNote: (event) => finishedArchiveNote(mode, event),
+    finishNote: (event) => finishArchiveNote(event ? modeFor(event) : mode),
+    finishedNote: (event) => finishedArchiveNote(modeFor(event), event),
   };
 }

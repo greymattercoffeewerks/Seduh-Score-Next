@@ -88,8 +88,9 @@ export function describeArchiveTime(date) {
 export function finishArchiveNote(mode) {
   if (mode === 'compulsory') {
     return (
-      'About 24 hours after you finish, the podium is published to the public archive automatically. ' +
-      'You can check your results first, or publish sooner yourself.'
+      'About 24 hours after you finish, the podium is published to the public archive automatically, ' +
+      'provided you have opened the report or standings after finishing (that is when it is prepared); otherwise only ' +
+      'the event name is listed. You can check your results first, or publish sooner yourself.'
     );
   }
   if (mode === 'choice') {
@@ -107,7 +108,7 @@ export function finishedArchiveNote(mode, event) {
   if (!dueAt || (mode !== 'compulsory' && mode !== 'choice')) return null;
   const when = describeArchiveTime(dueAt);
   return mode === 'compulsory'
-    ? `The podium goes to the public archive at about ${when}.`
+    ? `The podium goes to the public archive at about ${when} if you open the report or standings first; otherwise only the name is listed.`
     : `The archive lists this event at about ${when}.`;
 }
 
@@ -116,7 +117,7 @@ export const LISTING_LABEL = 'List the podium in the public archive';
 // What ticking and not ticking do (owner decision 10: unticked by default, and say what is lost).
 export function listingHelpText(listed) {
   if (listed) {
-    return 'The podium (first place and the others on it, with names and cafes) is published about 24 hours after you finish.';
+    return 'The podium (first place and the others on it, with names and cafes) is published about 24 hours after you finish, provided you have opened the report or standings after finishing.';
   }
   return (
     'Unticked: the archive still lists the event by name, date and place, but with no results. ' +
@@ -133,13 +134,16 @@ export const UNPUBLISH_CONFIRM_TEXT =
 export function statusText(state) {
   switch (state.kind) {
     case 'scheduled':
-      return `The podium will be published to the public archive at about ${describeArchiveTime(state.dueAt)}. Check your results first, or publish now.`;
+      return (
+        `The podium will be published to the public archive at about ${describeArchiveTime(state.dueAt)}, provided you have opened ` +
+        'the report or standings since the event finished; otherwise only the name is listed. Check your results first, or publish now.'
+      );
     case 'scheduled_named_only':
       return `At about ${describeArchiveTime(state.dueAt)} the archive will list this event by name, date and place only, with no results.`;
     case 'overdue':
       return (
         `Nothing is published yet. It was due at about ${describeArchiveTime(state.dueAt)}. ` +
-        'If you took it down yourself it stays down. Otherwise it may still be on its way: you can publish it now.'
+        'If you took it down yourself it stays down. You can publish it now.'
       );
     case 'published':
       return 'The podium is published on the public archive.';

@@ -110,7 +110,7 @@ describe('copy', () => {
     ]) {
       expect(statusText({ kind, dueAt: due })).toBeTruthy();
     }
-    expect(statusText({ kind: 'overdue', dueAt: due })).toContain('may still be on its way');
+    expect(statusText({ kind: 'overdue', dueAt: due })).toContain('You can publish it now');
     expect(statusText({ kind: 'off' })).toBeNull();
   });
   it('maps the stable hints, and falls back to a generic line', () => {

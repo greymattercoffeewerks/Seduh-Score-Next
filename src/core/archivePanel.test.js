@@ -40,6 +40,11 @@ function fakeClient({ entry, results = [], rpc = {} } = {}) {
   };
 }
 
+const storageOf = (store) => ({
+  getItem: (k) => store.get(k) ?? null,
+  setItem: (k, v) => store.set(k, v),
+});
+
 function make(client, over = {}) {
   const store = new Map();
   const onChange = vi.fn();
@@ -66,7 +71,7 @@ describe('archive controller: dark', () => {
     expect(client.calls.map((c) => c[1])).toEqual(['my_entitlements']);
   });
 
-  it('stays off when the snapshot cannot be read (fail-open for the screen)', async () => {
+  it('stays off when there is no usable snapshot (fail-open for the screen)', async () => {
     const { controller } = make(fakeClient());
     await controller.load([ev()]);
     expect(controller.renderFor(ev())).toBeNull();
@@ -116,7 +121,7 @@ describe('archive controller: Community (compulsory)', () => {
     await controller.load([ev()]);
     const panel = controller.renderFor(ev());
     expect(panel.dataset.archiveState).toBe('overdue');
-    expect(panel.textContent).toContain('may still be on its way');
+    expect(panel.textContent).toContain('You can publish it now');
   });
 
   it('offers a two-step take-down of a published podium, then reads taken down and never republishes', async () => {
@@ -124,7 +129,7 @@ describe('archive controller: Community (compulsory)', () => {
       entry: { allowed: false, enforced: true },
       results: [{ event_id: 'e1', payload: { podium: [{ name: 'A' }] }, published_at: ENDED }],
     });
-    const { controller, onChange } = make(client);
+    const { controller, onChange, store } = make(client);
     await controller.load([ev()]);
     let panel = controller.renderFor(ev());
     expect(panel.dataset.archiveState).toBe('published');
@@ -143,6 +148,12 @@ describe('archive controller: Community (compulsory)', () => {
     await vi.waitFor(() =>
       expect(controller.renderFor(ev()).dataset.archiveState).toBe('taken_down'),
     );
+    // after a reload (a new controller on the same device, the result row gone) it still says taken down, never "will be published"
+    const reloaded = make(fakeClient({ entry: { allowed: false, enforced: true } }), {
+      storage: storageOf(store),
+    });
+    await reloaded.controller.load([ev()]);
+    expect(reloaded.controller.renderFor(ev()).dataset.archiveState).toBe('taken_down');
     expect(client.calls).toContainEqual([
       'rpc',
       'unpublish_event_results',
@@ -266,5 +277,100 @@ describe('archive controller: Per-event / Annual (choice)', () => {
     const { controller } = make(client, { publishHrefFor: () => null });
     await controller.load([ev({ format: 'btc' })]);
     expect(controller.renderFor(ev({ format: 'btc' })).querySelector('a')).toBeNull();
+  });
+
+  it('a test event gets the explanation line but never a tick box', async () => {
+    const { controller } = make(client);
+    const test = ev({ is_test: true });
+    await controller.load([test]);
+    const panel = controller.renderFor(test);
+    expect(panel.dataset.archiveState).toBe('test');
+    expect(panel.querySelector('input')).toBeNull();
+    expect(panel.querySelector('a, button')).toBeNull();
+  });
+
+  it('keeps the remembered choice per event', async () => {
+    const { controller, store } = make(client);
+    store.set('seduh.archiveListing.e1', 'list');
+    const other = ev({ id: 'e2', name: 'Other' });
+    await controller.load([ev(), other]);
+    expect(controller.renderFor(ev()).querySelector('#archive-listing-e1').checked).toBe(true);
+    expect(controller.renderFor(other).querySelector('#archive-listing-e2').checked).toBe(false);
+  });
+
+  it('offers no take-down on a paid plan (the soft unpublish is the Community rule)', async () => {
+    client = fakeClient({
+      entry: { allowed: true, enforced: true },
+      results: [{ event_id: 'e1', payload: { podium: [{ name: 'A' }] }, published_at: ENDED }],
+    });
+    const { controller } = make(client);
+    await controller.load([ev()]);
+    const panel = controller.renderFor(ev());
+    expect(panel.dataset.archiveState).toBe('published');
+    expect(panel.querySelector('#archive-unpublish-e1')).toBeNull();
+  });
+
+  it('gives up on a hung plan read and stays dark', async () => {
+    const hung = fakeClient({ entry: { allowed: false, enforced: true } });
+    hung.rpc = () => new Promise(() => {});
+    const { controller } = make(hung, { timeoutMs: 10 });
+    await controller.load([ev()]);
+    expect(controller.renderFor(ev())).toBeNull();
+  });
+
+  it('does not offer the tick box once the due time has passed (the choice would be closed)', async () => {
+    const { controller } = make(client, { now: () => new Date('2026-11-05T00:00:00Z').getTime() });
+    await controller.load([ev()]);
+    const panel = controller.renderFor(ev());
+    expect(panel.dataset.archiveState).toBe('overdue');
+    expect(panel.querySelector('input')).toBeNull();
+  });
+});
+
+describe('archive controller: a per-event grant on a Community organisation', () => {
+  it('asks per event and treats the granted event as a choice, not a compulsory podium', async () => {
+    const client = fakeClient({ entry: { allowed: false, enforced: true } });
+    const baseRpc = client.rpc;
+    client.rpc = (name, args) =>
+      name === 'my_entitlements' && args.p_event === 'e2'
+        ? Promise.resolve({
+            data: { keys: { results_archive_optional: { allowed: true, enforced: true } } },
+            error: null,
+          })
+        : baseRpc(name, args);
+    const { controller } = make(client);
+    const granted = ev({ id: 'e2', name: 'Granted' });
+    await controller.load([ev(), granted]);
+    expect(controller.renderFor(ev()).dataset.archiveMode).toBe('compulsory');
+    const panel = controller.renderFor(granted);
+    expect(panel.dataset.archiveMode).toBe('choice');
+    expect(panel.querySelector('#archive-listing-e2')).not.toBeNull();
+    expect(controller.finishNote(granted)).toContain('List the podium');
+    expect(controller.finishNote(ev())).toContain('podium is published');
+  });
+
+  it('every button and link has its visible text inside its accessible name (WCAG 2.5.3)', async () => {
+    const client = fakeClient({
+      entry: { allowed: false, enforced: true },
+      results: [{ event_id: 'e1', payload: { podium: [{ name: 'A' }] }, published_at: ENDED }],
+    });
+    const { controller } = make(client);
+    await controller.load([ev()]);
+    const check = (panel) => {
+      for (const node of panel.querySelectorAll('button, a')) {
+        const label = node.getAttribute('aria-label');
+        if (label) expect(label.toLowerCase()).toContain(node.textContent.trim().toLowerCase());
+      }
+    };
+    check(controller.renderFor(ev()));
+    controller.renderFor(ev()).querySelector('#archive-unpublish-e1').click();
+    const confirming = controller.renderFor(ev());
+    expect(confirming.querySelectorAll('button')).toHaveLength(2);
+    check(confirming);
+    const overdue = make(fakeClient({ entry: { allowed: false, enforced: true } }), {
+      now: () => new Date('2026-11-05T00:00:00Z').getTime(),
+    });
+    await overdue.controller.load([ev()]);
+    check(overdue.controller.renderFor(ev()));
   });
 });

@@ -667,7 +667,7 @@ describe('buildResultsSheet for a named-only stub (T-ARC.4)', () => {
   it('says the event is listed by name only, with no table and no placings note', () => {
     const sheet = buildResultsSheet(stub);
     expect(sheet.textContent).toContain('Unlisted Cup');
-    expect(sheet.textContent).toContain('listed by name only');
+    expect(sheet.textContent).toContain('Only the event name is listed');
     expect(sheet.querySelector('table')).toBeNull();
     expect(sheet.textContent).not.toContain('Placings follow');
   });
