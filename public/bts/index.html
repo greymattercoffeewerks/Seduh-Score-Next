@@ -145,6 +145,15 @@
       Organiser branding is built but not released, so it is deliberately not
       mentioned. Facts follow CHANGELOG.md; the admin console's URL is left
       off the page on purpose (it is unlinked).
+
+      Progress update, 2026-11-02: still v3.4.1 (package.json has not moved),
+      still Gadong. Seduh ID Layer 1a is live (phone numbers checked to E.164,
+      the private identity record, the People screen, the 17-person backfill);
+      the password screens follow the cloud's 12-character, current-password
+      settings; the results archive pipeline is built but OFF, with its wording
+      on Privacy, Terms and Pricing. The copy makes no claim that Seduh ID is
+      free, nothing about sharing with third parties, and no timing promise
+      for the archive. Facts follow CHANGELOG.md.
     -->
     <style>
       @font-face {
@@ -1144,8 +1153,8 @@
               >BTC (Barista Team Championship) — the second real competition format — then a trust
               pass, the first live Cup Taster event on 4 October 2026 and the fixes it prompted,
               BTC's own projector and phone screens, the platform's first multi-organisation
-              release, and now an operator's console, password recovery and plans built and switched
-              off.</span
+              release, an operator's console, password recovery, and now a private identity record
+              for people, with plans and a results archive built and switched off.</span
             >
           </div>
           <div class="ledger-row reveal">
@@ -1192,18 +1201,145 @@
           Then <strong>Berakas</strong> — a front door nobody had planned for, followed by a public
           shelf for the useful extras. Now <strong>Gadong</strong> — the second real competition
           format, the first live event run on the platform, BTC's own screens for the room, and room
-          for more than one organiser, and the tools to run it as a platform. Newest first, one open
-          at a time — open a milestone to read it.
+          for more than one organiser, the tools to run it as a platform, and a private record that
+          knows a person is the same person. Newest first, one open at a time — open a milestone to
+          read it.
         </p>
 
         <div class="milestones">
-          <div class="milestone reveal is-open" id="ms-gadong-operator">
+          <div class="milestone reveal is-open" id="ms-gadong-identity">
+            <h3 class="milestone-head">
+              <button
+                type="button"
+                class="milestone-toggle"
+                id="ms-gadong-identity-btn"
+                aria-expanded="true"
+                aria-controls="ms-gadong-identity-panel"
+              >
+                <span class="ms-text">
+                  <span class="ms-meta"
+                    >Gadong · 28 October to 2 November 2026 · v3.4.1 · 3 entries</span
+                  >
+                  <span class="ms-title">One person, one record</span>
+                  <span class="ms-sum"
+                    >Seduh ID, the private record · Stronger passwords · A results archive, built
+                    and switched off</span
+                  >
+                </span>
+                <span class="ms-chev" aria-hidden="true"></span>
+              </button>
+            </h3>
+            <div
+              class="milestone-panel"
+              id="ms-gadong-identity-panel"
+              role="region"
+              aria-labelledby="ms-gadong-identity-btn"
+            >
+              <div class="milestone-inner">
+                <div class="log" data-stagger>
+                  <div class="log-item current reveal">
+                    <div class="log-phase">Gadong</div>
+                    <div>
+                      <div class="log-head">
+                        <span class="log-name">Seduh ID, the private record</span>
+                        <span class="log-ver">v3.4.1</span>
+                        <span class="log-now"><span class="pulse-dot"></span>Live now</span>
+                      </div>
+                      <div class="log-line shipped">
+                        <span class="k">Shipped</span
+                        ><span class="v"
+                          >The same barista turns up in many events under slightly different
+                          spellings, and the only thing that really identifies them is a phone
+                          number. So phone numbers are now checked to one international format
+                          everywhere they are typed in, and the database refuses anything else.
+                          Behind that sits a private identity record, one per phone number, that no
+                          browser can read; only the database can link a person in an organiser's
+                          roster to it. The organiser gets a People screen and a staff and affiliate
+                          roster for the people around an event who are not competing. The existing
+                          published results were linked by the owner in one run: 17 people, 17
+                          links. For the operator there is a counts-only view. A review caught one
+                          leak on the way, where a clever insert could reveal that a row id existed
+                          in another organisation, and it was closed with a column-level grant. A
+                          wider sweep of the other tables is still open.</span
+                        >
+                      </div>
+                      <div class="log-line felt">
+                        <span class="k">Felt like</span
+                        ><span class="v"
+                          >laying the pipes before anyone asks for water: nothing new on the
+                          scoreboard, but a person can finally be the same person twice.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="log-item current reveal">
+                    <div class="log-phase">Gadong</div>
+                    <div>
+                      <div class="log-head">
+                        <span class="log-name">Stronger passwords</span>
+                        <span class="log-ver">v3.4.1</span>
+                        <span class="log-now"><span class="pulse-dot"></span>Live now</span>
+                      </div>
+                      <div class="log-line shipped">
+                        <span class="k">Shipped</span
+                        ><span class="v"
+                          >On 29 October the live project began requiring twelve characters and the
+                          current password for any change. That would have left every new login
+                          stuck on its first password screen with only a vague "try again", so the
+                          screens were changed to ask for the one-time or current password and to
+                          say plainly when it is wrong. The operator's console also gained its own
+                          Change password panel.</span
+                        >
+                      </div>
+                      <div class="log-line felt">
+                        <span class="k">Felt like</span
+                        ><span class="v"
+                          >a setting flipped in one place that had to be answered in three.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="log-item current reveal">
+                    <div class="log-phase">Gadong</div>
+                    <div>
+                      <div class="log-head">
+                        <span class="log-name">A results archive, built and switched off</span>
+                        <span class="log-ver">v3.4.1</span>
+                      </div>
+                      <div class="log-line shipped">
+                        <span class="k">Shipped</span
+                        ><span class="v"
+                          >A pipeline that publishes an event's podium to a public archive has been
+                          built end to end: the organiser's browser stages the snapshot, there is a
+                          tick box and a take-down, the operator can see counts, and it has been
+                          proved over real HTTP and in a browser at phone width. It is not turned
+                          on. The Privacy, Terms and pricing pages now carry the wording for it, so
+                          the rule and the feature arrive together.</span
+                        >
+                      </div>
+                      <div class="log-line felt">
+                        <span class="k">Felt like</span
+                        ><span class="v"
+                          >writing the rule down before the first result is published under
+                          it.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="milestone reveal" id="ms-gadong-operator">
             <h3 class="milestone-head">
               <button
                 type="button"
                 class="milestone-toggle"
                 id="ms-gadong-operator-btn"
-                aria-expanded="true"
+                aria-expanded="false"
                 aria-controls="ms-gadong-operator-panel"
               >
                 <span class="ms-text">
