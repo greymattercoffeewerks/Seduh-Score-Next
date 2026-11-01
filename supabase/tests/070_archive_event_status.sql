@@ -90,7 +90,7 @@ update events set ended_at = timestamptz '2026-10-04 10:00+00', ended_via = 'org
 -- a snapshot that must never come out, and error codes that must not come out as they are
 insert into app.archive_events (event_id, org_id, due_at, state, attempts, last_error, listing_choice, staged_payload, staged_at, outcome_via, removed_at, removed_from)
 values
-  (t070.u(3),  t070.u(100), timestamptz '2026-10-05 10:00+00', 'pending', 0, null, 'list',
+  (t070.u(3),  t070.u(100), timestamptz '2026-10-06 12:00+00', 'pending', 0, null, 'list',
      '{"podium":[{"name":"LEAK-ME-NAME"}]}', now(), null, null, null),
   (t070.u(4),  t070.u(100), timestamptz '2026-10-05 10:00+00', 'stubbed', 0, 'no_snapshot', null, null, null, 'auto', null, null),
   (t070.u(5),  t070.u(100), timestamptz '2026-10-05 10:00+00', 'failed', 5, '40P01', 'named_only', null, null, null, null, null),
@@ -131,8 +131,8 @@ select is((select j -> t070.u(2)::text from t070_all),
   '{"state":"none","due_at":"2026-10-05T10:00:00+00:00","published":false,"listing_choice":null,"removed":false,"retrying":false,"reason":null}'::jsonb,
   'no ledger row but ended: none, the due time is ended_at + 24 hours');
 select is((select j -> t070.u(3)::text from t070_all),
-  '{"state":"pending","due_at":"2026-10-05T10:00:00+00:00","published":false,"listing_choice":"list","removed":false,"retrying":false,"reason":null}'::jsonb,
-  'pending with the saved tick box (list)');
+  '{"state":"pending","due_at":"2026-10-06T12:00:00+00:00","published":false,"listing_choice":"list","removed":false,"retrying":false,"reason":null}'::jsonb,
+  'pending with the saved tick box (list); the stored due time wins over ended_at + 24 hours');
 select is((select j -> t070.u(13)::text from t070_all),
   '{"state":"pending","due_at":"2026-10-05T10:00:00+00:00","published":false,"listing_choice":"named_only","removed":false,"retrying":false,"reason":null}'::jsonb,
   'pending with a ledger row that has no due time yet: the due time still comes from ended_at; the saved choice is named_only');

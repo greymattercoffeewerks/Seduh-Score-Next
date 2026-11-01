@@ -75,6 +75,9 @@ describe('normalizeArchiveStatus (the whitelist on the client too)', () => {
       reason: null,
     });
     expect(normalizeArchiveStatus(null)).toBeNull();
+    expect(normalizeArchiveStatus({ state: 'failed', reason: 'processing_error' }).reason).toBe(
+      'processing_error',
+    );
   });
 });
 

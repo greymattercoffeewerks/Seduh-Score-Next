@@ -402,7 +402,9 @@ describe('archive controller: Per-event / Annual (choice)', () => {
       'set_archive_listing',
       { p_org_id: 'org1', p_event_id: 'e1', p_list: true },
     ]);
-    expect(client.calls.filter((c) => c[1] === 'archive_event_status')).toHaveLength(2);
+    await vi.waitFor(() =>
+      expect(client.calls.filter((c) => c[1] === 'archive_event_status')).toHaveLength(2),
+    );
     expect(controller.renderFor(ev()).querySelector('#archive-listing-e1').checked).toBe(true);
     // a reload, even on another device, reads the saved choice from the database
     const reloaded = make(client);
@@ -502,6 +504,7 @@ describe('archive controller: Per-event / Annual (choice)', () => {
     await controller.load([ev()]);
     const panel = controller.renderFor(ev());
     expect(panel.dataset.archiveState).toBe('published');
+    expect(panel.querySelector('input')).toBeNull();
     expect(panel.querySelector('#archive-unpublish-e1')).toBeNull();
   });
 

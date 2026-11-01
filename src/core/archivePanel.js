@@ -39,7 +39,8 @@ const PUBLISH_NOW_STATES = [
   'taken_down',
 ];
 // Once the ledger row has left 'pending' the tick box is closed (set_archive_listing: archive_listing_closed); a published,
-// failed or overdue event is past the point where it could change what happens.
+// failed, overdue or unscheduled event is not worth offering (an overdue pending row would still accept it, but by then
+// the entry is about to be decided).
 const NO_LISTING_STATES = [
   'test',
   'published',
@@ -141,10 +142,14 @@ export function createArchiveController({
     saving.add(event.id);
     errors.delete(event.id);
     onChange(`#archive-listing-${event.id}`);
+    // shown at once so the box does not snap back while the save and the re-read run; undone if the save is refused
+    const before = statuses.get(event.id);
+    if (before) statuses.set(event.id, { ...before, listingChoice: list ? 'list' : 'named_only' });
     try {
       await setArchiveListing(orgId, event.id, list, client);
       await refreshStatus(event, { listingChoice: list ? 'list' : 'named_only' });
     } catch (error) {
+      if (before) statuses.set(event.id, before);
       errors.set(event.id, describeListingError(error));
     }
     saving.delete(event.id);

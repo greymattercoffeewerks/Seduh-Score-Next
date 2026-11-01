@@ -8,7 +8,7 @@
 
 **For T-ARC.5 Phase 2:** with the key enforced the panel now calls `archive_event_status` after `my_entitlements`; `data-archive-state` also takes `retrying` and `failed`; the overdue sentence now says the schedule is running late, and nothing is stored in `localStorage`.
 
-**Reviews:** (filled in below)
+**Reviews:** security-reviewer: clean (no leak, no oracle, ACL and search_path checked, 070 and 041 re-run by it). schema-guardian: clean. module-boundary-checker: no violation; one pre-existing note (the panel branches on the archive gate result, which the root CLAUDE.md entitlements rule predates; owner decision, not changed). code-reviewer: 1 Important (an event the pipeline never took, e.g. from before the cron floor, read "running late" forever) fixed with a new `unscheduled` state and tests; nits: unused export dropped, stale comment fixed, one stale id in the list turns the panel off (accepted, fail-closed). ui-accessibility-reviewer: 0 Important; the tick box snap-back fixed (optimistic, undone on refusal); not fixed and logged: focus is restored to the tick box even if the user moved on, a take-down is not announced by a live region, a failed status read hides the panel silently, "Unticked:" opener wording. test-auditor: 0 Important; fixed the due-time precedence, choice-mode published/take-down input and `processing_error` normalisation gaps; left the SQL `try` helper comparing SQLSTATE and hint only and the fixed 20 ms wait in the dark eventsScreen test.
 
 ## T-ARC.4: the organiser's archive panel, tick box and take-down; stub-tolerant results pages (built dark, no migration) · 2026-11-02
 
