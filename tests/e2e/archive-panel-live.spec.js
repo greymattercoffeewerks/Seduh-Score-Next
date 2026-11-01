@@ -1,5 +1,5 @@
 import { test, expect as baseExpect } from '@playwright/test';
-import { createLoneUser, createTenant } from './support/tenants.js';
+import { addMember, createLoneUser, createTenant } from './support/tenants.js';
 import { rest, rpc, signInPassword } from './support/api.js';
 import { setKeyEnforced } from './support/grants.js';
 import { dbNow, forceLedger, ledgerRow, makeDue, resultCount, runTick } from './support/archive.js';
@@ -126,8 +126,10 @@ test('INERT while the key is off: no panel, no archive words, nothing asked of t
       archiveCalls.push(request.url());
     }
   });
+  const snapshotAnswered = page.waitForResponse((r) => r.url().includes('my_entitlements'));
   await openEvents(page, w.com);
   await expect(page.getByRole('link', { name: `dark ${tag}` })).toBeVisible();
+  await snapshotAnswered; // the plan snapshot has been read, so an absent panel is the answer to it, not a race
   await page.locator(`#finish-event-${id}`).click();
   const copy = page.locator(`#finish-copy-${id}`);
   await expect(copy).toContainText('Finish this event?');
@@ -212,6 +214,9 @@ test('"Publish now" leads to the report, publishes once, and a later tick change
     before.body,
   );
   expect(after.body).toHaveLength(1);
+  // and the tick's own record says it stood aside, not that it failed against the existing row
+  expect(ledgerRow(id)).toMatchObject({ state: 'skipped', attempts: 0, last_error: null });
+  expect(ledgerRow(id).outcome_via).toMatch(/^organiser_(early|late)$/);
 
   await page.goto('/app/#/events');
   await expect(panel(page, id)).toHaveAttribute('data-archive-state', 'published');
@@ -220,6 +225,7 @@ test('"Publish now" leads to the report, publishes once, and a later tick change
 
 test('Community take-down is two steps, recorded, survives a reload and is not republished by a tick', async ({
   page,
+  browser,
 }) => {
   const id = ev.c1;
   await openEvents(page, w.com);
@@ -245,22 +251,26 @@ test('Community take-down is two steps, recorded, survives a reload and is not r
   await page.locator(`#archive-unpublish-${id}`).click();
   await page.locator(`#archive-confirm-unpublish-${id}`).click();
   await expect(p).toHaveAttribute('data-archive-state', 'taken_down');
+  await expect(p, 'focus lands on the panel after the take-down').toBeFocused();
   await expect(p).toContainText('Taken down. It will not be published again automatically.');
   expect(resultCount(id)).toBe(0);
   expect(ledgerRow(id)).toMatchObject({ state: 'removed', removed_from: expect.any(String) });
 
-  // the database remembers it, not this device
+  // the database remembers it, not this device: a brand-new browser profile (no storage at all) signs in and sees it
   await page.reload();
   await expect(panel(page, id)).toHaveAttribute('data-archive-state', 'taken_down');
-  const deviceKeys = await page.evaluate(() =>
-    [...Object.keys(localStorage), ...Object.keys(sessionStorage)].filter((key) =>
-      /archive/i.test(key),
-    ),
-  );
-  expect(deviceKeys, 'the panel keeps nothing about the archive on the device').toEqual([]);
+  const otherDevice = await browser.newContext({
+    baseURL: test.info().project.use.baseURL,
+    viewport: { width: 360, height: 740 },
+  });
+  const devicePage = await otherDevice.newPage();
+  await openEvents(devicePage, w.com);
+  await expect(panel(devicePage, id)).toHaveAttribute('data-archive-state', 'taken_down');
+  await otherDevice.close();
 
-  // and the tick does not put it back
+  // and the tick does not put it back, even when the event is due
   runTick(floorNow());
+  makeDue(id);
   runTick(null);
   expect(resultCount(id), 'a taken-down result stays down').toBe(0);
   await page.reload();
@@ -284,11 +294,12 @@ test('Annual: the tick box is unticked by default, the choice survives a reload,
   await noHorizontalScroll(page);
   expect(ledgerRow(listed), 'looking at the box saves nothing').toBeNull();
 
-  // ticking saves, and a reload (a different device in effect) still shows it
+  // ticking saves, and a reload still shows it (the take-down test above proves it from a fresh profile)
   await box.check();
   await expect(page.locator(`#archive-listing-help-${listed}`)).toContainText(
     'The podium (first place and the others on it',
   );
+  await expect(box, 'focus stays on the tick box after the save').toBeFocused();
   await expect.poll(() => ledgerRow(listed)?.listing_choice).toBe('list');
   await page.reload();
   await expect(box).toBeChecked();
@@ -318,7 +329,8 @@ test('Annual: the tick box is unticked by default, the choice survives a reload,
     'by name, date and place only, with no results',
   );
 
-  // both organisers' browsers staged a snapshot; the tick follows the saved choice, not the snapshot
+  // a snapshot is staged for each (over the API: the browser stages it when the report is opened, which needs a complete
+  // competition); the tick follows the saved choice, not the snapshot
   await stageSnapshot(w.tAnn, w.ann.orgId, listed, 'a1');
   await stageSnapshot(w.tAnn, w.ann.orgId, unlisted, 'a2');
   makeDue(listed);
@@ -336,6 +348,30 @@ test('Annual: the tick box is unticked by default, the choice survives a reload,
   const stored = await rest(`public_results?event_id=eq.${unlisted}&select=payload`);
   expect(stored.body[0].payload.listing).toBe('named_only');
   expect(stored.body[0].payload.podium).toBeUndefined();
+});
+
+test("a refused tick-box save shows the database's wording in an alert and puts the box back", async ({
+  page,
+}) => {
+  const id = await newEvent(w.ann, 'a3');
+  await openEvents(page, w.ann);
+  await page.route('**/rpc/set_archive_listing', (route) =>
+    route.fulfill({
+      status: 400,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        code: 'P0001',
+        message: "set_archive_listing: this event's archive entry is already decided",
+        hint: 'archive_listing_closed',
+      }),
+    }),
+  );
+  const box = page.locator(`#archive-listing-${id}`);
+  await box.click(); // not check(): the refusal puts the box back, which check() would wait on
+  const alert = panel(page, id).locator('[role="alert"]');
+  await expect(alert).toContainText('has already been decided');
+  await expect(box, 'the refused choice is not left ticked').not.toBeChecked();
+  expect(ledgerRow(id), 'a refused save wrote nothing').toBeNull();
 });
 
 test('the stub path: the organiser is told why, and the public list and sheet render it without breaking', async ({
@@ -447,7 +483,14 @@ test('a test event is marked, never offered the archive, and never told it will 
   await expect(page.locator(`#archive-publish-now-${id}`)).toHaveCount(0);
   await page.locator(`#finish-event-${id}`).click();
   await expect(page.locator(`#finish-copy-${id}`)).not.toContainText(/archive/i);
-  expect(ledgerRow(id)).toBeNull();
+  await page.locator(`#confirm-finish-${id}`).click();
+  // the success line for a test event is exactly this (an archive sentence would make the text longer, and exact: true fails)
+  await expect(page.getByText('Event finished.', { exact: true })).toBeVisible();
+  runTick(floorNow());
+  makeDue(id);
+  runTick(null);
+  expect(ledgerRow(id), 'a test event never gets a ledger row').toBeNull();
+  expect(resultCount(id)).toBe(0);
 });
 
 test("NEGATIVE: another organisation neither sees nor can act on this organisation's panel", async ({
@@ -502,6 +545,99 @@ test("NEGATIVE: another organisation neither sees nor can act on this organisati
   expect(refused.status).toBe(403);
 });
 
+test('NEGATIVE: archive_event_status answers one way for every refusal and returns nothing but words', async () => {
+  const target = ev.a1;
+  const own = ev.a2;
+  const ask = (token, org, ids) =>
+    rpc('archive_event_status', { p_org_id: org, p_event_ids: ids }, { token });
+  const body = (r) => `${r.status}|${JSON.stringify(r.body)}`;
+
+  // positive control: a member gets rows for exactly the events asked, with exactly the eight columns, no names
+  const ok = await ask(w.tAnn, w.ann.orgId, [target, own]);
+  expect(ok.status).toBe(200);
+  expect(ok.body).toHaveLength(2);
+  for (const row of ok.body) {
+    expect(Object.keys(row).sort()).toEqual(
+      [
+        'due_at',
+        'event_id',
+        'listing_choice',
+        'published',
+        'reason',
+        'removed',
+        'retrying',
+        'state',
+      ].sort(),
+    );
+  }
+  expect(JSON.stringify(ok.body)).not.toMatch(/Champion|Second|Cafe|a1 |a2 /);
+  expect(ok.body.find((r) => r.event_id === target)).toMatchObject({
+    state: 'published',
+    published: true,
+  });
+  const stubbed = await ask(w.tCom, w.com.orgId, [ev.c2]);
+  expect(stubbed.body[0]).toMatchObject({ state: 'stubbed', reason: 'no_snapshot' });
+  expect(JSON.stringify(stubbed.body)).not.toContain(`c2 ${tag}`);
+
+  // one answer for a foreign event under the caller's OWN organisation, a missing event, and a NULL inside the list
+  const both = await createLoneUser('ap-both');
+  await addMember(w.ann, both, 'organiser');
+  await addMember(w.other, both, 'organiser');
+  const tBoth = (await signInPassword(both)).token;
+  const refusals = {
+    foreignEventOwnOrg: await ask(w.tOther, w.other.orgId, [target]),
+    missingEvent: await ask(w.tOther, w.other.orgId, [crypto.randomUUID()]),
+    nullInList: await ask(w.tOther, w.other.orgId, [null]),
+    mixedWithForeign: await ask(w.tAnn, w.ann.orgId, [own, ev.c1]),
+    twoOrgWrongPairing: await ask(tBoth, w.ann.orgId, [ev.c1]),
+    twoOrgOtherWayRound: await ask(tBoth, w.other.orgId, [target]),
+  };
+  for (const [what, r] of Object.entries(refusals)) {
+    expect(r.status, what).toBe(403);
+    expect(r.body, what).toMatchObject({
+      code: '42501',
+      message: 'archive_event_status: event not found',
+    });
+  }
+  expect(new Set(Object.values(refusals).map(body)).size, 'one body for every refusal').toBe(1);
+  // the right pairings of the same two-organisation user work, and show only the named organisation's events
+  const right = await ask(tBoth, w.ann.orgId, [target]);
+  expect(right.status).toBe(200);
+  expect(right.body).toHaveLength(1);
+
+  // malformed lists and organisations
+  const nullList = await ask(w.tAnn, w.ann.orgId, null);
+  expect(nullList.body).toMatchObject({ code: '22023', hint: 'archive_status_invalid' });
+  const nullOrg = await ask(w.tAnn, null, [target]);
+  expect(nullOrg.body).toMatchObject({ code: '42501' });
+  const many = await ask(
+    w.tAnn,
+    w.ann.orgId,
+    Array.from({ length: 201 }, () => target),
+  );
+  expect(many.body).toMatchObject({ code: '22023', hint: 'archive_status_too_many' });
+  const exactly200 = await ask(
+    w.tAnn,
+    w.ann.orgId,
+    Array.from({ length: 200 }, () => target),
+  );
+  expect(exactly200.status).toBe(200);
+  expect(exactly200.body, 'a repeated id is one row').toHaveLength(1);
+
+  // nobody, and the anonymous caller
+  const nobody = await createLoneUser('ap-nobody2');
+  const none = await signInPassword(nobody);
+  const lone = await ask(none.token, w.ann.orgId, [target]);
+  expect(lone.status).toBe(403);
+  expect(lone.body).toMatchObject({ code: '42501' });
+  expect(JSON.stringify(lone.body)).not.toContain(target);
+  for (const token of [undefined, null]) {
+    const anon = await ask(token, w.ann.orgId, [target]);
+    expect(anon.status).toBe(401);
+    expect(anon.body.message).toMatch(/permission denied for function archive_event_status/);
+  }
+});
+
 test('at 1280px the same panels hold: states, no overflow, controls still reachable', async ({
   page,
 }) => {
@@ -510,8 +646,7 @@ test('at 1280px the same panels hold: states, no overflow, controls still reacha
   await expect(panel(page, ev.a1)).toHaveAttribute('data-archive-state', 'published');
   await expect(panel(page, ev.a2)).toHaveAttribute('data-archive-state', 'listed_named_only');
   await noHorizontalScroll(page);
-  const box = await panel(page, ev.a1).boundingBox();
-  expect(box.width).toBeLessThanOrEqual(1280);
+  await atLeast44(page.locator(`#archive-publish-now-${ev.a2}`), 'Publish now at 1280px');
 
   await openEvents(page, w.com);
   await expect(panel(page, ev.c1)).toHaveAttribute('data-archive-state', 'taken_down');
