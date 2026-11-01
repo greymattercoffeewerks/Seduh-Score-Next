@@ -26,6 +26,7 @@ import { timingHandlers } from './timing.js';
 import { confirmHandlers } from './scoring.js';
 import { publishLiveSessionHandlers } from './liveSession.js';
 import { resolveStageHandlers } from './standings.js';
+import { archiveStagingHandlers } from './archiveSnapshot.js';
 
 export function cupTasterOutboxHandlers(client) {
   return {
@@ -33,6 +34,7 @@ export function cupTasterOutboxHandlers(client) {
     ...confirmHandlers(client),
     ...publishLiveSessionHandlers(client),
     ...resolveStageHandlers(client),
+    ...archiveStagingHandlers(client),
   };
 }
 
@@ -60,4 +62,5 @@ export const cupTasterOperationLabels = {
   confirm_heat: 'confirming a heat',
   resolve_stage: 'resolving a stage',
   publish_live_session: 'publishing to the live view',
+  stage_archive_payload: 'saving the results snapshot',
 };

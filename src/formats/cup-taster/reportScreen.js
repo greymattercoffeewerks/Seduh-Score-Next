@@ -52,6 +52,8 @@ import {
   computeAvgSecsPerSet,
 } from './analytics.js';
 import { buildResultsPayload, podiumRowsOf } from './resultsPublishing.js';
+import { stageArchiveSnapshot } from './archiveSnapshot.js';
+import { cupTasterOutboxHandlers } from './outboxHandlers.js';
 import { ordinalLabel } from '../../core/ordinal.js';
 
 // `source` describes how an entry ARRIVED at this stage (T4.6's own
@@ -1530,6 +1532,9 @@ export async function mountReportScreen(root, { eventId, client = getSupabase(),
       // DOM-write race between the router..." entry.
       if (signal?.aborted) return;
       renderReport(data);
+      // Opening the finished report re-stages the archive snapshot (T-ARC.2), so a correction made after the champion
+      // was declared reaches the snapshot the tick publishes. Best-effort and silent; not awaited, the report is shown.
+      if (data.complete) void stageArchiveSnapshot(data.event, cupTasterOutboxHandlers(client));
     } catch (err) {
       if (signal?.aborted) return;
       renderError(describeError(err));
