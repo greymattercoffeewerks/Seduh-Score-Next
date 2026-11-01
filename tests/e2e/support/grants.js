@@ -53,6 +53,30 @@ export function grantPlan(orgId, tier = 'annual', note = 'e2e fixture (local sta
   return adminRpc('admin_grant_create', { p_org_id: orgId, p_tier: tier, p_note: note });
 }
 
+/** Calls any `admin_*` function with a real `aal2` platform-admin session (the same session grantPlan uses). */
+export function callAdminRpc(name, args = {}) {
+  return adminRpc(name, args);
+}
+
+/**
+ * Gives `orgId` a Per-event grant for `eventId` through `admin_grant_create` (five Brunei calendar days containing the
+ * event's date, so the event's date must be today's for the grant to be live now). Returns the grant id.
+ */
+export function grantEventPlan(
+  orgId,
+  eventId,
+  startOffsetDays = 0,
+  note = 'e2e fixture (local stack only)',
+) {
+  return adminRpc('admin_grant_create', {
+    p_org_id: orgId,
+    p_tier: 'per_event',
+    p_event_id: eventId,
+    p_start_offset_days: startOffsetDays,
+    p_note: note,
+  });
+}
+
 /** Switches a gating key through the audited `admin_set_key_enforced`, confirming the preview count it asks for. */
 export async function setKeyEnforced(key, enforced) {
   // The confirm number must equal the preview count at the moment of the switch. Other workers may create
