@@ -2,6 +2,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as exportModule from '../../core/export.js';
 import { formatDuration } from '../../core/duration.js';
 import { DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
+import { stageArchiveSnapshot } from './archiveSnapshot.js';
+
+// The archive staging call sites (T-ARC.2) are asserted below; the builder itself is tested in archiveSnapshot.test.js.
+vi.mock('./archiveSnapshot.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  stageArchiveSnapshot: vi.fn(async () => {}),
+}));
+
 import {
   describeOutcome,
   buildReportTables,
@@ -15,6 +23,10 @@ import {
   buildEventSummaryTable,
   renderRoundBarChart,
 } from './reportScreen.js';
+
+beforeEach(() => {
+  stageArchiveSnapshot.mockClear();
+});
 
 function fakeClient({ tables = {}, rpc: rpcResults = {} } = {}) {
   const queues = {};
@@ -987,6 +999,8 @@ describe('mountReportScreen', () => {
     // computation (standings/difficulty/distribution) should ever fire.
     expect(client.calls.some(([, table]) => table === 'ct_standings')).toBe(false);
     expect(client.calls.some(([, table]) => table === 'ct_sets')).toBe(false);
+    // an unfinished event stages nothing for the archive
+    expect(stageArchiveSnapshot).not.toHaveBeenCalled();
   });
 
   it('renders every stage once the terminal stage is complete, in ordinal order', async () => {
@@ -1057,6 +1071,9 @@ describe('mountReportScreen', () => {
       'Finals',
     ]);
     expect(root.textContent).toContain('Alex');
+    // opening the finished report re-stages the archive snapshot (T-ARC.2)
+    expect(stageArchiveSnapshot).toHaveBeenCalledTimes(1);
+    expect(stageArchiveSnapshot.mock.calls[0][0]).toMatchObject({ id: 'ev1' });
     // Plain, undecorated labels — each kind occurs only once here, so
     // neither the <h2> nor the <h3>s should carry a "(Round N)" suffix
     // nobody needs (see the disambiguation test below for the repeated-kind

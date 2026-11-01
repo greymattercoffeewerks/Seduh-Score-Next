@@ -65,6 +65,7 @@ describe('cupTasterOutboxHandlers', () => {
       'publish_live_session',
       'record_heat_time',
       'resolve_stage',
+      'stage_archive_payload',
       'start_heat',
     ]);
     // A bare key-presence check would still pass if e.g.
