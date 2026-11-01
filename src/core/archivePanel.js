@@ -1,13 +1,15 @@
 // The organiser's archive panel (T-ARC.4), format-agnostic: one block under an event in the Events list with the status
 // line, the "List the podium" tick box (Per-event and Annual), the early "Publish now" link and, on Community, the soft
 // unpublish (owner decision 7). It is INERT while the key is not enforced (archiveStatus.js): no markup, and nothing is
-// asked of the database beyond the entitlement snapshot. All words are in archiveStatus.js; the database decides everything.
+// asked of the database beyond the entitlement snapshot. All words are in archiveStatus.js; the database decides everything,
+// and what it decided is read from public.archive_event_status (T-ARC.4c): nothing is remembered per device.
 import { el, setBusyDisabled } from './dom.js';
 import { loadEntitlements } from './entitlements.js';
 import { raceTimeout } from './timeout.js';
 import {
   archiveModeOf,
   archiveStateOf,
+  normalizeArchiveStatus,
   statusText,
   listingHelpText,
   describeListingError,
@@ -17,23 +19,34 @@ import {
   UNPUBLISH_CONFIRM_TEXT,
 } from './archiveStatus.js';
 import {
+  ARCHIVE_STATUS_MAX,
+  getArchiveEventStatus,
   listPublishedResultsForEvents,
   setArchiveListing,
   unpublishEventResults,
 } from './publicResults.js';
 
 export const ARCHIVE_LOOKUP_TIMEOUT_MS = 2500;
-const CHOICE_KEY = (eventId) => `seduh.archiveListing.${eventId}`;
-const TAKEN_DOWN_KEY = (eventId) => `seduh.archiveTakenDown.${eventId}`;
 const PER_EVENT_LOOKUPS = 10;
 const PUBLISH_NOW_STATES = [
   'scheduled',
   'scheduled_named_only',
   'overdue',
+  'retrying',
+  'failed',
   'listed_named_only',
   'taken_down',
 ];
-const NO_LISTING_STATES = ['test', 'published', 'listed_named_only', 'taken_down', 'overdue'];
+// Once the ledger row has left 'pending' the tick box is closed (set_archive_listing: archive_listing_closed); a published,
+// failed or overdue event is past the point where it could change what happens.
+const NO_LISTING_STATES = [
+  'test',
+  'published',
+  'listed_named_only',
+  'taken_down',
+  'overdue',
+  'failed',
+];
 
 export function createArchiveController({
   orgId,
@@ -41,7 +54,6 @@ export function createArchiveController({
   signal,
   onChange,
   publishHrefFor = () => null,
-  storage = globalThis.localStorage ?? null,
   timeoutMs = ARCHIVE_LOOKUP_TIMEOUT_MS,
   now = () => Date.now(),
 }) {
@@ -51,44 +63,31 @@ export function createArchiveController({
   const eventModes = new Map();
   const modeFor = (event) => eventModes.get(event.id) ?? mode;
   const results = new Map();
-  const choices = new Map();
+  // event id -> the normalized archive_event_status row (an event absent from the map has no panel)
+  const statuses = new Map();
   const saving = new Set();
   const unpublishing = new Set();
   const confirming = new Set();
-  const takenDown = new Set();
   const errors = new Map();
 
-  // The tick box's saved value is not readable by a member (the ledger is owner-only), so the last choice made on this
-  // device is shown. A different device starts unticked. Logged as a finding.
-  function remembered(eventId) {
-    try {
-      return storage?.getItem(CHOICE_KEY(eventId)) === 'list';
-    } catch {
-      return false;
-    }
-  }
-  function remember(eventId, list) {
-    try {
-      storage?.setItem(CHOICE_KEY(eventId), list ? 'list' : 'named_only');
-    } catch {
-      /* the tick box still works; it starts unticked next visit */
-    }
+  async function readStatuses(events) {
+    const ids = events
+      .filter((e) => !e.is_test)
+      .slice(0, ARCHIVE_STATUS_MAX)
+      .map((e) => e.id);
+    const rows = await raceTimeout(getArchiveEventStatus(orgId, ids, client), timeoutMs);
+    return new Map(rows.map((row) => [row.event_id, normalizeArchiveStatus(row)]));
   }
 
-  // A take-down is remembered on this device the same way, so a reload does not go back to promising a publish the
-  // database will not make (a taken-down result is never republished). Another device cannot know: logged as a finding.
-  function rememberedTakenDown(eventId) {
+  // After a write the database is asked again for that one event; if it cannot answer, the local patch stands.
+  async function refreshStatus(event, patch) {
+    const before = statuses.get(event.id);
+    if (before) statuses.set(event.id, { ...before, ...patch });
     try {
-      return storage?.getItem(TAKEN_DOWN_KEY(eventId)) === '1';
+      const fresh = await readStatuses([event]);
+      if (fresh.get(event.id)) statuses.set(event.id, fresh.get(event.id));
     } catch {
-      return false;
-    }
-  }
-  function rememberTakenDown(eventId) {
-    try {
-      storage?.setItem(TAKEN_DOWN_KEY(eventId), '1');
-    } catch {
-      /* the in-memory mark still holds for this visit */
+      /* the patched row stays until the next load */
     }
   }
 
@@ -114,12 +113,11 @@ export function createArchiveController({
       }
       const ids = events.filter((e) => e.ended_at && !e.is_test).map((e) => e.id);
       const rows = await raceTimeout(listPublishedResultsForEvents(ids, client), timeoutMs);
+      const fresh = await readStatuses(events);
       results.clear();
       for (const row of rows) results.set(row.event_id, row);
-      for (const event of events) {
-        choices.set(event.id, remembered(event.id));
-        if (rememberedTakenDown(event.id)) takenDown.add(event.id);
-      }
+      statuses.clear();
+      for (const [id, status] of fresh) if (status) statuses.set(id, status);
       mode = next;
     } catch {
       mode = 'off';
@@ -131,8 +129,7 @@ export function createArchiveController({
       mode: modeFor(event),
       event,
       result: results.get(event.id) ?? null,
-      listed: choices.get(event.id) === true,
-      takenDown: takenDown.has(event.id),
+      status: statuses.get(event.id) ?? null,
       now: now(),
     });
   }
@@ -144,8 +141,7 @@ export function createArchiveController({
     onChange(`#archive-listing-${event.id}`);
     try {
       await setArchiveListing(orgId, event.id, list, client);
-      choices.set(event.id, list);
-      remember(event.id, list);
+      await refreshStatus(event, { listingChoice: list ? 'list' : 'named_only' });
     } catch (error) {
       errors.set(event.id, describeListingError(error));
     }
@@ -161,8 +157,7 @@ export function createArchiveController({
     try {
       await unpublishEventResults(orgId, event.id, client);
       results.delete(event.id);
-      takenDown.add(event.id);
-      rememberTakenDown(event.id);
+      await refreshStatus(event, { removed: true, published: false });
     } catch {
       errors.set(event.id, "Couldn't take it down. Please try again.");
     }
@@ -172,7 +167,7 @@ export function createArchiveController({
   }
 
   function listingControl(event) {
-    const listed = choices.get(event.id) === true;
+    const listed = statuses.get(event.id)?.listingChoice === 'list';
     const helpId = `archive-listing-help-${event.id}`;
     const input = el('input', {
       id: `archive-listing-${event.id}`,
@@ -187,10 +182,6 @@ export function createArchiveController({
         el('label', { text: LISTING_LABEL, attrs: { for: input.id } }),
       ]),
       el('p', { id: helpId, className: 'stage-meta', text: listingHelpText(listed) }),
-      el('p', {
-        className: 'stage-meta',
-        text: 'This shows the last choice made on this device.',
-      }),
     ]);
   }
 

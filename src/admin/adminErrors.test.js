@@ -61,6 +61,10 @@ const NOT_FOR_THE_CONSOLE = {
     'raised to an organiser whose event archive entry is already decided; not an admin console call',
   archive_event_is_test:
     'raised to an organiser choosing the archive listing of a test event; not an admin console call',
+  archive_status_invalid:
+    'archive_event_status refusing a NULL event list; the organiser panel never sends one, never an admin console call',
+  archive_status_too_many:
+    'archive_event_status refusing more than 200 ids; the organiser panel caps its list, never an admin console call',
   archive_tick_owner_only:
     'raised only to an API role calling the owner-run archive tick; never an admin console call',
   // The archive snapshot staging door (T-ARC.2): the organiser's browser, through the outbox; no copy is shown, the call is silent.
