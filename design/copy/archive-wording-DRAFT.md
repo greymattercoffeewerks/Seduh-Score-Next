@@ -127,15 +127,20 @@ it only if you will look at the count.
 
 Replace the first sentence with (the second sentence, about Cloudflare, stays):
 
-> Data is stored and processed in Singapore, with Supabase (AWS `ap-southeast-1`). If personal data is
+> Data is stored in Singapore, with Supabase (AWS `ap-southeast-1`), and is primarily processed there. If personal data is
 > transferred outside Brunei, we will make sure it is protected to a standard comparable to that of the
 > Personal Data Protection Order, 2025.
 
 `[LEGAL OPEN]` The second sentence is the owner's chosen line (2026-11-01), taken from the AITI sample
 policy's wording ("We will ensure that any transfers of personal data outside of Brunei is protected to a
-standard or protection that is comparable to the PDPO", sample policy, infokit p. 15). Two things the wording
-does not settle: whether Supabase offers a data processing agreement (**not verified**), and whether the
-public archive itself, which any reader in any country can see, counts as a transfer. Counsel's question.
+standard or protection that is comparable to the PDPO", sample policy, infokit p. 15). Supabase
+publishes a Data Processing Addendum (Version 1, 1 August 2026, between the customer and Supabase Pte. Ltd.; read
+on 2026-11-01). It supplements Supabase's Terms of Service, treats acceptance of the agreement as signing, and
+incorporates EU standard contractual clauses; for a customer-chosen region it says data is "stored and primarily
+Processed in that region", with stated exceptions, and it otherwise lets Supabase process anywhere it has
+facilities. It names neither Brunei nor the PDPO. **That is why the sentence says "primarily processed", not "processed":
+the addendum does not promise Singapore-only processing.** Do not claim the addendum satisfies the PDPO. The wording
+also does not settle whether the public archive itself, which any reader in any country can see, counts as a transfer (KIV, section 6).
 `[OWNER]` "Singapore" and "`ap-southeast-1`" are the live Privacy page's claims and the cloud project's
 region (CLAUDE.md, Repo). The Cloudflare sentence and the analytics sentence are unchanged and untouched here.
 
@@ -396,9 +401,12 @@ needs a line too.
 
 ---
 
-## 6. Open legal items: flagged, not settled
+## 6. Open items: flagged, not settled
 
-None of these is decided here. The wording above assumes none of them.
+None of these is decided here. The wording above assumes none of them. Owner direction, 2026-11-01: legal advice is
+not being sought now (not cheap or easy); the plan is basic compliance based on the PDPO and the AITI infokit. Items 1,
+3 and 5 are therefore **KIV (keep in view, not blocking)**: revisit when budget or firmer sources arrive. They stay
+listed so nobody mistakes the wording for settled law.
 
 1. **Controller or processor.** Whether the operator is the controller or a processor for the public archive,
    and for the staged snapshot. Archive publication on Community is initiated by the platform, which weighs
@@ -424,8 +432,9 @@ None of these is decided here. The wording above assumes none of them.
    most likely get a name-only entry (or none, if `listing_choice` rules say so). That is a build question
    for T-ARC.4/.5 and for GATING-SPEC G-B3, not a wording one. The wording above says "an event whose results
    are not listed is still named", which would then be true for BTC too. Confirm before publishing.
-7. **Supabase's data processing agreement is unverified.** The owner still has to confirm whether Supabase
-   offers one and whether it is in place (`HANDOFF-CORRECTION-005`, "Still open on 12").
+7. **Supabase's data processing agreement exists; its fit is not confirmed.** Supabase publishes a Data Processing
+   Addendum (Version 1, 1 August 2026; see 1e). Still for the owner: confirm it applies to this project's plan.
+   It names no Brunei law, and nothing here claims it satisfies the PDPO.
 8. **Minors.** No age data is stored. Whether an under-18 competitor on a podium needs a different default
    is an owner decision (spec section 7, item 6; Layer 1 spec 4.3 is unverified).
 9. **Breach.** The pipeline adds one breach shape, a wrong person or wrong podium published automatically
@@ -444,6 +453,11 @@ None of these is decided here. The wording above assumes none of them.
 - No Seduh ID price or promise. No claim about login, profiles, claiming or any later layer.
 - No email warning (decision 6: in-app only).
 - No promise that an organiser can never remove results (decision 7 is soft).
+- Length and tone. Two Brunei organisations' published notices that cite the PDPO (checked 2026-11-01) are short:
+  one has eleven plain sections with a DPO named by role and an email, and the other names the PDPO and AITI;
+  neither gives fixed response times, and neither addresses cross-border transfers or governing law. The cross-border
+  and governing-law lines the owner chose go further than both. Structure only was taken from them; no wording.
+  If the Privacy page is getting long, cut to 1a, 1b, 1c and 1g first.
 
 ---
 
@@ -471,13 +485,17 @@ None of these is decided here. The wording above assumes none of them.
 - [ ] Section 6, item 4: does the 2026-11-01 decision about the word reach the existing live pages?
 - [ ] Section 6, item 6: BTC events and the tick (a build decision, but it changes what the wording can say).
 
-**Answer with counsel (open legal items, none settled here):**
+**Confirm:**
+
+- [ ] Supabase's Data Processing Addendum applies to this project's plan (6, item 7). Do not claim it satisfies the PDPO.
+- [ ] Minors (6, item 8).
+
+**KIV (keep in view, not blocking):** revisit when budget or firmer sources arrive; the wording is published on
+the infokit and PDPO basis meanwhile.
 
 - [ ] Controller or processor (6, item 1).
-- [ ] Counsel's read of the clauses (6, item 3).
-- [ ] The Gazette confirmation of PDPO commencement (6, item 5).
-- [ ] Whether Supabase offers a data processing agreement, and whether it is in place (6, item 7).
-- [ ] Minors (6, item 8).
+- [ ] A lawyer's read of the clauses: cross-border line, governing law, Community condition, participant notice (6, item 3).
+- [ ] Gazette confirmation of PDPO commencement (6, item 5).
 
 **Before the PR that publishes:**
 

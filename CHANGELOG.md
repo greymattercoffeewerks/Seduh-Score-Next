@@ -4,6 +4,8 @@
 
 **Claims not fully traceable, flagged in the file:** the 12-month purge of ledger rows (owner decision 9, no migration builds it); the soft-unpublish and tick-box behaviour and the in-app warning (T-ARC.3 and T-ARC.4, not merged); the "move to a paid plan" remedy in the Community condition (a draft, not an owner decision). Also flagged: the live pages still use the banned word, and the tick has no format condition so a BTC event could get a name-only entry.
 
+**Owner updates applied (2026-11-01):** Supabase's Data Processing Addendum exists (re-read from its page: v1, 1 August 2026; names no Brunei law; region-chosen data is "primarily" processed there), so the storage sentence says stored in Singapore and primarily processed there and the checklist asks the owner to confirm the addendum applies to the plan; controller/processor, a lawyer's read and the Gazette confirmation moved to a KIV section; two Brunei peer notices checked for length and tone.
+
 **Reviews:** code-reviewer: no constraint breaches; 2 factual errors found and fixed (the publish-time promise ignored retries and a stopped job; the banned word's live usage in `pricingContent.js` was miscounted), 1 nit applied ("details of other competitors"). Infokit page numbers and Supabase's data processing agreement could not be verified by the reviewer.
 
 ## T-ARC.2: the organiser's browser stages the podium snapshot (built dark, not in the cloud) · 2026-11-01
