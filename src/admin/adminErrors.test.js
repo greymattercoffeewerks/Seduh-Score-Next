@@ -54,6 +54,8 @@ const NOT_FOR_THE_CONSOLE = {
   // Seduh ID backfill (T-ID.B4): owner-run function, refuses an API role.
   seduh_backfill_owner_only:
     'raised only to an API role calling the owner-run identity backfill; never an admin console call',
+  archive_tick_owner_only:
+    'raised only to an API role calling the owner-run archive tick; never an admin console call',
   // The BTC format's own RPCs.
   bracket_advanced: 'BTC format',
   demo_event_not_found: 'BTC format',
