@@ -22,9 +22,7 @@ export const TIERS = [
     price: 'Free',
     suffix: null,
     summary: 'For getting started. Up to 8 competitors, and one active event at a time.',
-    // The tier's archive rule (owner, 2026-10-17). Automatic enforcement is the archive
-    // phase (infrastructure plan, step 4); until then publishing is the organiser's choice
-    // on every tier, so this states the tier's policy ahead of the code.
+    // The tier's archive rule (owner, 2026-10-17), enforced by `results_archive_optional`.
     note: 'The podium is published to the public archive automatically, about 24 hours after the event ends. You can publish sooner.',
     cta: { text: 'Get in touch', href: '/contact/' },
   },

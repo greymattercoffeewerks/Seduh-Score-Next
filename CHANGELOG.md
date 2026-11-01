@@ -1,3 +1,27 @@
+## T-ARC.7 close: the gating keys flipped and the archive tick given its floor (switched on, nothing published yet) · 2026-11-02
+
+**Task:** Record the owner's key flips of 2026-11-02 and remove the one code comment they made untrue. Docs plus one comment in `pricingContent.js`: no migration, no behaviour change, no cloud write (the Supabase MCP was used read-only to check the figures below).
+
+**State, plainly:** the archive pipeline is **on**, and has **published nothing**. The ledger `app.archive_events` has 0 rows and no event has ended since the floor. The first proof is the first Community event that ends after the floor, about 24 hours later.
+
+**What the owner did (Brunei time; UTC 2026-11-01), one key at a time in the admin console, each after a preview:**
+
+- `cup_taster_participants` at 01:11:41, audit row 20, `would_lose` 0.
+- `events_open` at 01:12:56, audit row 21, `would_lose` 0.
+- `results_archive_optional` at 01:13:56.149318 (`2026-11-01 17:13:56.149318+00`), audit row 22, `would_lose` 1: Throwaway Org, Community, no events, so nothing real was lost. The confirm value typed was therefore 1.
+
+These are the first gating keys enforced in the cloud for real. The only earlier flip was a rehearsal on 2026-10-27: `cup_taster_participants` enforced (row 16, `gating.key_enforced`, `would_lose` 1) and relaxed again 6 minutes 34 seconds later (row 17, `gating.key_relaxed`), on the test organisation "Gating Rehearsal". The other eight keys are still `enforced = false`.
+
+**The floor:** `pg_cron` job 1 `archive-tick` (`*/5 * * * *`, as `postgres`) now runs `select app.archive_tick('2026-11-01 17:13:56.149318+00')`, the third flip's moment, instead of `select app.archive_tick(null)`, so only events that end at or after it are ever tracked (migration `20261023130000` backfilled `ended_at` for every already-concluded event, and an unbounded finder would have published the history). The 17:30 UTC run succeeded. The rescheduling at 17:15 UTC and the direct tick call (`dark: false`, enqueued 0, published 0, stubbed 0, skipped 0, errored 0) are as reported by the main session; this task read the job, the ledger and the audit log, and did not call the tick.
+
+**Pricing comment (draft item 3d):** the comment in `TIERS[0]` of `pricingContent.js` that said publishing was the organiser's choice on every tier until the pipeline existed now says `results_archive_optional` enforces the policy. Comment only: the strings on the page are unchanged.
+
+**Owed:** watch the first real publication; the landing page's "when the event ends" Community prose (the owner's say-so); the "if a reliable podium is available" nuance on the pricing page (owner undecided); a periodic delete for `cron.job_run_details` (about 288 rows a day, no purge job); T-ARC.8; Seduh ID 1b (D1) held until a real publish; the KIV legal items. Annual events default to a named-only stub unless the organiser ticks the listing box.
+
+**Version:** unchanged at 3.5.0.
+
+**Reviews:** docs and comment only; code-reviewer on the diff (result in the PR). No gate reviewer applies.
+
 ## T-ARC.Z: archive pipeline close-out (built, deployed, dark; never published anything) and the version bump to 3.5.0 · 2026-11-02
 
 **Task:** Close the build of the archive pipeline and record its cloud rollout so far, and run the version bump that no build session ran. Docs plus `package.json` and `package-lock.json` only: no migration, no app code, no cloud write (the Supabase MCP was used read-only: `list_migrations` and three `select` queries).
