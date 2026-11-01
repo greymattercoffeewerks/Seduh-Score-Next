@@ -221,14 +221,11 @@ function buildLatestResult(event, client) {
 }
 
 function archiveRow(event) {
-  // `payload` is caller-assembled, unvalidated jsonb (this migration's own
-  // comment: "never re-derives or validates the payload's own internal
-  // shape") — a row with no podium isn't something the schema rules out,
-  // even though today's one writer (resultsPublishing.js) always includes
-  // at least a champion. Found in review (code-reviewer): an earlier
-  // version assumed `event.podium[0]` always exists.
-  const winner = event.podium[0];
-  if (!winner) return null;
+  // `payload` is caller-assembled, unvalidated jsonb. Two shapes reach here: a podium entry, and (T-ARC.4) a named-only
+  // STUB (`listing: 'named_only'`, no podium) that the archive pipeline writes for an event whose organiser did not list its
+  // results. The stub is shown by name with no winner, never dropped: an unlisted event is still named (spec D-G21).
+  const winner = Array.isArray(event.podium) ? event.podium[0] : null;
+  if (!winner && event.listing !== 'named_only') return null;
   // Whose event it is (rows published before the name was stamped have none: nothing is shown for them).
   const organiser = publishedOrgName(event);
   return el('tr', { className: 'results-archive-row' }, [
@@ -252,8 +249,15 @@ function archiveRow(event) {
         : []),
     ]),
     el('td', { text: event.city ?? '—' }),
-    el('td', { className: 'results-archive-winner', text: winner.name }),
-    el('td', { className: 'results-archive-result' }, [scoreCell(winner.correct, winner.total)]),
+    el('td', {
+      className: 'results-archive-winner',
+      text: winner ? winner.name : 'Results not published',
+    }),
+    el(
+      'td',
+      { className: 'results-archive-result' },
+      winner ? [scoreCell(winner.correct, winner.total)] : [document.createTextNode('—')],
+    ),
   ]);
 }
 
@@ -386,7 +390,8 @@ export async function mountResultsScreen(root, { client } = {}) {
   }
 
   const events = rows.map(toEventPayload);
-  const latest = events[0];
+  // The "Latest result" feature needs a podium; a named-only stub (T-ARC.4) goes to the archive table by name instead.
+  const latest = events.find((event) => event.podium?.[0]) ?? null;
   const stats = {
     events: events.length,
     results: events.reduce((sum, event) => sum + (event.competitors ?? 0), 0),
@@ -394,13 +399,18 @@ export async function mountResultsScreen(root, { client } = {}) {
   };
 
   const hero = buildHero(stats);
-  const latestSection = buildLatestResult(latest, client);
-  // events[0] is already the "Latest result" feature above — the archive
+  const latestSection = latest ? buildLatestResult(latest, client) : null;
+  // The latest podium is already the "Latest result" feature above — the archive
   // table below covers everything else, not a repeat of the same row.
-  const archiveSection = events.length > 1 ? buildArchive(events.slice(1), client) : null;
+  const rest = events.filter((event) => event !== latest);
+  const archiveSection = rest.length > 0 ? buildArchive(rest, client) : null;
 
-  renderMain(hero, latestSection, ...(archiveSection ? [archiveSection] : []));
+  renderMain(
+    hero,
+    ...(latestSection ? [latestSection] : []),
+    ...(archiveSection ? [archiveSection] : []),
+  );
 
-  revealOnScroll(latestSection);
+  if (latestSection) revealOnScroll(latestSection);
   if (archiveSection) revealOnScroll(archiveSection);
 }

@@ -293,6 +293,7 @@ const SELF_CONTAINED = (name) => /^src\/(tools|community|marketing)\//.test(name
 const PAGES_THAT_LINK_IT = [
   'admin/index.html',
   'app/index.html',
+  'src/core/archivePanel.preview.html',
   'src/core/brandSlot.preview.html',
   'src/core/viewer-shell.preview.html',
   'src/formats/btc/bracketScreen.preview.html',
