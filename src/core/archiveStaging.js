@@ -6,7 +6,7 @@
 //
 // It rides the outbox like publishIntent.js, for the same reason: the snapshot is assembled from many reads, so the
 // INTENT is enqueued first (a local write that cannot fail just because the device is offline) and the payload is built
-// at FLUSH time, after any earlier queued write (the resolve_stage that declared the champion) has been applied.
+// at FLUSH time, after any earlier queued write (the one that finished the event) has been applied.
 //
 // Idempotency: the intent carries an `operationId` made once at enqueue. The RPC (stage_archive_payload) records it in the
 // project's operation ledger in the same transaction as the write, so a replay (a lost response, a second flush) stages

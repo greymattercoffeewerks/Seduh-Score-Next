@@ -13,6 +13,8 @@ import { listStagesForEvent } from './setup.js';
 import { isEventComplete, computeStageReport, computeEventSummary } from './analytics.js';
 import { buildResultsPayload, podiumRowsOf } from './resultsPublishing.js';
 
+const MAX_PODIUM_ROWS = 8; // app.archive_snapshot_payload's own limit
+
 // The snapshot for an intent ({ orgId, eventId }), or null when there is nothing to stage: a test event, an event whose
 // terminal stage is not complete yet, or one with nobody ranked.
 export async function buildArchiveSnapshot(intent, client = getSupabase()) {
@@ -34,13 +36,15 @@ export async function buildArchiveSnapshot(intent, client = getSupabase()) {
   for (let start = 0; start < podiumIds.length; start += 50) {
     entries.push(...(await listEntriesByIds(podiumIds.slice(start, start + 50), client)));
   }
-  return buildResultsPayload({
+  const payload = buildResultsPayload({
     event,
     stageReports,
     summary,
     cafeByEntryId: new Map(entries.map((entry) => [entry.id, entry.cafe ?? null])),
     scope: 'podium',
   });
+  // a tie at third place can make more than the eight rows the archive accepts: nothing to stage, the tick publishes a stub
+  return payload.podium.length > MAX_PODIUM_ROWS ? null : payload;
 }
 
 export function archiveStagingHandlers(client) {

@@ -24,6 +24,7 @@
 --   dark        results_archive_optional is unenforced: the pipeline is off, nothing is written (zero footprint; the owner's
 --               audited flip is the switch, as for the tick). The client stages again at the next report open.
 --   test_event  the event is a test event (the archive refuses them; is_test is re-read by the tick at publish time too).
+--   not_tracked the event ended more than 24 hours ago and has no ledger row (the floor, see below): nothing is created.
 --   closed      the event's ledger row is no longer pending (published, stubbed, skipped, failed or removed): terminal.
 --   superseded  a snapshot built LATER is already staged (a replayed older operation must not overwrite a newer one).
 --   duplicate   this operation id has already staged (the idempotency key).
@@ -111,6 +112,17 @@ begin
 
   v_built := least(coalesce(p_built_at, now()), now());
 
+  -- THE FLOOR (T-ARC.1 header): the tick creates rows only for events that ended at or after the moment the pipeline was
+  -- switched on, because migration 20261023130000 backfilled ended_at for every concluded event. This door runs on every
+  -- report open, so it must not make a row for an event that ended long ago, or opening an old report would publish it. A
+  -- row is made only for an event that has not ended or ended within the last 24 hours (a champion just declared, before the
+  -- tick has made its row); otherwise staging only goes on a row that already exists. Residual (stated): an event that ended
+  -- in the 24 hours BEFORE the flip and whose organiser opens its report after it is tracked, as an organiser's act.
+  if not exists (select 1 from app.archive_events a where a.event_id = p_event_id)
+     and v_e.ended_at is not null and v_e.ended_at < now() - interval '24 hours' then
+    return jsonb_build_object('staged', false, 'reason', 'not_tracked');
+  end if;
+
   -- the ledger row, made here when the tick has not made it yet (due_at is learned by the tick if the event has not ended)
   insert into app.archive_events (event_id, org_id, due_at)
   values (p_event_id, p_org_id, case when v_e.ended_at is null then null else v_e.ended_at + interval '24 hours' end)
@@ -121,7 +133,8 @@ begin
   if v_a.state <> 'pending' then
     return jsonb_build_object('staged', false, 'reason', 'closed');
   end if;
-  if v_a.staged_built_at is not null and v_built < v_a.staged_built_at then
+  -- (staged_at is null once the tick or a removal cleared the snapshot; a stale built time then orders nothing)
+  if v_a.staged_at is not null and v_a.staged_built_at is not null and v_built < v_a.staged_built_at then
     return jsonb_build_object('staged', false, 'reason', 'superseded');
   end if;
 

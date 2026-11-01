@@ -22,7 +22,7 @@
 -- NOT covered here (stated): two real sessions staging at once (the ledger row lock serialises them; one transaction cannot show
 -- it) and the browser side (src/core/archiveStaging.test.js).
 begin;
-select plan(84);
+select plan(88);
 
 create schema t067;
 grant usage on schema t067 to anon, authenticated;
@@ -111,10 +111,14 @@ insert into events (id, org_id, format, name, event_date, city, venue) values
   (t067.u(1005), t067.u(100), 'cup_taster', 'A5 stale', date '2026-10-04', null, null),
   (t067.u(1006), t067.u(100), 'cup_taster', 'A6 tick podium', date '2026-10-04', null, null),
   (t067.u(1007), t067.u(100), 'cup_taster', 'A7 tick stub', date '2026-10-04', null, null),
+  (t067.u(1008), t067.u(100), 'cup_taster', 'A8 old', date '2026-10-04', null, null),
   (t067.u(2001), t067.u(200), 'cup_taster', 'B1 ended', date '2026-10-04', null, null);
 update events set is_test = true where id = t067.u(1002);
-update events set ended_at = now() - interval '25 hours', ended_via = 'organiser'
+-- ended an hour ago: inside the 24 hours in which staging may make a ledger row. They are moved back before the tick.
+update events set ended_at = now() - interval '1 hour', ended_via = 'organiser'
  where id in (t067.u(1001), t067.u(1004), t067.u(1005), t067.u(1006), t067.u(1007), t067.u(2001));
+-- ended five days ago and never tracked: opening its report must not make it publishable
+update events set ended_at = now() - interval '5 days', ended_via = 'organiser' where id = t067.u(1008);
 
 -- ============ structure ============
 select is((select count(*)::int from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = 'stage_archive_payload'), 1,
@@ -195,6 +199,15 @@ select is(t067.ops(), (select v from t067.m where k = 'ops'), 'and no operation 
 select is(t067.call_as('authenticated', t067.u(1), t067.stage(9, 100, 1003, t067.snap('Early'))), t067.r(null, true), 'an event that has not ended can stage');
 select is(t067.arch(1003, 'due_at'), null, 'its due_at is left for the tick to fill in');
 
+-- ============ the floor: an old event is not tracked by opening its report ============
+insert into t067.m values ('rows_old', (select count(*)::int from app.archive_events)), ('ops_old', t067.ops());
+select is(t067.call_as('authenticated', t067.u(1), t067.stage(70, 100, 1008, t067.snap('Old'))), t067.r('not_tracked', false), 'an event that ended five days ago and has no ledger row is not tracked');
+select is((select count(*)::int from app.archive_events), (select v from t067.m where k = 'rows_old'), 'and no ledger row was made for it');
+select is(t067.ops(), (select v from t067.m where k = 'ops_old'), 'and no operation id was consumed');
+insert into app.archive_events (event_id, org_id, due_at, state, outcome_via) values (t067.u(1008), t067.u(100), now() + interval '1 day', 'pending', null);
+select is(t067.call_as('authenticated', t067.u(1), t067.stage(71, 100, 1008, t067.snap('Old'))), t067.r(null, true), 'but an old event whose ledger row already exists (the tick or an organiser choice made it) still stages');
+delete from app.archive_events where event_id = t067.u(1008);
+
 -- ============ malformed snapshots ============
 insert into t067.m values ('ops2', t067.ops());
 select is(t067.hint(t067.call_as('authenticated', t067.u(1), t067.stage(10 + c.n, 100, 1001, c.p))), c.expected, 'refused: ' || c.label)
@@ -241,8 +254,10 @@ select is(t067.call_as('authenticated', t067.u(1), t067.stage(51, 100, 1006, t06
 -- A5: a score changed after the snapshot was staged
 insert into score_change_log (org_id, event_id, table_name, row_id, action, changed_at)
 values (t067.u(100), t067.u(1005), 'ct_results', gen_random_uuid(), 'update', now() + interval '1 second');
--- A3 has now ended (25 hours ago), so it is due; A7 has no ledger row and no snapshot
-update events set ended_at = now() - interval '25 hours', ended_via = 'organiser' where id = t067.u(1003);
+-- time passes: every event ended 25 hours ago, so each is due; A7 has no ledger row and no snapshot
+update events set ended_at = now() - interval '25 hours', ended_via = 'organiser'
+ where id in (t067.u(1001), t067.u(1003), t067.u(1004), t067.u(1005), t067.u(1006), t067.u(1007), t067.u(2001));
+update app.archive_events set due_at = now() - interval '1 hour' where state = 'pending' and due_at is not null;
 
 select is(app.archive_tick(now() - interval '3 days'), jsonb_build_object('dark', false, 'enqueued', 1, 'published', 4, 'stubbed', 2, 'skipped', 0, 'errored', 0),
   'the tick: A7 enqueued; published A1, A3, A6 and B1 (staged podiums); stubbed A5 (stale) and A7 (nothing staged)');

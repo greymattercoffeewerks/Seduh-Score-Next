@@ -46,6 +46,13 @@ describe('buildArchiveSnapshot', () => {
     expect(args.stageReports).toEqual([{ id: 's1' }, { id: 's2' }]);
   });
 
+  it('stages nothing when the podium is wider than the eight rows the archive accepts', async () => {
+    buildResultsPayload.mockReturnValue({
+      podium: Array.from({ length: 9 }, () => ({ name: 'x' })),
+    });
+    expect(await buildArchiveSnapshot({ eventId: 'ev1' }, {})).toBeNull();
+  });
+
   it('stages nothing for a test event', async () => {
     findEvent.mockResolvedValue({ ...event, is_test: true });
     expect(await buildArchiveSnapshot({ eventId: 'ev1' }, {})).toBeNull();

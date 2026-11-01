@@ -401,7 +401,7 @@ export async function mountStandingsScreen(
         // (T-ARC.2). Queued behind the resolve_stage above and built at flush time, so it reads the finished result.
         // Best-effort and silent (stageArchiveSnapshot never throws); only the terminal stage declares a champion.
         if (data.stage.cutoff == null) {
-          await stageArchiveSnapshot(data.event, cupTasterOutboxHandlers(client));
+          void stageArchiveSnapshot(data.event, cupTasterOutboxHandlers(client));
         }
       } else if (flushResult.error) {
         pendingError = describeError(flushResult.error);
