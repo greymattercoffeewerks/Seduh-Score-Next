@@ -134,6 +134,29 @@ describe('mountTrustScreen', () => {
     expect(mount('contact').textContent).toContain('within 3 working days');
   });
 
+  it('dates the Terms too, and both pages carry the archive and Seduh ID wording but not the held lines', () => {
+    expect(mount('terms').querySelector('.trust-updated').textContent).toMatch(
+      /^Last updated \d+ \w+ 20\d\d$/,
+    );
+    const privacy = mount('privacy').textContent;
+    const terms = mount('terms').textContent;
+    expect(privacy).toContain('Community events are published automatically');
+    expect(privacy).toContain('A Seduh ID record has no automatic deletion either');
+    expect(terms).toContain('Community results are public');
+    expect(terms).toContain('courts of Brunei Darussalam have jurisdiction');
+    // Held by the owner's drafts: the Seduh ID feed sentence (not on yet), the ledger-retention
+    // sentences (the 12-month purge is not built) and the unpublished-remedy sentence (not decided).
+    expect(privacy).toContain('acknowledge your request within 10 days');
+    expect(privacy).toContain('or 30 days after it was due to be published');
+    expect(privacy).toContain('We keep the phone number on that record');
+    expect(privacy).not.toContain('named in a published podium may also have');
+    expect(privacy).not.toContain('for 12 months');
+    expect(terms).not.toContain('move to a paid plan');
+    // No placeholder text from the drafts reaches either page.
+    for (const text of [privacy, terms])
+      expect(text).not.toMatch(/\[[A-Za-z ]*(OWNER|organiser name)/i);
+  });
+
   it('names every tool that keeps data in the browser, and says a share link carries its list', () => {
     const text = mount('privacy').textContent;
     for (const tool of ['Timer', 'Brew Planner', 'Random Selector']) {
