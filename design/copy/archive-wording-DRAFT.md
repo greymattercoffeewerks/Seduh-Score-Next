@@ -155,9 +155,11 @@ published archive, but the pipeline adds two things that do have a period. Repla
 >
 > Before a Community result is published, the organiser's device sends us a prepared copy of the podium,
 > which we hold until the result is published. We delete that copy when it is published, or 30 days after it
-> was due to be published if it never was. We also keep a record of what the job did for each event (that an
-> event was published, skipped or failed, and when) for 12 months. That record contains no names, phone
-> numbers or results.
+> was due to be published if it never was.
+
+HELD (owner, 2026-11-01): the two sentences dropped from the end of this quote, about keeping a record of
+what the job did for each event for 12 months, because no purge job exists and the Privacy page must not
+promise one.
 
 `[RECHECK]` Decision 9 as recorded (`HANDOFF-CORRECTION-005`): staged snapshot deleted when published or 30
 days after due; queue/ledger rows 12 months. **The 30-day clearing is built** (`archive_tick`, retention
