@@ -19,7 +19,7 @@
 --     written (no audit row); the body names only the ledger, the key table, public_results (existence only) and the gate.
 -- Everything runs in ONE transaction. The shared local database may hold other sessions' rows, so every figure is a DELTA.
 begin;
-select plan(114);
+select plan(121);
 
 create schema t067;
 grant usage on schema t067 to anon, authenticated, service_role;
@@ -240,6 +240,11 @@ select is((select count(*)::int from pg_constraint where conrelid = 'app.archive
             and conname in ('archive_events_removed_from_valid', 'archive_events_removed_shape')), 2,
   'the two additive ledger constraints exist');
 
+select throws_ok(format('insert into app.archive_events (event_id, org_id, state) values (%L, %L, ''removed'')', t067.u(9990), t067.u(200)),
+  '23514', null, 'a removed row with no removed_at/removed_from is refused by the ledger''s own CHECK');
+select throws_ok(format('insert into app.archive_events (event_id, org_id, state, removed_at, removed_from) values (%L, %L, ''removed'', now(), ''removed'')', t067.u(9991), t067.u(200)),
+  '23514', null, 'and removed_from must be a state the row can have come from');
+
 -- ============ set_archive_listing: who may call it (the key is still unenforced, so the entitlement does not speak yet) ============
 select is(t067.val(t067.u(2), format('select public.set_archive_listing(%L, %L, true)::text', t067.u(200), t067.u(2001))),
   '{"due_at": null, "listing": "list", "recorded": true}', 'a member of the Annual organisation ticks the box: list is stored (no end yet, so no due time)');
@@ -365,8 +370,12 @@ select is(t067.has_result(1003), false, 'the hand-removed result stays removed')
 
 -- a removal is recorded once: publish by hand again, remove again, the first record stands
 insert into public_results (org_id, event_id, payload) values (t067.u(100), t067.u(1003), '{"eventName": "C3 again", "podium": [{"name": "Own"}]}');
-do $$ begin perform t067.try(t067.u(1), format('delete from public.public_results where event_id = %L', t067.u(1003))); end $$;
+create table t067.mark as select removed_at from app.archive_events where event_id = t067.u(1003);
+select is(t067.try(t067.u(1), format('delete from public.public_results where event_id = %L', t067.u(1003))), 'ok', 'the second removal is allowed too');
+select is(t067.has_result(1003), false, 'and removes the result');
 select is(t067.arch(1003, 'removed_from'), 'none', 'a second removal does not rewrite the first record');
+select is((select a.removed_at = m.removed_at from app.archive_events a, t067.mark m where a.event_id = t067.u(1003)), true,
+  'removed_at is still the FIRST removal');
 
 -- the trigger records nothing for a test event, a gone event, or a stranger's rows
 insert into public_results (org_id, event_id, payload) values (t067.u(100), t067.u(1004), '{"eventName": "C4", "podium": [{"name": "X"}]}');
@@ -453,17 +462,39 @@ insert into app.archive_events (event_id, org_id, due_at, state, outcome_via, la
   (t067.u(9008), t067.u(200), now() - interval '5 hours', 'failed', null, '23505', null);
 insert into app.archive_events (event_id, org_id, due_at, state, outcome_via, removed_at, removed_from) values
   (t067.u(9009), t067.u(200), now() - interval '5 hours', 'removed', 'auto', now(), 'stubbed');
+-- a removed row the organiser then published again by hand (a live result): removed_unpublished must NOT count it
+insert into app.archive_events (event_id, org_id, due_at, state, outcome_via, removed_at, removed_from)
+  values (t067.u(2005), t067.u(200), now() - interval '5 hours', 'removed', 'auto', now(), 'published');
+insert into public_results (org_id, event_id, payload) values (t067.u(200), t067.u(2005), '{"eventName": "A5", "podium": [{"name": "X"}]}');
+-- a removed row that still carries a stubbed reason: stubbed_no_snapshot must count STUBBED rows only
+insert into app.archive_events (event_id, org_id, due_at, state, outcome_via, last_error, removed_at, removed_from)
+  values (t067.u(9012), t067.u(200), now() - interval '5 hours', 'removed', 'auto', 'no_snapshot', now(), 'stubbed');
+-- the overdue edge: 61 minutes past due is overdue, 59 is not
+insert into app.archive_events (event_id, org_id, due_at, state) values
+  (t067.u(9010), t067.u(200), now() - interval '61 minutes', 'pending'), (t067.u(9011), t067.u(200), now() - interval '59 minutes', 'pending');
 do $$ begin perform t067.claims(t067.u(11), 'aal2', 10); end $$;
 set local role authenticated;
 create temp table got on commit drop as select * from public.admin_archive_status();
 reset role;
 select is((select count(*)::int from got), 1, 'exactly one row');
 select is((select pipeline_live from got), true, 'pipeline_live: true while the key is enforced');
+update app.entitlement_keys set enforced = false where key = 'results_archive_optional';
+do $$ begin perform t067.claims(t067.u(11), 'aal2', 10); end $$;
+set local role authenticated;
+create temp table got_dark on commit drop as select * from public.admin_archive_status();
+reset role;
+update app.entitlement_keys set enforced = true where key = 'results_archive_optional';
+select is((select pipeline_live from got_dark), false, 'pipeline_live: false while the key is unenforced (the operator''s dark/live signal)');
 select is((select events_total::bigint - b.total from got, t067.base b), (select count(*) from app.archive_events) - (select total from t067.base), 'events_total: every ledger row');
 select is((select events_pending::bigint - b.pending from got, t067.base b),
   (select count(*) from app.archive_events where state = 'pending') - (select pending from t067.base), 'events_pending matches the ledger');
 select is((select events_pending from got) >= 3, true, 'and counts at least the two fixtures and the not-yet-ended row');
-select is((select events_pending_overdue::bigint - b.overdue from got, t067.base b), 1::bigint, 'events_pending_overdue: +1 (an hour past due; five minutes past due is not overdue)');
+select is((select events_pending_overdue from got),
+  (select count(*)::int from app.archive_events where state = 'pending' and due_at < now() - interval '1 hour'),
+  'events_pending_overdue matches an hour-past-due count of the ledger');
+select is((select count(*)::int from app.archive_events where state = 'pending' and due_at < now() - interval '1 hour'
+            and event_id in (t067.u(9001), t067.u(9002), t067.u(9010), t067.u(9011))), 2,
+  'and of the four fixtures exactly 9001 (3 hours) and 9010 (61 minutes) are overdue, 9002 (5 minutes) and 9011 (59 minutes) are not');
 select is((select events_stubbed::bigint - b.stubbed from got, t067.base b),
   (select count(*) from app.archive_events where state = 'stubbed') - (select stubbed from t067.base), 'events_stubbed matches the ledger');
 select is((select events_skipped::bigint - b.skipped from got, t067.base b),
