@@ -96,6 +96,21 @@ export async function setArchiveListing(orgId, eventId, list, client = getSupaba
   return data;
 }
 
+// The member-readable archive status (public.archive_event_status, T-ARC.4c): one row per requested event of the
+// organisation, from the ledger the member cannot read themselves. At most ARCHIVE_STATUS_MAX ids per call. A refusal
+// carries SQLSTATE 42501 (an id that is not this organisation's) or 22023 with a stable hint (archive_status_invalid,
+// archive_status_too_many).
+export const ARCHIVE_STATUS_MAX = 200;
+export async function getArchiveEventStatus(orgId, eventIds, client = getSupabase()) {
+  if (eventIds.length === 0) return [];
+  const { data, error } = await client.rpc('archive_event_status', {
+    p_org_id: orgId,
+    p_event_ids: eventIds,
+  });
+  if (error) throw error;
+  return data ?? [];
+}
+
 export async function unpublishEventResults(orgId, eventId, client = getSupabase()) {
   const { error } = await client.rpc('unpublish_event_results', {
     p_org_id: orgId,

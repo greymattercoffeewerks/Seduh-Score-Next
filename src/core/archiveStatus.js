@@ -2,12 +2,11 @@
 // decides everything (the archive tick, set_archive_listing, the soft unpublish record); this module turns what a member
 // CAN read into words and decides nothing the database would not also do.
 //
-// What a member can read, and what not (the honest limit of this build):
-//   - `events.ended_at` and the event's own `public_results` row (members read their organisation's rows);
-//   - the entitlement snapshot's `results_archive_optional` entry.
-// The ledger (app.archive_events) is owner-only, so "failed", "retrying", "removed" and the saved tick box are NOT readable:
-// an event past its due time with no result is simply "overdue", and the tick box shows the last choice saved on this
-// device. A member-readable status door would remove both limits; it is logged as a T-ARC.4 finding, not built here.
+// What the panel reads (T-ARC.4c): `events.ended_at`, the event's own `public_results` row (the payload tells a podium
+// from a named-only entry) and, for everything the pipeline decided, `public.archive_event_status` (the member-readable
+// door onto the owner-only ledger): state, due time, saved tick box, taken-down, retrying and a safe reason code. Nothing is
+// remembered per device any more. Still derived here: the "scheduled" line before the pipeline has a row, and "not in the
+// schedule" for an event past its due time that the pipeline never took.
 //
 // DARK. `archiveModeOf` answers 'off' unless the snapshot says the key is ENFORCED. While the key is unenforced the
 // database answers `allowed: true` for everyone (a Community organisation included), so `allowed` alone cannot tell dark from
@@ -36,35 +35,69 @@ export function isNamedOnly(payload) {
   return payload?.listing === 'named_only';
 }
 
+// The ledger states and the stub/failure reasons the database may send (public.archive_event_status). Anything else is
+// read as "no row" / "no reason", so a future value cannot put raw text on the screen.
+const LEDGER_STATES = ['none', 'pending', 'published', 'stubbed', 'skipped', 'failed', 'removed'];
+const STUB_REASONS = ['no_snapshot', 'invalid_snapshot', 'stale_snapshot'];
+const OVERDUE_GRACE_MS = 3600 * 1000;
+const REASONS = [...STUB_REASONS, 'processing_error'];
+
+// One answer row of archive_event_status, trusted only for its whitelisted shape. null when it is not a row.
+export function normalizeArchiveStatus(row) {
+  if (!row || typeof row !== 'object') return null;
+  const due = row.due_at ? new Date(row.due_at) : null;
+  return {
+    state: LEDGER_STATES.includes(row.state) ? row.state : 'none',
+    dueAt: due && !Number.isNaN(due.getTime()) ? due : null,
+    published: row.published === true,
+    listingChoice:
+      row.listing_choice === 'list' || row.listing_choice === 'named_only'
+        ? row.listing_choice
+        : null,
+    removed: row.removed === true,
+    retrying: row.retrying === true,
+    reason: REASONS.includes(row.reason) ? row.reason : null,
+  };
+}
+
 // kind:
 //   off                    nothing to show (dark, or no event to speak of)
 //   test                   a test event is never archived
 //   open                   not finished yet
 //   scheduled              finished, due not reached, the podium will be published
 //   scheduled_named_only   finished, due not reached, only the name will be listed
-//   overdue                due time passed and nothing is published (retrying, taken down earlier, or the schedule is late)
+//   overdue                due time passed and nothing is published, no failure recorded (the schedule is late)
+//   unscheduled            due time passed and the pipeline will not publish it (no row, or already settled with no result)
+//   retrying               the last automatic attempt failed; it will be tried again
+//   failed                 the automatic attempts gave up
 //   published              a podium is public
-//   listed_named_only      only the name is public
-//   taken_down             the organiser took it down in this session
-// `listed` is the tick box (Per-event / Annual only; Community is always the podium).
-export function archiveStateOf({
-  mode,
-  event,
-  result = null,
-  listed = false,
-  takenDown = false,
-  now = Date.now(),
-}) {
+//   listed_named_only      only the name is public (`reason`: why, when the pipeline had to fall back to a stub)
+//   taken_down             the result was taken down and stays down
+// `status` is the normalized archive_event_status row (the saved tick box is its listingChoice; Community is always the
+// podium). Without one the panel cannot say what the pipeline decided: off.
+export function archiveStateOf({ mode, event, result = null, status = null, now = Date.now() }) {
   if (mode !== 'compulsory' && mode !== 'choice') return { kind: 'off', dueAt: null };
   if (event?.is_test) return { kind: 'test', dueAt: null };
-  const dueAt = archiveDueAt(event);
+  if (!status) return { kind: 'off', dueAt: null };
+  const dueAt = status.dueAt ?? archiveDueAt(event);
   if (result) {
-    return { kind: isNamedOnly(result.payload) ? 'listed_named_only' : 'published', dueAt };
+    return isNamedOnly(result.payload)
+      ? { kind: 'listed_named_only', dueAt, reason: status.reason }
+      : { kind: 'published', dueAt, reason: null };
   }
-  if (takenDown) return { kind: 'taken_down', dueAt };
+  if (status.removed) return { kind: 'taken_down', dueAt };
   if (!event?.ended_at || !dueAt) return { kind: 'open', dueAt: null };
-  if (now >= dueAt.getTime()) return { kind: 'overdue', dueAt };
-  const podium = mode === 'compulsory' || listed;
+  if (status.state === 'failed') return { kind: 'failed', dueAt };
+  if (status.retrying) return { kind: 'retrying', dueAt };
+  if (now >= dueAt.getTime()) {
+    // Late only while the pipeline still holds the event (pending) or has not had a tick since it fell due. A row the
+    // pipeline never made (an event from before its floor) or one it already settled with no result is not "running
+    // late": nothing will publish it, so say so and offer the manual publish.
+    const holding = status.state === 'pending';
+    const justDue = status.state === 'none' && now - dueAt.getTime() < OVERDUE_GRACE_MS;
+    return { kind: holding || justDue ? 'overdue' : 'unscheduled', dueAt };
+  }
+  const podium = mode === 'compulsory' || status.listingChoice === 'list';
   return { kind: podium ? 'scheduled' : 'scheduled_named_only', dueAt };
 }
 
@@ -131,6 +164,13 @@ export const UNPUBLISH_CONFIRM_TEXT =
   'Taking it down is recorded and counted (counts only, no names) and it will not be published again automatically. ' +
   'You can publish it yourself later.';
 
+const STUB_REASON_TEXT = {
+  no_snapshot:
+    ' The podium was not prepared because the report or standings were not opened after the event finished.',
+  invalid_snapshot: ' The prepared podium could not be used.',
+  stale_snapshot: ' Scores changed after the podium was prepared, so it was not published.',
+};
+
 export function statusText(state) {
   switch (state.kind) {
     case 'scheduled':
@@ -142,13 +182,22 @@ export function statusText(state) {
       return `At about ${describeArchiveTime(state.dueAt)} the archive will list this event by name, date and place only, with no results.`;
     case 'overdue':
       return (
-        `Nothing is published yet. It was due at about ${describeArchiveTime(state.dueAt)}. ` +
-        'If you took it down yourself it stays down. You can publish it now.'
+        `Nothing is published yet. It was due at about ${describeArchiveTime(state.dueAt)}, so the automatic publish is running late. ` +
+        'You can publish it now.'
       );
+    case 'unscheduled':
+      return 'This event is not in the automatic public archive schedule, so nothing is published. You can publish the results yourself.';
+    case 'retrying':
+      return 'The automatic publish hit a problem and will be tried again shortly. You can also publish it now.';
+    case 'failed':
+      return 'The automatic publish did not work. Nothing is published. You can publish it now.';
     case 'published':
       return 'The podium is published on the public archive.';
     case 'listed_named_only':
-      return 'The public archive lists this event by name only, with no results. You can publish the results yourself.';
+      return (
+        'The public archive lists this event by name only, with no results.' +
+        `${STUB_REASON_TEXT[state.reason] ?? ''} You can publish the results yourself.`
+      );
     case 'taken_down':
       return 'Taken down. It will not be published again automatically. You can publish it yourself.';
     case 'open':

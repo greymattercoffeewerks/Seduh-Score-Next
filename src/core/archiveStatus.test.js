@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   archiveModeOf,
   archiveStateOf,
+  normalizeArchiveStatus,
   archiveDueAt,
   describeArchiveTime,
   finishArchiveNote,
@@ -32,10 +33,63 @@ describe('archiveModeOf (dark by default)', () => {
   });
 });
 
+describe('normalizeArchiveStatus (the whitelist on the client too)', () => {
+  it('reads a database row into the fields the panel uses', () => {
+    expect(
+      normalizeArchiveStatus({
+        event_id: 'e1',
+        state: 'stubbed',
+        due_at: '2026-11-03T10:00:00Z',
+        published: true,
+        listing_choice: 'list',
+        removed: false,
+        retrying: false,
+        reason: 'stale_snapshot',
+      }),
+    ).toEqual({
+      state: 'stubbed',
+      dueAt: new Date('2026-11-03T10:00:00Z'),
+      published: true,
+      listingChoice: 'list',
+      removed: false,
+      retrying: false,
+      reason: 'stale_snapshot',
+    });
+  });
+  it('drops anything outside the contract rather than showing it', () => {
+    const row = normalizeArchiveStatus({
+      state: 'weird',
+      due_at: 'not a date',
+      listing_choice: 'maybe',
+      reason: '40P01',
+      removed: 'yes',
+      retrying: 1,
+    });
+    expect(row).toEqual({
+      state: 'none',
+      dueAt: null,
+      published: false,
+      listingChoice: null,
+      removed: false,
+      retrying: false,
+      reason: null,
+    });
+    expect(normalizeArchiveStatus(null)).toBeNull();
+    expect(normalizeArchiveStatus({ state: 'failed', reason: 'processing_error' }).reason).toBe(
+      'processing_error',
+    );
+  });
+});
+
 describe('archiveStateOf', () => {
-  const base = { mode: 'compulsory', event: event() };
+  const none = normalizeArchiveStatus({ state: 'none' });
+  const withStatus = (over) => normalizeArchiveStatus({ state: 'none', ...over });
+  const base = { mode: 'compulsory', event: event(), status: none };
   it('shows nothing while off, whatever the event', () => {
     expect(archiveStateOf({ ...base, mode: 'off' }).kind).toBe('off');
+  });
+  it('shows nothing without a ledger answer: it will not guess what the pipeline decided', () => {
+    expect(archiveStateOf({ ...base, status: null }).kind).toBe('off');
   });
   it('never archives a test event, even one with a result row', () => {
     expect(
@@ -51,27 +105,71 @@ describe('archiveStateOf', () => {
     expect(archiveStateOf({ ...base, now: due - 1 }).kind).toBe('scheduled');
     expect(archiveStateOf({ ...base, now: due }).kind).toBe('overdue');
   });
-  it('Community is always the podium; a paid plan is named-only until the box is ticked', () => {
-    const now = T('2026-11-02T12:00:00Z');
-    expect(archiveStateOf({ ...base, now }).kind).toBe('scheduled');
-    expect(archiveStateOf({ mode: 'choice', event: event(), now }).kind).toBe(
-      'scheduled_named_only',
-    );
-    expect(archiveStateOf({ mode: 'choice', event: event(), listed: true, now }).kind).toBe(
+  it("prefers the database's due time", () => {
+    const status = withStatus({ due_at: '2026-11-10T00:00:00Z' });
+    expect(archiveStateOf({ ...base, status, now: T('2026-11-05T00:00:00Z') }).kind).toBe(
       'scheduled',
     );
   });
-  it('a result row wins over the clock; a stub is told apart from a podium', () => {
+  it('Community is always the podium; a paid plan is named-only until the saved choice is list', () => {
+    const now = T('2026-11-02T12:00:00Z');
+    expect(archiveStateOf({ ...base, now }).kind).toBe('scheduled');
+    expect(archiveStateOf({ ...base, mode: 'choice', now }).kind).toBe('scheduled_named_only');
+    expect(
+      archiveStateOf({
+        ...base,
+        mode: 'choice',
+        status: withStatus({ listing_choice: 'named_only' }),
+        now,
+      }).kind,
+    ).toBe('scheduled_named_only');
+    expect(
+      archiveStateOf({
+        ...base,
+        mode: 'choice',
+        status: withStatus({ listing_choice: 'list' }),
+        now,
+      }).kind,
+    ).toBe('scheduled');
+  });
+  it('a result row wins over the clock; a stub is told apart from a podium and carries its reason', () => {
     const now = T('2026-12-01T00:00:00Z');
     const podium = { payload: { podium: [{ name: 'A' }] } };
     expect(archiveStateOf({ ...base, now, result: podium }).kind).toBe('published');
-    expect(
-      archiveStateOf({ ...base, now, result: { payload: { listing: 'named_only' } } }).kind,
-    ).toBe('listed_named_only');
+    const stub = archiveStateOf({
+      ...base,
+      now,
+      status: withStatus({ state: 'stubbed', reason: 'no_snapshot' }),
+      result: { payload: { listing: 'named_only' } },
+    });
+    expect(stub).toMatchObject({ kind: 'listed_named_only', reason: 'no_snapshot' });
   });
-  it('a result taken down in this session reads as taken down, not overdue', () => {
-    expect(archiveStateOf({ ...base, now: T('2026-12-01T00:00:00Z'), takenDown: true }).kind).toBe(
+  it('removed reads as taken down, not overdue, whatever the clock says', () => {
+    const status = withStatus({ state: 'removed', removed: true });
+    expect(archiveStateOf({ ...base, status, now: T('2026-12-01T00:00:00Z') }).kind).toBe(
       'taken_down',
+    );
+  });
+  it('no row long past due is unscheduled, not late; just past due is still late; a settled row with no result is unscheduled', () => {
+    const due = T('2026-11-03T10:00:00Z');
+    expect(archiveStateOf({ ...base, now: due + 1800 * 1000 }).kind).toBe('overdue');
+    expect(archiveStateOf({ ...base, now: due + 3 * 86400 * 1000 }).kind).toBe('unscheduled');
+    const skipped = withStatus({ state: 'skipped' });
+    expect(archiveStateOf({ ...base, status: skipped, now: due + 7200 * 1000 }).kind).toBe(
+      'unscheduled',
+    );
+  });
+  it('failed and retrying are told apart from a late schedule', () => {
+    const now = T('2026-12-01T00:00:00Z');
+    expect(archiveStateOf({ ...base, status: withStatus({ state: 'failed' }), now }).kind).toBe(
+      'failed',
+    );
+    expect(
+      archiveStateOf({ ...base, status: withStatus({ state: 'pending', retrying: true }), now })
+        .kind,
+    ).toBe('retrying');
+    expect(archiveStateOf({ ...base, status: withStatus({ state: 'pending' }), now }).kind).toBe(
+      'overdue',
     );
   });
 });
@@ -96,12 +194,15 @@ describe('copy', () => {
     expect(unticked).toContain('only place');
     expect(listingHelpText(true)).toContain('podium');
   });
-  it('every state with words has them, and overdue does not claim a retry it cannot see', () => {
+  it('every state with words has them, and overdue does not claim a retry', () => {
     const due = new Date(ENDED);
     for (const kind of [
       'scheduled',
       'scheduled_named_only',
       'overdue',
+      'unscheduled',
+      'retrying',
+      'failed',
       'published',
       'listed_named_only',
       'taken_down',
@@ -111,6 +212,8 @@ describe('copy', () => {
       expect(statusText({ kind, dueAt: due })).toBeTruthy();
     }
     expect(statusText({ kind: 'overdue', dueAt: due })).toContain('You can publish it now');
+    expect(statusText({ kind: 'overdue', dueAt: due })).not.toMatch(/retry|tried again/);
+    expect(statusText({ kind: 'retrying', dueAt: due })).toContain('tried again');
     expect(statusText({ kind: 'off' })).toBeNull();
   });
   it('maps the stable hints, and falls back to a generic line', () => {

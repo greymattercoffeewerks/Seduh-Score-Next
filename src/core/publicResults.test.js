@@ -6,6 +6,8 @@ import {
   findPublishedResultForEvent,
   publishEventResults,
   unpublishEventResults,
+  getArchiveEventStatus,
+  ARCHIVE_STATUS_MAX,
 } from './publicResults.js';
 
 function fakeQueryClient(response) {
@@ -177,5 +179,45 @@ describe('publishedOrgName (T-TEN.D3)', () => {
 
   it('does not touch the letters of the name (the archive shows it as typed)', () => {
     expect(publishedOrgName({ org_name: 'Kopi <b>Seduh</b> & Co' })).toBe('Kopi <b>Seduh</b> & Co');
+  });
+});
+
+describe('getArchiveEventStatus', () => {
+  const rpcClient = (response) => {
+    const calls = [];
+    return {
+      calls,
+      rpc(name, args) {
+        calls.push([name, args]);
+        return Promise.resolve(response);
+      },
+    };
+  };
+
+  it('asks archive_event_status for the organisation and the event ids, and returns the rows', async () => {
+    const rows = [{ event_id: 'e1', state: 'none' }];
+    const client = rpcClient({ data: rows, error: null });
+    expect(await getArchiveEventStatus('org1', ['e1'], client)).toEqual(rows);
+    expect(client.calls).toEqual([
+      ['archive_event_status', { p_org_id: 'org1', p_event_ids: ['e1'] }],
+    ]);
+  });
+
+  it('asks nothing for an empty list, and treats a null answer as no rows', async () => {
+    const client = rpcClient({ data: null, error: null });
+    expect(await getArchiveEventStatus('org1', [], client)).toEqual([]);
+    expect(client.calls).toHaveLength(0);
+    expect(await getArchiveEventStatus('org1', ['e1'], client)).toEqual([]);
+  });
+
+  it('throws the database error (its code and hint reach the caller)', async () => {
+    const error = { code: '22023', hint: 'archive_status_too_many' };
+    await expect(
+      getArchiveEventStatus('org1', ['e1'], rpcClient({ data: null, error })),
+    ).rejects.toBe(error);
+  });
+
+  it('the cap matches the database (200)', () => {
+    expect(ARCHIVE_STATUS_MAX).toBe(200);
   });
 });

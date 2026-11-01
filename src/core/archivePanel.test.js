@@ -12,11 +12,27 @@ const ev = (over = {}) => ({
   ...over,
 });
 
-// A client that answers my_entitlements, the public_results read and the two RPCs, recording every call.
-function fakeClient({ entry, results = [], rpc = {} } = {}) {
+const noRow = (id) => ({
+  event_id: id,
+  state: 'none',
+  due_at: null,
+  published: false,
+  listing_choice: null,
+  removed: false,
+  retrying: false,
+  reason: null,
+});
+
+// A client that answers my_entitlements, archive_event_status (a small stateful ledger: set_archive_listing and
+// unpublish_event_results change what it answers next, like the database), the public_results read and the RPCs,
+// recording every call. `status` maps an event id to the ledger fields it should answer with.
+function fakeClient({ entry, results = [], rpc = {}, status = {}, statusError = null } = {}) {
   const calls = [];
+  const ledger = { ...status };
+  let rows = results;
   return {
     calls,
+    ledger,
     rpc(name, args) {
       calls.push(['rpc', name, args]);
       if (name === 'my_entitlements') {
@@ -25,7 +41,27 @@ function fakeClient({ entry, results = [], rpc = {} } = {}) {
           error: null,
         });
       }
-      return Promise.resolve(rpc[name] ?? { data: {}, error: null });
+      if (name === 'archive_event_status') {
+        if (statusError) return Promise.resolve({ data: null, error: statusError });
+        return Promise.resolve({
+          data: args.p_event_ids.map((id) => ({ ...noRow(id), ...ledger[id] })),
+          error: null,
+        });
+      }
+      const answer = rpc[name];
+      if (!answer?.error) {
+        if (name === 'set_archive_listing') {
+          ledger[args.p_event_id] = {
+            ...ledger[args.p_event_id],
+            listing_choice: args.p_list ? 'list' : 'named_only',
+          };
+        }
+        if (name === 'unpublish_event_results') {
+          rows = rows.filter((r) => r.event_id !== args.p_event_id);
+          ledger[args.p_event_id] = { ...ledger[args.p_event_id], state: 'removed', removed: true };
+        }
+      }
+      return Promise.resolve(answer ?? { data: {}, error: null });
     },
     from(table) {
       calls.push(['from', table]);
@@ -33,20 +69,14 @@ function fakeClient({ entry, results = [], rpc = {} } = {}) {
         select: () => builder,
         in: () => builder,
         then: (resolve, reject) =>
-          Promise.resolve({ data: results, error: null }).then(resolve, reject),
+          Promise.resolve({ data: rows, error: null }).then(resolve, reject),
       };
       return builder;
     },
   };
 }
 
-const storageOf = (store) => ({
-  getItem: (k) => store.get(k) ?? null,
-  setItem: (k, v) => store.set(k, v),
-});
-
 function make(client, over = {}) {
-  const store = new Map();
   const onChange = vi.fn();
   const controller = createArchiveController({
     orgId: 'org1',
@@ -54,10 +84,9 @@ function make(client, over = {}) {
     onChange,
     now: () => NOW,
     publishHrefFor: (event) => `#/events/${event.id}/report`,
-    storage: { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) },
     ...over,
   });
-  return { controller, onChange, store };
+  return { controller, onChange };
 }
 
 describe('archive controller: dark', () => {
@@ -69,6 +98,7 @@ describe('archive controller: dark', () => {
     expect(controller.renderFor(ev())).toBeNull();
     expect(controller.finishNote()).toBeNull();
     expect(client.calls.map((c) => c[1])).toEqual(['my_entitlements']);
+    expect(client.calls.some((c) => c[1] === 'archive_event_status')).toBe(false);
   });
 
   it('stays off when there is no usable snapshot (fail-open for the screen)', async () => {
@@ -85,6 +115,17 @@ describe('archive controller: dark', () => {
     const { controller } = make(client);
     await controller.load([ev()]);
     expect(controller.mode()).toBe('off');
+  });
+
+  it('stays off when the status read fails: the panel never guesses what the pipeline decided', async () => {
+    const client = fakeClient({
+      entry: { allowed: false, enforced: true },
+      statusError: { code: '42501', message: 'no' },
+    });
+    const { controller } = make(client);
+    await controller.load([ev()]);
+    expect(controller.mode()).toBe('off');
+    expect(controller.renderFor(ev())).toBeNull();
   });
 });
 
@@ -117,6 +158,10 @@ describe('archive controller: Community (compulsory)', () => {
   });
 
   it('says overdue honestly when nothing is published after the due time', async () => {
+    client = fakeClient({
+      entry: { allowed: false, enforced: true },
+      status: { e1: { state: 'pending' } },
+    });
     const { controller } = make(client, { now: () => new Date('2026-11-05T00:00:00Z').getTime() });
     await controller.load([ev()]);
     const panel = controller.renderFor(ev());
@@ -129,7 +174,7 @@ describe('archive controller: Community (compulsory)', () => {
       entry: { allowed: false, enforced: true },
       results: [{ event_id: 'e1', payload: { podium: [{ name: 'A' }] }, published_at: ENDED }],
     });
-    const { controller, onChange, store } = make(client);
+    const { controller, onChange } = make(client);
     await controller.load([ev()]);
     let panel = controller.renderFor(ev());
     expect(panel.dataset.archiveState).toBe('published');
@@ -148,12 +193,19 @@ describe('archive controller: Community (compulsory)', () => {
     await vi.waitFor(() =>
       expect(controller.renderFor(ev()).dataset.archiveState).toBe('taken_down'),
     );
-    // after a reload (a new controller on the same device, the result row gone) it still says taken down, never "will be published"
-    const reloaded = make(fakeClient({ entry: { allowed: false, enforced: true } }), {
-      storage: storageOf(store),
-    });
+    // after a reload the database says removed (not this device's memory): still taken down, never "will be published"
+    const reloaded = make(client);
     await reloaded.controller.load([ev()]);
     expect(reloaded.controller.renderFor(ev()).dataset.archiveState).toBe('taken_down');
+    // ...and so does another device: a fresh client with only the ledger's answer and no result row
+    const otherDevice = make(
+      fakeClient({
+        entry: { allowed: false, enforced: true },
+        status: { e1: { state: 'removed', removed: true } },
+      }),
+    );
+    await otherDevice.controller.load([ev()]);
+    expect(otherDevice.controller.renderFor(ev()).dataset.archiveState).toBe('taken_down');
     expect(client.calls).toContainEqual([
       'rpc',
       'unpublish_event_results',
@@ -178,6 +230,132 @@ describe('archive controller: Community (compulsory)', () => {
       expect(controller.renderFor(ev()).querySelector('[role=alert]')).not.toBeNull(),
     );
     expect(controller.renderFor(ev()).dataset.archiveState).toBe('published');
+  });
+});
+
+describe('archive controller: what the database decided (archive_event_status)', () => {
+  const load = async (status, over = {}, results = []) => {
+    const client = fakeClient({ entry: { allowed: false, enforced: true }, status, results });
+    const made = make(client, over);
+    await made.controller.load([ev()]);
+    return { client, ...made };
+  };
+  const LATE = { now: () => new Date('2026-11-05T00:00:00Z').getTime() };
+
+  it('asks once for the listed events, never for a test event', async () => {
+    const client = fakeClient({ entry: { allowed: false, enforced: true } });
+    const { controller } = make(client);
+    await controller.load([ev(), ev({ id: 't1', is_test: true })]);
+    const asked = client.calls.filter((c) => c[1] === 'archive_event_status');
+    expect(asked).toEqual([
+      ['rpc', 'archive_event_status', { p_org_id: 'org1', p_event_ids: ['e1'] }],
+    ]);
+    expect(controller.renderFor(ev({ id: 't1', is_test: true })).dataset.archiveState).toBe('test');
+  });
+
+  it('asks for at most 200 events and shows no panel for the rest', async () => {
+    const client = fakeClient({ entry: { allowed: false, enforced: true } });
+    const { controller } = make(client);
+    const many = Array.from({ length: 203 }, (_, i) => ev({ id: `m${i}` }));
+    await controller.load(many);
+    const asked = client.calls.find((c) => c[1] === 'archive_event_status');
+    expect(asked[2].p_event_ids).toHaveLength(200);
+    expect(controller.renderFor(many[0])).not.toBeNull();
+    expect(controller.renderFor(many[202])).toBeNull();
+  });
+
+  it('retrying: a failed attempt that will be tried again (no claim it is published)', async () => {
+    const { controller } = await load({
+      e1: { state: 'pending', retrying: true, reason: 'processing_error' },
+    });
+    const panel = controller.renderFor(ev());
+    expect(panel.dataset.archiveState).toBe('retrying');
+    expect(panel.textContent).toContain('will be tried again');
+    expect(panel.querySelector('#archive-publish-now-e1')).not.toBeNull();
+  });
+
+  it('failed: gave up, nothing published, Publish now offered, no tick box', async () => {
+    const client = fakeClient({
+      entry: { allowed: true, enforced: true },
+      status: { e1: { state: 'failed', reason: 'processing_error' } },
+    });
+    const { controller } = make(client);
+    await controller.load([ev()]);
+    const panel = controller.renderFor(ev());
+    expect(panel.dataset.archiveState).toBe('failed');
+    expect(panel.textContent).toContain('did not work');
+    expect(panel.querySelector('#archive-publish-now-e1')).not.toBeNull();
+    expect(panel.querySelector('input')).toBeNull();
+    // the SQLSTATE or any raw text never reaches the screen
+    expect(panel.textContent).not.toMatch(/processing_error|40P01|SQLSTATE/);
+  });
+
+  it.each([
+    ['no_snapshot', 'were not opened'],
+    ['invalid_snapshot', 'could not be used'],
+    ['stale_snapshot', 'Scores changed'],
+  ])('a stub published because of %s says why', async (reason, words) => {
+    const { controller } = await load({ e1: { state: 'stubbed', published: true, reason } }, {}, [
+      { event_id: 'e1', payload: { listing: 'named_only' }, published_at: ENDED },
+    ]);
+    const panel = controller.renderFor(ev());
+    expect(panel.dataset.archiveState).toBe('listed_named_only');
+    expect(panel.textContent).toContain(words);
+    expect(panel.textContent).not.toContain(reason);
+  });
+
+  it('a stub with no reason (the organiser chose names only) adds no explanation', async () => {
+    const { controller } = await load({ e1: { state: 'stubbed', published: true } }, {}, [
+      { event_id: 'e1', payload: { listing: 'named_only' }, published_at: ENDED },
+    ]);
+    expect(controller.renderFor(ev()).textContent).not.toContain('Scores changed');
+  });
+
+  it('removed: taken down after a reload, nothing is promised again', async () => {
+    const { controller } = await load({ e1: { state: 'removed', removed: true } }, LATE);
+    const panel = controller.renderFor(ev());
+    expect(panel.dataset.archiveState).toBe('taken_down');
+    expect(panel.textContent).toContain('will not be published again automatically');
+  });
+
+  it('removed and then published again by hand reads as published', async () => {
+    const { controller } = await load(
+      { e1: { state: 'removed', removed: true, published: true } },
+      LATE,
+      [{ event_id: 'e1', payload: { podium: [{ name: 'A' }] }, published_at: ENDED }],
+    );
+    expect(controller.renderFor(ev()).dataset.archiveState).toBe('published');
+  });
+
+  it('overdue only when nothing is recorded as wrong: the schedule is late', async () => {
+    const { controller } = await load({ e1: { state: 'pending' } }, LATE);
+    const panel = controller.renderFor(ev());
+    expect(panel.dataset.archiveState).toBe('overdue');
+    expect(panel.textContent).toContain('running late');
+  });
+
+  it('an event the pipeline never took (no row, long past due) is not "running late"', async () => {
+    const { controller } = await load({}, LATE);
+    const panel = controller.renderFor(ev());
+    expect(panel.dataset.archiveState).toBe('unscheduled');
+    expect(panel.textContent).not.toContain('running late');
+    expect(panel.querySelector('#archive-publish-now-e1')).not.toBeNull();
+  });
+
+  it("uses the database's due time, not a recomputed one", async () => {
+    const { controller } = await load({
+      e1: { state: 'pending', due_at: '2026-11-04T10:00:00Z' },
+    });
+    expect(controller.renderFor(ev()).textContent).toContain('4 Nov 2026, 18:00 (Brunei time)');
+  });
+
+  it('a row it cannot read is treated as no ledger state, never as a reason on screen', async () => {
+    const { controller } = await load({
+      e1: { state: 'something_new', reason: 'SELECT * FROM secrets' },
+    });
+    const panel = controller.renderFor(ev());
+    expect(panel.dataset.archiveState).toBe('scheduled');
+    expect(panel.textContent).not.toContain('secrets');
   });
 });
 
@@ -210,8 +388,8 @@ describe('archive controller: Per-event / Annual (choice)', () => {
     expect(panel.querySelector('#archive-listing-e1')).not.toBeNull();
   });
 
-  it('ticking calls set_archive_listing with true, remembers it, and flips the scheduled state', async () => {
-    const { controller, store } = make(client);
+  it('ticking calls set_archive_listing with true, asks the database again, and flips the scheduled state', async () => {
+    const { controller } = make(client);
     await controller.load([ev()]);
     const box = controller.renderFor(ev()).querySelector('#archive-listing-e1');
     box.checked = true;
@@ -224,8 +402,17 @@ describe('archive controller: Per-event / Annual (choice)', () => {
       'set_archive_listing',
       { p_org_id: 'org1', p_event_id: 'e1', p_list: true },
     ]);
-    expect(store.get('seduh.archiveListing.e1')).toBe('list');
+    await vi.waitFor(() =>
+      expect(client.calls.filter((c) => c[1] === 'archive_event_status')).toHaveLength(2),
+    );
     expect(controller.renderFor(ev()).querySelector('#archive-listing-e1').checked).toBe(true);
+    // a reload, even on another device, reads the saved choice from the database
+    const reloaded = make(client);
+    await reloaded.controller.load([ev()]);
+    expect(reloaded.controller.renderFor(ev()).querySelector('#archive-listing-e1').checked).toBe(
+      true,
+    );
+    expect(reloaded.controller.renderFor(ev()).dataset.archiveState).toBe('scheduled');
   });
 
   it('a refused choice leaves the box as it was and shows the reason from the hint', async () => {
@@ -238,7 +425,7 @@ describe('archive controller: Per-event / Annual (choice)', () => {
         },
       },
     });
-    const { controller, store } = make(client);
+    const { controller } = make(client);
     await controller.load([ev()]);
     const box = controller.renderFor(ev()).querySelector('#archive-listing-e1');
     box.checked = true;
@@ -249,12 +436,16 @@ describe('archive controller: Per-event / Annual (choice)', () => {
       ),
     );
     expect(controller.renderFor(ev()).querySelector('#archive-listing-e1').checked).toBe(false);
-    expect(store.size).toBe(0);
+    // nothing was saved, so the database still answers no choice
+    expect(client.ledger.e1).toBeUndefined();
   });
 
-  it('starts from the last choice saved on this device', async () => {
-    const { controller, store } = make(client);
-    store.set('seduh.archiveListing.e1', 'list');
+  it('starts from the choice the database holds, not from this device', async () => {
+    client = fakeClient({
+      entry: { allowed: true, enforced: true },
+      status: { e1: { state: 'pending', listing_choice: 'list' } },
+    });
+    const { controller } = make(client);
     await controller.load([ev()]);
     expect(controller.renderFor(ev()).querySelector('#archive-listing-e1').checked).toBe(true);
   });
@@ -289,9 +480,15 @@ describe('archive controller: Per-event / Annual (choice)', () => {
     expect(panel.querySelector('a, button')).toBeNull();
   });
 
-  it('keeps the remembered choice per event', async () => {
-    const { controller, store } = make(client);
-    store.set('seduh.archiveListing.e1', 'list');
+  it('keeps the saved choice per event', async () => {
+    client = fakeClient({
+      entry: { allowed: true, enforced: true },
+      status: {
+        e1: { state: 'pending', listing_choice: 'list' },
+        e2: { listing_choice: 'named_only' },
+      },
+    });
+    const { controller } = make(client);
     const other = ev({ id: 'e2', name: 'Other' });
     await controller.load([ev(), other]);
     expect(controller.renderFor(ev()).querySelector('#archive-listing-e1').checked).toBe(true);
@@ -307,6 +504,7 @@ describe('archive controller: Per-event / Annual (choice)', () => {
     await controller.load([ev()]);
     const panel = controller.renderFor(ev());
     expect(panel.dataset.archiveState).toBe('published');
+    expect(panel.querySelector('input')).toBeNull();
     expect(panel.querySelector('#archive-unpublish-e1')).toBeNull();
   });
 
@@ -319,6 +517,10 @@ describe('archive controller: Per-event / Annual (choice)', () => {
   });
 
   it('does not offer the tick box once the due time has passed (the choice would be closed)', async () => {
+    client = fakeClient({
+      entry: { allowed: true, enforced: true },
+      status: { e1: { state: 'pending' } },
+    });
     const { controller } = make(client, { now: () => new Date('2026-11-05T00:00:00Z').getTime() });
     await controller.load([ev()]);
     const panel = controller.renderFor(ev());

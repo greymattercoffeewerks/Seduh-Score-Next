@@ -297,10 +297,31 @@ describe('mountEventsScreen', () => {
         return builder;
       };
       const baseRpc = client.rpc;
-      client.rpc = (name, payload) =>
-        name === 'my_entitlements'
-          ? Promise.resolve({ data: { keys: { results_archive_optional: entry } }, error: null })
-          : baseRpc(name, payload);
+      client.rpc = (name, payload) => {
+        if (name === 'my_entitlements') {
+          return Promise.resolve({
+            data: { keys: { results_archive_optional: entry } },
+            error: null,
+          });
+        }
+        if (name === 'archive_event_status') {
+          // the member-readable ledger door (T-ARC.4c): no row for any event yet
+          return Promise.resolve({
+            data: payload.p_event_ids.map((id) => ({
+              event_id: id,
+              state: 'none',
+              due_at: null,
+              published: false,
+              listing_choice: null,
+              removed: false,
+              retrying: false,
+              reason: null,
+            })),
+            error: null,
+          });
+        }
+        return baseRpc(name, payload);
+      };
       return client;
     }
     async function mount(client) {

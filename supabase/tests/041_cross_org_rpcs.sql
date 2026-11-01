@@ -18,7 +18,7 @@
 -- is shown to list exactly the caller's own organisations, and a new RPC that takes one of these ids fails here
 -- until it is added to the matrix (or consciously exempted).
 begin;
-select plan(74);
+select plan(76);
 
 create schema e1;
 grant usage on schema e1 to anon, authenticated;
@@ -122,7 +122,8 @@ insert into e1.rpc (name, sql, org_only) values
   ('team_remove_member', 'select public.team_remove_member(e1.u(''@'',100), ''00000000-0000-0000-0000-000000000003''::uuid)', true),
   ('link_person_identity', 'select public.link_person_identity(e1.u(''@'',100), e1.u(''%'',17))', false),
   ('stage_archive_payload', 'select public.stage_archive_payload(gen_random_uuid(), e1.u(''@'',100), e1.u(''%'',1), ''{"podium":[{"name":"A"}]}''::jsonb)', false),
-  ('set_archive_listing', 'select public.set_archive_listing(e1.u(''@'',100), e1.u(''%'',1), true)', false);
+  ('set_archive_listing', 'select public.set_archive_listing(e1.u(''@'',100), e1.u(''%'',1), true)', false),
+  ('archive_event_status', 'select * from public.archive_event_status(e1.u(''@'',100), array[e1.u(''%'',1)])', false);
 
 update e1.rpc set org_arg = false where name = 'create_btc_match';
 -- Where the organisation's own call is stopped by a LATER rule of the function (the fixture is a pending heat, an
@@ -138,7 +139,7 @@ update e1.rpc set own_expect = case name
   when 'record_btc_tiebreak'         then 'P0001: record_btc_tiebreak: a tie-break applies to knockout matches only'
   when 'record_heat_time'            then 'P0002: CONFLICT: heat .* is pending now, expected timing'
   else 'ok' end;
-select is((select count(*)::int from e1.rpc), 28, 'the matrix covers 28 RPCs');
+select is((select count(*)::int from e1.rpc), 29, 'the matrix covers 29 RPCs');
 select is(
   (select coalesce(string_agg(r.name, ', '), 'none') from e1.rpc r
     where not exists (select 1 from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = r.name)),
@@ -199,7 +200,8 @@ reset role;
 -- the function's own guard speaking (and not an argument error, a missing row of the fixture, or success)
 create function e1.is_guard(code text, rpc text) returns boolean language sql immutable as $$
   select code ~ '^(42501|P0001): ' and code ~* ('(not found|does not belong|only an owner'
-    || case when rpc = 'link_person_identity' then '|row-level security policy for table "people"' else '' end || ')')
+    || case when rpc = 'link_person_identity' then '|row-level security policy for table "people"'
+                           when rpc = 'archive_event_status' then '|row-level security policy for table "archive_events"' else '' end || ')')
 $$;
 
 -- ============ every cross-organisation attempt is refused by the guard ============
