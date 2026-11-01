@@ -3,6 +3,7 @@ import {
   canAccess,
   currentTier,
   entitlementKeys,
+  isEnforced,
   limitFor,
   loadEntitlements,
   setEntitlements,
@@ -57,6 +58,35 @@ describe('canAccess with a snapshot', () => {
     expect(canAccess('btc_format')).toBe(true);
     setEntitlements({ tier: 'annual' });
     expect(currentTier()).toBeNull();
+  });
+});
+
+describe('isEnforced', () => {
+  it('is false with no snapshot, an entry without the field, or a key the snapshot omits', () => {
+    expect(isEnforced('results_archive_optional')).toBe(false);
+    setEntitlements(snap({ results_archive_optional: { allowed: true } }));
+    expect(isEnforced('results_archive_optional')).toBe(false);
+    expect(isEnforced('season_history')).toBe(false);
+  });
+
+  it('is true only for a boolean true the database sent, whatever `allowed` says', () => {
+    setEntitlements(snap({ results_archive_optional: { allowed: false, enforced: true } }));
+    expect(isEnforced('results_archive_optional')).toBe(true);
+    setEntitlements(snap({ results_archive_optional: { allowed: true, enforced: true } }));
+    expect(isEnforced('results_archive_optional')).toBe(true);
+    setEntitlements(snap({ results_archive_optional: { allowed: false, enforced: false } }));
+    expect(isEnforced('results_archive_optional')).toBe(false);
+    setEntitlements(snap({ results_archive_optional: { allowed: false, enforced: 'true' } }));
+    expect(isEnforced('results_archive_optional')).toBe(false);
+  });
+
+  it('does not change what canAccess answers', () => {
+    setEntitlements(snap({ results_archive_optional: { allowed: false, enforced: true } }));
+    expect(canAccess('results_archive_optional')).toBe(false);
+  });
+
+  it('throws on an unknown key', () => {
+    expect(() => isEnforced('nope')).toThrow(/unknown key/);
   });
 });
 
