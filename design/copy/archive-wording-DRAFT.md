@@ -175,7 +175,7 @@ if T-ARC.3 adds columns.
 Add to the "Things to know" list, and reconcile with the existing timing sentence (see the note):
 
 > - **Asking us to take your name off a published result, or to stop publishing yours.** Email our Data
->   Protection Officer, Grey Matter Coffee Werks (D29, Bangunan Lim Eng Ming, Kg Kiulap, Brunei Darussalam), at [OWNER: DPO email address]. We will acknowledge your request
+>   Protection Officer, Grey Matter Coffee Werks (D29, Bangunan Lim Eng Ming, Kg Kiulap, Brunei Darussalam), at greymatter.cw@outlook.com. We will acknowledge your request
 >   within 10 days. We will tell you what we can do and what the consequence is: for example, we can remove
 >   your name from the public archive entry, but we cannot change the organiser's own record of the event.
 >   If you took part in a Community event, tell us which one.
@@ -344,7 +344,7 @@ fills in the square brackets. This is the notice the Terms bullet asks the organ
 > - What is shown: the podium only, with each placed person's **name, cafe and placing** (and how many sets
 >   they got right). If you are not on the podium, you are not named in the archive.
 > - What is not shown: your phone number, your email, or your set-by-set marks.
-> - Want to be left off, or want something corrected? Tell us before the event, or email [DPO email address]
+> - Want to be left off, or want something corrected? Tell us before the event, or email greymatter.cw@outlook.com
 >   afterwards. We will reply within 10 days.
 >
 > More detail: [link to the Privacy page]. [Organiser name] runs this event; Seduh Score is run by Grey
@@ -466,7 +466,7 @@ listed so nobody mistakes the wording for settled law.
 **Fill (placeholders in the text above):**
 
 - [x] DPO name and postal address: filled 2026-11-01 as Grey Matter Coffee Werks, D29, Bangunan Lim Eng Ming, Kg Kiulap, Brunei Darussalam (an organisation named as the contact; the infokit allows the role to be outsourced or held by an existing person, p. 8-9). Confirm this is the wording you want, or name a person.
-- [ ] DPO email address (1g, 4). Decide whether it replaces the temporary contact address everywhere.
+- [x] DPO email address: filled 2026-11-01 as greymatter.cw@outlook.com (1g, 4). Still decide whether it replaces the temporary contact address everywhere.
 - [ ] The date issued: update `PRIVACY_UPDATED` and the date at the top of the Privacy page.
 - [ ] Organiser name and Privacy link in the participant notice (4), for each event it is used on.
 
