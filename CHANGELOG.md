@@ -1,3 +1,21 @@
+## Reconciliation and housekeeping: version-bump guard, leak item closed, Seduh ID owner checks, branch pruning · 2026-11-02
+
+**Task:** record what changed around the archive flips (#404, #405) so the repo, the cloud and the notes agree. Docs only: no migration, no app code, no cloud write (the Supabase MCP and the live API were used read-only).
+
+**Version-bump CI guard (#407, released in #408).** A `Version bump` job in `.github/workflows/ci.yml`, run only on pull requests whose base is `main`, backed by `tools/check-version-bump.mjs` (node and git only) and a vitest table. Rule: `package-lock.json` must agree with `package.json` (always), and if a shipped file changed (`src/**` except `*.md` and `*.test.js`, `public/**`, any `*.html`, `supabase/migrations/**`, `supabase/functions/**`, `vite.config.js`, `wrangler.jsonc`) the `version` must be strictly higher than the PR base's; docs, test, tooling and CI-only releases pass. Override: label the release PR `skip-version-check` and re-run the job (waives the version rule only). The base is pinned to `pull_request.base.sha`. It ran for the first time on release PR #408 and passed. Dependency-only changes to `package.json` are not counted as shipped (owner decision open; recommended to leave). Known limit: it cannot tell a comment-only `src/` change from a real one, so such a release needs the label or a patch bump. Reviews: code-reviewer found the base moving under the check (fixed); test-auditor's patch-level and bypass-token cases were added. The first failing path in real CI is still unproven (only run locally against the 3.4.1 drift range, where it fails).
+
+**`delete_test_event` leak: closed (#406).** The ROADMAP entry was stale. It was closed on 2026-10-11 by T-TEN.B6 (`20261011130000_tenancy_resolver_disclosure`, in the cloud); `supabase/tests/034_resolver_disclosure.sql` asserts a stranger gets the same refusal whether the organisation id is true or wrong.
+
+**Seduh ID Layer 1a owner checks: done.** The three open checks are closed: the live API exposes only `public` and `graphql_public` (an `app` profile request answers `PGRST106`), the Honor check of the roster country select passed, and the admin counts panel shows 17 (the backfill's 17 identities and links). See ROADMAP.
+
+**Reconciliation, 2026-11-02:** the repo has 98 migration files and the cloud has 98 migrations, and the names match one for one (compared by name; versions differ by design where `apply_migration` stamped its own time, as recorded earlier). `dev` and `main` are level (0 and 0) after release #408 and its fast-forward. `main` is at 3.5.0.
+
+**Housekeeping:** 45 merged remote branches and 50 merged local branches (and their idle worktrees) were deleted after proving each an ancestor of `main`; every deletion is recorded with its tip outside the repo, and the three unmerged branches (`feat/hero-event-photos`, `wip/focus-preservation-cup-taster`, `wip/kinetic-landing-page`) and `feat/password-recovery-organiser` were saved as git bundles first, then deleted. The remote has `main` and `dev` only. Process lapses recorded earlier stand: four sessions merged PRs without the owner's word (2026-10-27 to 28); briefs now stop at an open PR and the main session merges once the owner says CI is green.
+
+**Not verified:** the `Version bump` job's failure path and the `skip-version-check` label read in real CI; the archive pipeline has still published nothing (the ledger had 0 rows at the last check); one empty leftover folder under `.claude/worktrees/` is locked by Windows and is not a git worktree.
+
+---
+
 ## T-ARC.7 close: the gating keys flipped and the archive tick given its floor (switched on, nothing published yet) · 2026-11-02
 
 **Task:** Record the owner's key flips of 2026-11-02 and remove the one code comment they made untrue. Docs plus one comment in `pricingContent.js`: no migration, no behaviour change, no cloud write (the Supabase MCP was used read-only to check the figures below).
