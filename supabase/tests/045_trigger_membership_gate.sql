@@ -231,7 +231,10 @@ select is(
      from before_row_definers
     where src !~ 'refuse_non_member|is_org_member|errcode = ''42501'''
       -- not cross-reference checks: they act on org_members / stamp a column, and say nothing about other rows
-      and fn not in ('app.protect_last_owner', 'app.stamp_public_results_org')),
+      and fn not in ('app.protect_last_owner', 'app.stamp_public_results_org',
+        -- Supabase's own storage schema (shipped by the platform image, not by our migrations; it acts on storage
+        -- lifecycle state and touches no organisation's rows). Found 2026-11-02 when a newer image added it.
+        'storage.protect_active_lifecycle_states')),
   'none',
   'every SECURITY DEFINER BEFORE ROW trigger function has a membership gate or refuses with the standard 42501 (or is a named exception)');
 
