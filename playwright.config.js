@@ -155,5 +155,13 @@ export default defineConfig({
       dependencies: ['dev-archive'],
       use: { baseURL: 'http://127.0.0.1:5273' },
     },
+    {
+      // throwdown-event.spec.js (T-TD.1): a full 8-competitor Throwdown test event, console plus a projector and a phone,
+      // against the real local stack. Last, for the same shared-backend reason as the projects above.
+      name: 'dev-throwdown',
+      testMatch: /throwdown-event\.spec\.js/,
+      dependencies: ['dev-archive-ui'],
+      use: { baseURL: 'http://127.0.0.1:5273' },
+    },
   ],
 });

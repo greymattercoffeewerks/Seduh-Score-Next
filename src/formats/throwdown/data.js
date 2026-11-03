@@ -81,9 +81,15 @@ export function dataHandlers(client) {
 
 async function submit(type, payload, handlers) {
   const operationId = crypto.randomUUID();
-  await enqueueOperation(type, { p_operation_id: operationId, ...payload });
-  const result = await flushOutbox(handlers);
-  return { operationId, result };
+  const operation = await enqueueOperation(type, { p_operation_id: operationId, ...payload });
+  let result = await flushOutbox(handlers);
+  // A flush that was already running when this operation was queued can finish without having seen it. If the
+  // operation is still waiting (and the flush did not stop on a failure), take one more pass for it.
+  if (!result?.stopped && (await listAllOperations()).some((op) => op.id === operation.id)) {
+    result = await flushOutbox(handlers);
+  }
+  // the OUTBOX's id for the operation (what droppedErrorFor compares), not the database's idempotency key
+  return { operationId: operation.id, result };
 }
 
 export const startEvent = ({ orgId, eventId, mode, seed, slotCount, pairs }, handlers) =>

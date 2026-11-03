@@ -510,19 +510,18 @@ export async function mountThrowdownEventScreen(
             }),
             button(
               'Confirm walkover',
-              () =>
-                act(
+              () => {
+                const winnerSlotId = state.walkover.slotId;
+                state.walkover = null;
+                return act(
                   () =>
                     recordWalkover(
-                      {
-                        orgId: state.event.org_id,
-                        matchId: match.id,
-                        winnerSlotId: state.walkover.slotId,
-                      },
+                      { orgId: state.event.org_id, matchId: match.id, winnerSlotId },
                       handlers,
                     ),
                   { publish: true },
-                ),
+                );
+              },
               {
                 className: 'btn btn-primary tap-target',
                 key: `td-walkover-ok-${match.id}`,
