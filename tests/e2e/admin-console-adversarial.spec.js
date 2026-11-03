@@ -602,12 +602,16 @@ test.describe('the admin surface under attack (HTTP, real local stack)', () => {
     expect(orgs.body.filter((org) => org.slug.startsWith(`adv-${w.tag}`))).toEqual([]);
   });
 
-  test('SEDUH ID COUNTS (T-ID.C3): an admin at aal2 gets exactly one row of ten whole numbers and nothing else, and an organiser gets the plain admin refusal', async () => {
+  test('SEDUH ID COUNTS (T-ID.C3): an admin at aal2 gets exactly one row of fourteen whole numbers and nothing else, and an organiser gets the plain admin refusal', async () => {
     const got = await rpc('admin_seduh_id_counts', {}, { token: adminAal2 });
     expect(got.status).toBe(200);
     expect(got.body).toHaveLength(1);
     expect(Object.keys(got.body[0]).sort()).toEqual(
       [
+        'feed_processed',
+        'feed_queued',
+        'feed_rejected',
+        'feed_undone',
         'identities_active',
         'identities_from_archive',
         'identities_from_roster',
