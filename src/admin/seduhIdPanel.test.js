@@ -23,6 +23,10 @@ const COUNTS = Object.freeze({
   people_total: 40,
   people_linked: 31,
   people_blocked: 3,
+  feed_queued: 5,
+  feed_processed: 7,
+  feed_rejected: 1,
+  feed_undone: 2,
 });
 const ok = (data) => ({ data, error: null });
 const refused = (hint, extra = {}) => ({ data: null, error: { hint, ...extra } });
@@ -52,7 +56,7 @@ afterEach(() => {
 });
 
 describe('readCounts', () => {
-  it('accepts exactly one row of ten whole non-negative numbers', () => {
+  it('accepts exactly one row of fourteen whole non-negative numbers', () => {
     expect(readCounts([COUNTS])).toEqual(COUNTS);
     expect(readCounts([{ ...COUNTS, extra_name: 'Ana' }])).toEqual(COUNTS); // an extra key is never drawn
   });
@@ -71,7 +75,7 @@ describe('readCounts', () => {
     expect(readCounts(data)).toBeNull();
   });
 
-  it('knows exactly the ten documented figures', () => {
+  it('knows exactly the fourteen documented figures', () => {
     expect(COUNT_KEYS.slice().sort()).toEqual(Object.keys(COUNTS).sort());
   });
 });
@@ -101,6 +105,10 @@ describe('the Seduh ID panel', () => {
     expect(value('Linked to an identity')).toBe('31');
     expect(value('Not linked')).toBe('9');
     expect(value('Blocked from linking by the owner')).toBe('3');
+    expect(value('Waiting for the owner to review')).toBe('5');
+    expect(value('Reviewed and run')).toBe('7');
+    expect(value('Declined by the owner')).toBe('1');
+    expect(value('Undone after a run')).toBe('2');
     expect(text()).not.toContain('Loading…');
   });
 
@@ -143,7 +151,7 @@ describe('the Seduh ID panel', () => {
     expect(value('Not linked')).toBe('40');
   });
 
-  it('never draws a figure that is not one of the ten, even if the function started returning one', async () => {
+  it('never draws a figure that is not one of the fourteen, even if the function started returning one', async () => {
     mount(ok([{ ...COUNTS, display_name: 'Ana Secret', phone: '+6737000000', org_id: 'x' }]));
     await flush();
     expect(text()).not.toMatch(/Ana Secret|\+6737000000/);

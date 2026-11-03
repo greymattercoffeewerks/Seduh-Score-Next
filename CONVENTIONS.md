@@ -328,6 +328,62 @@ listed. A new function that writes `people.global_person_id` must be added to th
    no tombstone points at them; an identity that gained a person since (the link function is legitimate) is kept and counted. Identities that
    existed before the run, and links made by anyone else, are never touched. Deleting an identity is irreversible.
 
+### Seduh ID feed: the owner's runbook (T-ID.D1, 20261103100000 and 20261103110000)
+
+The archive feed (Layer 1b) is how an identity gets created from a published podium after the one-time B4 backfill. It is **review-queue
+first**: a publish only puts the result's id on a queue, and the owner decides what runs. Everything is in the `app` schema, owned by the
+database owner; no API role (`service_role` included) can read or write the queue or the mode or call a feed function, and each function
+also refuses an API session by name (as B4's does).
+
+- **`app.seduh_feed_mode`** (one row): `off` (the default; nothing is queued and the run is refused), `queue` (the first live mode) or `auto`
+  (built, off), plus `org_daily_cap` (8) and `global_daily_cap` (40) for `auto`. Change it with owner SQL (`supabase/scripts/seduh_feed_mode.sql`)
+  and record the change in the CHANGELOG or a note: nothing writes an audit row for it.
+- **`app.seduh_feed_queue`**: one row per published podium of a non-test event (`result_id`, `org_id`, `state` = `queued` / `processed` /
+  `rejected` / `undone`, times, and after a run the uuids of the identities created and the people linked). Ids only: no phone, name, cafe
+  or free text (`last_error` is a SQLSTATE). A changed payload on a result already dealt with puts it back in the queue (the lists undo needs are kept);
+  an identical re-save does not. A result with no `podium` (a stub) is never queued. There is no foreign key, so the row outlives the result.
+- **The trigger** `trg_public_results_seduh_feed` is an **AFTER ROW** trigger on insert and on update of `payload`, `SECURITY DEFINER`,
+  `search_path ''`, and **fail open**: its body swallows every error, so a publish never fails because of the feed. It is AFTER, not BEFORE, so
+  test `045`'s guard (SECURITY DEFINER BEFORE ROW triggers, which run ahead of row-level security) does not match it; `045` is run to confirm.
+  Because an error is swallowed silently, `app.seduh_feed_review()` reports `podium_results_not_queued`.
+- **The creating rules are B4's, podium only** (`app.seduh_feed_slots_internal` / `app.seduh_feed_plan_internal` are B4's matching with the
+  `standings` array left out; B4's functions are pushed and unedited). Test `071` pins that the two plans agree for the same podium, and
+  that the leftover identities and links of a run are the same as B4's for the same podiums. Same skips (test event, bad phone, owner-blocked,
+  merge cycle, ambiguous or unmatched name), same reuse (an `opted_out` identity is linked but inert and never un-opted; a tombstone resolves
+  to the kept identity; an existing identity is never overwritten), same refusal to overwrite a link. A phone change after creation nulls the
+  link (the existing guard) and nothing here re-links: a processed result is not run again unless a changed payload re-queues it.
+- **THE FORGERY GAP IS NOT CLOSED.** Members write payloads, entries and people, and nothing validates a payload against the scores, so a member
+  can stage a non-test event, a person holding any phone and a podium naming them, and publish it. That is why `queue` is first: the review
+  below is the control. `auto` removes the human; its caps only bound the damage. At Layer 1 an identity is unreadable and cannot be claimed
+  (Layer 2 needs proof of control), so the harm is pollution and a stronger phone-existence signal, not exposure. Do not describe it as closed.
+
+**Order of the owner's rollout** (a separate approval; merging the PR does not touch the cloud database): (1) check `app` is still not an exposed schema;
+(2) push the two migrations (`apply_migration`; compare `list_migrations`); (3) leave the mode `off`, check the review answers and the admin
+console shows the four queue counts (zeros); (4) publish the Seduh ID wording (the D1d sentence in `design/copy/seduh-id-wording-DRAFT.md` 1g), then
+`update app.seduh_feed_mode set mode = 'queue'`; (5) review, then run.
+
+**Review and run** (`supabase/scripts/`): `seduh_feed_review.sql` (read only) prints, per queued result, the organisation, the event and what a run
+would create, reuse and skip, plus `by_org`, the last-24-hours figure and the queue counts, ids and counts only. Check each organisation and event against
+events you know are real, **reject** what you do not recognise (`seduh_feed_mode.sql`, block 2), and put the trusted result ids into
+`seduh_feed_run.sql` (`app.seduh_identity_feed(uuid[])`: no "all", refused while `off`; it ends in ROLLBACK until you change it to COMMIT). A run is
+planned over all the chosen ids together, exactly as B4's restricted run is. The report holds `created_identity_ids` and `linked_person_ids`; the same
+lists are recorded on each queue row.
+
+**Undo** (`seduh_feed_undo.sql`, `app.seduh_feed_undo(uuid[], boolean)`, dry run first): for the chosen processed rows it unlinks the recorded people who are
+still linked to an identity one of those rows created, and deletes a created identity only if it is still `archive`/`active`, nobody is linked and no tombstone
+points at it; an identity that gained a person since, was opted out since, or has a tombstone pointing at it is kept and counted. The rows become `undone`.
+Deleting an identity is irreversible: reject before running rather than undo after.
+
+**`auto`** (do not switch it on before the owner has answered the open points in the build brief: the opt-out procedure and its time limit, who reviews the queue
+and how often, the DPO address): `app.seduh_feed_auto_run()` does nothing unless the mode is `auto`; it works the oldest queued results one at a time, each in its
+own sub-transaction, and leaves a result queued when its new identities would take its organisation over `org_daily_cap`, or the platform over `global_daily_cap`,
+counting what was created in the last 24 hours (a result processed twice can over-count, never under-count; one result that alone exceeds the cap waits for the
+owner). It is **not scheduled** by the migration and `archive_tick` is not edited: add a `pg_cron` job for it as a separate owner step.
+
+**Retention** (owner decision 9): queue rows older than 12 months can be purged (`seduh_feed_mode.sql`, block 3); a purge also drops the lists undo needs for those rows.
+**Console:** `admin_seduh_id_counts()` adds four integers (`feed_queued`, `feed_processed`, `feed_rejected`, `feed_undone`); the Seduh ID screen shows them. Counts only.
+**A new function that writes `people.global_person_id`** must be added to the "only writers" list in test `062` (the feed's creating step and undo are there).
+
 ### Archive pipeline: the tick (T-ARC.1, 20261101100000)
 
 `app.archive_events` (one row per event, bare uuids, no foreign key) and `app.archive_tick(p_enqueue_from)` are database-owned: no API role,
