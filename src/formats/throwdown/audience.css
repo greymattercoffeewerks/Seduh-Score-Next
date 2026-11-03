@@ -1,0 +1,148 @@
+/*
+ * Throwdown audience surfaces: the phone view (viewerBody.js, paper theme, 360px first) and the venue display
+ * (projectorScreens.js, stage theme, sized from --stage-fit like every screen in core/stageDisplay.css's frame).
+ * Token-only. Winners are marked in words as well as the heavy outline. Do not write a slash directly after an
+ * asterisk in this comment.
+ */
+
+/* ---------- phone ---------- */
+.td-phone {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.td-phone h2 {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+}
+
+.td-phone-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.td-phone-vs,
+.td-phone-detail {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.td-phone-detail {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.td-phone-name[data-winner='true'] {
+  font-weight: var(--font-weight-bold);
+}
+
+.td-phone-champion {
+  border: var(--border-strong) solid var(--color-accent);
+  text-align: center;
+}
+
+.td-phone-kicker {
+  margin: 0;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: var(--font-weight-bold);
+}
+
+.td-phone-champion-name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- venue display ---------- */
+.td-stage-now,
+.td-stage-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: calc(1.5 * var(--stage-fit));
+}
+
+.td-stage-now {
+  grid-template-columns: repeat(auto-fit, minmax(24vw, 1fr));
+  margin-top: calc(2 * var(--stage-fit));
+}
+
+.td-stage-match {
+  display: flex;
+  flex-direction: column;
+  gap: calc(0.6 * var(--stage-fit));
+  padding: calc(1.6 * var(--stage-fit)) 1.2vw;
+  background: var(--color-surface);
+  border: var(--border-hairline) solid var(--color-border);
+  min-width: 0;
+}
+
+.td-stage-side {
+  display: flex;
+  align-items: baseline;
+  gap: 1vw;
+  min-width: 0;
+}
+
+.td-stage-side[data-winner='true'] {
+  font-weight: var(--font-weight-bold);
+}
+
+.td-stage-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: max(1rem, calc(3.4 * var(--stage-fit)));
+}
+
+.td-stage-votes {
+  font-family: var(--font-display);
+  font-size: max(1rem, calc(3.4 * var(--stage-fit)));
+}
+
+.td-stage-chip,
+.td-stage-note {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  font-size: max(0.75rem, calc(2.2 * var(--stage-fit)));
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0 0.6vw;
+  align-self: center;
+}
+
+.td-stage-note {
+  align-self: flex-start;
+}
+
+.td-stage-rounds {
+  display: flex;
+  gap: 2vw;
+  margin-top: calc(3 * var(--stage-fit));
+  overflow: hidden;
+}
+
+.td-stage-round {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.td-stage-round-title {
+  margin: 0 0 calc(1.2 * var(--stage-fit));
+  color: var(--color-text-secondary);
+  font-size: max(0.875rem, calc(2.6 * var(--stage-fit)));
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}

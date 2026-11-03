@@ -35,7 +35,11 @@ const KEY_NAMES = Object.freeze({
   events_open: 'One open event at a time',
   event_window_lock: 'Closing events after the Per-event window ends',
 });
-const FORMAT_NAMES = Object.freeze({ cup_taster: 'Cup Taster', btc: 'BTC', throwdown: 'Throwdown' });
+const FORMAT_NAMES = Object.freeze({
+  cup_taster: 'Cup Taster',
+  btc: 'BTC',
+  throwdown: 'Throwdown',
+});
 
 export function keyName(key) {
   return typeof key === 'string' && Object.hasOwn(KEY_NAMES, key)

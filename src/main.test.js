@@ -178,6 +178,10 @@ vi.mock('./formats/btc/outboxHandlers.js', () => ({
   btcOutboxHandlers: (...args) => btcOutboxHandlers(...args),
   btcOperationLabels,
 }));
+vi.mock('./formats/throwdown/outboxHandlers.js', () => ({
+  throwdownOutboxHandlers: () => ({}),
+  throwdownOperationLabels: {},
+}));
 const stopTrackingInputModality = vi.fn();
 const trackInputModality = vi.fn(() => stopTrackingInputModality);
 vi.mock('./core/inputModality.js', () => ({
@@ -351,7 +355,7 @@ describe('mountApp routing', () => {
     expect(findEvent).toHaveBeenCalledTimes(2);
   });
 
-  it('passes both configured formats to the events screen as formatOptions', async () => {
+  it('passes every configured format to the events screen as formatOptions', async () => {
     stubScreen(mountEventsScreen, 'EVENTS_SCREEN');
     await startApp();
     expect(mountEventsScreen).toHaveBeenCalledWith(
@@ -360,6 +364,7 @@ describe('mountApp routing', () => {
         formatOptions: [
           { value: 'cup_taster', label: 'Cup Taster' },
           { value: 'btc', label: 'BTC' },
+          { value: 'throwdown', label: 'Throwdown' },
         ],
       }),
     );

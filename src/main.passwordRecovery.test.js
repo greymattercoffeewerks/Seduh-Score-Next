@@ -35,6 +35,10 @@ vi.mock('./formats/btc/outboxHandlers.js', () => ({
   btcOutboxHandlers: () => ({}),
   btcOperationLabels: {},
 }));
+vi.mock('./formats/throwdown/outboxHandlers.js', () => ({
+  throwdownOutboxHandlers: () => ({}),
+  throwdownOperationLabels: {},
+}));
 vi.mock('./core/team.js', () => ({ canManageTeam: () => Promise.resolve(false) }));
 // The real client is built lazily by getSupabase(); this records what the address bar held at that moment
 // (only the one test that gives mountApp no client of its own uses it).

@@ -11,11 +11,59 @@
 -- unchanged (it still opens with refuse_non_member, still fails closed: an unknown format is capped as Cup Taster).
 --
 -- rollback:
---   restores the previous body of app.check_event_entry_cap (btc exempt, everything else capped as Cup Taster) and removes
---   the five keys (their caps first).
---     delete from app.entitlement_caps where key = 'throwdown_participants';
---     delete from app.entitlement_keys where key in ('throwdown_participants','throwdown_redemption','throwdown_revival','throwdown_lucky_loser','throwdown_latte_art');
---     (then re-run the B3 body: supabase/migrations/20261023120000_entitlement_enforcement_hooks.sql, app.check_event_entry_cap)
+--   delete from app.entitlement_caps where key = 'throwdown_participants';
+--   delete from app.entitlement_keys where key in ('throwdown_participants', 'throwdown_redemption', 'throwdown_revival', 'throwdown_lucky_loser', 'throwdown_latte_art');
+--   create or replace function app.check_event_entry_cap()
+--   returns trigger
+--   language plpgsql
+--   security definer
+--   set search_path = ''
+--   as $$
+--   declare
+--     v_org    uuid;
+--     v_format text;
+--     v_key    text;
+--     v_limit  int;
+--   begin
+--     v_org := app.org_id_for_event_internal(new.event_id);
+--     perform app.refuse_non_member(v_org, 'event_entries');
+--   
+--     -- only an insert of an active entry, or a reinstate (withdrawn true to false), adds a participant
+--     if new.withdrawn then
+--       return new;
+--     end if;
+--     if tg_op = 'UPDATE' and not old.withdrawn then
+--       return new;
+--     end if;
+--     if not app.entitlement_api_caller() then
+--       return new;
+--     end if;
+--   
+--     select e.format into v_format from public.events e where e.id = new.event_id;
+--     -- events.format is free text, and the app treats every format it does not know as Cup Taster (main.js sends only
+--     -- 'btc' to the BTC screens), so the cap is keyed the other way round: only the one format whose screens do not use
+--     -- event_entries ('btc', routed by exact match in main.js) is exempt (guess_the_bean has its own tables and no events rows); anything else (a typo, another case, a future format that has not yet declared
+--     -- its own key) is capped as Cup Taster. A new format adds its own key and its own branch here in its first commit.
+--     v_key := case when v_format = 'btc' then null else 'cup_taster_participants' end;
+--     if v_key is null then
+--       return new;
+--     end if;
+--   
+--     -- the roster can be open on several devices: count and decide under one lock per event
+--     perform pg_advisory_xact_lock(hashtext('entitlement_cap:' || new.event_id::text));
+--   
+--     v_limit := app.entitlement_limit(v_org, v_key, new.event_id);
+--     if v_limit is null then
+--       return new;
+--     end if;
+--     if (select count(*) from public.event_entries x
+--          where x.event_id = new.event_id and not x.withdrawn and x.id <> new.id) >= v_limit then
+--       raise exception 'entitlement_cap_reached'
+--         using errcode = '42501', hint = 'entitlement_cap_reached', detail = v_key;
+--     end if;
+--     return new;
+--   end;
+--   $$;
 
 do $seed$
 declare
