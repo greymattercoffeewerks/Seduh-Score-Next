@@ -1,8 +1,20 @@
-## T-TD.1 Throwdown core knockout: built and in review, PR into `dev`; cloud migrations NOT yet pushed · 2026-11-03
+## T-TD.1.9 Throwdown: the 3rd place match after a walkover: built and in review, PR into `dev`; migration NOT yet in the cloud · 2026-11-03
+
+**Task:** owner decision (2026-11-03): play the 3rd place match whenever BOTH semi-final losers exist and are active (`event_entries.withdrawn` is false). Before, `app.td_advance` made none if any semi-final was a bye or a walkover.
+
+**State, plainly:** built and tested locally; PR into `dev`; the owner says when CI is green and the main session merges, releases and applies the migration. **Not in the cloud:** `20261103140000_throwdown_third_place_walkover.sql` (a new migration; the four T-TD.1 migrations are already in the cloud and were not edited). It replaces only the body of `app.td_advance`; apply it with `apply_migration`, then compare `list_migrations`. The version is not bumped here.
+
+**The rule now:** a walkover no longer blocks the match (its loser is the other slot's competitor); a bye still does (a bye match has no loser); a withdrawn loser blocks it, a withdrawn winner does not. The usual real-world walkover, where the no-show is also withdrawn on the roster, therefore still gets no 3rd place match; an organiser who records a walkover without withdrawing the no-show gets the match. Idempotent as before (the round is only made when the latest main round is decided and has no successor); the 3rd place match and the Final are made together and are live at once. The decision is taken once, when the semi-finals complete.
+
+**Files:** the migration (rollback block restores the 20261103120000 body, run and verified inside a rolled-back transaction); `supabase/tests/072_throwdown.sql` (139 asserts, up from 116: walkover semi-final, bye semi-final (existing 5-competitor case), withdrawn loser, withdrawn winner, withdrawn no-show, two walkover semi-finals, a direct second run of `app.td_advance`, and the old "no 3rd place after a walkover" assertion reversed); `src/formats/throwdown/bracket.test.js` (a real walkover semi-final, 3rd place and Final); the Playwright event now has a walkover in the quarter-finals AND the semi-finals and checks the 3rd place match was played; stale lines fixed in this file, `ROADMAP.md` and `src/formats/throwdown/CLAUDE.md`. No JS predicts the rule (the bracket is derived from rows), so none needed changing.
+
+**Reviews:** schema-guardian (clean; rollback text identical to the old body), security-reviewer (clean), scoring-auditor (no Important; test-gap nits fixed), test-auditor (4 Important test gaps, all fixed: the withdrawn check is about losers only, withdrawn no-show, two walkovers, advancement re-run directly; plus a mislabelled vitest case and an e2e assertion), code-reviewer (1 Important: this entry was missing, now written; stale comment fixed). offline-sync-auditor not needed (no outbox change). Verified: full pgTAP suite, vitest, eslint, prettier, Playwright `dev-throwdown`.
+
+## T-TD.1 Throwdown core knockout: built and in review, PR into `dev`; migrations now in the cloud · 2026-11-03
 
 **Task:** T-TD.1 (ROADMAP "Throwdown (third format) — Phase TD.1 Core"; tasks T-TD.1.1 to .8) on branch `claude/throwdown-td1-core-d41fad`. Throwdown is the third format: a single-elimination knockout core with entitlement keys, schema, RPCs, pure modules, data layer, organiser console, projector and phone bodies, a printable organiser results page, and a full 8-competitor test event.
 
-**State, plainly:** built and tested locally; PR into `dev` opened; the owner says when CI is green and the main session merges. **Not in the cloud:** `20261103101000` (entitlement keys), `20261103111000` (tables), `20261103120000` (RPCs) and `20261103130000` (window lock) are repo-only. After the merge they must be pushed with the Supabase MCP's `apply_migration`; Throwdown does not work against the cloud until then.
+**State, plainly:** built and tested locally; PR into `dev` opened; the owner says when CI is green and the main session merges. **In the cloud (updated 2026-11-03):** `20261103101000` (entitlement keys), `20261103111000` (tables), `20261103120000` (RPCs) and `20261103130000` (window lock) were applied to the cloud project by the main session after the release (#416, #417, v3.6.0).
 
 **Decisions (the spec is silent or left them open; the owner may overrule):**
 
@@ -11,7 +23,7 @@
 - Any judge count is accepted. Confirm is disabled while votes are level; an extra tap resolves an even panel (Q5).
 - Competitor status is `event_entries.withdrawn`, so Q8b can be settled later without a schema change.
 - No call site branches on tier (D14).
-- No third-place match when either semi-final was a bye or a walkover (the loser may have withdrawn).
+- No third-place match when either semi-final was a bye or a walkover (the loser may have withdrawn). **Superseded 2026-11-03 by T-TD.1.9:** a walkover no longer blocks it; see the T-TD.1.9 entry.
 - Cross-check (spec section 11): `core/ranking` and `core/advancement` cannot express a knockout. Both take one ranked list and a cutoff; a knockout has per-match winners that feed the next round. Advancement therefore stays in `src/formats/throwdown/` and in the SQL RPC that writes it. The one generic primitive lifted is `core/seededShuffle.js`, which Liga heats and the lucky-loser draw can reuse. Bracket layout stays Throwdown-only until a second knockout format exists. No other `core/` file was edited.
 
 **Files:** the four migrations above; `supabase/tests/072_throwdown.sql` (116 asserts); `040` (34 tables) and `041` (35 RPCs) matrices; count updates in `052`, `056`, `057` and `069`; `src/core/seededShuffle.js`; `src/formats/throwdown/*` (votes, bracket, seeding, modules, data, liveSession, outboxHandlers, eventScreen, resultsScreen, viewerBody, projectorScreens and projectorBody, words); `main.js` and `liveSurfaces.js` wiring; Playwright project `dev-throwdown`.
@@ -39,7 +51,7 @@
 **Follow-ups (ROADMAP, TD.1 status; none block TD.1):**
 
 - Owner decision: repeat byes. With an odd number of winners, the last one gets a bye in every round; the Round 1 bye competitor can get a second bye and reach the Final having played one match (5 competitors). Spec section 5 is silent.
-- Owner decision: third place after a walkover or bye (today none is made).
+- Owner decision: third place after a walkover or bye. **Decided 2026-11-03 and built as T-TD.1.9:** played whenever both semi-final losers exist and are active (a walkover no longer blocks it; a bye or a withdrawn loser still does).
 - Owner decision: a server cap on `judge_count` (today advisory).
 - Q8b (withdrawn competitor and the 8-player cap): open, no schema change needed either way.
 - Corrections after a confirm (wrong winner tapped): not in TD.1. A reopen must also undo the next round if nothing in it has started; design with the owner.
@@ -50,6 +62,18 @@
 - Public results and the formatted report are TD.2 (archive write and PDF). TD.1 ships an organiser-facing printable results page only.
 
 **Working tree at close:** five files are modified and not committed on this branch (`CLAUDE.md`, `ROADMAP.md`, `src/core/seededShuffle.js`, `src/formats/throwdown/CLAUDE.md`, `src/formats/throwdown/eventScreen.js`). They must be committed in the PR; this entry does not cover them as separate changes.
+
+## v3.6.1: contact and Data Protection Officer address is hello@seduhscore.com; Seduh ID opt-out time limits published · 2026-11-04
+
+**What the number covers:** the one public contact address, `CONTACT_EMAIL` (and the app's `SEDUH_SCORE_EMAIL`, which a test pins to it), changes from the temporary Outlook address to `hello@seduhscore.com`, which forwards to the owner's mailbox through Cloudflare Email Routing (the owner set it up and tested it on 2026-11-04); the Privacy page's Seduh ID opt-out now promises acknowledgement within 10 days and completion within 30 days (#419); and the Seduh ID feed rollout record (#418). A patch: wording and one address. **Not done:** replies still go out from the owner's own mailbox, not from `hello@`; the drafts under `design/copy/` still show the old address as history.
+
+## T-ID.D1 rollout: feed migrations pushed, mode set to `queue` (nothing queued yet) · 2026-11-03
+
+**Done, each on the owner's approval ("Do it"), in the order the runbook gives:** (1) `app` re-checked as not exposed (live API: `PGRST106`, only `public` and `graphql_public`; the cloud had neither migration); (2) the two migrations pushed with the Supabase MCP, comments stripped as before, so not byte-identical to the repo files, names matching: `20261103100000_seduh_feed` is cloud `20261103135639` and `20261103110000_admin_seduh_id_counts_feed` is cloud `20261103135702`; (3) verified after the push: mode row `off` with caps 8 and 40, queue empty, the enqueue trigger present, all nine new `app` functions present, no API role (`anon`, `authenticated`, `service_role`, `authenticator`) able to execute them or holding a grant on the two new tables, `admin_seduh_id_counts` executable by `authenticated` only (admin-gated inside), the 17 B4 identities untouched; (4) mode set to `queue` by owner SQL at 2026-11-03 13:57 UTC (nothing audits that change; this entry is the record); (5) dry run `app.seduh_feed_review()`: 0 queued, 0 processed, 0 rejected, 0 undone, and `podium_results_not_queued: 1`.
+
+**State, plainly:** the feed is armed in `queue` mode and has created nothing. The one published podium predates the trigger and is not queued; the next Community publish should queue one row. **Not done:** the first real queued row has not been seen; `auto` is off and not scheduled. **Owed:** review the queue after each publish; the DPO address, opt-out procedure and who reviews the queue before `auto`.
+
+**Reviews:** none (records only). Rollback if wanted: `update app.seduh_feed_mode set mode = 'off';` stops queueing at once.
 
 ## v3.5.1: Seduh ID feed released, Privacy sentence published · 2026-11-03
 

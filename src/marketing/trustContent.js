@@ -7,9 +7,9 @@
 // Inline markup, parsed by trustScreen.js's renderInline (never innerHTML):
 //   **bold**   and   [link text](/path/)
 //
-// The contact address is ONE constant. It is temporary until a
-// hello@seduhscore.com mailbox exists; swap it here, and only here, when it does.
-export const CONTACT_EMAIL = 'greymatter.cw@outlook.com';
+// The contact address is ONE constant, and it is also the Data Protection Officer's address. hello@seduhscore.com
+// forwards to the owner's mailbox (Cloudflare Email Routing, tested 2026-11-04); change it here, and only here.
+export const CONTACT_EMAIL = 'hello@seduhscore.com';
 const EMAIL = `[${CONTACT_EMAIL}](mailto:${CONTACT_EMAIL})`;
 
 export const PRIVACY_UPDATED = '3 November 2026';
@@ -219,7 +219,7 @@ export const TRUST_PAGES = [
           'Deleting deletes what we can find by name, phone or email. Tell us which events you took part in to make sure we get everything.',
           '**Past results keep the name as it was entered for that event.** Each event entry stores the name and cafe as they were on the day, so a result is not rewritten later. If you want a name removed or changed from a past published result, tell us and we will handle it with the organiser.',
           `**Asking us to take your name off a published result, or to stop publishing yours.** Email our Data Protection Officer, Grey Matter Coffee Werks (D29, Bangunan Lim Eng Ming, Kg Kiulap, Brunei Darussalam), at ${EMAIL}. We will acknowledge your request within 10 days. We will tell you what we can do and what the consequence is: for example, we can remove your name from the public archive entry, but we cannot change the organiser’s own record of the event. If you took part in a Community event, tell us which one.`,
-          '**Asking us to stop using your Seduh ID record.** Email us and we will mark your record as opted out. We remove the name from it and stop using it. **We keep the phone number on that record** so that we can recognise it and honour your request; without it, a later result with the same number would create the record again. It is used for nothing else. Organisers’ own registries are separate: ask the organiser, or us, to remove those as above.',
+          '**Asking us to stop using your Seduh ID record.** Email us and we will acknowledge your request within 10 days and complete it within 30 days of receiving it. We will mark your record as opted out, remove the name from it and stop using it. **We keep the phone number on that record** so that we can recognise it and honour your request; without it, a later result with the same number would create the record again. It is used for nothing else. Organisers’ own registries are separate: ask the organiser, or us, to remove those as above.',
           'Guess the Bean sessions can be ended or reset by whoever created them, which permanently removes the guesses and contact details. If you took part and want yours removed, email us.',
         ],
       },

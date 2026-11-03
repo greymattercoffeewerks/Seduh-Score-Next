@@ -10,12 +10,13 @@
 --   * votes are rows, level votes cannot be confirmed, the majority wins, a decided match takes no more taps;
 --   * a FULL 8-competitor event to a champion: R1 (4 matches) -> R2 (2) -> 3rd place + Final live together -> done,
 --     with winners derived from the vote rows (td_match_results) and nothing projected ahead of the results;
---   * an odd field (a bye is decided at once and advances), a walkover (its own result kind, no 3rd place match when a
---     semi-final was one), and idempotent advancement (a repeated confirm creates no second round);
+--   * an odd field (a bye is decided at once and advances), a walkover (its own result kind; a walkover semi-final still gets a
+--     3rd place match, a bye or a withdrawn loser does not), and idempotent advancement (a repeated confirm, and a direct re-run
+--     of advancement, create no second round);
 --   * nobody writes a td_* table directly, a non-member reads zero rows and every function answers "event not found",
 --     every parent column is frozen, and a pair match cannot take a third slot.
 begin;
-select plan(116);
+select plan(139);
 
 create schema t072;
 grant usage on schema t072 to anon, authenticated;
@@ -80,11 +81,16 @@ insert into events (id, org_id, format, name, is_test) values (t072.u(170), t072
 insert into events (id, org_id, format, name) values
   (t072.u(180), t072.u(100), 'throwdown', 'Throwdown leader'),
   (t072.u(190), t072.u(100), 'throwdown', 'Throwdown replay'),
-  (t072.u(195), t072.u(100), 'throwdown', 'Throwdown no third place');
+  (t072.u(195), t072.u(100), 'throwdown', 'Throwdown no third place'),
+  (t072.u(200), t072.u(100), 'throwdown', 'Throwdown walkover semi'),
+  (t072.u(201), t072.u(100), 'throwdown', 'Throwdown withdrawn loser'),
+  (t072.u(202), t072.u(100), 'throwdown', 'Throwdown withdrawn winner'),
+  (t072.u(203), t072.u(100), 'throwdown', 'Throwdown withdrawn no-show'),
+  (t072.u(204), t072.u(100), 'throwdown', 'Throwdown two walkovers');
 -- competitors: event 110 -> entries 1..8 (ids 1101..1108), 120 -> 5, 130 -> 6, 140 -> 4, 210 -> 2
 insert into event_entries (id, event_id, display_name)
 select t072.u(e.ev * 10 + n), t072.u(e.ev), 'P' || n
-  from (values (110, 8), (120, 5), (130, 6), (140, 4), (170, 2), (180, 2), (190, 2), (195, 4), (210, 2)) e(ev, cnt), generate_series(1, 8) n
+  from (values (110, 8), (120, 5), (130, 6), (140, 4), (170, 2), (180, 2), (190, 2), (195, 4), (200, 4), (201, 4), (202, 4), (203, 4), (204, 4), (210, 2)) e(ev, cnt), generate_series(1, 8) n
  where n <= e.cnt;
 
 -- reads the winner's display name of a match by position (null while undecided)
@@ -285,7 +291,57 @@ select is((select result_kind from td_matches where id = t072.m(140, 1, 1)) || '
 select t072.contains(t072.as_user(t072.u(1), format('select public.td_cast_vote(gen_random_uuid(), %L, %L, %L)', t072.u(100), t072.m(140, 1, 1), t072.s(140, 1, 1, 1))),
   '%td_match_decided%', 'no taps after a walkover');
 select is(t072.decide(140, 1, 2, 1), 'ok', 'the other semi-final is played');
-select is(t072.rounds(140), '1:main:2 2:main:1', 'no 3rd place match when a semi-final ended in a walkover');
+select is(t072.rounds(140), '1:main:2 2:third_place:1 3:main:1', 'a semi-final decided by walkover still gets a 3rd place match: both losers exist and are active');
+
+-- ============ the 3rd place match after a walkover (owner decision 2026-11-03) ============
+select is(t072.start(200, 'random', 'seed-200', array[1,2,3,4]), 'ok', 'four competitors start');
+select is(t072.as_user(t072.u(1), format('select public.td_record_walkover(gen_random_uuid(), %L, %L, %L)', t072.u(100), t072.m(200, 1, 1), t072.s(200, 1, 1, 2))), 'ok',
+  'semi-final 1 is a walkover: the second competitor advances');
+select is(t072.decide(200, 1, 2, 1), 'ok', 'semi-final 2 is played');
+select is(t072.rounds(200), '1:main:2 2:third_place:1 3:main:1', 'the walkover loser and the semi-final 2 loser play the 3rd place match, with the Final live beside it');
+select is((select string_agg(e.display_name, ',' order by s.position)
+             from td_slots s join event_entries e on e.id = s.entry_id
+            where s.match_id = t072.m(200, 2, 1)),
+  'P1,P4', 'the 3rd place match is between the walkover loser (P1) and the other loser (P4)');
+select is(t072.confirm(200, 1, 2), 'ok', 'confirming a decided semi-final again...');
+select is(t072.rounds(200), '1:main:2 2:third_place:1 3:main:1', '...creates nothing: advancement is idempotent');
+
+-- a withdrawn loser means no 3rd place match (both losers must be active)
+select is(t072.start(201, 'random', 'seed-201', array[1,2,3,4]), 'ok', 'four competitors start (second event)');
+update event_entries set withdrawn = true where id = t072.u(2012);
+select is(t072.decide(201, 1, 1, 1) || t072.decide(201, 1, 2, 1), 'okok', 'both semi-finals are played, the loser P2 having withdrawn');
+select is(t072.rounds(201), '1:main:2 2:main:1', 'a withdrawn loser blocks the 3rd place match: only the Final follows');
+
+-- the check is about the LOSERS: a withdrawn semi-final WINNER does not block the 3rd place match
+create function t072.walk(ev int, rnd int, mpos int, spos int) returns text language sql as $$
+  select t072.as_user(t072.u(1), format('select public.td_record_walkover(gen_random_uuid(), %L, %L, %L)',
+    t072.u(100), t072.m(ev, rnd, mpos), t072.s(ev, rnd, mpos, spos)))
+$$;
+select is(t072.start(202, 'random', 'seed-202', array[1,2,3,4]), 'ok', 'four competitors start (withdrawn winner)');
+select is(t072.decide(202, 1, 1, 2), 'ok', 'semi-final 1: P2 wins');
+update event_entries set withdrawn = true where id = t072.u(2022);
+select is(t072.decide(202, 1, 2, 1), 'ok', 'semi-final 2: P3 wins, after the winner P2 withdrew');
+select is(t072.rounds(202), '1:main:2 2:third_place:1 3:main:1', 'a withdrawn WINNER does not block the 3rd place match: only the losers are asked');
+
+-- a walkover whose no-show has been withdrawn (the usual real case) gets no 3rd place match
+select is(t072.start(203, 'random', 'seed-203', array[1,2,3,4]), 'ok', 'four competitors start (withdrawn no-show)');
+update event_entries set withdrawn = true where id = t072.u(2031);
+select is(t072.walk(203, 1, 1, 2), 'ok', 'semi-final 1 is a walkover after P1 withdrew');
+select is(t072.decide(203, 1, 2, 1), 'ok', 'semi-final 2 is played');
+select is(t072.rounds(203), '1:main:2 2:main:1', 'a withdrawn no-show means no 3rd place match');
+
+-- a walkover in both semi-finals: the 3rd place match is between the two no-shows
+select is(t072.start(204, 'random', 'seed-204', array[1,2,3,4]), 'ok', 'four competitors start (two walkovers)');
+select is(t072.walk(204, 1, 1, 2) || t072.walk(204, 1, 2, 2), 'okok', 'both semi-finals are walkovers');
+select is(t072.rounds(204), '1:main:2 2:third_place:1 3:main:1', 'both walkovers: the 3rd place match and the Final exist');
+select is((select string_agg(e.display_name, ',' order by s.position)
+             from td_slots s join event_entries e on e.id = s.entry_id
+            where s.match_id = t072.m(204, 2, 1)),
+  'P1,P3', 'the 3rd place match is between the two no-shows');
+
+-- advancement itself, run again directly (a repeated confirm returns before reaching it)
+do $$ begin perform app.td_advance(t072.u(200)); end $$;
+select is(t072.rounds(200), '1:main:2 2:third_place:1 3:main:1', 'a direct second run of advancement creates nothing');
 
 -- ============ nobody writes directly; strangers see nothing ============
 select t072.contains(t072.as_user(t072.u(1), format('insert into td_votes (event_id, match_id, slot_id) values (%L, %L, %L)', t072.u(110), t072.m(110, 1, 1), t072.s(110, 1, 1, 1))),
