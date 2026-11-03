@@ -1,12 +1,12 @@
 // The Seduh ID screen (T-ID.C3, owner decision 7a): how big the Seduh ID directory is, as NUMBERS ONLY. It calls the one
-// read-only function `admin_seduh_id_counts` and draws the ten integers it returns, in plain words. It never shows, and
+// read-only function `admin_seduh_id_counts` and draws the fourteen integers it returns, in plain words. It never shows, and
 // the function never returns, a name, a phone number, an id, an email or an organisation's own figure (D-A4: the console
 // shows metadata and counts, never participant data; a per-organisation count could identify who is in the directory).
 // Merges and unlinks are the owner's, in SQL: there is deliberately nothing to click here but "Refresh numbers".
 //
 // Every request goes through ctx.callAdmin (panelRequest.js `ask`): a gate refusal draws nothing here (the console is
 // checking access again and replaces the panel); any other failure is translated by describeAdminError from its stable
-// hint, never from its text. The answer is validated BEFORE anything is drawn: a row that is not ten whole, non-negative
+// hint, never from its text. The answer is validated BEFORE anything is drawn: a row that is not fourteen whole, non-negative
 // numbers draws none of them, never half. Text only (`el()`), never innerHTML.
 import { el, setBusyDisabled } from '../core/dom.js';
 import { describeAdminError } from './adminErrors.js';
@@ -20,7 +20,7 @@ export const EXPLANATION =
   'Numbers only: this screen never shows a name, a phone number or an organisation. Merges and unlinks are done by the owner in SQL.';
 export const NO_IDENTITIES = 'There are no Seduh ID identities yet.';
 
-// The ten figures, in the order the function documents them.
+// The fourteen figures, in the order the function documents them.
 export const COUNT_KEYS = Object.freeze([
   'identities_total',
   'identities_active',
@@ -32,9 +32,13 @@ export const COUNT_KEYS = Object.freeze([
   'people_total',
   'people_linked',
   'people_blocked',
+  'feed_queued',
+  'feed_processed',
+  'feed_rejected',
+  'feed_undone',
 ]);
 
-// The row as ten whole non-negative numbers, or null when it is anything else (extra keys are ignored, not drawn).
+// The row as fourteen whole non-negative numbers, or null when it is anything else (extra keys are ignored, not drawn).
 export function readCounts(data) {
   const row = Array.isArray(data) && data.length === 1 ? data[0] : null;
   if (row === null || typeof row !== 'object') return null;
@@ -97,6 +101,16 @@ export function countGroups(counts) {
       ['Not linked', counts.people_total - counts.people_linked],
       ['Blocked from linking by the owner', counts.people_blocked],
     ]),
+    group(
+      'Published podiums and Seduh ID',
+      [
+        ['Waiting for the owner to review', counts.feed_queued],
+        ['Reviewed and run', counts.feed_processed],
+        ['Declined by the owner', counts.feed_rejected],
+        ['Undone after a run', counts.feed_undone],
+      ],
+      'Published podiums are queued here when the feed is on. Whether a queued podium creates records on its own or only when the owner runs it depends on the feed mode, which is set in SQL.',
+    ),
   );
   return groups;
 }

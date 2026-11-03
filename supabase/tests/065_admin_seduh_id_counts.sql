@@ -15,7 +15,7 @@
 --   * a call changes and logs nothing (no audit row), it is STABLE, SECURITY DEFINER with search_path '', and only
 --     `authenticated` may execute it (anon, service_role and PUBLIC may not).
 begin;
-select plan(43);
+select plan(49);
 
 create schema t065;
 grant usage on schema t065 to anon, authenticated, service_role;
@@ -91,6 +91,10 @@ create table t065.base as
          (select count(*) from public.people) as people,
          (select count(*) from public.people where global_person_id is not null) as linked,
          (select count(*) from app.person_link_blocks b join public.people p on p.id = b.person_id and p.phone = b.phone_e164) as blocked,
+         (select count(*) from app.seduh_feed_queue where state = 'queued') as fq,
+         (select count(*) from app.seduh_feed_queue where state = 'processed') as fp,
+         (select count(*) from app.seduh_feed_queue where state = 'rejected') as fr,
+         (select count(*) from app.seduh_feed_queue where state = 'undone') as fu,
          (select coalesce(max(id), 0) from app.admin_audit_log) as mid;
 
 insert into orgs (id, name, slug) values (t065.u(100), 'T065 A', 't065-a'), (t065.u(101), 'T065 B', 't065-b');
@@ -120,6 +124,12 @@ update people set global_person_id = t065.u(203) where id = t065.u(302);
 update people set global_person_id = t065.u(206) where id in (t065.u(303), t065.u(304));
 select set_config('app.seduh_link_write', '', true);
 insert into app.person_link_blocks (person_id, phone_e164) values (t065.u(306), '+6739650091'), (t065.u(307), '+6739650092');
+-- the review queue (T-ID.D1b): three waiting, two processed, one rejected, one undone (bare ids: no event or result need exist)
+insert into app.seduh_feed_queue (result_id, org_id, state, processed_at)
+select t065.u(400 + n), t065.u(100),
+       (array['queued', 'queued', 'queued', 'processed', 'processed', 'rejected', 'undone'])[n],
+       case when n <= 3 then null else now() end
+  from generate_series(1, 7) n;
 
 -- ============ who may execute it ============
 select is(
@@ -158,22 +168,23 @@ select is(
 select is(
   (select array(select distinct m[1] from pg_proc p, regexp_matches(p.prosrc, '\m((?:public|auth|app)\.[a-z_]+)', 'g') m
                  where p.oid = 'public.admin_seduh_id_counts()'::regprocedure order by 1)),
-  array['app.person_link_blocks', 'app.require_platform_admin', 'app.seduh_identities', 'public.people'],
-  'the body mentions exactly the two identity relations, the people table and the gate (no merge ledger, no organisation, no event)');
+  array['app.person_link_blocks', 'app.require_platform_admin', 'app.seduh_feed_queue', 'app.seduh_identities', 'public.people'],
+  'the body mentions exactly the two identity relations, the review queue, the people table and the gate (no merge ledger, no organisation, no event)');
 
 -- ============ the shape: integers only ============
 select is(
   (select proargnames from pg_proc where oid = 'public.admin_seduh_id_counts()'::regprocedure),
   array['identities_total', 'identities_active', 'identities_opted_out', 'identities_merged', 'identities_from_roster',
-        'identities_from_archive', 'identities_orphan', 'people_total', 'people_linked', 'people_blocked'],
-  'it returns exactly these ten columns: no name, phone, id, email or per-organisation figure');
+        'identities_from_archive', 'identities_orphan', 'people_total', 'people_linked', 'people_blocked',
+        'feed_queued', 'feed_processed', 'feed_rejected', 'feed_undone'],
+  'it returns exactly these fourteen columns: no name, phone, id, email or per-organisation figure');
 select is(
   (select coalesce(string_agg(distinct t::text, ','), 'none') from pg_proc p, unnest(p.proallargtypes) t
     where p.oid = 'public.admin_seduh_id_counts()'::regprocedure),
   '23', 'every column is an int4 (integers only)');
 select is(
   (select proargmodes::text from pg_proc where oid = 'public.admin_seduh_id_counts()'::regprocedure),
-  '{t,t,t,t,t,t,t,t,t,t}', 'and every one is a table column (no argument, no out parameter hiding another kind)');
+  '{t,t,t,t,t,t,t,t,t,t,t,t,t,t}', 'and every one is a table column (no argument, no out parameter hiding another kind)');
 
 -- ============ what an admin gets ============
 select t065.claims(t065.u(1), 'aal2', 10);
@@ -197,21 +208,30 @@ select is((select people_blocked::bigint - b.blocked from got, t065.base b), 1::
 select is((select count(*)::int from app.person_link_blocks where person_id in (t065.u(306), t065.u(307))), 2,
   'the lapsed block really is in the table (so the +1 above is the join at work, not a missing row)');
 
+select is((select feed_queued::bigint - b.fq from got, t065.base b), 3::bigint, 'feed_queued: +3 (waiting for review)');
+select is((select feed_processed::bigint - b.fp from got, t065.base b), 2::bigint, 'feed_processed: +2');
+select is((select feed_rejected::bigint - b.fr from got, t065.base b), 1::bigint, 'feed_rejected: +1');
+select is((select feed_undone::bigint - b.fu from got, t065.base b), 1::bigint, 'feed_undone: +1');
+select is((select feed_queued + feed_processed + feed_rejected + feed_undone from got), (select count(*)::int from app.seduh_feed_queue),
+  'the four queue figures add up to every queue row');
 select is((select identities_active + identities_opted_out + identities_merged = identities_total from got), true,
   'the three statuses add up to the total');
 select is((select identities_from_roster + identities_from_archive = identities_total from got), true,
   'the two sources add up to the total');
 select is((select (identities_total, identities_active, identities_opted_out, identities_merged, identities_from_roster,
-                   identities_from_archive, identities_orphan, people_total, people_linked, people_blocked)::text from got),
+                   identities_from_archive, identities_orphan, people_total, people_linked, people_blocked,
+                   feed_queued, feed_processed, feed_rejected, feed_undone)::text from got),
   (select (count(*), count(*) filter (where status = 'active'), count(*) filter (where status = 'opted_out'),
            count(*) filter (where status = 'merged'), count(*) filter (where source = 'organiser_roster'),
            count(*) filter (where source = 'archive'),
            count(*) filter (where status <> 'merged' and not exists (select 1 from public.people p where p.global_person_id = i.id)),
            (select count(*) from public.people), (select count(*) from public.people where global_person_id is not null),
-           (select count(*) from app.person_link_blocks b join public.people p on p.id = b.person_id and p.phone = b.phone_e164))::text
+           (select count(*) from app.person_link_blocks b join public.people p on p.id = b.person_id and p.phone = b.phone_e164),
+           (select count(*) from app.seduh_feed_queue where state = 'queued'), (select count(*) from app.seduh_feed_queue where state = 'processed'),
+           (select count(*) from app.seduh_feed_queue where state = 'rejected'), (select count(*) from app.seduh_feed_queue where state = 'undone'))::text
      from app.seduh_identities i),
   'every figure equals the same question asked directly');
-select is((select (identities_total is not null and identities_orphan is not null and people_blocked is not null) from got), true,
+select is((select (identities_total is not null and identities_orphan is not null and people_blocked is not null and feed_queued is not null and feed_undone is not null) from got), true,
   'no figure is null');
 
 -- linking a person to an orphan takes it out of the orphan count
@@ -231,11 +251,13 @@ select is((select count(*)::int from app.admin_audit_log where id > (select mid 
   'no audit row was written by any call (refused or answered)');
 select is((select count(*)::bigint from app.seduh_identities), (select ids + 6 from t065.base), 'no identity was created or removed by the calls');
 
+select is((select count(*)::bigint from app.seduh_feed_queue), (select fq + fp + fr + fu + 7 from t065.base), 'no queue row was created or removed by the calls');
+
 -- ============ no other door ============
 select is(
   (select coalesce(string_agg(r || '/' || t, ', '), 'none')
      from unnest(array['anon', 'authenticated', 'service_role']) r,
-          unnest(array['app.seduh_identities', 'app.person_link_blocks']) t
+          unnest(array['app.seduh_identities', 'app.person_link_blocks', 'app.seduh_feed_queue', 'app.seduh_feed_mode']) t
     where has_table_privilege(r, t, 'select,insert,update,delete,truncate')),
   'none', 'no API role can read or write the identity tables directly');
 select is(

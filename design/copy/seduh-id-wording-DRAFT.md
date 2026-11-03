@@ -101,6 +101,36 @@ Update the date at the top (`PRIVACY_UPDATED`) when publishing.
 `[OWNER]` The Seduh ID table has, per the B4 hand-over, already been populated in the cloud, so the Privacy page is already behind the data. Publishing the block in 1a is not
 dependent on the later archive-feed work.
 
+### 1g. The archive-feed sentence (T-ID.D1d, drafted 2026-11-03; the owner publishes it)
+
+The one new sentence the archive feed (T-ID.D1) needs, so that what the code does is said before it does it. It states
+only that a record is created when a person is named on a published podium. It goes in ONE place and is linked from
+the other: as a bullet in 1a (the "What we hold" block, after the bullet that begins "It is created only when you are
+named"), and the Terms "Seduh ID" section (2b) points to the Privacy page for it.
+
+> When you are named on a podium published on a Seduh Score results page, we create a Seduh ID record for the phone
+> number your organiser entered for you, or use the record that number already has.
+
+What it rests on and what it leaves out:
+
+- **Podium only.** The feed reads the published podium, not the full standings (decision 5 of 2026-11-01; B4's one-time
+  backfill also read the standings, the feed does not). A person who appears only in a full results table is not
+  covered by this sentence and the feed does not create a record for them.
+- **Needs a phone number the organiser entered**, and an entry that is unambiguously that person (B4's rules). A
+  rehearsal ("test") event, a person with no valid phone number, and a person the operator has unlinked create
+  nothing. "Or use the record that number already has" is what happens when the phone number matches an existing
+  record: nothing is overwritten, and a person who has asked us to stop using their record is not given a new one.
+- **Says nothing about when or how.** In `queue` mode (the first live mode) the operator reviews each published podium
+  before any record is created, so the sentence does not promise a time, and it does not say "automatically". If the
+  owner later switches the feed to `auto`, the sentence is still true; the wording about timing, the opt-out
+  procedure and the DPO address (open points in the build brief) are the owner's to settle first.
+- **No "free", no tier, no price.** Seduh ID is never gated and nothing here says so in either direction (owner
+  decision of 2026-11-01).
+- `[OWNER]` Whether "we" is right for the record's holder is the same `[LEGAL OPEN]` point as in 1a; do not add
+  "controller" or "processor".
+- `[OWNER]` When you publish it, bump `PRIVACY_UPDATED` (1e) and, if the Terms bullet in 2a is kept, check that it
+  still reads true next to this sentence. The live `src/marketing/trustContent.js` is NOT edited by the build.
+
 ---
 
 ## 2. Terms page
@@ -165,19 +195,20 @@ section until they are answered.
 
 ## 4. What each statement rests on (for the owner and reviewers)
 
-| Statement                                                                                                  | Source                                                                                                                                                                                             |
-| ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Record = validated E.164 phone, a name, optional country, `source`, `status`; no email                     | `20261030120000_seduh_identity_tables.sql` (`phone_e164` CHECK, `display_name`, `country`, `source`, `status`; no email column)                                                                    |
-| Nobody (no API role) can read the record                                                                   | same file: RLS on, no policy, `revoke all` from `public, anon, authenticated, service_role`; schema `app`                                                                                          |
-| Created only from a published non-test result, or by the operator; never by the link; never by a rehearsal | `20261031100000_seduh_identity_backfill.sql` (header: "NAMED IN A PUBLISHED RESULT", `events.is_test` excluded, API roles refused); `20261030140000_seduh_identity_link.sql` ("NEVER creates one") |
-| The link from a person to a record; changed phone clears it; database-written only                         | `20261030140000_seduh_identity_link.sql` (guard trigger, FK, `public.link_person_identity`)                                                                                                        |
-| An organiser sees only its own people and entries                                                          | tenancy rules in `CLAUDE.md` (`app.is_org_member`); a member sees on their own `people` row only an opaque identifier                                                                              |
-| Staff / affiliate roster, members of that organisation only, relationship is free text with a format check | `20261030130000_org_person_affiliations.sql` (RLS on `app.is_org_member`, `authenticated` only, no view, no anonymous door); column grants in `20261031120000_affiliations_column_grants.sql`      |
-| Opt-out = suppression record: name blanked, phone kept                                                     | `CONVENTIONS.md`, "Seduh ID link: the owner's runbook", "Opt out (E1)"; `seduh_identities_display_name_by_status` CHECK                                                                            |
-| Opt-out is done by the operator by hand (no screen, no self-service)                                       | `CONVENTIONS.md` runbook ("There is no admin function or console screen for any of the following")                                                                                                 |
-| No public surface in Layer 1                                                                               | no `anon` grant, no anonymous door, `public_results` payload gains no field (B1, B2, B3 headers)                                                                                                   |
-| Operator view is counts only                                                                               | `20261031110000_admin_seduh_id_counts.sql` (`admin_seduh_id_counts()`, "COUNTS ONLY ... no names, no phones, no ids")                                                                              |
-| "Payments stay manual"                                                                                     | **Not in code.** Spec A8 (local): wording the statement must carry; see the `[OWNER]` notes above                                                                                                  |
+| Statement                                                                                                                                    | Source                                                                                                                                                                                             |
+| -------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Record = validated E.164 phone, a name, optional country, `source`, `status`; no email                                                       | `20261030120000_seduh_identity_tables.sql` (`phone_e164` CHECK, `display_name`, `country`, `source`, `status`; no email column)                                                                    |
+| Nobody (no API role) can read the record                                                                                                     | same file: RLS on, no policy, `revoke all` from `public, anon, authenticated, service_role`; schema `app`                                                                                          |
+| Created only from a published non-test result, or by the operator; never by the link; never by a rehearsal                                   | `20261031100000_seduh_identity_backfill.sql` (header: "NAMED IN A PUBLISHED RESULT", `events.is_test` excluded, API roles refused); `20261030140000_seduh_identity_link.sql` ("NEVER creates one") |
+| A record is created when a person is named on a published podium (1g); podium only, never a test event, never a person without a valid phone | `20261103100000_seduh_feed.sql` (header; `seduh_feed_slots_internal` reads `podium` only; B4's rules; `queue` mode: the operator reviews first); pgTAP `071`                                       |
+| The link from a person to a record; changed phone clears it; database-written only                                                           | `20261030140000_seduh_identity_link.sql` (guard trigger, FK, `public.link_person_identity`)                                                                                                        |
+| An organiser sees only its own people and entries                                                                                            | tenancy rules in `CLAUDE.md` (`app.is_org_member`); a member sees on their own `people` row only an opaque identifier                                                                              |
+| Staff / affiliate roster, members of that organisation only, relationship is free text with a format check                                   | `20261030130000_org_person_affiliations.sql` (RLS on `app.is_org_member`, `authenticated` only, no view, no anonymous door); column grants in `20261031120000_affiliations_column_grants.sql`      |
+| Opt-out = suppression record: name blanked, phone kept                                                                                       | `CONVENTIONS.md`, "Seduh ID link: the owner's runbook", "Opt out (E1)"; `seduh_identities_display_name_by_status` CHECK                                                                            |
+| Opt-out is done by the operator by hand (no screen, no self-service)                                                                         | `CONVENTIONS.md` runbook ("There is no admin function or console screen for any of the following")                                                                                                 |
+| No public surface in Layer 1                                                                                                                 | no `anon` grant, no anonymous door, `public_results` payload gains no field (B1, B2, B3 headers)                                                                                                   |
+| Operator view is counts only                                                                                                                 | `20261031110000_admin_seduh_id_counts.sql` (`admin_seduh_id_counts()`, "COUNTS ONLY ... no names, no phones, no ids")                                                                              |
+| "Payments stay manual"                                                                                                                       | **Not in code.** Spec A8 (local): wording the statement must carry; see the `[OWNER]` notes above                                                                                                  |
 
 ## 5. Deliberately not said
 

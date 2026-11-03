@@ -311,8 +311,8 @@ select is(
      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname not in ('pg_catalog', 'information_schema', 't062') and p.prokind in ('f', 'p')
       and p.prosrc ~* 'global_person_id'),
-  'admin_seduh_id_counts(), app.guard_people_global_person_id(), app.seduh_backfill_plan_internal(uuid[]), app.seduh_identity_backfill(boolean,uuid[]), link_person_identity(uuid,uuid)',
-  'NO OTHER function mentions people.global_person_id: the guard, the link function and the owner-run backfill (064) write it; its read-only plan helper and the console''s counts function (T-ID.C3, 065) only read it');
+  'admin_seduh_id_counts(), app.guard_people_global_person_id(), app.seduh_backfill_plan_internal(uuid[]), app.seduh_feed_apply(uuid[],text), app.seduh_feed_plan_internal(uuid[]), app.seduh_feed_undo(uuid[],boolean), app.seduh_identity_backfill(boolean,uuid[]), link_person_identity(uuid,uuid)',
+  'NO OTHER function mentions people.global_person_id: the guard, the link function, the owner-run backfill (064) and the archive feed''s creating step and undo (071) write it; the read-only plan helpers and the console''s counts function (T-ID.C3, 065) only read it');
 select is(
   (select coalesce(string_agg(p.oid::regprocedure::text || '/' || r, ', ' order by p.oid::regprocedure::text collate "C"), 'none')
      from pg_proc p, unnest(array['anon', 'authenticated', 'service_role', 'public']) r
