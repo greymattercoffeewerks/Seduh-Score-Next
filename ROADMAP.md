@@ -2600,3 +2600,30 @@ Raised while drafting the Throwdown spec (`Handoffs and Specs/THROWDOWN-SPEC-DRA
 - **Lift the split-flap board into a shared `src/core/` component that any module can call.** Today the board lives inside `mountRandomSelector` in `src/tools/random-selector/randomSelectorScreen.js` (about 1,100 lines, with the tool's storage, share links, CSV and history), so no other module can use it. Rated 7/10 difficulty on 2026-11-03: split the board out of that function, move its CSS and accessibility tests (no flashing, reduced motion, announcements, focus) with it, and point the free tool at the shared board. A format may not import from `src/tools/`, so this has to go through `core/` with `module-boundary-checker` sign-off, not a copy.
 - **Trigger: a third consumer of the board.** Throwdown's two draws can use their own plain reveal on the lifted engine. Do this when a third place needs the split-flap look (for example Liga Seduh heats or Cup Taster running orders), or sooner if the owner wants the free tool and Throwdown to look identical. (Throwdown spec, Q13)
 - **When the engine is lifted (Throwdown TD.4), keep it free of the tool's storage and share-link code**, so this later split stays small. (Throwdown spec, Q13)
+
+## Throwdown (third format) — Phase TD.1 Core, started 2026-11-03
+
+Spec: `Handoffs and Specs/THROWDOWN-SPEC-DRAFT.md` (local only). Branch `claude/throwdown-td1-core-d41fad`, PR into `dev`.
+
+**Cross-check (spec section 11): can `core/ranking` / `core/advancement` express a knockout?** No. Both take one
+ranked list and a cutoff (positions, border ties); a knockout has no standings, only per-match winners that feed the next
+round. Knockout advancement is Throwdown-specific and stays in `src/formats/throwdown/` (and the SQL RPC that writes it).
+What is generic and goes to `core/`: a **seeded shuffle** (`core/seededShuffle.js`, recorded seed so a draw can be
+explained afterwards; Liga heats and the lucky-loser draw can reuse it). Vote tallying is match-slot shaped and stays in
+the format. Bracket layout is Throwdown-only until a second knockout format exists. No `core/` primitive is edited.
+
+**Tasks** (each small, each with tests; reviewers per root `CLAUDE.md`):
+
+- T-TD.1.1 Entitlement keys: `throwdown_participants` cap (Community 8) plus the four module key slots, in the catalog and a `$catalog_add$` migration (first commit).
+- T-TD.1.2 Schema: `td_settings`, `td_draws`, `td_rounds` (`kind`, `phase`), `td_matches`, `td_slots` (2..4), `td_votes` (rows, no judge identity), frozen parents, RLS, grants, rollback; `event_entries` cap hook gains the Throwdown branch.
+- T-TD.1.3 RPCs: `td_start_event` (draw, byes, lock), `td_confirm_match`, `td_record_walkover`, the single derived-advancement function (next round, 3rd place), idempotent. Matrices `040` / `041`.
+- T-TD.1.4 Pure modules: `votes.js` (tally, leader, level), `bracket.js` (derive rounds, names, champion, no projection), `seeding.js` (random + manual validation), `modules.js` (toggle registry, dependencies, lock), `core/seededShuffle.js`.
+- T-TD.1.5 Data layer + live payload + outbox handlers (`liveSession.js`, `outboxHandlers.js`).
+- T-TD.1.6 Console: dashboard, setup/roster, draw (random + manual), bracket, vote screen, walkover, champion banner; routes in `main.js`; format option.
+- T-TD.1.7 Projector + phone bodies registered in `liveSurfaces.js`; `is_test` on every surface.
+- T-TD.1.8 Results page, e2e of a full 8-player test event, reviewers, kb-sync, PR.
+
+**Assumed defaults (owner may overrule):** the timer is display-only (no elapsed time stored, no `clampElapsed`); the
+random draw stores its shuffle seed; any judge count is accepted and Confirm is disabled while votes are level (an extra
+tap resolves an even panel); competitor status is `event_entries.withdrawn` (so Q8b can be settled later without a
+schema change); no call site branches on a tier (D14); no 3rd place match when either semi-final was a bye or walkover.
