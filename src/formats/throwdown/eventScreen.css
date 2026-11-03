@@ -121,3 +121,41 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* long names never push a control wider than a 360px screen */
+.td-screen .btn,
+.td-match h3,
+.td-result,
+.td-preview li,
+.td-round-match span {
+  overflow-wrap: anywhere;
+}
+
+.td-choice {
+  min-height: 2.75rem;
+}
+
+.td-walkover summary {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.td-log {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.td-log th,
+.td-log td {
+  text-align: left;
+  padding: var(--space-1) var(--space-2);
+  border-bottom: var(--border-hairline) solid var(--color-border);
+  overflow-wrap: anywhere;
+}
+
+@media print {
+  .td-no-print {
+    display: none;
+  }
+}

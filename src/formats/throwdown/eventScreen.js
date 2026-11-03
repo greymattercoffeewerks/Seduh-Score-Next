@@ -20,7 +20,7 @@ import {
   undoVote,
   confirmMatch,
   recordWalkover,
-  pendingVoteDeltas,
+  pendingSnapshot,
 } from './data.js';
 import { tallyVotes, leadOf, canConfirm } from './votes.js';
 import {
@@ -31,7 +31,7 @@ import {
   emptyBoard,
   assignSlot,
 } from './seeding.js';
-import { MODULES, enabledModules } from './modules.js';
+import { MODULES } from './modules.js';
 import { publishThrowdownLive } from './liveSession.js';
 import { describeThrowdownError, resultLine, matchTitle } from './words.js';
 
@@ -46,7 +46,10 @@ export async function mountThrowdownEventScreen(
     data: null,
     form: null, // setup form values
     draw: null, // { seed, pairs } (random) or { slotCount, pairs } (manual)
-    pending: new Map(), // matchId -> { deltas, queued }
+    pending: new Map(), // matchId -> { deltas, queued, decisionQueued }
+    startQueued: false,
+    walkoverOpen: null, // matchId whose Walkover disclosure is open
+    focusTarget: null, // id to focus after the next render (a phase change replaces the focused control)
     walkover: null, // { matchId, slotId } waiting for the second tap
     feedback: null,
     busy: false,
@@ -55,12 +58,23 @@ export async function mountThrowdownEventScreen(
   const activeEntries = () => state.data.entries.filter((e) => !e.withdrawn);
   const nameOf = (id) => state.data.entries.find((e) => e.id === id)?.display_name ?? '';
 
+  // The server's rows and the outbox's waiting changes are two reads that can straddle a landing operation (counted
+  // in both, or in neither). The queue is read before and after the server; if it changed in between, read again.
   async function refresh() {
     try {
-      const [event, data] = await raceTimeout(
-        Promise.all([findEvent(eventId, client), loadThrowdown(eventId, client)]),
-        DEFAULT_LOAD_TIMEOUT_MS,
-      );
+      let pending = await pendingSnapshot();
+      let event;
+      let data;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        [event, data] = await raceTimeout(
+          Promise.all([findEvent(eventId, client), loadThrowdown(eventId, client)]),
+          DEFAULT_LOAD_TIMEOUT_MS,
+        );
+        const after = await pendingSnapshot();
+        const steady = after.signature === pending.signature;
+        pending = after;
+        if (steady) break;
+      }
       if (signal?.aborted) return;
       state.event = event;
       state.data = data;
@@ -70,10 +84,8 @@ export async function mountThrowdownEventScreen(
         thirdPlace: data.settings.third_place,
         seedingMode: data.settings.seeding_mode,
       };
-      state.pending = new Map();
-      for (const match of data.bracket.playableMatches) {
-        state.pending.set(match.id, await pendingVoteDeltas(match.id));
-      }
+      state.pending = pending.matches;
+      state.startQueued = pending.startQueued;
     } catch (err) {
       state.loadError = err.timedOut
         ? 'This is taking longer than expected — check your connection and try Retry.'
@@ -81,6 +93,39 @@ export async function mountThrowdownEventScreen(
     }
     state.loading = false;
     render();
+  }
+
+  // A judge's tap must never be dropped because another write is in flight: taps queue (the outbox keeps their order)
+  // and the screen reloads once the burst settles.
+  let refreshing = false;
+  let refreshAgain = false;
+  async function refreshSoon() {
+    if (refreshing) {
+      refreshAgain = true;
+      return;
+    }
+    refreshing = true;
+    try {
+      do {
+        refreshAgain = false;
+        await refresh();
+      } while (refreshAgain);
+    } finally {
+      refreshing = false;
+    }
+  }
+  async function tapAct(work, announce) {
+    if (signal?.aborted) return;
+    try {
+      const outcome = await work();
+      const dropped = droppedErrorFor(outcome.result, outcome.operationId);
+      state.feedback = dropped
+        ? { tone: 'error', text: describeThrowdownError(dropped) }
+        : { tone: null, text: announce ?? '' };
+    } catch (err) {
+      state.feedback = { tone: 'error', text: describeThrowdownError(err) };
+    }
+    await refreshSoon();
   }
 
   // Runs a write, reports a refusal in words, reloads. Never lets two writes overlap.
@@ -99,30 +144,36 @@ export async function mountThrowdownEventScreen(
       state.feedback = { tone: 'error', text: describeThrowdownError(err) };
     }
     state.busy = false;
+    if (publish && !state.feedback) state.focusTarget = 'td-now-h';
     await refresh();
   }
 
   // ---------- pieces ----------
 
+  // ONE live region for the screen's lifetime, re-attached on every render with only its words changed: a freshly
+  // inserted live region is not reliably announced (core/viewer-shell.js).
+  const feedbackEl = el('div', {
+    className: 'screen-feedback',
+    attrs: { role: 'status', 'aria-live': 'polite' },
+  });
   function feedbackNode() {
-    return el('div', {
-      className: 'screen-feedback',
-      text: state.feedback?.text ?? '',
-      attrs: { role: 'status', 'aria-live': 'polite' },
-    });
+    feedbackEl.textContent = state.feedback?.text ?? '';
+    if (state.feedback?.tone) feedbackEl.dataset.tone = state.feedback.tone;
+    else delete feedbackEl.dataset.tone;
+    return feedbackEl;
   }
 
   function button(
     label,
     onClick,
-    { className = 'btn btn-outline tap-target', key, disabled = false } = {},
+    { className = 'btn btn-outline tap-target', key, disabled = false, ignoreBusy = false } = {},
   ) {
     const b = el('button', {
       className,
       text: label,
       attrs: { type: 'button', 'data-focus-key': key ?? label },
     });
-    if (disabled || state.busy) setBusyDisabled(b, true);
+    if (disabled || (state.busy && !ignoreBusy)) setBusyDisabled(b, true);
     b.addEventListener('click', () => {
       if (b.getAttribute('aria-disabled') === 'true') return;
       onClick();
@@ -156,7 +207,7 @@ export async function mountThrowdownEventScreen(
       el('button', {
         className: 'btn btn-primary tap-target',
         text: 'Add competitor',
-        attrs: { type: 'submit' },
+        attrs: { type: 'submit', 'data-focus-key': 'td-add-submit' },
       }),
     ]);
     form.addEventListener('submit', (e) => {
@@ -281,7 +332,7 @@ export async function mountThrowdownEventScreen(
       judgeCount: state.form.judgeCount,
       thirdPlace: state.form.thirdPlace,
       seedingMode: mode,
-      modules: enabledModules({}),
+      modules: {},
     };
     return act(
       async () => {
@@ -326,7 +377,11 @@ export async function mountThrowdownEventScreen(
               };
               render();
             },
-            { className: 'btn btn-outline tap-target', key: 'td-draw' },
+            {
+              className: 'btn btn-outline tap-target',
+              key: 'td-draw',
+              disabled: state.startQueued,
+            },
           ),
         );
       }
@@ -340,9 +395,15 @@ export async function mountThrowdownEventScreen(
           button('Start Round 1', () => startDraw('random', state.draw.pairs, state.draw.seed), {
             className: 'btn btn-primary tap-target',
             key: 'td-start',
-            disabled: problemsFor(state.draw.pairs).length > 0,
+            disabled: state.startQueued || problemsFor(state.draw.pairs).length > 0,
           }),
         );
+        const randomProblems = problemsFor(state.draw.pairs);
+        if (randomProblems.length) {
+          body.push(
+            el('p', { className: 'td-note', text: randomProblems.map(problemText).join(' ') }),
+          );
+        }
       }
     } else {
       state.draw ??= { slotCount: Math.max(2, active.length + (active.length % 2)), pairs: null };
@@ -410,12 +471,20 @@ export async function mountThrowdownEventScreen(
         button('Start Round 1', () => startDraw('manual', normalisePairs(state.draw.pairs), null), {
           className: 'btn btn-primary tap-target',
           key: 'td-start',
-          disabled: problems.length > 0,
+          disabled: state.startQueued || problems.length > 0,
         }),
       );
     }
     return el('section', { className: 'card td-card', attrs: { 'aria-labelledby': 'td-draw-h' } }, [
       el('h2', { id: 'td-draw-h', text: 'Draw' }),
+      ...(state.startQueued
+        ? [
+            el('p', {
+              className: 'td-note',
+              text: 'The draw is waiting to sync. It starts when the connection is back.',
+            }),
+          ]
+        : []),
       ...body,
     ]);
   }
@@ -437,7 +506,11 @@ export async function mountThrowdownEventScreen(
 
   // The count shown for a side: the database's plus taps still waiting to sync.
   function displayedTallies(match) {
-    const pending = state.pending.get(match.id) ?? { deltas: new Map(), queued: 0 };
+    const pending = state.pending.get(match.id) ?? {
+      deltas: new Map(),
+      queued: 0,
+      decisionQueued: false,
+    };
     const slots = match.sides.map((s) => ({
       id: s.slotId,
       position: s.position,
@@ -448,11 +521,37 @@ export async function mountThrowdownEventScreen(
         slotId: s.slotId,
       })),
     );
-    return { tallies: tallyVotes(slots, votes), queued: pending.queued };
+    return {
+      tallies: tallyVotes(slots, votes),
+      queued: pending.queued,
+      decisionQueued: pending.decisionQueued,
+    };
+  }
+
+  function walkoverDetails(match, decisionQueued) {
+    const details = el('details', { className: 'td-walkover' }, [
+      el('summary', { className: 'tap-target', text: 'Walkover (a competitor does not show)' }),
+      ...match.sides.map((side, i) =>
+        button(
+          `${side.name} advances`,
+          () => {
+            state.walkover = { matchId: match.id, slotId: side.slotId };
+            render();
+          },
+          { key: `td-walkover-${match.id}-${i}`, disabled: decisionQueued },
+        ),
+      ),
+    ]);
+    if (state.walkoverOpen === match.id) details.open = true;
+    details.addEventListener('toggle', () => {
+      if (details.open) state.walkoverOpen = match.id;
+      else if (state.walkoverOpen === match.id) state.walkoverOpen = null;
+    });
+    return details;
   }
 
   function voteCard(match) {
-    const { tallies, queued } = displayedTallies(match);
+    const { tallies, queued, decisionQueued } = displayedTallies(match);
     const lead = leadOf(tallies);
     const judges = state.data.settings.judge_count;
     const sides = match.sides.map((side, i) => {
@@ -461,40 +560,47 @@ export async function mountThrowdownEventScreen(
         button(
           `Vote ${side.name}`,
           () =>
-            act(() =>
-              castVote(
-                { orgId: state.event.org_id, matchId: match.id, slotId: side.slotId },
-                handlers,
-              ),
+            tapAct(
+              () =>
+                castVote(
+                  { orgId: state.event.org_id, matchId: match.id, slotId: side.slotId },
+                  handlers,
+                ),
+              `${side.name}: ${count + 1} ${count + 1 === 1 ? 'vote' : 'votes'}`,
             ),
           {
             className: 'btn btn-primary tap-target td-vote',
             key: `td-vote-${match.id}-${i}`,
+            ignoreBusy: true,
+            disabled: decisionQueued,
           },
         ),
         el('p', {
           className: 'td-count',
           text: `${count} ${count === 1 ? 'vote' : 'votes'}`,
-          attrs: { 'aria-live': 'polite' },
         }),
         button(
           'Undo',
           () =>
-            act(() =>
-              undoVote(
-                { orgId: state.event.org_id, matchId: match.id, slotId: side.slotId },
-                handlers,
-              ),
+            tapAct(
+              () =>
+                undoVote(
+                  { orgId: state.event.org_id, matchId: match.id, slotId: side.slotId },
+                  handlers,
+                ),
+              `${side.name}: ${Math.max(0, count - 1)} ${count - 1 === 1 ? 'vote' : 'votes'}`,
             ),
           {
             key: `td-undo-${match.id}-${i}`,
-            disabled: count === 0,
+            ignoreBusy: true,
+            disabled: count === 0 || decisionQueued,
           },
         ),
       ]);
     });
-    const status =
-      lead.total === 0
+    const status = decisionQueued
+      ? 'The result is waiting to sync. Voting is closed for this match.'
+      : lead.total === 0
         ? `Waiting for votes (${judges} ${judges === 1 ? 'judge' : 'judges'}).`
         : lead.level
           ? 'The votes are level. Take another vote before confirming.'
@@ -536,19 +642,7 @@ export async function mountThrowdownEventScreen(
               { key: `td-walkover-cancel-${match.id}` },
             ),
           ])
-        : el('details', { className: 'td-walkover' }, [
-            el('summary', { text: 'Walkover (a competitor does not show)' }),
-            ...match.sides.map((side, i) =>
-              button(
-                `${side.name} advances`,
-                () => {
-                  state.walkover = { matchId: match.id, slotId: side.slotId };
-                  render();
-                },
-                { key: `td-walkover-${match.id}-${i}` },
-              ),
-            ),
-          ]);
+        : walkoverDetails(match, decisionQueued);
     return el(
       'article',
       { className: 'card td-match', attrs: { 'aria-label': matchTitle(match) } },
@@ -562,13 +656,22 @@ export async function mountThrowdownEventScreen(
         button(
           winnerName ? `Confirm: ${winnerName} wins` : 'Confirm result',
           () =>
-            act(() => confirmMatch({ orgId: state.event.org_id, matchId: match.id }, handlers), {
-              publish: true,
-            }),
+            act(
+              () =>
+                confirmMatch(
+                  {
+                    orgId: state.event.org_id,
+                    matchId: match.id,
+                    expectedWinnerSlotId: lead.leaderSlotId,
+                  },
+                  handlers,
+                ),
+              { publish: true },
+            ),
           {
             className: 'btn btn-primary tap-target',
             key: `td-confirm-${match.id}`,
-            disabled: !canConfirm(tallies),
+            disabled: decisionQueued || !canConfirm(tallies),
           },
         ),
         walkoverRow,
@@ -671,6 +774,7 @@ export async function mountThrowdownEventScreen(
           el('section', { className: 'td-now', attrs: { 'aria-labelledby': 'td-now-h' } }, [
             el('h2', {
               id: 'td-now-h',
+              attrs: { tabindex: '-1' },
               text: playable.length
                 ? 'Now playing'
                 : state.data.bracket.complete
@@ -680,9 +784,25 @@ export async function mountThrowdownEventScreen(
             ...playable.map(voteCard),
           ]),
         );
-        container.append(bracketCard(), competitorsCard());
+        container.append(
+          bracketCard(),
+          el('a', {
+            className: 'btn btn-outline tap-target',
+            text: 'Results and match log',
+            attrs: { href: `#/events/${eventId}/throwdown/results` },
+          }),
+          competitorsCard(),
+        );
       }
       root.appendChild(container);
+      if (state.focusTarget) {
+        const target = root.querySelector(`#${state.focusTarget}`);
+        state.focusTarget = null;
+        if (target) {
+          target.focus();
+          return true;
+        }
+      }
       return false;
     });
   }

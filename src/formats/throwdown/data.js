@@ -21,10 +21,22 @@ export const TD_OPERATIONS = Object.freeze({
   walkover: 'td_record_walkover',
 });
 
+// A plain select returns at most the API's row limit (1000 here), which a large event's vote rows can pass: a
+// silently shortened vote list would make a derived winner differ from the database's. Read in pages, in a stable order.
+const PAGE = 500;
 async function readAll(client, table, columns, eventId) {
-  const { data, error } = await client.from(table).select(columns).eq('event_id', eventId);
-  if (error) throw error;
-  return data;
+  const rows = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await client
+      .from(table)
+      .select(columns)
+      .eq('event_id', eventId)
+      .order('id')
+      .range(from, from + PAGE - 1);
+    if (error) throw error;
+    rows.push(...data);
+    if (data.length < PAGE) return rows;
+  }
 }
 
 // Everything one screen or one live payload needs, read together.
@@ -112,8 +124,12 @@ export const castVote = ({ orgId, matchId, slotId }, handlers) =>
 export const undoVote = ({ orgId, matchId, slotId }, handlers) =>
   submit(TD_OPERATIONS.undo, { p_org_id: orgId, p_match_id: matchId, p_slot_id: slotId }, handlers);
 
-export const confirmMatch = ({ orgId, matchId }, handlers) =>
-  submit(TD_OPERATIONS.confirm, { p_org_id: orgId, p_match_id: matchId }, handlers);
+export const confirmMatch = ({ orgId, matchId, expectedWinnerSlotId = null }, handlers) =>
+  submit(
+    TD_OPERATIONS.confirm,
+    { p_org_id: orgId, p_match_id: matchId, p_expected_winner_slot_id: expectedWinnerSlotId },
+    handlers,
+  );
 
 export const recordWalkover = ({ orgId, matchId, winnerSlotId }, handlers) =>
   submit(
@@ -122,23 +138,35 @@ export const recordWalkover = ({ orgId, matchId, winnerSlotId }, handlers) =>
     handlers,
   );
 
-// Taps still waiting in the outbox for a match, as a change to the displayed counts: +1 per queued vote for a slot,
-// -1 per queued undo. The screen shows server counts plus this, so a tap made offline is visible at once and a
-// replay that has not landed yet is not double counted (the server count only moves when the operation lands, and
-// a landed operation is removed from the queue).
-export async function pendingVoteDeltas(matchId) {
+// What is still waiting in the outbox, as the screen needs it: per match the change to the displayed vote counts (+1
+// per queued tap for a slot, -1 per queued undo) and whether a decision (confirm or walkover) is queued, and whether a
+// draw is queued. The screen shows server counts plus these, so a tap made offline is visible at once. `signature`
+// lets a reader tell that the queue changed while it was reading the server (see eventScreen.js refresh).
+export async function pendingSnapshot() {
   const ops = await listAllOperations();
-  const deltas = new Map();
-  let queued = 0;
+  const matches = new Map();
+  const forMatch = (id) => {
+    if (!matches.has(id)) matches.set(id, { deltas: new Map(), queued: 0, decisionQueued: false });
+    return matches.get(id);
+  };
+  let startQueued = false;
   for (const op of ops) {
-    if (op.payload?.p_match_id !== matchId) continue;
-    if (op.type === TD_OPERATIONS.vote) {
-      deltas.set(op.payload.p_slot_id, (deltas.get(op.payload.p_slot_id) ?? 0) + 1);
-      queued += 1;
-    } else if (op.type === TD_OPERATIONS.undo) {
-      deltas.set(op.payload.p_slot_id, (deltas.get(op.payload.p_slot_id) ?? 0) - 1);
-      queued += 1;
+    const payload = op.payload ?? {};
+    if (op.type === TD_OPERATIONS.start) startQueued = true;
+    else if (op.type === TD_OPERATIONS.vote || op.type === TD_OPERATIONS.undo) {
+      const m = forMatch(payload.p_match_id);
+      const step = op.type === TD_OPERATIONS.vote ? 1 : -1;
+      m.deltas.set(payload.p_slot_id, (m.deltas.get(payload.p_slot_id) ?? 0) + step);
+      m.queued += 1;
+    } else if (op.type === TD_OPERATIONS.confirm || op.type === TD_OPERATIONS.walkover) {
+      forMatch(payload.p_match_id).decisionQueued = true;
     }
   }
-  return { deltas, queued };
+  return { matches, startQueued, signature: ops.map((o) => o.id).join(',') };
+}
+
+// One match's share of the snapshot.
+export async function pendingVoteDeltas(matchId) {
+  const { matches } = await pendingSnapshot();
+  return matches.get(matchId) ?? { deltas: new Map(), queued: 0, decisionQueued: false };
 }

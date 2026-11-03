@@ -153,6 +153,11 @@ test.describe('Throwdown, a full 8-competitor test event (real app, real local S
     await expect(projector.locator('.is-test-banner')).toBeVisible();
     await expect(phone.locator('.is-test-banner')).toBeVisible();
     // a bracket with a Final, and the 3rd place match was played (no walkover in the semi-finals above)
-    await expect(page.locator('.td-round h3')).toContainText(['Final']);
+    await expect(page.locator('.td-round h3')).toContainText([
+      'Quarter-finals',
+      'Semi-finals',
+      '3rd place',
+      'Final',
+    ]);
   });
 });

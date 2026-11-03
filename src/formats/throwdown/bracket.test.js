@@ -116,6 +116,27 @@ describe('deriveBracket', () => {
     expect(done).toMatchObject({ champion: 'A', runnerUp: 'B', thirdPlace: 'D', complete: true });
   });
 
+  it('is not complete while the 3rd place match is still open, even with the Final decided', () => {
+    const b = deriveBracket({
+      rounds: [round('r3', 3, 'third_place'), round('r4', 4)],
+      matches: [
+        match('m3', 'r3', 1),
+        match('m4', 'r4', 1, { result_kind: 'votes', confirmed_at: 't' }),
+      ],
+      slots: [
+        slot('a', 'm3', 1, 'eC'),
+        slot('b', 'm3', 2, 'eD'),
+        slot('c', 'm4', 1, 'eA'),
+        slot('d', 'm4', 2, 'eB'),
+      ],
+      votes: [...taps('c', 2, 'm4'), ...taps('d', 1, 'm4')],
+      entries,
+    });
+    expect(b.champion).toBe('A');
+    expect(b.thirdPlace).toBeNull();
+    expect(b.complete).toBe(false);
+  });
+
   it('does not call a level confirmed-by-votes match decided for a winner (no inferred winner)', () => {
     const b = deriveBracket({
       rounds: [round('r1', 1)],

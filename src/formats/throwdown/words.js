@@ -16,6 +16,14 @@ const REFUSALS = {
   td_module_unknown: 'That module is not available.',
   td_module_dependency: 'That module needs another module switched on first.',
   td_judge_count_invalid: 'The judge count must be between 1 and 15.',
+  td_leader_changed:
+    'The votes changed while you were looking. Check the result and confirm again.',
+  td_slot_invalid: 'That competitor is not in this match.',
+  td_slot_empty: 'That slot has no competitor.',
+  td_seeding_invalid: 'Choose a random or a manual draw.',
+  td_seed_invalid: 'A random draw needs its draw code.',
+  td_draw_shape: 'The draw is not in pairs.',
+  td_module_invalid: 'The module choices are not valid.',
   event_window_locked: 'This event is closed.',
 };
 

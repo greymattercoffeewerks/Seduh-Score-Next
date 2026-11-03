@@ -412,7 +412,7 @@ select is(
   s.tbl || ': nobody INSERTS into an organisation without belonging to it (every attempt refused with 42501)'
 ) from e1.spec s order by s.tbl;
 
--- the moves: 28 tables, 27 with something to move, both directions
+-- the moves: 34 tables, 33 with something to move, both directions
 select is(
   (select coalesce(string_agg(r.caller || '/' || r.org || '=' || r.code, ' ' order by r.caller, r.org), 'none')
      from e1.results r

@@ -13,11 +13,7 @@
 import { getSupabase } from '../../core/supabaseClient.js';
 import { findEvent } from '../../core/events.js';
 import { findActiveLiveEventId } from '../../core/publish.js';
-import {
-  publishIntentHandler,
-  submitPublishIntent,
-  enqueuePublishIntent,
-} from '../../core/publishIntent.js';
+import { publishIntentHandler, submitPublishIntent } from '../../core/publishIntent.js';
 import { loadThrowdown } from './data.js';
 
 export const THROWDOWN_LIVE_OPERATION = 'publish_throwdown_live_session';
@@ -66,7 +62,7 @@ export function assembleThrowdownPayload({ event, bracket, activeCount }) {
   };
 }
 
-export async function buildThrowdownLivePayload(eventId, client = getSupabase()) {
+async function buildThrowdownLivePayload(eventId, client = getSupabase()) {
   const [event, state] = await Promise.all([
     findEvent(eventId, client),
     loadThrowdown(eventId, client),
@@ -104,11 +100,6 @@ function intentFor(event, takeOver) {
     isTest: event.is_test,
     onlyIfLive: takeOver !== true,
   };
-}
-
-// Persists the intent without flushing, so the publish queues BEHIND the write it describes.
-export async function enqueueThrowdownLive({ event, takeOver }) {
-  await enqueuePublishIntent(THROWDOWN_LIVE_OPERATION, intentFor(event, takeOver));
 }
 
 export async function publishThrowdownLive({ event, takeOver }, handlers) {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { deriveBracket } from './bracket.js';
-import { assembleThrowdownPayload } from './liveSession.js';
+import { assembleThrowdownPayload, publishThrowdownLive } from './liveSession.js';
 import { throwdownOutboxHandlers, throwdownOperationLabels } from './outboxHandlers.js';
 import { describeThrowdownError, resultLine } from './words.js';
 
@@ -123,5 +123,24 @@ describe('words', () => {
     const [m] = deriveBracket(base).rounds[0].matches;
     expect(resultLine(m)).toBe('2 to 1');
     expect(resultLine({ resultKind: 'walkover' })).toBe('Walkover');
+  });
+});
+
+describe('is_test on the live publish', () => {
+  it('refuses to publish an event whose is_test is not an explicit boolean (D9)', async () => {
+    await expect(
+      publishThrowdownLive({ event: { id: 'e', org_id: 'o' }, takeOver: true }, {}),
+    ).rejects.toThrow(/is_test/);
+    await expect(
+      publishThrowdownLive(
+        { event: { id: 'e', org_id: 'o', is_test: undefined }, takeOver: true },
+        {},
+      ),
+    ).rejects.toThrow(TypeError);
+  });
+  it('requires the composed handler map', async () => {
+    await expect(
+      publishThrowdownLive({ event: { id: 'e', org_id: 'o', is_test: true }, takeOver: true }),
+    ).rejects.toThrow(/handler map/);
   });
 });

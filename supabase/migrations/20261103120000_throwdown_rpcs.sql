@@ -24,7 +24,7 @@
 --
 -- rollback:
 --   drop function if exists public.td_record_walkover(uuid, uuid, uuid, uuid);
---   drop function if exists public.td_confirm_match(uuid, uuid, uuid);
+--   drop function if exists public.td_confirm_match(uuid, uuid, uuid, uuid);
 --   drop function if exists public.td_undo_vote(uuid, uuid, uuid, uuid);
 --   drop function if exists public.td_cast_vote(uuid, uuid, uuid, uuid);
 --   drop function if exists public.td_start_event(uuid, uuid, uuid, text, text, int, jsonb);
@@ -415,7 +415,12 @@ grant execute on function public.td_undo_vote(uuid, uuid, uuid, uuid) to authent
 
 -- ============ confirm: the majority wins; level votes cannot be committed ============
 
-create or replace function public.td_confirm_match(p_operation_id uuid, p_org_id uuid, p_match_id uuid)
+-- p_expected_winner_slot_id (optional): the slot the organiser saw leading when they pressed Confirm. If the votes have
+-- moved since (another device, a tap that landed in between), the confirm is refused (td_leader_changed) instead of
+-- committing a winner the organiser did not see.
+create or replace function public.td_confirm_match(
+  p_operation_id uuid, p_org_id uuid, p_match_id uuid, p_expected_winner_slot_id uuid default null
+)
 returns void
 language plpgsql
 security definer
@@ -425,6 +430,7 @@ declare
   v_event   uuid;
   v_leaders int;
   v_top     bigint;
+  v_leader  uuid;
 begin
   v_event := app.td_guard_match('td_confirm_match', p_org_id, p_match_id);
   perform pg_advisory_xact_lock(hashtext('td:' || v_event::text));
@@ -439,7 +445,8 @@ begin
     raise exception 'td_confirm_match: the match does not have two competitors' using hint = 'td_match_not_ready';
   end if;
 
-  select count(*) filter (where t.n = t.mx), max(t.n) into v_leaders, v_top
+  select count(*) filter (where t.n = t.mx), max(t.n), (array_agg(t.id) filter (where t.n = t.mx))[1]
+    into v_leaders, v_top, v_leader
     from (select s.id, count(v.id) as n, max(count(v.id)) over () as mx
             from public.td_slots s left join public.td_votes v on v.slot_id = s.id
            where s.match_id = p_match_id and s.entry_id is not null
@@ -447,14 +454,17 @@ begin
   if v_top = 0 or v_leaders <> 1 then
     raise exception 'td_confirm_match: the votes are level' using hint = 'td_votes_level';
   end if;
+  if p_expected_winner_slot_id is not null and p_expected_winner_slot_id <> v_leader then
+    raise exception 'td_confirm_match: the leader changed since you looked' using hint = 'td_leader_changed';
+  end if;
 
   update public.td_matches set result_kind = 'votes', confirmed_at = now() where id = p_match_id;
   perform app.td_advance(v_event);
   insert into public.processed_operations (id, org_id, kind) values (p_operation_id, p_org_id, 'td_confirm_match');
 end;
 $$;
-revoke all on function public.td_confirm_match(uuid, uuid, uuid) from public, anon;
-grant execute on function public.td_confirm_match(uuid, uuid, uuid) to authenticated;
+revoke all on function public.td_confirm_match(uuid, uuid, uuid, uuid) from public, anon;
+grant execute on function public.td_confirm_match(uuid, uuid, uuid, uuid) to authenticated;
 
 -- ============ walkover: its own result kind, never a tally ============
 

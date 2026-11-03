@@ -15,7 +15,7 @@
 --   * nobody writes a td_* table directly, a non-member reads zero rows and every function answers "event not found",
 --     every parent column is frozen, and a pair match cannot take a third slot.
 begin;
-select plan(98);
+select plan(116);
 
 create schema t071;
 grant usage on schema t071 to anon, authenticated;
@@ -77,10 +77,14 @@ insert into events (id, org_id, format, name) values
   (t071.u(160), t071.u(100), 'cup_taster', 'A Cup Taster'),
   (t071.u(210), t071.u(200), 'throwdown', 'Other org');
 insert into events (id, org_id, format, name, is_test) values (t071.u(170), t071.u(100), 'throwdown', 'Throwaway', true);
+insert into events (id, org_id, format, name) values
+  (t071.u(180), t071.u(100), 'throwdown', 'Throwdown leader'),
+  (t071.u(190), t071.u(100), 'throwdown', 'Throwdown replay'),
+  (t071.u(195), t071.u(100), 'throwdown', 'Throwdown no third place');
 -- competitors: event 110 -> entries 1..8 (ids 1101..1108), 120 -> 5, 130 -> 6, 140 -> 4, 210 -> 2
 insert into event_entries (id, event_id, display_name)
 select t071.u(e.ev * 10 + n), t071.u(e.ev), 'P' || n
-  from (values (110, 8), (120, 5), (130, 6), (140, 4), (170, 2), (210, 2)) e(ev, cnt), generate_series(1, 8) n
+  from (values (110, 8), (120, 5), (130, 6), (140, 4), (170, 2), (180, 2), (190, 2), (195, 4), (210, 2)) e(ev, cnt), generate_series(1, 8) n
  where n <= e.cnt;
 
 -- reads the winner's display name of a match by position (null while undecided)
@@ -183,7 +187,7 @@ select t071.contains(t071.start(110, 'random', null, array[1,2,3,4,5,6,7,8]), '%
 select t071.contains(t071.start(110, 'random', 'seed-110', array[1,2,3,4,5,6,7]), '%td_draw_empty%', 'a slot count that does not match the pairs is refused');
 select t071.contains(t071.start(110, 'random', 'seed-110', array[1,2,3,4,5,6]), '%td_draw_incomplete%', 'a random draw must place every active competitor');
 select t071.contains(t071.start(110, 'random', 'seed-110', array[1,2,3,4,5,6,7,1]), '%td_draw_duplicate%', 'a competitor can fill only one slot');
-select t071.contains(t071.start(110, 'random', 'seed-110', array[1,2,3,4,5,6,7,21]), '%td_draw_entry%', 'a competitor of another event is refused');
+select t071.contains(t071.start(110, 'random', 'seed-110', array[1,2,3,4,5,6,7,1001]), '%td_draw_entry%', 'a competitor of another event is refused');
 select is(t071.start(110, 'random', 'seed-110', array[3,7,1,5,2,8,4,6]), 'ok', 'the random draw starts Round 1');
 select is(t071.rounds(110), '1:main:4', 'Round 1 has four matches');
 select is((select seed || '/' || mode || '/' || slot_count from td_draws where event_id = t071.u(110)), 'seed-110/random/8', 'the shuffle seed is recorded with the draw');
@@ -201,6 +205,8 @@ select t071.tap(110, 1, 1, 1, 1);
 select t071.tap(110, 1, 1, 2, 1);
 select t071.contains(t071.confirm(110, 1, 1), '%td_votes_level%', 'confirm is still refused at 1-1');
 select is((select count(*)::int from td_votes where match_id = t071.m(110, 1, 1)), 2, 'votes are rows, one per tap, with no judge identity');
+select is((select string_agg(column_name, ',' order by column_name) from information_schema.columns where table_schema = 'public' and table_name = 'td_votes'),
+  'created_at,event_id,id,match_id,slot_id', 'and a vote row has no judge column at all: only the slot it counts for');
 select t071.tap(110, 1, 1, 1, 1);
 select is(t071.confirm(110, 1, 1), 'ok', 'confirm succeeds at 2-1');
 select is(t071.winner(110, 1, 1), 'P3', 'the majority winner is derived from the vote rows');
@@ -250,6 +256,7 @@ select is((select result_kind from td_matches where id = t071.m(120, 1, 3)), 'by
 select is(t071.winner(120, 1, 3), 'P5', 'and the lone competitor advances');
 select is(t071.decide(120, 1, 1, 1) || t071.decide(120, 1, 2, 2), 'okok', 'the two real matches are played');
 select is(t071.rounds(120), '1:main:3 2:main:2', 'three winners make two matches, the last one a bye');
+select is((select result_kind from td_matches where id = t071.m(120, 2, 2)), 'bye', 'and that match is a decided bye');
 select is(t071.decide(120, 2, 1, 1), 'ok', 'P1 beats P4');
 select is(t071.rounds(120), '1:main:3 2:main:2 3:main:1', 'no 3rd place match when a semi-final was a bye; the Final follows');
 select is(t071.decide(120, 3, 1, 2), 'ok', 'the Final is won by the bye competitor');
@@ -292,7 +299,7 @@ select is((select count(*)::int from information_schema.role_table_grants
               and (grantee = 'anon' or privilege_type <> 'SELECT')), 0,
   'anon holds nothing on any Throwdown table, and signed-in members only SELECT');
 select ok(t071.count_as(t071.u(1), 'td_votes') > 0 and t071.count_as(t071.u(1), 'td_matches') > 0, 'a member of the organisation reads its rows');
-select is(t071.count_as(t071.u(2), 'td_matches') + t071.count_as(t071.u(2), 'td_votes') + t071.count_as(t071.u(2), 'td_slots')
+select is(t071.count_as(t071.u(2), 'td_match_results') + t071.count_as(t071.u(2), 'td_matches') + t071.count_as(t071.u(2), 'td_votes') + t071.count_as(t071.u(2), 'td_slots')
           + t071.count_as(t071.u(2), 'td_rounds') + t071.count_as(t071.u(2), 'td_settings') + t071.count_as(t071.u(2), 'td_draws'),
   0, 'a non-member reads zero rows of every Throwdown table');
 select t071.contains(t071.as_user(t071.u(2), format('select public.td_cast_vote(gen_random_uuid(), %L, %L, %L)', t071.u(100), t071.m(120, 3, 1), t071.s(120, 3, 1, 1))),
@@ -308,13 +315,48 @@ insert into entitlement_grants (org_id, event_id, tier, valid_from, valid_until,
 update app.entitlement_keys set enforced = true where key = 'event_window_lock';
 select is(t071.as_user(t071.u(1), format('select public.td_save_settings(%L, %L, 3, true, ''random'', ''{}'')', t071.u(100), t071.u(150))),
   '42501|event_window_locked||td_save_settings: this event is closed', 'an event whose Per-event window has ended is closed to the Throwdown functions as well');
+select t071.contains(t071.as_user(t071.u(1), format('select public.td_save_settings(%L, %L, 3, true, ''random'', ''{}'')', t071.u(100), t071.u(110))),
+  '23001|td_setup_locked%', 'an open event is not closed by the window guard: it reaches its own rule (setup locked)');
 update app.entitlement_keys set enforced = false where key = 'event_window_lock';
 select is(t071.as_user(t071.u(1), format('select public.td_save_settings(%L, %L, 3, true, ''random'', ''{}'')', t071.u(100), t071.u(150))), 'ok',
   '...and with the lock switched off it is open again');
 
+-- ============ replays, the leader check, and the 3rd place switch ============
+-- replay of one undo operation takes back ONE vote
+select is(t071.start(180, 'random', 'seed-180', array[1,2]), 'ok', 'a two-competitor event starts');
+select t071.tap(180, 1, 1, 1, 2);
+select is(t071.as_user(t071.u(1), format('select public.td_undo_vote(%L, %L, %L, %L); select public.td_undo_vote(%L, %L, %L, %L)',
+    t071.u(9002), t071.u(100), t071.m(180, 1, 1), t071.s(180, 1, 1, 1), t071.u(9002), t071.u(100), t071.m(180, 1, 1), t071.s(180, 1, 1, 1))), 'ok',
+  'the same undo operation replayed...');
+select is((select count(*)::int from td_votes where slot_id = t071.s(180, 1, 1, 1)), 1, '...takes back one vote, not two');
+select t071.tap(180, 1, 1, 1, 1);
+select t071.contains(t071.as_user(t071.u(1), format('select public.td_confirm_match(gen_random_uuid(), %L, %L, %L)', t071.u(100), t071.m(180, 1, 1), t071.s(180, 1, 1, 2))),
+  '%td_leader_changed%', 'a confirm that expected the other competitor to lead is refused');
+select is(t071.as_user(t071.u(1), format('select public.td_confirm_match(gen_random_uuid(), %L, %L, %L)', t071.u(100), t071.m(180, 1, 1), t071.s(180, 1, 1, 1))), 'ok',
+  'and one that expected the real leader is committed');
+
+-- a walkover and a draw replayed with the same operation id do nothing the second time
+select is(t071.as_user(t071.u(1), format('select public.td_start_event(%L, %L, %L, ''random'', ''seed-190'', 2, %L); select public.td_start_event(%L, %L, %L, ''random'', ''seed-190'', 2, %L)',
+    t071.u(9003), t071.u(100), t071.u(190), t071.pairs(190, array[1,2]), t071.u(9003), t071.u(100), t071.u(190), t071.pairs(190, array[1,2]))), 'ok',
+  'the same draw operation replayed is not "already started"');
+select is(t071.as_user(t071.u(1), format('select public.td_record_walkover(%L, %L, %L, %L); select public.td_record_walkover(%L, %L, %L, %L)',
+    t071.u(9004), t071.u(100), t071.m(190, 1, 1), t071.s(190, 1, 1, 1), t071.u(9004), t071.u(100), t071.m(190, 1, 1), t071.s(190, 1, 1, 1))), 'ok',
+  'the same walkover operation replayed is a quiet no-op');
+select t071.contains(t071.as_user(t071.u(1), format('select public.td_record_walkover(gen_random_uuid(), %L, %L, %L)', t071.u(100), t071.m(190, 1, 1), t071.s(190, 1, 1, 2))),
+  '%td_match_decided%', 'but a DIFFERENT walkover operation on the decided match is refused');
+
+-- the 3rd place switch: off means no 3rd place match
+select is(t071.as_user(t071.u(1), format('select public.td_save_settings(%L, %L, 3, false, ''random'', ''{}'')', t071.u(100), t071.u(195))), 'ok', '3rd place switched off');
+select is(t071.start(195, 'random', 'seed-195', array[1,2,3,4]), 'ok', 'four competitors start');
+select is(t071.decide(195, 1, 1, 1) || t071.decide(195, 1, 2, 1), 'okok', 'both semi-finals are played');
+select is(t071.rounds(195), '1:main:2 2:main:1', 'with the switch off only the Final follows (no 3rd place round)');
+
 -- ============ structure ============
 select throws_ok(format('update td_matches set event_id = %L where id = %L', t071.u(210), t071.m(120, 1, 1)), '23001', null, 'a match cannot move to another event');
 select throws_ok(format('update td_votes set slot_id = %L where id = (select id from td_votes limit 1)', t071.s(120, 1, 1, 1)), '23001', null, 'a vote cannot be re-pointed');
+select throws_ok(format('update td_rounds set event_id = %L where id = (select round_id from td_matches where id = %L)', t071.u(210), t071.m(120, 1, 1)), '23001', null, 'a round cannot move to another event');
+select throws_ok(format('update td_slots set match_id = %L where id = %L', t071.m(110, 1, 1), t071.s(120, 1, 1, 1)), '23001', null, 'a slot cannot be moved to another match');
+select throws_ok(format('update td_settings set event_id = %L where event_id = %L', t071.u(210), t071.u(110)), '23001', null, 'a setup row cannot move to another event');
 select throws_ok(format('insert into td_slots (event_id, match_id, position) values (%L, %L, 3)', t071.u(120), t071.m(120, 1, 1)),
   'P0001', 'a pair match has exactly 2 slots', 'a pair match cannot take a third slot');
 

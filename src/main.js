@@ -58,6 +58,7 @@ import {
   throwdownOperationLabels,
 } from './formats/throwdown/outboxHandlers.js';
 import { mountThrowdownEventScreen } from './formats/throwdown/eventScreen.js';
+import { mountThrowdownResultsScreen } from './formats/throwdown/resultsScreen.js';
 import { trackInputModality } from './core/inputModality.js';
 
 // Every configured format an organiser can create an event as — passed into
@@ -966,6 +967,14 @@ export function buildRoutes({
             signal,
             handlers: allOutboxHandlers(client),
           }),
+        auth,
+      ),
+    },
+    {
+      pattern: '/events/:eventId/throwdown/results',
+      mount: requireAuth(
+        (outlet, { eventId, client, signal }) =>
+          mountThrowdownResultsScreen(outlet, { eventId, client, signal }),
         auth,
       ),
     },

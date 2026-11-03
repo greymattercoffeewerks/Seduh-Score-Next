@@ -8,14 +8,16 @@ import { mountThrowdownEventScreen } from './eventScreen.js';
 const EVENT = { id: 'ev', org_id: 'org', format: 'throwdown', name: 'Rehearsal', is_test: true };
 
 // A tiny read-only client: tables answer with the rows given, the events table answers the event.
-function clientWith(tables) {
+function clientWith(tables, event = EVENT) {
   return {
     from(name) {
       const rows = tables[name] ?? [];
       const q = {
         select: () => q,
         eq: () => q,
-        single: async () => ({ data: name === 'events' ? EVENT : rows[0], error: null }),
+        order: () => q,
+        range: () => q,
+        single: async () => ({ data: name === 'events' ? event : rows[0], error: null }),
         maybeSingle: async () => ({ data: rows[0] ?? null, error: null }),
         then: (resolve) => resolve({ data: rows, error: null }),
       };
@@ -45,12 +47,12 @@ const started = {
   event_entries: entries,
 };
 
-async function mount(tables) {
+async function mount(tables, event = EVENT) {
   const root = document.createElement('div');
   document.body.append(root);
   await mountThrowdownEventScreen(root, {
     eventId: 'ev',
-    client: clientWith({ events: [EVENT], ...tables }),
+    client: clientWith({ events: [event], ...tables }, event),
     handlers: {},
   });
   return root;
@@ -66,6 +68,27 @@ describe('the Throwdown organiser screen', () => {
   it('says TEST on a test event, from the first screen', async () => {
     const root = await mount({ event_entries: entries });
     expect(root.querySelector('.is-test-banner').textContent).toContain('Test Data');
+  });
+
+  it('shows no TEST banner on a real event', async () => {
+    const root = await mount({ event_entries: entries }, { ...EVENT, is_test: false });
+    expect(root.querySelector('.is-test-banner')).toBeNull();
+  });
+
+  it('closes voting on a match whose result is waiting to sync', async () => {
+    const { enqueueOperation } = await import('../../core/outbox.js');
+    await enqueueOperation('td_confirm_match', {
+      p_operation_id: 'x',
+      p_org_id: 'org',
+      p_match_id: 'm1',
+    });
+    const root = await mount(started);
+    expect(root.textContent).toContain('waiting to sync');
+    expect(
+      [...root.querySelectorAll('.td-vote')].every(
+        (b) => b.getAttribute('aria-disabled') === 'true',
+      ),
+    ).toBe(true);
   });
 
   it('before the draw offers competitors, setup and the draw, and no module controls', async () => {

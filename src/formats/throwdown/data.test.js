@@ -2,11 +2,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import 'fake-indexeddb/auto';
 import { _clearAllForTests } from '../../core/db.js';
-import { listAllOperations, _resetOutboxOwnerForTests } from '../../core/outbox.js';
+import { flushOutbox, listAllOperations, _resetOutboxOwnerForTests } from '../../core/outbox.js';
 import {
   castVote,
   undoVote,
   confirmMatch,
+  recordWalkover,
+  pendingSnapshot,
   pendingVoteDeltas,
   startEvent,
   loadThrowdown,
@@ -18,6 +20,8 @@ function table(rows, single = null) {
   const q = {
     select: () => q,
     eq: () => q,
+    order: () => q,
+    range: () => q,
     maybeSingle: async () => ({ data: single, error: null }),
     then: (resolve) => resolve({ data: rows, error: null }),
   };
@@ -57,14 +61,47 @@ describe('the writes go through the outbox with an operation id', () => {
     expect(deltas.has('x')).toBe(false);
   });
 
-  it('queues a confirm behind the taps it depends on (FIFO), then sends both', async () => {
+  it('sends taps first and the confirm after them (FIFO), never the confirm ahead of its taps', async () => {
     const calls = [];
+    let down = true;
     const rpc = vi.fn(async (type) => {
+      if (down) return { error: { message: 'down', code: '08006' }, status: 503 };
       calls.push(type);
       return { error: null, status: 200 };
     });
-    await confirmMatch({ orgId: 'o', matchId: 'm' }, dataHandlers({ rpc }));
-    expect(calls).toEqual(['td_confirm_match']);
+    const handlers = dataHandlers({ rpc });
+    await castVote({ orgId: 'o', matchId: 'm', slotId: 's1' }, handlers);
+    await castVote({ orgId: 'o', matchId: 'm', slotId: 's1' }, handlers);
+    await confirmMatch({ orgId: 'o', matchId: 'm', expectedWinnerSlotId: 's1' }, handlers);
+    expect(calls).toEqual([]);
+    down = false;
+    await flushOutbox(handlers);
+    expect(calls).toEqual(['td_cast_vote', 'td_cast_vote', 'td_confirm_match']);
+  });
+
+  it('sends the expected winner with a confirm', async () => {
+    const rpc = vi.fn(async () => ({ error: null, status: 200 }));
+    await confirmMatch(
+      { orgId: 'o', matchId: 'm', expectedWinnerSlotId: 's9' },
+      dataHandlers({ rpc }),
+    );
+    expect(rpc.mock.calls[0][1]).toMatchObject({ p_expected_winner_slot_id: 's9' });
+  });
+
+  it('tells the screen a decision or a draw is queued, so it can stop offering voting', async () => {
+    const rpc = vi.fn(async () => ({ error: { message: 'down', code: '08006' }, status: 503 }));
+    const handlers = dataHandlers({ rpc });
+    await confirmMatch({ orgId: 'o', matchId: 'm1' }, handlers);
+    await recordWalkover({ orgId: 'o', matchId: 'm2', winnerSlotId: 's' }, handlers);
+    await startEvent(
+      { orgId: 'o', eventId: 'e', mode: 'manual', slotCount: 2, pairs: [['a', 'b']] },
+      handlers,
+    );
+    const snap = await pendingSnapshot();
+    expect(snap.matches.get('m1').decisionQueued).toBe(true);
+    expect(snap.matches.get('m2').decisionQueued).toBe(true);
+    expect(snap.startQueued).toBe(true);
+    expect(snap.signature.split(',')).toHaveLength(3);
   });
 
   it('reports a permanent refusal so the screen can say why (the votes are level)', async () => {

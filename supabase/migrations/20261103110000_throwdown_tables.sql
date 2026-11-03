@@ -172,7 +172,7 @@ create table td_matches (
   constraint td_matches_result_kind_valid check (result_kind in ('votes', 'walkover', 'bye')),
   constraint td_matches_confirmed_with_result check ((result_kind is null) = (confirmed_at is null)),
   constraint td_matches_walkover_winner check (
-    (result_kind = 'walkover') = (walkover_winner_position is not null)
+    coalesce(result_kind = 'walkover', false) = (walkover_winner_position is not null)
     and (walkover_winner_position is null or walkover_winner_position between 1 and 4)
   )
 );
@@ -222,6 +222,7 @@ alter table td_slots enable row level security;
 create index on td_slots (event_id);
 create index on td_slots (match_id);
 create index on td_slots (entry_id);
+create index on td_slots (feeder_match_id);
 create trigger trg_td_slots_parent_immutable
   before update on td_slots
   for each row execute function app.forbid_parent_change('event_id', 'match_id');
@@ -269,6 +270,7 @@ create table td_votes (
   created_at  timestamptz not null default clock_timestamp()
 );
 alter table td_votes enable row level security;
+create index on td_votes (event_id);
 create index on td_votes (match_id);
 create index on td_votes (slot_id, created_at);
 create trigger trg_td_votes_parent_immutable

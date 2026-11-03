@@ -8,6 +8,10 @@ describe('seededShuffle', () => {
     expect(seededShuffle(items, 'abc')).toEqual(seededShuffle(items, 'abc'));
   });
 
+  it('keeps giving the order it gave when a draw was recorded (a changed generator would make past draws unexplainable)', () => {
+    expect(seededShuffle([1, 2, 3, 4, 5, 6, 7, 8], 'pin-seed-1')).toEqual([4, 7, 1, 2, 3, 8, 5, 6]);
+  });
+
   it('is a permutation: nothing lost, nothing repeated, and the input is untouched', () => {
     const before = [...items];
     const out = seededShuffle(items, 'seed-1');

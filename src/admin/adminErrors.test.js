@@ -109,6 +109,7 @@ const NOT_FOR_THE_CONSOLE = {
   td_slot_invalid: 'Throwdown format',
   td_match_not_ready: 'Throwdown format',
   td_votes_level: 'Throwdown format',
+  td_leader_changed: 'Throwdown format',
 };
 
 describe('the hint copy covers every hint the console can meet', () => {
