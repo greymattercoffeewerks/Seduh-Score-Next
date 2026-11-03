@@ -12,7 +12,7 @@
 export const CONTACT_EMAIL = 'greymatter.cw@outlook.com';
 const EMAIL = `[${CONTACT_EMAIL}](mailto:${CONTACT_EMAIL})`;
 
-export const PRIVACY_UPDATED = '1 November 2026';
+export const PRIVACY_UPDATED = '3 November 2026';
 export const TERMS_UPDATED = '1 November 2026';
 
 export const TRUST_PAGES = [
@@ -132,6 +132,7 @@ export const TRUST_PAGES = [
         items: [
           'A phone number in international format, the name it was published under, and, if the organiser entered one, a country.',
           'It is created only when you are named in a published, non-test result, or by us on request. Rehearsal (“test”) events never create one.',
+          'When you are named on a podium published on a Seduh Score results page, we create a Seduh ID record for the phone number your organiser entered for you, or use the record that number already has.',
           'It is linked to the entry for you in each organiser’s own registry, so the same phone number is recognised as the same person. If an organiser changes the phone number on your entry, the link is removed and checked again.',
           'It holds no email address, no results, no scores and no sign-in. Its contents are shown on no page, public or private. An organiser’s own people list shows only whether a person is linked.',
           'An organiser can also record, for its own people, that someone is staff or affiliated with it.',

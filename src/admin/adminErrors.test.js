@@ -52,6 +52,13 @@ const NOT_FOR_THE_CONSOLE = {
   people_global_person_id_unknown:
     'raised only by the owner-run people_global_person_id_fkey migration guard, never over the API',
   // Seduh ID backfill (T-ID.B4): owner-run function, refuses an API role.
+  // Seduh ID archive feed (T-ID.D1): owner-run functions, refuse an API role; never a console call.
+  seduh_feed_owner_only:
+    'raised only to an API role calling an owner-run Seduh ID feed function; never an admin console call',
+  seduh_feed_ids_required:
+    'raised only to the database owner running the feed or its undo without result ids; never an admin console call',
+  seduh_feed_mode_off:
+    'raised only to the database owner running the feed while its mode is off; never an admin console call',
   seduh_backfill_owner_only:
     'raised only to an API role calling the owner-run identity backfill; never an admin console call',
   // Archive tick box (T-ARC.3): the organiser's own RPC, never an admin console call.
