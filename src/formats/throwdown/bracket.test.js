@@ -137,6 +137,30 @@ describe('deriveBracket', () => {
     expect(b.complete).toBe(false);
   });
 
+  it('names a 3rd place winner when a semi-final was a walkover (the match is played, not skipped)', () => {
+    const b = deriveBracket({
+      rounds: [round('r2', 2, 'third_place'), round('r3', 3)],
+      matches: [
+        match('m2', 'r2', 1, { result_kind: 'votes', confirmed_at: 't' }),
+        match('m3', 'r3', 1, {
+          result_kind: 'walkover',
+          confirmed_at: 't',
+          walkover_winner_position: 1,
+        }),
+      ],
+      slots: [
+        slot('a', 'm2', 1, 'eC'),
+        slot('b', 'm2', 2, 'eD'),
+        slot('c', 'm3', 1, 'eA'),
+        slot('d', 'm3', 2, 'eB'),
+      ],
+      votes: taps('a', 2, 'm2'),
+      entries,
+    });
+    expect(b.rounds.map((r) => r.label)).toEqual(['3rd place', 'Final']);
+    expect(b).toMatchObject({ champion: 'A', runnerUp: 'B', thirdPlace: 'C', complete: true });
+  });
+
   it('does not call a level confirmed-by-votes match decided for a winner (no inferred winner)', () => {
     const b = deriveBracket({
       rounds: [round('r1', 1)],

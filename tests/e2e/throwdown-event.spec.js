@@ -104,7 +104,7 @@ test.describe('Throwdown, a full 8-competitor test event (real app, real local S
     await expect(projector.locator('.is-test-banner')).toBeVisible();
 
     // ---- play: every round until a champion. One walkover along the way; every other match by judges' taps.
-    let walkedOver = false;
+    let walkedOver = 0;
     let guard = 0;
     while ((await page.locator('.td-champion').count()) === 0 && guard < 12) {
       guard += 1;
@@ -119,15 +119,15 @@ test.describe('Throwdown, a full 8-competitor test event (real app, real local S
         const confirm = card.getByRole('button', { name: /^Confirm(:| result)/ });
         // level: 0-0, then 1-1: Confirm cannot be pressed
         await expect(confirm).toHaveAttribute('aria-disabled', 'true');
-        if (!walkedOver && guard === 1 && i === 0) {
-          walkedOver = true;
+        if ((guard === 1 || guard === 2) && i === 0) {
+          walkedOver += 1;
           await card.getByText('Walkover (a competitor does not show)').click();
           await card
             .getByRole('button', { name: /advances$/ })
             .first()
             .click();
           await card.getByRole('button', { name: 'Confirm walkover' }).click();
-          await expect(page.locator('article.td-match')).toHaveCount(3, { timeout: 10000 });
+          await expect(page.locator('article.td-match')).toHaveCount(total - 1, { timeout: 10000 });
           continue;
         }
         await tap(card, 0, 1);
@@ -140,7 +140,8 @@ test.describe('Throwdown, a full 8-competitor test event (real app, real local S
         await expect(card).toBeHidden();
       }
     }
-    expect(walkedOver).toBe(true);
+    // one walkover in the quarter-finals and one in the semi-finals: the 3rd place match is still played
+    expect(walkedOver).toBe(2);
 
     // ---- the end: one champion, named the same everywhere
     const banner = page.locator('.td-champion');
@@ -152,7 +153,7 @@ test.describe('Throwdown, a full 8-competitor test event (real app, real local S
     await expect(projector.locator('.stage-champion-name')).toHaveText(champion);
     await expect(projector.locator('.is-test-banner')).toBeVisible();
     await expect(phone.locator('.is-test-banner')).toBeVisible();
-    // a bracket with a Final, and the 3rd place match was played (no walkover in the semi-finals above)
+    // a bracket with a Final, and the 3rd place match was played (a walkover semi-final still gets one: both losers exist and are active)
     await expect(page.locator('.td-round h3')).toContainText([
       'Quarter-finals',
       'Semi-finals',

@@ -15,7 +15,7 @@
 --   * nobody writes a td_* table directly, a non-member reads zero rows and every function answers "event not found",
 --     every parent column is frozen, and a pair match cannot take a third slot.
 begin;
-select plan(116);
+select plan(126);
 
 create schema t072;
 grant usage on schema t072 to anon, authenticated;
@@ -80,11 +80,13 @@ insert into events (id, org_id, format, name, is_test) values (t072.u(170), t072
 insert into events (id, org_id, format, name) values
   (t072.u(180), t072.u(100), 'throwdown', 'Throwdown leader'),
   (t072.u(190), t072.u(100), 'throwdown', 'Throwdown replay'),
-  (t072.u(195), t072.u(100), 'throwdown', 'Throwdown no third place');
+  (t072.u(195), t072.u(100), 'throwdown', 'Throwdown no third place'),
+  (t072.u(200), t072.u(100), 'throwdown', 'Throwdown walkover semi'),
+  (t072.u(201), t072.u(100), 'throwdown', 'Throwdown withdrawn loser');
 -- competitors: event 110 -> entries 1..8 (ids 1101..1108), 120 -> 5, 130 -> 6, 140 -> 4, 210 -> 2
 insert into event_entries (id, event_id, display_name)
 select t072.u(e.ev * 10 + n), t072.u(e.ev), 'P' || n
-  from (values (110, 8), (120, 5), (130, 6), (140, 4), (170, 2), (180, 2), (190, 2), (195, 4), (210, 2)) e(ev, cnt), generate_series(1, 8) n
+  from (values (110, 8), (120, 5), (130, 6), (140, 4), (170, 2), (180, 2), (190, 2), (195, 4), (200, 4), (201, 4), (210, 2)) e(ev, cnt), generate_series(1, 8) n
  where n <= e.cnt;
 
 -- reads the winner's display name of a match by position (null while undecided)
@@ -285,7 +287,26 @@ select is((select result_kind from td_matches where id = t072.m(140, 1, 1)) || '
 select t072.contains(t072.as_user(t072.u(1), format('select public.td_cast_vote(gen_random_uuid(), %L, %L, %L)', t072.u(100), t072.m(140, 1, 1), t072.s(140, 1, 1, 1))),
   '%td_match_decided%', 'no taps after a walkover');
 select is(t072.decide(140, 1, 2, 1), 'ok', 'the other semi-final is played');
-select is(t072.rounds(140), '1:main:2 2:main:1', 'no 3rd place match when a semi-final ended in a walkover');
+select is(t072.rounds(140), '1:main:2 2:third_place:1 3:main:1', 'a semi-final decided by walkover still gets a 3rd place match: both losers exist and are active');
+
+-- ============ the 3rd place match after a walkover (owner decision 2026-11-03) ============
+select is(t072.start(200, 'random', 'seed-200', array[1,2,3,4]), 'ok', 'four competitors start');
+select is(t072.as_user(t072.u(1), format('select public.td_record_walkover(gen_random_uuid(), %L, %L, %L)', t072.u(100), t072.m(200, 1, 1), t072.s(200, 1, 1, 2))), 'ok',
+  'semi-final 1 is a walkover: the second competitor advances');
+select is(t072.decide(200, 1, 2, 1), 'ok', 'semi-final 2 is played');
+select is(t072.rounds(200), '1:main:2 2:third_place:1 3:main:1', 'the walkover loser and the semi-final 2 loser play the 3rd place match, with the Final live beside it');
+select is((select string_agg(e.display_name, ',' order by s.position)
+             from td_slots s join event_entries e on e.id = s.entry_id
+            where s.match_id = t072.m(200, 2, 1)),
+  'P1,P4', 'the 3rd place match is between the walkover loser (P1) and the other loser (P4)');
+select is(t072.confirm(200, 1, 2), 'ok', 'confirming a decided semi-final again...');
+select is(t072.rounds(200), '1:main:2 2:third_place:1 3:main:1', '...creates nothing: advancement is idempotent');
+
+-- a withdrawn loser means no 3rd place match (both losers must be active)
+select is(t072.start(201, 'random', 'seed-201', array[1,2,3,4]), 'ok', 'four competitors start (second event)');
+update event_entries set withdrawn = true where id = t072.u(2012);
+select is(t072.decide(201, 1, 1, 1) || t072.decide(201, 1, 2, 1), 'okok', 'both semi-finals are played, the loser P2 having withdrawn');
+select is(t072.rounds(201), '1:main:2 2:main:1', 'a withdrawn loser blocks the 3rd place match: only the Final follows');
 
 -- ============ nobody writes directly; strangers see nothing ============
 select t072.contains(t072.as_user(t072.u(1), format('insert into td_votes (event_id, match_id, slot_id) values (%L, %L, %L)', t072.u(110), t072.m(110, 1, 1), t072.s(110, 1, 1, 1))),

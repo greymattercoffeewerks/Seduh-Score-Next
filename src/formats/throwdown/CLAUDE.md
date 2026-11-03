@@ -26,7 +26,9 @@ another format. [src/formats/cup-taster/CLAUDE.md](../cup-taster/CLAUDE.md) and
   (`app.td_advance`, in the same transaction as the result; idempotent, so a second Continue
   cannot duplicate a round). The 3rd place match is created together with the Final, only when
   the event has it on, there are exactly two winners from a round of exactly two matches, and
-  neither was a bye nor a walkover. Both are live at once.
+  BOTH semi-final losers exist and are active (`event_entries.withdrawn` false; T-TD.1.9, owner
+  decision 2026-11-03). A walkover does not block it (its loser is the other slot's competitor);
+  a bye does (no loser), and so does a withdrawn loser. Both are live at once.
 - **Shape is general.** A match has 2..4 `td_slots` (a pair round's exactly 2); a round has
   `kind` (`pair` now, `pool` reserved) and `phase` (`main | third_place | redemption`). A module
   must not change these shapes; if it has to, the core was not ready.
@@ -57,8 +59,8 @@ another format. [src/formats/cup-taster/CLAUDE.md](../cup-taster/CLAUDE.md) and
 Timer display-only (nothing recorded, no `clampElapsed`); the random draw stores its shuffle
 seed (`core/seededShuffle.js`; the browser shuffles, the database stores the seed and checks the
 shape only, it cannot replay a browser PRNG); any judge count is accepted and not capped
-(`judge_count` is shown to the organiser, an extra tap resolves an even panel); no 3rd place match
-when a semi-final was a bye or a walkover.
+(`judge_count` is shown to the organiser, an extra tap resolves an even panel); the 3rd place match
+is skipped when a semi-final was a bye or a loser has withdrawn (a walkover does not skip it).
 
 ## Module history
 

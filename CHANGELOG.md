@@ -1,8 +1,8 @@
-## T-TD.1 Throwdown core knockout: built and in review, PR into `dev`; cloud migrations NOT yet pushed · 2026-11-03
+## T-TD.1 Throwdown core knockout: built and in review, PR into `dev`; migrations now in the cloud · 2026-11-03
 
 **Task:** T-TD.1 (ROADMAP "Throwdown (third format) — Phase TD.1 Core"; tasks T-TD.1.1 to .8) on branch `claude/throwdown-td1-core-d41fad`. Throwdown is the third format: a single-elimination knockout core with entitlement keys, schema, RPCs, pure modules, data layer, organiser console, projector and phone bodies, a printable organiser results page, and a full 8-competitor test event.
 
-**State, plainly:** built and tested locally; PR into `dev` opened; the owner says when CI is green and the main session merges. **Not in the cloud:** `20261103101000` (entitlement keys), `20261103111000` (tables), `20261103120000` (RPCs) and `20261103130000` (window lock) are repo-only. After the merge they must be pushed with the Supabase MCP's `apply_migration`; Throwdown does not work against the cloud until then.
+**State, plainly:** built and tested locally; PR into `dev` opened; the owner says when CI is green and the main session merges. **In the cloud (updated 2026-11-03):** `20261103101000` (entitlement keys), `20261103111000` (tables), `20261103120000` (RPCs) and `20261103130000` (window lock) were applied to the cloud project by the main session after the release (#416, #417, v3.6.0).
 
 **Decisions (the spec is silent or left them open; the owner may overrule):**
 
@@ -11,7 +11,7 @@
 - Any judge count is accepted. Confirm is disabled while votes are level; an extra tap resolves an even panel (Q5).
 - Competitor status is `event_entries.withdrawn`, so Q8b can be settled later without a schema change.
 - No call site branches on tier (D14).
-- No third-place match when either semi-final was a bye or a walkover (the loser may have withdrawn).
+- No third-place match when either semi-final was a bye or a walkover (the loser may have withdrawn). **Superseded 2026-11-03 by T-TD.1.9:** a walkover no longer blocks it; see the T-TD.1.9 entry.
 - Cross-check (spec section 11): `core/ranking` and `core/advancement` cannot express a knockout. Both take one ranked list and a cutoff; a knockout has per-match winners that feed the next round. Advancement therefore stays in `src/formats/throwdown/` and in the SQL RPC that writes it. The one generic primitive lifted is `core/seededShuffle.js`, which Liga heats and the lucky-loser draw can reuse. Bracket layout stays Throwdown-only until a second knockout format exists. No other `core/` file was edited.
 
 **Files:** the four migrations above; `supabase/tests/072_throwdown.sql` (116 asserts); `040` (34 tables) and `041` (35 RPCs) matrices; count updates in `052`, `056`, `057` and `069`; `src/core/seededShuffle.js`; `src/formats/throwdown/*` (votes, bracket, seeding, modules, data, liveSession, outboxHandlers, eventScreen, resultsScreen, viewerBody, projectorScreens and projectorBody, words); `main.js` and `liveSurfaces.js` wiring; Playwright project `dev-throwdown`.
@@ -39,7 +39,7 @@
 **Follow-ups (ROADMAP, TD.1 status; none block TD.1):**
 
 - Owner decision: repeat byes. With an odd number of winners, the last one gets a bye in every round; the Round 1 bye competitor can get a second bye and reach the Final having played one match (5 competitors). Spec section 5 is silent.
-- Owner decision: third place after a walkover or bye (today none is made).
+- Owner decision: third place after a walkover or bye. **Decided 2026-11-03 and built as T-TD.1.9:** played whenever both semi-final losers exist and are active (a walkover no longer blocks it; a bye or a withdrawn loser still does).
 - Owner decision: a server cap on `judge_count` (today advisory).
 - Q8b (withdrawn competitor and the 8-player cap): open, no schema change needed either way.
 - Corrections after a confirm (wrong winner tapped): not in TD.1. A reopen must also undo the next round if nothing in it has started; design with the owner.
