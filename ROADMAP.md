@@ -2630,10 +2630,10 @@ schema change); no call site branches on a tier (D14); the 3rd place match is pl
 
 **TD.1 status (2026-11-03): built, in review.** Follow-ups and owner questions raised by the reviewers (none block TD.1):
 
-- **Owner decision: repeat byes.** With an odd number of winners the last one gets a bye in every round, so the Round 1 bye competitor can get a second bye and reach the Final having played one match (5 competitors: pairs `[a,b] [c,d] [e,-]`, then `[wab,wcd] [e,-]`). Options: give the bye to a competitor who has not had one. Spec section 5 is silent.
+- **Decided (owner, 2026-11-03): repeat byes stay as built.** If the random bracket happens to give a competitor two or more byes, so be it. No rule change. (Spec section 5.)
 - **3rd place after a walkover or bye: DECIDED 2026-11-03, built as T-TD.1.9.** The 3rd place match is made whenever both semi-final losers exist and are active (`event_entries.withdrawn` is false). A walkover no longer blocks it; a bye (no loser) or a withdrawn loser does. Migration `20261103140000` (new; not yet in the cloud until the main session applies it).
-- **Owner decision: judge count cap.** `judge_count` is advisory (an extra tap resolves an even panel; Q5). A server cap would stop that.
-- **Q8b** (withdrawn competitor and the 8-player cap) still open; no schema change needed either way.
+- **Decided (owner, 2026-11-03): judge count stays advisory.** The 1 to 15 range stays; no server refusal of taps beyond the panel size, so an extra tap can still resolve an even panel (Q5).
+- **Decided (owner, 2026-11-03): Q8b.** Only active (non-withdrawn) competitors count toward the 8-player Community cap. This is what is built (the cap trigger counts `not withdrawn`); no change.
 - **Corrections after a confirm** (an organiser tapped the wrong winner): not in TD.1. A reopen must also undo the next round if nothing in it has started; design with the owner.
 - **Draw is recorded, not verified.** The database stores the seed but cannot replay the browser shuffle, so "explain the draw" relies on `randomPairs(entries, seed)` re-run by a person. A recompute check at start is possible client-side only.
 - **Ledger scope (pre-existing class).** `processed_operations` lookups are global by id (all RPCs), not scoped to org and kind. Guessing a v4 id is infeasible; scope it in one migration for every RPC.
