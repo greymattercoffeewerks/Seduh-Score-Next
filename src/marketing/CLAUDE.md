@@ -291,8 +291,8 @@ by `trustMain.js` (which reads its page from `#app`'s `data-page`) and rendered 
 marker resolved or removed, and `trustScreen.test.js` fails if a `[OWNER TO CONFIRM]`/`[VERIFY]`/
 `[TEMPORARY]` note ever reaches a page.
 
-- The contact address is one constant, `CONTACT_EMAIL` in `trustContent.js`. It is temporary
-  (`greymatter.cw@outlook.com`) until a `hello@seduhscore.com` mailbox exists; swap it there and
+- The contact address is one constant, `CONTACT_EMAIL` in `trustContent.js` (`hello@seduhscore.com`, which forwards
+  to the owner's mailbox through Cloudflare Email Routing; it is also the Data Protection Officer's address). Change it there and
   nowhere else (the test asserts no other address appears on any page).
 - `publicFooter.js` links all five pages from every public page's footer (a `nav` labelled
   "About and legal"); `currentSlug` marks the page being viewed with `aria-current`.

@@ -7,9 +7,9 @@
 // Inline markup, parsed by trustScreen.js's renderInline (never innerHTML):
 //   **bold**   and   [link text](/path/)
 //
-// The contact address is ONE constant. It is temporary until a
-// hello@seduhscore.com mailbox exists; swap it here, and only here, when it does.
-export const CONTACT_EMAIL = 'greymatter.cw@outlook.com';
+// The contact address is ONE constant, and it is also the Data Protection Officer's address. hello@seduhscore.com
+// forwards to the owner's mailbox (Cloudflare Email Routing, tested 2026-11-04); change it here, and only here.
+export const CONTACT_EMAIL = 'hello@seduhscore.com';
 const EMAIL = `[${CONTACT_EMAIL}](mailto:${CONTACT_EMAIL})`;
 
 export const PRIVACY_UPDATED = '3 November 2026';
