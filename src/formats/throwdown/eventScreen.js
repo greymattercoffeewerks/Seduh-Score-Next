@@ -48,6 +48,7 @@ export async function mountThrowdownEventScreen(
     draw: null, // { seed, pairs } (random) or { slotCount, pairs } (manual)
     pending: new Map(), // matchId -> { deltas, queued, decisionQueued }
     startQueued: false,
+    deciding: false, // a confirm, walkover or draw is in flight: no tap may queue behind it
     walkoverOpen: null, // matchId whose Walkover disclosure is open
     focusTarget: null, // id to focus after the next render (a phase change replaces the focused control)
     walkover: null, // { matchId, slotId } waiting for the second tap
@@ -132,6 +133,7 @@ export async function mountThrowdownEventScreen(
   async function act(work, { publish = false } = {}) {
     if (state.busy || signal?.aborted) return;
     state.busy = true;
+    state.deciding = publish;
     state.feedback = null;
     render();
     try {
@@ -144,8 +146,9 @@ export async function mountThrowdownEventScreen(
       state.feedback = { tone: 'error', text: describeThrowdownError(err) };
     }
     state.busy = false;
+    state.deciding = false;
     if (publish && !state.feedback) state.focusTarget = 'td-now-h';
-    await refresh();
+    await refreshSoon();
   }
 
   // ---------- pieces ----------
@@ -572,7 +575,7 @@ export async function mountThrowdownEventScreen(
             className: 'btn btn-primary tap-target td-vote',
             key: `td-vote-${match.id}-${i}`,
             ignoreBusy: true,
-            disabled: decisionQueued,
+            disabled: decisionQueued || state.deciding,
           },
         ),
         el('p', {
@@ -593,7 +596,7 @@ export async function mountThrowdownEventScreen(
           {
             key: `td-undo-${match.id}-${i}`,
             ignoreBusy: true,
-            disabled: count === 0 || decisionQueued,
+            disabled: count === 0 || decisionQueued || state.deciding,
           },
         ),
       ]);

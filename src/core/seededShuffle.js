@@ -6,7 +6,7 @@
 // Format-agnostic: nothing here knows what is being shuffled. This is the fairness of the *seed* (unpredictable
 // before the draw, recorded after it); the order is a deterministic Fisher-Yates over a seeded 32-bit generator
 // (mulberry32). It is for ordering a draw, not for drawing a prize: the Random Selector's rejection-sampled engine
-// (tools/randomSelector.js) is a different job, and lifting that one into core/ is a separate, later task.
+// (src/tools/random-selector/randomSelector.js) is a different job, and lifting that one into core/ is a separate, later task.
 
 // xmur3: a string -> 32-bit hash, so any recorded text seed becomes the generator's starting state.
 function hashSeed(text) {
