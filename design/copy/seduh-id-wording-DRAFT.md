@@ -101,7 +101,7 @@ Update the date at the top (`PRIVACY_UPDATED`) when publishing.
 `[OWNER]` The Seduh ID table has, per the B4 hand-over, already been populated in the cloud, so the Privacy page is already behind the data. Publishing the block in 1a is not
 dependent on the later archive-feed work.
 
-### 1g. The archive-feed sentence (T-ID.D1d, drafted 2026-11-03; the owner publishes it)
+### 1g. The archive-feed sentence (T-ID.D1d, drafted 2026-11-03; PUBLISHED on the Privacy page 2026-11-03, PRIVACY_UPDATED bumped)
 
 The one new sentence the archive feed (T-ID.D1) needs, so that what the code does is said before it does it. It states
 only that a record is created when a person is named on a published podium. It goes in ONE place and is linked from
