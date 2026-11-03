@@ -63,7 +63,7 @@
 
 **Working tree at close:** five files are modified and not committed on this branch (`CLAUDE.md`, `ROADMAP.md`, `src/core/seededShuffle.js`, `src/formats/throwdown/CLAUDE.md`, `src/formats/throwdown/eventScreen.js`). They must be committed in the PR; this entry does not cover them as separate changes.
 
-## v3.5.2: contact and Data Protection Officer address is hello@seduhscore.com; Seduh ID opt-out time limits published · 2026-11-04
+## v3.6.1: contact and Data Protection Officer address is hello@seduhscore.com; Seduh ID opt-out time limits published · 2026-11-04
 
 **What the number covers:** the one public contact address, `CONTACT_EMAIL` (and the app's `SEDUH_SCORE_EMAIL`, which a test pins to it), changes from the temporary Outlook address to `hello@seduhscore.com`, which forwards to the owner's mailbox through Cloudflare Email Routing (the owner set it up and tested it on 2026-11-04); the Privacy page's Seduh ID opt-out now promises acknowledgement within 10 days and completion within 30 days (#419); and the Seduh ID feed rollout record (#418). A patch: wording and one address. **Not done:** replies still go out from the owner's own mailbox, not from `hello@`; the drafts under `design/copy/` still show the old address as history.
 
