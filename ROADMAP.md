@@ -2631,7 +2631,7 @@ schema change); no call site branches on a tier (D14); the 3rd place match is pl
 **TD.1 status (2026-11-03): built, in review.** Follow-ups and owner questions raised by the reviewers (none block TD.1):
 
 - **Owner decision: repeat byes.** With an odd number of winners the last one gets a bye in every round, so the Round 1 bye competitor can get a second bye and reach the Final having played one match (5 competitors: pairs `[a,b] [c,d] [e,-]`, then `[wab,wcd] [e,-]`). Options: give the bye to a competitor who has not had one. Spec section 5 is silent.
-- **3rd place after a walkover or bye: DECIDED 2026-11-03, built as T-TD.1.9.** The 3rd place match is made whenever both semi-final losers exist and are active (`event_entries.withdrawn` is false). A walkover no longer blocks it; a bye (no loser) or a withdrawn loser does. Migration `20261103140000`.
+- **3rd place after a walkover or bye: DECIDED 2026-11-03, built as T-TD.1.9.** The 3rd place match is made whenever both semi-final losers exist and are active (`event_entries.withdrawn` is false). A walkover no longer blocks it; a bye (no loser) or a withdrawn loser does. Migration `20261103140000` (new; not yet in the cloud until the main session applies it).
 - **Owner decision: judge count cap.** `judge_count` is advisory (an extra tap resolves an even panel; Q5). A server cap would stop that.
 - **Q8b** (withdrawn competitor and the 8-player cap) still open; no schema change needed either way.
 - **Corrections after a confirm** (an organiser tapped the wrong winner): not in TD.1. A reopen must also undo the next round if nothing in it has started; design with the owner.

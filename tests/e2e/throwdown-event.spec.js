@@ -142,6 +142,8 @@ test.describe('Throwdown, a full 8-competitor test event (real app, real local S
     }
     // one walkover in the quarter-finals and one in the semi-finals: the 3rd place match is still played
     expect(walkedOver).toBe(2);
+    // every match was decided, the 3rd place one included (nothing is left to play)
+    await expect(page.locator('article.td-match')).toHaveCount(0);
 
     // ---- the end: one champion, named the same everywhere
     const banner = page.locator('.td-champion');
