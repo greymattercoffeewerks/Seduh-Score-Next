@@ -137,6 +137,66 @@ describe('deriveBracket', () => {
     expect(b.complete).toBe(false);
   });
 
+  it('names the champion when the Final was a walkover, and the 3rd place winner', () => {
+    const b = deriveBracket({
+      rounds: [round('r2', 2, 'third_place'), round('r3', 3)],
+      matches: [
+        match('m2', 'r2', 1, { result_kind: 'votes', confirmed_at: 't' }),
+        match('m3', 'r3', 1, {
+          result_kind: 'walkover',
+          confirmed_at: 't',
+          walkover_winner_position: 1,
+        }),
+      ],
+      slots: [
+        slot('a', 'm2', 1, 'eC'),
+        slot('b', 'm2', 2, 'eD'),
+        slot('c', 'm3', 1, 'eA'),
+        slot('d', 'm3', 2, 'eB'),
+      ],
+      votes: taps('a', 2, 'm2'),
+      entries,
+    });
+    expect(b.rounds.map((r) => r.label)).toEqual(['3rd place', 'Final']);
+    expect(b).toMatchObject({ champion: 'A', runnerUp: 'B', thirdPlace: 'C', complete: true });
+  });
+
+  it('shows a walkover semi-final, the 3rd place match between its loser and the other loser, and the Final', () => {
+    const b = deriveBracket({
+      rounds: [round('r1', 1), round('r2', 2, 'third_place'), round('r3', 3)],
+      matches: [
+        match('m1', 'r1', 1, {
+          result_kind: 'walkover',
+          confirmed_at: 't',
+          walkover_winner_position: 2,
+        }),
+        match('m2', 'r1', 2, { result_kind: 'votes', confirmed_at: 't' }),
+        match('m3', 'r2', 1, { result_kind: 'votes', confirmed_at: 't' }),
+        match('m4', 'r3', 1, { result_kind: 'votes', confirmed_at: 't' }),
+      ],
+      slots: [
+        slot('a', 'm1', 1, 'eA'),
+        slot('b', 'm1', 2, 'eB'),
+        slot('c', 'm2', 1, 'eC'),
+        slot('d', 'm2', 2, 'eD'),
+        slot('e', 'm3', 1, 'eA'),
+        slot('f', 'm3', 2, 'eD'),
+        slot('g', 'm4', 1, 'eB'),
+        slot('h', 'm4', 2, 'eC'),
+      ],
+      votes: [
+        ...taps('c', 2, 'm2'),
+        ...taps('d', 1, 'm2'),
+        ...taps('e', 2, 'm3'),
+        ...taps('g', 2, 'm4'),
+      ],
+      entries,
+    });
+    expect(b.rounds.map((r) => r.label)).toEqual(['Semi-finals', '3rd place', 'Final']);
+    expect(b.rounds[0].matches[0].resultKind).toBe('walkover');
+    expect(b).toMatchObject({ champion: 'B', runnerUp: 'C', thirdPlace: 'A', complete: true });
+  });
+
   it('does not call a level confirmed-by-votes match decided for a winner (no inferred winner)', () => {
     const b = deriveBracket({
       rounds: [round('r1', 1)],
