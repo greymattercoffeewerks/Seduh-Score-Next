@@ -351,7 +351,9 @@ also refuses an API session by name (as B4's does).
   that the leftover identities and links of a run are the same as B4's for the same podiums. Same skips (test event, bad phone, owner-blocked,
   merge cycle, ambiguous or unmatched name), same reuse (an `opted_out` identity is linked but inert and never un-opted; a tombstone resolves
   to the kept identity; an existing identity is never overwritten), same refusal to overwrite a link. A phone change after creation nulls the
-  link (the existing guard) and nothing here re-links: a processed result is not run again unless a changed payload re-queues it.
+  link (the existing guard) and nothing here re-links by itself: a processed result is not run again unless a changed payload re-queues it, and then the
+  owner's next run reads the person's CURRENT phone, as B4 would (pinned in `071`; flagged for the owner). A member's republish re-queues only a
+  `processed` result; it keeps `processed_at`, so the caps cannot be reset by republishing, and a result the owner rejected or undid stays that way.
 - **THE FORGERY GAP IS NOT CLOSED.** Members write payloads, entries and people, and nothing validates a payload against the scores, so a member
   can stage a non-test event, a person holding any phone and a podium naming them, and publish it. That is why `queue` is first: the review
   below is the control. `auto` removes the human; its caps only bound the damage. At Layer 1 an identity is unreadable and cannot be claimed
@@ -372,7 +374,7 @@ lists are recorded on each queue row.
 **Undo** (`seduh_feed_undo.sql`, `app.seduh_feed_undo(uuid[], boolean)`, dry run first): for the chosen processed rows it unlinks the recorded people who are
 still linked to an identity one of those rows created, and deletes a created identity only if it is still `archive`/`active`, nobody is linked and no tombstone
 points at it; an identity that gained a person since, was opted out since, or has a tombstone pointing at it is kept and counted. The rows become `undone`.
-Deleting an identity is irreversible: reject before running rather than undo after.
+Undo the results of one run together: an identity is credited to the result holding the earliest record of its phone, so undoing only a later result that names the same person leaves that person linked. Deleting an identity is irreversible: reject before running rather than undo after.
 
 **`auto`** (do not switch it on before the owner has answered the open points in the build brief: the opt-out procedure and its time limit, who reviews the queue
 and how often, the DPO address): `app.seduh_feed_auto_run()` does nothing unless the mode is `auto`; it works the oldest queued results one at a time, each in its

@@ -60,7 +60,7 @@
 -- Not pushed to the cloud by this change. Order of the owner's rollout (CONVENTIONS "Seduh ID feed"): check `app` is not an
 -- exposed schema, push the migrations, leave the mode `off`, set `queue`, review, run.
 --
--- rollback (verified in a transaction in test 071 against the schema this file creates):
+-- rollback (run D1b's rollback, 20261103110000, FIRST: its function reads the queue). Verified in a transaction in test 071:
 --   drop trigger if exists trg_public_results_seduh_feed on public.public_results;
 --   drop function if exists app.seduh_feed_undo(uuid[], boolean);
 --   drop function if exists app.seduh_feed_auto_run();
@@ -133,15 +133,15 @@ create table app.seduh_feed_queue (
   updated_at           timestamptz not null default now(),
   constraint seduh_feed_queue_state_vocab check (state in ('queued', 'processed', 'rejected', 'undone')),
   constraint seduh_feed_queue_via_vocab check (processed_via is null or processed_via in ('owner', 'auto')),
-  -- a queued row has not been dealt with; every other state has been
-  constraint seduh_feed_queue_processed_at_by_state check ((state = 'queued') = (processed_at is null)),
+  -- processed_at is the time of the last run (or rejection) and is NEVER cleared: the cap windows read it whatever the state is now
+  constraint seduh_feed_queue_dealt_with_has_time check (state = 'queued' or processed_at is not null),
   -- a SQLSTATE or a short reason code, never free text (a message can carry a name or a phone)
   constraint seduh_feed_queue_last_error_shape check (last_error is null or last_error ~ '^[A-Za-z0-9_]{1,40}$')
 );
 
 -- the review reads only what is waiting; the cap counts read what was processed lately
 create index seduh_feed_queue_queued on app.seduh_feed_queue (enqueued_at) where state = 'queued';
-create index seduh_feed_queue_processed on app.seduh_feed_queue (org_id, processed_at) where state = 'processed';
+create index seduh_feed_queue_processed on app.seduh_feed_queue (org_id, processed_at) where processed_at is not null;
 
 alter table app.seduh_feed_queue enable row level security;
 revoke all on app.seduh_feed_queue from public, anon, authenticated, service_role;
@@ -175,12 +175,14 @@ begin
        and jsonb_typeof(new.payload -> 'podium') = 'array'
        and jsonb_array_length(new.payload -> 'podium') > 0
        and exists (select 1 from public.events e where e.id = new.event_id and e.is_test is not true) then
-      -- a changed payload on a result already dealt with asks for a new review (what is recorded for undo stays)
+      -- a changed payload on a PROCESSED result asks for a new review; what is recorded for undo and processed_at (which the caps read)
+      -- stay, so a member cannot reset a cap by republishing. A result the owner REJECTED or UNDID is not revived by a member:
+      -- the owner puts it back with SQL if they want it looked at again
       insert into app.seduh_feed_queue as q (result_id, org_id)
       values (new.id, new.org_id)
       on conflict (result_id) do update
-         set state = 'queued', enqueued_at = now(), processed_at = null, processed_via = null, last_error = null
-       where q.state <> 'queued';
+         set state = 'queued', enqueued_at = now(), last_error = null
+       where q.state = 'processed';
     end if;
   exception when others then
     null;   -- a publish must never fail because of the feed
@@ -462,7 +464,7 @@ begin
     'mode', (select m.mode from app.seduh_feed_mode m),
     'caps', (select jsonb_build_object('org_daily_cap', m.org_daily_cap, 'global_daily_cap', m.global_daily_cap) from app.seduh_feed_mode m),
     'created_last_24h', (select coalesce(sum(cardinality(q.created_identity_ids)), 0)
-                           from app.seduh_feed_queue q where q.state = 'processed' and q.processed_at > now() - interval '24 hours'),
+                           from app.seduh_feed_queue q where q.processed_at > now() - interval '24 hours'),
     'queue', jsonb_build_object(
       'queued',    (select count(*) from app.seduh_feed_queue where state = 'queued'),
       'processed', (select count(*) from app.seduh_feed_queue where state = 'processed'),
@@ -502,7 +504,7 @@ begin
                        where pl.class = 'eligible' and pl.identity_id is null and pl.linked_to is null) as to_create,
                      (select coalesce(sum(cardinality(d.created_identity_ids)), 0)
                         from app.seduh_feed_queue d
-                       where d.org_id = g.org_id and d.state = 'processed' and d.processed_at > now() - interval '24 hours') as created_24h
+                       where d.org_id = g.org_id and d.processed_at > now() - interval '24 hours') as created_24h
                 from (select q.org_id, count(*) as results_queued, array_agg(q.result_id) as ids
                         from app.seduh_feed_queue q where q.state = 'queued' group by q.org_id) g) o)
   ) into v_report;
@@ -552,7 +554,7 @@ begin
     select q.result_id, q.org_id
       from app.seduh_feed_queue q
      where q.state = 'queued'
-     order by q.enqueued_at, q.result_id
+     order by (q.last_error is not null), q.enqueued_at, q.result_id
      limit 50
        for update skip locked
   loop
@@ -562,10 +564,10 @@ begin
        where pl.class = 'eligible' and pl.identity_id is null and pl.linked_to is null;
       select coalesce(sum(cardinality(d.created_identity_ids)), 0)::integer into v_org_used
         from app.seduh_feed_queue d
-       where d.org_id = r.org_id and d.state = 'processed' and d.processed_at > now() - interval '24 hours';
+       where d.org_id = r.org_id and d.processed_at > now() - interval '24 hours';
       select coalesce(sum(cardinality(d.created_identity_ids)), 0)::integer into v_all_used
         from app.seduh_feed_queue d
-       where d.state = 'processed' and d.processed_at > now() - interval '24 hours';
+       where d.processed_at > now() - interval '24 hours';
 
       if v_n > 0 and (v_org_used + v_n > v_m.org_daily_cap or v_all_used + v_n > v_m.global_daily_cap) then
         v_deferred := v_deferred + 1;

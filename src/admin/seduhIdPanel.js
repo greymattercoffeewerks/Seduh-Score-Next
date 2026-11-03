@@ -109,7 +109,7 @@ export function countGroups(counts) {
         ['Declined by the owner', counts.feed_rejected],
         ['Undone after a run', counts.feed_undone],
       ],
-      'A published podium is queued for review; nothing is created from it until the owner runs it.',
+      'Published podiums are queued here when the feed is on. Whether a queued podium creates records on its own or only when the owner runs it depends on the feed mode, which is set in SQL.',
     ),
   );
   return groups;

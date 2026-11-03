@@ -10,7 +10,7 @@
 -- HOW TO REVIEW. Payloads, entries and people are written by organisation members, and nothing checks a payload against the
 -- scores, so a forged "published podium" can name any phone (CONVENTIONS "Seduh ID feed"). For each queued result, check the
 -- organisation and the event against events you know are real (the admin console's organisation detail; the event's own
--- results screen), and note the result ids you trust. Anything you do not recognise: reject it (seduh_feed_reject below), do not run it.
+-- results screen), and note the result ids you trust. Anything you do not recognise: reject it (supabase/scripts/seduh_feed_mode.sql, block 2), do not run it.
 --
 -- Needs migration 20261103100000_seduh_feed.sql. Run as the database owner (the SQL editor, psql, or the Supabase MCP's
 -- execute_sql). Safe to run any number of times: the transaction is READ ONLY, so the database itself refuses a write.

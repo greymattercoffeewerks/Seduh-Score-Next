@@ -7,7 +7,7 @@ import { rest, rpc, signInPassword } from './support/api.js';
 // (no browser). The pgTAP file 071 proves the rules inside the database; this proves what only travels over HTTP, where the
 // session user is `authenticator`: an organiser's publish of a podium QUEUES a review row and CREATES NOTHING, the organiser
 // learns nothing from it (the same empty answer as before the feed existed), a stranger's publish queues nothing, the queue
-// and the mode are not reachable by name through the API by anyone, and no feed function is exposed.
+// and the mode are not reachable by name through the API by anyone, and no feed function is exposed. The last test is an EXPOSURE check (the API exposes only `public`, so the `app` objects answer 404/406 whatever their grants are); the grants themselves are pinned by pgTAP 071 and 050.
 //
 // The mode is switched to `queue` for the run through the database owner (no API door can change it) and put back to its
 // previous value afterwards. Local stack only (tenants.js and admins.js refuse any other host).
@@ -69,6 +69,7 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(() => {
+  sqlAsOwner(`delete from app.seduh_feed_queue where org_id in ('${w.a.orgId}', '${w.b.orgId}')`);
   sqlAsOwner(`update app.seduh_feed_mode set mode = '${previousMode}'`);
 });
 
@@ -142,7 +143,7 @@ test('with the mode off a publish queues nothing', async () => {
   }
 });
 
-test('the queue, the mode and the feed functions are reachable by no API caller, by any route', async () => {
+test('the queue, the mode and the feed functions are not exposed to any API caller, by any route', async () => {
   const callers = [
     ['an organiser', w.tokenA],
     ['a stranger', w.tokenB],

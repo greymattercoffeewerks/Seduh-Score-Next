@@ -29,7 +29,7 @@
 --     privilege on the two tables, every function is SECURITY DEFINER with search_path '' and executable by no API role;
 --   * the migration's rollback block, run here, removes everything and a publish still works afterwards.
 begin;
-select plan(180);
+select plan(190);
 
 create schema t071;
 grant usage on schema t071 to anon, authenticated, service_role;
@@ -154,6 +154,12 @@ select set_config('app.seduh_link_write', 'on', true);
 update people set global_person_id = t071.u(7805) where id = t071.u(7609);
 select set_config('app.seduh_link_write', '', true);
 insert into app.person_link_blocks (person_id, phone_e164) values (t071.u(7603), '+6739710003');
+insert into people (id, org_id, display_name, phone) values (t071.u(7620), t071.u(7111), 'T071 Cross', '+6739710021');
+-- an entry of org A's event pointing at org B's person: the database refuses it at write time (trigger), so the guard is lifted
+-- for the fixture only; the feed's own organisation join is then the only thing between this person and an identity
+alter table event_entries disable trigger trg_event_entries_person_org_check;
+insert into event_entries (id, event_id, person_id, display_name, cafe) values (t071.u(7920), t071.u(7201), t071.u(7620), 'T071 Cross', 'Cafe X');
+alter table event_entries enable trigger trg_event_entries_person_org_check;
 insert into event_entries (id, event_id, person_id, display_name, cafe) values
   (t071.u(7901), t071.u(7201), t071.u(7601), 'T071 Alpha',   'Cafe X'),
   (t071.u(7902), t071.u(7201), t071.u(7602), 'T071 Bravo',   'Cafe X'),
@@ -176,9 +182,12 @@ create temp table reports (kind text primary key, r jsonb) on commit drop;
 
 -- ============ the mode is off by default, and then nothing is queued ============
 
-select is((select mode || '/' || org_daily_cap || '/' || global_daily_cap from app.seduh_feed_mode), 'off/8/40',
+select is((select string_agg(pg_get_expr(d.adbin, d.adrelid), '/' order by a.attnum)
+             from pg_attrdef d join pg_attribute a on a.attrelid = d.adrelid and a.attnum = d.adnum
+            where d.adrelid = 'app.seduh_feed_mode'::regclass and a.attname in ('mode', 'org_daily_cap', 'global_daily_cap')), '''off''::text/8/40',
   'the mode is off by default, with the caps of 8 per organisation and 40 in all per 24 hours');
 select is((select count(*)::int from app.seduh_feed_mode), 1, '...and it is one row');
+update app.seduh_feed_mode set mode = 'off', org_daily_cap = 8, global_daily_cap = 40;   -- a known state, whatever other sessions left
 
 insert into public_results (org_id, event_id, published_at, payload) values
   (t071.u(7110), t071.u(7207), '2026-01-03 10:00+00', jsonb_build_object('format', 'cup_taster',
@@ -190,7 +199,8 @@ select is((select count(*)::int from app.seduh_feed_queue where org_id in (t071.
 select is(t071.attempt('select app.seduh_identity_feed(array[gen_random_uuid()])'), 'P0001: the Seduh ID feed is off', 'mode off: the owner''s run is refused');
 select is((select r ->> 'mode' from (select app.seduh_feed_review() as r) x), 'off', 'the review says the mode is off');
 select is((select (app.seduh_feed_review() ->> 'podium_results_not_queued')::int), (select count(*)::int from public_results pr join events e on e.id = pr.event_id
-            where e.is_test is not true and jsonb_typeof(pr.payload -> 'podium') = 'array' and jsonb_array_length(pr.payload -> 'podium') > 0), 'the review counts the podiums published but never queued (every one, while off)');
+            where e.is_test is not true and jsonb_typeof(pr.payload -> 'podium') = 'array' and jsonb_array_length(pr.payload -> 'podium') > 0
+              and not exists (select 1 from app.seduh_feed_queue q where q.result_id = pr.id)), 'the review counts the podiums published but never queued (every one, while off)');
 select is(t071.attempt('select app.seduh_feed_auto_run()'), 'ok', 'the auto job runs and...');
 select is((select app.seduh_feed_auto_run() ->> 'ran'), 'false', '...does nothing unless the mode is auto');
 
@@ -204,7 +214,8 @@ insert into public_results (org_id, event_id, published_at, payload) values
        jsonb_build_object('rank', 1, 'name', 'T071 Alpha', 'cafe', 'Cafe X'),
        jsonb_build_object('rank', 2, 'name', 'T071 Bravo', 'cafe', 'Cafe X'),
        jsonb_build_object('rank', 3, 'name', 'T071 Charlie', 'cafe', 'Cafe X'),
-       jsonb_build_object('rank', 4, 'name', 'T071 Twin', 'cafe', 'Cafe X')))),
+       jsonb_build_object('rank', 4, 'name', 'T071 Twin', 'cafe', 'Cafe X'),
+       jsonb_build_object('rank', 5, 'name', 'T071 Cross', 'cafe', 'Cafe X')))),
   (t071.u(7110), t071.u(7202), '2026-01-02 10:00+00', jsonb_build_object('format', 'cup_taster', 'eventName', 'T071 E2',
      'podium', jsonb_build_array(
        jsonb_build_object('rank', 1, 'name', 'T071 Echo', 'cafe', 'Cafe X'),
@@ -239,8 +250,9 @@ select is((select count(*)::int from people where display_name like 'T071 %' and
   '...and linked nothing: only the one person the fixtures linked (Hotel)');
 
 -- a changed payload on a row still waiting changes nothing; an identical re-save asks nothing
+update app.seduh_feed_queue set enqueued_at = '2020-01-01' where result_id = t071.rid(7201);
 update public_results set payload = payload where event_id = t071.u(7201);
-select is((select enqueued_at = now() from app.seduh_feed_queue where result_id = t071.rid(7201)), true, 'an identical re-save leaves the queued row as it was');
+select is((select enqueued_at = '2020-01-01' from app.seduh_feed_queue where result_id = t071.rid(7201)), true, 'an identical re-save leaves the queued row as it was');
 
 -- ============ the review (dry run): counts and ids ============
 
@@ -303,10 +315,11 @@ select is(t071.gpi(7616), t071.identity_for('+6739710016'), '...and Oscar is lin
 select is((select country from app.seduh_identities where phone_e164 = '+6739710016'), 'Malaysia', '...with their country');
 
 select is(t071.identity_for('+6739710015'), null, 'nothing for a TEST event (Nova)');
-select is(t071.identity_for('+6739710002'), null, 'nothing for the bad phone... (Bravo has none to give)');
+select is((select class from app.seduh_feed_plan_internal(array[t071.rid(7201)]) where person_id = t071.u(7602)), 'bad_phone', 'Bravo is classed bad_phone by the plan, so nothing is made for them');
 select is((select phone from people where id = t071.u(7602)), '555-0102', '...and Bravo''s phone was not repaired or touched');
 select is(t071.gpi(7602), null, '...Bravo is not linked');
 select is(t071.identity_for('+6739710003'), null, 'nothing for an owner-blocked person (Charlie)');
+select is(t071.identity_for('+6739710021') is null and t071.gpi(7620) is null, true, 'nothing for a WRONG-ORGANISATION person: an entry of this event whose person belongs to another organisation (Cross)');
 select is(t071.gpi(7603), null, '...who stays unlinked');
 select is((select count(*)::int from app.seduh_identities where phone_e164 in ('+6739710004', '+6739710005')), 0, 'nothing for two entries the podium cannot tell apart (Delta and Delta2)');
 select is(t071.identity_for('+6739710010'), null, 'NOTHING for a person named only in the full standings (Juliet): the feed is podium only');
@@ -359,6 +372,15 @@ select is(t071.qstate(7201), 'processed', '...and the result stays processed');
 select is((select (app.seduh_identity_feed(array[t071.rid(7201)]) ->> 'results_not_queued')), '1', 'a run for that result does nothing: it is not queued');
 select is(t071.gpi(7601), null, '...so nothing re-linked the person');
 update people set phone = '+6739710001' where id = t071.u(7601);
+-- PINNED, for the owner's decision: if the organiser then republishes a CHANGED payload, the result is re-queued and the owner's next
+-- run reads the person's CURRENT phone (as B4 does), so the new number gets an identity and the link. Nothing does it by itself.
+savepoint phone_requeue;
+update people set phone = '+6739710098' where id = t071.u(7601);
+update public_results set payload = payload || '{"venue": "p"}'::jsonb where event_id = t071.u(7201);
+select is(t071.gpi(7601), null, 'after a phone change and a republish, the person is still unlinked until the owner runs the feed');
+select app.seduh_identity_feed(array[t071.rid(7201)]);
+select is(t071.gpi(7601), t071.identity_for('+6739710098'), 'the owner''s run on the re-queued result links the person to the identity of their CURRENT phone (pinned behaviour)');
+rollback to savepoint phone_requeue;
 
 -- ============ undo ============
 
@@ -396,10 +418,11 @@ select is(t071.attempt($$ select app.seduh_feed_undo(array[]::uuid[], false) $$)
 
 -- the undo guards: an opted-out-since identity, an identity with a tombstone, and a person linked elsewhere since
 create temp table undo_fx (k int primary key, rid uuid) on commit drop;
-select t071.mk_event(7401, t071.u(7110), array['+6739710061', '+6739710062', '+6739710063']);
-insert into public_results (id, org_id, event_id, payload) values (t071.u(7411), t071.u(7110), t071.u(7401), t071.podium_of(7401, 3));
+select t071.mk_event(7401, t071.u(7110), array['+6739710061', '+6739710062', '+6739710063', '+6739710064']);
+insert into public_results (id, org_id, event_id, payload) values (t071.u(7411), t071.u(7110), t071.u(7401), t071.podium_of(7401, 4));
 select app.seduh_identity_feed(array[t071.u(7411)]);
-select is((select cardinality(created_identity_ids) || '/' || cardinality(linked_person_ids) from app.seduh_feed_queue where result_id = t071.u(7411)), '3/3', 'a fresh result created 3 identities and linked 3 people');
+select is((select cardinality(created_identity_ids) || '/' || cardinality(linked_person_ids) from app.seduh_feed_queue where result_id = t071.u(7411)), '4/4', 'a fresh result created 4 identities and linked 4 people');
+update app.seduh_identities set source = 'organiser_roster' where phone_e164 = '+6739710064';                                      -- not an archive identity
 update app.seduh_identities set status = 'opted_out', display_name = null where phone_e164 = '+6739710061';                      -- opted out since
 insert into app.seduh_identities (phone_e164, display_name, source, status, merged_into)
   values ('+6739710069', null, 'archive', 'merged', t071.identity_for('+6739710062'));                                          -- a tombstone points at the second
@@ -413,13 +436,16 @@ select is(t071.gpi(74012), null, 'unlinks the second person...');
 select isnt(t071.identity_for('+6739710062'), null, '...but KEEPS the identity a tombstone points at');
 select is(t071.gpi(74013), t071.u(7805), 'a person linked elsewhere since is left alone');
 select is(t071.identity_for('+6739710063'), null, '...and the identity nobody is linked to any more is deleted');
-select is((select (r ->> 'people_unlinked') || '/' || (r ->> 'identities_deleted') || '/' || (r ->> 'identities_kept') from reports where kind = 'undo2'), '2/1/2', 'the undo report: 2 unlinked, 1 deleted, 2 kept');
+select isnt(t071.identity_for('+6739710064'), null, 'an identity whose source is not archive is KEPT (unlinked person, identity stays)');
+select is((select (r ->> 'people_unlinked') || '/' || (r ->> 'identities_deleted') || '/' || (r ->> 'identities_kept') from reports where kind = 'undo2'), '3/1/3', 'the undo report: 3 unlinked, 1 deleted, 3 kept');
 
 -- ============ rejecting by hand, and fail open ============
 
 update app.seduh_feed_queue set state = 'rejected', processed_at = now() where result_id = t071.rid(7203);
 select is(t071.qstate(7203), 'rejected', 'the owner can reject a queued result by hand (a row with no further effect)');
 select is((select app.seduh_identity_feed(array[t071.rid(7203)]) ->> 'results_not_queued'), '1', '...and the run does not touch it');
+update public_results set payload = payload || '{"venue": "r"}'::jsonb where event_id = t071.u(7203);
+select is(t071.qstate(7203), 'rejected', 'a result the owner rejected is NOT revived by a member''s republish');
 
 select t071.mk_event(7501, t071.u(7110), array['+6739710071']);
 alter table app.seduh_feed_queue add constraint t071_boom check (false) not valid;
@@ -473,16 +499,21 @@ select is(t071.attempt('select app.seduh_feed_auto_run()'), '42501: seduh_feed_a
 select is(t071.attempt('select app.seduh_feed_undo(array[gen_random_uuid()], true)'), '42501: seduh_feed_undo is run by the database owner only', '...undo');
 select is(t071.attempt('select app.seduh_feed_apply(array[gen_random_uuid()], ''owner'')'), '42501: seduh_feed_apply is run by the database owner only', '...and the creating step');
 reset role;
+grant usage on schema app to service_role, authenticator;   -- so the call reaches the function; undone by the rollback
+grant usage on schema t071, extensions to authenticator;
+grant execute on all functions in schema t071 to authenticator;
+grant execute on function app.seduh_identity_feed(uuid[]) to authenticator;
 set local role service_role;
-select matches(t071.attempt('select app.seduh_identity_feed(array[gen_random_uuid()])'), '^42501: (seduh_identity_feed is run by the database owner only|permission denied for schema app)$', 'service_role is refused as well');
+select is(t071.attempt('select app.seduh_identity_feed(array[gen_random_uuid()])'), '42501: seduh_identity_feed is run by the database owner only', 'service_role is refused BY NAME (it reached the function)');
 reset role;
--- a session role of authenticator (what PostgREST connects as), with SET ROLE postgres afterwards, is refused through session_user
--- only when the session is one: here the session is postgres, so the by-name check is on current_user and the role setting
+set local role authenticator;
+select is(t071.attempt('select app.seduh_identity_feed(array[gen_random_uuid()])'), '42501: seduh_identity_feed is run by the database owner only', 'authenticator (what PostgREST connects as) is refused by name too. The session_user branch cannot be reached here: postgres may not SET SESSION AUTHORIZATION on the hosted image, so only the role-name branches are tested');
+reset role;
 set local role anon;
 select is(t071.attempt('select app.seduh_identity_feed(array[gen_random_uuid()])'), '42501: seduh_identity_feed is run by the database owner only', 'anon too');
 reset role;
 revoke execute on function app.seduh_identity_feed(uuid[]), app.seduh_feed_review(), app.seduh_feed_auto_run(), app.seduh_feed_undo(uuid[], boolean),
-  app.seduh_feed_apply(uuid[], text) from authenticated, anon, service_role;   -- the door is shut again for the catalog checks below
+  app.seduh_feed_apply(uuid[], text) from authenticated, anon, service_role, authenticator;   -- the door is shut again for the catalog checks below
 
 -- ============ `auto` and its caps ============
 
@@ -492,7 +523,7 @@ update app.seduh_feed_mode set mode = 'queue';
 select is((select app.seduh_feed_auto_run() ->> 'ran'), 'false', 'in queue mode the auto job does nothing');
 update app.seduh_feed_queue set state = 'rejected', processed_at = now() where state = 'queued';
 -- only the last 24 hours count towards a cap: push everything processed so far back two days
-update app.seduh_feed_queue set processed_at = now() - interval '2 days' where state = 'processed';
+update app.seduh_feed_queue set processed_at = now() - interval '2 days' where processed_at is not null;
 
 select t071.mk_event(7301, t071.u(7110), array['+6739710031', '+6739710032']);     -- org A, 2 new identities
 select t071.mk_event(7302, t071.u(7110), array['+6739710033']);                    -- org A, 1 new
@@ -512,6 +543,18 @@ select is((select string_agg(t071.qstate(e.n), ',' order by e.n) from unnest(arr
 select is((select count(*)::int from app.seduh_identities where phone_e164 in ('+6739710031', '+6739710032')), 2, 'the first result''s two identities exist');
 select is((select count(*)::int from app.seduh_identities where phone_e164 in ('+6739710033', '+6739710034', '+6739710035')), 0, '...and the deferred ones created nothing');
 select is((select processed_via from app.seduh_feed_queue where result_id = t071.u(7311)), 'auto', 'the row says the job ran it');
+
+-- a member cannot reset a cap by republishing: the processed result goes back to the queue but keeps its time
+savepoint cap_reset;
+insert into people (id, org_id, display_name, phone) values (t071.u(7390), t071.u(7110), 'T071 P7301_3', '+6739710090');
+insert into event_entries (id, event_id, person_id, display_name, cafe) values (t071.u(739001), t071.u(7301), t071.u(7390), 'T071 P7301_3', 'Cafe T');
+update public_results set payload = t071.podium_of(7301, 3) where id = t071.u(7311);
+select is(t071.qstate(7301), 'queued', 'a changed payload puts the processed result back in the queue...');
+select is((select processed_at is not null from app.seduh_feed_queue where result_id = t071.u(7311)), true, '...but its processed_at stays (the caps read it)');
+select is((select (app.seduh_feed_auto_run() ->> 'processed')), '0', 'THE CAP HOLDS: republishing with a new person does not reset the organisation''s used figure, nothing is processed');
+select is(t071.identity_for('+6739710090'), null, '...and no identity was made');
+rollback to savepoint cap_reset;
+
 update app.seduh_feed_mode set global_daily_cap = 10;
 insert into reports select 'auto2', app.seduh_feed_auto_run();
 select is((select (r ->> 'processed') || '/' || (r ->> 'deferred_over_cap') from reports where kind = 'auto2'), '1/1', 'global cap raised to 10: org B''s result goes; org A''s second still waits on the ORGANISATION cap');
@@ -547,7 +590,7 @@ select is(t071.attempt($$ insert into app.seduh_feed_queue (result_id, org_id, l
 select is(t071.attempt($$ insert into app.seduh_feed_queue (result_id, org_id, state, processed_at) values (gen_random_uuid(), gen_random_uuid(), 'done', now()) $$),
   '23514: new row for relation "seduh_feed_queue" violates check constraint "seduh_feed_queue_state_vocab"', 'the state vocabulary is closed');
 select is(t071.attempt($$ insert into app.seduh_feed_queue (result_id, org_id, state) values (gen_random_uuid(), gen_random_uuid(), 'processed') $$),
-  '23514: new row for relation "seduh_feed_queue" violates check constraint "seduh_feed_queue_processed_at_by_state"', 'a processed row has a time and a queued one has none');
+  '23514: new row for relation "seduh_feed_queue" violates check constraint "seduh_feed_queue_dealt_with_has_time"', 'a row that was dealt with has a time');
 select is(t071.attempt(format('update app.seduh_feed_queue set org_id = gen_random_uuid() where result_id = %L', t071.u(7311))), '23001: seduh_feed_queue.org_id is immutable',
   'a queue row never moves to another organisation');
 select is(t071.attempt($$ update app.seduh_feed_mode set mode = 'on' $$), '23514: new row for relation "seduh_feed_mode" violates check constraint "seduh_feed_mode_vocab"', 'the mode vocabulary is closed');
