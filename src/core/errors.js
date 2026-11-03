@@ -10,6 +10,7 @@ const GATING_HINTS = new Set(['entitlement_required', 'entitlement_cap_reached']
 
 const GATING_MESSAGES = {
   cup_taster_participants: `This event has reached its entry limit. Nothing already saved has been lost. ${SEDUH_SCORE_CONTACT}`,
+  throwdown_participants: `This event has reached its competitor limit. Nothing already saved has been lost. ${SEDUH_SCORE_CONTACT}`,
   events_open: `You already have an open event, and your plan allows one at a time. If it is a test event, delete it to make room. Nothing already saved has been lost. ${SEDUH_SCORE_CONTACT}`,
   btc_format: `This format needs a plan that includes it. Nothing already saved has been lost. ${SEDUH_SCORE_CONTACT}`,
 };

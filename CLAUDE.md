@@ -38,7 +38,7 @@ the context it actually touches:
   native Kotlin/Glance Android home-screen widget for one public Guess the Bean session;
   outside `src/` entirely (own Gradle build, anonymous-only Supabase reads).
 - [src/formats/cup-taster/CLAUDE.md](src/formats/cup-taster/CLAUDE.md) — Cup Taster.
-- [src/formats/throwdown/CLAUDE.md](src/formats/throwdown/CLAUDE.md) — Throwdown (not started).
+- [src/formats/throwdown/CLAUDE.md](src/formats/throwdown/CLAUDE.md) — Throwdown (TD.1 core built 2026-11-03; modules are later phases).
 - [src/formats/liga-seduh/CLAUDE.md](src/formats/liga-seduh/CLAUDE.md) — Liga Seduh (not started).
 - [src/formats/btc/CLAUDE.md](src/formats/btc/CLAUDE.md) — BTC (Barista Team
   Championship; BBTC is the Brunei-specific instance, not the format's name — shipped
@@ -403,7 +403,7 @@ src/
   formats/
     cup-taster/                 ← scoring, timing-surface, entry-surface, viewer-body,
                                    analytics. See src/formats/cup-taster/CLAUDE.md.
-    throwdown/                  ← not started. See src/formats/throwdown/CLAUDE.md.
+    throwdown/                  ← individual 1v1 knockout, TD.1 core. See src/formats/throwdown/CLAUDE.md.
     liga-seduh/                 ← not started. See src/formats/liga-seduh/CLAUDE.md.
     btc/                        ← Barista Team Championship, live (2026-09-23). See
                                    src/formats/btc/CLAUDE.md.

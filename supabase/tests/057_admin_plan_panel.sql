@@ -197,7 +197,7 @@ select is(
 select is(
   (select string_agg(e ->> 'key' || '=' || coalesce(e ->> 'limit', 'null'), ',' order by e ->> 'key')
      from jsonb_array_elements(public.admin_plan_org(t057.u(100)) -> 'keys') e where e ->> 'kind' = 'cap'),
-  'cup_taster_participants=8,events_open=1', 'and the caps say their limits (8 participants, 1 open event)');
+  'cup_taster_participants=8,events_open=1,throwdown_participants=8', 'and the caps say their limits (8 participants, 1 open event, 8 Throwdown competitors)');
 select is(
   (select bool_and((e ->> 'allowed_if_enforced')::boolean) from jsonb_array_elements(public.admin_plan_org(t057.u(200)) -> 'keys') e),
   true, 'Annual: would pass every key');

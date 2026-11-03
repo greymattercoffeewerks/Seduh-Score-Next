@@ -53,6 +53,12 @@ import {
   cupTasterOutboxHandlers,
   cupTasterOperationLabels,
 } from './formats/cup-taster/outboxHandlers.js';
+import {
+  throwdownOutboxHandlers,
+  throwdownOperationLabels,
+} from './formats/throwdown/outboxHandlers.js';
+import { mountThrowdownEventScreen } from './formats/throwdown/eventScreen.js';
+import { mountThrowdownResultsScreen } from './formats/throwdown/resultsScreen.js';
 import { trackInputModality } from './core/inputModality.js';
 
 // Every configured format an organiser can create an event as — passed into
@@ -62,6 +68,7 @@ import { trackInputModality } from './core/inputModality.js';
 const FORMAT_OPTIONS = [
   { value: 'cup_taster', label: 'Cup Taster' },
   { value: 'btc', label: 'BTC' },
+  { value: 'throwdown', label: 'Throwdown' },
 ];
 
 // Same "unreliable venue wifi" holding-state pattern this project already
@@ -570,6 +577,14 @@ function mountEventHomeScreen(outlet, { eventId, client, signal }) {
     if (event.format === 'btc') {
       return mountBtcEventDashboardScreen(outlet, { eventId, client, signal });
     }
+    if (event.format === 'throwdown') {
+      return mountThrowdownEventScreen(outlet, {
+        eventId,
+        client,
+        signal,
+        handlers: allOutboxHandlers(client),
+      });
+    }
     return mountEventDashboardScreen(outlet, { eventId, client, signal });
   }
   return attempt();
@@ -956,6 +971,14 @@ export function buildRoutes({
       ),
     },
     {
+      pattern: '/events/:eventId/throwdown/results',
+      mount: requireAuth(
+        (outlet, { eventId, client, signal }) =>
+          mountThrowdownResultsScreen(outlet, { eventId, client, signal }),
+        auth,
+      ),
+    },
+    {
       pattern: '/events/:eventId/btc/matches',
       mount: requireAuth(
         (outlet, { eventId, client, signal }) =>
@@ -1055,7 +1078,11 @@ export function buildRoutes({
 // queued operation whose type is missing here throws "no handler" and stops the whole
 // FIFO queue behind it, including other formats' operations.
 function allOutboxHandlers(client) {
-  return { ...cupTasterOutboxHandlers(client), ...btcOutboxHandlers(client) };
+  return {
+    ...cupTasterOutboxHandlers(client),
+    ...btcOutboxHandlers(client),
+    ...throwdownOutboxHandlers(client),
+  };
 }
 
 // Sync-on-reconnect (D4: "local-first with sync-on-reconnect") — found
@@ -1137,7 +1164,11 @@ export function mountApp(
   // comment.
   const shell = mountAppShell(shellRoot, {
     client,
-    operationLabels: { ...cupTasterOperationLabels, ...btcOperationLabels },
+    operationLabels: {
+      ...cupTasterOperationLabels,
+      ...btcOperationLabels,
+      ...throwdownOperationLabels,
+    },
   });
 
   // Tracked reactively via onAuthStateChange, NOT a fresh client.auth.

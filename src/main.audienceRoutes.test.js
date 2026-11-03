@@ -34,6 +34,10 @@ vi.mock('./formats/btc/outboxHandlers.js', () => ({
   btcOutboxHandlers: () => ({}),
   btcOperationLabels: {},
 }));
+vi.mock('./formats/throwdown/outboxHandlers.js', () => ({
+  throwdownOutboxHandlers: () => ({}),
+  throwdownOperationLabels: {},
+}));
 
 const { mountApp } = await import('./main.js');
 const { _clearOrgResolverForTests } = await import('./core/orgResolver.js');

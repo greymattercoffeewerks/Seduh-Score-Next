@@ -100,6 +100,46 @@
       "min_tier": null,
       "window_bound": true,
       "note": "The Per-event window lock: after a Per-event event grant's 5-day window ends, the event workspace and live displays are closed until an admin extends it (G-B5, D-G15). Community and Annual are unaffected."
+    },
+    {
+      "key": "throwdown_participants",
+      "kind": "cap",
+      "min_tier": null,
+      "window_bound": true,
+      "note": "Active (non-withdrawn) competitors per Throwdown event. Community 8; Per-event and Annual unlimited (Throwdown spec, section 10). Whether a withdrawn competitor still counts is open (Q8b).",
+      "caps": {
+        "community": 8,
+        "per_event": null,
+        "annual": null
+      }
+    },
+    {
+      "key": "throwdown_redemption",
+      "kind": "flag",
+      "min_tier": "per_event",
+      "window_bound": true,
+      "note": "Throwdown redemption round module. Slot only: the module is not built (TD.3)."
+    },
+    {
+      "key": "throwdown_revival",
+      "kind": "flag",
+      "min_tier": "per_event",
+      "window_bound": true,
+      "note": "Throwdown revival draw module. Slot only: the module is not built (TD.5)."
+    },
+    {
+      "key": "throwdown_lucky_loser",
+      "kind": "flag",
+      "min_tier": null,
+      "window_bound": true,
+      "note": "Throwdown lucky loser draw module. Free. Slot only: the module is not built (TD.4)."
+    },
+    {
+      "key": "throwdown_latte_art",
+      "kind": "flag",
+      "min_tier": null,
+      "window_bound": true,
+      "note": "Throwdown latte art pre-round draw module. Free. Slot only: the module is not built (TD.6)."
     }
   ]
 }

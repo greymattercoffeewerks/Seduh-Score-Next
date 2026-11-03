@@ -18,7 +18,7 @@
 -- is shown to list exactly the caller's own organisations, and a new RPC that takes one of these ids fails here
 -- until it is added to the matrix (or consciously exempted).
 begin;
-select plan(76);
+select plan(88);
 
 create schema e1;
 grant usage on schema e1 to anon, authenticated;
@@ -83,6 +83,17 @@ begin
       (e1.u(t, 12), e1.u(t, 1), 'preliminary', e1.u(t, 9), e1.u(t, 10));
     insert into btc_match_judges (match_id, judge_id) values (e1.u(t, 12), e1.u(t, 11));
     insert into btc_bracket_slots (id, event_id, round, slot_label) values (e1.u(t, 14), e1.u(t, 1), 'final', 'Final ' || t);
+    -- Throwdown (T-TD.1): a started event with one undecided match, and an event not yet started with two competitors
+    insert into events (id, org_id, format, name) values (e1.u(t, 60), e1.u(t, 100), 'throwdown', 'Throwdown ' || t);
+    insert into event_entries (id, event_id, display_name) values
+      (e1.u(t, 64), e1.u(t, 60), 'Competitor one ' || t), (e1.u(t, 66), e1.u(t, 60), 'Competitor two ' || t);
+    insert into td_rounds (id, event_id, position) values (e1.u(t, 61), e1.u(t, 60), 1);
+    insert into td_matches (id, event_id, round_id, position) values (e1.u(t, 62), e1.u(t, 60), e1.u(t, 61), 1);
+    insert into td_slots (id, event_id, match_id, position, entry_id) values
+      (e1.u(t, 63), e1.u(t, 60), e1.u(t, 62), 1, e1.u(t, 64)), (e1.u(t, 67), e1.u(t, 60), e1.u(t, 62), 2, e1.u(t, 66));
+    insert into events (id, org_id, format, name) values (e1.u(t, 70), e1.u(t, 100), 'throwdown', 'Throwdown fresh ' || t);
+    insert into event_entries (id, event_id, display_name) values
+      (e1.u(t, 71), e1.u(t, 70), 'Fresh one ' || t), (e1.u(t, 72), e1.u(t, 70), 'Fresh two ' || t);
   end loop;
 end
 $fixture$;
@@ -123,7 +134,13 @@ insert into e1.rpc (name, sql, org_only) values
   ('link_person_identity', 'select public.link_person_identity(e1.u(''@'',100), e1.u(''%'',17))', false),
   ('stage_archive_payload', 'select public.stage_archive_payload(gen_random_uuid(), e1.u(''@'',100), e1.u(''%'',1), ''{"podium":[{"name":"A"}]}''::jsonb)', false),
   ('set_archive_listing', 'select public.set_archive_listing(e1.u(''@'',100), e1.u(''%'',1), true)', false),
-  ('archive_event_status', 'select * from public.archive_event_status(e1.u(''@'',100), array[e1.u(''%'',1)])', false);
+  ('archive_event_status', 'select * from public.archive_event_status(e1.u(''@'',100), array[e1.u(''%'',1)])', false),
+  ('td_save_settings', 'select public.td_save_settings(e1.u(''@'',100), e1.u(''%'',70), 3, true, ''random'', ''{}''::jsonb)', false),
+  ('td_start_event', 'select public.td_start_event(gen_random_uuid(), e1.u(''@'',100), e1.u(''%'',70), ''random'', ''seed'', 2, jsonb_build_array(jsonb_build_array(e1.u(''%'',71), e1.u(''%'',72))))', false),
+  ('td_cast_vote', 'select public.td_cast_vote(gen_random_uuid(), e1.u(''@'',100), e1.u(''%'',62), e1.u(''%'',63))', false),
+  ('td_undo_vote', 'select public.td_undo_vote(gen_random_uuid(), e1.u(''@'',100), e1.u(''%'',62), e1.u(''%'',63))', false),
+  ('td_confirm_match', 'select public.td_confirm_match(gen_random_uuid(), e1.u(''@'',100), e1.u(''%'',62))', false),
+  ('td_record_walkover', 'select public.td_record_walkover(gen_random_uuid(), e1.u(''@'',100), e1.u(''%'',62), e1.u(''%'',63))', false);
 
 update e1.rpc set org_arg = false where name = 'create_btc_match';
 -- Where the organisation's own call is stopped by a LATER rule of the function (the fixture is a pending heat, an
@@ -138,8 +155,9 @@ update e1.rpc set own_expect = case name
   when 'record_btc_seeding_tiebreak' then 'P0001: record_btc_seeding_tiebreak: the bracket already exists, so the seeds are fixed'
   when 'record_btc_tiebreak'         then 'P0001: record_btc_tiebreak: a tie-break applies to knockout matches only'
   when 'record_heat_time'            then 'P0002: CONFLICT: heat .* is pending now, expected timing'
+  when 'td_confirm_match'            then 'P0001: td_confirm_match: the votes are level'
   else 'ok' end;
-select is((select count(*)::int from e1.rpc), 29, 'the matrix covers 29 RPCs');
+select is((select count(*)::int from e1.rpc), 35, 'the matrix covers 35 RPCs');
 select is(
   (select coalesce(string_agg(r.name, ', '), 'none') from e1.rpc r
     where not exists (select 1 from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = r.name)),

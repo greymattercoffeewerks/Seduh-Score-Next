@@ -1,3 +1,56 @@
+## T-TD.1 Throwdown core knockout: built and in review, PR into `dev`; cloud migrations NOT yet pushed · 2026-11-03
+
+**Task:** T-TD.1 (ROADMAP "Throwdown (third format) — Phase TD.1 Core"; tasks T-TD.1.1 to .8) on branch `claude/throwdown-td1-core-d41fad`. Throwdown is the third format: a single-elimination knockout core with entitlement keys, schema, RPCs, pure modules, data layer, organiser console, projector and phone bodies, a printable organiser results page, and a full 8-competitor test event.
+
+**State, plainly:** built and tested locally; PR into `dev` opened; the owner says when CI is green and the main session merges. **Not in the cloud:** `20261103101000` (entitlement keys), `20261103111000` (tables), `20261103120000` (RPCs) and `20261103130000` (window lock) are repo-only. After the merge they must be pushed with the Supabase MCP's `apply_migration`; Throwdown does not work against the cloud until then.
+
+**Decisions (the spec is silent or left them open; the owner may overrule):**
+
+- Timer is display-only: no elapsed time is stored, so `clampElapsed` does not apply.
+- The random draw stores its shuffle seed, so a draw can be re-run and explained afterwards. The database stores the seed but cannot replay the browser shuffle (see follow-ups).
+- Any judge count is accepted. Confirm is disabled while votes are level; an extra tap resolves an even panel (Q5).
+- Competitor status is `event_entries.withdrawn`, so Q8b can be settled later without a schema change.
+- No call site branches on tier (D14).
+- No third-place match when either semi-final was a bye or a walkover (the loser may have withdrawn).
+- Cross-check (spec section 11): `core/ranking` and `core/advancement` cannot express a knockout. Both take one ranked list and a cutoff; a knockout has per-match winners that feed the next round. Advancement therefore stays in `src/formats/throwdown/` and in the SQL RPC that writes it. The one generic primitive lifted is `core/seededShuffle.js`, which Liga heats and the lucky-loser draw can reuse. Bracket layout stays Throwdown-only until a second knockout format exists. No other `core/` file was edited.
+
+**Files:** the four migrations above; `supabase/tests/072_throwdown.sql` (116 asserts); `040` (34 tables) and `041` (35 RPCs) matrices; count updates in `052`, `056`, `057` and `069`; `src/core/seededShuffle.js`; `src/formats/throwdown/*` (votes, bracket, seeding, modules, data, liveSession, outboxHandlers, eventScreen, resultsScreen, viewerBody, projectorScreens and projectorBody, words); `main.js` and `liveSurfaces.js` wiring; Playwright project `dev-throwdown`.
+
+**Verified:** vitest 5966 of 5966 pass; eslint and prettier clean; full pgTAP suite passes; `dev-throwdown` passes the full 8-competitor test event.
+
+**Reviews** (fixes in `3bd152d` unless stated):
+
+- schema-guardian: no Important. Nits: walkover check coalesce (fixed); indexes (fixed); server cap on `judge_count` deliberately not added (ROADMAP open question).
+- security-reviewer: no Important. Ledger-scope nit is pre-existing (all RPCs), logged in ROADMAP.
+- scoring-auditor: no Important. Truncated vote reads (fixed: paged); Confirm now takes `p_expected_winner_slot_id` (fixed).
+- offline-sync-auditor: 2 Important, both fixed: a queued decision now closes voting; the pending read is stable. Round 2: 2 nits, fixed.
+- module-boundary-checker: clean. 4 comment and doc nits, fixed or noted.
+- test-auditor: 9 Important test gaps, all fixed with new pgTAP and vitest cases.
+- ui-accessibility-reviewer: 5 nits, fixed (focus, tap targets, persistent live region, overflow, details). This was a review, not a 360px browser run (see outstanding items).
+- code-reviewer: no Important. Dead code removed; refusal copy added.
+
+**Outstanding (why this entry is provisional, DoD §11):**
+
+- The 360px browser pass and the 16:9 pass, and a screen-reader pass, for the console and the projector and phone bodies, are owed (ROADMAP, TD.1 status).
+- The cloud push of the four migrations, after merge (above). Migrations are not yet in the cloud, so the "applies in the cloud, never edited again" item is pending.
+- Footer version not bumped in this session: the closing brief limited edits to this entry and `state.json`. The bump belongs with the release to `main`, where the CI version guard applies.
+- `ROADMAP.md` at-a-glance (line 58, "remain planned") was not updated in this session, for the same reason.
+
+**Follow-ups (ROADMAP, TD.1 status; none block TD.1):**
+
+- Owner decision: repeat byes. With an odd number of winners, the last one gets a bye in every round; the Round 1 bye competitor can get a second bye and reach the Final having played one match (5 competitors). Spec section 5 is silent.
+- Owner decision: third place after a walkover or bye (today none is made).
+- Owner decision: a server cap on `judge_count` (today advisory).
+- Q8b (withdrawn competitor and the 8-player cap): open, no schema change needed either way.
+- Corrections after a confirm (wrong winner tapped): not in TD.1. A reopen must also undo the next round if nothing in it has started; design with the owner.
+- The draw is recorded, not verified: a recompute check at start is possible client-side only.
+- Ledger scope: `processed_operations` lookups are global by id across all RPCs. Guessing a v4 id is infeasible; scope it in one migration for every RPC.
+- Replay after the Per-event window closes is reported as a dropped write (the window guard runs before the ledger check).
+- Pool matches (TD.3): the loser join in `app.td_advance` assumes pair matches.
+- Public results and the formatted report are TD.2 (archive write and PDF). TD.1 ships an organiser-facing printable results page only.
+
+**Working tree at close:** five files are modified and not committed on this branch (`CLAUDE.md`, `ROADMAP.md`, `src/core/seededShuffle.js`, `src/formats/throwdown/CLAUDE.md`, `src/formats/throwdown/eventScreen.js`). They must be committed in the PR; this entry does not cover them as separate changes.
+
 ## v3.5.1: Seduh ID feed released, Privacy sentence published · 2026-11-03
 
 **What the number covers:** T-ID.D1 (#412: the feed in review-queue mode, mode `off`, its two migrations NOT yet in the cloud, and the admin console's Seduh ID counts panel), the published D1d Privacy sentence (#414, `PRIVACY_UPDATED` 3 November 2026) and the `045` storage-trigger test fix (#410). A patch: nothing changes for organisers or the public until the owner pushes the migrations and sets the mode.

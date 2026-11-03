@@ -17,6 +17,8 @@ import { createBrandSource } from './core/brandDoor.js';
 import { createProjectorBody } from './formats/cup-taster/projectorBody.js';
 import { createBtcProjectorBody } from './formats/btc/projectorBody.js';
 import { createBtcViewerBody } from './formats/btc/viewerBody.js';
+import { createThrowdownProjectorBody } from './formats/throwdown/projectorBody.js';
+import { createThrowdownViewerBody } from './formats/throwdown/viewerBody.js';
 import { mountViewerBody, hasViewableContent } from './formats/cup-taster/viewerBody.js';
 
 // A projector body factory is handed `{ brand }` (core/formatBody.js), so a body built after the brand arrived, for
@@ -24,11 +26,13 @@ import { mountViewerBody, hasViewableContent } from './formats/cup-taster/viewer
 export const PROJECTOR_BODIES = {
   cup_taster: (options) => createProjectorBody(options),
   btc: (options) => createBtcProjectorBody(options),
+  throwdown: (options) => createThrowdownProjectorBody(options),
 };
 
 export const PHONE_BODIES = {
   cup_taster: () => ({ renderBody: mountViewerBody, hasContent: hasViewableContent }),
   btc: () => createBtcViewerBody(),
+  throwdown: () => createThrowdownViewerBody(),
 };
 
 // Puts a brand that arrived while a surface was still mounting on it. A fault here must not turn a mounted surface
