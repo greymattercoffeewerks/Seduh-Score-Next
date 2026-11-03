@@ -95,6 +95,28 @@ const NOT_FOR_THE_CONSOLE = {
   tiebreak_match_not_found: 'BTC format',
   tiebreak_not_tied: 'BTC format',
   tiebreak_unconfirmed: 'BTC format',
+  // The Throwdown format's own functions (organiser screens only; never an admin console call).
+  td_setup_locked: 'Throwdown format',
+  td_slot_empty: 'Throwdown format',
+  td_match_decided: 'Throwdown format',
+  event_window_locked: 'Throwdown format',
+  td_judge_count_invalid: 'Throwdown format',
+  td_seeding_invalid: 'Throwdown format',
+  td_module_invalid: 'Throwdown format',
+  td_module_unknown: 'Throwdown format',
+  td_module_dependency: 'Throwdown format',
+  td_already_started: 'Throwdown format',
+  td_seed_invalid: 'Throwdown format',
+  td_draw_empty: 'Throwdown format',
+  td_seeding_mismatch: 'Throwdown format',
+  td_draw_shape: 'Throwdown format',
+  td_draw_duplicate: 'Throwdown format',
+  td_draw_entry: 'Throwdown format',
+  td_draw_incomplete: 'Throwdown format',
+  td_slot_invalid: 'Throwdown format',
+  td_match_not_ready: 'Throwdown format',
+  td_votes_level: 'Throwdown format',
+  td_leader_changed: 'Throwdown format',
 };
 
 describe('the hint copy covers every hint the console can meet', () => {

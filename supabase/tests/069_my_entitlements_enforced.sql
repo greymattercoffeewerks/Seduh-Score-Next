@@ -43,7 +43,7 @@ select is(
   'results_archive_optional', 'the whitelist is exactly one key: no other key carries `enforced`');
 select is((public.my_entitlements(t069.u(100)) -> 'keys') -> 'btc_format', '{"allowed": true}'::jsonb, 'another flag key is unchanged (allowed only)');
 select is((public.my_entitlements(t069.u(100)) -> 'keys') -> 'cup_taster_participants', '{"allowed": true, "limit": null}'::jsonb, 'a cap key is unchanged (allowed and limit)');
-select is((select count(*)::int from jsonb_object_keys(public.my_entitlements(t069.u(100)) -> 'keys')), 11, 'still one entry per key');
+select is((select count(*)::int from jsonb_object_keys(public.my_entitlements(t069.u(100)) -> 'keys')), 16, 'still one entry per key');
 select is(
   (select string_agg(k, ',' order by k) from jsonb_object_keys(public.my_entitlements(t069.u(100), t069.u(101))) k),
   'keys,tier,window', 'the top-level shape is unchanged (tier, keys, window)');
@@ -78,7 +78,7 @@ select is(
           is distinct from case when k.key = 'results_archive_optional' then 'allowed,enforced'
                                 when k.kind = 'cap' then 'allowed,limit' else 'allowed' end),
   'none', 'every key entry carries exactly allowed (+ limit for a cap, + enforced for the archive key) and nothing else');
-select is((select count(*)::int from app.entitlement_keys), 11, 'and the join above covered all eleven keys');
+select is((select count(*)::int from app.entitlement_keys), 16, 'and the join above covered all sixteen keys');
 set local role authenticated;
 set local request.jwt.claim.sub = '00000000-0000-0000-0690-000000000001';
 
