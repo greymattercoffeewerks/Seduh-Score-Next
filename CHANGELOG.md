@@ -51,6 +51,14 @@
 
 **Working tree at close:** five files are modified and not committed on this branch (`CLAUDE.md`, `ROADMAP.md`, `src/core/seededShuffle.js`, `src/formats/throwdown/CLAUDE.md`, `src/formats/throwdown/eventScreen.js`). They must be committed in the PR; this entry does not cover them as separate changes.
 
+## T-ID.D1 rollout: feed migrations pushed, mode set to `queue` (nothing queued yet) · 2026-11-03
+
+**Done, each on the owner's approval ("Do it"), in the order the runbook gives:** (1) `app` re-checked as not exposed (live API: `PGRST106`, only `public` and `graphql_public`; the cloud had neither migration); (2) the two migrations pushed with the Supabase MCP, comments stripped as before, so not byte-identical to the repo files, names matching: `20261103100000_seduh_feed` is cloud `20261103135639` and `20261103110000_admin_seduh_id_counts_feed` is cloud `20261103135702`; (3) verified after the push: mode row `off` with caps 8 and 40, queue empty, the enqueue trigger present, all nine new `app` functions present, no API role (`anon`, `authenticated`, `service_role`, `authenticator`) able to execute them or holding a grant on the two new tables, `admin_seduh_id_counts` executable by `authenticated` only (admin-gated inside), the 17 B4 identities untouched; (4) mode set to `queue` by owner SQL at 2026-11-03 13:57 UTC (nothing audits that change; this entry is the record); (5) dry run `app.seduh_feed_review()`: 0 queued, 0 processed, 0 rejected, 0 undone, and `podium_results_not_queued: 1`.
+
+**State, plainly:** the feed is armed in `queue` mode and has created nothing. The one published podium predates the trigger and is not queued; the next Community publish should queue one row. **Not done:** the first real queued row has not been seen; `auto` is off and not scheduled. **Owed:** review the queue after each publish; the DPO address, opt-out procedure and who reviews the queue before `auto`.
+
+**Reviews:** none (records only). Rollback if wanted: `update app.seduh_feed_mode set mode = 'off';` stops queueing at once.
+
 ## v3.5.1: Seduh ID feed released, Privacy sentence published · 2026-11-03
 
 **What the number covers:** T-ID.D1 (#412: the feed in review-queue mode, mode `off`, its two migrations NOT yet in the cloud, and the admin console's Seduh ID counts panel), the published D1d Privacy sentence (#414, `PRIVACY_UPDATED` 3 November 2026) and the `045` storage-trigger test fix (#410). A patch: nothing changes for organisers or the public until the owner pushes the migrations and sets the mode.
