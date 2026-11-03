@@ -19,6 +19,11 @@ const SOURCE_LABELS = Object.freeze({
 // by its id: a new key still appears, and a name is added here.
 const KEY_NAMES = Object.freeze({
   cup_taster_participants: 'Participants per Cup Taster event',
+  throwdown_participants: 'Competitors per Throwdown event',
+  throwdown_redemption: 'Throwdown redemption round',
+  throwdown_revival: 'Throwdown revival draw',
+  throwdown_lucky_loser: 'Throwdown lucky loser draw',
+  throwdown_latte_art: 'Throwdown latte art draw',
   btc_format: 'Barista Team Championship (BTC) events',
   cup_taster_report: 'Cup Taster report and CSV export',
   cup_taster_analytics: 'Cup Taster analytics',
@@ -30,7 +35,7 @@ const KEY_NAMES = Object.freeze({
   events_open: 'One open event at a time',
   event_window_lock: 'Closing events after the Per-event window ends',
 });
-const FORMAT_NAMES = Object.freeze({ cup_taster: 'Cup Taster', btc: 'BTC' });
+const FORMAT_NAMES = Object.freeze({ cup_taster: 'Cup Taster', btc: 'BTC', throwdown: 'Throwdown' });
 
 export function keyName(key) {
   return typeof key === 'string' && Object.hasOwn(KEY_NAMES, key)
