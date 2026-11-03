@@ -299,6 +299,10 @@ following (owner decision 7: counts only); each is owner SQL, in ONE transaction
 - **Opt out (erasure/objection, E1).** `update app.seduh_identities set status='opted_out', display_name=null where id = '<id>';` The
   phone stays as the suppression record. The link function still links an opted-out identity (inert), on purpose, so the
   readable link cannot tell a member which phones objected.
+  **Time limits (owner decision 2026-11-03, published on the Privacy page):** acknowledge within 10 days and complete within 30 days of
+  receiving the request. Requests arrive at the DPO address (`CONTACT_EMAIL` in `src/marketing/trustContent.js`); the owner runs the SQL above.
+  **Queue review:** the owner reviews the Seduh ID feed queue (`app.seduh_feed_review()`) weekly, covering every podium published since the
+  last review. The feed stays in `queue` mode; `auto` is not scheduled and is decided again only after several real reviews.
 - **Accepted signals (spec 3.3):** a member can learn that an identity exists for a phone they type in (a published non-test
   result exists); a member of two organisations sees the same uuid for the same person.
 
