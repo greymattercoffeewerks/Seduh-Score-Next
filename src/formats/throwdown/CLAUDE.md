@@ -62,8 +62,8 @@ when a semi-final was a bye or a walkover.
 
 ## Module history
 
-TD.1 (2026-11-03): schema `20261103110000`, functions `20261103120000`, keys and cap branch
-`20261103100000`, window lock `20261103130000`; pgTAP `071`, matrices `040`/`041`; pure modules
+TD.1 (2026-11-03): schema `20261103111000`, functions `20261103120000`, keys and cap branch
+`20261103101000`, window lock `20261103130000`; pgTAP `072`, matrices `040`/`041`; pure modules
 `votes`, `bracket`, `seeding`, `modules`; `data`, `liveSession`, `outboxHandlers`; console
 `eventScreen`, `resultsScreen` (printable match log and podium); phone `viewerBody`, projector
 `projectorScreens`/`projectorBody`; Playwright `dev-throwdown` (full 8-competitor test event).

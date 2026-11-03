@@ -1,5 +1,5 @@
 // Throwdown's data layer: reads the event's rows, and writes through the database's functions (the tables are
-// SELECT-only for the API, see migration 20261103110000). Reads are plain selects the organiser's RLS already allows.
+// SELECT-only for the API, see migration 20261103111000). Reads are plain selects the organiser's RLS already allows.
 //
 // Writes that must survive a bad connection (a judge's tap, an undo, confirm, walkover, the draw) go through the
 // shared outbox: enqueued first with a client-made operation id (the database records it, so a replay does

@@ -1,6 +1,6 @@
 -- Seduh Score Next - T-TD.1.3: Throwdown functions (settings, draw, vote, confirm, walkover, advancement)
 --
--- The only writers of the td_* tables (the API roles hold SELECT only, see 20261103110000). Each public function:
+-- The only writers of the td_* tables (the API roles hold SELECT only, see 20261103111000). Each public function:
 --   * takes the organisation first, then the resource, and opens with app.td_guard: a caller who is not a member of
 --     that organisation, an event that is not that organisation's, an event that is not a Throwdown, or a missing id
 --     all answer the same "<function>: event not found" (no id is confirmed or denied);

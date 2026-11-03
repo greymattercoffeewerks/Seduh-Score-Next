@@ -2,7 +2,7 @@
 
 **Task:** T-TD.1 (ROADMAP "Throwdown (third format) — Phase TD.1 Core"; tasks T-TD.1.1 to .8) on branch `claude/throwdown-td1-core-d41fad`. Throwdown is the third format: a single-elimination knockout core with entitlement keys, schema, RPCs, pure modules, data layer, organiser console, projector and phone bodies, a printable organiser results page, and a full 8-competitor test event.
 
-**State, plainly:** built and tested locally; PR into `dev` opened; the owner says when CI is green and the main session merges. **Not in the cloud:** `20261103100000` (entitlement keys), `20261103110000` (tables), `20261103120000` (RPCs) and `20261103130000` (window lock) are repo-only. After the merge they must be pushed with the Supabase MCP's `apply_migration`; Throwdown does not work against the cloud until then.
+**State, plainly:** built and tested locally; PR into `dev` opened; the owner says when CI is green and the main session merges. **Not in the cloud:** `20261103101000` (entitlement keys), `20261103111000` (tables), `20261103120000` (RPCs) and `20261103130000` (window lock) are repo-only. After the merge they must be pushed with the Supabase MCP's `apply_migration`; Throwdown does not work against the cloud until then.
 
 **Decisions (the spec is silent or left them open; the owner may overrule):**
 
@@ -14,7 +14,7 @@
 - No third-place match when either semi-final was a bye or a walkover (the loser may have withdrawn).
 - Cross-check (spec section 11): `core/ranking` and `core/advancement` cannot express a knockout. Both take one ranked list and a cutoff; a knockout has per-match winners that feed the next round. Advancement therefore stays in `src/formats/throwdown/` and in the SQL RPC that writes it. The one generic primitive lifted is `core/seededShuffle.js`, which Liga heats and the lucky-loser draw can reuse. Bracket layout stays Throwdown-only until a second knockout format exists. No other `core/` file was edited.
 
-**Files:** the four migrations above; `supabase/tests/071_throwdown.sql` (116 asserts); `040` (34 tables) and `041` (35 RPCs) matrices; count updates in `052`, `056`, `057` and `069`; `src/core/seededShuffle.js`; `src/formats/throwdown/*` (votes, bracket, seeding, modules, data, liveSession, outboxHandlers, eventScreen, resultsScreen, viewerBody, projectorScreens and projectorBody, words); `main.js` and `liveSurfaces.js` wiring; Playwright project `dev-throwdown`.
+**Files:** the four migrations above; `supabase/tests/072_throwdown.sql` (116 asserts); `040` (34 tables) and `041` (35 RPCs) matrices; count updates in `052`, `056`, `057` and `069`; `src/core/seededShuffle.js`; `src/formats/throwdown/*` (votes, bracket, seeding, modules, data, liveSession, outboxHandlers, eventScreen, resultsScreen, viewerBody, projectorScreens and projectorBody, words); `main.js` and `liveSurfaces.js` wiring; Playwright project `dev-throwdown`.
 
 **Verified:** vitest 5966 of 5966 pass; eslint and prettier clean; full pgTAP suite passes; `dev-throwdown` passes the full 8-competitor test event.
 
