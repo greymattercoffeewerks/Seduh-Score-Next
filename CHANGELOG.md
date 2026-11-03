@@ -1,3 +1,7 @@
+## v3.5.1: Seduh ID feed released, Privacy sentence published · 2026-11-03
+
+**What the number covers:** T-ID.D1 (#412: the feed in review-queue mode, mode `off`, its two migrations NOT yet in the cloud, and the admin console's Seduh ID counts panel), the published D1d Privacy sentence (#414, `PRIVACY_UPDATED` 3 November 2026) and the `045` storage-trigger test fix (#410). A patch: nothing changes for organisers or the public until the owner pushes the migrations and sets the mode.
+
 ## T-ID.D1: Seduh ID archive feed (Layer 1b), review-queue mode · 2026-11-03
 
 **Task:** build the feed that creates Seduh ID identities from published podiums, in `queue` mode (nothing is created until the owner reviews and runs it), with `auto` built and off. **Not in the cloud:** two migrations, no cloud write, no flip; the push is a separate owner-approved step. Wording drafted only; `trustContent.js` is untouched.
