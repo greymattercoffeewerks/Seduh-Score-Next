@@ -44,7 +44,7 @@ describe('describeGatingError', () => {
 
   it('tells the organiser how to reach the team: the phone number and the email, in every gating message', () => {
     expect(SEDUH_SCORE_CONTACT).toBe(
-      'Contact the Seduh Score team on +673\u00a0835\u00a01231 or greymatter.cw@outlook.com',
+      'Contact the Seduh Score team on +673\u00a0835\u00a01231 or hello@seduhscore.com',
     );
     for (const key of ['cup_taster_participants', 'events_open', 'btc_format', 'future_key']) {
       const { message } = describeGatingError({
@@ -53,7 +53,7 @@ describe('describeGatingError', () => {
         details: key,
       });
       expect(message, key).toContain('+673\u00a0835\u00a01231');
-      expect(message, key).toContain('greymatter.cw@outlook.com');
+      expect(message, key).toContain('hello@seduhscore.com');
     }
   });
 

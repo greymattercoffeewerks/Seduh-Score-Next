@@ -2,7 +2,7 @@
 // CONTACT_EMAIL in src/marketing/trustContent.js (core may not import marketing): change both together.
 // Non-breaking spaces keep the number on one line at 360px.
 export const SEDUH_SCORE_PHONE = '+673\u00a0835\u00a01231';
-export const SEDUH_SCORE_EMAIL = 'greymatter.cw@outlook.com';
+export const SEDUH_SCORE_EMAIL = 'hello@seduhscore.com';
 // No full stop after the email: a phone's tap-to-select takes a trailing '.' into the copied address.
 export const SEDUH_SCORE_CONTACT = `Contact the Seduh Score team on ${SEDUH_SCORE_PHONE} or ${SEDUH_SCORE_EMAIL}`;
 
