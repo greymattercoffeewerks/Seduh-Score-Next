@@ -30,7 +30,7 @@ export const TRUST_PAGES = [
       },
       {
         type: 'p',
-        text: 'It supports two competition formats today, Cup Taster and BTC (Barista Team Championship). Throwdown and Liga Seduh are still to come. We also offer free [community tools](/community/), including a Timer and Guess the Bean, and a public archive of published results.',
+        text: 'It supports three competition formats today, Cup Taster, BTC (Barista Team Championship) and Throwdown. Liga Seduh is still to come. We also offer free [community tools](/community/), including a Timer and Guess the Bean, and a public archive of published results.',
       },
       { type: 'h2', text: 'Who builds it' },
       {

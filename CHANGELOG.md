@@ -4,9 +4,9 @@
 
 **Changed (`src/marketing/landingScreen.js`, `landingScreen.test.js`):** hero stat "3 formats live"; nav indicator "Live — Cup Taster, BTC, Throwdown"; Throwdown's row is now live and links to `/app/#/events` like the other two. Its blurb describes what shipped (seeded or random draw, judge votes, 3rd place match, live audience view) and says redemption and revival rounds are coming as add-on modules; the old "redemption & revival draw" claim is gone. Liga Seduh stays dimmed. Tests updated to 3 live rows and 1 dimmed row.
 
-**Not changed, still stale (follow-up):** the Tour's "next rounds" (`tourScreen.js`, `tourScreen.test.js`), the shared header's live indicator (`publicHeader.js`), the Pricing FAQ (`pricingContent.js`), the About page (`trustContent.js` and `design/copy/about-page-draft.md`), and `src/marketing/CLAUDE.md`.
+**Follow-up pass, same day:** the Tour (new live Throwdown section, planned grid now Liga Seduh only), the shared header indicator, the Pricing FAQ, the About page (`trustContent.js` and its draft) and `src/marketing/CLAUDE.md` now say Throwdown is live.
 
-**Verified:** vitest `src/marketing` 206 of 206, eslint and prettier clean. No reviewers run (copy-only change).
+**Verified:** full vitest 5969 of 5969, eslint and prettier clean. No reviewers run (copy-only; the new Tour section reuses BTC's existing markup and classes).
 
 ## T-TD.1.9 Throwdown: the 3rd place match after a walkover: built and in review, PR into `dev`; migration NOT yet in the cloud · 2026-11-03
 

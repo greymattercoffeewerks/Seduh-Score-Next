@@ -97,8 +97,8 @@ export const FEATURE_GROUPS = [
         'Entries queue on the device and sync when the connection returns.',
         [yes, yes, yes],
       ],
-      // Owner, 2026-10-17 and 2026-10-23: Community has Cup Taster (and Throwdown and Liga Seduh
-      // when they ship) limited to 8 participants, one active event at a time, and no BTC;
+      // Owner, 2026-10-17 and 2026-10-23: Community has Cup Taster (and Throwdown, and Liga Seduh
+      // when it ships) limited to 8 participants, one active event at a time, and no BTC;
       // Annual has full access; Per-event covers one event in one format, with no cap, BTC
       // included. Nothing enforces any of it yet: caps are decision D-G3 in
       // GATING-SPEC.md. The 5-day Per-event window (D-G15) is confirmed but deliberately not on
@@ -203,8 +203,8 @@ export const FAQ = [
       'It is not built yet. We list it so you can see where the product is going, not to sell it to you today.',
   },
   {
-    question: 'What about Throwdown and Liga Seduh?',
+    question: 'What about Liga Seduh?',
     answer:
-      'Both are planned formats. When they launch they follow the same rules as Cup Taster: up to 8 competitors on Community, one event at a time on Per-event, and included on Annual.',
+      'Liga Seduh is a planned format. Throwdown is live and follows the same rules as Cup Taster: up to 8 competitors on Community, one event at a time on Per-event, and included on Annual. Liga Seduh will follow them when it launches.',
   },
 ];

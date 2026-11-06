@@ -1,5 +1,5 @@
-// Public format tour. It states the current truth: Cup Taster and BTC are
-// live, the remaining competition formats are planned, and Community tools
+// Public format tour. It states the current truth: Cup Taster, BTC and
+// Throwdown are live, the remaining competition format is planned, and Community tools
 // are separate link-out utilities.
 //
 // BTC (2026-09-23) — the app-wiring pass that routed BTC's screens into the
@@ -102,7 +102,9 @@ function buildHero() {
     }),
     el('div', { className: 'tour-hero-status' }, [
       el('span', { className: 'tour-status-mark', text: '01' }),
-      el('span', { text: 'Cup Taster and BTC are live now. More formats are on the way.' }),
+      el('span', {
+        text: 'Cup Taster, BTC and Throwdown are live now. More formats are on the way.',
+      }),
     ]),
   ]);
 }
@@ -205,6 +207,42 @@ function buildBtc() {
   );
 }
 
+// Text-first like buildBtc: Throwdown has no real event photography yet.
+// Redemption and revival rounds are not built; they are named as coming
+// modules and nothing here claims them.
+function buildThrowdown() {
+  return el(
+    'section',
+    {
+      className: 'tour-cup',
+      attrs: { id: 'throwdown', 'aria-labelledby': 'throwdown-title' },
+    },
+    [
+      el('div', { className: 'tour-section-label' }, [
+        el('span', { text: '03' }),
+        el('span', { text: 'Live format' }),
+      ]),
+      el('div', { className: 'tour-cup-solo' }, [
+        el('div', { className: 'tour-icon', attrs: { 'aria-hidden': 'true' } }, [ICONS.bracket()]),
+        el('p', { className: 'tour-kicker', text: '1v1 knockout' }),
+        el('h2', { id: 'throwdown-title', text: 'Throwdown.' }),
+        el('p', {
+          className: 'tour-copy',
+          text: 'Two competitors, one match at a time. Seed the bracket or draw it at random, let the judges vote, and follow the winners through to a final and a 3rd place match on a live audience view.',
+        }),
+        el('p', {
+          className: 'tour-note',
+          text: 'Live in the organiser console. Redemption and revival rounds are coming later as add-on modules.',
+        }),
+        el('a', { className: 'tour-primary-link cut-sm', attrs: { href: '/app/#/events' } }, [
+          el('span', { text: 'Open Throwdown' }),
+          arrow(),
+        ]),
+      ]),
+    ],
+  );
+}
+
 function plannedFormat({ number, title, label, description, icon: iconName }) {
   return el('article', { className: 'tour-planned-card' }, [
     el('div', { className: 'tour-planned-top' }, [
@@ -228,26 +266,18 @@ function buildPlannedFormats() {
       el('div', { className: 'tour-planned-intro' }, [
         el('div', {}, [
           el('div', { className: 'tour-section-label' }, [
-            el('span', { text: '03' }),
+            el('span', { text: '04' }),
             el('span', { text: 'The format map' }),
           ]),
           el('h2', { id: 'planned-title', text: 'The next rounds.' }),
         ]),
         el('p', {
-          text: 'These formats are part of the direction, not yet live in Seduh Score Next. Their legacy ideas are here as a clear map of what is being carried forward.',
+          text: 'This format is part of the direction, not yet live in Seduh Score Next. Its legacy idea is here as a clear map of what is being carried forward.',
         }),
       ]),
       el('div', { className: 'tour-planned-grid' }, [
         plannedFormat({
           number: '01',
-          title: 'Throwdown',
-          label: '1v1 knockout',
-          description:
-            'A focused head-to-head bracket built for decisive rounds, randomised seeding and a room following every result.',
-          icon: 'bracket',
-        }),
-        plannedFormat({
-          number: '02',
           title: 'Liga Seduh',
           label: 'Round robin league',
           description:
@@ -278,7 +308,7 @@ function buildCommunity() {
     },
     [
       el('div', { className: 'tour-section-label' }, [
-        el('span', { text: '04' }),
+        el('span', { text: '05' }),
         el('span', { text: 'Community tools' }),
       ]),
       el('div', { className: 'tour-community-heading' }, [
@@ -323,6 +353,7 @@ export function mountTourScreen(root) {
       buildHero(),
       buildCupTaster(),
       buildBtc(),
+      buildThrowdown(),
       buildPlannedFormats(),
       buildCommunity(),
       buildPublicFooter({

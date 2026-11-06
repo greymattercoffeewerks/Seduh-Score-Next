@@ -162,8 +162,8 @@ just an empty `alt` or a hopeful `aria-label`.
 `tour/index.html` is a second public entry in this module, composed by `tourMain.js` and
 `tourScreen.js` with `tour.css`. It is a static, link-out page: it must not import the app
 router, auth, Supabase, or a competition implementation. It uses the legacy tour only as
-historical reference while stating the current truth: Cup Taster and BTC are live;
-Throwdown and Liga Seduh are planned; Community is a separate final section.
+historical reference while stating the current truth: Cup Taster, BTC and Throwdown are live;
+Liga Seduh is planned; Community is a separate final section.
 
 ## Pricing page (2026-10-17)
 
@@ -176,7 +176,7 @@ and the shared header's Pricing link. It is static like the Tour: no router, aut
   or `text`). Prices are the landing page's. `soon` means not built yet and the page says "Planned" in
   words; never mark a feature `yes` before it exists (the "Known placeholders" rule above).
 - **The matrix is confirmed by the owner (2026-10-17) but not enforced by the product.** Community is
-  limited to 8 competitors for Cup Taster (and, when they ship, Throwdown and Liga Seduh), one active event
+  limited to 8 competitors for Cup Taster (and Throwdown, and Liga Seduh when it ships), one active event
   at a time, and has **no BTC** (owner, 2026-10-23, reversing the first confirmation: BTC is Per-event and
   Annual only, uncapped; the spec is GATING-SPEC section 6d, key `btc_format`, min tier `per_event`); Per-event is one event in one format; Annual has full access; "Result listing" is Compulsory /
   Optional / Optional. The tentative 5-day Per-event window is deliberately not on the page. Gating (`Handoffs and Specs/GATING-SPEC.md`, D-G2/D-G3)
@@ -252,6 +252,16 @@ The landing page's two "Take the tour" CTAs point to `/tour/`. Keep that link an
 production build omits it if it is not listed in `vite.config.js`. `hero-cupping-bowls.jpg`
 is the only real event photo used by the Tour; its Cup Taster overlay is presentational and
 aria-hidden.
+
+## Throwdown goes live on the public pages (2026-11-06)
+
+Throwdown (T-TD.1, 2026-11-03) is the third live format. The landing page (hero stat "3 formats live",
+nav indicator, a live Throwdown row), the Tour (`buildThrowdown()`, section 03, text-first and
+photo-less like BTC; the planned grid now holds only Liga Seduh, Community is 05), the shared header's
+"Live —" indicator, the Pricing FAQ and the About page all say so. Redemption and revival rounds are
+NOT built (they are later add-on modules): copy may name them as coming, never as shipped, and a Tour
+test keeps them out of the Throwdown description. Throwdown's row carries the same "Basic free" tag as
+the other live rows, on the pricing page's rule that it follows Cup Taster's tier limits.
 
 ## Public-page prerendering (2026-09-16)
 
