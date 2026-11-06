@@ -1,3 +1,11 @@
+## Landing page: new hero tagline · 2026-11-06
+
+**Task:** a test panel found the hero headline ("One tablet. One projector. Zero fall-apart.") disconnected and confusing, with no link to coffee.
+
+**Changed:** `landingScreen.js` hero is now "Every cup brewed. / Every score counted. / Every result trusted." (owner-chosen wording; the last line keeps the accent colour). `landingScreen.test.js` asserts the three lines and the accent span; `tests/e2e/smoke.spec.js`'s raw-response check and `tools/prerender-public-pages.mjs`'s landing marker look for "Every cup brewed" instead of "One tablet". The prerender marker was missed at first and failed `npm run build`, so the Cloudflare Workers build went red; a search for the old headline must include `.mjs` files. The body copy still carries "no install and no dependency on venue wifi". Version 3.6.3 (CI's version gate).
+
+**Verified:** at 360px the headline wraps to six lines with no horizontal overflow (the page width equals the viewport); at 1280px it is three lines. No reviewers run (one text change).
+
 ## Landing page: Throwdown shown as live (3 formats) · 2026-11-06
 
 **Task:** the landing page still said 2 formats were live after Throwdown shipped (T-TD.1, 2026-11-03).

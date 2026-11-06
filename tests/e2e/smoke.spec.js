@@ -15,7 +15,7 @@ test('app entry mounts the real app shell and routes to the events screen', asyn
 
 test('public pages ship meaningful HTML before client JavaScript runs', async ({ page }) => {
   const pages = [
-    ['/', '<div class="petrol-page"', 'One tablet.'],
+    ['/', '<div class="petrol-page"', 'Every cup brewed.'],
     ['/tour/', '<main class="tour-page"', 'A better way to '],
     ['/pricing/', '<div class="pricing-page"', 'Pricing, stated '],
     ['/community/', '<main class="community-hub"', 'Useful on the '],
