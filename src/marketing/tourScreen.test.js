@@ -32,20 +32,35 @@ describe('mountTourScreen', () => {
     expect(btcSection.querySelector('img')).toBeNull();
   });
 
-  it('only lists genuinely not-yet-live formats (Throwdown, Liga Seduh) as "Coming soon", not BTC', () => {
+  it('lists Throwdown as live, linked to the organiser console, with no photo and no redemption claim', () => {
     mountTourScreen(root);
-    expect(root.querySelectorAll('.tour-planned-status')).toHaveLength(2);
+    const section = root.querySelector('#throwdown');
+    expect(section).not.toBeNull();
+    expect(section.querySelector('h2').textContent).toBe('Throwdown.');
+    const link = section.querySelector('.tour-primary-link');
+    expect(link.getAttribute('href')).toBe('/app/#/events');
+    expect(link.textContent).toContain('Open Throwdown');
+    expect(section.querySelector('img')).toBeNull();
+    // Redemption and revival are not built: the section may only name them as coming later.
+    expect(section.querySelector('.tour-copy').textContent).not.toMatch(/redemption|revival/i);
+    expect(section.querySelector('.tour-note').textContent).toMatch(/later/i);
+  });
+
+  it('only lists genuinely not-yet-live formats (Liga Seduh) as "Coming soon", not BTC or Throwdown', () => {
+    mountTourScreen(root);
+    expect(root.querySelectorAll('.tour-planned-status')).toHaveLength(1);
     const plannedTitles = [...root.querySelectorAll('.tour-planned-card h3')].map(
       (h3) => h3.textContent,
     );
-    expect(plannedTitles).toEqual(['Throwdown', 'Liga Seduh']);
+    expect(plannedTitles).toEqual(['Liga Seduh']);
     expect(root.querySelector('.tour-planned').textContent).not.toContain('BTC');
+    expect(root.querySelector('.tour-planned').textContent).not.toContain('Throwdown');
   });
 
-  it('lists both live formats in the shared public header\'s own "Live —" indicator, not just Cup Taster', () => {
+  it('lists all live formats in the shared public header\'s own "Live —" indicator, not just Cup Taster', () => {
     mountTourScreen(root);
     expect(root.querySelector('.public-header-live').textContent).toContain(
-      'Live — Cup Taster, BTC',
+      'Live — Cup Taster, BTC, Throwdown',
     );
   });
 

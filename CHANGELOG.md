@@ -1,3 +1,13 @@
+## Landing page: Throwdown shown as live (3 formats) · 2026-11-06
+
+**Task:** the landing page still said 2 formats were live after Throwdown shipped (T-TD.1, 2026-11-03).
+
+**Changed (`src/marketing/landingScreen.js`, `landingScreen.test.js`):** hero stat "3 formats live"; nav indicator "Live — Cup Taster, BTC, Throwdown"; Throwdown's row is now live and links to `/app/#/events` like the other two. Its blurb describes what shipped (seeded or random draw, judge votes, 3rd place match, live audience view) and says redemption and revival rounds are coming as add-on modules; the old "redemption & revival draw" claim is gone. Liga Seduh stays dimmed. Tests updated to 3 live rows and 1 dimmed row.
+
+**Follow-up pass, same day:** the Tour (new live Throwdown section, planned grid now Liga Seduh only), the shared header indicator, the Pricing FAQ, the About page (`trustContent.js` and its draft) and `src/marketing/CLAUDE.md` now say Throwdown is live.
+
+**Verified:** full vitest 5969 of 5969, eslint and prettier clean. No reviewers run (copy-only; the new Tour section reuses BTC's existing markup and classes).
+
 ## T-TD.1.9 Throwdown: the 3rd place match after a walkover: built and in review, PR into `dev`; migration NOT yet in the cloud · 2026-11-03
 
 **Task:** owner decision (2026-11-03): play the 3rd place match whenever BOTH semi-final losers exist and are active (`event_entries.withdrawn` is false). Before, `app.td_advance` made none if any semi-final was a bye or a walkover.
