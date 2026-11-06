@@ -12,7 +12,7 @@ const ROUTES = [
     output: 'index.html',
     url: 'https://www.seduhscore.com/',
     rootMarker: '<div class="petrol-page"',
-    marker: 'One tablet',
+    marker: 'Every cup brewed',
   },
   {
     output: 'tour/index.html',
