@@ -65,6 +65,19 @@ describe('mountLandingScreen — format list', () => {
   });
 });
 
+describe('mountLandingScreen — hero headline', () => {
+  it('states the three-line coffee tagline, with the accent on the last line', () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: true }));
+    const root = document.createElement('div');
+    mountLandingScreen(root);
+    const h1 = root.querySelector('.petrol-hero-headline');
+    expect(h1.innerHTML.replace(/<br>/g, '|').replace(/<\/?span>/g, '')).toBe(
+      'Every cup brewed.|Every score counted.|Every result trusted.',
+    );
+    expect(h1.querySelector('span').textContent).toBe('Every result trusted.');
+  });
+});
+
 describe('mountLandingScreen — pricing', () => {
   beforeEach(() => {
     vi.stubGlobal('matchMedia', (query) => ({ matches: query.includes('reduce') }));

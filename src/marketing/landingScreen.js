@@ -300,11 +300,11 @@ function buildHero() {
   const content = el('div', { className: 'petrol-hero-content' }, [
     el('p', { className: 'petrol-kicker', text: 'Grey Matter Coffee Werks · Brunei' }),
     el('h1', { className: 'petrol-display petrol-hero-headline' }, [
-      document.createTextNode('One tablet.'),
+      document.createTextNode('Every cup brewed.'),
       el('br'),
-      document.createTextNode('One projector.'),
+      document.createTextNode('Every score counted.'),
       el('br'),
-      el('span', { text: 'Zero fall-apart.' }),
+      el('span', { text: 'Every result trusted.' }),
     ]),
     el('p', {
       className: 'petrol-hero-body',
