@@ -1,20 +1,20 @@
 # Seduh Score Next — Claude Code orientation
 
-_State: Phase 0–5 done. See `ROADMAP.md` for current phase and `CHANGELOG.md` for
-what's shipped, in what order, and why — this file no longer narrates that history
-(it used to; see below for where it moved)._
+_State: see `STATUS.md` (one page: where we are, what's in flight, what's blocked). This file carries
+rules only; history lives in `CHANGELOG.md` and `ROADMAP.md`._
 
-Read these before touching anything:
+**Read `STATUS.md` first. Read the rest on demand, never whole.** `CHANGELOG.md` and `ROADMAP.md` are kept short on purpose;
+older entries and the open-items backlog are in `docs/` (see "Where to find things" in `STATUS.md`). Look things up
+with grep, do not read them end to end. For a given task read:
 
 1. `Handoffs and Specs/SEDUH-NEXT-HANDOFF.md` — the frozen spec. Vocabulary, schema,
    permission model, the full build plan (§14, T0.1–T6.x), Definition of Done (§11). This
    never gets edited to reflect progress (§0) — it's the original brief.
 2. `CONVENTIONS.md` — how this codebase actually builds things, backfilled from what's
    shipped.
-3. `CHANGELOG.md` — what's shipped, in what order, and why. The ground truth for "where
-   are we."
-4. `ROADMAP.md` — living phase-status tracker (the handoff's build plan, kept current —
-   unlike the handoff itself).
+3. `CHANGELOG.md` — the last ~two weeks of what shipped and why (older: `CHANGELOG-INDEX.md`).
+4. `ROADMAP.md` — the live programme (the handoff's build plan, kept current — unlike the handoff
+   itself). Open items by area: `docs/backlog/`.
 
 This file carries only the rules that apply everywhere in the repo. Directory-scoped
 `CLAUDE.md` files carry the module-specific conventions and history — Claude Code loads
@@ -51,7 +51,9 @@ Non-negotiables — not duplicated into each scoped file.
 
 ## Session state
 
-Read `state.json` first, before Handoff/CONVENTIONS/CHANGELOG. Rewrite it after
+`STATUS.md` (tracked, shared across sessions and machines) is the entry point; `kb-sync` updates it when a task closes.
+`state.json` is the per-task scratch file for a local session (gitignored, so a fresh cloud session has none). Read
+`state.json` first when it exists, before Handoff/CONVENTIONS/CHANGELOG. Rewrite it after
 every step — current task state only, never a narrative of what happened.
 When kb-sync closes a task, state.json resets to the next task's skeleton.
 
@@ -267,75 +269,15 @@ functions"); the locked spec is `Handoffs and Specs/ADMIN-CONSOLE-SPEC.md` (loca
   know needs a deliberate tick (`member_password_unset`, D-A9: a gate and an audit trail, not a proof), and why
   each change is one transaction with its audit row (`org.create`, `member.add`, `member.role_set`).
   `account.create` is recorded by the Edge Function in a second transaction.
-- **Add the first or another admin (the only way: no API, migration or seed makes one).** As the database owner (the
-  Supabase MCP's `execute_sql` or the SQL editor), in this order, so the window in which a password alone is enough is
-  as short as possible: (a) set a temporary random password on the person's login with the service key
-  (`PUT /auth/v1/admin/users/<id>` with `{ "password": ... }`; the old one stops working) or, from the Supabase MCP
-  (which holds no service key), `update auth.users set encrypted_password = extensions.crypt('<temp>',
-extensions.gen_salt('bf', 10)) where id = '<id>'` (the same bcrypt hash, and `encrypted_password =
-extensions.crypt('<temp>', encrypted_password)` proves it took; check first that the login has no live session and
-  no factor); (b)
-  `insert into app.platform_admins (user_id, note) values ('<auth.users.id>', '<who, why, when>');`; (c) they sign in
-  at `/admin/` with the temporary password and **enrol their authenticator app at once**; (d) **replace the temporary password at once through the console's "Change password" panel** (`#/password`, needs
-  the `aal2` session they just reached; asks for the current password, minimum 12 characters, ends their other
-  sessions); make it long and random and keep it in a password manager. **Do NOT use the dashboard's "send a password
-  recovery email" for an admin with an authenticator:** that link signs in at `aal1`, GoTrue refuses a password change
-  from a password-only session once a factor is verified (`insufficient_aal`), and the link lands on a page with
-  nothing listening. Rotation by someone else is by the Auth admin API with the service key or by SQL (step a), which
-  leaves the value known to the operator's tooling, so follow it with the panel and then "Sign out everywhere". **If their first sign-in shows a CHALLENGE screen instead of the enrolment screen,
-  someone else has already enrolled a factor: the account is compromised.** Delete that factor in the dashboard,
-  rotate the password and start again. Until a factor is verified, anyone holding only the password could enrol
-  their own. To remove an admin: `delete from app.platform_admins where user_id = '<id>';` cuts a live session off on
-  its next call. Never reset an admin's password through the organiser Team screen (it refuses admins): use the Auth
-  admin API.
-- **Lost or stolen authenticator or session (the order matters).** (1) End every session of the login first: a
-  global sign-out through the Auth admin API (`POST /auth/v1/logout?scope=global` with a token, or the console's
-  "Sign out everywhere"), or a password reset (which deletes sessions). A ban only PAUSES the admin functions; it does
-  not end sessions, so lift it only after step 3. (2) Remove the factor in the dashboard (Authentication, Users).
-  (3) Enrol again yourself immediately. Reversed, a thief holding the old session is offered the enrolment screen the
-  moment the factor goes. Provisioning by the SQL runbook below keeps working throughout. While the console is open
-  it asks the database again whenever the tab becomes visible and every five minutes, so a revoked admin loses the
-  screen without a reload.
-- **TOTP is switched on for the whole project, so:** any signed-in user can enrol a factor on their own account;
-  a person with a verified factor cannot change their password from a password-only session (`insufficient_aal`);
-  and whoever knows a NEW login's one-time password could enrol a factor first and block the real owner's forced
-  password change. The blast radius is small (the creator is already trusted) and it is a ROADMAP open item.
-- **Known limits, accepted** (threat model, spec section 7): a stolen admin session is bounded by the 60-minute
-  window and "Sign out everywhere", not prevented; `account.create` is two transactions, so a crash can leave an
-  **orphan login** that nobody can sign in to (no function returns its password), belongs to no organisation and
-  has no audit row: it blocks that email (a retry answers "already has an account") until the operator resets its
-  password or removes it, and `admin_find_user` finds it (the console words these cases `account_state_unknown`,
-  `account_record_failed` and `account_stranded`); refused calls write no audit row; audit ids have gaps that do not
-  mean deletion; an admin who attaches someone to an organisation has given them its data.
-- **Tests that hold this.** pgTAP `046` to `051` (identity, audit, read and write RPCs, the platform-tables
-  contract, the audit writer); Playwright `dev-admin` (the console, plus `admin-console-adversarial.spec.js`: the
-  attack list over HTTP, which a new admin function or door must be added to); and, for the Edge Function (not
-  served in CI), `supabase/tests/manual/admin-accounts-e2e.mjs`, to run before every rollout.
-- **Rollout status (2026-10-17): in the cloud and live (v3.4.0).** Done in order on 2026-10-16/17, each by the owner's
-  approval: (1) the pre-checks (the exposed schemas exclude `app`, `pg_graphql` is off, `pg_default_acl` has no `app`
-  entry, `postgres` can read `auth.sessions`); (2) the six migrations pushed with the Supabase MCP (cloud versions
-  `20261016080210` to `20261016080352`, compared with `list_migrations`; advisors showed only the expected findings:
-  `rls_enabled_no_policy` on the two `app` tables, lint 0029 on the admin functions, one unused index); (3) TOTP: the
-  hosted dashboard had no switch to flip (Supabase documents TOTP as on by default), an organiser still signed in, and
-  it was proven at the first enrolment (step 6); (4) `admin-accounts` deployed (version 1, `verify_jwt` true; the manual
-  script had passed 35 of 35 against local first; probes: no auth 401, anon-key bearer 401, GET 405); (5) release PR
-  #285 merged and `/admin/` checked live: 200, `no-store`, `X-Robots-Tag: noindex, nofollow`, the CSP with `connect-src
-'self' https://*.supabase.co`, the meta robots tag, `/admin` redirecting to `/admin/`, and no link from `/`, `/app/`,
-  `/tour/`, `/community/`, the sitemap or `robots.txt`; (6) the first admin, by the temporary-password procedure above,
-  with the authenticator factor verified and one `aal2` session; (7) a smoke test on a throwaway organisation
-  `console-smoke`, removed afterwards by SQL (the organisation, then the login a Team-screen add had made; the audit rows
-  stay, by design).
-  **Every console write path has now run against the cloud.** The first smoke test (2026-10-17) proved `org.create`
-  with an existing account and `member.role_set` twice (an owner swapped between two accounts, which keeps one owner
-  throughout, so `last_owner` never fired). On 2026-10-22 the owner proved the rest with throwaway organisations
-  "Noice Test" and "Noice 2 Test": `account.create` with a NEW login (audit rows 4 and 5), `member.role_set` again
-  (rows 6 and 7), `org.create` with an existing account and the attestation ticked (row 8) and `member.add` of an
-  account whose one-time password was still unset, attestation ticked (row 9, `attested: true`). The two throwaway
-  organisations and their two logins were then removed by SQL the same day (with the owner's old "Grey Matter
-  Rehearsal" organisation, which held no events); the audit rows stay, by design.
-  **The console cannot disable or delete anything**
-  (organisation, member or login): a throwaway is removed by SQL, and a requested admin function for it is logged in
-  ROADMAP.md ("Admin console: disable or delete", 2026-10-22).
+- **Operator runbooks live in [docs/runbooks/admin-console.md](docs/runbooks/admin-console.md)** (read it before touching an
+  admin's login, session or authenticator): adding or removing an admin, a lost or stolen authenticator or session
+  (the order matters), the TOTP caveats, the accepted known limits, the tests that hold this, and the rollout record
+  (live in the cloud since 2026-10-17, v3.4.0). Rules that hold every time: **the only way to add an admin is owner
+  SQL** (no API, migration or seed makes one; enrol the authenticator at once and replace the temporary password through
+  the console's Change password panel); never reset an admin's password through the organiser Team screen (it refuses
+  admins); **the console cannot disable or delete anything** (a throwaway organisation is removed by SQL).
+  Tests: pgTAP `046` to `051`, Playwright `dev-admin` (including `admin-console-adversarial.spec.js`, which a new admin
+  function or door must be added to), and `supabase/tests/manual/admin-accounts-e2e.mjs` before every rollout.
 
 ### Definition of Done (handoff §11, restated)
 
@@ -457,40 +399,12 @@ CHANGELOG.md's dated entry) — credentials given to the user in chat, not commi
 anywhere. Local dev still defaults to the local stack (`npm run supabase -- start`,
 Studio at `http://127.0.0.1:54423`) — nothing about local dev changed.
 
-**Provisioning an org (T-TEN.B4; invite-only — there is no signup and no API role can do this).**
-**The admin console is live in the cloud (rolled out 2026-10-17, see "Platform administration"), so `/admin/` is
-the normal path and this SQL is the fallback** (the console's New organisation screen is `create_org` plus an audit
-row and the same refusals, plus the admin gate, `admin_self_target` and `member_password_unset`). Whenever the console cannot be used (a lost authenticator, for example), run these
-as the service role (the Supabase MCP's `execute_sql`), never from the app:
-
-1. Make sure the owner has an account (Auth → Add user in the dashboard) and that **they set their
-   own password**. Note their user id.
-2. `select public.create_org('Display Name', 'url-slug', '<owner user id>');` returns the new org's id.
-   The slug is trimmed and lower-cased, 3 to 40 letters/digits with single hyphens, not a reserved word
-   (`app`, `admin`, `api`, `www`, `live`, `results`, `tour`, `community`, `tools`, `guess-the-bean`,
-   `about`, `contact`, `privacy`, `terms`, `neutrality`, `login`, `signup`, `auth`, `assets`, `bts`,
-   `marketing`, `events`, `team`, `projector`, `phone`, `splash`, `help`, `docs`, `support`, `pricing`,
-   `status`, `static`, `settings`, `dashboard`) and not taken. **A slug can never be changed** (it is in
-   printed and QR audience links) and deleting an org frees it for reuse, so choose with care.
-3. To give an existing account a second membership (a two-org user):
-   `select public.org_add_existing_member('<org id>', '<user id>', 'organiser');`. Only attach an account
-   whose holder has set their own password, never one a Team screen created with a one-time password
-   (that org's owner still knows it).
-4. Refusals carry a stable `hint` (`org_slug_taken`, `org_slug_invalid`, `org_slug_reserved`,
-   `org_name_invalid`, `org_owner_not_found`, `member_exists`, ...): read the hint, not the text.
-5. To make someone else owner or demote an owner use `select public.org_set_role(...)` (B5); an org can
-   never be left without an owner.
-
-**Build variables (Cloudflare Workers Builds → Settings → Build → Variables and secrets).** Three, all `VITE_`:
-`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` and `VITE_LEGACY_AUDIENCE_ORG_SLUG=grey-matter-coffee-werks` (the one
-organisation the old slug-less audience links mean; retire it, and the shim in `src/core/config.js`, when those
-printed links are gone). `VITE_DEFAULT_ORG_ID` was **removed on 2026-10-13** (T-TEN.E5 step 6) and must not come back:
-the organiser console takes its organisation from the signed-in person's memberships, and an unset variable never
-throws. A change to these variables takes effect only on the NEXT production build (retry the latest build on
-`main`). **Preview builds (pull request branches) do not receive them at all**, so a preview shows "supabaseUrl is
-required" whatever the dashboard says; only a production build tells you anything. Check a production change by
-fetching `/app/`, then its `app-*.js`, and looking for the Supabase project ref and the slug; keep the previous
-deployment (Deployments → Rollback) one click away until you have.
+**Provisioning an organisation and build variables: [docs/runbooks/provisioning-and-deploy.md](docs/runbooks/provisioning-and-deploy.md).**
+Organisations are invite-only: the admin console (`/admin/`, live) is the normal path and `select public.create_org(...)`
+as the service role is the fallback; there is no signup. **A slug can never be changed** (it is in printed and QR audience
+links). The build variables are `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` and `VITE_LEGACY_AUDIENCE_ORG_SLUG`;
+`VITE_DEFAULT_ORG_ID` was removed on 2026-10-13 and **must not come back**. A variable change takes effect only on the
+next production build, and preview builds do not receive them at all.
 
 **Pushing a migration to the cloud project is a separate, manual step from merging its
 PR — merging to `main` only deploys the frontend (Cloudflare Workers Builds); it never

@@ -84,10 +84,10 @@ section 6.
 
 **A. Team name and country (build first, Phase 1).** One forward migration, `btc_team_country`:
 
-| Column           | Shape                                                                        | Why                                                                                       |
-| ---------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `country_code`   | `text null`, `CHECK (country_code ~ '^[A-Z]{2}$')`                           | ISO 3166-1 alpha-2. Nullable so non-country BTC events (club leagues) keep working.       |
-| `represents`     | `text null`, 1–60 chars                                                      | Optional free label when a team represents a region or federation, not a country.         |
+| Column           | Shape                                                                          | Why                                                                                         |
+| ---------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| `country_code`   | `text null`, `CHECK (country_code ~ '^[A-Z]{2}$')`                             | ISO 3166-1 alpha-2. Nullable so non-country BTC events (club leagues) keep working.         |
+| `represents`     | `text null`, 1–60 chars                                                        | Optional free label when a team represents a region or federation, not a country.           |
 | unique (partial) | `unique (event_id, country_code) where country_code is not null` (decision D3) | One team per country per year, if the rules say so. Leave it out if a country may send two. |
 
 - Names are stored, never derived: the display name comes from `Intl.DisplayNames` at render time (no country
@@ -109,14 +109,14 @@ section 6.
 **B. Optional member backfill (Phase 3, only on the owner's yes, after Section 8).** New tenant table
 `btc_team_members`:
 
-| Column                     | Notes                                                                                                      |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `id`, `event_id`, `team_id` | `(team_id, event_id)` references `btc_teams (id, event_id)` (the composite key already exists)           |
-| `person_id uuid null`      | references `people(id)` of the event's org; **nullable**                                                   |
-| `display_name text`        | required when `person_id` is null; a member can be recorded by name alone                                 |
-| `role text`                | `member` / `captain` / `coach` / `alternate`, free text with a format check (the `relationship` precedent) |
-| `seat smallint null`       | 1–4 if the committee wants order; no hard cap of 4 in SQL (alternates)                                    |
-| `created_at`, `created_by` | defaults; not client-writable                                                                              |
+| Column                      | Notes                                                                                                      |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `id`, `event_id`, `team_id` | `(team_id, event_id)` references `btc_teams (id, event_id)` (the composite key already exists)             |
+| `person_id uuid null`       | references `people(id)` of the event's org; **nullable**                                                   |
+| `display_name text`         | required when `person_id` is null; a member can be recorded by name alone                                  |
+| `role text`                 | `member` / `captain` / `coach` / `alternate`, free text with a format check (the `relationship` precedent) |
+| `seat smallint null`        | 1–4 if the committee wants order; no hard cap of 4 in SQL (alternates)                                     |
+| `created_at`, `created_by`  | defaults; not client-writable                                                                              |
 
 - Checklist from `CONVENTIONS.md:165-213` in full: RLS on `app.is_org_member` via `app.org_id_for_event`, frozen
   `event_id`/`team_id`/`person_id`, a `refuse_non_member` trigger that checks the person belongs to the event's org,
@@ -159,16 +159,16 @@ section 6.
 Layer 1a is built and in the cloud; Layer 1b (the archive feed) is in `queue` mode with nothing queued
 (`ROADMAP.md:1960`, `CHANGELOG.md:88-94`). To call it properly online:
 
-| # | Item                                                                                                            | Owner / builder        | Source                       |
-| - | --------------------------------------------------------------------------------------------------------------- | ---------------------- | ---------------------------- |
-| 1 | First real Community event ends after the 2026-11-02 floor; watch the archive publish ~24 h later              | Owner (needs an event) | `ROADMAP.md:1979`, `1983`    |
-| 2 | That publish puts one row on the feed queue; review it and run `app.seduh_identity_feed` for the trusted id   | Owner (SQL runbook)    | `CONVENTIONS.md` "Seduh ID feed" |
-| 3 | Weekly queue review habit recorded (decided 2026-11-03), and replies from `hello@`                              | Owner                  | `CHANGELOG.md:86`            |
-| 4 | Publish the C4 wording (`design/copy/seduh-id-wording-DRAFT.md`)                                                | Owner edits, then a PR | `ROADMAP.md:1957`            |
-| 5 | Section 8 sign-offs (`HANDOFF-CORRECTION-004.md`, local only)                                                   | Owner                  | `ROADMAP.md:1958`            |
-| 6 | Legal read KIV: controller/processor, PDPO commencement, minors, Singapore cross-border wording                 | Owner                  | `ROADMAP.md:1956`, `1985`    |
-| 7 | `pg_cron` run-details purge (about 288 rows a day)                                                              | Build, small migration | `ROADMAP.md:1983` item 4     |
-| 8 | Row-id existence oracle on 24 tenant tables (low)                                                               | Build, per table       | `ROADMAP.md:1959`            |
+| #   | Item                                                                                                        | Owner / builder        | Source                           |
+| --- | ----------------------------------------------------------------------------------------------------------- | ---------------------- | -------------------------------- |
+| 1   | First real Community event ends after the 2026-11-02 floor; watch the archive publish ~24 h later           | Owner (needs an event) | `ROADMAP.md:1979`, `1983`        |
+| 2   | That publish puts one row on the feed queue; review it and run `app.seduh_identity_feed` for the trusted id | Owner (SQL runbook)    | `CONVENTIONS.md` "Seduh ID feed" |
+| 3   | Weekly queue review habit recorded (decided 2026-11-03), and replies from `hello@`                          | Owner                  | `CHANGELOG.md:86`                |
+| 4   | Publish the C4 wording (`design/copy/seduh-id-wording-DRAFT.md`)                                            | Owner edits, then a PR | `ROADMAP.md:1957`                |
+| 5   | Section 8 sign-offs (`HANDOFF-CORRECTION-004.md`, local only)                                               | Owner                  | `ROADMAP.md:1958`                |
+| 6   | Legal read KIV: controller/processor, PDPO commencement, minors, Singapore cross-border wording             | Owner                  | `ROADMAP.md:1956`, `1985`        |
+| 7   | `pg_cron` run-details purge (about 288 rows a day)                                                          | Build, small migration | `ROADMAP.md:1983` item 4         |
+| 8   | Row-id existence oracle on 24 tenant tables (low)                                                           | Build, per table       | `ROADMAP.md:1959`                |
 
 Recommendation: **items 1–4 before the Board** (they are what lets the owner say "live and reviewed"); 5 and 6 gate
 any BTC member feed; `auto` mode stays off through March (it removes the human who closes the forgery gap,
@@ -299,17 +299,17 @@ them: BTC scoring, matches, setup, bracket, standings, BTC phone/projector, then
 
 ### 3.1 BTC organiser flow: findings, in the order an organiser meets them
 
-| # | Step        | Finding                                                                                                                                                                                                                                                                                                    | Severity for the beta |
-| - | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
-| 1 | Rules       | Bracket requires at least 8 teams (`20260922130000_btc_bracket_generate_rpc.sql:68-69`); preliminary 15 cups, knockouts 20 (`src/formats/btc/scoring.js:36-40`). Unknown fit to the real competition.                                                                                                  | Blocking              |
-| 2 | Dashboard   | The BTC event hub is four links (Setup, Matches, Standings, Bracket) and a test banner (`src/formats/btc/eventDashboardScreen.js:99-131`); no progress ("12 of 28 preliminaries confirmed"), no next step, no Live-now badge (Cup Taster has one, `src/formats/cup-taster/eventDashboardScreen.js:44`), no "show this event" control (`ROADMAP.md:1908`). | High                  |
-| 3 | Setup       | Teams are name-only; no country (section 1). Judges name-only. Demo-data card is good.                                                                                                                                                                                                                       | High (country)        |
-| 4 | Matches     | **No round-robin generator.** Each preliminary is created by hand: two team selects plus three judge checkboxes (`src/formats/btc/matchesScreen.js`); 8 teams means 28 matches, 112 picks, with no duplicate-pair warning (`create_btc_match` has no idempotency key by design, `src/formats/btc/CLAUDE.md:100-111`). | High                  |
-| 5 | Scoring     | Solid: drafts in IndexedDB, confirm state machine, stale-draft handling (`scoringScreen.js:13-19`). But the **screen cannot load without the network** (`ROADMAP.md:1318`), and the confirm waits for the display publish (`ROADMAP.md:1905`).                                                          | High (offline)        |
-| 6 | Standings   | Good empty state (`standingsScreen.js:166`). Fine.                                                                                                                                                                                                                                                         | Low                   |
-| 7 | Bracket     | Blocked state explains itself (`bracketScreen.js:1014`). Seeding tie-break works. Provisional lists are tall at 360px (`ROADMAP.md:1865`).                                                                                                                                                              | Low                   |
-| 8 | Records     | **No BTC dispute-pack button** (`ROADMAP.md:1811`), though `get_dispute_pack` already reads the `btc_*` tables (`src/core/disputePack.js:1-5`). No CSV. This is the shadow comparison's input.                                                                                                       | Blocking for G1       |
-| 9 | Live        | Projector and phone are built. Open: body live region re-read on every update (`ROADMAP.md:1874`), no publish coalescing (`1906`), a stuck publish can block a confirm (`1904`), and moments not yet seen on the real TV (`1790`).                                                                    | Medium                |
+| #   | Step      | Finding                                                                                                                                                                                                                                                                                                                                                   | Severity for the beta |
+| --- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| 1   | Rules     | Bracket requires at least 8 teams (`20260922130000_btc_bracket_generate_rpc.sql:68-69`); preliminary 15 cups, knockouts 20 (`src/formats/btc/scoring.js:36-40`). Unknown fit to the real competition.                                                                                                                                                     | Blocking              |
+| 2   | Dashboard | The BTC event hub is four links (Setup, Matches, Standings, Bracket) and a test banner (`src/formats/btc/eventDashboardScreen.js:99-131`); no progress ("12 of 28 preliminaries confirmed"), no next step, no Live-now badge (Cup Taster has one, `src/formats/cup-taster/eventDashboardScreen.js:44`), no "show this event" control (`ROADMAP.md:1908`). | High                  |
+| 3   | Setup     | Teams are name-only; no country (section 1). Judges name-only. Demo-data card is good.                                                                                                                                                                                                                                                                    | High (country)        |
+| 4   | Matches   | **No round-robin generator.** Each preliminary is created by hand: two team selects plus three judge checkboxes (`src/formats/btc/matchesScreen.js`); 8 teams means 28 matches, 112 picks, with no duplicate-pair warning (`create_btc_match` has no idempotency key by design, `src/formats/btc/CLAUDE.md:100-111`).                                     | High                  |
+| 5   | Scoring   | Solid: drafts in IndexedDB, confirm state machine, stale-draft handling (`scoringScreen.js:13-19`). But the **screen cannot load without the network** (`ROADMAP.md:1318`), and the confirm waits for the display publish (`ROADMAP.md:1905`).                                                                                                            | High (offline)        |
+| 6   | Standings | Good empty state (`standingsScreen.js:166`). Fine.                                                                                                                                                                                                                                                                                                        | Low                   |
+| 7   | Bracket   | Blocked state explains itself (`bracketScreen.js:1014`). Seeding tie-break works. Provisional lists are tall at 360px (`ROADMAP.md:1865`).                                                                                                                                                                                                                | Low                   |
+| 8   | Records   | **No BTC dispute-pack button** (`ROADMAP.md:1811`), though `get_dispute_pack` already reads the `btc_*` tables (`src/core/disputePack.js:1-5`). No CSV. This is the shadow comparison's input.                                                                                                                                                            | Blocking for G1       |
+| 9   | Live      | Projector and phone are built. Open: body live region re-read on every update (`ROADMAP.md:1874`), no publish coalescing (`1906`), a stuck publish can block a confirm (`1904`), and moments not yet seen on the real TV (`1790`).                                                                                                                        | Medium                |
 
 ### 3.2 Cup Taster flow (live since 4 Oct, lower priority for March)
 
@@ -368,13 +368,13 @@ Proposed updates, in order:
 
 Assumes the Board meets in **mid-March 2027** and the competition date is unknown (D11). Dates are targets.
 
-| Phase                              | Dates              | Work                                                                                                                                                                                                                                                       | Exit                                                      |
-| ---------------------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| **P0 Decide and specify**          | 9–22 Nov           | Owner answers D1–D11. Write three short specs (local): BTC country + shadow mode, round-robin generator, Petrol V2 tokens. Quick wins with no migration: BTC records card (dispute-pack JSON + CSV), dashboard progress + Live-now badge, docs drift fix in `CONVENTIONS.md`. | Rules confirmed; specs approved                            |
-| **P1 Trustworthy shadow run**      | 23 Nov – 20 Dec    | Migrations: `btc_team_country`, `events_shadow_run`, `btc_matches` write-policy split + judge freeze, `publish_session` reads flags and clamps time, round-robin generator; bracket size variant only if D1 says fewer than 8. UI: country select, Unofficial band, payload country. Seduh ID items 1–3 (first real publish). | All gate reviewers clean; cloud migrations pushed and compared |
-| **P2 Petrol V2 + offline**         | 4 Jan – 31 Jan     | V2 tokens and components, BTC screens first. Offline: scoring load from mirror, publish coalescing, give-up rule for a stuck publish, `allOutboxHandlers` in Cup Taster routes. **Rehearsal 1** (mid-January): internal, 8 fictional country teams, paper scoresheets scored in parallel by a second person. | G2 offline soak passed; rehearsal 1 report                 |
-| **P3 Rehearsal 2 + Tour**          | 1 Feb – 28 Feb     | Fix rehearsal 1 findings. **Rehearsal 2** on the real venue's wifi and devices, with someone from the committee if possible, on a real non-test event with `is_shadow`. Tour update with screenshots. Optional member backfill (only if D6 = yes and Section 8 signed). | G1, G3, G4 passed                                          |
-| **P4 Freeze and Board pack**       | 1 Mar – Board day  | Code freeze two weeks before the Board (bug fixes only). Board pack: comparison report, screenshots, roadmap. `kb-sync`, version bump (BTC with countries is a minor bump; Liga Seduh would be the next nameplate).                      | G5                                                         |
+| Phase                         | Dates             | Work                                                                                                                                                                                                                                                                                                                          | Exit                                                           |
+| ----------------------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| **P0 Decide and specify**     | 9–22 Nov          | Owner answers D1–D11. Write three short specs (local): BTC country + shadow mode, round-robin generator, Petrol V2 tokens. Quick wins with no migration: BTC records card (dispute-pack JSON + CSV), dashboard progress + Live-now badge, docs drift fix in `CONVENTIONS.md`.                                                 | Rules confirmed; specs approved                                |
+| **P1 Trustworthy shadow run** | 23 Nov – 20 Dec   | Migrations: `btc_team_country`, `events_shadow_run`, `btc_matches` write-policy split + judge freeze, `publish_session` reads flags and clamps time, round-robin generator; bracket size variant only if D1 says fewer than 8. UI: country select, Unofficial band, payload country. Seduh ID items 1–3 (first real publish). | All gate reviewers clean; cloud migrations pushed and compared |
+| **P2 Petrol V2 + offline**    | 4 Jan – 31 Jan    | V2 tokens and components, BTC screens first. Offline: scoring load from mirror, publish coalescing, give-up rule for a stuck publish, `allOutboxHandlers` in Cup Taster routes. **Rehearsal 1** (mid-January): internal, 8 fictional country teams, paper scoresheets scored in parallel by a second person.                  | G2 offline soak passed; rehearsal 1 report                     |
+| **P3 Rehearsal 2 + Tour**     | 1 Feb – 28 Feb    | Fix rehearsal 1 findings. **Rehearsal 2** on the real venue's wifi and devices, with someone from the committee if possible, on a real non-test event with `is_shadow`. Tour update with screenshots. Optional member backfill (only if D6 = yes and Section 8 signed).                                                       | G1, G3, G4 passed                                              |
+| **P4 Freeze and Board pack**  | 1 Mar – Board day | Code freeze two weeks before the Board (bug fixes only). Board pack: comparison report, screenshots, roadmap. `kb-sync`, version bump (BTC with countries is a minor bump; Liga Seduh would be the next nameplate).                                                                                                           | G5                                                             |
 
 ### Beta-run readiness gates (all must pass before the real competition)
 
@@ -399,37 +399,37 @@ Assumes the Board meets in **mid-March 2027** and the competition date is unknow
 
 ## 5. Decisions needed from the owner
 
-| #   | Decision                                                                                                   | Recommendation                                                               | Needed by |
-| --- | ---------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | --------- |
-| D1  | Real competition rules: team count, cups per round, bonuses, judges per match, third place, tie rules      | Get the committee's rulebook; adapt the engine only where it differs          | 15 Nov    |
-| D2  | Round robin: generated order or the committee's own draw?                                                  | Generator that accepts an imported order                                     | 22 Nov    |
-| D3  | One team per country per year?                                                                            | Yes, enforced by a partial unique index, unless the rules say otherwise       | 22 Nov    |
-| D4  | Room display during the shadow run                                                                         | None; organiser screens only                                                  | 22 Nov    |
-| D5  | Show judge names on any surface for a real competition                                                     | Hide when `is_shadow`                                                         | 22 Nov    |
-| D6  | Member backfill this year? Names only, or with phones?                                                     | Not before the Board; if yes, names only                                      | 31 Jan    |
-| D7  | May BTC ever create Seduh ID identities?                                                                   | Not before Section 8 sign-offs and a separate spec                            | After March |
-| D8  | `btc_format` gating key: flip before the competition, and with which plan for the committee's org?         | Keep off until after the beta; or grant Per-event first                       | 31 Jan    |
-| D9  | Phone body size 15px or 16px                                                                               | 15px under 640px                                                              | 4 Jan     |
-| D10 | Mention the shadow beta publicly on the Tour?                                                              | No; Board pack only                                                           | 1 Feb     |
-| D11 | Board date and competition date                                                                            | Needed to fix the freeze date                                                 | 15 Nov    |
-| D12 | Seduh ID: publish C4 wording; run a December Community event to get the first archive publish              | Yes to both                                                                   | 1 Dec     |
+| #   | Decision                                                                                              | Recommendation                                                          | Needed by   |
+| --- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | ----------- |
+| D1  | Real competition rules: team count, cups per round, bonuses, judges per match, third place, tie rules | Get the committee's rulebook; adapt the engine only where it differs    | 15 Nov      |
+| D2  | Round robin: generated order or the committee's own draw?                                             | Generator that accepts an imported order                                | 22 Nov      |
+| D3  | One team per country per year?                                                                        | Yes, enforced by a partial unique index, unless the rules say otherwise | 22 Nov      |
+| D4  | Room display during the shadow run                                                                    | None; organiser screens only                                            | 22 Nov      |
+| D5  | Show judge names on any surface for a real competition                                                | Hide when `is_shadow`                                                   | 22 Nov      |
+| D6  | Member backfill this year? Names only, or with phones?                                                | Not before the Board; if yes, names only                                | 31 Jan      |
+| D7  | May BTC ever create Seduh ID identities?                                                              | Not before Section 8 sign-offs and a separate spec                      | After March |
+| D8  | `btc_format` gating key: flip before the competition, and with which plan for the committee's org?    | Keep off until after the beta; or grant Per-event first                 | 31 Jan      |
+| D9  | Phone body size 15px or 16px                                                                          | 15px under 640px                                                        | 4 Jan       |
+| D10 | Mention the shadow beta publicly on the Tour?                                                         | No; Board pack only                                                     | 1 Feb       |
+| D11 | Board date and competition date                                                                       | Needed to fix the freeze date                                           | 15 Nov      |
+| D12 | Seduh ID: publish C4 wording; run a December Community event to get the first archive publish         | Yes to both                                                             | 1 Dec       |
 
 ---
 
 ## 6. Reviewer triggers by phase (CLAUDE.md "Delegation strategy" and "Review protocol")
 
-| Phase / item                                         | Reviewers (run in parallel; gate findings get an independent check)                                                                   |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| P0 records card, dashboard, docs                     | `module-boundary-checker`, `ui-accessibility-reviewer` (360px first), `test-auditor`, `code-reviewer`; docs-only parts `code-reviewer` |
-| P1 `btc_team_country`, `events_shadow_run`           | `schema-guardian` (rollback run in a transaction), `security-reviewer` (non-member reads zero rows; matrices `040`/`041`), `code-reviewer` |
+| Phase / item                                                   | Reviewers (run in parallel; gate findings get an independent check)                                                                                             |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P0 records card, dashboard, docs                               | `module-boundary-checker`, `ui-accessibility-reviewer` (360px first), `test-auditor`, `code-reviewer`; docs-only parts `code-reviewer`                          |
+| P1 `btc_team_country`, `events_shadow_run`                     | `schema-guardian` (rollback run in a transaction), `security-reviewer` (non-member reads zero rows; matrices `040`/`041`), `code-reviewer`                      |
 | P1 `btc_matches` policy split, judge freeze, `publish_session` | `security-reviewer`, `schema-guardian`, `scoring-auditor` (confirm path), `offline-sync-auditor` (queued confirms still drain), `test-auditor`, `code-reviewer` |
-| P1 round-robin generator                             | `scoring-auditor`, `schema-guardian`, `security-reviewer`, `test-auditor`, `ui-accessibility-reviewer`, `module-boundary-checker`, `code-reviewer` |
-| P1 country select, payload country, Unofficial band | `module-boundary-checker` (`core/country.js` extraction), `ui-accessibility-reviewer`, `test-auditor`, `code-reviewer`                  |
-| P2 Petrol V2 tokens and screens                      | `ui-accessibility-reviewer` (every pairing re-measured, 360px first), `module-boundary-checker`, `code-reviewer`                       |
-| P2 offline scoring load, coalescing, give-up rule    | `offline-sync-auditor` (blocking), `test-auditor`, `code-reviewer`                                                                     |
-| P3 member backfill (if approved)                     | `schema-guardian`, `security-reviewer`, `test-auditor`, `code-reviewer`; Privacy page in the same PR                                   |
-| P3 Tour update                                       | `ui-accessibility-reviewer`, `test-auditor`, `code-reviewer`                                                                           |
-| End of every task                                    | `kb-sync`; push each migration to the cloud as its own owner-approved step and compare `list_migrations`                                |
+| P1 round-robin generator                                       | `scoring-auditor`, `schema-guardian`, `security-reviewer`, `test-auditor`, `ui-accessibility-reviewer`, `module-boundary-checker`, `code-reviewer`              |
+| P1 country select, payload country, Unofficial band            | `module-boundary-checker` (`core/country.js` extraction), `ui-accessibility-reviewer`, `test-auditor`, `code-reviewer`                                          |
+| P2 Petrol V2 tokens and screens                                | `ui-accessibility-reviewer` (every pairing re-measured, 360px first), `module-boundary-checker`, `code-reviewer`                                                |
+| P2 offline scoring load, coalescing, give-up rule              | `offline-sync-auditor` (blocking), `test-auditor`, `code-reviewer`                                                                                              |
+| P3 member backfill (if approved)                               | `schema-guardian`, `security-reviewer`, `test-auditor`, `code-reviewer`; Privacy page in the same PR                                                            |
+| P3 Tour update                                                 | `ui-accessibility-reviewer`, `test-auditor`, `code-reviewer`                                                                                                    |
+| End of every task                                              | `kb-sync`; push each migration to the cloud as its own owner-approved step and compare `list_migrations`                                                        |
 
 A cross-cutting change (the policy split, V2's tokens) gets every applicable reviewer and a second pass if the first
 finds a 🔴. Three review rounds on one change, then stop and rethink (`CLAUDE.md`, "Re-review must converge").
