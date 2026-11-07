@@ -20,7 +20,8 @@ new code.
   assignment.
 - C: **ties on points only**, with the tie card showing each team's recorded finish times (manual confirmation).
 - D: a **finish-time input check** (formatter and verifier).
-- E: the team country column, as a dependency (specified in the plan, section 1; summarised in 6).
+- E: the team and **judge** country columns, as a dependency (specified in the plan, section 1; summarised in
+  section 7).
 
 **Out of scope** (separate tasks, listed in the plan): the shadow-event flag, the `btc_matches_write` policy split,
 the records export, offline scoring load, Petrol V2, the Tour. Numeric match times and automatic time ranking stay a
@@ -237,6 +238,7 @@ chosen team's country. Built before the draw; it does not depend on anything abo
 | C migration and view                                                      | **`schema-guardian`, `security-reviewer`, `scoring-auditor`**                                                 |
 | C tie card                                                                | `ui-accessibility-reviewer`, `test-auditor`                                                                   |
 | D parser and input                                                        | `ui-accessibility-reviewer`, `test-auditor`, `module-boundary-checker` (it lands in `core/`)                  |
+| E team and judge country (`btc_team_country`)                             | **`schema-guardian`, `security-reviewer`**, `ui-accessibility-reviewer` (the select), `test-auditor`          |
 
 Tests: pgTAP for every migration (a non-member reads zero rows; every refusal hint; rollback verified in a
 transaction), unit tests for every pure function with the negative cases listed in each acceptance section, and a
