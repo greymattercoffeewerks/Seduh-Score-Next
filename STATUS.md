@@ -23,7 +23,7 @@ Seduh ID, Petrol V2 refinement, UX audit and Tour. Known (owner, 2026-11-07): te
 each with its own team name; two preliminary rounds (round 1 random, round 2's rule to be confirmed), then the committee
 picks the top 8 by points, ties by the sum of each team's two finish times, confirmed manually by the organiser (wins no
 longer order the standings). Both round-2 methods (random without repeats, and by round-1 results) are to be built and
-selectable. Registration opens January 2027. Open: the by-results variant (D1).
+selectable. Registration opens January 2027. Round 2's by-results method is strongest against weakest. Open: nothing blocking; the committee confirms round 2.
 
 ## Where to find things (look up, do not read whole)
 
