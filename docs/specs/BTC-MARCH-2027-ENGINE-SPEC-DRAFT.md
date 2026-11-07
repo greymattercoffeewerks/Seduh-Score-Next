@@ -34,10 +34,15 @@ later option (section 9).
 | Two preliminary rounds; round 1 a random draw; same-country pairings allowed when drawn                                                                                             | owner             |
 | Round 2: build **both** methods, selectable per event: seeded random without repeat opponents, and strongest against weakest by points                                              | owner             |
 | Top 8 chosen by points after round 2; a tie is broken by **points first, then time**, not wins; time is the sum of the team's two finish times; confirmed manually by the organiser | owner             |
+| A judge must **not score a team from their own country** (avoid it)                                                                                                                 | owner, 2026-11-07 |
+| Round 2 needs every earlier preliminary round fully confirmed                                                                                                                       | owner             |
+| Every preliminary finish time **must be recorded** (needed for the tie-break)                                                                                                       | owner             |
+| An odd team count (a withdrawal) is **KIV**: the committee decides; until then the draw refuses                                                                                     | owner             |
+| Whether a round-2 rematch may be avoided is to be checked with the committee; avoiding is the default and can be switched off                                                       | owner             |
 | No draw or schedule exists before registration opens in January 2027                                                                                                                | owner             |
 
-Still to confirm with the committee (does not block the build, because both modes exist): which round-2 method they
-use; whether a team may play the same opponent twice (the draw avoids it where possible).
+Still to confirm with the committee (none blocks the build): which round-2 method they use; the odd-count bye
+rule (KIV); whether a round-2 rematch is allowed (rematch avoidance is a setting, default on).
 
 ## 3. A: the preliminary round number
 
@@ -67,23 +72,26 @@ Reuse `src/core/seededShuffle.js` (`newSeed`, `seededShuffle`), the same recorde
 
 - `drawRound1({ teamIds, seed })`: shuffle with the seed and pair consecutive teams. An **odd** number of teams is
   refused with a message (a bye would give one team fewer matches and make points unfair); see open question O1.
-- `drawRound2Random({ teamIds, priorPairs, seed })`: seeded shuffle, then pair; if a pair repeats a round-1
-  opponent, the repair step swaps with the next unpaired team until no repeat remains or no swap helps. Returns the
+- `drawRound2Random({ teamIds, priorPairs, seed, avoidRematches = true })`: seeded shuffle, then pair; when
+  `avoidRematches` is on and a pair repeats a round-1 opponent, the repair step swaps with the next unpaired team until no repeat remains or no swap helps. Returns the
   pairs plus `rematches` (a count) so the screen can say "1 rematch could not be avoided".
-- `drawRound2ByResults({ standings, priorPairs })`: order by round-1 points (descending; equal points ordered by a
+- `drawRound2ByResults({ standings, priorPairs, avoidRematches = true })`: order by round-1 points (descending; equal points ordered by a
   fixed seeded shuffle so the result is explainable), then pair **strongest against weakest** (1st with last, 2nd
   with second last, ...), repairing rematches by a minimal swap. The standings must be complete (every round-1
   match confirmed).
-- `assignJudges({ pairs, judges })`: deterministic rotation giving each match **3 distinct judges** and each judge
-  a load that differs from any other by at most one match. Pure and re-runnable; the organiser edits the result.
+- `assignJudges({ pairs, judges, teamCountry })`: deterministic rotation giving each match **3 distinct judges**,
+  each judge's load within one match of any other's, and **no judge from the country of either team in the match**
+  (a judge or team with no country never conflicts). It returns a `conflicts` list when the pool is too small to
+  avoid every conflict (few judges, many teams from one country) instead of failing silently. Pure and re-runnable;
+  the organiser edits the result.
 - Every function returns the pairs, the seed used, and `warnings` (rematch count, same-country pairs as an
   information count only, since they are allowed).
 
 ### 4.2 Database
 
 New table `btc_round_draws` (mirrors Throwdown's `td_draws`): `event_id`, `prelim_round`, `mode`
-(`random` | `by_results` | `manual`), `seed text null`, `match_count smallint`, `created_by default auth.uid()`,
-`created_at`; primary key `(event_id, prelim_round)`; `check ((mode in ('random', 'by_results')) = (seed is not null))` (both
+(`random` | `by_results` | `manual`), `seed text null`, `match_count smallint`, `avoid_rematches boolean`, `conflict_ticks jsonb` (matches where a judge
+conflict was knowingly accepted), `created_by default auth.uid()`, `created_at`; primary key `(event_id, prelim_round)`; `check ((mode in ('random', 'by_results')) = (seed is not null))` (both
 seeded modes record a seed; `by_results` uses it for equal-points order); frozen `event_id` (`app.forbid_parent_change`); RLS read and write through `app.is_org_member`; added
 to matrices `040` and `041`. Its job is to answer "why did the draw produce this?" for a committee, an appeal, or the
 Board comparison.
@@ -95,8 +103,10 @@ invoker**, one transaction:
    the bracket functions use, and refuses if the event already has a bracket.
 2. Refuses if round `p_prelim_round` already has matches (`btc_round_exists`) or a draw row.
 3. Validates `p_matches`: every team in the event appears **exactly once** in the round (`btc_round_incomplete`),
-   teams and judges belong to this event, each match has 3 distinct judges, no team plays itself.
-4. For `by_results`: requires every earlier preliminary round confirmed (`btc_prior_round_open`).
+   teams and judges belong to this event, each match has 3 distinct judges, no team plays itself. A judge from a team's own country is **not refused by the
+   database** (a committee may need an exception); the screen flags it and asks for an explicit tick (4.3).
+4. For any `p_prelim_round` above 1 (both modes): requires every earlier preliminary round fully confirmed
+   (`btc_prior_round_open`).
 5. Inserts the matches with `prelim_round` and their judges (the same checks `create_btc_match` makes), the draw row,
    and returns the created matches. A failure anywhere creates nothing.
 
@@ -112,7 +122,10 @@ if the sibling RPCs do). Refusals carry a `hint`. The manual form (`create_btc_m
 - Show the **seed** (and let the organiser re-enter one to reproduce a draw, or press "New seed").
 - A **preview table**: match number, team 1, team 2 (with country), three judge selects. Swap controls to change a
   pairing by hand; any manual change marks the draw `manual` and drops the seed requirement.
-- Warnings in plain words (rematch, odd team count), no jargon.
+- Warnings in plain words (rematch, odd team count, **a judge from a team's own country**), no jargon. A judge
+  conflict turns that match red and **Create** stays disabled until the organiser changes the judge or ticks "allow
+  this conflict" for that match; the tick is kept in the draw record.
+- A setting **Avoid repeat opponents** (default on) for round 2, so the committee's answer is a switch, not a rebuild.
 - **Create N matches** is disabled until the preview is valid; one press calls `create_btc_round`.
 - 360px first: the preview is a stacked card list, not a wide table; focus and live-region rules per
   `ui-accessibility-reviewer` (focus follows the pressed control, results announced).
@@ -123,6 +136,9 @@ if the sibling RPCs do). Refusals carry a `hint`. The manual form (`create_btc_m
 
 - Same seed and same teams give the same round-1 pairs.
 - Round 1 with 20 teams makes 10 matches, each team once; with 19 teams it refuses.
+- With enough judges, no match has a judge from either team's country; with too few, the conflicts are listed and
+  **Create** needs the tick.
+- Round 2 needs round 1 fully confirmed in both modes; a draw before that is refused.
 - Round 2 random never repeats a round-1 pair when a repeat-free arrangement exists; it reports the count when it
   cannot.
 - Round 2 by results pairs rank 1 with rank 20, 2 with 19, and so on, unless that is a rematch.
@@ -162,8 +178,9 @@ the committee's rule.
 For each team in a tie group the card lists its **preliminary finish times** (round 1 and round 2 notes) and a
 **best-effort sum** when both parse as minutes and seconds, labelled "for guidance, you decide". New read-only
 view `btc_prelim_times` (`event_id`, `team_id`, `prelim_round`, `time_note`, from `btc_matches` by which side the
-team was on; `security_invoker`, `authenticated` only) so the client does not reassemble it from raw matches. An
-unparseable or missing time is shown as typed (or "no time") and the sum is omitted. The organiser orders the group
+team was on; `security_invoker`, `authenticated` only) so the client does not reassemble it from raw matches.
+Because a time is required for every confirmed preliminary match (section 6), a new event always has both times and
+the sum; an unparseable or missing value (an old or demo row) is shown as typed, or "no time", and the sum is omitted. The organiser orders the group
 as today (up and down buttons, a required reason; the reason text should say which rule was applied).
 
 ### 5.3 Acceptance
@@ -171,7 +188,7 @@ as today (up and down buttons, a required reason; the reason text should say whi
 - Two teams with equal points and different wins are a tie group; their wins do not order them.
 - A tie across the 8th and 9th places blocks `generate_btc_bracket` until ordered; ordering it unblocks it.
 - A three-way tie is ordered as a whole; a half-recorded group is ignored (existing behaviour kept).
-- The card shows both times per team and a sum only when both parse; no time never errors.
+- The card shows both times per team and the sum when both parse; an old row with no time shows "no time" and never errors.
 - Rollback restores the (points, wins) behaviour exactly.
 
 ## 6. D: the finish-time input check
@@ -186,19 +203,29 @@ if it is consistent.
   to 59), returns total seconds or `null`. Pure, format-agnostic, unit-tested (Cup Taster can reuse it).
 - On blur the box tidies a valid value (`08:42` to `8:42`) and, for anything else, shows an inline message
   ("Use minutes and seconds, like 8:42") with `aria-invalid="true"` and `aria-describedby`.
-- A **non-empty invalid** time blocks Confirm with that message; an empty time stays allowed (optional).
+- **A time is required for each team in a preliminary match** (owner: "must have a time"): Confirm is blocked with a
+  plain message until both boxes hold a valid time. An invalid value shows its own message. Knockout matches keep
+  the time optional. The boxes' label drops "(optional)" for preliminary matches.
+- **Client-side for March.** The confirm function is a scoring gate with its own idempotency, so the requirement is
+  not added there yet (it would also affect the demo loader); recommended hardening, if wanted: refuse a preliminary
+  confirm without both times in `confirm_btc_match`, with a hint, after `scoring-auditor` review. Meanwhile the
+  event dashboard shows a checklist line "N preliminary matches have no times" before the bracket step, so a gap
+  made by an old or odd flow is visible.
 - The draft persistence (IndexedDB) and `buildRpcParams` carry the tidied text.
 - 360px: the message sits under the box, no layout shift beyond one line; contrast per Petrol tokens.
 
 **Acceptance.** `8:42`, `08:42`, `12:05` pass; `8.42`, `8:60`, `842`, `8 min` are refused with the message; empty
-passes; Confirm is blocked while a non-empty time is invalid.
+passes only for a knockout match; a preliminary Confirm is blocked while either time is missing or invalid.
 
 ## 7. E: the team country (dependency)
 
-Specified in the plan (section 1.A, migration `btc_team_country`): `country_code` (ISO alpha-2, nullable),
-optional `represents`, **no uniqueness on country** (2 to 3 teams per country), display `Country · Team name`
-(names are unique per event already). The draw preview and the tie card show it. Built before the draw so the
-preview can show it; it does not depend on anything above.
+Specified in the plan (section 1.A, migration `btc_team_country`): `country_code` (ISO alpha-2, nullable) on
+`btc_teams`, optional `represents`, **no uniqueness on country** (2 to 3 teams per country), display `Country ·
+Team name` (names are unique per event already). **Judges also get a nullable `country_code`** in the same
+migration (the owner wants a judge kept off teams from their own country), with a country select on the judge
+setup form; `assignJudges` and the draw preview use it (section 4). A judge with no country never conflicts. The
+manual match form (`matchesScreen.js`) shows the same conflict warning when the organiser picks a judge from a
+chosen team's country. Built before the draw; it does not depend on anything above.
 
 ## 8. Reviews, tests and rollout
 
@@ -229,16 +256,18 @@ phase P1, December).
 - Pairing round 2 by neighbours (one-line variant of `drawRound2ByResults`) if the committee prefers it.
 - A third preliminary round (`prelim_round` has no upper bound).
 
-## 10. Open questions
+## 10. Open questions and parked items
 
-- **O1 Odd team count or a withdrawal.** With 19 teams (or a team withdrawing between rounds) the draw refuses. Options:
-  the committee names a bye and the app records it as a no-match with the standing adjusted by their rule, or the
-  organiser adds a fictional "bye" team. The committee must say; the default is refuse and say so.
-- **O2 Judges.** Judges have no country field. Does the committee require that a judge does not score a team from
-  their own country? If yes, judges need a country and the rotation must avoid conflicts (a small addition to
-  `btc_judges` and `assignJudges`).
-- **O3 Round 2 on partial results.** `by_results` needs round 1 fully confirmed. If the committee wants to start
-  round 2 before every round-1 score is confirmed, that needs a different rule; the default is no.
-- **O4 What "time" means for the tie.** Confirmed as the sum of the team's two finish times; the committee should
-  also say what happens when a team has no recorded time (default: the organiser decides, as the card shows).
-- **O5 Same opponent twice.** The draw avoids it; confirm the committee does too, or the repair step can be turned off.
+- **O1 Odd team count or a withdrawal: KIV** (owner: ask the committee). With 19 teams, or a team withdrawing
+  between rounds, the draw **refuses** and says why. Options for later: the committee names a bye and the app
+  records it as a no-match with the standings adjusted by their rule, or a fictional "bye" team. No build until the
+  committee answers.
+- **O2 Judge country: decided.** Avoid a judge scoring a team from their own country (sections 4 and 7). Still to
+  settle: if the judge pool is too small to avoid every conflict, is an accepted exception allowed? The spec allows
+  it with an explicit tick and records it.
+- **O3 Round 2 on partial results: decided.** Round 2 needs round 1 fully confirmed.
+- **O4 Time: decided.** Every preliminary finish time must be recorded (section 6). Open: what is recorded when a
+  team does not finish (a "did not finish" value, or the cup limit)? A "must have a time" rule needs an answer or a
+  confirm is impossible.
+- **O5 Same opponent twice: KIV** (owner: check with the committee). Avoidance is a setting, default on; if the
+  committee's format allows repeats, switch it off.

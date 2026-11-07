@@ -18,6 +18,9 @@ plan starts from `ROADMAP.md` and `CHANGELOG.md` (v3.6.3, `package.json:3`)._
 - **Tie-break for the top 8:** points first, then time (**not wins**): the committee will most probably compare the
   **sum of each team's two finish times**. The owner prefers a **manual confirmation** (the organiser decides) over
   new automatic ranking code, to keep the change small.
+- **Judges:** avoid a judge scoring a team from their own country. **Round 2** needs round 1 fully confirmed.
+  **Every preliminary finish time must be recorded.** An odd team count (a withdrawal) is **KIV** pending the
+  committee, as is whether a round-2 rematch is allowed.
 - **Same-country teams** may meet if the random selection puts them together.
 - **No draw or schedule exists yet.** Registration opens in January 2027, so the real team list arrives after the
   build window starts; rehearsals use fictional teams.
