@@ -68,7 +68,7 @@ _The BTC podium card and the knockout re-confirm-as-tie fix shipped; these were 
 - **A tied knockout match has no resolution path (gap 1). CLOSED 2026-10-09 by T-BTC.knockout-tiebreak** (`20261009110000` pushed to the cloud project 2026-10-09 and verified there; see CHANGELOG.md). The product decision: the organiser records which team goes through, plus a reason; the app does not score a tie-break cup. The bracket screen's tied-match state exists now: a level confirmed match reads "Tied … Nobody advances until you record which team goes through", and the recorded winner decides the seat and the podium.
 - **No parity test between the SQL advancement and the JS podium comparator.** One fixture should run through both `confirm_btc_match`'s advancement and `derivePodium`, so the podium and the bracket cannot disagree about a winner.
 - **The semifinal-tie refusal wording for the "loser" branch is untested.** Reaching it needs a final or third-place match to exist, which needs sf1 seeded.
-- **No podium on a live surface yet.** `derivePodium` is ready for T-BTC.3 and is meant to be reused unedited; that surface must carry its own `is_test` treatment (D9).
+- **No podium on a live surface yet.** `derivePodium` is ready for T-BTC.3 and is meant to be reused unedited; that surface must carry its own `is_test` treatment (D9). **CLOSED (triage 2026-11-07):** the live payload assembler calls `derivePodium` for the projector and phone (src/formats/btc/liveSession.js:37, :215).
 - **A missing team in the roster shows "Unknown team" as a decided name** (`podium.js`'s `nameOf` fallback). If that can happen, it should be a visible "missing" state, not a name.
 - **BTC dispute-pack button is still missing.**
 
@@ -84,7 +84,7 @@ _The knockout tie-break shipped (organiser records the winner and a reason); the
 - **Recorded tie-break reasons appear on the PUBLIC results page** via `get_scoring_record` (anon-callable). The form warns organisers; every consumer must render the reason as plain text.
 - **The helper's downstream refusal still reads "confirm_btc_match: …"** even when raised from `record_btc_tiebreak` (pinned by `016` and `027`). The client keys on the hint, not the message. Cosmetic; changing the text means updating both suites.
 - **The JS reason validator is slightly stricter than the SQL CHECK** (it trims NBSP, and it measures length in UTF-16 units). That is the safe direction: the client refuses something the database would accept, never the reverse.
-- **The tie-break is organiser-screen only.** No projector, phone or results surface shows it yet (T-BTC.3). That surface needs its own `is_test` treatment (D9).
+- **The tie-break is organiser-screen only.** No projector, phone or results surface shows it yet (T-BTC.3). That surface needs its own `is_test` treatment (D9). **CLOSED (triage 2026-11-07):** the payload carries the recorded winner and reason (src/formats/btc/liveSession.js:104) and the projector and phone render it (projectorScreens.js:159-160, viewerBody.js:259).
 
 ---
 
@@ -107,7 +107,7 @@ _The audience surfaces now serve whichever format is live; no BTC screen exists 
 - **A body outlives its session row.** When no session is active (`session` null) `viewer-shell`'s `computePhase` skips `hasContent`, so `formatBody` never reselects and the last format's display (page loop, ring, moment timers) keeps running behind the holding card until the format changes or the surface unmounts. Predates this change (Cup Taster had it); fix before BTC's projector body ships, e.g. a shell signal when the row goes away. **CLOSED (T-BTC.display-lifecycle, 2026-10-09):** the shell now tells the surface (`onNoContent`), the dispatcher keys its body on the event as well as the format (a direct move to another event, which has no gap, would otherwise have kept the old display and its memory), and `release()` destroys the display.
 - **The second-use extraction is still owed before BTC's projector** (see "Known open items from T-HARDEN.projector-moments"): the shared venue vocabulary (`kicker`, `bigTitle`, the standings table, champion classes) moves into `core` with Cup Taster migrated and regression-tested, so BTC never imports Cup Taster's stylesheet. **CLOSED (T-BTC.venue-vocabulary, 2026-10-09).**
 - **`mountStageSurface`'s `surfaceClass` option has no production caller.** Keep it as a hook or remove it when the BTC projector lands.
-- **BTC payload fields are decided but unbuilt:** recent results ordered by confirmation time (Cup Taster had a bug here), bracket slots with winners and tie-break flags, podium via `derivePodium`, and `is_test` on every publish.
+- **BTC payload fields are decided but unbuilt:** recent results ordered by confirmation time (Cup Taster had a bug here), bracket slots with winners and tie-break flags, podium via `derivePodium`, and `is_test` on every publish. **CLOSED (triage 2026-11-07):** the assembler builds winners and tie-break flags, the podium and an explicit boolean `is_test` on every publish (src/formats/btc/liveSession.js:104, :215, :336-343).
 
 ## Known open items from T-BTC.seeding-tiebreak (2026-10-10)
 
@@ -127,7 +127,7 @@ _The organiser can now order level teams; this lists what that does not do._
 - **Provisional lists are tall at 320 and 360px** ("Seed N (provisional)" and the team name take two rows each).
 - **The form's error is both `role="alert"` and focused**, and the form and its list share the group's name: some screen readers will read them twice (the same pattern as the knockout tie-break form).
 - **`btc_seeding_order` is a view over `btc_standings`**: a future migration that drops `btc_standings` without CASCADE will fail (earlier ones did).
-- **The cloud project does not have the migration yet.** Merging the PR only ships the front end; the card hides itself (view not found) until `20261010100000` is pushed with `apply_migration`, and until then a tie across the cut-off still blocks generation exactly as before.
+- **The cloud project does not have the migration yet.** Merging the PR only ships the front end; the card hides itself (view not found) until `20261010100000` is pushed with `apply_migration`, and until then a tie across the cut-off still blocks generation exactly as before. **CLOSED (triage 2026-11-07):** the later freeze-trigger migration on `btc_seeding_tiebreaks` was applied to the cloud project 2026-10-13, which requires the table from this migration to exist there (docs/backlog/tenancy.md:289).
 
 ## Known open items from T-BTC.phone-view (2026-10-10)
 
@@ -153,7 +153,7 @@ _The BTC projector is built (stage 3c); the phone view (stage 4) is not._
 - **Cup Taster and BTC still duplicate three small things**: the "what is new since the last snapshot" step of the detectors (the `seen` set, the fresh filter, the oldest-first sort), the result and rank moment mount boilerplate (frame, footer ring, destroy), and the idle loop's "same content, do not restart" signature guard. Extract when a third format needs them or one of them changes; the second-use rule was applied to the rank-impact logic, which carried the most behaviour.
 - **`demoLivePayload.js` reimplements the +5/+2 formula and the standings aggregation** to build fixtures (demo and tests only; it runs through the real assembler). **CLOSED (T-BTC.demo-payload-derive, 2026-10-11):** each fixture now supplies cup votes to `scoring.js`'s `computeScores`; an invariant test recomputes every confirmed demo match and independently ranks the pinned preliminary standings.
 - **Cup Taster's rank screen still renames `label` to `displayName` and back** (a cosmetic round trip); pass `impact.rows` through when its fixtures are next touched. Its headline does not say "joint" for a shared place, BTC's does.
-- **The BTC phone view (stage 4) is not started.** ROADMAP's item "BTC payload fields are decided but unbuilt" is closed for the projector only.
+- **The BTC phone view (stage 4) is not started.** ROADMAP's item "BTC payload fields are decided but unbuilt" is closed for the projector only. **CLOSED (triage 2026-11-07):** the BTC phone view shipped (src/formats/btc/viewerBody.js; the T-BTC.phone-view section above).
 
 ## Known open items from T-BTC.live-publish (2026-10-09)
 

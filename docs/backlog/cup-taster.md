@@ -732,7 +732,7 @@ Cup Taster event._
 
 _Deferred findings from T-HARDEN.correct-heat-time, flagged and documented, not blocking._
 
-- **Deploy:** push migrations `20261006100000` then `20261006110000` to the cloud project (apply_migration, then list_migrations) before or with the release to `main`; without them every correction call fails permanently.
+- **Deploy:** push migrations `20261006100000` then `20261006110000` to the cloud project (apply_migration, then list_migrations) before or with the release to `main`; without them every correction call fails permanently. **CLOSED (triage 2026-11-07):** Both migrations are in the cloud: the T-ID.Z reconciliation found 93 repo migrations and 93 cloud migrations matching name for name (CHANGELOG entry "Seduh ID Layer 1 closed out: C4 wording drafts and T-ID.Z verification").
 - **Modal or bottom-sheet editor** — editor is 314px tall at 360px; pushes later Stop buttons down; ship compact version first, build modal later.
 - **Correction handler copied in three screens** — ~45 lines per screen; extract to shared handler.
 - **Save in flight when another action re-renders** — busy editor not carried over; covered by test on scoring screen only (not timing/manual).
@@ -818,7 +818,7 @@ _Deferred findings from T-HARDEN.team-accounts, flagged and documented, not bloc
 - **Deploy:** migration `20261007120000` to the cloud project, then the `team-accounts` Edge Function (`verify_jwt` true), then release; check `select role, count(*) from org_members group by 1` before pushing.
 - **Re-adding a removed member** is impossible with the same email (account kept → 409). A "restore" path needs a marker only the function can set (e.g. `team_removed_org` in `app_metadata`) and a `team_restore_member` service-role function.
 - **One-time passwords never expire** and the must-change flag is user-editable: add a TTL / server-side check at sign-in if teams grow.
-- **Owner-recovery:** no promote/demote function; an org that loses its only owner needs SQL.
+- **Owner-recovery:** no promote/demote function; an org that loses its only owner needs SQL. **CLOSED (triage 2026-11-07):** `org_set_role` (service role) promotes or demotes a member and a trigger refuses to leave an org with no owner (supabase/migrations/20261011120000_tenancy_last_owner.sql).
 - **Function hardening:** rate limit / body-size cap; align the server's `minimum_password_length` (6) with the screen's 8; consider proof of email ownership (an emailed confirmation) if/when SMTP exists.
 - **Nav focus:** the Team link arriving asynchronously rebuilds the nav and can drop focus from a link the keyboard user is on.
 - **Check on the real iPad** that the Team screen, the copied one-time password and the choose-a-password screen behave (keyboard, autofill, paste).
@@ -841,10 +841,10 @@ _Deferred findings from T-HARDEN.login-hardening, flagged and documented, not bl
 
 _Deferred findings from T-HARDEN.roster-edit, flagged and documented, not blocking._
 
-- **Deploy:** push migration `20261007100000` to the cloud project (apply_migration, then list_migrations); without it every roster Save fails.
+- **Deploy:** push migration `20261007100000` to the cloud project (apply_migration, then list_migrations); without it every roster Save fails. **CLOSED (triage 2026-11-07):** The migration is in the cloud: the T-ID.Z reconciliation found 93 repo migrations and 93 cloud migrations matching name for name (CHANGELOG entry "Seduh ID Layer 1 closed out: C4 wording drafts and T-ID.Z verification").
 - **Last write wins** between two organiser devices — optional `p_expected_updated_at` check against `people.updated_at` if it ever matters.
 - **Phone uniqueness depends on client-side normalisation** (same as `registerPerson`); a format check or normalisation in the RPC would close it.
-- **Pre-existing: `people_write` lets a two-org member move a person to another org** — a trigger on `people.org_id` would close it if multi-org users become real.
+- **Pre-existing: `people_write` lets a two-org member move a person to another org** — a trigger on `people.org_id` would close it if multi-org users become real. **CLOSED (triage 2026-11-07):** `trg_people_org_immutable` now freezes `people.org_id` (supabase/migrations/20261011100000_tenancy_org_id_immutable.sql:33, asserted by supabase/tests/033).
 - **No audit row for name edits** after an event is published; dispute pack and results read the entry's name.
 - **`service_role` grant on `update_roster_entry` is unused** — drop for least privilege.
 - **`describeRosterEditError` lives in the Cup Taster screen** — move to core if another format adds roster edit.

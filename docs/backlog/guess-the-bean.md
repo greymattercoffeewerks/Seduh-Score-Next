@@ -58,6 +58,6 @@ See `android/guess-the-bean-widget/CLAUDE.md`.
   aria-live announcement of in-flight state, and native `disabled` attribute drops keyboard
   focus. Flagged by ui-accessibility-reviewer during Phase 2; spawned as separate background
   task since it's out of scope for auth-stub work and requires cross-module coordination.
-  Not blocking Phase 2 closure. Flagged by: ui-accessibility-reviewer during Phase 2.
+  Not blocking Phase 2 closure. Flagged by: ui-accessibility-reviewer during Phase 2. **CLOSED (triage 2026-11-07):** both screens now use `setBusyDisabled` (aria-disabled, no native `disabled`) and `withFocusPreservation`, and keep an `aria-live="polite"` status that receives focus (`src/community/guess-the-bean/authScreen.js:39,137,150`, `src/core/loginScreen.js:52,179,192`; CHANGELOG-archive 2026-09-H1, follow-up task_8aad08ec).
 
 ---
