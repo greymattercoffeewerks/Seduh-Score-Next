@@ -192,7 +192,7 @@ station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can 
   the full account.
 - **Supabase cloud project not yet linked.** Phases 0–3 only set up and verified the
   local stack. Linking a cloud project (and the `supabase db push` step CLAUDE.md's Git
-  section refers to) is Phase 4+ work, once the schema is stable enough to push.
+  section refers to) is Phase 4+ work, once the schema is stable enough to push. **CLOSED (triage 2026-11-07):** the cloud project "Seduh Score Next" was linked and all migrations pushed 2026-08-30 (this file's own "Supabase cloud project linked, real organiser provisioned (2026-08-30)" item; CHANGELOG 2026-08 entries).
 - **Design tokens shipped 2026-08-22, ahead of Phase 4** (`src/ui/tokens/`: colors,
   typography, spacing, base styles, self-hosted fonts, `DESIGN.md`, `preview.html`) —
   see CHANGELOG.md's "Design system foundation" entry for what shipped and what the
