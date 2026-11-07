@@ -19,8 +19,9 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
 The pitch went well. The owner presents to the Board in March 2027, and the app may be used in the real competition as a
 **shadow beta** (manual scoring stays authoritative; Seduh Score runs in parallel and is compared afterwards). The plan is
 [`MARCH-2027-BOARD-PLAN.md`](MARCH-2027-BOARD-PLAN.md): BTC team and country model with an optional member backfill to
-Seduh ID, Petrol V2 refinement, UX audit and Tour. It has 12 owner decisions; the first (the real competition's team
-count and format; the bracket refuses fewer than 8 teams) blocks the BTC work.
+Seduh ID, Petrol V2 refinement, UX audit and Tour. It has 12 owner decisions. Known (owner, 2026-11-07): tentatively
+20 teams, 2 to 3 per country. The blocking question is now how 20 teams reach the knockout (the engine plays a full
+round robin, 190 matches at 20 teams, then takes the top 8); see D1 and D2 in the plan.
 
 ## Where to find things (look up, do not read whole)
 
