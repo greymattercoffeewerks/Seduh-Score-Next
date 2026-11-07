@@ -17,7 +17,7 @@ export const BUDGETS = Object.freeze({
   'CLAUDE.md': 36_000,
   'STATUS.md': 8_000,
   'CHANGELOG.md': 200_000,
-  'ROADMAP.md': 160_000,
+  'ROADMAP.md': 115_000,
 });
 
 export function overBudget(sizes, budgets = BUDGETS) {
