@@ -67,3 +67,16 @@ Every section moved out of `ROADMAP.md`'s open-items run, by heading, with the f
 - Known open items from the landing page cleanup (stage 1, 2026-10-29) → [`public-site.md`](public-site.md)
 - Known open items from the landing page cleanup (stage 3, 2026-10-30) → [`public-site.md`](public-site.md)
 - Known open items from the landing proof photo (full bleed, 2026-10-30) → [`public-site.md`](public-site.md)
+
+## Triage, 2026-11-07
+
+Every open-looking item was checked against the code, migrations, tests and changelog. 42 were marked **CLOSED** or **SUPERSEDED** in place, each with the evidence it was verified against (a `**CLOSED (triage 2026-11-07):**` note at the end of the item), and a second set of agents that did not write the marks tried to refute all 42 and confirmed them. One closure that rested on inference was reverted. Everything else was left open: the pass favoured a missed closure over a false one, and it did not search every item deeply, so an open item may still be done. Search for `triage 2026-11-07` to list what was closed.
+
+Open items the triage flagged as worth a decision (not a full list):
+
+- **BTC:** `btc_matches_write` is still `FOR ALL`, so a member can mark a match confirmed directly, and `btc_match_judges` stays editable after confirmation (`btc.md`, `tenancy.md`). Due before any beta run.
+- **Tenancy:** `service_role` still holds TRUNCATE on most tenant tables; anonymous reads still reveal which organisation owns each event; `team-accounts` email probing is accepted but unmitigated (needs rate limiting).
+- **Offline and UX:** a failed event check still reads "No event scheduled" (`src/core/viewer-shell.js`); an unpushed migration makes the audience view retry forever; `core/db.js` `withStore` attaches its handlers after `await`; the lost-write notice is not persisted across tabs.
+- **Accessibility:** Cup Taster organiser screens still use native `.disabled` with no focus preservation; disabled-button contrast (3:1) is open; the Menu button loses its bars in forced-colors mode.
+- **Not built:** BTC dispute-pack button, a CSV email at the end of the event window, a bounded `admin_plan_orgs`, the `public_event_branding` door, paging on the archive page.
+- **Owner or real-world actions:** republishing the live event, the `/results/` indexing decision, the `team-accounts` Edge Function deploy, and a cloud-push check for the stage 3 homepage migration.
