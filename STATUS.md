@@ -21,8 +21,9 @@ The pitch went well. The owner presents to the Board in March 2027, and the app 
 [`MARCH-2027-BOARD-PLAN.md`](MARCH-2027-BOARD-PLAN.md): BTC team and country model with an optional member backfill to
 Seduh ID, Petrol V2 refinement, UX audit and Tour. Known (owner, 2026-11-07): tentatively 20 teams, 2 to 3 per country,
 each with its own team name; two preliminary rounds (round 1 random, round 2's rule to be confirmed), then the committee
-picks the top 8 for the knockout. Registration opens January 2027. Open: round 2's rule and whether the top 8 are strictly
-by score (D1).
+picks the top 8 for the knockout, ties by the fastest total preliminary time. Both round-2 methods (random without
+repeats, and by round-1 results) are to be built and selectable. Registration opens January 2027. Open: the order of
+tie-breaks and the by-results variant (D1).
 
 ## Where to find things (look up, do not read whole)
 
