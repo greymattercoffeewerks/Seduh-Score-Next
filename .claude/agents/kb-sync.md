@@ -38,12 +38,15 @@ For each task completed:
 4. Do not mark a task's log entry as final if any Definition-of-Done item (§11) is
    outstanding — note what's missing instead.
 5. If the task also changes overall phase status, update `ROADMAP.md`'s status-at-a-glance
-   to match — `CHANGELOG.md` is the detailed record, `ROADMAP.md` is the at-a-glance one,
+   and `STATUS.md` (the one-page entry point: version, in flight, blocked, next) to match — `CHANGELOG.md` is the detailed record, `ROADMAP.md` is the at-a-glance one,
    and they must agree.
 6. If the task added, changed, or backfilled a convention (naming, a module's shape, a
    pattern that should generalize), make sure `CONVENTIONS.md` was updated to carry it —
    that document is edited continuously and backfilled from what shipped (§0), and it is
    the one companion doc this agent should prompt for if it's stale.
+   **Keep the hot files short (budgets enforced by `npm run check:docs`).** Deferred findings go to the area's file in
+   `docs/backlog/` (see `docs/backlog/README.md`), not to `ROADMAP.md`. When `CHANGELOG.md` passes ~200 KB, move its
+   oldest entries verbatim to `docs/archive/changelog/<period>.md` and add one line each to `CHANGELOG-INDEX.md`.
 7. Run `npx prettier --write CHANGELOG.md` (and `ROADMAP.md`/`CONVENTIONS.md` if this
    task touched them) right after editing — CI's `format:check` has failed on this
    agent's own `CHANGELOG.md` entry twice now (2026-09-05), each caught only after the
@@ -69,8 +72,8 @@ For each task completed:
      (`.claude/hooks/`) mechanically rejects the write if you get this wrong, but don't
      rely on the hook alone — check it yourself first, the way you'd check any other
      Definition-of-Done item.
-   - **Every `deferred` finding actually landed in `ROADMAP.md`'s "Known open items"**,
-     not just noted as "will copy it." Grep `ROADMAP.md` for each deferred finding's
+   - **Every `deferred` finding actually landed in the area's `docs/backlog/*.md` file**,
+     not just noted as "will copy it." Grep `docs/backlog/` for each deferred finding's
      summary text (or its clear paraphrase) before considering this satisfied — the
      copy is the completion condition, the same way step 2's CHANGELOG entry is, not a
      note-to-self to do it later. If step 5 above already updated ROADMAP.md this run,

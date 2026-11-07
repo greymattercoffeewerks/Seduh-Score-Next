@@ -154,6 +154,15 @@
       on Privacy, Terms and Pricing. The copy makes no claim that Seduh ID is
       free, nothing about sharing with third parties, and no timing promise
       for the archive. Facts follow CHANGELOG.md.
+
+      Progress update, 2026-11-04: v3.6.1 (package.json moved: 3.5.0 on
+      2026-11-02, 3.5.1 the Seduh ID feed, 3.6.0 Throwdown, 3.6.1 the contact
+      address), still Gadong. Throwdown is the third format (TD.1 core,
+      released 2026-11-03), NOT yet run at a live event, so the copy says so.
+      The first three gating keys were switched on 2026-11-02 and the archive
+      has still published nothing; the earlier entries that said "built and
+      switched off" were corrected. The Seduh ID feed is in queue mode and has
+      queued nothing. No prices, no "free" claim, nothing about third parties.
     -->
     <style>
       @font-face {
@@ -1147,14 +1156,14 @@
           </div>
           <div class="ledger-row reveal">
             <span class="ledger-place">Gadong</span>
-            <span class="ledger-version">v3.4.1</span>
+            <span class="ledger-version">v3.6.1</span>
             <span class="ledger-status current"><span class="pulse-dot"></span>Current</span>
             <span class="ledger-note"
               >BTC (Barista Team Championship) — the second real competition format — then a trust
               pass, the first live Cup Taster event on 4 October 2026 and the fixes it prompted,
               BTC's own projector and phone screens, the platform's first multi-organisation
               release, an operator's console, password recovery, and now a private identity record
-              for people, with plans and a results archive built and switched off.</span
+              for people, Throwdown as the third format, and the first limits switched on.</span
             >
           </div>
           <div class="ledger-row reveal">
@@ -1177,16 +1186,16 @@
             <span class="ledger-version">—</span>
             <span class="ledger-status shipped">TBD</span>
             <span class="ledger-note"
-              >Still TBD — Throwdown and Liga Seduh are both still coming. This row's already called
-              the order wrong once, so it's not calling it again.</span
+              >Still TBD — Liga Seduh is still coming. This row's already called the order wrong
+              once, so it's not calling it again.</span
             >
           </div>
         </div>
 
         <div class="stat-row reveal">
           <span><b>3</b> cycles</span>
-          <span><b>v3.4.1</b> now</span>
-          <span><b>2 / 4</b> formats</span>
+          <span><b>v3.6.1</b> now</span>
+          <span><b>3 / 4</b> formats</span>
           <span><b>1</b> live event</span>
           <span><b>2</b> organisations in production</span>
           <span><b>4</b> community tools</span>
@@ -1199,31 +1208,164 @@
         <p class="sec-sub reveal">
           <strong>Kiulap</strong> — seven phases per the project's frozen handoff spec, all shipped.
           Then <strong>Berakas</strong> — a front door nobody had planned for, followed by a public
-          shelf for the useful extras. Now <strong>Gadong</strong> — the second real competition
-          format, the first live event run on the platform, BTC's own screens for the room, and room
-          for more than one organiser, the tools to run it as a platform, and a private record that
-          knows a person is the same person. Newest first, one open at a time — open a milestone to
-          read it.
+          shelf for the useful extras. Now <strong>Gadong</strong> — a second and third real
+          competition formats, the first live event run on the platform, BTC's own screens for the
+          room, and room for more than one organiser, the tools to run it as a platform, and a
+          private record that knows a person is the same person, then Throwdown. Newest first, one
+          open at a time — open a milestone to read it.
         </p>
 
         <div class="milestones">
-          <div class="milestone reveal is-open" id="ms-gadong-identity">
+          <div class="milestone reveal is-open" id="ms-gadong-throwdown">
+            <h3 class="milestone-head">
+              <button
+                type="button"
+                class="milestone-toggle"
+                id="ms-gadong-throwdown-btn"
+                aria-expanded="true"
+                aria-controls="ms-gadong-throwdown-panel"
+              >
+                <span class="ms-text">
+                  <span class="ms-meta"
+                    >Gadong · 2 to 4 November 2026 · v3.5.0 to v3.6.1 · 3 entries</span
+                  >
+                  <span class="ms-title">A third format, and the first switches</span>
+                  <span class="ms-sum"
+                    >Throwdown · The first limits switched on · The Seduh ID feed, armed and
+                    waiting</span
+                  >
+                </span>
+                <span class="ms-chev" aria-hidden="true"></span>
+              </button>
+            </h3>
+            <div
+              class="milestone-panel"
+              id="ms-gadong-throwdown-panel"
+              role="region"
+              aria-labelledby="ms-gadong-throwdown-btn"
+            >
+              <div class="milestone-inner">
+                <div class="log" data-stagger>
+                  <div class="log-item current reveal">
+                    <div class="log-phase">Gadong</div>
+                    <div>
+                      <div class="log-head">
+                        <span class="log-name">Throwdown</span>
+                        <span class="log-ver">v3.6.0</span>
+                        <span class="log-now"><span class="pulse-dot"></span>Live now</span>
+                      </div>
+                      <div class="log-line shipped">
+                        <span class="k">Shipped</span
+                        ><span class="v"
+                          >The third competition format: a one-on-one knockout. Competitors are
+                          seeded or drawn at random, and the draw stores its shuffle seed so it can
+                          be explained afterwards. Each match is decided by the judges' votes; the
+                          organiser confirms the winner, and confirming asks which winner they
+                          expect, so a stale screen can't confirm the wrong one. Byes and walkovers
+                          are handled, and the third-place match is still played when a semi-final
+                          ended in a walkover, as long as both losers are still in. It comes with an
+                          organiser console, its own projector and phone screens, a printable
+                          results page and a full eight-competitor test event. Scoring advancement
+                          lives in the format itself, because the shared ranking code takes one
+                          ranked list and a cut-off, which a knockout isn't; the only shared piece
+                          added was the seeded shuffle. Built with reviews that found two real
+                          offline-sync problems (a queued decision now closes voting) and nine test
+                          gaps, all fixed. Throwdown has not yet been run at a live event.</span
+                        >
+                      </div>
+                      <div class="log-line felt">
+                        <span class="k">Felt like</span
+                        ><span class="v"
+                          >two names, one winner, and a bracket that can show its working.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="log-item current reveal">
+                    <div class="log-phase">Gadong</div>
+                    <div>
+                      <div class="log-head">
+                        <span class="log-name">The first limits switched on</span>
+                        <span class="log-ver">v3.5.0</span>
+                        <span class="log-now"><span class="pulse-dot"></span>Live now</span>
+                      </div>
+                      <div class="log-line shipped">
+                        <span class="k">Shipped</span
+                        ><span class="v"
+                          >On 2 November the owner turned on the first three of the switches built
+                          in October, one at a time, each after a preview of who it would affect:
+                          the cap on participants in a Community event, the one-open-event rule, and
+                          the results archive. The preview counted nobody who would lose anything
+                          real. The archive only looks at events that end after the moment of the
+                          last flip, so the history was never published. It has not published
+                          anything yet; the first proof is the first Community event to end after
+                          that moment. The other eight switches are still off. The same day the
+                          version moved to 3.5.0, which also covers everything since 3.4.1, because
+                          the number had not been bumped for ten days.</span
+                        >
+                      </div>
+                      <div class="log-line felt">
+                        <span class="k">Felt like</span
+                        ><span class="v"
+                          >putting up the first fence posts and walking the line to see that nobody
+                          is standing in the wrong place.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="log-item current reveal">
+                    <div class="log-phase">Gadong</div>
+                    <div>
+                      <div class="log-head">
+                        <span class="log-name">The Seduh ID feed, armed and waiting</span>
+                        <span class="log-ver">v3.5.1 to v3.6.1</span>
+                        <span class="log-now"><span class="pulse-dot"></span>Live now</span>
+                      </div>
+                      <div class="log-line shipped">
+                        <span class="k">Shipped</span
+                        ><span class="v"
+                          >The next step for the private identity record: when an event's podium is
+                          published, the people on it can be turned into identities. It runs in a
+                          review-queue mode, so nothing is created until the owner has looked, and
+                          the fully automatic mode is built and off. It has queued nothing so far. A
+                          review also stopped a republish from resetting its daily caps. The Privacy
+                          page now has the sentence for it, and promises that an opt-out is
+                          acknowledged within 10 days and completed within 30. The public contact
+                          address became a proper one on the Seduh Score domain.</span
+                        >
+                      </div>
+                      <div class="log-line felt">
+                        <span class="k">Felt like</span
+                        ><span class="v"
+                          >a door with a person standing at it before anyone is let through.</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="milestone reveal" id="ms-gadong-identity">
             <h3 class="milestone-head">
               <button
                 type="button"
                 class="milestone-toggle"
                 id="ms-gadong-identity-btn"
-                aria-expanded="true"
+                aria-expanded="false"
                 aria-controls="ms-gadong-identity-panel"
               >
                 <span class="ms-text">
                   <span class="ms-meta"
-                    >Gadong · 28 October to 2 November 2026 · v3.4.1 · 3 entries</span
+                    >Gadong · 28 October to 2 November 2026 · v3.5.0 · 3 entries</span
                   >
                   <span class="ms-title">One person, one record</span>
                   <span class="ms-sum"
                     >Seduh ID, the private record · Stronger passwords · A results archive, built
-                    and switched off</span
+                    and then switched on</span
                   >
                 </span>
                 <span class="ms-chev" aria-hidden="true"></span>
@@ -1242,7 +1384,7 @@
                     <div>
                       <div class="log-head">
                         <span class="log-name">Seduh ID, the private record</span>
-                        <span class="log-ver">v3.4.1</span>
+                        <span class="log-ver">v3.5.0</span>
                         <span class="log-now"><span class="pulse-dot"></span>Live now</span>
                       </div>
                       <div class="log-line shipped">
@@ -1278,7 +1420,7 @@
                     <div>
                       <div class="log-head">
                         <span class="log-name">Stronger passwords</span>
-                        <span class="log-ver">v3.4.1</span>
+                        <span class="log-ver">v3.5.0</span>
                         <span class="log-now"><span class="pulse-dot"></span>Live now</span>
                       </div>
                       <div class="log-line shipped">
@@ -1305,8 +1447,9 @@
                     <div class="log-phase">Gadong</div>
                     <div>
                       <div class="log-head">
-                        <span class="log-name">A results archive, built and switched off</span>
-                        <span class="log-ver">v3.4.1</span>
+                        <span class="log-name">A results archive</span>
+                        <span class="log-ver">v3.5.0</span>
+                        <span class="log-now"><span class="pulse-dot"></span>Live now</span>
                       </div>
                       <div class="log-line shipped">
                         <span class="k">Shipped</span
@@ -1314,9 +1457,10 @@
                           >A pipeline that publishes an event's podium to a public archive has been
                           built end to end: the organiser's browser stages the snapshot, there is a
                           tick box and a take-down, the operator can see counts, and it has been
-                          proved over real HTTP and in a browser at phone width. It is not turned
-                          on. The Privacy, Terms and pricing pages now carry the wording for it, so
-                          the rule and the feature arrive together.</span
+                          proved over real HTTP and in a browser at phone width. It shipped switched
+                          off, and was turned on on 2 November (see the next milestone). The
+                          Privacy, Terms and pricing pages carry the wording for it, so the rule and
+                          the feature arrived together.</span
                         >
                       </div>
                       <div class="log-line felt">
@@ -1348,8 +1492,8 @@
                   >
                   <span class="ms-title">Running it as a platform</span>
                   <span class="ms-sum"
-                    >The operator's console · Password recovery · Plans and limits, built and
-                    switched off · Random Selector</span
+                    >The operator's console · Password recovery · Plans and limits, built dark ·
+                    Random Selector</span
                   >
                 </span>
                 <span class="ms-chev" aria-hidden="true"></span>
@@ -1432,7 +1576,7 @@
                     <div class="log-phase">Gadong</div>
                     <div>
                       <div class="log-head">
-                        <span class="log-name">Plans and limits, built and switched off</span>
+                        <span class="log-name">Plans and limits, built dark</span>
                         <span class="log-ver">v3.4.1</span>
                       </div>
                       <div class="log-line shipped">
@@ -1442,11 +1586,11 @@
                           organisation can be given one, the operator can record a payment and see
                           what each organisation may do, and the checks (how many events can be open
                           at once, how large an event can be, when a paid event's window closes)
-                          live in the database, where a browser can't skip them. Every check ships
-                          off. Today nothing limits anyone, and each one is turned on separately,
-                          after the operator has seen who it would affect. Alongside it: organisers
-                          get a "Finish event" button, with a confirmation, so a finished event
-                          stops counting as open.</span
+                          live in the database, where a browser can't skip them. Every check shipped
+                          off, and each one is turned on separately, after the operator has seen who
+                          it would affect. The first three were switched on on 2 November (see the
+                          next milestone up). Alongside it: organisers get a "Finish event" button,
+                          with a confirmation, so a finished event stops counting as open.</span
                         >
                       </div>
                       <div class="log-line felt">

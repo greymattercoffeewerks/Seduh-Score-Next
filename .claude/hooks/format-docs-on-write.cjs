@@ -15,7 +15,13 @@
 // the way a real lint error does; this hook always exits 0.
 const { spawnSync } = require('node:child_process');
 
-const WATCHED_BASENAMES = ['CHANGELOG.md', 'ROADMAP.md', 'CONVENTIONS.md'];
+const WATCHED_BASENAMES = [
+  'CHANGELOG.md',
+  'ROADMAP.md',
+  'CONVENTIONS.md',
+  'STATUS.md',
+  'CHANGELOG-INDEX.md',
+];
 
 let raw = '';
 process.stdin.on('data', (chunk) => {
