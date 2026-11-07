@@ -8,7 +8,7 @@ findings for this area here, not to `ROADMAP.md`.** Section index: [`README.md`]
 
 _Source: CHANGELOG `T-GATE.C`. Migration `20261023150000` (057) merged as #309 and pushed to the cloud project 2026-10-26 (keys all off). Status: NOT FINAL until the open items below are settled._
 
-1. **Raw key ids on the Keys screen.** A human label per key is needed before the operator uses the screen with customers in view (ui-accessibility-reviewer; wording observation, not a blocker).
+1. **Raw key ids on the Keys screen.** A human label per key is needed before the operator uses the screen with customers in view (ui-accessibility-reviewer; wording observation, not a blocker). **CLOSED (triage 2026-11-07):** the Keys screen now draws each key by a plain name with the id as small text, and a catalog test fails when a key has no name (`src/admin/planFormat.js:44` `keyName`; `src/admin/CLAUDE.md` "Accessibility and wording").
 2. **`admin_plan_orgs` is unbounded** (code-reviewer). Paging is needed at scale; fine at today's organisation count.
 3. **Release of an already-ended event reports success** (code-reviewer). Decide whether a release of an ended event should be refused with a hint, or stay a no-op success.
 4. **Restoring event names in the picker** is a one-line change in `admin_plan_org` plus a D-A4 amendment. The owner's call (security-reviewer's decision: names narrowed out).
@@ -29,7 +29,7 @@ _Source: CHANGELOG `T-GATE.B5`. Migration `20261023140000` (056) merged as #307 
 4. **A realtime client keeps its last frame until reload** (security-reviewer). After the lock closes an event, a projector, phone or splash that is already open keeps showing its last frame until it is reloaded.
 5. **`public_event_summary` falls through to the organisation's next unlocked event** (security-reviewer). The anonymous door skips a locked event, and then offers the next one for the same organisation. Decide whether that is intended before the flip.
 6. **No automatic CSV email at window end (G-F1).** The organiser has no copy of the results except the public archive page.
-7. **D-G22, the 24-hour podium publish, is still not built** (carried from B4 item 3).
+7. **D-G22, the 24-hour podium publish, is still not built** (carried from B4 item 3). **CLOSED (triage 2026-11-07):** built as the archive pipeline `app.archive_tick` (`supabase/migrations/20261101100000_archive_tick.sql`; CHANGELOG "T-ARC.1 to .6").
 8. **Accepted (schema-guardian):** publishing after the lock writes an empty payload from the browser. The locked screen blocks that UI, so nothing reaches a user.
 9. **By design (security-reviewer):** a Community organisation can register 8 competitors on a fresh event after a lock. The Community cap is per event.
 10. **Pre-existing, carried:** `events.status` and `events.is_test` are member-writable (7a risk 2, as in B3 item 4 and B4 item 5).
@@ -44,11 +44,11 @@ _Source: CHANGELOG `T-GATE.B4`. Pushed to the cloud 2026-10-26 (D-G13 satisfied)
 
 1. **Flip runbook: old open events block the first flip of `events_open`.** A Community organisation with a forgotten, never-finished event is at its limit of 1, so its next event creation is refused the moment the key is enforced. Before flipping: run `select * from app.gating_would_lose('events_open')` (or `admin_gating_preview('events_open')`), then either release the stuck events deliberately (`admin_event_release`, each with a reason) or backfill the Annual tier first. Do not flip it blind.
 2. **Flip runbook: `btc_format` and live BTC events.** A BTC event that went live before `btc_format` is enforced has no snapshot, so its next `publish_session` is refused mid-event (B4 security-reviewer nit). Do not enforce `btc_format` while a BTC event is live; check `admin_gating_preview('btc_format')` first. The only grant writer is `admin_grant_create`: it requires a platform admin with fresh MFA and is revoked from `service_role`. A CI fixture for this key therefore needs an admin-session helper. **RESOLVED 2026-10-28 (PR #336):** `createTenant` grants an Annual plan through `admin_grant_create` with a real platform-admin session (admin made by SQL as the local database owner, TOTP factor enrolled, `aal2` token computed in `tests/e2e/support/grants.js`); no grant-boundary change. Proved by `btc-entitlement.spec.js` (project `dev-gating`). The cloud precondition (no BTC event live when `btc_format` is flipped) still stands; the runbook re-checks it on the day.
-3. **Automatic podium publish 24 hours after an event ends (D-G22) is NOT built.** `ended_at` now exists, but nothing reads it to publish. The publish path is its own task.
+3. **Automatic podium publish 24 hours after an event ends (D-G22) is NOT built.** `ended_at` now exists, but nothing reads it to publish. The publish path is its own task. **CLOSED (triage 2026-11-07):** the 24-hour podium publish was built as the archive pipeline, `app.archive_tick`, and pushed to the cloud (`supabase/migrations/20261101100000_archive_tick.sql`; CHANGELOG "T-ARC.1 to .6" built, five migrations pushed).
 4. **RESOLVED in T-GATE.B5:** the Per-event 5-day window lock (G-B5) is built, dark. See "Known open items from T-GATE.B5".
 5. **`events.status` and `events.is_test` are still member-writable** (7a risk 2, as in B3 item 4). `is_test` does not exempt an event from the open-event count, by design.
 6. **Not run before the PR:** `module-boundary-checker` on `src/core/entitlements.contract.test.js` (the one `src/` change).
-7. **Organiser copy for `entitlement_required` and `entitlement_cap_reached`** (G-C2), as in B3 item 10. A Finish button and its copy are the organiser's side of `events_open`.
+7. **Organiser copy for `entitlement_required` and `entitlement_cap_reached`** (G-C2), as in B3 item 10. A Finish button and its copy are the organiser's side of `events_open`. **CLOSED (triage 2026-11-07):** the organiser copy is `GATING_MESSAGES.events_open` and the Finish action is built (`src/core/errors.js:14`, `src/core/eventsScreen.js:127` `renderFinishAction`).
 8. **Pre-existing, recorded (security-reviewer):** `btc_format` is not tied to `events.format` for `btc_*` table writes. It is a soft commercial gate only.
 9. **Cloud:** RESOLVED 2026-10-26: migrations `20261023100000` to `20261023130000` were pushed to the cloud project (see item above), keys all off.
 
@@ -65,7 +65,7 @@ _Source: CHANGELOG `T-GATE.B3`. Pushed to the cloud 2026-10-26 (D-G13 satisfied)
 7. **RESOLVED 2026-10-27 (PR #332):** `listEventsForOrg` now selects `id, format, name, event_date, venue, city, is_test, ended_at`, so the snapshot columns no longer reach the client. (`findEvent` still uses `select('*')`, logged as pre-existing.)
 8. **RESOLVED 2026-10-27 (PR #332):** `service_role` snapshot-edit refusal is now covered in `054` (two refusals and a control update; plan 92). Not yet confirmed by a mutation run of pgTAP (reviewed on reading, CI green).
 9. **Re-snapshot:** a per-event window that opens after go-live, or a grant bought after go-live, needs `admin_event_resnapshot` (rollout note in the 054 header).
-10. **Organiser copy for `entitlement_required` / `entitlement_cap_reached`** (G-C2) not written. The admin copy for the four gating hints is in `NOT_FOR_THE_CONSOLE` (`src/admin/adminErrors.test.js`).
+10. **Organiser copy for `entitlement_required` / `entitlement_cap_reached`** (G-C2) not written. The admin copy for the four gating hints is in `NOT_FOR_THE_CONSOLE` (`src/admin/adminErrors.test.js`). **CLOSED (triage 2026-11-07):** organiser copy for both hints exists as `GATING_MESSAGES` per key, shown by the events screen (`src/core/errors.js:9-30`, `src/core/eventsScreen.test.js:497,524`).
 11. **Not run before PR:** `module-boundary-checker` on the one `src/` change (a test file under `src/admin/`).
 12. **Cloud:** RESOLVED 2026-10-26: migrations `20261023100000`, `20261023110000` and `20261023120000` were pushed to the cloud project (see above), keys all off.
 
@@ -75,7 +75,7 @@ _Source: CHANGELOG `T-GATE.B2`. Pushed to the cloud 2026-10-26 (D-G13 satisfied)
 
 - **PR #301 merged to `dev`** (stacked on #300). Its CI result is recorded on the PR, not re-checked here.
 - **Done locally in T-GATE.B3 (migration 054): the enforcement hooks** (events gate, format freeze, participant cap, snapshot, resnapshot). The Per-event window lock is built in T-GATE.B5 (migration 056), dark.
-- **No grant UI yet.** The gating hints are in `NOT_FOR_THE_CONSOLE` (`src/admin/adminErrors.test.js`); move them into the copy map when the grant screen lands.
+- **No grant UI yet.** The gating hints are in `NOT_FOR_THE_CONSOLE` (`src/admin/adminErrors.test.js`); move them into the copy map when the grant screen lands. **CLOSED (triage 2026-11-07):** the Plan panel (grant screen) shipped in T-GATE.C and all gating hints now have copy in `ADMIN_ERROR_COPY` (`src/admin/adminErrors.js`, `src/admin/planPanel.js`; `src/admin/CLAUDE.md:189`, "the gating hints are no longer in `NOT_FOR_THE_CONSOLE`").
 - **Intentional, recorded nits (security-reviewer):** a platform admin who is also a member can grant their own organisation (audited); the free-text grant `note` is stored verbatim in the audit row, so the screen should warn against participant data.
 - **Intentional, recorded nit (code-reviewer):** `admin_grant_extend` does not require the new end to be after `now()`. Revisit if the fixed-date tests are ever made clock-independent.
 - **Cloud:** RESOLVED 2026-10-26: migrations `20261023100000` and `20261023110000` were pushed to the cloud project (see above), keys all off.
@@ -178,7 +178,7 @@ _Deferred findings and accepted limits from the BR-E1 CHANGELOG entry (PR #297).
 - **Not built:** the banners (the splash's full-bleed banner and the projector's idle banner screen) and the logo on the printed results sheet (D-BR11). (BR-E1)
 - **Duplicated plumbing, for a later pass:** the "call a database door with a timeout and unwrap the answer" skeleton is now in three places (`core/brandDoor.js`, `core/events.js`'s `findLatestEventForOrg`, `core/orgResolver.js`), and the UUID pattern is in `core/brandDoor.js` and `src/admin/ids.js`. `viewer-shell.js` also keeps a private copy of `raceTimeout`'s job (`withTimeout`). (BR-E1, module-boundary-checker)
 - **A new projector body factory must pass its options through** to `createStageBody`, or its display is built unbranded every time; `brandWiring.test.js` checks the two existing ones. (BR-E1)
-- **Stale comments:** `src/core/events.js:50-51` and `src/core/CLAUDE.md` still say nothing writes `events.status`; since 2026-10-04 `resolve_stage` writes `'concluded'`. Found by the gating recon, not part of BR-E1. (G-A2)
+- **Stale comments:** `src/core/events.js:50-51` and `src/core/CLAUDE.md` still say nothing writes `events.status`; since 2026-10-04 `resolve_stage` writes `'concluded'`. Found by the gating recon, not part of BR-E1. (G-A2) **CLOSED (triage 2026-11-07):** both now say `resolve_stage` writes `events.status` to `concluded` (`src/core/events.js:61`, `src/core/CLAUDE.md:47`).
 
 ## Known open items from D-PW1 (organiser password recovery, 2026-10-23)
 

@@ -127,7 +127,7 @@ _The organiser can now order level teams; this lists what that does not do._
 - **Provisional lists are tall at 320 and 360px** ("Seed N (provisional)" and the team name take two rows each).
 - **The form's error is both `role="alert"` and focused**, and the form and its list share the group's name: some screen readers will read them twice (the same pattern as the knockout tie-break form).
 - **`btc_seeding_order` is a view over `btc_standings`**: a future migration that drops `btc_standings` without CASCADE will fail (earlier ones did).
-- **The cloud project does not have the migration yet.** Merging the PR only ships the front end; the card hides itself (view not found) until `20261010100000` is pushed with `apply_migration`, and until then a tie across the cut-off still blocks generation exactly as before. **CLOSED (triage 2026-11-07):** the later freeze-trigger migration on `btc_seeding_tiebreaks` was applied to the cloud project 2026-10-13, which requires the table from this migration to exist there (docs/backlog/tenancy.md:289).
+- **The cloud project does not have the migration yet.** Merging the PR only ships the front end; the card hides itself (view not found) until `20261010100000` is pushed with `apply_migration`, and until then a tie across the cut-off still blocks generation exactly as before.
 
 ## Known open items from T-BTC.phone-view (2026-10-10)
 
