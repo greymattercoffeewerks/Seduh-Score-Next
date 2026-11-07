@@ -10,8 +10,8 @@ findings for this area here, not to `ROADMAP.md`.** Section index: [`README.md`]
   (hint says reload first; Update does not re-fetch) and a retroactive 'withdrawn' flag
   changes a published result on the next Update.
 - **Order of tied rows within a tie is not meaningful.**
-- **The sheet downloads every published payload to show one** (fine at current size).
-- **The shared public header's brand link is under 44px tall** (pre-existing).
+- **The sheet downloads every published payload to show one** (fine at current size). **CLOSED (triage 2026-11-07):** the sheet now reads only its own event's row by id via `findPublishedResultForEvent(eventId)` (src/marketing/resultsSheet.js:350-357, src/core/publicResults.js:53-62).
+- **The shared public header's brand link is under 44px tall** (pre-existing). **CLOSED (triage 2026-11-07):** `.public-header-brand` now has `min-height: var(--tap-target-min)` (44px) (src/marketing/publicHeader.css:21-27; CHANGELOG 2026-10-H1 "44px brand link").
 - **No test feeds the real `buildResultsPayload` output into `buildResultsSheet`**
   (payload keys are duplicated as fixtures — the key set is pinned on both sides) and
   `resultsMain.js`'s `?sheet=` routing has no test.
@@ -290,7 +290,7 @@ station set not null`, named explicitly so `ensureHeatEntries` (`heats.js`) can 
 - **No org/membership management UI or RPC exists.** `orgs`/`org_members` are
   deliberately read-only at the RLS+GRANT layer; provisioning the single org for
   October happens via `service_role` outside the app, not through a built flow. Revisit
-  if a self-serve org-setup flow is ever needed.
+  if a self-serve org-setup flow is ever needed. **SUPERSEDED (triage 2026-11-07):** the operator's admin console now creates organisations and adds/changes members through `admin_*` RPCs (supabase/migrations/20261014130000_admin_write_rpcs.sql; src/admin/; CHANGELOG-INDEX "T-ADM cloud rollout").
 - **Cloudflare Workers is now connected and auto-deploying** (2026-08-22, user action —
   ahead of §15.4's "not before Phase 5 at the earliest" default). The GitHub repo has the
   official "Cloudflare Workers and Pages" App installed; every push gets a Workers Build
