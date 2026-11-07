@@ -132,7 +132,7 @@ function buildNav() {
 
   const live = el('span', { className: 'petrol-live-indicator' }, [
     liveDot(),
-    document.createTextNode('Live — Cup Taster, BTC'),
+    document.createTextNode('Live — Cup Taster, BTC, Throwdown'),
   ]);
 
   const secondary = el('span', {
@@ -300,11 +300,11 @@ function buildHero() {
   const content = el('div', { className: 'petrol-hero-content' }, [
     el('p', { className: 'petrol-kicker', text: 'Grey Matter Coffee Werks · Brunei' }),
     el('h1', { className: 'petrol-display petrol-hero-headline' }, [
-      document.createTextNode('One tablet.'),
+      document.createTextNode('Every cup brewed.'),
       el('br'),
-      document.createTextNode('One projector.'),
+      document.createTextNode('Every score counted.'),
       el('br'),
-      el('span', { text: 'Zero fall-apart.' }),
+      el('span', { text: 'Every result trusted.' }),
     ]),
     el('p', {
       className: 'petrol-hero-body',
@@ -318,7 +318,7 @@ function buildHero() {
       actionLink('Take the tour', { outline: true, href: '/tour/' }),
     ]),
     el('div', { className: 'petrol-stat-strip' }, [
-      statItem('2', 'formats live'),
+      statItem('3', 'formats live'),
       statItem('0', 'installs'),
       statItem('1', 'tablet runs it'),
       statItem('3', 'tiers, public'),
@@ -422,11 +422,11 @@ function tag(text, { solid = false } = {}) {
   });
 }
 
-// Cup Taster and BTC are the two real, live formats — not dimmed,
-// left-accented, and each row is a link straight into the app (both go to
+// Cup Taster, BTC and Throwdown are the three real, live formats — not dimmed,
+// left-accented, and each row is a link straight into the app (all go to
 // the same /app/#/events; which format an organiser gets from there is a
-// per-event choice, not a per-format URL). Throwdown and Liga Seduh are
-// real product scope (ROADMAP.md), just not built yet, so they stay dimmed.
+// per-event choice, not a per-format URL). Liga Seduh is real product scope
+// (ROADMAP.md), just not built yet, so it stays dimmed.
 // "BTC," not "BBTC" — see this file's header comment for the naming
 // history (the design reference had it right; this codebase was wrong for
 // a while, not the other way around).
@@ -477,9 +477,9 @@ function formatsSection() {
       formatRow(
         '01',
         'Throwdown',
-        '1v1 knockout — redemption & revival draw, live audience view. The format that ' +
-          'launched the platform.',
-        { dimmed: true },
+        '1v1 knockout — seeded or random draw, judge votes, a 3rd place match and a live ' +
+          'audience view. Redemption and revival rounds are coming as add-on modules.',
+        { live: true, href: '/app/#/events' },
       ),
       formatRow(
         '02',

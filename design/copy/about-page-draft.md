@@ -10,7 +10,7 @@ Scoring for coffee competitions, built by people in the coffee community.
 
 Seduh Score is a platform for running coffee competitions. It handles registering competitors, timing and scoring heats, working out the standings, and publishing results. It is built to keep working when the connection is poor, and to make every result something the organiser can explain and show.
 
-It supports two competition formats today, Cup Taster and BTC (Barista Team Championship). Throwdown and Liga Seduh are still to come. We also offer free community tools, including a Timer and Guess the Bean, and a public archive of published results.
+It supports three competition formats today, Cup Taster, BTC (Barista Team Championship) and Throwdown. Liga Seduh is still to come. We also offer free community tools, including a Timer and Guess the Bean, and a public archive of published results.
 
 ## Who builds it
 

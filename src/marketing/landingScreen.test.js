@@ -23,25 +23,25 @@ describe('mountLandingScreen — format list', () => {
     mountLandingScreen(root);
 
     const liveRows = [...root.querySelectorAll('.petrol-format-row-live')];
-    expect(liveRows).toHaveLength(2);
+    expect(liveRows).toHaveLength(3);
 
     const linkTexts = liveRows.map((row) => row.querySelector('.petrol-format-link').textContent);
-    expect(linkTexts).toEqual(['Open Cup Taster →', 'Open BTC →']);
+    expect(linkTexts).toEqual(['Open Throwdown →', 'Open Cup Taster →', 'Open BTC →']);
     // The load-bearing assertion: two DIFFERENT strings, not the same one twice.
-    expect(new Set(linkTexts).size).toBe(2);
+    expect(new Set(linkTexts).size).toBe(3);
   });
 
-  it('links Cup Taster and BTC to the same real app destination; the other two formats stay dimmed with no link', () => {
+  it('links Throwdown, Cup Taster and BTC to the same real app destination; Liga Seduh stays dimmed with no link', () => {
     const root = document.createElement('div');
     mountLandingScreen(root);
 
     const liveHrefs = [...root.querySelectorAll('.petrol-format-row-live')].map((row) =>
       row.getAttribute('href'),
     );
-    expect(liveHrefs).toEqual(['/app/#/events', '/app/#/events']);
+    expect(liveHrefs).toEqual(['/app/#/events', '/app/#/events', '/app/#/events']);
 
     const dimmedRows = [...root.querySelectorAll('.petrol-format-row-dimmed')];
-    expect(dimmedRows).toHaveLength(2);
+    expect(dimmedRows).toHaveLength(1);
     for (const row of dimmedRows) {
       expect(row.tagName).toBe('DIV');
       expect(row.querySelector('.petrol-format-link')).toBeNull();
@@ -56,12 +56,25 @@ describe('mountLandingScreen — format list', () => {
     expect(names).not.toContain('BBTC');
   });
 
-  it('lists both live formats in the nav bar\'s own "Live —" indicator, not just Cup Taster', () => {
+  it('lists all live formats in the nav bar\'s own "Live —" indicator, not just Cup Taster', () => {
     const root = document.createElement('div');
     mountLandingScreen(root);
     expect(root.querySelector('.petrol-live-indicator').textContent).toContain(
-      'Live — Cup Taster, BTC',
+      'Live — Cup Taster, BTC, Throwdown',
     );
+  });
+});
+
+describe('mountLandingScreen — hero headline', () => {
+  it('states the three-line coffee tagline, with the accent on the last line', () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: true }));
+    const root = document.createElement('div');
+    mountLandingScreen(root);
+    const h1 = root.querySelector('.petrol-hero-headline');
+    expect(h1.innerHTML.replace(/<br>/g, '|').replace(/<\/?span>/g, '')).toBe(
+      'Every cup brewed.|Every score counted.|Every result trusted.',
+    );
+    expect(h1.querySelector('span').textContent).toBe('Every result trusted.');
   });
 });
 
