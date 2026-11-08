@@ -167,6 +167,13 @@ describe('the standings', () => {
     ...more,
   });
 
+  it('writes each team with its country where it has one, and the bare name where it has none', () => {
+    const standings = rows(2);
+    standings[0].country = { code: 'BN', name: 'Brunei' };
+    const { container } = mounted(withStandings(standings));
+    expect(teamsInTable(container)).toEqual(['Brunei · Team 1', 'Team 2']);
+  });
+
   it('shows the top five places, and offers the rest with the count of teams', () => {
     const { container } = mounted(withStandings(rows(8)));
     expect(teamsInTable(container)).toEqual(['Team 1', 'Team 2', 'Team 3', 'Team 4', 'Team 5']);
@@ -336,7 +343,12 @@ describe('results and the bracket', () => {
     );
     const items = [...recent.querySelectorAll('li')];
     expect(items).toHaveLength(3);
-    expect(items[0].querySelector('.btc-phone-line').textContent).toMatch(/^.+ \d+ – \d+ .+$/);
+    // both sides carry their country where they have one (Pour Decisions is from Brunei, Latte Lab from Indonesia)
+    const line = items.map((item) => item.querySelector('.btc-phone-line').textContent);
+    expect(line.every((text) => /^.+ \d+ – \d+ .+$/.test(text))).toBe(true);
+    expect(
+      line.some((text) => /^Brunei · Pour Decisions \d+ – \d+ Indonesia · Latte Lab$/.test(text)),
+    ).toBe(true);
     expect(items[0].querySelector('.stage-meta').textContent).toMatch(/^Preliminary · .+ win$/);
   });
 

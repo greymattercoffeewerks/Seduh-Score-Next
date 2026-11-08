@@ -149,6 +149,13 @@ describe('small shared pieces', () => {
     const side = renderSide({ name: 'Team Kopi', country: { code: 'BN', name: 'Brunei' } });
     expect(side.querySelector('.btc-stage-side-country').textContent).toBe('Brunei');
     expect(side.querySelector('.btc-stage-side-name').textContent).toBe('Team Kopi');
+    // the country line comes first, so it reads (and sits) above the name
+    expect(
+      side
+        .querySelector('.btc-stage-side-country')
+        .compareDocumentPosition(side.querySelector('.btc-stage-side-name')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(
       renderSide({ name: 'Team Kopi', country: null }).querySelector('.btc-stage-side-country'),
     ).toBeNull();
@@ -181,6 +188,10 @@ describe('idle loop: the pages', () => {
     expect(text(host, '.stage-kicker')).toBe('Up next · Preliminary');
     expect(text(host, '.stage-title')).toBe('Preliminary');
     expect(all(host, '.btc-stage-side-name')).toEqual(['Pour Decisions', 'Steam Team']);
+    // Pour Decisions is from Brunei; Steam Team has no country, so only one country line is drawn
+    const sides = [...host.querySelectorAll('.btc-stage-side')];
+    expect(sides[0].querySelector('.btc-stage-side-country').textContent).toBe('Brunei');
+    expect(sides[1].querySelector('.btc-stage-side-country')).toBeNull();
     // in the preliminary round a place is only "so far", so no seed is claimed
     expect(host.querySelector('.btc-stage-side-label')).toBeNull();
     expect(text(host, '.btc-stage-judges')).toBe('Judges: Judge 1 · Judge 2 · Judge 3');
@@ -605,7 +616,11 @@ describe('idle loop: the bracket page', () => {
   const slotsOf = (host) =>
     [...host.querySelectorAll('.btc-stage-slot')].map((slot) =>
       [...slot.querySelectorAll('.btc-stage-slot-team')].map((team) => ({
-        text: [team.firstChild.textContent, team.lastChild.textContent].join('|'),
+        text: [
+          team.querySelector('.btc-stage-slot-name').textContent,
+          team.lastChild.textContent,
+        ].join('|'),
+        country: team.querySelector('.btc-stage-slot-country')?.textContent ?? null,
         mark: team.querySelector('.btc-stage-slot-mark')?.textContent ?? null,
         markKind: team.querySelector('.btc-stage-slot-mark')?.getAttribute('data-kind') ?? null,
         winner: team.getAttribute('data-winner'),
@@ -641,10 +656,13 @@ describe('idle loop: the bracket page', () => {
     const { host, handle } = bracketHost(knockoutPayload({ results: { qf1: { tokensA: 40 } } }));
     const slots = slotsOf(host);
     expect(slots[0][0]).toMatchObject({ winner: 'true', tbd: false });
-    expect(slots[0][0].text).toMatch(/^Brunei · Bean Scene\|\d+$/);
+    expect(slots[0][0].text).toMatch(/^Bean Scene\|\d+$/);
+    // the country sits on its own line, never inside the name; a team with none (Steam Team) and a TBD seat have none
+    expect(slots[0].map((team) => team.country)).toEqual(['Brunei', null]);
+    expect(slots[4][1].country).toBeNull();
     expect(slots[0][1]).toMatchObject({ winner: 'false', tbd: false });
     // an unplayed quarterfinal has both teams and no totals
-    expect(slots[1][0].text).toBe('Singapore · Drip Society|');
+    expect(slots[1][0].text).toBe('Drip Society|');
     // a semifinal waiting on a result has a known team and a seat to be decided
     const sf1 = slots[4];
     expect(sf1[0].text).toBe(`${slots[0][0].text.split('|')[0]}|`);
@@ -672,7 +690,7 @@ describe('idle loop: the bracket page', () => {
     expect(slots[2].map((team) => team.winner)).toEqual(['false', 'true']);
     expect(slots[2].map((team) => team.mark)).toEqual([null, 'Through · tie-break']);
     expect(slots[2][1].markKind).toBe('tiebreak');
-    expect(slots[2][1].text).toMatch(/^Malaysia · Roast Republic\|30$/);
+    expect(slots[2][1].text).toMatch(/^Roast Republic\|30$/);
     handle.destroy();
   });
 

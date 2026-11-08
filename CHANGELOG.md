@@ -8,6 +8,17 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## BTC Build E part 2: team country in the live payload and on the audience surfaces · 2026-11-08
+
+**Task:** `docs/specs/BTC-E-TEAM-JUDGE-COUNTRY-PLAN.md` section 6. Builds on part 1 (PR #428); this branch is rebased after #428 merges.
+
+- **Public payload, one new field:** `country: { code, name } | null` on each TEAM object (standings rows, up next, then next, result sides, bracket slots, decided podium places). `btc_teams` is read as `id, name, country_code`; judges stay `id, name`, so a **judge's country is never published** (decision D5). The name comes from `core/country.js` at publish time. A code outside the list is shown as the code.
+- **Surfaces:** the phone shows `Country · Name` (`words.js` `withCountry`; the up-next headline uses `matchHeadline`; the tight "Then:" and footer lines keep plain names). The projector's two-sided match card puts the country on its own small line above the name; standings, champion and podium line use the label; the bracket slot writes `Country · Name` on one line and cuts a long country at its own end, never the team name (checked at 1080p with "Democratic Republic of the Congo": the fourth quarterfinal still fits). Rank headlines and the result sentences keep plain names. `demoLivePayload.js` gives the rehearsal teams countries (one with none).
+- **Reviews:** `security-reviewer` and `module-boundary-checker` clean. `code-reviewer` clean (nits only). `ui-accessibility-reviewer`: one red, the long country in a bracket slot cut the team name (and a first fix that put it on a second line pushed the fourth quarterfinal off the screen); fixed with the one-line layout, re-measured. `test-auditor`: four reds (no test for country on the phone Recent results, the phone standings, the projector up-next page and the result-reveal moment, each with a surviving mutant) and one nit, all fixed with tests.
+- **Not done here:** the payload field reaches the display only after a republish; no migration (part 1 holds the database change).
+
+---
+
 ## BTC Build E: country on teams and judges (PR 1) · 2026-11-08
 
 **Task:** `docs/specs/BTC-E-TEAM-JUDGE-COUNTRY-PLAN.md`, PR 1 (sections 4 and 5): the data and organiser screens for the judge-off-own-country rule that the draw (Build B) builds on. PR 2 (country in the live payload) is not started.

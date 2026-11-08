@@ -196,7 +196,18 @@ function renderSlot(slot, round, label) {
             },
           },
           [
-            el('span', { text: team.name ? withCountry(team.name, team.country) : TO_BE_DECIDED }),
+            // "Country · Name" on one line; a long country ("Democratic Republic of the Congo") is cut at its own
+            // end and never hides the team name (projectorScreens.css).
+            el(
+              'span',
+              { className: 'btc-stage-slot-who' },
+              [
+                team.name && team.country
+                  ? el('span', { className: 'btc-stage-slot-country', text: team.country.name })
+                  : null,
+                el('span', { className: 'btc-stage-slot-name', text: team.name ?? TO_BE_DECIDED }),
+              ].filter(Boolean),
+            ),
             mark
               ? el('span', {
                   className: 'btc-stage-slot-mark',
