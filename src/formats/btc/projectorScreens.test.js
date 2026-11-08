@@ -9,6 +9,7 @@ import {
 } from './projectorScreens.js';
 import { btcBand, matchLine, KNOCKOUT_PLACES } from './words.js';
 import { preliminaryPayload, knockoutPayload } from './demoLivePayload.js';
+import { readFileSync } from 'node:fs';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -205,6 +206,21 @@ describe('idle loop: the pages', () => {
     const { host, handle } = mountFor(payload);
     expect(all(host, '.btc-stage-side-country')).toEqual(['Brunei', 'Indonesia']);
     handle.destroy();
+  });
+
+  // A flex gap is reserved even for an item shrunk to nothing, so it would push a name that fills its slot against
+  // the wrapper's clip and cut its last letter. The separator therefore lives inside the country, with no gap.
+  it('a bracket slot reserves no gap beside the country: the separator is inside it', () => {
+    const slotCss = readFileSync('src/formats/btc/projectorScreens.css', 'utf8');
+    // the declaration block of one rule, found by its exact selector text
+    const block = (selector) => {
+      const start = slotCss.indexOf(`${selector} {`);
+      return start < 0 ? '' : slotCss.slice(start, slotCss.indexOf('}', start));
+    };
+    const wrapper = block('.btc-stage-slot-team > span:first-child');
+    expect(wrapper).not.toBe('');
+    expect(wrapper).not.toContain('gap');
+    expect(block('.btc-stage-slot-country::after')).toContain("content: '\\00a0·\\00a0'");
   });
 
   it('calls a knockout match by the seeds the bracket gave its teams', () => {

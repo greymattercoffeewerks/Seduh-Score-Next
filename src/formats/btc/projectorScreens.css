@@ -199,7 +199,6 @@
   display: flex;
   flex: 1 1 auto;
   align-items: baseline;
-  gap: 0.5ch;
   min-width: 0;
   overflow: hidden;
 }
@@ -225,8 +224,10 @@
   font-weight: var(--font-weight-normal, 400);
 }
 
+/* The separator lives INSIDE the country (non-breaking spaces, so nowrap keeps them) and there is no flex gap, so
+   nothing is reserved once the country has shrunk to nothing and the name sits flush against the wrapper. */
 .btc-stage-slot-country::after {
-  content: ' ·';
+  content: '\00a0·\00a0';
 }
 
 .btc-stage-slot-team > span:last-child {
