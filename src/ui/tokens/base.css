@@ -206,6 +206,112 @@ body {
   }
 }
 
+/* ---- Shared small primitives (Petrol V2 "public pages" pass) ----------------------------------------------
+   The public pages (landing, pricing, tour, trust, results, community hub, header, footer) used to hand-build
+   their own tags, cards, toggles and buttons, each with its own edge and (no) corner. These are the ONE spelling.
+   They live here, not in components.css, for the reason components.css's header gives: tokens/index.css is loaded by
+   EVERY page, and components.css is not (a page that styles its own .form-field / .screen-feedback must not get it).
+   Every value is a token; a page adds only layout (margin, width, grid) and, where it must, a colour variable.
+   Reuse, do not restate: tokenDrift.test.js fails a public stylesheet that gives a small box a border or fill
+   without a token radius, or defines a class named like one of these (-tag, -badge, -dot, -toggle...).
+
+     .tag          small mono label: hairline edge, 3px corner.  --tag-edge / --tag-ink recolour it (e.g. the
+                   is_test violet, a success green); .tag-solid fills it with the accent; .tag-dashed is "planned".
+     .panel        the card edge: 1px --color-border-card, 6px corner. Shape only (no fill, no padding), so a page
+                   chooses its own surface. components.css's .card carries the same two declarations (a test holds
+                   them equal).
+     .icon-frame   a small framed square for an icon or an index number: accent hairline, 3px corner.
+     .menu-toggle  the square hamburger button: tap-target size, hairline edge, 3px corner.
+     .action       a link or button that looks like a button: 3px corner, tap-target height. .action-primary is the
+                   accent fill, .action-outline the edged one. A big main call-to-action adds .btn-bevel.
+   The live dot is .status-live-dot (above), the big button shape is .btn-bevel (below). */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-2);
+  border: var(--border-hairline) solid var(--tag-edge, var(--color-border));
+  border-radius: var(--radius-sm);
+  color: var(--tag-ink, var(--color-text-secondary));
+  font-family: var(--font-mono);
+  font-size: var(--text-3xs);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.tag-solid {
+  --tag-ink: var(--color-accent-contrast);
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+}
+
+.tag-dashed {
+  border-style: dashed;
+}
+
+.panel {
+  border: var(--border-hairline) solid var(--color-border-card);
+  border-radius: var(--radius-md);
+}
+
+.icon-frame {
+  display: grid;
+  place-items: center;
+  border: var(--border-hairline) solid var(--frame-edge, var(--color-accent));
+  border-radius: var(--radius-sm);
+  color: var(--frame-ink, var(--color-accent));
+}
+
+.menu-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap-target-min);
+  height: var(--tap-target-min);
+  padding: 0;
+  border: var(--border-hairline) solid var(--color-border-input);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tap-target-min);
+  padding: var(--space-2) var(--space-4);
+  border: var(--border-hairline) solid transparent;
+  border-radius: var(--radius-sm);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--text-sm);
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.action-primary {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+}
+
+.action-primary:hover {
+  background: var(--color-accent-hover);
+}
+
+.action-outline {
+  background: transparent;
+  color: var(--color-text);
+  border-color: var(--color-border-input);
+}
+
+.action-outline:hover {
+  border-color: var(--color-accent);
+}
+
 /* Legacy corner cut, kept for LARGE DECORATIVE PANELS only (the random selector's board frame). A clip-path cuts
    off the outside focus ring, so never put it on anything focusable: a big button is `.btn-bevel`, a small
    element takes `--radius-sm`. */

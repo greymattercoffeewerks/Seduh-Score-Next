@@ -276,21 +276,6 @@ const ALLOWLIST = [
     ['1s', 'step-start'],
     'stepped timer blink (DESIGN.md motion exceptions)',
   ),
-  // ---- colour ----
-  ...allow(
-    'src/marketing/landing.css',
-    'colour',
-    '.petrol-action-outline',
-    ['rgba(238, 242, 241, 0.5)'],
-    'hairline tint #eef2f1: no token equals it (between --clr-petrol-50 and -100); left as is rather than shift the landing look. Add a token to retire it',
-  ),
-  ...allow(
-    'src/marketing/landing.css',
-    'colour',
-    '.petrol-stat-strip',
-    ['rgba(238, 242, 241, 0.24)'],
-    'hairline tint #eef2f1: no token equals it (between --clr-petrol-50 and -100); left as is rather than shift the landing look. Add a token to retire it',
-  ),
 ];
 
 const keyOf = (v) => `${v.file} | ${v.kind} | ${v.selector} | ${v.literal}`;
@@ -320,7 +305,6 @@ function scan() {
 }
 
 const { sources, htmlFiles, violations } = scan();
-console.log(violations.map((v) => `${keyOf(v)}`).join(String.fromCharCode(10)));
 
 describe('Petrol token drift guard', () => {
   it('scans the stylesheets (a vacuous scan would pass anything)', () => {
@@ -358,6 +342,172 @@ describe('Petrol token drift guard', () => {
     }
     for (const [key, count] of budget)
       expect(seen.get(key) ?? 0, `stale or changed ALLOWLIST entry: ${key}`).toBe(count);
+  });
+});
+
+// ---- public pages: shared primitives, not hand-built shapes ----
+//
+// The public pages (landing, pricing, tour, trust, results, community hub, header, footer) once built their own tags,
+// cards, toggles and buttons, so a Petrol change to the shared layer restyled the console and left them behind (a
+// "BASIC FREE" tag stayed square). They now use the primitives in tokens/base.css (.tag, .panel, .icon-frame,
+// .menu-toggle, .action, .status-live-dot, .btn-bevel). This is a HEURISTIC, not a CSS parser; it reads each public
+// stylesheet rule by rule and fails on two shapes:
+//   no-corner         a rule that paints a box (a `border` shorthand with a line style, or a `background` that is
+//                     not none/transparent) and sets no border-radius. The corner may come from the markup instead:
+//                     a class the page's JS always writes in the same string as a shared shape class
+//                     (`pricing-card panel`) is shaped by it. A radius in a sibling CSS rule does not count.
+//   local-primitive   a rule that paints and whose last class is named like a shared primitive (-tag, -badge, -chip,
+//                     -pill, -dot, -toggle, -mark): that is a page-local copy of .tag / .status-live-dot /
+//                     .menu-toggle / .icon-frame. Use the shared class and set --tag-edge / --frame-edge to recolour.
+// Rules for hover/focus/active states, pseudo-elements and `border: 0|none` are not boxes of their own and are skipped.
+// The SQUARE allowlist pins file + selector chain + kind, with a reason, and is exact in both directions (an entry
+// that stops matching fails). Full-bleed bands, the header bar, the ticker and edge-to-edge rows stay square on
+// purpose (DESIGN.md, "Public pages"): a rounded corner on something that touches both screen edges reads as a bug.
+
+const PUBLIC_CSS = (file) =>
+  file.startsWith('src/marketing/') || file === 'src/community/communityHub.css';
+const PAINTS_BORDER = /^border$/;
+const SHAPE_CLASSES = new Set(['tag', 'panel', 'icon-frame', 'menu-toggle', 'action', 'btn-bevel']);
+const SHARED_NAME = /(?:^|-)(?:tag|badge|chip|pill|dot|toggle|mark)$/;
+
+function paintedBoxes(css) {
+  const rules = new Map();
+  for (const d of declarations(css)) {
+    if (!rules.has(d.selector)) rules.set(d.selector, []);
+    rules.get(d.selector).push(d);
+  }
+  const found = [];
+  for (const [selector, decls] of rules) {
+    const last = selector.split('>').pop().trim();
+    if (selector.includes('@keyframes') || /::|:hover|:focus|:active|:disabled|:checked/.test(last))
+      continue;
+    if (selector.includes('@media print')) continue;
+    const paints = decls.some(({ prop, value }) => {
+      if (PAINTS_BORDER.test(prop))
+        return /\b(solid|dashed|dotted|double)\b/.test(value) && !/^(0|none)\b/.test(value);
+      if (prop === 'background' || prop === 'background-color')
+        return !/^(none|transparent|inherit|initial|unset)\b/.test(value);
+      return false;
+    });
+    if (!paints) continue;
+    const hasRadius = decls.some(({ prop }) => /^border(-.*)?-radius$/.test(prop));
+    const lastClass =
+      /\.([\w-]+)(?![\w-]*\()[^.\s]*$/.exec(last.replace(/\[[^\]]*\]/g, ''))?.[1] ?? '';
+    if (SHARED_NAME.test(lastClass)) found.push({ selector, kind: 'local-primitive', lastClass });
+    else if (!hasRadius) found.push({ selector, kind: 'no-corner', lastClass });
+  }
+  return found;
+}
+
+const SQUARE = (file, kind, selectors, reason) =>
+  selectors.map((selector) => ({ file, kind, selector, reason }));
+const BAND =
+  'full-bleed page band or bar: touches both screen edges, stays square (DESIGN.md "Public pages")';
+const ROW =
+  'edge-to-edge row or divider inside a band, not a free-standing box (DESIGN.md "Public pages")';
+const PAGE_ROOT = 'the page root fills the viewport: a background, not a box';
+const DECOR = 'decorative or atmospheric fill, not a UI element (DESIGN.md "Public pages")';
+
+const LANDING = 'src/marketing/landing.css';
+const SQUARE_ALLOWLIST = [
+  ...SQUARE(LANDING, 'no-corner', ['.petrol-page'], PAGE_ROOT),
+  ...SQUARE('src/marketing/pricing.css', 'no-corner', ['.pricing-page'], PAGE_ROOT),
+  ...SQUARE('src/marketing/results.css', 'no-corner', ['.results-page'], PAGE_ROOT),
+  ...SQUARE('src/marketing/tour.css', 'no-corner', ['.tour-page'], PAGE_ROOT),
+  ...SQUARE('src/marketing/trust.css', 'no-corner', ['.trust-page'], PAGE_ROOT),
+  ...SQUARE('src/community/communityHub.css', 'no-corner', ['.community-hub'], PAGE_ROOT),
+  ...SQUARE(
+    LANDING,
+    'no-corner',
+    [
+      '.petrol-nav',
+      '.petrol-nav-mobile-panel',
+      '.petrol-ticker',
+      '.petrol-band',
+      '.petrol-live-bar',
+      '.petrol-cta-copy',
+      '@media (max-width: 640px) > .petrol-story-copy',
+    ],
+    BAND,
+  ),
+  ...SQUARE(LANDING, 'no-corner', ['.petrol-format-row-dimmed:nth-of-type(even)'], ROW),
+  ...SQUARE(LANDING, 'no-corner', ['.petrol-hero-scrim', '.petrol-cta-accent'], DECOR),
+  ...SQUARE(
+    'src/marketing/publicHeader.css',
+    'no-corner',
+    ['.public-header', '.public-header-mobile-panel'],
+    BAND,
+  ),
+  ...SQUARE(
+    'src/marketing/publicHeader.css',
+    'no-corner',
+    ['.public-footer-flag-icon'],
+    'a flag glyph, 18x12: a fixed-proportion image, not a UI box',
+  ),
+  ...SQUARE(
+    'src/marketing/results.css',
+    'no-corner',
+    ['.results-sheet-paper'],
+    'the printable results sheet is a sheet of paper, not a UI box (it is designed for print)',
+  ),
+];
+
+const squareKey = (v) => `${v.file} | ${v.kind} | ${v.selector}`;
+
+// Every class that some public-page script writes in the same string as a shared shape class.
+function classesShapedByMarkup() {
+  const shaped = new Set();
+  const files = [
+    ...walk('src/marketing', (name) => name.endsWith('.js') && !name.endsWith('.test.js')),
+    'src/community/communityHub.js',
+  ];
+  for (const file of files) {
+    const js = readFileSync(file, 'utf8');
+    for (const m of js.matchAll(/(['"`])((?:\\.|(?!\1)[^\\\n])*)\1/g)) {
+      const tokens = m[2].split(/\s+|\$\{[^}]*\}/).filter(Boolean);
+      if (!tokens.some((t) => SHAPE_CLASSES.has(t))) continue;
+      for (const t of tokens) shaped.add(t);
+    }
+  }
+  return shaped;
+}
+
+function scanPublicShapes() {
+  const out = [];
+  const shaped = classesShapedByMarkup();
+  for (const { file, css } of sources) {
+    if (!PUBLIC_CSS(file)) continue;
+    for (const { lastClass, ...box } of paintedBoxes(css)) {
+      if (box.kind === 'no-corner' && shaped.has(lastClass)) continue;
+      out.push({ file, ...box });
+    }
+  }
+  return out;
+}
+
+describe('public pages build on the shared primitives', () => {
+  const found = scanPublicShapes();
+  console.log(found.map(squareKey).join('\n'));
+  it('scans the public stylesheets', () => {
+    expect(new Set(found.map((f) => f.file)).size).toBeGreaterThan(2);
+  });
+  it('no public rule paints a square box or re-implements a shared primitive, except the allowlist', () => {
+    const budget = new Set(SQUARE_ALLOWLIST.map(squareKey));
+    const unlisted = found.filter((v) => !budget.has(squareKey(v)));
+    expect(
+      unlisted.map((v) => `${v.file}  [${v.kind}]  ${v.selector}`),
+      'Give it a token radius, or use the shared .tag/.panel/.icon-frame/.menu-toggle/.action/.status-live-dot, or add a SQUARE_ALLOWLIST entry with a reason',
+    ).toEqual([]);
+  });
+  it('every SQUARE_ALLOWLIST entry has a reason and still matches', () => {
+    const seen = new Set(found.map(squareKey));
+    for (const entry of SQUARE_ALLOWLIST) {
+      expect(['no-corner', 'local-primitive']).toContain(entry.kind);
+      expect(entry.reason.length, `${squareKey(entry)} needs a reason`).toBeGreaterThan(10);
+      expect(seen.has(squareKey(entry)), `stale SQUARE_ALLOWLIST entry: ${squareKey(entry)}`).toBe(
+        true,
+      );
+    }
   });
 });
 
@@ -405,6 +555,20 @@ describe('drift rules (the reader and the four checks, on synthetic CSS)', () =>
       ['clip-path', 'polygon()'],
     ]);
     expect(flag('.sr{clip:rect(0,0,0,0);clip-path:inset(50%)}')).toEqual([]);
+  });
+  it('public shapes: flags a square painted box and a local copy of a primitive, not a shaped or stateful rule', () => {
+    const kinds = (css) => paintedBoxes(css).map((b) => `${b.kind}:${b.lastClass}`);
+    expect(kinds('.x-card{border:1px solid var(--c);background:var(--s)}')).toEqual([
+      'no-corner:x-card',
+    ]);
+    expect(kinds('.x-tag{border:1px solid var(--c)}')).toEqual(['local-primitive:x-tag']);
+    expect(kinds('.x-live-dot{background:var(--a);border-radius:var(--radius-sm)}')).toEqual([
+      'local-primitive:x-live-dot',
+    ]);
+    expect(kinds('.x-card{border:1px solid var(--c);border-radius:var(--radius-md)}')).toEqual([]);
+    expect(kinds('.x-card:hover{background:var(--s)} .x::before{background:red}')).toEqual([]);
+    expect(kinds('.x{border:0;background:none;border-bottom:1px solid var(--c)}')).toEqual([]);
+    expect(kinds('@media print{.x{background:var(--c)}}')).toEqual([]);
   });
   it('reads inline <style> blocks and ignores commented-out ones', () => {
     expect(

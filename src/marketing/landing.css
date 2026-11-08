@@ -187,18 +187,10 @@ a {
 .petrol-nav-link:hover {
   color: var(--color-accent);
 }
+/* The button itself is the shared .menu-toggle (tokens/base.css); only its place in this bar is here. */
 .petrol-nav-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--tap-target-min);
-  height: var(--tap-target-min);
   margin-left: auto;
   flex-shrink: 0;
-  background: transparent;
-  border: var(--border-hairline) solid color-mix(in srgb, var(--clr-white) 20%, transparent);
-  color: var(--color-text);
-  cursor: pointer;
 }
 .petrol-nav-toggle-icon-close {
   display: none;
@@ -251,41 +243,10 @@ a {
 }
 
 /* ---- Buttons ---- */
+/* The shape, colours and hover are the shared .action / .action-primary / .action-outline (tokens/base.css); the
+   primary one also takes .btn-bevel. Only this page's larger padding is local. */
 .petrol-action {
-  border-radius: var(--radius-sm);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--tap-target-min);
   padding: 11px 20px;
-  font-weight: var(--font-weight-semibold);
-  font-size: var(--text-sm);
-}
-.petrol-action-primary {
-  background: var(--color-accent);
-  color: var(--color-accent-contrast);
-  transition: background var(--dur-base) var(--ease-out);
-}
-@media (prefers-reduced-motion: reduce) {
-  .petrol-action-primary {
-    transition: none;
-  }
-}
-.petrol-action-primary:hover {
-  background: var(--color-accent-hover);
-}
-.petrol-action-outline {
-  border: var(--border-hairline) solid rgba(238, 242, 241, 0.5);
-  color: var(--color-text);
-  transition: border-color var(--dur-base) var(--ease-out);
-}
-@media (prefers-reduced-motion: reduce) {
-  .petrol-action-outline {
-    transition: none;
-  }
-}
-.petrol-action-outline:hover {
-  border-color: var(--color-accent);
 }
 
 /* ---- Hero ---- */
@@ -373,7 +334,7 @@ a {
   grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
   max-width: 46rem;
   margin-top: 44px;
-  border-top: var(--border-hairline) solid rgba(238, 242, 241, 0.24);
+  border-top: var(--border-hairline) solid color-mix(in srgb, var(--clr-white) 24%, transparent);
 }
 .petrol-stat {
   padding: 14px 16px 0 0;
@@ -596,21 +557,7 @@ a {
   gap: 7px;
   white-space: nowrap;
 }
-.petrol-tag {
-  padding: 4px 10px;
-  border: var(--border-hairline) solid color-mix(in srgb, var(--clr-white) 16%, transparent);
-  font-family: var(--font-mono);
-  font-size: var(--text-3xs);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--color-text-secondary);
-  white-space: nowrap;
-}
-.petrol-tag-solid {
-  border: none;
-  background: var(--color-accent);
-  color: var(--color-accent-contrast);
-}
+/* Tags are the shared .tag / .tag-solid (tokens/base.css). */
 /* Phones: the tier pill moves up beside the row number instead of taking its
    own column, so the name and description get the full row width (at 360px the
    old third column squeezed the body copy into a ~125px strip). */
@@ -718,7 +665,9 @@ a {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   margin-top: 36px;
-  border: var(--border-hairline) solid color-mix(in srgb, var(--clr-white) 12%, transparent);
+  /* The edge and 6px corner are the shared .panel (set in landingScreen.js); the clip keeps the featured
+     column's 3px top rule inside the rounded corners. */
+  overflow: hidden;
 }
 .petrol-plate-col {
   padding: 28px 26px;
@@ -866,10 +815,8 @@ a {
   max-width: 1360px;
   margin: 0 auto;
 }
+/* The dot is the shared .status-live-dot (tokens/base.css). */
 .petrol-live-bar-dot {
-  width: 8px;
-  height: 8px;
-  background: var(--color-accent);
   flex: none;
 }
 .petrol-live-bar-text {

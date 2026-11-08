@@ -44,6 +44,8 @@
   margin: 0 0 var(--space-3) 0;
 }
 
+/* Keep this edge and corner identical to .panel in base.css (the shared card shape the public pages use);
+   sharedPrimitives.test.js holds them equal. */
 /* Petrol V2: a hairline in --color-border-card (3:1 or better against the
    canvas in both modes), not the 2px near-black frame. The frame did the
    container-separation work against a one-step canvas/surface gap

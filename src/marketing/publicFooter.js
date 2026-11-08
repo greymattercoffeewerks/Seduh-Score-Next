@@ -58,7 +58,7 @@ export function buildPublicFooter({ companionHref, companionText, currentSlug })
           attrs: { href: companionHref },
         }),
         el('a', {
-          className: 'public-footer-version',
+          className: 'public-footer-version tag',
           text: `v${APP_VERSION}`,
           attrs: { href: '/bts/' },
         }),

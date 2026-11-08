@@ -34,9 +34,7 @@ body {
 }
 .tour-brand,
 .tour-nav a,
-.tour-primary-link,
 .tour-community-card,
-.tour-community-link,
 .tour-footer a {
   color: inherit;
   text-decoration: none;
@@ -140,14 +138,11 @@ body {
 .tour-hero-status {
   margin-top: var(--space-8);
 }
+/* The frame (accent edge, 3px corner, centred) is the shared .icon-frame (tokens/base.css); only the size is here. */
 .tour-status-mark,
 .tour-section-label > span:first-child {
-  display: grid;
   width: 2rem;
   aspect-ratio: 1;
-  place-items: center;
-  border: var(--border-hairline) solid var(--color-accent);
-  color: var(--color-accent);
 }
 .tour-cup,
 .tour-planned,
@@ -173,14 +168,11 @@ body {
 .tour-cup-solo {
   margin-top: clamp(2.5rem, 5vw, 4.5rem);
 }
+/* The frame is the shared .icon-frame (tokens/base.css); only the size and spacing are here. */
 .tour-icon {
-  display: grid;
   width: 4rem;
   aspect-ratio: 1;
-  place-items: center;
   margin-bottom: var(--space-6);
-  border: var(--border-hairline) solid var(--color-accent);
-  color: var(--color-accent);
 }
 .tour-icon svg {
   width: 2.25rem;
@@ -207,27 +199,19 @@ body {
   margin: var(--space-4) 0 0;
   font-size: var(--text-sm);
 }
+/* Shape, fill and hover are the shared .action .action-primary (tokens/base.css, set in tourScreen.js); the
+   layout and the mono small caps are this page's. */
 .tour-primary-link,
 .tour-community-link {
-  border-radius: var(--radius-sm);
-  display: inline-flex;
-  align-items: center;
   justify-content: space-between;
   gap: var(--space-5);
-  min-height: var(--tap-target-min);
   margin-top: var(--space-6);
   padding: var(--space-3) var(--space-4);
-  background: var(--color-accent);
-  color: var(--color-accent-contrast);
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   font-weight: var(--font-weight-bold);
   letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
-}
-.tour-primary-link:hover,
-.tour-community-link:hover {
-  background: var(--color-accent-hover);
 }
 .tour-arrow {
   font-size: var(--text-lg);
@@ -236,7 +220,8 @@ body {
 .tour-cup-media {
   position: relative;
   min-height: 28rem;
-  border: var(--border-hairline) solid var(--color-border);
+  /* the edge and 6px corner are the shared .panel (tourScreen.js); the clip rounds the photo with it */
+  overflow: hidden;
   background: var(--color-surface);
 }
 .tour-cup-media img {
@@ -252,7 +237,8 @@ body {
   bottom: clamp(1rem, 3vw, 2rem);
   width: min(16rem, calc(100% - 2rem));
   padding: var(--space-4);
-  border: var(--border-hairline) solid var(--color-accent);
+  /* shared .panel shape (tourScreen.js); the accent edge is this board's own */
+  border-color: var(--color-accent);
   background: var(--color-canvas);
   color: var(--color-text);
 }
@@ -267,17 +253,17 @@ body {
   gap: var(--space-2);
   margin-top: var(--space-4);
 }
+/* Each cup is a shared .icon-frame (set in tourScreen.js), recoloured through its two variables. */
 .tour-set-cups span {
-  display: grid;
+  --frame-edge: var(--color-border);
+  --frame-ink: var(--color-text);
   aspect-ratio: 1;
-  place-items: center;
-  border: var(--border-hairline) solid var(--color-border);
   font-family: var(--font-display);
   font-size: var(--text-xl);
 }
 .tour-set-cups span:nth-child(2) {
-  border-color: var(--color-accent);
-  color: var(--color-accent);
+  --frame-edge: var(--color-accent);
+  --frame-ink: var(--color-accent);
 }
 .tour-board-result {
   display: grid;
@@ -323,7 +309,6 @@ body {
 .tour-planned-card {
   min-height: 22rem;
   padding: var(--space-5);
-  border: var(--border-hairline) solid var(--color-border);
   background: var(--color-surface);
   opacity: 0.68;
 }
@@ -337,9 +322,9 @@ body {
   font-size: var(--text-2xs);
 }
 .tour-icon-muted {
+  --frame-edge: var(--color-border);
+  --frame-ink: var(--color-text-secondary);
   margin: auto 0 var(--space-6);
-  border-color: var(--color-border);
-  color: var(--color-text-secondary);
 }
 .tour-planned-card h3,
 .tour-community-card h3 {
@@ -361,7 +346,6 @@ body {
   display: flex;
   flex-direction: column;
   padding: var(--space-5);
-  border: var(--border-hairline) solid var(--color-border);
   background: var(--color-surface);
   transition:
     border-color var(--dur-fast) var(--ease-out),

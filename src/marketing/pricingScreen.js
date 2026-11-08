@@ -39,7 +39,7 @@ function tierCard(tier) {
   return el(
     'article',
     {
-      className: `pricing-card${tier.featured ? ' pricing-card-featured' : ''}`,
+      className: `pricing-card panel${tier.featured ? ' pricing-card-featured' : ''}`,
       attrs: { 'aria-labelledby': headingId },
     },
     [
@@ -47,10 +47,17 @@ function tierCard(tier) {
       el('p', { className: 'pricing-tier-price tabular-nums' }, priceLine),
       el('p', { className: 'pricing-tier-summary', text: tier.summary }),
       el('p', { className: 'pricing-tier-note', text: tier.note }),
-      el('a', { className: 'pricing-cta btn-bevel', attrs: { href: tier.cta.href } }, [
-        document.createTextNode(tier.cta.text),
-        el('span', { className: 'sr-only', text: ` — ${tier.name}` }),
-      ]),
+      el(
+        'a',
+        {
+          className: 'pricing-cta action action-primary btn-bevel',
+          attrs: { href: tier.cta.href },
+        },
+        [
+          document.createTextNode(tier.cta.text),
+          el('span', { className: 'sr-only', text: ` — ${tier.name}` }),
+        ],
+      ),
     ],
   );
 }
@@ -85,7 +92,10 @@ function stateCell(cell, tier) {
       text: GLYPHS[cell.state],
       attrs: { 'aria-hidden': 'true' },
     }),
-    el('span', { className: 'pricing-cell-word', text: STATE_WORDS[cell.state] }),
+    el('span', {
+      className: `pricing-cell-word${cell.state === 'soon' ? ' tag tag-dashed' : ''}`,
+      text: STATE_WORDS[cell.state],
+    }),
   );
   return td;
 }
@@ -95,7 +105,7 @@ function featureRow([name, description, cells]) {
   if (description) {
     nameBlock.push(el('span', { className: 'pricing-feature-desc', text: description }));
   }
-  return el('tr', { className: 'pricing-row', attrs: { role: 'row' } }, [
+  return el('tr', { className: 'pricing-row panel', attrs: { role: 'row' } }, [
     el(
       'th',
       { className: 'pricing-feature', attrs: { scope: 'row', role: 'rowheader' } },
@@ -184,7 +194,7 @@ function buildClosing() {
       el('h2', { id: 'pricing-closing-title', text: 'Not sure which tier fits?' }),
       el('p', { text: 'Tell us about your event and we will point you at the right one.' }),
       el('a', {
-        className: 'pricing-cta btn-bevel',
+        className: 'pricing-cta action action-primary btn-bevel',
         attrs: { href: '/contact/' },
         text: 'Get in touch',
       }),

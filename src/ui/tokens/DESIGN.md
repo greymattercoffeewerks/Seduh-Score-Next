@@ -262,7 +262,42 @@ specific to Petrol:
   celebration (pop, confetti, burst), the splash intro, the landing hero fade (1.1s), stepped animations (Random
   Selector flip, timer blink) and bts's tactile `--ease-out-back`.
 
+## Public pages: shared primitives
+
+The public pages (landing, pricing, tour, trust, results, community hub, the public header and footer) once drew
+their own tags, cards, toggles, buttons and live dots, so Petrol V2 reached the console and skipped them (a "BASIC
+FREE" tag stayed square). They now draw from **one** definition each, in `base.css`, the file `index.css` loads on
+every page. Not `components.css`: that file is not on the public pages on purpose (its header says why: they style
+their own `.form-field` and `.screen-feedback` names), and its `.btn` carries the console's busy and press states.
+
+| Class                             | Is                                                          | Corner | Used by                                                                                            |
+| --------------------------------- | ----------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------- |
+| `.tag` `.tag-solid` `.tag-dashed` | small mono label; `--tag-edge` / `--tag-ink` recolour it    | 3px    | landing tier tags, pricing "Planned", community status, footer version                             |
+| `.panel`                          | the card edge, shape only (1px `--color-border-card`)       | 6px    | pricing cards and rows, tour cards/photo/board, community cards, results card/table, landing plate |
+| `.icon-frame`                     | framed square for an icon or index; `--frame-edge` / `-ink` | 3px    | tour numbers, icons and cups, community note mark and instrument                                   |
+| `.menu-toggle`                    | hamburger button, 44px                                      | 3px    | landing nav and the public header                                                                  |
+| `.action` `-primary` `-outline`   | button-shaped link, accent fill or edged                    | 3px    | landing actions, header "Start free", pricing/tour links, results sheet button                     |
+| `.status-live-dot`                | the live blip (already shared)                              | 3px    | landing live bar, public header                                                                    |
+| `.btn-bevel`                      | the big call-to-action shape (already shared)               | bevel  | with `.action-primary` on the main CTAs                                                            |
+
+`.card` (components.css) and `.panel` carry the same two declarations, `border` and `border-radius`; a test holds them
+equal, so a card and a pricing card cannot drift. A page adds only layout and, where it must, a variable
+(`--tag-edge: var(--color-success)`); it never restates the border, fill or corner.
+
+**Stays square, on purpose:** full-bleed page bands and roots, the header bar and mobile menu panel, the landing ticker,
+live bar and edge-to-edge format rows, the printable results sheet, a flag glyph and decorative fills. A rounded
+corner on something that touches both screen edges reads as a bug, not a style. These are the `SQUARE_ALLOWLIST` in
+`tokenDrift.test.js`, each with its reason.
+
 ## Drift guard
+
+A second check covers the public pages (`src/marketing/*.css`, `src/community/communityHub.css`). It is a heuristic,
+not a parser: a rule that paints a box (a `border` shorthand with a line style, or a `background`) and sets no
+`border-radius` fails unless the page's JS writes that class beside a shared shape class (`pricing-card panel`), and a
+painting rule whose last class is named like a primitive (`-tag`, `-badge`, `-chip`, `-pill`, `-dot`, `-toggle`,
+`-mark`) fails as a local copy. State rules (`:hover`, `:focus`), pseudo-elements and `border: 0` are skipped. Square
+things go in `SQUARE_ALLOWLIST` (file, selector chain, kind, reason; exact both ways).
+`src/marketing/sharedPrimitives.test.js` checks the markup really carries the shared classes.
 
 `src/ui/tokens/tokenDrift.test.js` fails CI when a stylesheet outside this folder (every `*.css` under `src/`, and
 the inline `<style>` of HTML pages; not `public/bts/index.html`, `design/`, or `*.preview.html` dev harnesses)

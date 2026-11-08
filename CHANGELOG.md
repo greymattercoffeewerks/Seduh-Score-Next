@@ -8,6 +8,20 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Petrol V2 public pages · 2026-11-09
+
+**Task:** make the public pages draw from the same Petrol V2 layer as the console. Branch `claude/petrol-v2-public-16c90b`, cut from the drift guard (0dc2e3f), not merged. No version bump.
+
+- **Shared primitives** in `base.css` (every page loads it): `.tag` (+ `-solid`, `-dashed`, `--tag-edge`/`--tag-ink`), `.panel` (card edge, 6px), `.icon-frame` (3px), `.menu-toggle`, `.action` (+ `-primary`, `-outline`); the live dot is the existing `.status-live-dot` and the big CTA the existing `.btn-bevel`. Not `components.css`, for the reason its header gives; `.card` keeps the same edge and corner as `.panel` and a test holds them equal.
+- **Migrated:** landing (tags, nav toggle, actions, pricing plate, live-bar dot), public header and footer (toggle, Start free, live dot, version chip), pricing (cards, rows, CTAs, "Planned" word), tour (status marks, icons, cups, photo, board, cards, links), results (latest card, table, sheet button; record rows get a 3px corner), community hub (cards, status, instruments, note mark). Page rules lost their copies of border, fill, corner and button shape. The two `rgba(238,242,241,a)` colour allowlist entries are gone (outline uses `--color-border-input`, the strip a `color-mix`). Dead CSS deleted: `.results-sample-banner` and `.results-sample-badge` (no markup).
+- **Visible changes:** card and tag edges use the card-edge token (a little lighter than the old soft border on stage), tags are 11px mono caps with a 3px corner, cards and the landing plate are 6px, the header and landing buttons share one hover. Layout unchanged.
+- **Stays square:** full-bleed roots and bands, header bar and mobile panel, ticker, live bar, edge-to-edge rows, the printable results sheet, a flag glyph, decorative fills (`SQUARE_ALLOWLIST`, DESIGN.md "Public pages").
+- **Guard:** `tokenDrift.test.js` fails a painted box with no token radius (unless the JS pairs the class with a shared shape class) and a page-local `-tag`/`-badge`/`-dot`/`-toggle` copy; the allowlist is exact both ways. New `src/marketing/sharedPrimitives.test.js` checks the markup carries the shared classes and the primitives are defined once.
+- **Checked** at 360px then 1280px on landing, pricing, tour, community and privacy: no horizontal overflow, 3px/6px/bevel corners as computed, keyboard focus ring visible. The results page shows only its error state without a Supabase `.env`, so its data states are tests-only.
+- **Reviews.** Pending.
+
+---
+
 ## Petrol V2 drift guard · 2026-11-08
 
 **Task:** the last Petrol V2 phase, on branch `claude/petrol-v2-guard-cf745e` (cut from the combined `claude/petrol-v2-2a4279`, 85cae05), not merged. No version bump.

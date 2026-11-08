@@ -114,9 +114,9 @@ function navLink(text, href) {
 }
 
 function actionLink(text, { primary = false, outline = false, href = '/app/#/events' } = {}) {
-  const classes = ['petrol-action'];
-  if (primary) classes.push('petrol-action-primary', 'btn-bevel');
-  if (outline) classes.push('petrol-action-outline');
+  const classes = ['petrol-action', 'action'];
+  if (primary) classes.push('action-primary', 'btn-bevel');
+  if (outline) classes.push('action-outline');
   return el('a', { className: classes.join(' '), text, attrs: { href } });
 }
 
@@ -163,7 +163,7 @@ function buildNav() {
   ]);
 
   const toggle = el('button', {
-    className: 'petrol-nav-toggle',
+    className: 'petrol-nav-toggle menu-toggle',
     attrs: {
       type: 'button',
       'aria-expanded': 'false',
@@ -417,7 +417,7 @@ function problemSection() {
 
 function tag(text, { solid = false } = {}) {
   return el('span', {
-    className: `petrol-tag${solid ? ' petrol-tag-solid' : ''}`,
+    className: `tag${solid ? ' tag-solid' : ''}`,
     text,
   });
 }
@@ -620,7 +620,10 @@ function liveBar({ rows, total }) {
   const [first, ...others] = live;
   const named = (row) => (row.orgName ? `${row.eventName} by ${row.orgName}` : row.eventName);
   const main = el('div', { className: 'petrol-live-bar-main' }, [
-    el('span', { className: 'petrol-live-bar-dot', attrs: { 'aria-hidden': 'true' } }),
+    el('span', {
+      className: 'petrol-live-bar-dot status-live-dot',
+      attrs: { 'aria-hidden': 'true' },
+    }),
     el('p', { className: 'petrol-live-bar-text' }, [
       el('strong', { className: 'petrol-live-bar-label', text: 'Live now:' }),
       document.createTextNode(` ${named(first)}`),
@@ -696,7 +699,7 @@ function pricingSection() {
   const inner = el('div', { className: 'petrol-wrap', attrs: { id: 'pricing' } }, [
     el('p', { className: 'petrol-eyebrow', text: '03 · Pricing, stated plainly' }),
     el('h2', { className: 'petrol-heading', text: 'Three tiers. Start free.' }),
-    el('div', { className: 'petrol-plate' }, [
+    el('div', { className: 'petrol-plate panel' }, [
       pricingColumn(
         TIERS[0].name,
         TIERS[0].price,

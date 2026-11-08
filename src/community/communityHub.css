@@ -174,13 +174,10 @@ body {
   color: var(--color-text-secondary);
 }
 
+/* The frame is the shared .icon-frame (tokens/base.css, set in communityHub.js); only the size is here. */
 .community-note-mark {
-  display: grid;
   width: 2rem;
   aspect-ratio: 1;
-  place-items: center;
-  border: var(--border-hairline) solid var(--color-accent);
-  color: var(--color-accent);
 }
 
 .community-shelf {
@@ -218,7 +215,7 @@ body {
   display: flex;
   flex-direction: column;
   padding: clamp(1.25rem, 3vw, 2rem);
-  border: var(--border-hairline) solid var(--color-border);
+  /* the edge and 6px corner are the shared .panel (communityHub.js) */
   background: var(--color-surface);
   transition:
     border-color var(--dur-fast) var(--ease-out),
@@ -244,27 +241,25 @@ body {
   color: var(--color-accent);
 }
 
+/* The chip is the shared .tag (tokens/base.css, set in communityHub.js), recoloured to the success green. */
 .community-tool-status {
-  padding: var(--space-1) var(--space-2);
-  border: var(--border-hairline) solid var(--color-success);
-  color: var(--color-success);
+  --tag-edge: var(--color-success);
+  --tag-ink: var(--color-success);
   font-size: var(--text-3xs);
   letter-spacing: 0.1em;
 }
 
 .community-instrument {
+  /* the frame is the shared .icon-frame (communityHub.js), with the quiet edge */
+  --frame-edge: var(--color-border);
   width: 8.75rem;
   height: 8.75rem;
-  display: grid;
-  place-items: center;
   margin: auto 0 var(--space-6);
-  border: var(--border-hairline) solid var(--color-border);
-  color: var(--color-accent);
   transform: rotate(-5deg);
 }
 
 .community-tool-card:nth-child(2) .community-instrument {
-  color: var(--color-gold);
+  --frame-ink: var(--color-gold);
   transform: rotate(5deg);
 }
 
