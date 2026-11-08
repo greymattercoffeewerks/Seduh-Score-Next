@@ -48,7 +48,7 @@ export function buildPublicHeader({ active }) {
     el('div', { className: 'public-header-mobile-links' }, [
       ...mobileLinks,
       el('a', {
-        className: 'public-header-action cut-sm',
+        className: 'public-header-action',
         text: 'Start free',
         attrs: { href: '/#' },
       }),
@@ -104,7 +104,7 @@ export function buildPublicHeader({ active }) {
       el('div', { className: 'public-header-desktop' }, [
         el('div', { className: 'public-header-links' }, links),
         el('a', {
-          className: 'public-header-action cut-sm',
+          className: 'public-header-action',
           text: 'Start free',
           attrs: { href: '/#' },
         }),

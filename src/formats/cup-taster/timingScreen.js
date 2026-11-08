@@ -702,7 +702,7 @@ export async function mountTimingScreen(
       );
     } else if (data.heat.status === 'pending') {
       const startButton = el('button', {
-        className: 'btn btn-primary tap-target',
+        className: 'btn btn-primary btn-lg tap-target',
         text: 'Start heat',
       });
       // Starting a heat publishes this event to the venue screens (projector, phones, splash), replacing

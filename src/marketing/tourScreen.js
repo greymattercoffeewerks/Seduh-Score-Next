@@ -147,7 +147,7 @@ function buildCupTaster() {
             className: 'tour-note',
             text: 'Live in the organiser console. Sign in to set up and run an event.',
           }),
-          el('a', { className: 'tour-primary-link cut-sm', attrs: { href: '/app/#/events' } }, [
+          el('a', { className: 'tour-primary-link btn-bevel', attrs: { href: '/app/#/events' } }, [
             el('span', { text: 'Open Cup Taster' }),
             arrow(),
           ]),
@@ -198,7 +198,7 @@ function buildBtc() {
           className: 'tour-note',
           text: 'Live in the organiser console. Sign in to set up and run an event.',
         }),
-        el('a', { className: 'tour-primary-link cut-sm', attrs: { href: '/app/#/events' } }, [
+        el('a', { className: 'tour-primary-link btn-bevel', attrs: { href: '/app/#/events' } }, [
           el('span', { text: 'Open BTC' }),
           arrow(),
         ]),
@@ -234,7 +234,7 @@ function buildThrowdown() {
           className: 'tour-note',
           text: 'Live in the organiser console. Redemption and revival rounds are coming later as add-on modules.',
         }),
-        el('a', { className: 'tour-primary-link cut-sm', attrs: { href: '/app/#/events' } }, [
+        el('a', { className: 'tour-primary-link btn-bevel', attrs: { href: '/app/#/events' } }, [
           el('span', { text: 'Open Throwdown' }),
           arrow(),
         ]),

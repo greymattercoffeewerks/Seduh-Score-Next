@@ -94,6 +94,7 @@
   justify-content: center;
   min-height: var(--tap-target-min);
   padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-sm);
   background: var(--color-accent);
   color: var(--color-accent-contrast);
   font-size: var(--text-xs);

@@ -8,6 +8,18 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Petrol V2 P2: shared components · 2026-11-08
+
+**Task:** the second Petrol V2 phase, on branch `claude/petrol-v2-p2-335063` (cut from P1), not merged; the owner combines the phases.
+
+- **Bevel.** `.btn-bevel` (shape only, `base.css`, for CTAs that are not `.btn`) and `.btn .btn-primary .btn-lg` (`components.css`): `corner-shape: bevel round bevel round` inside `@supports`, asymmetric `border-radius` fallback, never `clip-path`. Applied to Start heat, Confirm heat, BTC Confirm match, the landing primary, pricing tier buttons, tour primary links, random selector DRAW ENTRY and KEEP RESULT, Brew Planner primary buttons.
+- **`.cut-*` retired** from buttons: `.cut-sm`/`.cut-md` and `--cut-sm/md` removed; `.cut-lg` kept for the random selector board frame only. The three focus-ring workarounds (pricing, random selector, Brew Planner) are deleted. Small marketing/tool buttons now take `--radius-sm`.
+- **States.** `.btn` hover/colour transitions (`--dur-fast`), press (`--dur-press`, 1px sink, darker fill), `[aria-busy='true']` bottom-edge line (static under reduced motion), `.screen-feedback` enters over `--dur-base` (keyframe, empty-region behaviour unchanged), `.is-selected` / `.selectable` (tint, 2px edge, check mark). Selected classes are not applied anywhere yet; candidates for P3: appShell and admin nav `aria-current`, Brew Planner step, heats list.
+- **Input edges.** New `--color-border-input` (petrol-400): 4.00:1 against the paper surface (3.38:1 canvas), 4.16:1 against the stage surface; was 2.09:1 (canvas) / 2.47:1 (surface).
+- **Reviews.** `code-reviewer`: 3 red, all fixed (`.btn-lg` rule duplicated in `base.css` failing `components.test.js`, `base.css` counted as a reliant sheet, corrupted check glyph). `ui-accessibility-reviewer`: no red; nit fixed (function name in comments); logged pre-existing: `.btn[aria-disabled]` opacity .6 dims a busy label to about 3:1. `module-boundary-checker` clean. Not verified: focus ring look on a bevel in a real browser, forced-colors. `kb-sync` not run.
+
+---
+
 ## Petrol V2 P1: design tokens · 2026-11-08
 
 **Task:** the first of three Petrol V2 phases (tokens, components, screens), on branch `claude/petrol-v2-2a4279`, not merged; the owner merges after every phase.

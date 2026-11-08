@@ -100,6 +100,8 @@
   /* Card edge (Petrol V2): at least 3:1 against the canvas (WCAG 1.4.11),
      unlike --color-border, which stays soft for dividers. */
   --color-border-card: var(--clr-petrol-400);
+  /* Form-control edges (WCAG 1.4.11, 3:1): same ramp step as the card edge, named for its role. */
+  --color-border-input: var(--clr-petrol-400);
 
   --color-text: var(--clr-petrol-950);
   --color-text-secondary: var(--clr-petrol-700);
@@ -140,6 +142,8 @@
   --color-border: var(--clr-petrol-700);
   --color-border-strong: var(--clr-petrol-50);
   --color-border-card: var(--clr-petrol-400);
+  /* Form-control edges (WCAG 1.4.11, 3:1): same ramp step as the card edge, named for its role. */
+  --color-border-input: var(--clr-petrol-400);
 
   --color-text: var(--clr-petrol-50);
   --color-text-secondary: var(--clr-petrol-300);

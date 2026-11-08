@@ -114,6 +114,7 @@ body {
   line-height: var(--leading-relaxed);
 }
 .pricing-cta {
+  border-radius: var(--radius-sm);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -131,12 +132,6 @@ body {
 }
 .pricing-cta:hover {
   background: var(--color-accent-hover);
-}
-/* .cut-sm clips the element, and clip-path clips the outside focus ring too, so the ring
-   is drawn inside the button in the dark text colour (10:1 on the teal). */
-.pricing-cta:focus-visible {
-  outline: 2px solid var(--color-accent-contrast);
-  outline-offset: -5px;
 }
 .pricing-footnote {
   margin: var(--space-5) 0 0;
