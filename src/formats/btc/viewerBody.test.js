@@ -80,7 +80,7 @@ describe('the cards', () => {
     const { container } = mounted(preliminaryPayload({ playedCount: 12 }));
     expect(headings(container)).toEqual([
       'Preliminary round',
-      'Pour Decisions vs Steam Team',
+      'Brunei · Pour Decisions vs Steam Team',
       'Standings',
       'Recent results',
     ]);
@@ -92,7 +92,7 @@ describe('the cards', () => {
     ]);
     // the heading carries its own context, so heading navigation lists something meaningful
     expect(container.querySelectorAll('.card')[1].querySelector('h2').textContent).toBe(
-      'Up next · Preliminary Pour Decisions vs Steam Team',
+      'Up next · Preliminary Brunei · Pour Decisions vs Steam Team',
     );
   });
 
@@ -372,11 +372,11 @@ describe('results and the bracket', () => {
       'Third place',
     ]);
     const lines = all(container, '.card:nth-of-type(3) .btc-phone-line');
-    expect(lines[0]).toMatch(/^Bean Scene \d+ – \d+ Steam Team$/);
+    expect(lines[0]).toMatch(/^Brunei · Bean Scene \d+ – \d+ Steam Team$/);
     expect(
       container.querySelector('.card:nth-of-type(3) .btc-score-line').getAttribute('aria-label'),
-    ).toMatch(/^Bean Scene \d+ to \d+ Steam Team$/);
-    expect(lines[1]).toBe('Drip Society vs Grind House');
+    ).toMatch(/^Brunei · Bean Scene \d+ to \d+ Steam Team$/);
+    expect(lines[1]).toBe('Singapore · Drip Society vs Malaysia · Grind House');
     const metas = all(container, '.card:nth-of-type(3) li .stage-meta');
     expect(metas[0]).toBe('Bean Scene go through');
     expect(metas[1]).toBe('Not played yet');
@@ -392,7 +392,9 @@ describe('the champion', () => {
     const payload = knockoutPayload({ results: FULL_RESULTS });
     const { container } = mounted(payload);
     expect(text(container, '.btc-phone-champion-label')).toBe('Champion');
-    expect(text(container, '.btc-phone-champion-name')).toBe(payload.podium.places[0].teamName);
+    expect(text(container, '.btc-phone-champion-name')).toBe(
+      `Brunei · ${payload.podium.places[0].teamName}`,
+    );
     expect(text(container, '.btc-phone-champion .stage-meta')).toBe(
       finalScoreLine(payload).visible,
     );
@@ -402,7 +404,7 @@ describe('the champion', () => {
     ).toMatch(/^Final \d+ to \d+$/);
     // the heading carries both words, so heading navigation says who the champion is
     expect(text(container, '.btc-phone-champion h2')).toBe(
-      `Champion ${payload.podium.places[0].teamName}`,
+      `Champion Brunei · ${payload.podium.places[0].teamName}`,
     );
     expect(container.querySelector('.btc-phone').firstElementChild.className).toBe(
       'btc-phone-champion',
@@ -413,7 +415,7 @@ describe('the champion', () => {
       '3rd place',
     ]);
     expect(all(container, '.btc-phone-podium dd')).toEqual(
-      payload.podium.places.map((place) => place.teamName),
+      payload.podium.places.map((place) => `${place.country.name} · ${place.teamName}`),
     );
     expect(headings(container)).toContain('Final result');
   });
@@ -484,7 +486,10 @@ describe('partial payloads and the bracket card', () => {
       upNext: preliminaryPayload().upNext,
     });
     expect(container.textContent).not.toMatch(/0 of 0/);
-    expect(headings(container)).toEqual(['Preliminary round', 'Pour Decisions vs Steam Team']);
+    expect(headings(container)).toEqual([
+      'Preliminary round',
+      'Brunei · Pour Decisions vs Steam Team',
+    ]);
   });
 
   it('leaves out a round of the bracket that has no slots', () => {
@@ -517,7 +522,9 @@ describe('partial payloads and the bracket card', () => {
     const payload = knockoutPayload({ results: { qf1: { tokensA: 40 } } });
     payload.bracket.rounds[0].slots[0].teams[0].total = null;
     const { container } = mounted(payload);
-    expect(all(container, '.btc-phone-list .btc-phone-line')[0]).toBe('Bean Scene vs Steam Team');
+    expect(all(container, '.btc-phone-list .btc-phone-line')[0]).toBe(
+      'Brunei · Bean Scene vs Steam Team',
+    );
   });
 
   it('shows the podium card only when a place besides the champion is decided', () => {

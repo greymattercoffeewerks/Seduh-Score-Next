@@ -158,6 +158,7 @@ const resultMoment = {
       renderSide({
         label: sideLabel(result, anyWinner ? team.winner : null),
         name: team.name,
+        country: team.country,
         winner: anyWinner ? team.winner : null,
         points: team.total,
         chips: chipsFor(team, result),
