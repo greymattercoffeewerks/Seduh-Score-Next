@@ -1,0 +1,12 @@
+/*
+ * Motion tokens — Petrol V2 (P1). One duration/easing vocabulary replaces the
+ * ad-hoc pairs scattered through screen CSS. Consumers migrate in P2/P3.
+ * base.css carries the global prefers-reduced-motion rule.
+ */
+:root {
+  --dur-press: 80ms; /* pressed / active feedback */
+  --dur-fast: 140ms; /* hover, focus, small state changes */
+  --dur-base: 220ms; /* panels, selection, most transitions */
+  --dur-stage: 420ms; /* venue-display moments and screen changes */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+}

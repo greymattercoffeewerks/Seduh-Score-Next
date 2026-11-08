@@ -1,13 +1,13 @@
 # Seduh Score Next — Design System ("Petrol")
 
-_Tokens live in `colors.css`, `typography.css`, `spacing.css`, `base.css` — import
+_Tokens live in `colors.css`, `typography.css`, `spacing.css`, `motion.css`, `base.css` — import
 `index.css`. This file explains the reasoning; the CSS is the source of truth for values._
 
 _Reworked again (2026-09-13) — "Petrol" replaces "Cherry" (2026-09-11: chartreuse-green
 accent, bottle-green-black neutrals, Bricolage Grotesque/IBM Plex Sans). Cherry itself
 replaced "Editorial" for the same complaint now recurring a third time: fresh user
 feedback on a marketing exploration built independently of Cherry — petrol-teal accent,
-graphite ground, hard angular cuts (zero border-radius), racing/telemetry motifs —
+graphite ground, hard angular cuts, racing/telemetry motifs —
 tested as clearly less generic-SaaS than Cherry's own rollout. This file ports that
 exploration's palette and shape language into Cherry's proven architecture (one neutral
 ramp, two surface modes, semantic-token symmetry) rather than inventing new structure._
@@ -64,6 +64,11 @@ Every pairing below is checked against WCAG 2.1 contrast minimums (4.5:1 normal 
 | `--color-success` on canvas (stage)                         | 9.6:1  |
 | `--color-warning` on canvas (stage)                         | 9.1:1  |
 | `--color-gold` on canvas (stage — its one real use context) | 8.4:1  |
+| `--color-accent-tint-text` on `--color-accent-tint` (paper) | 9.0:1  |
+| `--color-text` on `--color-accent-tint` (paper)             | 17.1:1 |
+| `--color-accent` as text on `--color-accent-tint` (paper)   | 7.2:1  |
+| `--color-accent-tint-text` on `--color-accent-tint` (stage) | 7.8:1  |
+| `--color-text` on `--color-accent-tint` (stage)             | 13.4:1 |
 
 `--color-text-muted` on stage sits right at the 4.5:1 floor — same tightness Cherry's own
 table had for a couple of pairings. Don't push it any lighter; if a future accent tweak
@@ -87,23 +92,46 @@ danger in both modes as a second, hue-independent safety margin (paper: accent l
 tweak narrows either gap, rerun a colorblind simulation before shipping — don't rely on
 hue distance alone.
 
-## Angular shapes replace rounded corners
+## Shape: the Hybrid rule (Petrol V2)
 
-The one real shape-language change, not just a color swap: **`--radius-sm/md/lg` are now
-`0`.** Petrol commits to hard angular cuts, no rounding, anywhere in the system. This
-flows through automatically to every token consumer (cards, buttons, inputs, badges) —
-and turns `.status-live-dot` into a square blip instead of a circle, which reads as more
-"telemetry indicator" than "online dot" and matches the marketing exploration's own
-motif.
+Petrol V1 set every `--radius-*` to `0`. V2 (owner decision, 2026-11) softens that without
+losing the telemetry identity. Corners are sized by the element's role:
 
-New `--cut-sm/md/lg` tokens + `.cut-sm/.cut-md/.cut-lg` utility classes (`base.css`) add
-the angular alternative to a rounded corner — a clipped chevron-style cut, used sparingly
-(primary CTAs, tags, hero panels), not on every box. This is additive; nothing forces a
-screen to adopt it during the gradual rollout. `preview.html` demonstrates all three
-sizes.
+| Token           | Value  | Used for                                                            |
+| --------------- | ------ | ------------------------------------------------------------------- |
+| `--radius-sm`   | 3px    | tags, badges, chips, inputs, secondary buttons, the live blip       |
+| `--radius-md`   | 6px    | cards                                                               |
+| `--radius-lg`   | 10px   | modals and large panels                                             |
+| `--radius-full` | 9999px | true circles only: spinners and avatars (never a pill or a badge)   |
+| `--bevel-md/lg` | 6/9px  | the soft chamfer on BIG primary buttons (built in P2; unused in P1) |
 
-**No shadows** — unchanged from Cherry (which carried it forward from Editorial). Still
-flat borders/surface-color steps only.
+`.status-live-dot` uses `--radius-sm`: a machined 3px blip, not a circle. `--cut-*` and
+`.cut-*` stay for now (the clip-path cut clips focus rings); P2 retires them from small
+elements. Cards use a hairline `--color-border` instead of the old 2px near-black frame.
+This is a known trade: the card edge is 2.1:1 against the paper canvas (1.3:1 on stage) and
+the surface step only 1.2:1, so cards separate more softly than before (the 2026-09-05
+"nearly invisible" feedback is the risk). Accepted for V2; revisit in P3 if screens read flat.
+
+**No shadows** — unchanged. Flat borders and surface steps only.
+
+## Motion
+
+`motion.css` is the one vocabulary: `--dur-press` 80ms (pressed), `--dur-fast` 140ms (hover,
+focus), `--dur-base` 220ms (most transitions), `--dur-stage` 420ms (venue-display moments),
+`--ease-out` `cubic-bezier(.2,.8,.2,1)`. Use these, not a hand-picked pair (16 ad-hoc pairs
+existed before V2; they migrate in P2/P3). `base.css` has one global
+`prefers-reduced-motion: reduce` rule that cuts every animation and transition to 0.01ms
+and stops loops after one cycle. It is a safety net: a looping or decorative animation should
+still be written inside `@media (prefers-reduced-motion: no-preference)` so it never runs
+under reduce at all (the existing pattern); the global rule covers whatever slips through.
+
+## Accent tint (selected state)
+
+`--clr-teal-50/100` (paper) and `--clr-teal-900` (stage) feed `--color-accent-tint`, with
+`--color-accent-tint-text` as the text that sits on it, in both modes (rows in the contrast
+table above). A selected or active row uses the tint, not the grey sunken surface. The
+symmetry rule holds: paper tint is light with dark text, stage tint is dark with light text.
+The classes that apply it arrive in P2.
 
 ## `is_test` is violet, and only violet is `is_test` — unchanged
 
@@ -148,9 +176,9 @@ specific to Petrol:
 - **Do** reach for `.cut-sm/.cut-md/.cut-lg` instead of hand-writing a one-off
   `clip-path` when a screen wants the angular-cut treatment — same "don't hand-pick a
   value, extend the token layer" discipline Cherry's own rules apply to color/spacing.
-- **Don't** reintroduce `border-radius` anywhere outside these token files. If a screen
-  seems to need a rounded corner, that's a signal to raise it, not to patch around
-  `--radius-*` locally.
+- **Don't** hand-pick a `border-radius` or a transition duration/easing. Pick the role's
+  `--radius-*` and a `--dur-*`/`--ease-out`; if none fits, raise it rather than patching
+  locally. `--radius-full` is for circles only.
 
 ## Open items
 
@@ -162,7 +190,12 @@ specific to Petrol:
    shape language so far (from the earlier design-system pilot). Every other screen
    (scoring, standings, viewer/projector, timer, roster, dashboard) still needs its own
    pass — the token layer supports them already (everything reads through `var()`), but
-   nobody has verified each screen's specific layout against zero-radius/`.cut-*` yet.
+   nobody has verified each screen's specific layout against the Hybrid radii/`.cut-*` yet.
+3. Petrol V2 is in progress on its own branch: P1 (tokens, this file) done; P2 (bevel
+   buttons, press and busy states, selected-state classes, retire `--cut-*` from small
+   elements and fix focus-ring clipping) and P3 (screens), then a drift-guard test, are open.
+   Existing `--radius-full` pills and badges were moved to `--radius-sm` in P1 so they do
+   not turn into pills; the splash glow keeps `--radius-full`.
 
 ## Live preview
 

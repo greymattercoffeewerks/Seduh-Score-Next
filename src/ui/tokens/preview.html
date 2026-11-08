@@ -20,6 +20,55 @@
         border-bottom: var(--border-hairline) solid var(--color-border);
         padding-bottom: var(--space-3);
       }
+      .radius-demo {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-4);
+        align-items: center;
+        margin-bottom: var(--space-4);
+      }
+      .radius-demo > div {
+        width: 5rem;
+        height: 3.5rem;
+        display: grid;
+        place-items: center;
+        background: var(--color-surface-sunken);
+        border: var(--border-hairline) solid var(--color-border);
+        font-family: var(--font-mono);
+        font-size: var(--text-2xs);
+      }
+      .radius-demo .full {
+        border-radius: var(--radius-full);
+        width: 3.5rem;
+      }
+      .motion-chip {
+        padding: var(--space-2) var(--space-3);
+        border: var(--border-hairline) solid var(--color-border);
+        border-radius: var(--radius-sm);
+        background: var(--color-surface);
+        font-family: var(--font-mono);
+        font-size: var(--text-2xs);
+        transition:
+          background var(--dur-base) var(--ease-out),
+          transform var(--dur-base) var(--ease-out);
+      }
+      .motion-chip:hover {
+        background: var(--color-accent-tint);
+        color: var(--color-accent-tint-text);
+        transform: translateX(var(--space-2));
+      }
+      .tint-demo {
+        display: flex;
+        gap: var(--space-3);
+        flex-wrap: wrap;
+      }
+      .tint-demo span {
+        padding: var(--space-2) var(--space-3);
+        border-radius: var(--radius-sm);
+        background: var(--color-accent-tint);
+        color: var(--color-accent-tint-text);
+        font-weight: var(--font-weight-semibold);
+      }
       .swatch-grid {
         display: grid;
         /* 9rem track minimum is a demo-page layout choice (fits a label plus
@@ -135,7 +184,7 @@
         align-items: center;
         gap: var(--space-2);
         padding: var(--space-1) var(--space-3);
-        border-radius: var(--radius-full);
+        border-radius: var(--radius-sm);
         font-size: var(--text-2xs);
         font-weight: var(--font-weight-bold);
         text-transform: uppercase;
@@ -329,8 +378,8 @@
 
       <h2 class="guide-heading">Corner cuts</h2>
       <p>
-        Petrol's angular alternative to a rounded corner (<code>--radius-*</code> is now
-        <code>0</code> everywhere) — see the "Do" list in <code>DESIGN.md</code>.
+        The legacy angular cut (<code>--cut-*</code>); P2 retires it from small elements and gives
+        big primary buttons a soft bevel (<code>--bevel-*</code>) instead.
       </p>
       <div class="btn-row">
         <button class="btn btn-primary cut-sm">cut-sm</button>
@@ -354,6 +403,33 @@
       <div class="space-row">
         <div class="meta">space-8 / 64px</div>
         <div class="bar" style="width: var(--space-8)"></div>
+      </div>
+
+      <h2 class="guide-heading">Shape — Hybrid radii</h2>
+      <div class="radius-demo">
+        <div style="border-radius: var(--radius-sm)">sm 3px</div>
+        <div style="border-radius: var(--radius-md)">md 6px</div>
+        <div style="border-radius: var(--radius-lg)">lg 10px</div>
+        <div class="full">full</div>
+      </div>
+      <p>
+        <code>--bevel-md</code> 6px and <code>--bevel-lg</code> 9px are reserved for P2's big
+        primary button chamfer; nothing consumes them yet.
+      </p>
+
+      <h2 class="guide-heading">Motion</h2>
+      <p>
+        Hover a chip: <code>--dur-press</code> 80ms, <code>--dur-fast</code> 140ms,
+        <code>--dur-base</code> 220ms, <code>--dur-stage</code> 420ms,
+        <code>--ease-out</code> cubic-bezier(.2,.8,.2,1). The chip below uses base + ease-out and
+        stops moving under reduced motion.
+      </p>
+      <div class="btn-row"><span class="motion-chip">hover me — 220ms</span></div>
+
+      <h2 class="guide-heading">Accent tint (selected state)</h2>
+      <div class="tint-demo"><span>Selected row</span><span>Round 2 — active</span></div>
+      <div class="stage-panel" data-surface="stage" style="margin-top: var(--space-3)">
+        <div class="tint-demo"><span>Selected row</span><span>Round 2 — active</span></div>
       </div>
 
       <h2 class="guide-heading">Mock scoreboard (paper mode)</h2>

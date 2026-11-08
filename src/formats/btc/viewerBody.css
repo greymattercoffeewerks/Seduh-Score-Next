@@ -52,7 +52,7 @@
   padding: var(--space-1) var(--space-4);
   background: var(--color-gold);
   color: var(--color-gold-contrast);
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-sm);
   font-size: var(--text-sm);
   font-weight: var(--font-weight-bold);
   letter-spacing: 0.05em;
