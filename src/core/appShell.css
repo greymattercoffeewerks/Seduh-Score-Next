@@ -667,3 +667,31 @@
     display: none;
   }
 }
+
+/* Petrol V2 (P3): panels open instead of snapping, and hover states ease. The nav panel and the notice and
+   sync overlays are toggled with display or by a class, so they cannot transition; they fade and settle in with
+   an entrance animation over --dur-base. Reduced motion shortens it to nothing (base.css). The rules are added
+   here, separate from the ones above, which appShell.test.js pins selector by selector. */
+@keyframes app-shell-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(var(--space-1) * -1));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.app-shell-nav-panel.app-shell-nav-panel-open,
+.app-shell-org-notice.app-shell-org-notice-open,
+.app-shell-sync.app-shell-sync-open {
+  animation: app-shell-panel-in var(--dur-base) var(--ease-out) both;
+}
+
+.app-shell-link,
+.app-shell-footer-link {
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}

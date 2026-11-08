@@ -118,6 +118,36 @@
   overflow-wrap: anywhere;
 }
 
+/* A long team name is cut with an ellipsis (the "(tied)" beside it never is) instead of wrapping into the
+   score columns. max-width: 0 with width: 100% lets the name column take the space the others leave. */
+.btc-phone-table tbody th.btc-phone-name-cell {
+  width: 100%;
+  max-width: 0;
+  overflow-wrap: normal;
+}
+
+.btc-phone-name-row {
+  display: flex;
+  min-width: 0;
+}
+
+.btc-phone-name-text {
+  min-width: 0;
+  /* Two lines at most, then an ellipsis: a touch screen has no tooltip, so a long name keeps a second line to
+     be read, and still never pushes into the score columns. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.btc-phone-name-suffix {
+  flex: none;
+  white-space: pre;
+}
+
 /* ---------- results and bracket ---------- */
 .btc-phone-list {
   list-style: none;

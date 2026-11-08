@@ -253,3 +253,10 @@
   color: var(--color-text);
   box-shadow: inset 0 -2px 0 var(--color-accent);
 }
+
+/* Petrol V2 (P3): hover colour changes ease (the header CTA is P2's). */
+.public-header-link,
+.public-footer-link,
+.public-footer-version {
+  transition: color var(--dur-fast) var(--ease-out);
+}

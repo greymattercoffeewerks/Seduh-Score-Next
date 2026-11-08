@@ -9,6 +9,7 @@
 import { createPageRotator } from './pageRotator.js';
 import { createProgressRing } from './progressRing.js';
 import { mountFooterRing } from './stageDisplay.js';
+import { withRankMotion } from './rankMotion.js';
 
 export function createStagePageLoop(frame, { dwellMs }) {
   const ring = createProgressRing();
@@ -36,7 +37,7 @@ export function createStagePageLoop(frame, { dwellMs }) {
         onPage(index, { dwellMs: heldMs, startedAt }) {
           const page = pages[index];
           onPage?.(page, index);
-          frame.main.replaceChildren(...page.render());
+          withRankMotion(frame.main, () => frame.main.replaceChildren(...page.render()));
           frame.footerStart.textContent = footerFor(page, index);
           if (pages.length > 1) {
             mountFooterRing(frame, heldMs, { ring, startedAt });

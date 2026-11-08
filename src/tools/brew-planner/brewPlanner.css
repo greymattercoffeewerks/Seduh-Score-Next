@@ -621,3 +621,8 @@ body {
     text-align: center;
   }
 }
+
+/* Petrol V2 (P3): the hover colour change eases. */
+.bp-btn-primary {
+  transition: background var(--dur-fast) var(--ease-out);
+}

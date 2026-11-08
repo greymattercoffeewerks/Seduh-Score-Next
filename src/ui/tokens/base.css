@@ -153,7 +153,10 @@ body {
 
 @media (prefers-reduced-motion: no-preference) {
   .status-live-dot {
-    animation: status-live-pulse 2s ease-in-out infinite;
+    /* Petrol V2: a slow breathe (4s, opacity only, no blink). A named ambient-loop exception to the
+       motion tokens: it is not a transition, so no --dur-* fits. A lost connection never breathes (the
+       viewer shows "Reconnecting…" with no dot), so the two states differ by shape and words. */
+    animation: status-live-pulse 4s ease-in-out infinite;
   }
 }
 
@@ -163,7 +166,7 @@ body {
     opacity: 1;
   }
   50% {
-    opacity: 0.4;
+    opacity: 0.45;
   }
 }
 

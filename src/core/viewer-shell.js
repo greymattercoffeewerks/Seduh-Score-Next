@@ -74,6 +74,8 @@ import { raceTimeout } from './timeout.js';
 import { applyBrandColors, normaliseBrand, renderBrandIdentity } from './brandSlot.js';
 import { renderPoweredBy } from './poweredBy.js';
 import { renderStageBand } from './stageBand.js';
+import { captureRankState, playRankMotion } from './rankMotion.js';
+import { renderSkeletonBoard } from './skeletonBoard.js';
 
 // The one place this string is spelled out — both the chrome's visible <h1>
 // (renderChrome, showChrome:true) and mountViewerShell's own visually-hidden
@@ -83,6 +85,16 @@ const APP_NAME = 'Seduh Score';
 
 export function defaultHasContent(payload) {
   return payload != null && typeof payload === 'object' && Object.keys(payload).length > 0;
+}
+
+// The rank motion is decoration: a failure in it must never stop the body from painting.
+function safely(fn) {
+  try {
+    return fn();
+  } catch (err) {
+    console.error('viewer-shell: rank motion failed', err);
+    return undefined;
+  }
 }
 
 // Distinguishes each mount's realtime channel topic — see mountViewerShell.
@@ -439,6 +451,8 @@ export async function mountViewerShell(
 
     bodyCleanup?.();
     bodyCleanup = null;
+    // Rows a format marked (core/rankMotion.js) slide to their new place when the body is redrawn below.
+    const rankBefore = safely(() => captureRankState(body));
     body.replaceChildren();
     if (connectionLost) {
       body.appendChild(renderHoldingState('lost'));
@@ -457,8 +471,12 @@ export async function mountViewerShell(
         format: session.format,
         eventId: session.event_id,
       });
+      safely(() => playRankMotion(body, rankBefore));
     } else {
       body.appendChild(renderHoldingState(phase));
+      // First load only: a board-shaped placeholder under the words, so the page does not jump when the data
+      // arrives. Never for a state that means "nothing is coming" (no event, not started, not published).
+      if (phase === 'connecting') body.appendChild(renderSkeletonBoard());
       // The live session is gone (no event, none active): whatever the caller built for it is now unseen and
       // must stop (a display's timers, its idea of "the last snapshot"). Not for 'connecting' (nothing built
       // yet), not for a lost connection (the same session is still there; a blip must not forget where the

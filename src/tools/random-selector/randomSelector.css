@@ -349,7 +349,7 @@ textarea:focus-visible {
   padding: var(--space-3);
   resize: vertical;
   border: var(--border-hairline) solid var(--color-border-strong);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   background: var(--color-canvas);
   color: var(--color-text);
   font-family: var(--font-mono);
@@ -415,7 +415,7 @@ textarea:focus-visible {
   height: var(--tap-target-min);
   padding: 0 var(--space-2);
   border: var(--border-hairline) solid var(--color-border-strong);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   background: var(--color-canvas);
   color: var(--color-text);
   font-family: var(--font-mono);
@@ -472,7 +472,7 @@ textarea:focus-visible {
   min-height: var(--tap-target-min);
   padding: 0 var(--space-2);
   border: var(--border-hairline) solid var(--color-border-strong);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   background: var(--color-canvas);
   color: var(--color-text-secondary);
   font-family: var(--font-mono);
@@ -525,7 +525,7 @@ textarea:focus-visible {
   min-height: var(--tap-target-min);
   padding: 0 var(--space-3);
   border: var(--border-hairline) solid var(--color-border-strong);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   background: var(--color-canvas);
   color: var(--color-text);
   font-family: var(--font-mono);
@@ -552,7 +552,7 @@ textarea:focus-visible {
   height: var(--tap-target-min);
   padding: 0.1rem;
   border: var(--border-hairline) solid var(--color-border-strong);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   background: var(--color-canvas);
 }
 .rs-entry-actions {
@@ -753,4 +753,10 @@ textarea:focus-visible {
 }
 .rs-note-row .rs-note {
   margin: var(--space-3) 0 0;
+}
+
+/* Petrol V2 (P3): the hover colour change eases. */
+.rs-draw-button,
+.rs-button-primary {
+  transition: background var(--dur-fast) var(--ease-out);
 }

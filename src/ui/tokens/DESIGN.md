@@ -240,6 +240,28 @@ specific to Petrol:
    Existing `--radius-full` pills and badges were moved to `--radius-sm` in P1 so they do
    not turn into pills; the splash glow keeps `--radius-full`.
 
+## Petrol V2 P3: surfaces
+
+- **Rank slides and score ticks:** `core/rankMotion.js` (+ `.css`). A format marks a row `data-rank-key`
+  (its name) and the cells that can change `data-rank-value` (`markRankRow`); `viewer-shell` (every phone body)
+  and `stagePageLoop` (every projector standings page) redraw through it, so rows slide (FLIP, `--dur-stage`,
+  `--ease-out`) and changed numbers tick in. Reduced motion: no motion, instant update. A key that appears twice
+  is not animated. Cup Taster and BTC use it; Throwdown has no standings list yet and uses it unedited when it does.
+- **Loading placeholder:** `core/skeletonBoard.js` draws a board-shaped placeholder under the "Connecting…" card,
+  in the `connecting` phase only. Dashed hollow outlines, never animated, `aria-hidden`; the TEST banner host is
+  untouched.
+- **Live blip:** a 4s opacity breathe (`.status-live-dot`, `.stage-band-live-dot`), not a 2s blink. A lost
+  connection already reads differently: "Reconnecting…" in the danger colour, no dot, and the holding card.
+- **Names:** long names in the phone standings (Cup Taster, BTC) and the projector table are cut with an ellipsis,
+  the "(tied)" beside them never is; stage titles use `text-wrap: balance`.
+- **Colours:** `colors.css` gained `--clr-white`, `--clr-black` (paper and ink for print) and
+  `--clr-chart-1..8` (the categorical chart palette). `public/bts/index.html` cannot link the tokens, so it keeps
+  a copy of the palette and motion tokens, held equal by `btsPalette.test.js`.
+- **Motion exceptions** (named, deliberately not on the tokens): ambient loops (splash glow, Guess the Bean
+  float/bob/spin, landing marquee, the live blip's 4s breathe, bts glow and pulse ring), the Guess the Bean
+  celebration (pop, confetti, burst), the splash intro, the landing hero fade (1.1s), stepped animations (Random
+  Selector flip, timer blink) and bts's tactile `--ease-out-back`.
+
 ## Live preview
 
 `src/ui/tokens/preview.html` renders every token — palette swatches for both surface

@@ -272,3 +272,16 @@
 .events-list .archive-panel a.btn::after {
   content: none;
 }
+
+/* Petrol V2 (P3): the row link's underline eases in instead of snapping (transparent at rest, so the resting
+   look is unchanged: no underline). */
+.events-list a {
+  text-decoration-line: underline;
+  text-decoration-color: transparent;
+  transition: text-decoration-color var(--dur-fast) var(--ease-out);
+}
+
+.events-list a:hover,
+.events-list a:focus-visible {
+  text-decoration-color: currentColor;
+}

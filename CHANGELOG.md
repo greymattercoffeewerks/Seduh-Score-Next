@@ -19,6 +19,17 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 - **Reviews.** `code-reviewer`: 3 red, all fixed (`.btn-lg` rule duplicated in `base.css` failing `components.test.js`, `base.css` counted as a reliant sheet, corrupted check glyph). `ui-accessibility-reviewer`: no red; nit fixed (function name in comments); logged pre-existing: `.btn[aria-disabled]` opacity .6 dims a busy label to about 3:1. `module-boundary-checker` clean. Not verified: focus ring look on a bevel in a real browser, forced-colors. `kb-sync` not run.
 
 ---
+## Petrol V2 P3: surfaces · 2026-11-08
+
+**Task:** the third Petrol V2 phase (screens), on branch `claude/petrol-v2-p3-56ecc7`, cut from P1 and not merged; P2 (components) is a sibling branch. No version bump.
+
+**What shipped:** `core/rankMotion.js` + `.css` (rows slide to their new rank by FLIP, changed numbers tick in, `--dur-stage`/`--ease-out`, instant under reduced motion, a duplicated or hidden row is left alone), wired once into `viewer-shell` (every phone body) and `stagePageLoop` (every projector standings page); Cup Taster and BTC mark their rows, Throwdown has no standings list yet. `core/skeletonBoard.js`: a hollow, dashed, never-animated, aria-hidden board placeholder under "Connecting…" (connecting phase only; the TEST banner is untouched). The live blip is a 4s opacity breathe (connection lost already differs: "Reconnecting…" in the danger colour, no dot). Long names in the phone standings are cut with an ellipsis (BTC: two lines at most, so touch can read them), "(tied)" never is; `text-wrap: balance` on stage titles and holding titles. Panels (nav, org notice, sync detail) open over `--dur-base`; hover transitions on `appShell`, `eventsScreen`, `publicHeader`, `trust`, `brewPlanner`, `randomSelector` (the `.btn`, pricing CTA and header CTA are P2's and untouched). Motion tokens replace hand-written durations in landing, results, tour, community hub, Guess the Bean, stage moments and `public/bts` (which carries a token copy held equal by `btsPalette.test.js`). Colours: `colors.css` gained `--clr-white`, `--clr-black`, `--clr-chart-1..8`; `reportScreen.css` and `results.css` have no raw hex left; the four `border-radius: 50%` are `--radius-full`; the six `border-radius: 0` in `randomSelector.css` are `--radius-sm` (they restated the V1 zero radius; V2's Hybrid gives small elements 3px). The named motion exceptions are listed in `DESIGN.md`.
+
+**Reviews:** `ui-accessibility-reviewer` (no blocking; a duplicate-key motion nit fixed, touch access to cut names fixed by letting the name wrap, "Not live" badge while connecting is pre-existing and logged), `code-reviewer` (hidden-row position nit fixed, motion calls made non-fatal in the shell, test gaps closed), `module-boundary-checker` (clean), `test-auditor` (reduced-motion, duplicate-key and wiring tests added). `offline-sync-auditor` not run (no sync change). Not run in a browser or Playwright.
+
+**Left for later:** a 360px and 16:9 visual pass in a real browser; Throwdown standings when they exist; a shared `prefersReducedMotion()` helper (four copies, three pre-existing); the "Not live" badge while connecting.
+
+---
 
 ## Petrol V2 P1: design tokens · 2026-11-08
 

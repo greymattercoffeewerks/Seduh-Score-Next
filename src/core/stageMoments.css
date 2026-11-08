@@ -77,7 +77,7 @@
    there. core/stageReveal.js removes the .stage-reveal class when the last item has finished. */
 @media (prefers-reduced-motion: no-preference) {
   .stage-reveal .stage-reveal-item {
-    animation: stage-rise 0.5s ease-out both;
+    animation: stage-rise var(--dur-stage) var(--ease-out) both;
   }
 
   .stage-reveal .stage-reveal-item:nth-child(2) {

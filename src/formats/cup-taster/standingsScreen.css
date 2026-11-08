@@ -64,6 +64,42 @@
   }
 }
 
+/* The phone viewer's name cell (formats/cup-taster/viewerBody.js): a long name is cut with an ellipsis and the
+   "(tied)" beside it never is. Above 480px it is a real table cell, so the name column takes the space the
+   others leave (width 100%, max-width 0); at 480px and below the cell is already a full-width block. */
+.standings-table td.standings-name-cell {
+  width: 100%;
+  max-width: 0;
+}
+
+@media (max-width: 480px) {
+  .standings-table td.standings-name-cell {
+    max-width: none;
+  }
+  /* The stacked card gives the name its own full-width row, so it may wrap there: a touch screen has no tooltip. */
+  .standings-name-text {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+
+.standings-name-row {
+  display: flex;
+  min-width: 0;
+}
+
+.standings-name-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.standings-name-suffix {
+  flex: none;
+  white-space: pre;
+}
+
 /* A row's provisional standing while a tie is still being resolved —
    distinct, token-sourced treatment for each state, not left to fall
    through unstyled (the same reasoning scoringScreen.css's `unscored` tone

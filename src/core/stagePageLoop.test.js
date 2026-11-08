@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { createStagePageLoop } from './stagePageLoop.js';
 import { renderScreenFrame } from './stageDisplay.js';
+import { markRankRow } from './rankMotion.js';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -201,6 +202,25 @@ describe('createStagePageLoop', () => {
     loop.show([page('A'), page('B')]);
     vi.advanceTimersByTime(2_000);
     expect(frame.main.textContent).toBe('body of B');
+    loop.destroy();
+  });
+});
+
+describe('createStagePageLoop: rank motion', () => {
+  it('redraws a page through core/rankMotion: a marked value that changed ticks in', () => {
+    const { frame, loop } = setup();
+    const row = (value) => {
+      const tr = document.createElement('div');
+      const cell = document.createElement('span');
+      cell.textContent = value;
+      markRankRow(tr, 'Cupper A', [cell]);
+      tr.append(cell);
+      return [tr];
+    };
+    loop.show([page('One', () => row('1')), page('Two', () => row('2'))]);
+    expect(frame.main.querySelector('.rank-tick')).toBeNull();
+    vi.advanceTimersByTime(10_000);
+    expect(frame.main.querySelector('span').classList.contains('rank-tick')).toBe(true);
     loop.destroy();
   });
 });

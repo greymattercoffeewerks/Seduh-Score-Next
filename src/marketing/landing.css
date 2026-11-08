@@ -104,8 +104,8 @@ a {
     opacity: 0;
     transform: translateY(24px);
     transition:
-      opacity 0.7s var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1)),
-      transform 0.7s var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1));
+      opacity var(--dur-stage) var(--ease-out),
+      transform var(--dur-stage) var(--ease-out);
   }
   .is-revealed {
     opacity: 1 !important;
@@ -266,7 +266,7 @@ a {
 .petrol-action-primary {
   background: var(--color-accent);
   color: var(--color-accent-contrast);
-  transition: background 0.2s ease;
+  transition: background var(--dur-base) var(--ease-out);
 }
 @media (prefers-reduced-motion: reduce) {
   .petrol-action-primary {
@@ -279,7 +279,7 @@ a {
 .petrol-action-outline {
   border: var(--border-hairline) solid rgba(238, 242, 241, 0.5);
   color: var(--color-text);
-  transition: border-color 0.2s ease;
+  transition: border-color var(--dur-base) var(--ease-out);
 }
 @media (prefers-reduced-motion: reduce) {
   .petrol-action-outline {
@@ -497,7 +497,7 @@ a {
   gap: 18px;
   padding: 20px 0;
   border-bottom: var(--border-hairline) solid rgba(255, 255, 255, 0.1);
-  transition: background 0.2s ease;
+  transition: background var(--dur-base) var(--ease-out);
 }
 @media (prefers-reduced-motion: reduce) {
   .petrol-ledger-row {
@@ -556,7 +556,7 @@ a {
 }
 .petrol-format-row-live {
   border-left: 3px solid var(--color-accent);
-  transition: background 0.2s ease;
+  transition: background var(--dur-base) var(--ease-out);
 }
 @media (prefers-reduced-motion: reduce) {
   .petrol-format-row-live {
