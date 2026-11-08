@@ -19,8 +19,29 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
 The pitch went well. The owner presents to the Board in March 2027, and the app may be used in the real competition as a
 **shadow beta** (manual scoring stays authoritative; Seduh Score runs in parallel and is compared afterwards). The plan is
 [`MARCH-2027-BOARD-PLAN.md`](MARCH-2027-BOARD-PLAN.md): BTC team and country model with an optional member backfill to
-Seduh ID, Petrol V2 refinement, UX audit and Tour. It has 12 owner decisions; the first (the real competition's team
-count and format; the bracket refuses fewer than 8 teams) blocks the BTC work.
+Seduh ID, Petrol V2 refinement, UX audit and Tour. Known (owner, 2026-11-07): tentatively 20 teams, 2 to 3 per country,
+each with its own team name; two preliminary rounds (round 1 random, round 2's rule to be confirmed), then the committee
+picks the top 8 by points, ties by the sum of each team's two finish times, confirmed manually by the organiser (wins no
+longer order the standings). Both round-2 methods (random without repeats, and by round-1 results) are to be built and
+selectable. Registration opens January 2027. Round 2's by-results method is strongest against weakest. Engine spec draft: [`docs/specs/BTC-MARCH-2027-ENGINE-SPEC-DRAFT.md`](docs/specs/BTC-MARCH-2027-ENGINE-SPEC-DRAFT.md).
+
+## Handover (2026-11-08, cloud session to a local session)
+
+- **Branch `ccr-dd9e5a6c-bxhucc`, PR #427 into `dev` (open).** #426 (docs trim, STATUS.md, backlog triage, the first plan)
+  is merged into `dev`. #427 is docs only: the plan and the engine spec follow the owner's answers. No code, migration or
+  cloud change exists for BTC yet. Start with `git fetch origin && git checkout ccr-dd9e5a6c-bxhucc`, then `npm ci`.
+- **Next step:** turn the engine spec into tasks, in this order: E team and judge country, A `prelim_round`, D finish-time
+  check (`parseDuration`, required times, capped at the round's limit), B draw and `create_btc_round`, C ties on points
+  only. Each has its reviewers in section 8 of the spec; the C migration and the draw are scoring and tenancy gates.
+- **Waiting on the committee (none blocks the first tasks):** the real team count and round-2 method; which round has the
+  10-minute limit and which the 15 (the default is 10:00 preliminary, 15:00 knockout, one function to edit); odd team
+  count or a withdrawal (KIV, the draw refuses meanwhile); whether a round-2 rematch is allowed (setting, default
+  avoid); what decides a tie when both teams hit the time limit. Registration opens January 2027.
+- **Owner-only actions still open:** the backlog items listed in `docs/backlog/README.md` ("Triage"), including closing the
+  `btc_matches_write FOR ALL` gap before any beta, the `/results/` indexing decision and republishing the live event.
+- **Local session notes:** `state.json` does not exist (gitignored); the frozen handoff and other specs are in
+  `Handoffs and Specs/` on the owner's machine only. Run `npm run check:docs` after any doc change; `ROADMAP.md` and
+  `CHANGELOG.md` have size budgets. Every migration is pushed to the cloud by hand after merge (see `CLAUDE.md`).
 
 ## Where to find things (look up, do not read whole)
 
