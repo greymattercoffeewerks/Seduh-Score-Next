@@ -62,7 +62,8 @@ insert into _buckets values
   ('btc_match_bonuses', 'updated_at', 'metadata'),
   -- btc_matches
   ('btc_matches', 'id', 'immutable'), ('btc_matches', 'event_id', 'immutable'),
-  ('btc_matches', 'round', 'logged'), ('btc_matches', 'team1_id', 'logged'),
+  ('btc_matches', 'round', 'logged'), ('btc_matches', 'prelim_round', 'logged'),
+  ('btc_matches', 'team1_id', 'logged'),
   ('btc_matches', 'team2_id', 'logged'), ('btc_matches', 'status', 'logged'),
   ('btc_matches', 'team1_time_note', 'logged'), ('btc_matches', 'team2_time_note', 'logged'),
   ('btc_matches', 'tiebreak_winner_team_id', 'logged'), ('btc_matches', 'tiebreak_reason', 'logged'),

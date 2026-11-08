@@ -8,6 +8,18 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## BTC Build A: a preliminary round number on btc_matches · 2026-11-08
+
+**Task:** item A of `docs/specs/BTC-MARCH-2027-ENGINE-SPEC-DRAFT.md` (section 3), database only: two preliminary rounds can now be told apart. Built in a side session, PR into `dev`; **the migration is NOT yet in the cloud** (merging does not push it).
+
+- **Database:** migration `20261108200000_btc_prelim_round.sql`: `btc_matches.prelim_round smallint null`, check `btc_matches_prelim_round_valid` (`null` or `round = 'preliminary'` and `>= 1`, no upper bound), partial index `btc_matches_event_prelim_round_idx (event_id, prelim_round) where round = 'preliminary'`. `btc_standings` unchanged (sums both rounds). No backfill: existing rows stay NULL and read as round 1 in the UI later. No new table, function, policy or grant, so `040`/`041` need no entry (re-run, pass).
+- **Decided in the task, not in the spec:** `prelim_round` is **logged**, like `round`. The same migration replaces `app.log_score_change` (from its latest body, `20261009110000_btc_knockout_tiebreak.sql`; diffed, one key added, revoke re-issued) and `018` has the bucket row. `get_dispute_pack` exports whole match rows so it carries the column (organiser-only); `get_scoring_record` shows log values generically and needs no change.
+- **Tests:** pgTAP `074` (40 assertions): 1, 2, 3 and NULL accepted; 0, negative and any number on a knockout round refused 23514 (insert and update, and a numbered preliminary cannot become a knockout); log rows written for a change and none for an unchanged value; standings 35 + 35 = 70 across both rounds; another organisation and a stranger update and read zero rows, anon 42501; the scored demo leaves every number NULL. Full pgTAP suite passes (75 files). `db:reset` from empty applies; rollback run in a transaction and re-applied (function restored without the key, then back).
+- **Reviews:** `schema-guardian` clean. `security-reviewer` clean (function posture identical, no grant or policy change, no anon door). `code-reviewer` clean (nit left: `012` does not mention the constraint). `test-auditor`: no red; mutation checks all caught; nit 1 (demo assertion vacuous, ran unscored) and nit 2 (cross-org update also hit the knockout row, so a broken RLS would error rather than count) fixed; nit 3 left: "existing rows untouched" is held by the migration having no backfill, not by a test.
+- **Not done here:** merge and the cloud push. After merge compare `supabase/migrations/` with the cloud list and push `20261108200000`.
+
+---
+
 ## BTC Build E part 2: team country in the live payload and on the audience surfaces · 2026-11-08
 
 **Task:** `docs/specs/BTC-E-TEAM-JUDGE-COUNTRY-PLAN.md` section 6. Builds on part 1 (PR #428, released as 3.6.4).
