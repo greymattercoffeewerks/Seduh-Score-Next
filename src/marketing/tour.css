@@ -357,9 +357,9 @@ body {
   border: var(--border-hairline) solid var(--color-border);
   background: var(--color-surface);
   transition:
-    border-color 160ms ease,
-    background 160ms ease,
-    transform 160ms ease;
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
 }
 .tour-community-card:hover {
   border-color: var(--color-accent);

@@ -105,13 +105,14 @@
 
 @media (prefers-reduced-motion: no-preference) {
   .stage-band-live-dot {
-    animation: stage-live-blink 2s ease-in-out infinite;
+    /* Slow breathe, not a blink (Petrol V2): a named ambient-loop exception to the motion tokens. */
+    animation: stage-live-blink 4s ease-in-out infinite;
   }
 }
 
 @keyframes stage-live-blink {
   50% {
-    opacity: 0.35;
+    opacity: 0.45;
   }
 }
 

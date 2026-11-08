@@ -120,7 +120,7 @@
 .gtb-spinner {
   width: 2.25rem;
   height: 2.25rem;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   margin: var(--space-8) auto;
   border: var(--border-strong) solid var(--color-border);
   border-top-color: var(--color-accent);
@@ -147,7 +147,7 @@
 .gtb-confirm-check {
   width: 4.5rem;
   height: 4.5rem;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   background: var(--color-success);
   color: var(--color-canvas);
   display: flex;

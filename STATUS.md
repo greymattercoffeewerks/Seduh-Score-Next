@@ -10,7 +10,7 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
 - **Gating:** three keys enforced for the Brunei organisation since 2026-11-02 (`cup_taster_participants`, `events_open`,
   `results_archive_optional`); eight stay off. **Seduh ID:** Layer 1a built; the archive feed (1b) is in `queue` mode and
   has published nothing yet.
-- **Petrol V2 P1 (design tokens) done** on branch `claude/petrol-v2-2a4279`, unmerged; P2 (components) and P3 (screens) open.
+- **Petrol V2 P1 (design tokens) done** on branch `claude/petrol-v2-2a4279`, unmerged. **P3 (surfaces) done** on branch `claude/petrol-v2-p3-56ecc7`, unmerged; P2 (components) is a sibling branch.
 - **Open, not merged or not in the cloud** (check `CHANGELOG.md` before trusting this line): password recovery D-PW2 to
   D-PW8 not started; organiser branding BR-E1 in PR #297 (no database door, so no brand shows); T-TD.1.9 (Throwdown 3rd place
   match after a walkover) was in review with its migration not yet in the cloud on 2026-11-03.

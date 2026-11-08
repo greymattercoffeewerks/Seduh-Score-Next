@@ -1614,3 +1614,68 @@ describe('the event check goes through public_event_summary (T-TEN.D2)', () => {
     logged.mockRestore();
   });
 });
+
+describe('mountViewerShell: rank motion and the loading placeholder', () => {
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  it('draws the board placeholder while connecting, and never in a live, pending or no-event state', async () => {
+    const client = fakeClient([session({ payload: { rows: ['A'] } })]);
+    client._setReadDelay(20);
+    const root = document.createElement('div');
+    const mounted = mountViewerShell(root, {
+      orgId: 'org1',
+      renderBody: vi.fn(),
+      hasContent: () => true,
+      showChrome: false,
+      client,
+    });
+    expect(root.querySelector('[data-skeleton="board"]')).not.toBeNull();
+    expect(root.textContent).toContain('Connecting');
+    await mounted;
+    expect(root.querySelector('[data-skeleton="board"]')).toBeNull();
+
+    for (const rows of [[session({ payload: {} })], []]) {
+      const other = document.createElement('div');
+      await mountViewerShell(other, {
+        orgId: 'org1',
+        renderBody: vi.fn(),
+        showChrome: false,
+        client: fakeClient(rows),
+      });
+      expect(other.querySelector('[data-skeleton="board"]')).toBeNull();
+    }
+  });
+
+  it('slides a keyed row to its new place when a later payload reorders the body', async () => {
+    const rect = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function () {
+        return { top: Array.from(this.parentNode?.children ?? []).indexOf(this) * 40 };
+      });
+    try {
+      const renderBody = (container, payload) => {
+        for (const name of payload.names) {
+          const row = document.createElement('div');
+          row.setAttribute('data-rank-key', name);
+          container.append(row);
+        }
+      };
+      const client = fakeClient([session({ payload: { names: ['A', 'B'] } })]);
+      const root = document.createElement('div');
+      await mountViewerShell(root, {
+        orgId: 'org1',
+        renderBody,
+        hasContent: () => true,
+        showChrome: false,
+        client,
+      });
+      expect(root.querySelector('.rank-slide')).toBeNull();
+      client.db.live_sessions[0].payload = { names: ['B', 'A'] };
+      client._triggerChange();
+      await tick();
+      expect(root.querySelectorAll('.rank-slide')).toHaveLength(2);
+    } finally {
+      rect.mockRestore();
+    }
+  });
+});

@@ -165,21 +165,23 @@
    own renderRoundBarChart comment for the full account). Defined locally
    here, not in src/ui/tokens/ — this is a categorical (cupper-identity)
    palette, not a semantic one, and nothing else on this screen or any
-   other screen needs it. Eight hues, deliberately excluding both ends of
+   other screen needs it. (P3: the eight values now live in colors.css as
+   --clr-chart-1..8, so no raw hex is left in this file; the screen-local
+   names below still alias them.) Eight hues, deliberately excluding both ends of
    this project's own semantic vocabulary: nothing in the ember/gold band
    (--color-accent/--color-gold, reserved for the brand accent and
    ceremonial podium/champion highlighting) and nothing in the violet band
    (--clr-test-500, reserved exclusively for is_test — see colors.css's own
    comment on that token for why it must never be reused elsewhere). */
 .report-screen {
-  --report-chart-color-1: #2f7d6e;
-  --report-chart-color-2: #3a6ea5;
-  --report-chart-color-3: #6b7a2f;
-  --report-chart-color-4: #4a548a;
-  --report-chart-color-5: #8a5a3a;
-  --report-chart-color-6: #5a7d8a;
-  --report-chart-color-7: #7a4a6e;
-  --report-chart-color-8: #4a7a5a;
+  --report-chart-color-1: var(--clr-chart-1);
+  --report-chart-color-2: var(--clr-chart-2);
+  --report-chart-color-3: var(--clr-chart-3);
+  --report-chart-color-4: var(--clr-chart-4);
+  --report-chart-color-5: var(--clr-chart-5);
+  --report-chart-color-6: var(--clr-chart-6);
+  --report-chart-color-7: var(--clr-chart-7);
+  --report-chart-color-8: var(--clr-chart-8);
 }
 
 /* A chart's own reserved per-cupper width (barWidth * cupperCount, times
@@ -353,8 +355,8 @@
      setting (D9: test data must be unmistakable on every surface, paper included). */
   .is-test-banner {
     background: none;
-    color: #000;
-    border: 3pt solid #000;
+    color: var(--clr-black);
+    border: 3pt solid var(--clr-black);
     font-weight: var(--font-weight-bold);
   }
 

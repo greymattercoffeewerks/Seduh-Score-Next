@@ -91,6 +91,24 @@
    */
   --clr-test-500: #6b21c9;
 
+  /* Pure white and black, for surfaces that must be paper or ink whatever the mode (the printed results sheet's
+     paper, the printed TEST banner). Not for screen UI: use the neutral ramp and the semantic tokens. */
+  --clr-white: #ffffff;
+  --clr-black: #000000;
+
+  /* Categorical (identity, not meaning) series colours for charts: eight mid-tone hues that read on both
+     surface modes. Deliberately none in the ember/gold band (the brand accent and podium highlight) and none in
+     the violet band (--clr-test-500, reserved for is_test). A series colour never carries meaning alone: the
+     chart labels every series in words. Moved here from reportScreen.css in Petrol V2 P3. */
+  --clr-chart-1: #2f7d6e;
+  --clr-chart-2: #3a6ea5;
+  --clr-chart-3: #6b7a2f;
+  --clr-chart-4: #4a548a;
+  --clr-chart-5: #8a5a3a;
+  --clr-chart-6: #5a7d8a;
+  --clr-chart-7: #7a4a6e;
+  --clr-chart-8: #4a7a5a;
+
   /* Semantic tokens — paper mode (default) */
   --color-canvas: var(--clr-petrol-100);
   --color-surface: var(--clr-petrol-50);

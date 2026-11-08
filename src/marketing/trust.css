@@ -66,3 +66,8 @@ body {
 .trust-link:hover {
   color: var(--color-text);
 }
+
+/* Petrol V2 (P3): the hover colour change eases. */
+.trust-link {
+  transition: color var(--dur-fast) var(--ease-out);
+}

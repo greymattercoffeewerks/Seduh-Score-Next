@@ -125,8 +125,8 @@ body {
   transform: translate(-50%, 2rem);
   opacity: 0;
   transition:
-    opacity 0.5s,
-    transform 0.5s;
+    opacity var(--dur-stage) var(--ease-out),
+    transform var(--dur-stage) var(--ease-out);
   display: grid;
   text-align: center;
   white-space: nowrap;
@@ -213,7 +213,7 @@ body {
   line-height: 1.5;
 }
 .gtb-display-feed.is-new {
-  animation: gtb-display-row-in 0.45s both;
+  animation: gtb-display-row-in var(--dur-stage) var(--ease-out) both;
 }
 /* Same [hidden]-vs-display fix as .gtb-display-question/.gtb-display-number
    above — displayScreen.js's `qrWrap.hidden = done` would not otherwise hide
@@ -253,7 +253,7 @@ body {
   font-size: clamp(1.6rem, 4vh, 2.7rem);
 }
 .gtb-display-count.is-bump {
-  animation: gtb-display-bump 0.5s;
+  animation: gtb-display-bump var(--dur-stage) var(--ease-out);
 }
 .gtb-display-countdown {
   position: fixed;
