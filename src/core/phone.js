@@ -21,11 +21,12 @@ import {
   getCountries,
   getCountryCallingCode,
 } from 'libphonenumber-js/min';
+import { HOME_COUNTRY, countryOptions } from './country.js';
 
 // The project's home market. A bare number with no chosen country is read as Brunei only when it
 // is a complete Brunei number (see BRUNEI_LOCAL); this no longer means "assume it for anything".
 export const DEFAULT_COUNTRY_CODE = '+673';
-export const DEFAULT_COUNTRY = 'BN';
+export const DEFAULT_COUNTRY = HOME_COUNTRY;
 
 // E.164's own bounds: '+' followed by 8-15 digits total, first digit non-zero. Textually equal to
 // the pattern in the database's `app.is_e164` and `people` CHECK (a pgTAP test compares them).
@@ -212,19 +213,9 @@ export function validatePhoneShape(phone) {
 // Pure. The countries a person can choose, Brunei first and the rest by name, for a select:
 // [{ iso, callingCode, name }]. Names come from Intl when it has them, else the ISO code.
 export function phoneCountryOptions(locale = 'en') {
-  let names = null;
-  try {
-    names = new Intl.DisplayNames([locale], { type: 'region' });
-  } catch {
-    names = null;
-  }
-  const rows = getCountries().map((iso) => ({
+  return countryOptions(locale).map(({ iso, name }) => ({
     iso,
     callingCode: String(getCountryCallingCode(iso)),
-    name: names?.of(iso) ?? iso,
+    name,
   }));
-  rows.sort((a, b) => a.name.localeCompare(b.name, locale));
-  const home = rows.findIndex((row) => row.iso === DEFAULT_COUNTRY);
-  if (home > 0) rows.unshift(...rows.splice(home, 1));
-  return rows;
 }

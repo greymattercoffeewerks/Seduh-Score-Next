@@ -13,8 +13,10 @@ import { describeError } from '../../core/errors.js';
 import { findEvent } from '../../core/events.js';
 import { publishBtcLive } from './liveSession.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
-import { listTeams, createTeam, removeTeam } from './teams.js';
-import { listJudges, createJudge, removeJudge } from './judges.js';
+import { listTeams, createTeam, updateTeam, removeTeam } from './teams.js';
+import { listJudges, createJudge, updateJudge, removeJudge } from './judges.js';
+import { countrySelect } from './countrySelect.js';
+import { teamLabel } from './words.js';
 import {
   DEMO_TEAM_COUNT,
   DEMO_JUDGE_COUNT,
@@ -32,6 +34,19 @@ export function validateRosterName(name, label) {
   return null;
 }
 
+// The database's own limit on a team's optional "represents" label (btc_teams_represents_length).
+export const REPRESENTS_MAX = 60;
+
+export function validateRepresents(value) {
+  if (value.trim().length > REPRESENTS_MAX) {
+    return `Represents must be ${REPRESENTS_MAX} characters or fewer.`;
+  }
+  return null;
+}
+
+// '' (nothing chosen or typed) is stored as null, never as an empty string.
+const orNull = (value) => (value.trim() === '' ? null : value.trim());
+
 export async function mountSetupScreen(
   root,
   { eventId, client = getSupabase(), signal, handlers } = {},
@@ -44,8 +59,15 @@ export async function mountSetupScreen(
     judges: [],
     teamDraft: '',
     judgeDraft: '',
+    teamCountryDraft: '',
+    teamRepresentsDraft: '',
+    judgeCountryDraft: '',
     teamError: null,
+    teamErrorField: 'name', // which field teamError belongs to: 'name' | 'represents'
     judgeError: null,
+    // The one row being edited (teams and judges share it, so one row edits at a time):
+    // null | { kind: 'team' | 'judge', id, countryCode, represents, error }.
+    edit: null,
     busy: false,
     toastMessage: null,
     // The demo card's own result, kept inside the card and NOT auto-dismissed (the shared toast
@@ -54,7 +76,9 @@ export async function mountSetupScreen(
     // makes it out of date (showToast) or the next load starts.
     demoStatus: null,
     demoBusyScored: null,
-    // null | 'heading' | 'toast' — consumed once by render() below. Separate
+    // null | 'heading' | 'toast' | 'edit-first' (the first field of the row just opened for editing) |
+    // 'focus:<data-focus-key>' (a named control, for example the Edit button of the row just saved or cancelled) —
+    // consumed once by render() below. Separate
     // from withFocusPreservation's own restore-by-selector mechanism: that
     // one only ever re-focuses a control that ALREADY had focus before this
     // render (e.g. the name input, mid-typing, on a validation error) —
@@ -139,6 +163,14 @@ export async function mountSetupScreen(
     const validationMessage = validateRosterName(state.teamDraft, 'Team');
     if (validationMessage) {
       state.teamError = validationMessage;
+      state.teamErrorField = 'name';
+      render();
+      return;
+    }
+    const representsMessage = validateRepresents(state.teamRepresentsDraft);
+    if (representsMessage) {
+      state.teamError = representsMessage;
+      state.teamErrorField = 'represents';
       render();
       return;
     }
@@ -146,16 +178,27 @@ export async function mountSetupScreen(
     state.teamError = null;
     render();
     try {
-      const team = await createTeam(eventId, state.teamDraft.trim(), client);
+      const team = await createTeam(
+        eventId,
+        state.teamDraft.trim(),
+        {
+          countryCode: orNull(state.teamCountryDraft),
+          represents: orNull(state.teamRepresentsDraft),
+        },
+        client,
+      );
       state.teams = state.teams.some((t) => t.id === team.id)
         ? state.teams
         : [...state.teams, team].sort((a, b) => a.name.localeCompare(b.name));
       state.teamDraft = '';
+      state.teamCountryDraft = '';
+      state.teamRepresentsDraft = '';
       // Standings list every registered team, so a roster change is visible to the room.
       requestLivePublish(false);
       showToast(`${team.name} added.`);
     } catch (err) {
       state.teamError = describeError(err);
+      state.teamErrorField = 'name';
     }
     state.busy = false;
     render();
@@ -168,6 +211,7 @@ export async function mountSetupScreen(
     try {
       await removeTeam(team.id, client);
       state.teams = state.teams.filter((t) => t.id !== team.id);
+      if (state.edit?.id === team.id) state.edit = null;
       requestLivePublish(false);
       showToast(`${team.name} removed.`);
     } catch (err) {
@@ -190,11 +234,17 @@ export async function mountSetupScreen(
     state.judgeError = null;
     render();
     try {
-      const judge = await createJudge(eventId, state.judgeDraft.trim(), client);
+      const judge = await createJudge(
+        eventId,
+        state.judgeDraft.trim(),
+        { countryCode: orNull(state.judgeCountryDraft) },
+        client,
+      );
       state.judges = state.judges.some((j) => j.id === judge.id)
         ? state.judges
         : [...state.judges, judge].sort((a, b) => a.name.localeCompare(b.name));
       state.judgeDraft = '';
+      state.judgeCountryDraft = '';
       showToast(`${judge.name} added.`);
     } catch (err) {
       state.judgeError = describeError(err);
@@ -210,9 +260,78 @@ export async function mountSetupScreen(
     try {
       await removeJudge(judge.id, client);
       state.judges = state.judges.filter((j) => j.id !== judge.id);
+      if (state.edit?.id === judge.id) state.edit = null;
       showToast(`${judge.name} removed.`);
     } catch (err) {
       showToast(describeError(err));
+    }
+    state.busy = false;
+    render();
+  }
+
+  function editFocusKey(kind, id) {
+    return `focus:edit-${kind}-${id}`;
+  }
+
+  function handleStartEdit(kind, item) {
+    if (state.busy) return;
+    state.edit = {
+      kind,
+      id: item.id,
+      countryCode: item.country_code ?? '',
+      represents: item.represents ?? '',
+      error: null,
+    };
+    state.pendingFocus = 'edit-first';
+    render();
+  }
+
+  function handleCancelEdit() {
+    if (state.busy || !state.edit) return;
+    state.pendingFocus = editFocusKey(state.edit.kind, state.edit.id);
+    state.edit = null;
+    render();
+  }
+
+  // Country and represents do not affect scoring, and a team in a match cannot be removed, so editing is the only
+  // way to fix a typo once matches exist. Only a TEAM's change reaches the audience display (judge country is
+  // organiser-only); it republishes only if the event is already live, as a team add does.
+  async function handleSaveEdit(domEvent) {
+    domEvent.preventDefault();
+    if (state.busy || !state.edit) return;
+    const { kind, id } = state.edit;
+    if (kind === 'team') {
+      const message = validateRepresents(state.edit.represents);
+      if (message) {
+        state.edit.error = message;
+        render();
+        return;
+      }
+    }
+    state.busy = true;
+    state.edit.error = null;
+    render();
+    const draft = state.edit;
+    try {
+      if (kind === 'team') {
+        const team = await updateTeam(
+          id,
+          { countryCode: orNull(draft.countryCode), represents: orNull(draft.represents) },
+          client,
+        );
+        state.teams = state.teams.map((t) => (t.id === id ? team : t));
+        requestLivePublish(false);
+        showToast(`${team.name} updated.`);
+      } else {
+        const judge = await updateJudge(id, { countryCode: orNull(draft.countryCode) }, client);
+        state.judges = state.judges.map((j) => (j.id === id ? judge : j));
+        showToast(`${judge.name} updated.`);
+      }
+      state.edit = null;
+      // The toast confirms in words; focus goes back to the row's Edit button, where the keyboard user was.
+      state.pendingFocus = editFocusKey(kind, id);
+    } catch (err) {
+      if (state.edit) state.edit.error = describeError(err);
     }
     state.busy = false;
     render();
@@ -262,6 +381,7 @@ export async function mountSetupScreen(
       const persisted = await raceTimeout(loadPersisted(), DEFAULT_LOAD_TIMEOUT_MS);
       state.teams = persisted.teams;
       state.judges = persisted.judges;
+      state.edit = null;
       state.demoStatus = { tone: 'success', message: describeDemoLoaded(loaded) };
     } catch {
       state.demoStatus = null;
@@ -336,6 +456,9 @@ export async function mountSetupScreen(
     );
   }
 
+  // One card per roster (teams, judges): an add form (name, country, and for a team a free "represents" label), then
+  // the rows. A row shows "Country · Name" and an Edit button that swaps the row for an inline form with the same
+  // country (and represents) fields, Save and Cancel; one row edits at a time (state.edit).
   function renderRosterSection({
     fieldKey,
     heading,
@@ -343,13 +466,23 @@ export async function mountSetupScreen(
     items,
     draftValue,
     draftError,
+    errorField,
     placeholder,
+    nameHint,
+    withRepresents,
+    countryDraft,
+    representsDraft,
     onDraftInput,
+    onCountryChange,
+    onRepresentsInput,
     onSubmit,
     onRemove,
     emptyMessage,
   }) {
     const errorId = `btc-${fieldKey}-error`;
+    const hintId = `btc-${fieldKey}-name-hint`;
+    const nameError = draftError && errorField === 'name';
+    const representsError = draftError && errorField === 'represents';
 
     // aria-label AND the labeledField text both use singularLabel, matching
     // validateRosterName's own singular wording ("Team name is required.")
@@ -361,6 +494,7 @@ export async function mountSetupScreen(
     // hitting a validation error, and re-rendering doesn't drop focus to
     // <body> (found in review, ui-accessibility-reviewer — nothing on this
     // screen carried a focus-key at all).
+    const nameDescribedBy = [nameHint ? hintId : null, nameError ? errorId : null].filter(Boolean);
     const input = el('input', {
       className: 'field-input',
       attrs: {
@@ -368,12 +502,37 @@ export async function mountSetupScreen(
         'aria-label': `${singularLabel} name`,
         placeholder,
         'data-field': fieldKey,
-        ...(draftError ? { 'aria-describedby': errorId, 'aria-invalid': 'true' } : {}),
+        ...(nameDescribedBy.length ? { 'aria-describedby': nameDescribedBy.join(' ') } : {}),
+        ...(nameError ? { 'aria-invalid': 'true' } : {}),
       },
     });
     input.value = draftValue;
     setBusyDisabled(input, state.busy);
     input.addEventListener('input', () => onDraftInput(input.value));
+
+    const countryField = countrySelect({
+      value: countryDraft,
+      ariaLabel: `${singularLabel} country`,
+      dataField: `${fieldKey}-country`,
+      onChange: onCountryChange,
+    });
+    setBusyDisabled(countryField, state.busy);
+
+    let representsInput = null;
+    if (withRepresents) {
+      representsInput = el('input', {
+        className: 'field-input',
+        attrs: {
+          type: 'text',
+          'aria-label': 'Represents (optional)',
+          'data-field': `${fieldKey}-represents`,
+          ...(representsError ? { 'aria-describedby': errorId, 'aria-invalid': 'true' } : {}),
+        },
+      });
+      representsInput.value = representsDraft;
+      setBusyDisabled(representsInput, state.busy);
+      representsInput.addEventListener('input', () => onRepresentsInput(representsInput.value));
+    }
 
     const submitButton = el('button', {
       className: 'btn btn-primary tap-target',
@@ -389,21 +548,33 @@ export async function mountSetupScreen(
     // triggered it keeps focus via data-field above. Found missing
     // entirely in review (ui-accessibility-reviewer): previously a plain
     // <p> with no role and no association to the field at all.
+    const errorNode = draftError
+      ? el('p', {
+          id: errorId,
+          className: 'btc-field-error',
+          text: draftError,
+          attrs: { role: 'alert' },
+        })
+      : null;
     const form = el('form', { className: 'btc-roster-form' }, [
       labeledField(
         `${singularLabel} name`,
         input,
-        draftError
-          ? [
-              el('p', {
-                id: errorId,
-                className: 'btc-field-error',
-                text: draftError,
-                attrs: { role: 'alert' },
-              }),
-            ]
-          : [],
+        [
+          nameHint ? el('p', { id: hintId, className: 'form-field-hint', text: nameHint }) : null,
+          nameError ? errorNode : null,
+        ].filter(Boolean),
       ),
+      labeledField('Country', countryField),
+      ...(representsInput
+        ? [
+            labeledField(
+              'Represents (optional)',
+              representsInput,
+              representsError ? [errorNode] : [],
+            ),
+          ]
+        : []),
       submitButton,
     ]);
     form.addEventListener('submit', onSubmit);
@@ -414,26 +585,141 @@ export async function mountSetupScreen(
         : el(
             'ul',
             { className: 'roster-list', attrs: { 'aria-label': `${heading} roster` } },
-            items.map((item) => {
-              const removeButton = el('button', {
-                className: 'btn btn-outline tap-target',
-                text: 'Remove',
-                attrs: {
-                  type: 'button',
-                  'aria-label': `Remove ${item.name}`,
-                  'data-focus-key': `remove-${fieldKey}-${item.id}`,
-                },
-              });
-              setBusyDisabled(removeButton, state.busy);
-              removeButton.addEventListener('click', () => onRemove(item));
-              return el('li', {}, [el('span', { text: item.name }), removeButton]);
-            }),
+            items.map((item) =>
+              state.edit?.kind === fieldKey && state.edit.id === item.id
+                ? renderEditRow({ fieldKey, singularLabel, withRepresents, item })
+                : renderRosterRow({ fieldKey, withRepresents, item, onRemove }),
+            ),
           );
 
     return el('div', { className: 'card btc-roster-card' }, [
       el('h2', { text: heading }),
       form,
       list,
+    ]);
+  }
+
+  // "Country · Name" (words.js's teamLabel: the one place the format is written, used for judges too), the team's
+  // free "represents" label under it, then Edit and Remove.
+  function renderRosterRow({ fieldKey, withRepresents, item, onRemove }) {
+    const editButton = el('button', {
+      className: 'btn btn-outline tap-target',
+      text: 'Edit',
+      attrs: {
+        type: 'button',
+        'aria-label': `Edit ${item.name}`,
+        'data-focus-key': `edit-${fieldKey}-${item.id}`,
+      },
+    });
+    setBusyDisabled(editButton, state.busy);
+    editButton.addEventListener('click', () => handleStartEdit(fieldKey, item));
+
+    const removeButton = el('button', {
+      className: 'btn btn-outline tap-target',
+      text: 'Remove',
+      attrs: {
+        type: 'button',
+        'aria-label': `Remove ${item.name}`,
+        'data-focus-key': `remove-${fieldKey}-${item.id}`,
+      },
+    });
+    setBusyDisabled(removeButton, state.busy);
+    removeButton.addEventListener('click', () => onRemove(item));
+
+    return el('li', {}, [
+      el(
+        'div',
+        { className: 'btc-roster-info' },
+        [
+          el('span', { text: teamLabel(item) }),
+          withRepresents && item.represents
+            ? el('span', { className: 'stage-meta', text: `Represents: ${item.represents}` })
+            : null,
+        ].filter(Boolean),
+      ),
+      el('div', { className: 'btc-roster-actions' }, [editButton, removeButton]),
+    ]);
+  }
+
+  function renderEditRow({ fieldKey, singularLabel, withRepresents, item }) {
+    const edit = state.edit;
+    const errorId = `btc-${fieldKey}-edit-error`;
+
+    const countryField = countrySelect({
+      value: edit.countryCode,
+      ariaLabel: `${singularLabel} country`,
+      dataField: 'edit-country',
+      onChange: (value) => {
+        edit.countryCode = value;
+      },
+    });
+    setBusyDisabled(countryField, state.busy);
+
+    let representsInput = null;
+    if (withRepresents) {
+      representsInput = el('input', {
+        className: 'field-input',
+        attrs: {
+          type: 'text',
+          'aria-label': 'Represents (optional)',
+          'data-field': 'edit-represents',
+          ...(edit.error ? { 'aria-describedby': errorId, 'aria-invalid': 'true' } : {}),
+        },
+      });
+      representsInput.value = edit.represents;
+      setBusyDisabled(representsInput, state.busy);
+      representsInput.addEventListener('input', () => {
+        edit.represents = representsInput.value;
+      });
+    }
+
+    const errorNode = edit.error
+      ? el('p', {
+          id: errorId,
+          className: 'btc-field-error',
+          text: edit.error,
+          attrs: { role: 'alert' },
+        })
+      : null;
+
+    const saveButton = el('button', {
+      className: 'btn btn-primary tap-target',
+      text: state.busy ? 'Saving…' : 'Save',
+      attrs: {
+        type: 'submit',
+        'data-focus-key': 'edit-save',
+        ...(edit.error && !withRepresents ? { 'aria-describedby': errorId } : {}),
+      },
+    });
+    setBusyDisabled(saveButton, state.busy);
+    const cancelButton = el('button', {
+      className: 'btn btn-outline tap-target',
+      text: 'Cancel',
+      attrs: { type: 'button', 'data-focus-key': 'edit-cancel' },
+    });
+    setBusyDisabled(cancelButton, state.busy);
+    cancelButton.addEventListener('click', () => handleCancelEdit());
+
+    const form = el(
+      'form',
+      {
+        className: 'btc-roster-form btc-roster-edit-form',
+        attrs: { 'aria-label': `Edit ${item.name}` },
+      },
+      [
+        labeledField('Country', countryField),
+        ...(representsInput
+          ? [labeledField('Represents (optional)', representsInput, errorNode ? [errorNode] : [])]
+          : []),
+        ...(!representsInput && errorNode ? [errorNode] : []),
+        el('div', { className: 'btc-roster-actions' }, [saveButton, cancelButton]),
+      ],
+    );
+    form.addEventListener('submit', handleSaveEdit);
+
+    return el('li', { className: 'btc-roster-editing' }, [
+      el('span', { text: teamLabel(item) }),
+      form,
     ]);
   }
 
@@ -511,9 +797,20 @@ export async function mountSetupScreen(
           items: state.teams,
           draftValue: state.teamDraft,
           draftError: state.teamError,
+          errorField: state.teamErrorField,
           placeholder: 'e.g. Grey Matter',
+          nameHint: 'A team or country name, not a person’s name',
+          withRepresents: true,
+          countryDraft: state.teamCountryDraft,
+          representsDraft: state.teamRepresentsDraft,
           onDraftInput: (value) => {
             state.teamDraft = value;
+          },
+          onCountryChange: (value) => {
+            state.teamCountryDraft = value;
+          },
+          onRepresentsInput: (value) => {
+            state.teamRepresentsDraft = value;
           },
           onSubmit: handleAddTeam,
           onRemove: handleRemoveTeam,
@@ -529,9 +826,15 @@ export async function mountSetupScreen(
           items: state.judges,
           draftValue: state.judgeDraft,
           draftError: state.judgeError,
+          errorField: 'name',
           placeholder: 'e.g. Alex Rivera',
+          withRepresents: false,
+          countryDraft: state.judgeCountryDraft,
           onDraftInput: (value) => {
             state.judgeDraft = value;
+          },
+          onCountryChange: (value) => {
+            state.judgeCountryDraft = value;
           },
           onSubmit: handleAddJudge,
           onRemove: handleRemoveJudge,
@@ -566,6 +869,23 @@ export async function mountSetupScreen(
         state.pendingFocus = null;
         if (toastNode) {
           toastNode.focus();
+          return true;
+        }
+      } else if (state.pendingFocus === 'edit-first') {
+        state.pendingFocus = null;
+        const first = container.querySelector('[data-field="edit-country"]');
+        if (first) {
+          first.focus();
+          return true;
+        }
+      } else if (state.pendingFocus?.startsWith('focus:')) {
+        const key = state.pendingFocus.slice('focus:'.length);
+        state.pendingFocus = null;
+        const target = [...container.querySelectorAll('[data-focus-key]')].find(
+          (node) => node.getAttribute('data-focus-key') === key,
+        );
+        if (target) {
+          target.focus();
           return true;
         }
       }

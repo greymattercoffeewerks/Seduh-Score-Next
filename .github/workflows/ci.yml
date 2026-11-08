@@ -47,6 +47,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run format:check
+      # Orientation docs stay short and the archive stays complete (tools/check-doc-budgets.mjs, STATUS.md).
+      - run: npm run check:docs
       - run: npm run lint
       - run: npm test
       - run: npm run build

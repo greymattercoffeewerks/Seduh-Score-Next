@@ -55,3 +55,32 @@
 .btc-demo-status:empty {
   display: none;
 }
+
+/* A roster row: the label (and a team's optional "represents" line) on the left, Edit and Remove on the right,
+   wrapping below at 360px rather than overflowing. */
+.btc-roster-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  flex: 1 1 12rem;
+  overflow-wrap: anywhere;
+}
+
+.btc-roster-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* The inline edit form fills the row under its label. */
+.btc-roster-editing .btc-roster-edit-form {
+  flex: 1 1 100%;
+  margin-bottom: 0;
+}
+
+@media (min-width: 640px) {
+  .btc-roster-form .btc-roster-actions {
+    align-self: flex-end;
+  }
+}

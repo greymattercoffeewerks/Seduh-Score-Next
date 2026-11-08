@@ -1,6 +1,6 @@
 {
   "name": "seduh-score-next",
-  "version": "3.6.3",
+  "version": "3.6.4",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,6 +8,7 @@
     "build": "vite build && npm run prerender:public",
     "prerender:public": "node tools/prerender-public-pages.mjs",
     "check:admin-leak": "node tools/check-admin-bundle-leak.mjs",
+    "check:docs": "node tools/check-doc-budgets.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
