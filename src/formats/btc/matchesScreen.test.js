@@ -422,4 +422,126 @@ describe('mountMatchesScreen', () => {
   });
 
   expect(publishBtcLive).not.toHaveBeenCalled();
+  describe('country', () => {
+    const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+    const choose = (field, value) => {
+      const select = root.querySelector(`select[data-field="${field}"]`);
+      select.value = value;
+      select.dispatchEvent(new Event('change'));
+    };
+    const tick = (judgeId, checked) => {
+      const box = root.querySelector(`input[data-field="judge-${judgeId}"]`);
+      box.checked = checked;
+      box.dispatchEvent(new Event('change'));
+    };
+    const warnings = () =>
+      [...root.querySelectorAll('.btc-country-warnings p')].map((p) => p.textContent);
+    const countryDb = () => {
+      const db = baseDb();
+      db.btc_teams = [
+        { id: 't1', event_id: 'ev1', name: 'Team Kopi', country_code: 'BN' },
+        { id: 't2', event_id: 'ev1', name: 'Team Teh', country_code: 'BN' },
+        { id: 't3', event_id: 'ev1', name: 'Team Satay', country_code: 'SG' },
+        { id: 't4', event_id: 'ev1', name: 'Team Plain', country_code: null },
+      ];
+      db.btc_judges = [
+        { id: 'j1', event_id: 'ev1', name: 'Siti', country_code: 'BN' },
+        { id: 'j2', event_id: 'ev1', name: 'Ahmad', country_code: 'MY' },
+        { id: 'j3', event_id: 'ev1', name: 'Lee', country_code: null },
+      ];
+      return db;
+    };
+
+    it('shows "Country · Name" in the team selects and beside each judge', async () => {
+      await mountMatchesScreen(root, { eventId: 'ev1', client: fakeClient(countryDb()) });
+      const options = [...root.querySelectorAll('select[data-field="team1Id"] option')].map(
+        (o) => o.textContent,
+      );
+      expect(options).toEqual([
+        'Select a team…',
+        'Brunei · Team Kopi',
+        'Brunei · Team Teh',
+        'Singapore · Team Satay',
+        'Team Plain',
+      ]);
+      const judges = [...root.querySelectorAll('.btc-judge-checkbox-label')].map(
+        (l) => l.textContent,
+      );
+      expect(judges).toEqual(['Brunei · Siti', 'Malaysia · Ahmad', 'Lee']);
+    });
+
+    it('warns, in words and per judge, when a ticked judge shares a team country', async () => {
+      await mountMatchesScreen(root, { eventId: 'ev1', client: fakeClient(countryDb()) });
+      expect(warnings()).toEqual([]);
+      choose('team1Id', 't1');
+      choose('team2Id', 't3');
+      tick('j1', true);
+      expect(warnings()).toEqual(['Judge Siti is from Brunei, the same country as Team Kopi.']);
+      // the warning is a polite status tied to the judge fieldset
+      const region = root.querySelector('.btc-country-warnings');
+      expect(region.getAttribute('role')).toBe('status');
+      expect(root.querySelector('fieldset').getAttribute('aria-describedby')).toBe(region.id);
+    });
+
+    it('lists one line for each team of the judge country', async () => {
+      await mountMatchesScreen(root, { eventId: 'ev1', client: fakeClient(countryDb()) });
+      choose('team1Id', 't1');
+      choose('team2Id', 't2');
+      tick('j1', true);
+      expect(warnings()).toEqual([
+        'Judge Siti is from Brunei, the same country as Team Kopi.',
+        'Judge Siti is from Brunei, the same country as Team Teh.',
+      ]);
+    });
+
+    it('clears the warning when the judge is unticked or the team changes, and ignores no-country sides', async () => {
+      await mountMatchesScreen(root, { eventId: 'ev1', client: fakeClient(countryDb()) });
+      choose('team1Id', 't1');
+      choose('team2Id', 't3');
+      tick('j1', true);
+      expect(warnings()).toHaveLength(1);
+      tick('j1', false);
+      expect(warnings()).toEqual([]);
+      expect(root.querySelector('fieldset').hasAttribute('aria-describedby')).toBe(false);
+      tick('j1', true);
+      expect(warnings()).toHaveLength(1);
+      choose('team1Id', 't4'); // a team with no country
+      expect(warnings()).toEqual([]);
+      tick('j3', true); // a judge with no country
+      choose('team1Id', 't1');
+      expect(warnings()).toEqual(['Judge Siti is from Brunei, the same country as Team Kopi.']);
+    });
+
+    it('never disables Create match, and still creates the match with the warning showing', async () => {
+      const client = fakeClient(countryDb());
+      await mountMatchesScreen(root, { eventId: 'ev1', client });
+      choose('team1Id', 't1');
+      choose('team2Id', 't3');
+      tick('j1', true);
+      tick('j2', true);
+      tick('j3', true);
+      expect(warnings()).toHaveLength(1);
+      const submit = root.querySelector('button[data-focus-key="match-submit"]');
+      expect(submit.disabled).toBe(false);
+      expect(submit.getAttribute('aria-disabled')).toBeNull();
+      root
+        .querySelector('form')
+        .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await flush();
+      expect(client.rpcCalls).toHaveLength(1);
+      expect(client.rpcCalls[0][0]).toBe('create_btc_match');
+      // the new match is listed with the country labels
+      expect(root.querySelector('.btc-match-teams').textContent).toBe(
+        'Brunei · Team Kopi vs Singapore · Team Satay',
+      );
+    });
+
+    it('keeps focus on the team select that was changed', async () => {
+      await mountMatchesScreen(root, { eventId: 'ev1', client: fakeClient(countryDb()) });
+      const select = root.querySelector('select[data-field="team1Id"]');
+      select.focus();
+      choose('team1Id', 't1');
+      expect(document.activeElement).toBe(root.querySelector('select[data-field="team1Id"]'));
+    });
+  });
 });

@@ -178,3 +178,6 @@ _BTC now publishes its live payload automatically; no BTC audience screen exists
 - **Closed by this task:** the demo-data item "if the event is the ACTIVE live session, a load does not republish" (a load now republishes and takes the display over).
 
 ---
+
+- **`btc_teams`/`btc_judges` still grant `authenticated` every column** (Build E, 2026-11-08: `country_code` and `represents` ride on the table-level grant). Narrowing them to column-level insert/update grants (`CONVENTIONS.md`, "How to add a tenant table", item 4) is the owner's per-table decision; not done in Build E.
+- **The judge-country warning is not reliably announced** (Build E): the matches screen rebuilds its polite status node on every render, as it does for "N of 3 selected". A persistent live region needs a change to the render loop.

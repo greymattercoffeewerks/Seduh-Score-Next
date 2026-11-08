@@ -8,6 +8,18 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## BTC Build E: country on teams and judges (PR 1) · 2026-11-08
+
+**Task:** `docs/specs/BTC-E-TEAM-JUDGE-COUNTRY-PLAN.md`, PR 1 (sections 4 and 5): the data and organiser screens for the judge-off-own-country rule that the draw (Build B) builds on. PR 2 (country in the live payload) is not started.
+
+- **Database:** migration `20261108100000_btc_team_judge_country.sql` adds `btc_teams.country_code`, `btc_teams.represents` (1 to 60 characters, trimmed) and `btc_judges.country_code` (shape `^[A-Z]{2}$`, nullable, not unique). No new table, function, policy or grant. Rollback run in a transaction and re-applied with an identical fingerprint. pgTAP `073` (38 assertions); the full suite passes. `get_scoring_record` and `public_event_summary` emit no team or judge row, and the live payload reads judges as `id, name`, so judge country reaches no public surface. `get_dispute_pack` emits whole rows, so it now carries the columns (organiser-only; no test pins those keys).
+- **Front end:** `core/country.js` (one country list; `phone.js` delegates, its tests unchanged); `teams.js`/`judges.js` take options on create (**signature change**: `createTeam(eventId, name, { countryCode, represents }, client)`) and gain `updateTeam`/`updateJudge`; `countryConflicts.js` (pure; B reuses it); `words.js` `teamLabel`; `countrySelect.js`; setup add and inline edit forms (one row at a time; only a team change republishes); the matches screen shows `Country · Name` and warns, never blocks, when a ticked judge shares a team's country.
+- **Deviations from the plan:** `countryName` returns the code itself for a code outside the list (Intl would say "Unknown Region"). A team with a stored country but a judge with none never conflicts (as planned). The console has no dark theme, so the light/dark check was light only (dark exists only on the projector).
+- **Reviews:** `schema-guardian` clean (nit: `btrim` strips spaces only, left). `security-reviewer` clean. `module-boundary-checker` clean (one comment nit, fixed). `test-auditor`: no red; mutation checks all caught; one nit fixed (unknown code now pins `ZZ · Team Kopi`). `code-reviewer`: one red, `format:check` failing on five files, fixed with Prettier (a real miss, mine); nits left. `ui-accessibility-reviewer`: one provisional red, the judge-country warning is a polite status node that the render loop rebuilds each time, so a screen reader may not announce it (the "N of 3 selected" line has the same pre-existing pattern). Not fixed, no independent check run: a persistent live region needs a change to the render loop; the warning is also read via `aria-describedby` and is visible text. Open for the owner. Also open: edits typed while a save is in flight are dropped; the Save has no timeout.
+- **Not done here:** merge, and pushing the migration to the cloud project. `tools/check-doc-budgets.test.js` fails on this Windows checkout only (a POSIX path assumption), unrelated.
+
+---
+
 ## Landing page: new hero tagline · 2026-11-06
 
 **Task:** a test panel found the hero headline ("One tablet. One projector. Zero fall-apart.") disconnected and confusing, with no link to coffee.

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { listTeams, findTeamByName, createTeam, removeTeam } from './teams.js';
+import { listTeams, findTeamByName, createTeam, updateTeam, removeTeam } from './teams.js';
 
 // Matches cup-taster/setup.test.js's own fakeClient shape (queue-based,
 // consumed strictly in call order per table) — same convention, reused
@@ -23,6 +23,10 @@ function fakeClient({ tables = {} } = {}) {
         },
         insert: (payload) => {
           calls.push(['insert', table, payload]);
+          return builder;
+        },
+        update: (patch) => {
+          calls.push(['update', table, patch]);
           return builder;
         },
         delete: () => {
@@ -77,7 +81,7 @@ describe('createTeam', () => {
   it('inserts a new team and returns it', async () => {
     const created = { id: 't1', event_id: 'e1', name: 'Alpha' };
     const client = fakeClient({ tables: { btc_teams: { data: created, error: null } } });
-    const result = await createTeam('e1', 'Alpha', client);
+    const result = await createTeam('e1', 'Alpha', {}, client);
     expect(result).toEqual(created);
     expect(client.calls).toContainEqual(['insert', 'btc_teams', { event_id: 'e1', name: 'Alpha' }]);
   });
@@ -97,7 +101,7 @@ describe('createTeam', () => {
         ],
       },
     });
-    const result = await createTeam('e1', 'Alpha', client);
+    const result = await createTeam('e1', 'Alpha', {}, client);
     expect(result).toEqual(existing);
   });
 
@@ -110,7 +114,7 @@ describe('createTeam', () => {
         ],
       },
     });
-    await expect(createTeam('e1', 'Alpha', client)).rejects.toMatchObject({ code: '23505' });
+    await expect(createTeam('e1', 'Alpha', {}, client)).rejects.toMatchObject({ code: '23505' });
   });
 
   it('throws a non-unique-violation error without attempting recovery', async () => {
@@ -119,7 +123,7 @@ describe('createTeam', () => {
         btc_teams: { data: null, error: { code: '42501', message: 'permission denied' } },
       },
     });
-    await expect(createTeam('e1', 'Alpha', client)).rejects.toMatchObject({ code: '42501' });
+    await expect(createTeam('e1', 'Alpha', {}, client)).rejects.toMatchObject({ code: '42501' });
     // findTeamByName is the only path that ever calls .eq() (it filters by
     // event_id and name) — a plain insert().select().single() never does,
     // so its absence here proves recovery was never attempted for a
@@ -141,5 +145,82 @@ describe('removeTeam', () => {
       tables: { btc_teams: { data: null, error: { code: '23503', message: 'FK violation' } } },
     });
     await expect(removeTeam('t1', client)).rejects.toMatchObject({ code: '23503' });
+  });
+});
+
+describe('createTeam with a country', () => {
+  it('sends the country and the represents label when they are set', async () => {
+    const created = {
+      id: 't1',
+      event_id: 'e1',
+      name: 'Kopi',
+      country_code: 'BN',
+      represents: 'Borneo',
+    };
+    const client = fakeClient({ tables: { btc_teams: { data: created, error: null } } });
+    const result = await createTeam(
+      'e1',
+      'Kopi',
+      { countryCode: 'BN', represents: 'Borneo' },
+      client,
+    );
+    expect(result).toEqual(created);
+    expect(client.calls).toContainEqual([
+      'insert',
+      'btc_teams',
+      { event_id: 'e1', name: 'Kopi', country_code: 'BN', represents: 'Borneo' },
+    ]);
+  });
+
+  it('sends neither key when both are null', async () => {
+    const client = fakeClient({ tables: { btc_teams: { data: { id: 't1' }, error: null } } });
+    await createTeam('e1', 'Kopi', { countryCode: null, represents: null }, client);
+    expect(client.calls).toContainEqual(['insert', 'btc_teams', { event_id: 'e1', name: 'Kopi' }]);
+  });
+
+  it('returns an adopted row as it is, not overwritten with the country just sent', async () => {
+    const existing = { id: 't1', event_id: 'e1', name: 'Kopi', country_code: 'SG' };
+    const client = fakeClient({
+      tables: {
+        btc_teams: [
+          { data: null, error: { code: '23505', message: 'duplicate' } },
+          { data: existing, error: null },
+        ],
+      },
+    });
+    const result = await createTeam('e1', 'Kopi', { countryCode: 'BN' }, client);
+    expect(result).toEqual(existing);
+    expect(client.calls.filter(([op]) => op === 'update')).toHaveLength(0);
+  });
+});
+
+describe('updateTeam', () => {
+  it('updates only the keys passed', async () => {
+    const client = fakeClient({ tables: { btc_teams: { data: { id: 't1' }, error: null } } });
+    await updateTeam('t1', { countryCode: 'BN' }, client);
+    expect(client.calls).toContainEqual(['update', 'btc_teams', { country_code: 'BN' }]);
+    expect(client.calls).toContainEqual(['eq', 'btc_teams', 'id', 't1']);
+    await updateTeam('t1', { represents: 'Borneo' }, client);
+    expect(client.calls).toContainEqual(['update', 'btc_teams', { represents: 'Borneo' }]);
+  });
+
+  it('clears with null', async () => {
+    const client = fakeClient({ tables: { btc_teams: { data: { id: 't1' }, error: null } } });
+    await updateTeam('t1', { countryCode: null, represents: null }, client);
+    expect(client.calls).toContainEqual([
+      'update',
+      'btc_teams',
+      { country_code: null, represents: null },
+    ]);
+  });
+
+  it('throws with no field to change, and the raw error on a failed write', async () => {
+    const client = fakeClient({
+      tables: { btc_teams: { data: null, error: { code: '23514', message: 'check' } } },
+    });
+    await expect(updateTeam('t1', {}, client)).rejects.toThrow('needs a field');
+    await expect(updateTeam('t1', { countryCode: 'bn' }, client)).rejects.toMatchObject({
+      code: '23514',
+    });
   });
 });

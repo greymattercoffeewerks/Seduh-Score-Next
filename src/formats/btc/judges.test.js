@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { listJudges, findJudgeByName, createJudge, removeJudge } from './judges.js';
+import { listJudges, findJudgeByName, createJudge, updateJudge, removeJudge } from './judges.js';
 
 // Same fakeClient shape as teams.test.js / cup-taster/setup.test.js.
 function fakeClient({ tables = {} } = {}) {
@@ -21,6 +21,10 @@ function fakeClient({ tables = {} } = {}) {
         },
         insert: (payload) => {
           calls.push(['insert', table, payload]);
+          return builder;
+        },
+        update: (patch) => {
+          calls.push(['update', table, patch]);
           return builder;
         },
         delete: () => {
@@ -75,7 +79,7 @@ describe('createJudge', () => {
   it('inserts a new judge and returns it', async () => {
     const created = { id: 'j1', event_id: 'e1', name: 'Alex' };
     const client = fakeClient({ tables: { btc_judges: { data: created, error: null } } });
-    const result = await createJudge('e1', 'Alex', client);
+    const result = await createJudge('e1', 'Alex', {}, client);
     expect(result).toEqual(created);
     expect(client.calls).toContainEqual(['insert', 'btc_judges', { event_id: 'e1', name: 'Alex' }]);
   });
@@ -90,7 +94,7 @@ describe('createJudge', () => {
         ],
       },
     });
-    const result = await createJudge('e1', 'Alex', client);
+    const result = await createJudge('e1', 'Alex', {}, client);
     expect(result).toEqual(existing);
   });
 
@@ -103,7 +107,7 @@ describe('createJudge', () => {
         ],
       },
     });
-    await expect(createJudge('e1', 'Alex', client)).rejects.toMatchObject({ code: '23505' });
+    await expect(createJudge('e1', 'Alex', {}, client)).rejects.toMatchObject({ code: '23505' });
   });
 
   it('throws a non-unique-violation error without attempting recovery', async () => {
@@ -112,7 +116,7 @@ describe('createJudge', () => {
         btc_judges: { data: null, error: { code: '42501', message: 'permission denied' } },
       },
     });
-    await expect(createJudge('e1', 'Alex', client)).rejects.toMatchObject({ code: '42501' });
+    await expect(createJudge('e1', 'Alex', {}, client)).rejects.toMatchObject({ code: '42501' });
     // findJudgeByName is the only path that ever calls .eq() — its absence
     // proves recovery was never attempted for a non-23505 error.
     expect(client.calls.filter(([op]) => op === 'eq')).toHaveLength(0);
@@ -132,5 +136,55 @@ describe('removeJudge', () => {
       tables: { btc_judges: { data: null, error: { code: '23503', message: 'FK violation' } } },
     });
     await expect(removeJudge('j1', client)).rejects.toMatchObject({ code: '23503' });
+  });
+});
+
+describe('createJudge with a country', () => {
+  it('sends the country when set, and nothing when null', async () => {
+    const client = fakeClient({ tables: { btc_judges: { data: { id: 'j1' }, error: null } } });
+    await createJudge('e1', 'Siti', { countryCode: 'BN' }, client);
+    expect(client.calls).toContainEqual([
+      'insert',
+      'btc_judges',
+      { event_id: 'e1', name: 'Siti', country_code: 'BN' },
+    ]);
+    await createJudge('e1', 'Alex', { countryCode: null }, client);
+    expect(client.calls).toContainEqual(['insert', 'btc_judges', { event_id: 'e1', name: 'Alex' }]);
+  });
+
+  it('returns an adopted row as it is, not overwritten with the country just sent', async () => {
+    const existing = { id: 'j1', event_id: 'e1', name: 'Siti', country_code: 'SG' };
+    const client = fakeClient({
+      tables: {
+        btc_judges: [
+          { data: null, error: { code: '23505', message: 'duplicate' } },
+          { data: existing, error: null },
+        ],
+      },
+    });
+    const result = await createJudge('e1', 'Siti', { countryCode: 'BN' }, client);
+    expect(result).toEqual(existing);
+    expect(client.calls.filter(([op]) => op === 'update')).toHaveLength(0);
+  });
+});
+
+describe('updateJudge', () => {
+  it('sets and clears the country', async () => {
+    const client = fakeClient({ tables: { btc_judges: { data: { id: 'j1' }, error: null } } });
+    await updateJudge('j1', { countryCode: 'BN' }, client);
+    expect(client.calls).toContainEqual(['update', 'btc_judges', { country_code: 'BN' }]);
+    expect(client.calls).toContainEqual(['eq', 'btc_judges', 'id', 'j1']);
+    await updateJudge('j1', { countryCode: null }, client);
+    expect(client.calls).toContainEqual(['update', 'btc_judges', { country_code: null }]);
+  });
+
+  it('throws with no field to change, and the raw error on a failed write', async () => {
+    const client = fakeClient({
+      tables: { btc_judges: { data: null, error: { code: '23514', message: 'check' } } },
+    });
+    await expect(updateJudge('j1', {}, client)).rejects.toThrow('needs a field');
+    await expect(updateJudge('j1', { countryCode: 'bn' }, client)).rejects.toMatchObject({
+      code: '23514',
+    });
   });
 });

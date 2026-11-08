@@ -82,3 +82,17 @@
     gap: var(--space-4);
   }
 }
+
+/* The judge-country warning under the judge checkboxes: a status line in words (never colour alone), collapsed when
+   there is nothing to say so the always-present live region adds no gap. */
+.btc-country-warnings:empty {
+  display: none;
+}
+
+.btc-country-warning {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  border-inline-start: 3px solid var(--color-warning);
+  padding-inline-start: var(--space-2);
+}
