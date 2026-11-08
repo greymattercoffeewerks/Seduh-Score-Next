@@ -81,16 +81,68 @@ describe('demoLivePayload: the fixtures the preview page and the screen tests st
     // update instead of a silent demo/test-data change.
     const preliminary = preliminaryPayload({ playedCount: 28 });
     expect(preliminary.standings).toEqual([
-      { position: 1, teamName: 'Bean Scene', played: 7, wins: 7, points: 259 },
-      { position: 2, teamName: 'Pour Decisions', played: 7, wins: 6, points: 237 },
-      { position: 3, teamName: 'Crema Crew', played: 7, wins: 4, points: 211 },
-      { position: 4, teamName: 'Drip Society', played: 7, wins: 4, points: 182 },
-      { position: 5, teamName: 'Grind House', played: 7, wins: 3, points: 176 },
-      { position: 6, teamName: 'Roast Republic', played: 7, wins: 2, points: 137 },
-      { position: 7, teamName: 'Latte Lab', played: 7, wins: 2, points: 124 },
-      { position: 8, teamName: 'Steam Team', played: 7, wins: 0, points: 98 },
+      {
+        position: 1,
+        teamName: 'Bean Scene',
+        country: { code: 'BN', name: 'Brunei' },
+        played: 7,
+        wins: 7,
+        points: 259,
+      },
+      {
+        position: 2,
+        teamName: 'Pour Decisions',
+        country: { code: 'BN', name: 'Brunei' },
+        played: 7,
+        wins: 6,
+        points: 237,
+      },
+      {
+        position: 3,
+        teamName: 'Crema Crew',
+        country: { code: 'SG', name: 'Singapore' },
+        played: 7,
+        wins: 4,
+        points: 211,
+      },
+      {
+        position: 4,
+        teamName: 'Drip Society',
+        country: { code: 'SG', name: 'Singapore' },
+        played: 7,
+        wins: 4,
+        points: 182,
+      },
+      {
+        position: 5,
+        teamName: 'Grind House',
+        country: { code: 'MY', name: 'Malaysia' },
+        played: 7,
+        wins: 3,
+        points: 176,
+      },
+      {
+        position: 6,
+        teamName: 'Roast Republic',
+        country: { code: 'MY', name: 'Malaysia' },
+        played: 7,
+        wins: 2,
+        points: 137,
+      },
+      {
+        position: 7,
+        teamName: 'Latte Lab',
+        country: { code: 'ID', name: 'Indonesia' },
+        played: 7,
+        wins: 2,
+        points: 124,
+      },
+      { position: 8, teamName: 'Steam Team', country: null, played: 7, wins: 0, points: 98 },
     ]);
-    expect(preliminary.standings).toEqual(recomputedStandings(preliminaryFixtureMatches()));
+    // (the country is pinned by the list above; the recompute is of the numbers)
+    expect(preliminary.standings.map((row) => ({ ...row, country: undefined }))).toEqual(
+      recomputedStandings(preliminaryFixtureMatches()),
+    );
 
     const knockout = knockoutPayload({ results: KNOCKOUT_RESULTS });
     const byMatchId = new Map(records.map(({ match, score }) => [match.id, score]));

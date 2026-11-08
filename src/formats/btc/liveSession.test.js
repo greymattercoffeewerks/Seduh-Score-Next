@@ -154,10 +154,10 @@ describe('assembleBtcLivePayload', () => {
         ],
       });
       expect(payload.standings).toEqual([
-        { position: 1, teamName: 'Alpha', played: 2, wins: 2, points: 26 },
-        { position: 2, teamName: 'Beta', played: 2, wins: 1, points: 14 },
-        { position: 2, teamName: 'Gamma', played: 2, wins: 1, points: 14 },
-        { position: 4, teamName: 'Delta', played: 0, wins: 0, points: 0 },
+        { position: 1, teamName: 'Alpha', country: null, played: 2, wins: 2, points: 26 },
+        { position: 2, teamName: 'Beta', country: null, played: 2, wins: 1, points: 14 },
+        { position: 2, teamName: 'Gamma', country: null, played: 2, wins: 1, points: 14 },
+        { position: 4, teamName: 'Delta', country: null, played: 0, wins: 0, points: 0 },
       ]);
     });
 
@@ -166,6 +166,7 @@ describe('assembleBtcLivePayload', () => {
       expect(payload.standings[0]).toEqual({
         position: 1,
         teamName: 'Alpha',
+        country: null,
         played: 3,
         wins: 2,
         points: 26,
@@ -200,8 +201,8 @@ describe('assembleBtcLivePayload', () => {
         roundLabel: 'Preliminary',
         status: 'scoring',
         teams: [
-          { name: 'Beta', place: 2, seed: null },
-          { name: 'Alpha', place: 1, seed: null },
+          { name: 'Beta', country: null, place: 2, seed: null },
+          { name: 'Alpha', country: null, place: 1, seed: null },
         ],
         judges: ['Jo', 'Kim', 'Lee'],
       });
@@ -270,7 +271,12 @@ describe('assembleBtcLivePayload', () => {
         matchJudges: [{ match_id: 'm1', judge_id: 'gone' }],
         standings,
       });
-      expect(payload.upNext.teams[0]).toEqual({ name: 'Unknown team', place: null, seed: null });
+      expect(payload.upNext.teams[0]).toEqual({
+        name: 'Unknown team',
+        country: null,
+        place: null,
+        seed: null,
+      });
       expect(payload.upNext.judges).toEqual(['Unknown judge']);
     });
   });
@@ -294,8 +300,8 @@ describe('assembleBtcLivePayload', () => {
         bracketEntries: [entry(slot('quarterfinal', 'qf1', 't1', 't2', 'mq1', [2, 3]), m)],
       });
       expect(payload.upNext.teams).toEqual([
-        { name: 'Alpha', place: 2, seed: 2 },
-        { name: 'Beta', place: 2, seed: 3 },
+        { name: 'Alpha', country: null, place: 2, seed: 2 },
+        { name: 'Beta', country: null, place: 2, seed: 3 },
       ]);
     });
 
@@ -408,6 +414,7 @@ describe('assembleBtcLivePayload', () => {
       expect(result.teams).toEqual([
         {
           name: 'Alpha',
+          country: null,
           tokens: 8,
           total: 13,
           bonuses: { win: true, fastest: false, signature: false },
@@ -415,6 +422,7 @@ describe('assembleBtcLivePayload', () => {
         },
         {
           name: 'Beta',
+          country: null,
           tokens: 7,
           total: 9,
           bonuses: { win: false, fastest: true, signature: false },
@@ -657,8 +665,8 @@ describe('assembleBtcLivePayload', () => {
         label: 'qf1',
         status: 'confirmed',
         teams: [
-          { name: 'Alpha', total: 25, winner: true },
-          { name: 'Beta', total: 18, winner: false },
+          { name: 'Alpha', country: null, total: 25, winner: true },
+          { name: 'Beta', country: null, total: 18, winner: false },
         ],
         level: false,
         tiebreak: null,
@@ -667,15 +675,15 @@ describe('assembleBtcLivePayload', () => {
         label: 'qf2',
         status: 'pending',
         teams: [
-          { name: 'Gamma', total: null, winner: false },
-          { name: 'Delta', total: null, winner: false },
+          { name: 'Gamma', country: null, total: null, winner: false },
+          { name: 'Delta', country: null, total: null, winner: false },
         ],
         level: false,
         tiebreak: null,
       });
       expect(sf.slots[0].teams).toEqual([
-        { name: 'Alpha', total: null, winner: false },
-        { name: null, total: null, winner: false },
+        { name: 'Alpha', country: null, total: null, winner: false },
+        { name: null, country: null, total: null, winner: false },
       ]);
       expect(sf.slots[0].status).toBeNull();
     });
@@ -765,8 +773,8 @@ describe('assembleBtcLivePayload', () => {
         scores: [score('mq1', { round: 'quarterfinal', team1_total: 25, team2_total: 18 })],
       });
       expect(payload.bracket.rounds[0].slots[0].teams).toEqual([
-        { name: 'Beta', total: 18, winner: false },
-        { name: 'Alpha', total: 25, winner: true },
+        { name: 'Beta', country: null, total: 18, winner: false },
+        { name: 'Alpha', country: null, total: 25, winner: true },
       ]);
     });
 
@@ -805,6 +813,7 @@ describe('assembleBtcLivePayload', () => {
             label: 'Champion',
             state: 'decided',
             teamName: 'Alpha',
+            country: null,
             viaTiebreak: false,
           },
           {
@@ -812,6 +821,7 @@ describe('assembleBtcLivePayload', () => {
             label: '1st runner-up',
             state: 'decided',
             teamName: 'Beta',
+            country: null,
             viaTiebreak: false,
           },
           {
@@ -819,6 +829,7 @@ describe('assembleBtcLivePayload', () => {
             label: '3rd place',
             state: 'pending',
             teamName: null,
+            country: null,
             viaTiebreak: false,
           },
         ],
@@ -891,6 +902,7 @@ describe('what the payload makes public', () => {
     );
     expect(keys(payload.progress)).toEqual(['played', 'total']);
     expect(keys(payload.standings[0])).toEqual([
+      'country',
       'played',
       'points',
       'position',
@@ -905,12 +917,12 @@ describe('what the payload makes public', () => {
       'status',
       'teams',
     ]);
-    expect(keys(payload.upNext.teams[0])).toEqual(['name', 'place', 'seed']);
+    expect(keys(payload.upNext.teams[0])).toEqual(['country', 'name', 'place', 'seed']);
     expect(keys(payload.recentResults[0])).toEqual(
       ['confirmedAt', 'level', 'matchId', 'round', 'roundLabel', 'teams', 'tiebreak'].sort(),
     );
     expect(keys(payload.recentResults[0].teams[0])).toEqual(
-      ['bonuses', 'name', 'tokens', 'total', 'winner'].sort(),
+      ['bonuses', 'country', 'name', 'tokens', 'total', 'winner'].sort(),
     );
     expect(keys(payload.recentResults[0].teams[0].bonuses)).toEqual([
       'fastest',
@@ -922,11 +934,16 @@ describe('what the payload makes public', () => {
     expect(keys(payload.bracket.rounds[0].slots[0])).toEqual(
       ['label', 'level', 'status', 'teams', 'tiebreak'].sort(),
     );
-    expect(keys(payload.bracket.rounds[0].slots[0].teams[0])).toEqual(['name', 'total', 'winner']);
+    expect(keys(payload.bracket.rounds[0].slots[0].teams[0])).toEqual([
+      'country',
+      'name',
+      'total',
+      'winner',
+    ]);
     expect(keys(payload.bracket.rounds[0].slots[0].tiebreak)).toEqual(['reason', 'winnerName']);
     expect(keys(payload.podium)).toEqual(['complete', 'places']);
     expect(keys(payload.podium.places[0])).toEqual(
-      ['key', 'label', 'state', 'teamName', 'viaTiebreak'].sort(),
+      ['country', 'key', 'label', 'state', 'teamName', 'viaTiebreak'].sort(),
     );
   });
 
@@ -1392,5 +1409,111 @@ describe('enqueueBtcLive', () => {
       enqueueBtcLive({ event: { id: 'ev1', org_id: 'org1' }, takeOver: true }),
     ).rejects.toThrow(TypeError);
     expect(await listPendingOperations()).toEqual([]);
+  });
+});
+
+// ---------- team country in the public payload (Build E, PR 2) ----------
+
+describe('team country', () => {
+  const BN = { code: 'BN', name: 'Brunei' };
+  const SG = { code: 'SG', name: 'Singapore' };
+  const withCountry = [
+    { id: 't1', name: 'Alpha', country_code: 'BN' },
+    { id: 't2', name: 'Beta', country_code: 'SG' },
+    { id: 't3', name: 'Gamma', country_code: null },
+    { id: 't4', name: 'Delta' },
+  ];
+  const countryJudges = [
+    { id: 'j1', name: 'Jo', country_code: 'MY' },
+    { id: 'j2', name: 'Kim', country_code: 'BN' },
+    { id: 'j3', name: 'Lee', country_code: null },
+  ];
+
+  it('puts { code, name } on a standings row, and null for no country', () => {
+    const payload = assemble({
+      teams: withCountry,
+      standings: [standing('t1', 'Alpha', 1, 1, 1, 13), standing('t3', 'Gamma', 2, 0, 0, 0)],
+    });
+    expect(payload.standings.map((s) => s.country)).toEqual([BN, null]);
+  });
+
+  it('carries a country on every team of up next, then next, results and bracket slots', () => {
+    const final = match('mf', { round: 'final' });
+    const payload = assemble({
+      teams: withCountry,
+      matches: [
+        match('m1'),
+        match('m2', { status: 'pending' }),
+        match('m3', { status: 'pending', team1_id: 't3', team2_id: 't4' }),
+        final,
+      ],
+      scores: [score('m1'), score('mf', { round: 'final' })],
+      totals: [totalsRow('m1'), totalsRow('mf')],
+      bracketEntries: [entry(slot('final', 'final', 't1', 't2', 'mf'), final)],
+    });
+    expect(payload.upNext.teams.map((t) => t.country)).toEqual([BN, SG]);
+    expect(payload.thenNext.teams.map((t) => t.country)).toEqual([null, null]);
+    expect(payload.recentResults[0].teams.map((t) => t.country)).toEqual([BN, SG]);
+    expect(payload.bracket.rounds[0].slots[0].teams.map((t) => t.country)).toEqual([BN, SG]);
+  });
+
+  it('gives a TBD bracket slot no country, and only decided podium places one', () => {
+    const final = match('mf', { round: 'final' });
+    const payload = assemble({
+      teams: withCountry,
+      matches: [final],
+      scores: [score('mf', { round: 'final' })],
+      totals: [totalsRow('mf')],
+      bracketEntries: [
+        entry(slot('final', 'final', 't1', 't2', 'mf'), final),
+        entry(slot('semifinal', 'sf1', 't1', null, null), null),
+      ],
+    });
+    const sf = payload.bracket.rounds.find((r) => r.round === 'semifinal');
+    expect(sf.slots[0].teams.map((t) => t.country)).toEqual([BN, null]);
+    expect(payload.podium.places.map((p) => [p.state, p.country])).toEqual([
+      ['decided', BN],
+      ['decided', SG],
+    ]);
+  });
+
+  it('shows a stored code that Intl does not know as the code itself', () => {
+    const payload = assemble({
+      teams: [{ id: 't1', name: 'Alpha', country_code: 'ZZ' }, ...withCountry.slice(1)],
+      standings: [standing('t1', 'Alpha', 1, 1, 1, 13)],
+    });
+    expect(payload.standings[0].country).toEqual({ code: 'ZZ', name: 'ZZ' });
+  });
+
+  it('never publishes a judge country', () => {
+    const payload = assemble({
+      teams: withCountry,
+      judges: countryJudges,
+      matches: [match('m2', { status: 'pending' })],
+      matchJudges: [
+        { match_id: 'm2', judge_id: 'j1' },
+        { match_id: 'm2', judge_id: 'j2' },
+        { match_id: 'm2', judge_id: 'j3' },
+      ],
+    });
+    // judges stay bare names, and no judge-only country appears anywhere
+    expect(payload.upNext.judges).toEqual(['Jo', 'Kim', 'Lee']);
+    expect(JSON.stringify(payload)).not.toContain('Malaysia');
+    expect(JSON.stringify(payload)).not.toContain('MY');
+  });
+});
+
+describe('buildBtcLivePayload reads', () => {
+  it('reads the team country and still reads judges as id and name only', async () => {
+    const db = baseDb();
+    db.btc_teams[0].country_code = 'BN';
+    db.btc_judges[0].country_code = 'MY';
+    const client = fakeClient(db);
+    const payload = await buildBtcLivePayload('ev1', client);
+    const columnsOf = (table) => client.reads.find((r) => r.table === table).columns;
+    expect(columnsOf('btc_teams')).toBe('id, name, country_code');
+    expect(columnsOf('btc_judges')).toBe('id, name');
+    expect(payload.standings[0].country).toEqual({ code: 'BN', name: 'Brunei' });
+    expect(JSON.stringify(payload)).not.toContain('Malaysia');
   });
 });

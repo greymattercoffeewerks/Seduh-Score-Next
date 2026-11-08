@@ -23,7 +23,8 @@
 // a result card can reappear: each card carries `confirmedAt` so a display can tell a re-score from a new one.
 //
 // Everything in the payload is public (live_sessions is readable by anon): team and judge names, and the
-// organiser's typed tie-break reason, as plain text.
+// organiser's typed tie-break reason, as plain text. A team also carries its country ({ code, name } or null,
+// Build E); a JUDGE's country is never published (judges are another body's officials, plan 1.4, decision D5).
 import { getSupabase } from '../../core/supabaseClient.js';
 import { findEvent } from '../../core/events.js';
 import { findActiveLiveEventId } from '../../core/publish.js';
@@ -37,6 +38,7 @@ import { fetchBracket, BRACKET_ROUND_ORDER, BRACKET_ROUND_LABELS } from './brack
 import { derivePodium } from './podium.js';
 import { recordedWinnerId, winnerOfScore } from './tiebreak.js';
 import { roundLabel } from './scoring.js';
+import { countryName } from '../../core/country.js';
 
 export const BTC_LIVE_OPERATION = 'publish_btc_live_session';
 
@@ -70,7 +72,7 @@ const byNewest = (a, b) => instant(b.updated_at) - instant(a.updated_at) || byId
 // (btc_match_totals), so a card shows them only when they explain BOTH totals exactly (tokens + 5 for the win
 // + 2 fastest + 2 signature): a missing row, or reads that straddle a confirm, show the totals without a
 // breakdown rather than one that does not add up, on both sides together.
-function resultSide(side, match, score, totalsRow, winnerId, nameOf) {
+function resultSide(side, match, score, totalsRow, winnerId, nameOf, countryOf) {
   const own = side === 1 ? 'team1' : 'team2';
   const other = side === 1 ? 'team2' : 'team1';
   const teamId = score[`${own}_id`];
@@ -84,15 +86,24 @@ function resultSide(side, match, score, totalsRow, winnerId, nameOf) {
   const explained =
     tokens + (bonuses.win ? 5 : 0) + (bonuses.fastest ? 2 : 0) + (bonuses.signature ? 2 : 0);
   return {
-    side: { name: nameOf(teamId), tokens, total, bonuses, winner: winnerId === teamId },
+    side: {
+      name: nameOf(teamId),
+      country: countryOf(teamId),
+      tokens,
+      total,
+      bonuses,
+      winner: winnerId === teamId,
+    },
     explainsTotal: Boolean(totalsRow) && explained === total,
   };
 }
 
-function resultCard(match, score, totalsRow, nameOf) {
+function resultCard(match, score, totalsRow, nameOf, countryOf) {
   const winnerId = winnerOfScore(match, score);
   const tiebreakWinnerId = recordedWinnerId(match, score);
-  const sides = [1, 2].map((n) => resultSide(n, match, score, totalsRow, winnerId, nameOf));
+  const sides = [1, 2].map((n) =>
+    resultSide(n, match, score, totalsRow, winnerId, nameOf, countryOf),
+  );
   const explained = sides.every((side) => side.explainsTotal);
   return {
     matchId: match.id,
@@ -120,7 +131,7 @@ function seedsByTeam(entries) {
   return seeds;
 }
 
-function matchCard(match, judgeNamesByMatch, placeByTeam, seedByTeam, nameOf) {
+function matchCard(match, judgeNamesByMatch, placeByTeam, seedByTeam, nameOf, countryOf) {
   return {
     matchId: match.id,
     round: match.round,
@@ -128,6 +139,7 @@ function matchCard(match, judgeNamesByMatch, placeByTeam, seedByTeam, nameOf) {
     status: match.status,
     teams: [match.team1_id, match.team2_id].map((id) => ({
       name: nameOf(id),
+      country: countryOf(id),
       place: placeByTeam.get(id) ?? null,
       seed: seedByTeam.get(id) ?? null,
     })),
@@ -135,7 +147,7 @@ function matchCard(match, judgeNamesByMatch, placeByTeam, seedByTeam, nameOf) {
   };
 }
 
-function bracketPayload(entries, scoresByMatchId, nameOf) {
+function bracketPayload(entries, scoresByMatchId, nameOf, countryOf) {
   if (entries.length === 0) return null;
   const rounds = [];
   for (const round of BRACKET_ROUND_ORDER) {
@@ -159,6 +171,7 @@ function bracketPayload(entries, scoresByMatchId, nameOf) {
         };
         const team = (teamId) => ({
           name: teamId ? nameOf(teamId) : null,
+          country: teamId ? countryOf(teamId) : null,
           total: totalFor(teamId),
           winner: confirmed && teamId !== null && teamId === winnerId,
         });
@@ -177,7 +190,7 @@ function bracketPayload(entries, scoresByMatchId, nameOf) {
   return { rounds };
 }
 
-// Pure. Inputs are plain rows: event, teams ({id,name}), judges ({id,name}), matches (btc_matches),
+// Pure. Inputs are plain rows: event, teams ({id,name,country_code}), judges ({id,name}), matches (btc_matches),
 // matchJudges ({match_id, judge_id}), scores (btc_match_scores), totals (btc_match_totals), standings
 // (fetchPreliminaryStandings' [{item, position}]) and bracketEntries (fetchBracket's [{slot, match}]).
 export function assembleBtcLivePayload({
@@ -193,6 +206,12 @@ export function assembleBtcLivePayload({
 }) {
   const teamsById = new Map(teams.map((t) => [t.id, t]));
   const nameOf = (id) => teamsById.get(id)?.name ?? 'Unknown team';
+  // A team's country as the audience sees it: the code and its English name, or null for no country. A name
+  // is never stored; it comes from Intl at publish time (core/country.js).
+  const countryOf = (id) => {
+    const code = teamsById.get(id)?.country_code ?? null;
+    return code ? { code, name: countryName(code) } : null;
+  };
   const judgeNames = new Map(judges.map((j) => [j.id, j.name]));
   const judgeNamesByMatch = new Map();
   for (const { match_id: matchId, judge_id: judgeId } of matchJudges) {
@@ -232,28 +251,32 @@ export function assembleBtcLivePayload({
     standings: standings.map(({ item, position }) => ({
       position,
       teamName: item.teamName,
+      country: countryOf(item.teamId),
       played: num(item.played),
       wins: num(item.wins),
       points: num(item.totalPoints),
     })),
     upNext: upcoming[0]
-      ? matchCard(upcoming[0], judgeNamesByMatch, placeByTeam, seedByTeam, nameOf)
+      ? matchCard(upcoming[0], judgeNamesByMatch, placeByTeam, seedByTeam, nameOf, countryOf)
       : null,
     thenNext: upcoming[1]
-      ? matchCard(upcoming[1], judgeNamesByMatch, placeByTeam, seedByTeam, nameOf)
+      ? matchCard(upcoming[1], judgeNamesByMatch, placeByTeam, seedByTeam, nameOf, countryOf)
       : null,
     recentResults: confirmed
       .slice(0, RECENT_RESULTS_LIMIT)
-      .map((m) => resultCard(m, scoresByMatchId.get(m.id), totalsByMatchId.get(m.id), nameOf)),
-    bracket: bracketPayload(bracketEntries, scoresByMatchId, nameOf),
+      .map((m) =>
+        resultCard(m, scoresByMatchId.get(m.id), totalsByMatchId.get(m.id), nameOf, countryOf),
+      ),
+    bracket: bracketPayload(bracketEntries, scoresByMatchId, nameOf, countryOf),
     podium: hasBracket
       ? {
           complete: podium.complete,
-          places: podium.places.map(({ key, label, state, teamName, viaTiebreak }) => ({
+          places: podium.places.map(({ key, label, state, teamId, teamName, viaTiebreak }) => ({
             key,
             label,
             state,
             teamName: state === 'decided' ? teamName : null,
+            country: state === 'decided' ? countryOf(teamId) : null,
             viaTiebreak: state === 'decided' ? viaTiebreak === true : false,
           })),
         }
@@ -281,7 +304,7 @@ export async function buildBtcLivePayload(eventId, client = getSupabase()) {
   const [event, teams, judges, matches, scores, totals, standings, bracketEntries] =
     await Promise.all([
       findEvent(eventId, client),
-      readForEvent(client, 'btc_teams', 'id, name', eventId),
+      readForEvent(client, 'btc_teams', 'id, name, country_code', eventId),
       readForEvent(client, 'btc_judges', 'id, name', eventId),
       readForEvent(client, 'btc_matches', '*', eventId),
       readForEvent(client, 'btc_match_scores', SCORE_COLUMNS, eventId),

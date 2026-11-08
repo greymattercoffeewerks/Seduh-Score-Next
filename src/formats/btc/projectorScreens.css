@@ -57,6 +57,16 @@
   color: var(--color-text-secondary);
 }
 
+.btc-stage-side-country {
+  display: block;
+  font-family: var(--font-body);
+  font-size: max(1rem, calc(3.2 * var(--stage-fit)));
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
 .btc-stage-side-name {
   margin: 0;
   font-family: var(--font-display);
@@ -186,11 +196,38 @@
 }
 
 .btc-stage-slot-team > span:first-child {
+  display: flex;
   flex: 1 1 auto;
+  align-items: baseline;
   min-width: 0;
+  overflow: hidden;
+}
+
+.btc-stage-slot-name,
+.btc-stage-slot-country {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* "Country · Name" on ONE line (a second line would push the fourth quarterfinal off a 1080p screen). The name
+   keeps its full width (cut only when it alone is wider than the slot); the country takes what is left and is cut
+   at its own end, down to nothing in a narrow 4:3 column (the wrapper clips, so nothing runs into the mark) ("Democratic Republic of the Congo" never hides the team). */
+.btc-stage-slot-name {
+  flex: 0 0 auto;
+  max-width: 100%;
+}
+
+.btc-stage-slot-country {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-weight: var(--font-weight-normal, 400);
+}
+
+/* The separator lives INSIDE the country (non-breaking spaces, so nowrap keeps them) and there is no flex gap, so
+   nothing is reserved once the country has shrunk to nothing and the name sits flush against the wrapper. */
+.btc-stage-slot-country::after {
+  content: '\00a0·\00a0';
 }
 
 .btc-stage-slot-team > span:last-child {
