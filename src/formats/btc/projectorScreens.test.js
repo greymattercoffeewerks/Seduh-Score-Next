@@ -198,6 +198,15 @@ describe('idle loop: the pages', () => {
     handle.destroy();
   });
 
+  it('draws a country on BOTH sides of the up-next card when both teams have one', () => {
+    vi.useFakeTimers();
+    const payload = preliminaryPayload({ playedCount: 12 });
+    payload.upNext.teams[1].country = { code: 'ID', name: 'Indonesia' };
+    const { host, handle } = mountFor(payload);
+    expect(all(host, '.btc-stage-side-country')).toEqual(['Brunei', 'Indonesia']);
+    handle.destroy();
+  });
+
   it('calls a knockout match by the seeds the bracket gave its teams', () => {
     vi.useFakeTimers();
     const payload = knockoutPayload();
