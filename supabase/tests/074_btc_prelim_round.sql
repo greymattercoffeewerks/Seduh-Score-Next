@@ -9,7 +9,7 @@
 --   * changing prelim_round writes a score_change_log row (an unchanged value writes none), and the dispute pack carries it;
 --   * a member of ANOTHER organisation and a signed-in stranger update zero rows and read zero rows; anon is refused.
 begin;
-select plan(39);
+select plan(40);
 
 create schema t074;
 grant usage on schema t074 to anon, authenticated;
@@ -193,9 +193,9 @@ select is((select total_points::int from btc_standings where event_id = t074.u(1
           'standings: 35 + 35 = 70 (30 tokens + 5 round-winner each round)');
 
 -- another organisation and a stranger update and read nothing; anon is refused
-select is(t074.rows_as('authenticated', t074.u(2), format('update public.btc_matches set prelim_round = 2 where event_id = %L', t074.u(110))),
+select is(t074.rows_as('authenticated', t074.u(2), format('update public.btc_matches set prelim_round = 2 where event_id = %L and round = ''preliminary''', t074.u(110))),
           0, 'another organisation updates zero matches');
-select is(t074.rows_as('authenticated', t074.u(3), format('update public.btc_matches set prelim_round = 2 where event_id = %L', t074.u(110))),
+select is(t074.rows_as('authenticated', t074.u(3), format('update public.btc_matches set prelim_round = 2 where event_id = %L and round = ''preliminary''', t074.u(110))),
           0, 'a stranger updates zero matches');
 select is(t074.visible_as(t074.u(2), format('select prelim_round from public.btc_matches where event_id = %L', t074.u(110))) +
           t074.visible_as(t074.u(3), format('select prelim_round from public.btc_matches where event_id = %L', t074.u(110))),
@@ -205,9 +205,10 @@ select is(left(t074.run_as('anon', null, format('update public.btc_matches set p
 select is((select count(*)::int from btc_matches where event_id = t074.u(110) and prelim_round = 2), 1,
           'no refused write changed a match (only the one inserted as round 2)');
 
--- the demo leaves every number NULL
-select is(t074.run_as('authenticated', t074.u(1), format('select public.load_btc_demo(%L, %L, false)', t074.u(100), t074.u(120))),
-          'ok', 'load_btc_demo still runs on a test event');
+-- the demo leaves every number NULL (scored, so it really creates matches)
+select is(t074.run_as('authenticated', t074.u(1), format('select public.load_btc_demo(%L, %L, true)', t074.u(100), t074.u(120))),
+          'ok', 'load_btc_demo (scored) still runs on a test event');
+select cmp_ok((select count(*)::int from btc_matches where event_id = t074.u(120)), '>', 0, 'the scored demo created matches');
 select is((select count(*)::int from btc_matches where event_id = t074.u(120) and prelim_round is not null), 0,
           'the demo leaves every prelim_round NULL');
 
