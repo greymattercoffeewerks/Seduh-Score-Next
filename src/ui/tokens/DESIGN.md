@@ -64,6 +64,8 @@ Every pairing below is checked against WCAG 2.1 contrast minimums (4.5:1 normal 
 | `--color-success` on canvas (stage)                         | 9.6:1  |
 | `--color-warning` on canvas (stage)                         | 9.1:1  |
 | `--color-gold` on canvas (stage — its one real use context) | 8.4:1  |
+| `--color-border-card` vs canvas (paper), a 1px edge         | 3.4:1  |
+| `--color-border-card` vs canvas (stage), a 1px edge         | 4.5:1  |
 | `--color-accent-tint-text` on `--color-accent-tint` (paper) | 9.0:1  |
 | `--color-text` on `--color-accent-tint` (paper)             | 17.1:1 |
 | `--color-accent` as text on `--color-accent-tint` (paper)   | 7.2:1  |
@@ -107,10 +109,11 @@ losing the telemetry identity. Corners are sized by the element's role:
 
 `.status-live-dot` uses `--radius-sm`: a machined 3px blip, not a circle. `--cut-*` and
 `.cut-*` stay for now (the clip-path cut clips focus rings); P2 retires them from small
-elements. Cards use a hairline `--color-border` instead of the old 2px near-black frame.
-This is a known trade: the card edge is 2.1:1 against the paper canvas (1.3:1 on stage) and
-the surface step only 1.2:1, so cards separate more softly than before (the 2026-09-05
-"nearly invisible" feedback is the risk). Accepted for V2; revisit in P3 if screens read flat.
+elements. Cards use a 1px `--color-border-card` (`petrol-400` in both modes) instead of the old 2px
+near-black frame: 3.4:1 against the paper canvas (4.0:1 on the card surface) and 4.5:1 on
+stage (4.2:1 on the card surface), so the edge meets WCAG 1.4.11's 3:1 and the 2026-09-05
+"nearly invisible" feedback is answered without the heavy frame. `--color-border` stays soft
+for dividers. Input edges (`--color-border`, about 2.1:1 on paper) do not meet 1.4.11 yet.
 
 **No shadows** — unchanged. Flat borders and surface steps only.
 

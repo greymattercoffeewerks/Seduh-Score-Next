@@ -97,6 +97,9 @@
   --color-surface-sunken: var(--clr-petrol-200);
   --color-border: var(--clr-petrol-300);
   --color-border-strong: var(--clr-petrol-950);
+  /* Card edge (Petrol V2): at least 3:1 against the canvas (WCAG 1.4.11),
+     unlike --color-border, which stays soft for dividers. */
+  --color-border-card: var(--clr-petrol-400);
 
   --color-text: var(--clr-petrol-950);
   --color-text-secondary: var(--clr-petrol-700);
@@ -136,6 +139,7 @@
   --color-surface-sunken: var(--clr-petrol-800);
   --color-border: var(--clr-petrol-700);
   --color-border-strong: var(--clr-petrol-50);
+  --color-border-card: var(--clr-petrol-400);
 
   --color-text: var(--clr-petrol-50);
   --color-text-secondary: var(--clr-petrol-300);

@@ -14,7 +14,7 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 - **Tokens:** Hybrid radii (`--radius-sm/md/lg` 3/6/10px, `--radius-full` 9999px for circles only), `--bevel-md/lg` (unused until P2), new `motion.css` (`--dur-*`, `--ease-out`), one global reduced-motion rule in `base.css`, teal tints and `--color-accent-tint(-text)` in both modes with contrast rows in DESIGN.md. `.status-live-dot` is 3px; `.card` border is a hairline.
 - **Knock-on:** 14 `--radius-full` pills and badges in eight CSS files moved to `--radius-sm` so none became a pill (splash glow stays round). Every `--radius-*` consumer (inputs, buttons, cards, admin, timer) now has soft corners, and cards lose the 2px black frame.
-- **Reviews:** `code-reviewer` no red (nit: the `.card:focus-visible` rule is now redundant; kept, `components.test.js` pins the selector). `ui-accessibility-reviewer` no red; cards now separate softly (edge 2.1:1, surface 1.2:1 on paper), recorded in DESIGN.md as an accepted trade; motion doc clarified. `module-boundary-checker` clean.
+- **Reviews:** `code-reviewer` no red (nit: the `.card:focus-visible` rule is now redundant; kept, `components.test.js` pins the selector). `ui-accessibility-reviewer` no red; found the hairline card edge too faint (2.1:1); fixed in a follow-up commit with `--color-border-card` (3.4:1 paper, 4.5:1 stage); motion doc clarified. `module-boundary-checker` clean.
 - **Not done here:** bevel buttons, press/busy states, selected classes (P2); screens and drift-guard test (P3). P2 note: a selected tint is 1.14:1 against paper, so it needs a non-colour cue.
 
 ---

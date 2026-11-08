@@ -44,14 +44,15 @@
   margin: 0 0 var(--space-3) 0;
 }
 
-/* Petrol V2: a hairline in --color-border, not the 2px near-black frame. The
-   frame did the container-separation work against a one-step canvas/surface
-   gap (2026-09-05 feedback); V2 trades it for a softer edge, and the surface
-   step plus the 6px corner carry the separation. Still no shadow. Shared by
+/* Petrol V2: a hairline in --color-border-card (3:1 or better against the
+   canvas in both modes), not the 2px near-black frame. The frame did the
+   container-separation work against a one-step canvas/surface gap
+   (2026-09-05 feedback); V2 keeps that separation with a lighter, still
+   visible edge and a 6px corner. Still no shadow. Shared by
    every screen using `.card`. */
 .card {
   background: var(--color-surface);
-  border: var(--border-hairline) solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border-card);
   border-radius: var(--radius-md);
   padding: var(--space-5);
 }
