@@ -20,6 +20,9 @@ import { publishBtcLive } from './liveSession.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
 import { listTeams } from './teams.js';
 import { listJudges } from './judges.js';
+import { countryName } from '../../core/country.js';
+import { judgeCountryConflicts } from './countryConflicts.js';
+import { teamLabel } from './words.js';
 import { validateMatchDraft, createMatch, listMatches, removeMatch } from './matches.js';
 
 const ROUND = 'preliminary';
@@ -47,11 +50,14 @@ export async function mountMatchesScreen(
   };
   let toastTimer;
 
+  // "Country · Name" (words.js's teamLabel), or just the name for a team with no country.
   function teamName(id) {
-    return state.teams.find((t) => t.id === id)?.name ?? 'Unknown team';
+    const team = state.teams.find((t) => t.id === id);
+    return team ? teamLabel(team) : 'Unknown team';
   }
   function judgeName(id) {
-    return state.judges.find((j) => j.id === id)?.name ?? 'Unknown judge';
+    const judge = state.judges.find((j) => j.id === id);
+    return judge ? teamLabel(judge) : 'Unknown judge';
   }
 
   // The audience display follows every change the room should see (liveSession.js). Best-effort: a failed or
@@ -194,13 +200,15 @@ export async function mountMatchesScreen(
       });
       select.appendChild(el('option', { text: 'Select a team…', attrs: { value: '' } }));
       for (const team of state.teams) {
-        const option = el('option', { text: team.name, attrs: { value: team.id } });
+        const option = el('option', { text: teamLabel(team), attrs: { value: team.id } });
         if (team.id === state.draft[fieldKey]) option.selected = true;
         select.appendChild(option);
       }
       setBusyDisabled(select, state.busy);
+      // Re-renders: the judge-country warning depends on which teams are chosen.
       select.addEventListener('change', () => {
         state.draft[fieldKey] = select.value;
+        render();
       });
       return select;
     };
@@ -217,10 +225,29 @@ export async function mountMatchesScreen(
       checkbox.addEventListener('change', () => toggleDraftJudge(judge.id, checkbox.checked));
       const label = el('label', { className: 'btc-judge-checkbox-label' }, [
         checkbox,
-        el('span', { text: judge.name }),
+        el('span', { text: teamLabel(judge) }),
       ]);
       return label;
     });
+
+    // A judge from the same country as a chosen team: a warning in words, never a refusal (a committee may need an
+    // exception), so Create match stays enabled. Judges and teams with no country never appear here.
+    const conflicts = judgeCountryConflicts({
+      judges: state.judges,
+      teams: state.teams,
+      team1Id: state.draft.team1Id,
+      team2Id: state.draft.team2Id,
+      judgeIds: state.draft.judgeIds,
+    });
+    const conflictLines = conflicts.map(({ judgeId, teamId }) => {
+      const judge = state.judges.find((j) => j.id === judgeId);
+      const team = state.teams.find((t) => t.id === teamId);
+      return el('p', {
+        className: 'btc-country-warning',
+        text: `Judge ${judge.name} is from ${countryName(judge.country_code)}, the same country as ${team.name}.`,
+      });
+    });
+    const conflictId = 'btc-judge-country-warning';
 
     // A form-level error (not one specific field — it can name either team
     // or the judge count) is associated to the control the organiser will
@@ -246,15 +273,27 @@ export async function mountMatchesScreen(
           el('span', { className: 'btc-match-vs', text: 'vs', attrs: { 'aria-hidden': 'true' } }),
           labeledField('Team 2', team2Select),
         ]),
-        el('fieldset', { className: 'btc-judge-fieldset' }, [
-          el('legend', { text: 'Judges (select exactly 3)' }),
-          el('div', { className: 'btc-judge-checkboxes' }, judgeCheckboxes),
-          el('p', {
-            className: 'stage-meta',
-            text: `${state.draft.judgeIds.length} of 3 selected`,
-            attrs: { role: 'status', 'aria-live': 'polite' },
-          }),
-        ]),
+        el(
+          'fieldset',
+          {
+            className: 'btc-judge-fieldset',
+            attrs: conflictLines.length ? { 'aria-describedby': conflictId } : {},
+          },
+          [
+            el('legend', { text: 'Judges (select exactly 3)' }),
+            el('div', { className: 'btc-judge-checkboxes' }, judgeCheckboxes),
+            el('p', {
+              className: 'stage-meta',
+              text: `${state.draft.judgeIds.length} of 3 selected`,
+              attrs: { role: 'status', 'aria-live': 'polite' },
+            }),
+            el(
+              'div',
+              { id: conflictId, className: 'btc-country-warnings', attrs: { role: 'status' } },
+              conflictLines,
+            ),
+          ],
+        ),
         state.formError
           ? el('p', {
               id: errorId,

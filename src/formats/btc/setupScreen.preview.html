@@ -14,8 +14,8 @@
       Demo-only harness for the BTC Setup screen — not part of the shipped
       module graph, same role as rosterScreen.preview.html/setupScreen.preview.html
       (cup-taster). No live Supabase connection: an in-memory fake client
-      (below) stands in for the real one. Seeded with two teams and one
-      judge. Try: adding a team/judge, removing one, and re-adding a name
+      (below) stands in for the real one. Seeded with four teams (two from
+      Brunei, one with no country) and two judges. Try: adding a team/judge with a country, Edit on a row, removing one, and re-adding a name
       that already exists (shows the existing row rather than erroring).
     -->
     <p>
@@ -31,10 +31,15 @@
         const db = {
           events: [{ id: 'ev1', org_id: 'org1', name: 'BTC Demo Event', is_test: true }],
           btc_teams: [
-            { id: 't1', event_id: 'ev1', name: 'Grey Matter' },
-            { id: 't2', event_id: 'ev1', name: 'Coffee Cartel' },
+            { id: 't1', event_id: 'ev1', name: 'Grey Matter', country_code: 'BN', represents: 'Borneo' },
+            { id: 't2', event_id: 'ev1', name: 'Coffee Cartel', country_code: 'BN', represents: null },
+            { id: 't3', event_id: 'ev1', name: 'Kopi Collective', country_code: 'SG', represents: null },
+            { id: 't4', event_id: 'ev1', name: 'No-Country Crew', country_code: null, represents: null },
           ],
-          btc_judges: [{ id: 'j1', event_id: 'ev1', name: 'Alex Rivera' }],
+          btc_judges: [
+            { id: 'j1', event_id: 'ev1', name: 'Alex Rivera', country_code: 'BN' },
+            { id: 'j2', event_id: 'ev1', name: 'Jordan Lee', country_code: null },
+          ],
         };
         let idCounter = 0;
 
@@ -62,6 +67,22 @@
               return {
                 select: () => ({ single: () => Promise.resolve({ data: inserted, error: null }) }),
               };
+            },
+            update(patch) {
+              const target = [];
+              const chain = {
+                eq(col, val) {
+                  target.push([col, val]);
+                  return chain;
+                },
+                select: () => chain,
+                single() {
+                  const row = (db[table] ?? []).find((r) => matchesFilters(r, target));
+                  Object.assign(row, patch);
+                  return Promise.resolve({ data: { ...row }, error: null });
+                },
+              };
+              return chain;
             },
             delete() {
               return {

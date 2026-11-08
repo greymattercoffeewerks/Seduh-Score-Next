@@ -4,10 +4,18 @@
 // `tiebreak` and a standings row's `position` are the payload's own.
 import { ordinalLabel } from '../../core/ordinal.js';
 import { el } from '../../core/dom.js';
+import { countryName } from '../../core/country.js';
 
 // The preliminary round's top eight reach the quarterfinals (generate_btc_bracket seeds eight, and refuses to
 // until a tie across the cut-off is settled, so the surfaces say "qualify", never "go through", while it is open).
 export const KNOCKOUT_PLACES = 8;
+
+// How an organiser-side team is written: "Brunei · Team Kopi", or just the name when it has no country. The one place
+// the format is decided: setup, matches and (later) the audience surfaces call this. A middle dot with normal spaces.
+export function teamLabel({ name, country_code: countryCode }) {
+  const country = countryName(countryCode ?? null);
+  return country ? `${country} · ${name}` : name;
+}
 
 export const matchLine = (match) => `${match.teams[0].name} vs ${match.teams[1].name}`;
 

@@ -27,10 +27,21 @@ export async function findTeamByName(eventId, name, client = getSupabase()) {
   return data;
 }
 
-export async function createTeam(eventId, name, client = getSupabase()) {
+// `countryCode` is an ISO alpha-2 code or null; `represents` an optional free label (the database checks the shape:
+// two capital letters; trimmed, 1 to 60 characters). Only a value that is set is sent, so a team created without
+// either is exactly the row it always was.
+export async function createTeam(
+  eventId,
+  name,
+  { countryCode = null, represents = null } = {},
+  client = getSupabase(),
+) {
+  const row = { event_id: eventId, name };
+  if (countryCode != null) row.country_code = countryCode;
+  if (represents != null) row.represents = represents;
   const { data, error } = await client
     .from('btc_teams')
-    .insert({ event_id: eventId, name })
+    .insert(row)
     .select()
     .single();
   if (!error) return data;
@@ -40,7 +51,7 @@ export async function createTeam(eventId, name, client = getSupabase()) {
   // after the first attempt's response never made it back over an
   // unreliable connection. Either way, adopt the row that's actually there
   // rather than erroring on a name the organiser can plainly see already
-  // exists.
+  // exists. The adopted row is returned as it is: its country is not overwritten.
   if (error.code === UNIQUE_VIOLATION) {
     const existing = await findTeamByName(eventId, name, client);
     if (existing) return existing;
@@ -55,4 +66,21 @@ export async function createTeam(eventId, name, client = getSupabase()) {
 export async function removeTeam(teamId, client = getSupabase()) {
   const { error } = await client.from('btc_teams').delete().eq('id', teamId);
   if (error) throw error;
+}
+
+// Updates only the keys passed (an absent key is left alone; null clears). Country and represents do not affect
+// scoring, and a team in a match cannot be removed, so this is the way to fix a typo after matches exist.
+export async function updateTeam(teamId, { countryCode, represents } = {}, client = getSupabase()) {
+  const patch = {};
+  if (countryCode !== undefined) patch.country_code = countryCode;
+  if (represents !== undefined) patch.represents = represents;
+  if (Object.keys(patch).length === 0) throw new Error('updateTeam needs a field to change');
+  const { data, error } = await client
+    .from('btc_teams')
+    .update(patch)
+    .eq('id', teamId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
 }

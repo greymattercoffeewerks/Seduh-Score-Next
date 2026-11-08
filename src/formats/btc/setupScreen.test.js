@@ -57,6 +57,28 @@ function fakeClient(initialDb, { errorOn, demoError, demoGate, demoReply } = {})
           }),
         };
       },
+      // update(patch).eq(col, val).select().single(): the edit form's write (teams.js updateTeam).
+      update(patch) {
+        const target = [];
+        const chain = {
+          eq(col, val) {
+            target.push([col, val]);
+            return chain;
+          },
+          select: () => chain,
+          single() {
+            if (fails(table, 'update')) {
+              return Promise.resolve({ data: null, error: { code: '23514', message: 'check' } });
+            }
+            const row = (db[table] ?? []).find((r) => matchesFilters(r, target));
+            if (!row)
+              return Promise.resolve({ data: null, error: { code: 'PGRST116', message: 'none' } });
+            Object.assign(row, patch);
+            return Promise.resolve({ data: { ...row }, error: null });
+          },
+        };
+        return chain;
+      },
       delete() {
         if (fails(table, 'delete')) {
           return {
@@ -231,7 +253,10 @@ describe('mountSetupScreen', () => {
       expect(root.textContent).toContain('Bean Scene');
       expect(root.textContent).not.toContain('Alpha');
       // judges too, not only teams
-      expect(root.textContent).not.toContain('Jordan');
+      // (scoped to the judges list: "Jordan" is also a country in the country selects)
+      expect(root.querySelector('ul[aria-label="Judges roster"]').textContent).not.toContain(
+        'Jordan',
+      );
       expect(root.textContent).toContain('Judge 1');
       // Loading wipes and rebuilds the event, so the audience display is refreshed, and a rehearsal on the
       // projector takes it over (as a test heat does for Cup Taster).
@@ -718,9 +743,13 @@ describe('mountSetupScreen', () => {
     const errorNode = root.querySelector('.btc-field-error');
     expect(errorNode.getAttribute('role')).toBe('alert');
     expect(errorNode.id).toBeTruthy();
+    // the error AND the name hint both describe the field
     expect(
-      root.querySelector('input[aria-label="Team name"]').getAttribute('aria-describedby'),
-    ).toBe(errorNode.id);
+      root
+        .querySelector('input[aria-label="Team name"]')
+        .getAttribute('aria-describedby')
+        .split(' '),
+    ).toEqual(['btc-team-name-hint', errorNode.id]);
     expect(root.querySelector('input[aria-label="Team name"]').getAttribute('aria-invalid')).toBe(
       'true',
     );
@@ -742,5 +771,210 @@ describe('mountSetupScreen', () => {
     await Promise.resolve();
 
     expect(document.activeElement?.textContent).toBe('Gamma added.');
+  });
+  describe('country', () => {
+    const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+    const click = (node) => node.dispatchEvent(new Event('click', { bubbles: true }));
+    const submit = (form) =>
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    const type = (input, value) => {
+      input.value = value;
+      input.dispatchEvent(new Event('input'));
+    };
+    const choose = (select, value) => {
+      select.value = value;
+      select.dispatchEvent(new Event('change'));
+    };
+    const teamForm = () => root.querySelector('input[aria-label="Team name"]').closest('form');
+    const judgeForm = () => root.querySelector('input[aria-label="Judge name"]').closest('form');
+    const editButton = (name) => root.querySelector(`button[aria-label="Edit ${name}"]`);
+    const rowText = (listLabel, name) =>
+      [...root.querySelectorAll(`ul[aria-label="${listLabel}"] li`)].find((li) =>
+        li.textContent.includes(name),
+      )?.textContent;
+    const editForm = () => root.querySelector('.btc-roster-edit-form');
+
+    it('adds a team with its country and represents label, and shows "Country · Name"', async () => {
+      const client = fakeClient(baseDb());
+      await mountSetupScreen(root, { eventId: 'ev1', client });
+      const form = teamForm();
+      type(form.querySelector('input[aria-label="Team name"]'), 'Gamma');
+      choose(form.querySelector('select[aria-label="Team country"]'), 'BN');
+      type(form.querySelector('input[aria-label="Represents (optional)"]'), '  Borneo ');
+      submit(form);
+      await flush();
+
+      expect(client.db.btc_teams.find((t) => t.name === 'Gamma')).toMatchObject({
+        country_code: 'BN',
+        represents: 'Borneo',
+      });
+      expect(rowText('Teams roster', 'Gamma')).toContain('Brunei · Gamma');
+      expect(rowText('Teams roster', 'Gamma')).toContain('Represents: Borneo');
+      // the next team starts blank: a country is never carried over silently
+      expect(teamForm().querySelector('select[aria-label="Team country"]').value).toBe('');
+    });
+
+    it('adds a team with no country and sends neither field', async () => {
+      const client = fakeClient(baseDb());
+      await mountSetupScreen(root, { eventId: 'ev1', client });
+      type(root.querySelector('input[aria-label="Team name"]'), 'Gamma');
+      submit(teamForm());
+      await flush();
+      const gamma = client.db.btc_teams.find((t) => t.name === 'Gamma');
+      expect(gamma).not.toHaveProperty('country_code');
+      expect(gamma).not.toHaveProperty('represents');
+      expect(rowText('Teams roster', 'Gamma')).toBe('GammaEditRemove');
+    });
+
+    it('says what the team name is for, tied to the field', async () => {
+      await mountSetupScreen(root, { eventId: 'ev1', client: fakeClient(baseDb()) });
+      const hint = root.querySelector('#btc-team-name-hint');
+      expect(hint.textContent).toBe('A team or country name, not a person’s name');
+      expect(
+        root.querySelector('input[aria-label="Team name"]').getAttribute('aria-describedby'),
+      ).toBe('btc-team-name-hint');
+    });
+
+    it('adds a judge with a country', async () => {
+      const client = fakeClient(baseDb());
+      await mountSetupScreen(root, { eventId: 'ev1', client });
+      const form = judgeForm();
+      type(form.querySelector('input[aria-label="Judge name"]'), 'Siti');
+      choose(form.querySelector('select[aria-label="Judge country"]'), 'BN');
+      submit(form);
+      await flush();
+      expect(client.db.btc_judges.find((j) => j.name === 'Siti')).toMatchObject({
+        country_code: 'BN',
+      });
+      expect(rowText('Judges roster', 'Siti')).toContain('Brunei · Siti');
+    });
+
+    it('refuses a represents label over 60 characters, at the field, without writing', async () => {
+      const client = fakeClient(baseDb());
+      await mountSetupScreen(root, { eventId: 'ev1', client });
+      const form = teamForm();
+      type(form.querySelector('input[aria-label="Team name"]'), 'Gamma');
+      type(form.querySelector('input[aria-label="Represents (optional)"]'), 'x'.repeat(61));
+      submit(form);
+      await flush();
+      const alert = root.querySelector('.btc-roster-card [role="alert"]');
+      expect(alert.textContent).toBe('Represents must be 60 characters or fewer.');
+      const represents = root.querySelector('input[aria-label="Represents (optional)"]');
+      expect(represents.getAttribute('aria-describedby')).toBe(alert.id);
+      expect(represents.getAttribute('aria-invalid')).toBe('true');
+      expect(client.db.btc_teams.some((t) => t.name === 'Gamma')).toBe(false);
+    });
+
+    it('edits a team in place, saves it, announces it and returns focus to its Edit button', async () => {
+      const client = fakeClient(baseDb());
+      await mountSetupScreen(root, { eventId: 'ev1', client });
+      click(editButton('Alpha'));
+      // focus moves to the first field of the opened form
+      expect(document.activeElement).toBe(
+        editForm().querySelector('select[aria-label="Team country"]'),
+      );
+      choose(editForm().querySelector('select'), 'SG');
+      type(editForm().querySelector('input[aria-label="Represents (optional)"]'), 'Lion City');
+      submit(editForm());
+      await flush();
+
+      expect(client.db.btc_teams.find((t) => t.id === 't1')).toMatchObject({
+        country_code: 'SG',
+        represents: 'Lion City',
+      });
+      expect(editForm()).toBeNull();
+      expect(rowText('Teams roster', 'Alpha')).toContain('Singapore · Alpha');
+      expect(root.textContent).toContain('Alpha updated.');
+      expect(document.activeElement).toBe(editButton('Alpha'));
+      expect(publishBtcLive).toHaveBeenCalledWith(
+        expect.objectContaining({ takeOver: false }),
+        undefined,
+      );
+    });
+
+    it('clears a country and a represents label with "No country" and an empty field', async () => {
+      const db = baseDb();
+      db.btc_teams[0].country_code = 'BN';
+      db.btc_teams[0].represents = 'Borneo';
+      const client = fakeClient(db);
+      await mountSetupScreen(root, { eventId: 'ev1', client });
+      click(editButton('Alpha'));
+      // the form opens on what is stored
+      expect(editForm().querySelector('select').value).toBe('BN');
+      expect(editForm().querySelector('input').value).toBe('Borneo');
+      choose(editForm().querySelector('select'), '');
+      type(editForm().querySelector('input'), '   ');
+      submit(editForm());
+      await flush();
+      expect(client.db.btc_teams.find((t) => t.id === 't1')).toMatchObject({
+        country_code: null,
+        represents: null,
+      });
+      expect(rowText('Teams roster', 'Alpha')).toBe('AlphaEditRemove');
+    });
+
+    it('Cancel changes nothing, publishes nothing and returns focus to the Edit button', async () => {
+      const db = baseDb();
+      db.btc_teams[0].country_code = 'BN';
+      const client = fakeClient(db);
+      await mountSetupScreen(root, { eventId: 'ev1', client });
+      click(editButton('Alpha'));
+      choose(editForm().querySelector('select'), 'SG');
+      click(editForm().querySelector('button[data-focus-key="edit-cancel"]'));
+      expect(editForm()).toBeNull();
+      expect(client.db.btc_teams.find((t) => t.id === 't1').country_code).toBe('BN');
+      expect(document.activeElement).toBe(editButton('Alpha'));
+      expect(publishBtcLive).not.toHaveBeenCalled();
+    });
+
+    it('edits one row at a time', async () => {
+      await mountSetupScreen(root, { eventId: 'ev1', client: fakeClient(baseDb()) });
+      click(editButton('Alpha'));
+      click(editButton('Beta'));
+      expect(root.querySelectorAll('.btc-roster-edit-form')).toHaveLength(1);
+      expect(editForm().getAttribute('aria-label')).toBe('Edit Beta');
+      click(editButton('Jordan'));
+      expect(root.querySelectorAll('.btc-roster-edit-form')).toHaveLength(1);
+      expect(editForm().getAttribute('aria-label')).toBe('Edit Jordan');
+    });
+
+    it('keeps the edit open and says why when represents is too long', async () => {
+      const client = fakeClient(baseDb());
+      await mountSetupScreen(root, { eventId: 'ev1', client });
+      click(editButton('Alpha'));
+      type(editForm().querySelector('input'), 'x'.repeat(61));
+      submit(editForm());
+      await flush();
+      const alert = editForm().querySelector('[role="alert"]');
+      expect(alert.textContent).toBe('Represents must be 60 characters or fewer.');
+      expect(editForm().querySelector('input').getAttribute('aria-describedby')).toBe(alert.id);
+      expect(client.db.btc_teams.find((t) => t.id === 't1')).not.toHaveProperty('represents');
+    });
+
+    it('keeps the edit open with the database error when the save fails', async () => {
+      const client = fakeClient(baseDb(), { errorOn: 'btc_teams.update' });
+      await mountSetupScreen(root, { eventId: 'ev1', client });
+      click(editButton('Alpha'));
+      choose(editForm().querySelector('select'), 'SG');
+      submit(editForm());
+      await flush();
+      expect(editForm().querySelector('[role="alert"]')).not.toBeNull();
+      expect(editForm().querySelector('select').value).toBe('SG');
+      expect(publishBtcLive).not.toHaveBeenCalled();
+    });
+
+    it('edits a judge country and does not republish (judge country is organiser-only)', async () => {
+      const client = fakeClient(baseDb());
+      await mountSetupScreen(root, { eventId: 'ev1', client });
+      click(editButton('Jordan'));
+      expect(editForm().querySelector('input')).toBeNull(); // judges have no represents label
+      choose(editForm().querySelector('select'), 'MY');
+      submit(editForm());
+      await flush();
+      expect(client.db.btc_judges.find((j) => j.id === 'j1').country_code).toBe('MY');
+      expect(rowText('Judges roster', 'Jordan')).toContain('Malaysia · Jordan');
+      expect(document.activeElement).toBe(editButton('Jordan'));
+      expect(publishBtcLive).not.toHaveBeenCalled();
+    });
   });
 });

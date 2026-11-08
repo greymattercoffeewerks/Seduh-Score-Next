@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   KNOCKOUT_PLACES,
   matchLine,
+  teamLabel,
   winsText,
   qualifyingNote,
   winnerPhrase,
@@ -341,5 +342,22 @@ describe('who a knockout team is', () => {
     expect(knockoutMeeting(m({ seed: null, place: null }, { seed: 4, place: 4 }))).toBeNull();
     expect(knockoutMeeting(m({ seed: null, place: 1 }, { seed: null, place: null }))).toBeNull();
     expect(knockoutMeeting(m({ seed: 1, place: 1 }, { seed: null, place: null }))).toBeNull();
+  });
+});
+
+describe('teamLabel', () => {
+  it('puts the country before the name with a middle dot', () => {
+    expect(teamLabel({ name: 'Team Kopi', country_code: 'BN' })).toBe('Brunei · Team Kopi');
+  });
+
+  it('is just the name when there is no country', () => {
+    expect(teamLabel({ name: 'Team Kopi', country_code: null })).toBe('Team Kopi');
+    expect(teamLabel({ name: 'Team Kopi' })).toBe('Team Kopi');
+  });
+
+  it('falls back to the code for a code Intl does not know', () => {
+    expect(teamLabel({ name: 'Team Kopi', country_code: 'ZZ' })).toMatch(
+      /^(ZZ|Unknown Region) · Team Kopi$/,
+    );
   });
 });
