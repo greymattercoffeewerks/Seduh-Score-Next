@@ -34,6 +34,7 @@ import {
   finalScoreLine,
   renderScoreLine,
   podiumPlace as placeOf,
+  withCountry,
 } from './words.js';
 import {
   stageKicker,
@@ -59,7 +60,14 @@ const CHAMPION_MIN_DWELL_MS = 60_000;
 // One side of a match card: a label (in words: "3rd in the table", "Goes through"), the team's name, and for a result its
 // points and the chips that explain them. `winner` is true, false, or null when there is no winner to show
 // (a match not yet played, or a tie nobody has decided).
-export function renderSide({ label = null, name, winner = null, points = null, chips = [] }) {
+export function renderSide({
+  label = null,
+  name,
+  country = null,
+  winner = null,
+  points = null,
+  chips = [],
+}) {
   return el(
     'div',
     {
@@ -68,6 +76,8 @@ export function renderSide({ label = null, name, winner = null, points = null, c
     },
     [
       label ? el('span', { className: 'btc-stage-side-label', text: label }) : null,
+      // The country on its own small line above the name, so a long country never pushes the name off the card.
+      country ? el('span', { className: 'btc-stage-side-country', text: country.name }) : null,
       el('p', { className: 'btc-stage-side-name', text: name }),
       points === null ? null : el('p', { className: 'btc-stage-points', text: String(points) }),
       chips.length
@@ -104,7 +114,10 @@ function renderUpNextPage(match) {
   return [
     stageKicker(upNextKicker(match.roundLabel)),
     stageTitle(title),
-    renderVs(renderSide({ label: tagA, name: a.name }), renderSide({ label: tagB, name: b.name })),
+    renderVs(
+      renderSide({ label: tagA, name: a.name, country: a.country }),
+      renderSide({ label: tagB, name: b.name, country: b.country }),
+    ),
     judgesLine(match.judges)
       ? el('p', { className: 'btc-stage-judges', text: judgesLine(match.judges) })
       : null,
@@ -115,7 +128,7 @@ function renderStandingsPage(payload, page, range, pageCount) {
   const shared = sharedPositions(payload.standings, (row) => row.position);
   const rows = page.map((row) => ({
     position: row.position,
-    name: row.teamName,
+    name: withCountry(row.teamName, row.country),
     // Words, never colour alone. A team that has not played yet is level with every other such team, which
     // is not news, so only a tie among teams with results is written in the row.
     suffix: tiedSuffix(row, shared),
@@ -183,7 +196,18 @@ function renderSlot(slot, round, label) {
             },
           },
           [
-            el('span', { text: team.name ?? TO_BE_DECIDED }),
+            // "Country · Name" on one line; a long country ("Democratic Republic of the Congo") is cut at its own
+            // end and never hides the team name (projectorScreens.css).
+            el(
+              'span',
+              { className: 'btc-stage-slot-who' },
+              [
+                team.name && team.country
+                  ? el('span', { className: 'btc-stage-slot-country', text: team.country.name })
+                  : null,
+                el('span', { className: 'btc-stage-slot-name', text: team.name ?? TO_BE_DECIDED }),
+              ].filter(Boolean),
+            ),
             mark
               ? el('span', {
                   className: 'btc-stage-slot-mark',
@@ -316,7 +340,9 @@ const idleScreen = {
 
 // "1st runner-up X   ·   3rd place Y": only the places that are decided, never a guess.
 function podiumLine(payload) {
-  const parts = decidedPodiumPlaces(payload).map((place) => `${place.label} ${place.teamName}`);
+  const parts = decidedPodiumPlaces(payload).map(
+    (place) => `${place.label} ${withCountry(place.teamName, place.country)}`,
+  );
   return parts.length ? parts.join('   ·   ') : null;
 }
 
@@ -332,7 +358,7 @@ const championScreen = {
       const score = finalScoreLine(next);
       frame.main.replaceChildren(
         ...renderChampion({
-          name: champion?.teamName ?? '',
+          name: champion ? withCountry(champion.teamName, champion.country) : '',
           scoreLine: score ? renderScoreLine(score) : null,
           podiumLine: podiumLine(next),
         }),
