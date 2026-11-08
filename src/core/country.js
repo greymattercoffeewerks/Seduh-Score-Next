@@ -1,4 +1,4 @@
-// Countries, as the one list the whole app uses (the phone picker, a BTC team's or judge's country). ISO 3166-1
+// Countries, as the one list the whole app uses (the phone picker and any format's country field). ISO 3166-1
 // alpha-2 codes, from libphonenumber's metadata (the same list the phone checker reads), names from `Intl.DisplayNames`
 // at render time: no country name is ever stored. Pure: no DOM, no clock, no network.
 import { getCountries } from 'libphonenumber-js/min';
@@ -33,13 +33,16 @@ function safeName(names, iso) {
   }
 }
 
+const KNOWN = new Set(getCountries());
+
 // Pure. The display name of a country code, the code itself when Intl has no name (or throws), null for no country.
 export function countryName(iso, locale = 'en') {
   if (iso == null || iso === '') return null;
+  // A code outside the list (the database checks only the shape) is shown as the code: Intl would call it
+  // "Unknown Region", which says less.
+  if (!KNOWN.has(iso)) return iso;
   return safeName(displayNames(locale), iso);
 }
-
-const KNOWN = new Set(getCountries());
 
 // Pure. Whether the code is one of the countries in the list.
 export function isCountryCode(iso) {

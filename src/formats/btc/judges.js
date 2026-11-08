@@ -26,14 +26,15 @@ export async function findJudgeByName(eventId, name, client = getSupabase()) {
 
 // `countryCode` is an ISO alpha-2 code or null; only a value that is set is sent. A judge adopted after a lost
 // race is returned as it is: its country is not overwritten.
-export async function createJudge(eventId, name, { countryCode = null } = {}, client = getSupabase()) {
+export async function createJudge(
+  eventId,
+  name,
+  { countryCode = null } = {},
+  client = getSupabase(),
+) {
   const row = { event_id: eventId, name };
   if (countryCode != null) row.country_code = countryCode;
-  const { data, error } = await client
-    .from('btc_judges')
-    .insert(row)
-    .select()
-    .single();
+  const { data, error } = await client.from('btc_judges').insert(row).select().single();
   if (!error) return data;
 
   if (error.code === UNIQUE_VIOLATION) {

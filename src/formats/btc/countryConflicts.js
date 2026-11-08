@@ -5,7 +5,13 @@
 // `judges` and `teams` are rows with `id` and `country_code`; `team1Id`/`team2Id` pick the two teams, `judgeIds` the
 // selected judges. Returns [{ judgeId, teamId }]: one entry per selected judge per team of the same country (a judge
 // matching both teams has two). An id with no row is ignored.
-export function judgeCountryConflicts({ judges = [], teams = [], team1Id, team2Id, judgeIds = [] }) {
+export function judgeCountryConflicts({
+  judges = [],
+  teams = [],
+  team1Id,
+  team2Id,
+  judgeIds = [],
+}) {
   const judgeById = new Map(judges.map((j) => [j.id, j]));
   const teamById = new Map(teams.map((t) => [t.id, t]));
   const picked = [];

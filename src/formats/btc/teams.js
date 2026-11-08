@@ -39,11 +39,7 @@ export async function createTeam(
   const row = { event_id: eventId, name };
   if (countryCode != null) row.country_code = countryCode;
   if (represents != null) row.represents = represents;
-  const { data, error } = await client
-    .from('btc_teams')
-    .insert(row)
-    .select()
-    .single();
+  const { data, error } = await client.from('btc_teams').insert(row).select().single();
   if (!error) return data;
 
   // Lost a race to a concurrent insert of the same (event_id, name) between
