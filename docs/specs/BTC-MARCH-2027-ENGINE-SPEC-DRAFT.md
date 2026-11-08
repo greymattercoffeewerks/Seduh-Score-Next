@@ -38,6 +38,7 @@ later option (section 9).
 | A judge must **not score a team from their own country** (avoid it)                                                                                                                 | owner, 2026-11-07 |
 | Round 2 needs every earlier preliminary round fully confirmed                                                                                                                       | owner             |
 | Every preliminary finish time **must be recorded** (needed for the tie-break)                                                                                                       | owner             |
+| A team that does not finish records the **maximum time** for the round (10 or 15 minutes, depending on the round); teams may serve anywhere from 4 to 15 cups in that time          | owner, 2026-11-08 |
 | An odd team count (a withdrawal) is **KIV**: the committee decides; until then the draw refuses                                                                                     | owner             |
 | Whether a round-2 rematch may be avoided is to be checked with the committee; avoiding is the default and can be switched off                                                       | owner             |
 | No draw or schedule exists before registration opens in January 2027                                                                                                                | owner             |
@@ -207,6 +208,15 @@ if it is consistent.
 - **A time is required for each team in a preliminary match** (owner: "must have a time"): Confirm is blocked with a
   plain message until both boxes hold a valid time. An invalid value shows its own message. Knockout matches keep
   the time optional. The boxes' label drops "(optional)" for preliminary matches.
+- **The time limit is the cap.** A team that does not finish records the round's **maximum time** (10 or 15 minutes,
+  depending on the round; which round is which is open, O6). A pure `maxTimeSecsForRound(round)` beside
+  `cupsForRound` in `src/formats/btc/scoring.js` gives the limit, and the entry goes through `clampElapsed()` from
+  `src/core/timeclamp.js` (the project's single duration cap, so no second cap is invented): a value above the limit
+  is set to the limit and the screen says "Capped at the 10:00 limit"; a team that did not finish enters the limit
+  itself. The label says so ("Did not finish? Enter 10:00"). Teams may serve 4 to 15 cups in the time; the cups they
+  did not serve are scored through the existing per-cup token buttons, so the time rule adds no new scoring path.
+  Two teams that both hit the cap tie on time, and the tie card says so ("both at the limit"): the organiser decides
+  that tie by their own rule, as today, and the reason text records it.
 - **Client-side for March.** The confirm function is a scoring gate with its own idempotency, so the requirement is
   not added there yet (it would also affect the demo loader); recommended hardening, if wanted: refuse a preliminary
   confirm without both times in `confirm_btc_match`, with a hint, after `scoring-auditor` review. Meanwhile the
@@ -216,7 +226,8 @@ if it is consistent.
 - 360px: the message sits under the box, no layout shift beyond one line; contrast per Petrol tokens.
 
 **Acceptance.** `8:42`, `08:42`, `12:05` pass; `8.42`, `8:60`, `842`, `8 min` are refused with the message; empty
-passes only for a knockout match; a preliminary Confirm is blocked while either time is missing or invalid.
+passes only for a knockout match; a preliminary Confirm is blocked while either time is missing or invalid. With a
+10:00 limit, `10:30` becomes `10:00` with the capped message, `9:59` is kept, and `0:00` is refused.
 
 ## 7. E: the team country (dependency)
 
@@ -268,8 +279,11 @@ phase P1, December).
   settle: if the judge pool is too small to avoid every conflict, is an accepted exception allowed? The spec allows
   it with an explicit tick and records it.
 - **O3 Round 2 on partial results: decided.** Round 2 needs round 1 fully confirmed.
-- **O4 Time: decided.** Every preliminary finish time must be recorded (section 6). Open: what is recorded when a
-  team does not finish (a "did not finish" value, or the cup limit)? A "must have a time" rule needs an answer or a
-  confirm is impossible.
+- **O4 Time: decided.** Every preliminary finish time must be recorded (section 6). A team that does not finish
+  records the round's maximum time (10 or 15 minutes), so no "did not finish" value is needed.
 - **O5 Same opponent twice: KIV** (owner: check with the committee). Avoidance is a setting, default on; if the
   committee's format allows repeats, switch it off.
+- **O6 Which round has which limit?** The owner said 10 or 15 minutes "depending on the round". Needed: the limit for
+  each preliminary round and for the knockout rounds (the shipped cup counts are 15 in the preliminary and 20 in
+  every knockout round, which is a different thing). Until confirmed, `maxTimeSecsForRound` is one function to
+  edit, and the default is 10:00 for preliminary rounds and 15:00 for knockouts.
