@@ -201,6 +201,7 @@
   align-items: baseline;
   gap: 0.5ch;
   min-width: 0;
+  overflow: hidden;
 }
 
 .btc-stage-slot-name,
@@ -211,8 +212,8 @@
 }
 
 /* "Country · Name" on ONE line (a second line would push the fourth quarterfinal off a 1080p screen). The name
-   keeps its full width and is cut only when it alone is too wide; the country takes what is left and is cut at
-   its own end ("Democratic Republic of the Congo" never hides the team). */
+   keeps its full width (cut only when it alone is wider than the slot); the country takes what is left and is cut
+   at its own end, down to nothing in a narrow 4:3 column (the wrapper clips, so nothing runs into the mark) ("Democratic Republic of the Congo" never hides the team). */
 .btc-stage-slot-name {
   flex: 0 0 auto;
   max-width: 100%;
@@ -220,7 +221,7 @@
 
 .btc-stage-slot-country {
   flex: 0 1 auto;
-  min-width: 4ch;
+  min-width: 0;
   font-weight: var(--font-weight-normal, 400);
 }
 
