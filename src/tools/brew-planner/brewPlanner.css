@@ -207,6 +207,7 @@ body {
 
 .bp-btn {
   min-height: var(--tap-target-min);
+  border-radius: var(--radius-sm);
   padding: 0 var(--space-4);
   font: inherit;
   font-size: var(--text-sm);
@@ -224,19 +225,6 @@ body {
   border: var(--border-hairline) solid var(--color-accent);
   background: var(--color-accent);
   color: var(--color-accent-contrast);
-  clip-path: polygon(
-    var(--cut-sm) 0,
-    100% 0,
-    100% calc(100% - var(--cut-sm)),
-    calc(100% - var(--cut-sm)) 100%,
-    0 100%,
-    0 var(--cut-sm)
-  );
-}
-
-.bp-btn-primary:focus-visible {
-  /* The cut corners would clip the focus ring, so it goes square while focused. */
-  clip-path: none;
 }
 
 .bp-btn-primary:hover {

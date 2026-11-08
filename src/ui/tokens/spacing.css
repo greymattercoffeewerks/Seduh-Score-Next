@@ -8,8 +8,8 @@
  * secondary buttons, the live blip) get a 3px machined corner; cards 6px;
  * modals and large panels 10px; --radius-full is a true circle, for spinners
  * and avatars only. Big primary buttons keep a soft bevel chamfer, sized by
- * --bevel-* (used from P2; no component reads them yet). --cut-* stays until
- * P2 retires it from small elements.
+ * --bevel-* (read by base.css's .btn-bevel; --bevel-md is reserved). --cut-lg stays for
+ * large decorative panels only.
  *
  * Still no shadow tokens. Flat borders/surface steps only.
  */
@@ -35,10 +35,7 @@
   --bevel-md: 6px;
   --bevel-lg: 9px;
 
-  /* Legacy corner-cut sizes for base.css's .cut-* utilities; P2 retires them
-     from small elements. */
-  --cut-sm: 6px;
-  --cut-md: 10px;
+  /* Corner-cut size for base.css's .cut-lg, kept for large decorative panels only. */
   --cut-lg: 16px;
 
   --border-hairline: 1px;

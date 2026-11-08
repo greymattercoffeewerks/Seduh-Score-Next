@@ -1,7 +1,7 @@
 /*
  * Shared screen-chrome component shapes: .screen-container (and its headings), .card, .btn / .btn-primary /
- * .btn-outline, .form-field / .form-field-label / .form-field-hint, .field-input, .screen-feedback (and its
- * tones).
+ * .btn-outline, .btn-primary.btn-lg (the big bevelled call-to-action), .is-selected / .selectable, .form-field /
+ * .form-field-label / .form-field-hint, .field-input, .screen-feedback (and its tones).
  *
  * One canonical copy. These used to live in src/formats/cup-taster/heatsScreen.css and be restated by
  * src/formats/btc/shared.css and src/admin/admin.css (a format could not link another format's CSS, and the
@@ -79,6 +79,51 @@
   font-size: var(--text-base);
   font-weight: var(--font-weight-semibold);
   cursor: pointer;
+  /* Positioned and clipped so the busy line (below) stays inside the button's shape. The button's own outside
+     focus ring is not clipped by its own overflow. */
+  position: relative;
+  overflow: hidden;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    transform var(--dur-press) var(--ease-out);
+}
+
+/* Press: a 1px sink and a darker fill, over --dur-press. Not while disabled or busy. */
+.btn:active:not(:disabled):not([aria-disabled='true']) {
+  transform: translateY(1px);
+}
+
+/* Busy (Petrol V2): the label stays, and a thin line runs along the bottom edge. The attribute is set by
+   core/dom.js's setBusyDisabled() together with aria-disabled, so every submit button that already says "Signing in…" gets
+   it for free. Under reduced motion the line is static (a full-width bar), still a visible cue. */
+.btn[aria-busy='true']::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  width: 100%;
+  background: currentColor;
+  opacity: 0.7;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .btn[aria-busy='true']::after {
+    width: 40%;
+    opacity: 1;
+    animation: btn-busy-line calc(var(--dur-stage) * 3) linear infinite;
+  }
+}
+
+@keyframes btn-busy-line {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
 }
 
 .btn:disabled,
@@ -94,6 +139,26 @@
 
 .btn-primary:hover:not(:disabled):not([aria-disabled='true']) {
   background: var(--color-accent-hover);
+}
+
+.btn-primary:active:not(:disabled):not([aria-disabled='true']) {
+  background: color-mix(in srgb, var(--color-accent-hover) 80%, black);
+}
+
+/* The big primary button (Petrol V2): the screen's one main call-to-action (Start the heat, Record the result).
+   `.btn btn-primary btn-lg`. The soft bevel chamfer is the same shape as base.css's .btn-bevel (for CTAs that are not .btn). Small and secondary buttons never take it: they keep --radius-sm. */
+.btn-primary.btn-lg {
+  min-height: calc(var(--tap-target-min) + var(--space-2));
+  padding: var(--space-3) var(--space-6);
+  font-size: var(--text-md);
+  /* The bevel shape, same declarations as base.css's .btn-bevel (see the comment there). */
+  border-radius: var(--bevel-lg) var(--radius-sm) var(--bevel-lg) var(--radius-sm);
+}
+
+@supports (corner-shape: bevel) {
+  .btn-primary.btn-lg {
+    corner-shape: bevel round bevel round;
+  }
 }
 
 /* Ported from src/ui/tokens/preview.html's own documented `.btn-outline` —
@@ -113,6 +178,38 @@
 
 .btn-outline:hover:not(:disabled):not([aria-disabled='true']) {
   background: var(--color-surface-sunken);
+}
+
+.btn-outline:active:not(:disabled):not([aria-disabled='true']) {
+  background: var(--color-border);
+}
+
+/* Selected / active item (Petrol V2): the accent tint, a 2px accent edge on the start side, AND a check mark.
+   The tint alone is 1.14:1 against the paper canvas (it is a fill, not a boundary), so the edge and the check
+   carry the state for anyone who cannot see the tint. Apply as `.is-selected`, or give an element `.selectable`
+   and let aria-selected / aria-current drive it. The edge is a background stripe, not a border or shadow, so
+   nothing shifts when it appears. The check is a ::before: do not use it on an element that already has one. */
+.is-selected,
+.selectable[aria-selected='true'],
+.selectable[aria-current='true'],
+.selectable[aria-current='page'],
+.selectable[aria-current='step'] {
+  background-color: var(--color-accent-tint);
+  background-image: linear-gradient(var(--color-accent), var(--color-accent));
+  background-repeat: no-repeat;
+  background-size: 2px 100%;
+  background-position: left center;
+  color: var(--color-accent-tint-text);
+}
+
+.is-selected::before,
+.selectable[aria-selected='true']::before,
+.selectable[aria-current='true']::before,
+.selectable[aria-current='page']::before,
+.selectable[aria-current='step']::before {
+  content: '\2713' / '';
+  margin-inline-end: var(--space-2);
+  font-weight: var(--font-weight-bold);
 }
 
 /* Shared "label above input" field wrapper — core/dom.js's labeledField()
@@ -149,12 +246,15 @@
   min-height: var(--tap-target-min);
   width: 100%;
   padding: var(--space-2) var(--space-3);
-  border: var(--border-hairline) solid var(--color-border);
+  /* --color-border-input (petrol-400), not --color-border (2.1:1): a form control's edge must reach 3:1 against
+     what it sits on (WCAG 1.4.11). 4.0:1 on the paper surface, 4.2:1 on the stage surface. */
+  border: var(--border-hairline) solid var(--color-border-input);
   border-radius: var(--radius-sm);
   background: var(--color-surface);
   color: var(--color-text);
   font-family: var(--font-body);
   font-size: var(--text-base);
+  transition: border-color var(--dur-fast) var(--ease-out);
 }
 
 /* A real, token-controlled color — not left to browser/OS default disabled
@@ -171,6 +271,22 @@
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);
+}
+
+/* Enter, don't pop (Petrol V2). The region is usually created empty and text written into it later (the :empty
+   rule at the end of this file holds it out of the layout until then). A keyframe animation, not a transition,
+   because it starts when the rule starts to apply, i.e. the moment the first text arrives, and again for each
+   time the region is emptied and refilled. Opacity and a 4px rise only: no layout property moves, and the text is
+   in the accessibility tree from the first frame, so a screen reader's announcement is not delayed. */
+.screen-feedback:not(:empty) {
+  animation: screen-feedback-in var(--dur-base) var(--ease-out) both;
+}
+
+@keyframes screen-feedback-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
 }
 
 .screen-feedback[data-tone='error'] {

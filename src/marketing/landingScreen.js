@@ -115,7 +115,7 @@ function navLink(text, href) {
 
 function actionLink(text, { primary = false, outline = false, href = '/app/#/events' } = {}) {
   const classes = ['petrol-action'];
-  if (primary) classes.push('petrol-action-primary', 'cut-sm');
+  if (primary) classes.push('petrol-action-primary', 'btn-bevel');
   if (outline) classes.push('petrol-action-outline');
   return el('a', { className: classes.join(' '), text, attrs: { href } });
 }

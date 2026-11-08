@@ -112,8 +112,7 @@ self-contained CSS instead.
     every colour in the stylesheet is a `--clr-*` / `--color-*` token (the first version had a
     brown wood frame and a dozen hard-coded hex values), the board frame is graphite with teal
     rails and a `.cut-lg` corner, the primary actions (DRAW ENTRY, KEEP RESULT) are the accent
-    with a `.cut-md` / `.cut-sm` corner that goes square while focused so the ring is not
-    clipped, and there are no shadows. With no custom accent the tool uses the Petrol accent
+    with the soft bevel (`.btn-bevel`, Petrol V2 P2; no `clip-path`, so no focus workaround), and there are no shadows. With no custom accent the tool uses the Petrol accent
     token (`PETROL_ACCENT_HEX` only fills the colour picker), so Present mode gets the stage
     teal for free; `accentColor` is `null` for that, a picked colour still wins, "USE PETROL
     ACCENT" goes back, the old built-in default `#0fb5a3` means "no custom accent", and a share

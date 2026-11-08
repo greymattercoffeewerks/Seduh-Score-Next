@@ -6,8 +6,8 @@
  * format-specific (Cup Taster, Guess the Bean, ...) — this file must stay
  * usable by any future format untouched, same as the rest of `src/core`.
  *
- * Identical to Cherry's base.css except for one addition (.cut-sm/.cut-md/
- * .cut-lg, new) and the is-test-banner stripe now referencing
+ * Identical to Cherry's base.css except for the corner treatments (.btn-bevel
+ * and the decorative .cut-lg, new) and the is-test-banner stripe now referencing
  * --clr-petrol-950 instead of --clr-cherry-950 — every other existing rule
  * here already consumes tokens only, so it re-themes for free from
  * colors.css/spacing.css alone.
@@ -182,35 +182,30 @@ body {
   }
 }
 
-/* New for Petrol — the angular alternative to a rounded corner. Apply to
-   any container that would otherwise reach for --radius-* at a size big
-   enough for the cut to read (primary buttons, tags, hero panels). Not a
-   replacement for --radius-* everywhere — most elements are fine simply
-   square; reserve the cut for elements that want a little more visual
-   "commitment" (this mirrors how the marketing page uses it only on CTAs
-   and card corners, not on every box). */
-.cut-sm {
-  clip-path: polygon(
-    var(--cut-sm) 0,
-    100% 0,
-    100% calc(100% - var(--cut-sm)),
-    calc(100% - var(--cut-sm)) 100%,
-    0 100%,
-    0 var(--cut-sm)
-  );
+/* Petrol V2 — the soft bevel chamfer, ONLY on big primary buttons (Hybrid rule: small elements keep the 3px
+   --radius-sm). Top-left and bottom-right are chamfered by --bevel-lg, the other two corners stay a 3px machined
+   radius. Two spellings of one shape:
+     .btn-bevel            shape only, for a call-to-action that is not a .btn (marketing, pricing, tools);
+     .btn-primary.btn-lg   the console's big primary button, in components.css (same declarations, keep in sync).
+   Lives here, not in components.css, because tokens/index.css is loaded by every page and components.css is not.
+   The doubled .btn-bevel.btn-bevel is deliberate: it out-ranks a screen's own single-class `border-radius` (the
+   random selector's `.rs-button { border-radius: 0 }`) without !important.
+   Never clip-path: it clips the outside focus ring. `corner-shape` shapes the border box itself, so the ring and
+   the border follow it. Browsers without `corner-shape` get the asymmetric radius below: a rounded 9px corner
+   on the same two diagonals, which still reads as the same family. */
+.btn-bevel.btn-bevel {
+  border-radius: var(--bevel-lg) var(--radius-sm) var(--bevel-lg) var(--radius-sm);
 }
 
-.cut-md {
-  clip-path: polygon(
-    var(--cut-md) 0,
-    100% 0,
-    100% calc(100% - var(--cut-md)),
-    calc(100% - var(--cut-md)) 100%,
-    0 100%,
-    0 var(--cut-md)
-  );
+@supports (corner-shape: bevel) {
+  .btn-bevel.btn-bevel {
+    corner-shape: bevel round bevel round;
+  }
 }
 
+/* Legacy corner cut, kept for LARGE DECORATIVE PANELS only (the random selector's board frame). A clip-path cuts
+   off the outside focus ring, so never put it on anything focusable: a big button is `.btn-bevel`, a small
+   element takes `--radius-sm`. */
 .cut-lg {
   clip-path: polygon(
     var(--cut-lg) 0,

@@ -47,7 +47,7 @@ function tierCard(tier) {
       el('p', { className: 'pricing-tier-price tabular-nums' }, priceLine),
       el('p', { className: 'pricing-tier-summary', text: tier.summary }),
       el('p', { className: 'pricing-tier-note', text: tier.note }),
-      el('a', { className: 'pricing-cta cut-sm', attrs: { href: tier.cta.href } }, [
+      el('a', { className: 'pricing-cta btn-bevel', attrs: { href: tier.cta.href } }, [
         document.createTextNode(tier.cta.text),
         el('span', { className: 'sr-only', text: ` — ${tier.name}` }),
       ]),
@@ -184,7 +184,7 @@ function buildClosing() {
       el('h2', { id: 'pricing-closing-title', text: 'Not sure which tier fits?' }),
       el('p', { text: 'Tell us about your event and we will point you at the right one.' }),
       el('a', {
-        className: 'pricing-cta cut-sm',
+        className: 'pricing-cta btn-bevel',
         attrs: { href: '/contact/' },
         text: 'Get in touch',
       }),

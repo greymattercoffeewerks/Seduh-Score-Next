@@ -689,7 +689,7 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
       });
       const drawButton = button(
         state.spinning ? 'DRAWING' : 'DRAW ENTRY',
-        'rs-draw-button cut-md',
+        'rs-draw-button btn-bevel',
         startDraw,
         {
           'data-focus-key': 'draw',
@@ -771,7 +771,7 @@ export function mountRandomSelector(root, { storage = browserStorage() } = {}) {
                 : 'Selected and kept in the draw.',
             }),
             el('div', { className: 'rs-reveal-actions' }, [
-              button('KEEP RESULT', 'rs-button rs-button-primary cut-sm', keepResult, {
+              button('KEEP RESULT', 'rs-button rs-button-primary btn-bevel', keepResult, {
                 'data-focus-key': 'keep-result',
               }),
               button('REDRAW', 'rs-button rs-button-outline', redraw, {

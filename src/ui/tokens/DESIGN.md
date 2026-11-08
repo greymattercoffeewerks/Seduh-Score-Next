@@ -99,21 +99,62 @@ hue distance alone.
 Petrol V1 set every `--radius-*` to `0`. V2 (owner decision, 2026-11) softens that without
 losing the telemetry identity. Corners are sized by the element's role:
 
-| Token           | Value  | Used for                                                            |
-| --------------- | ------ | ------------------------------------------------------------------- |
-| `--radius-sm`   | 3px    | tags, badges, chips, inputs, secondary buttons, the live blip       |
-| `--radius-md`   | 6px    | cards                                                               |
-| `--radius-lg`   | 10px   | modals and large panels                                             |
-| `--radius-full` | 9999px | true circles only: spinners and avatars (never a pill or a badge)   |
-| `--bevel-md/lg` | 6/9px  | the soft chamfer on BIG primary buttons (built in P2; unused in P1) |
+| Token           | Value  | Used for                                                                                       |
+| --------------- | ------ | ---------------------------------------------------------------------------------------------- |
+| `--radius-sm`   | 3px    | tags, badges, chips, inputs, secondary buttons, the live blip                                  |
+| `--radius-md`   | 6px    | cards                                                                                          |
+| `--radius-lg`   | 10px   | modals and large panels                                                                        |
+| `--radius-full` | 9999px | true circles only: spinners and avatars (never a pill or a badge)                              |
+| `--bevel-md/lg` | 6/9px  | the soft chamfer on BIG primary buttons (`--bevel-lg` is read by `.btn-bevel`; `-md` reserved) |
 
-`.status-live-dot` uses `--radius-sm`: a machined 3px blip, not a circle. `--cut-*` and
-`.cut-*` stay for now (the clip-path cut clips focus rings); P2 retires them from small
-elements. Cards use a 1px `--color-border-card` (`petrol-400` in both modes) instead of the old 2px
+`.status-live-dot` uses `--radius-sm`: a machined 3px blip, not a circle. Cards use a 1px `--color-border-card` (`petrol-400` in both modes) instead of the old 2px
 near-black frame: 3.4:1 against the paper canvas (4.0:1 on the card surface) and 4.5:1 on
 stage (4.2:1 on the card surface), so the edge meets WCAG 1.4.11's 3:1 and the 2026-09-05
 "nearly invisible" feedback is answered without the heavy frame. `--color-border` stays soft
-for dividers. Input edges (`--color-border`, about 2.1:1 on paper) do not meet 1.4.11 yet.
+for dividers. Input edges use `--color-border-input` (`petrol-400`, same step as the card edge): 4.0:1 against the paper
+surface (3.4:1 against the canvas) and 4.2:1 against the stage surface (4.5:1 against the canvas); the old
+`--color-border` edge was 2.1:1 (paper canvas), under WCAG 1.4.11.
+
+### Big primary button: the bevel (P2)
+
+One shape, two spellings (`.btn-bevel` lives in `base.css`, loaded by every page; `.btn-lg` in `components.css`, which restates the same declarations):
+
+- `.btn .btn-primary .btn-lg` — the console's big primary button. `components.css` adds the size
+  (`min-height` 52px, `--text-md`); the shape comes from `base.css`.
+- `.btn-bevel` — shape only, for a call-to-action that is not a `.btn` (marketing, pricing, tour, the
+  tools). Use it with the element's own colours and size.
+
+Shape: top-left and bottom-right are chamfered (`corner-shape: bevel round bevel round`, inside
+`@supports (corner-shape: bevel)`); the other two corners keep 3px. Both read `border-radius:
+--bevel-lg --radius-sm --bevel-lg --radius-sm`, which is also the fallback: a browser without `corner-shape`
+shows the same two diagonals rounded at 9px. **Never `clip-path`**: it clips the outside focus ring, which is
+why the old `.cut-*` needed a square-while-focused workaround in three places. `corner-shape` shapes the border box,
+so the ring follows. `.btn-bevel.btn-bevel` is doubled on purpose so a screen's own one-class `border-radius`
+cannot flatten it.
+
+Who gets it: the screen's single main call-to-action only. Console: Start heat, Confirm heat (Cup Taster), Confirm
+match (BTC). Public pages: the landing primary action, the pricing tier buttons, the tour's primary links. Tools:
+the random selector's DRAW ENTRY and KEEP RESULT, the Brew Planner's primary buttons. Everything else, including the
+public header's "Start free", takes `--radius-sm`.
+
+`.cut-lg` (clip-path polygon, `--cut-lg` 16px) survives only for large decorative, non-focusable panels (the
+random selector's board frame). `.cut-sm` and `.cut-md` are removed.
+
+## Component states (P2)
+
+- **Press.** `.btn:active` sinks 1px (`--dur-press`) and darkens the fill; hover and colour changes ease over
+  `--dur-fast`. Not applied while disabled or busy.
+- **Busy.** `.btn[aria-busy='true']` keeps its label and shows a 2px line along the bottom edge that runs under
+  motion and is a static bar under reduced motion. `core/dom.js` `setBusyDisabled()` already sets `aria-busy` together with
+  `aria-disabled` (it is what every sign-in and save button uses), so those buttons pick it up with no JS change.
+  Guess the Bean's `.gtb-btn` has its own look and was not changed.
+- **Feedback.** `.screen-feedback` fades and rises 4px over `--dur-base` when text arrives in it (an animation,
+  so it also runs for a region that starts empty). The empty-region rule is unchanged: still in the accessibility
+  tree, no space taken.
+- **Selected.** `.is-selected`, or `.selectable` driven by `aria-selected` / `aria-current`: accent tint, a 2px
+  accent edge and a check mark. The tint is only 1.14:1 against the paper canvas, so the edge and the check carry the state.
+  The classes are ready; the console's existing selected markers (appShell nav `aria-current`, admin nav, Brew
+  Planner step `aria-current='step'`, the heats list) adopt them in P3.
 
 **No shadows** — unchanged. Flat borders and surface steps only.
 
@@ -134,7 +175,7 @@ under reduce at all (the existing pattern); the global rule covers whatever slip
 `--color-accent-tint-text` as the text that sits on it, in both modes (rows in the contrast
 table above). A selected or active row uses the tint, not the grey sunken surface. The
 symmetry rule holds: paper tint is light with dark text, stage tint is dark with light text.
-The classes that apply it arrive in P2.
+The classes that apply it are `.is-selected` / `.selectable` (see "Component states").
 
 ## `is_test` is violet, and only violet is `is_test` — unchanged
 
@@ -176,9 +217,8 @@ timer, `--color-gold` ceremonial-only, `--color-focus-ring` stays neutral, no
 third-party font CDN, no new font weight without a real consumer). Two additions
 specific to Petrol:
 
-- **Do** reach for `.cut-sm/.cut-md/.cut-lg` instead of hand-writing a one-off
-  `clip-path` when a screen wants the angular-cut treatment — same "don't hand-pick a
-  value, extend the token layer" discipline Cherry's own rules apply to color/spacing.
+- **Do** reach for `.btn-bevel` / `.btn-primary.btn-lg` for a big primary button, and `--radius-sm` for
+  everything small. **Don't** put a `clip-path` on anything focusable.
 - **Don't** hand-pick a `border-radius` or a transition duration/easing. Pick the role's
   `--radius-*` and a `--dur-*`/`--ease-out`; if none fits, raise it rather than patching
   locally. `--radius-full` is for circles only.
@@ -194,15 +234,15 @@ specific to Petrol:
    (scoring, standings, viewer/projector, timer, roster, dashboard) still needs its own
    pass — the token layer supports them already (everything reads through `var()`), but
    nobody has verified each screen's specific layout against the Hybrid radii/`.cut-*` yet.
-3. Petrol V2 is in progress on its own branch: P1 (tokens, this file) done; P2 (bevel
-   buttons, press and busy states, selected-state classes, retire `--cut-*` from small
-   elements and fix focus-ring clipping) and P3 (screens), then a drift-guard test, are open.
+3. Petrol V2 is in progress on its own branch: P1 (tokens) and P2 (bevel buttons, press and busy states,
+   selected-state classes, input edges, `.cut-*` retired from buttons) done; P3 (screens, and adopting the selected
+   classes) and a drift-guard test are open.
    Existing `--radius-full` pills and badges were moved to `--radius-sm` in P1 so they do
    not turn into pills; the splash glow keeps `--radius-full`.
 
 ## Live preview
 
 `src/ui/tokens/preview.html` renders every token — palette swatches for both surface
-modes, the type scale, spacing/radius, the corner-cut utilities, a mock scoreboard using
+modes, the type scale, spacing/radius, buttons (big bevel, busy, disabled), the selected state, inputs and feedback, the decorative `.cut-lg`, a mock scoreboard using
 `.font-mono-score`, and the `is_test` banner. Open it via the dev server (`npm run dev`,
 then navigate to `/src/ui/tokens/preview.html`) when changing any token value.

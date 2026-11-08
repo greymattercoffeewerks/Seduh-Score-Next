@@ -254,6 +254,7 @@ a {
 
 /* ---- Buttons ---- */
 .petrol-action {
+  border-radius: var(--radius-sm);
   display: inline-flex;
   align-items: center;
   justify-content: center;

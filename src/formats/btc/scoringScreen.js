@@ -792,7 +792,7 @@ export async function mountScoringScreen(
 
     ui.confirmHint = el('p', { id: 'btc-confirm-hint', className: 'form-field-hint' });
     ui.confirmButton = el('button', {
-      className: 'btn btn-primary tap-target',
+      className: 'btn btn-primary btn-lg tap-target',
       attrs: { type: 'button', 'data-focus-key': 'confirm-match' },
     });
     ui.confirmButton.addEventListener('click', handleConfirm);
