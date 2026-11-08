@@ -567,6 +567,12 @@ section only records the conventions a new screen or token needs to follow.
   `--color-accent`, `--color-accent-hover` and `--color-accent-contrast`**, so it can never reach `--color-test`
   or a status colour (`core/brandColor.js` returns only those three, and the colour is moved to stay at 4.5:1 on
   every surface of the mode).
+- **Drift guard (Petrol V2, 2026-11-08).** `src/ui/tokens/tokenDrift.test.js` scans every stylesheet under `src/`
+  outside `tokens/` (and inline `<style>` in HTML pages) for raw colours, off-token `border-radius`, time/easing
+  literals in `transition`/`animation`, and `clip-path: polygon()`. A new literal must use a token. The only
+  exceptions are the `ALLOWLIST` entries, each pinned to file, selector, literal and a named reason in
+  `DESIGN.md`'s "Drift guard" section; an allowlisted rule's count is exact, so adding a second literal to it fails
+  too. Changing an allowlist entry is a design decision, not a test fix.
 - `src/ui/tokens/preview.html` renders every token in both surface modes — open it
   (`npm run dev`, then `/src/ui/tokens/preview.html`) when changing any token value, and
   keep its demo copy format-agnostic (a leaked Cup-Taster-specific term here was

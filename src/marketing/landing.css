@@ -46,10 +46,8 @@
  * canvas darkness — see DESIGN.md's own "sits right at the floor" note) —
  * every band usage below deliberately uses `--color-text-secondary`
  * instead of muted for exactly that reason. The hero's own gradient scrim
- * keeps literal rgba(11,14,16,*) values since they equal --clr-petrol-950
- * at different alpha steps — there's no token for "canvas color at N%
- * opacity," so this is the one place a raw value stays, with this comment
- * as the paper trail.
+ * is written as color-mix(in srgb, var(--clr-petrol-950) N%, transparent), the
+ * token at N% opacity (Petrol V2 drift guard: no raw rgba here).
  */
 
 * {
@@ -119,7 +117,7 @@ a {
   top: 0;
   z-index: 20;
   background: var(--clr-petrol-800);
-  border-bottom: var(--border-hairline) solid rgba(255, 255, 255, 0.08);
+  border-bottom: var(--border-hairline) solid color-mix(in srgb, var(--clr-white) 8%, transparent);
 }
 .petrol-nav-bar {
   display: flex;
@@ -198,7 +196,7 @@ a {
   margin-left: auto;
   flex-shrink: 0;
   background: transparent;
-  border: var(--border-hairline) solid rgba(255, 255, 255, 0.2);
+  border: var(--border-hairline) solid color-mix(in srgb, var(--clr-white) 20%, transparent);
   color: var(--color-text);
   cursor: pointer;
 }
@@ -217,7 +215,7 @@ a {
   gap: 16px;
   padding: 16px clamp(20px, 4vw, 40px) 22px;
   background: var(--clr-petrol-700);
-  border-top: var(--border-hairline) solid rgba(255, 255, 255, 0.1);
+  border-top: var(--border-hairline) solid color-mix(in srgb, var(--clr-white) 10%, transparent);
   /* The bar is sticky, so an open panel taller than the viewport (landscape phone, on-screen
      keyboard) could not be scrolled to: cap it at the space under the ~72px bar and scroll inside. */
   max-height: calc(100vh - 72px);
@@ -322,10 +320,10 @@ a {
   inset: 0;
   background: linear-gradient(
     100deg,
-    rgba(11, 14, 16, 0.92) 0%,
-    rgba(11, 14, 16, 0.68) 34%,
-    rgba(11, 14, 16, 0.15) 62%,
-    rgba(11, 14, 16, 0.35) 100%
+    color-mix(in srgb, var(--clr-petrol-950) 92%, transparent) 0%,
+    color-mix(in srgb, var(--clr-petrol-950) 68%, transparent) 34%,
+    color-mix(in srgb, var(--clr-petrol-950) 15%, transparent) 62%,
+    color-mix(in srgb, var(--clr-petrol-950) 35%, transparent) 100%
   );
 }
 .petrol-hero-inner {
@@ -456,8 +454,8 @@ a {
 /* ---- Dark inline bands (Problem / Pricing) ---- */
 .petrol-band {
   background: var(--clr-petrol-800);
-  border-top: var(--border-hairline) solid rgba(255, 255, 255, 0.08);
-  border-bottom: var(--border-hairline) solid rgba(255, 255, 255, 0.08);
+  border-top: var(--border-hairline) solid color-mix(in srgb, var(--clr-white) 8%, transparent);
+  border-bottom: var(--border-hairline) solid color-mix(in srgb, var(--clr-white) 8%, transparent);
   padding: clamp(48px, 7vw, 88px) 0;
 }
 .petrol-eyebrow {
@@ -489,14 +487,14 @@ a {
   gap: clamp(24px, 4vw, 56px);
 }
 .petrol-ledger {
-  border-top: var(--border-hairline) solid rgba(255, 255, 255, 0.1);
+  border-top: var(--border-hairline) solid color-mix(in srgb, var(--clr-white) 10%, transparent);
 }
 .petrol-ledger-row {
   display: flex;
   align-items: center;
   gap: 18px;
   padding: 20px 0;
-  border-bottom: var(--border-hairline) solid rgba(255, 255, 255, 0.1);
+  border-bottom: var(--border-hairline) solid color-mix(in srgb, var(--clr-white) 10%, transparent);
   transition: background var(--dur-base) var(--ease-out);
 }
 @media (prefers-reduced-motion: reduce) {
@@ -505,7 +503,7 @@ a {
   }
 }
 .petrol-ledger-row:hover {
-  background: rgba(15, 181, 163, 0.05);
+  background: color-mix(in srgb, var(--clr-teal-500) 5%, transparent);
 }
 .petrol-ledger-index {
   width: 26px;
@@ -533,7 +531,7 @@ a {
 }
 .petrol-format-list {
   margin-top: 36px;
-  border-top: var(--border-hairline) solid rgba(255, 255, 255, 0.1);
+  border-top: var(--border-hairline) solid color-mix(in srgb, var(--clr-white) 10%, transparent);
 }
 .petrol-format-row {
   display: grid;
@@ -541,7 +539,7 @@ a {
   align-items: center;
   gap: 20px;
   padding: 22px 12px;
-  border-bottom: var(--border-hairline) solid rgba(255, 255, 255, 0.1);
+  border-bottom: var(--border-hairline) solid color-mix(in srgb, var(--clr-white) 10%, transparent);
 }
 /* grayscale only, no opacity — found in review (ui-accessibility-reviewer):
    blending already-marginal --color-text-secondary body copy toward the
@@ -552,7 +550,7 @@ a {
   filter: grayscale(0.5);
 }
 .petrol-format-row-dimmed:nth-of-type(even) {
-  background: rgba(255, 255, 255, 0.015);
+  background: color-mix(in srgb, var(--clr-white) 1.5%, transparent);
 }
 .petrol-format-row-live {
   border-left: 3px solid var(--color-accent);
@@ -564,7 +562,7 @@ a {
   }
 }
 .petrol-format-row-live:hover {
-  background: rgba(15, 181, 163, 0.08);
+  background: color-mix(in srgb, var(--clr-teal-500) 8%, transparent);
 }
 .petrol-format-index {
   font-size: var(--text-xl);
@@ -600,7 +598,7 @@ a {
 }
 .petrol-tag {
   padding: 4px 10px;
-  border: var(--border-hairline) solid rgba(255, 255, 255, 0.16);
+  border: var(--border-hairline) solid color-mix(in srgb, var(--clr-white) 16%, transparent);
   font-family: var(--font-mono);
   font-size: var(--text-3xs);
   letter-spacing: 0.06em;
@@ -671,11 +669,11 @@ a {
   inset: 0;
   background: linear-gradient(
     90deg,
-    rgba(11, 14, 16, 0.6) 0px,
-    rgba(11, 14, 16, 0.94) var(--story-gutter),
+    color-mix(in srgb, var(--clr-petrol-950) 60%, transparent) 0px,
+    color-mix(in srgb, var(--clr-petrol-950) 94%, transparent) var(--story-gutter),
     var(--clr-petrol-950) calc(var(--story-gutter) + 560px),
-    rgba(11, 14, 16, 0.75) calc(var(--story-gutter) + 700px),
-    rgba(11, 14, 16, 0.1) calc(var(--story-gutter) + 980px)
+    color-mix(in srgb, var(--clr-petrol-950) 75%, transparent) calc(var(--story-gutter) + 700px),
+    color-mix(in srgb, var(--clr-petrol-950) 10%, transparent) calc(var(--story-gutter) + 980px)
   );
 }
 .petrol-story-wrap {
@@ -720,11 +718,11 @@ a {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   margin-top: 36px;
-  border: var(--border-hairline) solid rgba(255, 255, 255, 0.12);
+  border: var(--border-hairline) solid color-mix(in srgb, var(--clr-white) 12%, transparent);
 }
 .petrol-plate-col {
   padding: 28px 26px;
-  border-right: var(--border-hairline) solid rgba(255, 255, 255, 0.12);
+  border-right: var(--border-hairline) solid color-mix(in srgb, var(--clr-white) 12%, transparent);
 }
 .petrol-plate-col:last-child {
   border-right: none;
@@ -855,7 +853,7 @@ a {
    animates; every interactive part is at least 44px tall. */
 .petrol-live-bar {
   background: var(--clr-petrol-700, var(--clr-petrol-800));
-  border-bottom: var(--border-hairline) solid rgba(255, 255, 255, 0.12);
+  border-bottom: var(--border-hairline) solid color-mix(in srgb, var(--clr-white) 12%, transparent);
   padding: 4px clamp(20px, 4vw, 40px);
   font-size: var(--text-sm);
   color: var(--color-text);

@@ -8,6 +8,18 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## Petrol V2 drift guard · 2026-11-08
+
+**Task:** the last Petrol V2 phase, on branch `claude/petrol-v2-guard-cf745e` (cut from the combined `claude/petrol-v2-2a4279`, 85cae05), not merged. No version bump.
+
+- **Guard.** `src/ui/tokens/tokenDrift.test.js` scans every `*.css` under `src/` outside `src/ui/tokens/` and the inline `<style>` of HTML pages (not `public/bts/index.html`, `design/`, `*.preview.html`) and fails on a raw colour, an off-token `border-radius`, a time/easing literal in `transition`/`animation`, or `clip-path: polygon()`. The `ALLOWLIST` pins file + kind + selector chain + literal + reason, with exact counts (new drift in an allowlisted rule fails, a stale entry fails). It also checks the scan is not vacuous and runs the four rules and the CSS reader on synthetic input (the reader fails closed on unbalanced blocks).
+- **Found on this commit:** 50 colour, 38 motion, 1 radius, 0 `clip-path` (89 literals). Fixed onto tokens (look unchanged): landing/header `rgba(255,255,255|11,14,16|15,181,163,a)` to `color-mix(in srgb, var(--clr-*) a%, transparent)`; three `#fff`/`#ffffff` QR plates to `--clr-white`; two mask gradients `#000` to `--clr-black`; `.archive-panel` radius fallback `var(--radius-md, 8px)` to `var(--radius-md)`; a stale comment in `landing.css` rewritten. Allowlisted by a named DESIGN.md exception: live-blip breathe, splash intro and glow, Guess the Bean float/bob and celebration, landing hero fade and marquee, Random Selector flip, timer blink, the reduced-motion reset (0.01ms).
+- **Judgment calls, flagged:** `.gtb-spinner` (0.8s linear) and `.gtb-display-countdown strong` (0.72s) are allowlisted but DESIGN.md does not name them; `rgba(238,242,241,a)` on `.petrol-action-outline` and `.petrol-stat-strip` (no token equals #eef2f1) is allowlisted rather than shift the landing look; the `*.preview.html` demo-control hexes are out of scope (dev harnesses).
+- **Reviews.** `test-auditor`: 1 red judged out of scope (the task names duration and easing; longhand `animation-delay`/`transition-delay` stagger offsets stay unchecked: 10 sites in `stageMoments.css`, `splashScreen.css`, GTB `displayScreen.css`, listed as a known gap in DESIGN.md, a follow-up if wanted), nits fixed (vendor-prefixed props, `var()` fallback literals) or logged as known gaps (custom-property indirection, named colours, string-unaware comment stripper). `code-reviewer`: no red, 5 nits fixed. `module-boundary-checker`: clean. `ui-accessibility-reviewer` not run (token swaps render identically). `kb-sync` not run.
+- DESIGN.md has a new "Drift guard" paragraph.
+
+---
+
 ## Petrol V2 P2: shared components · 2026-11-08
 
 **Task:** the second Petrol V2 phase, on branch `claude/petrol-v2-p2-335063` (cut from P1), not merged; the owner combines the phases.
@@ -19,6 +31,7 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 - **Reviews.** `code-reviewer`: 3 red, all fixed (`.btn-lg` rule duplicated in `base.css` failing `components.test.js`, `base.css` counted as a reliant sheet, corrupted check glyph). `ui-accessibility-reviewer`: no red; nit fixed (function name in comments); logged pre-existing: `.btn[aria-disabled]` opacity .6 dims a busy label to about 3:1. `module-boundary-checker` clean. Not verified: focus ring look on a bevel in a real browser, forced-colors. `kb-sync` not run.
 
 ---
+
 ## Petrol V2 P3: surfaces · 2026-11-08
 
 **Task:** the third Petrol V2 phase (screens), on branch `claude/petrol-v2-p3-56ecc7`, cut from P1 and not merged; P2 (components) is a sibling branch. No version bump.

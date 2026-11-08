@@ -236,7 +236,7 @@ specific to Petrol:
    nobody has verified each screen's specific layout against the Hybrid radii/`.cut-*` yet.
 3. Petrol V2 is in progress on its own branch: P1 (tokens) and P2 (bevel buttons, press and busy states,
    selected-state classes, input edges, `.cut-*` retired from buttons) done; P3 (screens, and adopting the selected
-   classes) and a drift-guard test are open.
+   classes) and the drift guard (`tokenDrift.test.js`) are done.
    Existing `--radius-full` pills and badges were moved to `--radius-sm` in P1 so they do
    not turn into pills; the splash glow keeps `--radius-full`.
 
@@ -261,6 +261,19 @@ specific to Petrol:
   float/bob/spin, landing marquee, the live blip's 4s breathe, bts glow and pulse ring), the Guess the Bean
   celebration (pop, confetti, burst), the splash intro, the landing hero fade (1.1s), stepped animations (Random
   Selector flip, timer blink) and bts's tactile `--ease-out-back`.
+
+## Drift guard
+
+`src/ui/tokens/tokenDrift.test.js` fails CI when a stylesheet outside this folder (every `*.css` under `src/`, and
+the inline `<style>` of HTML pages; not `public/bts/index.html`, `design/`, or `*.preview.html` dev harnesses)
+writes a raw colour (hex, `rgb()`, `hsl()`), a `border-radius` length that is not `var(--radius-*)`,
+`var(--bevel-*)`, `0` or `inherit`, a time or easing literal in `transition`/`animation`, or a
+`clip-path: polygon()`. Known gaps: longhand `animation-delay`/`transition-delay` (stagger offsets), named and modern colours (`white`, `oklch()`), and values hidden behind a custom property are not checked. For a translucent token colour use `color-mix(in srgb, var(--clr-white) 8%, transparent)`.
+
+To allow a value, add an entry to `ALLOWLIST` in that file: the file, the kind, the full selector chain, the exact
+literal, and a reason (ideally a named exception above; two Guess the Bean entries, the spinner and the display countdown, are allowlisted on judgment and not yet named there). Entries are exact (a second copy of the value in the
+same rule fails, and an entry that stops matching fails), so prefer a token to an entry, and add a token when
+several screens need the same value.
 
 ## Live preview
 

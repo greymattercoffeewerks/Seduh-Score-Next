@@ -95,7 +95,7 @@
   width: 12.5rem;
   max-width: 100%;
   height: auto;
-  background: #ffffff;
+  background: var(--clr-white);
   padding: var(--space-3);
   border-radius: var(--radius-sm);
 }

@@ -5,7 +5,7 @@
   top: 0;
   z-index: 20;
   background: var(--clr-petrol-800);
-  border-bottom: var(--border-hairline) solid rgba(255, 255, 255, 0.08);
+  border-bottom: var(--border-hairline) solid color-mix(in srgb, var(--clr-white) 8%, transparent);
   color: var(--color-text);
 }
 .public-header-bar {
@@ -114,7 +114,7 @@
   height: var(--tap-target-min);
   margin-left: auto;
   padding: 0;
-  border: var(--border-hairline) solid rgba(255, 255, 255, 0.2);
+  border: var(--border-hairline) solid color-mix(in srgb, var(--clr-white) 20%, transparent);
   background: transparent;
   color: var(--color-text);
   cursor: pointer;
@@ -132,7 +132,7 @@
   gap: var(--space-4);
   padding: var(--space-4) clamp(20px, 4vw, 40px) var(--space-5);
   background: var(--clr-petrol-700);
-  border-top: var(--border-hairline) solid rgba(255, 255, 255, 0.1);
+  border-top: var(--border-hairline) solid color-mix(in srgb, var(--clr-white) 10%, transparent);
   /* The bar is sticky, so an open panel taller than the viewport (landscape phone, on-screen
      keyboard) could not be scrolled to: cap it at the space under the ~72px bar and scroll inside. */
   max-height: calc(100vh - 72px);
@@ -195,7 +195,7 @@
   width: 18px;
   height: 12px;
   flex-shrink: 0;
-  border: var(--border-hairline) solid rgba(255, 255, 255, 0.16);
+  border: var(--border-hairline) solid color-mix(in srgb, var(--clr-white) 16%, transparent);
 }
 .public-footer-links {
   display: flex;
@@ -217,7 +217,7 @@
 }
 .public-footer-version {
   padding: 4px 10px;
-  border: var(--border-hairline) solid rgba(255, 255, 255, 0.16);
+  border: var(--border-hairline) solid color-mix(in srgb, var(--clr-white) 16%, transparent);
 }
 @media (max-width: 760px) {
   .public-footer-wrap {
