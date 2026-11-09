@@ -25,15 +25,38 @@ export const roundOf = (match) => match.prelim_round ?? 1;
 export function roundStatus(round, matches, deadRounds = new Set()) {
   const inRound = (r) => matches.filter((m) => roundOf(m.match) === r);
   const drawn = inRound(round).length > 0;
+  // Redraw (redraw_btc_round): a drawn round, or one whose record outlived its matches, can be cleared while a later round
+  // does not exist and nothing in it is scored. The database decides; this only says so up front.
+  const redraw = () => {
+    if (matches.some((m) => roundOf(m.match) > round)) {
+      return {
+        possible: false,
+        reason: `Round ${round} cannot be redrawn while a later round is drawn. Redraw that round first.`,
+      };
+    }
+    if (inRound(round).some((m) => m.match.status !== 'pending')) {
+      return {
+        possible: false,
+        reason: `A match in round ${round} is in scoring or confirmed, so the round cannot be redrawn.`,
+      };
+    }
+    return { possible: true, reason: null };
+  };
   if (drawn) {
-    return { drawn: true, available: false, reason: `Round ${round} has already been drawn.` };
+    return {
+      drawn: true,
+      available: false,
+      reason: `Round ${round} has already been drawn.`,
+      redraw: redraw(),
+    };
   }
   if (deadRounds.has(round)) {
     // the database still holds this round's draw record although its matches were removed (create_btc_round refuses)
     return {
       drawn: false,
       available: false,
-      reason: `Round ${round} cannot be drawn again here: its draw record is still in the database although its matches were removed. Ask the platform owner to clear it.`,
+      reason: `Round ${round} cannot be drawn again as it stands: its draw record is still in the database although its matches were removed. Redraw it to clear the record.`,
+      redraw: redraw(),
     };
   }
   if (round === 1) return { drawn: false, available: true, reason: null };

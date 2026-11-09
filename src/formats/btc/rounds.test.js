@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { assignJudges, drawRound1 } from './draw.js';
-import { buildRoundMatches, createRound, describeRoundError, roundRefusal } from './rounds.js';
+import {
+  buildRoundMatches,
+  createRound,
+  describeRoundError,
+  redrawRound,
+  roundRefusal,
+} from './rounds.js';
 
 const recordingClient = (result = { data: [], error: null }) => {
   const calls = [];
@@ -128,9 +134,26 @@ describe('roundRefusal and describeRoundError', () => {
       'btc_round_matches_invalid',
       'btc_round_seed_mode',
       'btc_round_invalid',
+      'btc_redraw_nothing',
+      'btc_redraw_later_round',
+      'btc_redraw_scored',
     ]) {
       expect(roundRefusal({ hint })?.message).toBeTruthy();
     }
+  });
+
+  it('redrawRound calls redraw_btc_round with the round and returns how many matches went', async () => {
+    const client = recordingClient({ data: 2, error: null });
+    expect(await redrawRound({ orgId: 'o', eventId: 'e', prelimRound: 2 }, client)).toBe(2);
+    expect(client.calls).toEqual([
+      ['redraw_btc_round', { p_org_id: 'o', p_event_id: 'e', p_prelim_round: 2 }],
+    ]);
+    await expect(
+      redrawRound(
+        { orgId: 'o', eventId: 'e', prelimRound: 1 },
+        recordingClient({ data: null, error: { hint: 'btc_redraw_scored' } }),
+      ),
+    ).rejects.toMatchObject({ hint: 'btc_redraw_scored' });
   });
 
   it('falls back to the generic message for anything else', () => {

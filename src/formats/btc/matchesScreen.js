@@ -27,7 +27,7 @@ import { validateMatchDraft, createMatch, listMatches, removeMatch } from './mat
 import { newSeed } from '../../core/seededShuffle.js';
 import { DrawError } from './draw.js';
 import { fetchPreliminaryStandings } from './standings.js';
-import { createRound, describeRoundError, roundRefusal } from './rounds.js';
+import { createRound, describeRoundError, redrawRound, roundRefusal } from './rounds.js';
 import {
   defaultRound,
   drawIssues,
@@ -282,7 +282,73 @@ export async function mountMatchesScreen(
       render();
     },
     create: () => handleCreateRound(),
+    redraw: (round) => handleRedrawRound(round),
   };
+
+  // Re-reads everything the draw depends on; a failed read keeps what is on screen.
+  async function reloadPersisted() {
+    try {
+      const persisted = await raceTimeout(loadPersisted(), DEFAULT_LOAD_TIMEOUT_MS);
+      Object.assign(state, {
+        event: persisted.event,
+        teams: persisted.teams,
+        judges: persisted.judges,
+        matches: persisted.matches,
+        standings: persisted.standings,
+        drawnRounds: persisted.drawnRounds,
+        listStale: false,
+      });
+    } catch {
+      // keep what is on screen
+    }
+  }
+
+  // Clears a round (its matches and its draw record) so it can be drawn again. Destructive, so it asks first, the way
+  // Remove does; the database refuses unless nothing in the round is scored.
+  async function handleRedrawRound(round) {
+    if (state.busy) return;
+    const count = state.matches.filter((m) => roundOf(m.match) === round).length;
+    const ok = window.confirm(
+      count > 0
+        ? `Redraw round ${round}? This removes its ${count} ${count === 1 ? 'match' : 'matches'} and the draw record. This can't be undone.`
+        : `Redraw round ${round}? This clears the leftover draw record. This can't be undone.`,
+    );
+    if (!ok) return;
+    state.busy = true;
+    state.drawError = null;
+    render();
+    let toast = null;
+    try {
+      await raceTimeout(
+        redrawRound({ orgId: state.event.org_id, eventId, prelimRound: round }, client),
+        DEFAULT_LOAD_TIMEOUT_MS * 2,
+      );
+      await reloadPersisted();
+      state.drawnRounds = new Set([...state.drawnRounds].filter((r) => r !== round));
+      requestLivePublish(false);
+      state.round = round;
+      state.seedTyped = null;
+      rebuildDraw(newSeed());
+      state.drawStatus = '';
+      toast = `Round ${round} cleared. Draw it again below.`;
+    } catch (err) {
+      if (signal?.aborted) return;
+      state.drawError = err?.timedOut
+        ? 'This is taking too long to confirm. Check the matches list before trying again.'
+        : describeRoundError(err);
+      state.drawErrorFresh = true;
+      if (roundRefusal(err)?.reload || err?.timedOut) {
+        await reloadPersisted();
+        state.round = round; // stay on the round the organiser was looking at
+        const error = state.drawError;
+        rebuildDraw(newSeed());
+        state.drawError = error;
+      }
+    }
+    state.busy = false;
+    if (toast) showToast(toast);
+    render();
+  }
 
   async function handleCreateRound() {
     const draw = state.draw;

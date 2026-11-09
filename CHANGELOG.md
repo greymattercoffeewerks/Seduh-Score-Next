@@ -8,6 +8,14 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## BTC Build B part 3: redraw a round · 2026-11-09
+
+**Task:** B part 3, the "redraw" door that part 2's review found missing. Branch `claude/btc-b3-redraw-round-9d6d63`, PR into `claude/btc-b2-draw-panel-9d6d63` (part 2's branch; it retargets to `dev` when part 2 merges). **One migration, not pushed to the cloud:** `20261109110000_btc_redraw_round.sql`. Owner's rule (2026-11-09): allowed only while nothing in the round is scored.
+
+- **Database:** `redraw_btc_round(p_org_id, p_event_id, p_prelim_round) returns int` (SECURITY INVOKER, search_path pinned empty, the per-event advisory lock, standard not-found for a non-member). It deletes the round's matches (judges, votes and bonuses cascade) and its `btc_round_draws` row in one transaction. Refusals carry hints: `btc_round_bracket_exists`, `btc_redraw_nothing`, `btc_redraw_later_round` (a later round is drawn: redraw that one first), `btc_redraw_scored` (a match is not `pending`, or has a finish time, a cup vote or a bonus row), plus the shared not-found and invalid-round hints. It also clears a draw record whose matches were already removed by hand (0 matches removed). pgTAP `076` (30 assertions); `041`'s matrix has the new RPC.
+- **Screen:** a drawn (or dead) round shows **Redraw round N** in the Draw panel, behind a `window.confirm` like Remove; blocked with its reason (aria-disabled, described) when a later round exists or a match is in scoring or confirmed; the database stays the authority. After a redraw the page is re-read, the round is offered again and the live view is republished only if live. `rounds.js` has `redrawRound` and words for the three new hints.
+- **Reviews:** __REVIEWS3__
+
 ## BTC Build B part 2: the Draw a round panel · 2026-11-09
 
 **Task:** item B part 2 of `docs/specs/BTC-MARCH-2027-ENGINE-SPEC-DRAFT.md` (sections 4.3, 4.4, 8). Branch `claude/btc-b2-draw-panel-9d6d63`, PR into `dev`. **Front end only:** no migration, no RPC change, no change to the public live payload, no outbox change.

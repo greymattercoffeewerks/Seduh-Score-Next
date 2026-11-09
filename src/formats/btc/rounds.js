@@ -41,6 +41,19 @@ export async function createRound(
   return data ?? [];
 }
 
+// Clears one round (its matches AND its draw record) so it can be drawn again: redraw_btc_round
+// (supabase/migrations/20261109110000_btc_redraw_round.sql). The database refuses unless nothing in the round is scored.
+// Returns how many matches were removed.
+export async function redrawRound({ orgId, eventId, prelimRound }, client = getSupabase()) {
+  const { data, error } = await client.rpc('redraw_btc_round', {
+    p_org_id: orgId,
+    p_event_id: eventId,
+    p_prelim_round: prelimRound,
+  });
+  if (error) throw error;
+  return data ?? 0;
+}
+
 // The hints the database attaches to its refusals, so this never depends on message wording. `reload` marks the
 // refusals that mean the screen is showing stale state (the caller refreshes it); `alreadyCreated` is the one that a
 // retry after a dropped response produces.
@@ -74,6 +87,19 @@ const REFUSALS = {
   btc_round_seed_mode: {
     message: 'A random or by-results draw needs its seed; a manual draw has none.',
     reload: false,
+  },
+  btc_redraw_nothing: {
+    message: 'That round has nothing to redraw — the page has been refreshed.',
+    reload: true,
+  },
+  btc_redraw_later_round: {
+    message: 'A later round has been drawn. Redraw that round first.',
+    reload: true,
+  },
+  btc_redraw_scored: {
+    message:
+      'A match in this round has been scored, so it cannot be redrawn. The page has been refreshed.',
+    reload: true,
   },
   btc_round_invalid: {
     message: 'The round number or draw mode is not valid.',

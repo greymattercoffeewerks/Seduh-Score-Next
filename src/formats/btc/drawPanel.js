@@ -106,6 +106,36 @@ export function renderDrawPanel(ctx) {
     nodes.push(
       el('p', { className: 'btc-draw-warning', text: status.reason, attrs: { role: 'status' } }),
     );
+    if (status.redraw) {
+      // Redraw clears the round (matches and draw record) so it can be drawn again. aria-disabled with its reason
+      // described, like Create: it stays focusable and says why it is blocked.
+      const reasonId = 'btc-draw-redraw-reason';
+      const redraw = el('button', {
+        className: 'btn btn-outline tap-target',
+        text: `Redraw round ${state.round}`,
+        attrs: {
+          type: 'button',
+          'data-focus-key': 'draw-redraw',
+          ...(status.redraw.possible ? {} : { 'aria-describedby': reasonId }),
+        },
+      });
+      setBusyDisabled(redraw, busy);
+      if (!status.redraw.possible) redraw.setAttribute('aria-disabled', 'true');
+      redraw.addEventListener('click', () => {
+        if (status.redraw.possible) on.redraw(state.round);
+      });
+      if (!status.redraw.possible) {
+        nodes.push(el('p', { id: reasonId, className: 'stage-meta', text: status.redraw.reason }));
+      } else {
+        nodes.push(
+          el('p', {
+            className: 'stage-meta',
+            text: 'Redrawing removes this round’s matches and its draw record, so it can be drawn again. It is only possible while nothing in the round has been scored.',
+          }),
+        );
+      }
+      nodes.push(redraw);
+    }
     if (errorNode) nodes.push(errorNode);
     return wrap(nodes);
   }
