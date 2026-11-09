@@ -31,6 +31,29 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
   - The 🟣 item (below 860px a keyboard-focused chapter in the horizontal rail can sit off-screen): headless Chromium only, cause not established.
   - The `ROADMAP.md` Kiarong row says "Shipped 2026-11-09", but the code is not on `dev` or `main` until the PR merges and releases. Owner to confirm the wording.
 
+---
+
+## Public page hero consistency · 2026-11-09
+
+**Task:** owner review of the public pages, not a roadmap item. Branch `claude/page-hero-consistency` (off `origin/dev`), PR to `dev`; the version moves at the next release.
+
+- **Why:** Tour, Community hub, Pricing and Results had drifted apart: four headline sizes (3.5rem to 7.75rem), three distances below the header, and a grid backdrop on only Tour and Community. Each page carried its own hero rules.
+- **What:** one shared `.page-hero` (`-grid`, `-kicker`, `-intro`) in `src/ui/tokens/base.css`. Gap below the header `clamp(3.5rem, 8vw, 6rem)`; headline `clamp(2.75rem, 8vw, 6rem)`, uppercase; grid backdrop on all four. The pages' own hero rules are deleted (community's `min-height: 31rem` too). Community keeps its circles, Tour its status line, Results its stats.
+- **Results copy changed on purpose:** kicker reads "Seduh Score / Community archive" (was "Community archive"); headline now uppercase like the others.
+- **Left distinct on purpose:** the landing page (photo hero) and the trust pages (document title).
+- **Measured:** at 1280px every page's headline is 96px, starting 132px below the header. At 360px the headline is 44px and starts 92px below. No sideways scroll at 360px.
+- **Docs:** `src/ui/tokens/DESIGN.md` "Public pages" paragraph.
+- **Tests:** `src/marketing/sharedPrimitives.test.js` checks every page's hero parts, that no page stylesheet sizes an `h1`, and that each page links `tokens/index.css`. Full suite 6205 pass; the one failure is the known Windows-only `brokenLinks` test in `tools/check-doc-budgets.test.js`.
+- **Files:** `src/ui/tokens/base.css`, `src/ui/tokens/DESIGN.md`, `src/community/communityHub.css`, `src/community/communityHub.js`, `src/marketing/pricing.css`, `src/marketing/pricingScreen.js`, `src/marketing/results.css`, `src/marketing/resultsScreen.js`, `src/marketing/tourScreen.js`, `src/marketing/sharedPrimitives.test.js`.
+
+**Reviews:**
+
+- `code-reviewer`: 0 Important; 1 Nit (a misleading comment above `.results-kicker` in `results.css`), fixed.
+- `ui-accessibility-reviewer`: 0 Important; 1 Nit (the Results kicker copy change was not disclosed), intentional, now disclosed above. Pre-existing: the Results loading and error states have no `<h1>`. Logged in [`docs/backlog/public-site.md`](docs/backlog/public-site.md), not fixed here.
+- `test-auditor` (covering the module boundary too): 0 Important; boundary clean. 2 Nits, both fixed: the test regex missed `-hero > h1`; nothing checked that the pages load `tokens/index.css`. The first was confirmed by a mutation, which the test now fails.
+
+**Open follow-up:** the Results loading and error `<h1>` (above).
+
 ## BTC Build B part 1: the draw engine (database and pure functions, no screen) · 2026-11-09
 
 **Task:** item B of `docs/specs/BTC-MARCH-2027-ENGINE-SPEC-DRAFT.md` (sections 4.1, 4.2, 4.4), part 1 of 2. Branch `claude/btc-b-draw-engine-6895c3` (commits `7e5553a`, `8f1955e`). **One migration, not pushed to the cloud:** `20261109100000_btc_round_draws.sql`. Part 2 (the Draw panel on the matches screen) is not built; nothing here is wired into `main.js`.

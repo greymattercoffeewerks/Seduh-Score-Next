@@ -284,6 +284,14 @@ their own `.form-field` and `.screen-feedback` names), and its `.btn` carries th
 equal, so a card and a pricing card cannot drift. A page adds only layout and, where it must, a variable
 (`--tag-edge: var(--color-success)`); it never restates the border, fill or corner.
 
+**One page hero (2026-11-09).** Tour, Community hub, Pricing and Results open on the same `.page-hero` (`base.css`):
+a 3.5rem to 6rem gap below the header, a 2.75rem to 6rem uppercase display headline with its accent words in a `span`,
+the mono kicker (`.page-hero-kicker`, "Seduh Score / …"), the intro (`.page-hero-intro`) and the faint grid backdrop
+(`.page-hero-grid`, `aria-hidden`). They had drifted to four sizes (3.5rem to 7.75rem), three gaps and a grid on two
+of four. A page keeps only its width and what it alone has (the hub's circles, the tour's status line, the results
+stats). Distinct on purpose, so not on it: the landing page's full-bleed photo hero and the trust pages' document
+title. `sharedPrimitives.test.js` fails if a page drops a hero part or restates `-hero h1`.
+
 **Stays square, on purpose:** full-bleed page bands and roots, the header bar and mobile menu panel, the landing ticker,
 live bar and edge-to-edge format rows, the printable results sheet, a flag glyph and decorative fills. A rounded
 corner on something that touches both screen edges reads as a bug, not a style. These are the `SQUARE_ALLOWLIST` in

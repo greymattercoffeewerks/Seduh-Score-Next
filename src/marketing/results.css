@@ -18,10 +18,7 @@ body {
   margin-inline: auto;
 }
 
-/* ---- Hero ---- */
-.results-hero {
-  padding-block: clamp(3.5rem, 8vw, 6rem) clamp(2.5rem, 5vw, 4rem);
-}
+/* The section kickers ("Latest result", "Recent competitions"); the hero's kicker is the shared .page-hero-kicker. */
 .results-kicker {
   margin: 0 0 var(--space-2);
   color: var(--color-accent);
@@ -31,24 +28,11 @@ body {
   letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
 }
-.results-hero h1 {
-  margin: 0 0 var(--space-4);
-  font-family: var(--font-display);
-  font-size: clamp(2.25rem, 6vw, 3.5rem);
-  line-height: 1.05;
-}
-.results-hero h1 span {
-  color: var(--color-accent);
-}
-.results-hero-intro {
-  max-width: 46rem;
-  margin: 0 0 var(--space-6);
-  color: var(--color-text-secondary);
-  font-size: var(--text-lg);
-  line-height: 1.5;
-}
+/* ---- Hero ----
+   Spacing, headline, kicker, intro and grid are the shared .page-hero (tokens/base.css); the stats are this page's. */
 .results-stats {
   display: grid;
+  margin-top: var(--space-8);
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-5);
   padding-top: var(--space-5);

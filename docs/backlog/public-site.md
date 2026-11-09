@@ -40,3 +40,9 @@ The `/bts/` page is now a one-chapter reader (CHANGELOG entry of the same date).
 
 - **Keyboard focus can sit off-screen below 860px.** In the horizontal chapter rail, a keyboard-focused chapter is not scrolled into view, so it can sit off-screen. Seen in headless Chromium only; the cause is not established. Pre-existing, found by `ui-accessibility-reviewer`; not changed in v4.0.0. (Behind the Seduh reader)
 - **Screen reader not run on `/bts/`.** The reader's focus handling, status region and `aria-current` rail are checked by tests and a browser probe only. Owed before the page is called checked for assistive technology. (Behind the Seduh reader)
+
+## Known open items from the public page hero (2026-11-09)
+
+The shared `.page-hero` on Tour, Community hub, Pricing and Results (CHANGELOG entry of the same date). One item came out of it.
+
+- **Results loading and error states have no `<h1>`.** While `/results/` is loading or when it fails, the page shows no headline, so a screen reader gets no page title there. Pre-existing: the loading and error markup predates the shared hero. Found by `ui-accessibility-reviewer`; logged, not fixed in that change.
