@@ -40,6 +40,12 @@ describe('roundStatus', () => {
     expect(defaultRound([row('m', null, 'pending', 'a', 'b')])).toBe(2);
   });
 
+  it('says "are still open" for several open matches', () => {
+    expect(
+      roundStatus(2, [row('m', 1, 'pending', 'a', 'b'), row('n', 1, 'scoring', 'c', 'd')]).reason,
+    ).toMatch(/2 of 2 are still open/);
+  });
+
   it('needs round 1 drawn and every match confirmed before round 2', () => {
     expect(roundStatus(2, []).available).toBe(false);
     expect(roundStatus(2, [row('m', 1, 'scoring', 'a', 'b')]).reason).toMatch(
@@ -128,6 +134,9 @@ describe('hand edits', () => {
     expect(drawIssues(setTick(withConflict, 0, true), { teams, judges }).valid).toBe(true);
     const duplicate = setJudge(draw, 0, 1, 'j2');
     expect(drawIssues(duplicate, { teams, judges }).byMatch[0].duplicate).toBe(true);
+    expect(drawIssues(duplicate, { teams, judges }).valid).toBe(false);
+    // an empty slot is as unusable as a repeated judge
+    expect(drawIssues(setJudge(draw, 0, 0, ''), { teams, judges }).valid).toBe(false);
   });
 
   it('builds p_matches in match order', () => {

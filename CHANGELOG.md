@@ -8,6 +8,18 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## BTC Build B part 2: the Draw a round panel · 2026-11-09
+
+**Task:** item B part 2 of `docs/specs/BTC-MARCH-2027-ENGINE-SPEC-DRAFT.md` (sections 4.3, 4.4, 8). Branch `claude/btc-b2-draw-panel-9d6d63`, PR into `dev`. **Front end only:** no migration, no RPC change, no change to the public live payload, no outbox change.
+
+- **The panel** (`formats/btc/drawPanel.js` builds it; `drawPlan.js` is its pure state; `matchesScreen.js` wires it): round 1 or 2, for round 2 random or by results, **Avoid repeat opponents** (default on), the seed (shown, re-enterable with Enter or **Use this seed**, **New seed**), a stacked card per match (`Country · Name` through `teamLabel`, a **Swap** button per team, three judge selects), warnings in words (rematch count, odd team count, same-country pairings as information, own-country judges), and **Create N matches**, which calls `createRound` once. The mode choice is panel state, nothing is stored per event. Who plays whom is only ever `draw.js`: `drawPlan.js` calls the four functions and applies the organiser's edits; the rematch recount after a swap is `draw.js`'s new `describePairs`.
+- **Gates:** round 2 is offered only when round 1 exists and every round 1 match is confirmed (the RPC's rule), otherwise the panel says why. A swap makes the draw `manual` (no seed recorded); a judge change keeps mode and seed but clears that match's tick. An own-country judge turns the card to the danger state and Create stays blocked until the judge is changed or "Allow this conflict" is ticked for that match; the tick only gates the button (the RPC derives `conflict_ticks` itself). Create is `aria-disabled` with its reason in `aria-describedby`, not natively disabled, so the reason stays reachable.
+- **Match list** is grouped by round (a `null` `prelim_round` reads as round 1); the hand-entry form has a round choice and passes `p_prelim_round`. After a create the live session is republished only if the event is already live.
+- **Refusals** are shown in words keyed on the hint (`describeRoundError`); a refusal that means the page is stale reloads it. A draw record outlives its matches (Remove deletes only the match), so the panel reads `btc_round_draws` on load and says a round whose record remains cannot be drawn again here (owner SQL clears it): see `docs/backlog/btc.md`.
+- **Spec deviations:** Create is `aria-disabled` rather than `disabled`; the swap is two taps (pick, then pick) rather than a drop-down; the round-1 table for by-results is read with `standings.js` (`rank()` wraps each row as `{ item, position }`, unwrapped in `loadPersisted`).
+- **Tests:** `matchesScreen.draw.test.js` (every 4.4 acceptance case the screen holds, focus after New seed, swap, tick and Create, the refusals) and `drawPlan.test.js`; `matchesScreen.preview.html` has 20 fictional teams and 6 judges. Verified at 360px (light and stage) then 768px with the preview tools.
+- **Reviews:** __REVIEWS__
+
 ## BTC Build B part 1: the draw engine (database and pure functions, no screen) · 2026-11-09
 
 **Task:** item B of `docs/specs/BTC-MARCH-2027-ENGINE-SPEC-DRAFT.md` (sections 4.1, 4.2, 4.4), part 1 of 2. Branch `claude/btc-b-draw-engine-6895c3` (commits `7e5553a`, `8f1955e`). **One migration, not pushed to the cloud:** `20261109100000_btc_round_draws.sql`. Part 2 (the Draw panel on the matches screen) is not built; nothing here is wired into `main.js`.

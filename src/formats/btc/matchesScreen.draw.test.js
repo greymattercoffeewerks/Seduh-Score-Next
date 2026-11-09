@@ -1,13 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mountMatchesScreen } from './matchesScreen.js';
 import { publishBtcLive } from './liveSession.js';
+import { countryName } from '../../core/country.js';
 
 vi.mock('./liveSession.js', () => ({ publishBtcLive: vi.fn(async () => {}) }));
 
 // The Draw a round panel on the matches screen (Build B part 2). The draw itself is draw.js's (tested there); these
 // tests hold what the SCREEN does with it: preview, warnings, the gate on Create, focus, and the one RPC call.
 
-function fakeClient(initialDb, { roundError } = {}) {
+function fakeClient(initialDb, { roundError, beforeError } = {}) {
   const db = {};
   for (const [table, rows] of Object.entries(initialDb)) db[table] = rows.map((r) => ({ ...r }));
   const rpcCalls = [];
@@ -37,7 +38,10 @@ function fakeClient(initialDb, { roundError } = {}) {
     from: (table) => makeBuilder(table),
     rpc(name, args) {
       rpcCalls.push([name, args]);
-      if (roundError) return Promise.resolve({ data: null, error: roundError });
+      if (roundError) {
+        beforeError?.(db);
+        return Promise.resolve({ data: null, error: roundError });
+      }
       if (name === 'create_btc_round') {
         const made = args.p_matches.map((m) => {
           idCounter += 1;
@@ -127,6 +131,11 @@ const NEUTRAL_JUDGES = judgeRows([
   ['j3', null],
   ['j4', null],
 ]);
+
+const labelOf = (rows, id) => {
+  const t = rows.find((r) => r.id === id);
+  return t.country_code ? `${countryName(t.country_code)} · ${t.name}` : t.name;
+};
 
 const flush = async () => {
   for (let i = 0; i < 4; i += 1) await new Promise((r) => setTimeout(r, 0));
@@ -267,6 +276,10 @@ describe('Draw a round panel', () => {
     it('draws without repeat opponents when the round is confirmed', async () => {
       await mount(dbWith({ teams: fourTeams(), judges: SIX_JUDGES, matches: round1('confirmed') }));
       expect(q('[data-field="draw-avoid"]').checked).toBe(true);
+      // 'rep-0' repeats both round 1 pairs when avoidance is off (checked against drawRound2Random), so this fails if
+      // the screen stops passing avoid through
+      useSeed('rep-0');
+      expect(preview()).toHaveLength(2);
       const played = new Set([
         'Brunei · Team 1|Malaysia · Team 2',
         'Singapore · Team 3|Indonesia · Team 4',
@@ -416,7 +429,7 @@ describe('Draw a round panel', () => {
       expect(createDisabled()).toBe(true);
     });
 
-    it('creates the round with the conflict accepted, sending the three judges as shown', async () => {
+    it('creates the round with the conflict accepted, sending the three judges it asked for', async () => {
       const client = await mount(conflictDb());
       const tick = q('[data-field="tick-0"]');
       tick.checked = true;
@@ -453,6 +466,10 @@ describe('Draw a round panel', () => {
       const args = client.rpcCalls[0][1];
       expect(args.p_mode).toBe('manual');
       expect(args.p_seed).toBeNull();
+      const rows = teamRows(4);
+      expect(
+        args.p_matches.map((m) => [labelOf(rows, m.team1_id), labelOf(rows, m.team2_id)]),
+      ).toEqual(after);
     });
 
     it('cancels a swap when the same team is chosen twice', async () => {
@@ -505,8 +522,13 @@ describe('Draw a round panel', () => {
       const args = client.rpcCalls[0][1];
       expect(args).toMatchObject({ p_prelim_round: 1, p_mode: 'random', p_seed: 'go-live' });
       expect(args.p_matches).toHaveLength(10);
-      expect(args.p_matches.map((m) => [m.team1_id, m.team2_id].length)).toEqual(Array(10).fill(2));
-      expect(expected).toHaveLength(10);
+      const rows = teamRows(20);
+      expect(
+        args.p_matches.map((m) => [labelOf(rows, m.team1_id), labelOf(rows, m.team2_id)]),
+      ).toEqual(expected);
+      expect(args.p_matches.flatMap((m) => [m.team1_id, m.team2_id]).sort()).toEqual(
+        rows.map((r) => r.id),
+      );
       // the list now has the round, the panel has moved on to round 2 (not yet confirmed)
       expect(root.querySelector('.btc-round-group h3').textContent).toBe('Round 1');
       expect(root.querySelectorAll('.btc-round-group li')).toHaveLength(10);
@@ -520,13 +542,16 @@ describe('Draw a round panel', () => {
       expect(publishBtcLive.mock.calls[0][0].takeOver).toBe(false);
     });
 
-    it('shows each database refusal in words, keyed on its hint, and keeps Create focusable', async () => {
+    it('shows each database refusal in words, keyed on its hint', async () => {
       const cases = [
         ['btc_round_incomplete', 'Every team must play exactly once'],
         ['btc_round_matches_invalid', 'not valid: check the teams'],
         ['btc_round_bracket_exists', 'bracket has been generated'],
         ['btc_prior_round_open', 'earlier round has to be drawn and fully confirmed'],
         ['btc_round_exists', 'already been drawn'],
+        ['btc_round_event_not_found', 'event could not be found'],
+        ['btc_round_seed_mode', 'needs its seed'],
+        ['btc_round_invalid', 'round number or draw mode is not valid'],
       ];
       for (const [hint, words] of cases) {
         root.innerHTML = '';
@@ -717,6 +742,26 @@ describe('Draw a round panel', () => {
       expect(root.textContent).toContain('its draw record is still in the database');
       expect(createButton()).toBeNull();
       expect(client.rpcCalls).toHaveLength(0);
+    });
+
+    it('reloads the page when a refusal says it is stale, and moves on to the next round', async () => {
+      await mount(dbWith({ teams: teamRows(4), judges: NEUTRAL_JUDGES }), {
+        roundError: { code: 'P0001', message: 'x', hint: 'btc_round_exists' },
+        // another device drew round 1 and confirmed it meanwhile
+        beforeError: (db) => {
+          db.btc_matches.push(
+            match('o1', 1, 'confirmed', 't01', 't02'),
+            match('o2', 1, 'confirmed', 't03', 't04'),
+          );
+          db.btc_round_draws = [{ event_id: 'ev1', prelim_round: 1 }];
+        },
+      });
+      click(createButton());
+      await flush();
+      expect(root.querySelector('.btc-round-group h3').textContent).toBe('Round 1');
+      expect(q('[data-field="draw-round-2"]').checked).toBe(true);
+      expect(cards()).toHaveLength(2); // round 2 is now offered, from the refreshed matches
+      expect(q('[role="alert"]').textContent).toContain('already been drawn');
     });
   });
 });
