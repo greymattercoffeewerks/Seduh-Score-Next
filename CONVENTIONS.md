@@ -636,7 +636,15 @@ shipping, or a major cross-cutting relaunch — never on a fixed schedule. See R
 "Version cycle plan" for the planned future sequence; a cycle's name is picked (and this
 section updated) when that cycle actually starts, not before.
 
-**Current cycle: Gadong, v3.0.0** (moved 2026-09-23, from Berakas/v2.x). Trigger: BTC
+**Current cycle: Kiarong, v4.0.0** (moved 2026-11-09, from Gadong/v3.x). Trigger: Throwdown shipped on
+2026-11-03 as the platform's third competition format, which is this rule's trigger, but it went out as a minor
+(v3.6.0) and patches followed to v3.6.6 before the miss was noticed, while redesigning the Behind the Seduh page. The
+v4.0.0 bump catches the number up and changes no feature. Lesson: a task that ships a new format must run
+`npm version major` and move `NAMEPLATE` itself; the Z-task rule above says `minor` for a feature release, and a new
+format is the one feature release that is `major`. `src/marketing/btsPage.test.js` now fails when the BTS page's
+current place or major version disagrees with `src/core/version.js`.
+
+**Previous cycle: Gadong, v3.0.0** (moved 2026-09-23, from Berakas/v2.x). Trigger: BTC
 (Barista Team Championship, renamed from BBTC at the start of Phase T-BTC.2, 2026-09-18)
 shipped as the platform's second real competition format — schema, bracket generation
 and advancement, five organiser screens, and the public marketing site (landing + Tour)
@@ -649,7 +657,7 @@ format arrived; see ROADMAP.md's "Version cycle plan" table for the corrected se
 format assignments). Second time this exact reordering has happened — Berakas jumped
 queue ahead of the original Gadong/Throwdown slot in the same way.
 
-**Previous cycle: Berakas, v2.0.0** (2026-09-07, from Kiulap/v1.x). Trigger: the public
+**Before that: Berakas, v2.0.0** (2026-09-07, from Kiulap/v1.x). Trigger: the public
 marketing landing page (`src/marketing/`) shipped, the site's first real front door — the
 console moved to `/app/`, matching legacy's own Berakas cycle almost exactly ("the front
 door — seduhscore.com, an organiser zone... Cup Taster as the fourth format"). Cloudflare

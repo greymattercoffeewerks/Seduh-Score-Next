@@ -255,10 +255,10 @@ specific to Petrol:
 - **Names:** long names in the phone standings (Cup Taster, BTC) and the projector table are cut with an ellipsis,
   the "(tied)" beside them never is; stage titles use `text-wrap: balance`.
 - **Colours:** `colors.css` gained `--clr-white`, `--clr-black` (paper and ink for print) and
-  `--clr-chart-1..8` (the categorical chart palette). `public/bts/index.html` cannot link the tokens, so it keeps
-  a copy of the palette and motion tokens, held equal by `btsPalette.test.js`.
+  `--clr-chart-1..8` (the categorical chart palette). Behind the Seduh (`bts/index.html`) links the tokens like any
+  other page since 2026-11-09 (it used to keep a copy in `public/bts/`), so `src/marketing/bts.css` is drift-guarded.
 - **Motion exceptions** (named, deliberately not on the tokens): ambient loops (splash glow, Guess the Bean
-  float/bob/spin, landing marquee, the live blip's 4s breathe, bts glow and pulse ring), the Guess the Bean
+  float/bob/spin, landing marquee, the live blip's 4s breathe), the Guess the Bean
   celebration (pop, confetti, burst), the splash intro, the landing hero fade (1.1s), stepped animations (Random
   Selector flip, timer blink) and bts's tactile `--ease-out-back`.
 
@@ -300,7 +300,7 @@ things go in `SQUARE_ALLOWLIST` (file, selector chain, kind, reason; exact both 
 `src/marketing/sharedPrimitives.test.js` checks the markup really carries the shared classes.
 
 `src/ui/tokens/tokenDrift.test.js` fails CI when a stylesheet outside this folder (every `*.css` under `src/`, and
-the inline `<style>` of HTML pages; not `public/bts/index.html`, `design/`, or `*.preview.html` dev harnesses)
+the inline `<style>` of HTML pages; not `design/` or `*.preview.html` dev harnesses)
 writes a raw colour (hex, `rgb()`, `hsl()`), a `border-radius` length that is not `var(--radius-*)`,
 `var(--bevel-*)`, `0` or `inherit`, a time or easing literal in `transition`/`animation`, or a
 `clip-path: polygon()`. Known gaps: longhand `animation-delay`/`transition-delay` (stagger offsets), named and modern colours (`white`, `oklch()`), and values hidden behind a custom property are not checked. For a translucent token colour use `color-mix(in srgb, var(--clr-white) 8%, transparent)`.
