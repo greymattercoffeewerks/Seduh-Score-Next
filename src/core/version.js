@@ -31,7 +31,13 @@
 // which this slot originally assumed — the nameplate tracks ship ORDER, not a
 // specific named format, same reordering class as the Berakas jump above. See
 // ROADMAP.md's "Version cycle plan" table for the corrected sequence.
+//
+// Gadong -> Kiarong, 2026-11-09 (v4.0.0): Throwdown shipped on 2026-11-03 as the platform's THIRD competition
+// format, which is exactly this rule's trigger, but it went out as a minor (v3.6.0) and the patches piled up behind
+// it to v3.6.6 before anyone noticed. The bump catches the number up; it changes no feature. ROADMAP.md had
+// reserved Kiarong for "whichever of Throwdown/Liga Seduh ships 3rd". bts/index.html's btsPage.test.js now fails
+// when that page's current place or major version disagrees with this file.
 import pkg from '../../package.json';
 
 export const APP_VERSION = pkg.version;
-export const NAMEPLATE = 'Gadong';
+export const NAMEPLATE = 'Kiarong';

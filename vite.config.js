@@ -50,6 +50,9 @@ export default defineConfig({
         ),
         community: fileURLToPath(new URL('./community/index.html', import.meta.url)),
         tour: fileURLToPath(new URL('./tour/index.html', import.meta.url)),
+        // /bts/ (Behind the Seduh): moved from public/bts/ to a real entry on 2026-11-09 so it links the Petrol V2
+        // token files instead of carrying copies. Static HTML; src/marketing/btsMain.js adds the reader.
+        bts: fileURLToPath(new URL('./bts/index.html', import.meta.url)),
         pricing: fileURLToPath(new URL('./pricing/index.html', import.meta.url)),
         // /results/ (2026-09-17) — the public results archive. Reads real
         // data via core/publicResults.js (an organiser publishes via

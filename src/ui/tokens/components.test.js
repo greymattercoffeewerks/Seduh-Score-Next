@@ -550,7 +550,7 @@ describe('the shared component shapes', { timeout: 30000 }, () => {
     expect(offenders).toEqual([]);
   });
 
-  it('are defined in no inline <style> of a page that links them (standalone pages with their own look, design/ mockups and public/bts, are out of scope)', () => {
+  it('are defined in no inline <style> of a page that links them (standalone pages with their own look, and design/ mockups, are out of scope)', () => {
     const offenders = [];
     for (const page of pages) {
       const html = read(page);
