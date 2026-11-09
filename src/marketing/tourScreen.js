@@ -101,7 +101,7 @@ function buildHero() {
       text: 'Competition formats for the serious work, plus small Community tools for everything around it.',
     }),
     el('div', { className: 'tour-hero-status' }, [
-      el('span', { className: 'tour-status-mark', text: '01' }),
+      el('span', { className: 'tour-status-mark icon-frame', text: '01' }),
       el('span', {
         text: 'Cup Taster, BTC and Throwdown are live now. More formats are on the way.',
       }),
@@ -110,12 +110,12 @@ function buildHero() {
 }
 
 function setBoard() {
-  return el('div', { className: 'tour-set-board', attrs: { 'aria-hidden': 'true' } }, [
+  return el('div', { className: 'tour-set-board panel', attrs: { 'aria-hidden': 'true' } }, [
     el('span', { className: 'tour-board-label', text: 'Blind set / set 04' }),
     el(
       'div',
       { className: 'tour-set-cups' },
-      ['A', 'B', 'C'].map((letter) => el('span', { text: letter })),
+      ['A', 'B', 'C'].map((letter) => el('span', { className: 'icon-frame', text: letter })),
     ),
     el('div', { className: 'tour-board-result' }, [
       el('span', { text: 'Odd cup' }),
@@ -131,12 +131,14 @@ function buildCupTaster() {
     { className: 'tour-cup', attrs: { id: 'cup-taster', 'aria-labelledby': 'cup-title' } },
     [
       el('div', { className: 'tour-section-label' }, [
-        el('span', { text: '01' }),
+        el('span', { className: 'icon-frame', text: '01' }),
         el('span', { text: 'Live format' }),
       ]),
       el('div', { className: 'tour-cup-grid' }, [
         el('div', { className: 'tour-cup-copy' }, [
-          el('div', { className: 'tour-icon', attrs: { 'aria-hidden': 'true' } }, [ICONS.cup()]),
+          el('div', { className: 'tour-icon icon-frame', attrs: { 'aria-hidden': 'true' } }, [
+            ICONS.cup(),
+          ]),
           el('p', { className: 'tour-kicker', text: 'Blind set sensory' }),
           el('h2', { id: 'cup-title', text: 'Cup Taster.' }),
           el('p', {
@@ -147,12 +149,16 @@ function buildCupTaster() {
             className: 'tour-note',
             text: 'Live in the organiser console. Sign in to set up and run an event.',
           }),
-          el('a', { className: 'tour-primary-link cut-sm', attrs: { href: '/app/#/events' } }, [
-            el('span', { text: 'Open Cup Taster' }),
-            arrow(),
-          ]),
+          el(
+            'a',
+            {
+              className: 'tour-primary-link action action-primary btn-bevel',
+              attrs: { href: '/app/#/events' },
+            },
+            [el('span', { text: 'Open Cup Taster' }), arrow()],
+          ),
         ]),
-        el('div', { className: 'tour-cup-media' }, [
+        el('div', { className: 'tour-cup-media panel' }, [
           el('img', {
             attrs: {
               src: '/marketing/hero-cupping-bowls.jpg',
@@ -177,7 +183,7 @@ function buildBtc() {
     { className: 'tour-cup', attrs: { id: 'btc', 'aria-labelledby': 'btc-title' } },
     [
       el('div', { className: 'tour-section-label' }, [
-        el('span', { text: '02' }),
+        el('span', { className: 'icon-frame', text: '02' }),
         el('span', { text: 'Live format' }),
       ]),
       // .tour-cup-solo, not .tour-cup-grid — buildCupTaster's own two-column grid
@@ -187,7 +193,9 @@ function buildBtc() {
       // review, ui-accessibility-reviewer: without it, the icon sat flush against
       // the section label above with zero gap, at every viewport width).
       el('div', { className: 'tour-cup-solo' }, [
-        el('div', { className: 'tour-icon', attrs: { 'aria-hidden': 'true' } }, [ICONS.team()]),
+        el('div', { className: 'tour-icon icon-frame', attrs: { 'aria-hidden': 'true' } }, [
+          ICONS.team(),
+        ]),
         el('p', { className: 'tour-kicker', text: 'Team head-to-head' }),
         el('h2', { id: 'btc-title', text: 'BTC.' }),
         el('p', {
@@ -198,10 +206,14 @@ function buildBtc() {
           className: 'tour-note',
           text: 'Live in the organiser console. Sign in to set up and run an event.',
         }),
-        el('a', { className: 'tour-primary-link cut-sm', attrs: { href: '/app/#/events' } }, [
-          el('span', { text: 'Open BTC' }),
-          arrow(),
-        ]),
+        el(
+          'a',
+          {
+            className: 'tour-primary-link action action-primary btn-bevel',
+            attrs: { href: '/app/#/events' },
+          },
+          [el('span', { text: 'Open BTC' }), arrow()],
+        ),
       ]),
     ],
   );
@@ -219,11 +231,13 @@ function buildThrowdown() {
     },
     [
       el('div', { className: 'tour-section-label' }, [
-        el('span', { text: '03' }),
+        el('span', { className: 'icon-frame', text: '03' }),
         el('span', { text: 'Live format' }),
       ]),
       el('div', { className: 'tour-cup-solo' }, [
-        el('div', { className: 'tour-icon', attrs: { 'aria-hidden': 'true' } }, [ICONS.bracket()]),
+        el('div', { className: 'tour-icon icon-frame', attrs: { 'aria-hidden': 'true' } }, [
+          ICONS.bracket(),
+        ]),
         el('p', { className: 'tour-kicker', text: '1v1 knockout' }),
         el('h2', { id: 'throwdown-title', text: 'Throwdown.' }),
         el('p', {
@@ -234,24 +248,30 @@ function buildThrowdown() {
           className: 'tour-note',
           text: 'Live in the organiser console. Redemption and revival rounds are coming later as add-on modules.',
         }),
-        el('a', { className: 'tour-primary-link cut-sm', attrs: { href: '/app/#/events' } }, [
-          el('span', { text: 'Open Throwdown' }),
-          arrow(),
-        ]),
+        el(
+          'a',
+          {
+            className: 'tour-primary-link action action-primary btn-bevel',
+            attrs: { href: '/app/#/events' },
+          },
+          [el('span', { text: 'Open Throwdown' }), arrow()],
+        ),
       ]),
     ],
   );
 }
 
 function plannedFormat({ number, title, label, description, icon: iconName }) {
-  return el('article', { className: 'tour-planned-card' }, [
+  return el('article', { className: 'tour-planned-card panel' }, [
     el('div', { className: 'tour-planned-top' }, [
       el('span', { text: number }),
       el('span', { className: 'tour-planned-status', text: 'Coming soon' }),
     ]),
-    el('div', { className: 'tour-icon tour-icon-muted', attrs: { 'aria-hidden': 'true' } }, [
-      ICONS[iconName](),
-    ]),
+    el(
+      'div',
+      { className: 'tour-icon icon-frame tour-icon-muted', attrs: { 'aria-hidden': 'true' } },
+      [ICONS[iconName]()],
+    ),
     el('p', { className: 'tour-kicker', text: label }),
     el('h3', { text: title }),
     el('p', { text: description }),
@@ -266,7 +286,7 @@ function buildPlannedFormats() {
       el('div', { className: 'tour-planned-intro' }, [
         el('div', {}, [
           el('div', { className: 'tour-section-label' }, [
-            el('span', { text: '04' }),
+            el('span', { className: 'icon-frame', text: '04' }),
             el('span', { text: 'The format map' }),
           ]),
           el('h2', { id: 'planned-title', text: 'The next rounds.' }),
@@ -290,8 +310,10 @@ function buildPlannedFormats() {
 }
 
 function communityCard({ title, label, description, href, icon: iconName }) {
-  return el('a', { className: 'tour-community-card', attrs: { href } }, [
-    el('div', { className: 'tour-icon', attrs: { 'aria-hidden': 'true' } }, [ICONS[iconName]()]),
+  return el('a', { className: 'tour-community-card panel', attrs: { href } }, [
+    el('div', { className: 'tour-icon icon-frame', attrs: { 'aria-hidden': 'true' } }, [
+      ICONS[iconName](),
+    ]),
     el('p', { className: 'tour-kicker', text: label }),
     el('h3', { text: title }),
     el('p', { text: description }),
@@ -308,7 +330,7 @@ function buildCommunity() {
     },
     [
       el('div', { className: 'tour-section-label' }, [
-        el('span', { text: '05' }),
+        el('span', { className: 'icon-frame', text: '05' }),
         el('span', { text: 'Community tools' }),
       ]),
       el('div', { className: 'tour-community-heading' }, [
@@ -338,10 +360,11 @@ function buildCommunity() {
           icon: 'beans',
         }),
       ]),
-      el('a', { className: 'tour-community-link', attrs: { href: '/community/' } }, [
-        el('span', { text: 'Explore all Community tools' }),
-        arrow(),
-      ]),
+      el(
+        'a',
+        { className: 'tour-community-link action action-primary', attrs: { href: '/community/' } },
+        [el('span', { text: 'Explore all Community tools' }), arrow()],
+      ),
     ],
   );
 }

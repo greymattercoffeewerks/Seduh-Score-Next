@@ -93,6 +93,20 @@ into this codebase:
   exactly which values were snapped onto existing `--clr-petrol-*` ramp steps instead of
   becoming new marketing-only hex values.
 
+## Shared primitives, not page-local shapes (2026-11-09, Petrol V2)
+
+Tags, cards, toggles, buttons and the live dot on these pages come from `src/ui/tokens/base.css` (`.tag`, `.panel`,
+`.icon-frame`, `.menu-toggle`, `.action`, `.status-live-dot`, `.btn-bevel`), loaded through `index.css` like every
+page. They are NOT drawn from `components.css`, which these pages still do not link (it would restyle their own
+`.screen-feedback` and `.form-field` names; its `.btn` also carries console-only busy and press states). So a page
+class here adds layout (and a variable such as `--tag-edge`), and the JS adds the shared class beside it
+(`className: 'pricing-card panel'`). Never restate a border, fill or corner: `tokenDrift.test.js` fails a painted box
+without a token radius and a local `-tag`/`-badge`/`-dot`/`-toggle` copy, and `sharedPrimitives.test.js` fails if the
+markup drops the shared class. Full-bleed bands, the header bar, the ticker, the live bar and edge-to-edge rows stay
+square (the guard's `SQUARE_ALLOWLIST`; DESIGN.md "Public pages" says why). `results.css`'s sample-data banner and
+badge had no markup and were deleted. The results page's data states (latest card, table, record rows) cannot be seen
+without a Supabase `.env`; the tests cover them.
+
 ## Why this DOES import `src/ui/tokens/index.css` now
 
 Kinetic's (and Cherry's, and Editorial's) own CLAUDE.md reasoning was: `colors.css`'s

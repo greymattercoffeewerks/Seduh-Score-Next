@@ -225,13 +225,13 @@ textarea:focus-visible {
   min-height: var(--tap-target-min);
   padding: 0 var(--space-5);
   border: var(--border-hairline) solid var(--color-border-strong);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   font-weight: var(--font-weight-bold);
   letter-spacing: 0.08em;
 }
-/* The primary action is the accent with an angular cut, as on the other Petrol call-to-actions. */
+/* The primary action is the accent with the soft bevel (base.css .btn-bevel), as on the other Petrol call-to-actions. */
 .rs-draw-button {
   border-color: var(--rs-accent);
   background: var(--rs-accent);
@@ -240,11 +240,6 @@ textarea:focus-visible {
 .rs-draw-button:hover:not([aria-disabled='true']),
 .rs-button-primary:hover {
   background: color-mix(in srgb, var(--rs-accent) 85%, black);
-}
-/* The cut corners would clip the focus ring, so the shape goes square while focused. */
-.rs-draw-button:focus-visible,
-.rs-button-primary:focus-visible {
-  clip-path: none;
 }
 .rs-draw-button[aria-disabled='true'] {
   /* Token colours, not opacity: dimming the whole button took the label (including "DRAWING")
@@ -354,7 +349,7 @@ textarea:focus-visible {
   padding: var(--space-3);
   resize: vertical;
   border: var(--border-hairline) solid var(--color-border-strong);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   background: var(--color-canvas);
   color: var(--color-text);
   font-family: var(--font-mono);
@@ -420,7 +415,7 @@ textarea:focus-visible {
   height: var(--tap-target-min);
   padding: 0 var(--space-2);
   border: var(--border-hairline) solid var(--color-border-strong);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   background: var(--color-canvas);
   color: var(--color-text);
   font-family: var(--font-mono);
@@ -477,7 +472,7 @@ textarea:focus-visible {
   min-height: var(--tap-target-min);
   padding: 0 var(--space-2);
   border: var(--border-hairline) solid var(--color-border-strong);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   background: var(--color-canvas);
   color: var(--color-text-secondary);
   font-family: var(--font-mono);
@@ -530,7 +525,7 @@ textarea:focus-visible {
   min-height: var(--tap-target-min);
   padding: 0 var(--space-3);
   border: var(--border-hairline) solid var(--color-border-strong);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   background: var(--color-canvas);
   color: var(--color-text);
   font-family: var(--font-mono);
@@ -557,7 +552,7 @@ textarea:focus-visible {
   height: var(--tap-target-min);
   padding: 0.1rem;
   border: var(--border-hairline) solid var(--color-border-strong);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   background: var(--color-canvas);
 }
 .rs-entry-actions {
@@ -758,4 +753,10 @@ textarea:focus-visible {
 }
 .rs-note-row .rs-note {
   margin: var(--space-3) 0 0;
+}
+
+/* Petrol V2 (P3): the hover colour change eases. */
+.rs-draw-button,
+.rs-button-primary {
+  transition: background var(--dur-fast) var(--ease-out);
 }

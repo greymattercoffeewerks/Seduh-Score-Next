@@ -447,7 +447,7 @@ export async function mountScoringScreen(
       );
       const confirmBlocked = !complete || correctionQueued;
       const confirmButton = el('button', {
-        className: 'btn btn-primary tap-target',
+        className: 'btn btn-primary btn-lg tap-target',
         text: confirmInFlight ? 'Confirming…' : 'Confirm heat',
         attrs: {
           ...(!confirmBlocked && !confirmInFlight ? {} : { disabled: 'disabled' }),

@@ -1,0 +1,27 @@
+/*
+ * Rank slides and score ticks (core/rankMotion.js). The script sets the start position of a moving row and
+ * releases it; the transition below carries it to its place. Under reduced motion the script animates nothing and
+ * base.css's global rule shortens anything else, so an update is instant.
+ */
+
+.rank-slide {
+  transition: transform var(--dur-stage) var(--ease-out);
+  /* A moving row sits above its neighbours rather than being clipped by them. */
+  position: relative;
+  z-index: 1;
+}
+
+.rank-tick {
+  animation: rank-tick-in var(--dur-stage) var(--ease-out) both;
+}
+
+@keyframes rank-tick-in {
+  from {
+    opacity: 0;
+    transform: translateY(40%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

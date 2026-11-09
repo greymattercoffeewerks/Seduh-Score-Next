@@ -1,26 +1,17 @@
 /*
- * Spacing & shape tokens — Seduh Score Next — "Petrol" identity
+ * Spacing & shape tokens — Seduh Score Next — "Petrol" identity (V2 shape: Hybrid)
  *
- * Spacing scale, borders, max-widths, tap targets, and focus-ring geometry
- * are UNCHANGED from Cherry — structural values, not part of the visual
- * swap. Two real changes:
+ * Spacing scale, borders, max-widths, tap targets and focus-ring geometry are
+ * structural values, unchanged since Cherry.
  *
- * 1. --radius-* is now 0 across the board. This system commits to hard
- *    angular cuts, zero border-radius — the opposite of Cherry's softened
- *    3/6/10px corners. This is a breaking visual change everywhere
- *    var(--radius-*) is consumed (cards, buttons, inputs, badges,
- *    .status-live-dot — the dot literally becomes a square blip, which
- *    matches the marketing exploration's telemetry-blip motif rather than
- *    a soft "online" dot).
+ * Shape (Petrol V2, P1): a Hybrid. Small elements (tags, badges, chips, inputs,
+ * secondary buttons, the live blip) get a 3px machined corner; cards 6px;
+ * modals and large panels 10px; --radius-full is a true circle, for spinners
+ * and avatars only. Big primary buttons keep a soft bevel chamfer, sized by
+ * --bevel-* (read by base.css's .btn-bevel; --bevel-md is reserved). --cut-lg stays for
+ * large decorative panels only.
  *
- * 2. New --cut-* tokens + base.css utility classes add the angular
- *    corner-cut (clip-path) shape this identity uses in place of a rounded
- *    corner wherever a little more visual "commitment" is wanted (primary
- *    CTAs, tags) — see base.css's .cut-sm/.cut-md/.cut-lg.
- *
- * Still no shadow tokens. Flat borders/surface steps only — this rule
- * predates Cherry and survives this rework unchanged; angular cuts replace
- * rounding as the shape language, they don't bring back elevation.
+ * Still no shadow tokens. Flat borders/surface steps only.
  */
 
 :root {
@@ -35,19 +26,16 @@
   --space-8: 4rem; /* 64px */
   --space-9: 6rem; /* 96px */
 
-  /* Angular commitment — zero radius everywhere. radius-full stays a named
-     token (some markup still asks for "the fully-round one") but resolves
-     to 0 too, so a former pill/circle renders as a hard-edged square/blip
-     instead, on purpose. */
-  --radius-sm: 0; /* inputs, tags, badges, buttons */
-  --radius-md: 0; /* cards */
-  --radius-lg: 0; /* modals, large containers */
-  --radius-full: 0; /* status pill / live-indicator dot — now a square blip */
+  --radius-sm: 3px; /* inputs, tags, badges, chips, secondary buttons, the live blip */
+  --radius-md: 6px; /* cards */
+  --radius-lg: 10px; /* modals, large panels */
+  --radius-full: 9999px; /* true circle: spinners and avatars only */
 
-  /* Corner-cut sizes for base.css's .cut-sm/.cut-md/.cut-lg clip-path
-     utilities — the angular alternative to a rounded corner. */
-  --cut-sm: 6px;
-  --cut-md: 10px;
+  /* Bevel (chamfer) sizes for big primary buttons — P2 consumes these. */
+  --bevel-md: 6px;
+  --bevel-lg: 9px;
+
+  /* Corner-cut size for base.css's .cut-lg, kept for large decorative panels only. */
   --cut-lg: 16px;
 
   --border-hairline: 1px;

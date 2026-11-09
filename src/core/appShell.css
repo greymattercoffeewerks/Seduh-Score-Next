@@ -240,7 +240,7 @@
   width: 18px;
   height: 2px;
   background: var(--color-text);
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-sm);
 }
 
 /* Wraps the nav links AND the auth control (2026-09-06, user-reported —
@@ -314,7 +314,7 @@
   padding: calc(var(--space-2) - var(--border-hairline))
     calc(var(--space-3) - var(--border-hairline));
   font-weight: var(--font-weight-bold);
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-sm);
   text-decoration: none;
 }
 
@@ -518,7 +518,7 @@
   /* Invisible normally; forced-colors mode (which drops backgrounds) draws it, so a problem chip keeps
      its shape and still reads as a control there. The padding above is trimmed by the same width. */
   border: var(--border-hairline) solid transparent;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-text-muted);
   font: inherit;
@@ -666,4 +666,32 @@
   .app-shell-footer {
     display: none;
   }
+}
+
+/* Petrol V2 (P3): panels open instead of snapping, and hover states ease. The nav panel and the notice and
+   sync overlays are toggled with display or by a class, so they cannot transition; they fade and settle in with
+   an entrance animation over --dur-base. Reduced motion shortens it to nothing (base.css). The rules are added
+   here, separate from the ones above, which appShell.test.js pins selector by selector. */
+@keyframes app-shell-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(var(--space-1) * -1));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.app-shell-nav-panel.app-shell-nav-panel-open,
+.app-shell-org-notice.app-shell-org-notice-open,
+.app-shell-sync.app-shell-sync-open {
+  animation: app-shell-panel-in var(--dur-base) var(--ease-out) both;
+}
+
+.app-shell-link,
+.app-shell-footer-link {
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
 }

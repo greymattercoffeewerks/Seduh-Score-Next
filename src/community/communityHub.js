@@ -83,12 +83,12 @@ function arrow(text) {
 }
 
 function toolCard({ number, title, eyebrow, body, href, meta, instrument, arrowText, attrs }) {
-  return el('a', { className: 'community-tool-card', attrs: { href, ...attrs } }, [
+  return el('a', { className: 'community-tool-card panel', attrs: { href, ...attrs } }, [
     el('div', { className: 'community-card-top' }, [
       el('span', { className: 'community-tool-number', text: number }),
-      el('span', { className: 'community-tool-status', text: 'Available now' }),
+      el('span', { className: 'community-tool-status tag', text: 'Available now' }),
     ]),
-    el('div', { className: 'community-instrument', attrs: { 'aria-hidden': 'true' } }, [
+    el('div', { className: 'community-instrument icon-frame', attrs: { 'aria-hidden': 'true' } }, [
       instrument,
     ]),
     el('div', { className: 'community-card-copy' }, [
@@ -127,7 +127,7 @@ function buildHero() {
         text: 'A growing collection of practical tools for coffee people running things, making things, and bringing a room together.',
       }),
       el('div', { className: 'community-hero-note' }, [
-        el('span', { className: 'community-note-mark', text: '02' }),
+        el('span', { className: 'community-note-mark icon-frame', text: '02' }),
         el('span', { text: 'Free tools, built in Brunei.' }),
       ]),
     ],

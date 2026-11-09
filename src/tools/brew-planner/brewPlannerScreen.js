@@ -85,7 +85,7 @@ const machineName = (machine, index) => machine.name || `Machine ${index + 1}`;
 
 function button(text, { kind = 'outline', onClick, attrs = {} }) {
   const node = el('button', {
-    className: `bp-btn bp-btn-${kind}`,
+    className: `bp-btn bp-btn-${kind}${kind === 'primary' ? ' btn-bevel' : ''}`,
     text,
     attrs: { type: 'button', 'data-focus-key': `btn-${text}`, ...attrs },
   });

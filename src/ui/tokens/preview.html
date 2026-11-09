@@ -20,6 +20,55 @@
         border-bottom: var(--border-hairline) solid var(--color-border);
         padding-bottom: var(--space-3);
       }
+      .radius-demo {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-4);
+        align-items: center;
+        margin-bottom: var(--space-4);
+      }
+      .radius-demo > div {
+        width: 5rem;
+        height: 3.5rem;
+        display: grid;
+        place-items: center;
+        background: var(--color-surface-sunken);
+        border: var(--border-hairline) solid var(--color-border);
+        font-family: var(--font-mono);
+        font-size: var(--text-2xs);
+      }
+      .radius-demo .full {
+        border-radius: var(--radius-full);
+        width: 3.5rem;
+      }
+      .motion-chip {
+        padding: var(--space-2) var(--space-3);
+        border: var(--border-hairline) solid var(--color-border);
+        border-radius: var(--radius-sm);
+        background: var(--color-surface);
+        font-family: var(--font-mono);
+        font-size: var(--text-2xs);
+        transition:
+          background var(--dur-base) var(--ease-out),
+          transform var(--dur-base) var(--ease-out);
+      }
+      .motion-chip:hover {
+        background: var(--color-accent-tint);
+        color: var(--color-accent-tint-text);
+        transform: translateX(var(--space-2));
+      }
+      .tint-demo {
+        display: flex;
+        gap: var(--space-3);
+        flex-wrap: wrap;
+      }
+      .tint-demo span {
+        padding: var(--space-2) var(--space-3);
+        border-radius: var(--radius-sm);
+        background: var(--color-accent-tint);
+        color: var(--color-accent-tint-text);
+        font-weight: var(--font-weight-semibold);
+      }
       .swatch-grid {
         display: grid;
         /* 9rem track minimum is a demo-page layout choice (fits a label plus
@@ -135,7 +184,7 @@
         align-items: center;
         gap: var(--space-2);
         padding: var(--space-1) var(--space-3);
-        border-radius: var(--radius-full);
+        border-radius: var(--radius-sm);
         font-size: var(--text-2xs);
         font-weight: var(--font-weight-bold);
         text-transform: uppercase;
@@ -285,6 +334,50 @@
           ⟳
         </button>
       </div>
+      <p>
+        Big primary (<code>.btn .btn-primary .btn-lg</code>, soft bevel), the same shape on a
+        non-<code>.btn</code>
+        call-to-action (<code>.btn-bevel</code>), a busy button (<code>aria-busy="true"</code>: the
+        label stays, a line runs along the bottom edge), and a disabled one. Press any button to see
+        the 1px sink.
+      </p>
+      <div class="btn-row">
+        <button class="btn btn-primary btn-lg">Start heat</button>
+        <a class="btn btn-primary btn-bevel" href="#buttons" style="text-decoration: none"
+          >Start free</a
+        >
+        <button class="btn btn-primary btn-lg" aria-disabled="true" aria-busy="true">
+          Confirming…
+        </button>
+        <button class="btn btn-outline" aria-busy="true" aria-disabled="true">Saving…</button>
+        <button class="btn btn-primary" disabled>Disabled</button>
+      </div>
+
+      <h2 class="guide-heading">Selected state</h2>
+      <p>
+        <code>.is-selected</code>, or <code>.selectable</code> with <code>aria-selected</code> /
+        <code>aria-current</code>: accent tint, a 2px accent edge and a check mark (the tint alone
+        is 1.14:1 against paper).
+      </p>
+      <div class="btn-row" style="flex-direction: column; align-items: stretch">
+        <div class="selectable" role="option" aria-selected="false" style="padding: var(--space-3)">
+          Heat 1
+        </div>
+        <div class="selectable" role="option" aria-selected="true" style="padding: var(--space-3)">
+          Heat 2
+        </div>
+        <div class="is-selected" style="padding: var(--space-3)">Heat 3</div>
+      </div>
+
+      <h2 class="guide-heading">Inputs and feedback</h2>
+      <div class="form-field">
+        <label class="form-field-label" for="pv-input">Entry name</label>
+        <input class="field-input" id="pv-input" value="Edge at 3:1 or better" />
+      </div>
+      <div class="btn-row" style="margin-top: var(--space-4)">
+        <div class="screen-feedback" data-tone="success">Saved. Slides in over 220ms.</div>
+        <div class="screen-feedback" data-tone="error">Could not save that.</div>
+      </div>
 
       <h2 class="guide-heading">Type scale</h2>
       <div class="type-row">
@@ -327,15 +420,23 @@
         </div>
       </div>
 
-      <h2 class="guide-heading">Corner cuts</h2>
+      <h2 class="guide-heading">Corner cut (large decorative panels only)</h2>
       <p>
-        Petrol's angular alternative to a rounded corner (<code>--radius-*</code> is now
-        <code>0</code> everywhere) — see the "Do" list in <code>DESIGN.md</code>.
+        <code>.cut-lg</code> survives for big decorative frames that take no focus. A button is
+        never cut: big primary buttons use the soft bevel (<code>.btn-bevel</code>, above),
+        everything small takes <code>--radius-sm</code>.
       </p>
       <div class="btn-row">
-        <button class="btn btn-primary cut-sm">cut-sm</button>
-        <button class="btn btn-primary cut-md">cut-md</button>
-        <button class="btn btn-primary cut-lg">cut-lg</button>
+        <div
+          class="cut-lg"
+          style="
+            background: var(--color-accent);
+            color: var(--color-accent-contrast);
+            padding: var(--space-5);
+          "
+        >
+          cut-lg panel
+        </div>
       </div>
 
       <h2 class="guide-heading">Spacing scale</h2>
@@ -354,6 +455,33 @@
       <div class="space-row">
         <div class="meta">space-8 / 64px</div>
         <div class="bar" style="width: var(--space-8)"></div>
+      </div>
+
+      <h2 class="guide-heading">Shape — Hybrid radii</h2>
+      <div class="radius-demo">
+        <div style="border-radius: var(--radius-sm)">sm 3px</div>
+        <div style="border-radius: var(--radius-md)">md 6px</div>
+        <div style="border-radius: var(--radius-lg)">lg 10px</div>
+        <div class="full">full</div>
+      </div>
+      <p>
+        <code>--bevel-lg</code> 9px is the soft chamfer on big primary buttons
+        (<code>.btn-lg</code>, <code>.btn-bevel</code>); <code>--bevel-md</code> 6px is reserved.
+      </p>
+
+      <h2 class="guide-heading">Motion</h2>
+      <p>
+        Hover a chip: <code>--dur-press</code> 80ms, <code>--dur-fast</code> 140ms,
+        <code>--dur-base</code> 220ms, <code>--dur-stage</code> 420ms,
+        <code>--ease-out</code> cubic-bezier(.2,.8,.2,1). The chip below uses base + ease-out and
+        stops moving under reduced motion.
+      </p>
+      <div class="btn-row"><span class="motion-chip">hover me — 220ms</span></div>
+
+      <h2 class="guide-heading">Accent tint (selected state)</h2>
+      <div class="tint-demo"><span>Selected row</span><span>Round 2 — active</span></div>
+      <div class="stage-panel" data-surface="stage" style="margin-top: var(--space-3)">
+        <div class="tint-demo"><span>Selected row</span><span>Round 2 — active</span></div>
       </div>
 
       <h2 class="guide-heading">Mock scoreboard (paper mode)</h2>

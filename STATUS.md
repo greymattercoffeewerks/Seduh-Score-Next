@@ -1,6 +1,6 @@
 # Status — read this first
 
-_As of 2026-11-07, app version 3.6.3. One page on purpose (budget 8 KB, `npm run check:docs`). `kb-sync` updates it when a
+_As of 2026-11-08, app version 3.6.4. One page on purpose (budget 8 KB, `npm run check:docs`). `kb-sync` updates it when a
 task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this file._
 
 ## Where we are
@@ -10,6 +10,7 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
 - **Gating:** three keys enforced for the Brunei organisation since 2026-11-02 (`cup_taster_participants`, `events_open`,
   `results_archive_optional`); eight stay off. **Seduh ID:** Layer 1a built; the archive feed (1b) is in `queue` mode and
   has published nothing yet.
+- **Petrol V2 P1 to P3 done** (tokens, components, surfaces) on `claude/petrol-v2-2a4279`, unmerged; the drift guard is done on `claude/petrol-v2-guard-cf745e` (2026-11-08, unmerged). The public-pages pass (marketing pages on the shared primitives, guard extended) is done on `claude/petrol-v2-public-16c90b`, unmerged. Merge only when the owner says all phases are done.
 - **Open, not merged or not in the cloud** (check `CHANGELOG.md` before trusting this line): password recovery D-PW2 to
   D-PW8 not started; organiser branding BR-E1 in PR #297 (no database door, so no brand shows); T-TD.1.9 (Throwdown 3rd place
   match after a walkover) was in review with its migration not yet in the cloud on 2026-11-03.

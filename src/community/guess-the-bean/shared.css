@@ -141,7 +141,7 @@ input[type='checkbox'][aria-disabled='true'] {
   background: var(--color-text);
   color: var(--color-canvas);
   padding: var(--space-3) var(--space-5);
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-sm);
   font-size: var(--text-sm);
   font-weight: var(--font-weight-semibold);
   z-index: 200;
