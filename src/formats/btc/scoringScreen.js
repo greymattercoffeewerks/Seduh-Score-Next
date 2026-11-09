@@ -24,6 +24,7 @@ import { describeError } from '../../core/errors.js';
 import { findEvent } from '../../core/events.js';
 import { findLiveElsewhere, takeOverWarning } from '../../core/publish.js';
 import { droppedErrorFor } from '../../core/outbox.js';
+import { formatDuration } from '../../core/duration.js';
 import { enqueueBtcLive } from './liveSession.js';
 import { raceTimeout, DEFAULT_LOAD_TIMEOUT_MS } from '../../core/timeout.js';
 import { listTeams } from './teams.js';
@@ -34,17 +35,21 @@ import {
   TOKENS_PER_CUP,
   blankDraft,
   buildConfirmParams,
+  checkFinishTime,
   clearDraft,
   computeScores,
   cupTokens,
   cupsForRound,
   describeConfirmError,
+  finishTimeMessage,
+  finishTimeProblems,
   firstMissingCup,
   flushPending,
   isMatchComplete,
   isOperationQueued,
   loadConfirmedDraft,
   loadDraft,
+  maxTimeSecsForRound,
   missingCupCount,
   roundLabel,
   saveDraft,
@@ -231,10 +236,45 @@ export async function mountScoringScreen(
     ui.totals.team2.textContent = `${scores.team2Total} points (${scores.team2Tokens} tokens)`;
   }
 
+  function timeProblemText({ which, status }) {
+    return status === 'empty'
+      ? `${teamLabel(which)} needs a finish time.`
+      : `${teamLabel(which)}'s finish time needs minutes and seconds, like 8:42.`;
+  }
+
+  // Judges a box's text for the round, tidies a valid value ("08:42" -> "8:42", an over-limit one to the
+  // limit) in the draft and the box, and words what is left under the box. Runs on blur and again at Confirm.
+  // The message sits in a region that is always in the page (only its text changes), never moves focus, and
+  // typing clears it, so it never describes text the scorer has already changed.
+  function commitTime(which) {
+    const { match } = state.data;
+    const field = ui.timeFields.find((f) => f.which === which);
+    const result = checkFinishTime(state.draft.times[which], match.round);
+    if (result.status !== 'invalid' && result.status !== 'zero') {
+      if (result.text !== state.draft.times[which]) {
+        state.draft = { ...state.draft, times: { ...state.draft.times, [which]: result.text } };
+        field.node.value = result.text;
+        persistDraft();
+      }
+    }
+    showTimeMessage(field, finishTimeMessage(result, match.round), {
+      invalid: result.status === 'invalid' || result.status === 'zero',
+    });
+    updateConfirm();
+  }
+
+  function showTimeMessage(field, message, { invalid }) {
+    field.message.textContent = message ?? '';
+    if (invalid) field.node.setAttribute('aria-invalid', 'true');
+    else field.node.removeAttribute('aria-invalid');
+  }
+
   function updateConfirm() {
     const { match, judgeIds } = state.data;
-    const isComplete = isMatchComplete(state.draft, judgeIds.length, match.round);
-    const missing = isComplete ? 0 : missingCupCount(state.draft, match.round);
+    const cupsComplete = isMatchComplete(state.draft, judgeIds.length, match.round);
+    const missing = cupsComplete ? 0 : missingCupCount(state.draft, match.round);
+    const timeProblems = finishTimeProblems(state.draft, match.round);
+    const isComplete = cupsComplete && timeProblems.length === 0;
     ui.confirmButton.textContent = state.confirmInFlight
       ? 'Confirming…'
       : match.status === 'confirmed'
@@ -253,7 +293,14 @@ export async function mountScoringScreen(
     if (isComplete) {
       ui.confirmHint.hidden = true;
     } else {
-      ui.confirmHint.textContent = `Confirm unlocks once every cup has a score. ${missing} cup${missing === 1 ? '' : 's'} still missing.`;
+      const parts = [];
+      if (!cupsComplete) {
+        parts.push(
+          `Confirm unlocks once every cup has a score. ${missing} cup${missing === 1 ? '' : 's'} still missing.`,
+        );
+      }
+      for (const problem of timeProblems) parts.push(timeProblemText(problem));
+      ui.confirmHint.textContent = parts.join(' ');
       ui.confirmHint.hidden = false;
     }
     ui.statusNote.textContent =
@@ -430,6 +477,9 @@ export async function mountScoringScreen(
   async function handleConfirm() {
     if (locked()) return;
     const { match, judgeIds, event } = state.data;
+    // Tidy and word both time boxes first, so what is sent is what the boxes show.
+    commitTime('team1');
+    commitTime('team2');
     const missing = firstMissingCup(state.draft, match.round);
     if (missing || judgeIds.length !== JUDGES_PER_MATCH) {
       setFeedback(
@@ -443,6 +493,12 @@ export async function mountScoringScreen(
         ui.gotoMissing.dataset.cup = String(missing);
       }
       ui.feedback.focus();
+      return;
+    }
+    const timeProblems = finishTimeProblems(state.draft, match.round);
+    if (timeProblems.length) {
+      setFeedback(timeProblems.map(timeProblemText).join(' '), 'error');
+      ui.timeFields.find((f) => f.which === timeProblems[0].which).node.focus();
       return;
     }
     state.info = null;
@@ -635,34 +691,59 @@ export async function mountScoringScreen(
       );
     }
 
+    const preliminary = !knockout;
+    const limitText = formatDuration(maxTimeSecsForRound(match.round));
     for (const which of ['team1', 'team2']) {
+      const hintId = `btc-time-hint-${which}`;
+      const messageId = `btc-time-message-${which}`;
       const input = el('input', {
         className: 'field-input',
         attrs: {
           type: 'text',
-          'aria-label': `${teamLabel(which)} finish time (optional)`,
+          inputmode: 'numeric',
+          autocomplete: 'off',
+          'aria-label': `${teamLabel(which)} finish time${preliminary ? '' : ' (optional)'}`,
+          'aria-describedby': `${hintId} ${messageId}`,
           placeholder: 'e.g. 8:42',
           'data-field': `time-${which}`,
         },
       });
+      // Live region rendered up front; only its text changes (see commitTime).
+      const message = el('p', {
+        id: messageId,
+        className: 'form-field-hint btc-time-message',
+        attrs: { role: 'status', 'aria-live': 'polite' },
+      });
+      const field = { node: input, which, message };
       input.addEventListener('input', () => {
         if (locked()) {
           updateControls();
           return;
         }
         state.draft = { ...state.draft, times: { ...state.draft.times, [which]: input.value } };
+        showTimeMessage(field, null, { invalid: false });
         persistDraft();
+        updateConfirm();
       });
-      ui.timeFields.push({ node: input, which });
+      input.addEventListener('blur', () => {
+        if (!locked()) commitTime(which);
+      });
+      ui.timeFields.push(field);
       ui.controls.push(input);
       children.push(
         el('div', { className: 'form-field' }, [
           el('span', {
             className: 'form-field-label',
-            text: `${teamLabel(which)} finish time`,
+            text: `${teamLabel(which)} finish time${preliminary ? '' : ' (optional)'}`,
             attrs: { 'aria-hidden': 'true' },
           }),
           input,
+          el('p', {
+            id: hintId,
+            className: 'form-field-hint',
+            text: `Did not finish? Enter ${limitText}`,
+          }),
+          message,
         ]),
       );
     }

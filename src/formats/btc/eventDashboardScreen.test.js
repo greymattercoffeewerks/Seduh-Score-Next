@@ -108,4 +108,62 @@ describe('mountBtcEventDashboardScreen', () => {
     expect(root.querySelector('h1').textContent).toBe('Regional Bracket');
     expect(document.activeElement).toBe(root.querySelector('h1'));
   });
+
+  describe('the preliminary-times checklist line', () => {
+    const event = { data: { id: 'ev1', name: 'Regional Bracket', format: 'btc', is_test: false } };
+    const line = () => root.querySelector('.btc-checklist-line');
+
+    it('counts confirmed preliminary matches missing a usable time, singular and plural', async () => {
+      const client = fakeClient({
+        events: event,
+        btc_matches: {
+          data: [
+            { team1_time_note: '8:42', team2_time_note: '9:10' },
+            { team1_time_note: '8:42', team2_time_note: null },
+            { team1_time_note: '8.42', team2_time_note: '9:10' },
+          ],
+        },
+      });
+      await mountBtcEventDashboardScreen(root, { eventId: 'ev1', client });
+      expect(line().textContent).toBe('2 preliminary matches have no times');
+
+      const root2 = document.createElement('div');
+      document.body.appendChild(root2);
+      await mountBtcEventDashboardScreen(root2, {
+        eventId: 'ev1',
+        client: fakeClient({
+          events: event,
+          btc_matches: { data: [{ team1_time_note: '', team2_time_note: '9:10' }] },
+        }),
+      });
+      expect(root2.querySelector('.btc-checklist-line').textContent).toBe(
+        '1 preliminary match has no times',
+      );
+      root2.remove();
+    });
+
+    it('shows nothing when every match has both times, or there are none', async () => {
+      const full = fakeClient({
+        events: event,
+        btc_matches: { data: [{ team1_time_note: '8:42', team2_time_note: '9:10' }] },
+      });
+      await mountBtcEventDashboardScreen(root, { eventId: 'ev1', client: full });
+      expect(line()).toBeNull();
+      await mountBtcEventDashboardScreen(root, {
+        eventId: 'ev1',
+        client: fakeClient({ events: event, btc_matches: { data: [] } }),
+      });
+      expect(line()).toBeNull();
+    });
+
+    it('a failed read leaves the dashboard open without the line', async () => {
+      const client = fakeClient({
+        events: event,
+        btc_matches: { data: null, error: { code: '42501' } },
+      });
+      await mountBtcEventDashboardScreen(root, { eventId: 'ev1', client });
+      expect(root.querySelector('h1').textContent).toBe('Regional Bracket');
+      expect(line()).toBeNull();
+    });
+  });
 });

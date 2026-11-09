@@ -8,6 +8,7 @@
 // venue wifi" design target makes a half-created match (a real match row
 // with 0-2 judges attached) a genuine risk, not a hypothetical one.
 import { getSupabase } from '../../core/supabaseClient.js';
+import { parseDuration } from '../../core/duration.js';
 
 // Pure. Mirrors the RPC's own validation exactly (team1 !== team2, exactly
 // 3 distinct judges) so a screen can reject an invalid draft locally before
@@ -60,6 +61,23 @@ export async function listMatches(eventId, round, client = getSupabase()) {
     withJudges.push({ match, judgeIds });
   }
   return withJudges;
+}
+
+// How many CONFIRMED preliminary matches of an event are missing a usable finish time (either team's time
+// empty, or not minutes and seconds: an old or demo row). Feeds the event dashboard's checklist line, so a
+// gap in the times a points tie may need is visible before the bracket step. Throws on a failed read.
+export async function countPreliminaryMatchesWithoutTimes(eventId, client = getSupabase()) {
+  const { data, error } = await client
+    .from('btc_matches')
+    .select('team1_time_note, team2_time_note')
+    .eq('event_id', eventId)
+    .eq('round', 'preliminary')
+    .eq('status', 'confirmed');
+  if (error) throw error;
+  return (data ?? []).filter(
+    (row) =>
+      parseDuration(row.team1_time_note) === null || parseDuration(row.team2_time_note) === null,
+  ).length;
 }
 
 // The event a match belongs to, or null when there is no such match as far as this person can see.

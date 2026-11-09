@@ -18,32 +18,41 @@
     <p>
       <button id="demo-normal">Mount (normal)</button>
       <button id="demo-test-event">Mount (test event)</button>
+      <button id="demo-missing-times">Mount (a match has no times)</button>
       <button id="demo-failed">Mount (load fails)</button>
     </p>
     <div id="app"></div>
     <script type="module">
       import { mountBtcEventDashboardScreen } from './eventDashboardScreen.js';
 
-      function createDemoClient({ isTest = false, fail = false } = {}) {
+      // btc_matches answers the checklist line's count: two confirmed preliminaries, one of them without times.
+      function createDemoClient({ isTest = false, fail = false, missingTimes = false } = {}) {
+        const matches = [
+          { team1_time_note: '8:42', team2_time_note: '9:10' },
+          missingTimes
+            ? { team1_time_note: '8:42', team2_time_note: null }
+            : { team1_time_note: '7:55', team2_time_note: '10:00' },
+        ];
         return {
-          from: () => ({
-            select: () => ({
-              eq: () => ({
-                single: () =>
-                  fail
-                    ? Promise.resolve({ data: null, error: { code: '42501', message: 'boom' } })
-                    : Promise.resolve({
-                        data: {
-                          id: 'ev1',
-                          name: 'Regional Bracket',
-                          format: 'btc',
-                          is_test: isTest,
-                        },
-                        error: null,
-                      }),
-              }),
-            }),
-          }),
+          from: (table) => {
+            const builder = {
+              select: () => builder,
+              eq: () => builder,
+              single: () =>
+                fail
+                  ? Promise.resolve({ data: null, error: { code: '42501', message: 'boom' } })
+                  : Promise.resolve({
+                      data: { id: 'ev1', name: 'Regional Bracket', format: 'btc', is_test: isTest },
+                      error: null,
+                    }),
+              then: (resolve, reject) =>
+                Promise.resolve({ data: table === 'btc_matches' ? matches : [], error: null }).then(
+                  resolve,
+                  reject,
+                ),
+            };
+            return builder;
+          },
         };
       }
 
@@ -58,6 +67,9 @@
       document
         .getElementById('demo-test-event')
         .addEventListener('click', () => mount(createDemoClient({ isTest: true })));
+      document
+        .getElementById('demo-missing-times')
+        .addEventListener('click', () => mount(createDemoClient({ missingTimes: true })));
       document
         .getElementById('demo-failed')
         .addEventListener('click', () => mount(createDemoClient({ fail: true })));

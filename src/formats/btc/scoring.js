@@ -26,6 +26,8 @@ import {
   listAllOperations,
 } from '../../core/outbox.js';
 import { getSupabase } from '../../core/supabaseClient.js';
+import { formatDuration, parseDuration } from '../../core/duration.js';
+import { clampElapsed } from '../../core/timeclamp.js';
 export { roundLabel } from './roundNames.js';
 
 // A match must still carry exactly 3 assigned judges before it can be confirmed —
@@ -37,6 +39,57 @@ export const TOKENS_PER_CUP = 3;
 // 20 in every knockout round including third place.
 export function cupsForRound(round) {
   return round === 'preliminary' ? 15 : 20;
+}
+
+// The finish-time limit, in seconds. A team that does not finish records the limit itself, and a longer typed
+// time is capped to it. THE single place to change it: 10:00 for the preliminary round and 15:00 for every
+// knockout round are the working answer to open question O6 (pending the committee).
+export function maxTimeSecsForRound(round) {
+  return round === 'preliminary' ? 600 : 900;
+}
+
+// What the finish-time box holds, judged for a round. Pure; the one place a typed time is read.
+//   empty    nothing typed
+//   invalid  not M:SS / MM:SS with seconds 00-59
+//   zero     0:00 (a team that did not finish enters the limit, never zero)
+//   ok       a valid time within the limit; `text` is the tidy form ("08:42" -> "8:42")
+//   capped   a valid time over the limit; `text` is the limit, written the same way
+// The cap is clampElapsed(), the project's single duration cap, never a second one here.
+export function checkFinishTime(rawText, round) {
+  const trimmed = typeof rawText === 'string' ? rawText.trim() : '';
+  if (trimmed === '') return { status: 'empty', text: '', secs: null };
+  const secs = parseDuration(trimmed);
+  if (secs === null) return { status: 'invalid', text: trimmed, secs: null };
+  if (secs === 0) return { status: 'zero', text: trimmed, secs: 0 };
+  const limit = maxTimeSecsForRound(round);
+  const { elapsed } = clampElapsed(secs, limit);
+  return {
+    status: secs > limit ? 'capped' : 'ok',
+    text: formatDuration(elapsed),
+    secs: elapsed,
+  };
+}
+
+// The words under a finish-time box for a check result (null: nothing to say).
+export function finishTimeMessage(result, round) {
+  if (result.status === 'invalid') return 'Use minutes and seconds, like 8:42';
+  if (result.status === 'zero') return 'Enter a time longer than 0:00';
+  if (result.status === 'capped') {
+    return `Capped at the ${formatDuration(maxTimeSecsForRound(round))} limit`;
+  }
+  return null;
+}
+
+// Which boxes stop a confirm: anything invalid or zero, and (preliminary only) an empty box. A knockout
+// match keeps its times optional. `which` is 'team1' | 'team2'.
+export function finishTimeProblems(draft, round) {
+  const problems = [];
+  for (const which of ['team1', 'team2']) {
+    const { status } = checkFinishTime(draft.times[which], round);
+    if (status === 'invalid' || status === 'zero') problems.push({ which, status });
+    else if (status === 'empty' && round === 'preliminary') problems.push({ which, status });
+  }
+  return problems;
 }
 
 // `baseUpdatedAt` is the match version this draft was started from: it is what the
@@ -150,9 +203,15 @@ export function buildConfirmParams(match, draft, round) {
           : null,
     p_team1_signature: knockout && draft.signature.team1,
     p_team2_signature: knockout && draft.signature.team2,
-    p_team1_time_note: draft.times.team1,
-    p_team2_time_note: draft.times.team2,
+    p_team1_time_note: finishTimeNote(draft.times.team1, round),
+    p_team2_time_note: finishTimeNote(draft.times.team2, round),
   };
+}
+
+// The note that is sent: the tidy form of a valid time (capped to the limit), otherwise the trimmed text.
+// A preliminary confirm with a missing or invalid time is stopped by the screen before it gets here.
+function finishTimeNote(text, round) {
+  return checkFinishTime(text, round).text;
 }
 
 function draftKey(matchId) {
