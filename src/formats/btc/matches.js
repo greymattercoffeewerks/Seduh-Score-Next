@@ -27,7 +27,7 @@ export function validateMatchDraft({ team1Id, team2Id, judgeIds }) {
 
 export async function createMatch(
   eventId,
-  { round, team1Id, team2Id, judgeIds },
+  { round, team1Id, team2Id, judgeIds, prelimRound },
   client = getSupabase(),
 ) {
   const { data, error } = await client.rpc('create_btc_match', {
@@ -36,6 +36,9 @@ export async function createMatch(
     p_team1_id: team1Id,
     p_team2_id: team2Id,
     p_judge_ids: judgeIds,
+    // Build B: a hand-made correction match in round 2 carries its round. Omitted unless given, so the
+    // call is byte-for-byte what it was for every existing caller.
+    ...(prelimRound == null ? {} : { p_prelim_round: prelimRound }),
   });
   if (error) throw error;
   return data;

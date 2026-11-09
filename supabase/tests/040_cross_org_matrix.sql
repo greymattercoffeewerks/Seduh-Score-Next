@@ -32,7 +32,7 @@
 --   * the privileges `anon` holds on tables and columns are exactly the pinned list below.
 -- (org_id immutability on every table that carries the column is pinned separately by 033.)
 begin;
-select plan(198);
+select plan(203);
 
 -- ============ helpers (rolled back with the rest) ============
 
@@ -150,6 +150,8 @@ begin
     insert into btc_cup_votes (id, match_id, cup_number, team1_tokens) values (e1.u(t, 13), e1.u(t, 12), 1, 1);
     insert into btc_match_bonuses (match_id) values (e1.u(t, 12));
     insert into btc_bracket_slots (id, event_id, round, slot_label) values (e1.u(t, 14), e1.u(t, 1), 'final', 'Final ' || t);
+    -- the draw record of a preliminary round (Build B)
+    insert into btc_round_draws (event_id, prelim_round, mode, seed, match_count) values (e1.u(t, 1), 1, 'random', 'seed ' || t, 1);
     -- a started Throwdown (T-TD.1): setup, the draw record, one round, one match with a competitor in a slot and a vote
     insert into events (id, org_id, format, name) values (e1.u(t, 60), e1.u(t, 100), 'throwdown', 'Throwdown ' || t);
     insert into event_entries (id, event_id, display_name) values
@@ -234,6 +236,7 @@ insert into e1.spec (tbl, filter, set_col, member_read, member_update, read_rule
   ('btc_cup_votes',         'id = e1.u(''@'', 13)',         'id',            true,  true,  'members', 'update public.btc_cup_votes set match_id = e1.u(''#'', 12) where id = e1.u(''@'', 13)'),
   ('btc_match_bonuses',     'match_id = e1.u(''@'', 12)',   'match_id',      true,  true,  'members', 'update public.btc_match_bonuses set match_id = e1.u(''#'', 12) where match_id = e1.u(''@'', 12)'),
   ('btc_bracket_slots',     'id = e1.u(''@'', 14)',         'id',            true,  true,  'members', 'update public.btc_bracket_slots set event_id = e1.u(''#'', 1) where id = e1.u(''@'', 14)'),
+  ('btc_round_draws',      'event_id = e1.u(''@'', 1)',    'mode',          true,  false, 'members', 'update public.btc_round_draws set event_id = e1.u(''#'', 1) where event_id = e1.u(''@'', 1)'),
   ('btc_seeding_tiebreaks', 'event_id = e1.u(''@'', 30)',   'reason',        true,  true,  'members', 'update public.btc_seeding_tiebreaks set event_id = e1.u(''#'', 30) where event_id = e1.u(''@'', 30)'),
   ('td_settings',          'event_id = e1.u(''@'', 60)',   'judge_count',   true,  false, 'members', 'update public.td_settings set event_id = e1.u(''#'', 60) where event_id = e1.u(''@'', 60)'),
   ('td_draws',              'event_id = e1.u(''@'', 60)',   'mode',          true,  false, 'members', 'update public.td_draws set event_id = e1.u(''#'', 60) where event_id = e1.u(''@'', 60)'),
@@ -251,6 +254,10 @@ insert into e1.spec (tbl, filter, set_col, member_read, member_update, read_rule
 
 -- a caller may insert only these columns of this table (recorded_by / recorded_at are set by the database), so a copy
 -- of the row is built from them; with the others included the refusal would be a column privilege, not row-level security
+-- the draw record: a caller names none of created_by / created_at, and there is no UPDATE privilege at all
+update e1.spec set insert_cols = 'event_id, prelim_round, mode, seed, match_count, avoid_rematches, conflict_ticks'
+ where tbl = 'btc_round_draws';
+
 update e1.spec set insert_cols = 'event_id, team_id, total_points, wins, group_size, tiebreak_rank, reason'
  where tbl = 'btc_seeding_tiebreaks';
 
@@ -263,7 +270,7 @@ update e1.spec set insert_cols = 'org_id, person_id, relationship, started_on, e
 -- an update where default privileges grant one; either way only the owning organisation's members may
 update e1.spec set update_env = true where tbl = 'processed_operations';
 
-select is((select count(*)::int from e1.spec), 34, 'the matrix covers 34 tenant tables');
+select is((select count(*)::int from e1.spec), 35, 'the matrix covers 35 tenant tables');
 
 -- one captured row per table and organisation, so a copy of it can be INSERTed by someone it does not belong to
 create table e1.fx (tbl text, org text, doc jsonb);
@@ -412,7 +419,7 @@ select is(
   s.tbl || ': nobody INSERTS into an organisation without belonging to it (every attempt refused with 42501)'
 ) from e1.spec s order by s.tbl;
 
--- the moves: 34 tables, 33 with something to move, both directions
+-- the moves: 35 tables, 34 with something to move, both directions
 select is(
   (select coalesce(string_agg(r.caller || '/' || r.org || '=' || r.code, ' ' order by r.caller, r.org), 'none')
      from e1.results r
