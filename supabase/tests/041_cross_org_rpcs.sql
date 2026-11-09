@@ -18,7 +18,7 @@
 -- is shown to list exactly the caller's own organisations, and a new RPC that takes one of these ids fails here
 -- until it is added to the matrix (or consciously exempted).
 begin;
-select plan(88);
+select plan(90);
 
 create schema e1;
 grant usage on schema e1 to anon, authenticated;
@@ -125,6 +125,7 @@ insert into e1.rpc (name, sql, org_only) values
   ('generate_btc_bracket', 'select public.generate_btc_bracket(e1.u(''@'',100), e1.u(''%'',1))', false),
   ('create_btc_bracket_match', 'select public.create_btc_bracket_match(e1.u(''@'',100), e1.u(''%'',14), array[e1.u(''%'',11)])', false),
   ('load_btc_demo', 'select public.load_btc_demo(e1.u(''@'',100), e1.u(''%'',50), true)', false),
+  ('create_btc_round', 'select public.create_btc_round(e1.u(''@'',100), e1.u(''%'',1), 1::smallint, ''random'', ''seed'', jsonb_build_array(jsonb_build_object(''team1_id'', e1.u(''%'',9), ''team2_id'', e1.u(''%'',10), ''judge_ids'', jsonb_build_array(e1.u(''%'',11), e1.u(''%'',21), e1.u(''%'',22)))))', false),
   ('create_btc_match', 'select public.create_btc_match(e1.u(''%'',1), ''preliminary'', e1.u(''%'',9), e1.u(''%'',10), array[e1.u(''%'',11), e1.u(''%'',21), e1.u(''%'',22)])', false),
   ('team_list_members', 'select * from public.team_list_members(e1.u(''@'',100))', true),
   ('team_list_removed_members', 'select * from public.team_list_removed_members(e1.u(''@'',100))', true),
@@ -150,6 +151,7 @@ update e1.rpc set own_expect = case name
   when 'confirm_btc_match'           then 'P0001: confirm_btc_match: match must have exactly 3 judges'
   when 'confirm_heat'                then 'P0001: confirm_heat: 1 cupper\(s\) do not have every set scored'
   when 'correct_heat_time'           then 'P0002: CONFLICT: heat .* is pending, its times can no longer be corrected'
+  when 'create_btc_round'            then 'P0001: create_btc_round: the bracket already exists, so the preliminary rounds are closed'
   when 'create_btc_bracket_match'    then 'P0001: create_btc_bracket_match: both of this slot''s teams must be known first'
   when 'generate_btc_bracket'        then 'P0001: generate_btc_bracket: a bracket already exists for this event'
   when 'record_btc_seeding_tiebreak' then 'P0001: record_btc_seeding_tiebreak: the bracket already exists, so the seeds are fixed'
@@ -157,7 +159,7 @@ update e1.rpc set own_expect = case name
   when 'record_heat_time'            then 'P0002: CONFLICT: heat .* is pending now, expected timing'
   when 'td_confirm_match'            then 'P0001: td_confirm_match: the votes are level'
   else 'ok' end;
-select is((select count(*)::int from e1.rpc), 35, 'the matrix covers 35 RPCs');
+select is((select count(*)::int from e1.rpc), 36, 'the matrix covers 36 RPCs');
 select is(
   (select coalesce(string_agg(r.name, ', '), 'none') from e1.rpc r
     where not exists (select 1 from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = r.name)),

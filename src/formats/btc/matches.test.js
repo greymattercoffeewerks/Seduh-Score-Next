@@ -148,6 +148,22 @@ describe('createMatch', () => {
     ]);
   });
 
+  it('sends p_prelim_round only when a round number is given (Build B)', async () => {
+    const client = fakeClient({ rpc: { data: { id: 'm2' }, error: null } });
+    await createMatch(
+      'ev1',
+      {
+        round: 'preliminary',
+        team1Id: 't1',
+        team2Id: 't2',
+        judgeIds: ['j1', 'j2', 'j3'],
+        prelimRound: 2,
+      },
+      client,
+    );
+    expect(client.rpcCalls[0][1]).toMatchObject({ p_prelim_round: 2 });
+  });
+
   it('throws the raw RPC error (e.g. a validation rejection) rather than swallowing it', async () => {
     const client = fakeClient({
       rpc: { data: null, error: { code: 'P0001', message: 'a team cannot play itself' } },
