@@ -64,11 +64,11 @@ body {
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);
 }
+/* The edge and 6px corner are the shared .panel (set in pricingScreen.js). */
 .pricing-card {
   display: flex;
   flex-direction: column;
   padding: var(--space-5);
-  border: var(--border-hairline) solid var(--color-border);
   background: var(--color-surface);
 }
 .pricing-card-featured {
@@ -113,30 +113,16 @@ body {
   font-weight: var(--font-weight-semibold);
   line-height: var(--leading-relaxed);
 }
+/* Shape, fill and hover are the shared .action .action-primary .btn-bevel (pricingScreen.js); this page adds its
+   mono small caps, padding and place in the card. */
 .pricing-cta {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--tap-target-min);
   margin-top: auto;
   padding: var(--space-3) var(--space-5);
-  background: var(--color-accent);
-  color: var(--color-accent-contrast);
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   font-weight: var(--font-weight-bold);
   letter-spacing: var(--tracking-wide);
-  text-decoration: none;
   text-transform: uppercase;
-}
-.pricing-cta:hover {
-  background: var(--color-accent-hover);
-}
-/* .cut-sm clips the element, and clip-path clips the outside focus ring too, so the ring
-   is drawn inside the button in the dark text colour (10:1 on the teal). */
-.pricing-cta:focus-visible {
-  outline: 2px solid var(--color-accent-contrast);
-  outline-offset: -5px;
 }
 .pricing-footnote {
   margin: var(--space-5) 0 0;
@@ -197,7 +183,7 @@ body {
 .pricing-row {
   margin-bottom: var(--space-3);
   padding: var(--space-4);
-  border: var(--border-hairline) solid var(--color-border);
+  /* the edge and 6px corner are the shared .panel (pricingScreen.js) */
   background: var(--color-surface);
 }
 .pricing-feature {
@@ -247,9 +233,7 @@ body {
 }
 /* "Planned" is told apart by its dashed outline and its word, not by colour alone. */
 .pricing-cell-soon .pricing-cell-word {
-  padding: 0 var(--space-2);
-  border: var(--border-hairline) dashed var(--color-text-secondary);
-  color: var(--color-text-secondary);
+  --tag-edge: var(--color-text-secondary);
 }
 
 @media (min-width: 760px) {

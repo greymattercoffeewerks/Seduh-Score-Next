@@ -1,6 +1,6 @@
 # Status — read this first
 
-_As of 2026-11-07, app version 3.6.3. One page on purpose (budget 8 KB, `npm run check:docs`). `kb-sync` updates it when a
+_As of 2026-11-08, app version 3.6.4. One page on purpose (budget 8 KB, `npm run check:docs`). `kb-sync` updates it when a
 task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this file._
 
 ## Where we are
@@ -10,6 +10,7 @@ task closes. When it disagrees with `CHANGELOG.md`, the changelog wins: fix this
 - **Gating:** three keys enforced for the Brunei organisation since 2026-11-02 (`cup_taster_participants`, `events_open`,
   `results_archive_optional`); eight stay off. **Seduh ID:** Layer 1a built; the archive feed (1b) is in `queue` mode and
   has published nothing yet.
+- **Petrol V2 P1 to P3 done** (tokens, components, surfaces) on `claude/petrol-v2-2a4279`, unmerged; the drift guard is done on `claude/petrol-v2-guard-cf745e` (2026-11-08, unmerged). The public-pages pass (marketing pages on the shared primitives, guard extended) is done on `claude/petrol-v2-public-16c90b`, unmerged. Merge only when the owner says all phases are done.
 - **Open, not merged or not in the cloud** (check `CHANGELOG.md` before trusting this line): password recovery D-PW2 to
   D-PW8 not started; organiser branding BR-E1 in PR #297 (no database door, so no brand shows); T-TD.1.9 (Throwdown 3rd place
   match after a walkover) was in review with its migration not yet in the cloud on 2026-11-03.
@@ -30,9 +31,10 @@ selectable. Registration opens January 2027. Round 2's by-results method is stro
 - **Branch `ccr-dd9e5a6c-bxhucc`, PR #427 into `dev` (open).** #426 (docs trim, STATUS.md, backlog triage, the first plan)
   is merged into `dev`. #427 is docs only: the plan and the engine spec follow the owner's answers. No code, migration or
   cloud change exists for BTC yet. Start with `git fetch origin && git checkout ccr-dd9e5a6c-bxhucc`, then `npm ci`.
-- **Next step:** turn the engine spec into tasks, in this order: E team and judge country, A `prelim_round`, D finish-time
-  check (`parseDuration`, required times, capped at the round's limit), B draw and `create_btc_round`, C ties on points
-  only. Each has its reviewers in section 8 of the spec; the C migration and the draw are scoring and tenancy gates.
+- **Next step:** the engine spec's tasks, in this order: E team and judge country, A `prelim_round`, D finish-time
+  check, B draw and `create_btc_round`, C ties on points only. E is built; A and D are built with PRs into `dev` (D is
+  front end only, on `claude/btc-d-finish-time-f04478`, not yet merged); B and C remain. Each has its reviewers in section
+  8 of the spec; the C migration and the draw are scoring and tenancy gates.
 - **Waiting on the committee (none blocks the first tasks):** the real team count and round-2 method; which round has the
   10-minute limit and which the 15 (the default is 10:00 preliminary, 15:00 knockout, one function to edit); odd team
   count or a withdrawal (KIV, the draw refuses meanwhile); whether a round-2 rematch is allowed (setting, default

@@ -19,6 +19,11 @@
 }
 
 .stage-title {
+  /* Petrol V2: balanced lines, so a two-line headline is not one long line and one orphan word. */
+  text-wrap: balance;
+}
+
+.stage-title {
   margin: 0;
   font-family: var(--font-display);
   font-size: max(1.75rem, calc(10.89 * var(--stage-fit)));

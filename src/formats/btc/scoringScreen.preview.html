@@ -16,7 +16,7 @@
       confirm_btc_match simulation that enforces the same strict-confirm and
       concurrency rules as the real RPC. The REAL outbox and IndexedDB draft store
       are used, so reloading mid-scoring restores your votes. Try: tap votes, fill
-      every cup, confirm; switch to the Final (signature-beverage appears); use
+      every cup, then try the finish-time boxes (08:42 tidies to 8:42 on leaving the box; 8.42 and 0:00 are refused; 10:30 is capped to the limit; a preliminary needs both times before Confirm unlocks, a knockout does not); confirm; switch to the Final (signature-beverage appears); use
       "Conflict" to see a stale-data rejection.
     -->
     <p>
@@ -101,6 +101,7 @@
             match.status = 'confirmed';
             match.updated_at = new Date().toISOString();
             match.team1_time_note = args.p_team1_time_note?.trim() || null;
+            match.team2_time_note = args.p_team2_time_note?.trim() || null;
             db.btc_cup_votes = args.p_votes.map((v) => ({
               match_id: 'm1',
               cup_number: v.cup_number,

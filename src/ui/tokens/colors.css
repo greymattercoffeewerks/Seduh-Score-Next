@@ -5,7 +5,7 @@
  * green-black neutrals). Cherry itself replaced "Editorial" for the same
  * complaint recurring a third time: fresh user feedback on a marketing
  * exploration built independently of Cherry — petrol-teal accent, graphite
- * ground, hard angular cuts (zero border-radius), racing/telemetry motifs —
+ * ground, hard angular cuts (Hybrid corners since V2), racing/telemetry motifs —
  * tested as clearly less generic-SaaS than Cherry's own rollout. This file
  * ports that exploration's palette into Cherry's proven architecture (one
  * neutral ramp, two surface modes, semantic-token symmetry) rather than
@@ -48,10 +48,16 @@
      meaning Cherry's chartreuse accent carried; teal here reads as
      instrumentation/telemetry (racing HUD, timing displays) — this
      product's own subject matter as much as the crop was. */
+  /* Tint steps (Petrol V2): selected/active backgrounds, so a selection no
+     longer falls back to a grey sunken surface. 50/100 are paper tints, 900
+     is the stage tint. */
+  --clr-teal-50: #e6f4f1;
+  --clr-teal-100: #cdebe6;
   --clr-teal-300: #2dd4c0;
   --clr-teal-500: #0fb5a3;
   --clr-teal-700: #065a51;
   --clr-teal-800: #054a43;
+  --clr-teal-900: #0f2e2b;
 
   /* Gold — secondary, ceremonial accent (podium, champion, finals). Carried
      forward unchanged in role from Cherry; hue nudged only enough to sit
@@ -85,12 +91,35 @@
    */
   --clr-test-500: #6b21c9;
 
+  /* Pure white and black, for surfaces that must be paper or ink whatever the mode (the printed results sheet's
+     paper, the printed TEST banner). Not for screen UI: use the neutral ramp and the semantic tokens. */
+  --clr-white: #ffffff;
+  --clr-black: #000000;
+
+  /* Categorical (identity, not meaning) series colours for charts: eight mid-tone hues that read on both
+     surface modes. Deliberately none in the ember/gold band (the brand accent and podium highlight) and none in
+     the violet band (--clr-test-500, reserved for is_test). A series colour never carries meaning alone: the
+     chart labels every series in words. Moved here from reportScreen.css in Petrol V2 P3. */
+  --clr-chart-1: #2f7d6e;
+  --clr-chart-2: #3a6ea5;
+  --clr-chart-3: #6b7a2f;
+  --clr-chart-4: #4a548a;
+  --clr-chart-5: #8a5a3a;
+  --clr-chart-6: #5a7d8a;
+  --clr-chart-7: #7a4a6e;
+  --clr-chart-8: #4a7a5a;
+
   /* Semantic tokens — paper mode (default) */
   --color-canvas: var(--clr-petrol-100);
   --color-surface: var(--clr-petrol-50);
   --color-surface-sunken: var(--clr-petrol-200);
   --color-border: var(--clr-petrol-300);
   --color-border-strong: var(--clr-petrol-950);
+  /* Card edge (Petrol V2): at least 3:1 against the canvas (WCAG 1.4.11),
+     unlike --color-border, which stays soft for dividers. */
+  --color-border-card: var(--clr-petrol-400);
+  /* Form-control edges (WCAG 1.4.11, 3:1): same ramp step as the card edge, named for its role. */
+  --color-border-input: var(--clr-petrol-400);
 
   --color-text: var(--clr-petrol-950);
   --color-text-secondary: var(--clr-petrol-700);
@@ -99,6 +128,9 @@
   --color-accent: var(--clr-teal-700);
   --color-accent-hover: var(--clr-teal-800);
   --color-accent-contrast: #ffffff;
+  /* Selected/active background and the text that sits on it (Petrol V2). */
+  --color-accent-tint: var(--clr-teal-50);
+  --color-accent-tint-text: var(--clr-teal-800);
 
   --color-gold: var(--clr-gold-700);
   --color-gold-contrast: #ffffff;
@@ -127,6 +159,9 @@
   --color-surface-sunken: var(--clr-petrol-800);
   --color-border: var(--clr-petrol-700);
   --color-border-strong: var(--clr-petrol-50);
+  --color-border-card: var(--clr-petrol-400);
+  /* Form-control edges (WCAG 1.4.11, 3:1): same ramp step as the card edge, named for its role. */
+  --color-border-input: var(--clr-petrol-400);
 
   --color-text: var(--clr-petrol-50);
   --color-text-secondary: var(--clr-petrol-300);
@@ -135,6 +170,8 @@
   --color-accent: var(--clr-teal-300);
   --color-accent-hover: var(--clr-teal-500);
   --color-accent-contrast: var(--clr-petrol-950);
+  --color-accent-tint: var(--clr-teal-900);
+  --color-accent-tint-text: var(--clr-teal-300);
 
   --color-gold: var(--clr-gold-500);
   --color-gold-contrast: var(--clr-petrol-950);

@@ -6,8 +6,8 @@
  * format-specific (Cup Taster, Guess the Bean, ...) — this file must stay
  * usable by any future format untouched, same as the rest of `src/core`.
  *
- * Identical to Cherry's base.css except for one addition (.cut-sm/.cut-md/
- * .cut-lg, new) and the is-test-banner stripe now referencing
+ * Identical to Cherry's base.css except for the corner treatments (.btn-bevel
+ * and the decorative .cut-lg, new) and the is-test-banner stripe now referencing
  * --clr-petrol-950 instead of --clr-cherry-950 — every other existing rule
  * here already consumes tokens only, so it re-themes for free from
  * colors.css/spacing.css alone.
@@ -138,9 +138,8 @@ body {
 }
 
 /* A small "LIVE" pulse dot, used sparingly (heat in progress, live
-   session connected). Now a square blip, not a circle — --radius-full
-   resolves to 0 under this identity's angular commitment (spacing.css),
-   which reads as more "telemetry indicator" than "online dot" and matches
+   session connected). A machined blip (--radius-sm, 3px), not a circle: it
+   reads as a "telemetry indicator" rather than an "online dot" and matches
    the marketing exploration's own motif. Motion is opt-in via
    prefers-reduced-motion so it degrades to a static blip rather than being
    suppressed entirely. */
@@ -148,13 +147,16 @@ body {
   display: inline-block;
   width: 0.5rem;
   height: 0.5rem;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-sm);
   background: var(--color-accent);
 }
 
 @media (prefers-reduced-motion: no-preference) {
   .status-live-dot {
-    animation: status-live-pulse 2s ease-in-out infinite;
+    /* Petrol V2: a slow breathe (4s, opacity only, no blink). A named ambient-loop exception to the
+       motion tokens: it is not a transition, so no --dur-* fits. A lost connection never breathes (the
+       viewer shows "Reconnecting…" with no dot), so the two states differ by shape and words. */
+    animation: status-live-pulse 4s ease-in-out infinite;
   }
 }
 
@@ -164,39 +166,155 @@ body {
     opacity: 1;
   }
   50% {
-    opacity: 0.4;
+    opacity: 0.45;
   }
 }
 
-/* New for Petrol — the angular alternative to a rounded corner. Apply to
-   any container that would otherwise reach for --radius-* at a size big
-   enough for the cut to read (primary buttons, tags, hero panels). Not a
-   replacement for --radius-* everywhere — most elements are fine simply
-   square; reserve the cut for elements that want a little more visual
-   "commitment" (this mirrors how the marketing page uses it only on CTAs
-   and card corners, not on every box). */
-.cut-sm {
-  clip-path: polygon(
-    var(--cut-sm) 0,
-    100% 0,
-    100% calc(100% - var(--cut-sm)),
-    calc(100% - var(--cut-sm)) 100%,
-    0 100%,
-    0 var(--cut-sm)
-  );
+/* Petrol V2 — one global reduced-motion rule. Shortens every animation and
+   transition app-wide to near-instant (not removed, so end states and
+   animationend/transitionend handlers still fire). Loops stop after one
+   cycle. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
-.cut-md {
-  clip-path: polygon(
-    var(--cut-md) 0,
-    100% 0,
-    100% calc(100% - var(--cut-md)),
-    calc(100% - var(--cut-md)) 100%,
-    0 100%,
-    0 var(--cut-md)
-  );
+/* Petrol V2 — the soft bevel chamfer, ONLY on big primary buttons (Hybrid rule: small elements keep the 3px
+   --radius-sm). Top-left and bottom-right are chamfered by --bevel-lg, the other two corners stay a 3px machined
+   radius. Two spellings of one shape:
+     .btn-bevel            shape only, for a call-to-action that is not a .btn (marketing, pricing, tools);
+     .btn-primary.btn-lg   the console's big primary button, in components.css (same declarations, keep in sync).
+   Lives here, not in components.css, because tokens/index.css is loaded by every page and components.css is not.
+   The doubled .btn-bevel.btn-bevel is deliberate: it out-ranks a screen's own single-class `border-radius` (the
+   random selector's `.rs-button { border-radius: 0 }`) without !important.
+   Never clip-path: it clips the outside focus ring. `corner-shape` shapes the border box itself, so the ring and
+   the border follow it. Browsers without `corner-shape` get the asymmetric radius below: a rounded 9px corner
+   on the same two diagonals, which still reads as the same family. */
+.btn-bevel.btn-bevel {
+  border-radius: var(--bevel-lg) var(--radius-sm) var(--bevel-lg) var(--radius-sm);
 }
 
+@supports (corner-shape: bevel) {
+  .btn-bevel.btn-bevel {
+    corner-shape: bevel round bevel round;
+  }
+}
+
+/* ---- Shared small primitives (Petrol V2 "public pages" pass) ----------------------------------------------
+   The public pages (landing, pricing, tour, trust, results, community hub, header, footer) used to hand-build
+   their own tags, cards, toggles and buttons, each with its own edge and (no) corner. These are the ONE spelling.
+   They live here, not in components.css, for the reason components.css's header gives: tokens/index.css is loaded by
+   EVERY page, and components.css is not (a page that styles its own .form-field / .screen-feedback must not get it).
+   Every value is a token; a page adds only layout (margin, width, grid) and, where it must, a colour variable.
+   Reuse, do not restate: tokenDrift.test.js fails a public stylesheet that gives a small box a border or fill
+   without a token radius, or defines a class named like one of these (-tag, -badge, -dot, -toggle...).
+
+     .tag          small mono label: hairline edge, 3px corner.  --tag-edge / --tag-ink recolour it (e.g. the
+                   is_test violet, a success green); .tag-solid fills it with the accent; .tag-dashed is "planned".
+     .panel        the card edge: 1px --color-border-card, 6px corner. Shape only (no fill, no padding), so a page
+                   chooses its own surface. components.css's .card carries the same two declarations (a test holds
+                   them equal).
+     .icon-frame   a small framed square for an icon or an index number: accent hairline, 3px corner.
+     .menu-toggle  the square hamburger button: tap-target size, hairline edge, 3px corner.
+     .action       a link or button that looks like a button: 3px corner, tap-target height. .action-primary is the
+                   accent fill, .action-outline the edged one. A big main call-to-action adds .btn-bevel.
+   The live dot is .status-live-dot (above), the big button shape is .btn-bevel (below). */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-2);
+  border: var(--border-hairline) solid var(--tag-edge, var(--color-border));
+  border-radius: var(--radius-sm);
+  color: var(--tag-ink, var(--color-text-secondary));
+  font-family: var(--font-mono);
+  font-size: var(--text-3xs);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.tag-solid {
+  --tag-ink: var(--color-accent-contrast);
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+}
+
+.tag-dashed {
+  border-style: dashed;
+}
+
+.panel {
+  border: var(--border-hairline) solid var(--color-border-card);
+  border-radius: var(--radius-md);
+}
+
+.icon-frame {
+  display: grid;
+  place-items: center;
+  border: var(--border-hairline) solid var(--frame-edge, var(--color-accent));
+  border-radius: var(--radius-sm);
+  color: var(--frame-ink, var(--color-accent));
+}
+
+.menu-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap-target-min);
+  height: var(--tap-target-min);
+  padding: 0;
+  border: var(--border-hairline) solid var(--color-border-input);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tap-target-min);
+  padding: var(--space-2) var(--space-4);
+  border: var(--border-hairline) solid transparent;
+  border-radius: var(--radius-sm);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--text-sm);
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.action-primary {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+}
+
+.action-primary:hover {
+  background: var(--color-accent-hover);
+}
+
+.action-outline {
+  background: transparent;
+  color: var(--color-text);
+  border-color: var(--color-border-input);
+}
+
+.action-outline:hover {
+  border-color: var(--color-accent);
+}
+
+/* Legacy corner cut, kept for LARGE DECORATIVE PANELS only (the random selector's board frame). A clip-path cuts
+   off the outside focus ring, so never put it on anything focusable: a big button is `.btn-bevel`, a small
+   element takes `--radius-sm`. */
 .cut-lg {
   clip-path: polygon(
     var(--cut-lg) 0,

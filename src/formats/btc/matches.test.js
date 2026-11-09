@@ -284,3 +284,43 @@ describe('findMatchEventId (T-TEN.C7)', () => {
     await expect(findMatchEventId('m1', client)).rejects.toMatchObject({ code: '42501' });
   });
 });
+
+describe('countPreliminaryMatchesWithoutTimes', () => {
+  it('asks only for the event’s confirmed preliminary matches and counts the unusable times', async () => {
+    const { countPreliminaryMatchesWithoutTimes } = await import('./matches.js');
+    const filters = [];
+    const rows = [
+      { team1_time_note: '8:42', team2_time_note: '9:10' },
+      { team1_time_note: ' ', team2_time_note: '9:10' },
+      { team1_time_note: '8:42', team2_time_note: 'n/a' },
+      { team1_time_note: '0:00', team2_time_note: '9:10' },
+    ];
+    const builder = {
+      select: () => builder,
+      eq: (column, value) => {
+        filters.push([column, value]);
+        return builder;
+      },
+      then: (resolve) => resolve({ data: rows, error: null }),
+    };
+    const count = await countPreliminaryMatchesWithoutTimes('ev1', { from: () => builder });
+    expect(count).toBe(3);
+    expect(filters).toEqual([
+      ['event_id', 'ev1'],
+      ['round', 'preliminary'],
+      ['status', 'confirmed'],
+    ]);
+  });
+
+  it('throws a failed read so the caller can decide (the dashboard drops the line)', async () => {
+    const { countPreliminaryMatchesWithoutTimes } = await import('./matches.js');
+    const builder = {
+      select: () => builder,
+      eq: () => builder,
+      then: (resolve) => resolve({ data: null, error: { code: '42501' } }),
+    };
+    await expect(
+      countPreliminaryMatchesWithoutTimes('ev1', { from: () => builder }),
+    ).rejects.toEqual({ code: '42501' });
+  });
+});

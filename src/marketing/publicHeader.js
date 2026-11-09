@@ -48,7 +48,7 @@ export function buildPublicHeader({ active }) {
     el('div', { className: 'public-header-mobile-links' }, [
       ...mobileLinks,
       el('a', {
-        className: 'public-header-action cut-sm',
+        className: 'public-header-action action action-primary',
         text: 'Start free',
         attrs: { href: '/#' },
       }),
@@ -57,7 +57,7 @@ export function buildPublicHeader({ active }) {
   const toggle = el(
     'button',
     {
-      className: 'public-header-toggle',
+      className: 'public-header-toggle menu-toggle',
       attrs: {
         type: 'button',
         'aria-expanded': 'false',
@@ -97,14 +97,17 @@ export function buildPublicHeader({ active }) {
         [brandLockup()],
       ),
       el('span', { className: 'public-header-live' }, [
-        el('span', { className: 'public-header-live-dot', attrs: { 'aria-hidden': 'true' } }),
+        el('span', {
+          className: 'public-header-live-dot status-live-dot',
+          attrs: { 'aria-hidden': 'true' },
+        }),
         document.createTextNode('Live — Cup Taster, BTC, Throwdown'),
       ]),
       el('span', { className: 'public-header-secondary', text: 'No install · no wifi dependency' }),
       el('div', { className: 'public-header-desktop' }, [
         el('div', { className: 'public-header-links' }, links),
         el('a', {
-          className: 'public-header-action cut-sm',
+          className: 'public-header-action action action-primary',
           text: 'Start free',
           attrs: { href: '/#' },
         }),

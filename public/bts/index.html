@@ -239,6 +239,15 @@
            anything that should feel pressed/tactile, ease-in-out-sine for
            slow ambient loops) rather than one bezier reused everywhere. */
         --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+
+        /* Petrol V2 (P3): the app's motion and shape tokens (src/ui/tokens/motion.css, spacing.css), copied
+           inline for the same reason as the palette above. Keep these values equal to the originals. */
+        --dur-press: 80ms;
+        --dur-fast: 140ms;
+        --dur-base: 220ms;
+        --dur-stage: 420ms;
+        --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+        --radius-full: 9999px; /* true circles only */
         --ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
         --ease-in-out-sine: cubic-bezier(0.37, 0, 0.63, 1);
       }
@@ -285,7 +294,7 @@
         height: 60vmax;
         margin-left: -30vmax;
         margin-top: -30vmax;
-        border-radius: 50%;
+        border-radius: var(--radius-full);
         background: radial-gradient(circle, var(--color-accent) 0%, transparent 70%);
         filter: blur(13vmin);
         opacity: 0.1;
@@ -311,8 +320,8 @@
         opacity: 0;
         transform: translateY(14px);
         transition:
-          opacity 0.6s var(--ease-out-expo),
-          transform 0.6s var(--ease-out-expo);
+          opacity var(--dur-stage) var(--ease-out),
+          transform var(--dur-stage) var(--ease-out);
       }
       .reveal.in {
         opacity: 1;
@@ -324,7 +333,7 @@
          slow first paint never leaves it visibly stuck at opacity 0. */
       .enter {
         opacity: 0;
-        animation: enterUp 0.7s var(--ease-out-expo) both;
+        animation: enterUp var(--dur-stage) var(--ease-out) both;
       }
 
       @keyframes enterUp {
@@ -487,7 +496,7 @@
         padding: 1.25rem 1.5rem;
         border-bottom: 1px solid var(--color-border);
         background: var(--color-surface);
-        transition: background 0.25s var(--ease-out-expo);
+        transition: background var(--dur-base) var(--ease-out);
       }
       .ledger-row:hover {
         background: var(--color-surface-sunken);
@@ -599,7 +608,7 @@
         padding: 1.75rem 1rem;
         margin: 0 -1rem;
         border-top: 1px solid var(--color-border);
-        transition: background 0.25s var(--ease-out-expo);
+        transition: background var(--dur-base) var(--ease-out);
       }
       .log-item::before {
         content: '';
@@ -610,7 +619,7 @@
         width: 3px;
         background: var(--color-accent);
         opacity: 0;
-        transition: opacity 0.3s var(--ease-out-expo);
+        transition: opacity var(--dur-base) var(--ease-out);
       }
       .log-item:hover {
         background: var(--color-surface);
@@ -725,7 +734,7 @@
       .milestone {
         border: 1px solid var(--color-border);
         scroll-margin-top: 1rem;
-        transition: border-color 0.3s var(--ease-out-expo);
+        transition: border-color var(--dur-base) var(--ease-out);
       }
       .milestone.is-open {
         border-color: var(--color-accent);
@@ -747,7 +756,7 @@
         text-align: left;
         cursor: pointer;
         font: inherit;
-        transition: background 0.2s var(--ease-out-expo);
+        transition: background var(--dur-base) var(--ease-out);
       }
       .milestone-toggle:hover {
         background: var(--color-surface-sunken);
@@ -786,7 +795,7 @@
         border-right: 2px solid var(--color-text-secondary);
         border-bottom: 2px solid var(--color-text-secondary);
         transform: rotate(45deg);
-        transition: transform 0.35s var(--ease-out-expo);
+        transition: transform var(--dur-stage) var(--ease-out);
       }
       .milestone.is-open .ms-chev {
         transform: rotate(-135deg);
@@ -801,7 +810,7 @@
       .js .milestone-panel {
         display: grid;
         grid-template-rows: 0fr;
-        transition: grid-template-rows 0.45s var(--ease-out-expo);
+        transition: grid-template-rows var(--dur-stage) var(--ease-out);
       }
       .js .milestone.is-open .milestone-panel {
         grid-template-rows: 1fr;
@@ -810,7 +819,7 @@
         min-height: 0;
         overflow: hidden;
         visibility: hidden;
-        transition: visibility 0s linear 0.45s;
+        transition: visibility 0s linear var(--dur-stage);
       }
       .js .milestone.is-open .milestone-inner {
         visibility: visible;
@@ -934,7 +943,7 @@
         justify-content: center;
         color: var(--color-accent);
         flex: none;
-        transition: transform 0.4s var(--ease-out-back);
+        transition: transform var(--dur-stage) var(--ease-out-back);
       }
       .bio-card:hover .bio-mark {
         transform: rotate(-6deg) scale(1.06);
@@ -1000,8 +1009,8 @@
           0 6px
         );
         transition:
-          background 0.2s var(--ease-out-expo),
-          transform 0.4s var(--ease-out-back);
+          background var(--dur-base) var(--ease-out),
+          transform var(--dur-stage) var(--ease-out-back);
       }
       .btn:hover {
         background: var(--color-accent-hover);
@@ -1010,7 +1019,7 @@
       }
       .btn:active {
         transform: translateY(-1px) scale(0.99);
-        transition-duration: 0.1s;
+        transition-duration: var(--dur-press);
       }
 
       footer {

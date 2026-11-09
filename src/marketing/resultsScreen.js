@@ -194,7 +194,7 @@ function buildLatestResult(event, client) {
         el('h2', { id: 'latest-title', text: event.eventName }),
         el('span', { className: 'results-latest-meta', text: metaParts.join(' · ') }),
       ]),
-      el('div', { className: 'results-latest-card' }, [
+      el('div', { className: 'results-latest-card panel' }, [
         el('div', { className: 'results-latest-summary' }, [
           el('p', { className: 'results-eyebrow', text: formatLabel(event.format) }),
           el('ul', { className: 'results-fact-list' }, [
@@ -273,7 +273,7 @@ function buildArchive(events, client) {
       el(
         'div',
         {
-          className: 'results-table-wrap',
+          className: 'results-table-wrap panel',
           attrs: {
             tabindex: '0',
             role: 'region',

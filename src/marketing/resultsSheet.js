@@ -274,7 +274,7 @@ function statusSection(message, { onRetry = null } = {}) {
       ? [
           (() => {
             const retry = el('button', {
-              className: 'results-sheet-button',
+              className: 'results-sheet-button action action-primary',
               text: 'Try again',
               attrs: { type: 'button' },
             });
@@ -381,7 +381,7 @@ export async function mountResultsSheet(root, { eventId, client } = {}) {
     document.title = `${cleanText(event.eventName) || 'Results'} — Results`;
 
     const printButton = el('button', {
-      className: 'results-sheet-button',
+      className: 'results-sheet-button action action-primary',
       text: 'Print / Save as PDF',
       attrs: { type: 'button' },
     });

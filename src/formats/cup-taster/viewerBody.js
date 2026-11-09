@@ -61,6 +61,7 @@
 // matching the DB-shape precedent, not dodging lint. These values are
 // always read-only display copies of an already-clamped
 // `ct_heat_entries.elapsed_secs`, never a second write path for one.
+import { markRankRow } from '../../core/rankMotion.js';
 import { el, withSrExpansion } from '../../core/dom.js';
 import { chainComparators } from '../../core/ranking.js';
 import { renderCountdown } from '../../core/countdownDisplay.js';
@@ -135,12 +136,31 @@ function renderStandingsTable(stage, standings) {
     // anyone who can't distinguish it, so the label carries the word too.
     const statusSuffix =
       row.tieStatus === 'tied' ? ' (tied)' : row.tieStatus === 'advancing' ? ' (advancing)' : '';
-    return el(
+    const tr = el(
       'tr',
       { className: 'standings-row', attrs: row.tieStatus ? { 'data-status': row.tieStatus } : {} },
       [
         renderPositionCell(row.position),
-        el('td', { text: row.displayName + statusSuffix, attrs: { 'data-label': 'Cupper' } }),
+        // The name is cut with an ellipsis, the "(tied)" beside it never is (core/stageVocabulary.js's pattern).
+        el(
+          'td',
+          {
+            className: 'standings-name-cell',
+            attrs: { 'data-label': 'Cupper', title: row.displayName },
+          },
+          [
+            el(
+              'div',
+              { className: 'standings-name-row' },
+              [
+                el('span', { className: 'standings-name-text', text: row.displayName }),
+                statusSuffix
+                  ? el('span', { className: 'standings-name-suffix', text: statusSuffix })
+                  : null,
+              ].filter(Boolean),
+            ),
+          ],
+        ),
         el('td', {
           // `stage` can be absent (see mountViewerBody) — fall back to a
           // bare count rather than crashing or showing "N/undefined".
@@ -153,6 +173,8 @@ function renderStandingsTable(stage, standings) {
         renderTimeCell(row.totalElapsedSecs),
       ],
     );
+    // Slides to its new place and ticks a changed number (core/rankMotion.js).
+    return markRankRow(tr, row.displayName, [tr.cells[0], tr.cells[2], tr.cells[3]]);
   });
 
   return el('table', { className: 'standings-table' }, [

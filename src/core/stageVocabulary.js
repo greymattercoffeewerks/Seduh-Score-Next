@@ -7,6 +7,7 @@
 // Meaning is carried by words, never by colour alone: a tie or an advancing place is written in the row's own
 // suffix, and the champion is labelled "Champion".
 import { el } from './dom.js';
+import { RANK_KEY_ATTR, RANK_VALUE_ATTR } from './rankMotion.js';
 
 export function stageKicker(text) {
   return el('p', { className: 'stage-kicker', text });
@@ -47,29 +48,40 @@ export function standingsRangeText(range, pageCount, noun) {
 // an ellipsis and the suffix (" (tied)", " (advancing)") never is.
 export function renderStandingsTable(rows, columns = []) {
   const body = rows.map((row) =>
-    el('tr', { className: 'stage-standing-row' }, [
-      el('td', { className: 'stage-standing-pos', text: String(row.position) }),
-      el('td', { className: 'stage-standing-name' }, [
-        el(
-          'div',
-          { className: 'stage-name-row' },
-          [
-            el('span', { className: 'stage-name-text', text: row.name }),
-            row.suffix ? el('span', { className: 'stage-name-suffix', text: row.suffix }) : null,
-          ].filter(Boolean),
-        ),
-      ]),
-      ...row.cells.map((cell, i) => {
-        const column = columns[i] ?? {};
-        const td = el(
-          'td',
-          { className: ['stage-standing-cell', column.className].filter(Boolean).join(' ') },
-          Array.isArray(cell) ? cell : [document.createTextNode(String(cell ?? ''))],
-        );
-        if (column.width) td.style.width = column.width;
-        return td;
-      }),
-    ]),
+    el(
+      'tr',
+      { className: 'stage-standing-row', attrs: { [RANK_KEY_ATTR]: String(row.key ?? row.name) } },
+      [
+        el('td', {
+          className: 'stage-standing-pos',
+          text: String(row.position),
+          attrs: { [RANK_VALUE_ATTR]: '' },
+        }),
+        el('td', { className: 'stage-standing-name' }, [
+          el(
+            'div',
+            { className: 'stage-name-row' },
+            [
+              el('span', { className: 'stage-name-text', text: row.name }),
+              row.suffix ? el('span', { className: 'stage-name-suffix', text: row.suffix }) : null,
+            ].filter(Boolean),
+          ),
+        ]),
+        ...row.cells.map((cell, i) => {
+          const column = columns[i] ?? {};
+          const td = el(
+            'td',
+            {
+              className: ['stage-standing-cell', column.className].filter(Boolean).join(' '),
+              attrs: { [RANK_VALUE_ATTR]: '' },
+            },
+            Array.isArray(cell) ? cell : [document.createTextNode(String(cell ?? ''))],
+          );
+          if (column.width) td.style.width = column.width;
+          return td;
+        }),
+      ],
+    ),
   );
   return el('table', { className: 'stage-standings' }, [el('tbody', {}, body)]);
 }

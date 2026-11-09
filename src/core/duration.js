@@ -10,6 +10,18 @@ export function formatDuration(totalSecs) {
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
+// The inverse of formatDuration for typed input: "M:SS" or "MM:SS" with seconds 00-59,
+// returned as total seconds, or null for anything else ("8.42", "8:60", "842", "8 min",
+// "1:2:03", a negative, a blank). Surrounding whitespace is ignored. "0:00" parses (to
+// 0): whether zero is acceptable is the caller's rule, not a format question.
+// Pure and format-agnostic.
+export function parseDuration(text) {
+  if (typeof text !== 'string') return null;
+  const match = /^(\d{1,2}):([0-5]\d)$/.exec(text.trim());
+  if (!match) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
 // A screen-reader-friendly expansion of the same value formatDuration()
 // renders visibly — "2 minutes 0 seconds," not "2:00" (found in review,
 // ui-accessibility-reviewer: a bare colon-separated numeral in a static

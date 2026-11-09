@@ -92,7 +92,7 @@
   width: 100%;
   max-width: 16rem;
   margin: var(--space-4) auto 0;
-  background: #fff;
+  background: var(--clr-white);
   padding: var(--space-3);
   box-sizing: border-box;
 }

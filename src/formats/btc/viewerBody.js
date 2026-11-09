@@ -11,6 +11,7 @@
 // cleanup the shell calls just before it clears (the only moment the old toggle is still in the page). The
 // toggle itself works in place (it shows and hides rows, it does not rebuild the column), because the shell's
 // body is a polite live region and a rebuild would have a screen reader read the whole page again.
+import { markRankRow } from '../../core/rankMotion.js';
 import { el } from '../../core/dom.js';
 import { sharedPositions } from '../../core/rankMovement.js';
 import {
@@ -145,13 +146,34 @@ function renderStandings(payload, { isShowingAll, onToggle }) {
     const tr = el('tr', {}, [
       el('td', { text: String(row.position) }),
       // Words, never colour alone: a tie among teams with results is written in the row.
-      el('th', {
-        text: withCountry(row.teamName, row.country) + tiedSuffix(row, shared),
-        attrs: { scope: 'row' },
-      }),
+      // The name (with its country) is cut with an ellipsis, the "(tied)" beside it never is.
+      el(
+        'th',
+        {
+          className: 'btc-phone-name-cell',
+          attrs: { scope: 'row', title: withCountry(row.teamName, row.country) },
+        },
+        [
+          el(
+            'div',
+            { className: 'btc-phone-name-row' },
+            [
+              el('span', {
+                className: 'btc-phone-name-text',
+                text: withCountry(row.teamName, row.country),
+              }),
+              tiedSuffix(row, shared)
+                ? el('span', { className: 'btc-phone-name-suffix', text: tiedSuffix(row, shared) })
+                : null,
+            ].filter(Boolean),
+          ),
+        ],
+      ),
       el('td', { text: winsText(row.wins) }),
       el('td', { text: String(row.points) }),
     ]);
+    // Slides to its new place and ticks a changed number (core/rankMotion.js).
+    markRankRow(tr, row.teamName, [tr.cells[0], tr.cells[2], tr.cells[3]]);
     if (beyondTop(row)) {
       tr.setAttribute('data-extra', 'true');
       tr.hidden = !isShowingAll();
