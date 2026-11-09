@@ -32,6 +32,8 @@ export class DrawError extends Error {
 // in a few dozen steps; the cap only keeps a pathological input (every pair already played) from running away. When the
 // cap is hit the best arrangement found so far is returned, and `rematches` says how many repeats it still holds.
 const SEARCH_NODE_CAP = 200000;
+// The same kind of cap for the judge search (assignJudges): only reached when the trades leave a conflict behind.
+const JUDGE_SEARCH_NODE_CAP = 20000;
 
 // ---------------------------------------------------------------- shared checks
 
@@ -45,6 +47,9 @@ function assertTeamIds(teamIds) {
   if (new Set(teamIds).size !== teamIds.length) {
     throw new DrawError('duplicate_team', 'A team appears more than once in the draw.');
   }
+  if (teamIds.length < 2) {
+    throw new DrawError('too_few_teams', 'A draw needs at least 2 teams.');
+  }
   if (teamIds.length % 2 === 1) {
     // O1: the committee has not decided how to handle a bye, so the draw refuses rather than guess.
     throw new DrawError(
@@ -52,13 +57,16 @@ function assertTeamIds(teamIds) {
       `There are ${teamIds.length} teams, an odd number. Every team must have an opponent, so the draw cannot run until the committee decides how to handle the extra team.`,
     );
   }
-  if (teamIds.length < 2) {
-    throw new DrawError('too_few_teams', 'A draw needs at least 2 teams.');
-  }
 }
 
 function seedOrNew(seed) {
   return typeof seed === 'string' && seed.length > 0 ? seed : newSeed();
+}
+
+// The draw is a function of the SEED and the SET of teams, not of the order the caller listed them in: the record stores
+// only the seed, so a re-entered seed must reproduce the draw whatever order the screen happens to hold the teams in.
+function canonical(teamIds) {
+  return [...teamIds].sort();
 }
 
 function pairKey(a, b) {
@@ -222,14 +230,16 @@ function pairOrdered(order, forbidden, avoidRematches, weakestFirst) {
 export function drawRound1({ teamIds, seed, teamCountry } = {}) {
   assertTeamIds(teamIds);
   const usedSeed = seedOrNew(seed);
-  const order = seededShuffle(teamIds, usedSeed);
+  const order = seededShuffle(canonical(teamIds), usedSeed);
   const idPairs = pairOrdered(order, new Set(), false, false);
   const { rematches, warnings } = buildWarnings(idPairs, new Set(), teamCountry, false);
   return { pairs: toPairObjects(idPairs), seed: usedSeed, rematches, warnings };
 }
 
 // Round 2, random: the same shuffle, then (when avoidRematches) a repair so nobody meets an earlier opponent again.
-// `rematches` counts the repeats that remain: 0 whenever a repeat-free arrangement exists.
+// `rematches` counts the repeats that remain: 0 whenever a repeat-free arrangement is found. The search is capped, so a
+// pathological field (about 30 teams or more with very few allowed opponents each) can report a repeat that a longer
+// search would avoid; the count is always honest. Realistic fields (about 20 teams, a few rounds) never hit the cap.
 export function drawRound2Random({
   teamIds,
   priorPairs = [],
@@ -240,7 +250,7 @@ export function drawRound2Random({
   assertTeamIds(teamIds);
   const usedSeed = seedOrNew(seed);
   const forbidden = priorPairKeys(priorPairs);
-  const order = seededShuffle(teamIds, usedSeed);
+  const order = seededShuffle(canonical(teamIds), usedSeed);
   const idPairs = pairOrdered(order, forbidden, avoidRematches, false);
   const { rematches, warnings } = buildWarnings(idPairs, forbidden, teamCountry, avoidRematches);
   return { pairs: toPairObjects(idPairs), seed: usedSeed, rematches, warnings };
@@ -275,8 +285,14 @@ export function drawRound2ByResults({
   const forbidden = priorPairKeys(priorPairs);
   const points = new Map(standings.map((row) => [row.teamId, row.points]));
   // Array#sort is stable: equal points keep the seeded shuffle's order.
-  const order = seededShuffle(teamIds, usedSeed).sort((a, b) => points.get(b) - points.get(a));
-  const idPairs = pairOrdered(order, forbidden, avoidRematches, true);
+  const order = seededShuffle(canonical(teamIds), usedSeed).sort(
+    (a, b) => points.get(b) - points.get(a),
+  );
+  const rank = new Map(order.map((id, i) => [id, i]));
+  // a repair can seat the stronger team second; team1 is always the higher-ranked side
+  const idPairs = pairOrdered(order, forbidden, avoidRematches, true).map(([a, b]) =>
+    rank.get(a) <= rank.get(b) ? [a, b] : [b, a],
+  );
   const { rematches, warnings } = buildWarnings(idPairs, forbidden, teamCountry, avoidRematches);
   return { pairs: toPairObjects(idPairs), seed: usedSeed, rematches, warnings };
 }
@@ -372,6 +388,57 @@ export function assignJudges({ pairs, judges, teamCountry } = {}) {
         }
       }
     }
+  }
+
+  // The trading above stops at a local optimum, so it can leave a conflict that a different arrangement avoids. When any
+  // remain, search whole arrangements (capped, deterministic) for one with fewer; keep it only if strictly better.
+  const countConflicts = (rows) =>
+    rows.reduce((sum, ids, m) => sum + ids.reduce((s, id) => s + conflictsOf(pairs[m], id), 0), 0);
+  const localCost = countConflicts(slots);
+  if (localCost > 0) {
+    const totalSlots = 3 * pairs.length;
+    const floorLoad = Math.floor(totalSlots / pool.length);
+    const capLoad = Math.ceil(totalSlots / pool.length);
+    const load = new Array(pool.length).fill(0);
+    const chosen = [];
+    let bestRows = null;
+    let bestCost = localCost;
+    let nodes = 0;
+    const visitMatch = (m, cost) => {
+      nodes += 1;
+      if (nodes > JUDGE_SEARCH_NODE_CAP || cost >= bestCost) return;
+      if (m === pairs.length) {
+        if (Math.max(...load) - Math.min(...load) <= 1) {
+          bestRows = chosen.map((row) => row.map((j) => pool[j].id));
+          bestCost = cost;
+        }
+        return;
+      }
+      // every judge must still be able to reach the minimum load
+      const needed = load.reduce((n, l) => n + Math.max(0, floorLoad - l), 0);
+      if (needed > 3 * (pairs.length - m)) return;
+      const open = [];
+      for (let j = 0; j < pool.length; j += 1) {
+        if (load[j] < capLoad) open.push({ j, c: conflictsOf(pairs[m], pool[j].id) });
+      }
+      // fewest conflicts first, then the lightest load, then pool order
+      open.sort((a, b) => a.c - b.c || load[a.j] - load[b.j] || a.j - b.j);
+      for (let x = 0; x < open.length; x += 1) {
+        for (let y = x + 1; y < open.length; y += 1) {
+          for (let z = y + 1; z < open.length; z += 1) {
+            const panel = [open[x], open[y], open[z]];
+            for (const t of panel) load[t.j] += 1;
+            chosen.push(panel.map((t) => t.j).sort((a, b) => a - b));
+            visitMatch(m + 1, cost + panel[0].c + panel[1].c + panel[2].c);
+            chosen.pop();
+            for (const t of panel) load[t.j] -= 1;
+            if (bestCost === 0 || nodes > JUDGE_SEARCH_NODE_CAP) return;
+          }
+        }
+      }
+    };
+    visitMatch(0, 0);
+    if (bestRows) bestRows.forEach((row, m) => (slots[m] = row));
   }
 
   const assignments = slots.map((judgeIds, matchIndex) => ({

@@ -5,7 +5,7 @@
 -- recorded and not refused, a non-member gets the not-found refusal and reads zero rows, the table's grants, and
 -- create_btc_match's new optional round. The cross-organisation matrices (040, 041) hold the other half.
 begin;
-select plan(63);
+select plan(66);
 
 -- ---------- helpers (all rolled back with the transaction) ----------
 
@@ -214,6 +214,12 @@ select is(public.t075_hint(500, 1, 'random', 's', jsonb_build_array(public.t075_
   'btc_round_exists', 'an unnumbered preliminary match counts as round 1: round 1 cannot be drawn over it');
 select is(public.t075_hint(500, 2, 'random', 's', jsonb_build_array(public.t075_m(51, 52, 61, 62, 63))),
   'btc_prior_round_open', 'and round 2 waits for it to be confirmed');
+reset role;
+insert into btc_round_draws (event_id, prelim_round, mode, seed, match_count) values (public.t075_u(700), 1, 'random', 'x', 1);
+set local role authenticated;
+set local request.jwt.claim.sub = '75000000-0000-0000-0000-000000000001';
+select is(public.t075_hint(700, 1, 'random', 's', jsonb_build_array(public.t075_m(91, 92, 95, 96, 97))),
+  'btc_round_exists', 'a draw record with no matches left also blocks the round (a redraw deletes both)');
 select is(public.t075_hint(600, 1, 'random', 's', jsonb_build_array(public.t075_m(71, 72, 81, 82, 83))),
   'btc_round_bracket_exists', 'a round cannot be drawn once the bracket exists');
 
@@ -231,8 +237,11 @@ select is((select count(distinct t)::int from (select team1_id t from btc_matche
     union all select team2_id from btc_matches where event_id = public.t075_u(200)) x), 6, 'every team exactly once');
 select is((select min(c)::int from (select count(*) c from btc_match_judges mj join btc_matches m on m.id = mj.match_id
     where m.event_id = public.t075_u(200) group by m.id) x), 3, 'every match has 3 judges');
-select is((select team1_id from btc_matches where event_id = public.t075_u(200) order by created_at limit 1), public.t075_u(1),
-  'created_at keeps the draw order (match 1 first)');
+select is((select string_agg(team1_id::text, ',' order by created_at, id) from btc_matches where event_id = public.t075_u(200)),
+  public.t075_u(1)::text || ',' || public.t075_u(3)::text || ',' || public.t075_u(5)::text,
+  'the matches come back in draw order (1, 3, 5)');
+select is((select count(distinct created_at)::int from btc_matches where event_id = public.t075_u(200)), 3,
+  'created_at is distinct per match, so that order is stored and not a tie');
 select is((select mode || '/' || seed || '/' || match_count || '/' || avoid_rematches || '/' || conflict_ticks::text
     from btc_round_draws where event_id = public.t075_u(200) and prelim_round = 1),
   'random/seed-r1/3/true/[]', 'the draw record holds the mode, seed, count, avoidance and no conflicts');
@@ -269,13 +278,17 @@ set local request.jwt.claim.sub = '75000000-0000-0000-0000-000000000001';
 
 -- round 2: a judge from a team's own country is recorded, not refused
 select is(public.t075_hint(200, 2, 'by_results', 'seed-r2', jsonb_build_array(public.t075_m(1, 3, 11, 13, 15),
-    public.t075_m(2, 5, 13, 14, 16), public.t075_m(4, 6, 12, 13, 15)), 10, false),
+    public.t075_m(2, 5, 13, 14, 16), public.t075_m(4, 6, 12, 13, 14)), 10, false),
   'ok', 'round 2 is created once round 1 is confirmed, with a judge from a team''s own country');
 select is((select conflict_ticks #>> '{0,judge_id}' from btc_round_draws where event_id = public.t075_u(200) and prelim_round = 2),
   public.t075_u(11)::text, 'the database recorded the conflict (judge 11 of Brunei on a Brunei team)');
 select is((select jsonb_array_length(conflict_ticks) || '/' || (conflict_ticks #>> '{0,match}') || '/' || avoid_rematches
     from btc_round_draws where event_id = public.t075_u(200) and prelim_round = 2),
-  '1/1/false', 'exactly one conflict, in match 1, and the avoid setting is kept');
+  '2/1/false', 'two conflicts, the first in match 1, and the avoid setting is kept');
+select is((select (conflict_ticks #>> '{1,match}') || '/' || (conflict_ticks #>> '{1,judge_id}') || '/' || (conflict_ticks #>> '{1,team_id}')
+    from btc_round_draws where event_id = public.t075_u(200) and prelim_round = 2),
+  '3/' || public.t075_u(14)::text || '/' || public.t075_u(6)::text,
+  'the second is judge 14 (SG) on team 6 (SG), the SECOND team of match 3: both teams of a match are checked');
 select is((select count(*)::int from btc_matches where event_id = public.t075_u(200) and prelim_round = 2), 3, 'round 2 has its 3 matches');
 
 -- a hand-made correction match carries its round, and only a preliminary match may

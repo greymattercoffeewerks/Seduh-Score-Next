@@ -21,7 +21,8 @@
 --   mode                     random | by_results | manual. Both seeded modes record their seed (by_results uses it for
 --                            equal-points order); manual has none. CHECK keeps the pair in step.
 --   conflict_ticks           jsonb array of the judge-country conflicts present in the round when it was created:
---                            [{ match, judge_id, team_id, country_code }]. The DATABASE derives them from the rows
+--                            [{ match, judge_id, team_id, country_code }] where `match` is the 1-BASED match number in draw order (draw.js's
+--                            conflicts[].matchIndex is 0-based). create_btc_round derives them from the rows
 --                            (a judge and a team of the same non-null country); the client does not claim them.
 --                            A conflict is never refused here: a committee may need an exception (spec 4.2 step 3).
 --   created_by               default auth.uid(); a client never names it. created_at default now().
@@ -208,8 +209,9 @@ declare
   v_match       public.btc_matches;
   v_judge       uuid;
 begin
-  -- 1. Same not-found shape as generate_btc_bracket, plus an explicit membership test: org_id_for_event answers for any
-  -- caller, so without the test a non-member would learn "that event is in this org" from the next refusal.
+  -- 1. Same not-found shape as generate_btc_bracket, plus an explicit membership test. Since 20261011130000
+  -- org_id_for_event itself answers NULL for a non-member, so the test is belt and braces (kept so the not-found shape
+  -- survives a loosened resolver): p_org_id must equal the event's organisation and the caller must belong to it.
   if p_org_id is distinct from app.org_id_for_event(p_event_id) or not app.is_org_member(p_org_id) then
     raise exception 'create_btc_round: event not found' using hint = 'btc_round_event_not_found';
   end if;

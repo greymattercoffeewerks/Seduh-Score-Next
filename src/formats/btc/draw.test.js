@@ -36,13 +36,19 @@ describe('drawRound1', () => {
     expect(one.seed).toBe('seed-one');
   });
 
-  it('does not depend on the order the teams are listed in only through the seed (input order is part of the draw)', () => {
+  it('depends on the seed and the set of teams, not the order they are listed in', () => {
     const reversed = [...teams(20)].reverse();
     const a = drawRound1({ teamIds: teams(20), seed: 'x' }).pairs;
-    const b = drawRound1({ teamIds: reversed, seed: 'x' }).pairs;
-    // the same seed over a different input order is a different, but still valid, draw
-    expect([...teamsOf(b)].sort()).toEqual(teams(20));
-    expect(keys(a)).not.toEqual(keys(b));
+    expect(drawRound1({ teamIds: reversed, seed: 'x' }).pairs).toEqual(a);
+    const ids = teams(20);
+    const prior = drawRound1({ teamIds: ids, seed: 'r1' }).pairs;
+    expect(drawRound2Random({ teamIds: reversed, priorPairs: prior, seed: 'k' }).pairs).toEqual(
+      drawRound2Random({ teamIds: ids, priorPairs: prior, seed: 'k' }).pairs,
+    );
+    const standings = ids.map((teamId, i) => ({ teamId, points: i % 3 }));
+    expect(drawRound2ByResults({ standings: [...standings].reverse(), seed: 'k' }).pairs).toEqual(
+      drawRound2ByResults({ standings, seed: 'k' }).pairs,
+    );
   });
 
   it('does not change its input', () => {
@@ -67,6 +73,10 @@ describe('drawRound1', () => {
     expect(e.message).toMatch(/19 teams, an odd number/);
   });
 
+  it('refuses a single team with the at-least-2 message, not the odd-count one', () => {
+    expect(refusal(() => drawRound1({ teamIds: ['only'], seed: 's' }))?.code).toBe('too_few_teams');
+  });
+
   it('refuses no teams, a duplicate team and a missing id', () => {
     expect(refusal(() => drawRound1({ teamIds: [], seed: 's' }))?.code).toBe('no_teams');
     expect(refusal(() => drawRound1({ teamIds: ['a', 'a', 'b', 'c'], seed: 's' }))?.code).toBe(
@@ -79,10 +89,20 @@ describe('drawRound1', () => {
   });
 
   it('counts same-country pairs as information only', () => {
-    const teamCountry = { t01: 'BN', t02: 'BN', t03: 'MY', t04: 'ID' };
-    const r = drawRound1({ teamIds: ['t01', 't02', 't03', 't04'], seed: 'q', teamCountry });
-    const same = r.pairs.filter((p) => teamCountry[p.team1Id] === teamCountry[p.team2Id]).length;
-    expect(r.warnings.find((w) => w.code === 'same_country')?.count ?? 0).toBe(same);
+    // two teams, both Brunei: the only possible pair is a same-country pair, and it is allowed, not refused
+    const r = drawRound1({
+      teamIds: ['t01', 't02'],
+      seed: 'q',
+      teamCountry: { t01: 'BN', t02: 'BN' },
+    });
+    expect(r.pairs).toHaveLength(1);
+    expect(r.warnings.find((w) => w.code === 'same_country')?.count).toBe(1);
+    const none = drawRound1({
+      teamIds: ['t01', 't02'],
+      seed: 'q',
+      teamCountry: { t01: 'BN', t02: 'MY' },
+    });
+    expect(none.warnings).toEqual([]);
     expect(r.rematches).toBe(0);
   });
 });
@@ -150,6 +170,28 @@ describe('drawRound2Random', () => {
     const two = drawRound2Random({ teamIds: ['a', 'b'], priorPairs: [['a', 'b']], seed: 's' });
     expect(two.rematches).toBe(1);
     expect(two.warnings[0].message).toMatch(/1 rematch could not be avoided/);
+  });
+
+  it('still avoids every repeat with three earlier rounds on 6 teams (a repeat-free round exists)', () => {
+    const t = teams(6);
+    // three rounds of a 1-factorisation of K6; the unplayed edges still contain whole matchings
+    const prior = [
+      [t[0], t[1]],
+      [t[2], t[3]],
+      [t[4], t[5]],
+      [t[0], t[2]],
+      [t[1], t[4]],
+      [t[3], t[5]],
+      [t[0], t[3]],
+      [t[1], t[5]],
+      [t[2], t[4]],
+    ];
+    const played = new Set(prior.map(([a, b]) => keyOf(a, b)));
+    for (let i = 0; i < 40; i += 1) {
+      const r = drawRound2Random({ teamIds: t, priorPairs: prior, seed: `q${i}` });
+      expect(r.rematches).toBe(0);
+      expect(keys(r.pairs).filter((k) => played.has(k))).toEqual([]);
+    }
   });
 
   it('allows repeats when avoidance is switched off, and still counts them', () => {
@@ -224,6 +266,30 @@ describe('drawRound2ByResults', () => {
     expect(keys(r.pairs)).toContain('t03|t06');
     expect(keys(r.pairs)).toContain('t04|t05');
     expect([...teamsOf(r.pairs)].sort()).toEqual(ids);
+  });
+
+  it('keeps the stronger team as team1 even after repairs against several earlier rounds', () => {
+    const ids = teams(12);
+    const standings = ids.map((teamId, i) => ({ teamId, points: (i % 4) * 5 }));
+    const points = new Map(standings.map((r) => [r.teamId, r.points]));
+    for (let i = 0; i < 300; i += 1) {
+      const r1 = drawRound1({ teamIds: ids, seed: `a${i}` }).pairs;
+      const r2 = drawRound2Random({ teamIds: ids, priorPairs: r1, seed: `b${i}` }).pairs;
+      const r3 = drawRound2Random({
+        teamIds: ids,
+        priorPairs: [...r1, ...r2],
+        seed: `c${i}`,
+      }).pairs;
+      const r = drawRound2ByResults({
+        standings,
+        priorPairs: [...r1, ...r2, ...r3],
+        seed: `d${i}`,
+      });
+      for (const p of r.pairs) {
+        expect(points.get(p.team1Id)).toBeGreaterThanOrEqual(points.get(p.team2Id));
+      }
+      expect([...teamsOf(r.pairs)].sort()).toEqual(ids);
+    }
   });
 
   it('counts a rematch it cannot avoid', () => {
@@ -317,6 +383,18 @@ describe('assignJudges', () => {
     const r = assignJudges({ pairs, judges, teamCountry });
     expect(r.assignments[0].judgeIds).not.toContain('j0');
     expect(r.conflicts).toEqual([]);
+  });
+
+  it('finds a conflict-free assignment that the simple trades miss', () => {
+    // found by the scoring-auditor's brute-force comparison: trades alone leave one conflict, a zero-conflict deal exists
+    const countries = ['SG', null, 'BN', null, 'MY', 'MY'];
+    const judges = judgeList(6, (i) => countries[i]);
+    const teamCountry = { a0: 'MY', b0: 'BN', a1: 'SG', b1: 'SG', a2: 'SG', b2: 'MY' };
+    const r = assignJudges({ pairs: pairsFor(3), judges, teamCountry });
+    expect(r.conflicts).toEqual([]);
+    for (const a of r.assignments) expect(new Set(a.judgeIds).size).toBe(3);
+    const loads = Object.values(r.loads);
+    expect(Math.max(...loads) - Math.min(...loads)).toBeLessThanOrEqual(1);
   });
 
   it('lists the conflicts instead of failing when the pool is too small', () => {
