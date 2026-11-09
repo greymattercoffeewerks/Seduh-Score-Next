@@ -70,14 +70,16 @@ export async function mountBtcEventDashboardScreen(
     loading = true;
     renderLoading();
     let event = null;
+    // Started beside the event read, not after it: an advisory line must not double the wait on a slow link.
+    const countRead = raceTimeout(
+      countPreliminaryMatchesWithoutTimes(eventId, client),
+      DEFAULT_LOAD_TIMEOUT_MS,
+    ).catch(() => 0);
     try {
       event = await raceTimeout(findEvent(eventId, client), DEFAULT_LOAD_TIMEOUT_MS);
       loadFailedMessage = null;
       // An advisory line: a failed or slow read never stops the dashboard from opening.
-      withoutTimes = await raceTimeout(
-        countPreliminaryMatchesWithoutTimes(eventId, client),
-        DEFAULT_LOAD_TIMEOUT_MS,
-      ).catch(() => 0);
+      withoutTimes = await countRead;
       // Same Retry-only focus gap Cup Taster's own eventDashboardScreen.js closed —
       // the very first successful mount is already covered by router.js's own
       // generic heading fallback, but a Retry click doesn't go through the router.

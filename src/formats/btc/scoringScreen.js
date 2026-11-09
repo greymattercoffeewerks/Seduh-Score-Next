@@ -237,9 +237,9 @@ export async function mountScoringScreen(
   }
 
   function timeProblemText({ which, status }) {
-    return status === 'empty'
-      ? `${teamLabel(which)} needs a finish time.`
-      : `${teamLabel(which)}'s finish time needs minutes and seconds, like 8:42.`;
+    if (status === 'empty') return `${teamLabel(which)} needs a finish time.`;
+    if (status === 'zero') return `${teamLabel(which)}'s finish time must be longer than 0:00.`;
+    return `${teamLabel(which)}'s finish time needs minutes and seconds, like 8:42.`;
   }
 
   // Judges a box's text for the round, tidies a valid value ("08:42" -> "8:42", an over-limit one to the
@@ -258,7 +258,10 @@ export async function mountScoringScreen(
       }
     }
     showTimeMessage(field, finishTimeMessage(result, match.round), {
-      invalid: result.status === 'invalid' || result.status === 'zero',
+      invalid:
+        result.status === 'invalid' ||
+        result.status === 'zero' ||
+        (result.status === 'empty' && match.round === 'preliminary'),
     });
     updateConfirm();
   }
@@ -700,7 +703,6 @@ export async function mountScoringScreen(
         className: 'field-input',
         attrs: {
           type: 'text',
-          inputmode: 'numeric',
           autocomplete: 'off',
           'aria-label': `${teamLabel(which)} finish time${preliminary ? '' : ' (optional)'}`,
           'aria-describedby': `${hintId} ${messageId}`,
@@ -714,19 +716,21 @@ export async function mountScoringScreen(
         className: 'form-field-hint btc-time-message',
         attrs: { role: 'status', 'aria-live': 'polite' },
       });
-      const field = { node: input, which, message };
+      const field = { node: input, which, message, touched: false };
       input.addEventListener('input', () => {
         if (locked()) {
           updateControls();
           return;
         }
         state.draft = { ...state.draft, times: { ...state.draft.times, [which]: input.value } };
+        field.touched = true;
         showTimeMessage(field, null, { invalid: false });
         persistDraft();
         updateConfirm();
       });
       input.addEventListener('blur', () => {
-        if (!locked()) commitTime(which);
+        // Only a box the scorer has typed in: tabbing past a recorded time must not rewrite it or save a draft.
+        if (!locked() && field.touched) commitTime(which);
       });
       ui.timeFields.push(field);
       ui.controls.push(input);

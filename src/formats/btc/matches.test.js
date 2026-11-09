@@ -293,6 +293,7 @@ describe('countPreliminaryMatchesWithoutTimes', () => {
       { team1_time_note: '8:42', team2_time_note: '9:10' },
       { team1_time_note: ' ', team2_time_note: '9:10' },
       { team1_time_note: '8:42', team2_time_note: 'n/a' },
+      { team1_time_note: '0:00', team2_time_note: '9:10' },
     ];
     const builder = {
       select: () => builder,
@@ -303,7 +304,7 @@ describe('countPreliminaryMatchesWithoutTimes', () => {
       then: (resolve) => resolve({ data: rows, error: null }),
     };
     const count = await countPreliminaryMatchesWithoutTimes('ev1', { from: () => builder });
-    expect(count).toBe(2);
+    expect(count).toBe(3);
     expect(filters).toEqual([
       ['event_id', 'ev1'],
       ['round', 'preliminary'],

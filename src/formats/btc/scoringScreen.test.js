@@ -240,8 +240,8 @@ describe('mountScoringScreen', () => {
     // A preliminary match needs both finish times to confirm (Build D); give any empty box one.
     for (const which of ['team1', 'team2']) {
       const box = root.querySelector(`[data-field="time-${which}"]`);
-      if (box && db.btc_matches[0].round === 'preliminary' && box.value === '')
-        setTime(which, '8:42');
+      expect(box).not.toBeNull();
+      if (db.btc_matches[0].round === 'preliminary' && box.value === '') setTime(which, '8:42');
     }
     await flush();
   }
@@ -1336,17 +1336,50 @@ describe('mountScoringScreen', () => {
       expect(feedback().textContent).toContain("Alpha's finish time needs minutes and seconds");
     });
 
-    it('a blur while the screen is locked changes nothing', async () => {
+    it('tabbing past a recorded time that the scorer has not edited rewrites nothing and saves nothing', async () => {
+      // An older confirmed note ('08:42', or a free-text one) must stay as recorded until it is edited.
+      cache.set('btc-scoring-draft:m1', {
+        votes: { 1: 0 },
+        fastest: null,
+        signature: { team1: false, team2: false },
+        baseUpdatedAt: 'T0',
+        confirmOpId: null,
+        times: { team1: '08:42', team2: 'about 9 min' },
+      });
       await mount();
-      await fillAll();
-      flushOutcome = 'offline';
-      confirmButton().click();
-      await flush();
-      const before = cache.get('btc-scoring-draft:m1').times.team1;
-      box('team1').disabled = false;
-      box('team1').value = '99:99';
+      expect(box('team1').value).toBe('08:42');
       blur('team1');
-      expect(cache.get('btc-scoring-draft:m1').times.team1).toBe(before);
+      blur('team2');
+      expect(box('team1').value).toBe('08:42');
+      expect(message('team1').textContent).toBe('');
+      expect(message('team2').textContent).toBe('');
+      expect(cache.get('btc-scoring-draft:m1').times.team1).toBe('08:42');
+    });
+
+    it('a blank preliminary box gets words and aria-invalid once the scorer has been in it', async () => {
+      await mount();
+      typeTime('team1', '8:42');
+      typeTime('team1', '');
+      expect(message('team1').textContent).toBe('Enter a finish time, like 8:42');
+      expect(box('team1').getAttribute('aria-invalid')).toBe('true');
+    });
+
+    it('a blank knockout box says nothing', async () => {
+      db = baseDb('semifinal');
+      await mount();
+      typeTime('team1', '8:42');
+      typeTime('team1', '');
+      expect(message('team1').textContent).toBe('');
+      expect(box('team1').getAttribute('aria-invalid')).toBeNull();
+    });
+
+    it('a zero time is worded as zero in the Confirm hint, not as a format problem', async () => {
+      await mount();
+      await fillCupsOnly();
+      typeTime('team1', '0:00');
+      expect(root.querySelector('#btc-confirm-hint').textContent).toContain(
+        'finish time must be longer than 0:00',
+      );
     });
   });
 });

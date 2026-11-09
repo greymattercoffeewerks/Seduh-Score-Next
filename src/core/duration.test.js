@@ -63,14 +63,14 @@ describe('parseDuration', () => {
     expect(parseDuration(text)).toBeNull();
   });
 
-  it('refuses anything that is not a string', () => {
-    for (const value of [undefined, null, 522, {}, ['8:42']])
-      expect(parseDuration(value)).toBeNull();
+  it.each([undefined, null, 522, {}, ['8:42']])('refuses the non-string %j', (value) => {
+    expect(parseDuration(value)).toBeNull();
   });
 
-  it('round-trips formatDuration for whole minutes under 100', () => {
-    for (const secs of [1, 59, 60, 61, 599, 600, 3599, 5999]) {
+  it.each([1, 59, 60, 61, 599, 600, 3599, 5999])(
+    'round-trips formatDuration for %i seconds',
+    (secs) => {
       expect(parseDuration(formatDuration(secs))).toBe(secs);
-    }
-  });
+    },
+  );
 });

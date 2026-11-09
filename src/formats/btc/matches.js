@@ -74,10 +74,10 @@ export async function countPreliminaryMatchesWithoutTimes(eventId, client = getS
     .eq('round', 'preliminary')
     .eq('status', 'confirmed');
   if (error) throw error;
-  return (data ?? []).filter(
-    (row) =>
-      parseDuration(row.team1_time_note) === null || parseDuration(row.team2_time_note) === null,
-  ).length;
+  // Same rule as the scoring screen: a time must parse and be above 0:00 (a team that did not finish enters the limit).
+  const usable = (note) => (parseDuration(note) ?? 0) > 0;
+  return (data ?? []).filter((row) => !usable(row.team1_time_note) || !usable(row.team2_time_note))
+    .length;
 }
 
 // The event a match belongs to, or null when there is no such match as far as this person can see.

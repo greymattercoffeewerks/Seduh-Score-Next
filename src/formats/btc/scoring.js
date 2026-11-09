@@ -74,6 +74,8 @@ export function checkFinishTime(rawText, round) {
 export function finishTimeMessage(result, round) {
   if (result.status === 'invalid') return 'Use minutes and seconds, like 8:42';
   if (result.status === 'zero') return 'Enter a time longer than 0:00';
+  // Only a preliminary match needs the time; a knockout box may stay empty without a word.
+  if (result.status === 'empty' && round === 'preliminary') return 'Enter a finish time, like 8:42';
   if (result.status === 'capped') {
     return `Capped at the ${formatDuration(maxTimeSecsForRound(round))} limit`;
   }
