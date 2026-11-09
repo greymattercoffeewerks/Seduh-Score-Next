@@ -30,9 +30,10 @@ selectable. Registration opens January 2027. Round 2's by-results method is stro
 - **Branch `ccr-dd9e5a6c-bxhucc`, PR #427 into `dev` (open).** #426 (docs trim, STATUS.md, backlog triage, the first plan)
   is merged into `dev`. #427 is docs only: the plan and the engine spec follow the owner's answers. No code, migration or
   cloud change exists for BTC yet. Start with `git fetch origin && git checkout ccr-dd9e5a6c-bxhucc`, then `npm ci`.
-- **Next step:** turn the engine spec into tasks, in this order: E team and judge country, A `prelim_round`, D finish-time
-  check (`parseDuration`, required times, capped at the round's limit), B draw and `create_btc_round`, C ties on points
-  only. Each has its reviewers in section 8 of the spec; the C migration and the draw are scoring and tenancy gates.
+- **Next step:** the engine spec's tasks, in this order: E team and judge country, A `prelim_round`, D finish-time
+  check, B draw and `create_btc_round`, C ties on points only. E is built; A and D are built with PRs into `dev` (D is
+  front end only, on `claude/btc-d-finish-time-f04478`, not yet merged); B and C remain. Each has its reviewers in section
+  8 of the spec; the C migration and the draw are scoring and tenancy gates.
 - **Waiting on the committee (none blocks the first tasks):** the real team count and round-2 method; which round has the
   10-minute limit and which the 15 (the default is 10:00 preliminary, 15:00 knockout, one function to edit); odd team
   count or a withdrawal (KIV, the draw refuses meanwhile); whether a round-2 rematch is allowed (setting, default

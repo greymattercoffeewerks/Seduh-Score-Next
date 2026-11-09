@@ -8,6 +8,32 @@ archive and add them to the index (CI's `check:docs` enforces the budget).
 
 ---
 
+## BTC Build D: the finish-time input check · 2026-11-09
+
+**Task:** item D of `docs/specs/BTC-MARCH-2027-ENGINE-SPEC-DRAFT.md` (section 6): a finish time is checked where it is typed, a preliminary match needs both times, and no time can exceed its round's limit. Front end only: **no migration, no RPC change**. Commits `e21d923` and `2539c22` on `claude/btc-d-finish-time-f04478`; PR into `dev`, not merged.
+
+- **Parsing (`core/duration.js`):** `parseDuration` reads `M:SS` or `MM:SS` with seconds 00 to 59 and returns seconds, or `null` for anything else. Pure, no BTC knowledge.
+- **Rules (`formats/btc/scoring.js`):** `maxTimeSecsForRound(round)` returns 600 for preliminary and 900 for every knockout round. This is the decision for open question O6, **pending the committee**, and it is the single place to change. `checkFinishTime` judges one box (empty, invalid, zero, ok, capped). The cap is `clampElapsed()` from the unchanged `core/timeclamp.js`; a time of exactly the limit is kept and not called capped. `finishTimeMessage` and `finishTimeProblems` produce the words and the confirm blockers.
+- **Scoring screen:** a box is tidied on blur (`08:42` to `8:42`), but only a box the scorer typed in. A message sits under the box: "Use minutes and seconds, like 8:42", "Capped at the 10:00 limit", "Enter a time longer than 0:00", "Enter a finish time, like 8:42" (blank preliminary box). The box has `aria-invalid` and `aria-describedby`. The label is "Did not finish? Enter 10:00". A preliminary match requires both times: Confirm is blocked, the hint is shown and focus moves to the box, and "(optional)" is dropped. A knockout match's times stay optional, but an invalid or 0:00 time blocks in every round. The draft and `buildConfirmParams` carry the tidied, capped text. The confirm RPC is untouched.
+- **Dashboard:** a checklist line "N preliminary matches have no times" from `countPreliminaryMatchesWithoutTimes` (`matches.js`). It counts confirmed preliminary matches whose time is unparseable or 0:00. It is advisory, fails open, and is read beside the event.
+- **Deviations and decisions:**
+  - (a) The tie card's "both at the limit" wording (spec section 6, fourth bullet) is **not built**. No tie card shows times yet; that belongs to Build C.
+  - (b) `inputmode="numeric"` was dropped after review: phone keypads have no colon key. Needs a check on the Honor phone and an iPad.
+  - (c) Re-confirming an older confirmed preliminary match with empty or legacy times needs both times first, as the spec's rule implies.
+- **Tests:** 6106 pass in the full suite. The one failure, `tools/check-doc-budgets.test.js` "brokenLinks" (a fake `/r/` path), is a Windows path quirk unrelated to this change. ESLint clean. Verified at 360px on the paper and stage surfaces: no horizontal scroll. The console has no OS-dark mode; "dark" means the stage surface.
+- **Setup:** this worktree's `node_modules` was empty and the shared one lacked `libphonenumber-js` (Build E), so `npm ci` was run inside the worktree.
+- **Reviews:**
+  - `scoring-auditor`: clean. One nit, intended (re-confirm needs times).
+  - `module-boundary-checker`: clean. One nit fixed: the dashboard count treated 0:00 as usable.
+  - `offline-sync-auditor`: clean. Two nits: blur rewrote an untouched legacy time and saved a draft (fixed with a touched flag); the re-confirm block is intended.
+  - `code-reviewer`: clean. Nits fixed: the dashboard read ran after the event read. Left: a restored invalid legacy time shows no message until blur or leave (the hint explains it).
+  - `ui-accessibility-reviewer`: one Important, `inputmode` numeric, fixed by removal. Device-unverified. No fresh-context check and no re-run, because the fix removes an attribute. Nits fixed: "0:00" wording in the hint; a blank preliminary box had no words. Left: the dashboard line is created with its text; the focus ring under the global pointer rule and the field border contrast are pre-existing.
+  - `test-auditor`: no red. 14 mutations, all caught except one vacuous test (locked-blur), which was replaced. The round-trip loop was split.
+- **Not final, Definition of Done outstanding:** the Honor phone and iPad checks, and the `ui-accessibility-reviewer` re-run after the `inputmode` removal. Also the PR merge, which the owner does when CI is green.
+- **Open follow-up:** O6 (the 10:00 and 15:00 limits) waits on the committee. The optional hardening is in spec section 6: the RPC does not enforce the preliminary-requires-both-times rule, so it is client-side only.
+
+---
+
 ## BTC Build A: a preliminary round number on btc_matches · 2026-11-08
 
 **Task:** item A of `docs/specs/BTC-MARCH-2027-ENGINE-SPEC-DRAFT.md` (section 3), database only: two preliminary rounds can now be told apart. Built in a side session, PR into `dev`; **the migration is NOT yet in the cloud** (merging does not push it).
