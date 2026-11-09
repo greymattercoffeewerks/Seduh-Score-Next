@@ -27,6 +27,7 @@ describe('public pages use the shared primitives', () => {
     const header = buildPublicHeader({ active: 'tour' });
     expect(cls(header.querySelector('.public-header-toggle'), 'menu-toggle')).toBe(true);
     expect(cls(header.querySelector('.public-header-live-dot'), 'status-live-dot')).toBe(true);
+    expect(header.querySelectorAll('.public-header-action').length).toBeGreaterThan(0);
     for (const action of header.querySelectorAll('.public-header-action')) {
       expect(cls(action, 'action') && cls(action, 'action-primary')).toBe(true);
     }
@@ -73,6 +74,13 @@ describe('public pages use the shared primitives', () => {
 
   it('pricing: cards, rows and the soon word are shared shapes', () => {
     const root = mount(mountPricingScreen);
+    for (const sel of [
+      '.pricing-card',
+      '.pricing-row',
+      '.pricing-cta',
+      '.pricing-cell-soon .pricing-cell-word',
+    ])
+      expect(root.querySelectorAll(sel).length, sel).toBeGreaterThan(0);
     for (const card of root.querySelectorAll('.pricing-card'))
       expect(cls(card, 'panel')).toBe(true);
     for (const row of root.querySelectorAll('.pricing-row')) expect(cls(row, 'panel')).toBe(true);

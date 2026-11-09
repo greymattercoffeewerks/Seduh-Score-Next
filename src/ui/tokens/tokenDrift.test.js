@@ -390,11 +390,18 @@ function paintedBoxes(css) {
       return false;
     });
     if (!paints) continue;
-    const hasRadius = decls.some(({ prop }) => /^border(-.*)?-radius$/.test(prop));
-    const lastClass =
-      /\.([\w-]+)(?![\w-]*\()[^.\s]*$/.exec(last.replace(/\[[^\]]*\]/g, ''))?.[1] ?? '';
-    if (SHARED_NAME.test(lastClass)) found.push({ selector, kind: 'local-primitive', lastClass });
-    else if (!hasRadius) found.push({ selector, kind: 'no-corner', lastClass });
+    // a real corner: a token radius or bevel (an explicit 0 is a square, not a corner)
+    const hasRadius = decls.some(
+      ({ prop, value }) =>
+        /^border(-.*)?-radius$/.test(prop) && /var\(--(?:radius|bevel)-/.test(value),
+    );
+    // a grouped selector (.a, .b-tag) is checked per member
+    for (const member of last.split(',')) {
+      const lastClass =
+        /\.([\w-]+)(?![\w-]*\()[^.\s]*$/.exec(member.trim().replace(/\[[^\]]*\]/g, ''))?.[1] ?? '';
+      if (SHARED_NAME.test(lastClass)) found.push({ selector, kind: 'local-primitive', lastClass });
+      else if (!hasRadius) found.push({ selector, kind: 'no-corner', lastClass });
+    }
   }
   return found;
 }
@@ -463,7 +470,7 @@ function classesShapedByMarkup() {
   ];
   for (const file of files) {
     const js = readFileSync(file, 'utf8');
-    for (const m of js.matchAll(/(['"`])((?:\\.|(?!\1)[^\\\n])*)\1/g)) {
+    for (const m of js.matchAll(/className:\s*(['"`])((?:\\.|(?!\1)[^\\\n])*)\1/g)) {
       const tokens = m[2].split(/\s+|\$\{[^}]*\}/).filter(Boolean);
       if (!tokens.some((t) => SHAPE_CLASSES.has(t))) continue;
       for (const t of tokens) shaped.add(t);
@@ -487,9 +494,9 @@ function scanPublicShapes() {
 
 describe('public pages build on the shared primitives', () => {
   const found = scanPublicShapes();
-  console.log(found.map(squareKey).join('\n'));
   it('scans the public stylesheets', () => {
-    expect(new Set(found.map((f) => f.file)).size).toBeGreaterThan(2);
+    expect(new Set(found.map((f) => f.file)).size).toBeGreaterThan(5);
+    expect(sources.filter((x) => PUBLIC_CSS(x.file)).length).toBeGreaterThan(5);
   });
   it('no public rule paints a square box or re-implements a shared primitive, except the allowlist', () => {
     const budget = new Set(SQUARE_ALLOWLIST.map(squareKey));

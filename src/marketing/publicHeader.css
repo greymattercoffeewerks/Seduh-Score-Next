@@ -191,7 +191,11 @@
 .public-footer-version:hover {
   color: var(--color-accent);
 }
-/* The version chip is the shared .tag (tokens/base.css), kept at tap-target height by the rule above. */
+/* The version chip is the shared .tag (tokens/base.css), kept at tap-target height by the rule above. It is a
+   link, so its edge takes the control edge rather than the tag's decorative one. */
+.public-footer-version {
+  --tag-edge: var(--color-border-input);
+}
 @media (max-width: 760px) {
   .public-footer-wrap {
     padding-inline: 20px;
