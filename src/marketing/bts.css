@@ -291,6 +291,7 @@
   list-style: none;
   overflow-x: auto;
   scroll-snap-type: x proximity;
+  scroll-padding-inline: var(--space-1);
   scrollbar-width: thin;
 }
 
@@ -482,6 +483,7 @@ a.bts-cycle:hover {
 
 .bts-toc-list {
   display: grid;
+  scroll-padding: var(--space-1);
   gap: 2px;
   max-height: 70vh;
   margin: 0;
@@ -539,11 +541,6 @@ a.bts-cycle:hover {
 
 .bts-ch[aria-current='true'] .bts-ch-title {
   color: var(--color-accent);
-}
-
-/* Not colour alone: the chapter being read also carries a mark before its title. */
-.bts-ch[aria-current='true'] .bts-ch-title::before {
-  content: '▸ ';
 }
 
 /* pane */

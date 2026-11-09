@@ -195,6 +195,16 @@ export function enhanceBts(root, win = root.ownerDocument.defaultView) {
     // Chapter list: the selected cycle's chapters.
     const place = cycleLinks.find((l) => l.dataset.cycle === cycle);
     tocLabel.textContent = `${place ? place.querySelector('.bts-cycle-place').textContent : ''} chapters`;
+    // The chapter being read carries a mark before its title (not colour alone); aria-current already says so to a
+    // screen reader, so the mark itself is hidden from it.
+    const chTitle = (c) => {
+      const title = make(doc, 'span', { className: 'bts-ch-title' });
+      if (!filtering() && c.id === state.chapter) {
+        title.append(make(doc, 'span', { 'aria-hidden': 'true', text: '▸ ' }));
+      }
+      title.append(titleOf(c));
+      return title;
+    };
     tocList.replaceChildren(
       ...chapters
         .filter((c) => cycleOf(c) === cycle)
@@ -217,7 +227,7 @@ export function enhanceBts(root, win = root.ownerDocument.defaultView) {
               'data-chapter': c.id,
               'aria-current': String(!filtering() && c.id === state.chapter),
             },
-            [meta, make(doc, 'span', { className: 'bts-ch-title', text: titleOf(c) })],
+            [meta, chTitle(c)],
           );
           button.addEventListener('click', () => go(c.id, false, 'toc'));
           return make(doc, 'li', {}, [button]);
@@ -261,9 +271,10 @@ export function enhanceBts(root, win = root.ownerDocument.defaultView) {
         className: 'bts-text-btn',
         text: 'Clear and go back to the chapters',
       });
-      clear.addEventListener('click', () => {
+      clear.addEventListener('click', (event) => {
         search.value = '';
-        go(state.chapter, false, 'search');
+        // Back to search only from the keyboard (detail 0); a tap must not raise the on-screen keyboard.
+        go(state.chapter, false, event.detail === 0 ? 'search' : undefined);
       });
       result.replaceChildren(
         make(doc, 'span', {

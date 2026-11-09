@@ -176,6 +176,28 @@ describe('Behind the Seduh: the reader', () => {
     expect(document.activeElement.closest('.bts-chapter').hidden).toBe(false);
   });
 
+  it('the chapter being read is marked in the list by more than colour, hidden from screen readers', () => {
+    const current = root.querySelector('.bts-ch[aria-current="true"] .bts-ch-title');
+    const mark = current.querySelector('[aria-hidden="true"]');
+    expect(mark.textContent.trim()).toBe('▸');
+    const others = root.querySelectorAll(
+      '.bts-ch[aria-current="false"] .bts-ch-title [aria-hidden]',
+    );
+    expect(others).toHaveLength(0);
+  });
+
+  it('Clear returns focus to search from the keyboard only', () => {
+    const search = root.querySelector('#bts-search');
+    type(search, 'btc');
+    root
+      .querySelector('.bts-result button')
+      .dispatchEvent(new MouseEvent('click', { detail: 1, bubbles: true }));
+    expect(document.activeElement).not.toBe(search);
+    type(search, 'btc');
+    root.querySelector('.bts-result button').click();
+    expect(document.activeElement).toBe(search);
+  });
+
   it('search reaches across cycles, shows exactly the matching entries and says how many', () => {
     const term = 'btc';
     const titleOf = (e) =>
