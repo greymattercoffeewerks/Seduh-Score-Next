@@ -594,4 +594,77 @@ describe('Draw a round panel', () => {
       expect(groups[1].querySelectorAll('li')).toHaveLength(1);
     });
   });
+  describe('review fixes', () => {
+    it('ignores a round or option change while a create is in flight, so the controls match the draw sent', async () => {
+      const matches = [
+        match('r1a', 1, 'confirmed', 't01', 't02'),
+        match('r1b', 1, 'confirmed', 't03', 't04'),
+      ];
+      const client = await mount(dbWith({ teams: teamRows(4), judges: NEUTRAL_JUDGES, matches }), {
+        roundError: { code: 'P0001', message: 'x', hint: 'btc_round_matches_invalid' },
+      });
+      click(createButton());
+      // still busy: change the checkbox and the round before the RPC settles
+      const avoid = q('[data-field="draw-avoid"]');
+      avoid.checked = false;
+      avoid.dispatchEvent(new Event('change', { bubbles: true }));
+      choose('draw-round-1');
+      await flush();
+      expect(client.rpcCalls[0][1].p_avoid_rematches).toBe(true);
+      // after the refusal the controls still describe the draw that was sent
+      expect(q('[data-field="draw-avoid"]').checked).toBe(true);
+      expect(q('[data-field="draw-round-2"]').checked).toBe(true);
+      expect(cards()).toHaveLength(2);
+    });
+
+    it('keeps a typed but unused seed across another action, and clears it when the draw is rebuilt', async () => {
+      await mount(dbWith({ teams: teamRows(4), judges: NEUTRAL_JUDGES }));
+      const box = q('[data-field="draw-seed"]');
+      box.value = 'half-typed';
+      box.dispatchEvent(new Event('input', { bubbles: true }));
+      click(q('[data-focus-key="swap-0-1"]'));
+      expect(q('[data-field="draw-seed"]').value).toBe('half-typed');
+      click(q('[data-focus-key="draw-new-seed"]'));
+      expect(q('[data-field="draw-seed"]').value).not.toBe('half-typed');
+    });
+
+    it('says so, instead of looping, when the database still has a round whose matches were removed', async () => {
+      const client = await mount(dbWith({ teams: teamRows(4), judges: NEUTRAL_JUDGES }), {
+        roundError: { code: 'P0001', message: 'x', hint: 'btc_round_exists' },
+      });
+      click(createButton());
+      await flush();
+      expect(q('[role="alert"]').textContent).toContain('already been drawn');
+      expect(root.textContent).toContain('its draw record is still in the database');
+      expect(createButton()).toBeNull();
+      expect(client.rpcCalls).toHaveLength(1);
+    });
+
+    it('does not call a written round a failure when only the list refresh fails', async () => {
+      const client = fakeClient(dbWith({ teams: teamRows(4), judges: NEUTRAL_JUDGES }));
+      screen = await mountMatchesScreen(root, { eventId: 'ev1', client, handlers: {} });
+      const real = client.from;
+      client.from = (table) => {
+        if (table === 'btc_matches') throw new Error('offline');
+        return real(table);
+      };
+      click(createButton());
+      await flush();
+      expect(root.querySelector('[role="alert"]')).toBeNull();
+      expect(root.textContent).toContain('was created, but the list could not be refreshed');
+      expect(publishBtcLive).toHaveBeenCalledTimes(1);
+    });
+
+    it('clears a stale swap message when a refused create reloads the page', async () => {
+      await mount(dbWith({ teams: teamRows(4), judges: NEUTRAL_JUDGES }), {
+        roundError: { code: 'P0001', message: 'x', hint: 'btc_round_incomplete' },
+      });
+      click(q('[data-focus-key="swap-0-1"]'));
+      click(q('[data-focus-key="swap-1-2"]'));
+      expect(q('.btc-draw-status').textContent).toContain('Swapped');
+      click(createButton());
+      await flush();
+      expect(q('.btc-draw-status').textContent).toBe('');
+    });
+  });
 });

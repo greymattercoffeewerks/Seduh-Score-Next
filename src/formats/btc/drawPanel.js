@@ -51,6 +51,15 @@ export function renderDrawPanel(ctx) {
     ]),
   ]);
 
+  // A refused create is shown whatever the panel looks like afterwards (a reload can leave no preview at all).
+  const errorNode = state.error
+    ? el('p', {
+        id: ERROR_ID,
+        className: 'btc-field-error',
+        text: state.error,
+        attrs: { role: 'alert' },
+      })
+    : null;
   const nodes = [roundGroup];
 
   if (state.round === 2) {
@@ -95,6 +104,7 @@ export function renderDrawPanel(ctx) {
     nodes.push(
       el('p', { className: 'btc-draw-warning', text: status.reason, attrs: { role: 'status' } }),
     );
+    if (errorNode) nodes.push(errorNode);
     return wrap(nodes);
   }
 
@@ -111,6 +121,7 @@ export function renderDrawPanel(ctx) {
     },
   });
   seedInput.value = state.seedInput;
+  seedInput.addEventListener('input', () => on.typing(seedInput.value));
   setBusyDisabled(seedInput, busy);
   const useSeed = el('button', {
     className: 'btn btn-outline tap-target',
@@ -162,9 +173,13 @@ export function renderDrawPanel(ctx) {
     nodes.push(
       el('p', { className: 'btc-draw-warning', text: state.refusal, attrs: { role: 'status' } }),
     );
+    if (errorNode) nodes.push(errorNode);
     return wrap(nodes);
   }
-  if (!draw) return wrap(nodes);
+  if (!draw) {
+    if (errorNode) nodes.push(errorNode);
+    return wrap(nodes);
+  }
 
   // ---- warnings
   const issues = drawIssues(draw, { teams, judges });
@@ -305,16 +320,7 @@ export function renderDrawPanel(ctx) {
       }),
     );
   }
-  if (state.error) {
-    nodes.push(
-      el('p', {
-        id: ERROR_ID,
-        className: 'btc-field-error',
-        text: state.error,
-        attrs: { role: 'alert' },
-      }),
-    );
-  }
+  if (errorNode) nodes.push(errorNode);
   nodes.push(create);
   return wrap(nodes);
 }

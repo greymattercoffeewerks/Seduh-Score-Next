@@ -65,6 +65,8 @@ export async function mountMatchesScreen(
     round: 1,
     round2Mode: 'random',
     seedInput: newSeed(),
+    seedTyped: null, // text typed in the seed box and not yet used
+    deadRounds: new Set(), // rounds the database says exist although none of their matches are on screen
     avoid: true,
     draw: null,
     refusal: null,
@@ -156,7 +158,10 @@ export async function mountMatchesScreen(
     state.refusal = null;
     state.swapPick = null;
     state.drawError = null;
-    if (!panelReady() || !roundStatus(state.round, state.matches).available) return;
+    state.seedTyped = null;
+    if (!panelReady() || !roundStatus(state.round, state.matches, state.deadRounds).available) {
+      return;
+    }
     try {
       state.draw = generateDraw({
         round: state.round,
@@ -181,11 +186,15 @@ export async function mountMatchesScreen(
   }
 
   const drawHandlers = {
+    // Each of these checks `busy` BEFORE it sets state: the controls are only aria-disabled while a create is in
+    // flight (core/dom.js setBusyDisabled), so a change event can still arrive and must not move the panel's state.
     round: (round) => {
+      if (state.busy) return;
       state.round = Number(round);
       changeDraw(`Round ${state.round} selected.`, state.seedInput);
     },
     mode: (mode) => {
+      if (state.busy) return;
       state.round2Mode = mode;
       changeDraw(
         mode === 'by_results' ? 'Drawing by results.' : 'Drawing at random.',
@@ -193,11 +202,16 @@ export async function mountMatchesScreen(
       );
     },
     avoid: (value) => {
+      if (state.busy) return;
       state.avoid = value;
       changeDraw(
         value ? 'Avoiding repeat opponents.' : 'Repeat opponents allowed.',
         state.seedInput,
       );
+    },
+    // typed but not yet used: kept so another action's redraw does not wipe the box (no render here)
+    typing: (text) => {
+      state.seedTyped = text;
     },
     seed: (text) => {
       const typed = text.trim();
@@ -265,11 +279,17 @@ export async function mountMatchesScreen(
         },
         client,
       );
-      state.matches = await listMatches(eventId, ROUND, client);
+      // the round is written from here on: whatever happens next must not read as a failed create
       requestLivePublish(false);
       toast = `Round ${draw.round} created: ${draw.pairs.length} matches.`;
-      state.round = defaultRound(state.matches);
-      rebuildDraw(newSeed());
+      try {
+        state.matches = await listMatches(eventId, ROUND, client);
+        state.round = defaultRound(state.matches);
+        rebuildDraw(newSeed());
+      } catch {
+        state.draw = null;
+        state.refusal = `Round ${draw.round} was created, but the list could not be refreshed. Reload the page to see it.`;
+      }
     } catch (err) {
       if (signal?.aborted) return;
       const message = describeRoundError(err);
@@ -287,8 +307,17 @@ export async function mountMatchesScreen(
         } catch {
           // keep what is on screen; the message below still says what happened
         }
+        // The database also keeps a draw record per round. If it says the round exists but no match of it is on
+        // screen (its matches were removed), no draw can ever pass for that round from here: say so, not a loop.
+        if (
+          err?.hint === 'btc_round_exists' &&
+          !state.matches.some((m) => roundOf(m.match) === draw.round)
+        ) {
+          state.deadRounds = new Set([...state.deadRounds, draw.round]);
+        }
         state.round = defaultRound(state.matches);
         rebuildDraw(newSeed());
+        state.drawStatus = '';
       }
       state.drawError = message;
     }
@@ -331,6 +360,7 @@ export async function mountMatchesScreen(
     try {
       const match = await createMatch(eventId, { round: ROUND, ...state.draft }, client);
       state.matches = [...state.matches, { match, judgeIds: state.draft.judgeIds }];
+      rebuildDraw(); // the preview's rounds and repeat-opponent counts follow the matches
       requestLivePublish(false);
       const t1 = teamName(state.draft.team1Id);
       const t2 = teamName(state.draft.team2Id);
@@ -362,6 +392,7 @@ export async function mountMatchesScreen(
     try {
       await removeMatch(match.id, client);
       state.matches = state.matches.filter((m) => m.match.id !== match.id);
+      rebuildDraw();
       requestLivePublish(false);
       showToast(`${teamName(match.team1_id)} vs ${teamName(match.team2_id)} removed.`);
     } catch (err) {
@@ -654,7 +685,7 @@ export async function mountMatchesScreen(
             state: {
               round: state.round,
               round2Mode: state.round2Mode,
-              seedInput: state.seedInput,
+              seedInput: state.seedTyped ?? state.seedInput,
               avoid: state.avoid,
               draw: state.draw,
               refusal: state.refusal,
@@ -665,7 +696,7 @@ export async function mountMatchesScreen(
             teams: state.teams,
             judges: state.judges,
             busy: state.busy,
-            statusOf: (round) => roundStatus(round, state.matches),
+            statusOf: (round) => roundStatus(round, state.matches, state.deadRounds),
             on: drawHandlers,
           }),
         );

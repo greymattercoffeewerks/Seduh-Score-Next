@@ -22,11 +22,19 @@ export const roundOf = (match) => match.prelim_round ?? 1;
 
 // `matches` is the screen's [{ match, judgeIds }] list. A round can be drawn when it has no matches yet and, for round
 // 2, round 1 exists and is fully confirmed (the database refuses otherwise: btc_prior_round_open).
-export function roundStatus(round, matches) {
+export function roundStatus(round, matches, deadRounds = new Set()) {
   const inRound = (r) => matches.filter((m) => roundOf(m.match) === r);
   const drawn = inRound(round).length > 0;
   if (drawn) {
     return { drawn: true, available: false, reason: `Round ${round} has already been drawn.` };
+  }
+  if (deadRounds.has(round)) {
+    // the database still holds this round's draw record although its matches were removed (create_btc_round refuses)
+    return {
+      drawn: false,
+      available: false,
+      reason: `Round ${round} cannot be drawn again here: its draw record is still in the database although its matches were removed. Ask the platform owner to clear it.`,
+    };
   }
   if (round === 1) return { drawn: false, available: true, reason: null };
   const first = inRound(1);
